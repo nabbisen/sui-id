@@ -1,0 +1,18 @@
+[package]
+name = "sui-id-web"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Admin and setup UI (Leptos SSR) for sui-id."
+
+[lints]
+workspace = true
+
+[dependencies]
+sui-id-shared = { workspace = true }
+
+leptos = { workspace = true }
+serde = { workspace = true }
+chrono = { workspace = true }
