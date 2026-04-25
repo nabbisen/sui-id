@@ -31,6 +31,12 @@ pub fn build_router(app: AppState) -> Router {
             post(admin::clients_set_disabled),
         )
         .route("/admin/clients/{id}/delete", post(admin::clients_delete))
+        .route("/admin/signing-keys", get(admin::signing_keys_get))
+        .route("/admin/signing-keys/rotate", post(admin::signing_keys_rotate))
+        .route(
+            "/admin/signing-keys/{id}/delete",
+            post(admin::signing_keys_delete),
+        )
         .route("/admin/audit", get(admin::audit_get))
         .route("/static/{*path}", get(crate::assets::serve))
         .with_state(app)

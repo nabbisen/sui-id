@@ -353,6 +353,48 @@ pub async fn audit_get(
     Ok(Html(render_audit(dtos, None)).into_response())
 }
 
+// ---------- signing keys ----------
+
+pub async fn signing_keys_get(
+    state_ext: AppStateExt,
+    CurrentAdmin(admin_id): CurrentAdmin,
+) -> Result<Response, HttpError> {
+    let State(app) = state_ext;
+    let rows = admin_uc::list_signing_keys(&app.db, admin_id).map_err(HttpError::html)?;
+    let summaries: Vec<sui_id_shared::api::SigningKeySummary> = rows
+        .into_iter()
+        .map(|r| sui_id_shared::api::SigningKeySummary {
+            id: r.id,
+            algorithm: r.algorithm,
+            is_active: r.is_active,
+            created_at: r.created_at,
+            rotated_at: r.rotated_at,
+        })
+        .collect();
+    Ok(Html(sui_id_web::render_signing_keys(summaries, None)).into_response())
+}
+
+pub async fn signing_keys_rotate(
+    state_ext: AppStateExt,
+    CurrentAdmin(admin_id): CurrentAdmin,
+) -> Result<Response, HttpError> {
+    let State(app) = state_ext;
+    admin_uc::rotate_signing_key(&app.db, &app.clock, admin_id).map_err(HttpError::html)?;
+    Ok(Redirect::to("/admin/signing-keys").into_response())
+}
+
+pub async fn signing_keys_delete(
+    state_ext: AppStateExt,
+    CurrentAdmin(admin_id): CurrentAdmin,
+    Path(id): Path<String>,
+) -> Result<Response, HttpError> {
+    let State(app) = state_ext;
+    let target = sui_id_shared::ids::SigningKeyId::from_str(&id)
+        .map_err(|_| HttpError::html(CoreError::BadRequest("invalid signing key id".into())))?;
+    admin_uc::delete_signing_key(&app.db, admin_id, target).map_err(HttpError::html)?;
+    Ok(Redirect::to("/admin/signing-keys").into_response())
+}
+
 // ---------- silence dead-code warnings for unused imports ----------
 
 #[allow(dead_code)]

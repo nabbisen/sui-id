@@ -5,6 +5,39 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-04-25
+
+### Added
+- **Signing key rotation UI** at `/admin/signing-keys`. Rotation
+  generates a fresh Ed25519 key, makes it the new active signing key,
+  and demotes the previous key to retired status. Retired keys stay in
+  the database — and therefore in `/.well-known/jwks.json` — so that
+  tokens issued under them continue to verify during their remaining
+  lifetime (the JWKS "grace window"). Once those tokens have expired,
+  an administrator can permanently delete the retired key from the same
+  page.
+- **`signing_keys::retire` and `signing_keys::delete`** repository
+  operations. `delete` refuses to remove the currently active key
+  (returns `Conflict`), so the UI cannot accidentally leave the system
+  with no signing key.
+- **`admin_uc::rotate_signing_key`** and **`admin_uc::delete_signing_key`**
+  use cases on the core layer, wired through the admin UI and the new
+  `signing_key.rotate` / `signing_key.delete` audit-log entries.
+- Navigation entry "Keys" added to the admin shell.
+- `SigningKeySummary` DTO in `sui-id-shared`.
+- 4 new end-to-end tests:
+  - `signing_key_rotation_publishes_both_keys_in_jwks`
+  - `rotation_does_not_break_existing_authorization_flow` — the old
+    access token still validates after rotation, exercising the grace
+    window.
+  - `cannot_delete_active_signing_key`
+  - `delete_retired_signing_key_drops_it_from_jwks`
+
+### Changed
+- `signing_keys::active` documentation now spells out the
+  most-recently-created tie-break used during rotation. Behaviour is
+  unchanged.
+
 ## [0.3.0] - 2026-04-25
 
 ### Added

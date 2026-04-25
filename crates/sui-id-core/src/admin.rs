@@ -290,6 +290,81 @@ pub fn delete_client(db: &Database, actor: UserId, target: ClientId) -> CoreResu
     Ok(())
 }
 
+// ---------- signing keys ----------
+
+pub fn list_signing_keys(
+    db: &Database,
+    actor: UserId,
+) -> CoreResult<Vec<sui_id_store::models::SigningKeyRow>> {
+    require_admin(db, actor)?;
+    Ok(sui_id_store::repos::signing_keys::list_published(db)?)
+}
+
+/// Generate a fresh Ed25519 signing key, persist it as the new active key,
+/// and retire the previous one. The previous key's row stays in the table
+/// (and therefore in JWKS) so that tokens already issued under it can still
+/// be verified during their lifetime — a "grace window" of one access-token
+/// lifetime is sufficient. The retired key can be deleted afterwards by an
+/// administrator.
+///
+/// Returns the new key id.
+pub fn rotate_signing_key(
+    db: &Database,
+    clock: &SharedClock,
+    actor: UserId,
+) -> CoreResult<sui_id_shared::ids::SigningKeyId> {
+    use ed25519_dalek::SigningKey;
+    use rand::rngs::OsRng;
+    use sui_id_shared::ids::SigningKeyId;
+    use sui_id_store::repos::signing_keys;
+
+    require_admin(db, actor)?;
+    let previous = signing_keys::active(db).ok();
+
+    // Generate the new key.
+    let mut rng = OsRng;
+    let sk = SigningKey::generate(&mut rng);
+    let pk = sk.verifying_key();
+    let new_id = SigningKeyId::new();
+    signing_keys::insert_with_plaintext(
+        db,
+        new_id,
+        "EdDSA",
+        sk.to_bytes().as_ref(),
+        pk.to_bytes().as_ref(),
+        true,
+    )?;
+
+    // Retire the previous active key, if any. We do this *after* the new
+    // key is in place so that — even with a crash mid-flight — there is
+    // never a window with zero active keys.
+    if let Some(prev) = previous {
+        signing_keys::retire(db, prev.id)?;
+    }
+    let _ = clock;
+    audit_ok(db, actor, "signing_key.rotate", Some(new_id.to_string()));
+    Ok(new_id)
+}
+
+/// Permanently delete a retired signing key. Refuses to delete the
+/// currently active key.
+pub fn delete_signing_key(
+    db: &Database,
+    actor: UserId,
+    target: sui_id_shared::ids::SigningKeyId,
+) -> CoreResult<()> {
+    require_admin(db, actor)?;
+    sui_id_store::repos::signing_keys::delete(db, target).map_err(|e| match e {
+        sui_id_store::StoreError::NotFound => CoreError::NotFound,
+        sui_id_store::StoreError::Conflict => CoreError::Conflict(
+            "cannot delete the active signing key; rotate first".into(),
+        ),
+        other => CoreError::from(other),
+    })?;
+    audit_ok(db, actor, "signing_key.delete", Some(target.to_string()));
+    Ok(())
+}
+
 fn validate_redirect_uri(uri: &str) -> CoreResult<()> {
     let parsed = url::Url::parse(uri).map_err(|_| {
         CoreError::BadRequest(format!("redirect_uri is not a valid URL: {uri}"))

@@ -64,6 +64,10 @@ pub fn insert_with_plaintext(
 }
 
 /// Get the currently active signing key, or `NotFound` if none exists.
+///
+/// When more than one row has `is_active = 1` (which can briefly happen
+/// during a rotation transaction), the **most recently created** one wins.
+/// This is the key newly issued tokens should be signed with.
 pub fn active(db: &Database) -> StoreResult<SigningKeyRow> {
     db.with_conn(|conn| {
         conn.query_row(
@@ -76,6 +80,62 @@ pub fn active(db: &Database) -> StoreResult<SigningKeyRow> {
             rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
             other => StoreError::from(other),
         })
+    })
+}
+
+/// Mark a key as retired: set `is_active = 0` and stamp `rotated_at`.
+/// The row is **not** deleted — its public half stays in JWKS so that
+/// already-issued tokens can still be verified during the grace window.
+/// Returns `NotFound` if no key has the given id.
+pub fn retire(db: &Database, id: SigningKeyId) -> StoreResult<()> {
+    db.with_conn(|conn| {
+        let n = conn.execute(
+            "UPDATE signing_keys SET is_active = 0, rotated_at = ?1 \
+             WHERE id = ?2 AND is_active = 1",
+            rusqlite::params![Utc::now(), id.to_string()],
+        )?;
+        if n == 0 {
+            // Either the id doesn't exist or it was already retired. We
+            // distinguish by a probe; the caller usually only cares that
+            // the row is now in the retired state.
+            let exists: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM signing_keys WHERE id = ?1",
+                    [id.to_string()],
+                    |r| r.get(0),
+                )
+                .unwrap_or(0);
+            if exists == 0 {
+                return Err(StoreError::NotFound);
+            }
+        }
+        Ok(())
+    })
+}
+
+/// Hard-delete a signing key row. Only permitted for already-retired keys
+/// — deleting an active key would break newly-minted token verification.
+/// Returns `Conflict` for an active row, `NotFound` for a missing one.
+pub fn delete(db: &Database, id: SigningKeyId) -> StoreResult<()> {
+    db.with_conn(|conn| {
+        let row: Option<i64> = conn
+            .query_row(
+                "SELECT is_active FROM signing_keys WHERE id = ?1",
+                [id.to_string()],
+                |r| r.get(0),
+            )
+            .ok();
+        match row {
+            None => Err(StoreError::NotFound),
+            Some(1) => Err(StoreError::Conflict),
+            Some(_) => {
+                conn.execute(
+                    "DELETE FROM signing_keys WHERE id = ?1",
+                    [id.to_string()],
+                )?;
+                Ok(())
+            }
+        }
     })
 }
 

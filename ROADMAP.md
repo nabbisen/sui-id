@@ -10,9 +10,6 @@ draws from medium-term.)
 
 ## Medium term
 
-- **Key rotation UI.** Today the bootstrap signing key is permanent; we need
-  an admin action to introduce a new key, mark the old one inactive, and let
-  JWKS publish both for a grace window.
 - **Per-client scope policy.** Today every active client may request any
   scope. Allow clients to declare a permitted scope set.
 - **Per-client `post_logout_redirect_uris`.** Today logout reuses the
@@ -45,6 +42,7 @@ draws from medium-term.)
 - Annotated `sui-id.example.toml` configuration template.
 - `sui-id backup` / `sui-id restore` subcommands with hot SQLite snapshot.
 - `docs/threat-model.md` and a documentation index in the README.
+- Signing key rotation UI with a JWKS grace window.
 
 ## Explicitly **not** on the roadmap
 

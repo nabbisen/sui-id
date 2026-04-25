@@ -172,6 +172,43 @@ PrivateTmp=yes
 WantedBy=multi-user.target
 ```
 
+## Signing key rotation
+
+sui-id signs JWTs with one active Ed25519 key. The bootstrap key is
+created during setup; you can rotate it later from the admin UI at
+`/admin/signing-keys`.
+
+A rotation does three things:
+
+1. Generates a fresh Ed25519 key pair, sealed under the master key.
+2. Marks the new key as the active signer. All tokens issued from this
+   moment onwards use it.
+3. Demotes the previous key to retired status. The retired key stays in
+   `/.well-known/jwks.json` so that tokens already issued with it can
+   still be verified by relying parties during their remaining
+   lifetime — the JWKS "grace window".
+
+Once the longest-lived previously-issued tokens have expired (the
+default is `tokens.access_lifetime_secs = 900` seconds for access tokens
+and 14 days for refresh tokens), you can delete the retired key from
+the same page. Refresh tokens do not need to grace-window the *signing*
+key because they are opaque, but if your `refresh_lifetime_secs` is
+long, leaving the retired key in JWKS for the same window is harmless.
+
+A reasonable cadence is "rotate every quarter, delete keys older than
+the longest token lifetime." There is no built-in scheduler today;
+rotations are operator-initiated.
+
+### When to rotate immediately
+
+- The master key file may have been exposed.
+- A backup tarball is missing or unaccounted for.
+- An administrator account was compromised.
+
+In any of those cases, rotate the signing key, then take additional
+steps as appropriate (e.g. rotate the master key, force-re-issue
+client secrets).
+
 ## Upgrading
 
 For now, sui-id is pre-release: take a backup, replace the binary, and

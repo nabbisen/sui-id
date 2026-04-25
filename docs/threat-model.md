@@ -195,12 +195,15 @@ What we do:
   not from any caller-supplied input.
 - Private keys live sealed in the database. With the master key
   separated, even a stolen database does not yield signing capability.
+- Administrators can rotate the signing key from `/admin/signing-keys`.
+  A rotation publishes the new key as the active signer, demotes the
+  previous key to retired status, and keeps it in JWKS so already-issued
+  tokens continue to verify until they expire. Once expired, the
+  retired key can be deleted.
 
 What we do **not** do (yet):
 
-- Automatic key rotation. The bootstrap signing key is currently
-  permanent. Adding rotation with a JWKS grace window is on the
-  roadmap.
+- Automatic / scheduled rotation. Rotation today is operator-driven.
 
 ### A10. Replay of an access token after revocation
 

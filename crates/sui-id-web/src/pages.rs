@@ -363,6 +363,86 @@ pub fn render_audit(entries: Vec<AuditLogEntryDto>, flash: Option<Flash>) -> Str
     })
 }
 
+// ---------- signing keys ----------
+
+fn signing_key_row_view(k: sui_id_shared::api::SigningKeySummary) -> impl IntoView {
+    let id_str = k.id.to_string();
+    let id_for_url = id_str.clone();
+    let id_for_display = id_str.clone();
+    let status = if k.is_active { "active" } else { "retired" };
+    let rotated = k
+        .rotated_at
+        .map(fmt_time)
+        .unwrap_or_else(|| "-".to_string());
+    let delete_url = format!("/admin/signing-keys/{id_for_url}/delete");
+    let actions = if k.is_active {
+        view! { <td class="muted">"(in use)"</td> }.into_any()
+    } else {
+        view! {
+            <td>
+                <form method="post" action=delete_url style="display:inline"
+                      onsubmit="return confirm('Permanently delete this retired key? Tokens still in flight that were signed with it will fail to verify.');">
+                    <button type="submit" class="danger">"Delete"</button>
+                </form>
+            </td>
+        }
+        .into_any()
+    };
+    view! {
+        <tr>
+            <td><span class="code">{id_for_display}</span></td>
+            <td>{k.algorithm}</td>
+            <td>{status}</td>
+            <td>{fmt_time(k.created_at)}</td>
+            <td>{rotated}</td>
+            {actions}
+        </tr>
+    }
+}
+
+pub fn render_signing_keys(
+    keys: Vec<sui_id_shared::api::SigningKeySummary>,
+    flash: Option<Flash>,
+) -> String {
+    render(move || {
+        let rows: Vec<_> = keys.into_iter().map(signing_key_row_view).collect();
+        view! {
+            <Shell
+                title="Signing keys".to_string()
+                show_nav=true
+                current=Some("signing-keys".to_string())
+            >
+                <h2>"Signing keys"</h2>
+                {flash_banner(flash)}
+                <p class="muted">
+                    "sui-id signs JWTs with one active Ed25519 key. Rotating publishes a fresh key as the new \
+                     signing key, demotes the previous one to retired status, and keeps it in JWKS so that \
+                     tokens already issued can still be verified during their remaining lifetime. Once those \
+                     tokens have expired, you can safely delete the retired key from this page."
+                </p>
+                <form method="post" action="/admin/signing-keys/rotate">
+                    <button type="submit">"Rotate signing key"</button>
+                </form>
+
+                <h3>"All keys"</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>"Key id"</th>
+                            <th>"Algorithm"</th>
+                            <th>"Status"</th>
+                            <th>"Created"</th>
+                            <th>"Retired"</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>{rows}</tbody>
+                </table>
+            </Shell>
+        }
+    })
+}
+
 // ---------- error ----------
 
 pub fn render_error(title: String, message: String, request_id: String) -> String {

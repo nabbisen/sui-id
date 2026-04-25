@@ -17,5 +17,5 @@ pub mod pages;
 
 pub use pages::{
     render_audit, render_clients, render_dashboard, render_error, render_login, render_setup,
-    render_users, Flash, FlashKind,
+    render_signing_keys, render_users, Flash, FlashKind,
 };

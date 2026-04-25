@@ -124,6 +124,17 @@ pub struct UpdateClientRequest {
     pub redirect_uris: Option<Vec<String>>,
 }
 
+// ---------- signing keys ----------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SigningKeySummary {
+    pub id: crate::ids::SigningKeyId,
+    pub algorithm: String,
+    pub is_active: bool,
+    pub created_at: DateTime<Utc>,
+    pub rotated_at: Option<DateTime<Utc>>,
+}
+
 // ---------- audit ----------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
