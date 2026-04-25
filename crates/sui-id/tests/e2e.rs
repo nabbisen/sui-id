@@ -92,13 +92,30 @@ async fn complete_setup_and_login(state: &AppState) -> String {
 }
 
 async fn create_client(state: &AppState, session_cookie: &str) -> (String, String) {
+    // First, GET the clients page to obtain a CSRF cookie + token.
     let router = build_router(state.clone());
-    let body = "name=test-rp&redirect_uris=https%3A%2F%2Frp.test%2Fcb&confidential=true";
+    let req = Request::builder()
+        .method(Method::GET)
+        .uri("/admin/clients")
+        .header(header::COOKIE, format!("sui_id_session={session_cookie}"))
+        .body(Body::empty())
+        .expect("req");
+    let resp = router.oneshot(req).await.expect("clients GET");
+    let csrf = extract_set_cookie(resp.headers(), "sui_id_csrf").expect("csrf cookie set on GET");
+
+    // Then POST the form with both the cookie and a matching _csrf field.
+    let router = build_router(state.clone());
+    let body = format!(
+        "name=test-rp&redirect_uris=https%3A%2F%2Frp.test%2Fcb&confidential=true&_csrf={csrf}"
+    );
     let req = Request::builder()
         .method(Method::POST)
         .uri("/admin/clients")
         .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .header(header::COOKIE, format!("sui_id_session={session_cookie}"))
+        .header(
+            header::COOKIE,
+            format!("sui_id_session={session_cookie}; sui_id_csrf={csrf}"),
+        )
         .body(Body::from(body))
         .expect("req");
     let resp = router.oneshot(req).await.expect("create client");
@@ -117,9 +134,22 @@ async fn create_client(state: &AppState, session_cookie: &str) -> (String, Strin
             break;
         }
     }
-    // First two .code spans on the freshly-created flash banner are id and secret.
     assert!(codes.len() >= 2, "expected client id and secret in HTML, found {codes:?}");
     (codes[0].clone(), codes[1].clone())
+}
+
+/// Fetch a fresh CSRF token from any admin GET. The Set-Cookie value is
+/// the token; the same value goes in the form's `_csrf` field.
+async fn fetch_csrf(state: &AppState, session_cookie: &str) -> String {
+    let router = build_router(state.clone());
+    let req = Request::builder()
+        .method(Method::GET)
+        .uri("/admin")
+        .header(header::COOKIE, format!("sui_id_session={session_cookie}"))
+        .body(Body::empty())
+        .expect("req");
+    let resp = router.oneshot(req).await.expect("admin GET");
+    extract_set_cookie(resp.headers(), "sui_id_csrf").expect("csrf cookie on admin GET")
 }
 
 #[tokio::test]
@@ -569,12 +599,17 @@ async fn signing_key_rotation_publishes_both_keys_in_jwks() {
     let kid_before = json["keys"][0]["kid"].as_str().expect("kid").to_owned();
 
     // Rotate via the admin endpoint.
+    let csrf = fetch_csrf(&state, &session).await;
     let router = build_router(state.clone());
     let req = Request::builder()
         .method(Method::POST)
         .uri("/admin/signing-keys/rotate")
-        .header(header::COOKIE, format!("sui_id_session={session}"))
-        .body(Body::empty())
+        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .header(
+            header::COOKIE,
+            format!("sui_id_session={session}; sui_id_csrf={csrf}"),
+        )
+        .body(Body::from(format!("_csrf={csrf}")))
         .expect("req");
     let resp = router.oneshot(req).await.expect("rotate");
     assert!(resp.status().is_redirection(), "expected redirect, got {}", resp.status());
@@ -648,12 +683,17 @@ async fn rotation_does_not_break_existing_authorization_flow() {
     let access_old = json["access_token"].as_str().expect("access_token").to_owned();
 
     // Rotate.
+    let csrf = fetch_csrf(&state, &session).await;
     let router = build_router(state.clone());
     let req = Request::builder()
         .method(Method::POST)
         .uri("/admin/signing-keys/rotate")
-        .header(header::COOKIE, format!("sui_id_session={session}"))
-        .body(Body::empty())
+        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .header(
+            header::COOKIE,
+            format!("sui_id_session={session}; sui_id_csrf={csrf}"),
+        )
+        .body(Body::from(format!("_csrf={csrf}")))
         .expect("req");
     let resp = router.oneshot(req).await.expect("rotate");
     assert!(resp.status().is_redirection());
@@ -678,12 +718,17 @@ async fn cannot_delete_active_signing_key() {
     let active = sui_id_store::repos::signing_keys::active(&state.db).expect("active");
     let active_id = active.id.to_string();
 
+    let csrf = fetch_csrf(&state, &session).await;
     let router = build_router(state.clone());
     let req = Request::builder()
         .method(Method::POST)
         .uri(format!("/admin/signing-keys/{active_id}/delete"))
-        .header(header::COOKIE, format!("sui_id_session={session}"))
-        .body(Body::empty())
+        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .header(
+            header::COOKIE,
+            format!("sui_id_session={session}; sui_id_csrf={csrf}"),
+        )
+        .body(Body::from(format!("_csrf={csrf}")))
         .expect("req");
     let resp = router.oneshot(req).await.expect("delete attempt");
     assert_eq!(resp.status(), StatusCode::CONFLICT);
@@ -704,12 +749,17 @@ async fn delete_retired_signing_key_drops_it_from_jwks() {
         .expect("active")
         .id
         .to_string();
+    let csrf = fetch_csrf(&state, &session).await;
     let router = build_router(state.clone());
     let req = Request::builder()
         .method(Method::POST)
         .uri("/admin/signing-keys/rotate")
-        .header(header::COOKIE, format!("sui_id_session={session}"))
-        .body(Body::empty())
+        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .header(
+            header::COOKIE,
+            format!("sui_id_session={session}; sui_id_csrf={csrf}"),
+        )
+        .body(Body::from(format!("_csrf={csrf}")))
         .expect("req");
     let resp = router.oneshot(req).await.expect("rotate");
     assert!(resp.status().is_redirection());
@@ -719,8 +769,12 @@ async fn delete_retired_signing_key_drops_it_from_jwks() {
     let req = Request::builder()
         .method(Method::POST)
         .uri(format!("/admin/signing-keys/{original_id}/delete"))
-        .header(header::COOKIE, format!("sui_id_session={session}"))
-        .body(Body::empty())
+        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .header(
+            header::COOKIE,
+            format!("sui_id_session={session}; sui_id_csrf={csrf}"),
+        )
+        .body(Body::from(format!("_csrf={csrf}")))
         .expect("req");
     let resp = router.oneshot(req).await.expect("delete");
     assert!(resp.status().is_redirection() || resp.status().is_success());
@@ -814,6 +868,125 @@ async fn backup_then_restore_preserves_users_and_clients() {
     let clients = sui_id_store::repos::clients::list(&db2).expect("list clients");
     assert_eq!(clients.len(), 1, "the client should survive the round trip");
     assert_eq!(clients[0].id.to_string(), client_id);
+}
+
+// ---------- CSRF tests ----------
+
+#[tokio::test]
+async fn admin_get_sets_csrf_cookie() {
+    let state = test_app();
+    let session = complete_setup_and_login(&state).await;
+
+    let router = build_router(state.clone());
+    let req = Request::builder()
+        .method(Method::GET)
+        .uri("/admin/users")
+        .header(header::COOKIE, format!("sui_id_session={session}"))
+        .body(Body::empty())
+        .expect("req");
+    let resp = router.oneshot(req).await.expect("admin GET");
+    assert_eq!(resp.status(), StatusCode::OK);
+    let csrf = extract_set_cookie(resp.headers(), "sui_id_csrf");
+    assert!(csrf.is_some(), "admin GET must set sui_id_csrf");
+    let value = csrf.unwrap();
+    assert!(!value.is_empty());
+    assert_eq!(value.len(), 43, "32 bytes b64url no-pad = 43 chars");
+}
+
+#[tokio::test]
+async fn admin_post_without_csrf_cookie_is_forbidden() {
+    let state = test_app();
+    let session = complete_setup_and_login(&state).await;
+
+    // POST to clients/create with the session cookie but NO csrf cookie
+    // and NO _csrf field. Should be 403.
+    let router = build_router(state.clone());
+    let body = "name=test-rp&redirect_uris=https%3A%2F%2Frp.test%2Fcb&confidential=true";
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri("/admin/clients")
+        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .header(header::COOKIE, format!("sui_id_session={session}"))
+        .body(Body::from(body))
+        .expect("req");
+    let resp = router.oneshot(req).await.expect("post");
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn admin_post_with_mismatched_csrf_is_forbidden() {
+    let state = test_app();
+    let session = complete_setup_and_login(&state).await;
+
+    // Real csrf cookie, but the form's _csrf field is something else.
+    let real = fetch_csrf(&state, &session).await;
+    let router = build_router(state.clone());
+    let body = format!(
+        "name=test-rp&redirect_uris=https%3A%2F%2Frp.test%2Fcb&confidential=true&_csrf=tampered-value-not-the-real-one"
+    );
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri("/admin/clients")
+        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .header(
+            header::COOKIE,
+            format!("sui_id_session={session}; sui_id_csrf={real}"),
+        )
+        .body(Body::from(body))
+        .expect("req");
+    let resp = router.oneshot(req).await.expect("post");
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn admin_post_with_matching_csrf_succeeds() {
+    // Sanity: this is what every other admin test relies on. If this
+    // breaks, csrf has gone wrong systemically.
+    let state = test_app();
+    let session = complete_setup_and_login(&state).await;
+    let (client_id, _secret) = create_client(&state, &session).await;
+    assert!(!client_id.is_empty());
+}
+
+#[tokio::test]
+async fn oidc_endpoints_are_not_subject_to_csrf() {
+    // The /oauth2/* protocol surface must not require sui_id_csrf — it
+    // is protocol traffic, not an admin form.
+    let state = test_app();
+    let session = complete_setup_and_login(&state).await;
+    let (client_id, client_secret) = create_client(&state, &session).await;
+
+    let (verifier, challenge) = pkce_pair();
+    let auth_url = format!(
+        "/oauth2/authorize?client_id={client_id}&redirect_uri=https%3A%2F%2Frp.test%2Fcb\
+         &response_type=code&scope=openid&code_challenge={challenge}&code_challenge_method=S256"
+    );
+    let router = build_router(state.clone());
+    let req = Request::builder()
+        .method(Method::GET)
+        .uri(&auth_url)
+        .header(header::COOKIE, format!("sui_id_session={session}"))
+        .body(Body::empty())
+        .expect("req");
+    let resp = router.oneshot(req).await.expect("authorize");
+    let location = resp.headers().get(header::LOCATION).and_then(|v| v.to_str().ok()).unwrap_or("").to_owned();
+    let parsed = Url::parse(&location).expect("redirect");
+    let code = parsed.query_pairs().find(|(k, _)| k == "code").map(|(_, v)| v.into_owned()).expect("code");
+
+    // /token exchange with NO csrf cookie or field — must succeed.
+    let body = format!(
+        "grant_type=authorization_code&code={code}&redirect_uri=https%3A%2F%2Frp.test%2Fcb\
+         &client_id={client_id}&client_secret={client_secret}&code_verifier={verifier}"
+    );
+    let router = build_router(state.clone());
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri("/oauth2/token")
+        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .body(Body::from(body))
+        .expect("req");
+    let resp = router.oneshot(req).await.expect("token");
+    assert_eq!(resp.status(), StatusCode::OK, "OIDC token endpoint must not require CSRF");
 }
 
 // `http` is brought in transitively by axum; we only need its HeaderMap.

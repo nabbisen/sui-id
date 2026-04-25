@@ -5,6 +5,47 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-04-25
+
+### Added
+- **CSRF tokens on every admin form** (synchronizer token pattern with
+  a double-submit cookie). On every admin GET, sui-id sets a
+  `sui_id_csrf` cookie containing a 32-byte random token; the same
+  token is embedded as a hidden `_csrf` field in every rendered form.
+  On admin POST, the cookie value and the form field are compared in
+  constant time. A missing or mismatched token returns 403 Forbidden.
+  This adds a real synchronizer token defence beneath the existing
+  `SameSite=Lax` session cookie, so the CSRF property no longer
+  depends on cookie attributes alone.
+- The CSRF cookie is `SameSite=Lax`, `Path=/`, and follows the
+  operator's `cookie_secure` setting. Unlike the session cookie it is
+  intentionally **not** `HttpOnly` — the rendering layer needs to be
+  able to read it to embed in form fields. The cookie alone has no
+  authority; only when paired with a matching form field on a
+  session-authenticated request does it grant anything.
+- New `sui_id::csrf` module with `new_token`, `ensure_token`,
+  `csrf_cookie`, `check_token`, and `verify_with_headers` helpers.
+- 13 new tests:
+  - 8 unit tests on `sui_id::csrf` covering token format, reuse,
+    minting, accept/reject pairs, missing-cookie, missing-field, and
+    empty-string corner cases.
+  - 5 end-to-end tests:
+    `admin_get_sets_csrf_cookie`,
+    `admin_post_without_csrf_cookie_is_forbidden`,
+    `admin_post_with_mismatched_csrf_is_forbidden`,
+    `admin_post_with_matching_csrf_succeeds`,
+    `oidc_endpoints_are_not_subject_to_csrf`.
+
+### Changed
+- All admin form bodies now carry a `_csrf` field. The Leptos render
+  functions for `users`, `clients`, `signing_keys`, and `dashboard`
+  pages take an additional `csrf_token: String` parameter. The
+  protocol surface (`/oauth2/*`) is deliberately unchanged — those
+  endpoints must remain CSRF-free because they are RP-to-IdP traffic,
+  not user-facing forms.
+- Threat model A7 (CSRF) has been promoted from "we don't do this
+  yet" to a positive description of the synchronizer-token defence.
+
 ## [0.4.0] - 2026-04-25
 
 ### Added

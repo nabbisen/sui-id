@@ -160,17 +160,28 @@ What we do:
 
 What we do:
 
-- The session cookie is `SameSite=Lax`. Top-level navigations from a
-  malicious site cannot carry the cookie to a sensitive POST.
-- Admin actions are POST forms with no `GET`-side equivalents. Reading a
-  malicious image tag cannot cause a state change.
+- Every admin page sets a `sui_id_csrf` cookie carrying a 32-byte
+  random token; every form rendered by that page embeds the same
+  token as a hidden `_csrf` field. On POST, sui-id reads both and
+  compares them in constant time. A missing or mismatched token
+  returns 403.
+- The session cookie is `SameSite=Lax` and `HttpOnly`. Top-level
+  navigations from a malicious site cannot carry the cookie to a
+  sensitive POST, and JavaScript on the page cannot exfiltrate it.
+- Admin actions are POST forms with no GET-side equivalents. A
+  malicious image tag on another origin cannot cause a state change.
+- The CSRF cookie is intentionally **not** `HttpOnly` so the page can
+  read its own token. The cookie alone is harmless — only paired
+  with a matching form field on a session-authenticated request does
+  it grant anything.
 
-What we do **not** do (yet):
+What we do **not** do:
 
-- Per-form CSRF tokens. `SameSite=Lax` is sufficient against the
-  classic attack but is brittle if a future change introduces a
-  cross-origin POST. A future release should add a synchronizer token
-  on the admin forms; this is on the roadmap.
+- Apply CSRF to `/oauth2/*`. Those endpoints are protocol traffic
+  between the relying party's backend and sui-id, not user-facing
+  forms, and CSRF does not apply to them. They are protected by
+  client authentication (`client_secret`), PKCE, and authorization
+  code single-use semantics instead.
 
 ### A8. Open redirect via `redirect_uri` or `post_logout_redirect_uri`
 

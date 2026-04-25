@@ -15,9 +15,6 @@ draws from medium-term.)
 - **Per-client `post_logout_redirect_uris`.** Today logout reuses the
   authorization `redirect_uris` set; a real deployment may want a separate
   list. Adding it is a schema migration.
-- **CSRF tokens on admin forms.** `SameSite=Lax` is sufficient against the
-  classic attack today, but a synchronizer token would keep the property
-  intact under future routing changes.
 - **MFA.** TOTP first; WebAuthn second. Both are big enough to be their own
   releases.
 
@@ -43,6 +40,7 @@ draws from medium-term.)
 - `sui-id backup` / `sui-id restore` subcommands with hot SQLite snapshot.
 - `docs/threat-model.md` and a documentation index in the README.
 - Signing key rotation UI with a JWKS grace window.
+- CSRF tokens on every admin form (synchronizer-token + double-submit cookie).
 
 ## Explicitly **not** on the roadmap
 

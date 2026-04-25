@@ -7,8 +7,9 @@ use crate::errors::HttpError;
 use crate::handlers::{
     clear_session_cookie, session_cookie, AppStateExt, CurrentAdmin, CurrentUser, SESSION_COOKIE,
 };
+use crate::state::AppState;
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
+use axum::http::{header, HeaderValue, StatusCode};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::Form;
 use axum_extra::extract::cookie::CookieJar;
@@ -24,8 +25,17 @@ use sui_id_shared::ids::{ClientId, SessionId, UserId};
 use sui_id_store::repos::{audit, clients, state, users};
 use sui_id_web::{
     pages::DashboardData, render_audit, render_clients, render_dashboard, render_login,
-    render_users, Flash, FlashKind,
+    render_signing_keys, render_users, Flash, FlashKind,
 };
+
+/// Attach a `Set-Cookie` header for the CSRF token to a response.
+fn with_csrf_cookie(mut resp: Response, app: &AppState, token: &str) -> Response {
+    let cookie = crate::csrf::csrf_cookie(token.to_owned(), app.config.server.cookie_secure);
+    if let Ok(v) = HeaderValue::from_str(&cookie.to_string()) {
+        resp.headers_mut().append(header::SET_COOKIE, v);
+    }
+    resp
+}
 
 // ---------- login ----------
 
@@ -112,6 +122,7 @@ pub async fn logout(
 pub async fn dashboard(
     state_ext: AppStateExt,
     CurrentAdmin(admin_id): CurrentAdmin,
+    jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
     let admin = users::get(&app.db, admin_id).map_err(|e| HttpError::html(CoreError::from(e)))?;
@@ -127,7 +138,9 @@ pub async fn dashboard(
         client_count: clients_n,
         issuer: app.issuer().to_owned(),
     };
-    Ok(Html(render_dashboard(data, None)).into_response())
+    let token = crate::csrf::ensure_token(&jar);
+    let resp = Html(render_dashboard(data, None)).into_response();
+    Ok(with_csrf_cookie(resp, &app, &token))
 }
 
 // ---------- users ----------
@@ -135,6 +148,7 @@ pub async fn dashboard(
 pub async fn users_get(
     state_ext: AppStateExt,
     CurrentAdmin(admin_id): CurrentAdmin,
+    jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
     let admin = users::get(&app.db, admin_id).map_err(|e| HttpError::html(CoreError::from(e)))?;
@@ -151,7 +165,9 @@ pub async fn users_get(
             created_at: r.created_at,
         })
         .collect();
-    Ok(Html(render_users(summaries, None, admin.username)).into_response())
+    let token = crate::csrf::ensure_token(&jar);
+    let resp = Html(render_users(summaries, None, admin.username, token.clone())).into_response();
+    Ok(with_csrf_cookie(resp, &app, &token))
 }
 
 #[derive(Debug, Deserialize)]
@@ -162,14 +178,18 @@ pub struct CreateUserForm {
     pub password: String,
     #[serde(default)]
     pub is_admin: Option<String>,
+    #[serde(rename = "_csrf", default)]
+    pub csrf: String,
 }
 
 pub async fn users_create(
     state_ext: AppStateExt,
     CurrentAdmin(admin_id): CurrentAdmin,
+    jar: CookieJar,
     Form(form): Form<CreateUserForm>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
+    crate::handlers::enforce_csrf(&jar, Some(&form.csrf))?;
     let display = if form.display_name.trim().is_empty() {
         None
     } else {
@@ -192,21 +212,26 @@ pub async fn users_create(
         },
     )
     .map_err(HttpError::html)?;
+    let _ = &app; // hush
     Ok(Redirect::to("/admin/users").into_response())
 }
 
 #[derive(Debug, Deserialize)]
 pub struct DisableForm {
     pub disabled: String,
+    #[serde(rename = "_csrf", default)]
+    pub csrf: String,
 }
 
 pub async fn users_set_disabled(
     state_ext: AppStateExt,
     CurrentAdmin(admin_id): CurrentAdmin,
+    jar: CookieJar,
     Path(id): Path<String>,
     Form(form): Form<DisableForm>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
+    crate::handlers::enforce_csrf(&jar, Some(&form.csrf))?;
     let target = UserId::from_str(&id)
         .map_err(|_| HttpError::html(CoreError::BadRequest("invalid user id".into())))?;
     let value = matches!(form.disabled.as_str(), "true" | "on" | "1");
@@ -214,12 +239,22 @@ pub async fn users_set_disabled(
     Ok(Redirect::to("/admin/users").into_response())
 }
 
+/// `_csrf`-only body: confirmation-style POSTs that have no other fields.
+#[derive(Debug, Deserialize, Default)]
+pub struct CsrfOnlyForm {
+    #[serde(rename = "_csrf", default)]
+    pub csrf: String,
+}
+
 pub async fn users_delete(
     state_ext: AppStateExt,
     CurrentAdmin(admin_id): CurrentAdmin,
+    jar: CookieJar,
     Path(id): Path<String>,
+    Form(form): Form<CsrfOnlyForm>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
+    crate::handlers::enforce_csrf(&jar, Some(&form.csrf))?;
     let target = UserId::from_str(&id)
         .map_err(|_| HttpError::html(CoreError::BadRequest("invalid user id".into())))?;
     admin_uc::delete_user(&app.db, admin_id, target).map_err(HttpError::html)?;
@@ -231,6 +266,7 @@ pub async fn users_delete(
 pub async fn clients_get(
     state_ext: AppStateExt,
     CurrentAdmin(admin_id): CurrentAdmin,
+    jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
     let rows = admin_uc::list_clients(&app.db, admin_id).map_err(HttpError::html)?;
@@ -246,7 +282,9 @@ pub async fn clients_get(
             created_at: r.created_at,
         })
         .collect();
-    Ok(Html(render_clients(summaries, None, None)).into_response())
+    let token = crate::csrf::ensure_token(&jar);
+    let resp = Html(render_clients(summaries, None, None, token.clone())).into_response();
+    Ok(with_csrf_cookie(resp, &app, &token))
 }
 
 #[derive(Debug, Deserialize)]
@@ -255,14 +293,18 @@ pub struct CreateClientForm {
     pub redirect_uris: String,
     #[serde(default)]
     pub confidential: Option<String>,
+    #[serde(rename = "_csrf", default)]
+    pub csrf: String,
 }
 
 pub async fn clients_create(
     state_ext: AppStateExt,
     CurrentAdmin(admin_id): CurrentAdmin,
+    jar: CookieJar,
     Form(form): Form<CreateClientForm>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
+    crate::handlers::enforce_csrf(&jar, Some(&form.csrf))?;
     let uris: Vec<String> = form
         .redirect_uris
         .lines()
@@ -301,16 +343,20 @@ pub async fn clients_create(
 
     let secret_payload =
         created.generated_secret.map(|s| (created.row.id.to_string(), s));
-    Ok(Html(render_clients(summaries, None, secret_payload)).into_response())
+    let token = crate::csrf::ensure_token(&jar);
+    let resp = Html(render_clients(summaries, None, secret_payload, token.clone())).into_response();
+    Ok(with_csrf_cookie(resp, &app, &token))
 }
 
 pub async fn clients_set_disabled(
     state_ext: AppStateExt,
     CurrentAdmin(admin_id): CurrentAdmin,
+    jar: CookieJar,
     Path(id): Path<String>,
     Form(form): Form<DisableForm>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
+    crate::handlers::enforce_csrf(&jar, Some(&form.csrf))?;
     let target = ClientId::from_str(&id)
         .map_err(|_| HttpError::html(CoreError::BadRequest("invalid client id".into())))?;
     let value = matches!(form.disabled.as_str(), "true" | "on" | "1");
@@ -321,9 +367,12 @@ pub async fn clients_set_disabled(
 pub async fn clients_delete(
     state_ext: AppStateExt,
     CurrentAdmin(admin_id): CurrentAdmin,
+    jar: CookieJar,
     Path(id): Path<String>,
+    Form(form): Form<CsrfOnlyForm>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
+    crate::handlers::enforce_csrf(&jar, Some(&form.csrf))?;
     let target = ClientId::from_str(&id)
         .map_err(|_| HttpError::html(CoreError::BadRequest("invalid client id".into())))?;
     admin_uc::delete_client(&app.db, admin_id, target).map_err(HttpError::html)?;
@@ -335,6 +384,7 @@ pub async fn clients_delete(
 pub async fn audit_get(
     state_ext: AppStateExt,
     CurrentAdmin(_): CurrentAdmin,
+    jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
     let entries = audit::recent(&app.db, 200)
@@ -350,7 +400,9 @@ pub async fn audit_get(
             note: r.note,
         })
         .collect();
-    Ok(Html(render_audit(dtos, None)).into_response())
+    let token = crate::csrf::ensure_token(&jar);
+    let resp = Html(render_audit(dtos, None)).into_response();
+    Ok(with_csrf_cookie(resp, &app, &token))
 }
 
 // ---------- signing keys ----------
@@ -358,6 +410,7 @@ pub async fn audit_get(
 pub async fn signing_keys_get(
     state_ext: AppStateExt,
     CurrentAdmin(admin_id): CurrentAdmin,
+    jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
     let rows = admin_uc::list_signing_keys(&app.db, admin_id).map_err(HttpError::html)?;
@@ -371,14 +424,19 @@ pub async fn signing_keys_get(
             rotated_at: r.rotated_at,
         })
         .collect();
-    Ok(Html(sui_id_web::render_signing_keys(summaries, None)).into_response())
+    let token = crate::csrf::ensure_token(&jar);
+    let resp = Html(render_signing_keys(summaries, None, token.clone())).into_response();
+    Ok(with_csrf_cookie(resp, &app, &token))
 }
 
 pub async fn signing_keys_rotate(
     state_ext: AppStateExt,
     CurrentAdmin(admin_id): CurrentAdmin,
+    jar: CookieJar,
+    Form(form): Form<CsrfOnlyForm>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
+    crate::handlers::enforce_csrf(&jar, Some(&form.csrf))?;
     admin_uc::rotate_signing_key(&app.db, &app.clock, admin_id).map_err(HttpError::html)?;
     Ok(Redirect::to("/admin/signing-keys").into_response())
 }
@@ -386,9 +444,12 @@ pub async fn signing_keys_rotate(
 pub async fn signing_keys_delete(
     state_ext: AppStateExt,
     CurrentAdmin(admin_id): CurrentAdmin,
+    jar: CookieJar,
     Path(id): Path<String>,
+    Form(form): Form<CsrfOnlyForm>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
+    crate::handlers::enforce_csrf(&jar, Some(&form.csrf))?;
     let target = sui_id_shared::ids::SigningKeyId::from_str(&id)
         .map_err(|_| HttpError::html(CoreError::BadRequest("invalid signing key id".into())))?;
     admin_uc::delete_signing_key(&app.db, admin_id, target).map_err(HttpError::html)?;

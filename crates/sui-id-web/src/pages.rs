@@ -146,7 +146,7 @@ pub fn render_dashboard(data: DashboardData, flash: Option<Flash>) -> String {
 
 // ---------- users ----------
 
-fn user_row_view(u: UserSummary, current_user: String) -> impl IntoView {
+fn user_row_view(u: UserSummary, current_user: String, csrf: String) -> impl IntoView {
     let status = if u.is_deleted {
         "deleted"
     } else if u.is_disabled {
@@ -165,6 +165,8 @@ fn user_row_view(u: UserSummary, current_user: String) -> impl IntoView {
     let action_target = if is_disabled { "false" } else { "true" };
     let disabled_url = format!("/admin/users/{id_str}/disabled");
     let delete_url = format!("/admin/users/{id_str}/delete");
+    let csrf_disable = csrf.clone();
+    let csrf_delete = csrf.clone();
 
     let actions = if is_self {
         view! { <td class="muted">"(you)"</td> }.into_any()
@@ -174,12 +176,14 @@ fn user_row_view(u: UserSummary, current_user: String) -> impl IntoView {
         view! {
             <td>
                 <form method="post" action=disabled_url style="display:inline">
+                    <input type="hidden" name="_csrf" value=csrf_disable />
                     <input type="hidden" name="disabled" value=action_target />
                     <button type="submit" class="secondary">{action_label}</button>
                 </form>
                 " "
                 <form method="post" action=delete_url style="display:inline"
                       onsubmit="return confirm('Permanently delete this user?');">
+                    <input type="hidden" name="_csrf" value=csrf_delete />
                     <button type="submit" class="danger">"Delete"</button>
                 </form>
             </td>
@@ -198,11 +202,18 @@ fn user_row_view(u: UserSummary, current_user: String) -> impl IntoView {
     }
 }
 
-pub fn render_users(users: Vec<UserSummary>, flash: Option<Flash>, current_user: String) -> String {
+pub fn render_users(
+    users: Vec<UserSummary>,
+    flash: Option<Flash>,
+    current_user: String,
+    csrf_token: String,
+) -> String {
     render(move || {
+        let csrf_for_rows = csrf_token.clone();
+        let csrf_for_form = csrf_token.clone();
         let rows: Vec<_> = users
             .into_iter()
-            .map(|u| user_row_view(u, current_user.clone()))
+            .map(|u| user_row_view(u, current_user.clone(), csrf_for_rows.clone()))
             .collect();
         view! {
             <Shell title="Users".to_string() show_nav=true current=Some("users".to_string())>
@@ -210,6 +221,7 @@ pub fn render_users(users: Vec<UserSummary>, flash: Option<Flash>, current_user:
                 {flash_banner(flash)}
                 <h3>"Add a user"</h3>
                 <form method="post" action="/admin/users">
+                    <input type="hidden" name="_csrf" value=csrf_for_form />
                     <label for="u-name">"Username"</label>
                     <input id="u-name" name="username" type="text" required=true autocomplete="off" />
                     <label for="u-disp">"Display name (optional)"</label>
@@ -237,7 +249,7 @@ pub fn render_users(users: Vec<UserSummary>, flash: Option<Flash>, current_user:
 
 // ---------- clients ----------
 
-fn client_row_view(c: ClientSummary) -> impl IntoView {
+fn client_row_view(c: ClientSummary, csrf: String) -> impl IntoView {
     let status = if c.is_deleted {
         "deleted"
     } else if c.is_disabled {
@@ -253,6 +265,8 @@ fn client_row_view(c: ClientSummary) -> impl IntoView {
     let action_target = if is_disabled { "false" } else { "true" };
     let disabled_url = format!("/admin/clients/{id_str}/disabled");
     let delete_url = format!("/admin/clients/{id_str}/delete");
+    let csrf_disable = csrf.clone();
+    let csrf_delete = csrf.clone();
 
     let actions = if is_deleted {
         view! { <td class="muted">"-"</td> }.into_any()
@@ -260,12 +274,14 @@ fn client_row_view(c: ClientSummary) -> impl IntoView {
         view! {
             <td>
                 <form method="post" action=disabled_url style="display:inline">
+                    <input type="hidden" name="_csrf" value=csrf_disable />
                     <input type="hidden" name="disabled" value=action_target />
                     <button type="submit" class="secondary">{action_label}</button>
                 </form>
                 " "
                 <form method="post" action=delete_url style="display:inline"
                       onsubmit="return confirm('Permanently delete this client and revoke its tokens?');">
+                    <input type="hidden" name="_csrf" value=csrf_delete />
                     <button type="submit" class="danger">"Delete"</button>
                 </form>
             </td>
@@ -288,8 +304,11 @@ pub fn render_clients(
     clients: Vec<ClientSummary>,
     flash: Option<Flash>,
     new_secret: Option<(String, String)>,
+    csrf_token: String,
 ) -> String {
     render(move || {
+        let csrf_for_rows = csrf_token.clone();
+        let csrf_for_form = csrf_token.clone();
         let secret_block = new_secret.map(|(cid, sec)| {
             view! {
                 <div class="flash warn" role="status">
@@ -299,7 +318,10 @@ pub fn render_clients(
                 </div>
             }
         });
-        let rows: Vec<_> = clients.into_iter().map(client_row_view).collect();
+        let rows: Vec<_> = clients
+            .into_iter()
+            .map(|c| client_row_view(c, csrf_for_rows.clone()))
+            .collect();
         view! {
             <Shell title="Clients".to_string() show_nav=true current=Some("clients".to_string())>
                 <h2>"Clients"</h2>
@@ -307,6 +329,7 @@ pub fn render_clients(
                 {secret_block}
                 <h3>"Register a client"</h3>
                 <form method="post" action="/admin/clients">
+                    <input type="hidden" name="_csrf" value=csrf_for_form />
                     <label for="c-name">"Application name"</label>
                     <input id="c-name" name="name" type="text" required=true />
                     <label for="c-uris">"Redirect URIs (one per line; https or http loopback)"</label>
@@ -365,7 +388,10 @@ pub fn render_audit(entries: Vec<AuditLogEntryDto>, flash: Option<Flash>) -> Str
 
 // ---------- signing keys ----------
 
-fn signing_key_row_view(k: sui_id_shared::api::SigningKeySummary) -> impl IntoView {
+fn signing_key_row_view(
+    k: sui_id_shared::api::SigningKeySummary,
+    csrf: String,
+) -> impl IntoView {
     let id_str = k.id.to_string();
     let id_for_url = id_str.clone();
     let id_for_display = id_str.clone();
@@ -382,6 +408,7 @@ fn signing_key_row_view(k: sui_id_shared::api::SigningKeySummary) -> impl IntoVi
             <td>
                 <form method="post" action=delete_url style="display:inline"
                       onsubmit="return confirm('Permanently delete this retired key? Tokens still in flight that were signed with it will fail to verify.');">
+                    <input type="hidden" name="_csrf" value=csrf />
                     <button type="submit" class="danger">"Delete"</button>
                 </form>
             </td>
@@ -403,9 +430,15 @@ fn signing_key_row_view(k: sui_id_shared::api::SigningKeySummary) -> impl IntoVi
 pub fn render_signing_keys(
     keys: Vec<sui_id_shared::api::SigningKeySummary>,
     flash: Option<Flash>,
+    csrf_token: String,
 ) -> String {
     render(move || {
-        let rows: Vec<_> = keys.into_iter().map(signing_key_row_view).collect();
+        let csrf_for_rows = csrf_token.clone();
+        let csrf_for_form = csrf_token.clone();
+        let rows: Vec<_> = keys
+            .into_iter()
+            .map(|k| signing_key_row_view(k, csrf_for_rows.clone()))
+            .collect();
         view! {
             <Shell
                 title="Signing keys".to_string()
@@ -421,6 +454,7 @@ pub fn render_signing_keys(
                      tokens have expired, you can safely delete the retired key from this page."
                 </p>
                 <form method="post" action="/admin/signing-keys/rotate">
+                    <input type="hidden" name="_csrf" value=csrf_for_form />
                     <button type="submit">"Rotate signing key"</button>
                 </form>
 

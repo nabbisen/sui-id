@@ -182,6 +182,26 @@ where
     }
 }
 
+/// Enforce CSRF on a state-changing admin POST. Returns Err(403) when the
+/// cookie is missing or does not match the form's `_csrf` field.
+///
+/// `form_token` is whatever the form-decoded body produced for the
+/// `_csrf` field; the caller pulls this out of its own `Form<T>` struct
+/// (each admin POST struct now carries a `csrf: String` field renamed
+/// from the wire name `_csrf`).
+pub fn enforce_csrf(
+    jar: &axum_extra::extract::cookie::CookieJar,
+    form_token: Option<&str>,
+) -> Result<(), HttpError> {
+    if crate::csrf::check_token(jar, form_token).is_some() {
+        return Ok(());
+    }
+    tracing::warn!("CSRF token missing or mismatched on admin POST");
+    let mut err = HttpError::html(sui_id_core::CoreError::Forbidden);
+    err.force_status(axum::http::StatusCode::FORBIDDEN);
+    Err(err)
+}
+
 /// Apply a rate-limit decision to a request. Returns `Err` (mapped to 429
 /// with a `Retry-After` header) when the bucket is exhausted.
 ///

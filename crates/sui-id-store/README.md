@@ -5,7 +5,7 @@
 [![Dependency Status](https://deps.rs/crate/sui-id-store/latest/status.svg)](https://deps.rs/crate/sui-id-store)
 [![License](https://img.shields.io/github/license/nabbisen/sui-id-store)](https://github.com/nabbisen/sui-id-store/blob/main/LICENSE)
 
-Persistence layer (SQLite + field-level encryption) for sui-id, a self-hosted Rust OIDC provider. Owns the
+Persistence layer (SQLite + field-level encryption) for sui-id. Owns the
 SQLite connection, runs schema migrations on startup, and exposes thin
 repository functions for the domain layer in `sui-id-core`.
 
