@@ -1,0 +1,32 @@
+[package]
+name = "sui-id-store"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Persistence layer (SQLite + field-level encryption) for sui-id."
+
+[lints]
+workspace = true
+
+[dependencies]
+sui-id-shared = { path = "../sui-id-shared" }
+
+rusqlite = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+secrecy = { workspace = true }
+zeroize = { workspace = true }
+chacha20poly1305 = { workspace = true }
+rand = { workspace = true }
+rand_core = { workspace = true }
+base64ct = { workspace = true }
+subtle = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

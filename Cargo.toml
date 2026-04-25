@@ -1,0 +1,91 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/sui-id-bin",
+    "crates/sui-id-core",
+    "crates/sui-id-store",
+    "crates/sui-id-web",
+    "crates/sui-id-shared",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.91"
+license = "Apache-2.0"
+repository = "https://github.com/nabbisen/sui-id"
+homepage = "https://github.com/nabbisen/sui-id"
+authors = ["nabbisen <nabbisen@scqr.net>"]
+
+[workspace.dependencies]
+# Async runtime / web
+tokio = { version = "1.40", features = ["macros", "rt-multi-thread", "signal", "fs", "sync", "time"] }
+axum = { version = "0.8", features = ["macros"] }
+axum-extra = { version = "0.10", features = ["cookie"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "compression-gzip", "set-header"] }
+hyper = "1.4"
+
+# Serde / config
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Storage
+rusqlite = { version = "0.32", features = ["bundled", "chrono"] }
+
+# Crypto / hashing
+argon2 = "0.5"
+rand = "0.8"
+rand_core = { version = "0.6", features = ["std"] }
+chacha20poly1305 = "0.10"
+ed25519-dalek = { version = "2.1", features = ["rand_core", "pkcs8"] }
+sha2 = "0.10"
+hmac = "0.12"
+subtle = "2.6"
+zeroize = { version = "1.8", features = ["derive"] }
+secrecy = { version = "0.10", features = ["serde"] }
+base64ct = { version = "1.6", features = ["alloc"] }
+
+# Logging / errors
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Misc
+uuid = { version = "1.10", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+url = { version = "2.5", features = ["serde"] }
+percent-encoding = "2.3"
+
+# UI (Leptos used in SSR-only mode for the admin panel; no WASM/JS bundle is shipped
+#  in line with the project's minimal-runtime philosophy).
+leptos = { version = "0.8", default-features = false, features = ["ssr"] }
+
+# Asset embedding
+include_dir = "0.7"
+
+# Test helpers
+tempfile = "3.13"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unused_must_use = "deny"
+
+[workspace.lints.clippy]
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+todo = "warn"
+unimplemented = "warn"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"
+
+[profile.dev]
+opt-level = 0

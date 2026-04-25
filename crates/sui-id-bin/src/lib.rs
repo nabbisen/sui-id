@@ -1,0 +1,24 @@
+//! # sui-id-bin
+//!
+//! Entry point: configuration loading, master-key resolution, tracing setup,
+//! Axum routing, asset embedding, and graceful shutdown. The library half
+//! exists so that integration tests in `tests/` can spin up a fully wired
+//! server without going through `main`.
+
+#![forbid(unsafe_code)]
+
+pub mod assets;
+pub mod config;
+pub mod errors;
+pub mod gc;
+pub mod handlers;
+pub mod keyring;
+pub mod ratelimit;
+pub mod router;
+pub mod startup;
+pub mod state;
+
+pub use config::Config;
+pub use router::build_router;
+pub use startup::Startup;
+pub use state::AppState;

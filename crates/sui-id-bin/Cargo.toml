@@ -1,0 +1,62 @@
+[package]
+name = "sui-id-bin"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "sui-id main binary: HTTP server, configuration, asset embedding."
+default-run = "sui-id"
+
+[[bin]]
+name = "sui-id"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+sui-id-shared = { path = "../sui-id-shared" }
+sui-id-store  = { path = "../sui-id-store" }
+sui-id-core   = { path = "../sui-id-core" }
+sui-id-web    = { path = "../sui-id-web" }
+
+tokio = { workspace = true }
+axum = { workspace = true }
+axum-extra = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+hyper = { workspace = true }
+time = "0.3"
+cookie = "0.18"
+
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+url = { workspace = true }
+secrecy = { workspace = true }
+rand = { workspace = true }
+rand_core = { workspace = true }
+base64ct = { workspace = true }
+chacha20poly1305 = { workspace = true }
+include_dir = { workspace = true }
+percent-encoding = { workspace = true }
+subtle = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true }
+serde_json = { workspace = true }
+url = { workspace = true }
+sha2 = { workspace = true }
+base64ct = { workspace = true }
+sui-id-store = { path = "../sui-id-store" }
+http = "1"
+http-body-util = "0.1"
