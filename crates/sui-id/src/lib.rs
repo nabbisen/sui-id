@@ -1,4 +1,4 @@
-//! # sui-id-bin
+//! # sui-id
 //!
 //! Entry point: configuration loading, master-key resolution, tracing setup,
 //! Axum routing, asset embedding, and graceful shutdown. The library half
@@ -12,6 +12,7 @@ pub mod config;
 pub mod errors;
 pub mod gc;
 pub mod handlers;
+pub mod ipnet;
 pub mod keyring;
 pub mod ratelimit;
 pub mod router;

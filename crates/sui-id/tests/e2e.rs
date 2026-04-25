@@ -10,8 +10,8 @@ use axum::body::{to_bytes, Body};
 use axum::http::{header, Method, Request, StatusCode};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use sha2::{Digest, Sha256};
-use sui_id_bin::config::{Config, LogConfig, ServerConfig, StorageConfig, TokensConfig};
-use sui_id_bin::{build_router, AppState};
+use sui_id::config::{Config, LogConfig, ServerConfig, StorageConfig, TokensConfig};
+use sui_id::{build_router, AppState};
 use sui_id_store::{crypto::MasterKey, Database};
 use tower::ServiceExt;
 use url::Url;
@@ -28,6 +28,7 @@ fn test_app() -> AppState {
             listen_addr: "127.0.0.1:0".into(),
             issuer: "https://idp.test".into(),
             cookie_secure: false,
+            trusted_proxies: Vec::new(),
         },
         storage: StorageConfig {
             db_path: "/tmp/unused.sqlite".into(),
@@ -411,7 +412,7 @@ async fn gc_purges_expired_auth_codes() {
         .expect("query");
     assert!(count_before >= 1);
 
-    sui_id_bin::gc::run_once(&state);
+    sui_id::gc::run_once(&state);
 
     let count_after: i64 = state
         .db
@@ -422,6 +423,135 @@ async fn gc_purges_expired_auth_codes() {
         })
         .expect("query");
     assert_eq!(count_after, 0, "expired auth code should have been GCed");
+}
+
+#[tokio::test]
+async fn logout_with_id_token_hint_revokes_session_and_redirects() {
+    let state = test_app();
+    let session = complete_setup_and_login(&state).await;
+    let (client_id, client_secret) = create_client(&state, &session).await;
+
+    // Drive an authorization to obtain an id_token.
+    let (verifier, challenge) = pkce_pair();
+    let auth_url = format!(
+        "/oauth2/authorize?client_id={client_id}&redirect_uri=https%3A%2F%2Frp.test%2Fcb\
+         &response_type=code&scope=openid&code_challenge={challenge}&code_challenge_method=S256"
+    );
+    let router = build_router(state.clone());
+    let req = Request::builder()
+        .method(Method::GET)
+        .uri(&auth_url)
+        .header(header::COOKIE, format!("sui_id_session={session}"))
+        .body(Body::empty())
+        .expect("req");
+    let resp = router.oneshot(req).await.expect("authorize");
+    let location = resp.headers().get(header::LOCATION).and_then(|v| v.to_str().ok()).unwrap_or("").to_owned();
+    let parsed = Url::parse(&location).expect("redirect");
+    let code = parsed.query_pairs().find(|(k, _)| k == "code").map(|(_, v)| v.into_owned()).expect("code");
+
+    let body = format!(
+        "grant_type=authorization_code&code={code}&redirect_uri=https%3A%2F%2Frp.test%2Fcb\
+         &client_id={client_id}&client_secret={client_secret}&code_verifier={verifier}"
+    );
+    let router = build_router(state.clone());
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri("/oauth2/token")
+        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .body(Body::from(body))
+        .expect("req");
+    let resp = router.oneshot(req).await.expect("token");
+    let body_bytes = read_body(resp.into_body()).await;
+    let json: serde_json::Value = serde_json::from_slice(&body_bytes).expect("json");
+    let id_token = json["id_token"].as_str().expect("id_token").to_owned();
+
+    let logout_url = format!(
+        "/oauth2/logout?id_token_hint={}&post_logout_redirect_uri=https%3A%2F%2Frp.test%2Fcb&state=xyz",
+        utf8_encode(&id_token)
+    );
+    let router = build_router(state.clone());
+    let req = Request::builder()
+        .method(Method::GET)
+        .uri(&logout_url)
+        .header(header::COOKIE, format!("sui_id_session={session}"))
+        .body(Body::empty())
+        .expect("req");
+    let resp = router.oneshot(req).await.expect("logout");
+    assert!(
+        resp.status().is_redirection(),
+        "expected redirect, got {}",
+        resp.status()
+    );
+    let location = resp
+        .headers()
+        .get(header::LOCATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    assert!(
+        location.starts_with("https://rp.test/cb"),
+        "should redirect back to RP: {location}"
+    );
+    assert!(location.contains("state=xyz"));
+    let set_cookie = resp
+        .headers()
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .find(|s| s.starts_with("sui_id_session="))
+        .expect("session cookie cleared");
+    assert!(set_cookie.contains("Max-Age=0"));
+}
+
+#[tokio::test]
+async fn logout_rejects_unregistered_post_redirect() {
+    let state = test_app();
+    let session = complete_setup_and_login(&state).await;
+    let (client_id, _secret) = create_client(&state, &session).await;
+
+    let logout_url = format!(
+        "/oauth2/logout?client_id={client_id}&post_logout_redirect_uri=https%3A%2F%2Fattacker.test%2F"
+    );
+    let router = build_router(state.clone());
+    let req = Request::builder()
+        .method(Method::GET)
+        .uri(&logout_url)
+        .header(header::COOKIE, format!("sui_id_session={session}"))
+        .body(Body::empty())
+        .expect("req");
+    let resp = router.oneshot(req).await.expect("logout");
+    if resp.status().is_redirection() {
+        let loc = resp
+            .headers()
+            .get(header::LOCATION)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+        assert!(!loc.contains("attacker.test"));
+    } else {
+        assert!(resp.status().is_success());
+    }
+}
+
+#[tokio::test]
+async fn discovery_advertises_end_session_endpoint() {
+    let state = test_app();
+    let router = build_router(state);
+    let req = Request::builder()
+        .method(Method::GET)
+        .uri("/.well-known/openid-configuration")
+        .body(Body::empty())
+        .expect("req");
+    let resp = router.oneshot(req).await.expect("discovery");
+    let body_bytes = read_body(resp.into_body()).await;
+    let json: serde_json::Value = serde_json::from_slice(&body_bytes).expect("json");
+    let ese = json["end_session_endpoint"]
+        .as_str()
+        .expect("end_session_endpoint");
+    assert!(ese.ends_with("/oauth2/logout"), "{ese}");
+}
+
+fn utf8_encode(s: &str) -> String {
+    use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+    utf8_percent_encode(s, NON_ALPHANUMERIC).to_string()
 }
 
 // `http` is brought in transitively by axum; we only need its HeaderMap.

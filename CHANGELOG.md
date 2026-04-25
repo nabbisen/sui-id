@@ -5,11 +5,49 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.0] - 2026-04-25
+
+### Added
+- **OpenID Connect RP-Initiated Logout 1.0** (`/oauth2/logout`).
+  Accepts `id_token_hint`, `post_logout_redirect_uri`, `state`, and a
+  `client_id` fallback. Verifies the ID token signature against the JWKS
+  (expired hints accepted, per the spec). Validates the
+  `post_logout_redirect_uri` against the hinted client's registered
+  `redirect_uris` — unregistered URIs are silently ignored, never
+  redirected to. Revokes all of the user's outstanding sessions and
+  refresh tokens, clears the session cookie, and either redirects back to
+  the RP or shows a static "Signed out" page.
+- **`server.trusted_proxies`** configuration. When this CIDR list is
+  non-empty *and* the immediate socket peer is in it, sui-id walks the
+  `X-Forwarded-For` header from rightmost to leftmost (skipping addresses
+  that are themselves trusted proxies) to derive the real client IP for
+  rate-limiting and logging. Defaults to empty (always use the socket
+  peer), which is the correct setting for direct exposure.
+- **`sui-id.example.toml`** at the repository root: a fully commented
+  starter configuration covering every setting and its trade-offs.
+- **In-house CIDR matcher** (`sui_id::ipnet`) for IPv4 and IPv6, used by
+  `trusted_proxies`. No additional dependency was required.
+- 6 new tests: 7 CIDR unit tests in `sui_id::ipnet`, plus 3 new E2E tests
+  (`logout_with_id_token_hint_revokes_session_and_redirects`,
+  `logout_rejects_unregistered_post_redirect`,
+  `discovery_advertises_end_session_endpoint`).
+- `sui_id_core::tokens::verify_id_token` helper for ID token verification
+  with optional acceptance of expired tokens (used by logout).
+- `sui_id_core::session::logout_user` end-to-end logout helper that
+  revokes sessions and refresh tokens together.
+
+### Changed
+- Binary crate renamed `sui-id-bin` → `sui-id`. End users now install with
+  `cargo install sui-id`.
+- `static/` moved from the repository root into `crates/sui-id/static/`
+  so that `cargo install sui-id` produces a working binary without
+  needing the surrounding workspace.
+
+## [0.1.0] - 2026-04-25
 
 ### Added
 - Initial workspace skeleton with five crates: `sui-id-shared`, `sui-id-store`,
-  `sui-id-core`, `sui-id-web`, and `sui-id-bin`.
+  `sui-id-core`, `sui-id-web`, and `sui-id` (the binary crate).
 - SQLite storage layer with bundled SQLite, schema migration runner, and
   per-column XChaCha20-Poly1305 encryption for sensitive fields.
 - Argon2id password hashing with a minimum-length policy (no composition rules,

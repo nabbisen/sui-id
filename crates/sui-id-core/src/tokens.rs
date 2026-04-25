@@ -189,6 +189,34 @@ pub fn verify_pkce(method: &str, verifier: &str, expected_challenge: &str) -> Co
     }
 }
 
+/// Verify a sui-id ID token against the active and recently-rotated
+/// signing keys. Returns the validated claims.
+///
+/// `accept_expired` allows passing tokens that have aged out — used by
+/// RP-initiated logout, where the spec encourages accepting expired hints
+/// so the user can still sign out after their token has aged.
+pub fn verify_id_token(
+    db: &sui_id_store::Database,
+    clock: &crate::time::SharedClock,
+    token: &str,
+    accept_expired: bool,
+) -> crate::CoreResult<IdTokenClaims> {
+    use ed25519_dalek::VerifyingKey;
+    use sui_id_store::repos::signing_keys;
+
+    let resolver = |kid: &str| -> Option<VerifyingKey> {
+        let rows = signing_keys::list_published(db).ok()?;
+        let m = rows.into_iter().find(|r| r.id.to_string() == kid)?;
+        let arr: [u8; 32] = m.public_key.as_slice().try_into().ok()?;
+        VerifyingKey::from_bytes(&arr).ok()
+    };
+    let decoded: crate::jwt::Decoded<IdTokenClaims> = crate::jwt::verify(token, resolver)?;
+    if !accept_expired && decoded.claims.exp < clock.now().timestamp() {
+        return Err(crate::CoreError::Unauthenticated);
+    }
+    Ok(decoded.claims)
+}
+
 /// Verify a sui-id access token against the active and recently-rotated
 /// signing keys. Returns the validated claims.
 ///

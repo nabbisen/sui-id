@@ -15,6 +15,7 @@ pub fn build_router(app: AppState) -> Router {
         .route("/oauth2/authorize", get(oidc::authorize))
         .route("/oauth2/token", post(oidc::token))
         .route("/oauth2/userinfo", get(oidc::userinfo).post(oidc::userinfo))
+        .route("/oauth2/logout", get(oidc::logout))
         .route("/admin/login", get(admin::login_get).post(admin::login_post))
         .route("/admin/logout", post(admin::logout).get(admin::logout))
         .route("/admin", get(admin::dashboard))

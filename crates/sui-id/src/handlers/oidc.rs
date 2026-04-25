@@ -356,3 +356,116 @@ pub async fn userinfo(
     })
     .into_response())
 }
+
+// ---------- /logout (RP-initiated) ----------
+
+/// Query parameters for the RP-initiated logout endpoint, per
+/// OpenID Connect RP-Initiated Logout 1.0.
+#[derive(Debug, Deserialize)]
+pub struct LogoutQuery {
+    /// Optional ID Token previously issued to this RP. Used as a hint for
+    /// which user to log out and verified against our JWKS.
+    pub id_token_hint: Option<String>,
+    /// Where to send the user after logout. Must match a `redirect_uris`
+    /// entry on the client referenced by `id_token_hint`. Without a hint
+    /// we cannot validate against a client and must reject the parameter.
+    pub post_logout_redirect_uri: Option<String>,
+    /// Opaque value echoed back to the RP for CSRF protection.
+    pub state: Option<String>,
+    /// Optional `client_id`. Some RPs send it explicitly; we accept it as
+    /// a fallback when there is no `id_token_hint`.
+    pub client_id: Option<String>,
+}
+
+/// `GET /oauth2/logout`. End the user's session and, if a valid
+/// `post_logout_redirect_uri` was supplied, redirect to it.
+pub async fn logout(
+    state_ext: AppStateExt,
+    Query(q): Query<LogoutQuery>,
+    headers: HeaderMap,
+) -> Result<Response, HttpError> {
+    let axum::extract::State(app) = state_ext;
+    let mut user_id: Option<sui_id_shared::ids::UserId> = None;
+    let mut hinted_client: Option<sui_id_shared::ids::ClientId> = None;
+
+    // Prefer the id_token_hint when present.
+    if let Some(token) = &q.id_token_hint {
+        // Verify the signature; accept expired tokens so the user can still
+        // log out after their session has gone stale.
+        if let Ok(claims) = sui_id_core::tokens::verify_id_token(&app.db, &app.clock, token, true) {
+            user_id = claims.sub.parse().ok();
+            hinted_client = claims.aud.parse().ok();
+        } else {
+            tracing::warn!("logout: id_token_hint failed signature verification");
+        }
+    }
+
+    // Fall back to the session cookie for the user identification.
+    if user_id.is_none() {
+        if let Some(cookie) = headers
+            .get(header::COOKIE)
+            .and_then(|v| v.to_str().ok())
+        {
+            for part in cookie.split(';') {
+                let part = part.trim();
+                if let Some(value) = part.strip_prefix("sui_id_session=") {
+                    if let Ok(sid) = value.parse() {
+                        if let Ok(uid) = sui_id_core::session::resolve(&app.db, &app.clock, sid) {
+                            user_id = Some(uid);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(uid) = user_id {
+        sui_id_core::session::logout_user(&app.db, &app.clock, uid)
+            .map_err(HttpError::html)?;
+    }
+
+    // Validate the post_logout_redirect_uri against the hinted client.
+    let redirect_target = match (q.post_logout_redirect_uri.as_deref(), hinted_client.or_else(|| q.client_id.as_deref().and_then(|s| s.parse().ok()))) {
+        (Some(uri), Some(cid)) => match sui_id_store::repos::clients::get(&app.db, cid) {
+            Ok(client) if !client.is_disabled && !client.is_deleted => {
+                if client.redirect_uris.iter().any(|u| u == uri) {
+                    Some(uri.to_owned())
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        },
+        _ => None,
+    };
+
+    // Always clear the session cookie before redirecting / responding.
+    let clear_cookie = format!(
+        "sui_id_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0{}",
+        if app.config.server.cookie_secure { "; Secure" } else { "" }
+    );
+
+    if let Some(mut url) = redirect_target {
+        if let Some(state) = q.state.as_deref() {
+            let sep = if url.contains('?') { '&' } else { '?' };
+            url.push(sep);
+            url.push_str("state=");
+            url.push_str(&utf8_percent_encode(state, NON_ALPHANUMERIC).to_string());
+        }
+        let mut resp = Redirect::to(&url).into_response();
+        if let Ok(v) = axum::http::HeaderValue::from_str(&clear_cookie) {
+            resp.headers_mut().insert(header::SET_COOKIE, v);
+        }
+        return Ok(resp);
+    }
+
+    // No (or invalid) post_logout_redirect_uri: render a small confirmation page.
+    let body = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Signed out</title></head>\
+                <body><h1>Signed out</h1><p>You have been signed out of sui-id.</p>\
+                <p><a href=\"/admin/login\">Sign in again</a></p></body></html>";
+    let mut resp = (axum::http::StatusCode::OK, axum::response::Html(body)).into_response();
+    if let Ok(v) = axum::http::HeaderValue::from_str(&clear_cookie) {
+        resp.headers_mut().insert(header::SET_COOKIE, v);
+    }
+    Ok(resp)
+}

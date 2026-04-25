@@ -7,14 +7,8 @@ a promise.
 
 - **Documentation pass.** Expand `docs/` with an operator's guide, integrator
   guide, and threat model.
-- **Configuration file template.** Ship a `sui-id.example.toml` with comments
-  next to each setting.
 - **Backup helper.** A subcommand that dumps the SQLite file and the master
   key into a tarball with proper permissions, plus a `--restore` counterpart.
-- **`X-Forwarded-For` opt-in.** When sui-id sits behind a trusted reverse
-  proxy, the rate-limit IP should come from that header. Today it always
-  comes from the socket peer.
-- **Log out endpoint.** RP-initiated logout per OIDC RP-Initiated Logout 1.0.
 
 ## Medium term
 
@@ -23,6 +17,9 @@ a promise.
   JWKS publish both for a grace window.
 - **Per-client scope policy.** Today every active client may request any
   scope. Allow clients to declare a permitted scope set.
+- **Per-client `post_logout_redirect_uris`.** Today logout reuses the
+  authorization `redirect_uris` set; a real deployment may want a separate
+  list. Adding it is a schema migration.
 - **MFA.** TOTP first; WebAuthn second. Both are big enough to be their own
   releases.
 
@@ -40,6 +37,11 @@ a promise.
 - Background GC of expired authorization codes, sessions, and refresh tokens.
 - Audit logging of authentication outcomes (success/failure).
 - `/healthz` endpoint suitable for liveness/readiness probes.
+- crates.io publication metadata; binary distributable via
+  `cargo install sui-id`.
+- OpenID Connect RP-Initiated Logout 1.0 (`/oauth2/logout`).
+- `server.trusted_proxies` opt-in for `X-Forwarded-For`-derived client IP.
+- Annotated `sui-id.example.toml` configuration template.
 
 ## Explicitly **not** on the roadmap
 

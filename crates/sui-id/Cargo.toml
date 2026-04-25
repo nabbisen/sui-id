@@ -1,12 +1,27 @@
 [package]
-name = "sui-id-bin"
+name = "sui-id"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 authors.workspace = true
-description = "sui-id main binary: HTTP server, configuration, asset embedding."
-default-run = "sui-id"
+keywords.workspace = true
+categories.workspace = true
+description = "Self-hosted, single-binary OpenID Connect provider in Rust. Install with `cargo install sui-id`."
+readme = "../../README.md"
+
+# Restrict what gets uploaded to crates.io.
+include = [
+    "src/**/*",
+    "tests/**/*",
+    "static/**/*",
+    "Cargo.toml",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+]
 
 [[bin]]
 name = "sui-id"
@@ -16,10 +31,10 @@ path = "src/main.rs"
 workspace = true
 
 [dependencies]
-sui-id-shared = { workspace = true }
-sui-id-store  = { workspace = true }
-sui-id-core   = { workspace = true }
-sui-id-web    = { workspace = true }
+sui-id-shared = { version = "0.2.0", path = "../sui-id-shared" }
+sui-id-store  = { version = "0.2.0", path = "../sui-id-store" }
+sui-id-core   = { version = "0.2.0", path = "../sui-id-core" }
+sui-id-web    = { version = "0.2.0", path = "../sui-id-web" }
 
 tokio = { workspace = true }
 axum = { workspace = true }
@@ -57,6 +72,7 @@ serde_json = { workspace = true }
 url = { workspace = true }
 sha2 = { workspace = true }
 base64ct = { workspace = true }
-sui-id-store = { path = "../sui-id-store" }
+percent-encoding = { workspace = true }
+sui-id-store = { version = "0.2.0", path = "../sui-id-store" }
 http = "1"
 http-body-util = "0.1"

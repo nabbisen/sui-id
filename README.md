@@ -3,12 +3,9 @@
 > A self-hosted, single-binary OpenID Connect provider written in Rust.
 > Quiet, careful, and small enough to read end to end.
 
-[![crates.io](https://img.shields.io/crates/v/sui-id?label=rust)](https://crates.io/crates/sui-id)
-[![Rust Documentation](https://docs.rs/sui-id/badge.svg?version=latest)](https://docs.rs/sui-id)
-[![Dependency Status](https://deps.rs/crate/sui-id/latest/status.svg)](https://deps.rs/crate/sui-id)
-[![License](https://img.shields.io/github/license/nabbisen/sui-id)](https://github.com/nabbisen/sui-id/blob/main/LICENSE)
-
-![logo](docs/assets/logo.png)
+[![status: pre-release](https://img.shields.io/badge/status-pre--release-orange)]()
+[![language: Rust](https://img.shields.io/badge/Rust-1.91-orange?logo=rust)]()
+[![license: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
 ---
 
@@ -49,13 +46,22 @@ and that's a feature.
 ## Quick start
 
 ```bash
-# Build
-cargo build --release
+# Install the binary from crates.io
+cargo install sui-id
 
 # Generate a starter config
-./target/release/sui-id --print-sample-config > sui-id.toml
+sui-id --print-sample-config > sui-id.toml
 
 # Edit issuer / paths if needed, then start
+sui-id --config sui-id.toml
+```
+
+If you'd rather build from source:
+
+```bash
+git clone https://github.com/sui-id/sui-id && cd sui-id
+cargo build --release
+./target/release/sui-id --print-sample-config > sui-id.toml
 ./target/release/sui-id --config sui-id.toml
 ```
 
@@ -117,9 +123,9 @@ crates/
 ├── sui-id-store    SQLite, migrations, column encryption, repositories
 ├── sui-id-core     Domain logic: passwords, JWT, OIDC, setup, sessions
 ├── sui-id-web      Leptos SSR pages (login, setup, admin panel)
-└── sui-id-bin      Axum router, config loader, master-key resolution
+└── sui-id          Axum router, config loader, master-key resolution,
+                    embedded static assets, the `sui-id` binary
 docs/               Operator and integrator documentation
-static/             Embedded assets (robots.txt, etc.)
 ```
 
 ## License

@@ -118,35 +118,67 @@ pub type AppStateExt = State<AppState>;
 
 /// Client IP address extractor.
 ///
-/// Prefers the real socket peer (`ConnectInfo<SocketAddr>` extension, set
-/// by `into_make_service_with_connect_info` in `main`). Falls back to
-/// `127.0.0.1` when the extension is missing — this happens when the
-/// router is invoked via `tower::ServiceExt::oneshot` in tests, and would
-/// otherwise force tests to set up a full TCP listener.
+/// Resolution order:
 ///
-/// We deliberately do not consult `X-Forwarded-For` here. Doing so without
-/// an explicit "trust proxy" configuration would let any caller bypass
-/// per-IP rate limits by lying.
+/// 1. Start with the socket peer (`ConnectInfo<SocketAddr>` extension).
+/// 2. If `server.trusted_proxies` is non-empty *and* the peer is in that
+///    set, walk `X-Forwarded-For` from rightmost to leftmost, dropping
+///    every entry that is itself a trusted proxy. The first untrusted
+///    address is the real client.
+/// 3. Falls back to `127.0.0.1` only when the `ConnectInfo` extension is
+///    missing entirely (e.g. tests using `oneshot`).
+///
+/// We deliberately do **not** read `X-Forwarded-For` when no proxies are
+/// trusted: doing so would let any caller bypass per-IP rate limits by
+/// supplying the header.
 #[derive(Debug, Clone, Copy)]
 pub struct ClientIp(pub std::net::IpAddr);
 
 impl<S> axum::extract::FromRequestParts<S> for ClientIp
 where
     S: Send + Sync,
+    AppState: axum::extract::FromRef<S>,
 {
     type Rejection = std::convert::Infallible;
 
     async fn from_request_parts(
         parts: &mut axum::http::request::Parts,
-        _state: &S,
+        state: &S,
     ) -> Result<Self, Self::Rejection> {
-        if let Some(axum::extract::ConnectInfo(addr)) = parts
+        let app: AppState = AppState::from_ref(state);
+        let peer = parts
             .extensions
             .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
+            .map(|axum::extract::ConnectInfo(s)| s.ip());
+        let peer = match peer {
+            Some(ip) => ip,
+            None => return Ok(Self("127.0.0.1".parse().expect("static"))),
+        };
+        if app.trusted_proxies.is_empty()
+            || !crate::ipnet::any_contains(&app.trusted_proxies, &peer)
         {
-            return Ok(Self(addr.ip()));
+            return Ok(Self(peer));
         }
-        Ok(Self("127.0.0.1".parse().expect("static")))
+        let xff = parts
+            .headers
+            .get_all("x-forwarded-for")
+            .iter()
+            .filter_map(|v| v.to_str().ok())
+            .flat_map(|s| s.split(','))
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>();
+        // Walk from rightmost to leftmost; the first entry that isn't a
+        // trusted proxy is the client.
+        for candidate in xff.iter().rev() {
+            if let Ok(ip) = candidate.parse::<std::net::IpAddr>() {
+                if !crate::ipnet::any_contains(&app.trusted_proxies, &ip) {
+                    return Ok(Self(ip));
+                }
+            }
+        }
+        // The whole chain was trusted (unusual but legal); fall back to peer.
+        Ok(Self(peer))
     }
 }
 

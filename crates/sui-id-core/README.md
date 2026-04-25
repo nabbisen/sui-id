@@ -3,4 +3,4 @@
 [![Dependency Status](https://deps.rs/crate/sui-id-core/latest/status.svg)](https://deps.rs/crate/sui-id-core)
 [![License](https://img.shields.io/github/license/nabbisen/sui-id-core)](https://github.com/nabbisen/sui-id-core/blob/main/LICENSE)
 
-Authentication / authorization core (OIDC / OAuth2 + PKCE) for sui-id.
+Authentication / authorization core (OIDC / OAuth2 + PKCE) for sui-id, a self-hosted Rust OIDC provider.

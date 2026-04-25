@@ -1,6 +1,7 @@
 //! Shared application state passed to handlers as `State<AppState>`.
 
 use crate::config::Config;
+use crate::ipnet::Cidr;
 use crate::ratelimit::Limiters;
 use std::sync::Arc;
 use sui_id_core::time::{system_clock, SharedClock};
@@ -14,16 +15,27 @@ pub struct AppState {
     pub config: Arc<Config>,
     pub setup_token: Arc<String>,
     pub limiters: Arc<Limiters>,
+    pub trusted_proxies: Arc<Vec<Cidr>>,
 }
 
 impl AppState {
     pub fn new(db: Database, config: Config, setup_token: String) -> Self {
+        // CIDRs were validated at config load time; an unwrap_or_default
+        // here is defensive: even if validation regressed, we degrade to
+        // "trust nobody" rather than crash.
+        let trusted_proxies: Vec<Cidr> = config
+            .server
+            .trusted_proxies
+            .iter()
+            .filter_map(|s| Cidr::parse(s).ok())
+            .collect();
         Self {
             db,
             clock: system_clock(),
             config: Arc::new(config),
             setup_token: Arc::new(setup_token),
             limiters: Arc::new(Limiters::default()),
+            trusted_proxies: Arc::new(trusted_proxies),
         }
     }
 

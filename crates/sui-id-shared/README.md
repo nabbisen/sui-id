@@ -3,4 +3,4 @@
 [![Dependency Status](https://deps.rs/crate/sui-id-shared/latest/status.svg)](https://deps.rs/crate/sui-id-shared)
 [![License](https://img.shields.io/github/license/nabbisen/sui-id-shared)](https://github.com/nabbisen/sui-id-shared/blob/main/LICENSE)
 
-Shared types and DTOs for sui-id.
+Shared types and DTOs for sui-id, a self-hosted Rust OIDC provider.

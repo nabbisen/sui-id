@@ -108,3 +108,13 @@ pub fn logout(db: &Database, id: SessionId) -> CoreResult<()> {
     sessions::revoke(db, id)?;
     Ok(())
 }
+
+/// End a user's RP-facing session. Revokes the named session and **all**
+/// outstanding refresh tokens for that user. Used by RP-initiated logout
+/// where we want a clean slate, not just one expired cookie.
+pub fn logout_user(db: &Database, clock: &SharedClock, user_id: UserId) -> CoreResult<()> {
+    let _ = clock; // signature kept symmetric with other lifecycle fns
+    sessions::revoke_all_for_user(db, user_id)?;
+    sui_id_store::repos::refresh_tokens::revoke_all_for_user(db, user_id)?;
+    Ok(())
+}

@@ -8,7 +8,7 @@ use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use include_dir::{include_dir, Dir};
 
-static STATIC_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../../static");
+static STATIC_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/static");
 
 pub async fn serve(axum::extract::Path(path): axum::extract::Path<String>) -> Response {
     let trimmed = path.trim_start_matches('/');

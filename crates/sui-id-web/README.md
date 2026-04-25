@@ -3,4 +3,4 @@
 [![Dependency Status](https://deps.rs/crate/sui-id-web/latest/status.svg)](https://deps.rs/crate/sui-id-web)
 [![License](https://img.shields.io/github/license/nabbisen/sui-id-web)](https://github.com/nabbisen/sui-id-web/blob/main/LICENSE)
 
-Admin and setup UI (Leptos SSR) for sui-id.
+Server-rendered admin and setup UI (Leptos SSR) for sui-id, a self-hosted Rust OIDC provider.

@@ -4,8 +4,13 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 authors.workspace = true
-description = "Shared types and DTOs for sui-id."
+keywords.workspace = true
+categories.workspace = true
+description = "Shared types and DTOs for sui-id, a self-hosted Rust OIDC provider."
+readme = "README.md"
 
 [lints]
 workspace = true

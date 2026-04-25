@@ -8,7 +8,7 @@
 
 use anyhow::{Context, Result};
 use std::path::PathBuf;
-use sui_id_bin::{build_router, config::Config, startup};
+use sui_id::{build_router, config::Config, startup};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -38,7 +38,7 @@ async fn main() -> Result<()> {
     let startup = startup::prepare(cfg)?;
     let router = build_router(startup.state.clone());
 
-    sui_id_bin::gc::spawn(startup.state.clone());
+    sui_id::gc::spawn(startup.state.clone());
 
     let addr: std::net::SocketAddr = startup
         .listen_addr

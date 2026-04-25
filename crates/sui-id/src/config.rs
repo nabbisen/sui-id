@@ -31,6 +31,11 @@ pub struct ServerConfig {
     /// Whether the cookie should be marked `Secure` (set this true behind HTTPS).
     #[serde(default)]
     pub cookie_secure: bool,
+    /// CIDR ranges of reverse proxies whose `X-Forwarded-For` header should
+    /// be trusted. Empty = always use the socket peer. See `sui-id.example.toml`
+    /// for guidance.
+    #[serde(default)]
+    pub trusted_proxies: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -78,7 +83,7 @@ fn default_log_format() -> String {
 }
 
 fn default_log_filter() -> String {
-    "info,sui_id_bin=info,sui_id_core=info,sui_id_store=info".into()
+    "info,sui_id=info,sui_id_core=info,sui_id_store=info".into()
 }
 
 impl Default for LogConfig {
@@ -108,6 +113,7 @@ impl Config {
                 listen_addr: "127.0.0.1:8801".into(),
                 issuer: "http://127.0.0.1:8801".into(),
                 cookie_secure: false,
+                trusted_proxies: Vec::new(),
             },
             storage: StorageConfig {
                 db_path: PathBuf::from("./sui-id.sqlite"),
@@ -127,6 +133,11 @@ impl Config {
         }
         if !self.server.issuer.starts_with("http://") && !self.server.issuer.starts_with("https://") {
             anyhow::bail!("server.issuer must be an absolute http(s) URL");
+        }
+        for cidr in &self.server.trusted_proxies {
+            crate::ipnet::Cidr::parse(cidr).map_err(|e| {
+                anyhow::anyhow!("invalid CIDR in server.trusted_proxies: {cidr:?} ({e})")
+            })?;
         }
         Ok(())
     }

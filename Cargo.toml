@@ -1,29 +1,27 @@
 [workspace]
 resolver = "3"
 members = [
-    "crates/sui-id-shared",
-    "crates/sui-id-store",
+    "crates/sui-id",
     "crates/sui-id-core",
+    "crates/sui-id-store",
     "crates/sui-id-web",
-    "crates/sui-id-bin",
+    "crates/sui-id-shared",
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.91"
 license = "Apache-2.0"
+authors = ["nabbisen <nabbisen@scqr.net>"]
 repository = "https://github.com/nabbisen/sui-id"
 homepage = "https://github.com/nabbisen/sui-id"
-authors = ["nabbisen <nabbisen@scqr.net>"]
+documentation = "https://docs.rs/sui-id"
+readme = "README.md"
+keywords = ["oidc", "oauth2", "idaas", "identity", "authentication"]
+categories = ["authentication", "web-programming::http-server"]
 
 [workspace.dependencies]
-sui-id-shared = "0.1.0"
-sui-id-store = "0.1.0"
-sui-id-core = "0.1.0"
-sui-id-web = "0.1.0"
-sui-id-bin = "0.1.0"
-
 # Async runtime / web
 tokio = { version = "1.40", features = ["macros", "rt-multi-thread", "signal", "fs", "sync", "time"] }
 axum = { version = "0.8", features = ["macros"] }

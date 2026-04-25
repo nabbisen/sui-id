@@ -1,0 +1,88 @@
+# sui-id configuration file.
+#
+# A starter configuration with every option commented inline. Generated
+# defaults can also be obtained at runtime with:
+#
+#     sui-id --print-sample-config
+#
+# Save this file as `sui-id.toml` in the directory you launch sui-id from,
+# or pass an explicit path with `--config /etc/sui-id/sui-id.toml`.
+#
+# After editing, validate by running `sui-id --config sui-id.toml`. The
+# program rejects malformed values at startup rather than at request time.
+
+# ----- network ------------------------------------------------------------
+[server]
+
+# host:port to bind. Use 127.0.0.1 when sitting behind a reverse proxy on
+# the same host (the recommended deployment); use 0.0.0.0 only if you are
+# terminating TLS in sui-id itself, which is not currently a documented
+# configuration.
+listen_addr = "127.0.0.1:8801"
+
+# Public URL clients see. Goes verbatim into the OIDC `iss` claim and the
+# Discovery document. Must be absolute (http:// or https://). Trailing
+# slashes are stripped. Behind a reverse proxy this is the *external* URL,
+# not the bind address above.
+issuer = "https://idp.example.com"
+
+# Mark the session cookie `Secure`. Set true when the issuer is https://.
+# Set false only for local development at http://127.0.0.1.
+cookie_secure = true
+
+# Trust `X-Forwarded-For` for the rate-limit IP. Empty = trust nobody (use
+# the socket peer). Otherwise list every reverse proxy hop that the request
+# legitimately passes through, in CIDR form. The right-most IP in the
+# header that is *not* in this list is taken as the real client.
+#
+# Example for a single nginx in front of sui-id:
+#   trusted_proxies = ["127.0.0.1/32"]
+#
+# Example for a Cloudflare-fronted deployment:
+#   trusted_proxies = ["173.245.48.0/20", "103.21.244.0/22", ...]
+#
+# WARNING: setting this to a value that includes the client's range
+# (e.g. "0.0.0.0/0") lets any caller bypass per-IP rate limits by lying
+# in the header.
+trusted_proxies = []
+
+# ----- storage ------------------------------------------------------------
+[storage]
+
+# SQLite database file. Created on first run. Parent directories are
+# created if missing.
+db_path = "/var/lib/sui-id/sui-id.sqlite"
+
+# Master encryption key file. A fresh 32-byte key is generated on first run
+# and written here with permissions 0600. Back this file up: losing it
+# makes encrypted columns (refresh tokens, signing-key bytes) unreadable.
+#
+# As an alternative, set the SUI_ID_MASTER_KEY environment variable to a
+# base64-encoded 32-byte value; that takes precedence over this file.
+key_file = "/var/lib/sui-id/sui-id.key"
+
+# ----- token lifetimes ---------------------------------------------------
+[tokens]
+
+# Access tokens are short-lived JWTs. 15 minutes is a reasonable default.
+access_lifetime_secs = 900
+
+# ID tokens have the same lifetime as access tokens by default.
+id_token_lifetime_secs = 900
+
+# Refresh tokens last much longer. They rotate on every use, so a leaked
+# refresh token is invalidated as soon as the legitimate client uses it
+# again.
+refresh_lifetime_secs = 1209600   # 14 days
+
+# ----- logging -----------------------------------------------------------
+[log]
+
+# "fmt" for human-readable colourised output (development).
+# "json" for one structured JSON object per line (production / log
+#        aggregators).
+format = "json"
+
+# `tracing-subscriber` env-filter expression. The default keeps the project
+# crates at info level and stays quiet about upstream chatter.
+filter = "info,sui_id=info,sui_id_core=info,sui_id_store=info"

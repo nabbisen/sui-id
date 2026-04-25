@@ -12,6 +12,7 @@ pub struct Discovery {
     pub authorization_endpoint: String,
     pub token_endpoint: String,
     pub userinfo_endpoint: String,
+    pub end_session_endpoint: String,
     pub jwks_uri: String,
 
     pub response_types_supported: Vec<&'static str>,
@@ -31,6 +32,7 @@ impl Discovery {
             authorization_endpoint: format!("{trimmed}/oauth2/authorize"),
             token_endpoint: format!("{trimmed}/oauth2/token"),
             userinfo_endpoint: format!("{trimmed}/oauth2/userinfo"),
+            end_session_endpoint: format!("{trimmed}/oauth2/logout"),
             jwks_uri: format!("{trimmed}/.well-known/jwks.json"),
 
             response_types_supported: vec!["code"],
