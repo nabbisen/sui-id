@@ -5,6 +5,36 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-04-26
+
+Internal cleanup. No functional changes.
+
+### Changed
+- Crate authorship and contact: now `nabbisen <nabbisen@scqr.net>` for all
+  five workspace crates (was `sui-id contributors`).
+- Repository / homepage URLs across the workspace: now
+  `https://github.com/nabbisen/sui-id` (was `sui-id/sui-id`). Updated
+  in workspace `Cargo.toml`, every crate's `README.md`, the docs
+  under `docs/`, the `.github/` files, `PUBLISHING.md`, `ROADMAP.md`,
+  and `TERMS_OF_USE.md`.
+- The `LICENSE` file's copyright line is now
+  `Copyright 2026 nabbisen <nabbisen@scqr.net>`.
+- `sui-id` (the binary crate) no longer keeps its own copy of `README.md`
+  or `CHANGELOG.md`. Its `Cargo.toml` now sets `readme = "../../README.md"`,
+  which `cargo publish` resolves to the workspace root's README — the
+  packaged crate uploaded to crates.io contains a copy with no
+  duplication on disk.
+- Per-crate `LICENSE` files have been removed. The single
+  `LICENSE` and `NOTICE` files at the repository root are sufficient;
+  `cargo publish` resolves them automatically and includes them in each
+  uploaded crate.
+
+### Added
+- `NOTICE` file at the repository root, per the Apache-2.0 convention,
+  carrying the copyright statement and a brief informational list of
+  third-party permissive-licensed dependencies whose own NOTICE files
+  travel with them in the source distribution.
+
 ## [0.6.0] - 2026-04-26
 
 ### Added — schema migration 0002

@@ -144,8 +144,9 @@ docs/               Operator and integrator documentation
 
 ## License
 
-Apache-2.0. See [LICENSE](LICENSE) for the full text and
-[TERMS_OF_USE.md](TERMS_OF_USE.md) for additional notes.
+Apache-2.0. See [LICENSE](LICENSE) for the full text, [NOTICE](NOTICE)
+for attribution, and [TERMS_OF_USE.md](TERMS_OF_USE.md) for additional
+notes.
 
 ## Status
 

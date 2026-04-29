@@ -9,17 +9,17 @@ members = [
 ]
 
 [workspace.package]
-version = "0.6.0"
+version = "0.6.1"
 edition = "2024"
 rust-version = "1.91"
 license = "Apache-2.0"
-authors = ["nabbisen <nabbisen@scqr.net>"]
 repository = "https://github.com/nabbisen/sui-id"
 homepage = "https://github.com/nabbisen/sui-id"
 documentation = "https://docs.rs/sui-id"
-readme = "README.md"
+authors = ["nabbisen <nabbisen@scqr.net>"]
 keywords = ["oidc", "oauth2", "idaas", "identity", "authentication"]
 categories = ["authentication", "web-programming::http-server"]
+readme = "README.md"
 
 [workspace.dependencies]
 # Async runtime / web

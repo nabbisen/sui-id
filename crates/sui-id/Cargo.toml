@@ -12,15 +12,14 @@ categories.workspace = true
 description = "Self-hosted, single-binary OpenID Connect provider in Rust. Install with `cargo install sui-id`."
 readme = "../../README.md"
 
-# Restrict what gets uploaded to crates.io.
+# Restrict what gets uploaded to crates.io. `cargo publish` automatically
+# resolves `readme = "../../README.md"` and copies the file into the
+# package; we do not need to list it here.
 include = [
     "src/**/*",
     "tests/**/*",
     "static/**/*",
     "Cargo.toml",
-    "README.md",
-    "LICENSE",
-    "CHANGELOG.md",
 ]
 
 [[bin]]
@@ -31,10 +30,10 @@ path = "src/main.rs"
 workspace = true
 
 [dependencies]
-sui-id-shared = { version = "0.6.0", path = "../sui-id-shared" }
-sui-id-store  = { version = "0.6.0", path = "../sui-id-store" }
-sui-id-core   = { version = "0.6.0", path = "../sui-id-core" }
-sui-id-web    = { version = "0.6.0", path = "../sui-id-web" }
+sui-id-shared = { version = "0.6.1", path = "../sui-id-shared" }
+sui-id-store  = { version = "0.6.1", path = "../sui-id-store" }
+sui-id-core   = { version = "0.6.1", path = "../sui-id-core" }
+sui-id-web    = { version = "0.6.1", path = "../sui-id-web" }
 
 tokio = { workspace = true }
 axum = { workspace = true }
@@ -75,6 +74,6 @@ url = { workspace = true }
 sha2 = { workspace = true }
 base64ct = { workspace = true }
 percent-encoding = { workspace = true }
-sui-id-store = { version = "0.6.0", path = "../sui-id-store" }
+sui-id-store = { version = "0.6.1", path = "../sui-id-store" }
 http = "1"
 http-body-util = "0.1"
