@@ -116,15 +116,29 @@ What we do:
   `DELETE` against `audit_log`. An attacker who can write the file
   directly can of course tamper with it; we make sure sui-id itself
   cannot.
+- **Hash-chained audit log** (since v0.17.0). Every audit row carries
+  `prev_hash` and `hash`, where `hash = SHA-256(prev_hash ||
+  canonical_bytes(row))`. Tampering with row N requires recomputing
+  every later row's hash — possible for an attacker with raw SQL
+  access, but they cannot do it without leaving a detectable
+  mismatch at the boundary because the legitimate code path's hash
+  computation is the only thing that produces matching chains. On
+  every startup sui-id walks the most recent 5,000 rows and emits
+  a structured log entry naming the broken sequence number on
+  detection. See `docs/operators.md` for SIEM rule examples.
 - All the protections from A3 still hold: even with write access, the
   attacker cannot mint access tokens or forge refresh tokens without
   the master key.
 
-What we do **not** do:
+What this does **not** cover:
 
-- Detect tampering. There is no signed audit log, no Merkle chain over
-  rows, no off-host journal. Operators who need that should ship the
-  audit log to an external WORM destination.
+- An attacker who controls the binary itself can rewrite the chain
+  end-to-end. The chain protects against DB-only attackers (SQL
+  injection, misconfigured backups, file-system access), which is
+  the more common threat model for self-hosted IdPs.
+- External timestamping (RFC 3161 or notary service) is not
+  built in. Operators with strict compliance requirements ship
+  the audit log to an external WORM destination as well.
 
 ### A5. Online password guessing against `/admin/login`
 
@@ -238,22 +252,44 @@ What we do **not** do (yet):
 
 - Automatic / scheduled rotation. Rotation today is operator-driven.
 
-### A10. Replay of an access token after revocation
+### A10. Replay of an access token or refresh token after revocation
 
 What we do:
 
 - Access tokens are short-lived (15 minutes by default), so revocation
-  has a bounded window.
+  has a bounded window. RFC 7662 introspection and RFC 7009 revocation
+  let RPs check and revoke explicitly.
 - Logout and account suspension revoke all of the user's outstanding
   refresh tokens and sessions, so the user cannot get a *new* access
   token after revocation.
+- **Refresh-token theft detection** (since v0.17.0). Each refresh
+  token belongs to a "family" rooted at the original
+  authorization-code exchange, with rotations chained through the
+  family. If a refresh token is presented at the token endpoint and
+  decrypts to a row that's *already revoked* — meaning the
+  legitimate client already rotated it once — that's a strong
+  theft signal: the most plausible explanation is that an attacker
+  captured the token before rotation and is now replaying the
+  captured copy. The defensive response is to revoke every other
+  active row in the same family. The attacker can no longer use
+  the captured token; the legitimate client discovers the failure
+  on its next refresh and forces re-authentication. A
+  `auth.refresh.theft_detected` audit event records the family id
+  and client id for SIEM correlation. The HTTP response on
+  detection is the same `400 invalid_grant` that any unknown or
+  expired token would produce — we don't give an attacker a
+  different response shape to detect.
+
+This follows OAuth 2.1 §6.1 / RFC 6819 §5.2.2.3 / OAuth 2.0
+Security Best Current Practice §4.13.
 
 What we do **not** do:
 
-- Revocation lists for already-issued access tokens. The standard answer
-  is short access-token lifetimes plus refresh-token rotation, which is
-  what we do. Operators who require immediate revocation should
-  configure a smaller `tokens.access_lifetime_secs`.
+- Revocation lists for already-issued access tokens (other than
+  the v0.11.0 introspection / revocation endpoints driven by RPs
+  and admin actions). The standard answer is short access-token
+  lifetimes plus refresh-token rotation with theft detection,
+  which is what we do.
 
 ### A11. Compromise of a single password
 
@@ -406,6 +442,58 @@ What we do not do:
   it gives a clear error on the wrong passphrase, without leaking
   any signal stronger than "decryption failed".
 
+### A14. Browser-side attacks against the admin UI and authorize flow
+
+Threats: clickjacking on `/oauth2/authorize` to obtain a code
+through staged redirect; an XSS in any admin page being used to
+exfiltrate the session cookie or to navigate to authorize and
+mint tokens; a cross-origin script reading discovery / JWKS for
+fingerprinting; an outbound `Referer` header leaking an
+authorization code or session id to an RP.
+
+What we do (since v0.17.0):
+
+- `Content-Security-Policy: default-src 'self'; ... frame-ancestors
+  'none'; ...` denies framing of every endpoint, including
+  `/oauth2/authorize`. There is no consent screen we'd need to
+  show in an iframe; framing is unconditionally refused.
+- `X-Frame-Options: DENY` as a belt-and-braces alongside CSP for
+  older browsers that don't honour `frame-ancestors`.
+- `X-Content-Type-Options: nosniff` so a JSON body cannot be
+  re-typed as HTML by a browser.
+- `Referrer-Policy: strict-origin-when-cross-origin` so an
+  outbound navigation away from sui-id (RP redirect after logout,
+  for example) leaks only the origin, never the path or query —
+  which is where authorization codes and `state` parameters
+  would otherwise live.
+- `Permissions-Policy` denies camera, geolocation, microphone,
+  payment, USB, and similar feature APIs sui-id has no business
+  asking for. A compromised page asking for them would be denied
+  at the browser before the user is prompted.
+- `Strict-Transport-Security: max-age=63072000; includeSubDomains`
+  when the operator has set `server.cookie_secure = true`. We do
+  not enable HSTS preload by default — that's a deliberate
+  operator commitment, not a thing to default on.
+- Session and CSRF cookies are `HttpOnly` (no JS access) and
+  `SameSite=Lax` (not sent on cross-site `POST` or sub-resource
+  requests; sent on top-level navigations, which is what OIDC
+  redirects need).
+
+What this does **not** cover:
+
+- An attacker who controls the operator's DNS or TLS proxy can
+  override the HTTP headers sui-id emits. The CSP and HSTS we
+  send are advisory to the *browser*; if a hostile proxy strips
+  them, the browser doesn't know.
+- A custom admin theme that injects external scripts will need a
+  relaxed CSP at the proxy. sui-id's bundled CSP allows only
+  `'self'` for scripts.
+- A CSP-bypassing XSS (e.g. `'unsafe-inline'` in styles, which we
+  *do* allow because Leptos generates inline styles for layout)
+  is conceivable but would require an HTML-injection bug in
+  sui-id itself. The framework's escaping defaults make that
+  unlikely; if you find one, please report through SECURITY.md.
+
 ## Adversaries we do not plan for
 
 These are out of scope. Either the threat is genuinely better handled
@@ -436,8 +524,18 @@ elsewhere in the stack, or sui-id is too small to address it.
 Given the design, the highest-value signals an operator can collect are:
 
 1. **The audit log.** Tail it. Repeated `auth.login.failure` from the
-   same target is the obvious flag, but also watch for unexpected
-   `client.create`, `user.disable`, and `user.reset_password` events.
+   same target is the obvious flag. Beyond that:
+   - `auth.login.locked` indicates the lockout curve just kicked
+     in; bursts of these signal an active brute-force attempt.
+   - `auth.refresh.theft_detected` indicates a refresh-token
+     replay was caught and a token family was revoked — investigate
+     the affected user immediately.
+   - `mfa.admin_reset` indicates an admin lifted MFA on a user;
+     this is occasionally legitimate but should always be
+     followed up.
+   - `audit-log hash-chain verification FAILED` (with
+     `broken_at_seq`) on startup indicates DB-level tampering.
+     Treat as a confirmed incident.
 2. **HTTP 429 responses.** A sustained rate of 429s on `/admin/login`
    means somebody is grinding; on `/oauth2/token` it usually means a
    misbehaving client.

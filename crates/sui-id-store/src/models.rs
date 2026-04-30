@@ -116,6 +116,14 @@ pub struct RefreshTokenRow {
     /// rotation. The refreshed ID token reports the *original*
     /// authentication, never a synthetic re-evaluation.
     pub auth_methods: Vec<sui_id_shared::AuthMethod>,
+    /// Identifier of the rotation family this refresh token belongs
+    /// to. The first refresh token issued for a given session
+    /// (initial authorization-code exchange) has `family_id == id`.
+    /// Each subsequent rotation copies the parent's `family_id`
+    /// onto the new row. If a revoked token is later replayed, we
+    /// revoke every row in the same family — see the refresh-grant
+    /// flow in `sui_id_core::authorize`.
+    pub family_id: String,
 }
 
 #[derive(Debug, Clone)]

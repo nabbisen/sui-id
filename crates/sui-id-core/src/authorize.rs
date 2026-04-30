@@ -22,8 +22,8 @@ use crate::tokens::{self, TokenLifetimes, TokenSet};
 use chrono::Duration;
 use ed25519_dalek::SigningKey;
 use sui_id_shared::ids::{ClientId, UserId};
-use sui_id_store::models::{AuthorizationCodeRow, RefreshTokenRow};
-use sui_id_store::repos::{auth_codes, clients, refresh_tokens, signing_keys};
+use sui_id_store::models::{AuditLogRow, AuthorizationCodeRow, RefreshTokenRow};
+use sui_id_store::repos::{audit, auth_codes, clients, refresh_tokens, signing_keys};
 use sui_id_store::Database;
 
 /// Lifetime of an authorization code (kept very short by design).
@@ -288,13 +288,28 @@ pub fn exchange_refresh(
     }
     authenticate_client(&client, req.client_secret.as_deref())?;
 
-    let row = refresh_tokens::find_active(db, &req.refresh_token).map_err(|e| match e {
-        sui_id_store::StoreError::NotFound => CoreError::Protocol {
-            code: ProtocolError::InvalidGrant,
-            description: "refresh token is unknown or revoked".into(),
-        },
-        other => CoreError::from(other),
-    })?;
+    // Look up the token. We check `find_any` first — which returns
+    // even revoked / expired rows — because finding the token in a
+    // *revoked* state is itself a theft signal: the most plausible
+    // explanation for a revoked token being presented again is that
+    // an attacker captured it before the legitimate client rotated
+    // it, and is now replaying the captured copy. The defensive
+    // response is to revoke the entire rotation family so neither
+    // the attacker nor the (now-rotated-twice-from-its-perspective)
+    // legitimate client can keep going. The legitimate client
+    // detects the failure on its next refresh and re-authenticates.
+    //
+    // See OAuth 2.1 §6.1 / RFC 6819 §5.2.2.3.
+    let row = match refresh_tokens::find_any(db, &req.refresh_token) {
+        Ok(r) => r,
+        Err(sui_id_store::StoreError::NotFound) => {
+            return Err(CoreError::Protocol {
+                code: ProtocolError::InvalidGrant,
+                description: "refresh token is unknown".into(),
+            });
+        }
+        Err(e) => return Err(e.into()),
+    };
 
     if row.client_id != req.client_id {
         return Err(CoreError::Protocol {
@@ -303,11 +318,45 @@ pub fn exchange_refresh(
         });
     }
 
+    if row.revoked_at.is_some() {
+        // Already-revoked token replay: revoke the whole family and
+        // record an audit event with the family_id so an operator
+        // can correlate. We deliberately don't tell the caller what
+        // happened — the response to legitimate-and-attacker traffic
+        // looks identical.
+        let _ = refresh_tokens::revoke_family(db, &row.family_id);
+        let _ = audit::append(
+            db,
+            &AuditLogRow {
+                at: clock.now(),
+                actor: Some(row.user_id),
+                action: "auth.refresh.theft_detected".into(),
+                target: Some(row.user_id.to_string()),
+                result: "denied".into(),
+                note: Some(format!(
+                    "revoked refresh-token family={} client_id={}",
+                    row.family_id, row.client_id
+                )),
+            },
+        );
+        return Err(CoreError::Protocol {
+            code: ProtocolError::InvalidGrant,
+            description: "refresh token is unknown or revoked".into(),
+        });
+    }
+
+    if row.expires_at <= clock.now() {
+        return Err(CoreError::Protocol {
+            code: ProtocolError::InvalidGrant,
+            description: "refresh token has expired".into(),
+        });
+    }
+
     // Rotation: revoke the old token *before* we issue the new set, so a
     // crash-mid-flow can never leave both valid simultaneously.
     refresh_tokens::revoke(db, &row.id)?;
 
-    issue_for(
+    issue_for_with_family(
         db,
         clock,
         ctx,
@@ -316,6 +365,7 @@ pub fn exchange_refresh(
         &row.scope,
         None,
         &row.auth_methods,
+        Some(row.family_id.clone()),
     )
 }
 
@@ -351,6 +401,38 @@ fn issue_for(
     nonce: Option<&str>,
     auth_methods: &[sui_id_shared::AuthMethod],
 ) -> CoreResult<TokenSet> {
+    // Initial issuance (authorization-code grant): no parent family,
+    // so we let `issue_for_with_family` create a new family rooted
+    // at the new refresh-token id.
+    issue_for_with_family(
+        db,
+        clock,
+        ctx,
+        user_id,
+        client_id,
+        scope,
+        nonce,
+        auth_methods,
+        None,
+    )
+}
+
+/// The actual issuance routine. `family_id` is `None` for initial
+/// issuance (a new family is created, rooted at the new
+/// refresh-token id) and `Some(parent_family_id)` for rotations
+/// (the new row inherits the family).
+#[allow(clippy::too_many_arguments)]
+fn issue_for_with_family(
+    db: &Database,
+    clock: &SharedClock,
+    ctx: IssuanceContext<'_>,
+    user_id: UserId,
+    client_id: ClientId,
+    scope: &str,
+    nonce: Option<&str>,
+    auth_methods: &[sui_id_shared::AuthMethod],
+    family_id: Option<String>,
+) -> CoreResult<TokenSet> {
     let key_row = signing_keys::active(db).map_err(|e| match e {
         sui_id_store::StoreError::NotFound => CoreError::Internal,
         other => CoreError::from(other),
@@ -374,14 +456,13 @@ fn issue_for(
         auth_methods,
     )?;
 
-    // Persist the refresh token (sealed at rest). Carry the
-    // originating session's authentication factors forward — a
-    // token rotated via the refresh grant must report the same
-    // `acr` / `amr` as the original issuance, never a synthesised
-    // re-evaluation.
     let now = clock.now();
+    let new_id = tokens::random_token(16);
+    // First issuance roots a new family at this new row's id; a
+    // rotation copies the parent's family forward unchanged.
+    let family = family_id.unwrap_or_else(|| new_id.clone());
     let rt_row = RefreshTokenRow {
-        id: tokens::random_token(16),
+        id: new_id,
         token_plain: Some(set.refresh_token.clone()),
         user_id,
         client_id,
@@ -390,6 +471,7 @@ fn issue_for(
         revoked_at: None,
         created_at: now,
         auth_methods: auth_methods.to_vec(),
+        family_id: family,
     };
     refresh_tokens::insert(db, &rt_row)?;
     Ok(set)

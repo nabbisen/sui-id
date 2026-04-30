@@ -103,6 +103,19 @@ v0.10.1 / v0.10.2.
   observably the same. A new `auth.login.locked` audit event
   distinguishes "wrong password" from "wrong password and now
   the account is locked" for SIEM consumption.
+- Security strengthening pass (v0.17.0). Five reinforcements
+  identified by an internal audit and shipped as one release:
+  global security headers (CSP, HSTS, X-Frame-Options DENY,
+  Permissions-Policy, …); CORS for the OIDC public endpoints
+  (discovery / JWKS / userinfo as `*`, token-endpoint with
+  origin allowlist from registered redirect_uris);
+  `Cache-Control: no-store` on userinfo per OIDC Core §5.3.2;
+  refresh-token theft detection (replay of a rotated token
+  revokes the entire family with an `auth.refresh.theft_detected`
+  audit event); and a hash chain on the audit log with a
+  startup-time tail verification to detect DB-level tampering.
+  Defense-in-depth removal of the dead `plain` branch in
+  `verify_pkce`.
 
 ## Explicitly **not** on the roadmap
 

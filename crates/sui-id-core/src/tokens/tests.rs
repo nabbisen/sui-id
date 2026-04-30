@@ -45,9 +45,20 @@ fn pkce_s256_rejects_wrong_verifier() {
 }
 
 #[test]
-fn pkce_unsupported_method_is_rejected_as_bad_request() {
+fn pkce_unsupported_method_is_rejected_as_invalid_grant() {
+    // v0.17.0: previously this returned `BadRequest`. Now that
+    // `verify_pkce` is also part of the defense-in-depth chain
+    // against `code_challenge_method=plain` slipping through, all
+    // unknown / disallowed methods return the OAuth-spec
+    // `invalid_grant` error code uniformly.
     let r = verify_pkce("md5", "x", "y");
-    assert!(matches!(r, Err(CoreError::BadRequest(_))));
+    assert!(matches!(
+        r,
+        Err(CoreError::Protocol {
+            code: crate::errors::ProtocolError::InvalidGrant,
+            ..
+        })
+    ));
 }
 
 // ---------- property-based tests (v0.13.0) ----------
@@ -107,4 +118,36 @@ proptest! {
         let challenge = s256_challenge(&verifier);
         prop_assert_eq!(challenge.len(), 43);
     }
+}
+
+#[test]
+fn verify_pkce_rejects_plain_method() {
+    // Defense-in-depth: even if `/oauth2/authorize` ever stops
+    // refusing `code_challenge_method=plain`, `verify_pkce` still
+    // says no. This test pins the layer behaviour.
+    let r = super::verify_pkce("plain", "verifier", "verifier");
+    assert!(
+        matches!(
+            r,
+            Err(crate::errors::CoreError::Protocol {
+                code: crate::errors::ProtocolError::InvalidGrant,
+                ..
+            })
+        ),
+        "expected InvalidGrant for method=plain, got: {r:?}"
+    );
+}
+
+#[test]
+fn verify_pkce_rejects_unknown_method() {
+    let r = super::verify_pkce("S512", "v", "c");
+    assert!(matches!(
+        r,
+        Err(crate::errors::CoreError::Protocol {
+            code: crate::errors::ProtocolError::InvalidGrant,
+            ..
+        })
+    ));
+    let r = super::verify_pkce("", "v", "c");
+    assert!(r.is_err());
 }

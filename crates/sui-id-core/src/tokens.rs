@@ -184,6 +184,13 @@ pub fn sha256_hex(s: &str) -> String {
 }
 
 /// PKCE challenge verification per RFC 7636 §4.6.
+///
+/// sui-id only supports `S256`. The `plain` method described in
+/// RFC 7636 is intentionally rejected here as a defense-in-depth
+/// layer behind the same check at the `/oauth2/authorize` entry
+/// point — if that check ever regresses, this layer still refuses
+/// to verify. A relying party that needs `plain` (none should in
+/// 2026) must run a different IdP.
 pub fn verify_pkce(method: &str, verifier: &str, expected_challenge: &str) -> CoreResult<()> {
     use subtle::ConstantTimeEq;
     let computed = match method {
@@ -196,11 +203,15 @@ pub fn verify_pkce(method: &str, verifier: &str, expected_challenge: &str) -> Co
             out.truncate(n);
             String::from_utf8(out).map_err(|_| CoreError::Internal)?
         }
-        "plain" => verifier.to_owned(),
         _ => {
-            return Err(CoreError::BadRequest(format!(
-                "unsupported code_challenge_method: {method}"
-            )));
+            // Includes the literal string "plain" — which is the
+            // most likely thing to land here if the upstream
+            // defence regresses. Refuse with the same error as for
+            // any other unknown method.
+            return Err(CoreError::Protocol {
+                code: crate::errors::ProtocolError::InvalidGrant,
+                description: format!("unsupported code_challenge_method: {method}"),
+            });
         }
     };
     if computed.as_bytes().ct_eq(expected_challenge.as_bytes()).into() {

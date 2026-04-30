@@ -252,6 +252,68 @@ server {
 When proxying, set `cookie_secure = true` in `[server]` so the session
 cookie is only ever sent over HTTPS.
 
+## Security headers
+
+sui-id sets a fixed set of security-relevant response headers on
+every response. These are not configurable — they are part of the
+program's defended posture, not policy you should tune.
+
+| Header | Value | What it does |
+|---|---|---|
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'` | Restricts what the admin UI can load; `frame-ancestors 'none'` denies framing of every endpoint, including `/oauth2/authorize`. |
+| `X-Frame-Options` | `DENY` | Belt-and-braces alongside `frame-ancestors` for older browsers. |
+| `X-Content-Type-Options` | `nosniff` | Stops MIME-sniffing. |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | Outbound navigation leaks only the origin, never the path/query. |
+| `Permissions-Policy` | camera/geolocation/microphone/payment/USB all denied | Disables browser feature APIs sui-id has no use for. |
+| `Strict-Transport-Security` | `max-age=63072000; includeSubDomains` | **Only when `cookie_secure = true`**. Two years, no `preload` (operators opt in to preload separately if they want it). |
+
+If your reverse proxy adds these headers too, sui-id's middleware
+will *not* overwrite anything the inner handler already set, but a
+proxy that overwrites the response from sui-id wins. That's fine
+provided the proxy's policy is at least as strict.
+
+### CSP and the WebAuthn JS bundle
+
+The CSP allows `script-src 'self'` so the bundled `/static/webauthn.js`
+loads. There are no inline scripts and no remote scripts. If you
+deploy a custom admin theme that injects external scripts, you'll
+need to relax the policy in your proxy — sui-id itself does not
+support this.
+
+## CORS
+
+sui-id emits CORS headers on the routes that legitimately want
+cross-origin browser access:
+
+| Route | Policy |
+|---|---|
+| `/.well-known/openid-configuration` | `Access-Control-Allow-Origin: *` |
+| `/.well-known/jwks.json` | `Access-Control-Allow-Origin: *` |
+| `/oauth2/userinfo` | `Access-Control-Allow-Origin: *` |
+| `/oauth2/token` | Origin allowlist computed at request time from registered `redirect_uris` |
+| `/oauth2/introspect`, `/oauth2/revoke` | none — server-to-server |
+| `/oauth2/authorize`, `/oauth2/logout` | none — top-level navigation |
+| `/admin/*` | none — same-origin |
+
+The token-endpoint allowlist matters for SPA relying parties: a
+browser-resident OIDC client running on `https://app.example.com`
+exchanges its authorization code via `fetch` from that origin. The
+fetch is allowed if and only if the origin matches the scheme +
+host + port of some registered `redirect_uri` on some active
+client. Two consequences:
+
+- A new SPA RP that hasn't yet been registered will get a CORS
+  failure on the token exchange. **Register the redirect_uri for
+  the SPA before you deploy it.**
+- A registered desktop/mobile client whose redirect_uri uses a
+  custom scheme (e.g. `app://callback`) won't appear in the
+  allowlist; that's correct, because non-browser clients don't
+  send `Origin` and don't need CORS to begin with.
+
+If your proxy already handles CORS for these routes, sui-id's
+middleware adds no headers when there is no `Origin` request
+header. Your proxy's policy then wins.
+
 ## Logging
 
 sui-id uses [`tracing`](https://docs.rs/tracing). Pick `format = "json"` if
@@ -333,6 +395,7 @@ expect them to be renamed without a deprecation cycle):
 | `auth.session.revoked` | Session torn down by logout, admin disable, or expiry. |
 | `auth.logout` | RP-initiated logout completed. |
 | `auth.login.locked` | A failed sign-in that just triggered or extended an account lockout. **Alert on bursts of this.** |
+| `auth.refresh.theft_detected` | A revoked refresh token was replayed at the token endpoint. The whole rotation family was revoked. **Alert on this.** |
 | `mfa.admin_reset` | An administrator forcibly removed every MFA factor for a user. **Alert on this.** |
 | `admin.user.unlock` | An admin cleared an account lockout via `sui-id admin unlock-user`. |
 | `oauth.authorize.issued` | `/oauth2/authorize` issued an authorization code. |
@@ -371,6 +434,76 @@ FROM audit_log
 WHERE action = 'mfa.admin_reset'
 ORDER BY seq DESC;
 ```
+
+## Audit log integrity
+
+Every audit row carries a `prev_hash` and a `hash`, where
+`hash = SHA-256(prev_hash || canonical_bytes(row))` and
+`prev_hash` is the previous row's `hash`. To rewrite or delete
+row N you'd have to recompute every later row's hash — something
+an attacker with raw SQL access can do, but never without leaving
+a detectable mismatch at the boundary, because the legitimate
+code path's hash computation is the only thing that produces
+matching chains.
+
+This is local tamper-evidence: it catches DB-only attackers (SQL
+injection, misconfigured backups, file-system access) but not
+attackers who control the binary itself. For most self-hosted IdP
+deployments that's the relevant attack model; full external
+timestamping is a follow-up topic.
+
+### What sui-id does on startup
+
+On every startup sui-id walks the most recent 5,000 audit rows
+newest-first and recomputes each row's hash. The result lands in
+the structured log:
+
+```json
+{"level": "INFO", "fields": {"event": "audit-log hash chain verified", "checked": 5000, "legacy_unhashed": 0}}
+```
+
+If a row's stored hash disagrees with recomputation, the log
+entry is at `ERROR` level with a `broken_at_seq` field:
+
+```json
+{"level": "ERROR", "fields": {"event": "audit-log hash-chain verification FAILED — tampering or DB corruption suspected", "broken_at_seq": 423}}
+```
+
+sui-id **does not refuse to start** on detection. Refusing would
+turn a one-row corruption into a denial-of-service for the entire
+IdP. The error is loud enough that an operator's monitoring
+catches it; the action is for the operator to investigate.
+
+### Setting up an alert
+
+A SIEM or log shipper rule on the literal phrase "hash-chain
+verification FAILED" (or the structured field
+`broken_at_seq`) is the right place to fire. From the JSON log:
+
+```bash
+jq -c 'select(.fields.broken_at_seq) | {at: .timestamp, broken_at_seq: .fields.broken_at_seq}' \
+   < sui-id.log
+```
+
+In a Loki / Grafana setup:
+
+```logql
+{job="sui-id"} | json | fields_broken_at_seq != ""
+```
+
+### Rows from before v0.17.0
+
+Rows that pre-date this feature have empty `hash` and `prev_hash`
+columns. The verifier counts them as `legacy_unhashed` and does
+**not** flag them as tampering — they were never hashed in the
+first place. Once you upgrade and the next audit event lands,
+the chain begins from there.
+
+If you want a fully hashed audit log going forward and you don't
+need the historical entries, you can re-bootstrap by truncating
+`audit_log` and restarting; new rows will form a clean chain
+from row 1. Be aware this destroys investigation evidence — only
+do it on a fresh deployment.
 
 ## Systemd unit
 

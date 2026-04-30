@@ -21,6 +21,12 @@ pub struct Startup {
 
 static INIT_TRACING: Once = Once::new();
 
+/// How many rows from the tail of the audit log to chain-verify on
+/// startup. A few thousand catches anything an attacker is likely
+/// to have modified in a recent intrusion; deeper sweeps belong in
+/// a scheduled background task or a dedicated CLI subcommand.
+const AUDIT_VERIFY_TAIL: i64 = 5_000;
+
 pub fn init_tracing(filter: &str, json: bool) {
     INIT_TRACING.call_once(|| {
         let env_filter = EnvFilter::try_new(filter).unwrap_or_else(|_| EnvFilter::new("info"));
@@ -65,6 +71,36 @@ pub fn prepare(cfg: Config) -> Result<Startup> {
     }
     let db = Database::open(&cfg.storage.db_path, resolved.key)
         .context("opening database")?;
+
+    // Verify the tail of the audit-log hash chain. A mismatch here
+    // indicates DB-level tampering since the most recent restart;
+    // an attacker who modified an audit row directly via SQL will
+    // have left the row's hash mismatching its recomputation.
+    //
+    // We don't refuse to start on detection — that would let an
+    // attacker DoS the IdP by corrupting one row — but we surface
+    // the finding loudly so an operator's monitoring catches it.
+    match sui_id_store::repos::audit::verify_chain_tail(&db, AUDIT_VERIFY_TAIL) {
+        Ok(report) => {
+            if let Some(seq) = report.broken_at_seq {
+                tracing::error!(
+                    broken_at_seq = seq,
+                    checked = report.checked,
+                    legacy_unhashed = report.legacy_unhashed,
+                    "audit-log hash-chain verification FAILED — tampering or DB corruption suspected"
+                );
+            } else {
+                tracing::info!(
+                    checked = report.checked,
+                    legacy_unhashed = report.legacy_unhashed,
+                    "audit-log hash chain verified"
+                );
+            }
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "audit-log chain verification could not run");
+        }
+    }
 
     // 3. Generate setup token if the system is uninitialized; print it once.
     let setup_token = generate_setup_token();

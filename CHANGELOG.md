@@ -5,6 +5,182 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0] - 2026-04-28
+
+Security strengthening pass. Five reinforcements that close
+gaps surfaced by an internal security audit, organised as two
+delivery blocks.
+
+### Block 1 — response surface
+
+#### Added — security headers middleware
+
+Every response now carries a fixed set of security-relevant
+headers. These are not configurable; they are part of the
+program's defended posture.
+
+- `Content-Security-Policy: default-src 'self'; script-src 'self';
+  style-src 'self' 'unsafe-inline'; img-src 'self' data:;
+  font-src 'self'; connect-src 'self'; frame-ancestors 'none';
+  base-uri 'self'; form-action 'self'; object-src 'none'`
+- `X-Frame-Options: DENY` (belt-and-braces alongside CSP for
+  older browsers)
+- `X-Content-Type-Options: nosniff`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `Permissions-Policy` denying camera, geolocation, microphone,
+  payment, USB and friends
+- `Strict-Transport-Security: max-age=63072000; includeSubDomains`
+  (only when `cookie_secure = true`; HSTS preload is a deliberate
+  operator commitment, not something we default on)
+
+The middleware leaves any header an inner handler set deliberately
+untouched, so a route that wants a stricter local policy can
+override.
+
+#### Added — CORS for the OIDC public endpoints
+
+Routes that legitimately need browser cross-origin access now
+return appropriate `Access-Control-Allow-Origin` headers; routes
+that don't, don't.
+
+| Route | Policy |
+|---|---|
+| `/.well-known/openid-configuration` | `*` |
+| `/.well-known/jwks.json` | `*` |
+| `/oauth2/userinfo` | `*` |
+| `/oauth2/token` | Origin allowlist computed at request time from registered `redirect_uris` |
+| `/oauth2/introspect`, `/oauth2/revoke` | none — server-to-server |
+| `/oauth2/authorize`, `/oauth2/logout` | none — top-level navigation |
+| `/admin/*` | none — same-origin |
+
+Browser-based SPA relying parties can now complete the OIDC flow
+against sui-id without proxy gymnastics, but only from origins
+matching some registered `redirect_uri` of some active client.
+
+#### Added — `Cache-Control: no-store` on `/oauth2/userinfo`
+
+OIDC Core §5.3.2 SHOULD. Without it a CDN or shared proxy could
+serve one user's claims to another.
+
+#### Removed — PKCE `plain` from the verifier
+
+`code_challenge_method=plain` was already rejected at the
+`/oauth2/authorize` entry point, but `verify_pkce` itself still
+contained a working `"plain"` branch that would never be reached
+under normal flow. As defense-in-depth the branch is gone:
+`verify_pkce` now refuses anything other than `S256`. If the
+upstream check ever regresses, this layer still says no.
+
+### Block 2 — token and audit hardening
+
+#### Added — refresh-token theft detection
+
+A refresh-token "family" is a chain of rotations rooted at one
+original issuance. We now detect replay of an already-rotated
+token and revoke the entire family on detection.
+
+- Schema migration 0008 adds `refresh_tokens.family_id`. Initial
+  issuance roots a new family at the new row's id. Each rotation
+  copies the parent's `family_id` onto the new row.
+- `exchange_refresh` looks up the supplied token via `find_any`
+  (which returns even revoked rows). If the token decrypts to a
+  *revoked* row, that's a theft signal: the legitimate client
+  already rotated it, and an attacker is replaying the captured
+  copy. We revoke every active row in the same family — the
+  attacker can no longer use the captured token, the legitimate
+  client discovers this on next refresh and re-authenticates.
+- A new `auth.refresh.theft_detected` audit event records the
+  `family_id` and `client_id` so an operator's SIEM can correlate.
+- The HTTP response on detection is the same `400 invalid_grant`
+  the legitimate-but-already-rotated case would get; we don't
+  give an attacker a different response shape to detect.
+
+This follows OAuth 2.1 §6.1 / RFC 6819 §5.2.2.3 / OAuth 2.0
+Security Best Current Practice.
+
+#### Added — audit-log hash chain (tamper-evidence)
+
+Every audit row now carries `prev_hash` and `hash`, where
+`hash = SHA-256(prev_hash || canonical_bytes(row))` and
+`canonical_bytes` is a length-prefixed serialisation that fully
+distinguishes field boundaries.
+
+- Schema migration 0009 adds the two columns. Pre-migration rows
+  default to empty strings; the verifier treats empty `hash` as
+  "predates v0.17.0" and counts them separately rather than
+  flagging tampering.
+- `audit::append` reads the latest row's hash inside the same
+  transaction it inserts, so concurrent appends serialise into a
+  single chain.
+- `audit::verify_chain_tail(db, limit)` walks the most recent
+  rows newest-first and reports the first row whose stored hash
+  disagrees with recomputation. Returns a `ChainVerifyReport` with
+  `checked`, `legacy_unhashed`, and `broken_at_seq`.
+- Startup runs a 5,000-row tail verification and emits
+  `tracing::error!` with `broken_at_seq` on detection. We
+  deliberately *do not* refuse to start — corrupting a single
+  row would otherwise be a denial-of-service amplifier.
+
+This is local tamper-evidence: an attacker who controls the
+binary can rewrite the chain end-to-end, but the much more common
+"DB-only access" attacker (SQL injection, misconfigured backup,
+file-system access) will leave a detectable mismatch. External
+timestamping (RFC 3161 or notary service) is a follow-up topic
+when there's a concrete operator need.
+
+### Added — tests
+
+- 3 unit tests in `sui-id::security_headers`
+- 4 unit tests in `sui-id::cors` (origin parsing)
+- 5 unit tests in `sui-id-store::repos::audit` (chain construction,
+  empty-prev-hash root, tamper detection, legacy-row handling,
+  field-boundary disambiguation)
+- 2 unit tests in `sui-id-core::tokens` (PKCE plain rejected,
+  unknown methods rejected)
+- 4 e2e tests in `sui-id`:
+  - `admin_responses_carry_security_headers`
+  - `discovery_endpoint_allows_cross_origin_fetch`
+  - `jwks_endpoint_allows_cross_origin_fetch`
+  - `userinfo_response_carries_no_store_cache_control`
+- 2 e2e tests for refresh-token theft detection:
+  - `replaying_a_rotated_refresh_token_revokes_the_whole_family`
+  - `theft_detection_writes_audit_event`
+
+Workspace lib totals: shared 13, store 15 (+5), core 54 (+2),
+sui-id 47 (+7) — **129** lib tests, all passing. Plus 6 new e2e
+tests on top of the existing suite.
+
+### Added — documentation
+
+- `docs/operators.md` — new "Security headers" and "CORS"
+  sections describing what's emitted and why, with the per-route
+  CORS matrix and a note on what an operator's reverse proxy can
+  override.
+
+### Audit notes (gaps surfaced and resolved)
+
+- `post_logout_redirect_uri` exact-match: already correct, no
+  change needed; deprecation note added on the legacy
+  `redirect_uris` fallback.
+- PKCE plain at `/oauth2/authorize`: already correct (S256-only);
+  defense-in-depth strengthened in `verify_pkce`.
+- Session id rotation on login: already correct
+  (`SessionId::new()` + cookie overwrite on each login).
+- JWT alg constraint: already correct (`EdDSA` only).
+- Cookie attributes: already correct (`HttpOnly`, `SameSite=Lax`,
+  `Secure` config-controlled).
+- Authorization-code single-use, redirect_uri / client_id
+  re-validation: already correct.
+
+### Items deferred to v0.18.0+
+
+- `/me/security` self-service UI (active session list, self
+  revoke, recent auth events) — UI-heavy, separate release.
+- HIBP password breach check, idle session timeout, concurrent
+  session limit, suspicious-activity detection,
+  master-key rotation command — operator-judgement items;
+  staged delivery makes them easier to review individually.
+
 ## [0.16.0] - 2026-04-28
 
 Account lockout. After enough consecutive failed password attempts

@@ -369,12 +369,20 @@ pub async fn userinfo(
     if row.is_disabled || row.is_deleted {
         return Err(HttpError::api(CoreError::Unauthenticated));
     }
-    Ok(Json(UserInfo {
+    // OIDC Core §5.3.2 SHOULD: userinfo is per-user data and must
+    // not be cached by intermediaries. Without `no-store` a CDN or
+    // shared proxy could serve one user's claims to another.
+    let mut resp = Json(UserInfo {
         sub: row.id.to_string(),
         preferred_username: Some(row.username),
         name: row.display_name,
     })
-    .into_response())
+    .into_response();
+    resp.headers_mut().insert(
+        header::CACHE_CONTROL,
+        "no-store".parse().expect("static header value"),
+    );
+    Ok(resp)
 }
 
 // ---------- /logout (RP-initiated) ----------

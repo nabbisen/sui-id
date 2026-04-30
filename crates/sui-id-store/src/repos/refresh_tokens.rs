@@ -33,6 +33,7 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<RefreshTokenRow> {
         revoked_at: row.get::<_, Option<DateTime<Utc>>>(6)?,
         created_at: row.get::<_, DateTime<Utc>>(7)?,
         auth_methods,
+        family_id: row.get(9)?,
     })
 }
 
@@ -49,8 +50,8 @@ pub fn insert(db: &Database, row: &RefreshTokenRow) -> StoreResult<()> {
     let methods_json = serde_json::to_string(&row.auth_methods)?;
     db.with_conn(|conn| {
         conn.execute(
-            "INSERT INTO refresh_tokens(id, token_enc, user_id, client_id, scope, expires_at, revoked_at, created_at, auth_methods) \
-             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT INTO refresh_tokens(id, token_enc, user_id, client_id, scope, expires_at, revoked_at, created_at, auth_methods, family_id) \
+             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 row.id,
                 sealed,
@@ -61,6 +62,7 @@ pub fn insert(db: &Database, row: &RefreshTokenRow) -> StoreResult<()> {
                 row.revoked_at,
                 row.created_at,
                 methods_json,
+                row.family_id,
             ],
         )?;
         Ok(())
@@ -75,7 +77,7 @@ pub fn find_active(db: &Database, plaintext: &str) -> StoreResult<RefreshTokenRo
     let now = Utc::now();
     let candidates: Vec<(RefreshTokenRow, Vec<u8>)> = db.with_conn(|conn| {
         let mut stmt = conn.prepare(
-            "SELECT id, token_enc, user_id, client_id, scope, expires_at, revoked_at, created_at, auth_methods FROM refresh_tokens \
+            "SELECT id, token_enc, user_id, client_id, scope, expires_at, revoked_at, created_at, auth_methods, family_id FROM refresh_tokens \
              WHERE revoked_at IS NULL AND expires_at > ?1",
         )?;
         let rows = stmt
@@ -139,6 +141,57 @@ pub fn purge_expired(db: &Database) -> StoreResult<usize> {
         let n = conn.execute(
             "DELETE FROM refresh_tokens WHERE expires_at < ?1 OR revoked_at IS NOT NULL",
             [Utc::now()],
+        )?;
+        Ok(n)
+    })
+}
+
+/// Find a refresh token row by plaintext, *including* revoked rows
+/// that haven't been purged yet. Used by the theft-detection path
+/// in the refresh-grant flow: a token presented at the token
+/// endpoint that decrypts to a row with `revoked_at != NULL` is
+/// almost certainly an attacker replaying a captured-and-already-
+/// rotated token, so the caller revokes the whole family.
+///
+/// Returns `NotFound` for tokens that genuinely don't exist (typo,
+/// or rows already purged by `purge_expired`). Returns the row
+/// regardless of `revoked_at` and `expires_at` when found.
+pub fn find_any(db: &Database, plaintext: &str) -> StoreResult<RefreshTokenRow> {
+    use subtle::ConstantTimeEq;
+
+    let candidates: Vec<(RefreshTokenRow, Vec<u8>)> = db.with_conn(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT id, token_enc, user_id, client_id, scope, expires_at, revoked_at, created_at, auth_methods, family_id FROM refresh_tokens",
+        )?;
+        let rows = stmt
+            .query_map([], |r| {
+                let row = map(r)?;
+                let enc: Vec<u8> = r.get(1)?;
+                Ok((row, enc))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    })?;
+
+    let pt = plaintext.as_bytes();
+    for (row, enc) in candidates {
+        if let Ok(opened) = open(db.key(), &enc, AAD) {
+            if opened.ct_eq(pt).into() {
+                return Ok(row);
+            }
+        }
+    }
+    Err(StoreError::NotFound)
+}
+
+/// Revoke every active row in the given rotation family. Returns
+/// the number of rows updated. Idempotent: rows already revoked
+/// are not re-revoked.
+pub fn revoke_family(db: &Database, family_id: &str) -> StoreResult<usize> {
+    db.with_conn(|conn| {
+        let n = conn.execute(
+            "UPDATE refresh_tokens SET revoked_at = ?1 WHERE family_id = ?2 AND revoked_at IS NULL",
+            params![Utc::now(), family_id],
         )?;
         Ok(n)
     })

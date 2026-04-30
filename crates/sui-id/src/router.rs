@@ -1,20 +1,41 @@
 //! Axum router construction.
 
 use crate::handlers::{admin, index, oidc, setup};
+use crate::security_headers::SecurityHeaderConfig;
 use crate::AppState;
 use axum::routing::{get, post};
 use axum::Router;
 
 pub fn build_router(app: AppState) -> Router {
+    let hsts_enabled = app.config.server.cookie_secure;
+
+    // Routes that emit fully-public bodies and want browsers from any
+    // origin to be able to fetch them. We attach `cors::public_read`
+    // here so the OPTIONS preflight is answered with `*`.
+    let public_cors = axum::middleware::from_fn(crate::cors::public_read);
+
+    // Token endpoint: per-origin allowlist driven by registered
+    // redirect_uris. State-aware because it has to consult the
+    // database on each request.
+    let token_cors = axum::middleware::from_fn_with_state(app.clone(), crate::cors::token_endpoint);
+
+    let public_routes = Router::new()
+        .route("/.well-known/openid-configuration", get(oidc::discovery))
+        .route("/.well-known/jwks.json", get(oidc::jwks))
+        .route("/oauth2/userinfo", get(oidc::userinfo).post(oidc::userinfo))
+        .layer(public_cors);
+
+    let token_routes = Router::new()
+        .route("/oauth2/token", post(oidc::token))
+        .layer(token_cors);
+
     Router::new()
         .route("/", get(index::root))
         .route("/healthz", get(index::healthz))
         .route("/setup", get(setup::get).post(setup::post))
-        .route("/.well-known/openid-configuration", get(oidc::discovery))
-        .route("/.well-known/jwks.json", get(oidc::jwks))
+        .merge(public_routes)
+        .merge(token_routes)
         .route("/oauth2/authorize", get(oidc::authorize))
-        .route("/oauth2/token", post(oidc::token))
-        .route("/oauth2/userinfo", get(oidc::userinfo).post(oidc::userinfo))
         .route("/oauth2/logout", get(oidc::logout))
         .route(
             "/oauth2/introspect",
@@ -91,6 +112,15 @@ pub fn build_router(app: AppState) -> Router {
         .route("/admin/audit", get(admin::audit_get))
         .route("/static/{*path}", get(crate::assets::serve))
         .with_state(app)
+        // Security-headers middleware applies to *every* response,
+        // including the OIDC public ones merged above. State-aware so
+        // it can decide whether to emit HSTS based on cookie_secure.
+        .layer(axum::middleware::from_fn_with_state(
+            SecurityHeaderConfig {
+                enable_hsts: hsts_enabled,
+            },
+            crate::security_headers::middleware,
+        ))
         // request-id middleware runs first (outermost) so the id is
         // attached before TraceLayer's span is opened.
         .layer(axum::middleware::from_fn(crate::request_id::middleware))
