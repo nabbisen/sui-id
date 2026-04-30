@@ -30,6 +30,10 @@ const MIGRATIONS: &[Migration] = &[
         version: 4,
         sql: include_str!("./migrations/0004_webauthn.sql"),
     },
+    Migration {
+        version: 5,
+        sql: include_str!("./migrations/0005_revoked_access_tokens.sql"),
+    },
 ];
 
 const META_KEY_SCHEMA_VERSION: &str = "schema_version";

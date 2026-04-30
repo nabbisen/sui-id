@@ -202,6 +202,103 @@ the supplied URI (with `state` echoed if provided). If the URI is
 not acceptable, sui-id renders a static "Signed out" confirmation
 page instead.
 
+## Token introspection (RFC 7662)
+
+Confidential clients can ask `POST /oauth2/introspect` whether a
+token they hold is still valid:
+
+```
+POST /oauth2/introspect
+Authorization: Basic base64(client_id:client_secret)
+Content-Type: application/x-www-form-urlencoded
+
+token=eyJhbGc...&token_type_hint=access_token
+```
+
+`token_type_hint` is optional but speeds the lookup if you know
+which kind of token you're asking about. The two accepted hints are
+`access_token` and `refresh_token`.
+
+The response is JSON. For an active token:
+
+```json
+{
+  "active": true,
+  "scope": "openid profile",
+  "client_id": "...",
+  "username": "alice",
+  "token_type": "Bearer",
+  "exp": 1735689600,
+  "iat": 1735688700,
+  "sub": "...",
+  "aud": "...",
+  "iss": "https://idp.example.com"
+}
+```
+
+For an inactive (expired, revoked, malformed, or belonging to a
+different client) token:
+
+```json
+{ "active": false }
+```
+
+A few sui-id-specific points:
+
+- **Public clients cannot introspect.** Only confidential clients
+  have a secret to authenticate with at this endpoint. Public
+  clients should not need introspection — they hold the token
+  themselves and can read its `exp` claim directly.
+- **A client can only see its own tokens.** Submitting another
+  client's token returns `{"active": false}` rather than its
+  metadata. This avoids using introspection as an oracle to fish
+  for valid tokens.
+- The `Authorization: Basic` header is preferred per RFC 6749 §2.3.1
+  but `client_id` + `client_secret` form fields also work.
+
+## Token revocation (RFC 7009)
+
+Confidential clients can also revoke a refresh token at
+`POST /oauth2/revoke`:
+
+```
+POST /oauth2/revoke
+Authorization: Basic base64(client_id:client_secret)
+Content-Type: application/x-www-form-urlencoded
+
+token=eyJhbGc...&token_type_hint=refresh_token
+```
+
+Per RFC 7009 §2.2, the response is **always** `200 OK` with an empty
+body — even if the token was already revoked, expired, or never
+existed. This is deliberate: the revocation endpoint must not be
+usable as an oracle. The only error responses are
+`invalid_request` (malformed body), `unsupported_token_type`, or
+`invalid_client` (auth failure).
+
+Effects:
+
+- **Refresh token**: marked revoked at the storage layer. The next
+  attempt to use it at `/oauth2/token` returns `invalid_grant`.
+  Existing access tokens issued from the same authorization grant
+  remain valid until they expire — sui-id's access tokens are
+  stateless JWTs and cannot be revoked individually except via the
+  small deny-list (see below).
+- **Access token**: a `jti` deny-list entry is recorded so that
+  subsequent `/oauth2/introspect` calls will report it inactive.
+  Note that this does *not* prevent the access token from being
+  accepted at relying-party APIs that don't introspect — those
+  applications validate the JWT signature locally and have no
+  signal of revocation. The deny-list entry is garbage-collected
+  once the token's original `exp` passes.
+
+For a complete logout, the relying party should call `/oauth2/revoke`
+with the user's refresh token *and* call `/oauth2/logout` (RP-
+Initiated Logout) to end the user's sui-id session. Doing only one
+of the two leaves a path back: the refresh token can mint new
+access tokens, or the sui-id session can be used to log straight
+back into the application.
+
 ## Errors
 
 Errors at `/token` follow RFC 6749 §5.2. Errors at `/authorize` follow RFC
@@ -227,8 +324,6 @@ exposing the underlying cause to the caller.
   supported; see above.)
 - Dynamic client registration.
 - Custom claims beyond the OIDC standard set.
-- Token introspection (RFC 7662).
-- Token revocation (RFC 7009).
 - `acr` / `amr` claims signalling whether MFA was used during
   authentication.
 - `prompt=login`, `prompt=none`, or `max_age` parameter

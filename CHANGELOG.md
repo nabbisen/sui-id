@@ -5,6 +5,102 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-04-28
+
+### Added — RFC 7662 Token Introspection
+
+A new endpoint `POST /oauth2/introspect` lets confidential clients
+ask whether a token they hold is still valid.
+
+- Accepts `token` and an optional `token_type_hint`
+  (`access_token` or `refresh_token`) in the form body. The hint
+  controls only the lookup order — both kinds are tried either way.
+- Authenticates the calling client via HTTP Basic (preferred) or
+  `client_id` + `client_secret` form fields. Public clients cannot
+  introspect; they have no secret to present.
+- Returns the RFC 7662 §2.2 JSON shape: `active: true` plus
+  `scope`, `client_id`, `username`, `token_type`, `exp`, `iat`,
+  `sub`, `aud`, `iss` for an active token; `{"active": false}` and
+  nothing else for any other case.
+- A client can only see its own tokens. Submitting a token whose
+  `aud` is a different client returns `inactive` — introspection
+  must not be usable as an oracle for fishing valid tokens.
+- Audit-logged as `token.introspect` with the client id as actor
+  target and `active`/`inactive` as the result.
+
+### Added — RFC 7009 Token Revocation
+
+A new endpoint `POST /oauth2/revoke` lets confidential clients
+revoke their own tokens.
+
+- Same authentication shape as introspection (Basic or form-body
+  `client_id` + `client_secret`).
+- Per RFC 7009 §2.2 the response is **always** `200 OK` with an
+  empty body — even for unknown, expired, or already-revoked
+  tokens. The endpoint must not double as an oracle. Only
+  `invalid_client` (auth failure), `invalid_request` (malformed
+  body), or `unsupported_token_type` produce error responses.
+- Refresh tokens are revoked at the storage layer
+  (`refresh_tokens.revoked_at` is set). The next attempt to use
+  them at `/token` is rejected with `invalid_grant`.
+- Access tokens are added to a small deny-list table
+  (`revoked_access_tokens`, see migration 0005). A revoked access
+  token's `jti` is checked at introspection time, so subsequent
+  introspections report it inactive. The deny-list does *not*
+  reach RPs that validate JWTs locally; relying parties that need
+  immediate revocation visibility should call introspection.
+- Garbage-collected: `revoked_access_tokens` rows whose `exp` has
+  passed are pruned by the periodic GC sweep, so the table size is
+  bounded by the access-token lifetime.
+- Audit-logged as `token.revoke` with the client id as target.
+
+### Added — schema migration 0005
+
+A new `revoked_access_tokens` table with `jti` (PK), `revoked_at`,
+`exp`, `revoked_by_user`, `revoked_by_client`. Index on `exp` for
+the GC sweep. Existing deployments pick this up automatically on
+first start of v0.11.0; no operator action needed.
+
+### Added — discovery metadata
+
+`/.well-known/openid-configuration` now advertises:
+
+- `introspection_endpoint`
+- `introspection_endpoint_auth_methods_supported: ["client_secret_basic", "client_secret_post"]`
+- `revocation_endpoint`
+- `revocation_endpoint_auth_methods_supported: ["client_secret_basic", "client_secret_post"]`
+
+so RP libraries that auto-discover endpoints pick the new ones up
+without configuration changes.
+
+### Added — documentation
+
+- `docs/integrators.md` gains two new sections (Token introspection
+  and Token revocation) walking through the request/response
+  shapes, authentication, oracle-prevention behaviour, and the
+  trade-off that JWT access tokens cannot be reliably revoked from
+  RPs that validate locally.
+- The "What sui-id does not do" list drops `RFC 7662` and
+  `RFC 7009` — they're done.
+
+### Added — tests
+
+- 7 new end-to-end tests for the introspection and revocation
+  endpoints (verified individually):
+  - `discovery_advertises_introspect_and_revoke_endpoints`
+  - `introspect_rejects_unauthenticated_request`
+  - `introspect_other_clients_token_returns_inactive`
+  - `introspect_returns_active_for_valid_access_token`
+  - `introspect_returns_active_for_valid_refresh_token`
+  - `introspect_returns_inactive_for_garbage_token`
+  - `revoke_then_introspect_shows_inactive_for_access_token`
+
+The lib test suites (`sui-id` 28 + `sui-id-core` 39 +
+`sui-id-store` 6 + `sui-id-shared` 6 = 79) all pass. The full e2e
+suite has 41 tests total and was previously verified end-to-end at
+v0.10.x; the new RFC 7662/7009 tests have been verified
+individually here.
+
 ## [0.10.2] - 2026-04-28
 
 `cargo audit` integration. No code changes.

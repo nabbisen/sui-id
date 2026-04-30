@@ -60,6 +60,10 @@ v0.10.1 / v0.10.2.
 - `cargo audit` CI integration — `.github/workflows/audit.yml` runs
   on push, on PR, and weekly. The companion `ci.yml` covers build,
   test, fmt, and clippy on every change.
+- Token introspection (RFC 7662) and token revocation (RFC 7009).
+  Confidential clients can introspect and revoke their own tokens
+  via the standards-blessed endpoints; both are advertised through
+  the OIDC discovery document.
 
 ## Explicitly **not** on the roadmap
 

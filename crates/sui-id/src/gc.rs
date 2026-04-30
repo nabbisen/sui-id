@@ -11,7 +11,8 @@
 use crate::AppState;
 use std::time::Duration;
 use sui_id_store::repos::{
-    auth_codes, login_pending_mfa, refresh_tokens, sessions, webauthn_pending,
+    auth_codes, login_pending_mfa, refresh_tokens, revoked_access_tokens, sessions,
+    webauthn_pending,
 };
 
 const GC_INTERVAL: Duration = Duration::from_secs(15 * 60);
@@ -56,5 +57,10 @@ pub fn run_once(state: &AppState) {
         Ok(n) if n > 0 => tracing::info!(deleted = n, "gc: removed expired WebAuthn ceremonies"),
         Ok(_) => {}
         Err(e) => tracing::warn!(error = %e, "gc: webauthn_pending purge failed"),
+    }
+    match revoked_access_tokens::purge_expired(db) {
+        Ok(n) if n > 0 => tracing::info!(deleted = n, "gc: removed expired access-token deny entries"),
+        Ok(_) => {}
+        Err(e) => tracing::warn!(error = %e, "gc: revoked_access_tokens purge failed"),
     }
 }

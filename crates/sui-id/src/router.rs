@@ -16,6 +16,14 @@ pub fn build_router(app: AppState) -> Router {
         .route("/oauth2/token", post(oidc::token))
         .route("/oauth2/userinfo", get(oidc::userinfo).post(oidc::userinfo))
         .route("/oauth2/logout", get(oidc::logout))
+        .route(
+            "/oauth2/introspect",
+            post(crate::handlers::oauth_token::introspect),
+        )
+        .route(
+            "/oauth2/revoke",
+            post(crate::handlers::oauth_token::revoke),
+        )
         .route("/admin/login", get(admin::login_get).post(admin::login_post))
         .route(
             "/admin/login/mfa",

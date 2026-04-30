@@ -293,7 +293,7 @@ pub async fn token(
     Ok(out)
 }
 
-fn parse_basic_auth(headers: &HeaderMap) -> Option<(String, String)> {
+pub(crate) fn parse_basic_auth(headers: &HeaderMap) -> Option<(String, String)> {
     let raw = headers.get(header::AUTHORIZATION)?.to_str().ok()?;
     let body = raw.strip_prefix("Basic ")?;
     let mut buf = vec![0u8; body.len()];
@@ -341,6 +341,13 @@ pub async fn userinfo(
 
     let claims = sui_id_core::tokens::verify_access_token(&app.db, &app.clock, raw)
         .map_err(HttpError::api)?;
+    // RFC 7009: a revoked access token must stop being honoured at
+    // protected endpoints. We consult the deny-list before serving.
+    if sui_id_store::repos::revoked_access_tokens::is_revoked(&app.db, &claims.jti)
+        .map_err(|e| HttpError::api(CoreError::from(e)))?
+    {
+        return Err(HttpError::api(CoreError::Unauthenticated));
+    }
     let uid: sui_id_shared::ids::UserId = claims
         .sub
         .parse()

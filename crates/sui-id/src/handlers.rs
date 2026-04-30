@@ -16,6 +16,7 @@ use sui_id_store::repos::users;
 
 pub mod admin;
 pub mod index;
+pub mod oauth_token;
 pub mod oidc;
 pub mod setup;
 

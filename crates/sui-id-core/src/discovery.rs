@@ -13,12 +13,22 @@ pub struct Discovery {
     pub token_endpoint: String,
     pub userinfo_endpoint: String,
     pub end_session_endpoint: String,
+    /// RFC 7662.
+    pub introspection_endpoint: String,
+    /// RFC 7009.
+    pub revocation_endpoint: String,
     pub jwks_uri: String,
 
     pub response_types_supported: Vec<&'static str>,
     pub subject_types_supported: Vec<&'static str>,
     pub id_token_signing_alg_values_supported: Vec<&'static str>,
     pub token_endpoint_auth_methods_supported: Vec<&'static str>,
+    /// Per RFC 8414 §2: declares the auth methods accepted at
+    /// `/oauth2/introspect`. We accept the same set as `/token`
+    /// minus `none`, because RFC 7662 §2.1 forbids public clients
+    /// from introspecting.
+    pub introspection_endpoint_auth_methods_supported: Vec<&'static str>,
+    pub revocation_endpoint_auth_methods_supported: Vec<&'static str>,
     pub grant_types_supported: Vec<&'static str>,
     pub code_challenge_methods_supported: Vec<&'static str>,
     pub scopes_supported: Vec<&'static str>,
@@ -33,12 +43,16 @@ impl Discovery {
             token_endpoint: format!("{trimmed}/oauth2/token"),
             userinfo_endpoint: format!("{trimmed}/oauth2/userinfo"),
             end_session_endpoint: format!("{trimmed}/oauth2/logout"),
+            introspection_endpoint: format!("{trimmed}/oauth2/introspect"),
+            revocation_endpoint: format!("{trimmed}/oauth2/revoke"),
             jwks_uri: format!("{trimmed}/.well-known/jwks.json"),
 
             response_types_supported: vec!["code"],
             subject_types_supported: vec!["public"],
             id_token_signing_alg_values_supported: vec!["EdDSA"],
             token_endpoint_auth_methods_supported: vec!["client_secret_basic", "client_secret_post", "none"],
+            introspection_endpoint_auth_methods_supported: vec!["client_secret_basic", "client_secret_post"],
+            revocation_endpoint_auth_methods_supported: vec!["client_secret_basic", "client_secret_post"],
             grant_types_supported: vec!["authorization_code", "refresh_token"],
             code_challenge_methods_supported: vec!["S256"],
             scopes_supported: vec!["openid", "profile", "email", "offline_access"],

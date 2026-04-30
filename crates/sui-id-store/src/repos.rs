@@ -10,6 +10,7 @@ pub mod clients;
 pub mod credentials;
 pub mod login_pending_mfa;
 pub mod refresh_tokens;
+pub mod revoked_access_tokens;
 pub mod sessions;
 pub mod signing_keys;
 pub mod state;

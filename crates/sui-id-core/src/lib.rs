@@ -23,5 +23,6 @@ pub mod time;
 pub mod totp;
 pub mod mfa;
 pub mod webauthn;
+pub mod oauth_token;
 
 pub use errors::{CoreError, CoreResult};
