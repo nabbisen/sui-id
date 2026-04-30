@@ -64,8 +64,8 @@ pub async fn authorize(
     let axum::extract::State(app) = state_ext;
 
     // Resolve a session if one exists; otherwise redirect to login.
-    let session_user = match resolve_session(&app, &headers).await {
-        Some(uid) => uid,
+    let (session_user, session_auth_methods) = match resolve_session(&app, &headers).await {
+        Some(state) => state,
         None => {
             let qs = build_query_string(&q);
             let next = format!("/oauth2/authorize?{qs}");
@@ -94,8 +94,14 @@ pub async fn authorize(
     };
 
     let accepted = authorize::begin_authorization(&app.db, params).map_err(HttpError::html)?;
-    let redirect = authorize::complete_authorization(&app.db, &app.clock, session_user, accepted)
-        .map_err(HttpError::html)?;
+    let redirect = authorize::complete_authorization(
+        &app.db,
+        &app.clock,
+        session_user,
+        &session_auth_methods,
+        accepted,
+    )
+    .map_err(HttpError::html)?;
 
     let mut url = redirect.redirect_uri;
     let sep = if url.contains('?') { '&' } else { '?' };
@@ -112,13 +118,20 @@ pub async fn authorize(
 async fn resolve_session(
     app: &crate::AppState,
     headers: &HeaderMap,
-) -> Option<sui_id_shared::ids::UserId> {
+) -> Option<(sui_id_shared::ids::UserId, Vec<sui_id_shared::AuthMethod>)> {
     use axum_extra::extract::cookie::CookieJar;
     use sui_id_shared::ids::SessionId;
     let jar = CookieJar::from_headers(headers);
     let raw = jar.get(crate::handlers::SESSION_COOKIE)?.value().to_string();
     let id = SessionId::from_str(&raw).ok()?;
-    sui_id_core::session::resolve(&app.db, &app.clock, id).ok()
+    // Resolve hits the database both for validity (expiry / revocation)
+    // and to fetch the recorded auth_methods. Cheaper to do it once
+    // here than to call resolve and then re-fetch the row.
+    let session = sui_id_store::repos::sessions::get(&app.db, id).ok()?;
+    if session.revoked_at.is_some() || session.expires_at < app.clock.now() {
+        return None;
+    }
+    Some((session.user_id, session.auth_methods))
 }
 
 fn build_query_string(q: &AuthorizeQuery) -> String {

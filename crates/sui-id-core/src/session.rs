@@ -134,6 +134,10 @@ pub fn login_with_mfa(
         expires_at: now + Duration::hours(SESSION_LIFETIME_HOURS),
         created_at: now,
         revoked_at: None,
+        // No MFA was required for this user, so the only factor is
+        // the password. The session's `acr` will be "1" and its
+        // `amr` will be ["pwd"].
+        auth_methods: vec![sui_id_shared::AuthMethod::Pwd],
     };
     sessions::insert(db, &row)?;
     record_login_success(db, clock, user.id);

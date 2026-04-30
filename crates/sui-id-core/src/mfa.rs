@@ -199,7 +199,7 @@ pub fn verify_pending(
     }
 
     let trimmed = code_input.trim();
-    let accepted = if let Ok(digits) = trimmed.parse::<u32>() {
+    let (accepted, method_used) = if let Ok(digits) = trimmed.parse::<u32>() {
         let mut secret = user_totp::decrypt_secret(db, &totp_row)?;
         let now = clock.now().timestamp();
         let result = totp::verify(&secret, now, digits, totp_row.last_used_step);
@@ -207,14 +207,15 @@ pub fn verify_pending(
         match result {
             Some(step) => {
                 user_totp::set_last_used_step(db, pending.user_id, step)?;
-                true
+                (true, sui_id_shared::AuthMethod::Totp)
             }
-            None => false,
+            None => (false, sui_id_shared::AuthMethod::Totp),
         }
     } else {
         // Recovery-code path. Match against any stored hash; on hit,
         // remove that hash from the list so the code is single-use.
-        consume_recovery_code(db, pending.user_id, &totp_row, trimmed)?
+        let ok = consume_recovery_code(db, pending.user_id, &totp_row, trimmed)?;
+        (ok, sui_id_shared::AuthMethod::RecoveryCode)
     };
 
     if !accepted {
@@ -229,6 +230,11 @@ pub fn verify_pending(
         expires_at: now + Duration::hours(SESSION_LIFETIME_HOURS),
         created_at: now,
         revoked_at: None,
+        // Two factors were used: the password (which produced the
+        // pending-MFA row) and whichever second factor the user just
+        // verified. The session's `acr` will be "2" and `amr` will
+        // include `pwd`, `otp`, and `mfa`.
+        auth_methods: vec![sui_id_shared::AuthMethod::Pwd, method_used],
     };
     sessions::insert(db, &session)?;
     let _ = login_pending_mfa::delete(db, pending_id);
@@ -266,6 +272,14 @@ pub fn verify_pending_webauthn(
         expires_at: now + Duration::hours(SESSION_LIFETIME_HOURS),
         created_at: now,
         revoked_at: None,
+        // Password established the pending row; WebAuthn was the
+        // second factor. The session's `acr` will be "3" (phishing-
+        // resistant hardware-bound key) and `amr` will include
+        // `pwd`, `hwk`, and `mfa`.
+        auth_methods: vec![
+            sui_id_shared::AuthMethod::Pwd,
+            sui_id_shared::AuthMethod::Webauthn,
+        ],
     };
     sessions::insert(db, &session)?;
     let _ = login_pending_mfa::delete(db, pending_id);

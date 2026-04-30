@@ -85,6 +85,15 @@ v0.10.1 / v0.10.2.
   exercised with proptest. CONTRIBUTING.md documents the case-
   count convention and how to widen coverage with
   `PROPTEST_CASES=…` for releases or scheduled CI.
+- `acr` and `amr` claims in ID tokens (OpenID Connect Core §2 +
+  RFC 8176). The originating session's authentication factors are
+  snapshotted at sign-in, propagated through auth codes and
+  refresh-token rotations, and surfaced as numeric ISO 29115 LoA
+  strings (`"1"` / `"2"` / `"3"`) plus an `amr` array. Refreshed
+  ID tokens echo the original sign-in's claims rather than
+  synthesising fresh ones. The `acr_values` request-side parameter
+  is not yet honoured — relying parties filter on the issued
+  claim.
 
 ## Explicitly **not** on the roadmap
 

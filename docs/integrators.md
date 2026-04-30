@@ -148,9 +148,64 @@ ID tokens carry the standard OIDC claim set:
 | `iat`   | Issued at, unix seconds                         |
 | `exp`   | Expires at, unix seconds                        |
 | `nonce` | Echoed from your `/authorize` request, if given |
+| `acr`   | Authentication Context Class Reference (see below) |
+| `amr`   | Authentication Methods References (see below)   |
 
 The userinfo response carries `sub`, `preferred_username`, and `name` (when
 the user has a display name set).
+
+### `acr` — assurance level
+
+sui-id reports the level-of-assurance of the originating sign-in as
+a numeric ISO/IEC 29115 LoA string in the ID token's `acr` claim.
+Three levels are produced:
+
+| `acr` | What it means                                                  |
+| ----- | -------------------------------------------------------------- |
+| `"1"` | Single-factor sign-in. Password only.                          |
+| `"2"` | Multi-factor with a software second factor (TOTP, recovery code). |
+| `"3"` | Multi-factor with a phishing-resistant hardware-bound key (WebAuthn). |
+
+Numeric strings are the form Keycloak and most other off-the-shelf
+IdPs produce; longer URI variants (NIST AAL,
+`http://idmanagement.gov/ns/assurance/aal/2`; eIDAS LoA) target
+specific national contexts and are not what a general-purpose IdP
+should emit.
+
+A relying party that needs a minimum assurance level should compare
+the numeric value as a string-or-integer (`"2"` and `"3"` are both
+acceptable when the requirement is "at least 2"). sui-id does not
+yet support the `acr_values` request parameter that lets a client
+*demand* a particular ACR up front; if you need that, raise an
+issue.
+
+### `amr` — which factors were used
+
+Alongside `acr`, the `amr` claim is an array of RFC 8176 method
+references describing the actual factors used:
+
+| Token   | Meaning                                                |
+| ------- | ------------------------------------------------------ |
+| `pwd`   | Password.                                              |
+| `otp`   | One-time code (TOTP authenticator app or recovery code). |
+| `hwk`   | Hardware-bound key proof (WebAuthn).                   |
+| `mfa`   | Umbrella signal: two or more distinct factor types were used. |
+
+Examples of what your RP will see:
+
+| Sign-in path                | `acr` | `amr`                       |
+| --------------------------- | ----- | --------------------------- |
+| Password only               | `"1"` | `["pwd"]`                   |
+| Password + TOTP             | `"2"` | `["pwd", "otp", "mfa"]`     |
+| Password + recovery code    | `"2"` | `["pwd", "otp", "mfa"]`     |
+| Password + WebAuthn passkey | `"3"` | `["pwd", "hwk", "mfa"]`     |
+
+`acr` and `amr` describe the *originating* sign-in. They do not
+change as the user uses your application: a session that started
+as password-only does not become MFA later just because the user
+enrols TOTP afterwards. ID tokens issued via the refresh-token
+flow echo the `acr` and `amr` of the original authorization,
+verbatim.
 
 ## Multi-factor authentication
 
@@ -324,8 +379,11 @@ exposing the underlying cause to the caller.
   supported; see above.)
 - Dynamic client registration.
 - Custom claims beyond the OIDC standard set.
-- `acr` / `amr` claims signalling whether MFA was used during
-  authentication.
+- The `acr_values` request parameter on `/oauth2/authorize`: sui-id
+  *issues* `acr` and `amr` claims (see "ID token claims") but does
+  not yet honour an RP's `acr_values` ask for a minimum assurance
+  level up front. Filter on the issued `acr` at the relying party
+  for now.
 - `prompt=login`, `prompt=none`, or `max_age` parameter
   enforcement.
 

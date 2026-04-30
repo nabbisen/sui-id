@@ -5,6 +5,114 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] - 2026-04-28
+
+`acr` and `amr` claims in ID tokens, so relying parties can tell
+how the user actually authenticated.
+
+### Added — `acr` claim (Authentication Context Class Reference)
+
+ID tokens now carry an `acr` claim with one of three values:
+
+- `"1"` — single factor. Password only.
+- `"2"` — multi-factor with a software second factor (TOTP or
+  recovery code).
+- `"3"` — multi-factor with a phishing-resistant hardware-bound
+  key (WebAuthn).
+
+These are the bare numeric ISO/IEC 29115 LoA strings, which is the
+form Keycloak and most off-the-shelf IdPs produce. Longer URI
+variants (NIST AAL `http://idmanagement.gov/ns/assurance/aal/2`,
+eIDAS LoA) target specific national contexts and are needlessly
+verbose for a general-purpose IdP — see the design rationale in
+`docs/integrators.md`.
+
+### Added — `amr` claim (Authentication Methods References)
+
+ID tokens now carry an `amr` array using RFC 8176 method tokens:
+
+- `pwd` — password
+- `otp` — one-time code (TOTP or recovery code; both are OTPs from
+  the relying party's perspective, per RFC 8176)
+- `hwk` — hardware-bound key (WebAuthn passkey)
+- `mfa` — umbrella signal added when two or more *distinct* factor
+  types were used. Single-factor sign-ins, even one with a
+  hardware key, do not earn `mfa`.
+
+Resulting per-path claims:
+
+| Sign-in path                | `acr` | `amr`                       |
+| --------------------------- | ----- | --------------------------- |
+| Password only               | `"1"` | `["pwd"]`                   |
+| Password + TOTP             | `"2"` | `["pwd", "otp", "mfa"]`     |
+| Password + recovery code    | `"2"` | `["pwd", "otp", "mfa"]`     |
+| Password + WebAuthn passkey | `"3"` | `["pwd", "hwk", "mfa"]`     |
+
+### Added — `sui_id_shared::AuthMethod`
+
+A typed enum (`Pwd`, `Totp`, `RecoveryCode`, `Webauthn`) plus pure
+helpers `acr_from_methods` and `amr_from_methods`. Lives in the
+shared crate so all three layers (store models, core flows, HTTP
+handlers) reference one canonical representation.
+
+### Added — schema migration 0006
+
+A new `auth_methods TEXT NOT NULL DEFAULT '[]'` column on three
+tables: `sessions`, `auth_codes`, `refresh_tokens`. Pre-migration
+rows default to `'[]'`, which the issuance code treats as "no
+recorded factors" — an empty list produces *no* `acr` / `amr`
+claim rather than a misleading `"1"`. New sign-ins from v0.15+
+populate the list correctly.
+
+### Snapshot-and-propagate model
+
+The session's authentication factors are recorded once at session
+creation. From there:
+
+- `/oauth2/authorize` snapshots the session's `auth_methods` onto
+  the new auth code row.
+- `/oauth2/token` (authorization-code grant) reads the snapshot
+  off the auth code, populates the ID token's `acr` / `amr`, and
+  copies the snapshot onto the refresh-token row.
+- `/oauth2/token` (refresh grant) reads the snapshot off the
+  current refresh token row and copies it onto the new one.
+
+The critical security property: a refreshed ID token reports the
+*original* authentication, never a synthesised re-evaluation. A
+session that started as password-only can never produce
+`acr=2` later, no matter how many refreshes happen, even if the
+user enrols TOTP afterwards.
+
+### Added — tests
+
+- 7 lib tests in `sui-id-shared` covering `AuthMethod`,
+  `acr_from_methods`, `amr_from_methods` (LoA mapping, dedup,
+  RFC 8176 token mapping, `mfa` umbrella semantics).
+- 3 e2e tests:
+  - `id_token_carries_acr_1_and_amr_pwd_for_password_only_login`
+  - `id_token_carries_acr_2_and_amr_with_mfa_after_totp_login`
+  - `refresh_grant_preserves_acr_and_amr_from_original_session`
+
+Workspace lib totals: shared **13** (+7), store 10, core 50,
+sui-id 40 — **113** total, all passing.
+
+### Added — documentation
+
+- `docs/integrators.md` — "ID token claims" section now describes
+  `acr` and `amr`, with the LoA mapping table and the per-path
+  examples. Notes that `acr_values` request-side enforcement is
+  not yet implemented; relying parties filter on the issued claim
+  for now.
+
+### What this does *not* change
+
+- `userinfo` is unchanged. `acr` / `amr` are ID-token claims per
+  OIDC Core; the userinfo endpoint continues to expose `sub`,
+  `preferred_username`, and `name`.
+- The `acr_values` request parameter is *not* honoured. A relying
+  party that requires a minimum LoA must filter on the returned
+  `acr` claim.
+
 ## [0.14.0] - 2026-04-28
 
 Property-based tests (`proptest`) for the parts of sui-id that

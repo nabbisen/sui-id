@@ -69,6 +69,13 @@ pub struct AuthorizationCodeRow {
     pub expires_at: DateTime<Utc>,
     pub consumed: bool,
     pub created_at: DateTime<Utc>,
+    /// Snapshot of the originating session's authentication factors,
+    /// taken at code issuance. Read at the token endpoint to populate
+    /// the resulting ID token's `acr` / `amr`. We snapshot rather
+    /// than dereferencing back to the session because the session
+    /// can be revoked between authorize and token without affecting
+    /// the validity of an already-issued auth code.
+    pub auth_methods: Vec<sui_id_shared::AuthMethod>,
 }
 
 #[derive(Debug, Clone)]
@@ -78,6 +85,12 @@ pub struct SessionRow {
     pub expires_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
     pub revoked_at: Option<DateTime<Utc>>,
+    /// Which authentication factors were used to establish this
+    /// session. Read at ID-token issuance to populate `acr` / `amr`.
+    /// Stored as a JSON array of [`sui_id_shared::AuthMethod`] values
+    /// in the database. An empty list represents a pre-migration
+    /// session and is treated as single-factor by issuance code.
+    pub auth_methods: Vec<sui_id_shared::AuthMethod>,
 }
 
 #[derive(Debug, Clone)]
@@ -90,6 +103,11 @@ pub struct RefreshTokenRow {
     pub expires_at: DateTime<Utc>,
     pub revoked_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
+    /// Snapshot of the originating session's factors, propagated
+    /// from the auth code at issuance and forward through every
+    /// rotation. The refreshed ID token reports the *original*
+    /// authentication, never a synthetic re-evaluation.
+    pub auth_methods: Vec<sui_id_shared::AuthMethod>,
 }
 
 #[derive(Debug, Clone)]

@@ -53,6 +53,16 @@ pub struct IdTokenClaims {
     pub nonce: Option<String>,
     /// Convenience identifier used by some clients.
     pub jti: String,
+    /// Authentication Context Class Reference (OIDC Core §2). The
+    /// numeric ISO 29115 LoA strings `"1"`, `"2"`, `"3"`. Always
+    /// present from v0.15.0 onward.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub acr: Option<String>,
+    /// Authentication Methods References (OIDC Core §2; values from
+    /// RFC 8176). Tokens like `"pwd"`, `"otp"`, `"hwk"`, plus `"mfa"`
+    /// when two or more distinct factors were used.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub amr: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -84,7 +94,10 @@ pub struct TokenSet {
 ///
 /// `nonce` is the original OIDC `nonce` from the authorization request, if
 /// present. `include_id_token` is true when `openid` is among the requested
-/// scopes.
+/// scopes. `auth_methods` is the list of factors that established the
+/// originating session — used to populate the ID token's `acr` and `amr`
+/// claims. Pass `&[]` for grant types that don't have a session
+/// underneath them; the ID token will then carry no `acr` / `amr`.
 #[allow(clippy::too_many_arguments)]
 pub fn issue_token_set(
     issuer: &str,
@@ -97,6 +110,7 @@ pub fn issue_token_set(
     signing_key: &SigningKey,
     lifetimes: TokenLifetimes,
     clock: &SharedClock,
+    auth_methods: &[sui_id_shared::AuthMethod],
 ) -> CoreResult<TokenSet> {
     let now = clock.now();
     let iat = now.timestamp();
@@ -113,6 +127,14 @@ pub fn issue_token_set(
     let access_token = jwt::sign(kid, signing_key, &access_claims)?;
 
     let id_token = if include_id_token {
+        let (acr, amr) = if auth_methods.is_empty() {
+            (None, None)
+        } else {
+            (
+                Some(sui_id_shared::acr_from_methods(auth_methods).to_string()),
+                Some(sui_id_shared::amr_from_methods(auth_methods)),
+            )
+        };
         let claims = IdTokenClaims {
             iss: issuer.to_owned(),
             sub: user.to_string(),
@@ -121,6 +143,8 @@ pub fn issue_token_set(
             exp: iat + lifetimes.id_secs,
             nonce: nonce.map(str::to_owned),
             jti: random_token(16),
+            acr,
+            amr,
         };
         Some(jwt::sign(kid, signing_key, &claims)?)
     } else {

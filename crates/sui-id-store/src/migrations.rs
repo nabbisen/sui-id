@@ -34,6 +34,10 @@ const MIGRATIONS: &[Migration] = &[
         version: 5,
         sql: include_str!("./migrations/0005_revoked_access_tokens.sql"),
     },
+    Migration {
+        version: 6,
+        sql: include_str!("./migrations/0006_session_auth_methods.sql"),
+    },
 ];
 
 /// The highest schema version this build of sui-id-store knows how to

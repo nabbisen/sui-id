@@ -7,7 +7,9 @@
 #![forbid(unsafe_code)]
 
 pub mod api;
+pub mod auth_method;
 pub mod errors;
 pub mod ids;
 
+pub use auth_method::{acr_from_methods, amr_from_methods, AuthMethod};
 pub use errors::{ApiError, ApiErrorCode};

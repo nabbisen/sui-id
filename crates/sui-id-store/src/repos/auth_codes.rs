@@ -12,6 +12,10 @@ use chrono::{DateTime, Utc};
 use rusqlite::params;
 
 fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<AuthorizationCodeRow> {
+    let auth_methods_json: String = row.get(11)?;
+    let auth_methods = serde_json::from_str(&auth_methods_json).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(11, rusqlite::types::Type::Text, Box::new(e))
+    })?;
     Ok(AuthorizationCodeRow {
         code_hash: row.get(0)?,
         client_id: row
@@ -30,14 +34,16 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<AuthorizationCodeRow> {
         expires_at: row.get::<_, DateTime<Utc>>(8)?,
         consumed: row.get::<_, i64>(9)? != 0,
         created_at: row.get::<_, DateTime<Utc>>(10)?,
+        auth_methods,
     })
 }
 
 pub fn insert(db: &Database, row: &AuthorizationCodeRow) -> StoreResult<()> {
+    let methods_json = serde_json::to_string(&row.auth_methods)?;
     db.with_conn(|conn| {
         conn.execute(
-            "INSERT INTO auth_codes(code_hash, client_id, user_id, redirect_uri, scope, nonce, code_challenge, code_challenge_method, expires_at, consumed, created_at) \
-             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            "INSERT INTO auth_codes(code_hash, client_id, user_id, redirect_uri, scope, nonce, code_challenge, code_challenge_method, expires_at, consumed, created_at, auth_methods) \
+             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             params![
                 row.code_hash,
                 row.client_id.to_string(),
@@ -50,6 +56,7 @@ pub fn insert(db: &Database, row: &AuthorizationCodeRow) -> StoreResult<()> {
                 row.expires_at,
                 row.consumed as i64,
                 row.created_at,
+                methods_json,
             ],
         )?;
         Ok(())
@@ -64,7 +71,7 @@ pub fn consume(db: &Database, code_hash: &str) -> StoreResult<AuthorizationCodeR
         let tx = conn.unchecked_transaction()?;
         let row: AuthorizationCodeRow = tx
             .query_row(
-                "SELECT code_hash, client_id, user_id, redirect_uri, scope, nonce, code_challenge, code_challenge_method, expires_at, consumed, created_at FROM auth_codes WHERE code_hash = ?1",
+                "SELECT code_hash, client_id, user_id, redirect_uri, scope, nonce, code_challenge, code_challenge_method, expires_at, consumed, created_at, auth_methods FROM auth_codes WHERE code_hash = ?1",
                 [code_hash],
                 map,
             )

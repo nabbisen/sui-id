@@ -13,6 +13,10 @@ use rusqlite::params;
 use sui_id_shared::ids::{ClientId, UserId};
 
 fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<RefreshTokenRow> {
+    let auth_methods_json: String = row.get(8)?;
+    let auth_methods = serde_json::from_str(&auth_methods_json).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(8, rusqlite::types::Type::Text, Box::new(e))
+    })?;
     Ok(RefreshTokenRow {
         id: row.get(0)?,
         token_plain: None,
@@ -28,6 +32,7 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<RefreshTokenRow> {
         expires_at: row.get::<_, DateTime<Utc>>(5)?,
         revoked_at: row.get::<_, Option<DateTime<Utc>>>(6)?,
         created_at: row.get::<_, DateTime<Utc>>(7)?,
+        auth_methods,
     })
 }
 
@@ -41,10 +46,11 @@ pub fn insert(db: &Database, row: &RefreshTokenRow) -> StoreResult<()> {
         .as_deref()
         .ok_or_else(|| StoreError::Integrity("refresh token: missing plaintext on insert".into()))?;
     let sealed = seal(db.key(), plain.as_bytes(), AAD)?;
+    let methods_json = serde_json::to_string(&row.auth_methods)?;
     db.with_conn(|conn| {
         conn.execute(
-            "INSERT INTO refresh_tokens(id, token_enc, user_id, client_id, scope, expires_at, revoked_at, created_at) \
-             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO refresh_tokens(id, token_enc, user_id, client_id, scope, expires_at, revoked_at, created_at, auth_methods) \
+             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
                 row.id,
                 sealed,
@@ -54,6 +60,7 @@ pub fn insert(db: &Database, row: &RefreshTokenRow) -> StoreResult<()> {
                 row.expires_at,
                 row.revoked_at,
                 row.created_at,
+                methods_json,
             ],
         )?;
         Ok(())
@@ -68,7 +75,7 @@ pub fn find_active(db: &Database, plaintext: &str) -> StoreResult<RefreshTokenRo
     let now = Utc::now();
     let candidates: Vec<(RefreshTokenRow, Vec<u8>)> = db.with_conn(|conn| {
         let mut stmt = conn.prepare(
-            "SELECT id, token_enc, user_id, client_id, scope, expires_at, revoked_at, created_at FROM refresh_tokens \
+            "SELECT id, token_enc, user_id, client_id, scope, expires_at, revoked_at, created_at, auth_methods FROM refresh_tokens \
              WHERE revoked_at IS NULL AND expires_at > ?1",
         )?;
         let rows = stmt

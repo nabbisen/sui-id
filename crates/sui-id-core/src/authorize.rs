@@ -151,6 +151,7 @@ pub fn complete_authorization(
     db: &Database,
     clock: &SharedClock,
     user_id: UserId,
+    auth_methods: &[sui_id_shared::AuthMethod],
     accepted: AcceptedAuthorize,
 ) -> CoreResult<AuthorizationResponseRedirect> {
     let now = clock.now();
@@ -168,6 +169,14 @@ pub fn complete_authorization(
         expires_at: now + Duration::seconds(AUTH_CODE_LIFETIME_SECS),
         consumed: false,
         created_at: now,
+        // Snapshot the originating session's authentication factors
+        // here; the token endpoint will read them back to populate
+        // `acr` and `amr`. Snapshotting at this point — rather than
+        // dereferencing a session id at exchange time — is correct
+        // even if the session is revoked between authorize and
+        // token, which keeps an issued auth code valid as long as
+        // it's within its single-use lifetime.
+        auth_methods: auth_methods.to_vec(),
     };
     auth_codes::insert(db, &row)?;
     Ok(AuthorizationResponseRedirect {
@@ -245,7 +254,16 @@ pub fn exchange_code(
     }
     tokens::verify_pkce(&row.code_challenge_method, &req.code_verifier, &row.code_challenge)?;
 
-    issue_for(db, clock, ctx, row.user_id, req.client_id, &row.scope, row.nonce.as_deref())
+    issue_for(
+        db,
+        clock,
+        ctx,
+        row.user_id,
+        req.client_id,
+        &row.scope,
+        row.nonce.as_deref(),
+        &row.auth_methods,
+    )
 }
 
 /// Exchange a refresh token for a fresh token set, rotating the refresh token.
@@ -289,7 +307,16 @@ pub fn exchange_refresh(
     // crash-mid-flow can never leave both valid simultaneously.
     refresh_tokens::revoke(db, &row.id)?;
 
-    issue_for(db, clock, ctx, row.user_id, row.client_id, &row.scope, None)
+    issue_for(
+        db,
+        clock,
+        ctx,
+        row.user_id,
+        row.client_id,
+        &row.scope,
+        None,
+        &row.auth_methods,
+    )
 }
 
 fn authenticate_client(
@@ -313,6 +340,7 @@ fn authenticate_client(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn issue_for(
     db: &Database,
     clock: &SharedClock,
@@ -321,6 +349,7 @@ fn issue_for(
     client_id: ClientId,
     scope: &str,
     nonce: Option<&str>,
+    auth_methods: &[sui_id_shared::AuthMethod],
 ) -> CoreResult<TokenSet> {
     let key_row = signing_keys::active(db).map_err(|e| match e {
         sui_id_store::StoreError::NotFound => CoreError::Internal,
@@ -342,9 +371,14 @@ fn issue_for(
         &sk,
         ctx.lifetimes,
         clock,
+        auth_methods,
     )?;
 
-    // Persist the refresh token (sealed at rest).
+    // Persist the refresh token (sealed at rest). Carry the
+    // originating session's authentication factors forward — a
+    // token rotated via the refresh grant must report the same
+    // `acr` / `amr` as the original issuance, never a synthesised
+    // re-evaluation.
     let now = clock.now();
     let rt_row = RefreshTokenRow {
         id: tokens::random_token(16),
@@ -355,6 +389,7 @@ fn issue_for(
         expires_at: now + Duration::seconds(ctx.lifetimes.refresh_secs),
         revoked_at: None,
         created_at: now,
+        auth_methods: auth_methods.to_vec(),
     };
     refresh_tokens::insert(db, &rt_row)?;
     Ok(set)

@@ -8,6 +8,10 @@ use rusqlite::params;
 use sui_id_shared::ids::{SessionId, UserId};
 
 fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<SessionRow> {
+    let auth_methods_json: String = row.get(5)?;
+    let auth_methods = serde_json::from_str(&auth_methods_json).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(5, rusqlite::types::Type::Text, Box::new(e))
+    })?;
     Ok(SessionRow {
         id: row
             .get::<_, String>(0)?
@@ -20,19 +24,23 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<SessionRow> {
         expires_at: row.get::<_, DateTime<Utc>>(2)?,
         created_at: row.get::<_, DateTime<Utc>>(3)?,
         revoked_at: row.get::<_, Option<DateTime<Utc>>>(4)?,
+        auth_methods,
     })
 }
 
 pub fn insert(db: &Database, s: &SessionRow) -> StoreResult<()> {
+    let methods_json = serde_json::to_string(&s.auth_methods)?;
     db.with_conn(|conn| {
         conn.execute(
-            "INSERT INTO sessions(id, user_id, expires_at, created_at, revoked_at) VALUES(?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO sessions(id, user_id, expires_at, created_at, revoked_at, auth_methods) \
+             VALUES(?1, ?2, ?3, ?4, ?5, ?6)",
             params![
                 s.id.to_string(),
                 s.user_id.to_string(),
                 s.expires_at,
                 s.created_at,
                 s.revoked_at,
+                methods_json,
             ],
         )?;
         Ok(())
@@ -42,7 +50,8 @@ pub fn insert(db: &Database, s: &SessionRow) -> StoreResult<()> {
 pub fn get(db: &Database, id: SessionId) -> StoreResult<SessionRow> {
     db.with_conn(|conn| {
         conn.query_row(
-            "SELECT id, user_id, expires_at, created_at, revoked_at FROM sessions WHERE id = ?1",
+            "SELECT id, user_id, expires_at, created_at, revoked_at, auth_methods \
+             FROM sessions WHERE id = ?1",
             [id.to_string()],
             map,
         )
