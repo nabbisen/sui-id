@@ -5,6 +5,107 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-04-28
+
+Property-based tests (`proptest`) for the parts of sui-id that
+guard correctness or security boundaries. No production code
+behaviour changes; one tiny refactor extracts the redirect-URI
+matcher into its own `pub fn` so a property test can exercise it
+directly.
+
+### Added — proptest infrastructure
+
+- `proptest = "1.5"` added as a workspace dev-dependency. Pulled in
+  by `sui-id`, `sui-id-core`, and `sui-id-store` under
+  `[dev-dependencies]` only — never reaches production builds.
+- `CONTRIBUTING.md` gains a "Property-based tests" section
+  explaining the case-count convention (256–512 for cheap
+  properties, 4 for Argon2-driven ones), how to widen coverage via
+  `PROPTEST_CASES=…`, and the rule that proptest regression files
+  under `proptest-regressions/` are committed so a shrunk
+  counter-example replays forever.
+
+### Added — sui-id-store::crypto: 4 properties on seal / open
+
+  - `round_trip_for_arbitrary_plaintext_and_aad` — `open(seal(p, a), a) == p`
+    over arbitrary plaintexts (0..2048 bytes) and AADs (0..256 bytes).
+  - `open_with_wrong_aad_fails` — different AAD must reject.
+  - `open_with_wrong_key_fails` — different key must reject.
+  - `ciphertext_strictly_grows_by_nonce_plus_tag` — output length
+    is exactly `plaintext.len() + 24 (nonce) + 16 (tag)`. A future
+    framing regression would surface here.
+
+### Added — sui-id-core::tokens: 3 properties on PKCE S256
+
+  - `s256_verifies_iff_challenge_was_derived_from_same_verifier` —
+    cross-checked against a separate reference S256 derivation.
+  - `s256_rejects_any_distinct_verifier`.
+  - `s256_challenge_size_is_43_chars` — the SHA-256 →
+    base64url-no-pad framing is exactly 43 characters; anything
+    else is a length bug.
+
+### Added — sui-id-core::password: 3 properties on Argon2id
+
+  - `verify_succeeds_for_any_round_trip`.
+  - `verify_fails_on_any_distinct_password`.
+  - `hashes_differ_across_invocations_for_same_password` — guards
+    against a zero-salt regression that would let two users with
+    the same password share a hash.
+
+  Cases capped at **4** per property because Argon2id at production
+  parameters is intentionally slow. Operators / CI can raise the
+  bar with `PROPTEST_CASES=…`.
+
+### Added — sui-id::ipnet: 4 properties on the CIDR matcher
+
+  - `ipv4_contains_matches_naive_implementation` — cross-check
+    against an independent brute-force reference. The matcher is
+    where off-by-one errors at /0, /32, and the boundaries
+    historically surface in this kind of code.
+  - `an_address_is_always_in_its_own_slash_32`.
+  - `slash_zero_contains_every_v4`.
+  - `v4_and_v6_never_cross_match` — a v6 probe must never satisfy
+    a v4 CIDR.
+
+### Added — sui-id-core::authorize: 5 properties on redirect_uri matching
+
+  Plus a small refactor: the inline check
+  `client.redirect_uris.iter().any(|u| u == &params.redirect_uri)` is
+  now a `pub fn is_redirect_uri_registered(&[String], &str) -> bool`,
+  with a doc comment explaining why the rule must be byte-exact and
+  why no normalisation is allowed. Production behaviour is unchanged.
+
+  Properties:
+
+  - `registered_uri_is_always_accepted`.
+  - `one_byte_off_uri_is_rejected` — a single byte flipped anywhere
+    must reject.
+  - `case_difference_is_not_folded` — `/cb` and `/CB` are different
+    URIs.
+  - `prefix_extension_is_rejected` — registered + arbitrary suffix
+    must reject (defends against attacker-controlled
+    `https://attacker.example/cb/../../leak`-style submissions).
+  - `multi_registry_matches_each_member_and_only_them`.
+
+### Test counts
+
+  - `sui-id-store` lib: **10** (was 6)
+  - `sui-id-shared` lib: 6 (unchanged)
+  - `sui-id-core` lib: **50** (was 39, +11 properties)
+  - `sui-id` lib: **40** (was 36, +4 properties)
+
+  Workspace lib total: **106**, all passing. The 41 e2e tests in
+  `sui-id` are unchanged.
+
+### Note on running times
+
+The Argon2id properties are the slowest in the suite. With the
+default `cases: 4` they add ~50 seconds to a debug `cargo test -p
+sui-id-core --lib` on the reference build host. The other properties
+add well under a second each. This is the reason for the asymmetric
+case-count convention; raise it before a release with
+`PROPTEST_CASES=…`.
+
 ## [0.13.0] - 2026-04-28
 
 Server migration / secure backup. The `backup` and `restore`

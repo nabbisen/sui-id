@@ -24,6 +24,34 @@ code that won't merge.
   `path/to/file/tests.rs`). Integration tests live in the relevant crate's
   `tests/` directory.
 
+## Property-based tests
+
+A handful of modules use [proptest](https://crates.io/crates/proptest)
+to express invariants directly — crypto round-trips, the CIDR matcher,
+PKCE S256 derivation, password hashing, and the redirect-URI exact-match
+rule. These run as part of the regular `cargo test` suite under tight
+case caps (`cases: 4` for Argon2-driven tests, `cases: 256–512` for
+cheap ones) so the suite finishes in a reasonable time.
+
+To run the properties under wider coverage — recommended before a
+release, and as a periodic CI job — override the case count from the
+environment:
+
+```bash
+PROPTEST_CASES=4096 cargo test --workspace
+```
+
+When a property fails, proptest writes a regression file under
+`crates/<crate>/proptest-regressions/`. **Commit it.** The regressed
+input becomes part of the test suite forever, so the same shrunk
+counter-example is replayed on every future run.
+
+When adding a new property, give the test a sentence-long doc comment
+that says what invariant the property captures. Property tests that
+just paraphrase the production code as `assert_eq!` aren't useful;
+the ones that earn their place are the ones that pin down a rule that
+*could* be broken by a future refactor.
+
 ## Commit hygiene
 
 One concern per commit. Squash WIP commits before opening a PR. Imperative

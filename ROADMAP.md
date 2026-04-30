@@ -78,6 +78,13 @@ v0.10.1 / v0.10.2.
   `SUI_ID_BACKUP_PASSPHRASE`. A new `verify-backup` subcommand
   reads a file (decrypting if needed), parses the manifest, and
   runs SQLite `integrity_check` without writing anything.
+- Property-based tests with `proptest`. Crypto seal/open round-
+  trip, Argon2id round-trip, PKCE S256 derivation, the CIDR
+  matcher (cross-checked against an independent brute-force
+  reference), and the redirect-URI exact-match rule are all
+  exercised with proptest. CONTRIBUTING.md documents the case-
+  count convention and how to widen coverage with
+  `PROPTEST_CASES=…` for releases or scheduled CI.
 
 ## Explicitly **not** on the roadmap
 

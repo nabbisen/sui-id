@@ -83,7 +83,7 @@ pub fn begin_authorization(db: &Database, params: AuthorizeParams) -> CoreResult
             description: "client is not allowed to use the authorization endpoint".into(),
         });
     }
-    if !client.redirect_uris.iter().any(|u| u == &params.redirect_uri) {
+    if !is_redirect_uri_registered(&client.redirect_uris, &params.redirect_uri) {
         return Err(CoreError::Protocol {
             code: ProtocolError::InvalidRequest,
             description: "redirect_uri does not match a registered URI".into(),
@@ -91,6 +91,29 @@ pub fn begin_authorization(db: &Database, params: AuthorizeParams) -> CoreResult
     }
     enforce_scope_policy(&client.allowed_scopes, &params.scope)?;
     Ok(AcceptedAuthorize { params })
+}
+
+/// Whether `submitted` is a registered redirect URI for the client.
+///
+/// The OAuth 2.0 / OIDC spec mandates **exact-string match** between
+/// the value sent at `/authorize` and one of the URIs the client
+/// registered. There is no normalisation, no case folding, no
+/// trailing-slash leniency: `https://example.com/cb` and
+/// `https://example.com/cb/` are different URIs, and
+/// `https://example.com/cb` and `https://example.com:443/cb` are
+/// different URIs even though they reach the same socket.
+///
+/// The strictness is the security: any normalisation we did here
+/// would be a normalisation an attacker could exploit. A bug that
+/// accepted slight variants of a registered URI would let an
+/// attacker who registers `https://attacker.example/cb` reach a
+/// callback like `https://attacker.example.com/cb`.
+///
+/// The function is `pub` so it can be exercised by property tests
+/// directly. Keep it boring; resist any urge to add normalisation
+/// in here.
+pub fn is_redirect_uri_registered(registered: &[String], submitted: &str) -> bool {
+    registered.iter().any(|u| u == submitted)
 }
 
 /// Check the requested scope string against the client's `allowed_scopes`
@@ -335,4 +358,112 @@ fn issue_for(
     };
     refresh_tokens::insert(db, &rt_row)?;
     Ok(set)
+}
+
+#[cfg(test)]
+mod redirect_uri_tests {
+    //! Property tests on [`is_redirect_uri_registered`].
+    //!
+    //! The redirect-URI check is the security boundary against an
+    //! open-redirect attack. The properties below pin down the rule
+    //! the OAuth/OIDC specs put on us — strict, byte-exact match —
+    //! and guard against well-known regressions:
+    //!
+    //!   - case folding
+    //!   - trailing-slash leniency
+    //!   - default-port collapsing (`:443` vs implicit)
+    //!   - subdomain wildcard misreads
+    //!   - prefix matching
+    //!
+    //! If anyone tries to "fix" a perceived UX problem by adding
+    //! normalisation, one of these properties should fail loudly.
+
+    use super::is_redirect_uri_registered;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig {
+            cases: 256,
+            ..ProptestConfig::default()
+        })]
+
+        /// A URI that was registered exactly is accepted.
+        #[test]
+        fn registered_uri_is_always_accepted(
+            // Realistic-ish URI alphabet. Doesn't have to parse as a
+            // URL — the function is a string comparator.
+            uri in "[A-Za-z0-9:/._~?&=#@%-]{1,256}",
+        ) {
+            let registered = vec![uri.clone()];
+            prop_assert!(is_redirect_uri_registered(&registered, &uri));
+        }
+
+        /// A URI that differs by even one byte is rejected.
+        ///
+        /// Generated as: take a registered URI, flip one character
+        /// somewhere along it. The mutation makes the strings
+        /// unequal, so the function must reject.
+        #[test]
+        fn one_byte_off_uri_is_rejected(
+            base in "[A-Za-z0-9:/._~?&=-]{8,128}",
+            mutation_index in any::<usize>(),
+        ) {
+            // Build a "submitted" by flipping a byte in `base`.
+            let mut submitted = base.clone().into_bytes();
+            let i = mutation_index % submitted.len();
+            // Swap the byte to a guaranteed-different one. ASCII
+            // arithmetic; we know all the chars are ASCII because
+            // of the regex.
+            submitted[i] = if submitted[i] == b'X' { b'Y' } else { b'X' };
+            let submitted = String::from_utf8(submitted).unwrap();
+            prop_assume!(submitted != base);
+            let registered = vec![base];
+            prop_assert!(!is_redirect_uri_registered(&registered, &submitted));
+        }
+
+        /// Case differences are not folded — `/cb` and `/CB` are
+        /// distinct URIs as far as we're concerned.
+        #[test]
+        fn case_difference_is_not_folded(
+            stem in "[a-z]{4,16}",
+        ) {
+            let lower = format!("https://example.com/{stem}");
+            let upper = format!("https://example.com/{}", stem.to_uppercase());
+            prop_assume!(lower != upper);
+            let registered = vec![lower.clone()];
+            prop_assert!(is_redirect_uri_registered(&registered, &lower));
+            prop_assert!(!is_redirect_uri_registered(&registered, &upper));
+        }
+
+        /// A registered URI followed by extra junk is rejected — no
+        /// prefix match. This is the "attacker registers
+        /// `https://example.com/cb` and submits
+        /// `https://example.com/cb/../../leak`" case.
+        #[test]
+        fn prefix_extension_is_rejected(
+            base in "[A-Za-z0-9:/._~-]{8,64}",
+            suffix in "[A-Za-z0-9/.-]{1,32}",
+        ) {
+            let registered = vec![base.clone()];
+            let submitted = format!("{base}{suffix}");
+            prop_assume!(submitted != base);
+            prop_assert!(!is_redirect_uri_registered(&registered, &submitted));
+        }
+
+        /// Multiple registered URIs: any one matching is enough; any
+        /// one not in the list is not. (Sanity: this is what `any()`
+        /// computes; the property is here to catch a future
+        /// refactor that gets the predicate backwards.)
+        #[test]
+        fn multi_registry_matches_each_member_and_only_them(
+            uris in proptest::collection::vec("[A-Za-z0-9:/._~-]{8,64}", 1..6),
+            outsider in "[A-Za-z0-9:/._~-]{8,64}",
+        ) {
+            prop_assume!(!uris.iter().any(|u| u == &outsider));
+            for u in &uris {
+                prop_assert!(is_redirect_uri_registered(&uris, u));
+            }
+            prop_assert!(!is_redirect_uri_registered(&uris, &outsider));
+        }
+    }
 }

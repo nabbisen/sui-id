@@ -30,10 +30,10 @@ path = "src/main.rs"
 workspace = true
 
 [dependencies]
-sui-id-shared = { version = "0.13.0", path = "../sui-id-shared" }
-sui-id-store  = { version = "0.13.0", path = "../sui-id-store" }
-sui-id-core   = { version = "0.13.0", path = "../sui-id-core" }
-sui-id-web    = { version = "0.13.0", path = "../sui-id-web" }
+sui-id-shared = { version = "0.14.0", path = "../sui-id-shared" }
+sui-id-store  = { version = "0.14.0", path = "../sui-id-store" }
+sui-id-core   = { version = "0.14.0", path = "../sui-id-core" }
+sui-id-web    = { version = "0.14.0", path = "../sui-id-web" }
 
 tokio = { workspace = true }
 axum = { workspace = true }
@@ -78,6 +78,6 @@ url = { workspace = true }
 sha2 = { workspace = true }
 base64ct = { workspace = true }
 percent-encoding = { workspace = true }
-sui-id-store = { version = "0.13.0", path = "../sui-id-store" }
+sui-id-store = { version = "0.14.0", path = "../sui-id-store" }
 http = "1"
 http-body-util = "0.1"
