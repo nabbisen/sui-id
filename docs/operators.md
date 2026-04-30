@@ -157,6 +157,111 @@ upstream chatter.
 The setup token is **not** written through the tracing pipeline. It only
 goes to stderr so it cannot accidentally land in your log aggregator.
 
+### Request correlation
+
+Every HTTP request gets an `X-Request-Id` header. If the caller supplies
+one (and it's reasonable — alphanumeric, dash, dot, underscore, up to 64
+chars) it is kept and echoed back on the response; otherwise sui-id
+generates a fresh UUIDv4. The id is attached to the `tracing` span that
+wraps handler execution, so every log line emitted while handling that
+request — including ones from inside use cases, repos, and middleware —
+carries it automatically.
+
+In a JSON log line the request id appears under `spans[].request_id`,
+alongside the `method` and `path` fields:
+
+```json
+{
+  "timestamp": "2026-04-28T10:31:42.123456Z",
+  "level": "INFO",
+  "fields": { "message": "request completed", "status": 200, "latency_ms": 4 },
+  "target": "sui_id::request_id",
+  "spans": [
+    { "method": "POST", "path": "/oauth2/token",
+      "request_id": "0c58b960-f963-4427-86f0-d4e16938d8aa",
+      "name": "request" }
+  ]
+}
+```
+
+Every request produces at least two of these: a `request received`
+line on entry and a `request completed` line on exit (with `status`
+and `latency_ms`). Anything that happens in between — security
+events, internal warnings — picks up the same request_id from the
+ambient span.
+
+To correlate across a reverse proxy, configure the proxy to
+generate or forward an `X-Request-Id`. Caddy:
+
+```
+header_up X-Request-Id {http.request.uuid}
+```
+
+nginx:
+
+```
+proxy_set_header X-Request-Id $request_id;
+```
+
+### Security events
+
+A small number of events are *security-relevant* and get a structured
+log line in addition to the audit-log row in the database. The two
+records carry the same fields. Operators monitoring live should
+filter on `event = ...`; operators reconstructing what happened
+yesterday should query the `audit_log` table. Both have the same
+underlying truth.
+
+Canonical event names (these are the strings you query on; do not
+expect them to be renamed without a deprecation cycle):
+
+| Event | Meaning |
+|---|---|
+| `auth.login.success` | Password (and possibly MFA) check succeeded; session issued. |
+| `auth.login.failure` | Password did not match, or account is disabled. |
+| `auth.login.password_ok_mfa_required` | Password accepted; user redirected to MFA challenge. |
+| `auth.mfa.success` | TOTP / recovery code / WebAuthn assertion accepted. |
+| `auth.mfa.failure` | TOTP code or recovery code rejected. |
+| `auth.session.revoked` | Session torn down by logout, admin disable, or expiry. |
+| `auth.logout` | RP-initiated logout completed. |
+| `mfa.admin_reset` | An administrator forcibly removed every MFA factor for a user. **Alert on this.** |
+| `oauth.authorize.issued` | `/oauth2/authorize` issued an authorization code. |
+| `oauth.authorize.rejected` | `/oauth2/authorize` refused (bad redirect_uri, scope outside policy, etc). |
+| `oauth.token.issued` | `/oauth2/token` minted an access + ID token. |
+| `oauth.token.refreshed` | A refresh token was rotated for a new access token. |
+| `oauth.token.introspected` | A confidential client called `/oauth2/introspect`. |
+| `oauth.token.revoked` | A confidential client called `/oauth2/revoke`. |
+| `webauthn.credential.register` | A user enrolled a passkey. |
+| `webauthn.credential.delete` | A user deleted one of their passkeys. |
+
+Common queries (jq against a JSON-line log file):
+
+```bash
+# Recent failed logins.
+jq -c 'select(.fields.event == "auth.login.failure")' < sui-id.log | tail
+
+# MFA failures grouped by user.
+jq -r 'select(.fields.event == "auth.mfa.failure") | .fields.target' < sui-id.log | sort | uniq -c
+
+# Every admin-initiated MFA reset, with who reset whom.
+jq -c 'select(.fields.event == "mfa.admin_reset") | {at: .timestamp, actor: .fields.actor, target: .fields.target, note: .fields.note}' < sui-id.log
+
+# Correlate everything that happened during a given request_id.
+jq -c 'select(.spans[]?.request_id == "0c58b960-f963-4427-86f0-d4e16938d8aa")' < sui-id.log
+```
+
+The audit-log table carries the same data and is the right query
+target when investigating something more than a few days old (the
+log file may already have been rotated):
+
+```sql
+-- Same events, from the database.
+SELECT at, actor, action, target, result, note
+FROM audit_log
+WHERE action = 'mfa.admin_reset'
+ORDER BY seq DESC;
+```
+
 ## Systemd unit
 
 ```ini

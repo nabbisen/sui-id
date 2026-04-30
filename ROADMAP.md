@@ -64,6 +64,10 @@ v0.10.1 / v0.10.2.
   Confidential clients can introspect and revoke their own tokens
   via the standards-blessed endpoints; both are advertised through
   the OIDC discovery document.
+- Structured logging — `X-Request-Id` propagation, per-request
+  tracing spans, JSON-line output, a typed `SecurityEvent` API
+  in `sui-id-core`, and an operator-facing event vocabulary
+  documented in `operators.md` for SIEM integration.
 
 ## Explicitly **not** on the roadmap
 

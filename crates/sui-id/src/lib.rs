@@ -17,6 +17,7 @@ pub mod handlers;
 pub mod ipnet;
 pub mod keyring;
 pub mod ratelimit;
+pub mod request_id;
 pub mod router;
 pub mod startup;
 pub mod state;

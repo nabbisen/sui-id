@@ -5,6 +5,88 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-04-28
+
+Structured logging and request correlation.
+
+### Added — request_id middleware
+
+Every HTTP request now picks up an `X-Request-Id`. If the caller
+supplied one (alphanumeric, dot/dash/underscore, ≤64 chars) we
+keep it; otherwise we generate a fresh UUIDv4. The id is:
+
+- attached to the `tracing` span that wraps handler execution, so
+  every log line emitted while handling a request — including ones
+  from inside use cases — carries it automatically;
+- echoed back in the response's `X-Request-Id` header so the caller
+  / reverse proxy can correlate;
+- stashed in a request extension as `RequestId(String)` for
+  handlers that want to read it directly.
+
+The middleware also writes a structured `request received` line on
+entry and a `request completed` (with `status` and `latency_ms`)
+line on exit. With `log.format = "json"` these become SIEM-ingestible
+records:
+
+```json
+{
+  "fields": { "message": "request completed", "status": 200, "latency_ms": 4 },
+  "spans": [{ "method": "POST", "path": "/oauth2/token",
+              "request_id": "0c58b960-f963-4427-86f0-d4e16938d8aa",
+              "name": "request" }]
+}
+```
+
+### Added — `sui_id_core::events`
+
+A typed `SecurityEvent` enum (with variants `LoginPasswordSuccess`,
+`LoginPasswordFailure`, `MfaSuccess`, `MfaFailure`, `AdminMfaReset`,
+`AuthorizeIssued`, `AuthorizeRejected`, `TokenIssued`,
+`TokenRefreshed`, `TokenIntrospected`, `TokenRevoked`, `Logout`,
+`SessionRevoked`, `LoginPasswordOkMfaRequired`) plus an `emit()`
+function that, given a `Context` (actor / client_ip / request_id),
+writes a structured tracing line **and** appends an audit-log row
+in one go.
+
+This unifies the two parallel paths that used to drift apart —
+`tracing::info!` for live observability and `audit::append` for
+durable record-keeping — behind a single typed API. Adding a new
+kind of security event is now a single match arm.
+
+The existing `audit::append` callers continue to work unchanged.
+A follow-up release will migrate them to `events::emit` site by
+site; the first wave of migrations needs careful test alignment
+because some E2E tests match exact action-string and note values.
+
+### Added — documentation
+
+- `docs/operators.md` "Logging" section now documents the
+  request-id propagation, the structured event vocabulary
+  (the canonical event-name table and the field shape), and example
+  jq queries against the JSON log stream. Reverse-proxy snippets for
+  Caddy and nginx show how to forward request ids from the edge.
+
+### Added — tests
+
+- 4 new E2E tests for the request-id middleware:
+  - `response_carries_a_generated_x_request_id_when_caller_omits_one`
+  - `caller_supplied_x_request_id_is_echoed_back`
+  - `caller_supplied_x_request_id_thats_too_long_is_replaced` —
+    confirms the 64-char cap defends against log padding attacks.
+  - `caller_supplied_x_request_id_with_unsafe_chars_is_replaced` —
+    confirms the alphabet-restricting filter rejects (and replaces)
+    values containing whitespace.
+
+Lib tests continue green: 79/79 (28 sui-id + 39 sui-id-core + 6
+store + 6 shared).
+
+### Note for operators
+
+The log lines have changed shape. If you have a SIEM rule that
+matched on the previous unstructured output, point it at the new
+event-name field instead — see the table in operators.md. The
+data is the same; only the access pattern is more uniform.
+
 ## [0.11.0] - 2026-04-28
 
 ### Added — RFC 7662 Token Introspection

@@ -24,5 +24,6 @@ pub mod totp;
 pub mod mfa;
 pub mod webauthn;
 pub mod oauth_token;
+pub mod events;
 
 pub use errors::{CoreError, CoreResult};

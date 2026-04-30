@@ -91,4 +91,7 @@ pub fn build_router(app: AppState) -> Router {
         .route("/admin/audit", get(admin::audit_get))
         .route("/static/{*path}", get(crate::assets::serve))
         .with_state(app)
+        // request-id middleware runs first (outermost) so the id is
+        // attached before TraceLayer's span is opened.
+        .layer(axum::middleware::from_fn(crate::request_id::middleware))
 }
