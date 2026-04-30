@@ -131,8 +131,12 @@ docs/               Operator and integrator documentation
 
 ## Documentation
 
-- [`docs/operators.md`](docs/operators.md) — installing, configuring,
-  reverse-proxying, backup, and operating sui-id.
+- [`docs/deployment.md`](docs/deployment.md) — chronological,
+  opinionated walkthrough from a fresh Linux server to a hardened
+  production install. Start here for a first-time deployment.
+- [`docs/operators.md`](docs/operators.md) — reference for
+  configuration fields, the master key, GC, the audit log schema,
+  and routine operational tasks.
 - [`docs/integrators.md`](docs/integrators.md) — pointing an application
   at a sui-id instance: discovery, registration, the OIDC flow, and the
   shape of the tokens.

@@ -20,9 +20,6 @@ rather than new auth primitives.
 - **`cargo audit` integration** in CI / pre-deploy. The dependency
   tree now reaches OpenSSL via webauthn-rs, so a periodic check is
   prudent.
-- **Documentation**: a deployment guide that walks an operator from
-  zero to a hardened production install (HTTPS termination, systemd
-  unit, backup schedule).
 
 ## Longer term, less certain
 
@@ -58,6 +55,8 @@ rather than new auth primitives.
 - Admin-initiated MFA reset (lifts every second factor for a user
   whose authenticator app, recovery codes, and passkeys have all
   been lost).
+- `docs/deployment.md` — chronological install walkthrough from a
+  fresh Linux server to a hardened production deployment.
 
 ## Explicitly **not** on the roadmap
 

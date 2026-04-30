@@ -1,7 +1,15 @@
 # Operator's guide
 
-This guide is for someone running sui-id on a server they control. If you
-are looking for how to point an application at sui-id, see
+This is a *reference* for the operational surface of sui-id —
+configuration fields, the master key, the audit log, GC, and routine
+tasks.
+
+If you are setting sui-id up for the first time, read
+[deployment.md](deployment.md) first; that guide walks the
+chronological "what do I run, in what order" path from a fresh
+server to a working production install.
+
+If you are looking for how to point an application at sui-id, see
 [integrators.md](integrators.md).
 
 ## Installing
@@ -209,6 +217,85 @@ In any of those cases, rotate the signing key, then take additional
 steps as appropriate (e.g. rotate the master key, force-re-issue
 client secrets).
 
+## Multi-factor authentication
+
+sui-id supports two second factors: TOTP (RFC 6238 authenticator
+app) and WebAuthn (passkeys / hardware authenticators). Either, both,
+or neither can be active per user. They are user-driven from the
+Profile page, not operator-driven from the user list.
+
+- **TOTP** is set up by scanning a QR code or pasting a Base32
+  secret. On confirmation the user gets eight single-use recovery
+  codes; they are shown once.
+- **Passkeys** are registered via the browser's
+  `navigator.credentials.create()` API. The user can have many — a
+  YubiKey, a phone-based platform authenticator, and a backup
+  device, for instance. Each is named by the user.
+
+Once the first factor is enabled, password-only login is no longer
+sufficient: the user must also pass the second factor. If both are
+enabled, either suffices at the challenge page.
+
+The audit log records every relevant event: `mfa.enable`,
+`mfa.disable`, `mfa.recovery_codes_regenerate`,
+`webauthn.credential.register`, `webauthn.credential.delete`,
+`auth.mfa.success`, `auth.mfa.failure`,
+`auth.login.password_ok_mfa_required`.
+
+### Admin-initiated MFA reset
+
+When a user has lost every second factor at once — authenticator
+gone, recovery codes lost, every passkey broken — they cannot sign
+in. Self-service recovery is impossible at that point.
+
+From `/admin/users`, find the row, and use the **Reset MFA** button.
+This deletes the user's TOTP enrolment (if any) and every registered
+passkey. The user can then sign in with password alone and is free
+to re-enrol whichever factors they want.
+
+The reset is recorded as `mfa.admin_reset` in the audit log, with
+the actor (the admin who performed it), the target (the user reset),
+and a note describing exactly what was removed. **Review this
+column periodically.** A reset is a privileged operation that
+weakens the account; legitimate uses are recoverable user lockouts,
+not routine maintenance.
+
+The reset does **not** revoke the user's existing sessions or
+refresh tokens. If you also want to force a re-login, follow up
+with the Disable / Enable cycle from the same page — that revokes
+sessions.
+
+## WebAuthn / passkey requirements
+
+WebAuthn imposes two requirements on the deployment:
+
+- The browser must reach sui-id over **HTTPS**, except for
+  `localhost` (which the spec excludes from the HTTPS rule for
+  development convenience).
+- The `server.issuer` URL's host part is the WebAuthn relying-party
+  id. It must not change after users have registered passkeys; if
+  it does, every passkey breaks. Treat the issuer URL as
+  immutable from the moment the first user registers a passkey.
+
+If you are deploying behind a reverse proxy, make sure the proxy
+preserves the `Host` header sui-id sees as the issuer host. The
+sample Caddy and nginx configs in
+[`deployment.md`](deployment.md) get this right.
+
+## Per-client scope policy
+
+Every client registered on or after v0.6.0 declares an
+`allowed_scopes` policy. Requests at `/oauth2/authorize` for scopes
+outside the policy are rejected with `invalid_scope`. The default
+for new clients is `openid profile`. Empty means "permit any" for
+backwards compatibility with clients registered before the feature
+existed.
+
+The policy is editable from `/admin/clients/{id}/edit`. Tightening
+takes effect immediately; loosening too. There is no token-issuance
+window for a previously-issued code to slip through with a now-
+forbidden scope.
+
 ## Upgrading
 
 For now, sui-id is pre-release: take a backup, replace the binary, and
@@ -217,6 +304,9 @@ restart. If a release ever requires a destructive migration, the
 
 ## Further reading
 
+- [`docs/deployment.md`](deployment.md) is a chronological install
+  walkthrough — useful when setting sui-id up for the first time on
+  a new host.
 - [`docs/threat-model.md`](threat-model.md) describes what sui-id defends
   against, what it does not, and what assumptions an operator must
   uphold for the design to work.
