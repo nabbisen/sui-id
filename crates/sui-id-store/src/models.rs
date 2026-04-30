@@ -24,6 +24,14 @@ pub struct UserRow {
     pub user_uuid: uuid::Uuid,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    /// Consecutive failed password attempts since last success.
+    /// Reset to 0 on a successful password verification.
+    pub failed_login_count: i64,
+    /// Earliest moment the account becomes eligible for password
+    /// verification again. None means "not locked". A `Some(t)` with
+    /// `t` already in the past represents a stale lock that has
+    /// expired and will be cleared on the next sign-in.
+    pub locked_until: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone)]

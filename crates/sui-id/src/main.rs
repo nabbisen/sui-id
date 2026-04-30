@@ -42,6 +42,7 @@ async fn main() -> Result<()> {
         Some("backup") => return run_backup_subcommand(&args),
         Some("restore") => return run_restore_subcommand(&args),
         Some("verify-backup") => return run_verify_backup_subcommand(&args),
+        Some("admin") => return run_admin_subcommand(&args),
         Some(other) => bail!(
             "unknown subcommand {other:?}. Run `sui-id --help` for usage."
         ),
@@ -189,6 +190,68 @@ fn run_verify_backup_subcommand(args: &[String]) -> Result<()> {
     Ok(())
 }
 
+/// Dispatcher for `sui-id admin <subaction> ...`. Currently the only
+/// admin subaction is `unlock-user`, but the surface is shaped to grow.
+fn run_admin_subcommand(args: &[String]) -> Result<()> {
+    let action = args.get(2).map(String::as_str);
+    match action {
+        Some("unlock-user") => run_admin_unlock_user(args),
+        Some(other) => bail!(
+            "unknown admin subaction `{other}`. Known subactions: unlock-user"
+        ),
+        None => bail!(
+            "admin requires a subaction. Try: sui-id admin unlock-user --username NAME"
+        ),
+    }
+}
+
+/// `sui-id admin unlock-user --username NAME [--config PATH]`
+///
+/// Clears `failed_login_count` and `locked_until` on a user without
+/// requiring a password verification — the operator's own
+/// authority, witnessed by their access to the host's master key
+/// material, is what authorises this. Used to recover a real user
+/// who's been locked out by a typo storm or by a brute-force
+/// attempt that exceeded the auto-unlock window.
+fn run_admin_unlock_user(args: &[String]) -> Result<()> {
+    let username = args
+        .iter()
+        .position(|a| a == "--username")
+        .and_then(|i| args.get(i + 1))
+        .context("admin unlock-user requires --username NAME")?;
+    let config_path = parse_config_path(args).unwrap_or_else(|| PathBuf::from("./sui-id.toml"));
+    let cfg = Config::load(&config_path)
+        .with_context(|| format!("loading config from {}", config_path.display()))?;
+
+    // Open the database using the same key-resolution logic the
+    // server uses (env var > file). No need to spin up the HTTP
+    // layer or the clock; we read one row, write one row, exit.
+    let resolved = sui_id::keyring::resolve(&cfg.storage.key_file)
+        .context("loading master key")?;
+    let db = sui_id_store::Database::open(&cfg.storage.db_path, resolved.key)
+        .context("opening database")?;
+
+    let user = sui_id_store::repos::users::find_by_username(&db, username)
+        .with_context(|| format!("looking up user {username:?}"))?;
+    sui_id_store::repos::users::admin_unlock(&db, user.id)
+        .context("clearing lockout")?;
+    // Mirror the operator-facing audit-log entry the live admin UI
+    // would write for this action.
+    let _ = sui_id_store::repos::audit::append(
+        &db,
+        &sui_id_store::models::AuditLogRow {
+            at: chrono::Utc::now(),
+            actor: None, // command-line operator; not a sui-id user
+            action: "admin.user.unlock".into(),
+            target: Some(user.id.to_string()),
+            result: "ok".into(),
+            note: Some(format!("unlocked via command line for username={username}")),
+        },
+    );
+    eprintln!("unlocked {username} (id={})", user.id);
+    Ok(())
+}
+
 /// Read a passphrase from stdin (interactive TTY) or from the
 /// `SUI_ID_BACKUP_PASSPHRASE` environment variable (for cron and
 /// scripted use). When `confirm` is true and we're on a TTY, the
@@ -252,6 +315,7 @@ USAGE:
     sui-id backup --to PATH [--config PATH] [--encrypt]
     sui-id restore --from PATH [--config PATH] [--force] [--decrypt]
     sui-id verify-backup --from PATH [--decrypt]
+    sui-id admin unlock-user --username NAME [--config PATH]
     sui-id --print-sample-config
     sui-id --version
     sui-id --help
@@ -276,12 +340,18 @@ SUBCOMMANDS:
                              integrity check on the inner snapshot. Use
                              before a real restore to catch a corrupted or
                              mismatched backup.
+    admin unlock-user        Clear an account-lockout state for the given
+                             user. Resets the failed-login counter and
+                             removes any active lock. Use to recover a real
+                             user who's been locked out by a typo storm or
+                             whose lockout window hasn't expired yet.
 
 OPTIONS:
     --config PATH            Path to the TOML configuration file
                              (default: ./sui-id.toml)
     --to PATH                Output path for `backup`.
     --from PATH              Input path for `restore` / `verify-backup`.
+    --username NAME          Target username for `admin unlock-user`.
     --force                  Allow `restore` to overwrite existing files.
     --encrypt                Encrypt the backup with a passphrase.
     --decrypt                Treat the input as an encrypted backup.

@@ -86,3 +86,34 @@ format = "json"
 # `tracing-subscriber` env-filter expression. The default keeps the project
 # crates at info level and stays quiet about upstream chatter.
 filter = "info,sui_id=info,sui_id_core=info,sui_id_store=info"
+
+# ----- security policy ---------------------------------------------------
+[security]
+
+# Maximum auto-unlock interval for account lockout. After enough
+# consecutive failed sign-ins, the account is locked for *up to* this
+# long; an admin can still unlock manually with
+# `sui-id admin unlock-user --username NAME`.
+#
+# Values are picked from a fixed set so that an operator typing a
+# duration by hand cannot accidentally pick a value far outside the
+# intended range. The cap of 48h is deliberate — locking past two days
+# is more likely to lock out a real user (post-vacation, post-weekend)
+# than to deter an attacker, who has long given up by then.
+#
+# Allowed values: "15min", "1h", "4h", "12h", "24h", "48h".
+# Default: "24h".
+#
+# The progressive-backoff curve below the cap is fixed:
+#   1st-2nd failure: no lock (everyone fat-fingers a password sometimes)
+#   3rd:    30 seconds
+#   4th:    1 minute
+#   5th:    5 minutes
+#   6th:    30 minutes
+#   7th:    2 hours
+#   8th:    6 hours
+#   9th:    12 hours
+#   10th+:  24 hours
+# Each value above is then capped at `max_lockout`. So a 1h cap means
+# "30s, 1m, 5m, 30m, 1h, 1h, 1h, …".
+max_lockout = "24h"

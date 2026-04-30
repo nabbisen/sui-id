@@ -38,6 +38,10 @@ const MIGRATIONS: &[Migration] = &[
         version: 6,
         sql: include_str!("./migrations/0006_session_auth_methods.sql"),
     },
+    Migration {
+        version: 7,
+        sql: include_str!("./migrations/0007_user_lockout.sql"),
+    },
 ];
 
 /// The highest schema version this build of sui-id-store knows how to

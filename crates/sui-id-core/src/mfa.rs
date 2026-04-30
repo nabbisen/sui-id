@@ -378,6 +378,8 @@ mod integration_tests {
                 user_uuid: uuid::Uuid::new_v4(),
                 created_at: chrono::Utc::now(),
                 updated_at: chrono::Utc::now(),
+                failed_login_count: 0,
+                locked_until: None,
             },
         )
         .expect("insert user");

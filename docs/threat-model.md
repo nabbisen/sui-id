@@ -134,16 +134,38 @@ What we do:
   guess expensive.
 - Per-IP rate limiting on `/admin/login` (default: 10 attempts per
   60-second window per IP) returns 429 with `Retry-After`.
+- **Per-account progressive lockout** (since v0.16.0): the third
+  consecutive password failure stamps a 30-second lock; the curve
+  grows from there to a configurable cap (default 24 hours,
+  selectable from `15min`, `1h`, `4h`, `12h`, `24h`, `48h` via
+  `[security] max_lockout`). A successful sign-in clears the
+  counter. The first two failures cost nothing — that's the typo
+  budget for legitimate users.
 - Login outcomes are written to the audit log so operators can see
-  patterns.
-- Login responses for unknown usernames also run a dummy Argon2 verify
-  so timing does not distinguish "no such user" from "wrong password".
+  patterns. The dedicated `auth.login.locked` event distinguishes
+  "we just locked an account" from ordinary "wrong password" so a
+  SIEM can alert on bursts of locks.
+- Login responses for unknown usernames, disabled users, locked
+  accounts, and wrong passwords all run an Argon2id verify
+  (against a dummy hash where there's no real one to verify against)
+  so wall-clock timing does not distinguish the four cases.
+- Admin-initiated unlock with `sui-id admin unlock-user --username NAME`
+  exists for the case where a real user has been locked out and
+  needs to recover before the auto-unlock window expires.
 
-What we do **not** do:
+What this trades off:
 
-- Lock accounts after N failures. Account lockout is a denial-of-service
-  amplifier (an attacker can lock out any user they know the username
-  of). Rate-limit the attacker, not the victim.
+- **DoS amplification**: an attacker who knows a username can lock
+  that account by submitting wrong passwords. We accept this
+  trade-off because (a) the per-IP rate limit on `/admin/login`
+  caps how fast an attacker can run up the failure count, (b) an
+  admin can clear the lock from the host, and (c) the fixed
+  `max_lockout` cap keeps the worst-case lockout bounded — at
+  default settings, a real user is at most one day from being able
+  to sign in again on their own. Earlier versions of sui-id (≤
+  v0.15.0) deliberately omitted lockout for exactly this reason;
+  the v0.16.0 design, with a configurable cap and an admin
+  unlock command, brings the trade-off back in our favour.
 
 ### A6. Online password guessing or token grinding against `/oauth2/token`
 

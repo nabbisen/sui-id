@@ -60,6 +60,8 @@ pub fn create_initial_admin(
      user_uuid: uuid::Uuid::new_v4(),
         created_at: now,
         updated_at: now,
+        failed_login_count: 0,
+        locked_until: None,
     };
     users::create(db, &user).map_err(|e| match e {
         sui_id_store::StoreError::Conflict => CoreError::Conflict("username already in use".into()),

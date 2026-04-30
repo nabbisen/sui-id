@@ -5,6 +5,143 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] - 2026-04-28
+
+Account lockout. After enough consecutive failed password attempts
+on an account, sui-id refuses further sign-in attempts even with
+the correct password — temporarily, with a configurable cap, and
+recoverable by an admin command. The lockout is per-account and
+orthogonal to the per-IP rate limiter that's been there since
+v0.1.0; together they prevent both single-account hammering and
+spread-across-many-accounts hammering.
+
+### Added — `[security]` config section
+
+A new top-level config section, currently with one knob:
+
+```toml
+[security]
+max_lockout = "24h"
+```
+
+Allowed values: `"15min"`, `"1h"`, `"4h"`, `"12h"`, `"24h"`,
+`"48h"`. Default is `"24h"`. Picking from a fixed enum avoids
+operator typos that would put the cap somewhere wild. The 48-hour
+ceiling is deliberate — locking past two days is more likely to
+lock out a real user than to deter an attacker.
+
+### Added — progressive backoff curve
+
+The lockout curve in `sui_id_core::session::lockout_backoff`:
+
+| Consecutive failures | Lock window |
+| -------------------- | ----------- |
+| 1, 2                 | none        |
+| 3                    | 30 seconds  |
+| 4                    | 1 minute    |
+| 5                    | 5 minutes   |
+| 6                    | 30 minutes  |
+| 7                    | 2 hours     |
+| 8                    | 6 hours     |
+| 9                    | 12 hours    |
+| 10+                  | 24 hours    |
+
+Each value is then capped at `max_lockout`. A successful password
+verification clears the counter and lifts any active lock. Two
+properties on the curve are tested with `proptest`:
+
+- `backoff_is_monotone_in_failure_count` — more failures never
+  produce a *shorter* lock than fewer.
+- `backoff_is_bounded_by_max_secs` — the cap is honoured.
+
+### Added — schema migration 0007
+
+Two new columns on `users`:
+
+- `failed_login_count INTEGER NOT NULL DEFAULT 0` — running count
+  of consecutive password failures since the last success.
+- `locked_until TEXT` — wall-clock time before which password
+  verification will be refused. NULL means "not locked".
+
+Pre-migration rows default to `(0, NULL)` — the unlocked state.
+
+### Added — timing-equivalent lockout check
+
+`login_with_mfa` now takes a `max_lockout_secs` parameter and
+checks `users.locked_until` *before* fetching the credential row
+or running Argon2id. There's no value in grinding the hash for an
+account we already plan to refuse.
+
+To avoid leaking the locked state to a remote observer through
+timing, the lockout branch runs Argon2id against a fixed dummy PHC
+string before returning — same wall-clock cost as a real verify.
+A remote observer cannot distinguish "user doesn't exist", "user
+disabled", "user locked", and "wrong password" by timing or by
+status code; all four return `401 Unauthorized` after a
+constant-ish ~80 ms.
+
+### Added — `auth.login.locked` audit event
+
+A new event distinct from `auth.login.failure`, emitted only when
+a failed attempt *just* triggered or extended a lock. The note
+field includes the consecutive-failure count and the new window
+length in seconds. SIEM rules that alert on bursts of locks now
+have a clean signal to filter on.
+
+### Added — `sui-id admin unlock-user` CLI subcommand
+
+```bash
+sui-id admin unlock-user --username alice --config /etc/sui-id/sui-id.toml
+```
+
+Resets `failed_login_count` to 0 and clears `locked_until`. The
+operation is recorded as `admin.user.unlock` in the audit log.
+
+The subcommand is the recovery path for legitimate users who've
+been locked out before the auto-unlock window expires.
+
+### Added — tests
+
+- 5 new lib tests in `sui_id_core::session::lockout_tests`: 3
+  units (no-lock-for-typos, third-failure-window, cap-honoured)
+  + 2 properties (monotonic, bounded).
+- 3 new e2e tests:
+  - `three_consecutive_wrong_passwords_lock_the_account`
+  - `admin_unlock_clears_an_active_lock`
+  - `successful_login_clears_partial_failure_count`
+
+Lib tests now total **115** across the workspace (shared 13,
+store 10, core 52, sui-id 40), all passing. The Argon2id
+properties (3 tests) need their own slow run with
+`PROPTEST_CASES`.
+
+### Added — documentation
+
+- `docs/operators.md` — new "Account lockout" section with the
+  backoff table, the configuration knob, the recovery command,
+  the audit-log vocabulary, and an explanation of the timing-
+  equivalence behaviour. The Logging section's event vocabulary
+  table picks up `auth.login.locked` and `admin.user.unlock`.
+- `docs/threat-model.md` A5 (online password guessing) rewritten
+  to describe the lockout curve and the trade-off vs. the
+  account-takeover-DoS-amplification concern that v0.15.0 and
+  earlier deliberately accepted.
+- `sui-id.example.toml` — `[security]` block with the curve table
+  inline.
+
+### Note for operators
+
+Existing deployments pick this up automatically on first start of
+v0.16.0 — the new schema columns default to the unlocked state.
+A pre-existing user who has been failing logins before the upgrade
+starts the curve from zero on the first failure after the upgrade.
+
+If you'd rather not deploy lockout at all, set `max_lockout =
+"15min"` to keep the cap minimal and rely on the per-IP rate
+limit as the primary defence. The lockout itself is not
+disable-able; we judge "no lockout" to be the wrong default at
+this point in sui-id's life.
+
 ## [0.15.0] - 2026-04-28
 
 `acr` and `amr` claims in ID tokens, so relying parties can tell

@@ -332,7 +332,9 @@ expect them to be renamed without a deprecation cycle):
 | `auth.mfa.failure` | TOTP code or recovery code rejected. |
 | `auth.session.revoked` | Session torn down by logout, admin disable, or expiry. |
 | `auth.logout` | RP-initiated logout completed. |
+| `auth.login.locked` | A failed sign-in that just triggered or extended an account lockout. **Alert on bursts of this.** |
 | `mfa.admin_reset` | An administrator forcibly removed every MFA factor for a user. **Alert on this.** |
+| `admin.user.unlock` | An admin cleared an account lockout via `sui-id admin unlock-user`. |
 | `oauth.authorize.issued` | `/oauth2/authorize` issued an authorization code. |
 | `oauth.authorize.rejected` | `/oauth2/authorize` refused (bad redirect_uri, scope outside policy, etc). |
 | `oauth.token.issued` | `/oauth2/token` minted an access + ID token. |
@@ -494,6 +496,109 @@ If you are deploying behind a reverse proxy, make sure the proxy
 preserves the `Host` header sui-id sees as the issuer host. The
 sample Caddy and nginx configs in
 [`deployment.md`](deployment.md) get this right.
+
+## Account lockout
+
+After enough consecutive failed password attempts on an account,
+sui-id locks the account temporarily — refusing further sign-in
+attempts even with the correct password. The defence is per-user
+and orthogonal to the per-IP rate limit on `/admin/login`: between
+the two, an attacker can neither hammer one account from one host
+nor spread an attack across many accounts from one host.
+
+### The backoff curve
+
+The first two failures cost an account nothing — every operator
+fat-fingers a password sometimes. From the third onward the lock
+window grows quickly:
+
+| Consecutive failures | Lock window |
+| -------------------- | ----------- |
+| 1, 2                 | none        |
+| 3                    | 30 seconds  |
+| 4                    | 1 minute    |
+| 5                    | 5 minutes   |
+| 6                    | 30 minutes  |
+| 7                    | 2 hours     |
+| 8                    | 6 hours     |
+| 9                    | 12 hours    |
+| 10+                  | 24 hours    |
+
+Each value is then capped by the `[security] max_lockout` setting.
+
+A successful password verification at any point clears the counter
+and lifts any active lock.
+
+### Configuring the cap
+
+```toml
+[security]
+max_lockout = "24h"
+```
+
+Allowed values, picked from a fixed set so a typo can't put the
+cap somewhere wild: `"15min"`, `"1h"`, `"4h"`, `"12h"`, `"24h"`,
+`"48h"`. Default is `"24h"`. The 48-hour ceiling is deliberate —
+locking past two days is more likely to lock out a real user
+(post-vacation, post-weekend) than to deter an attacker, who has
+long given up by then.
+
+A lower cap (`"15min"` or `"1h"`) is reasonable for installs where
+you'd rather risk a determined attacker getting more grinding
+attempts per day than risk a real user being locked out overnight.
+A higher cap (`"24h"` or `"48h"`) is the right choice for tighter
+deployments where a real user reaching out to an admin is an
+acceptable cost.
+
+### Recovering a locked-out user
+
+If a real user has been locked out — perhaps a typo storm, perhaps
+they're back from vacation and don't remember the password — clear
+the lock from the host:
+
+```bash
+sui-id admin unlock-user --username alice --config /etc/sui-id/sui-id.toml
+```
+
+This resets `failed_login_count` to 0 and removes any active lock.
+The account is immediately ready for sign-in. The action is
+recorded in the audit log as `admin.user.unlock`.
+
+### What this looks like in the audit log
+
+The two relevant events:
+
+| Event                  | Meaning                                           |
+| ---------------------- | ------------------------------------------------- |
+| `auth.login.failure`   | Wrong password (or unknown user, or disabled). The audit row's `note` says which. |
+| `auth.login.locked`    | A failed attempt that *just* triggered or extended a lock. Includes the consecutive-failure count and the new window length in the note. |
+| `admin.user.unlock`    | An admin cleared the lock via the CLI.            |
+
+A SIEM rule on `auth.login.locked` is a useful signal that
+something is hammering an account. From the JSON log:
+
+```bash
+jq -c 'select(.fields.event == "auth.login.locked") |
+       {at: .timestamp, target: .fields.target, note: .fields.note}' \
+   < sui-id.log
+```
+
+### Timing-equivalence behaviour
+
+To avoid leaking which accounts are locked, all of these branches
+produce the same HTTP response (`401 Unauthorized`) and very close
+to the same wall-clock time:
+
+- The user does not exist.
+- The user is disabled or deleted.
+- The user is locked.
+- The user exists, isn't locked, but the password is wrong.
+
+The Argon2id hash verification (~80 ms) runs on every branch — on
+the "user doesn't exist" and "user is locked" branches it's run
+against a fixed dummy PHC string that never matches anything,
+purely to keep timing equal to the real-verify path. A remote
+observer cannot tell the cases apart.
 
 ## Per-client scope policy
 

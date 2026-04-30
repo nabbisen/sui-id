@@ -76,7 +76,13 @@ pub async fn login_post(
         ip,
         crate::handlers::ErrorAs::Html,
     )?;
-    match session::login_with_mfa(&app.db, &app.clock, form.username.trim(), &form.password) {
+    match session::login_with_mfa(
+        &app.db,
+        &app.clock,
+        form.username.trim(),
+        &form.password,
+        app.config.security.max_lockout.as_secs(),
+    ) {
         Ok(session::LoginOutcome::SessionEstablished(row)) => {
             let cookie = session_cookie(row.id.to_string(), app.config.server.cookie_secure);
             let jar = jar.add(cookie);

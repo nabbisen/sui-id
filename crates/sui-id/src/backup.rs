@@ -685,6 +685,7 @@ mod tests {
             },
             tokens: crate::config::TokensConfig::default(),
             log: crate::config::LogConfig::default(),
+            security: crate::config::SecurityConfig::default(),
         };
         let backup_path = tmp.path().join("backup.tar");
         // Build a backup tar by hand — bypass run_backup since fake_files
@@ -725,6 +726,7 @@ mod tests {
             },
             tokens: crate::config::TokensConfig::default(),
             log: crate::config::LogConfig::default(),
+            security: crate::config::SecurityConfig::default(),
         };
         let backup_path = tmp.path().join("backup.tar");
         {
@@ -770,6 +772,7 @@ mod tests {
             },
             tokens: crate::config::TokensConfig::default(),
             log: crate::config::LogConfig::default(),
+            security: crate::config::SecurityConfig::default(),
         };
         let dest = tmp.path().join("backup.tar");
         run_backup(&cfg, &dest, &BackupOptions::default()).expect("backup");
@@ -788,6 +791,7 @@ mod tests {
             },
             tokens: cfg.tokens.clone(),
             log: cfg.log.clone(),
+            security: cfg.security.clone(),
         };
         run_restore(&cfg2, &dest, &RestoreOptions { force: false, passphrase: None }).expect("restore");
         let conn = rusqlite::Connection::open(&cfg2.storage.db_path).unwrap();
@@ -829,6 +833,7 @@ mod tests {
             storage: crate::config::StorageConfig { db_path: db, key_file: key },
             tokens: crate::config::TokensConfig::default(),
             log: crate::config::LogConfig::default(),
+            security: crate::config::SecurityConfig::default(),
         }
     }
 

@@ -94,6 +94,15 @@ v0.10.1 / v0.10.2.
   synthesising fresh ones. The `acr_values` request-side parameter
   is not yet honoured — relying parties filter on the issued
   claim.
+- Account lockout. Per-account progressive backoff after
+  consecutive password failures, with an operator-configurable
+  cap (15min / 1h / 4h / 12h / 24h / 48h, default 24h) and an
+  admin recovery command. The lockout check runs *before* Argon2id
+  but a dummy verify still runs on the lockout branch so the
+  timing of locked / unlocked / wrong-password / no-such-user is
+  observably the same. A new `auth.login.locked` audit event
+  distinguishes "wrong password" from "wrong password and now
+  the account is locked" for SIEM consumption.
 
 ## Explicitly **not** on the roadmap
 

@@ -69,7 +69,13 @@ pub async fn post(
     match outcome {
         Ok(_) => {
             // Auto-login the new admin after setup.
-            let session_row = session::login(&app.db, &app.clock, form.username.trim(), &form.password)
+            let session_row = session::login(
+                &app.db,
+                &app.clock,
+                form.username.trim(),
+                &form.password,
+                app.config.security.max_lockout.as_secs(),
+            )
                 .map_err(HttpError::html)?;
             let cookie = session_cookie(session_row.id.to_string(), app.config.server.cookie_secure);
             let jar = jar.add(cookie);

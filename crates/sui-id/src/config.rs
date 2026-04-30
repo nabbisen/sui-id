@@ -19,6 +19,8 @@ pub struct Config {
     pub tokens: TokensConfig,
     #[serde(default)]
     pub log: LogConfig,
+    #[serde(default)]
+    pub security: SecurityConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -95,6 +97,82 @@ impl Default for LogConfig {
     }
 }
 
+/// Security-policy knobs. Currently the only setting is the maximum
+/// time an account remains locked after repeated failed sign-ins;
+/// future settings (password-policy parameters, rate-limit
+/// thresholds, …) will land here too.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SecurityConfig {
+    /// Cap on the auto-unlock interval used at the top of the
+    /// progressive-backoff curve. After enough consecutive failures,
+    /// the account is locked for *up to* this long; an admin can
+    /// still unlock manually with `sui-id admin unlock-user`.
+    ///
+    /// The value is read from a small set of allowed durations so
+    /// that an operator picking "12h" by hand cannot accidentally
+    /// type "1h" or "120h"; see [`MaxLockoutDuration`]. Defaults to
+    /// 24 hours.
+    #[serde(default)]
+    pub max_lockout: MaxLockoutDuration,
+}
+
+impl Default for SecurityConfig {
+    fn default() -> Self {
+        Self {
+            max_lockout: MaxLockoutDuration::default(),
+        }
+    }
+}
+
+/// Allowed maximum-lockout settings. A small, hand-picked set rather
+/// than an arbitrary integer: each value is operationally meaningful
+/// (an over-business-hours cooldown, a one-business-day cooldown, a
+/// weekend cooldown). The cap of 48 hours is deliberate — locking
+/// past two days is more likely to lock out a real user
+/// (post-vacation, post-weekend) than to deter an attacker, who has
+/// long given up by then.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum MaxLockoutDuration {
+    #[serde(rename = "15min")]
+    FifteenMinutes,
+    #[serde(rename = "1h")]
+    OneHour,
+    #[serde(rename = "4h")]
+    FourHours,
+    #[serde(rename = "12h")]
+    TwelveHours,
+    #[serde(rename = "24h")]
+    TwentyFourHours,
+    #[serde(rename = "48h")]
+    FortyEightHours,
+}
+
+impl Default for MaxLockoutDuration {
+    fn default() -> Self {
+        // 24h matches the default in the canonical operator examples
+        // (NIST SP 800-63B suggests "rate limit … for at least one
+        // day" for the higher AAL tiers, which is exactly this).
+        Self::TwentyFourHours
+    }
+}
+
+impl MaxLockoutDuration {
+    /// The duration as a count of seconds. Used both to compute
+    /// `users.locked_until` and to stamp the `Retry-After` HTTP
+    /// header on a locked response.
+    pub fn as_secs(self) -> i64 {
+        match self {
+            Self::FifteenMinutes => 15 * 60,
+            Self::OneHour => 60 * 60,
+            Self::FourHours => 4 * 60 * 60,
+            Self::TwelveHours => 12 * 60 * 60,
+            Self::TwentyFourHours => 24 * 60 * 60,
+            Self::FortyEightHours => 48 * 60 * 60,
+        }
+    }
+}
+
 impl Config {
     /// Read and parse a TOML configuration file.
     pub fn load(path: &Path) -> anyhow::Result<Self> {
@@ -121,6 +199,7 @@ impl Config {
             },
             tokens: TokensConfig::default(),
             log: LogConfig::default(),
+            security: SecurityConfig::default(),
         }
     }
 
