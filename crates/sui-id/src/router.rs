@@ -110,6 +110,31 @@ pub fn build_router(app: AppState) -> Router {
             post(admin::signing_keys_delete),
         )
         .route("/admin/audit", get(admin::audit_get))
+        // ---------- settings (since v0.20.3) ----------
+        .route(
+            "/admin/settings",
+            get(crate::handlers::settings::index_redirect),
+        )
+        .route(
+            "/admin/settings/basic",
+            get(crate::handlers::settings::basic_get),
+        )
+        .route(
+            "/admin/settings/security",
+            get(crate::handlers::settings::security_get),
+        )
+        .route(
+            "/admin/settings/authentication",
+            get(crate::handlers::settings::authentication_get),
+        )
+        .route(
+            "/admin/settings/logs",
+            get(crate::handlers::settings::logs_get),
+        )
+        .route(
+            "/admin/settings/other",
+            get(crate::handlers::settings::other_get),
+        )
         // ---------- self-service security (since v0.18.0) ----------
         // These routes require an authenticated session but do *not*
         // require admin privilege; they're for any signed-in user.

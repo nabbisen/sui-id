@@ -5,6 +5,104 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.3] - 2026-05-02
+
+Settings hub at `/admin/settings/*` — five tabs surfacing the
+current effective configuration as a read-only overview, plus
+deep links into the existing detail pages where the operator can
+actually act on something.
+
+### Added
+
+#### Five settings tabs
+
+Each tab is its own route so the URL is the source of truth for
+which tab is active — refresh, bookmark, and back-button all
+work without JavaScript, and a server-side flash redirect cleanly
+preserves the active tab.
+
+- **`/admin/settings`** → 303 to `/admin/settings/basic`
+- **`/admin/settings/basic`** — Issuer URL, listen address,
+  cookie Secure flag, trusted_proxies CIDR list, links to
+  Discovery and JWKS endpoints
+- **`/admin/settings/security`** — max-lockout duration label,
+  HSTS / CSP / X-Frame-Options DENY / Permissions-Policy status
+  badges, CORS policy summary (token endpoint dynamic from
+  registered redirect_uris, public OIDC endpoints open)
+- **`/admin/settings/authentication`** — password policy
+  (min length, Argon2id), TOTP / WebAuthn enablement, 8 recovery
+  codes per enrollment, PKCE-required flag, per-token lifetimes
+  (access / id_token / refresh), refresh rotation + theft
+  detection flags
+- **`/admin/settings/logs`** — current log format and filter
+  expression, last-24h counts for `auth.login.success` /
+  `auth.login.failure` / `auth.login.locked` /
+  `auth.password.changed_self`, audit-chain tail-verify status
+  with `badge--ok` (正常) or `badge--danger` (破損検知). Deep
+  link to `/admin/audit` for full history
+- **`/admin/settings/other`** — sui-id binary version, supported
+  schema version (`MAX_SCHEMA_VERSION`), DB file path, master
+  key file path, server clock now, user/client counts with
+  inline links to the manage pages
+
+#### Tab strip
+
+A 5-element `.app-nav__link` strip renders at the top of every
+settings page. The active tab gets `aria-current="page"`, picking
+up the same accent-pill treatment the main nav uses. The strip
+wraps on narrow viewports.
+
+#### Settings handler module
+
+- New `handlers::settings` with one `*_get` per tab plus
+  `index_redirect`. Each handler reads `Config` and / or the DB
+  and produces the per-tab view data.
+- `MaxLockoutDuration::label()` added to surface the human
+  string the operator chose (e.g. "12h"), matching the form they
+  would write in `sui-id.toml`.
+
+#### Logs tab counters
+
+Reuses `audit::count_by_action_in_window` from v0.20.2 with a
+single 24-hour bucket — same query path the dashboard sparkline
+uses, so the index added in v0.20.2 keeps these counters fast.
+
+### Changed
+
+- Admin nav: `Settings` link added between Audit and Profile.
+  The link points at `/admin/settings`, which redirects to
+  `/admin/settings/basic` so the active-tab pill always lights
+  up cleanly.
+
+### Tests
+
+7 new e2e tests — one per tab plus the redirect and an
+admin-required check:
+
+- `settings_index_redirects_to_basic`
+- `settings_basic_renders_for_admin`
+- `settings_security_renders_lockout_and_headers`
+- `settings_authentication_renders_lifetimes`
+- `settings_logs_renders_with_24h_counts_and_chain_status`
+- `settings_other_renders_versions_and_paths`
+- `settings_pages_require_admin`
+
+Lib totals unchanged (no logic added to the lib layer that needed
+direct unit coverage; the read-only handlers consume existing
+APIs).
+
+### Notes
+
+- All values are read-only. Mutating settings goes through the
+  existing dedicated admin pages (`/admin/users`,
+  `/admin/clients`, `/admin/signing-keys`, `/admin/profile`) or
+  by editing `sui-id.toml` and restarting. The settings hub deep
+  links to those where applicable.
+- Adding an editable item to a settings tab in the future does
+  *not* require restructuring the page — drop a `<form>` into the
+  appropriate `.card` and wire a `*_post` handler. The current
+  visual structure already accommodates that.
+
 ## [0.20.2] - 2026-05-01
 
 Dashboard sparkline. The admin dashboard now shows the

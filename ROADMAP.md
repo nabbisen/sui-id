@@ -168,6 +168,16 @@ v0.10.1 / v0.10.2.
   the millions. Range option default is 7 days; persistence is
   URL-only for now (localStorage layering is a small follow-up
   if we want it).
+- Settings hub at `/admin/settings/*` (v0.20.3). Five-tab
+  read-only overview surfacing the current effective
+  configuration: Basic, Security, Authentication, Logs, Other.
+  Each tab is its own route (URL is the source of truth for
+  active tab; bookmark / refresh / back-button all just work).
+  The Logs tab surfaces 24-hour counts of the four most
+  operationally interesting audit actions and the audit-chain
+  tail verifier status with a badge. Deep links into the
+  existing detail pages (`/admin/users`, `/admin/clients`,
+  `/admin/audit`) replace any need to re-implement controls.
 
 ## Explicitly **not** on the roadmap
 

@@ -171,6 +171,20 @@ impl MaxLockoutDuration {
             Self::FortyEightHours => 48 * 60 * 60,
         }
     }
+
+    /// Human-readable label for the duration, used by the settings
+    /// admin page. Matches the wire form an operator would write
+    /// in `sui-id.toml`.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::FifteenMinutes => "15m",
+            Self::OneHour => "1h",
+            Self::FourHours => "4h",
+            Self::TwelveHours => "12h",
+            Self::TwentyFourHours => "24h",
+            Self::FortyEightHours => "48h",
+        }
+    }
 }
 
 impl Config {

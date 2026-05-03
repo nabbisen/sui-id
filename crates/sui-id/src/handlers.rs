@@ -19,6 +19,7 @@ pub mod index;
 pub mod me_security;
 pub mod oauth_token;
 pub mod oidc;
+pub mod settings;
 pub mod setup;
 
 /// Cookie name for the in-flight WebAuthn ceremony id (used by both

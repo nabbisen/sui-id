@@ -1660,3 +1660,582 @@ pub fn render_password_change(
         }
     })
 }
+
+// ---------- /admin/settings/* (v0.20.3) ----------
+//
+// Five read-only tabs surfacing the current effective configuration.
+// Each tab is its own route; this view module just renders the
+// shell + 5-tab strip + the tab body. The strip is intentionally
+// styled with the same `.app-nav__link` vocabulary as the main nav,
+// so the visual treatment is consistent: hover, focus ring, and the
+// `aria-current="page"` pill all behave the same.
+
+/// Identifier of the currently-active settings tab. The settings
+/// page renders the same 5-tab strip on every sub-route; this enum
+/// drives which tab gets `aria-current="page"`.
+#[derive(Clone, Copy)]
+pub enum SettingsTab {
+    Basic,
+    Security,
+    Authentication,
+    Logs,
+    Other,
+}
+
+impl SettingsTab {
+    fn key(self) -> &'static str {
+        match self {
+            Self::Basic => "basic",
+            Self::Security => "security",
+            Self::Authentication => "authentication",
+            Self::Logs => "logs",
+            Self::Other => "other",
+        }
+    }
+}
+
+fn settings_tabs(active: SettingsTab) -> impl IntoView {
+    let items = [
+        (SettingsTab::Basic, "基本", "/admin/settings/basic"),
+        (SettingsTab::Security, "セキュリティ", "/admin/settings/security"),
+        (
+            SettingsTab::Authentication,
+            "認証",
+            "/admin/settings/authentication",
+        ),
+        (SettingsTab::Logs, "ログ", "/admin/settings/logs"),
+        (SettingsTab::Other, "その他", "/admin/settings/other"),
+    ];
+    let active_key = active.key();
+    let links: Vec<_> = items
+        .into_iter()
+        .map(|(t, label, href)| {
+            let aria = if t.key() == active_key { Some("page") } else { None };
+            view! {
+                <a class="app-nav__link" href=href aria-current=aria>{label}</a>
+            }
+        })
+        .collect();
+    view! {
+        <nav class="app-nav" aria-label="設定タブ" style="margin-bottom:var(--space-4);flex-wrap:wrap">
+            {links}
+        </nav>
+    }
+}
+
+/// Two-column key/value table used inside each settings card. Keeps
+/// per-tab content boring and consistent.
+fn kv_row(k: &str, v: impl IntoView + 'static) -> impl IntoView {
+    let k = k.to_owned();
+    view! {
+        <tr>
+            <th scope="row" style="width:14rem;font-weight:var(--font-weight-medium);color:var(--fg-muted);text-align:left">
+                {k}
+            </th>
+            <td>{v}</td>
+        </tr>
+    }
+}
+
+fn kv_text(k: &str, v: String) -> impl IntoView {
+    kv_row(k, view! { <span>{v}</span> })
+}
+
+fn kv_code(k: &str, v: String) -> impl IntoView {
+    kv_row(k, view! { <span class="code">{v}</span> })
+}
+
+fn kv_bool_badge(k: &str, on: bool) -> impl IntoView {
+    let badge = if on {
+        view! { <span class="badge badge--ok">"有効"</span> }.into_any()
+    } else {
+        view! { <span class="badge">"無効"</span> }.into_any()
+    };
+    kv_row(k, badge)
+}
+
+// ---------- 基本タブ ----------
+
+pub struct SettingsBasicData {
+    pub issuer: String,
+    pub listen_addr: String,
+    pub cookie_secure: bool,
+    pub trusted_proxies: Vec<String>,
+    pub discovery_url: String,
+    pub jwks_url: String,
+}
+
+pub fn render_settings_basic(data: SettingsBasicData, flash: Option<Flash>) -> String {
+    render(move || {
+        let SettingsBasicData {
+            issuer,
+            listen_addr,
+            cookie_secure,
+            trusted_proxies,
+            discovery_url,
+            jwks_url,
+        } = data;
+        let proxies_display = if trusted_proxies.is_empty() {
+            "(なし — peer の IP を直接信頼)".to_owned()
+        } else {
+            trusted_proxies.join(", ")
+        };
+        view! {
+            <Shell title="設定 — 基本".to_string() show_nav=true current=Some("settings".to_string())>
+                <header class="page-header">
+                    <div>
+                        <h1 class="page-header__title">"設定"</h1>
+                        <p class="page-header__lede">
+                            "現在の有効な設定の確認。値の変更には sui-id.toml の編集と再起動が必要です。"
+                        </p>
+                    </div>
+                </header>
+                {flash_banner(flash)}
+                {settings_tabs(SettingsTab::Basic)}
+
+                <div class="card">
+                    <h3 class="card__title">"基本"</h3>
+                    <div class="table-wrap">
+                        <table>
+                            <tbody>
+                                {kv_code("Issuer", issuer)}
+                                {kv_code("Listen address", listen_addr)}
+                                {kv_bool_badge("Cookie Secure フラグ", cookie_secure)}
+                                {kv_text("Trusted proxies", proxies_display)}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 class="card__title">"OIDC 公開エンドポイント"</h3>
+                    <div class="table-wrap">
+                        <table>
+                            <tbody>
+                                <tr>
+                                    <th scope="row" style="width:14rem;font-weight:var(--font-weight-medium);color:var(--fg-muted);text-align:left">"Discovery"</th>
+                                    <td>
+                                        {
+                                            let url = discovery_url.clone();
+                                            view! {
+                                                <a href=discovery_url>
+                                                    <span class="code">{url}</span>
+                                                </a>
+                                            }
+                                        }
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row" style="width:14rem;font-weight:var(--font-weight-medium);color:var(--fg-muted);text-align:left">"JWKS"</th>
+                                    <td>
+                                        {
+                                            let url = jwks_url.clone();
+                                            view! {
+                                                <a href=jwks_url>
+                                                    <span class="code">{url}</span>
+                                                </a>
+                                            }
+                                        }
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </Shell>
+        }
+    })
+}
+
+// ---------- セキュリティタブ ----------
+
+pub struct SettingsSecurityData {
+    pub max_lockout_label: String,
+    pub hsts_enabled: bool,
+    pub csp_enabled: bool,
+    pub x_frame_deny: bool,
+    pub permissions_policy_minimal: bool,
+    pub cors_token_dynamic_from_clients: bool,
+    pub cors_public_endpoints_open: bool,
+}
+
+pub fn render_settings_security(data: SettingsSecurityData, flash: Option<Flash>) -> String {
+    render(move || {
+        let SettingsSecurityData {
+            max_lockout_label,
+            hsts_enabled,
+            csp_enabled,
+            x_frame_deny,
+            permissions_policy_minimal,
+            cors_token_dynamic_from_clients,
+            cors_public_endpoints_open,
+        } = data;
+        view! {
+            <Shell title="設定 — セキュリティ".to_string() show_nav=true current=Some("settings".to_string())>
+                <header class="page-header">
+                    <div>
+                        <h1 class="page-header__title">"設定"</h1>
+                        <p class="page-header__lede">
+                            "現在の有効な設定の確認。値の変更には sui-id.toml の編集と再起動が必要です。"
+                        </p>
+                    </div>
+                </header>
+                {flash_banner(flash)}
+                {settings_tabs(SettingsTab::Security)}
+
+                <div class="card">
+                    <h3 class="card__title">"アカウントロックアウト"</h3>
+                    <div class="table-wrap">
+                        <table>
+                            <tbody>
+                                {kv_code("最大ロックアウト時間", max_lockout_label)}
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="muted" style="margin-top:var(--space-2);margin-bottom:0">
+                        "段階的バックオフの上限値。プログレッシブな失敗時間が積み重なってもこの値を超えません。"
+                        "管理者は "<span class="code">"sui-id admin unlock-user"</span>" コマンドでいつでも解除できます。"
+                    </p>
+                </div>
+
+                <div class="card">
+                    <h3 class="card__title">"セキュリティヘッダー"</h3>
+                    <div class="table-wrap">
+                        <table>
+                            <tbody>
+                                {kv_bool_badge("HSTS (Strict-Transport-Security)", hsts_enabled)}
+                                {kv_bool_badge("Content-Security-Policy", csp_enabled)}
+                                {kv_bool_badge("X-Frame-Options: DENY", x_frame_deny)}
+                                {kv_bool_badge("Permissions-Policy(最小)", permissions_policy_minimal)}
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="muted" style="margin-top:var(--space-2);margin-bottom:0">
+                        "管理画面はすべて上記ヘッダーを返します。"
+                        "/oauth2/* 系の公開エンドポイントは仕様上の必要に応じて一部省略します。"
+                    </p>
+                </div>
+
+                <div class="card">
+                    <h3 class="card__title">"CORS"</h3>
+                    <div class="table-wrap">
+                        <table>
+                            <tbody>
+                                {kv_bool_badge("Token endpoint の動的許可(登録 redirect_uris の origin)", cors_token_dynamic_from_clients)}
+                                {kv_bool_badge("Discovery / JWKS / userinfo の公開許可(*)", cors_public_endpoints_open)}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </Shell>
+        }
+    })
+}
+
+// ---------- 認証タブ ----------
+
+pub struct SettingsAuthenticationData {
+    pub password_min_length: usize,
+    pub password_argon2id: String,
+    pub totp_enabled_per_user: bool,
+    pub webauthn_enabled_per_user: bool,
+    pub recovery_codes_per_enrollment: usize,
+    pub pkce_required: bool,
+    pub access_token_lifetime_secs: i64,
+    pub id_token_lifetime_secs: i64,
+    pub refresh_token_lifetime_secs: i64,
+    pub refresh_rotation: bool,
+    pub refresh_theft_detection: bool,
+}
+
+fn fmt_lifetime(secs: i64) -> String {
+    if secs % 86400 == 0 {
+        format!("{} 日 ({secs}s)", secs / 86400)
+    } else if secs % 3600 == 0 {
+        format!("{} 時間 ({secs}s)", secs / 3600)
+    } else if secs % 60 == 0 {
+        format!("{} 分 ({secs}s)", secs / 60)
+    } else {
+        format!("{secs} s")
+    }
+}
+
+pub fn render_settings_authentication(
+    data: SettingsAuthenticationData,
+    flash: Option<Flash>,
+) -> String {
+    render(move || {
+        let SettingsAuthenticationData {
+            password_min_length,
+            password_argon2id,
+            totp_enabled_per_user,
+            webauthn_enabled_per_user,
+            recovery_codes_per_enrollment,
+            pkce_required,
+            access_token_lifetime_secs,
+            id_token_lifetime_secs,
+            refresh_token_lifetime_secs,
+            refresh_rotation,
+            refresh_theft_detection,
+        } = data;
+        view! {
+            <Shell title="設定 — 認証".to_string() show_nav=true current=Some("settings".to_string())>
+                <header class="page-header">
+                    <div>
+                        <h1 class="page-header__title">"設定"</h1>
+                        <p class="page-header__lede">
+                            "現在の有効な設定の確認。値の変更には sui-id.toml の編集と再起動が必要です。"
+                        </p>
+                    </div>
+                </header>
+                {flash_banner(flash)}
+                {settings_tabs(SettingsTab::Authentication)}
+
+                <div class="card">
+                    <h3 class="card__title">"パスワード"</h3>
+                    <div class="table-wrap">
+                        <table>
+                            <tbody>
+                                {kv_text("最小文字数", format!("{password_min_length} 文字"))}
+                                {kv_text("ハッシュアルゴリズム", password_argon2id)}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 class="card__title">"2 段階認証"</h3>
+                    <div class="table-wrap">
+                        <table>
+                            <tbody>
+                                {kv_bool_badge("TOTP(認証アプリ)", totp_enabled_per_user)}
+                                {kv_bool_badge("WebAuthn(パスキー)", webauthn_enabled_per_user)}
+                                {kv_text("リカバリーコード(登録ごと)", format!("{recovery_codes_per_enrollment} 件"))}
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="muted" style="margin-top:var(--space-2);margin-bottom:0">
+                        "ユーザー個別に有効化します。詳細は "
+                        <a href="/admin/profile">"/admin/profile"</a>
+                        " を参照してください。"
+                    </p>
+                </div>
+
+                <div class="card">
+                    <h3 class="card__title">"OAuth 2.1 / OIDC"</h3>
+                    <div class="table-wrap">
+                        <table>
+                            <tbody>
+                                {kv_bool_badge("PKCE 必須(全 client、全 flow)", pkce_required)}
+                                {kv_text("Access token 有効期限", fmt_lifetime(access_token_lifetime_secs))}
+                                {kv_text("ID token 有効期限", fmt_lifetime(id_token_lifetime_secs))}
+                                {kv_text("Refresh token 有効期限", fmt_lifetime(refresh_token_lifetime_secs))}
+                                {kv_bool_badge("Refresh ローテーション", refresh_rotation)}
+                                {kv_bool_badge("Refresh 盗難検知(family revoke)", refresh_theft_detection)}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </Shell>
+        }
+    })
+}
+
+// ---------- ログタブ ----------
+
+pub struct SettingsLogsData {
+    pub log_format: String,
+    pub log_filter: String,
+    pub login_success_24h: i64,
+    pub login_failure_24h: i64,
+    pub login_locked_24h: i64,
+    pub password_changed_self_24h: i64,
+    pub chain_report: SettingsChainStatus,
+}
+
+pub struct SettingsChainStatus {
+    pub checked: usize,
+    pub broken_at_seq: Option<i64>,
+    pub legacy_unhashed: usize,
+}
+
+pub fn render_settings_logs(data: SettingsLogsData, flash: Option<Flash>) -> String {
+    render(move || {
+        let SettingsLogsData {
+            log_format,
+            log_filter,
+            login_success_24h,
+            login_failure_24h,
+            login_locked_24h,
+            password_changed_self_24h,
+            chain_report,
+        } = data;
+
+        let chain_badge = if chain_report.broken_at_seq.is_some() {
+            view! { <span class="badge badge--danger">"破損検知"</span> }.into_any()
+        } else {
+            view! { <span class="badge badge--ok">"正常"</span> }.into_any()
+        };
+        let chain_note = match chain_report.broken_at_seq {
+            Some(seq) => format!("seq={seq} で不一致を検出。すぐに調査してください。"),
+            None => format!(
+                "末尾 {} 行を検査。レガシー(v0.17 以前)未ハッシュ行: {}",
+                chain_report.checked, chain_report.legacy_unhashed
+            ),
+        };
+
+        view! {
+            <Shell title="設定 — ログ".to_string() show_nav=true current=Some("settings".to_string())>
+                <header class="page-header">
+                    <div>
+                        <h1 class="page-header__title">"設定"</h1>
+                        <p class="page-header__lede">
+                            "ログ出力設定と監査ログの状態。"
+                        </p>
+                    </div>
+                </header>
+                {flash_banner(flash)}
+                {settings_tabs(SettingsTab::Logs)}
+
+                <div class="card">
+                    <h3 class="card__title">"ログ出力"</h3>
+                    <div class="table-wrap">
+                        <table>
+                            <tbody>
+                                {kv_code("Format", log_format)}
+                                {kv_code("Filter", log_filter)}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 class="card__title">"直近 24 時間のイベント"</h3>
+                    <div class="table-wrap">
+                        <table>
+                            <tbody>
+                                {kv_text("auth.login.success", login_success_24h.to_string())}
+                                {kv_text("auth.login.failure", login_failure_24h.to_string())}
+                                {kv_text("auth.login.locked", login_locked_24h.to_string())}
+                                {kv_text("auth.password.changed_self", password_changed_self_24h.to_string())}
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="muted" style="margin-top:var(--space-2);margin-bottom:0">
+                        "詳細な履歴は "<a href="/admin/audit">"/admin/audit"</a>" を参照してください。"
+                    </p>
+                </div>
+
+                <div class="card">
+                    <h3 class="card__title">"監査ログのハッシュチェーン"</h3>
+                    <div class="row" style="gap:var(--space-3);align-items:center">
+                        <span>"状態:"</span>
+                        {chain_badge}
+                    </div>
+                    <p class="muted" style="margin-top:var(--space-2);margin-bottom:0">
+                        {chain_note}
+                    </p>
+                </div>
+            </Shell>
+        }
+    })
+}
+
+// ---------- その他タブ ----------
+
+pub struct SettingsOtherData {
+    pub binary_version: String,
+    pub schema_version: i32,
+    pub db_path: String,
+    pub master_key_file: String,
+    pub user_count: usize,
+    pub client_count: usize,
+    pub clock_now: chrono::DateTime<chrono::Utc>,
+}
+
+pub fn render_settings_other(data: SettingsOtherData, flash: Option<Flash>) -> String {
+    render(move || {
+        let SettingsOtherData {
+            binary_version,
+            schema_version,
+            db_path,
+            master_key_file,
+            user_count,
+            client_count,
+            clock_now,
+        } = data;
+        let now_str = clock_now.format("%Y-%m-%d %H:%M:%S UTC").to_string();
+        view! {
+            <Shell title="設定 — その他".to_string() show_nav=true current=Some("settings".to_string())>
+                <header class="page-header">
+                    <div>
+                        <h1 class="page-header__title">"設定"</h1>
+                        <p class="page-header__lede">
+                            "ビルド情報・スキーマ・ストレージ。"
+                        </p>
+                    </div>
+                </header>
+                {flash_banner(flash)}
+                {settings_tabs(SettingsTab::Other)}
+
+                <div class="card">
+                    <h3 class="card__title">"ビルド"</h3>
+                    <div class="table-wrap">
+                        <table>
+                            <tbody>
+                                {kv_code("sui-id バージョン", binary_version)}
+                                {kv_text("対応スキーマバージョン", schema_version.to_string())}
+                                {kv_code("サーバ時刻", now_str)}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 class="card__title">"ストレージ"</h3>
+                    <div class="table-wrap">
+                        <table>
+                            <tbody>
+                                {kv_code("DB ファイル", db_path)}
+                                {kv_code("マスターキーファイル", master_key_file)}
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="muted" style="margin-top:var(--space-2);margin-bottom:0">
+                        "DB は単一の SQLite ファイル、マスターキーは環境変数 "
+                        <span class="code">"SUI_ID_MASTER_KEY"</span>
+                        " が指定されない場合のみキーファイルから読み込まれます。"
+                    </p>
+                </div>
+
+                <div class="card">
+                    <h3 class="card__title">"レコード数"</h3>
+                    <div class="table-wrap">
+                        <table>
+                            <tbody>
+                                <tr>
+                                    <th scope="row" style="width:14rem;font-weight:var(--font-weight-medium);color:var(--fg-muted);text-align:left">"ユーザー"</th>
+                                    <td>
+                                        {user_count.to_string()}" 名 "
+                                        <a href="/admin/users" class="muted" style="margin-left:var(--space-2)">
+                                            "管理 →"
+                                        </a>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row" style="width:14rem;font-weight:var(--font-weight-medium);color:var(--fg-muted);text-align:left">"クライアント"</th>
+                                    <td>
+                                        {client_count.to_string()}" 件 "
+                                        <a href="/admin/clients" class="muted" style="margin-left:var(--space-2)">
+                                            "管理 →"
+                                        </a>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </Shell>
+        }
+    })
+}

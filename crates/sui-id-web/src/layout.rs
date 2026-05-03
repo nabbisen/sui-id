@@ -139,6 +139,7 @@ fn Nav(current: Option<String>) -> impl IntoView {
         ("clients", "Clients", "/admin/clients"),
         ("signing-keys", "Keys", "/admin/signing-keys"),
         ("audit", "Audit", "/admin/audit"),
+        ("settings", "Settings", "/admin/settings"),
         ("profile", "Profile", "/admin/profile"),
     ];
     view! {

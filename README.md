@@ -133,29 +133,29 @@ docs/               Operator and integrator documentation
 
 ## Documentation
 
-- [`docs/deployment.md`](/docs/deployment.md) — chronological,
+- [`docs/deployment.md`](docs/deployment.md) — chronological,
   opinionated walkthrough from a fresh Linux server to a hardened
   production install. Start here for a first-time deployment.
-- [`docs/operators.md`](/docs/operators.md) — reference for
+- [`docs/operators.md`](docs/operators.md) — reference for
   configuration fields, the master key, GC, the audit log schema,
   and routine operational tasks.
-- [`docs/integrators.md`](/docs/integrators.md) — pointing an application
+- [`docs/integrators.md`](docs/integrators.md) — pointing an application
   at a sui-id instance: discovery, registration, the OIDC flow, and the
   shape of the tokens.
-- [`docs/threat-model.md`](/docs/threat-model.md) — what sui-id defends
+- [`docs/threat-model.md`](docs/threat-model.md) — what sui-id defends
   against, what it does not, and what assumptions the operator must
   uphold for the design to work.
-- [`PUBLISHING.md`](/PUBLISHING.md) — how the maintainers publish to
+- [`PUBLISHING.md`](PUBLISHING.md) — how the maintainers publish to
   crates.io. Not relevant to end users.
 
 ## License
 
-Apache-2.0. See [LICENSE](/LICENSE) for the full text, [NOTICE](/NOTICE)
-for attribution, and [TERMS_OF_USE.md](/TERMS_OF_USE.md) for additional
+Apache-2.0. See [LICENSE](LICENSE) for the full text, [NOTICE](NOTICE)
+for attribution, and [TERMS_OF_USE.md](TERMS_OF_USE.md) for additional
 notes.
 
 ## Status
 
 Pre-release. The protocol surface and storage schema are still subject to
-change. See [ROADMAP.md](/ROADMAP.md) for the planned trajectory and
-[CHANGELOG.md](/CHANGELOG.md) for what has already shipped.
+change. See [ROADMAP.md](ROADMAP.md) for the planned trajectory and
+[CHANGELOG.md](CHANGELOG.md) for what has already shipped.
