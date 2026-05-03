@@ -2107,6 +2107,14 @@ pub struct SettingsSecurityData {
     pub permissions_policy_minimal: bool,
     pub cors_token_dynamic_from_clients: bool,
     pub cors_public_endpoints_open: bool,
+    /// v0.25.0 — current value in seconds, 0 = disabled.
+    pub idle_session_timeout_secs: i64,
+    /// v0.25.0 — current cap, 0 = disabled.
+    pub max_concurrent_sessions: i64,
+    /// CSRF token for the inline edit forms. Empty string is
+    /// tolerated (forms no-op without it) but production callers
+    /// should always pass a real token.
+    pub csrf_token: String,
 }
 
 pub fn render_settings_security(data: SettingsSecurityData, flash: Option<Flash>) -> String {
@@ -2119,7 +2127,62 @@ pub fn render_settings_security(data: SettingsSecurityData, flash: Option<Flash>
             permissions_policy_minimal,
             cors_token_dynamic_from_clients,
             cors_public_endpoints_open,
+            idle_session_timeout_secs,
+            max_concurrent_sessions,
+            csrf_token,
         } = data;
+        let csrf_for_idle = csrf_token.clone();
+        let csrf_for_cap = csrf_token.clone();
+        let session_forms = view! {
+            <section class="section">
+                <h2 class="section__title">"セッション制限 / Session limits"</h2>
+                <p class="muted">
+                    "アイドルタイムアウトと同時セッション数の上限。 "
+                    "いずれも 0 で無効。デフォルトは 0 (無効) で、運用ポリシーに応じて opt-in。 "
+                    "/ Idle timeout and concurrent-session cap. Both default to 0 (disabled); "
+                    "enable per policy."
+                </p>
+                <div class="card">
+                    <form method="post" action="/admin/settings/security/idle-timeout" class="stack">
+                        <input type="hidden" name="_csrf" value=csrf_for_idle />
+                        <div class="field">
+                            <label for="idle-timeout" class="field__label">
+                                "アイドルタイムアウト (秒) / Idle timeout (seconds)"
+                            </label>
+                            <input id="idle-timeout" name="secs" type="number"
+                                   min="0" max="2592000"
+                                   value=idle_session_timeout_secs.to_string() />
+                            <span class="field__hint">
+                                "0 = 無効。0 < N <= 2,592,000 (= 30 日)。 / 0 disables; up to 30 days."
+                            </span>
+                        </div>
+                        <div>
+                            <button type="submit">"保存 / Save"</button>
+                        </div>
+                    </form>
+                </div>
+                <div class="card">
+                    <form method="post" action="/admin/settings/security/max-sessions" class="stack">
+                        <input type="hidden" name="_csrf" value=csrf_for_cap />
+                        <div class="field">
+                            <label for="max-sessions" class="field__label">
+                                "1 ユーザーあたり最大同時セッション数 / Max concurrent sessions per user"
+                            </label>
+                            <input id="max-sessions" name="cap" type="number"
+                                   min="0" max="1000"
+                                   value=max_concurrent_sessions.to_string() />
+                            <span class="field__hint">
+                                "0 = 無効。1 <= N <= 1000。超過時は最も古いセッションが自動 revoke (FIFO)。 / "
+                                "0 disables. When exceeded, oldest session is auto-revoked (FIFO)."
+                            </span>
+                        </div>
+                        <div>
+                            <button type="submit">"保存 / Save"</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+        };
         view! {
             <Shell title="設定 — セキュリティ".to_string() show_nav=true current=Some("settings".to_string())>
                 <header class="page-header">
@@ -2177,6 +2240,7 @@ pub fn render_settings_security(data: SettingsSecurityData, flash: Option<Flash>
                         </table>
                     </div>
                 </div>
+                {session_forms}
             </Shell>
         }
     })

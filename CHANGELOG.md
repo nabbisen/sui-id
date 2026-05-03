@@ -5,6 +5,189 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.0] - 2026-05-04
+
+Idle session timeout and concurrent session cap. Two adjacent
+self-hardening knobs over the existing UI-cookie session model:
+
+1. **Idle session timeout**: a session that has not been
+   presented for `idle_session_timeout_secs` becomes invalid.
+   Bounds the post-compromise window of a stolen cookie when
+   the legitimate user has stopped using it.
+2. **Concurrent session cap**: a single user holds at most
+   `max_concurrent_sessions` active sessions. New logins past
+   the cap evict the oldest existing session (FIFO).
+
+Both default to `0` (= disabled). They are opt-in features
+that an operator turns on via the admin settings page.
+
+### Why default-off
+
+These two knobs trade convenience for safety in different
+ratios for different deployments. A small admin team running
+one tab in one browser benefits from neither — the idle-timeout
+adds friction with no realistic threat model behind it. A
+public sui-id with users spread across machines benefits from
+both. Choosing a default that fits everyone is impossible, so
+v0.25.0 ships the architecture and tools for opt-in enablement
+rather than a guess at the right defaults.
+
+### Why FIFO eviction (and not "refuse the new login")
+
+When a user is at the cap and signs in again, two designs are
+plausible:
+
+- **FIFO**: revoke the oldest existing session, accept the new
+  login. The user signing in now wins; the user (perhaps the
+  same user) on a possibly-stolen old cookie loses.
+- **LIFO**: refuse the new login with "you have too many
+  sessions; sign out somewhere first". The status quo wins.
+
+We chose FIFO because the typical "I'm at the cap" cause is
+either (a) the user has a stale cookie on a device they don't
+use any more, or (b) someone has stolen one of their cookies.
+In both cases, the new sign-in is the *legitimate* presence and
+the right action is to grant it; in case (b), evicting the
+stolen cookie is a defence rather than a regression.
+
+LIFO would be the right call only if "the cap was hit because
+something is wrong" is the more common case — which would be
+true if sui-id were aimed at machine-to-machine clients where
+the count corresponds to known instances. It isn't; sui-id's
+cap is per *human* user.
+
+### Throttled write pattern
+
+Idle-timeout requires a "most recent presentation" timestamp,
+which means writing on every authenticated request. A naive
+implementation produces one DB write per HTTP request — fine
+for hobby load, wasteful for any real one. v0.25.0 throttles
+these writes: the column gets updated only when the value is
+more than 60 seconds old. A busy session generates roughly one
+write per minute, and the idle-timeout granularity stays
+meaningful (a few-minutes timeout still reflects actual usage).
+The throttle constant is `core::session::LAST_USED_AT_THROTTLE_SECS`.
+
+### Added
+
+#### Migration 0018: schema for both knobs
+
+- `sessions.last_used_at TEXT` — nullable. Existing rows from
+  before the migration get NULL, and the application treats
+  NULL as "as old as `created_at`" — under the new idle-timeout
+  policy, pre-migration sessions get the same treatment as a
+  brand-new session that has not yet been re-presented.
+- `idx_sessions_user_active` — partial index on
+  `(user_id, created_at) WHERE revoked_at IS NULL`. Backs both
+  the per-user active-count query (cap enforcement) and the
+  oldest-active query (FIFO eviction).
+- `server_settings.idle_session_timeout_secs INTEGER NOT NULL
+  DEFAULT 0 CHECK (>= 0)` — `0` means feature off.
+  Application-validated in range `[0, 30 * 86400]` (30 days)
+  so a fat-fingered config does not silently exceed the
+  absolute `expires_at` ceiling.
+- `server_settings.max_concurrent_sessions INTEGER NOT NULL
+  DEFAULT 0 CHECK (>= 0)` — `0` means cap disabled.
+  Application-validated in range `[0, 1000]`.
+- `MAX_SCHEMA_VERSION` rolls to 18.
+
+#### Storage
+
+- `SessionRow.last_used_at: Option<DateTime<Utc>>`.
+- `ServerSettingsRow.idle_session_timeout_secs / max_concurrent_sessions`.
+- `repos::sessions::touch_last_used(db, id, at)` — backing the
+  throttled per-request write.
+- `repos::sessions::count_active_for_user(db, user_id, now)` —
+  cap-enforcement count.
+- `repos::sessions::oldest_active_for_user(db, user_id, now,
+  limit)` — FIFO selection.
+- `repos::server_settings::update_idle_session_timeout(db,
+  secs, now)`.
+- `repos::server_settings::update_max_concurrent_sessions(db,
+  cap, now)`.
+
+#### Core
+
+- `core::session::resolve` now also checks
+  `now - last_used_at(or created_at) > idle_session_timeout_secs`
+  when the timeout is non-zero. Past the window: revoke the row
+  in-place (best-effort) and return `Unauthenticated`. Falls
+  back to `created_at` when `last_used_at` is `NULL` — the
+  conservative choice for pre-migration sessions.
+- `core::session::touch_last_used(db, clock, id)` — public
+  function called from each authenticated extractor. Throttled:
+  a session whose `last_used_at` is newer than
+  `LAST_USED_AT_THROTTLE_SECS` (= 60) is not re-written.
+- `core::session::enforce_concurrent_session_cap(db, clock,
+  user_id)` (`pub(crate)`) — best-effort post-insert eviction.
+  Called from `login`, `mfa::verify_pending` (TOTP and recovery
+  paths), and the WebAuthn-finishing variant. Failures here do
+  not block the user from signing in; at worst the cap is
+  briefly exceeded until the next login.
+- `core::time::MockClock` — fixed-time `Clock` for deterministic
+  tests of time-sensitive policies.
+
+#### HTTP
+
+- `CurrentUser`, `SessionContext`, and `CurrentAdminJson`
+  extractors now call `session::touch_last_used` after
+  `session::resolve` succeeds. `CurrentAdmin` is composed on
+  top of `CurrentUser`, so it inherits the touch.
+- `settings::idle_timeout_post` (`POST
+  /admin/settings/security/idle-timeout`) — application bounds
+  `[0, 2_592_000]`.
+- `settings::max_sessions_post` (`POST
+  /admin/settings/security/max-sessions`) — application bounds
+  `[0, 1_000]`.
+
+#### Web
+
+- `SettingsSecurityData` gains `idle_session_timeout_secs`,
+  `max_concurrent_sessions`, and `csrf_token`.
+- `render_settings_security` adds a bilingual "セッション制限 /
+  Session limits" section with two number-input forms and
+  inline help text spelling out the disabled-on-zero semantics
+  and the FIFO behaviour at cap-exceed.
+
+### Tests
+
+- 8 new lib unit tests in `core::session::session_limit_tests`:
+  - `resolve_passes_when_idle_timeout_disabled`
+  - `resolve_revokes_after_idle_window`
+  - `resolve_passes_within_idle_window`
+  - `resolve_treats_null_last_used_at_as_created_at`
+  - `touch_last_used_throttles_within_window`
+  - `touch_last_used_writes_when_stale`
+  - `enforce_cap_does_nothing_when_cap_zero`
+  - `enforce_cap_evicts_oldest_in_fifo_order`
+- 6 new e2e tests:
+  - `session_no_idle_timeout_when_disabled`
+  - `session_idle_timeout_revokes_after_window`
+  - `session_cap_evicts_oldest_in_fifo`
+  - `session_cap_disabled_keeps_all_sessions`
+  - `admin_settings_security_idle_timeout_change`
+  - `admin_settings_security_max_sessions_change`
+- All existing e2e (120+) and lib tests (184) continue to pass.
+
+### Notes — interaction with step-up freshness
+
+The v0.21.x step-up freshness check (`is_fresh`) is independent
+of the v0.25.0 idle timeout. A session can be inside its idle
+window (recently presented) but outside its step-up freshness
+window, and vice versa. Both checks have to pass for a
+sensitive action to proceed. This is intentional: idle timeout
+is "have you been here recently", step-up freshness is "have
+you re-proven a strong factor recently".
+
+### Notes — last_used_at and OAuth refresh tokens
+
+The idle timeout applies only to UI cookie sessions (the
+`sessions` table). OAuth refresh tokens have their own lifetime
+machinery (`refresh_tokens.expires_at`, rotation, theft
+detection) and are not retroactively gated by idle timeout
+here. A refresh-token client that has been silent for an hour
+keeps working as long as the token itself is still valid.
+
 ## [0.24.0] - 2026-05-04
 
 Pwned Passwords (HIBP) breach check. Adds an optional pre-acceptance

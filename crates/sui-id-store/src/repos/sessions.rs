@@ -26,18 +26,20 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<SessionRow> {
         revoked_at: row.get::<_, Option<DateTime<Utc>>>(4)?,
         auth_methods,
         last_step_up_at: row.get::<_, Option<DateTime<Utc>>>(6)?,
+        last_used_at: row.get::<_, Option<DateTime<Utc>>>(7)?,
     })
 }
 
 const SELECT_COLS: &str =
-    "id, user_id, expires_at, created_at, revoked_at, auth_methods, last_step_up_at";
+    "id, user_id, expires_at, created_at, revoked_at, auth_methods, last_step_up_at, last_used_at";
 
 pub fn insert(db: &Database, s: &SessionRow) -> StoreResult<()> {
     let methods_json = serde_json::to_string(&s.auth_methods)?;
     db.with_conn(|conn| {
         conn.execute(
-            "INSERT INTO sessions(id, user_id, expires_at, created_at, revoked_at, auth_methods, last_step_up_at) \
-             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO sessions(id, user_id, expires_at, created_at, revoked_at, \
+             auth_methods, last_step_up_at, last_used_at) \
+             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             params![
                 s.id.to_string(),
                 s.user_id.to_string(),
@@ -46,6 +48,7 @@ pub fn insert(db: &Database, s: &SessionRow) -> StoreResult<()> {
                 s.revoked_at,
                 methods_json,
                 s.last_step_up_at,
+                s.last_used_at,
             ],
         )?;
         Ok(())
@@ -153,5 +156,67 @@ pub fn touch_step_up(
             params![at, id.to_string()],
         )?;
         Ok(())
+    })
+}
+
+/// Update `last_used_at` to `at`. Called by the application layer
+/// from authenticated request handlers, throttled so a busy session
+/// produces at most one UPDATE per minute (see
+/// `core::session::touch_last_used`). A revoked session being
+/// touched is benign.
+pub fn touch_last_used(
+    db: &Database,
+    id: SessionId,
+    at: DateTime<Utc>,
+) -> StoreResult<()> {
+    db.with_conn(|conn| {
+        conn.execute(
+            "UPDATE sessions SET last_used_at = ?1 WHERE id = ?2",
+            params![at, id.to_string()],
+        )?;
+        Ok(())
+    })
+}
+
+/// Count the active (un-expired, un-revoked) sessions for a user
+/// at the given moment. Used by the concurrent-session-cap check
+/// at login time.
+pub fn count_active_for_user(
+    db: &Database,
+    user_id: UserId,
+    now: DateTime<Utc>,
+) -> StoreResult<i64> {
+    db.with_conn(|conn| {
+        let n: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM sessions \
+             WHERE user_id = ?1 AND revoked_at IS NULL AND expires_at > ?2",
+            params![user_id.to_string(), now],
+            |row| row.get(0),
+        )?;
+        Ok(n)
+    })
+}
+
+/// Return up to `limit` of the oldest active sessions for a user,
+/// ordered by `created_at` ascending. Drives the FIFO eviction
+/// path: at login time, when the post-insert active count would
+/// exceed the cap by `k`, the application revokes the `k` oldest
+/// rows returned here.
+pub fn oldest_active_for_user(
+    db: &Database,
+    user_id: UserId,
+    now: DateTime<Utc>,
+    limit: i64,
+) -> StoreResult<Vec<SessionRow>> {
+    db.with_conn(|conn| {
+        let mut stmt = conn.prepare(&format!(
+            "SELECT {SELECT_COLS} FROM sessions \
+             WHERE user_id = ?1 AND revoked_at IS NULL AND expires_at > ?2 \
+             ORDER BY created_at ASC LIMIT ?3"
+        ))?;
+        let rows = stmt
+            .query_map(params![user_id.to_string(), now, limit], map)?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
     })
 }

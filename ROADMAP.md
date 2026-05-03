@@ -391,6 +391,31 @@ rather than new auth primitives.
   redemption) and an admin-settings UI for the mode are
   scheduled in the "HIBP scope expansion" entry under Medium
   term.
+- Idle session timeout and concurrent session cap (v0.25.0).
+  Two adjacent self-hardening knobs over the existing UI-cookie
+  session model. Idle timeout (`server_settings.idle_session_timeout_secs`)
+  invalidates a session that has not been presented for the
+  configured number of seconds; concurrent cap
+  (`server_settings.max_concurrent_sessions`) limits a user to
+  N simultaneous active sessions, evicting the oldest in FIFO
+  order when a new login would exceed the cap. Both default to
+  `0` (= disabled). The "most recent presentation" timestamp is
+  written through a 60-second throttle so a busy session does
+  not generate one DB write per HTTP request. Migration 0018
+  adds `sessions.last_used_at`, the partial index
+  `idx_sessions_user_active`, and the two settings columns; all
+  three SessionRow construction sites pick up the new field.
+  Idle-timeout enforcement lives inside `session::resolve` (best-
+  effort revoke before refusing); concurrent-cap eviction lives
+  in `enforce_concurrent_session_cap`, called from `login`,
+  both `mfa::verify_pending` paths, and the WebAuthn finisher.
+  The step-up freshness check (v0.21.x) is independent of the
+  idle timeout — both must pass for sensitive actions; idle =
+  "have you been here recently", step-up = "have you re-proven
+  a strong factor recently". An admin tab on
+  `/admin/settings/security` exposes both knobs with bilingual
+  inline help spelling out the disabled-on-zero semantics and
+  the FIFO behaviour.
 
 ## Explicitly **not** on the roadmap
 

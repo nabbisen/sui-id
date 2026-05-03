@@ -82,6 +82,10 @@ const MIGRATIONS: &[Migration] = &[
         version: 17,
         sql: include_str!("./migrations/0017_hibp_mode.sql"),
     },
+    Migration {
+        version: 18,
+        sql: include_str!("./migrations/0018_session_limits.sql"),
+    },
 ];
 
 /// The highest schema version this build of sui-id-store knows how to

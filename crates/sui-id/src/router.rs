@@ -149,6 +149,14 @@ pub fn build_router(app: AppState) -> Router {
             get(crate::handlers::settings::security_get),
         )
         .route(
+            "/admin/settings/security/idle-timeout",
+            post(crate::handlers::settings::idle_timeout_post),
+        )
+        .route(
+            "/admin/settings/security/max-sessions",
+            post(crate::handlers::settings::max_sessions_post),
+        )
+        .route(
             "/admin/settings/authentication",
             get(crate::handlers::settings::authentication_get),
         )

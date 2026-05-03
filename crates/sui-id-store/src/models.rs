@@ -118,6 +118,16 @@ pub struct SessionRow {
     /// authentication, or the row predates the v0.20.0 migration —
     /// either way the freshness check refuses.
     pub last_step_up_at: Option<DateTime<Utc>>,
+    /// Most recent moment at which this session was presented in
+    /// an authenticated request. Backs the v0.25.0 idle-session
+    /// timeout — when `now - last_used_at >
+    /// idle_session_timeout_secs` (and the timeout is non-zero),
+    /// `session::resolve` revokes the row before returning. The
+    /// column is `NULL` for rows from before migration 0018 and
+    /// for sessions that have never been re-presented; the
+    /// application treats `NULL` as "as old as `created_at`",
+    /// which is the conservative choice.
+    pub last_used_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone)]
@@ -380,6 +390,17 @@ pub struct ServerSettingsRow {
     pub default_lang: String,
     /// Pwned Passwords check mode. See [`HibpMode`].
     pub hibp_mode: HibpMode,
+    /// Idle-session-timeout, in seconds. `0` means the feature is
+    /// disabled (sessions only expire at their `expires_at`).
+    /// Application-validated to be in `[0, 30 * 86400]` so a
+    /// fat-fingered value does not silently exceed the absolute
+    /// session ceiling.
+    pub idle_session_timeout_secs: i64,
+    /// Maximum simultaneous active sessions per user. `0` means
+    /// the cap is disabled. When non-zero, a new login that would
+    /// exceed the cap evicts the oldest existing session (FIFO).
+    /// Application-validated to be in `[0, 1000]`.
+    pub max_concurrent_sessions: i64,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }

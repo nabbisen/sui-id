@@ -34,12 +34,16 @@ fn map_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ServerSettingsRow> {
     Ok(ServerSettingsRow {
         default_lang: row.get(1)?,
         hibp_mode,
-        created_at: row.get::<_, DateTime<Utc>>(3)?,
-        updated_at: row.get::<_, DateTime<Utc>>(4)?,
+        idle_session_timeout_secs: row.get(3)?,
+        max_concurrent_sessions: row.get(4)?,
+        created_at: row.get::<_, DateTime<Utc>>(5)?,
+        updated_at: row.get::<_, DateTime<Utc>>(6)?,
     })
 }
 
-const SELECT_COLUMNS: &str = "id, default_lang, hibp_mode, created_at, updated_at";
+const SELECT_COLUMNS: &str = "id, default_lang, hibp_mode, \
+                              idle_session_timeout_secs, max_concurrent_sessions, \
+                              created_at, updated_at";
 
 /// Fetch the singleton server-settings row. Migration 0016 inserts
 /// the default row, so post-migration this never returns NotFound.
@@ -88,6 +92,51 @@ pub fn update_hibp_mode(
         let n = conn.execute(
             "UPDATE server_settings SET hibp_mode = ?1, updated_at = ?2 WHERE id = ?3",
             params![mode.as_str(), now, SINGLETON_ID],
+        )?;
+        if n == 0 {
+            Err(StoreError::NotFound)
+        } else {
+            Ok(())
+        }
+    })
+}
+
+/// Update the idle-session-timeout value, in seconds. `0` means
+/// the feature is disabled. Application-layer validation should
+/// pin the value to an operationally sensible range before
+/// calling.
+pub fn update_idle_session_timeout(
+    db: &Database,
+    secs: i64,
+    now: DateTime<Utc>,
+) -> StoreResult<()> {
+    db.with_conn(|conn| {
+        let n = conn.execute(
+            "UPDATE server_settings SET idle_session_timeout_secs = ?1, \
+             updated_at = ?2 WHERE id = ?3",
+            params![secs, now, SINGLETON_ID],
+        )?;
+        if n == 0 {
+            Err(StoreError::NotFound)
+        } else {
+            Ok(())
+        }
+    })
+}
+
+/// Update the concurrent-session cap. `0` means no cap. The
+/// application enforces FIFO eviction at login time when the
+/// resulting count would exceed this.
+pub fn update_max_concurrent_sessions(
+    db: &Database,
+    cap: i64,
+    now: DateTime<Utc>,
+) -> StoreResult<()> {
+    db.with_conn(|conn| {
+        let n = conn.execute(
+            "UPDATE server_settings SET max_concurrent_sessions = ?1, \
+             updated_at = ?2 WHERE id = ?3",
+            params![cap, now, SINGLETON_ID],
         )?;
         if n == 0 {
             Err(StoreError::NotFound)

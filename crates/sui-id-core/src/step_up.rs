@@ -478,6 +478,7 @@ mod tests {
                 revoked_at: None,
                 auth_methods: vec![sui_id_shared::AuthMethod::Pwd],
                 last_step_up_at: None,
+                last_used_at: None,
             },
         )
         .expect("insert");
@@ -501,6 +502,7 @@ mod tests {
                 revoked_at: None,
                 auth_methods: vec![sui_id_shared::AuthMethod::Pwd],
                 last_step_up_at: None,
+                last_used_at: None,
             },
         )
         .expect("insert session");

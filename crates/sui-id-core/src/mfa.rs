@@ -240,8 +240,10 @@ pub fn verify_pending(
         // immediately ask the user to re-prove themselves on a
         // session that's seconds old.
         last_step_up_at: Some(now),
+            last_used_at: None,
     };
     sessions::insert(db, &session)?;
+    crate::session::enforce_concurrent_session_cap(db, clock, session.user_id);
     let _ = login_pending_mfa::delete(db, pending_id);
     Ok(session)
 }
@@ -287,8 +289,10 @@ pub fn verify_pending_webauthn(
         ],
         // Phishing-resistant step-up just succeeded.
         last_step_up_at: Some(now),
+            last_used_at: None,
     };
     sessions::insert(db, &session)?;
+    crate::session::enforce_concurrent_session_cap(db, clock, session.user_id);
     let _ = login_pending_mfa::delete(db, pending_id);
     Ok(session)
 }

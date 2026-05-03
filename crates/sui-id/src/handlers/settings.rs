@@ -100,25 +100,85 @@ pub async fn security_get(
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
     let cfg = app.config.as_ref();
+    let server_settings = sui_id_store::repos::server_settings::get(&app.db)
+        .map_err(|e| HttpError::html(CoreError::from(e)))?;
+    let token = csrf::ensure_token(&jar);
     let data = sui_id_web::SettingsSecurityData {
         max_lockout_label: cfg.security.max_lockout.label().to_owned(),
-        // Security headers are unconditionally on for admin
-        // responses; `/oauth2/*` deliberately omits some so SDKs
-        // can read JSON cross-origin. Surface the policy plainly.
         hsts_enabled: cfg.server.cookie_secure,
         csp_enabled: true,
         x_frame_deny: true,
         permissions_policy_minimal: true,
-        // CORS allowlist for the token endpoint is built dynamically
-        // from registered redirect_uris, so there's nothing to show
-        // here except the fact.
         cors_token_dynamic_from_clients: true,
         cors_public_endpoints_open: true,
+        idle_session_timeout_secs: server_settings.idle_session_timeout_secs,
+        max_concurrent_sessions: server_settings.max_concurrent_sessions,
+        csrf_token: token.clone(),
     };
-    let token = csrf::ensure_token(&jar);
     let html = sui_id_web::render_settings_security(data, None);
     let resp = Html(html).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
+}
+
+/// POST /admin/settings/security/idle-timeout
+///
+/// Update `server_settings.idle_session_timeout_secs`.
+/// Application bounds: `[0, 30 * 86400]`.
+#[derive(Debug, serde::Deserialize)]
+pub struct IdleTimeoutForm {
+    #[serde(rename = "_csrf", default)]
+    pub csrf: String,
+    pub secs: i64,
+}
+
+pub async fn idle_timeout_post(
+    state_ext: AppStateExt,
+    CurrentAdmin(_admin_id): CurrentAdmin,
+    jar: CookieJar,
+    axum::Form(form): axum::Form<IdleTimeoutForm>,
+) -> Result<Response, HttpError> {
+    let State(app) = state_ext;
+    crate::handlers::enforce_csrf(&jar, Some(&form.csrf))?;
+    const MAX: i64 = 30 * 86400;
+    if !(0..=MAX).contains(&form.secs) {
+        return Err(HttpError::html(CoreError::BadRequest(
+            "idle_session_timeout_secs out of range".into(),
+        )));
+    }
+    let now = app.clock.now();
+    sui_id_store::repos::server_settings::update_idle_session_timeout(&app.db, form.secs, now)
+        .map_err(|e| HttpError::html(CoreError::from(e)))?;
+    Ok(axum::response::Redirect::to("/admin/settings/security").into_response())
+}
+
+/// POST /admin/settings/security/max-sessions
+///
+/// Update `server_settings.max_concurrent_sessions`.
+/// Application bounds: `[0, 1000]`.
+#[derive(Debug, serde::Deserialize)]
+pub struct MaxSessionsForm {
+    #[serde(rename = "_csrf", default)]
+    pub csrf: String,
+    pub cap: i64,
+}
+
+pub async fn max_sessions_post(
+    state_ext: AppStateExt,
+    CurrentAdmin(_admin_id): CurrentAdmin,
+    jar: CookieJar,
+    axum::Form(form): axum::Form<MaxSessionsForm>,
+) -> Result<Response, HttpError> {
+    let State(app) = state_ext;
+    crate::handlers::enforce_csrf(&jar, Some(&form.csrf))?;
+    if !(0..=1000).contains(&form.cap) {
+        return Err(HttpError::html(CoreError::BadRequest(
+            "max_concurrent_sessions out of range".into(),
+        )));
+    }
+    let now = app.clock.now();
+    sui_id_store::repos::server_settings::update_max_concurrent_sessions(&app.db, form.cap, now)
+        .map_err(|e| HttpError::html(CoreError::from(e)))?;
+    Ok(axum::response::Redirect::to("/admin/settings/security").into_response())
 }
 
 // ---------- 認証 ----------

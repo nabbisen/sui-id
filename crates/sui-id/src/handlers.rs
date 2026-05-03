@@ -144,6 +144,13 @@ where
         let id = SessionId::from_str(raw.value())
             .map_err(|_| HttpError::html(CoreError::Unauthenticated))?;
         let user_id = session::resolve(&app.db, &app.clock, id).map_err(HttpError::html)?;
+        // Refresh the session's `last_used_at` so the v0.25.0
+        // idle-timeout check has an accurate reference. Throttled
+        // by the core layer (~one DB write per minute per
+        // session); failures here do not affect auth — at worst
+        // the row stays at its previous value and the next
+        // request retries.
+        let _ = session::touch_last_used(&app.db, &app.clock, id);
         Ok(CurrentUser(user_id))
     }
 }
@@ -175,6 +182,7 @@ where
         let id = SessionId::from_str(raw.value())
             .map_err(|_| HttpError::html(CoreError::Unauthenticated))?;
         let user_id = session::resolve(&app.db, &app.clock, id).map_err(HttpError::html)?;
+        let _ = session::touch_last_used(&app.db, &app.clock, id);
         Ok(SessionContext {
             user_id,
             session_id: id,
@@ -223,6 +231,7 @@ where
         let id = SessionId::from_str(raw.value())
             .map_err(|_| HttpError::api(CoreError::Unauthenticated))?;
         let uid = session::resolve(&app.db, &app.clock, id).map_err(HttpError::api)?;
+        let _ = session::touch_last_used(&app.db, &app.clock, id);
         let user = users::get(&app.db, uid).map_err(|_| HttpError::api(CoreError::Forbidden))?;
         if !user.is_admin || user.is_disabled || user.is_deleted {
             return Err(HttpError::api(CoreError::Forbidden));
