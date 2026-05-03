@@ -5,6 +5,176 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.0] - 2026-05-04
+
+Pwned Passwords (HIBP) breach check. Adds an optional pre-acceptance
+check that asks the public Pwned Passwords API whether a candidate
+password has shown up in known data breaches. Used at the setup-
+wizard admin-creation step in this release; other entry points
+(self-service password change, admin reset, forgot-password
+redemption) get the same treatment in v0.24.x patches per the
+ROADMAP "HIBP scope expansion" entry.
+
+### Why this design
+
+#### k-anonymity, not "send the hash"
+
+The naive "send the password and ask" is obviously wrong. Even
+sending the SHA-1 hash is dangerous: SHA-1 is small enough that
+HIBP could (and would) be a plaintext oracle for popular
+passwords.
+
+The Pwned Passwords API is built around k-anonymity: the client
+SHA-1s the candidate, sends only the first 5 hex characters of
+the hash (the *prefix*), receives a list of matching `<35-char
+suffix>:<count>` pairs (hundreds per prefix), and looks up its
+own suffix locally. sui-id never sends the password, never sends
+the full hash, and never logs the SHA-1 anywhere. The only thing
+on the wire is the 5-character prefix, shared by tens of thousands
+of distinct passwords.
+
+We also send `Add-Padding: true` so HIBP pads responses to a
+uniform size, defending against traffic-analysis attacks that
+infer the queried prefix from response length.
+
+#### Three operational modes
+
+Operators run sui-id everywhere from "fully internet-connected
+production" to "air-gapped". A single hard-coded behaviour can't
+fit all of these, so the check has three modes stored in the
+singleton `server_settings` row:
+
+- `'off'`: no check, no outbound request. The right setting for
+  offline / air-gapped deployments and policies that ban
+  third-party API calls.
+- `'warn'`: check is performed; a hit is logged at `warn` level
+  but the password is accepted. Default at install time —
+  operators get visibility without the flow breaking on the
+  first encounter with a flaky external API.
+- `'block'`: a hit refuses the password with a friendly error.
+
+#### Fail-open
+
+When the HIBP request itself fails (timeout, DNS, TLS, 5xx), the
+policy is to *let the password through* regardless of mode
+(including `block`). The audit trail records the failure so an
+operator can investigate, but a flaky external service must not
+be allowed to lock an admin out of password operations. This
+trade-off is documented in migration 0017's comment and pinned
+by the test
+`setup_wizard_fails_open_when_hibp_unavailable_in_block_mode`.
+
+#### Why `ureq` rather than `reqwest`
+
+We chose the synchronous `ureq` over the async `reqwest` for
+three reasons:
+
+- Cold path. The call site is one GET per password set, and at
+  v0.24.0 only at setup-wizard time. The benefit of async would
+  be drowned in the size and complexity it brings.
+- Smaller dependency surface. `ureq`'s rustls integration matches
+  the `wasm-smtp-tokio` rustls already in our tree without
+  pulling tokio's networking stack a second time.
+- Readability. The `ureq` request is short and direct; an async
+  equivalent would need `tokio::task::spawn_blocking` either way
+  to keep the axum runtime free, so async would buy us nothing
+  but more code.
+
+The `ureq` call is wrapped in `tokio::task::spawn_blocking` at
+the HTTP-handler call site so the runtime is not stalled on
+network I/O.
+
+### Added
+
+#### Migration 0017: `server_settings.hibp_mode`
+
+`ALTER TABLE server_settings ADD COLUMN hibp_mode TEXT NOT NULL
+DEFAULT 'warn' CHECK (hibp_mode IN ('off', 'warn', 'block'))`.
+The CHECK is enumerated (unlike `users.preferred_lang`) because
+the set is fixed by the application; rejecting a stale value at
+the DB layer keeps a typo in a hand-edited DB from silently
+treating "of" as "off". `MAX_SCHEMA_VERSION` rolls to 17.
+
+#### Crate `sui-id-core`
+
+- `models::HibpMode` enum (`Off | Warn | Block`) with `as_str()`,
+  `parse()`, `Default = Warn`.
+- `core::hibp` module:
+  - `HibpClient` trait — object-safe, single `check(&self, password)
+    -> HibpCheckOutcome`. Sync method; the impl is responsible for
+    converting any I/O / parse failure into `Unavailable` rather
+    than propagating errors.
+  - `HttpHibpClient` — production impl using `ureq`, talks to
+    `api.pwnedpasswords.com/range/{prefix}` with `Add-Padding`,
+    5-second connect/read timeouts, `User-Agent: sui-id/{version}`.
+    SHA-1 hex is `zeroize`d before return.
+  - `parse_response(body, suffix)` — pure parser, exposed for
+    unit tests. Case-insensitive suffix match, count == 0 lines
+    (Add-Padding markers) treated as not-breached.
+  - `enforce_hibp(mode, client, password)` — pure policy
+    function returning `HibpEnforcement::{Allowed,
+    AllowedWithWarning { count }, Blocked { count }}`. Short-
+    circuits on `Off` (no client call) and on `Unavailable`
+    (fail-open, both Warn and Block).
+  - `enforce_hibp_or_reject(...)` — convenience wrapper that
+    converts `Blocked` into `CoreError::BadRequest`.
+- `core::hibp::test_support::InMemoryHibpClient` (gated on
+  `feature = "test-support"`) — deterministic stub for tests.
+  `set_breached(pw, count)` and `set_unavailable(pw)` plan its
+  responses; unconfigured passwords return `NotBreached`.
+
+#### Storage
+
+- `repos::server_settings::update_hibp_mode(db, mode, now)`.
+- `ServerSettingsRow.hibp_mode: HibpMode`.
+
+#### HTTP
+
+- `AppState.hibp_client: Arc<dyn HibpClient>`. Production
+  constructs `HttpHibpClient`; tests inject `InMemoryHibpClient`.
+  The field is unconditional even when `hibp_mode = off` — the
+  cost is one Arc clone, and keeping the field unconditional
+  avoids a mode-checked match at every dispatch site.
+- `AppState::new(... mailer, hibp_client)` gains the new param.
+- `setup::admin_post` performs the HIBP check between the
+  password-mismatch check and the `setup::create_initial_admin`
+  call. Block-mode rejection re-renders the form with a
+  Japanese flash message; Warn-mode hits log at `warn` level;
+  Off-mode short-circuits before the HTTP request.
+
+### Tests
+
+- 12 new lib unit tests in `core::hibp` covering parse-response
+  (match, no match, padding, case-insensitivity), policy
+  (Off skips, Warn allows-with-warning, Block rejects, Allowed
+  on clean, fail-open on Unavailable in both Warn and Block),
+  and the `enforce_hibp_or_reject` rejection shape.
+- 6 new e2e tests covering each path through the setup wizard:
+  - `setup_wizard_accepts_clean_password_in_warn_mode`
+  - `setup_wizard_accepts_breached_password_in_warn_mode`
+  - `setup_wizard_rejects_breached_password_in_block_mode`
+  - `setup_wizard_accepts_clean_password_in_block_mode`
+  - `setup_wizard_off_mode_skips_check`
+  - `setup_wizard_fails_open_when_hibp_unavailable_in_block_mode`
+- All existing e2e (120+) and lib tests (176) continue to pass.
+
+### Notes — admin UI for the setting
+
+There is no admin UI for `hibp_mode` at v0.24.0; the field is
+edited via direct DB write or via the `repos::server_settings::update_hibp_mode`
+API in `core`. An admin-settings UI for HIBP, alongside the
+existing Email tab, lands in v0.24.x as part of the scope
+expansion entry.
+
+### Notes — what about caching
+
+We deliberately do *not* cache HIBP responses. The API responses
+are k-anonymity sets that update as new breaches are catalogued,
+and even the SHA-1 hex of the first 5 chars is sensitive enough
+that we'd rather not persist anything HIBP-related to disk. The
+production call rate is low (one GET per password set) so caching
+is not a performance need.
+
 ## [0.23.0] - 2026-05-03
 
 Multilingual support v1. Adds Japanese ↔ English UI selection

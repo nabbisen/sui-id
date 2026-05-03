@@ -16,9 +16,9 @@ readme = "README.md"
 workspace = true
 
 [dependencies]
-sui-id-shared = { version = "0.23.0", path = "../sui-id-shared" }
-sui-id-store  = { version = "0.23.0", path = "../sui-id-store" }
-sui-id-i18n   = { version = "0.23.0", path = "../sui-id-i18n" }
+sui-id-shared = { version = "0.24.0", path = "../sui-id-shared" }
+sui-id-store  = { version = "0.24.0", path = "../sui-id-store" }
+sui-id-i18n   = { version = "0.24.0", path = "../sui-id-i18n" }
 
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -46,7 +46,15 @@ wasm-smtp = { workspace = true }
 wasm-smtp-tokio = { workspace = true }
 mail-builder = { workspace = true }
 tokio = { workspace = true }
+ureq = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
 tempfile = { workspace = true }
+
+[features]
+default = []
+# Exposes deterministic in-memory implementations of the
+# `HibpClient` and `MailSender` traits so downstream test code
+# (sui-id e2e) can inject them into the AppState.
+test-support = []

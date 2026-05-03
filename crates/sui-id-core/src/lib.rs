@@ -31,5 +31,6 @@ pub mod events;
 pub mod mail;
 pub mod forgot_password;
 pub mod i18n;
+pub mod hibp;
 
 pub use errors::{CoreError, CoreResult};

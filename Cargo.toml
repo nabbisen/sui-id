@@ -10,7 +10,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.23.0"
+version = "0.24.0"
 edition = "2024"
 rust-version = "1.91"
 license = "Apache-2.0"
@@ -96,6 +96,18 @@ percent-encoding = "2.3"
 wasm-smtp = { version = "0.9", features = ["mail-builder"] }
 wasm-smtp-tokio = "0.9"
 mail-builder = "0.4"
+
+# Outbound HTTP — used for the optional Pwned Passwords (HIBP)
+# breach check. We pick `ureq` over `reqwest` here for three
+# reasons: the call site is a cold path (one GET per password
+# set, only at setup-wizard time as of v0.24.0), the request is
+# trivial enough that the synchronous API is more readable than
+# an async one, and `ureq` brings in `rustls` already in our
+# tree (via wasm-smtp-tokio) without pulling tokio's networking
+# stack a second time. The blocking call is wrapped in
+# `tokio::task::spawn_blocking` at the call site so it doesn't
+# stall the axum runtime.
+ureq = { version = "2.10", default-features = false, features = ["tls"] }
 
 # UI (Leptos used in SSR-only mode for the admin panel; no WASM/JS bundle is shipped
 #  in line with the project's minimal-runtime philosophy).

@@ -124,6 +124,57 @@ pub async fn admin_post(
             .into_response());
     }
 
+    // Pwned Passwords (HIBP) check — see migration 0017.
+    //
+    // The setup wizard runs once at install time, so this is the
+    // single entry point at v0.24.0 (other password-set entry
+    // points are scheduled in the ROADMAP scope-expansion entry).
+    // The check is short-circuited when mode is `off`. The HTTP
+    // request is synchronous via `ureq`; we wrap it in
+    // `spawn_blocking` so the axum runtime is not stalled on
+    // network I/O.
+    let hibp_settings = sui_id_store::repos::server_settings::get(&app.db)
+        .map_err(|e| HttpError::html(sui_id_core::errors::CoreError::from(e)))?;
+    let hibp_mode = hibp_settings.hibp_mode;
+    if hibp_mode != sui_id_store::models::HibpMode::Off {
+        let client = app.hibp_client.clone();
+        let pw_for_check = form.password.clone();
+        let outcome = tokio::task::spawn_blocking(move || {
+            sui_id_core::hibp::enforce_hibp(hibp_mode, Some(client.as_ref()), &pw_for_check)
+        })
+        .await
+        .map_err(|_| {
+            HttpError::html(sui_id_core::errors::CoreError::Internal)
+        })?;
+        match outcome {
+            sui_id_core::hibp::HibpEnforcement::Allowed => {}
+            sui_id_core::hibp::HibpEnforcement::AllowedWithWarning { count } => {
+                tracing::warn!(
+                    count,
+                    "setup-wizard admin password was found in HIBP breaches; \
+                     accepted because hibp_mode = warn"
+                );
+                // No audit row at the setup-wizard stage: there
+                // is no actor to attribute to and the audit
+                // chain has no genesis row yet (it gets seeded
+                // by the very admin we're about to create).
+            }
+            sui_id_core::hibp::HibpEnforcement::Blocked { count: _ } => {
+                let flash = Flash {
+                    kind: FlashKind::Warn,
+                    text: "このパスワードは過去のデータ漏洩で確認されています。\
+                           別のものを選んでください。"
+                        .into(),
+                };
+                return Ok((
+                    axum::http::StatusCode::BAD_REQUEST,
+                    Html(render_setup_admin(Some(flash))),
+                )
+                    .into_response());
+            }
+        }
+    }
+
     let display = trimmed_or_none(&form.display_name);
     let email = trimmed_or_none(&form.email);
 

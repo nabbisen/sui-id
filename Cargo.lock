@@ -2517,6 +2517,7 @@ dependencies = [
  "aws-lc-rs",
  "log",
  "once_cell",
+ "ring",
  "rustls-pki-types",
  "rustls-webpki",
  "subtle",
@@ -2938,7 +2939,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "sui-id"
-version = "0.23.0"
+version = "0.24.0"
 dependencies = [
  "anyhow",
  "argon2",
@@ -2984,7 +2985,7 @@ dependencies = [
 
 [[package]]
 name = "sui-id-core"
-version = "0.23.0"
+version = "0.24.0"
 dependencies = [
  "argon2",
  "base64ct",
@@ -3008,6 +3009,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tracing",
+ "ureq",
  "url",
  "uuid",
  "wasm-smtp",
@@ -3018,14 +3020,14 @@ dependencies = [
 
 [[package]]
 name = "sui-id-i18n"
-version = "0.23.0"
+version = "0.24.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "sui-id-shared"
-version = "0.23.0"
+version = "0.24.0"
 dependencies = [
  "chrono",
  "serde",
@@ -3036,7 +3038,7 @@ dependencies = [
 
 [[package]]
 name = "sui-id-store"
-version = "0.23.0"
+version = "0.24.0"
 dependencies = [
  "base64ct",
  "chacha20poly1305",
@@ -3060,7 +3062,7 @@ dependencies = [
 
 [[package]]
 name = "sui-id-web"
-version = "0.23.0"
+version = "0.24.0"
 dependencies = [
  "chrono",
  "leptos",
@@ -3565,6 +3567,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
+name = "ureq"
+version = "2.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "02d1a66277ed75f640d608235660df48c8e3c19f3b4edb6a263315626cc3c01d"
+dependencies = [
+ "base64 0.22.1",
+ "log",
+ "once_cell",
+ "rustls",
+ "rustls-pki-types",
+ "url",
+ "webpki-roots 0.26.11",
+]
+
+[[package]]
 name = "url"
 version = "2.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3889,6 +3906,24 @@ dependencies = [
  "serde",
  "serde_json",
  "url",
+]
+
+[[package]]
+name = "webpki-roots"
+version = "0.26.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "521bc38abb08001b01866da9f51eb7c5d647a19260e00054a8c7fd5f9e57f7a9"
+dependencies = [
+ "webpki-roots 1.0.7",
+]
+
+[[package]]
+name = "webpki-roots"
+version = "1.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52f5ee44c96cf55f1b349600768e3ece3a8f26010c05265ab73f945bb1a2eb9d"
+dependencies = [
+ "rustls-pki-types",
 ]
 
 [[package]]

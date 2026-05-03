@@ -52,7 +52,12 @@ fn test_app_with_mailer() -> (AppState, std::sync::Arc<sui_id_core::mail::InMemo
     };
     let mailer = std::sync::Arc::new(sui_id_core::mail::InMemoryMailSender::new());
     let mailer_dyn: std::sync::Arc<dyn sui_id_core::mail::MailSender> = mailer.clone();
-    let state = AppState::new(db, cfg, SETUP_TOKEN.into(), mailer_dyn);
+    // Default HIBP client for tests is a clean (no-breach) in-memory
+    // stub. Tests that want to assert breach behaviour use
+    // `test_app_with_hibp` instead.
+    let hibp_client: std::sync::Arc<dyn sui_id_core::hibp::HibpClient> =
+        std::sync::Arc::new(sui_id_core::hibp::test_support::InMemoryHibpClient::new());
+    let state = AppState::new(db, cfg, SETUP_TOKEN.into(), mailer_dyn, hibp_client);
     (state, mailer)
 }
 
@@ -864,7 +869,9 @@ async fn backup_then_restore_preserves_users_and_clients() {
     };
     let mailer: std::sync::Arc<dyn sui_id_core::mail::MailSender> =
         std::sync::Arc::new(sui_id_core::mail::InMemoryMailSender::new());
-    let state = sui_id::AppState::new(db, cfg_src.clone(), SETUP_TOKEN.into(), mailer);
+    let hibp_client: std::sync::Arc<dyn sui_id_core::hibp::HibpClient> =
+        std::sync::Arc::new(sui_id_core::hibp::test_support::InMemoryHibpClient::new());
+    let state = sui_id::AppState::new(db, cfg_src.clone(), SETUP_TOKEN.into(), mailer, hibp_client);
     let session = complete_setup_and_login(&state).await;
     let (client_id, _secret) = create_client(&state, &session).await;
 
@@ -5679,4 +5686,158 @@ async fn enable_smtp_with_inmemory_mailer(state: &AppState) {
         },
     )
     .expect("smtp upsert");
+}
+
+// ---------- v0.24.0: HIBP password breach check ----------
+
+/// Helper: build an AppState with a pre-programmed
+/// `InMemoryHibpClient`. The mailer is also captured so the test
+/// suite gets the same `(state, mailer)` shape `test_app_with_mailer`
+/// returns; HIBP is the third return so call sites can opt in.
+fn test_app_with_hibp() -> (
+    AppState,
+    std::sync::Arc<sui_id_core::mail::InMemoryMailSender>,
+    std::sync::Arc<sui_id_core::hibp::test_support::InMemoryHibpClient>,
+) {
+    let key = MasterKey::generate();
+    let db = Database::open_in_memory(key).expect("open db");
+    let cfg = Config {
+        server: ServerConfig {
+            listen_addr: "127.0.0.1:0".into(),
+            issuer: "https://idp.test".into(),
+            cookie_secure: false,
+            trusted_proxies: Vec::new(),
+        },
+        storage: StorageConfig {
+            db_path: "/tmp/unused.sqlite".into(),
+            key_file: "/tmp/unused.key".into(),
+        },
+        tokens: TokensConfig::default(),
+        log: LogConfig {
+            format: "fmt".into(),
+            filter: "off".into(),
+        },
+        security: sui_id::config::SecurityConfig::default(),
+    };
+    let mailer = std::sync::Arc::new(sui_id_core::mail::InMemoryMailSender::new());
+    let mailer_dyn: std::sync::Arc<dyn sui_id_core::mail::MailSender> = mailer.clone();
+    let hibp = std::sync::Arc::new(sui_id_core::hibp::test_support::InMemoryHibpClient::new());
+    let hibp_dyn: std::sync::Arc<dyn sui_id_core::hibp::HibpClient> = hibp.clone();
+    let state = AppState::new(db, cfg, SETUP_TOKEN.into(), mailer_dyn, hibp_dyn);
+    (state, mailer, hibp)
+}
+
+/// Set the server-settings `hibp_mode` directly. Tests use this
+/// to flip between modes without going through the (yet-to-be-
+/// added in v0.24.0) admin settings page.
+fn set_hibp_mode(state: &AppState, mode: sui_id_store::models::HibpMode) {
+    sui_id_store::repos::server_settings::update_hibp_mode(
+        &state.db,
+        mode,
+        chrono::Utc::now(),
+    )
+    .expect("update hibp_mode");
+}
+
+/// Default mode is `Warn`; setup wizard accepts a clean password.
+/// The InMemoryHibpClient with no plan returns NotBreached, so
+/// the setup completes normally — same shape as pre-v0.24.0.
+#[tokio::test]
+async fn setup_wizard_accepts_clean_password_in_warn_mode() {
+    let (state, _mailer, _hibp) = test_app_with_hibp();
+    // mode = warn (default).
+    let _session = complete_setup_and_login(&state).await;
+    // Got here = success.
+}
+
+/// In `Warn` mode, a breached password is accepted (the setup
+/// completes) but a tracing warning is emitted at the call site.
+/// We can't easily assert on tracing output from the e2e test, so
+/// we just confirm the happy path still completes when the HIBP
+/// stub flags the password.
+#[tokio::test]
+async fn setup_wizard_accepts_breached_password_in_warn_mode() {
+    let (state, _mailer, hibp) = test_app_with_hibp();
+    // Pre-program the HIBP stub: PASSWORD has been seen 9001 times.
+    hibp.set_breached(PASSWORD, 9001);
+
+    // Setup completes despite the breach hit.
+    let _session = complete_setup_and_login(&state).await;
+}
+
+/// In `Block` mode, a breached password is refused with a 400.
+/// The form re-renders with a flash message. The setup wizard
+/// can be retried with a different (un-breached) password.
+#[tokio::test]
+async fn setup_wizard_rejects_breached_password_in_block_mode() {
+    let (state, _mailer, hibp) = test_app_with_hibp();
+    set_hibp_mode(&state, sui_id_store::models::HibpMode::Block);
+    // Pre-program: the test password is breached.
+    hibp.set_breached(PASSWORD, 12345);
+
+    let resp = build_router(state.clone())
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/setup/admin")
+                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .body(Body::from(format!(
+                    "setup_token={SETUP_TOKEN}&username={USERNAME}&password={pw}\
+                     &confirm_password={pw}&display_name=&email=",
+                    pw = PASSWORD,
+                )))
+                .expect("req"),
+        )
+        .await
+        .expect("setup admin");
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    let bytes = read_body(resp.into_body()).await;
+    let body = std::str::from_utf8(&bytes).expect("utf8");
+    assert!(
+        body.contains("過去のデータ漏洩"),
+        "expected breach flash message, got: {}",
+        &body[..body.len().min(500)]
+    );
+    // No admin row should have been created.
+    let users_count: i64 = state
+        .db
+        .with_conn(|conn| {
+            conn.query_row("SELECT COUNT(*) FROM users", [], |r| r.get(0))
+                .map_err(Into::into)
+        })
+        .expect("count");
+    assert_eq!(users_count, 0);
+}
+
+/// `Block` mode with an unbreached password proceeds normally.
+#[tokio::test]
+async fn setup_wizard_accepts_clean_password_in_block_mode() {
+    let (state, _mailer, _hibp) = test_app_with_hibp();
+    set_hibp_mode(&state, sui_id_store::models::HibpMode::Block);
+    let _session = complete_setup_and_login(&state).await;
+}
+
+/// `Off` mode skips the check entirely, so a "breached" password
+/// in the stub still goes through. Verifies the short-circuit
+/// path (no client call at all).
+#[tokio::test]
+async fn setup_wizard_off_mode_skips_check() {
+    let (state, _mailer, hibp) = test_app_with_hibp();
+    set_hibp_mode(&state, sui_id_store::models::HibpMode::Off);
+    hibp.set_breached(PASSWORD, 999);
+    let _session = complete_setup_and_login(&state).await;
+}
+
+/// Fail-open: when the HIBP API is unavailable (the stub returns
+/// `Unavailable`), `Block` mode lets the password through anyway.
+/// This is the documented policy in migration 0017 — a flaky
+/// external API must not lock an admin out of password setting.
+#[tokio::test]
+async fn setup_wizard_fails_open_when_hibp_unavailable_in_block_mode() {
+    let (state, _mailer, hibp) = test_app_with_hibp();
+    set_hibp_mode(&state, sui_id_store::models::HibpMode::Block);
+    hibp.set_unavailable(PASSWORD);
+    // Setup completes despite Block mode + the would-be-breached
+    // password — fail-open.
+    let _session = complete_setup_and_login(&state).await;
 }

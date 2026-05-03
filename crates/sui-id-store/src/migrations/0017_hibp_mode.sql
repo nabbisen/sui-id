@@ -1,0 +1,62 @@
+-- 0017: HIBP (Have I Been Pwned) password breach check.
+--
+-- v0.24.0 adds an optional pre-acceptance check that asks the
+-- public Pwned Passwords API whether a candidate password has
+-- shown up in known data breaches. The API uses a k-anonymity
+-- scheme — sui-id sends only the first 5 characters of the
+-- SHA-1 hash, never the password itself — so the check is
+-- privacy-preserving by construction.
+--
+-- ## Configuration tier
+--
+-- Operators run sui-id in environments ranging from "fully
+-- internet-connected production" to "fully offline air-gapped"
+-- to "policy says no third-party API calls of any kind". A
+-- single hard-coded behaviour cannot fit all of these, so the
+-- check has three modes, configured in the singleton
+-- `server_settings` row.
+--
+-- - `'off'`     The check is not performed. No outbound
+--               request is made. This is the right setting for
+--               offline / air-gapped deployments and for
+--               environments with strict outbound-traffic
+--               policy.
+-- - `'warn'`    The check is performed; a hit is recorded as
+--               an audit event with the breach count, but the
+--               password is accepted. This is the default —
+--               operators get visibility without breaking the
+--               flow on the first encounter with a flaky
+--               external API.
+-- - `'block'`   The check is performed; a hit refuses the
+--               password with a friendly error pointing the
+--               user at choosing a different one.
+--
+-- ## Fail-open
+--
+-- When the check itself fails (network timeout, DNS failure,
+-- HIBP returning 5xx, TLS handshake error), sui-id treats this
+-- as "no information available" and lets the password through
+-- in *all* modes including `block`. The audit log records the
+-- failure so an operator can investigate, but a flaky external
+-- service must not be allowed to lock an admin out of password
+-- changes. This trades off some assurance for self-host
+-- independence — the right trade for an IdP whose primary
+-- customer is the operator running it.
+--
+-- ## Storage
+--
+-- The setting is added to the existing `server_settings`
+-- singleton row from migration 0016. We do NOT cache HIBP
+-- responses in the DB: the API responses are k-anonymity sets
+-- that change as new breaches are catalogued, and password
+-- hashes (even SHA-1 of the first 5 chars) are sensitive enough
+-- that we'd rather not persist them.
+--
+-- The CHECK constraint is *enumerated* (unlike `users.preferred_lang`)
+-- because the set of valid modes is fixed by the application
+-- and rejecting a stale value at the DB layer keeps a typo in
+-- a hand-edited DB from silently treating "of" as "off".
+
+ALTER TABLE server_settings
+  ADD COLUMN hibp_mode TEXT NOT NULL DEFAULT 'warn'
+    CHECK (hibp_mode IN ('off', 'warn', 'block'));

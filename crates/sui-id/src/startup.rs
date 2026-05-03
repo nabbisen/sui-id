@@ -130,7 +130,13 @@ pub fn prepare(cfg: Config) -> Result<Startup> {
             ehlo_hostname_from_issuer(&cfg.server.issuer),
         ),
     );
-    let state = AppState::new(db, cfg, setup_token, mailer);
+    // HIBP (Pwned Passwords) client. Constructed unconditionally
+    // — the call site short-circuits when `server_settings.hibp_mode
+    // = 'off'`, so a deployment that never wants outbound HIBP
+    // traffic still pays only the cost of one Arc::new at startup.
+    let hibp_client: std::sync::Arc<dyn sui_id_core::hibp::HibpClient> =
+        std::sync::Arc::new(sui_id_core::hibp::HttpHibpClient::new());
+    let state = AppState::new(db, cfg, setup_token, mailer, hibp_client);
     Ok(Startup { state, listen_addr })
 }
 

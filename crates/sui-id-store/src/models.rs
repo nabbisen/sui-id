@@ -327,12 +327,50 @@ pub struct PasswordResetTokenRow {
     pub requester_ip: Option<String>,
 }
 
+/// HIBP (Pwned Passwords) check operational mode. Stored as the
+/// string `'off' | 'warn' | 'block'` in `server_settings.hibp_mode`
+/// (CHECK-constrained), see migration 0017.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HibpMode {
+    /// No check performed; no outbound request made. The right
+    /// setting for offline / air-gapped deployments.
+    Off,
+    /// Check performed; a hit is recorded as an audit event but
+    /// the password is accepted. Default at install time.
+    Warn,
+    /// Check performed; a hit refuses the password.
+    Block,
+}
+
+impl HibpMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Warn => "warn",
+            Self::Block => "block",
+        }
+    }
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "off" => Some(Self::Off),
+            "warn" => Some(Self::Warn),
+            "block" => Some(Self::Block),
+            _ => None,
+        }
+    }
+}
+
+impl Default for HibpMode {
+    fn default() -> Self {
+        Self::Warn
+    }
+}
+
 // ---------- Server settings (v0.23.0) ----------
 
 /// Singleton row in `server_settings`. Holds process-wide settings
 /// that an admin should be able to change without restarting the
-/// server. Today only `default_lang`; the row is designed to be
-/// extended without a fresh migration.
+/// server.
 #[derive(Debug, Clone)]
 pub struct ServerSettingsRow {
     /// BCP-47 language tag used as a fallback when no per-user,
@@ -340,6 +378,8 @@ pub struct ServerSettingsRow {
     /// locale. Validated at the application layer to be one of the
     /// known `Locale` tags.
     pub default_lang: String,
+    /// Pwned Passwords check mode. See [`HibpMode`].
+    pub hibp_mode: HibpMode,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }

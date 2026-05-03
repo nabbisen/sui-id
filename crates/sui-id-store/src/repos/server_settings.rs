@@ -11,21 +11,35 @@
 //! `Result<Option<…>>` — the row always exists once migrations
 //! have run.
 
-use crate::{models::ServerSettingsRow, Database, StoreError, StoreResult};
+use crate::{
+    models::{HibpMode, ServerSettingsRow},
+    Database, StoreError, StoreResult,
+};
 use chrono::{DateTime, Utc};
 use rusqlite::params;
 
 const SINGLETON_ID: &str = "singleton";
 
 fn map_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ServerSettingsRow> {
+    let mode_str: String = row.get(2)?;
+    let hibp_mode = HibpMode::parse(&mode_str).ok_or_else(|| {
+        rusqlite::Error::FromSqlConversionFailure(
+            2,
+            rusqlite::types::Type::Text,
+            Box::new(StoreError::Integrity(format!(
+                "unknown server_settings.hibp_mode value: {mode_str}"
+            ))),
+        )
+    })?;
     Ok(ServerSettingsRow {
         default_lang: row.get(1)?,
-        created_at: row.get::<_, DateTime<Utc>>(2)?,
-        updated_at: row.get::<_, DateTime<Utc>>(3)?,
+        hibp_mode,
+        created_at: row.get::<_, DateTime<Utc>>(3)?,
+        updated_at: row.get::<_, DateTime<Utc>>(4)?,
     })
 }
 
-const SELECT_COLUMNS: &str = "id, default_lang, created_at, updated_at";
+const SELECT_COLUMNS: &str = "id, default_lang, hibp_mode, created_at, updated_at";
 
 /// Fetch the singleton server-settings row. Migration 0016 inserts
 /// the default row, so post-migration this never returns NotFound.
@@ -57,9 +71,25 @@ pub fn update_default_lang(
             params![lang, now, SINGLETON_ID],
         )?;
         if n == 0 {
-            // Should never happen — migration 0016 inserts the
-            // row. If it does, the database is in a broken state
-            // and we'd rather surface that than silently re-INSERT.
+            Err(StoreError::NotFound)
+        } else {
+            Ok(())
+        }
+    })
+}
+
+/// Update the server-wide Pwned Passwords (HIBP) check mode.
+pub fn update_hibp_mode(
+    db: &Database,
+    mode: HibpMode,
+    now: DateTime<Utc>,
+) -> StoreResult<()> {
+    db.with_conn(|conn| {
+        let n = conn.execute(
+            "UPDATE server_settings SET hibp_mode = ?1, updated_at = ?2 WHERE id = ?3",
+            params![mode.as_str(), now, SINGLETON_ID],
+        )?;
+        if n == 0 {
             Err(StoreError::NotFound)
         } else {
             Ok(())

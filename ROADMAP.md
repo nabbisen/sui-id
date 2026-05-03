@@ -59,6 +59,31 @@ rather than new auth primitives.
     pass on the design language. The `Locale::tag()` API is
     already the right anchor point for this.
 
+- **HIBP scope expansion (post-v0.24.0).** v0.24.0 wires the
+  Pwned Passwords check into the setup wizard's admin-creation
+  step — the single password-set entry point that exists at
+  install time. The remaining password-set entry points still
+  bypass the check at this release; each is mechanical to add
+  now that the `HibpClient` trait, the `enforce_hibp` policy
+  function, and the `HibpMode` enum are in place. Specifically:
+  - `me_security::password_change_post` (self-service password
+    change) — should run the same check on the new password
+    before the `credentials::upsert`.
+  - `admin::users_password_reset` (admin-driven password reset
+    for another user) — same check on the operator-supplied
+    password.
+  - `forgot_password::consume_and_reset_password` (token-based
+    reset) — same check on the new password before the
+    `credentials::upsert`.
+  - Periodic re-check of stored passwords. Cannot work
+    server-side (we don't store plaintext) but a "your last
+    sign-in's password is now in a breach" notification on the
+    next sign-in is feasible if we cache the SHA-1 prefix-only
+    fingerprint at password-set time. The privacy story for
+    that cache is non-trivial and is its own design discussion.
+  - Admin settings UI. v0.24.0 has no UI for the `hibp_mode`
+    column; an admin tab alongside Email is the next addition.
+
 ## Longer term, less certain
 
 - **Federation.** Acting as an OIDC client to an upstream IdP, mapping
@@ -344,6 +369,28 @@ rather than new auth primitives.
   Email locale resolution is decoupled from HTTP locale
   resolution: the email follows the recipient (their
   preferred_lang), the form follows the browser session.
+- Pwned Passwords (HIBP) breach check (v0.24.0). Optional
+  pre-acceptance check at the setup wizard's admin-creation
+  step. Three operational modes (`'off' | 'warn' | 'block'`)
+  stored in `server_settings.hibp_mode`, default `'warn'`.
+  Uses the public Pwned Passwords API's k-anonymity scheme —
+  sui-id sends only the first 5 characters of the SHA-1 hash,
+  never the password itself, with `Add-Padding: true` to defend
+  against traffic-analysis attacks. Fail-open: when the HIBP
+  request fails (timeout, DNS, TLS, 5xx), the policy is to let
+  the password through regardless of mode (including `block`),
+  the audit trail records the failure, but a flaky external
+  service is not allowed to lock an admin out of password
+  operations. Built on `ureq` (synchronous) wrapped in
+  `tokio::task::spawn_blocking` at the call site —
+  the call rate is too low to justify async, and `ureq`'s
+  rustls integration matches the `wasm-smtp-tokio` rustls
+  already in our tree without pulling tokio's networking
+  stack a second time. The remaining password-set entry points
+  (self-service password change, admin reset, forgot-password
+  redemption) and an admin-settings UI for the mode are
+  scheduled in the "HIBP scope expansion" entry under Medium
+  term.
 
 ## Explicitly **not** on the roadmap
 

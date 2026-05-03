@@ -4,6 +4,7 @@ use crate::config::Config;
 use crate::ipnet::Cidr;
 use crate::ratelimit::Limiters;
 use std::sync::Arc;
+use sui_id_core::hibp::HibpClient;
 use sui_id_core::mail::MailSender;
 use sui_id_core::time::{system_clock, SharedClock};
 use sui_id_core::tokens::TokenLifetimes;
@@ -22,6 +23,18 @@ pub struct AppState {
     /// the `AppState` clones the `Arc`; the underlying sender is
     /// shared.
     pub mailer: Arc<dyn MailSender>,
+    /// Pwned Passwords (HIBP) breach-check client, used by the
+    /// setup wizard to optionally screen the initial admin
+    /// password (and, in v0.24.x patches, other password-set
+    /// entry points). Production constructs an
+    /// `HttpHibpClient`; tests inject `InMemoryHibpClient` from
+    /// `sui-id-core`'s `test-support` feature.
+    ///
+    /// Even when `server_settings.hibp_mode = 'off'` we still
+    /// hold a client here — the cost is one Arc clone, and
+    /// keeping the field unconditional avoids a mode-checked
+    /// match at every dispatch site.
+    pub hibp_client: Arc<dyn HibpClient>,
 }
 
 impl AppState {
@@ -30,6 +43,7 @@ impl AppState {
         config: Config,
         setup_token: String,
         mailer: Arc<dyn MailSender>,
+        hibp_client: Arc<dyn HibpClient>,
     ) -> Self {
         let trusted_proxies: Vec<Cidr> = config
             .server
@@ -45,6 +59,7 @@ impl AppState {
             limiters: Arc::new(Limiters::default()),
             trusted_proxies: Arc::new(trusted_proxies),
             mailer,
+            hibp_client,
         }
     }
 
