@@ -13,6 +13,12 @@ pub struct UserRow {
     pub id: UserId,
     pub username: String,
     pub display_name: Option<String>,
+    /// Optional email address. Added in migration 0012. Used by the
+    /// setup wizard and admin user-creation form, and (in a future
+    /// release) by the password-change notification and forgot-password
+    /// reset flows once SMTP support lands. NULL = "we don't have one";
+    /// userinfo simply omits the `email` claim in that case.
+    pub email: Option<String>,
     pub is_admin: bool,
     pub is_disabled: bool,
     pub is_deleted: bool,

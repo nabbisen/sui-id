@@ -178,6 +178,19 @@ v0.10.1 / v0.10.2.
   tail verifier status with a badge. Deep links into the
   existing detail pages (`/admin/users`, `/admin/clients`,
   `/admin/audit`) replace any need to re-implement controls.
+- 3-step setup wizard (v0.20.4). The legacy single-page setup
+  form splits into welcome → admin-creation → done across
+  `/setup`, `/setup/admin`, and `/setup/done`. The admin form
+  gains an optional email field (also surfaced on
+  `/admin/users` for any new user) and password confirmation;
+  migration 0012 adds the nullable `users.email` column with a
+  partial unique index. The design memo's fourth screen
+  ("encryption settings") is intentionally omitted — sui-id
+  resolves the master key before HTTP is up, so there's no
+  surface for a setup-time UI; the omission is documented in
+  `docs/operators.md`. If a master-key rotation feature lands
+  later it will be a CLI command, not a UI on a running
+  process.
 
 ## Explicitly **not** on the roadmap
 

@@ -391,6 +391,8 @@ pub struct CreateUserForm {
     pub username: String,
     #[serde(default)]
     pub display_name: String,
+    #[serde(default)]
+    pub email: String,
     pub password: String,
     #[serde(default)]
     pub is_admin: Option<String>,
@@ -411,6 +413,11 @@ pub async fn users_create(
     } else {
         Some(form.display_name.as_str())
     };
+    let email = if form.email.trim().is_empty() {
+        None
+    } else {
+        Some(form.email.as_str())
+    };
     let is_admin = form
         .is_admin
         .as_deref()
@@ -424,6 +431,7 @@ pub async fn users_create(
             username: form.username.trim(),
             password: &form.password,
             display_name: display,
+            email,
             is_admin,
         },
     )

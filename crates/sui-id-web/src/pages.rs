@@ -58,19 +58,102 @@ where
     out
 }
 
-// ---------- setup ----------
+// ---------- setup wizard (3 steps: welcome → admin → done) ----------
+//
+// The design memo describes 4 screens (1 welcome, 2 admin, 3 encryption, 4 done).
+// sui-id resolves the master key before HTTP is up (env var or key file with
+// auto-generation), so screen 3 has no operator-facing surface to expose; we
+// render screens 1 / 2 / 4 as steps 1 / 2 / 3 of a 3-step wizard, preserving
+// the design book's screen numbering. See `docs/operators.md` and the v0.20.4
+// CHANGELOG entry for the rationale.
 
-pub fn render_setup(flash: Option<Flash>) -> String {
+/// Numeric position of the active step. 0-indexed for array math, but
+/// the visible label uses `{step + 1} / 3` to match natural language.
+fn setup_step_indicator(active: usize) -> impl IntoView {
+    // Three labelled dots showing which step the operator is on. Steps
+    // 1 and 3 are not interactive (no navigation back into the
+    // half-completed wizard); step 2 is the only form. Using static
+    // structure here lets screen-readers announce the step state
+    // without requiring ARIA tablist.
+    let labels = ["ようこそ", "管理者作成", "完了"];
+    let dots: Vec<_> = labels
+        .iter()
+        .enumerate()
+        .map(|(i, label)| {
+            let is_active = i == active;
+            let aria = if is_active { Some("step") } else { None };
+            // Active step uses the accent badge; past steps use a
+            // subtle "ok" badge; future steps use a muted neutral
+            // badge to imply "not yet".
+            let badge = if i < active {
+                view! { <span class="badge badge--ok">{format!("{}", i + 1)}</span> }
+                    .into_any()
+            } else if is_active {
+                view! { <span class="badge badge--accent">{format!("{}", i + 1)}</span> }
+                    .into_any()
+            } else {
+                view! { <span class="badge">{format!("{}", i + 1)}</span> }.into_any()
+            };
+            let style = if is_active {
+                "color:var(--fg-default);font-weight:var(--font-weight-medium)"
+            } else if i < active {
+                "color:var(--fg-muted)"
+            } else {
+                "color:var(--fg-subtle)"
+            };
+            view! {
+                <span class="row" style="gap:var(--space-1);align-items:center" aria-current=aria>
+                    {badge}
+                    <span style=style>{*label}</span>
+                </span>
+            }
+        })
+        .collect();
+    view! {
+        <nav class="row"
+             aria-label="セットアップステップ"
+             style="gap:var(--space-3);justify-content:center;margin-bottom:var(--space-4);flex-wrap:wrap;font-size:var(--font-size-caption)">
+            {dots}
+        </nav>
+    }
+}
+
+/// Step 1 of 3 — welcome.
+pub fn render_setup_welcome(flash: Option<Flash>) -> String {
     render(move || {
         view! {
-            <crate::layout::AuthShell title="Setup".to_string()>
+            <crate::layout::AuthShell title="セットアップ — ようこそ".to_string()>
+                {setup_step_indicator(0)}
                 <h1>"sui-id へようこそ"</h1>
                 <p class="muted">
-                    "サービスはまだ初期化されていません。"
-                    "起動時に表示されたセットアップトークンを使って、最初の管理者アカウントを作成してください。"
+                    "このサーバーはまだ初期化されていません。"
+                    "数分で完了するセットアップを始めましょう。"
+                </p>
+                <p class="muted">
+                    "次の画面で最初の管理者アカウントを作成します。"
+                    "サーバー起動時に出力されたセットアップトークンをお手元にご準備ください。"
                 </p>
                 {flash_banner(flash)}
-                <form method="post" action="/setup" class="stack">
+                <p style="margin-top:var(--space-4)">
+                    <a href="/setup/admin" class="button">"セットアップを始める"</a>
+                </p>
+            </crate::layout::AuthShell>
+        }
+    })
+}
+
+/// Step 2 of 3 — admin form.
+pub fn render_setup_admin(flash: Option<Flash>) -> String {
+    render(move || {
+        view! {
+            <crate::layout::AuthShell title="セットアップ — 管理者作成".to_string()>
+                {setup_step_indicator(1)}
+                <h1>"管理者アカウントの作成"</h1>
+                <p class="muted">
+                    "サーバー起動時に出力されたセットアップトークンと、新しい管理者アカウントの情報を入力してください。"
+                </p>
+                {flash_banner(flash)}
+                <form method="post" action="/setup/admin" class="stack" autocomplete="off">
                     <div class="field">
                         <label for="token" class="field__label">"セットアップトークン"</label>
                         <input id="token" name="setup_token" type="password"
@@ -78,9 +161,16 @@ pub fn render_setup(flash: Option<Flash>) -> String {
                         <span class="field__hint">"起動ログに 1 度だけ出力された値"</span>
                     </div>
                     <div class="field">
-                        <label for="username" class="field__label">"管理者ユーザー名"</label>
+                        <label for="username" class="field__label">"ユーザー名"</label>
                         <input id="username" name="username" type="text"
                                required=true autocomplete="username" />
+                    </div>
+                    <div class="field">
+                        <label for="email" class="field__label">"メールアドレス(任意)"</label>
+                        <input id="email" name="email" type="email" autocomplete="email" />
+                        <span class="field__hint">
+                            "通知やパスワードリセットに使用します(将来機能)。後から変更できます。"
+                        </span>
                     </div>
                     <div class="field">
                         <label for="display" class="field__label">"表示名(任意)"</label>
@@ -92,9 +182,68 @@ pub fn render_setup(flash: Option<Flash>) -> String {
                                required=true minlength="12" autocomplete="new-password" />
                         <span class="field__hint">"12 文字以上"</span>
                     </div>
-                    <button type="submit">"管理者を作成"</button>
+                    <div class="field">
+                        <label for="confirm_password" class="field__label">"パスワード(確認)"</label>
+                        <input id="confirm_password" name="confirm_password" type="password"
+                               required=true minlength="12" autocomplete="new-password" />
+                    </div>
+                    <div class="row">
+                        <a href="/setup" class="button secondary">"戻る"</a>
+                        <button type="submit">"管理者を作成"</button>
+                    </div>
                 </form>
             </crate::layout::AuthShell>
+        }
+    })
+}
+
+/// Step 3 of 3 — completion.
+///
+/// Renders unconditionally; if the operator reaches it before
+/// completing step 2 (e.g. by typing the URL in by hand), the
+/// `initialized` flag is false and the page shows a "not yet"
+/// notice with a link back to step 1 instead of the success
+/// message.
+pub fn render_setup_done(initialized: bool) -> String {
+    render(move || {
+        if initialized {
+            view! {
+                <crate::layout::AuthShell title="セットアップ — 完了".to_string()>
+                    {setup_step_indicator(2)}
+                    <h1>"セットアップ完了"</h1>
+                    <p class="muted">
+                        "管理者アカウントの作成と初期署名キーの発行が完了しました。"
+                        "管理画面からシステムの設定を確認できます。"
+                    </p>
+                    <div class="card">
+                        <h3 class="card__title">"次のステップ"</h3>
+                        <ul class="muted" style="margin:0;padding-left:var(--space-4)">
+                            <li>"OIDC クライアントを登録する。"</li>
+                            <li>"パスキーや認証アプリで 2 段階認証を有効にする。"</li>
+                            <li>"設定タブで現在の有効な設定を確認する。"</li>
+                        </ul>
+                    </div>
+                    <p style="margin-top:var(--space-4)">
+                        <a href="/admin" class="button">"管理画面へ進む"</a>
+                    </p>
+                </crate::layout::AuthShell>
+            }
+            .into_any()
+        } else {
+            view! {
+                <crate::layout::AuthShell title="セットアップ — まだ完了していません".to_string()>
+                    {setup_step_indicator(0)}
+                    <h1>"セットアップは完了していません"</h1>
+                    <p class="muted">
+                        "管理者アカウントの作成がまだ完了していません。"
+                        "セットアップを最初から始めてください。"
+                    </p>
+                    <p style="margin-top:var(--space-4)">
+                        <a href="/setup" class="button">"セットアップを始める"</a>
+                    </p>
+                </crate::layout::AuthShell>
+            }
+            .into_any()
         }
     })
 }
@@ -812,6 +961,10 @@ pub fn render_users(
                             <div class="field">
                                 <label for="u-disp" class="field__label">"表示名(任意)"</label>
                                 <input id="u-disp" name="display_name" type="text" autocomplete="off" />
+                            </div>
+                            <div class="field">
+                                <label for="u-email" class="field__label">"メールアドレス(任意)"</label>
+                                <input id="u-email" name="email" type="email" autocomplete="off" />
                             </div>
                             <div class="field">
                                 <label for="u-pw" class="field__label">"パスワード(12 文字以上)"</label>

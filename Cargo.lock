@@ -2662,7 +2662,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "sui-id"
-version = "0.20.3"
+version = "0.20.4"
 dependencies = [
  "anyhow",
  "argon2",
@@ -2707,7 +2707,7 @@ dependencies = [
 
 [[package]]
 name = "sui-id-core"
-version = "0.20.3"
+version = "0.20.4"
 dependencies = [
  "argon2",
  "base64ct",
@@ -2736,7 +2736,7 @@ dependencies = [
 
 [[package]]
 name = "sui-id-shared"
-version = "0.20.3"
+version = "0.20.4"
 dependencies = [
  "chrono",
  "serde",
@@ -2747,7 +2747,7 @@ dependencies = [
 
 [[package]]
 name = "sui-id-store"
-version = "0.20.3"
+version = "0.20.4"
 dependencies = [
  "base64ct",
  "chacha20poly1305",
@@ -2771,7 +2771,7 @@ dependencies = [
 
 [[package]]
 name = "sui-id-web"
-version = "0.20.3"
+version = "0.20.4"
 dependencies = [
  "chrono",
  "leptos",

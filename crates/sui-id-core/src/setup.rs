@@ -33,6 +33,7 @@ pub fn create_initial_admin(
     username: &str,
     password: &str,
     display_name: Option<&str>,
+    email: Option<&str>,
 ) -> CoreResult<CreatedInitialAdmin> {
     if state::is_initialized(db)? {
         return Err(CoreError::AlreadyInitialized);
@@ -54,6 +55,10 @@ pub fn create_initial_admin(
         id: UserId::new(),
         username: username.to_owned(),
         display_name: display_name.map(str::to_owned),
+        email: email
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned),
         is_admin: true,
         is_disabled: false,
         is_deleted: false,

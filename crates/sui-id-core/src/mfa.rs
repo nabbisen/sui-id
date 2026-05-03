@@ -387,6 +387,7 @@ mod integration_tests {
                 updated_at: chrono::Utc::now(),
                 failed_login_count: 0,
                 locked_until: None,
+                email: None,
             },
         )
         .expect("insert user");

@@ -5,6 +5,118 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.4] - 2026-05-02
+
+3-step setup wizard at `/setup` → `/setup/admin` → `/setup/done`.
+The single-page setup form is split into a welcome screen, the
+admin-creation form (with email and password-confirmation fields),
+and a completion screen. The wizard adds an optional `email`
+column to the user schema for the admin and for any user created
+through `/admin/users`.
+
+The design memo also describes a fourth screen ("encryption
+settings"). sui-id deliberately omits it — the rationale lives
+below under [Setup wizard: encryption screen omission](#setup-wizard-encryption-screen-omission).
+
+### Added
+
+#### 3-step wizard
+
+- `GET /setup` → 画面 1 (welcome). Static intro page with a single
+  "セットアップを始める" button to step 2. Redirects to
+  `/admin/login` when the system is already initialized.
+- `GET /setup/admin` → 画面 2 (admin form). Fields: setup token,
+  username, optional email, optional display name, password,
+  password confirmation. Redirects to `/admin/login` when already
+  initialized.
+- `POST /setup/admin` → consumes the form, creates the admin and
+  the first signing key, marks the system initialized,
+  auto-logs the operator in (so the post-setup dashboard link
+  lands authenticated), and 303-redirects to `/setup/done`.
+- `GET /setup/done` → 画面 4 (completion). Shows success +
+  "next steps" hint + "管理画面へ進む" button. If a curious
+  operator visits before finishing step 2 (uninitialized system),
+  the page renders a "セットアップは完了していません" notice
+  with a link back to `/setup`.
+
+A 3-dot step indicator (1 ようこそ / 2 管理者作成 / 3 完了)
+renders at the top of every wizard screen, with badges showing
+which step is active, complete, or upcoming. No JavaScript: the
+indicator is static structural HTML driven by the active step.
+
+#### `email` column on users (migration 0012)
+
+- `ALTER TABLE users ADD COLUMN email TEXT` (nullable).
+- `CREATE UNIQUE INDEX idx_users_email ON users(email) WHERE
+  email IS NOT NULL` — partial-unique so multiple NULL emails
+  don't conflict, but a set email is unique across the table.
+  `MAX_SCHEMA_VERSION` rolls to 12.
+- `UserRow.email: Option<String>`. `users::create` /
+  `find_by_username` / `list` round-trip the column.
+- `CreateUserSpec.email: Option<&str>` for `admin::create_user`.
+- `setup::create_initial_admin` takes a new `email: Option<&str>`
+  parameter.
+- `/admin/users` create form now has an "メールアドレス(任意)"
+  field; `CreateUserForm.email` is parsed and passed through.
+
+#### Form validation
+
+- `POST /setup/admin` rejects mismatched password / confirmation
+  with HTTP 400 and a friendly Japanese flash before consuming
+  the setup token. Mismatch is checked at the form layer rather
+  than against the password policy, so the user sees a clear
+  "一致しません" message instead of a generic policy error.
+- Empty email or display name are normalised to `None` rather
+  than the empty string so the partial-unique index never
+  conflicts on `""`.
+
+#### E2E tests (8)
+
+- `setup_welcome_renders_when_uninitialized`
+- `setup_welcome_redirects_when_initialized`
+- `setup_admin_form_renders_with_email_and_confirm`
+- `setup_admin_post_creates_admin_with_email_and_redirects_to_done`
+- `setup_admin_post_rejects_mismatched_confirm`
+- `setup_done_renders_after_initialization`
+- `setup_done_says_not_yet_when_uninitialized`
+- `admin_users_create_form_accepts_email`
+
+### Changed
+
+- `complete_setup_and_login` test helper now POSTs to
+  `/setup/admin` with the new `email` and `confirm_password`
+  fields. All existing e2e tests using this helper continue to
+  work unchanged.
+- `MaxLockoutDuration::label()` continues from v0.20.3.
+- The legacy single-page `render_setup` view function is gone;
+  `render_setup_welcome`, `render_setup_admin`, and
+  `render_setup_done` replace it.
+
+### Setup wizard: encryption screen omission
+
+The design memo's screen 3 asks the operator to "configure
+encryption" during setup. sui-id does not surface this in the
+UI on purpose:
+
+- The master key is **resolved before the HTTP server starts**.
+  `SUI_ID_MASTER_KEY` (env) wins; otherwise `storage.key_file`
+  is read, auto-generating a 32-byte file with `0600` perms on
+  first run.
+- By the time `/setup` renders, the database is already encrypted
+  and the key is already loaded. There is nothing for a "set the
+  encryption key" UI to do.
+- Adding one would either be cosmetic (key already decided) or
+  dangerous (a process that holds the master key advertising an
+  interface to manipulate it).
+
+This is documented in `docs/operators.md` under
+"Why there is no 'encryption' step in the wizard" so future
+operators don't go looking for the missing step.
+
+If a master-key rotation feature lands in a later release, it
+will be a `sui-id admin` CLI command operating against the
+database file offline, *not* a UI on a running process.
+
 ## [0.20.3] - 2026-05-02
 
 Settings hub at `/admin/settings/*` — five tabs surfacing the

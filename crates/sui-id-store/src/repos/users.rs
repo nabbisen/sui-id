@@ -26,20 +26,21 @@ fn map_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<UserRow> {
         updated_at: row.get::<_, DateTime<Utc>>(7)?,
         failed_login_count: row.get::<_, i64>(9)?,
         locked_until: row.get::<_, Option<DateTime<Utc>>>(10)?,
+        email: row.get::<_, Option<String>>(11)?,
     })
 }
 
 const SELECT_USER: &str = "SELECT id, username, display_name, is_admin, is_disabled, \
                            is_deleted, created_at, updated_at, user_uuid, \
-                           failed_login_count, locked_until FROM users";
+                           failed_login_count, locked_until, email FROM users";
 
 pub fn create(db: &Database, user: &UserRow) -> StoreResult<()> {
     db.with_conn(|conn| {
         conn.execute(
             "INSERT INTO users(id, username, display_name, is_admin, is_disabled, is_deleted, \
                                 created_at, updated_at, user_uuid, \
-                                failed_login_count, locked_until) \
-             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                                failed_login_count, locked_until, email) \
+             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             params![
                 user.id.to_string(),
                 user.username,
@@ -52,6 +53,7 @@ pub fn create(db: &Database, user: &UserRow) -> StoreResult<()> {
                 user.user_uuid.to_string(),
                 user.failed_login_count,
                 user.locked_until,
+                user.email,
             ],
         )
         .map_err(|e| match e {

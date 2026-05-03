@@ -49,6 +49,10 @@ pub struct CreateUserSpec<'a> {
     pub username: &'a str,
     pub password: &'a str,
     pub display_name: Option<&'a str>,
+    /// Optional email address. Stored if non-empty, dropped to None
+    /// otherwise. The admin form treats it as an optional field; the
+    /// setup wizard recommends but does not enforce filling it in.
+    pub email: Option<&'a str>,
     pub is_admin: bool,
 }
 
@@ -69,6 +73,11 @@ pub fn create_user(
         id: UserId::new(),
         username: spec.username.to_owned(),
         display_name: spec.display_name.map(str::to_owned),
+        email: spec
+            .email
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned),
         is_admin: spec.is_admin,
         is_disabled: false,
         is_deleted: false,

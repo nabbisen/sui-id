@@ -16,7 +16,7 @@ readme = "README.md"
 workspace = true
 
 [dependencies]
-sui-id-shared = { version = "0.20.3", path = "../sui-id-shared" }
+sui-id-shared = { version = "0.20.4", path = "../sui-id-shared" }
 
 leptos = { workspace = true }
 serde = { workspace = true }

@@ -85,11 +85,46 @@ same way you would treat a TLS private key.
    =====================================================
    ```
 
-2. Open the `/setup` URL in a browser. Paste the setup token and create the
-   first administrator. The token only exists for the lifetime of this
-   process; if you restart before finishing setup, you'll see a fresh one.
+2. Open the `/setup` URL in a browser. The setup wizard runs in
+   three steps:
 
-3. The wizard logs you in automatically and redirects to the dashboard.
+   - **Step 1 — welcome**: a brief description and a "begin" button.
+   - **Step 2 — admin form**: paste the setup token, choose a
+     username, optionally an email and display name, and pick a
+     password (12 characters or more) entered twice.
+   - **Step 3 — done**: confirmation that the admin account exists
+     and the first signing key has been generated. The wizard logs
+     you in automatically; the "管理画面へ進む" button lands you
+     on `/admin`.
+
+   The setup token only exists for the lifetime of this process —
+   if you restart before finishing setup, you'll see a fresh token.
+
+### Why there is no "encryption" step in the wizard
+
+You may have seen IdP wizards that ask you to "set the master key
+on first run". sui-id does not, on purpose. The master key is
+**resolved before the HTTP server starts**:
+
+- If `SUI_ID_MASTER_KEY` is set in the environment, that value
+  is used.
+- Otherwise sui-id reads `storage.key_file` from `sui-id.toml`.
+  If the file does not exist, sui-id generates a new 32-byte key
+  and writes it with permissions `0600` on first start; on
+  subsequent starts the existing file is read.
+
+By the time you reach `/setup` in a browser, the database is
+already encrypted and the key is already loaded. There's nothing
+left for a UI to do — surfacing one would invite operations that
+the architecture doesn't support (mid-process key rotation
+without restart) or actively undermine the security model
+(advertising a key-manipulation interface from a process that
+holds the key in memory). See [Threat model](./threat-model.md)
+for the reasoning.
+
+If you need to rotate the master key, that's a planned future
+operation, performed offline against the database file with the
+`sui-id admin` CLI.
 
 ## Backup and restore
 

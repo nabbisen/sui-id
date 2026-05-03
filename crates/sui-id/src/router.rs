@@ -32,7 +32,12 @@ pub fn build_router(app: AppState) -> Router {
     Router::new()
         .route("/", get(index::root))
         .route("/healthz", get(index::healthz))
-        .route("/setup", get(setup::get).post(setup::post))
+        .route("/setup", get(setup::welcome_get))
+        .route(
+            "/setup/admin",
+            get(setup::admin_get).post(setup::admin_post),
+        )
+        .route("/setup/done", get(setup::done_get))
         .merge(public_routes)
         .merge(token_routes)
         .route("/oauth2/authorize", get(oidc::authorize))
