@@ -141,6 +141,97 @@ etc), the SQLite transaction rolls back, the old key file is **not**
 yet renamed, and you can retry with the same arguments. There is no
 half-rotated state to recover from.
 
+## Dev mode for local testing
+
+If you're building a relying party (RP) and just want a working
+OIDC provider for local development, sui-id has a `--dev` flag
+that skips the setup wizard entirely:
+
+```sh
+sui-id --dev
+```
+
+This:
+
+- opens an in-memory SQLite database under a freshly-generated
+  master key (data evaporates on shutdown);
+- seeds an admin user, two test users, and one OIDC test
+  client;
+- prints all credentials to stderr in plaintext;
+- listens on `127.0.0.1:8801`.
+
+Point your RP at
+`http://127.0.0.1:8801/.well-known/openid-configuration`. The
+seed summary tells you the `client_id` (UUID) and
+`client_secret` to use.
+
+**Dev mode is not a production starting point.** It relaxes
+operational knobs — `cookie_secure` is off, HIBP is off,
+account lockout is disabled, the database is ephemeral. Every
+*cryptographic* invariant (PKCE S256-only, AAD-bound column
+encryption, Argon2id, `redirect_uri` exact match,
+12-character password minimum) holds the same as in
+production; the relaxations are about convenience, not about
+weakening the OIDC implementation.
+
+### Customising the seed
+
+Three sources, in priority order (highest first):
+
+1. **TOML file** via `--dev-seed PATH`. Full schema in
+   `examples/dev-seed.toml`. Sections that aren't in the file
+   fall back to defaults.
+2. **CLI flag overrides**: `--dev-admin-password STR`,
+   `--dev-client-secret STR`.
+3. **Hardcoded defaults**: `admin / admin-admin-admin`,
+   `alice / alice-alice-alice`, `bob / bob-bob-bob-bob`, plus
+   one confidential test client with redirect URIs at
+   `:3000`, `:5173`, `:8000` on localhost.
+
+Example: SPA developer who wants a public (PKCE-only) client
+on port 5173:
+
+```sh
+cat > /tmp/spa-seed.toml <<'TOML'
+[admin]
+username = "admin"
+password = "admin-admin-admin"
+
+[[client]]
+name = "My SPA"
+redirect_uris = ["http://localhost:5173/callback"]
+public = true
+allowed_scopes = "openid profile email"
+TOML
+
+sui-id --dev --dev-seed /tmp/spa-seed.toml
+```
+
+### Persisting dev state
+
+`--dev-db PATH` pins the database to a file. The file is
+truncated on each restart (a fresh master key is generated, so
+re-using the old SQLite file would just produce ciphertext
+nobody can decrypt). If you want persistence across restarts,
+you want a regular sui-id installation, not dev mode.
+
+### Binding outside loopback
+
+The default bind is `127.0.0.1:8801`. You can change it with
+`--dev-bind`:
+
+```sh
+sui-id --dev --dev-bind 0.0.0.0:8801
+```
+
+Any non-loopback bind requires explicit `yes` typed at the
+prompt before sui-id will listen. This is a deliberate
+guardrail: dev mode prints plaintext credentials at startup,
+and accidentally binding to `0.0.0.0` from a Docker container
+or shell-history search could expose them to a LAN. The
+prompt is the operator's chance to confirm that's what they
+meant.
+
 ## First run
 
 1. Start sui-id. It will print a setup token to stderr that looks like:

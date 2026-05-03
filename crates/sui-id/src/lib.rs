@@ -12,6 +12,7 @@ pub mod backup;
 pub mod config;
 pub mod cors;
 pub mod csrf;
+pub mod dev_mode;
 pub mod errors;
 pub mod gc;
 pub mod handlers;

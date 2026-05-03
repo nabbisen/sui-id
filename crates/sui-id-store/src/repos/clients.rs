@@ -178,3 +178,24 @@ pub fn soft_delete(db: &Database, id: ClientId) -> StoreResult<()> {
         Ok(())
     })
 }
+
+/// Patch a client's `secret_hash` to a caller-supplied value.
+/// Used **only** by dev mode to give a confidential client a
+/// predictable secret instead of the auto-generated one. Not
+/// exposed in the production HTTP path.
+pub fn set_dev_secret_hash(
+    db: &Database,
+    id: ClientId,
+    new_hash: Option<&str>,
+) -> StoreResult<()> {
+    db.with_conn(|conn| {
+        let n = conn.execute(
+            "UPDATE clients SET secret_hash = ?1 WHERE id = ?2",
+            params![new_hash, id.to_string()],
+        )?;
+        if n == 0 {
+            return Err(StoreError::NotFound);
+        }
+        Ok(())
+    })
+}

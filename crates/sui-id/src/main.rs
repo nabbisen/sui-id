@@ -49,6 +49,10 @@ async fn main() -> Result<()> {
         None => {} // fall through to `serve`.
     }
 
+    if args.iter().any(|a| a == "--dev") {
+        return serve_dev(&args).await;
+    }
+
     serve(&args).await
 }
 
@@ -100,6 +104,147 @@ async fn serve(args: &[String]) -> Result<()> {
     .with_graceful_shutdown(shutdown_signal())
     .await
     .context("running server")?;
+    Ok(())
+}
+
+/// `--dev` startup path.
+///
+/// Diverges from `serve` in three ways:
+///
+///   1. **Database.** Opens an in-memory SQLite DB (or a
+///      caller-pinned path which is truncated each restart) under
+///      a freshly generated master key. No `sui-id.toml`, no key
+///      file.
+///   2. **Config.** Synthesises a Config from `Config::sample()`,
+///      adjusts `listen_addr` from `--dev-bind` (default
+///      `127.0.0.1:8801`), keeps `cookie_secure = false`, and
+///      passes it through unchanged otherwise. Production-relevant
+///      knobs that we do not relax in dev — PKCE, AAD binding,
+///      Argon2id parameters, etc — are decided in core, not here.
+///   3. **Seed.** Runs `dev_mode::resolve_seed` over CLI flags
+///      and an optional TOML file, then `apply_seed` against the
+///      freshly opened DB. Prints both warning header and seed
+///      summary to stderr around the call.
+///
+/// 0.0.0.0 binding requires explicit `yes` confirmation
+/// from stdin; this is in `dev_mode::confirm_external_bind`.
+async fn serve_dev(args: &[String]) -> Result<()> {
+    use sui_id::dev_mode;
+
+    // Flag parsing.
+    let dev_db: Option<PathBuf> = args
+        .iter()
+        .position(|a| a == "--dev-db")
+        .and_then(|i| args.get(i + 1))
+        .map(PathBuf::from);
+    let dev_seed_path: Option<PathBuf> = args
+        .iter()
+        .position(|a| a == "--dev-seed")
+        .and_then(|i| args.get(i + 1))
+        .map(PathBuf::from);
+    let dev_bind: String = args
+        .iter()
+        .position(|a| a == "--dev-bind")
+        .and_then(|i| args.get(i + 1))
+        .cloned()
+        .unwrap_or_else(|| "127.0.0.1:8801".into());
+    let dev_admin_password: Option<String> = args
+        .iter()
+        .position(|a| a == "--dev-admin-password")
+        .and_then(|i| args.get(i + 1))
+        .cloned();
+    let dev_client_secret: Option<String> = args
+        .iter()
+        .position(|a| a == "--dev-client-secret")
+        .and_then(|i| args.get(i + 1))
+        .cloned();
+
+    // 0.0.0.0 (or any non-loopback) binding requires explicit
+    // `yes` confirmation. We treat anything that is not `127.*`
+    // or `[::1]` or `localhost` as "external" for this check.
+    let host_part = dev_bind.rsplit_once(':').map(|(h, _)| h).unwrap_or(&dev_bind);
+    let is_loopback = host_part.starts_with("127.")
+        || host_part == "::1"
+        || host_part == "[::1]"
+        || host_part == "localhost";
+    if !is_loopback {
+        dev_mode::confirm_external_bind(&dev_bind)?;
+    }
+
+    // Resolve seed.
+    let (seed, seed_source) = dev_mode::resolve_seed(
+        dev_seed_path.as_deref(),
+        dev_mode::DevFlagOverrides {
+            admin_password: dev_admin_password,
+            client_secret: dev_client_secret,
+        },
+    )?;
+
+    // Build a Config from sample(), patch the bind, keep
+    // cookie_secure = false, set issuer to match the bind so
+    // OIDC discovery returns a working URL.
+    let mut cfg = Config::sample();
+    cfg.server.listen_addr = dev_bind.clone();
+    // The issuer needs an http(s):// prefix per validation; reuse
+    // the bind for the host (this is a dev-mode-only scheme).
+    cfg.server.issuer = format!("http://{dev_bind}");
+    cfg.server.cookie_secure = false;
+    // No persisted key file: the DB lives under an ephemeral
+    // master key that this process generates. Keep storage paths
+    // unset by pointing them at /dev/null-style placeholders that
+    // the dev-mode flow does not read from.
+    cfg.storage.db_path = std::path::PathBuf::from(
+        dev_db.as_deref().map(|p| p.to_path_buf()).unwrap_or_else(|| {
+            std::path::PathBuf::from(":memory:")
+        }),
+    );
+
+    // Open DB and seed.
+    let db = dev_mode::open_dev_db(dev_db.as_deref())?;
+    let setup_token = {
+        use base64ct::Encoding;
+        use rand::RngCore;
+        let mut buf = [0u8; 24];
+        rand::rngs::OsRng.fill_bytes(&mut buf);
+        base64ct::Base64::encode_string(&buf)
+    };
+    dev_mode::print_dev_warnings(&dev_bind, &seed_source);
+    let outcome = {
+        let clock = sui_id_core::time::system_clock();
+        dev_mode::apply_seed(&db, &clock, &setup_token, &seed)?
+    };
+    dev_mode::print_seed_summary(&seed, &outcome, &dev_bind);
+    let _ = outcome.admin_user_id; // captured for symmetry; not needed below.
+
+    // Build the AppState directly (we can't use startup::prepare
+    // because it opens its own DB). Mirror its mailer + HIBP
+    // construction; the in-memory mailer keeps the dev path
+    // self-contained and offline.
+    let mailer: std::sync::Arc<dyn sui_id_core::mail::MailSender> = std::sync::Arc::new(
+        sui_id_core::mail::SmtpMailSender::new(db.clone(), String::from("sui-id-dev.local")),
+    );
+    let hibp_client: std::sync::Arc<dyn sui_id_core::hibp::HibpClient> =
+        std::sync::Arc::new(sui_id_core::hibp::HttpHibpClient::new());
+    let state = sui_id::AppState::new(db, cfg, setup_token, mailer, hibp_client);
+
+    let router = build_router(state.clone());
+    sui_id::gc::spawn(state.clone());
+
+    let addr: std::net::SocketAddr = dev_bind
+        .parse()
+        .with_context(|| format!("invalid --dev-bind {dev_bind}"))?;
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .with_context(|| format!("binding {addr}"))?;
+    tracing::info!(%addr, "sui-id (dev mode) listening");
+
+    axum::serve(
+        listener,
+        router.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await
+    .context("running dev server")?;
     Ok(())
 }
 
@@ -518,6 +663,8 @@ USAGE:
     sui-id verify-backup --from PATH [--decrypt]
     sui-id admin unlock-user --username NAME [--config PATH]
     sui-id admin rotate-key [--generate-new-key | --new-key PATH] [--yes] [--config PATH]
+    sui-id --dev [--dev-bind ADDR] [--dev-db PATH] [--dev-seed PATH]
+                 [--dev-admin-password STR] [--dev-client-secret STR]
     sui-id --print-sample-config
     sui-id --version
     sui-id --help
@@ -558,6 +705,16 @@ SUBCOMMANDS:
                              to provide one you prepared yourself. Use
                              --yes to skip the interactive confirmation
                              prompt for non-interactive use.
+    --dev                    Start sui-id in dev mode for local testing.
+                             Skips the setup wizard, opens an in-memory
+                             SQLite database under a freshly generated
+                             master key, and seeds an admin, two test
+                             users, and one OIDC test client. Plaintext
+                             credentials are printed to stderr at
+                             startup. MUST NOT be used in production.
+                             Bind defaults to 127.0.0.1; --dev-bind to
+                             a non-loopback address requires explicit
+                             'yes' confirmation on stdin.
 
 OPTIONS:
     --config PATH            Path to the TOML configuration file
@@ -571,6 +728,18 @@ OPTIONS:
     --force                  Allow `restore` to overwrite existing files.
     --encrypt                Encrypt the backup with a passphrase.
     --decrypt                Treat the input as an encrypted backup.
+    --dev-bind ADDR          Listen address for `--dev`
+                             (default: 127.0.0.1:8801).
+    --dev-db PATH            Pin the dev-mode database to a file path
+                             (default: in-memory). The file is
+                             truncated each restart.
+    --dev-seed PATH          TOML file describing dev-mode admin /
+                             users / OIDC clients to seed. See
+                             examples/dev-seed.toml.
+    --dev-admin-password STR Override the dev-mode admin password
+                             (default: 'admin').
+    --dev-client-secret STR  Override the first dev-mode client's
+                             secret (default: 'test-secret').
     --print-sample-config    Print a sample configuration and exit.
     --version, -V            Print version information and exit.
     --help, -h               Print this help and exit.

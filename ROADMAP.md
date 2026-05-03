@@ -439,6 +439,24 @@ rather than new auth primitives.
   (operators / developers, security auditors, enterprise
   adopters). Documentation-only release — no source changes,
   all tests continue to pass.
+- Dev mode (v0.28.0). `sui-id --dev` brings up a fully
+  working OIDC IdP in seconds against an in-memory SQLite
+  database, with a pre-seeded admin / two test users / one
+  OIDC test client. Aimed at developers building relying
+  parties (RPs) who need a real IdP for local testing
+  without clicking through the setup wizard each time.
+  Hybrid seed model: hardcoded defaults +
+  `--dev-admin-password` / `--dev-client-secret` flags +
+  `--dev-seed PATH` TOML file (priority TOML > flags >
+  defaults). Bind defaults to `127.0.0.1`; non-loopback
+  bind via `--dev-bind` requires explicit `yes`
+  confirmation on stdin. Cryptographic invariants
+  preserved (PKCE S256-only, AAD binding, Argon2id
+  parameters, `unsafe_code = forbid`, password-policy
+  minimum length, `redirect_uri` exact match);
+  operational knobs relaxed with operator-visible
+  warnings (`cookie_secure off`, `hibp_mode off`,
+  `lockout relaxed`).
 
 ## Explicitly **not** on the roadmap
 

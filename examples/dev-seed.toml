@@ -1,0 +1,97 @@
+# sui-id dev-mode seed configuration
+#
+# This file is read by `sui-id --dev --dev-seed ./dev-seed.toml`
+# and replaces the hardcoded defaults (admin/admin, alice/alice,
+# bob/bob, one localhost client). Any section omitted here falls
+# back to the hardcoded default for that section — so a file with
+# only `[admin]` reuses the default users and the default client.
+#
+# WARNING: this file contains plaintext credentials. Do NOT
+# commit it to version control with real values, do NOT use it
+# in production, and consider chmod 0600 on the file.
+#
+# Lookup order (highest priority first):
+#   1. Settings in this TOML file (when --dev-seed is passed).
+#   2. CLI flag overrides (--dev-admin-password, --dev-client-secret).
+#   3. Hardcoded defaults.
+
+# ---------- Admin ----------
+#
+# The first user created by --dev. Always an admin. Required if
+# you replace the [admin] block at all.
+
+[admin]
+username     = "admin"
+password     = "admin-admin-admin"
+email        = "admin@example.test"
+display_name = "Admin"
+
+# ---------- Test users ----------
+#
+# Zero or more `[[user]]` blocks. If you supply ANY user blocks,
+# the default users (alice, bob) are NOT seeded — supply them
+# yourself if you want them.
+#
+# Passwords must be at least 12 characters (sui-id enforces this
+# even in dev mode — cryptographic posture is not relaxed for
+# convenience). The default convention `<name>-<name>-<name>` is
+# easy to type and easy to remember.
+#
+# `preferred_lang` is an optional BCP-47 tag. Currently 'ja' or
+# 'en'. Omitted = falls back to the server / Accept-Language
+# resolution chain.
+
+[[user]]
+username     = "alice"
+password     = "alice-alice-alice"
+email        = "alice@example.test"
+display_name = "Alice"
+
+[[user]]
+username       = "bob"
+password       = "bob-bob-bob-bob"
+email          = "bob@example.test"
+display_name   = "Bob"
+preferred_lang = "ja"
+
+# ---------- OIDC clients ----------
+#
+# Zero or more `[[client]]` blocks. Same fallback rule as users:
+# supplying any clients here suppresses the default test client.
+#
+# The actual `client_id` (a UUID) is assigned by sui-id at
+# creation time and printed to stderr at startup; copy it from
+# the seed summary and put it in your relying party's config.
+# `name` is just a human-readable label shown in the admin UI.
+#
+# `client_secret`:
+#   - Omit → sui-id auto-generates a secret. The summary prints
+#     it once; copy it somewhere because dev mode does not
+#     persist anything else.
+#   - Set to a string → confidential client with that exact
+#     secret. Predictable, so your RP's config can be checked
+#     in to a sample-data repo.
+#   - Set `public = true` and omit `client_secret` → public
+#     client (PKCE-only, no secret), suitable for a SPA or a
+#     mobile app that cannot keep a secret.
+#
+# `redirect_uris` are matched exact-string at the authorize
+# endpoint, the same as in production.
+
+[[client]]
+name           = "Test confidential client"
+redirect_uris  = [
+  "http://localhost:3000/callback",
+  "http://localhost:5173/callback",
+  "http://localhost:8000/callback",
+]
+client_secret  = "test-secret"
+allowed_scopes = "openid profile email"
+
+# Example public (PKCE-only) client for a SPA dev server.
+#
+# [[client]]
+# name           = "Test SPA"
+# redirect_uris  = ["http://localhost:5173/callback"]
+# public         = true
+# allowed_scopes = "openid profile"

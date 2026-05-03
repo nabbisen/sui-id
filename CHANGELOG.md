@@ -5,6 +5,218 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.0] - 2026-05-04
+
+Dev mode: a `--dev` flag that brings up a fully working OIDC IdP
+in seconds, against an in-memory SQLite database, with a
+pre-seeded admin / users / OIDC client. Aimed at developers
+building relying parties (RPs) who need a real OIDC provider for
+local testing without spending five minutes clicking through the
+setup wizard each time.
+
+### Why `--dev` instead of a separate binary
+
+A second binary would mean two shipping artefacts, two CI
+matrices, and a path for "dev features" to drift away from the
+real sui-id over time. A `--dev` flag on the existing binary
+means there is exactly one sui-id, the dev path is kept honest
+by being right next to the production path in the same source
+tree, and operators can audit the dev-mode behaviour by reading
+`crates/sui-id/src/dev_mode.rs` instead of a sister codebase.
+
+### What dev mode is and is not
+
+**Dev mode IS**:
+
+- An ephemeral, single-command IdP. `sui-id --dev` starts up,
+  seeds an admin and two test users and one test OIDC client,
+  prints the credentials to stderr in plain text, and listens
+  on `127.0.0.1:8801`. RPs point at
+  `http://127.0.0.1:8801/.well-known/openid-configuration` and
+  go.
+- Designed to be honest about what it relaxes. The startup
+  banner says `cookie_secure off`, `HIBP off`, `lockout
+  relaxed`, and points at the seed source. Operators see what
+  is happening before any data is written.
+
+**Dev mode is NOT**:
+
+- A production starting point. Every cryptographic invariant
+  that holds in production also holds in dev mode (see
+  "Invariants kept" below). The relaxations are operational
+  (cookie scope, breach-check enforcement, rate limits), not
+  cryptographic.
+- A second product. The same OIDC code paths run; PKCE
+  S256-only is enforced exactly as in production, the
+  authorization-code flow is the same, refresh-token theft
+  detection is the same, AAD-bound column encryption is the
+  same.
+
+### Invariants kept
+
+Dev mode does NOT relax any of the following:
+
+- **PKCE.** S256-only at the authorization-code flow.
+- **Column-encryption AAD binding.** Every sealed column still
+  has its dedicated AAD; ciphertext-substitution attacks on
+  the in-memory DB still fail to decrypt.
+- **`unsafe_code = forbid`.** Workspace-level invariant; not
+  relaxed.
+- **Argon2id parameters.** Same as production.
+- **Password policy.** The 12-character minimum still holds —
+  the hardcoded defaults (`admin-admin-admin`,
+  `alice-alice-alice`, `bob-bob-bob-bob`) deliberately satisfy
+  the production policy so the seed itself never has to
+  bypass the check.
+- **`redirect_uri` exact match** at the authorize endpoint.
+- **Migration set / schema version.** Same migrations run, so
+  a dev-mode SQLite file is a normal sui-id DB.
+
+### Invariants relaxed (with operator-visible warnings)
+
+- `cookie_secure = false` (no HTTPS in dev).
+- `hibp_mode = off` (no outbound HIBP requests; offline-friendly).
+- Login lockout relaxed via `max_lockout = 0` (no lockout from
+  password attempts during testing).
+- Defaults to in-memory SQLite (data evaporates on shutdown).
+
+Each is mentioned in the startup banner.
+
+### Hybrid seed model
+
+Three sources of dev-mode seed data, in priority order
+(highest first):
+
+1. **TOML file** via `--dev-seed PATH`. Full schema:
+   `[admin]` block, zero-or-more `[[user]]` blocks (with
+   optional `preferred_lang`), zero-or-more `[[client]]`
+   blocks (with `public = true` for PKCE-only clients,
+   `client_secret = "…"` for confidential clients with
+   predictable secrets).
+2. **CLI flag overrides**: `--dev-admin-password STR` and
+   `--dev-client-secret STR`. Apply on top of whatever was
+   resolved from the TOML or the defaults.
+3. **Hardcoded defaults**: admin / alice / bob (each with a
+   `<name>-<name>-<name>`-style 12+ char password), one
+   confidential test client with three localhost redirect
+   URIs (`:3000`, `:5173`, `:8000`).
+
+A TOML file with only `[admin]` falls back to the default
+users and the default client. A TOML file with only `[[user]]`
+blocks suppresses the default users and uses the supplied
+ones. The "supply any → default suppressed for that section"
+rule keeps cross-cutting overrides simple to reason about.
+
+### Bind defaults to loopback; non-loopback requires confirmation
+
+`--dev` listens on `127.0.0.1:8801` by default. Operators who
+need the IdP reachable from another host (Docker container, LAN
+demo, CI box) pass `--dev-bind 0.0.0.0:8801` or similar. The
+non-loopback case **requires** an explicit `yes` typed on stdin
+before sui-id binds — printed warnings alone are not enough,
+because `sui-id --dev --dev-bind 0.0.0.0` from a shell-history
+search is too easy to fire accidentally and would expose
+plaintext seed credentials to whatever LAN the host is on.
+
+### Added
+
+#### `crates/sui-id/src/dev_mode.rs`
+
+- `DevSeed` / `DevAdmin` / `DevUser` / `DevClient` structs
+  representing the in-memory seed plan.
+- `DevSeed::default()` — the hardcoded 3-user / 1-client seed.
+- `DevSeedToml` (private) + `load_seed_from_toml` — TOML
+  schema with `[admin]`, `[[user]]`, `[[client]]` blocks. Any
+  omitted section falls back to defaults.
+- `DevFlagOverrides` + `apply_overrides()` for CLI flag
+  overlay.
+- `resolve_seed(seed_path, overrides) -> (DevSeed, source)`
+  — the orchestrator that returns both the resolved seed and
+  a human-readable source description (used in the warning
+  banner).
+- `open_dev_db(Option<&Path>)` — fresh in-memory DB or a
+  truncated-and-reopened pinned file under a freshly
+  generated master key.
+- `apply_seed(db, clock, setup_token, &seed) -> SeedOutcome`
+  — runs `setup::create_initial_admin`, `admin::create_user`
+  per user, `admin::create_client` per client. For
+  confidential clients with operator-supplied secrets,
+  patches the `secret_hash` post-creation via the new
+  `repos::clients::set_dev_secret_hash` helper.
+- `print_dev_warnings(bind, source)` — stderr banner with
+  the `DEV MODE` warning header.
+- `print_seed_summary(seed, outcome, listen_addr)` — stderr
+  per-credential summary printed after seeding succeeds.
+- `confirm_external_bind(bind)` — stdin-based `yes`
+  confirmation for non-loopback bind. Aborts with an error
+  if the line is anything other than `yes`.
+
+#### Storage
+
+- `repos::clients::set_dev_secret_hash(db, id, Option<&str>)`
+  — patches `secret_hash` on a client row. Used only by dev
+  mode to give a confidential client a predictable secret.
+  Not on any HTTP path.
+
+#### CLI
+
+- `sui-id --dev` flag handling in `main.rs`. Dispatches into
+  `serve_dev` when present.
+- `serve_dev` (~110 lines): flag parsing
+  (`--dev-bind`, `--dev-db`, `--dev-seed`,
+  `--dev-admin-password`, `--dev-client-secret`), loopback
+  vs non-loopback bind detection, `confirm_external_bind`
+  invocation, `Config::sample()` synthesis with bind /
+  issuer patched in, `open_dev_db`, `apply_seed`, AppState
+  construction, axum listener with graceful shutdown.
+- Help text updated with the dev section and all dev-mode
+  flags.
+
+#### Examples
+
+- `examples/dev-seed.toml` — annotated sample TOML
+  illustrating every option (`[admin]`, multiple `[[user]]`,
+  confidential and public `[[client]]` blocks). Included so
+  developers can copy-edit-paste rather than reading the
+  parser source.
+
+### Tests
+
+- 6 new lib unit tests in `dev_mode::tests`:
+  - `defaults_are_sensible` (also asserts password policy)
+  - `flag_overrides_apply_in_order`
+  - `toml_partial_falls_back_to_defaults`
+  - `toml_empty_users_uses_defaults`
+  - `toml_full_replacement`
+  - `toml_invalid_returns_error`
+- 5 new e2e tests in `tests/e2e.rs`:
+  - `dev_mode_default_seed_creates_admin_users_and_client`
+  - `dev_mode_flag_overrides_apply_to_seed` (+ verifies
+    overridden admin can actually sign in)
+  - `dev_mode_toml_seed_replaces_defaults` (covers
+    `public = true`, default users suppressed)
+  - `dev_mode_pinned_db_truncates_existing_file`
+  - `dev_mode_resolve_seed_applies_priority` (TOML →
+    flag override layering)
+- All existing e2e and lib tests continue to pass.
+
+### Notes — what we deliberately did NOT do
+
+- **Custom client_id.** sui-id assigns a UUID-shaped client_id
+  at creation; dev mode prints that UUID in the seed summary
+  and operators copy-paste it into RP configs. We chose this
+  over leaking a "predictable id override" into the
+  production `CreateClientSpec`.
+- **Hot reseed.** A long-running `sui-id --dev` does not
+  re-read the TOML file when it changes. Restart `sui-id` to
+  reseed. The behaviour matches the rest of sui-id (config
+  changes are picked up at startup).
+- **Persistent dev installs.** `--dev-db PATH` is supported
+  but each restart truncates the file under a fresh master
+  key. There is no mode that preserves dev-mode state across
+  restarts; if you want persistence, you want production
+  mode, not dev mode.
+
 ## [0.27.0] - 2026-05-04
 
 Threat-model document refresh. The previous `docs/threat-model.md`
