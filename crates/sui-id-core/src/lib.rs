@@ -32,5 +32,6 @@ pub mod mail;
 pub mod forgot_password;
 pub mod i18n;
 pub mod hibp;
+pub mod key_rotation;
 
 pub use errors::{CoreError, CoreResult};

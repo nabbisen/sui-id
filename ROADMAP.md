@@ -416,6 +416,18 @@ rather than new auth primitives.
   `/admin/settings/security` exposes both knobs with bilingual
   inline help spelling out the disabled-on-zero semantics and
   the FIFO behaviour.
+- Master-key rotation CLI (v0.26.0). Re-seal every encrypted
+  column under a new 32-byte XChaCha20-Poly1305 master key,
+  with the old key file archived as `.bak.<timestamp>` beside
+  the new one. Runs offline (server stopped, atomic SQLite
+  transaction, no half-rotated state to recover from). Two
+  new-key sources: `--generate-new-key` (CLI mints a fresh
+  one) and `--new-key PATH` (operator-supplied). Default
+  confirmation prompt; skip with `--yes` for non-interactive
+  use. Six sealed columns are covered: signing keys, refresh
+  tokens, TOTP secrets, TOTP recovery codes, WebAuthn
+  passkeys, and the SMTP password. Hot/online rotation was
+  rejected as the wrong cost-vs-complexity trade for an IdP.
 
 ## Explicitly **not** on the roadmap
 

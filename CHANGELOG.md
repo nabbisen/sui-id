@@ -5,6 +5,147 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.0] - 2026-05-04
+
+Master-key rotation CLI. Re-seal every encrypted column in the
+database under a new 32-byte XChaCha20-Poly1305 master key, with
+the old key file archived beside the new one. Runs offline.
+
+### Why offline
+
+Hot rotation (live re-key while the server is running) was
+evaluated and rejected. The complexity ladder is steep: every
+sealed read needs to fall back through the old key, every seal
+needs to choose the new one, the cutover has to be globally
+consistent, and partial-rotation crash-recovery requires its
+own state machinery. Offline rotation gives the strongest
+guarantee — every row is fully old-keyed or fully new-keyed at
+any point an operator can observe — at the cost of a few
+seconds of downtime once or twice in the lifetime of a
+deployment, which is the right trade for an IdP.
+
+### Atomicity
+
+All re-seals run inside a single SQLite transaction. On any
+error during the loop the transaction rolls back; the DB file
+remains entirely under the old key, the old key file has not
+yet been renamed (the rename happens AFTER COMMIT), and
+re-running with the same arguments is a clean retry. There is
+no half-rotated state to recover from.
+
+### Old-key preservation
+
+After the transaction commits, the old key file is renamed to
+`<original_path>.bak.<RFC3339-Z timestamp>`:
+
+- The old material is available for restoring from a pre-
+  rotation DB backup. (The CLI does NOT take a DB backup
+  itself — that's the operator's responsibility.)
+- The file is moved out of the path the server reads on next
+  startup, so the server picks up the new key without further
+  configuration changes.
+- The file stays in the same directory the operator already
+  manages permissions on.
+
+Old key files are not auto-deleted. The operator decides when
+(or whether) to remove them.
+
+### Two ways to source the new key
+
+- `--generate-new-key` (default if neither flag given): the
+  CLI generates a fresh 32-byte key from the OS RNG and writes
+  it as base64 to the configured key file path.
+- `--new-key PATH`: the operator has prepared a key file
+  externally (HSM-backed workflow, key-server, etc) and points
+  the CLI at it. The contents are validated as base64-encoded
+  32 bytes and replace the configured key file.
+
+Both paths flow through `sui_id_store::crypto::MasterKey`, so
+the file format is identical regardless of source.
+
+### Confirmation
+
+The CLI prints a summary (DB path, key file path, new-key
+source, what the rename will do) and waits for the operator to
+type `yes`. Pass `--yes` / `-y` to skip the prompt for non-
+interactive use; the summary is printed either way so the
+operator's terminal scrollback always shows what was done.
+
+### Added
+
+#### Storage
+
+- `Database::with_tx(|tx| ... )` — exclusive SQLite transaction
+  helper. Commits on `Ok`, rolls back on `Err`. Used by master-
+  key rotation; available for any other operation that wants
+  the same all-or-nothing semantics.
+- `repos::signing_keys::reseal_all`,
+  `repos::refresh_tokens::reseal_all`,
+  `repos::user_totp::reseal_all` (returns `(secrets, recovery)`),
+  `repos::user_webauthn_credentials::reseal_all`,
+  `repos::smtp_config::reseal_all`. Each iterates the table,
+  decrypts under the old key, re-seals under the new key,
+  preserves the AAD, and runs inside the caller's transaction
+  (no commits).
+
+#### Core
+
+- `core::key_rotation::rotate_master_key(db, new_key) ->
+  RotationReport`. The orchestrator. Opens the transaction,
+  walks each table's `reseal_all`, returns counts.
+- `core::key_rotation::reseal_one(old_key, new_key, sealed,
+  aad)`. Pure helper exposed for unit testing.
+- `core::key_rotation::RotationReport` with per-table counts
+  and a `total()` convenience.
+
+#### CLI
+
+- `sui-id admin rotate-key [--generate-new-key | --new-key PATH]
+  [--yes] [--config PATH]`. Help text updated to spell out the
+  offline-only nature and the `.bak.<timestamp>` rename.
+- The CLI also writes an audit row
+  (`admin.master_key.rotated`) before exiting so the operator's
+  trail captures the rotation event.
+
+### Tests
+
+- 4 new lib tests in `core::key_rotation`:
+  - `reseal_one_round_trip`
+  - `reseal_one_fails_with_wrong_old_key`
+  - `reseal_one_with_wrong_aad_fails`
+  - `rotation_report_total_sums_columns`
+- 2 new e2e tests:
+  - `rotation_reseal_succeeds_and_old_key_no_longer_decrypts` —
+    rotation against a DB with a signing key and a sealed SMTP
+    password; asserts old key fails to decrypt and new key
+    succeeds.
+  - `rotation_on_minimal_db_only_rekeys_signing_key` — pins
+    the row count on a fresh install, so future migrations
+    that add new sealed columns force this test (and the
+    rotation entry list) to be updated.
+- All existing e2e (130+) and lib tests (188) continue to pass.
+
+### Notes — what's covered and what isn't
+
+Sealed columns covered by rotation:
+
+- `signing_keys.private_key_enc`
+- `refresh_tokens.token_enc`
+- `user_totp.secret_enc`
+- `user_totp.recovery_codes_enc`
+- `user_webauthn_credentials.passkey_enc`
+- `smtp_config.password_enc`
+
+Things NOT in scope for the rotation CLI (by design):
+
+- `password_reset_tokens.token_hash` is a SHA-256 hash, not
+  encrypted, so there is nothing to rotate.
+- The server cannot know the original passphrase for an
+  encrypted backup file, so rotation does not re-encrypt
+  backup tarballs. Operators who keep encrypted backups beside
+  the running deployment should refresh them after rotation.
+- Hot/online rotation. See the "Why offline" section above.
+
 ## [0.25.0] - 2026-05-04
 
 Idle session timeout and concurrent session cap. Two adjacent

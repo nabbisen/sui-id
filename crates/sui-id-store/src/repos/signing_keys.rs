@@ -157,3 +157,33 @@ pub fn list_published(db: &Database) -> StoreResult<Vec<SigningKeyRow>> {
         Ok(rows)
     })
 }
+
+/// Re-seal every `private_key_enc` row under `new_key`. Used by
+/// master-key rotation. Runs inside the caller's transaction —
+/// the function does not commit.
+pub fn reseal_all(
+    tx: &rusqlite::Transaction<'_>,
+    old_key: &crate::crypto::MasterKey,
+    new_key: &crate::crypto::MasterKey,
+) -> StoreResult<u64> {
+    let mut stmt = tx.prepare("SELECT id, private_key_enc FROM signing_keys")?;
+    let rows = stmt
+        .query_map([], |row| {
+            let id: String = row.get(0)?;
+            let enc: Vec<u8> = row.get(1)?;
+            Ok((id, enc))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    drop(stmt);
+    let mut count = 0u64;
+    for (id, enc) in rows {
+        let plain = crate::crypto::open(old_key, &enc, AAD)?;
+        let resealed = crate::crypto::seal(new_key, &plain, AAD)?;
+        tx.execute(
+            "UPDATE signing_keys SET private_key_enc = ?1 WHERE id = ?2",
+            rusqlite::params![resealed, id],
+        )?;
+        count += 1;
+    }
+    Ok(count)
+}

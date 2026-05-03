@@ -148,3 +148,35 @@ pub fn delete(db: &Database, id: WebauthnCredentialId, user_id: UserId) -> Store
         Ok(())
     })
 }
+
+/// Re-seal every `passkey_enc` row under `new_key`. Used by
+/// master-key rotation. Runs inside the caller's transaction —
+/// the function does not commit.
+pub fn reseal_all(
+    tx: &rusqlite::Transaction<'_>,
+    old_key: &crate::crypto::MasterKey,
+    new_key: &crate::crypto::MasterKey,
+) -> StoreResult<u64> {
+    let mut stmt = tx.prepare(
+        "SELECT id, passkey_enc FROM user_webauthn_credentials",
+    )?;
+    let rows = stmt
+        .query_map([], |row| {
+            let id: String = row.get(0)?;
+            let enc: Vec<u8> = row.get(1)?;
+            Ok((id, enc))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    drop(stmt);
+    let mut count = 0u64;
+    for (id, enc) in rows {
+        let plain = crate::crypto::open(old_key, &enc, AAD)?;
+        let resealed = crate::crypto::seal(new_key, &plain, AAD)?;
+        tx.execute(
+            "UPDATE user_webauthn_credentials SET passkey_enc = ?1 WHERE id = ?2",
+            rusqlite::params![resealed, id],
+        )?;
+        count += 1;
+    }
+    Ok(count)
+}

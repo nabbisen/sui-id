@@ -124,3 +124,33 @@ pub fn decrypt_password(
 pub fn seal_password(plaintext: &str, master_key: &MasterKey) -> StoreResult<Vec<u8>> {
     seal(master_key, plaintext.as_bytes(), SMTP_PASSWORD_AAD)
 }
+
+/// Re-seal the singleton `password_enc` (if present) under
+/// `new_key`. Returns 1 if a password was re-sealed, 0 if none
+/// is configured. Used by master-key rotation; does not commit.
+pub fn reseal_all(
+    tx: &rusqlite::Transaction<'_>,
+    old_key: &crate::crypto::MasterKey,
+    new_key: &crate::crypto::MasterKey,
+) -> StoreResult<u64> {
+    let row: Option<Vec<u8>> = tx
+        .query_row(
+            "SELECT password_enc FROM smtp_config WHERE id = 'singleton'",
+            [],
+            |r| r.get::<_, Option<Vec<u8>>>(0),
+        )
+        .or_else(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => Ok(None),
+            other => Err(other),
+        })?;
+    let Some(enc) = row else {
+        return Ok(0);
+    };
+    let plain = crate::crypto::open(old_key, &enc, SMTP_PASSWORD_AAD)?;
+    let resealed = crate::crypto::seal(new_key, &plain, SMTP_PASSWORD_AAD)?;
+    tx.execute(
+        "UPDATE smtp_config SET password_enc = ?1 WHERE id = 'singleton'",
+        rusqlite::params![resealed],
+    )?;
+    Ok(1)
+}

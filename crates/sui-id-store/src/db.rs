@@ -65,6 +65,29 @@ impl Database {
         f(&guard)
     }
 
+    /// Run a closure inside an exclusive SQLite transaction. The
+    /// transaction commits if the closure returns `Ok`, and rolls
+    /// back on `Err` (or on any panic the caller catches further
+    /// up).
+    ///
+    /// Used by master-key rotation, where the entire DB has to be
+    /// re-sealed atomically — partial rotation is not a state we
+    /// want to ever observe.
+    pub fn with_tx<R>(
+        &self,
+        f: impl FnOnce(&rusqlite::Transaction<'_>) -> StoreResult<R>,
+    ) -> StoreResult<R> {
+        let mut guard = self
+            .inner
+            .conn
+            .lock()
+            .expect("database mutex was poisoned by a previous panic");
+        let tx = guard.transaction()?;
+        let result = f(&tx)?;
+        tx.commit()?;
+        Ok(result)
+    }
+
     /// Reference to the master encryption key.
     pub fn key(&self) -> &MasterKey {
         &self.inner.key

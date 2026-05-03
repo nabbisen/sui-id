@@ -148,3 +148,46 @@ pub fn delete(db: &Database, user_id: UserId) -> StoreResult<()> {
         Ok(())
     })
 }
+
+/// Re-seal both `secret_enc` and `recovery_codes_enc` columns
+/// under `new_key`. Returns `(secrets, recovery)` counts. Used
+/// by master-key rotation; does not commit.
+pub fn reseal_all(
+    tx: &rusqlite::Transaction<'_>,
+    old_key: &crate::crypto::MasterKey,
+    new_key: &crate::crypto::MasterKey,
+) -> StoreResult<(u64, u64)> {
+    let mut stmt = tx.prepare(
+        "SELECT user_id, secret_enc, recovery_codes_enc FROM user_totp",
+    )?;
+    let rows = stmt
+        .query_map([], |row| {
+            let user_id: String = row.get(0)?;
+            let secret: Vec<u8> = row.get(1)?;
+            let recovery: Option<Vec<u8>> = row.get(2)?;
+            Ok((user_id, secret, recovery))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    drop(stmt);
+    let mut secrets = 0u64;
+    let mut recoveries = 0u64;
+    for (user_id, sec_enc, rec_enc) in rows {
+        let sec_plain = crate::crypto::open(old_key, &sec_enc, AAD)?;
+        let sec_resealed = crate::crypto::seal(new_key, &sec_plain, AAD)?;
+        let rec_resealed = match rec_enc {
+            Some(rec) => {
+                let plain = crate::crypto::open(old_key, &rec, RECOVERY_AAD)?;
+                let r = crate::crypto::seal(new_key, &plain, RECOVERY_AAD)?;
+                recoveries += 1;
+                Some(r)
+            }
+            None => None,
+        };
+        tx.execute(
+            "UPDATE user_totp SET secret_enc = ?1, recovery_codes_enc = ?2 WHERE user_id = ?3",
+            rusqlite::params![sec_resealed, rec_resealed, user_id],
+        )?;
+        secrets += 1;
+    }
+    Ok((secrets, recoveries))
+}

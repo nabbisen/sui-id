@@ -16,9 +16,9 @@ readme = "README.md"
 workspace = true
 
 [dependencies]
-sui-id-shared = { version = "0.25.0", path = "../sui-id-shared" }
-sui-id-store  = { version = "0.25.0", path = "../sui-id-store" }
-sui-id-i18n   = { version = "0.25.0", path = "../sui-id-i18n" }
+sui-id-shared = { version = "0.26.0", path = "../sui-id-shared" }
+sui-id-store  = { version = "0.26.0", path = "../sui-id-store" }
+sui-id-i18n   = { version = "0.26.0", path = "../sui-id-i18n" }
 
 serde = { workspace = true }
 serde_json = { workspace = true }

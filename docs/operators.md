@@ -72,6 +72,75 @@ refresh tokens or signing-key material.
 Keep at least one offline copy in your normal secrets store. Treat it the
 same way you would treat a TLS private key.
 
+### Rotating the master key
+
+`sui-id admin rotate-key` re-seals every encrypted column under a new
+32-byte XChaCha20-Poly1305 master key, archives the old key file beside
+the new one, and exits. Use it when:
+
+- the existing key may have been exposed (laptop stolen, file leaked,
+  contractor offboarded, etc);
+- a periodic rotation policy says it's time;
+- you've successfully restored from a backup whose key file you no
+  longer trust.
+
+**The CLI runs offline.** Stop the server before invoking it. Hot
+rotation isn't supported — see the v0.26.0 CHANGELOG entry for the
+rationale.
+
+A typical run looks like:
+
+```sh
+# 1. Stop the running server.
+systemctl stop sui-id
+
+# 2. Take a fresh backup. Rotation is atomic, but having a backup
+#    that pairs the OLD DB with the OLD key is the simplest fallback
+#    if anything in the workflow goes wrong.
+sui-id backup --to backup-pre-rotation.tar --encrypt
+
+# 3. Run the rotation. By default the CLI mints a fresh key.
+sui-id admin rotate-key
+
+# 4. Confirm at the prompt: type `yes`. Skip the prompt with --yes
+#    in scripts. The CLI prints a per-table count of re-sealed rows
+#    on success.
+
+# 5. Restart the server. It picks up the new key from the configured
+#    key_file path automatically.
+systemctl start sui-id
+```
+
+If you'd rather provide the new key yourself (e.g. derived from an
+HSM, a key-management server, or a reproducible derivation):
+
+```sh
+# Prepare a base64-encoded 32-byte key in a file:
+sui-id admin rotate-key --new-key /secure/new-master.key
+```
+
+After rotation:
+
+- The previous key file has been renamed to
+  `<original>.bak.<timestamp>` in the same directory. It is **not**
+  auto-deleted — keep it as long as you might need to read a backup
+  taken before the rotation, then remove it.
+- An audit row `admin.master_key.rotated` is appended with a count
+  of re-sealed rows.
+- The new key file is written with `0600` permissions on Unix.
+
+**Sealed columns covered:** signing keys, refresh tokens, TOTP
+secrets, TOTP recovery codes, WebAuthn passkeys, and the SMTP
+configuration password. The `password_reset_tokens` table holds
+SHA-256 hashes (not encrypted) and is unaffected. Encrypted backup
+tarballs are not re-keyed by this command — they have their own
+passphrase and are the operator's to refresh as needed.
+
+If the re-seal step fails for any reason (disk full, schema drift,
+etc), the SQLite transaction rolls back, the old key file is **not**
+yet renamed, and you can retry with the same arguments. There is no
+half-rotated state to recover from.
+
 ## First run
 
 1. Start sui-id. It will print a setup token to stderr that looks like:
