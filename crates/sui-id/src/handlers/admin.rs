@@ -140,6 +140,7 @@ pub async fn login_post(
 
 pub async fn mfa_challenge_get(
     state_ext: AppStateExt,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -157,7 +158,7 @@ pub async fn mfa_challenge_get(
         .unwrap_or(false);
     let token = crate::csrf::ensure_token(&jar);
     let resp =
-        Html(sui_id_web::render_mfa_challenge(None, token.clone(), has_passkey)).into_response();
+        Html(sui_id_web::render_mfa_challenge(None, token.clone(), has_passkey, lang)).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
 }
 
@@ -171,6 +172,7 @@ pub struct MfaChallengeForm {
 pub async fn mfa_challenge_post(
     state_ext: AppStateExt,
     crate::handlers::ClientIp(ip): crate::handlers::ClientIp,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
     Form(form): Form<MfaChallengeForm>,
 ) -> Result<Response, HttpError> {
@@ -224,9 +226,10 @@ pub async fn mfa_challenge_post(
             Ok((jar, Redirect::to(&next_target)).into_response())
         }
         Err(_) => {
+            let t = lang.strings();
             let flash = Flash {
                 kind: FlashKind::Error,
-                text: "Verification failed. Try again, or use a recovery code.".into(),
+                text: t.mfa_challenge_failed_flash.into(),
             };
             let _ = sui_id_store::repos::audit::append(
                 &app.db,
@@ -258,6 +261,7 @@ pub async fn mfa_challenge_post(
                     Some(flash),
                     token.clone(),
                     has_passkey,
+                    lang,
                 )),
             )
                 .into_response();
@@ -851,6 +855,7 @@ pub async fn signing_keys_delete(
 pub async fn profile_get(
     state_ext: AppStateExt,
     CurrentUser(user_id): CurrentUser,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -880,6 +885,7 @@ pub async fn profile_get(
         },
         None,
         token.clone(),
+        lang,
     ))
     .into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
@@ -958,6 +964,7 @@ pub struct ProfileLangForm {
 pub async fn profile_mfa_enroll_start(
     state_ext: AppStateExt,
     CurrentUser(user_id): CurrentUser,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
     Form(form): Form<crate::handlers::admin::CsrfOnlyForm>,
 ) -> Result<Response, HttpError> {
@@ -990,6 +997,7 @@ pub async fn profile_mfa_enroll_start(
         },
         None,
         token.clone(),
+        lang,
     ))
     .into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
@@ -1005,6 +1013,7 @@ pub struct MfaConfirmForm {
 pub async fn profile_mfa_enroll_confirm(
     state_ext: AppStateExt,
     CurrentUser(user_id): CurrentUser,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
     Form(form): Form<MfaConfirmForm>,
 ) -> Result<Response, HttpError> {
@@ -1030,6 +1039,7 @@ pub async fn profile_mfa_enroll_confirm(
     );
     let user = users::get(&app.db, user_id).map_err(|e| HttpError::html(CoreError::from(e)))?;
     let token = crate::csrf::ensure_token(&jar);
+    let t = lang.strings();
     let resp = Html(sui_id_web::render_profile(
         sui_id_web::ProfileData {
             username: user.username,
@@ -1049,9 +1059,10 @@ pub async fn profile_mfa_enroll_confirm(
         },
         Some(Flash {
             kind: FlashKind::Info,
-            text: "Two-factor authentication is now enabled.".into(),
+            text: t.profile_mfa_enrolled_flash.into(),
         }),
         token.clone(),
+        lang,
     ))
     .into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
@@ -1083,6 +1094,7 @@ pub async fn profile_mfa_disable(
 pub async fn profile_mfa_regenerate_recovery(
     state_ext: AppStateExt,
     CurrentUser(user_id): CurrentUser,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
     Form(form): Form<crate::handlers::admin::CsrfOnlyForm>,
 ) -> Result<Response, HttpError> {
@@ -1103,6 +1115,7 @@ pub async fn profile_mfa_regenerate_recovery(
     );
     let user = users::get(&app.db, user_id).map_err(|e| HttpError::html(CoreError::from(e)))?;
     let token = crate::csrf::ensure_token(&jar);
+    let t = lang.strings();
     let resp = Html(sui_id_web::render_profile(
         sui_id_web::ProfileData {
             username: user.username,
@@ -1122,9 +1135,10 @@ pub async fn profile_mfa_regenerate_recovery(
         },
         Some(Flash {
             kind: FlashKind::Info,
-            text: "Recovery codes regenerated. Save the new ones - the old ones no longer work.".into(),
+            text: t.profile_recovery_regenerated_flash.into(),
         }),
         token.clone(),
+        lang,
     ))
     .into_response();
     Ok(with_csrf_cookie(resp, &app, &token))

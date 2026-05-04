@@ -470,6 +470,16 @@ rather than new auth primitives.
   tabs beyond Basic / Security, error pages, email
   templates) are scheduled for later v0.29.x patch
   releases — each a self-contained chunk of 2-5 screens.
+- i18n self-service translations (v0.29.1). Phase 2 of
+  the i18n scope expansion. The MFA challenge screen (shown
+  between password and full session for TOTP-enabled users),
+  the profile page (TOTP status, passkey list and registration,
+  language preference), and the MFA setup page (QR code and
+  verify form) are now rendered through the typed `Strings`
+  table. ~47 new translation keys covering MFA challenge,
+  profile body, and MFA setup wizard. Includes one
+  parameterised string (`profile_subtitle_template` with
+  `{username}`).
 
 ## Explicitly **not** on the roadmap
 

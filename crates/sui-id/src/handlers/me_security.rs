@@ -59,6 +59,7 @@ pub struct RevokeAllOthersForm {
 pub async fn page_get(
     state_ext: AppStateExt,
     CurrentUser(user_id): CurrentUser,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -126,6 +127,7 @@ pub async fn page_get(
         },
         flash_from_query(&jar),
         token.clone(),
+        lang,
     );
     let resp = Html(html).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
@@ -301,6 +303,7 @@ pub struct PasswordChangeForm {
 pub async fn password_change_get(
     state_ext: AppStateExt,
     CurrentUser(user_id): CurrentUser,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -313,6 +316,7 @@ pub async fn password_change_get(
         },
         None,
         token.clone(),
+        lang,
     );
     let resp = Html(html).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
@@ -322,6 +326,7 @@ pub async fn password_change_post(
     state_ext: AppStateExt,
     CurrentUser(user_id): CurrentUser,
     crate::handlers::ClientIp(ip): crate::handlers::ClientIp,
+    crate::handlers::RequestLocale(_lang): crate::handlers::RequestLocale,
     jar: CookieJar,
     Form(form): Form<PasswordChangeForm>,
 ) -> Result<Response, HttpError> {

@@ -278,18 +278,20 @@ pub fn render_mfa_challenge(
     flash: Option<Flash>,
     csrf_token: String,
     has_passkey: bool,
+    lang: sui_id_i18n::Locale,
 ) -> String {
     render(move || {
+        let t = lang.strings();
         let csrf_for_totp = csrf_token.clone();
         let csrf_for_pk = csrf_token.clone();
         let passkey_block = if has_passkey {
             view! {
                 <hr class="divider" />
-                <p class="muted">"または、パスキーでサインイン:"</p>
+                <p class="muted">{t.mfa_challenge_passkey_alt}</p>
                 <form id="passkey-auth-form" method="post"
                       action="/admin/login/webauthn/start" class="stack">
                     <input type="hidden" name="_csrf" value=csrf_for_pk />
-                    <button type="submit" class="secondary">"パスキーでサインイン"</button>
+                    <button type="submit" class="secondary">{t.mfa_challenge_passkey_button}</button>
                 </form>
                 <script src="/static/webauthn.js"></script>
             }
@@ -298,21 +300,19 @@ pub fn render_mfa_challenge(
             view! { <></> }.into_any()
         };
         view! {
-            <crate::layout::AuthShell title="Verification required".to_string()>
-                <h1>"確認コード"</h1>
+            <crate::layout::AuthShell title=t.mfa_challenge_shell_title.to_string() lang=lang>
+                <h1>{t.mfa_challenge_title}</h1>
                 {flash_banner(flash)}
-                <p class="muted">
-                    "認証アプリの 6 桁コード、またはリカバリーコードを入力してください。"
-                </p>
+                <p class="muted">{t.mfa_challenge_lede}</p>
                 <form method="post" action="/admin/login/mfa" class="stack">
                     <input type="hidden" name="_csrf" value=csrf_for_totp />
                     <div class="field">
-                        <label for="code" class="field__label">"コード"</label>
+                        <label for="code" class="field__label">{t.mfa_challenge_code_label}</label>
                         <input id="code" name="code" type="text"
                                required=true autocomplete="one-time-code"
                                inputmode="text" autofocus=true />
                     </div>
-                    <button type="submit">"確認"</button>
+                    <button type="submit">{t.mfa_challenge_submit}</button>
                 </form>
                 {passkey_block}
             </crate::layout::AuthShell>
@@ -344,8 +344,14 @@ pub struct PasskeyDescriptor {
     pub last_used_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-pub fn render_profile(data: ProfileData, flash: Option<Flash>, csrf_token: String) -> String {
+pub fn render_profile(
+    data: ProfileData,
+    flash: Option<Flash>,
+    csrf_token: String,
+    lang: sui_id_i18n::Locale,
+) -> String {
     render(move || {
+        let t = lang.strings();
         let ProfileData {
             username,
             totp_enabled,
@@ -368,35 +374,36 @@ pub fn render_profile(data: ProfileData, flash: Option<Flash>, csrf_token: Strin
             view! {
                 <div class="flash warn" role="status">
                     <div class="stack-tight">
-                        <strong>"リカバリーコードを今すぐ保存してください。再表示はされません。"</strong>
-                        <p class="muted">
-                            "各コードは 1 度だけ使えます。安全な場所に保管してください。"
-                            "認証アプリへのアクセスを失った場合、6 桁コードの代わりにこのいずれかを入力してサインインできます。"
-                        </p>
+                        <strong>{t.profile_recovery_save_now}</strong>
+                        <p class="muted">{t.profile_recovery_save_lede}</p>
                         <ol>{lis}</ol>
                     </div>
                 </div>
             }
         });
+        let mfa_disable_onsubmit = format!(
+            "return confirm('{}');",
+            t.profile_mfa_disable_confirm.replace('\'', "\\'")
+        );
         let mfa_section = if totp_enabled {
             view! {
                 <div class="card">
-                    <h3 class="card__title">"認証アプリ(TOTP)"</h3>
+                    <h3 class="card__title">{t.profile_mfa_totp_card_title}</h3>
                     <p>
-                        "状態:"
-                        <span class="badge badge--ok" style="margin-left:var(--space-1)">"有効"</span>
+                        {t.profile_mfa_status_label}
+                        <span class="badge badge--ok" style="margin-left:var(--space-1)">{t.profile_mfa_status_enabled}</span>
                     </p>
                     <div class="card__footer">
                         <form method="post" action="/admin/profile/mfa/recovery-codes/regenerate"
                               style="display:inline">
                             <input type="hidden" name="_csrf" value=csrf_for_regen />
-                            <button type="submit" class="secondary">"リカバリーコード再生成"</button>
+                            <button type="submit" class="secondary">{t.profile_mfa_regenerate_codes}</button>
                         </form>
                         <form method="post" action="/admin/profile/mfa/disable"
                               style="display:inline"
-                              onsubmit="return confirm('認証アプリによる 2 段階認証を無効化しますか?');">
+                              onsubmit=mfa_disable_onsubmit>
                             <input type="hidden" name="_csrf" value=csrf_for_disable />
-                            <button type="submit" class="danger">"TOTP を無効化"</button>
+                            <button type="submit" class="danger">{t.profile_mfa_disable_button}</button>
                         </form>
                     </div>
                 </div>
@@ -405,25 +412,32 @@ pub fn render_profile(data: ProfileData, flash: Option<Flash>, csrf_token: Strin
         } else {
             view! {
                 <div class="card">
-                    <h3 class="card__title">"認証アプリ(TOTP)"</h3>
+                    <h3 class="card__title">{t.profile_mfa_totp_card_title}</h3>
                     <p>
-                        "状態:"
-                        <span class="badge badge--warn" style="margin-left:var(--space-1)">"未設定"</span>
+                        {t.profile_mfa_status_label}
+                        <span class="badge badge--warn" style="margin-left:var(--space-1)">{t.profile_mfa_status_not_configured}</span>
                     </p>
                     <p class="muted">
-                        "有効化すると、サインイン時に認証アプリの 6 桁コードが必要になります。"
-                        "標準準拠の TOTP アプリならどれでも利用できます(Aegis / FreeOTP / Google Authenticator / 1Password など)。"
+                        {t.profile_mfa_enroll_lede}
+                        " "
+                        {t.profile_mfa_enroll_apps_note}
                     </p>
                     <div class="card__footer">
                         <form method="post" action="/admin/profile/mfa/enroll/start">
                             <input type="hidden" name="_csrf" value=csrf_for_enroll />
-                            <button type="submit">"TOTP を設定"</button>
+                            <button type="submit">{t.profile_mfa_enroll_button}</button>
                         </form>
                     </div>
                 </div>
             }
             .into_any()
         };
+        let passkey_delete_onsubmit = format!(
+            "return confirm('{}');",
+            t.profile_passkeys_delete_confirm.replace('\'', "\\'")
+        );
+        let passkey_last_used_never = t.profile_passkeys_last_used_never.to_owned();
+        let passkey_delete_label = t.profile_passkeys_delete_button;
         let passkey_rows: Vec<_> = passkeys
             .into_iter()
             .map(|p| {
@@ -433,7 +447,8 @@ pub fn render_profile(data: ProfileData, flash: Option<Flash>, csrf_token: Strin
                 let last = p
                     .last_used_at
                     .map(fmt_time)
-                    .unwrap_or_else(|| "(未使用)".into());
+                    .unwrap_or_else(|| passkey_last_used_never.clone());
+                let onsubmit = passkey_delete_onsubmit.clone();
                 view! {
                     <tr>
                         <td>{p.nickname}</td>
@@ -441,9 +456,9 @@ pub fn render_profile(data: ProfileData, flash: Option<Flash>, csrf_token: Strin
                         <td class="muted">{last}</td>
                         <td>
                             <form method="post" action=delete_url style="display:inline"
-                                  onsubmit="return confirm('このパスキーを削除しますか? このパスキーでのサインインができなくなります。');">
+                                  onsubmit=onsubmit>
                                 <input type="hidden" name="_csrf" value=csrf />
-                                <button type="submit" class="danger">"削除"</button>
+                                <button type="submit" class="danger">{passkey_delete_label}</button>
                             </form>
                         </td>
                     </tr>
@@ -452,7 +467,7 @@ pub fn render_profile(data: ProfileData, flash: Option<Flash>, csrf_token: Strin
             .collect();
         let passkey_table = if passkey_rows.is_empty() {
             view! {
-                <p class="muted">"パスキーは未登録です。"</p>
+                <p class="muted">{t.profile_passkeys_empty}</p>
             }
             .into_any()
         } else {
@@ -461,9 +476,9 @@ pub fn render_profile(data: ProfileData, flash: Option<Flash>, csrf_token: Strin
                     <table>
                         <thead>
                             <tr>
-                                <th>"名前"</th>
-                                <th>"登録日"</th>
-                                <th>"最終使用"</th>
+                                <th>{t.profile_passkeys_th_name}</th>
+                                <th>{t.profile_passkeys_th_registered}</th>
+                                <th>{t.profile_passkeys_th_last_used}</th>
                                 <th></th>
                             </tr>
                         </thead>
@@ -473,64 +488,55 @@ pub fn render_profile(data: ProfileData, flash: Option<Flash>, csrf_token: Strin
             }
             .into_any()
         };
+        let subtitle = t.profile_subtitle_template.replace("{username}", &username);
         view! {
-            <Shell title="Profile".to_string() show_nav=true current=Some("profile".to_string())>
+            <Shell title=t.profile_title.to_string() show_nav=true current=Some("profile".to_string()) lang=lang>
                 <header class="page-header">
                     <div>
-                        <h1 class="page-header__title">"プロフィール"</h1>
-                        <p class="page-header__lede">
-                            {format!("{username} のセキュリティ設定")}
-                        </p>
+                        <h1 class="page-header__title">{t.profile_title}</h1>
+                        <p class="page-header__lede">{subtitle}</p>
                     </div>
                 </header>
                 {flash_banner(flash)}
                 {recovery_block}
 
                 <section>
-                    <h2>"2 段階認証"</h2>
+                    <h2>{t.profile_mfa_section}</h2>
                     {mfa_section}
                 </section>
 
                 <section>
-                    <h2>"パスキー"</h2>
-                    <p class="muted">
-                        "パスキーは、スマートフォン・PC・セキュリティキー・パスワードマネージャに保存されるハードウェア裏付け資格情報です。"
-                        "デバイスから外に出ません。複数登録できます — バックアップとして 2 つ以上登録しておくことを推奨します。"
-                    </p>
+                    <h2>{t.profile_passkeys_section}</h2>
+                    <p class="muted">{t.profile_passkeys_lede}</p>
                     {passkey_table}
-                    <h3>"新しいパスキーを登録"</h3>
+                    <h3>{t.profile_passkeys_register_section}</h3>
                     <div class="card">
                         <form id="passkey-register-form" method="post"
                               action="/admin/profile/webauthn/register/start" class="stack">
                             <input type="hidden" name="_csrf" value=csrf_for_passkey_register />
                             <div class="field">
-                                <label for="pk-nickname" class="field__label">"ニックネーム"</label>
+                                <label for="pk-nickname" class="field__label">{t.profile_passkeys_nickname_label}</label>
                                 <input id="pk-nickname" name="nickname" type="text" required=true />
-                                <span class="field__hint">"例: YubiKey 5C / MacBook Touch ID"</span>
+                                <span class="field__hint">{t.profile_passkeys_nickname_hint}</span>
                             </div>
                             <div>
-                                <button type="submit">"パスキーを登録"</button>
+                                <button type="submit">{t.profile_passkeys_register_button}</button>
                             </div>
                         </form>
                     </div>
                 </section>
 
                 <section class="section">
-                    <h2 class="section__title">"表示言語 / Display language"</h2>
-                    <p class="muted">
-                        "サインイン後の画面で使用する言語。「ブラウザに従う」を選ぶと "
-                        "ブラウザの設定 (Accept-Language) に応じて自動選択されます。 "
-                        "/ Choose the language sui-id uses after sign-in. "
-                        "\"Browser default\" follows your browser's language setting."
-                    </p>
+                    <h2 class="section__title">{t.profile_lang_section}</h2>
+                    <p class="muted">{t.profile_lang_lede}</p>
                     <div class="card">
                         <form method="post" action="/admin/profile/lang" class="stack">
                             <input type="hidden" name="_csrf" value=csrf_for_lang />
                             <div class="field">
-                                <label for="lang-select" class="field__label">"言語 / Language"</label>
+                                <label for="lang-select" class="field__label">{t.profile_lang_field_label}</label>
                                 <select id="lang-select" name="lang">
                                     <option value="" selected=preferred_lang.is_none()>
-                                        "ブラウザに従う / Browser default"
+                                        {t.profile_lang_browser_default}
                                     </option>
                                     {sui_id_i18n::Locale::ALL.iter().map(|loc| {
                                         let tag = loc.tag();
@@ -543,7 +549,7 @@ pub fn render_profile(data: ProfileData, flash: Option<Flash>, csrf_token: Strin
                                 </select>
                             </div>
                             <div>
-                                <button type="submit">"保存 / Save"</button>
+                                <button type="submit">{t.button_save}</button>
                             </div>
                         </form>
                     </div>
@@ -564,50 +570,56 @@ pub struct MfaSetupData {
     pub secret_b32: String,
 }
 
-pub fn render_mfa_setup(data: MfaSetupData, flash: Option<Flash>, csrf_token: String) -> String {
+pub fn render_mfa_setup(
+    data: MfaSetupData,
+    flash: Option<Flash>,
+    csrf_token: String,
+    lang: sui_id_i18n::Locale,
+) -> String {
     render(move || {
+        let t = lang.strings();
         let MfaSetupData { otpauth_uri, qr_svg, secret_b32 } = data;
         view! {
-            <Shell title="Set up MFA".to_string() show_nav=true current=Some("profile".to_string())>
+            <Shell title=t.mfa_setup_shell_title.to_string() show_nav=true current=Some("profile".to_string()) lang=lang>
                 <header class="page-header">
                     <div>
-                        <h1 class="page-header__title">"2 段階認証の設定"</h1>
-                        <p class="page-header__lede">"認証アプリと sui-id を関連付けます。"</p>
+                        <h1 class="page-header__title">{t.mfa_setup_title}</h1>
+                        <p class="page-header__lede">{t.mfa_setup_lede}</p>
                     </div>
                 </header>
                 {flash_banner(flash)}
 
                 <div class="card">
-                    <h3 class="card__title">"手順"</h3>
+                    <h3 class="card__title">{t.mfa_setup_steps_title}</h3>
                     <ol>
-                        <li>"認証アプリを開き、下の QR コードを読み取ってください。手入力する場合は秘密鍵をペーストしてください。"</li>
-                        <li>"アプリに表示される 6 桁コードを以下のフォームに入力して確認してください。"</li>
-                        <li>"設定完了後、1 度だけ使えるリカバリーコードが 8 個発行されます。安全な場所に保管してください。"</li>
+                        <li>{t.mfa_setup_step1}</li>
+                        <li>{t.mfa_setup_step2}</li>
+                        <li>{t.mfa_setup_step3}</li>
                     </ol>
                 </div>
 
                 <div class="card">
-                    <h3 class="card__title">"QR コードと秘密鍵"</h3>
+                    <h3 class="card__title">{t.mfa_setup_qr_card_title}</h3>
                     <div inner_html=qr_svg style="max-width:240px;margin-bottom:var(--space-3)"></div>
-                    <p>"秘密鍵:"<span class="code" style="margin-left:var(--space-1)">{secret_b32}</span></p>
+                    <p>{t.mfa_setup_secret_label}<span class="code" style="margin-left:var(--space-1)">{secret_b32}</span></p>
                     <details>
-                        <summary class="muted">"otpauth URI(上級者向け)"</summary>
+                        <summary class="muted">{t.mfa_setup_otpauth_summary}</summary>
                         <p><span class="code">{otpauth_uri}</span></p>
                     </details>
                 </div>
 
                 <div class="card">
-                    <h3 class="card__title">"確認"</h3>
+                    <h3 class="card__title">{t.mfa_setup_verify_card_title}</h3>
                     <form method="post" action="/admin/profile/mfa/enroll/confirm" class="stack">
                         <input type="hidden" name="_csrf" value=csrf_token />
                         <div class="field">
-                            <label for="code" class="field__label">"確認コード"</label>
+                            <label for="code" class="field__label">{t.mfa_setup_code_label}</label>
                             <input id="code" name="code" type="text" required=true
                                    autocomplete="one-time-code" inputmode="text" autofocus=true />
-                            <span class="field__hint">"アプリに表示されている 6 桁コード"</span>
+                            <span class="field__hint">{t.mfa_setup_code_hint}</span>
                         </div>
                         <div>
-                            <button type="submit">"確認して有効化"</button>
+                            <button type="submit">{t.mfa_setup_confirm_button}</button>
                         </div>
                     </form>
                 </div>
@@ -1552,8 +1564,10 @@ pub fn render_me_security(
     data: MeSecurityData,
     flash: Option<Flash>,
     csrf_token: String,
+    lang: sui_id_i18n::Locale,
 ) -> String {
     render(move || {
+        let t = lang.strings();
         let MeSecurityData {
             username,
             is_admin,
@@ -1565,6 +1579,9 @@ pub fn render_me_security(
         } = data;
 
         let csrf_for_revoke_others = csrf_token.clone();
+        let revoke_label = t.me_security_sessions_revoke;
+        let revoke_confirm = t.me_security_sessions_revoke_confirm.to_owned();
+        let current_badge = t.me_security_sessions_current_badge;
 
         // Session table rows. Each non-current row gets its own
         // mini-form so a user can revoke that specific entry.
@@ -1583,19 +1600,20 @@ pub fn render_me_security(
                 let action_cell = if is_current {
                     view! {
                         <td>
-                            <span class="badge badge--accent">"current session"</span>
+                            <span class="badge badge--accent">{current_badge}</span>
                         </td>
                     }
                     .into_any()
                 } else {
                     let csrf_for_row = csrf_token.clone();
                     let post_url = format!("/me/security/sessions/{id}/revoke");
+                    let onsubmit_attr = format!("return confirm('{}');", revoke_confirm.replace('\'', "\\'"));
                     view! {
                         <td>
                             <form method="post" action=post_url style="display:inline"
-                                  onsubmit="return confirm('このセッションをサインアウトしますか?');">
+                                  onsubmit=onsubmit_attr>
                                 <input type="hidden" name="_csrf" value=csrf_for_row />
-                                <button type="submit" class="secondary">"Revoke"</button>
+                                <button type="submit" class="secondary">{revoke_label}</button>
                             </form>
                         </td>
                     }
@@ -1646,7 +1664,7 @@ pub fn render_me_security(
         let admin_link = is_admin.then(|| {
             view! {
                 <p class="muted">
-                    <a href="/admin">"管理画面を開く →"</a>
+                    <a href="/admin">{t.me_security_admin_link}</a>
                 </p>
             }
         });
@@ -1655,17 +1673,20 @@ pub fn render_me_security(
             let parts = {
                 let mut v = Vec::<String>::new();
                 if totp_enabled {
-                    v.push("認証アプリ".into());
+                    v.push(t.me_security_mfa_factor_totp.to_owned());
                 }
                 if passkey_count > 0 {
-                    v.push(format!("パスキー {passkey_count} 件"));
+                    v.push(
+                        t.me_security_mfa_factor_passkey_n
+                            .replace("{n}", &passkey_count.to_string()),
+                    );
                 }
                 v.join(" / ")
             };
             view! {
                 <p>
-                    "状態:"
-                    <span class="badge badge--ok" style="margin-left:var(--space-1)">"有効"</span>
+                    {t.me_security_mfa_status_label}
+                    <span class="badge badge--ok" style="margin-left:var(--space-1)">{t.me_security_mfa_status_enabled}</span>
                     <span class="muted" style="margin-left:var(--space-2)">{parts}</span>
                 </p>
             }
@@ -1674,24 +1695,26 @@ pub fn render_me_security(
             view! {
                 <div class="flash warn" role="status">
                     <div class="stack-tight">
-                        <strong>"2 段階認証が無効です。"</strong>
-                        <p class="muted" style="margin:0">
-                            "現在このアカウントはパスワードのみで保護されています。"
-                            "パスキーまたは認証アプリの登録を強く推奨します。"
-                        </p>
+                        <strong>{t.me_security_mfa_disabled_title}</strong>
+                        <p class="muted" style="margin:0">{t.me_security_mfa_disabled_lede}</p>
                     </div>
                 </div>
             }
             .into_any()
         };
 
+        let revoke_all_others_onsubmit = format!(
+            "return confirm('{}');",
+            t.me_security_sessions_revoke_all_others_confirm.replace('\'', "\\'")
+        );
+
         view! {
-            <Shell title="Security".to_owned() show_nav=false current=None>
+            <Shell title=t.me_security_title.to_owned() show_nav=false current=None lang=lang>
                 <header class="page-header">
                     <div>
-                        <h1 class="page-header__title">"アカウントセキュリティ"</h1>
+                        <h1 class="page-header__title">{t.me_security_title}</h1>
                         <p class="page-header__lede">
-                            <strong>{username}</strong>" としてサインイン中。"
+                            <strong>{username}</strong>{t.me_security_signed_in_as_suffix}
                         </p>
                     </div>
                 </header>
@@ -1699,34 +1722,30 @@ pub fn render_me_security(
                 {admin_link}
 
                 <section>
-                    <h2>"2 段階認証"</h2>
+                    <h2>{t.me_security_mfa_section}</h2>
                     <div class="card">
                         {mfa_summary}
                         <div class="card__footer">
                             <a href="/admin/profile" class="button secondary">
-                                "認証手段を管理"
+                                {t.me_security_mfa_manage}
                             </a>
                             <a href="/me/security/password" class="button secondary">
-                                "パスワードを変更"
+                                {t.me_security_password_change_link}
                             </a>
                         </div>
                     </div>
                 </section>
 
                 <section>
-                    <h2>"サインイン中の場所"</h2>
-                    <p class="muted">
-                        "1 行が 1 つのブラウザセッションです。"
-                        "Revoke を押すとそのブラウザは即座にサインアウトされます。"
-                        "「current session」とマークされているのは現在使用中のセッションです。"
-                    </p>
+                    <h2>{t.me_security_sessions_section}</h2>
+                    <p class="muted">{t.me_security_sessions_lede}</p>
                     <div class="table-wrap">
                         <table>
                             <thead>
                                 <tr>
-                                    <th>"開始日時"</th>
-                                    <th>"期限"</th>
-                                    <th>"要素"</th>
+                                    <th>{t.me_security_sessions_th_started}</th>
+                                    <th>{t.me_security_sessions_th_expires}</th>
+                                    <th>{t.me_security_sessions_th_factors}</th>
                                     <th></th>
                                 </tr>
                             </thead>
@@ -1735,29 +1754,26 @@ pub fn render_me_security(
                     </div>
                     <form method="post" action="/me/security/sessions/revoke-all-others"
                           style="margin-top:var(--space-3)"
-                          onsubmit="return confirm('現在のセッション以外をすべてサインアウトしますか?');">
+                          onsubmit=revoke_all_others_onsubmit>
                         <input type="hidden" name="_csrf" value=csrf_for_revoke_others />
                         <input type="hidden" name="current_session" value=current_session_id />
                         <button type="submit" class="secondary">
-                            "他のすべてのセッションをサインアウト"
+                            {t.me_security_sessions_revoke_all_others}
                         </button>
                     </form>
                 </section>
 
                 <section>
-                    <h2>"最近のアクティビティ"</h2>
-                    <p class="muted">
-                        "あなたのアカウントに関わる認証および管理イベントです。"
-                        "心当たりのない操作がある場合は、すぐにパスワードを変更し、他のセッションをサインアウトしてください。"
-                    </p>
+                    <h2>{t.me_security_activity_section}</h2>
+                    <p class="muted">{t.me_security_activity_lede}</p>
                     <div class="table-wrap">
                         <table>
                             <thead>
                                 <tr>
-                                    <th>"日時"</th>
-                                    <th>"イベント"</th>
-                                    <th>"結果"</th>
-                                    <th>"備考"</th>
+                                    <th>{t.me_security_activity_th_when}</th>
+                                    <th>{t.me_security_activity_th_event}</th>
+                                    <th>{t.me_security_activity_th_result}</th>
+                                    <th>{t.me_security_activity_th_note}</th>
                                 </tr>
                             </thead>
                             <tbody>{event_rows}</tbody>
@@ -1783,20 +1799,22 @@ pub fn render_password_change(
     data: PasswordChangeData,
     flash: Option<Flash>,
     csrf_token: String,
+    lang: sui_id_i18n::Locale,
 ) -> String {
     render(move || {
+        let t = lang.strings();
         let PasswordChangeData {
             username,
             revoke_others_default,
         } = data;
         let revoke_attr = if revoke_others_default { Some("") } else { None };
         view! {
-            <Shell title="Change password".to_owned() show_nav=false current=None>
+            <Shell title=t.password_change_title.to_owned() show_nav=false current=None lang=lang>
                 <header class="page-header">
                     <div>
-                        <h1 class="page-header__title">"パスワードを変更"</h1>
+                        <h1 class="page-header__title">{t.password_change_title}</h1>
                         <p class="page-header__lede">
-                            <strong>{username}</strong>" としてサインイン中。"
+                            <strong>{username}</strong>{t.me_security_signed_in_as_suffix}
                         </p>
                     </div>
                 </header>
@@ -1808,22 +1826,20 @@ pub fn render_password_change(
                         <input type="hidden" name="_csrf" value=csrf_token />
 
                         <div class="field">
-                            <label for="current_password" class="field__label">"現在のパスワード"</label>
+                            <label for="current_password" class="field__label">{t.password_change_current_label}</label>
                             <input type="password" id="current_password" name="current_password"
                                    required autocomplete="current-password" />
                         </div>
 
                         <div class="field">
-                            <label for="new_password" class="field__label">"新しいパスワード"</label>
+                            <label for="new_password" class="field__label">{t.password_change_new_label}</label>
                             <input type="password" id="new_password" name="new_password"
                                    required autocomplete="new-password" minlength="12" />
-                            <span class="field__hint">
-                                "12 文字以上。短く複雑なパスワードよりも、長くランダムなフレーズの方が安全です。"
-                            </span>
+                            <span class="field__hint">{t.password_change_new_hint}</span>
                         </div>
 
                         <div class="field">
-                            <label for="confirm_password" class="field__label">"新しいパスワード(確認)"</label>
+                            <label for="confirm_password" class="field__label">{t.password_change_confirm_label}</label>
                             <input type="password" id="confirm_password" name="confirm_password"
                                    required autocomplete="new-password" minlength="12" />
                         </div>
@@ -1832,16 +1848,14 @@ pub fn render_password_change(
                             <label class="row" style="gap:var(--space-2)">
                                 <input type="checkbox" name="revoke_others" value="1"
                                        checked=revoke_attr />
-                                <span>"パスワード変更後、他のブラウザ/アプリをサインアウトする"</span>
+                                <span>{t.password_change_revoke_others_label}</span>
                             </label>
-                            <span class="field__hint">
-                                "推奨。既存のセッションやリフレッシュトークンが無効化され、新しいパスワードでの再サインインが必要になります。"
-                            </span>
+                            <span class="field__hint">{t.password_change_revoke_others_hint}</span>
                         </div>
 
                         <div class="row">
-                            <button type="submit">"パスワードを変更"</button>
-                            <a href="/me/security" class="button secondary">"キャンセル"</a>
+                            <button type="submit">{t.password_change_submit}</button>
+                            <a href="/me/security" class="button secondary">{t.button_cancel}</a>
                         </div>
                     </form>
                 </div>

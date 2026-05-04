@@ -5,6 +5,132 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.1] - 2026-05-04
+
+i18n scope expansion, phase 2: the self-service security
+screens. The MFA challenge (shown between password verification
+and a full session, when the user has TOTP enabled), the
+profile page (TOTP enrolment status, passkey list and
+registration, language preference), and the MFA setup page
+(QR code + verify form for TOTP enrolment) are now rendered
+through `sui-id-i18n` and respect the resolved locale.
+
+### Why these screens, in this order
+
+These three are what an end user — not just an operator —
+sees during normal account life: the moment after entering
+their password (MFA challenge), the place they go to manage
+their second factor (profile), and the wizard for setting
+that up the first time (MFA setup). They sit immediately
+adjacent to the v0.29.0 auth-flow set, share the same
+`AuthShell` / `Shell` plumbing, and complete the
+"non-Japanese-reading user can configure their account" part
+of the experience.
+
+The bilingual `/ Display language` style placeholder text
+that was in the profile page in v0.23.0 (a stop-gap until
+real translations existed) is now gone — the profile page
+shows just the resolved-locale wording.
+
+### Added
+
+#### View functions now take a `lang: sui_id_i18n::Locale` parameter
+
+- `render_mfa_challenge(flash, csrf, has_passkey, lang)`
+- `render_profile(data, flash, csrf, lang)`
+- `render_mfa_setup(data, flash, csrf, lang)`
+
+The `<html lang="…">` attribute reflects the resolved locale.
+The MFA challenge shell title (`mfa_challenge_shell_title`)
+also localises now — previously hardcoded as
+`"Verification required"`.
+
+#### Handler-side `RequestLocale` extractor wiring
+
+- `handlers::admin::mfa_challenge_get`
+- `handlers::admin::mfa_challenge_post` (also localises the
+  failed-verification flash text)
+- `handlers::admin::profile_get`
+- `handlers::admin::profile_mfa_enroll_start`
+- `handlers::admin::profile_mfa_enroll_confirm` (also
+  localises the "Two-factor authentication is now enabled."
+  flash text)
+- `handlers::admin::profile_mfa_regenerate_recovery`
+
+#### New translation keys (~47)
+
+- **MFA challenge (8)**: `mfa_challenge_shell_title`,
+  `mfa_challenge_title`, `mfa_challenge_lede`,
+  `mfa_challenge_code_label`, `mfa_challenge_submit`,
+  `mfa_challenge_passkey_alt`, `mfa_challenge_passkey_button`,
+  `mfa_challenge_failed_flash`.
+- **Profile / self-service security (~25)**:
+  `profile_subtitle_template` (with `{username}` placeholder),
+  `profile_recovery_save_now`, `profile_recovery_save_lede`,
+  `profile_mfa_section`, `profile_mfa_totp_card_title`,
+  `profile_mfa_status_label`, `profile_mfa_status_enabled`,
+  `profile_mfa_status_not_configured`,
+  `profile_mfa_regenerate_codes`,
+  `profile_mfa_disable_confirm`, `profile_mfa_disable_button`,
+  `profile_mfa_enroll_lede`, `profile_mfa_enroll_apps_note`,
+  `profile_mfa_enroll_button`, `profile_mfa_enrolled_flash`,
+  `profile_passkeys_section`, `profile_passkeys_lede`,
+  `profile_passkeys_th_name`, `profile_passkeys_th_registered`,
+  `profile_passkeys_th_last_used`,
+  `profile_passkeys_last_used_never`,
+  `profile_passkeys_delete_confirm`,
+  `profile_passkeys_delete_button`, `profile_passkeys_empty`,
+  `profile_passkeys_register_section`,
+  `profile_passkeys_nickname_label`,
+  `profile_passkeys_nickname_hint`,
+  `profile_passkeys_register_button`,
+  `profile_lang_section`, `profile_lang_lede`,
+  `profile_lang_field_label`.
+- **MFA setup (14)**: `mfa_setup_shell_title`,
+  `mfa_setup_title`, `mfa_setup_lede`, `mfa_setup_steps_title`,
+  `mfa_setup_step1`, `mfa_setup_step2`, `mfa_setup_step3`,
+  `mfa_setup_qr_card_title`, `mfa_setup_secret_label`,
+  `mfa_setup_otpauth_summary`, `mfa_setup_verify_card_title`,
+  `mfa_setup_code_label`, `mfa_setup_code_hint`,
+  `mfa_setup_confirm_button`.
+
+The existing `profile_title` and `profile_lang_browser_default`
+keys (used by the older `/admin/profile` form) are reused
+unchanged to avoid duplication.
+
+### Tests
+
+- 4 new e2e tests in `tests/e2e.rs`:
+  - `profile_renders_in_en` — `Accept-Language: en` →
+    `<html lang="en">` + English profile wording (after
+    completing setup wizard and signing in).
+  - `profile_renders_in_ja_with_cookie_override` — pins
+    the `sui_id_lang` cookie's precedence over
+    `Accept-Language` for the profile page specifically.
+  - `mfa_setup_renders_in_en` — drives the
+    `POST /admin/profile/mfa/enroll/start` endpoint with a
+    valid CSRF token, asserts the rendered MFA setup page
+    is in English.
+  - `mfa_challenge_renders_in_en_without_pending` — pins
+    the MFA challenge GET in English.
+- All 134+ existing e2e tests and 194 lib tests continue to
+  pass without modification.
+
+### Notes — what's still not in this release
+
+- **Admin dashboard / users / clients / signing-keys / audit
+  log** — scheduled for v0.29.2.
+- **Settings tabs beyond Basic / Security** (Authentication,
+  Logs, Email, Other).
+- **Error pages** (404 / 500 / rate-limited).
+- **Email templates** (password-changed notification, reset
+  link) — translation requires per-recipient locale lookup
+  in `core::mail`, which is its own small refactor.
+
+The phase-2 scope was chosen to close out the user-facing
+auth-and-security loop in one release. The remaining patches
+target operator-facing screens.
+
 ## [0.29.0] - 2026-05-04
 
 i18n scope expansion, phase 1: the auth-flow screens. Setup
