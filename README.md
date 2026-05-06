@@ -3,6 +3,7 @@
 > A self-hosted, single-binary OpenID Connect provider written in Rust.
 > Quiet, careful, and small enough to read end to end.
 
+![Status](https://img.shields.io/badge/status-unstable-red)
 [![crates.io](https://img.shields.io/crates/v/sui-id?label=rust)](https://crates.io/crates/sui-id)
 [![Rust Documentation](https://docs.rs/sui-id/badge.svg?version=latest)](https://docs.rs/sui-id)
 [![Dependency Status](https://deps.rs/crate/sui-id/latest/status.svg)](https://deps.rs/crate/sui-id)
