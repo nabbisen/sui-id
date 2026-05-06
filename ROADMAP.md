@@ -5,8 +5,72 @@ a promise.
 
 ## Near term
 
-(None outstanding — all near-term items shipped in v0.3.0. Next batch
-draws from medium-term.)
+The v0.29.3 external codebase review surfaced four high-priority
+findings that take precedence over any new feature work, plus
+three medium-priority items in the same vein. Each is RFC-tracked.
+
+**High priority — security and spec compliance:**
+
+- **Revoke sessions and refresh tokens on forgot-password
+  completion** —
+  see [RFC 010](./rfcs/010-forgot-password-revoke.md). The
+  highest-priority item: today the email-link reset path
+  substitutes the password but leaves prior sessions and refresh
+  tokens active. The admin-driven and self-service password-
+  change paths revoke; this one doesn't. Restoring symmetry is a
+  few lines plus a regression test.
+- **Enforce WebAuthn transport (HTTPS / localhost) at the
+  server** —
+  see [RFC 011](./rfcs/011-webauthn-transport-enforcement.md).
+  The spec requires WebAuthn run only over HTTPS or localhost
+  HTTP. Today the server doesn't enforce this — it relies on
+  the browser. Adding a scheme/host check at `webauthn::build()`
+  brings the invariant in line with the rest of the codebase's
+  fail-loud-at-startup posture.
+- **HIBP scope expansion (priority elevated by review)** —
+  see [RFC 003](./rfcs/003-hibp-expansion.md). Originally a
+  medium-term feature breadth item; the review confirmed it's
+  a *consistency* gap (with `hibp_mode = block`, setup is
+  blocked but self-service password change passes through).
+  Wire the existing check into the three remaining
+  password-set entry points.
+- **Setup wizard scope reconciliation** —
+  see [RFC 012](./rfcs/012-setup-wizard-reconciliation.md). The
+  spec describes a wizard that collects language, HIBP mode,
+  log policy, encryption-key handling, and basic settings; the
+  implementation collects roughly the admin account. Maintainer
+  decision needed on which way the spec and code line up; the
+  RFC frames the options and recommends a hybrid (Position C).
+- **Server logging completeness** —
+  see [RFC 016](./rfcs/016-server-logging-completeness.md). A
+  maintainer-surfaced gap: there is no `TraceLayer` mounted, so
+  routine HTTP requests don't appear in logs at all. A dev-mode
+  operator can't confirm requests are arriving. There's also
+  no file-appender option for production deployments that want
+  log retention. The RFC adds `tower-http`'s `TraceLayer`,
+  `tracing-appender` for daily-rotated file output, dev-default
+  access logging, production-default off, and pins the
+  redaction invariant (passwords / tokens / cookie values
+  never reach any sink) with explicit tests.
+
+**Medium priority — performance and maintainability:**
+
+- **Reduce blocking impact of synchronous SQLite on async
+  handlers** —
+  see [RFC 013](./rfcs/013-db-blocking-mitigation.md). Today
+  every repo call holds a sync mutex on a Tokio worker. Wrap
+  DB I/O in `spawn_blocking` to free the runtime under load.
+- **Hot-path caches and benchmark harness** —
+  see [RFC 014](./rfcs/014-hot-path-caches-and-benchmarks.md).
+  Cache the redirect-origin set used at the token endpoint and
+  the JWKS used for JWT verification. Introduce a `criterion`
+  benchmark harness so the impact is measured rather than
+  asserted.
+- **Documentation consistency pass** —
+  see [RFC 015](./rfcs/015-doc-consistency-pass.md). README
+  references stale paths (`crates/sui-id-bin/...`), the settings
+  handler's module comment lies about the handler's scope, and
+  spot drift exists in `docs/`.
 
 ## Medium term
 
@@ -17,7 +81,12 @@ authentication and authorization surface is, for v0.x, broadly
 complete; the natural next steps are operability and quality work
 rather than new auth primitives.
 
-- **Persistent email outbox + retry worker.** v0.22.0 sends mail
+The three medium-term items below all have detailed designs in
+[`rfcs/`](./rfcs/) (v0.29.3 and onward); see those for the
+implementation contract.
+
+- **Persistent email outbox + retry worker** —
+  see [RFC 001](./rfcs/001-email-outbox.md). v0.22.0 sends mail
   inline with the request that triggered it; failures land in
   the audit log but the message itself is lost. For deployments
   where bounce rates are sensitive (password-reset to a flaky
@@ -28,7 +97,8 @@ rather than new auth primitives.
   forgot-password / password-change), but a clear future
   enhancement once a deployment hits delivery problems.
 
-- **i18n scope expansion (post-v0.23.0).** v0.23.0 ships the
+- **i18n scope expansion (post-v0.23.0)** —
+  see [RFC 002](./rfcs/002-i18n-expansion.md). v0.23.0 ships the
   typed `sui-id-i18n` foundation — `Locale` enum, `Strings`
   struct with compile-time exhaustiveness on every translation —
   with two locales (Japanese, English) and the core admin/auth
@@ -59,7 +129,8 @@ rather than new auth primitives.
     pass on the design language. The `Locale::tag()` API is
     already the right anchor point for this.
 
-- **HIBP scope expansion (post-v0.24.0).** v0.24.0 wires the
+- **HIBP scope expansion (post-v0.24.0)** —
+  see [RFC 003](./rfcs/003-hibp-expansion.md). v0.24.0 wires the
   Pwned Passwords check into the setup wizard's admin-creation
   step — the single password-set entry point that exists at
   install time. The remaining password-set entry points still
@@ -86,59 +157,64 @@ rather than new auth primitives.
 
 ## Longer term, less certain
 
-- **Federation.** Acting as an OIDC client to an upstream IdP, mapping
-  the result onto a sui-id user.
-- **Pluggable user backends.** A read-only LDAP shim, perhaps. The
-  current storage layer assumes sui-id owns the user table.
-- **Metrics.** A Prometheus endpoint behind admin auth.
-- **Multi-tenancy.** Today every client and every user share one
-  flat namespace. A tenant column threaded through the schema,
-  with admins scoped to their tenant, would open up B2B-style
-  deployments. The existing audit chain and cross-cutting
-  policies (lockout, rate limits) all need to become
-  tenant-aware first.
-- **Outbound-facing-third-party scenarios.** sui-id today is
-  designed for the "first-party" deployment model — every
-  registered OIDC client is an application the same operator
-  also runs. If we ever want to support the *other* posture —
-  third-party developers registering clients against this IdP,
-  end-users authorising those clients with their own data —
-  several capabilities have to land together as a single
-  coherent phase rather than as separate visual or schema
-  changes:
-    - **A consent screen.** The user must see "App X wants
-      access to scopes Y and Z" and be able to approve, refine,
-      or refuse. Either always-prompt or first-time-only with a
-      stored grant; first-time-only is the usual choice (it
-      matches the GitHub OAuth Apps shape) but needs a
-      `user_consent` table, a scope-diff check on subsequent
-      authorisations, and a UI on `/me/security` for the user
-      to revoke a consent later.
-    - **Dynamic client registration (RFC 7591).** Self-service
-      registration for third-party developers. Currently on the
-      "not on the roadmap" list specifically because it pulls
-      sui-id toward this posture; if we adopt the posture, the
-      ban is lifted.
-    - **Per-client scope policy refinement.** Today
-      `allowed_scopes` is a flat string. Sub-resource scopes
-      (`read:profile` vs `write:profile`) and labelled, human-
-      readable scope descriptions become important so the
-      consent screen can show "This will let App X *read* your
-      profile" rather than `read:profile`.
-    - **Application identity.** A logo, a homepage URL, a
-      privacy-policy URL per client — surfaced on the consent
-      screen so the user has the context to decide.
-    - **Refresh-token UX.** Long-lived refresh tokens against
-      third-party clients need a per-user "Active applications"
-      section on `/me/security` to revoke a specific client.
-  Treat this whole bundle as one tagged phase ("third-party
-  posture") rather than slicing it across releases. Splitting
-  it produces a half-built consent UI that is worse than the
-  current "no consent because all clients are first-party"
-  story.
+The five longer-term items below all have exploratory-status
+designs in [`rfcs/`](./rfcs/); each marks the open questions
+that need resolution before implementation.
+
+- **Federation** — see [RFC 004](./rfcs/004-federation.md).
+  Acting as an OIDC client to an upstream IdP, mapping the
+  result onto a sui-id user.
+- **Pluggable user backends** —
+  see [RFC 005](./rfcs/005-pluggable-user-backends.md). A
+  read-only LDAP shim, perhaps. The current storage layer
+  assumes sui-id owns the user table.
+- **Metrics** — see [RFC 006](./rfcs/006-metrics.md). A
+  Prometheus endpoint behind admin auth.
+- **Multi-tenancy** —
+  see [RFC 007](./rfcs/007-multi-tenancy.md). Today every
+  client and every user share one flat namespace. A tenant
+  column threaded through the schema, with admins scoped to
+  their tenant, would open up B2B-style deployments. The
+  existing audit chain and cross-cutting policies (lockout,
+  rate limits) all need to become tenant-aware first.
+- **Outbound-facing-third-party scenarios** —
+  see [RFC 008](./rfcs/008-third-party-posture.md). sui-id
+  today is designed for the "first-party" deployment model
+  — every registered OIDC client is an application the
+  same operator also runs. Adopting the *other* posture
+  (third-party developers registering clients, end users
+  authorising those clients with their own data) requires
+  consent screen, dynamic client registration (RFC 7591),
+  per-client scope policy refinement, application identity,
+  and refresh-token UX to land together as a single coherent
+  phase rather than as separate visual or schema changes.
+- **Pluggable SQL backends (PostgreSQL, MariaDB/MySQL)** —
+  see [RFC 009](./rfcs/009-sql-backends.md). SQLite remains
+  the default and the recommended choice for most
+  deployments (zero ops surface, single-file backup, runs
+  offline). For deployments that already operate a Postgres
+  or MariaDB cluster and would rather not introduce a new
+  SQLite file alongside, optional support for those backends
+  via a `[storage] driver` config field. Likely implemented
+  via `sqlx` behind a thin `Backend` trait; encrypted-column
+  ciphertext is invariant across backends so a SQLite-created
+  DB can be dump-restored to Postgres without losing
+  decryptability.
 
 ## Done
 
+- RFC set under `rfcs/` (v0.29.3). Seventeen design specifications
+  in two cohorts. Nine cover the medium- and longer-term
+  ROADMAP items (001–009); eight address the v0.29.3 external
+  codebase review's high- and medium-priority findings (010–015,
+  plus a status update to 003) and the maintainer's logging
+  query (016). Light template with optional Requirements /
+  Design / Test plan / Security considerations sections;
+  numbering is allocated at file creation and stable
+  thereafter. The RFC index (`rfcs/README.md`) lists all
+  17 in implementation order: review-driven first (010, 011,
+  012, 016, 003 high; 013, 014, 015 medium), ROADMAP-driven
+  after (001–002 medium; 004–009 longer-term).
 - Internal-improvements release (v0.29.2). Distribution-asset
   refresh per the maintainer's project-update brief: `.github/`
   hygiene files, `.vscode/` recommendations, replacement

@@ -5,6 +5,123 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.3] - 2026-05-05
+
+Documentation-only release. Adds `rfcs/` — a directory of design
+specifications keyed to ROADMAP themes, intended as the handoff
+contract between the maintainer and any implementer (human or
+otherwise) who picks up one of the upcoming features.
+
+The RFC set has two distinct cohorts:
+
+**Codebase-review-driven (high and medium priority).** Six new
+RFCs plus a status update to RFC 003, all sourced from a
+focused external Rust-expert codebase review of v0.29.3 against
+the development specification. These are the implementation
+backlog the next implementer should clear first:
+
+- `010-forgot-password-revoke.md` — **highest priority**. The
+  email-link password reset path doesn't revoke prior sessions
+  or refresh tokens. Admin-driven and self-service password
+  changes do. Restoring symmetry is a few lines plus a
+  regression test. Closes a real security gap.
+- `011-webauthn-transport-enforcement.md` — high priority. The
+  spec requires WebAuthn run only over HTTPS or localhost HTTP;
+  today the server doesn't enforce it. Adds a scheme/host check
+  at `webauthn::build()` so the invariant is server-enforced,
+  not browser-enforced.
+- `003-hibp-expansion.md` — **status updated**, priority elevated.
+  The review confirmed this is a *consistency* gap, not just a
+  feature breadth item. With `hibp_mode = block`, setup is
+  blocked but self-service password change passes through. Wire
+  the existing check into the three remaining password-set entry
+  points.
+- `012-setup-wizard-reconciliation.md` — high priority. The spec
+  describes a wizard that collects language, HIBP mode, log
+  policy, encryption-key handling, and basic settings; the
+  implementation collects roughly the admin account. Maintainer
+  decision needed; the RFC frames Positions A/B/C and recommends
+  a hybrid.
+- `016-server-logging-completeness.md` — high priority. The
+  router has no `TraceLayer` mounted; routine HTTP requests
+  don't appear in logs at all, so a dev-mode operator can't
+  confirm requests are arriving. No file appender either.
+  The RFC mounts `TraceLayer`, adds `tracing-appender` for
+  daily-rotated file output, sets dev-default access logging
+  on / production-default off, and pins the redaction
+  invariant (passwords, tokens, cookie values never reach
+  any sink) with explicit tests.
+- `013-db-blocking-mitigation.md` — medium priority. Today every
+  repo call holds a sync mutex on a Tokio worker. Wrap DB I/O in
+  `spawn_blocking` to free the runtime under load. Recommended
+  to land before RFC 009 (multi-backend SQL) since both touch
+  the connection-handling shape.
+- `014-hot-path-caches-and-benchmarks.md` — medium priority.
+  Cache the redirect-origin set used at the token endpoint and
+  the JWKS used for JWT verification. Introduce a `criterion`
+  benchmark harness so impact is measured rather than asserted.
+- `015-doc-consistency-pass.md` — medium priority. README
+  references stale paths, the settings handler's module comment
+  lies about its scope, spot drift exists in `docs/`. A
+  documentation pass with attention rather than scattered
+  drive-by edits.
+
+**ROADMAP-driven (longer-term).** Nine RFCs (numbers 001–009)
+covering every medium- and longer-term ROADMAP item:
+
+- `001-email-outbox.md` — persistent email outbox with retry
+  worker, replacing v0.22.0's inline-await mail send.
+- `002-i18n-expansion.md` — five sub-threads for the
+  post-v0.23.0 i18n surface: more locales, locale-aware
+  formatting, per-recipient mail locale, audit-event
+  long-form translations, RTL layout.
+- `003-hibp-expansion.md` — listed above (review elevated it).
+- `004-federation.md` — sui-id as an OIDC RP against an
+  upstream IdP, with a link-only and provision-on-first-
+  login policy split.
+- `005-pluggable-user-backends.md` — read-only LDAP shim
+  via a `UserSource` trait; cascade resolution with
+  local-first authority.
+- `006-metrics.md` — Prometheus `/metrics` endpoint behind
+  admin auth or a bearer token; explicit no-PII catalog.
+- `007-multi-tenancy.md` — tenant column threaded through
+  the schema, per-tenant admins and audit chains; flagged
+  as a deep change that may not belong in sui-id at all.
+- `008-third-party-posture.md` — the consent-screen +
+  RFC 7591 dynamic registration + scope policy + application-
+  identity + refresh-token-UX bundle, scoped as one phase.
+- `009-sql-backends.md` — optional PostgreSQL and MariaDB
+  support behind a `[storage] driver` config field, likely
+  via `sqlx` and a thin `Backend` trait. SQLite remains the
+  default and the recommended single-file deployment shape.
+
+The RFC index (`rfcs/README.md`) lists all 17 in the order an
+implementer should pick them up — review-driven items first,
+ROADMAP-driven items after.
+
+### Why a separate release for documentation
+
+The RFC set is a contract — once it lands in `main` it's
+something implementers can rely on as the design baseline.
+Tagging it as its own release makes that handoff legible
+and gives the documents a stable URL.
+
+### Document conventions established
+
+The `rfcs/README.md` codifies a light template (Summary /
+Background / Design / Open questions) with optional heavier
+sections (Requirements, full Design, Test plan, Security
+considerations) for medium-or-larger work. Status moves
+from Proposed/Exploratory through Accepted to Implemented
+or Withdrawn; numbering is allocated at file creation and
+stable thereafter.
+
+### Tests
+
+No code changes in this release. The 31-file e2e test
+binary and the 194-test lib-test surface from v0.29.2
+continue to pass without modification.
+
 ## [0.29.2] - 2026-05-04
 
 Internal-improvements release per the maintainer's
