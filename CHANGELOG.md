@@ -5,6 +5,76 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.5] - 2026-05-06
+
+Documentation-only release. Reorganises the `rfcs/` directory
+under a written lifecycle policy (RFC 018), and migrates every
+existing RFC into the new folder structure.
+
+### What changed in `rfcs/`
+
+The directory is now split into three lifecycle folders:
+
+```
+rfcs/
+  proposed/   ← open for review; implementer should not yet start
+  done/       ← implemented and shipped
+  archive/    ← withdrawn or superseded (currently empty)
+  README.md   ← state-grouped index
+```
+
+Eleven RFCs migrated to `proposed/` (001–002, 004–009, 013,
+014, 017); six migrated to `done/` (003, 010, 011, 012, 015,
+016 — every implementation that shipped in v0.29.4). RFC 018
+itself lands in `done/` because the policy it describes is
+already in effect.
+
+The folder is the source of truth for an RFC's state. The
+Status field inside each RFC mirrors the folder. Numbering is
+permanent — no RFC ever gets renumbered, even when it moves
+between folders. **Files are never deleted** (the rationale is
+in RFC 018).
+
+### RFC 018 — RFC lifecycle policy
+
+A new RFC formalising the lifecycle. It is written
+project-agnostic — any other repository's `rfcs/` directory
+can adopt the policy verbatim. Sui-id's adoption is the
+self-application example.
+
+The policy covers: lifecycle states (Proposed / Implemented /
+Withdrawn / Superseded, plus optional Draft and Accepted),
+folder layout (4-folder default; 5-folder variant for larger
+organisations where design and implementation roles are
+separate), Status field integration (folder is authoritative;
+field mirrors folder), naming and numbering (`NNN-slug.md`,
+permanent numbers), cross-reference rules, review and
+transition operations, README integrity, optional CI
+invariants, adoption guidance for new projects starting an
+`rfcs/` directory from scratch, and anti-patterns to avoid
+(deletion of completed RFCs being the chief one).
+
+### What didn't change
+
+- No code changes. No `Cargo.toml` workspace changes beyond
+  the version bump.
+- No RFC content changes. Every RFC's text is byte-identical
+  to its v0.29.4 form, except for the new RFC 018.
+- No tests added or removed. The integration test count is
+  unchanged.
+
+### Path updates
+
+`ROADMAP.md` references to RFCs are updated to point at the
+new paths:
+
+- Implemented RFCs: `./rfcs/done/<NNN>-<slug>.md`
+- Proposed RFCs: `./rfcs/proposed/<NNN>-<slug>.md`
+
+External tooling that linked to `rfcs/<NNN>-<slug>.md`
+directly (without the new subfolder prefix) will need a
+one-time update.
+
 ## [0.29.4] - 2026-05-06
 
 Security, spec-compliance, and quality release implementing the
@@ -89,6 +159,36 @@ locale-aware (labels come from `Strings`).
   new 5-step wizard flow.
 - `docs/operators.md`: wizard description updated to 5 steps with
   descriptions of the new language and HIBP steps.
+
+### Documentation (RFC 017 — added in same release window)
+
+**RFC 017 added to `rfcs/`.** Distillation of the maintainer-
+supplied UI/UX deliverables (one-page overview + 17-page
+detailed deck) into a written cross-cutting contract. Most of
+the deliverables' content was already covered by other in-flight
+RFCs (010, 011, 012, 002, 003, 016 — most of which shipped in
+this release); RFC 017 freezes what was *not* covered: the
+screen-relation map, the screen-responsibilities matrix, the
+dangerous-operation UI pattern, the state-copy contract (empty /
+error / success / loading / disabled), admin-dashboard
+information policy, the six-tab settings structure
+(Basic / Security / Authentication / Email / Logs / Advanced),
+audit-display rules, dev-mode visual separation, and the
+accessibility per-screen checklist. The RFC delegates settled
+items to existing RFCs and explicitly resolves the open
+questions from initial drafting:
+
+- Contract document path: `docs/ui-ux-contracts.md`.
+- Source-PDF archival in repo: **no** (per maintainer — the
+  deliverables remain under iterative refinement).
+- Settings tab naming: "Advanced" (not "Other").
+- Typed-confirmation field for delete operations: not
+  adopted in v1.
+
+No code change in v0.29.4 for RFC 017 itself; the document is
+the inherited contract for further admin-domain UI work
+(notably RFC 002's admin-domain i18n) and should land as the
+implementation contract before that work begins.
 
 ## [0.29.3] - 2026-05-05
 

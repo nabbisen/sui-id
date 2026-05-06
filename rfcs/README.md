@@ -1,61 +1,86 @@
 # sui-id RFCs
 
-Design notes for upcoming features. Each file scopes one ROADMAP
-item: enough detail for the implementer to start without a second
-design pass, but no more than that.
+Design notes for sui-id features and policies. Each RFC scopes
+one piece of work in enough detail that an implementer can start
+without a second design pass — but no more than that.
 
-These are not blanket commitments — the [ROADMAP](../ROADMAP.md)
+These are not blanket commitments. The [ROADMAP](../ROADMAP.md)
 sets which of these will actually ship and in what order. An RFC
-landing here means the design is settled enough to write code from;
-not landing here means the design is still soft.
+landing here means the design is settled enough to write code
+from; not landing here means the design is still soft.
 
-## Status
+## How this directory works
 
-| ID  | Title                                                          | Status     | Priority   |
-|-----|----------------------------------------------------------------|------------|------------|
-| 010 | [Revoke sessions on forgot-password](./010-forgot-password-revoke.md) | Proposed   | **Highest** — security-critical bug fix |
-| 011 | [Enforce WebAuthn transport at the server](./011-webauthn-transport-enforcement.md) | Proposed   | **High** — spec compliance gap |
-| 012 | [Setup wizard scope reconciliation](./012-setup-wizard-reconciliation.md) | Proposed   | **High** — spec ↔ implementation decision |
-| 016 | [Server logging completeness](./016-server-logging-completeness.md) | Proposed   | **High** — debugging blocker |
-| 003 | [HIBP scope expansion (post-v0.24.0)](./003-hibp-expansion.md)  | Proposed   | **High** — priority elevated by v0.29.3 review |
-| 013 | [Reduce SQLite blocking on async handlers](./013-db-blocking-mitigation.md) | Exploratory | Medium — performance ceiling |
-| 014 | [Hot-path caches and benchmark harness](./014-hot-path-caches-and-benchmarks.md) | Exploratory | Medium — performance |
-| 015 | [Documentation consistency pass](./015-doc-consistency-pass.md) | Proposed   | Medium — maintainability |
-| 001 | [Persistent email outbox + retry worker](./001-email-outbox.md) | Proposed   | Medium — operational |
-| 002 | [i18n scope expansion (post-v0.23.0)](./002-i18n-expansion.md)  | Proposed   | Medium — feature breadth |
-| 004 | [Federation as upstream OIDC client](./004-federation.md)       | Exploratory | Low — longer-term |
-| 005 | [Pluggable user backends (LDAP)](./005-pluggable-user-backends.md) | Exploratory | Low — longer-term |
-| 006 | [Prometheus metrics endpoint](./006-metrics.md)                | Exploratory | Low — longer-term |
-| 007 | [Multi-tenancy](./007-multi-tenancy.md)                        | Exploratory | Low — longer-term |
-| 008 | [Third-party-posture bundle](./008-third-party-posture.md)     | Exploratory | Low — longer-term |
-| 009 | [Pluggable SQL backends (PostgreSQL, MariaDB)](./009-sql-backends.md) | Exploratory | Low — longer-term |
+The lifecycle is governed by
+[RFC 018 — RFC lifecycle policy](./done/018-rfc-lifecycle-policy.md).
+Briefly:
 
-**Implementation order.** RFCs are ordered above by intended
-work sequence, not by RFC number. The numbering reflects the
-order RFCs were written; the priority column reflects the
-order an implementer should pick them up.
+- **`proposed/`** — open for review and discussion. Implementer
+  should not yet start work; the design may change.
+- **`done/`** — implemented and shipped. The RFC is now a
+  historical record of the design decisions.
+- **`archive/`** — withdrawn or superseded. Preserved as
+  evidence the design was considered.
 
-The first five (010, 011, 012, 016, 003) are the high-priority
-backlog from the v0.29.3 codebase review and the maintainer's
-follow-up on logging. They should land before any new feature
-work. RFC 010 (session revocation on forgot-password) is the
-highest priority — it's a small, unambiguous fix to a real
-security gap. RFC 016 (server logging completeness) sequences
-ahead of RFC 003 because logging makes implementing and
-verifying the others materially easier.
+Files do not move out of `done/` or `archive/` after they land
+there. Numbering is permanent: a file's RFC number is assigned
+at creation and never changes, even if the file moves between
+folders.
 
-The next three (013, 014, 015) are the same review's medium-
-priority findings: performance and maintainability work that
-strengthens the foundation.
+## Index
 
-The remaining eight (001, 002, 004–009) are the longer-term
-ROADMAP items, sequenced however the maintainer prefers once
-the higher-priority work is settled.
+### Proposed (open for review)
 
-**Status legend.** *Proposed* means the design is firm enough to
-implement against. *Exploratory* means the shape is sketched but
-the details are still open; expect a follow-up RFC pass before
-implementation begins.
+| ID  | Title                                                          | Priority |
+|-----|----------------------------------------------------------------|----------|
+| 013 | [Reduce SQLite blocking on async handlers](./proposed/013-db-blocking-mitigation.md) | Medium |
+| 014 | [Hot-path caches and benchmark harness](./proposed/014-hot-path-caches-and-benchmarks.md) | Medium |
+| 017 | [UI/UX design contracts](./proposed/017-ui-ux-design-contracts.md) | Medium — recommended ahead of further admin-UI work |
+| 001 | [Persistent email outbox + retry worker](./proposed/001-email-outbox.md) | Medium |
+| 002 | [i18n scope expansion (post-v0.23.0)](./proposed/002-i18n-expansion.md) | Medium |
+| 004 | [Federation as upstream OIDC client](./proposed/004-federation.md) | Low — longer-term |
+| 005 | [Pluggable user backends (LDAP)](./proposed/005-pluggable-user-backends.md) | Low — longer-term |
+| 006 | [Prometheus metrics endpoint](./proposed/006-metrics.md) | Low — longer-term |
+| 007 | [Multi-tenancy](./proposed/007-multi-tenancy.md) | Low — longer-term |
+| 008 | [Third-party-posture bundle](./proposed/008-third-party-posture.md) | Low — longer-term |
+| 009 | [Pluggable SQL backends (PostgreSQL, MariaDB)](./proposed/009-sql-backends.md) | Low — longer-term |
+
+### Implemented
+
+| ID  | Title                                                          | Shipped in |
+|-----|----------------------------------------------------------------|------------|
+| 010 | [Revoke sessions on forgot-password](./done/010-forgot-password-revoke.md) | v0.29.4 |
+| 011 | [Enforce WebAuthn transport at the server](./done/011-webauthn-transport-enforcement.md) | v0.29.4 |
+| 012 | [Setup wizard scope reconciliation](./done/012-setup-wizard-reconciliation.md) | v0.29.4 (Position C) |
+| 015 | [Documentation consistency pass](./done/015-doc-consistency-pass.md) | v0.29.4 |
+| 016 | [Server logging completeness](./done/016-server-logging-completeness.md) | v0.29.4 |
+| 003 | [HIBP scope expansion (post-v0.24.0)](./done/003-hibp-expansion.md) | v0.29.4 |
+| 018 | [RFC lifecycle policy](./done/018-rfc-lifecycle-policy.md) | v0.29.5 |
+
+### Archive
+
+(empty — no withdrawn or superseded RFCs)
+
+## Implementation order
+
+Within `proposed/`, RFCs are listed by intended work sequence,
+not by RFC number. The numbering reflects the order RFCs were
+written; the order above reflects the priority an implementer
+should pick them up.
+
+The current top of the queue is the medium-priority backlog:
+**013** (DB blocking), **014** (hot-path caches and benchmarks),
+and **017** (UI/UX design contracts) — the last of these is
+recommended ahead of any further admin-UI implementation work
+(notably RFC 002's admin-domain i18n) so admin screens inherit
+the contract rather than re-derive it. The remaining items
+(001, 002, 004–009) are the longer-term ROADMAP work, sequenced
+however the maintainer prefers once the medium-priority work
+is settled.
+
+The high-priority backlog (010, 011, 012, 015, 016, 003) cleared
+in v0.29.4. The lifecycle reorganisation itself (this directory's
+folder structure plus RFC 018) shipped in v0.29.5.
 
 ## Template
 
@@ -64,8 +89,8 @@ The standard shape is light:
 ```markdown
 # RFC NNN — Title
 
-**Status.** Proposed | Exploratory | Accepted | Implemented | Withdrawn
-**Tracks.** ROADMAP item this addresses.
+**Status.** Proposed | Implemented (vX.Y.Z) | Withdrawn | Superseded by RFC NNN
+**Tracks.** ROADMAP item or other context this addresses.
 **Touches.** crates / modules the work lands in.
 
 ## Summary
@@ -90,14 +115,11 @@ here with rough scope.
 
 ## Tests (when non-trivial)
 
-What the implementer should write to call it done. Concrete
-fixture, assertion, and regression cases — not a full test plan.
+What the implementer should write to call it done.
 
 ## Security considerations (when applicable)
 
 What an attacker might try, and what the design does about it.
-Skip when the change is purely operational and adds no new
-attack surface.
 
 ## Open questions
 
@@ -125,14 +147,18 @@ uses. There's no separate metadata.
 
 ## Process
 
-1. Open a draft RFC under `rfcs/NNN-slug.md` with status
-   `Proposed` (or `Exploratory` if the shape isn't firm).
-2. Iterate in review until the design is settled. Status moves
-   to `Accepted` when the maintainer signs off.
-3. Implementation proceeds. Status moves to `Implemented` when
-   the work merges, ideally referencing the release tag.
-4. RFCs that don't pan out move to `Withdrawn` with a sentence
-   explaining why; they stay in the directory as a record.
+The full lifecycle is described in
+[RFC 018](./done/018-rfc-lifecycle-policy.md). The short version:
 
-The numbering is allocated when the file is created. Don't
-renumber once a file exists, even if its status changes.
+1. New RFC: open a draft as `rfcs/proposed/NNN-slug.md` with
+   Status `Proposed`. The number is the next unused integer,
+   zero-padded to three digits, and never reused.
+2. Iterate in review until the design is settled.
+3. When the work ships, move the file to `rfcs/done/`, update
+   Status to `Implemented (vX.Y.Z)`, and update inbound
+   references in this README and other RFCs.
+4. RFCs that don't pan out move to `rfcs/archive/` with Status
+   `Withdrawn` (and a one-line reason) or `Superseded by RFC NNN`.
+   They stay there as a record.
+
+Files are never deleted. The full reasoning is in RFC 018.

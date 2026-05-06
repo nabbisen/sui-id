@@ -5,72 +5,38 @@ a promise.
 
 ## Near term
 
-The v0.29.3 external codebase review surfaced four high-priority
-findings that take precedence over any new feature work, plus
-three medium-priority items in the same vein. Each is RFC-tracked.
-
-**High priority — security and spec compliance:**
-
-- **Revoke sessions and refresh tokens on forgot-password
-  completion** —
-  see [RFC 010](./rfcs/010-forgot-password-revoke.md). The
-  highest-priority item: today the email-link reset path
-  substitutes the password but leaves prior sessions and refresh
-  tokens active. The admin-driven and self-service password-
-  change paths revoke; this one doesn't. Restoring symmetry is a
-  few lines plus a regression test.
-- **Enforce WebAuthn transport (HTTPS / localhost) at the
-  server** —
-  see [RFC 011](./rfcs/011-webauthn-transport-enforcement.md).
-  The spec requires WebAuthn run only over HTTPS or localhost
-  HTTP. Today the server doesn't enforce this — it relies on
-  the browser. Adding a scheme/host check at `webauthn::build()`
-  brings the invariant in line with the rest of the codebase's
-  fail-loud-at-startup posture.
-- **HIBP scope expansion (priority elevated by review)** —
-  see [RFC 003](./rfcs/003-hibp-expansion.md). Originally a
-  medium-term feature breadth item; the review confirmed it's
-  a *consistency* gap (with `hibp_mode = block`, setup is
-  blocked but self-service password change passes through).
-  Wire the existing check into the three remaining
-  password-set entry points.
-- **Setup wizard scope reconciliation** —
-  see [RFC 012](./rfcs/012-setup-wizard-reconciliation.md). The
-  spec describes a wizard that collects language, HIBP mode,
-  log policy, encryption-key handling, and basic settings; the
-  implementation collects roughly the admin account. Maintainer
-  decision needed on which way the spec and code line up; the
-  RFC frames the options and recommends a hybrid (Position C).
-- **Server logging completeness** —
-  see [RFC 016](./rfcs/016-server-logging-completeness.md). A
-  maintainer-surfaced gap: there is no `TraceLayer` mounted, so
-  routine HTTP requests don't appear in logs at all. A dev-mode
-  operator can't confirm requests are arriving. There's also
-  no file-appender option for production deployments that want
-  log retention. The RFC adds `tower-http`'s `TraceLayer`,
-  `tracing-appender` for daily-rotated file output, dev-default
-  access logging, production-default off, and pins the
-  redaction invariant (passwords / tokens / cookie values
-  never reach any sink) with explicit tests.
+v0.29.4 cleared the high-priority backlog from the v0.29.3
+external codebase review (RFCs 010, 011, 012, 016, 003 for
+security and spec compliance, plus RFC 015 for documentation
+consistency). The next batch is the medium-priority items —
+performance, maintainability, and the cross-cutting UI/UX
+contract.
 
 **Medium priority — performance and maintainability:**
 
 - **Reduce blocking impact of synchronous SQLite on async
   handlers** —
-  see [RFC 013](./rfcs/013-db-blocking-mitigation.md). Today
+  see [RFC 013](./rfcs/proposed/013-db-blocking-mitigation.md). Today
   every repo call holds a sync mutex on a Tokio worker. Wrap
   DB I/O in `spawn_blocking` to free the runtime under load.
 - **Hot-path caches and benchmark harness** —
-  see [RFC 014](./rfcs/014-hot-path-caches-and-benchmarks.md).
+  see [RFC 014](./rfcs/proposed/014-hot-path-caches-and-benchmarks.md).
   Cache the redirect-origin set used at the token endpoint and
   the JWKS used for JWT verification. Introduce a `criterion`
   benchmark harness so the impact is measured rather than
   asserted.
-- **Documentation consistency pass** —
-  see [RFC 015](./rfcs/015-doc-consistency-pass.md). README
-  references stale paths (`crates/sui-id-bin/...`), the settings
-  handler's module comment lies about the handler's scope, and
-  spot drift exists in `docs/`.
+- **UI/UX design contracts** —
+  see [RFC 017](./rfcs/proposed/017-ui-ux-design-contracts.md).
+  Distillation of the maintainer-supplied UI/UX deliverables
+  into a written contract: screen-relation map, screen-
+  responsibilities matrix, dangerous-operation pattern, state-
+  copy contract (empty / error / success / loading / disabled),
+  admin-dashboard information policy, settings-tab structure,
+  audit-log display rules, dev-mode UI separation, and the
+  accessibility per-screen checklist. No code change in this
+  RFC; the document becomes the inherited contract for further
+  admin-domain UI work (notably RFC 002's admin-domain i18n).
+  Land ahead of those.
 
 ## Medium term
 
@@ -86,7 +52,7 @@ The three medium-term items below all have detailed designs in
 implementation contract.
 
 - **Persistent email outbox + retry worker** —
-  see [RFC 001](./rfcs/001-email-outbox.md). v0.22.0 sends mail
+  see [RFC 001](./rfcs/proposed/001-email-outbox.md). v0.22.0 sends mail
   inline with the request that triggered it; failures land in
   the audit log but the message itself is lost. For deployments
   where bounce rates are sensitive (password-reset to a flaky
@@ -98,7 +64,7 @@ implementation contract.
   enhancement once a deployment hits delivery problems.
 
 - **i18n scope expansion (post-v0.23.0)** —
-  see [RFC 002](./rfcs/002-i18n-expansion.md). v0.23.0 ships the
+  see [RFC 002](./rfcs/proposed/002-i18n-expansion.md). v0.23.0 ships the
   typed `sui-id-i18n` foundation — `Locale` enum, `Strings`
   struct with compile-time exhaustiveness on every translation —
   with two locales (Japanese, English) and the core admin/auth
@@ -130,7 +96,7 @@ implementation contract.
     already the right anchor point for this.
 
 - **HIBP scope expansion (post-v0.24.0)** —
-  see [RFC 003](./rfcs/003-hibp-expansion.md). v0.24.0 wires the
+  see [RFC 003](./rfcs/done/003-hibp-expansion.md). v0.24.0 wires the
   Pwned Passwords check into the setup wizard's admin-creation
   step — the single password-set entry point that exists at
   install time. The remaining password-set entry points still
@@ -161,24 +127,24 @@ The five longer-term items below all have exploratory-status
 designs in [`rfcs/`](./rfcs/); each marks the open questions
 that need resolution before implementation.
 
-- **Federation** — see [RFC 004](./rfcs/004-federation.md).
+- **Federation** — see [RFC 004](./rfcs/proposed/004-federation.md).
   Acting as an OIDC client to an upstream IdP, mapping the
   result onto a sui-id user.
 - **Pluggable user backends** —
-  see [RFC 005](./rfcs/005-pluggable-user-backends.md). A
+  see [RFC 005](./rfcs/proposed/005-pluggable-user-backends.md). A
   read-only LDAP shim, perhaps. The current storage layer
   assumes sui-id owns the user table.
-- **Metrics** — see [RFC 006](./rfcs/006-metrics.md). A
+- **Metrics** — see [RFC 006](./rfcs/proposed/006-metrics.md). A
   Prometheus endpoint behind admin auth.
 - **Multi-tenancy** —
-  see [RFC 007](./rfcs/007-multi-tenancy.md). Today every
+  see [RFC 007](./rfcs/proposed/007-multi-tenancy.md). Today every
   client and every user share one flat namespace. A tenant
   column threaded through the schema, with admins scoped to
   their tenant, would open up B2B-style deployments. The
   existing audit chain and cross-cutting policies (lockout,
   rate limits) all need to become tenant-aware first.
 - **Outbound-facing-third-party scenarios** —
-  see [RFC 008](./rfcs/008-third-party-posture.md). sui-id
+  see [RFC 008](./rfcs/proposed/008-third-party-posture.md). sui-id
   today is designed for the "first-party" deployment model
   — every registered OIDC client is an application the
   same operator also runs. Adopting the *other* posture
@@ -189,7 +155,7 @@ that need resolution before implementation.
   and refresh-token UX to land together as a single coherent
   phase rather than as separate visual or schema changes.
 - **Pluggable SQL backends (PostgreSQL, MariaDB/MySQL)** —
-  see [RFC 009](./rfcs/009-sql-backends.md). SQLite remains
+  see [RFC 009](./rfcs/proposed/009-sql-backends.md). SQLite remains
   the default and the recommended choice for most
   deployments (zero ops surface, single-file backup, runs
   offline). For deployments that already operate a Postgres
@@ -202,6 +168,23 @@ that need resolution before implementation.
   decryptability.
 
 ## Done
+
+- RFC lifecycle reorganisation (v0.29.5). Documentation-only
+  release. The `rfcs/` directory is split into
+  `rfcs/{proposed,done,archive}/` per
+  [RFC 018](./rfcs/done/018-rfc-lifecycle-policy.md), the
+  policy describing how RFCs move between states. Eleven
+  RFCs migrated to `proposed/` (001–002, 004–009, 013, 014,
+  017); six migrated to `done/` (003, 010, 011, 012, 015,
+  016 — all the v0.29.4 implementations); RFC 018 itself
+  lands directly in `done/` because it is implemented (the
+  policy is in effect). RFC 018 is written project-agnostic
+  and applies verbatim to any other repository's `rfcs/`
+  directory; the same machinery, the same anti-patterns,
+  the same migration path. The full design rationale —
+  why deletion is the wrong cleanup, why renumbering
+  silently breaks links, why `accepted/` is overhead in
+  small projects — is in RFC 018.
 
 - Security, spec-compliance, and quality release (v0.29.4).
   Implements the five highest-priority RFC items from the
@@ -225,18 +208,16 @@ that need resolution before implementation.
     module comment corrected; operators.md wizard description
     updated.
 
-- RFC set under `rfcs/` (v0.29.3). Seventeen design specifications
-  in two cohorts. Nine cover the medium- and longer-term
-  ROADMAP items (001–009); eight address the v0.29.3 external
-  codebase review's high- and medium-priority findings (010–015,
-  plus a status update to 003) and the maintainer's logging
-  query (016). Light template with optional Requirements /
-  Design / Test plan / Security considerations sections;
-  numbering is allocated at file creation and stable
-  thereafter. The RFC index (`rfcs/README.md`) lists all
-  17 in implementation order: review-driven first (010, 011,
-  012, 016, 003 high; 013, 014, 015 medium), ROADMAP-driven
-  after (001–002 medium; 004–009 longer-term).
+- RFC set under `rfcs/` (v0.29.3, extended through v0.29.5).
+  Nineteen design specifications. Of these, seven are
+  Implemented (003, 010, 011, 012, 015, 016 in v0.29.4; 018
+  in v0.29.5); twelve are Proposed and live under
+  `rfcs/proposed/` awaiting implementation. Light template
+  with optional Requirements / Design / Test plan / Security
+  considerations sections; numbering is allocated at file
+  creation and stable thereafter. The RFC index
+  (`rfcs/README.md`) lists all 19 across the three lifecycle
+  folders, in implementation order within each.
 - Internal-improvements release (v0.29.2). Distribution-asset
   refresh per the maintainer's project-update brief: `.github/`
   hygiene files, `.vscode/` recommendations, replacement
