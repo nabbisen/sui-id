@@ -246,7 +246,8 @@ async fn serve_dev(args: &[String]) -> Result<()> {
     );
     let hibp_client: std::sync::Arc<dyn sui_id_core::hibp::HibpClient> =
         std::sync::Arc::new(sui_id_core::hibp::HttpHibpClient::new());
-    let state = sui_id::AppState::new(db, cfg, setup_token, mailer, hibp_client);
+    let caches = std::sync::Arc::new(sui_id_core::cache::Caches::new());
+    let state = sui_id::AppState::new(db, cfg, setup_token, mailer, hibp_client, caches);
 
     let router = build_router(state.clone());
     sui_id::gc::spawn(state.clone());

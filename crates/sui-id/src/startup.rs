@@ -195,7 +195,17 @@ pub async fn prepare(cfg: Config) -> Result<Startup> {
     // traffic still pays only the cost of one Arc::new at startup.
     let hibp_client: std::sync::Arc<dyn sui_id_core::hibp::HibpClient> =
         std::sync::Arc::new(sui_id_core::hibp::HttpHibpClient::new());
-    let state = AppState::new(db, cfg, setup_token, mailer, hibp_client);
+    // Build hot-path caches (RFC 014). Log and continue on failure —
+    // the startup completes with empty caches; the first request will
+    // be served from the DB instead, and the next mutation will rebuild.
+    let caches = match sui_id_core::cache::Caches::build(&db).await {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::warn!(error = %e, "cache build failed at startup; using empty caches");
+            std::sync::Arc::new(sui_id_core::cache::Caches::new())
+        }
+    };
+    let state = AppState::new(db, cfg, setup_token, mailer, hibp_client, caches);
     Ok(Startup { state, listen_addr, _log_guard: log_guard })
 }
 

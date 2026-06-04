@@ -18,16 +18,19 @@ use super::common::*;
 /// runs through `/setup/admin` which doesn't accept an email
 /// post-setup; we bypass that by writing the column ourselves.
 async fn set_admin_email(state: &AppState, email: &str) {
-    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await
         .expect("user");
-    state.db.with_conn(|conn| {
+    let uid = user.id;
+    let email_owned = email.to_owned();
+    state.db.with_conn(move |conn| {
         conn.execute(
             "UPDATE users SET email = ?1, email_normalized = lower(trim(?1)) WHERE id = ?2",
-            rusqlite::params![email, user.id.to_string()],
+            rusqlite::params![email_owned, uid.to_string()],
         )
         .expect("update");
         Ok(())
     })
+    .await
     .expect("set email");
 }
 

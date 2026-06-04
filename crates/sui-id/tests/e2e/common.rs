@@ -60,7 +60,8 @@ pub fn test_app_with_mailer() -> (AppState, std::sync::Arc<sui_id_core::mail::In
     // `test_app_with_hibp` instead.
     let hibp_client: std::sync::Arc<dyn sui_id_core::hibp::HibpClient> =
         std::sync::Arc::new(sui_id_core::hibp::test_support::InMemoryHibpClient::new());
-    let state = AppState::new(db, cfg, SETUP_TOKEN.into(), mailer_dyn, hibp_client);
+    let caches = std::sync::Arc::new(sui_id_core::cache::Caches::new());
+    let state = AppState::new(db, cfg, SETUP_TOKEN.into(), mailer_dyn, hibp_client, caches);
     (state, mailer)
 }
 
@@ -98,19 +99,20 @@ pub fn test_app_with_hibp() -> (
     let mailer_dyn: std::sync::Arc<dyn sui_id_core::mail::MailSender> = mailer.clone();
     let hibp = std::sync::Arc::new(sui_id_core::hibp::test_support::InMemoryHibpClient::new());
     let hibp_dyn: std::sync::Arc<dyn sui_id_core::hibp::HibpClient> = hibp.clone();
-    let state = AppState::new(db, cfg, SETUP_TOKEN.into(), mailer_dyn, hibp_dyn);
+    let caches = std::sync::Arc::new(sui_id_core::cache::Caches::new());
+    let state = AppState::new(db, cfg, SETUP_TOKEN.into(), mailer_dyn, hibp_dyn, caches);
     (state, mailer, hibp)
 }
 
 /// Set the server-settings `hibp_mode` directly. Tests use this
 /// to flip between modes without going through the admin settings
 /// page.
-pub fn set_hibp_mode(state: &AppState, mode: sui_id_store::models::HibpMode) {
+pub async fn set_hibp_mode(state: &AppState, mode: sui_id_store::models::HibpMode) {
     sui_id_store::repos::server_settings::update_hibp_mode(
         &state.db,
         mode,
         chrono::Utc::now(),
-    )
+    ).await
     .expect("update hibp_mode");
 }
 
@@ -283,6 +285,7 @@ pub async fn enable_smtp(state: &AppState) {
             updated_at: now,
         },
     )
+    .await
     .expect("upsert smtp");
 }
 
@@ -415,7 +418,7 @@ pub async fn enroll_mfa_for(state: &AppState, session: &str) -> (String, Vec<Str
     let secret = decode_b32(&secret_b32);
     let now = chrono::Utc::now().timestamp();
     let step = now / 30;
-    let code = totp::code_for_step(&secret, step);
+    let code = totp::code_for_step(&secret, step).await;
 
     // Confirm.
     let csrf = fetch_csrf(state, session).await;

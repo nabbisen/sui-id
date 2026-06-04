@@ -205,7 +205,7 @@ async fn theft_detection_writes_audit_event() {
     let _ = router.oneshot(req).await.expect("replay");
 
     // Audit log should contain `auth.refresh.theft_detected`.
-    let recent = sui_id_store::repos::audit::recent(&state.db, 50).expect("audit list");
+    let recent = sui_id_store::repos::audit::recent(&state.db, 50).await.expect("audit list");
     let count = recent
         .iter()
         .filter(|r| r.action == "auth.refresh.theft_detected")

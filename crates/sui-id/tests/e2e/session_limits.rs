@@ -25,11 +25,12 @@ async fn session_no_idle_timeout_when_disabled() {
     // was last used 30 days ago. With idle_session_timeout_secs
     // = 0 (default), this should still be valid.
     let user =
-        sui_id_store::repos::users::find_by_username(&state.db, USERNAME).expect("user");
+        sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await.expect("user");
     let stale = chrono::Utc::now() - chrono::Duration::days(30);
+    let user_id_owned = user.id;
     state
         .db
-        .with_conn(|conn| {
+        .with_conn(move |conn| {
             conn.execute(
                 "UPDATE sessions SET last_used_at = ?1 WHERE user_id = ?2",
                 rusqlite::params![stale, user.id.to_string()],
@@ -37,6 +38,7 @@ async fn session_no_idle_timeout_when_disabled() {
             .expect("update");
             Ok(())
         })
+        .await
         .expect("set stale");
     // Hitting an admin page should still 200 OK.
     let resp = build_router(state)
@@ -64,14 +66,15 @@ async fn session_idle_timeout_revokes_after_window() {
         &state.db,
         60,
         chrono::Utc::now(),
-    )
+    ).await
     .expect("set timeout");
     let user =
-        sui_id_store::repos::users::find_by_username(&state.db, USERNAME).expect("user");
+        sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await.expect("user");
     let stale = chrono::Utc::now() - chrono::Duration::seconds(120);
+    let user_id_owned = user.id;
     state
         .db
-        .with_conn(|conn| {
+        .with_conn(move |conn| {
             conn.execute(
                 "UPDATE sessions SET last_used_at = ?1 WHERE user_id = ?2",
                 rusqlite::params![stale, user.id.to_string()],
@@ -79,6 +82,7 @@ async fn session_idle_timeout_revokes_after_window() {
             .expect("update");
             Ok(())
         })
+        .await
         .expect("set stale");
     let resp = build_router(state.clone())
         .oneshot(
@@ -100,16 +104,18 @@ async fn session_idle_timeout_revokes_after_window() {
         resp.status()
     );
     // The session has been revoked in-place.
+    let uid_for_count = user.id;
     let count: i64 = state
         .db
-        .with_conn(|conn| {
+        .with_conn(move |conn| {
             conn.query_row(
                 "SELECT COUNT(*) FROM sessions WHERE user_id = ?1 AND revoked_at IS NULL",
-                rusqlite::params![user.id.to_string()],
+                rusqlite::params![uid_for_count.to_string()],
                 |r| r.get(0),
             )
             .map_err(Into::into)
         })
+        .await
         .expect("count");
     assert_eq!(count, 0, "expected session to be revoked");
 }
@@ -128,7 +134,7 @@ async fn session_cap_evicts_oldest_in_fifo() {
         &state.db,
         2,
         chrono::Utc::now(),
-    )
+    ).await
     .expect("set cap");
 
     // Login twice more; each via the regular login form.
@@ -156,28 +162,34 @@ async fn session_cap_evicts_oldest_in_fifo() {
     let s3 = login_once().await;
 
     let user =
-        sui_id_store::repos::users::find_by_username(&state.db, USERNAME).expect("user");
+        sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await.expect("user");
     // Active count is now 2 (cap respected).
     let active: i64 = sui_id_store::repos::sessions::count_active_for_user(
         &state.db,
         user.id,
         chrono::Utc::now(),
-    )
+    ).await
     .expect("count");
     assert_eq!(active, 2, "expected 2 active after 3 logins with cap 2");
 
     // s1 should have been revoked; s2 and s3 should be live.
-    let still_active = |sid_cookie: &str| {
-        use std::str::FromStr;
-        let sid =
-            sui_id_shared::ids::SessionId::from_str(sid_cookie).expect("parse sid");
-        let row =
-            sui_id_store::repos::sessions::get(&state.db, sid).expect("get");
-        row.revoked_at.is_none()
-    };
-    assert!(!still_active(&s1), "s1 should be revoked (FIFO)");
-    assert!(still_active(&s2), "s2 should remain");
-    assert!(still_active(&s3), "s3 should remain");
+    // Inline checks instead of closure because sessions::get is async.
+    use std::str::FromStr;
+    let sid1 = sui_id_shared::ids::SessionId::from_str(&s1).expect("parse s1");
+    let sid2 = sui_id_shared::ids::SessionId::from_str(&s2).expect("parse s2");
+    let sid3 = sui_id_shared::ids::SessionId::from_str(&s3).expect("parse s3");
+    assert!(
+        sui_id_store::repos::sessions::get(&state.db, sid1).await.expect("get s1").revoked_at.is_some(),
+        "s1 should be revoked (FIFO)"
+    );
+    assert!(
+        sui_id_store::repos::sessions::get(&state.db, sid2).await.expect("get s2").revoked_at.is_none(),
+        "s2 should remain"
+    );
+    assert!(
+        sui_id_store::repos::sessions::get(&state.db, sid3).await.expect("get s3").revoked_at.is_none(),
+        "s3 should remain"
+    );
 }
 
 /// Cap = 0 (default) — cap disabled, login N times yields N
@@ -208,12 +220,12 @@ async fn session_cap_disabled_keeps_all_sessions() {
     login_once().await;
 
     let user =
-        sui_id_store::repos::users::find_by_username(&state.db, USERNAME).expect("user");
+        sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await.expect("user");
     let active: i64 = sui_id_store::repos::sessions::count_active_for_user(
         &state.db,
         user.id,
         chrono::Utc::now(),
-    )
+    ).await
     .expect("count");
     assert_eq!(active, 3, "all 3 sessions active when cap disabled");
 }
@@ -255,7 +267,7 @@ async fn admin_settings_security_idle_timeout_change() {
         .expect("post");
     assert!(resp.status().is_redirection());
 
-    let row = sui_id_store::repos::server_settings::get(&state.db).expect("settings");
+    let row = sui_id_store::repos::server_settings::get(&state.db).await.expect("settings");
     assert_eq!(row.idle_session_timeout_secs, 900);
 }
 
@@ -296,7 +308,7 @@ async fn admin_settings_security_max_sessions_change() {
         .expect("post");
     assert!(resp.status().is_redirection());
 
-    let row = sui_id_store::repos::server_settings::get(&state.db).expect("settings");
+    let row = sui_id_store::repos::server_settings::get(&state.db).await.expect("settings");
     assert_eq!(row.max_concurrent_sessions, 5);
 
     // Out-of-range (>1000) is rejected.
@@ -322,7 +334,7 @@ async fn admin_settings_security_max_sessions_change() {
         resp.status()
     );
     // The cap stays at 5 (unchanged).
-    let row = sui_id_store::repos::server_settings::get(&state.db).expect("settings");
+    let row = sui_id_store::repos::server_settings::get(&state.db).await.expect("settings");
     assert_eq!(row.max_concurrent_sessions, 5);
 }
 

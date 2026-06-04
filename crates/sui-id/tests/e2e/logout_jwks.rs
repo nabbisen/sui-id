@@ -193,7 +193,7 @@ async fn signing_key_rotation_publishes_both_keys_in_jwks() {
 
     // The active row should be the *newer* one — verified by checking that
     // the store reports a different active kid than before.
-    let active = sui_id_store::repos::signing_keys::active(&state.db).expect("active");
+    let active = sui_id_store::repos::signing_keys::active(&state.db).await.expect("active");
     assert_ne!(active.id.to_string(), kid_before);
 }
 
@@ -273,7 +273,7 @@ async fn cannot_delete_active_signing_key() {
     let state = test_app();
     let session = complete_setup_and_login(&state).await;
 
-    let active = sui_id_store::repos::signing_keys::active(&state.db).expect("active");
+    let active = sui_id_store::repos::signing_keys::active(&state.db).await.expect("active");
     let active_id = active.id.to_string();
 
     let csrf = fetch_csrf(&state, &session).await;
@@ -293,7 +293,7 @@ async fn cannot_delete_active_signing_key() {
 
     // Active key should still exist.
     let still_active =
-        sui_id_store::repos::signing_keys::active(&state.db).expect("still active");
+        sui_id_store::repos::signing_keys::active(&state.db).await.expect("still active");
     assert_eq!(still_active.id.to_string(), active_id);
 }
 
@@ -303,7 +303,7 @@ async fn delete_retired_signing_key_drops_it_from_jwks() {
     let session = complete_setup_and_login(&state).await;
 
     // First key (created during setup), then rotate to retire it.
-    let original_id = sui_id_store::repos::signing_keys::active(&state.db)
+    let original_id = sui_id_store::repos::signing_keys::active(&state.db).await
         .expect("active")
         .id
         .to_string();

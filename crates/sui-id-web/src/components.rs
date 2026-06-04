@@ -592,4 +592,31 @@ section + section { margin-top: var(--space-5); }
   white-space: nowrap;
   border: 0;
 }
+
+/* ── Copy-to-clipboard button (RFC 028) ─────────────────────────────── */
+.copy-btn {
+    display: none; /* shown via JS when clipboard-available class is set */
+    align-items: center;
+    gap: 0.25em;
+    padding: 0.1em 0.5em;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm, 4px);
+    background: transparent;
+    color: var(--color-text-secondary);
+    font: inherit;
+    font-size: 0.8em;
+    cursor: pointer;
+    vertical-align: middle;
+    margin-left: 0.4em;
+    transition: color 0.15s, border-color 0.15s;
+    white-space: nowrap;
+}
+.clipboard-available .copy-btn { display: inline-flex; }
+.copy-btn:hover,
+.copy-btn:focus-visible {
+    color: var(--color-text-primary);
+    border-color: var(--color-text-secondary);
+    outline: 2px solid var(--color-focus-ring, currentColor);
+    outline-offset: 2px;
+}
 "#;

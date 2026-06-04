@@ -361,7 +361,7 @@ pub async fn userinfo(
         .and_then(|s| s.strip_prefix("Bearer "))
         .ok_or_else(|| HttpError::api(CoreError::Unauthenticated))?;
 
-    let claims = sui_id_core::tokens::verify_access_token(&app.db, &app.clock, raw).await
+    let claims = sui_id_core::tokens::verify_access_token_cached(&app.caches, &app.clock, raw).await
         .map_err(HttpError::api)?;
     // RFC 7009: a revoked access token must stop being honoured at
     // protected endpoints. We consult the deny-list before serving.
@@ -446,7 +446,7 @@ pub async fn logout(
     if let Some(token) = &q.id_token_hint {
         // Verify the signature; accept expired tokens so the user can still
         // log out after their session has gone stale.
-        if let Ok(claims) = sui_id_core::tokens::verify_id_token(&app.db, &app.clock, token, true).await {
+        if let Ok(claims) = sui_id_core::tokens::verify_id_token_cached(&app.caches, &app.clock, token, true).await {
             user_id = claims.sub.parse().ok();
             hinted_client = claims.aud.parse().ok();
         } else {

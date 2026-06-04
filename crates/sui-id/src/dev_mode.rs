@@ -460,6 +460,9 @@ pub async fn apply_seed(
         // means "public"; any other value means "confidential
         // with caller-chosen secret".
         let confidential = !matches!(c.client_secret.as_deref(), Some(""));
+        // dev_mode seeds always rebuild after; pass a throwaway cache since
+        // dev_mode runs before the main AppState is wired up.
+        let _dev_caches = sui_id_core::cache::Caches::new();
         let created_client = create_client(
             db,
             clock,
@@ -471,6 +474,7 @@ pub async fn apply_seed(
                 allowed_scopes: &c.allowed_scopes,
                 post_logout_redirect_uris: &c.post_logout_redirect_uris,
             },
+            &_dev_caches,
         ).await
         .with_context(|| format!("creating dev-mode client {:?}", c.name))?;
 

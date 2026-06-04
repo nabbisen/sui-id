@@ -70,6 +70,30 @@ const THEME_INIT_JS: &str = r#"
 })();
 "#;
 
+/// Inline JS for copy-to-clipboard buttons (RFC 028).
+/// Attached as a delegated `click` handler; triggers carry `data-copy="VALUE"`.
+const COPY_JS: &str = r#"
+(function () {
+  if (!navigator.clipboard) return;
+  // Mark document so CSS can show .copy-btn elements.
+  document.documentElement.classList.add('clipboard-available');
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-copy]');
+    if (!btn) return;
+    var value = btn.getAttribute('data-copy');
+    navigator.clipboard.writeText(value).then(function () {
+      var orig = btn.textContent;
+      btn.setAttribute('aria-pressed','true');
+      btn.textContent = '\u2713 Copied';
+      setTimeout(function () {
+        btn.textContent = orig;
+        btn.removeAttribute('aria-pressed');
+      }, 1800);
+    }).catch(function () {});
+  });
+})();
+"#;
+
 /// Wrap a page body in the standard sui-id chrome.
 ///
 /// `lang` controls the `<html lang="…">` attribute; pass the
@@ -93,6 +117,7 @@ pub fn Shell(
                 <title>{format!("{title} · sui-id")}</title>
                 <style>{stylesheet}</style>
                 <script>{THEME_INIT_JS}</script>
+                <script>{COPY_JS}</script>
             </head>
             <body>
                 <header class="app-header">

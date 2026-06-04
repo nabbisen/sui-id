@@ -191,6 +191,20 @@ pub async fn list_published(db: &Database) -> StoreResult<Vec<SigningKeyRow>> {
     }).await
 }
 
+/// Active signing keys only (is_active = 1). Used by the JWKS cache
+/// to populate the verification cache on startup and after key rotation.
+pub async fn list_active(db: &Database) -> StoreResult<Vec<SigningKeyRow>> {
+    db.with_conn(move |conn| {
+        let mut stmt = conn.prepare(
+            "SELECT id, algorithm, private_key_enc, public_key, is_active, created_at, rotated_at              FROM signing_keys WHERE is_active = 1 ORDER BY created_at DESC",
+        )?;
+        let rows = stmt
+            .query_map([], map)?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }).await
+}
+
 /// Re-seal every `private_key_enc` row under `new_key`. Used by
 /// master-key rotation. Runs inside the caller's transaction —
 /// the function does not commit.

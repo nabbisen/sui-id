@@ -146,7 +146,7 @@ async fn profile_lang_post_persists_and_sets_cookie() {
     );
 
     // DB has been updated.
-    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME).expect("user");
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await.expect("user");
     assert_eq!(user.preferred_lang.as_deref(), Some("en"));
 }
 
@@ -156,13 +156,13 @@ async fn profile_lang_clear_resets_to_browser_default() {
     let state = test_app();
     let session = complete_setup_and_login(&state).await;
     // Pre-set to "en" first.
-    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME).expect("user");
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await.expect("user");
     sui_id_store::repos::users::set_preferred_lang(
         &state.db,
         user.id,
         Some("en"),
         chrono::Utc::now(),
-    )
+    ).await
     .expect("preset");
 
     let resp = build_router(state.clone())
@@ -211,7 +211,7 @@ async fn profile_lang_clear_resets_to_browser_default() {
         set_cookies
     );
 
-    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME).expect("user");
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await.expect("user");
     assert_eq!(user.preferred_lang, None);
 }
 
@@ -293,7 +293,7 @@ async fn admin_settings_basic_default_lang_change() {
         .expect("post");
     assert!(resp.status().is_redirection());
 
-    let row = sui_id_store::repos::server_settings::get(&state.db).expect("settings");
+    let row = sui_id_store::repos::server_settings::get(&state.db).await.expect("settings");
     assert_eq!(row.default_lang, "en");
 }
 
@@ -306,17 +306,19 @@ async fn forgot_password_email_in_user_preferred_locale() {
 
     // Configure SMTP and set the user's email + preferred lang to en.
     enable_smtp_with_inmemory_mailer(&state).await;
-    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME).expect("user");
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await.expect("user");
+    let user_id = user.id;
     state
         .db
-        .with_conn(|conn| {
+        .with_conn(move |conn| {
             conn.execute(
                 "UPDATE users SET email = ?1, email_normalized = lower(trim(?1)), preferred_lang = ?2 WHERE id = ?3",
-                rusqlite::params!["alice@example.test", "en", user.id.to_string()],
+                rusqlite::params!["alice@example.test", "en", user_id.to_string()],
             )
             .expect("update");
             Ok(())
         })
+        .await
         .expect("set fields");
 
     // GET /forgot-password to obtain a CSRF cookie.
@@ -392,6 +394,7 @@ async fn enable_smtp_with_inmemory_mailer(state: &AppState) {
             updated_at: now,
         },
     )
+    .await
     .expect("smtp upsert");
 }
 

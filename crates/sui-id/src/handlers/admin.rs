@@ -654,6 +654,7 @@ pub async fn clients_create(
             allowed_scopes,
             post_logout_redirect_uris: &post_logout_uris,
         },
+        &app.caches,
     ).await
     .map_err(HttpError::html)?;
 
@@ -693,7 +694,7 @@ pub async fn clients_set_disabled(
     let target = ClientId::from_str(&id)
         .map_err(|_| HttpError::html(CoreError::BadRequest("invalid client id".into())))?;
     let value = matches!(form.disabled.as_str(), "true" | "on" | "1");
-    admin_uc::set_client_disabled(&app.db, admin_id, target, value).await.map_err(HttpError::html)?;
+    admin_uc::set_client_disabled(&app.db, &app.clock, admin_id, target, value, &app.caches).await.map_err(HttpError::html)?;
     Ok(Redirect::to("/admin/clients").into_response())
 }
 
@@ -714,7 +715,7 @@ pub async fn clients_delete(
     }
     let target = ClientId::from_str(&id)
         .map_err(|_| HttpError::html(CoreError::BadRequest("invalid client id".into())))?;
-    admin_uc::delete_client(&app.db, admin_id, target).await.map_err(HttpError::html)?;
+    admin_uc::delete_client(&app.db, admin_id, target, &app.caches).await.map_err(HttpError::html)?;
     Ok(Redirect::to("/admin/clients").into_response())
 }
 
@@ -785,7 +786,7 @@ pub async fn clients_edit_post(
     // separately; the operator sees three audit-log entries per save,
     // which is desirable — it makes it possible to track exactly which
     // facet of a client changed when.
-    admin_uc::update_client_basic(&app.db, admin_id, target, form.name.trim(), &uris).await
+    admin_uc::update_client_basic(&app.db, admin_id, target, form.name.trim(), &uris, &app.caches).await
         .map_err(HttpError::html)?;
     admin_uc::set_client_allowed_scopes(
         &app.db,
@@ -868,7 +869,7 @@ pub async fn signing_keys_rotate(
     {
         return Ok(redirect);
     }
-    admin_uc::rotate_signing_key(&app.db, &app.clock, admin_id).await.map_err(HttpError::html)?;
+    admin_uc::rotate_signing_key(&app.db, &app.clock, app.config.storage.key_file.to_str().unwrap_or_default(), admin_id, &app.caches).await.map_err(HttpError::html)?;
     Ok(Redirect::to("/admin/signing-keys").into_response())
 }
 
@@ -889,7 +890,7 @@ pub async fn signing_keys_delete(
     }
     let target = sui_id_shared::ids::SigningKeyId::from_str(&id)
         .map_err(|_| HttpError::html(CoreError::BadRequest("invalid signing key id".into())))?;
-    admin_uc::delete_signing_key(&app.db, admin_id, target).await.map_err(HttpError::html)?;
+    admin_uc::delete_signing_key(&app.db, &app.clock, admin_id, target, &app.caches).await.map_err(HttpError::html)?;
     Ok(Redirect::to("/admin/signing-keys").into_response())
 }
 

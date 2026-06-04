@@ -107,9 +107,9 @@ async fn exchange_code_rejected_when_user_disabled_before_exchange() {
     let (code, verifier) = get_auth_code(&state, &session, &client_id).await;
 
     // Disable the user before exchanging the code.
-    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await
         .expect("find user");
-    sui_id_store::repos::users::set_disabled(&state.db, user.id, true)
+    sui_id_store::repos::users::set_disabled(&state.db, user.id, true).await
         .expect("disable user");
 
     // Exchange should return invalid_grant, not a token set.
@@ -130,7 +130,7 @@ async fn exchange_code_rejected_when_user_disabled_before_exchange() {
     );
 
     // The audit log should contain the user_revoked event.
-    let audit = sui_id_store::repos::audit::recent(&state.db, 50).expect("audit");
+    let audit = sui_id_store::repos::audit::recent(&state.db, 50).await.expect("audit");
     let has_event = audit
         .iter()
         .any(|e| e.action == "oauth2.exchange_code.user_revoked");
@@ -151,15 +151,15 @@ async fn auth_codes_invalidated_on_user_disable() {
     // Disable the user via the store-level call (which `set_user_disabled`
     // delegates to after the admin/self-check). This is the path that
     // invalidates outstanding auth codes.
-    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await
         .expect("find user");
-    sui_id_store::repos::users::set_disabled(&state.db, user.id, true)
+    sui_id_store::repos::users::set_disabled(&state.db, user.id, true).await
         .expect("set_disabled");
-    sui_id_store::repos::auth_codes::invalidate_all_for_user(&state.db, user.id)
+    sui_id_store::repos::auth_codes::invalidate_all_for_user(&state.db, user.id).await
         .expect("invalidate_auth_codes");
 
     // Re-enable the user immediately to check that the code is still dead.
-    sui_id_store::repos::users::set_disabled(&state.db, user.id, false)
+    sui_id_store::repos::users::set_disabled(&state.db, user.id, false).await
         .expect("re-enable user");
 
     // The code should now be consumed and must return invalid_grant.
@@ -214,7 +214,7 @@ async fn refresh_token_theft_detection_survives_gc() {
     // Run GC. The old refresh_a is revoked but not yet expired: the
     // fixed GC only deletes rows WHERE expires_at < now, so refresh_a
     // should survive.
-    sui_id::gc::run_once(&state);
+    sui_id::gc::run_once(&state).await;
 
     // Replay refresh_a. If the GC had deleted it we'd get a generic
     // not-found error. If theft detection fires we get invalid_grant
@@ -239,7 +239,7 @@ async fn refresh_token_theft_detection_survives_gc() {
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST, "replay must fail");
 
     // The audit log should contain the theft_detected event.
-    let audit = sui_id_store::repos::audit::recent(&state.db, 50).expect("audit");
+    let audit = sui_id_store::repos::audit::recent(&state.db, 50).await.expect("audit");
     let has_theft = audit
         .iter()
         .any(|e| e.action == "auth.refresh.theft_detected");

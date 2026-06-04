@@ -230,51 +230,103 @@ pub fn verify_pkce(method: &str, verifier: &str, expected_challenge: &str) -> Co
 /// `accept_expired` allows passing tokens that have aged out — used by
 /// RP-initiated logout, where the spec encourages accepting expired hints
 /// so the user can still sign out after their token has aged.
-pub async fn verify_id_token(
-    db: &sui_id_store::Database,
-    clock: &crate::time::SharedClock,
-    token: &str,
-    accept_expired: bool,
-) -> crate::CoreResult<IdTokenClaims> {
-    use ed25519_dalek::VerifyingKey;
-    use sui_id_store::repos::signing_keys;
 
-    // Fetch signing keys eagerly (cannot .await inside a sync closure).
-    let published_keys = signing_keys::list_published(db).await.ok().unwrap_or_default();
-    let resolver = |kid: &str| -> Option<VerifyingKey> {
-        let m = published_keys.iter().find(|r| r.id.to_string() == kid)?;
-        let arr: [u8; 32] = m.public_key.as_slice().try_into().ok()?;
-        VerifyingKey::from_bytes(&arr).ok()
-    };
-    let decoded: crate::jwt::Decoded<IdTokenClaims> = crate::jwt::verify(token, resolver)?;
-    if !accept_expired && decoded.claims.exp < clock.now().timestamp() {
-        return Err(crate::CoreError::Unauthenticated);
-    }
-    Ok(decoded.claims)
-}
 
 /// Verify a sui-id access token against the active and recently-rotated
 /// signing keys. Returns the validated claims.
 ///
 /// This wraps the `jwt::verify` + JWKS lookup + expiry check so that the
 /// HTTP layer does not have to know about Ed25519 specifics.
+
+
+// ── JWT verification helpers (RFC 014) ───────────────────────────────────────
+
+/// Resolve a signing key by kid from a cache snapshot and verify the token.
+fn verify_from_snapshot<C: serde::de::DeserializeOwned>(
+    keys: &[crate::cache::CachedSigningKey],
+    token: &str,
+) -> crate::CoreResult<crate::jwt::Decoded<C>> {
+    use ed25519_dalek::VerifyingKey;
+    let resolver = |kid: &str| -> Option<VerifyingKey> {
+        let entry = keys.iter().find(|k| k.kid == kid)?;
+        let arr: [u8; 32] = entry.public_key_bytes.as_slice().try_into().ok()?;
+        VerifyingKey::from_bytes(&arr).ok()
+    };
+    crate::jwt::verify(token, resolver)
+}
+
+fn published_to_cached(
+    rows: Vec<sui_id_store::models::SigningKeyRow>,
+) -> Vec<crate::cache::CachedSigningKey> {
+    rows.into_iter()
+        .map(|k| crate::cache::CachedSigningKey {
+            kid: k.id.to_string(),
+            algorithm: k.algorithm,
+            public_key_bytes: k.public_key,
+        })
+        .collect()
+}
+
+/// Verify an ID token from the DB-fetched key list.
+pub async fn verify_id_token(
+    db: &sui_id_store::Database,
+    clock: &crate::time::SharedClock,
+    token: &str,
+    accept_expired: bool,
+) -> crate::CoreResult<IdTokenClaims> {
+    let keys = published_to_cached(
+        sui_id_store::repos::signing_keys::list_published(db)
+            .await
+            .unwrap_or_default(),
+    );
+    let decoded: crate::jwt::Decoded<IdTokenClaims> = verify_from_snapshot(&keys, token)?;
+    if !accept_expired && decoded.claims.exp < clock.now().timestamp() {
+        return Err(crate::CoreError::Unauthenticated);
+    }
+    Ok(decoded.claims)
+}
+
+/// Verify an ID token using the JWKS cache snapshot (RFC 014 hot path).
+pub async fn verify_id_token_cached(
+    caches: &crate::cache::Caches,
+    clock: &crate::time::SharedClock,
+    token: &str,
+    accept_expired: bool,
+) -> crate::CoreResult<IdTokenClaims> {
+    let keys = caches.jwks.snapshot().await;
+    let decoded: crate::jwt::Decoded<IdTokenClaims> = verify_from_snapshot(&keys, token)?;
+    if !accept_expired && decoded.claims.exp < clock.now().timestamp() {
+        return Err(crate::CoreError::Unauthenticated);
+    }
+    Ok(decoded.claims)
+}
+
+/// Verify an access token from the DB-fetched key list.
 pub async fn verify_access_token(
     db: &sui_id_store::Database,
     clock: &crate::time::SharedClock,
     token: &str,
 ) -> crate::CoreResult<AccessTokenClaims> {
-    use ed25519_dalek::VerifyingKey;
-    use sui_id_store::repos::signing_keys;
+    let keys = published_to_cached(
+        sui_id_store::repos::signing_keys::list_published(db)
+            .await
+            .unwrap_or_default(),
+    );
+    let decoded: crate::jwt::Decoded<AccessTokenClaims> = verify_from_snapshot(&keys, token)?;
+    if decoded.claims.exp < clock.now().timestamp() {
+        return Err(crate::CoreError::Unauthenticated);
+    }
+    Ok(decoded.claims)
+}
 
-    // Fetch signing keys eagerly (cannot .await inside a sync closure).
-    let published_keys = signing_keys::list_published(db).await.ok().unwrap_or_default();
-    let resolver = |kid: &str| -> Option<VerifyingKey> {
-        let m = published_keys.iter().find(|r| r.id.to_string() == kid)?;
-        let arr: [u8; 32] = m.public_key.as_slice().try_into().ok()?;
-        VerifyingKey::from_bytes(&arr).ok()
-    };
-    let decoded: crate::jwt::Decoded<AccessTokenClaims> =
-        crate::jwt::verify(token, resolver)?;
+/// Verify an access token using the JWKS cache snapshot (RFC 014 hot path).
+pub async fn verify_access_token_cached(
+    caches: &crate::cache::Caches,
+    clock: &crate::time::SharedClock,
+    token: &str,
+) -> crate::CoreResult<AccessTokenClaims> {
+    let keys = caches.jwks.snapshot().await;
+    let decoded: crate::jwt::Decoded<AccessTokenClaims> = verify_from_snapshot(&keys, token)?;
     if decoded.claims.exp < clock.now().timestamp() {
         return Err(crate::CoreError::Unauthenticated);
     }

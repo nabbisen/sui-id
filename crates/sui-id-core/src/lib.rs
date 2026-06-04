@@ -9,6 +9,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod cache;
 pub mod errors;
 pub mod password;
 pub mod tokens;

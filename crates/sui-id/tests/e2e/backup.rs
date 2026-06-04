@@ -55,7 +55,8 @@ async fn backup_then_restore_preserves_users_and_clients() {
         std::sync::Arc::new(sui_id_core::mail::InMemoryMailSender::new());
     let hibp_client: std::sync::Arc<dyn sui_id_core::hibp::HibpClient> =
         std::sync::Arc::new(sui_id_core::hibp::test_support::InMemoryHibpClient::new());
-    let state = sui_id::AppState::new(db, cfg_src.clone(), SETUP_TOKEN.into(), mailer, hibp_client);
+    let caches = std::sync::Arc::new(sui_id_core::cache::Caches::new());
+    let state = sui_id::AppState::new(db, cfg_src.clone(), SETUP_TOKEN.into(), mailer, hibp_client, caches);
     let session = complete_setup_and_login(&state).await;
     let (client_id, _secret) = create_client(&state, &session).await;
 
@@ -87,9 +88,9 @@ async fn backup_then_restore_preserves_users_and_clients() {
     let restored_key_b64 = std::fs::read_to_string(&cfg_dst.storage.key_file).expect("read key");
     let restored_key = MasterKey::from_base64(restored_key_b64.trim()).expect("decode");
     let db2 = Database::open(&cfg_dst.storage.db_path, restored_key).expect("open restored");
-    let users = sui_id_store::repos::users::list(&db2).expect("list users");
+    let users = sui_id_store::repos::users::list(&db2).await.expect("list users");
     assert_eq!(users.len(), 1, "the admin user should survive the round trip");
-    let clients = sui_id_store::repos::clients::list(&db2).expect("list clients");
+    let clients = sui_id_store::repos::clients::list(&db2).await.expect("list clients");
     assert_eq!(clients.len(), 1, "the client should survive the round trip");
     assert_eq!(clients[0].id.to_string(), client_id);
 }

@@ -98,36 +98,9 @@ pub async fn token_endpoint(
 }
 
 async fn origin_matches_any_redirect_uri(state: &crate::AppState, origin: &str) -> bool {
-    // Pull every active client's redirect URIs and ask whether any
-    // shares the supplied origin (scheme + host + port).
-    //
-    // For the foreseeable scale of a self-hosted IdP this is a few
-    // dozen rows at most; an in-memory cache is unwarranted and
-    // would only complicate the consistency story when an admin
-    // adds or removes a URI. If this ever shows up in profiles,
-    // cache with a short TTL.
-    let target = parse_origin(origin);
-    let target = match target {
-        Some(t) => t,
-        None => return false,
-    };
-    let clients = match sui_id_store::repos::clients::list(&state.db).await {
-        Ok(c) => c,
-        Err(_) => return false,
-    };
-    for client in clients {
-        if client.is_disabled || client.is_deleted {
-            continue;
-        }
-        for uri in client.redirect_uris {
-            if let Some(o) = parse_origin(&uri) {
-                if o == target {
-                    return true;
-                }
-            }
-        }
-    }
-    false
+    // RFC 014: served from the in-process redirect-origins cache.
+    // The cache is rebuilt on every client mutation; no DB call here.
+    state.caches.redirect_origins.contains(origin).await
 }
 
 /// `(scheme, host, port)` triple. Two URLs share an *origin* iff
@@ -135,6 +108,8 @@ async fn origin_matches_any_redirect_uri(state: &crate::AppState, origin: &str) 
 /// We avoid pulling in `url::Url` here — it's already a transitive
 /// dep but parsing here is light enough to do by hand and keeps the
 /// CORS surface entirely free of URL-equivalence subtleties.
+// Used internally if origin validation is needed outside the cache path.
+#[allow(dead_code)]
 fn parse_origin(s: &str) -> Option<(String, String, Option<u16>)> {
     // scheme://authority/...
     let (scheme, rest) = s.split_once("://")?;

@@ -58,6 +58,23 @@ where
     out
 }
 
+// ---------- copy-to-clipboard helper (RFC 028) ----------
+
+/// Render a copy-to-clipboard button for a credential value.
+/// Hidden when Clipboard API is unavailable (non-secure context).
+fn copy_btn(value: String, label: &'static str) -> impl IntoView {
+    view! {
+        <button
+            type="button"
+            class="copy-btn"
+            data-copy=value
+            aria-label=format!("Copy {label}")
+            title=format!("Copy {label}")>
+            "📋 Copy"
+        </button>
+    }
+}
+
 // ---------- setup wizard (3 steps: welcome → admin → done) ----------
 //
 // The design memo describes 4 screens (1 welcome, 2 admin, 3 encryption, 4 done).
@@ -960,7 +977,10 @@ pub fn render_dashboard(data: DashboardData, flash: Option<Flash>) -> String {
                                 </tr>
                                 <tr>
                                     <th scope="row">"JWKS"</th>
-                                    <td><a href="/.well-known/jwks.json"><span class="code">"/.well-known/jwks.json"</span></a></td>
+                                    <td>
+                                        <a href="/.well-known/jwks.json"><span class="code">"/.well-known/jwks.json"</span></a>
+                                        {copy_btn("/.well-known/jwks.json".to_string(), "JWKS URI")}
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
@@ -1197,10 +1217,14 @@ fn client_row_view(c: ClientSummary, csrf: String) -> impl IntoView {
         .into_any()
     };
 
+    let id_for_copy = id_str.clone();
     view! {
         <tr>
             <td>{c.name}</td>
-            <td><span class="code">{c.id.to_string()}</span></td>
+            <td>
+                <span class="code">{id_str}</span>
+                {copy_btn(id_for_copy, "Client ID")}
+            </td>
             <td>{kind}</td>
             <td><span class="code">{scopes_display}</span></td>
             <td class="muted">{logout_display}</td>
@@ -1225,8 +1249,8 @@ pub fn render_clients(
                 <div class="flash warn" role="status">
                     <div class="stack-tight">
                         <strong>"クライアント Secret は今だけ表示されます。安全な場所に保存してください。"</strong>
-                        <div>"Client ID: "<span class="code">{cid}</span></div>
-                        <div>"Client Secret: "<span class="code">{sec}</span></div>
+                        <div>"Client ID: "<span class="code">{cid.clone()}</span>{copy_btn(cid, "Client ID")}</div>
+                        <div>"Client Secret: "<span class="code">{sec.clone()}</span>{copy_btn(sec, "Client Secret")}</div>
                     </div>
                 </div>
             }
@@ -1374,7 +1398,7 @@ pub fn render_client_edit(
                 <div class="card">
                     <h3 class="card__title">"基本情報"</h3>
                     <div class="stack-tight muted">
-                        <div>"Client ID: "<span class="code">{id.clone()}</span></div>
+                        <div>"Client ID: "<span class="code">{id.clone()}</span>{copy_btn(id.clone(), "Client ID")}</div>
                         <div class="row" style="gap:var(--space-2)">
                             <span>"種別:"</span>
                             <span class="badge badge--accent">{kind}</span>

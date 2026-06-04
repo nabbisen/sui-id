@@ -8,6 +8,7 @@ use sui_id_core::hibp::HibpClient;
 use sui_id_core::mail::MailSender;
 use sui_id_core::time::{system_clock, SharedClock};
 use sui_id_core::tokens::TokenLifetimes;
+use sui_id_core::cache::Caches;
 use sui_id_store::Database;
 
 #[derive(Clone)]
@@ -35,6 +36,9 @@ pub struct AppState {
     /// keeping the field unconditional avoids a mode-checked
     /// match at every dispatch site.
     pub hibp_client: Arc<dyn HibpClient>,
+    /// Hot-path caches (RFC 014): redirect-origins and JWKS signing keys.
+    /// Rebuilt on startup and after mutations to clients/signing_keys.
+    pub caches: Arc<Caches>,
 }
 
 impl AppState {
@@ -44,6 +48,7 @@ impl AppState {
         setup_token: String,
         mailer: Arc<dyn MailSender>,
         hibp_client: Arc<dyn HibpClient>,
+        caches: Arc<Caches>,
     ) -> Self {
         let trusted_proxies: Vec<Cidr> = config
             .server
@@ -60,6 +65,7 @@ impl AppState {
             trusted_proxies: Arc::new(trusted_proxies),
             mailer,
             hibp_client,
+            caches,
         }
     }
 

@@ -279,7 +279,7 @@ async fn gc_purges_expired_auth_codes() {
     // so we need real referents to insert a test row.
     let session = complete_setup_and_login(&state).await;
     let (client_id_str, _) = create_client(&state, &session).await;
-    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await
         .expect("find user");
     let client_id: sui_id_shared::ids::ClientId = client_id_str.parse().expect("client_id");
 
@@ -298,7 +298,7 @@ async fn gc_purges_expired_auth_codes() {
         created_at: Utc::now() - Duration::minutes(2),
         auth_methods: vec![],
     };
-    auth_codes::insert(&state.db, &row).expect("insert");
+    auth_codes::insert(&state.db, &row).await.expect("insert");
 
     // Confirm the row exists before GC.
     let count_before: i64 = state
@@ -308,10 +308,11 @@ async fn gc_purges_expired_auth_codes() {
                 .query_row("SELECT COUNT(*) FROM auth_codes", [], |r| r.get(0))
                 .expect("count"))
         })
+        .await
         .expect("query");
     assert!(count_before >= 1);
 
-    sui_id::gc::run_once(&state);
+    sui_id::gc::run_once(&state).await;
 
     let count_after: i64 = state
         .db
@@ -320,6 +321,7 @@ async fn gc_purges_expired_auth_codes() {
                 .query_row("SELECT COUNT(*) FROM auth_codes", [], |r| r.get(0))
                 .expect("count"))
         })
+        .await
         .expect("query");
     assert_eq!(count_after, 0, "expired auth code should have been GCed");
 }

@@ -19,7 +19,7 @@ async fn step_up_form_shows_passkey_section_for_users_with_passkey() {
     use chrono::Utc;
     let state = test_app();
     let session = complete_setup_and_login(&state).await;
-    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await
         .expect("alice");
 
     // Insert a fake passkey row directly. The contents need not be
@@ -29,12 +29,12 @@ async fn step_up_form_shows_passkey_section_for_users_with_passkey() {
         id: sui_id_shared::ids::WebauthnCredentialId::new(),
         user_id: user.id,
         credential_id: vec![1, 2, 3, 4],
-        passkey_enc: vec![], // create() seals our plaintext, this is overwritten
+        passkey_enc: vec![], // create().await seals our plaintext, this is overwritten
         nickname: "Test Key".into(),
         created_at: Utc::now(),
         last_used_at: None,
     };
-    sui_id_store::repos::user_webauthn_credentials::create(&state.db, &cred_row, b"{}")
+    sui_id_store::repos::user_webauthn_credentials::create(&state.db, &cred_row, b"{}").await
         .expect("create passkey");
 
     let resp = build_router(state)

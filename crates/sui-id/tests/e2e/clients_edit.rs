@@ -71,7 +71,7 @@ async fn client_edit_updates_name_and_scopes() {
     // Verify the row was actually updated.
     use sui_id_shared::ids::ClientId;
     let id = client_id.parse::<ClientId>().expect("parse");
-    let row = sui_id_store::repos::clients::get(&state.db, id).expect("get");
+    let row = sui_id_store::repos::clients::get(&state.db, id).await.expect("get");
     assert_eq!(row.name, "renamed-rp");
     assert_eq!(row.redirect_uris, vec!["https://rp.test/new-cb".to_string()]);
     assert_eq!(row.allowed_scopes, "openid");
@@ -88,7 +88,7 @@ async fn client_edit_then_authorize_uses_new_scope_policy() {
     use sui_id_core::admin::CreateClientSpec;
     let state = test_app();
     let session = complete_setup_and_login(&state).await;
-    let admin_id = sui_id_store::repos::users::find_by_username(&state.db, "alice")
+    let admin_id = sui_id_store::repos::users::find_by_username(&state.db, "alice").await
         .expect("admin")
         .id;
     let created = sui_id_core::admin::create_client(
@@ -102,7 +102,8 @@ async fn client_edit_then_authorize_uses_new_scope_policy() {
             allowed_scopes: "", // initially permissive
             post_logout_redirect_uris: &[],
         },
-    )
+        &state.caches,
+    ).await
     .expect("create");
     let client_id = created.row.id.to_string();
 

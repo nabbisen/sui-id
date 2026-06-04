@@ -46,7 +46,7 @@ async fn setup_wizard_accepts_breached_password_in_warn_mode() {
 #[tokio::test]
 async fn setup_wizard_rejects_breached_password_in_block_mode() {
     let (state, _mailer, hibp) = test_app_with_hibp();
-    set_hibp_mode(&state, sui_id_store::models::HibpMode::Block);
+    set_hibp_mode(&state, sui_id_store::models::HibpMode::Block).await;
     // Pre-program: the test password is breached.
     hibp.set_breached(PASSWORD, 12345);
 
@@ -80,6 +80,7 @@ async fn setup_wizard_rejects_breached_password_in_block_mode() {
             conn.query_row("SELECT COUNT(*) FROM users", [], |r| r.get(0))
                 .map_err(Into::into)
         })
+        .await
         .expect("count");
     assert_eq!(users_count, 0);
 }
@@ -88,7 +89,7 @@ async fn setup_wizard_rejects_breached_password_in_block_mode() {
 #[tokio::test]
 async fn setup_wizard_accepts_clean_password_in_block_mode() {
     let (state, _mailer, _hibp) = test_app_with_hibp();
-    set_hibp_mode(&state, sui_id_store::models::HibpMode::Block);
+    set_hibp_mode(&state, sui_id_store::models::HibpMode::Block).await;
     let _session = complete_setup_and_login(&state).await;
 }
 
@@ -98,7 +99,7 @@ async fn setup_wizard_accepts_clean_password_in_block_mode() {
 #[tokio::test]
 async fn setup_wizard_off_mode_skips_check() {
     let (state, _mailer, hibp) = test_app_with_hibp();
-    set_hibp_mode(&state, sui_id_store::models::HibpMode::Off);
+    set_hibp_mode(&state, sui_id_store::models::HibpMode::Off).await;
     hibp.set_breached(PASSWORD, 999);
     let _session = complete_setup_and_login(&state).await;
 }
@@ -110,7 +111,7 @@ async fn setup_wizard_off_mode_skips_check() {
 #[tokio::test]
 async fn setup_wizard_fails_open_when_hibp_unavailable_in_block_mode() {
     let (state, _mailer, hibp) = test_app_with_hibp();
-    set_hibp_mode(&state, sui_id_store::models::HibpMode::Block);
+    set_hibp_mode(&state, sui_id_store::models::HibpMode::Block).await;
     hibp.set_unavailable(PASSWORD);
     // Setup completes despite Block mode + the would-be-breached
     // password — fail-open.

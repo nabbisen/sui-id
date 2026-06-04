@@ -196,6 +196,7 @@ async fn enable_smtp(state: &sui_id::AppState) {
             updated_at: now,
         },
     )
+    .await
     .expect("upsert smtp");
 }
 

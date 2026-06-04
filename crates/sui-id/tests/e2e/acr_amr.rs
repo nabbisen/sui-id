@@ -122,7 +122,7 @@ async fn login_with_totp_for_test(state: &AppState, secret: &[u8]) -> String {
         .expect("pending_mfa cookie");
 
     let step = chrono::Utc::now().timestamp() / 30 + 1;
-    let code = totp::code_for_step(secret, step);
+    let code = totp::code_for_step(secret, step).await;
 
     let router = build_router(state.clone());
     let req = Request::builder()

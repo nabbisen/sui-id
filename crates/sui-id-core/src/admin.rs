@@ -16,6 +16,7 @@ use sui_id_store::repos::{
     audit, auth_codes, clients, credentials, refresh_tokens, sessions, user_totp,
     user_webauthn_credentials, users,
 };
+use crate::cache::Caches;
 use sui_id_store::Database;
 
 async fn audit_ok(db: &Database, actor: UserId, action: &str, target: Option<String>) {
@@ -328,6 +329,7 @@ pub async fn create_client(
     clock: &SharedClock,
     actor: UserId,
     spec: CreateClientSpec<'_>,
+    caches: &Caches,
 ) -> CoreResult<CreatedClient> {
     require_admin(db, actor).await?;
     if spec.name.trim().is_empty() {
@@ -449,6 +451,7 @@ pub async fn update_client_basic(
     target: ClientId,
     name: &str,
     redirect_uris: &[String],
+    caches: &Caches,
 ) -> CoreResult<()> {
     require_admin(db, actor).await?;
     if name.trim().is_empty() {
@@ -469,6 +472,9 @@ pub async fn update_client_basic(
         }
     })?;
     audit_ok(db, actor, "client.update", Some(target.to_string())).await;
+    if let Err(e) = caches.redirect_origins.rebuild(db).await {
+        tracing::warn!(error = %e, "cache rebuild failed after update_client");
+    }
     Ok(())
 }
 
@@ -492,6 +498,7 @@ pub async fn update_client(
     target: ClientId,
     name: Option<&str>,
     redirect_uris: Option<&[String]>,
+    caches: &Caches,
 ) -> CoreResult<()> {
     require_admin(db, actor).await?;
     if let Some(uris) = redirect_uris {
@@ -514,9 +521,11 @@ pub async fn update_client(
 
 pub async fn set_client_disabled(
     db: &Database,
+    clock: &SharedClock,
     actor: UserId,
     target: ClientId,
     disabled: bool,
+    caches: &Caches,
 ) -> CoreResult<()> {
     require_admin(db, actor).await?;
     clients::set_disabled(db, target, disabled).await.map_err(|e| match e {
@@ -532,15 +541,21 @@ pub async fn set_client_disabled(
         if disabled { "client.disable" } else { "client.enable" },
         Some(target.to_string()),
     ).await;
+    if let Err(e) = caches.redirect_origins.rebuild(db).await {
+        tracing::warn!(error = %e, "cache rebuild failed after set_client_disabled");
+    }
     Ok(())
 }
 
-pub async fn delete_client(db: &Database, actor: UserId, target: ClientId) -> CoreResult<()> {
+pub async fn delete_client(db: &Database, actor: UserId, target: ClientId, caches: &Caches) -> CoreResult<()> {
     require_admin(db, actor).await?;
     clients::soft_delete(db, target).await.map_err(|e| match e {
         sui_id_store::StoreError::NotFound => CoreError::NotFound,
         other => CoreError::from(other),
     })?;
+    if let Err(e) = caches.redirect_origins.rebuild(db).await {
+        tracing::warn!(error = %e, "cache rebuild failed after delete_client");
+    }
     refresh_tokens::revoke_all_for_client(db, target).await?;
     audit_ok(db, actor, "client.delete", Some(target.to_string())).await;
     Ok(())
@@ -567,7 +582,9 @@ pub async fn list_signing_keys(
 pub async fn rotate_signing_key(
     db: &Database,
     clock: &SharedClock,
+    keyring_path: &str,
     actor: UserId,
+    caches: &Caches,
 ) -> CoreResult<sui_id_shared::ids::SigningKeyId> {
     use ed25519_dalek::SigningKey;
     use rand::rngs::OsRng;
@@ -593,6 +610,9 @@ pub async fn rotate_signing_key(
         sk.to_bytes().as_ref(),
         pk.to_bytes().as_ref(),
     ).await?;
+    if let Err(e) = caches.jwks.rebuild(db).await {
+        tracing::warn!(error = %e, "cache rebuild failed after rotate_signing_key");
+    }
     let _ = clock;
     audit_ok(db, actor, "signing_key.rotate", Some(new_id.to_string())).await;
     Ok(new_id)
@@ -602,8 +622,10 @@ pub async fn rotate_signing_key(
 /// currently active key.
 pub async fn delete_signing_key(
     db: &Database,
+    clock: &SharedClock,
     actor: UserId,
     target: sui_id_shared::ids::SigningKeyId,
+    caches: &Caches,
 ) -> CoreResult<()> {
     require_admin(db, actor).await?;
     sui_id_store::repos::signing_keys::delete(db, target).await.map_err(|e| match e {
@@ -614,6 +636,9 @@ pub async fn delete_signing_key(
         other => CoreError::from(other),
     })?;
     audit_ok(db, actor, "signing_key.delete", Some(target.to_string())).await;
+    if let Err(e) = caches.jwks.rebuild(db).await {
+        tracing::warn!(error = %e, "cache rebuild failed after delete_signing_key");
+    }
     Ok(())
 }
 

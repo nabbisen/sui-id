@@ -5,7 +5,108 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.30.0] — Unreleased
+## [0.31.0] — Unreleased
+
+**Minor version bump.** RFC 014 (hot-path caches) introduces a new cache
+subsystem and changes the `AppState` constructor — both are breaking API
+additions. RFC 028 (copy buttons, v0.30.1) ships in the same release.
+
+### RFC 028 — Copy-to-clipboard for credential values (v0.30.1 → rolled in)
+
+Adds `📋 Copy` buttons next to Client ID, client secret, User UUID, and
+JWKS URI. The `clipboard-available` CSS class is set by a small inline JS
+snippet when `navigator.clipboard` is present; buttons are hidden without
+it (non-HTTPS contexts degrade cleanly).
+
+### RFC 014 — Hot-path caches
+
+Two request-critical DB reads are now served from in-process caches:
+
+#### Cache 1 — Redirect-origin set (`RedirectOriginsCache`)
+
+`/oauth2/token` CORS pre-flight previously queried every registered client
+on every request to build the allowed-origins set. The cache is now
+rebuilt once at startup and after every client mutation (create / update /
+disable / delete). CORS checks call `caches.redirect_origins.contains(origin).await`
+— a single `RwLock::read` instead of a DB round-trip.
+
+#### Cache 2 — Active signing keys (`JwksCache`)
+
+`verify_access_token` and `verify_id_token` previously loaded the
+published-keys list from the DB on every call. The cache is rebuilt once
+at startup and after every signing-key rotation or deletion. Hot paths
+call `verify_access_token_cached` / `verify_id_token_cached`, which take
+a snapshot of the key list from the cache.
+
+#### Cache design
+
+- Both caches are `tokio::sync::RwLock<T>` snapshots stored as `Arc<Caches>`
+  in `AppState`.
+- Writes hold the lock only during the in-memory update (microseconds).
+- Rebuild on mutation is synchronous with the write: if the rebuild fails,
+  the mutation still returns success but the cache keeps the previous
+  snapshot and a `warn!` log is emitted.
+- Cold start: caches are pre-populated during `startup::prepare()`. A
+  startup rebuild failure yields an empty cache and a warn log; the next
+  successful mutation re-syncs.
+
+#### New public API
+
+- `sui_id_core::cache::Caches` — combined cache handle, stored in `AppState`.
+- `sui_id_core::cache::RedirectOriginsCache::contains(&self, origin) -> bool` (async)
+- `sui_id_core::cache::JwksCache::snapshot(&self) -> Vec<CachedSigningKey>` (async)
+- `tokens::verify_access_token_cached(caches, clock, token)` — hot-path variant.
+- `tokens::verify_id_token_cached(caches, clock, token, accept_expired)` — hot-path variant.
+- `signing_keys::list_active(db)` — new repo function (active keys only).
+
+#### Breaking: `AppState::new` gains a `caches: Arc<Caches>` parameter
+
+All construction sites (startup, tests, dev-mode, CLI sub-commands) updated.
+
+#### Cache invalidation hooks
+
+`admin::{create_client, update_client, update_client_basic, set_client_disabled,
+delete_client}` all rebuild `redirect_origins` on success.
+`admin::{rotate_signing_key, delete_signing_key}` rebuild `jwks` on success.
+All accept `caches: &Caches` as a new final parameter.
+
+#### Test updates
+
+- 3 new unit tests in `cache.rs` (origin extraction, contains, snapshot).
+- E2E tests updated throughout: `AppState::new` call sites, async helper
+  functions, `db.with_conn` missing `.await`, mailer async methods,
+  `move` closures for captured `user.id` / `stale`.
+
+### Test results
+
+- `sui-id-store`: 28 tests pass
+- `sui-id-core`: 114 tests pass (111 previous + 3 cache tests)
+- `cargo check --workspace`: clean
+- `cargo check -p sui-id --tests`: clean (e2e test compilation)
+
+---
+
+## [0.30.0] — Previous release
+
+### RFC 028 — Copy-to-clipboard for credential values
+
+Adds copy buttons next to UUID/URI values that operators frequently need
+to paste into external OIDC client configurations:
+
+- **Client ID** — in the client list table and the client detail page.
+- **Client secret** — in the one-time flash shown after client creation.
+- **JWKS URI** — on the dashboard endpoint table.
+
+The `📋 Copy` button uses `navigator.clipboard.writeText()` and shows
+`✓ Copied` for 1.8 s on success. Buttons are hidden (`display:none`) when
+the Clipboard API is unavailable (non-HTTPS, non-localhost contexts); an
+inline JS snippet adds the `clipboard-available` class to `<html>` at
+startup to reveal them, so the UI degrades cleanly in non-secure contexts
+without broken or disabled-looking controls.
+
+---
+
+## [0.30.0] — Previous release
 
 **Minor version bump.** RFC 013 (async DB layer) is the architectural
 change that earned this bump. From this release forward, every database

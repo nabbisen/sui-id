@@ -44,7 +44,7 @@ async fn mfa_enroll_then_login_with_totp_succeeds() {
     let now = chrono::Utc::now().timestamp();
     // Use step+1 to avoid the replay-defence cursor we set at enrolment time.
     let step = now / 30 + 1;
-    let code = totp::code_for_step(&secret, step);
+    let code = totp::code_for_step(&secret, step).await;
 
     let router = build_router(state.clone());
     let req = Request::builder()
@@ -251,7 +251,7 @@ async fn admin_can_reset_users_mfa_factors() {
 
     let state = test_app();
     let _ = complete_setup_and_login(&state).await;
-    let admin_id = sui_id_store::repos::users::find_by_username(&state.db, "alice")
+    let admin_id = sui_id_store::repos::users::find_by_username(&state.db, "alice").await
         .expect("admin")
         .id;
     let clock = system_clock();
@@ -268,25 +268,25 @@ async fn admin_can_reset_users_mfa_factors() {
             email: None,
             is_admin: false,
         },
-    )
+    ).await
     .expect("create");
-    let bob = sui_id_store::repos::users::find_by_username(&state.db, "bob")
+    let bob = sui_id_store::repos::users::find_by_username(&state.db, "bob").await
         .expect("bob")
         .id;
-    let ticket = mfa::start_enrollment(&state.db, "sui-id", bob, "bob").expect("start");
+    let ticket = mfa::start_enrollment(&state.db, "sui-id", bob, "bob").await.expect("start");
     let step = clock.now().timestamp() / 30;
-    let code = sui_id_core::totp::code_for_step(&ticket.secret, step);
-    let _ = mfa::confirm_enrollment(&state.db, &clock, bob, code).expect("confirm");
-    assert!(mfa::is_mfa_enabled(&state.db, bob).unwrap());
+    let code = sui_id_core::totp::code_for_step(&ticket.secret, step).await;
+    let _ = mfa::confirm_enrollment(&state.db, &clock, bob, code).await.expect("confirm");
+    assert!(mfa::is_mfa_enabled(&state.db, bob).await.unwrap());
 
     // Admin resets it.
-    let report = admin_reset_mfa(&state.db, admin_id, bob).expect("reset");
+    let report = admin_reset_mfa(&state.db, admin_id, bob).await.expect("reset");
     assert!(report.totp_removed);
     assert_eq!(report.passkeys_removed, 0);
 
     // MFA is now off for bob, and the audit log captured the reset.
-    assert!(!mfa::is_mfa_enabled(&state.db, bob).unwrap());
-    let audit = sui_id_store::repos::audit::recent(&state.db, 50).expect("audit");
+    assert!(!mfa::is_mfa_enabled(&state.db, bob).await.unwrap());
+    let audit = sui_id_store::repos::audit::recent(&state.db, 50).await.expect("audit");
     let reset_entries: Vec<_> = audit
         .iter()
         .filter(|e| e.action == "mfa.admin_reset")
@@ -309,7 +309,7 @@ async fn admin_mfa_reset_via_http_redirects_and_disables_mfa_requirement() {
 
     let state = test_app();
     let session = complete_setup_and_login(&state).await;
-    let admin_id = sui_id_store::repos::users::find_by_username(&state.db, "alice")
+    let admin_id = sui_id_store::repos::users::find_by_username(&state.db, "alice").await
         .expect("admin")
         .id;
     let clock = system_clock();
@@ -325,15 +325,15 @@ async fn admin_mfa_reset_via_http_redirects_and_disables_mfa_requirement() {
             email: None,
             is_admin: false,
         },
-    )
+    ).await
     .expect("create");
-    let carol = sui_id_store::repos::users::find_by_username(&state.db, "carol")
+    let carol = sui_id_store::repos::users::find_by_username(&state.db, "carol").await
         .expect("carol")
         .id;
-    let ticket = mfa::start_enrollment(&state.db, "sui-id", carol, "carol").expect("start");
+    let ticket = mfa::start_enrollment(&state.db, "sui-id", carol, "carol").await.expect("start");
     let step = clock.now().timestamp() / 30;
-    let code = sui_id_core::totp::code_for_step(&ticket.secret, step);
-    let _ = mfa::confirm_enrollment(&state.db, &clock, carol, code).expect("confirm");
+    let code = sui_id_core::totp::code_for_step(&ticket.secret, step).await;
+    let _ = mfa::confirm_enrollment(&state.db, &clock, carol, code).await.expect("confirm");
 
     // Sanity: a fresh password login for carol now goes to MFA challenge.
     let router = build_router(state.clone());
