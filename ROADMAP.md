@@ -40,6 +40,7 @@ from RFC 017 § 4.
 
 | Version | What shipped |
 |---|---|
+| v0.38.0 | e2e coverage (RFC 030/033/035), audit-events doc, settings i18n section headers |
 | v0.37.0 | RFC 029 pass 2 (dynamic locale), RFC 035 (user detail), RFC 036 (docs/Phase 5) |
 | v0.36.0 | RFC 030 (dangerous ops confirm), RFC 031 (dashboard prompts), RFC 033 (audit), RFC 034 (passkey+empty) |
 | v0.35.0 | RFC 032 (dev mode banner), RFC 029 first pass (admin i18n) |

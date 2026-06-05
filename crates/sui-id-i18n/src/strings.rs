@@ -386,6 +386,29 @@ pub struct Strings {
     pub user_detail_sessions_th_expires: &'static str,
     pub user_detail_sessions_th_factors: &'static str,
     pub user_detail_activity_section: &'static str,
+    // ---- Settings: common sections (RFC 029 second pass) ----
+    pub settings_page_title_template: &'static str, // "{tab} — Settings"
+    // Basic tab sections
+    pub settings_basic_description: &'static str,
+    // Security tab sections
+    pub settings_security_session_section: &'static str,
+    pub settings_security_session_lede: &'static str,
+    pub settings_security_idle_timeout_label: &'static str,
+    pub settings_security_max_sessions_label: &'static str,
+    pub settings_security_lockout_section: &'static str,
+    pub settings_security_headers_section: &'static str,
+    // Authentication tab sections
+    pub settings_auth_password_section: &'static str,
+    pub settings_auth_mfa_section: &'static str,
+    pub settings_auth_oidc_section: &'static str,
+    // Logs tab sections
+    pub settings_logs_output_section: &'static str,
+    pub settings_logs_audit_section: &'static str,
+    // Other/Advanced tab sections
+    pub settings_advanced_build_section: &'static str,
+    pub settings_advanced_storage_section: &'static str,
+    pub settings_advanced_record_counts: &'static str,
+
 
 
 

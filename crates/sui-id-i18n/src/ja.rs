@@ -434,4 +434,22 @@ pub static STRINGS_JA: Strings = Strings {
     user_detail_sessions_th_expires: "期限",
     user_detail_sessions_th_factors: "認証方式",
     user_detail_activity_section: "最近のアクティビティ",
+
+    // 設定セクションキー
+    settings_page_title_template: "設定",
+    settings_basic_description: "現在の有効な設定を確認します。値を変更するには sui-id.toml を編集して再起動してください。",
+    settings_security_session_section: "セッション制限",
+    settings_security_session_lede: "アイドルタイムアウトと同時セッション数の上限。どちらも 0 で無効（デフォルト）、運用ポリシーに応じて設定します。",
+    settings_security_idle_timeout_label: "アイドルタイムアウト（秒）",
+    settings_security_max_sessions_label: "1 ユーザーあたり最大同時セッション数",
+    settings_security_lockout_section: "アカウントロックアウト",
+    settings_security_headers_section: "セキュリティヘッダー",
+    settings_auth_password_section: "パスワード",
+    settings_auth_mfa_section: "2 段階認証",
+    settings_auth_oidc_section: "OIDC / トークン設定",
+    settings_logs_output_section: "ログ出力",
+    settings_logs_audit_section: "監査ログ ハッシュチェーン",
+    settings_advanced_build_section: "ビルド情報",
+    settings_advanced_storage_section: "ストレージ",
+    settings_advanced_record_counts: "レコード数",
 };

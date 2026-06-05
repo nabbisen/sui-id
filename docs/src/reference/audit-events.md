@@ -34,8 +34,11 @@ Use **Admin panel → Audit log** to filter by event prefix or export to CSV.
 | Event name | Label | Description |
 |---|---|---|
 | `user.create` | User created | Administrator created a new user account. |
+| `user.disable` | User disabled | Administrator disabled a user account. All active sessions and refresh tokens are immediately revoked. |
+| `user.enable` | User enabled | Administrator re-enabled a previously disabled user account. |
 | `user.delete` | User deleted | Administrator deleted a user account. |
 | `user.reset_password` | Password reset (admin) | Administrator reset a user's password. |
+| `mfa.admin_reset` | MFA reset (admin) | Administrator reset a user's MFA factors (TOTP and all passkeys removed). |
 | `admin.user.unlock` | Account unlocked | Administrator cleared a user's progressive lockout. |
 
 ## Client management events

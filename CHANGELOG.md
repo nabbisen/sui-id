@@ -5,7 +5,56 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.37.0] — Unreleased
+## [0.38.0] — Unreleased
+
+**Patch-level quality pass.** No schema changes, no new routes beyond the
+e2e test additions. Targets coverage, docs accuracy, and i18n completeness.
+
+### E2e test suite: RFC 030 / 031 / 033 / 035 coverage
+
+New test file `crates/sui-id/tests/e2e/rfc030_033_035.rs` with 7 tests:
+
+| Test | What it verifies |
+|---|---|
+| `delete_user_without_confirmed_is_rejected` | Direct POST to `/admin/users/{id}/delete` without `_confirmed=1` returns ≥ 400 and does not delete the user. |
+| `mfa_reset_without_confirmed_is_rejected` | Same bypass protection for `/admin/users/{id}/mfa-reset`. |
+| `delete_confirm_page_renders` | `GET /admin/users/{id}/delete-confirm` returns 200 or redirects to step-up. |
+| `audit_csv_export_returns_csv` | `GET /admin/audit.csv` returns `text/csv` with the correct header row. |
+| `audit_filter_by_event_prefix` | `GET /admin/audit?q=auth.login` returns 200 and echoes the filter value. |
+| `dashboard_shows_smtp_warning_when_unconfigured` | Dashboard contains SMTP warning text when no SMTP config is set. |
+| `user_detail_page_renders` | `GET /admin/users/{id}` renders the detail page with the username. |
+
+### Audit event reference: missing events added
+
+`docs/src/reference/audit-events.md` now documents:
+- `user.disable` — user disabled (sessions revoked immediately).
+- `user.enable` — user re-enabled.
+- `mfa.admin_reset` — admin forced removal of all MFA factors.
+
+### Settings UI i18n: section headers converted
+
+15 settings section headers converted from hardcoded Japanese to `t.` references
+across all six settings tabs (Basic, Security, Authentication, Logs, Email, Advanced):
+
+New keys: `settings_basic_description`, `settings_security_session_section/lede`,
+`settings_security_idle_timeout_label`, `settings_security_max_sessions_label`,
+`settings_security_lockout_section`, `settings_security_headers_section`,
+`settings_auth_password_section`, `settings_auth_mfa_section`,
+`settings_auth_oidc_section`, `settings_logs_output_section`,
+`settings_logs_audit_section`, `settings_advanced_build_section`,
+`settings_advanced_storage_section`, `settings_advanced_record_counts`.
+
+All three locales (Ja / En / Zh) updated.
+
+### Test results
+
+- `sui-id-i18n`: **12 tests pass**
+- `sui-id-store`: **33 tests pass**
+- `cargo check --workspace` + `cargo check --tests`: clean
+
+---
+
+## [0.37.0] — Previous release
 
 **Minor version bump.** Phase 5 distribution readiness: RFC 029 second pass,
 RFC 035 user detail page, RFC 036 docs structure. New routes and render function

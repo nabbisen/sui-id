@@ -437,4 +437,22 @@ pub static STRINGS_ZH: Strings = Strings {
     user_detail_sessions_th_expires: "过期时间",
     user_detail_sessions_th_factors: "认证因素",
     user_detail_activity_section: "近期活动",
+
+    // 设置页面分区键
+    settings_page_title_template: "设置",
+    settings_basic_description: "查看当前有效配置。如需修改，请编辑 sui-id.toml 并重启。",
+    settings_security_session_section: "会话限制",
+    settings_security_session_lede: "空闲超时和每用户并发会话上限，均默认为 0（禁用），按需启用。",
+    settings_security_idle_timeout_label: "空闲超时（秒）",
+    settings_security_max_sessions_label: "每用户最大并发会话数",
+    settings_security_lockout_section: "账户锁定",
+    settings_security_headers_section: "安全响应头",
+    settings_auth_password_section: "密码",
+    settings_auth_mfa_section: "双重认证",
+    settings_auth_oidc_section: "OIDC / 令牌设置",
+    settings_logs_output_section: "日志输出",
+    settings_logs_audit_section: "审计日志哈希链",
+    settings_advanced_build_section: "构建信息",
+    settings_advanced_storage_section: "存储",
+    settings_advanced_record_counts: "记录数量",
 };

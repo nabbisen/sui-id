@@ -2676,7 +2676,7 @@ pub fn render_settings_basic(data: SettingsBasicData, flash: Option<Flash>, lang
                     <div>
                         <h1 class="page-header__title">"設定"</h1>
                         <p class="page-header__lede">
-                            "現在の有効な設定の確認。値の変更には sui-id.toml の編集と再起動が必要です。"
+                            t.settings_basic_description
                         </p>
                     </div>
                 </header>
@@ -2776,7 +2776,7 @@ pub fn render_settings_security(data: SettingsSecurityData, flash: Option<Flash>
         let csrf_for_cap = csrf_token.clone();
         let session_forms = view! {
             <section class="section">
-                <h2 class="section__title">"セッション制限 / Session limits"</h2>
+                <h2 class="section__title">t.settings_security_session_section</h2>
                 <p class="muted">
                     "アイドルタイムアウトと同時セッション数の上限。 "
                     "いずれも 0 で無効。デフォルトは 0 (無効) で、運用ポリシーに応じて opt-in。 "
@@ -2788,7 +2788,7 @@ pub fn render_settings_security(data: SettingsSecurityData, flash: Option<Flash>
                         <input type="hidden" name="_csrf" value=csrf_for_idle />
                         <div class="field">
                             <label for="idle-timeout" class="field__label">
-                                "アイドルタイムアウト (秒) / Idle timeout (seconds)"
+                                t.settings_security_idle_timeout_label
                             </label>
                             <input id="idle-timeout" name="secs" type="number"
                                    min="0" max="2592000"
@@ -2807,7 +2807,7 @@ pub fn render_settings_security(data: SettingsSecurityData, flash: Option<Flash>
                         <input type="hidden" name="_csrf" value=csrf_for_cap />
                         <div class="field">
                             <label for="max-sessions" class="field__label">
-                                "1 ユーザーあたり最大同時セッション数 / Max concurrent sessions per user"
+                                t.settings_security_max_sessions_label
                             </label>
                             <input id="max-sessions" name="cap" type="number"
                                    min="0" max="1000"
@@ -2830,7 +2830,7 @@ pub fn render_settings_security(data: SettingsSecurityData, flash: Option<Flash>
                     <div>
                         <h1 class="page-header__title">"設定"</h1>
                         <p class="page-header__lede">
-                            "現在の有効な設定の確認。値の変更には sui-id.toml の編集と再起動が必要です。"
+                            t.settings_basic_description
                         </p>
                     </div>
                 </header>
@@ -2838,7 +2838,7 @@ pub fn render_settings_security(data: SettingsSecurityData, flash: Option<Flash>
                 {settings_tabs(SettingsTab::Security, lang)}
 
                 <div class="card">
-                    <h3 class="card__title">"アカウントロックアウト"</h3>
+                    <h3 class="card__title">t.settings_security_lockout_section</h3>
                     <div class="table-wrap">
                         <table>
                             <tbody>
@@ -2853,7 +2853,7 @@ pub fn render_settings_security(data: SettingsSecurityData, flash: Option<Flash>
                 </div>
 
                 <div class="card">
-                    <h3 class="card__title">"セキュリティヘッダー"</h3>
+                    <h3 class="card__title">t.settings_security_headers_section</h3>
                     <div class="table-wrap">
                         <table>
                             <tbody>
@@ -2940,7 +2940,7 @@ pub fn render_settings_authentication(
                     <div>
                         <h1 class="page-header__title">"設定"</h1>
                         <p class="page-header__lede">
-                            "現在の有効な設定の確認。値の変更には sui-id.toml の編集と再起動が必要です。"
+                            t.settings_basic_description
                         </p>
                     </div>
                 </header>
@@ -2948,7 +2948,7 @@ pub fn render_settings_authentication(
                 {settings_tabs(SettingsTab::Authentication, lang)}
 
                 <div class="card">
-                    <h3 class="card__title">"パスワード"</h3>
+                    <h3 class="card__title">t.settings_auth_password_section</h3>
                     <div class="table-wrap">
                         <table>
                             <tbody>
@@ -2960,7 +2960,7 @@ pub fn render_settings_authentication(
                 </div>
 
                 <div class="card">
-                    <h3 class="card__title">"2 段階認証"</h3>
+                    <h3 class="card__title">t.settings_auth_mfa_section</h3>
                     <div class="table-wrap">
                         <table>
                             <tbody>
@@ -3054,7 +3054,7 @@ pub fn render_settings_logs(data: SettingsLogsData, flash: Option<Flash>, lang: 
                 {settings_tabs(SettingsTab::Logs, lang)}
 
                 <div class="card">
-                    <h3 class="card__title">"ログ出力"</h3>
+                    <h3 class="card__title">t.settings_logs_output_section</h3>
                     <div class="table-wrap">
                         <table>
                             <tbody>
@@ -3083,7 +3083,7 @@ pub fn render_settings_logs(data: SettingsLogsData, flash: Option<Flash>, lang: 
                 </div>
 
                 <div class="card">
-                    <h3 class="card__title">"監査ログのハッシュチェーン"</h3>
+                    <h3 class="card__title">t.settings_logs_audit_section</h3>
                     <div class="row" style="gap:var(--space-3);align-items:center">
                         <span>"状態:"</span>
                         {chain_badge}
@@ -3135,7 +3135,7 @@ pub fn render_settings_other(data: SettingsOtherData, flash: Option<Flash>, lang
                 {settings_tabs(SettingsTab::Other, lang)}
 
                 <div class="card">
-                    <h3 class="card__title">"ビルド"</h3>
+                    <h3 class="card__title">t.settings_advanced_build_section</h3>
                     <div class="table-wrap">
                         <table>
                             <tbody>
@@ -3148,7 +3148,7 @@ pub fn render_settings_other(data: SettingsOtherData, flash: Option<Flash>, lang
                 </div>
 
                 <div class="card">
-                    <h3 class="card__title">"ストレージ"</h3>
+                    <h3 class="card__title">t.settings_advanced_storage_section</h3>
                     <div class="table-wrap">
                         <table>
                             <tbody>
@@ -3165,7 +3165,7 @@ pub fn render_settings_other(data: SettingsOtherData, flash: Option<Flash>, lang
                 </div>
 
                 <div class="card">
-                    <h3 class="card__title">"レコード数"</h3>
+                    <h3 class="card__title">t.settings_advanced_record_counts</h3>
                     <div class="table-wrap">
                         <table>
                             <tbody>
@@ -3459,7 +3459,7 @@ pub fn render_settings_email(
                                    autocomplete="off" value=username />
                         </div>
                         <div class="field">
-                            <label for="password" class="field__label">"パスワード"</label>
+                            <label for="password" class="field__label">t.settings_auth_password_section</label>
                             <input id="password" name="password" type="password"
                                    autocomplete="off" placeholder=pw_placeholder />
                             <span class="field__hint">

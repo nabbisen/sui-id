@@ -434,4 +434,22 @@ pub static STRINGS_EN: Strings = Strings {
     user_detail_sessions_th_expires: "Expires",
     user_detail_sessions_th_factors: "Factors",
     user_detail_activity_section: "Recent activity",
+
+    // Settings section keys
+    settings_page_title_template: "Settings",
+    settings_basic_description: "Review the current effective configuration. To change values, edit sui-id.toml and restart.",
+    settings_security_session_section: "Session limits",
+    settings_security_session_lede: "Idle timeout and concurrent session cap. Both default to 0 (disabled); opt in per your policy.",
+    settings_security_idle_timeout_label: "Idle timeout (seconds)",
+    settings_security_max_sessions_label: "Max concurrent sessions per user",
+    settings_security_lockout_section: "Account lockout",
+    settings_security_headers_section: "Security headers",
+    settings_auth_password_section: "Password",
+    settings_auth_mfa_section: "Two-factor authentication",
+    settings_auth_oidc_section: "OIDC / token settings",
+    settings_logs_output_section: "Log output",
+    settings_logs_audit_section: "Audit log hash-chain",
+    settings_advanced_build_section: "Build info",
+    settings_advanced_storage_section: "Storage",
+    settings_advanced_record_counts: "Record counts",
 };
