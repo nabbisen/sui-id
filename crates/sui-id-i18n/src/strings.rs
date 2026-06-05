@@ -376,6 +376,17 @@ pub struct Strings {
     pub dashboard_warn_smtp: &'static str,
     pub dashboard_warn_hibp: &'static str,
     pub dashboard_warn_cookie_insecure: &'static str,
+    // ---- Admin: User detail page (RFC 035) ----
+    pub user_detail_back: &'static str,
+    pub user_detail_auth_section: &'static str,
+    pub user_detail_totp_label: &'static str,
+    pub user_detail_passkeys_label: &'static str,
+    pub user_detail_sessions_section: &'static str,
+    pub user_detail_sessions_th_started: &'static str,
+    pub user_detail_sessions_th_expires: &'static str,
+    pub user_detail_sessions_th_factors: &'static str,
+    pub user_detail_activity_section: &'static str,
+
 
 
     // ---- Admin: Users (RFC 029) ----

@@ -423,4 +423,15 @@ pub static STRINGS_EN: Strings = Strings {
     confirm_delete_signing_key_impact: "Tokens signed by this key that have not yet expired will fail verification immediately.",
     confirm_delete_signing_key_reversibility: "This cannot be undone. Only delete keys whose tokens have all expired.",
     confirm_delete_signing_key_button: "Delete signing key",
+
+    // Admin: User detail (RFC 035)
+    user_detail_back: "← Back to users",
+    user_detail_auth_section: "Authentication",
+    user_detail_totp_label: "Authenticator app (TOTP):",
+    user_detail_passkeys_label: "Passkeys:",
+    user_detail_sessions_section: "Active sessions",
+    user_detail_sessions_th_started: "Started",
+    user_detail_sessions_th_expires: "Expires",
+    user_detail_sessions_th_factors: "Factors",
+    user_detail_activity_section: "Recent activity",
 };

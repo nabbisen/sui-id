@@ -14,8 +14,6 @@ Completed work is tracked in [CHANGELOG.md](CHANGELOG.md) and the
 | [RFC 005](rfcs/proposed/005-pluggable-user-backends.md) | Pluggable user backends | Low | LDAP/AD directory integration |
 | [RFC 006](rfcs/proposed/006-metrics.md) | Metrics and observability | Low | Prometheus / OpenTelemetry |
 | [RFC 008](rfcs/proposed/008-third-party-posture.md) | Third-party posture / consent screen | Low-Medium | Explicit consent for external RPs |
-| [RFC 029](rfcs/proposed/029-admin-i18n-completion.md) | Admin panel i18n completion (second pass) | Medium-High | lang routing, server_settings.default_lang |
-| [RFC 035](rfcs/proposed/035-user-detail-page.md) | Admin user detail page | Medium | sessions/MFA/audit per user |
 | [RFC 009](rfcs/proposed/009-sql-backends.md) | Alternative SQL backends | Low | PostgreSQL / MySQL support |
 | [RFC 017](rfcs/proposed/017-ui-ux-design-contracts.md) | UI/UX design contracts | Medium | Cross-cutting admin UI contract; see [docs/ui-ux-contracts.md](docs/ui-ux-contracts.md) |
 | [RFC 023](rfcs/proposed/023-visual-design-system.md) | Visual design system (CSS tokens) | Medium | CSS variable tokens, component primitives, dark mode |
@@ -42,6 +40,7 @@ from RFC 017 § 4.
 
 | Version | What shipped |
 |---|---|
+| v0.37.0 | RFC 029 pass 2 (dynamic locale), RFC 035 (user detail), RFC 036 (docs/Phase 5) |
 | v0.36.0 | RFC 030 (dangerous ops confirm), RFC 031 (dashboard prompts), RFC 033 (audit), RFC 034 (passkey+empty) |
 | v0.35.0 | RFC 032 (dev mode banner), RFC 029 first pass (admin i18n) |
 | v0.34.0 | RFC 002 (i18n: zh locale, Formatters, audit labels, dir=, per-recipient locale) |

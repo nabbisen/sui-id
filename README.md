@@ -112,8 +112,17 @@ After setup, point your relying party at:
 - OAuth 2.0 Refresh Token grant with token rotation on each use
 - EdDSA / Ed25519 token signing, advertised through JWKS
 - Argon2id password hashing
-- Field-level encryption of refresh tokens and signing-key material
-- Append-only audit log including authentication outcomes
+- Field-level encryption of refresh tokens, credentials, and signing-key material
+- Append-only audit log with SHA-256 hash-chain integrity, filter, and CSV export
+- Two-factor authentication: TOTP (authenticator app) and WebAuthn passkeys
+- Recovery codes (8 per TOTP enrollment), single-use
+- Forgot-password and password-change email notifications via SMTP
+- Have I Been Pwned breach-password checking (off / warn / block)
+- Step-up authentication for sensitive admin operations
+- Server-rendered confirmation screens for all destructive operations
+- Session idle timeout and concurrent session cap (both opt-in, per server settings)
+- Per-user and server-wide language preference (Japanese, English, Chinese)
+- Dev mode: one-flag startup with seed data, no setup wizard
 - Per-IP rate limiting on login, token, and setup endpoints
 - Background garbage collection of expired authorization codes, sessions,
   and refresh tokens
@@ -133,7 +142,9 @@ After setup, point your relying party at:
 - **HTTP:** Axum 0.8 over Tokio. The router is one file: `crates/sui-id/src/router.rs`.
 - **UI:** Leptos 0.8 in SSR-only mode. No WASM is shipped; pages are rendered
   server-side and HTML POSTs handle state changes. JavaScript is reserved for
-  the single `confirm()` prompt on destructive actions.
+  WebAuthn credential ceremonies only; all other interactions are pure HTML forms.
+  Destructive operations route through server-rendered confirmation screens with
+  step-up authentication (RFC 030).
 - **Observability:** `tracing` + `tracing-subscriber`. Choose `fmt` or `json`
   output via config.
 

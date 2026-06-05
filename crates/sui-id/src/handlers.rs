@@ -592,3 +592,36 @@ pub fn require_confirmed(confirmed: &str) -> Result<(), HttpError> {
         )))
     }
 }
+
+/// Resolve the display locale for an admin panel response (RFC 029 § second pass).
+///
+/// Resolution order:
+/// 1. The admin user's own `users.preferred_lang` (set in profile).
+/// 2. `server_settings.default_lang` (operator-configured server default).
+/// 3. `Locale::Ja` hardcoded fallback.
+///
+/// Errors in DB reads are silently ignored; the fallback guarantees a
+/// usable locale even under degraded conditions.
+pub async fn resolve_admin_locale(
+    app: &crate::state::AppState,
+    admin_id: sui_id_shared::ids::UserId,
+) -> sui_id_i18n::Locale {
+    // 1. Admin user's own preference
+    if let Ok(user) = sui_id_store::repos::users::get(&app.db, admin_id).await {
+        if let Some(ref tag) = user.preferred_lang {
+            if let Some(loc) = sui_id_i18n::Locale::parse(tag) {
+                return loc;
+            }
+        }
+    }
+
+    // 2. Server-configured default language
+    if let Ok(settings) = sui_id_store::repos::server_settings::get(&app.db).await {
+        if let Some(loc) = sui_id_i18n::Locale::parse(&settings.default_lang) {
+            return loc;
+        }
+    }
+
+    // 3. Hardcoded fallback
+    sui_id_i18n::Locale::Ja
+}

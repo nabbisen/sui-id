@@ -1,0 +1,16 @@
+[book]
+title       = "sui-id Documentation"
+authors     = ["nabbisen"]
+description = "Self-hosted, single-binary OpenID Connect provider"
+language    = "en"
+src         = "src"
+
+[build]
+build-dir = "book"
+
+[output.html]
+git-repository-url       = "https://github.com/nabbisen/sui-id"
+git-repository-icon      = "fa-github"
+edit-url-template        = "https://github.com/nabbisen/sui-id/edit/main/docs/src/{path}"
+site-url                 = "/docs/"
+additional-css           = []

@@ -29,12 +29,13 @@ use sui_id_web::{
     pages::{
         ConfirmDeleteClientData, ConfirmDeleteSigningKeyData, ConfirmDeleteUserData,
         ConfirmDisableData, ConfirmResetMfaData, DashboardData,
+        UserDetailData, UserDetailSession,
     },
     render_audit, render_clients, render_confirm_delete_client,
     render_confirm_delete_signing_key, render_confirm_delete_user,
     render_confirm_disable_user, render_confirm_reset_mfa,
-    render_dashboard, render_login, render_signing_keys, render_users,
-    Flash, FlashKind,
+    render_dashboard, render_login, render_signing_keys, render_user_detail,
+    render_users, Flash, FlashKind,
 };
 
 /// Attach a `Set-Cookie` header for the CSRF token to a response.
@@ -389,7 +390,8 @@ pub async fn dashboard(
         warn_cookie_insecure: !app.config.server.cookie_secure,
     };
     let token = crate::csrf::ensure_token(&jar);
-    let resp = Html(render_dashboard(data, None, app.is_dev_mode, sui_id_i18n::Locale::Ja)).into_response();
+    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
+    let resp = Html(render_dashboard(data, None, app.is_dev_mode, lang)).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
 }
 
@@ -427,7 +429,8 @@ pub async fn users_get(
     }
     // summaries already collected in for loop above
     let token = crate::csrf::ensure_token(&jar);
-    let resp = Html(render_users(summaries, None, admin.username, token.clone(), app.is_dev_mode, sui_id_i18n::Locale::Ja)).into_response();
+    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
+    let resp = Html(render_users(summaries, None, admin.username, token.clone(), app.is_dev_mode, lang)).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
 }
 
@@ -499,7 +502,8 @@ pub async fn users_create(
                 });
             }
             let flash = Flash { kind: FlashKind::Error, text: msg };
-            let resp = Html(render_users(summaries, Some(flash), admin.username, token.clone(), app.is_dev_mode, sui_id_i18n::Locale::Ja)).into_response();
+    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
+            let resp = Html(render_users(summaries, Some(flash), admin.username, token.clone(), app.is_dev_mode, lang)).into_response();
             Ok((axum::http::StatusCode::CONFLICT, with_csrf_cookie(resp, &app, &token)).into_response())
         }
         Err(e) => Err(HttpError::html(e)),
@@ -594,11 +598,83 @@ pub async fn users_mfa_reset(
 }
 
 
+
+pub async fn users_detail_get(
+    state_ext: AppStateExt,
+    CurrentAdmin(admin_id): CurrentAdmin,
+    jar: CookieJar,
+    Path(id): Path<String>,
+) -> Result<Response, HttpError> {
+    let State(app) = state_ext;
+    let target = UserId::from_str(&id)
+        .map_err(|_| HttpError::html(CoreError::BadRequest("invalid user id".into())))?;
+    let user = users::get(&app.db, target)
+        .await
+        .map_err(|e| HttpError::html(CoreError::from(e)))?;
+
+    // MFA state
+    let totp = sui_id_store::repos::user_totp::get(&app.db, target).await
+        .unwrap_or(None);
+    let totp_enabled = totp.map(|r| r.enabled).unwrap_or(false);
+    let passkey_count = sui_id_store::repos::user_webauthn_credentials::count_for_user(
+        &app.db, target
+    ).await.unwrap_or(0);
+
+    // Active sessions
+    let sessions_raw = sui_id_store::repos::sessions::list_active_for_user(
+        &app.db, target
+    ).await.unwrap_or_default();
+
+    let sessions: Vec<UserDetailSession> = sessions_raw.into_iter().map(|s| {
+        let factors = s.auth_methods.iter()
+            .map(|m| format!("{m:?}").to_lowercase())
+            .collect::<Vec<_>>()
+            .join(", ");
+        UserDetailSession {
+            started: s.created_at,
+            expires: s.expires_at,
+            factors: if factors.is_empty() { "password".into() } else { factors },
+        }
+    }).collect();
+
+    // Recent audit events (actor or target)
+    let audit_rows = sui_id_store::repos::audit::recent_for_user(
+        &app.db, target, 20
+    ).await.unwrap_or_default();
+
+    let recent_audit: Vec<AuditLogEntryDto> = audit_rows.into_iter().map(|r| {
+        AuditLogEntryDto {
+            at: r.at, actor: r.actor, action: r.action,
+            target: r.target, result: r.result, note: r.note,
+        }
+    }).collect();
+
+    let token = crate::csrf::ensure_token(&jar);
+    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
+    let data = UserDetailData {
+        user_id: id,
+        username: user.username,
+        display_name: user.display_name,
+        email: user.email,
+        is_admin: user.is_admin,
+        is_disabled: user.is_disabled,
+        totp_enabled,
+        passkey_count,
+        sessions,
+        recent_audit,
+        dev_mode: app.is_dev_mode,
+        csrf_token: token.clone(),
+    };
+
+    let resp = Html(render_user_detail(data, lang)).into_response();
+    Ok(with_csrf_cookie(resp, &app, &token))
+}
+
 // ---------- dangerous-op confirmation GET handlers (RFC 030) ----------
 
 pub async fn users_disable_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdmin(_admin_id): CurrentAdmin,
+    CurrentAdmin(admin_id): CurrentAdmin,
     jar: CookieJar,
     Path(id): Path<String>,
 ) -> Result<Response, HttpError> {
@@ -614,14 +690,15 @@ pub async fn users_disable_confirm_get(
         is_disabled: user.is_disabled,
         csrf_token: token.clone(),
     };
-    let resp = Html(render_confirm_disable_user(data, app.is_dev_mode, sui_id_i18n::Locale::Ja))
+    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
+    let resp = Html(render_confirm_disable_user(data, app.is_dev_mode, lang))
         .into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
 }
 
 pub async fn users_delete_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdmin(_admin_id): CurrentAdmin,
+    CurrentAdmin(admin_id): CurrentAdmin,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -643,14 +720,15 @@ pub async fn users_delete_confirm_get(
         username: user.username,
         csrf_token: token.clone(),
     };
-    let resp = Html(render_confirm_delete_user(data, app.is_dev_mode, sui_id_i18n::Locale::Ja))
+    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
+    let resp = Html(render_confirm_delete_user(data, app.is_dev_mode, lang))
         .into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
 }
 
 pub async fn users_mfa_reset_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdmin(_admin_id): CurrentAdmin,
+    CurrentAdmin(admin_id): CurrentAdmin,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -672,14 +750,15 @@ pub async fn users_mfa_reset_confirm_get(
         username: user.username,
         csrf_token: token.clone(),
     };
-    let resp = Html(render_confirm_reset_mfa(data, app.is_dev_mode, sui_id_i18n::Locale::Ja))
+    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
+    let resp = Html(render_confirm_reset_mfa(data, app.is_dev_mode, lang))
         .into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
 }
 
 pub async fn clients_delete_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdmin(_admin_id): CurrentAdmin,
+    CurrentAdmin(admin_id): CurrentAdmin,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -701,14 +780,15 @@ pub async fn clients_delete_confirm_get(
         client_name: client.name,
         csrf_token: token.clone(),
     };
-    let resp = Html(render_confirm_delete_client(data, app.is_dev_mode, sui_id_i18n::Locale::Ja))
+    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
+    let resp = Html(render_confirm_delete_client(data, app.is_dev_mode, lang))
         .into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
 }
 
 pub async fn signing_keys_delete_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdmin(_admin_id): CurrentAdmin,
+    CurrentAdmin(admin_id): CurrentAdmin,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -726,7 +806,8 @@ pub async fn signing_keys_delete_confirm_get(
         algorithm: "Ed25519".to_string(),
         csrf_token: token.clone(),
     };
-    let resp = Html(render_confirm_delete_signing_key(data, app.is_dev_mode, sui_id_i18n::Locale::Ja))
+    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
+    let resp = Html(render_confirm_delete_signing_key(data, app.is_dev_mode, lang))
         .into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
 }
@@ -755,7 +836,8 @@ pub async fn clients_get(
         })
         .collect();
     let token = crate::csrf::ensure_token(&jar);
-    let resp = Html(render_clients(summaries, None, None, token.clone(), app.is_dev_mode, sui_id_i18n::Locale::Ja)).into_response();
+    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
+    let resp = Html(render_clients(summaries, None, None, token.clone(), app.is_dev_mode, lang)).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
 }
 
@@ -848,7 +930,8 @@ pub async fn clients_create(
     let secret_payload =
         created.generated_secret.map(|s| (created.row.id.to_string(), s));
     let token = crate::csrf::ensure_token(&jar);
-    let resp = Html(render_clients(summaries, None, secret_payload, token.clone(), app.is_dev_mode, sui_id_i18n::Locale::Ja)).into_response();
+    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
+    let resp = Html(render_clients(summaries, None, secret_payload, token.clone(), app.is_dev_mode, lang)).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
 }
 
@@ -1072,7 +1155,8 @@ pub async fn signing_keys_get(
         })
         .collect();
     let token = crate::csrf::ensure_token(&jar);
-    let resp = Html(render_signing_keys(summaries, None, token.clone(), app.is_dev_mode, sui_id_i18n::Locale::Ja)).into_response();
+    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
+    let resp = Html(render_signing_keys(summaries, None, token.clone(), app.is_dev_mode, lang)).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
 }
 

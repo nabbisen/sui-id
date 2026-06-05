@@ -426,4 +426,15 @@ pub static STRINGS_ZH: Strings = Strings {
     confirm_delete_signing_key_impact: "由此密钥签名且尚未过期的令牌将立即验证失败。",
     confirm_delete_signing_key_reversibility: "此操作无法撤销，请仅在所有令牌均已过期后删除。",
     confirm_delete_signing_key_button: "删除签名密钥",
+
+    // Admin: 用户详情 (RFC 035)
+    user_detail_back: "← 返回用户列表",
+    user_detail_auth_section: "认证",
+    user_detail_totp_label: "认证器应用 (TOTP)：",
+    user_detail_passkeys_label: "通行密钥：",
+    user_detail_sessions_section: "活跃会话",
+    user_detail_sessions_th_started: "开始时间",
+    user_detail_sessions_th_expires: "过期时间",
+    user_detail_sessions_th_factors: "认证因素",
+    user_detail_activity_section: "近期活动",
 };

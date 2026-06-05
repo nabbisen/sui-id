@@ -5,7 +5,82 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.36.0] — Unreleased
+## [0.37.0] — Unreleased
+
+**Minor version bump.** Phase 5 distribution readiness: RFC 029 second pass,
+RFC 035 user detail page, RFC 036 docs structure. New routes and render function
+signatures justify the minor bump.
+
+### RFC 029 — Admin panel i18n: second pass (dynamic locale resolution)
+
+Admin handlers now resolve the display locale dynamically instead of
+hardcoding `Locale::Ja`. Resolution order:
+
+1. Admin user's `users.preferred_lang` (set in profile).
+2. `server_settings.default_lang` (operator-configured server default).
+3. `Locale::Ja` hardcoded fallback.
+
+New helper: `crate::handlers::resolve_admin_locale(&app, admin_id).await`.
+All twelve `Locale::Ja` literals in `handlers/admin.rs` replaced with this call.
+The confirmation-screen handlers now also bind `admin_id` (was `_admin_id`).
+
+### RFC 035 — Admin user detail page
+
+New route: `GET /admin/users/{id}` → `users_detail_get` handler.
+
+The detail page shows:
+- User identity (username, display name, email, admin/disabled badge).
+- Authentication state: TOTP enabled/disabled, passkey count.
+- Active sessions table (started, expires, factors).
+- Recent audit activity for this user (last 20 events as actor or target).
+- Action buttons: Reset MFA, Disable/Enable, Delete — all routed through
+  the RFC 030 confirmation screens.
+
+User list rows now link to the detail page instead of providing only inline
+action buttons.
+
+New structs: `UserDetailData`, `UserDetailSession` (exported from `sui-id-web`).
+New i18n keys: `user_detail_*` (×3 locales).
+
+### RFC 036 — Phase 5: Distribution readiness
+
+#### README updates
+
+- Features list updated to reflect v0.37 state: MFA, passkeys, HIBP,
+  session limits, i18n, step-up, confirmation screens, operator prompts,
+  audit hash-chain.
+- "Design notes" section: stale `confirm()` mention replaced with
+  accurate description of RFC 030 confirmation screens.
+
+#### docs/src/ — mdbook structure
+
+New `docs/book.toml` and `docs/src/` tree ready for `mdbook build`:
+
+| File | Description |
+|---|---|
+| `src/introduction.md` | Project intro and navigation guide |
+| `src/getting-started/overview.md` | What sui-id does, who it's for, scope |
+| `src/getting-started/quick-start.md` | Install, configure, first run, dev mode |
+| `src/getting-started/faq.md` | 9 common questions with answers |
+| `src/guides/deployment.md` | Production deployment walkthrough |
+| `src/guides/operators.md` | Full configuration reference |
+| `src/guides/upgrade.md` | Upgrade procedure and version notes |
+| `src/reference/configuration.md` | Placeholder (stub) |
+| `src/reference/oidc-api.md` | OIDC integration guide |
+| `src/reference/audit-events.md` | All audit event names, labels, and descriptions |
+| `src/contributing/architecture.md` | Crate graph, request lifecycle, storage model |
+| `src/contributing/local-dev.md` | Build, test, RFC process |
+| `src/contributing/translators.md` | Step-by-step guide for adding a locale |
+
+### Test results
+
+- `sui-id-i18n`: **12 tests pass**
+- `sui-id-store`: **33 tests pass**
+- `cargo check --workspace`: clean
+
+---
+
+## [0.36.0] — Previous release
 
 **Minor version bump.** Completes the first UI/UX realignment wave (RFC 029–034)
 and closes out the design-document gap list from the v0.29.x review. New routes,

@@ -423,4 +423,15 @@ pub static STRINGS_JA: Strings = Strings {
     confirm_delete_signing_key_impact: "このキーで署名されたまだ有効期限が切れていないトークンは即座に検証に失敗します。",
     confirm_delete_signing_key_reversibility: "この操作は元に戻せません。トークンがすべて期限切れになった後にのみ削除してください。",
     confirm_delete_signing_key_button: "署名キーを削除",
+
+    // Admin: ユーザー詳細 (RFC 035)
+    user_detail_back: "← ユーザー一覧へ",
+    user_detail_auth_section: "認証",
+    user_detail_totp_label: "認証アプリ (TOTP):",
+    user_detail_passkeys_label: "パスキー:",
+    user_detail_sessions_section: "アクティブセッション",
+    user_detail_sessions_th_started: "開始日時",
+    user_detail_sessions_th_expires: "期限",
+    user_detail_sessions_th_factors: "認証方式",
+    user_detail_activity_section: "最近のアクティビティ",
 };

@@ -30,6 +30,7 @@ pub use pages::{
     render_signing_keys, render_step_up, render_users,
     ConfirmDeleteClientData, ConfirmDeleteSigningKeyData, ConfirmDeleteUserData,
     ConfirmDisableData, ConfirmResetMfaData, ClientEditData, DashboardData,
+    UserDetailData, UserDetailSession, render_user_detail,
     DashboardSparkBucket, DashboardSparkline, Flash, FlashKind, MeAuditEntry, MeSecurityData,
     MeSessionDescriptor, MfaSetupData, PasskeyDescriptor, PasswordChangeData, ProfileData,
     SettingsAuthenticationData, SettingsBasicData, SettingsChainStatus, SettingsEmailData,

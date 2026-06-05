@@ -1968,6 +1968,176 @@ pub fn render_confirm_delete_signing_key(
     })
 }
 
+
+// ---------- admin user detail (RFC 035) ----------
+
+pub struct UserDetailData {
+    pub user_id: String,
+    pub username: String,
+    pub display_name: Option<String>,
+    pub email: Option<String>,
+    pub is_admin: bool,
+    pub is_disabled: bool,
+    pub totp_enabled: bool,
+    pub passkey_count: usize,
+    pub sessions: Vec<UserDetailSession>,
+    pub recent_audit: Vec<sui_id_shared::api::AuditLogEntryDto>,
+    pub dev_mode: bool,
+    pub csrf_token: String,
+}
+
+pub struct UserDetailSession {
+    pub started: chrono::DateTime<chrono::Utc>,
+    pub expires: chrono::DateTime<chrono::Utc>,
+    pub factors: String,
+}
+
+pub fn render_user_detail(data: UserDetailData, lang: sui_id_i18n::Locale) -> String {
+    render(move || {
+        let t = lang.strings();
+        let badge = if data.is_disabled {
+            view! { <span class="badge badge--warn">{t.badge_disabled}</span> }.into_any()
+        } else if data.is_admin {
+            view! { <span class="badge badge--accent">"admin"</span> }.into_any()
+        } else {
+            view! { <span class="badge badge--ok">{t.badge_enabled}</span> }.into_any()
+        };
+
+        let display = data.display_name.clone().unwrap_or_default();
+        let email = data.email.clone().unwrap_or_default();
+        let username = data.username.clone();
+        let uid = data.user_id.clone();
+        let totp_badge = if data.totp_enabled {
+            view! { <span class="badge badge--ok">{t.profile_mfa_status_enabled}</span> }.into_any()
+        } else {
+            view! { <span class="muted">{t.profile_mfa_status_not_configured}</span> }.into_any()
+        };
+
+        let session_rows: Vec<_> = data.sessions.iter().map(|s| {
+            let started = fmt_time(s.started);
+            let expires = fmt_time(s.expires);
+            let factors = s.factors.clone();
+            view! {
+                <tr>
+                    <td class="muted">{started}</td>
+                    <td class="muted">{expires}</td>
+                    <td>{factors}</td>
+                </tr>
+            }
+        }).collect();
+
+        let audit_rows: Vec<_> = data.recent_audit.iter().map(|e| {
+            audit_row_view(e.clone())
+        }).collect();
+
+        let disable_confirm_url = format!("/admin/users/{uid}/disable-confirm");
+        let delete_confirm_url  = format!("/admin/users/{uid}/delete-confirm");
+        let reset_mfa_confirm_url = format!("/admin/users/{uid}/mfa-reset-confirm");
+
+        view! {
+            <Shell title=username.clone() show_nav=true
+                   current=Some("users".to_string())
+                   dev_mode=data.dev_mode lang=lang>
+                <div style="margin-bottom:var(--space-3)">
+                    <a href="/admin/users" class="muted">{t.user_detail_back}</a>
+                </div>
+
+                <header class="page-header">
+                    <div>
+                        <h1 class="page-header__title">
+                            <span class="code">{username.clone()}</span>
+                            " " {badge}
+                        </h1>
+                        {(!display.is_empty()).then(|| view! {
+                            <p class="page-header__lede">{display.clone()}</p>
+                        })}
+                        {(!email.is_empty()).then(|| view! {
+                            <p class="muted" style="font-size:var(--font-size-caption)">{email}</p>
+                        })}
+                    </div>
+                    <div class="row" style="gap:var(--space-2);align-self:flex-start">
+                        {data.totp_enabled.then(|| view! {
+                            <a href=reset_mfa_confirm_url.clone() class="button secondary">
+                                {t.confirm_reset_mfa_button}
+                            </a>
+                        })}
+                        <a href=disable_confirm_url class="button secondary">
+                            {if data.is_disabled { t.confirm_enable_button } else { t.confirm_disable_button }}
+                        </a>
+                        <a href=delete_confirm_url class="button danger">
+                            {t.button_delete}
+                        </a>
+                    </div>
+                </header>
+
+                <section class="card" style="margin-bottom:var(--space-4)">
+                    <h2 class="card__title">{t.user_detail_auth_section}</h2>
+                    <dl class="kv-list">
+                        <div class="kv-list__row">
+                            <dt>{t.user_detail_totp_label}</dt>
+                            <dd>{totp_badge}</dd>
+                        </div>
+                        <div class="kv-list__row">
+                            <dt>{t.user_detail_passkeys_label}</dt>
+                            <dd>{data.passkey_count.to_string()}</dd>
+                        </div>
+                    </dl>
+                </section>
+
+                <section style="margin-bottom:var(--space-4)">
+                    <h2>{t.user_detail_sessions_section}</h2>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>{t.user_detail_sessions_th_started}</th>
+                                    <th>{t.user_detail_sessions_th_expires}</th>
+                                    <th>{t.user_detail_sessions_th_factors}</th>
+                                </tr>
+                            </thead>
+                            {if session_rows.is_empty() {
+                                view! {
+                                    <tbody><tr><td colspan="3" class="muted"
+                                        style="text-align:center;padding:var(--space-4) 0">
+                                        {t.muted_none}
+                                    </td></tr></tbody>
+                                }.into_any()
+                            } else {
+                                view! { <tbody>{session_rows}</tbody> }.into_any()
+                            }}
+                        </table>
+                    </div>
+                </section>
+
+                <section>
+                    <h2>{t.user_detail_activity_section}</h2>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>{t.audit_col_when}</th>
+                                    <th>{t.audit_col_action}</th>
+                                    <th>{t.audit_col_outcome}</th>
+                                </tr>
+                            </thead>
+                            {if audit_rows.is_empty() {
+                                view! {
+                                    <tbody><tr><td colspan="3" class="muted"
+                                        style="text-align:center;padding:var(--space-4) 0">
+                                        {t.muted_none}
+                                    </td></tr></tbody>
+                                }.into_any()
+                            } else {
+                                view! { <tbody>{audit_rows}</tbody> }.into_any()
+                            }}
+                        </table>
+                    </div>
+                </section>
+            </Shell>
+        }
+    })
+}
+
 // ---------- error ----------
 
 pub fn render_error(title: String, message: String, request_id: String) -> String {
