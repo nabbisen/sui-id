@@ -1,6 +1,6 @@
 # RFC 066 — `handlers/admin.rs` split per screen domain
 
-**Status.** Proposed
+**Status.** Implemented (v0.47.1)
 **Priority.** P0 — Phase F (v0.47.0)
 **Tracks.** Mirrors RFC 065's pages.rs split on the handler side.
 Both files violate the 500-LOC spec; both contribute the bulk of

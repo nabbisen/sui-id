@@ -33,7 +33,6 @@ folders.
 
 | ID  | Title                                                          | Priority |
 |-----|----------------------------------------------------------------|----------|
-| 066 | [`handlers/admin.rs` split per screen domain](./proposed/066-admin-handlers-split.md) | P0 — v0.47.1 |
 | 067 | [Inline-style discipline + CI bound](./proposed/067-inline-style-discipline.md) | P1 — v0.48.0 |
 | 008 | [Third-party-posture bundle](./proposed/008-third-party-posture.md) | Low-medium — post-1.0 |
 | 025 | [Multi-tenant expansion path: detailed design](./proposed/025-multi-tenant-expansion.md) | Low — post-1.0, no schedule |
@@ -46,6 +45,7 @@ folders.
 
 | ID  | Title                                                          | Shipped in |
 |-----|----------------------------------------------------------------|------------|
+| 066 | [`handlers/admin.rs` split per screen domain](./done/066-admin-handlers-split.md) | v0.47.1 |
 | 065 | [`pages.rs` split per screen domain](./done/065-pages-split-per-screen.md) | v0.47.0 |
 | 064 | [Empty / error state primitives](./done/064-empty-error-state-primitives.md) | v0.46.0 |
 | 063 | [Dashboard signal vs. noise pass](./done/063-dashboard-signal-noise.md) | v0.46.0 |

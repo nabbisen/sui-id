@@ -5,6 +5,130 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.47.1] — Unreleased
+
+**Phase F continuation: `handlers/admin.rs` split per screen domain
+(RFC 066).** This is the second of three Phase F releases; RFC 067
+(inline-style discipline) plus `handlers/me_security.rs` split land
+in v0.48.0. After v0.48.0, v1.0-rc1 is the next planned tag.
+
+The visible signal of v0.47.1 landing: nothing user-facing — pure
+code-structure refactor. Contributors editing one handler domain no
+longer scroll past nine others to find it.
+
+---
+
+### RFC 066 — `handlers/admin.rs` split per screen domain
+
+The 1531-line `handlers/admin.rs` is split into 8 child modules
+under `crates/sui-id/src/handlers/admin/`, mirroring the route
+prefixes (`/admin/users/*`, `/admin/clients/*`, etc.). Rust 2018+
+module style is used throughout — `admin.rs` is the umbrella;
+submodules live in `admin/` as sibling .rs files. No `mod.rs`.
+
+**New module tree:**
+
+```
+crates/sui-id/src/handlers/
+├── admin.rs                # umbrella: pub use {submodule}::*; +
+│                           # `with_csrf_cookie` + `render_qr_svg(_pub)` +
+│                           # 8 mod declarations
+└── admin/
+    ├── forms.rs       (~70 LOC)  # DisableForm, CsrfOnlyForm,
+    │                              # ConfirmedForm, ConfirmedReasonForm
+    ├── auth.rs        (~275 LOC) # login_get/post, mfa_challenge_get/post,
+    │                              # logout, LoginForm, MfaChallengeForm
+    ├── dashboard.rs   (~115 LOC) # dashboard handler + DashboardQuery
+    ├── users.rs       (~370 LOC) # 9 handlers: list, create, set_disabled,
+    │                              # delete, mfa_reset, detail_get, +
+    │                              # 3 confirm_get pages
+    ├── clients.rs     (~360 LOC) # 8 handlers: list, create, set_disabled,
+    │                              # delete, edit_get/post, rotate_secret,
+    │                              # + delete confirm_get
+    ├── signing_keys.rs (~100 LOC) # 4 handlers: list, rotate, delete +
+    │                              # delete confirm_get
+    ├── audit.rs       (~80 LOC)  # audit_get, audit_csv_get, AuditQuery
+    └── webauthn.rs    (~145 LOC) # login challenge: webauthn_auth_start +
+                                  # webauthn_auth_complete (distinct from
+                                  # /me/security/passkeys/* which live in
+                                  # handlers/me_security.rs)
+```
+
+**Every file under 500 LOC.** umbrella `admin.rs` is 55 LOC.
+
+**Public API unchanged.** Routes wired in `crate::router` reference
+`crate::handlers::admin::handler_name` — each submodule's `pub`
+items are flattened into the admin namespace by the
+`pub use {submodule}::*;` re-exports. The router file needs no
+changes; `crate::handlers` declaration in handlers.rs needs no
+changes (`pub mod admin;` already pointed at admin.rs which is now
+the umbrella).
+
+**`render_qr_svg` placement**: kept in the umbrella as a private
+helper plus a `pub fn render_qr_svg_pub` wrapper. Called both from
+`mfa_challenge_post` inside admin (at first secret generation) and
+from `crate::handlers::me_security::mfa_enroll_start` (RFC 055).
+Moving it into a submodule would force a sibling-to-sibling import
+and lose nothing in clarity. Sui-id-web is the eventual home but
+the move is out of scope for v0.47.1.
+
+**`_silence_state` / `_silence_state2` removed.** These were
+dead-code suppressors in the monolithic admin.rs that referenced
+otherwise-unused-in-some-paths imports (`CurrentUser` and
+`state::is_initialized`). After the split, each submodule declares
+only what it needs; the suppressors are unnecessary.
+
+**Build hygiene during the split:**
+
+- 14 `pub struct` types lost their `#[derive(Debug, Deserialize, …)]`
+  during extraction because the derive line was claimed as the
+  trailing content of the preceding item. Fixed by extracting the
+  derives back from the backup admin.rs and inserting them above
+  each affected struct in the new files.
+- 85 unused-import warnings (every submodule inherited the full
+  monolithic `use` block) auto-pruned by `cargo fix --lib`.
+- `axum::Json` (used by `webauthn_auth_start` to return a challenge
+  payload) was missing from the inherited use block; added manually
+  to `admin/webauthn.rs`.
+- The pre-existing v0.47.0 warnings (`mailer`, `title`, three
+  `caches`/`clock` in sui-id-core) carry forward unchanged —
+  unrelated to this RFC; tracked separately.
+
+### CI invariants verified
+
+The three existing grep CI jobs (text-leaks, css-tokens,
+semantic-palette-parity) scope by `crates/`, not by filename — they
+automatically follow the new file structure. Manual verification
+on v0.47.1 post-split passed all three. No CI workflow changes
+needed.
+
+### Tests pass count
+
+Unchanged from v0.47.0 — this is a structural release.
+**228/228 PASS**:
+
+- sui-id-i18n: 12
+- sui-id-shared: 13
+- sui-id-store: 36
+- sui-id-core: 114
+- sui-id: 53
+
+### Breaking changes
+
+None. `crate::handlers::admin::*` paths resolve identically.
+
+### Deferred
+
+- **RFC 067** (inline-style discipline; ~119 inline `style=""` →
+  ~30 with `.mt-*`/`.gap-*` utility classes + CI bound at 40) →
+  **v0.48.0**.
+- **`handlers/me_security.rs` split** (1099 LOC, also over the 500
+  spec ceiling; same Rust 2018+ pattern as admin.rs) → **v0.48.0**.
+
+v0.48.0 is the final Phase F buffer release; v1.0-rc1 follows.
+
+---
+
 ## [0.47.0] — Unreleased
 
 **Phase F (partial) of the v0.42 → v1.0-rc UI/UX hardening plan:

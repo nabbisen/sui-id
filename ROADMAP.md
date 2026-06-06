@@ -51,6 +51,7 @@ proposed RFCs once they enter the repository at each phase start.
 
 | Version | What shipped |
 |---|---|
+| v0.47.1 | **Phase F (continued)** of the UI/UX hardening plan — RFC 066 (`handlers/admin.rs` 1531 LOC → 8 sub-modules under `admin/`, Rust 2018+ module style; every file under spec's 500-LOC ceiling, umbrella 55 LOC; public route paths unchanged through `pub use {submodule}::*;` re-exports). Hygiene: 14 `#[derive(...)]` attributes lost during extraction were re-attached from the original; 85 unused-import warnings auto-pruned by `cargo fix`; `_silence_state*` dead-code suppressors removed (the split made them unnecessary). RFC 067 (inline-style discipline) + `handlers/me_security.rs` split deferred to v0.48.0, the final Phase F buffer release before v1.0-rc1. |
 | v0.47.0 | **Phase F (partial)** of the UI/UX hardening plan — RFC 065 (`pages.rs` 4170 LOC → 22 sub-modules under `pages/`, Rust 2018+ module style throughout; every file under spec's 500-LOC ceiling; sub-directory splits for `settings/` and `me_security/`; public API surface unchanged through `pub use {submodule}::*;` re-exports). Build hygiene: 22 unused-variable warnings cleared; 7 genuine dead code removals (`let csrf_*`/`let *_url` from pre-Phase-D row buttons). RFC 066 (admin.rs split) deferred to v0.47.1; RFC 067 (inline-style discipline) + `handlers/me_security.rs` split deferred to v0.48.0. |
 | v0.46.0 | **Phase E** of the UI/UX hardening plan — RFC 061 (semantic palette extension: 12 new tokens completing `--{semantic}-subtle` + `--fg-on-{semantic}` triples for danger/warning/success/info × light/dark/auto-dark; closes v0.44.0 `.banner--success` regression where `--success-subtle` was used but undeclared; new CI job `semantic-palette-parity` enforces structural completeness), RFC 062 (card variants `.card--warn`, `.card--info`, `.card--success`, `.card--callout` over `.card` base; 2 inline `border-left` migrations), RFC 063 (dashboard signal/noise reorder: recent events promoted above stats with `.card--info`, sparkline demoted to h3+opacity), RFC 064 (`empty_state()` + `table_empty_row()` primitives replacing 5 ad-hoc `<p class="muted">No X yet.</p>` sites). |
 | v0.45.0 | **Phase D** of the UI/UX hardening plan — RFC 058 (step-up enforcement on 4 dangerous routes: `users_set_disabled`, `clients_set_disabled`, `mfa_disable`, `passkey_delete`), RFC 059 (`<ConfirmScreen>` shared component; 5 `render_confirm_*` functions delegate to one template), RFC 060 (audit-note rollout: 7 use cases gain `reason` parameter, 8 handlers migrate to new `ConfirmedReasonForm`, self-service routes write canonical `"self"` note, reason textarea added to all 5 confirm screens). Latent bypass closed: 5 routes accepted POSTs without `_confirmed=1`; now enforced server-side. New docs page `guides/dangerous-operations.md`. |
@@ -79,23 +80,22 @@ Full history: [CHANGELOG.md](CHANGELOG.md)
 
 ## Status
 
-v0.47.0 ships Phase F partial: code structure cleanup. `pages.rs`
-collapses from 4170 LOC into 22 child modules under `pages/`, all
-under the 500-LOC spec ceiling. Rust 2018+ module style is used
-throughout — no `mod.rs` files; each module is either an umbrella
-`.rs` file or a sibling directory. Public API surface is unchanged
-because the umbrella re-exports each submodule's items via
-`pub use *;`.
+v0.47.1 ships Phase F continued: `handlers/admin.rs` collapses
+from 1531 LOC into 8 child modules under `admin/`, all under the
+500-LOC spec ceiling, umbrella 55 LOC. Rust 2018+ module style is
+used throughout — no `mod.rs` files. Route paths in `crate::router`
+unchanged because the umbrella re-exports each submodule's items
+via `pub use *;`.
 
-This is a purely structural release. No user-visible behavior
-changes. Test count holds at 228/228.
+Purely structural; no user-visible behavior changes. Tests hold at
+228/228.
 
-The project is **on hold for v1.0** until Phase F completes. The
-remaining tasks land across two more buffer releases:
+The project is **on hold for v1.0** until Phase F completes with
+v0.48.0:
 
-- **v0.47.1**: RFC 066 (`handlers/admin.rs` 1531 LOC → 8 sub-modules).
-- **v0.48.0**: RFC 067 (inline-style discipline + CI bound) plus
-  `handlers/me_security.rs` 1099 LOC → 6 sub-modules.
+- **v0.48.0** (final Phase F buffer): RFC 067 (inline-style
+  discipline + CI bound at 40) plus `handlers/me_security.rs`
+  1099 LOC → 6 sub-modules.
 
 After v0.48.0, v1.0-rc1 is the next planned tag.
 
