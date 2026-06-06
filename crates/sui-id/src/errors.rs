@@ -13,7 +13,7 @@
 //!   revoke endpoints. Integrators depend on this exact wire format.
 
 use axum::http::StatusCode;
-use axum::response::{Html, IntoResponse, Response};
+use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::Json;
 use serde::Serialize;
 use sui_id_core::errors::{CoreError, ProtocolError};
@@ -222,6 +222,33 @@ fn json_error_response(e: HttpError, code: ApiErrorCode) -> Response {
 }
 
 fn html_error_response(e: HttpError, code: ApiErrorCode) -> Response {
+    // v0.48.1: For HTML-representation Unauthenticated errors
+    // (typical case: an admin tries to GET /admin without a valid
+    // session cookie), redirect to /admin/login instead of
+    // rendering a 401 page. The 401 page itself has a "Back home"
+    // link that goes to `/` — and `/` redirects an initialised
+    // system back to `/admin`, producing a lock-out loop where
+    // every click on "Back home" round-trips through another 401.
+    //
+    // The redirect-to-login pattern is what every reasonable web
+    // app does when a protected GET hits an unauthenticated user;
+    // the 401 page was only ever appropriate for genuine error
+    // conditions (malformed cookie, server side problem), not for
+    // "you need to sign in".
+    //
+    // We deliberately do NOT include the original URL as a
+    // `?return=` query parameter in this hotfix: the open-redirect
+    // safety logic needs to be designed properly first (only allow
+    // same-origin path-only values, etc.), and that is v0.48.2+
+    // territory. The plain redirect to /admin/login is correct and
+    // safe.
+    if matches!(e.inner, CoreError::Unauthenticated)
+        && matches!(e.representation, ErrorRepresentation::Html)
+        && e.forced_status.is_none()
+    {
+        return Redirect::to("/admin/login").into_response();
+    }
+
     let status = e.forced_status.unwrap_or_else(|| {
         StatusCode::from_u16(code.http_status()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)
     });

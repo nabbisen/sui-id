@@ -14,6 +14,13 @@ pub fn render_error(status: u16, request_id: &str, lang: sui_id_i18n::Locale) ->
     let rid = request_id.to_string();
     let req_id_label = t.error_request_id_label;
     let back_home = t.error_back_home;
+    // v0.48.1 (Bug 9 defense-in-depth): when an Unauthorized page
+    // does still render (e.g. for a non-Unauthenticated 401 path,
+    // or future authentication errors that don't redirect),
+    // "Back home" should point at /admin/login rather than `/`.
+    // The latter is a root handler that just redirects to /admin
+    // again for any initialised installation, producing a loop.
+    let back_home_href = if status == 401 { "/admin/login" } else { "/" };
     render(move || {
         view! {
             <crate::layout::AuthShell title=title.to_string() lang=lang>
@@ -26,7 +33,7 @@ pub fn render_error(status: u16, request_id: &str, lang: sui_id_i18n::Locale) ->
                         <span class="code">{rid}</span>
                     </p>
                     <p>
-                        <a href="/" class="button secondary">{back_home}</a>
+                        <a href=back_home_href class="button secondary">{back_home}</a>
                     </p>
                 </div>
             </crate::layout::AuthShell>

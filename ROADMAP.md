@@ -51,6 +51,7 @@ proposed RFCs once they enter the repository at each phase start.
 
 | Version | What shipped |
 |---|---|
+| v0.48.1 | **First verification-phase hotfix.** Three lock-out / main-feature bugs surfaced during actual-environment testing of v0.48.0 at localhost:8801 — all CSP-related. **Bug 2** (CSP `script-src 'self'` blocking 3 inline `<script>` blocks + 3 inline `onclick=` handlers → theme toggle, clipboard copy, sign-out all silently failed): externalised the inline JS into `/static/theme-init.js`, `/static/copy.js`, `/static/logout-csrf.js`; theme buttons keep only `data-theme-value` attributes and `theme-init.js` attaches listeners on DOM-ready. **Bug 3** (sign-out → /admin redirect loop): subsumed by Bug 2 fix — CSRF token injection script now runs. **Bug 9** (401 lock-out after restart, "Back home" loops to /admin): `html_error_response` now redirects `CoreError::Unauthenticated`+HTML to `/admin/login` instead of rendering a 401 page; `pages/error.rs` "Back home" is context-aware (401 → /admin/login, else → /). Tests stable at 228/228; 0 workspace warnings; CI invariants all PASS. No new RFC consumed (hotfix scope). Six other v0.48.0 issues (`::selection` color, /me/security/overview i18n, mobile responsive on nav + tables, setup wizard language picker, footer a11y label intent, title tagline restraint) deferred to v0.48.2 — none of them lock operators out. |
 | v0.48.0 | **Phase F (final buffer)** — RFC 068 (`handlers/me_security.rs` 1099 LOC → 7 sub-modules, Rust 2018+ style; all under 500 LOC) + RFC 067 (inline-style discipline: 119 → 16 with 40+ utility classes in `components.rs`; new CI bound `inline-style-bound` at 20). Pre-existing warning cleanup: 5 issues cleared (dead `mailer`/`title`, `_caches`/`_clock` rename for API symmetry, `decrypt_field` allow(dead_code)). 0 workspace warnings. Phase F closes; project enters verification phase. **No v1.0-rc/pre tag is scheduled from this release** — sufficient soak, external review, and integration verification precede any v1 designation. |
 | v0.47.1 | **Phase F (continued)** of the UI/UX hardening plan — RFC 066 (`handlers/admin.rs` 1531 LOC → 8 sub-modules under `admin/`, Rust 2018+ module style; every file under spec's 500-LOC ceiling, umbrella 55 LOC; public route paths unchanged through `pub use {submodule}::*;` re-exports). Hygiene: 14 `#[derive(...)]` attributes lost during extraction were re-attached from the original; 85 unused-import warnings auto-pruned by `cargo fix`; `_silence_state*` dead-code suppressors removed (the split made them unnecessary). RFC 067 (inline-style discipline) + `handlers/me_security.rs` split deferred to v0.48.0, the final Phase F buffer release. |
 | v0.47.0 | **Phase F (partial)** of the UI/UX hardening plan — RFC 065 (`pages.rs` 4170 LOC → 22 sub-modules under `pages/`, Rust 2018+ module style throughout; every file under spec's 500-LOC ceiling; sub-directory splits for `settings/` and `me_security/`; public API surface unchanged through `pub use {submodule}::*;` re-exports). Build hygiene: 22 unused-variable warnings cleared; 7 genuine dead code removals (`let csrf_*`/`let *_url` from pre-Phase-D row buttons). RFC 066 (admin.rs split) deferred to v0.47.1; RFC 067 (inline-style discipline) + `handlers/me_security.rs` split deferred to v0.48.0. |
@@ -81,34 +82,35 @@ Full history: [CHANGELOG.md](CHANGELOG.md)
 
 ## Status
 
-v0.48.0 ships Phase F's final buffer: `handlers/me_security.rs`
-1099 → 7 sub-modules (RFC 068), inline-style discipline 119 → 16
-plus a CI bound of 20 (RFC 067), and a cleanup of five pre-existing
-warnings carried over from earlier releases.
+v0.48.1 ships the **first verification-phase hotfix**. Three CSP-
+related bugs (theme toggle / clipboard / sign-out all silently
+broken from inline JS being blocked, plus a 401 lock-out + redirect
+loop after server restart) surfaced during actual-environment
+testing at localhost:8801 within hours of v0.48.0 being archived.
 
-**Phase F closes here.** The three files originally in the Phase F
-mandate — `pages.rs` (4170), `handlers/admin.rs` (1531), and
-`handlers/me_security.rs` (1099) — are all split into per-screen /
-per-domain submodules under 500 LOC. Inline `style=""` count is
-bounded by CI. The workspace compiles with 0 warnings.
+All three are fixed by externalising the inline scripts and by
+redirecting unauthenticated GETs to `/admin/login` instead of
+rendering a 401 page that has no escape route. The fixes are
+defensive — minimal scope, no API changes, all dozen existing
+handlers and tests untouched.
 
-Ten other `.rs` files (i18n string tables, sui-id-core state
-machines, `backup.rs`, `handlers/oidc.rs`) are still over the
-500-LOC *recommendation*. They were not in Phase F scope; some are
-single-bag string tables where splitting harms cohesion, others
-are state-machine implementations tracked as separate post-1.0
-candidates.
+Six other issues surfaced in the same verification round (selection
+color, /me/security/overview i18n hardcoding, mobile-responsive
+nav + tables, setup-wizard language picker, footer a11y label
+intent, title tagline restraint) but none of them lock operators
+out. They are scheduled for v0.48.2 (verification-pass buffer) so
+the v0.48.1 hotfix can ship immediately.
 
-The project enters **verification phase**. A v1.0 candidate
+The project remains in **verification phase**. A v1.0 candidate
 designation (rc, pre, beta, anything) is not on the immediate
-horizon — sufficient soak, external review, and an integration
-verification pass come first. The next planned release is a
-verification-pass buffer; its tag is TBD and **will not start
-with v1**.
+horizon — verification cycles like this one are exactly what the
+phase is for. The next planned release is v0.48.2 (verification-
+pass buffer); its tag **will not start with v1**.
 
 The v0.42 → v0.48 hardening arc is complete: 21 RFCs (048–068)
 landed across 7 releases, addressing every gap surfaced by the PDF
-review.
+review. v0.48.1 onward addresses gaps surfaced by actual operator
+testing.
 
 ---
 

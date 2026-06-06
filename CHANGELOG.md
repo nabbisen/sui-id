@@ -5,6 +5,170 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.48.1] — Unreleased
+
+**Verification-phase hotfix.** Three serious bugs surfaced in
+actual-environment testing of v0.48.0 at `localhost:8801` after
+v0.48.0 was tagged. All three share a single class of root cause:
+the codebase grew CSP-unsafe inline JavaScript and an authentication
+flow that assumed JavaScript would always run. With
+`Content-Security-Policy: script-src 'self'` (the production
+default), the inline scripts are blocked, and the assumption
+collapses into user-visible failures.
+
+This is the **first verification-phase release**. Per project
+guidance, no v1.0-* tag is scheduled — v0.48.1 is a defensive
+patch to keep the verification phase running until further bugs
+are surfaced and a planned verification-pass buffer can ship.
+
+---
+
+### Bug 2 (CSP blocks inline scripts → theme toggle, copy, sign-out broken)
+
+Browser developer tools showed multiple CSP violations on every
+page under the admin chrome:
+
+- `script-src-elem 'self'` blocked the three inline `<script>`
+  blocks in `crates/sui-id-web/src/layout.rs` (theme init, copy
+  helper, logout CSRF injector).
+- `script-src-attr 'self'` blocked the three inline `onclick=`
+  handlers on the footer theme-toggle buttons.
+
+All three inline scripts were extracted into external files served
+by the existing `/static/*` route (which already serves the
+WebAuthn JS):
+
+| New file | Replaces | Loaded as |
+|----------|----------|-----------|
+| `crates/sui-id/static/theme-init.js` | inline `THEME_INIT_JS` (in 2 places: Shell + AuthShell) + 3 inline `onclick=` | `<script src="/static/theme-init.js" defer>` |
+| `crates/sui-id/static/copy.js` | inline `COPY_JS` | `<script src="/static/copy.js" defer>` |
+| `crates/sui-id/static/logout-csrf.js` | inline CSRF-cookie-to-form-input injector | `<script src="/static/logout-csrf.js" defer>` |
+
+The theme-toggle buttons now carry only `data-theme-value="..."`
+attributes; `theme-init.js` attaches `click` listeners on DOM ready
+by selecting `.theme-toggle__btn[data-theme-value]`. The functional
+behaviour is identical to the inline version that v0.47.x shipped.
+
+`assets.rs::mime_for()` learnt the `.js → application/javascript;
+charset=utf-8` mapping; previously only `.ico`, `.png`, `.svg`,
+and `.txt` were known.
+
+### Bug 3 (Sign-out redirect loop)
+
+Subsumed by Bug 2 fix. The root cause:
+
+1. The logout `<form>` had `<input id="logout-csrf" value="">` —
+   the value was supposed to be populated client-side from the
+   `sui_id_csrf` cookie by an inline script.
+2. CSP blocked the script; the input stayed empty.
+3. POST `/admin/logout` saw an empty `_csrf` field, `enforce_csrf`
+   failed, the handler took its "graceful" fallback —
+   `Redirect::to("/admin/login")`.
+4. `/admin/login` saw a still-valid session cookie (logout never
+   ran) and redirected back to `/admin`.
+5. The operator appeared to be unable to sign out.
+
+Externalising the inline script (`logout-csrf.js`) restores the
+behaviour. The proper fix — server-rendering the CSRF token into
+the form so no JavaScript injection is needed — is deferred to
+v0.48.2+ because it touches every `render_*` call site (Shell
+takes `csrf_token: String` would have to plumb through dozens of
+handlers).
+
+### Bug 9 (401 lock-out + redirect loop after server restart)
+
+A user reported: stop the service, restart, navigate to `/admin` →
+greeted with a 401 page (`リクエストを処理できませんでした`) with
+only a "Back home" button → which round-trips through `/` →
+`/admin` → 401 again, forever. Only the request ID changed across
+attempts.
+
+Root cause: two latent design issues in combination.
+
+1. **`html_error_response`** (`crates/sui-id/src/errors.rs`)
+   rendered `CoreError::Unauthenticated` as a 401 page rather than
+   a redirect. The proper pattern for a protected GET hit by an
+   unauthenticated user is `303 → /admin/login`, not `401 → page`.
+   The 401 page should only fire for genuine error conditions
+   (malformed cookie, server failure).
+2. **`pages::error::render_error`** had `<a href="/">` for the
+   "Back home" button. `/` is the root handler, which for any
+   *initialised* installation (the common case) redirects to
+   `/admin`. The 401 page therefore had no escape — every Back
+   click was a fresh attempt at the page that produced the 401.
+
+Both are fixed:
+
+- `html_error_response` now detects
+  `CoreError::Unauthenticated`-with-HTML-representation and
+  returns `Redirect::to("/admin/login")` instead of rendering a
+  page.
+- `render_error` makes the "Back home" link context-aware: status
+  401 → `/admin/login`, everything else → `/`. This is
+  defense-in-depth: even if a future code path produces a 401 page
+  by some other route, the operator isn't trapped.
+
+The `?return=<original-url>` query parameter on the redirect is
+deliberately **not** included in this hotfix. Allowing arbitrary
+return URLs is an open-redirect class issue; doing it correctly
+needs same-origin path-only validation and is v0.48.2+ work.
+
+### CI invariants
+
+All 4 grep CI jobs still PASS after the hotfix changes:
+
+- text-leaks (RFC 048): 0 leaked `>t.foo<` literals
+- css-tokens (RFC 049): every `var(--name)` resolves
+- semantic-palette-parity (RFC 061): 12 semantic tokens × 3 modes
+- inline-style-bound (RFC 067): 16 ≤ 20
+
+### Tests pass count
+
+Unchanged: **228/228**.
+
+- sui-id-i18n: 12
+- sui-id-shared: 13
+- sui-id-store: 36
+- sui-id-core: 114
+- sui-id: 53
+
+### Breaking changes
+
+None.
+
+### Deferred to v0.48.2+
+
+Six issues surfaced in the same verification round but did not lock
+operators out, so they are scheduled for v0.48.2 (a regular
+verification-pass buffer release, *not* a v1.0 candidate):
+
+- **Bug 1**: `::selection` background color (`--accent-subtle`) is
+  too close to `--surface-default` to be visible in light mode.
+  Needs `--accent-default` with `--fg-on-accent`.
+- **Bug 5**: `/me/security/overview` has two hardcoded English
+  labels (`"MFA (TOTP)"`, `"Passkeys"`) and one wrong i18n key
+  (`me_security_sessions_lede` used as the empty-events fallback).
+- **Bug 8**: mobile responsive — no `@media` queries in
+  `components.rs` and no `white-space: nowrap` on nav links /
+  table cells. Result: on narrow viewports, items get squeezed and
+  text wraps inside each item, turning nav links and table cells
+  into vertical stacks. Horizontal scope confirmed — affects both
+  the admin nav and content tables.
+- **Issue 4** (UX): the setup wizard appears in English when the
+  browser's `Accept-Language` is `en-*`. Resolution is correct
+  per design, but the v0.48.1 user reaction suggests adding an
+  explicit language picker at the top of the wizard.
+- **Issue 6** (UX): footer accessibility labels (Keyboard
+  support / Screen reader support / Contrast support) are
+  decorative `<span>` elements with tooltips — they look
+  clickable but aren't. Intent needs to be clarified and the
+  UI/UX redesigned per the design-spec intent.
+- **Issue 7** (UX): the footer tagline `sui-id ·
+  静かで、凛として、やさしい ID 基盤を。` is visually prominent and
+  could be styled more restrained. CSS-only adjustment.
+
+---
+
 ## [0.48.0] — Unreleased
 
 **Phase F final buffer: `handlers/me_security.rs` split (RFC 068)

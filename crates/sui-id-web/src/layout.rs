@@ -3,9 +3,14 @@
 //! Composes the design tokens (`tokens.rs`) and component styles
 //! (`components.rs`) and adds:
 //!
-//! - The early inline script that resolves the user's theme choice
-//!   from `localStorage` *synchronously* on the document root, before
-//!   first paint, to avoid a flash of unthemed content (FOUT).
+//! - External scripts (`/static/theme-init.js`, `/static/copy.js`,
+//!   `/static/logout-csrf.js`) loaded with `defer`. The theme init
+//!   script resolves the user's theme choice from `localStorage`
+//!   *as soon as the DOM is parsed* and sets `data-theme` on
+//!   `<html>` before the visible body is painted, avoiding a
+//!   flash of unthemed content (FOUT). Earlier versions used inline
+//!   `<script>` blocks for this; v0.48.1 moved them to external
+//!   files because CSP `script-src 'self'` blocks inline JS.
 //! - The footer with the theme toggle (light / dark / auto) and the
 //!   accessibility badges.
 //! - The admin nav (when `show_nav` is true).
@@ -13,90 +18,6 @@
 use crate::components::COMPONENTS_CSS;
 use crate::tokens::TOKENS_CSS;
 use leptos::prelude::*;
-
-/// Inline script that runs *synchronously* in `<head>` before body
-/// paint. Reads `localStorage["sui_id_theme"]` (one of "light" /
-/// "dark" / "system"; missing or invalid values fall back to
-/// "system") and sets `data-theme` on `<html>`. When the saved
-/// value is "system" we follow `prefers-color-scheme` and listen
-/// for changes so the page tracks OS appearance live.
-///
-/// This is the only piece of JS we ship for theming. The toggle
-/// buttons in the footer also write to localStorage and update
-/// `data-theme` immediately; on page navigation the cycle starts
-/// fresh from this snippet.
-const THEME_INIT_JS: &str = r#"
-(function () {
-  try {
-    var KEY = "sui_id_theme";
-    var saved = localStorage.getItem(KEY);
-    var mode = (saved === "light" || saved === "dark") ? saved : "system";
-    var root = document.documentElement;
-    function apply(m) {
-      if (m === "system") {
-        root.removeAttribute("data-theme");
-      } else {
-        root.setAttribute("data-theme", m);
-      }
-    }
-    apply(mode);
-    if (mode === "system" && window.matchMedia) {
-      var mq = window.matchMedia("(prefers-color-scheme: dark)");
-      var listener = function () { /* CSS handles it via :not([data-theme]) */ };
-      if (mq.addEventListener) mq.addEventListener("change", listener);
-    }
-    // Expose a tiny helper used by the footer toggle.
-    window.__suiIdSetTheme = function (m) {
-      if (m !== "light" && m !== "dark" && m !== "system") return;
-      try { localStorage.setItem(KEY, m); } catch (e) {}
-      apply(m);
-      // Update aria-pressed on toggle buttons if present.
-      document.querySelectorAll(".theme-toggle__btn").forEach(function (b) {
-        b.setAttribute("aria-pressed", b.getAttribute("data-theme-value") === m ? "true" : "false");
-      });
-    };
-    // Initialise aria-pressed on first load (defer until DOM ready).
-    var setPressed = function () {
-      document.querySelectorAll(".theme-toggle__btn").forEach(function (b) {
-        b.setAttribute("aria-pressed", b.getAttribute("data-theme-value") === mode ? "true" : "false");
-      });
-    };
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", setPressed);
-    } else {
-      setPressed();
-    }
-  } catch (e) {}
-})();
-"#;
-
-/// Inline JS for copy-to-clipboard buttons (RFC 028).
-/// Attached as a delegated `click` handler; triggers carry `data-copy="VALUE"`.
-const COPY_JS: &str = r#"
-(function () {
-  if (!navigator.clipboard) return;
-  // Mark document so CSS can show .copy-btn elements.
-  document.documentElement.classList.add('clipboard-available');
-  document.addEventListener('click', function (e) {
-    var btn = e.target.closest('[data-copy]');
-    if (!btn) return;
-    var value = btn.getAttribute('data-copy');
-    navigator.clipboard.writeText(value).then(function () {
-      var orig = btn.textContent;
-      btn.setAttribute('aria-pressed','true');
-      // RFC 053: localised "Copied" text carried on each button via
-      // data-copy-done. Falls back to a Unicode check + English if
-      // missing.
-      var done = btn.getAttribute('data-copy-done') || '\u2713 Copied';
-      btn.textContent = done;
-      setTimeout(function () {
-        btn.textContent = orig;
-        btn.removeAttribute('aria-pressed');
-      }, 1800);
-    }).catch(function () {});
-  });
-})();
-"#;
 
 /// Wrap a page body in the standard sui-id chrome.
 ///
@@ -124,8 +45,8 @@ pub fn Shell(
                 <meta name="referrer" content="same-origin" />
                 <title>{format!("{title} · sui-id")}</title>
                 <style>{stylesheet}</style>
-                <script>{THEME_INIT_JS}</script>
-                <script>{COPY_JS}</script>
+                <script src="/static/theme-init.js" defer></script>
+                <script src="/static/copy.js" defer></script>
             </head>
             <body>
                 {dev_mode.unwrap_or(false).then(|| view! {
@@ -168,7 +89,7 @@ pub fn AuthShell(
                 <meta name="referrer" content="same-origin" />
                 <title>{format!("{title} · sui-id")}</title>
                 <style>{stylesheet}</style>
-                <script>{THEME_INIT_JS}</script>
+                <script src="/static/theme-init.js" defer></script>
             </head>
             <body>
                 <header class="app-header">
@@ -222,15 +143,10 @@ fn Nav(current: Option<String>, lang: sui_id_i18n::Locale, csrf_token: String) -
                     {t.nav_logout}
                 </button>
             </form>
-            <script>
-                r#"(function(){
-                    var f=document.getElementById('logout-csrf');
-                    if(f&&!f.value){
-                        var m=document.cookie.match(/(?:^|; )sui_id_csrf=([^;]*)/);
-                        if(m) f.value=decodeURIComponent(m[1]);
-                    }
-                }())"#
-            </script>
+            // CSP-safe replacement (v0.48.1) for the previously
+            // inline injector. Populates the hidden #logout-csrf
+            // input from the `sui_id_csrf` cookie before submit.
+            <script src="/static/logout-csrf.js" defer></script>
         </nav>
     }
 }
@@ -257,16 +173,20 @@ fn Footer(lang: sui_id_i18n::Locale) -> impl IntoView {
 #[component]
 fn ThemeToggle(lang: sui_id_i18n::Locale) -> impl IntoView {
     let t = lang.strings();
-    // Initial aria-pressed values are filled in by THEME_INIT_JS once
-    // localStorage is read; SSR cannot know the user's preference, so
-    // we render all three buttons un-pressed and rely on the script.
+    // Click handlers and initial aria-pressed are attached by
+    // `/static/theme-init.js` on DOM ready, keyed off the
+    // `data-theme-value` attribute on each button.
+    //
+    // Prior to v0.48.1 these were inline `onclick=` attributes;
+    // CSP `script-src 'self'` blocks inline event handlers
+    // (`script-src-attr`), so the toggle silently did nothing on
+    // production builds.
     view! {
         <div class="theme-toggle" role="group" aria-label=t.theme_toggle_group>
             <button class="theme-toggle__btn"
                     type="button"
                     data-theme-value="light"
                     aria-pressed="false"
-                    onclick="window.__suiIdSetTheme && window.__suiIdSetTheme('light')"
                     title=t.theme_toggle_light_title>
                 "☀ " {t.theme_toggle_light}
             </button>
@@ -274,7 +194,6 @@ fn ThemeToggle(lang: sui_id_i18n::Locale) -> impl IntoView {
                     type="button"
                     data-theme-value="system"
                     aria-pressed="false"
-                    onclick="window.__suiIdSetTheme && window.__suiIdSetTheme('system')"
                     title=t.theme_toggle_auto_title>
                 "🖥 " {t.theme_toggle_auto}
             </button>
@@ -282,7 +201,6 @@ fn ThemeToggle(lang: sui_id_i18n::Locale) -> impl IntoView {
                     type="button"
                     data-theme-value="dark"
                     aria-pressed="false"
-                    onclick="window.__suiIdSetTheme && window.__suiIdSetTheme('dark')"
                     title=t.theme_toggle_dark_title>
                 "☾ " {t.theme_toggle_dark}
             </button>

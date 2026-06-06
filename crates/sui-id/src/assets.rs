@@ -28,6 +28,8 @@ fn mime_for(path: &str) -> &'static str {
         "image/svg+xml"
     } else if path.ends_with(".txt") {
         "text/plain; charset=utf-8"
+    } else if path.ends_with(".js") {
+        "application/javascript; charset=utf-8"
     } else {
         "application/octet-stream"
     }

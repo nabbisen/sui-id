@@ -17,8 +17,8 @@ workspace = true
 
 [dependencies]
 url = { workspace = true }
-sui-id-shared = { version = "0.48.0", path = "../sui-id-shared" }
-sui-id-i18n   = { version = "0.48.0", path = "../sui-id-i18n" }
+sui-id-shared = { version = "0.48.1", path = "../sui-id-shared" }
+sui-id-i18n   = { version = "0.48.1", path = "../sui-id-i18n" }
 
 leptos = { workspace = true }
 serde = { workspace = true }
