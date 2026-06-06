@@ -193,7 +193,11 @@ fn Nav(current: Option<String>, lang: sui_id_i18n::Locale, csrf_token: String) -
         ("signing-keys", t.nav_signing_keys, "/admin/signing-keys"),
         ("audit",        t.nav_audit,        "/admin/audit"),
         ("settings",     t.nav_settings,     "/admin/settings"),
-        ("profile",      t.nav_profile,      "/admin/profile"),
+        // RFC 055 (v0.44.0): "Profile" → "Security", pointing to the
+        // consolidated tabbed /me/security/* surface. The current-tab
+        // key is "me" to match the highlight Shell/`current=` already
+        // uses across the tabbed render_me_* views.
+        ("me",           t.nav_security,     "/me/security/overview"),
     ];
     // The CSRF token for the logout form. If none was passed in by the
     // handler (the page was rendered without the cookie), fall back to

@@ -25,7 +25,7 @@ pub use pages::{
     render_audit, render_client_edit, render_clients, render_dashboard, render_error,
     DashboardEventRow,
     render_forgot_password, render_forgot_password_sent, render_login, render_me_security,
-    render_mfa_challenge, render_mfa_setup, render_password_change, render_profile,
+    render_mfa_challenge, render_mfa_setup, render_password_change,
     render_reset_password, render_reset_password_invalid, render_settings_authentication,
     render_settings_basic, render_settings_email, render_settings_logs, render_settings_other,
     render_settings_security, render_setup_admin, render_setup_done, render_setup_hibp,
@@ -39,7 +39,7 @@ pub use pages::{
     ConsentData, ConfirmDisableData, ConfirmResetMfaData, ClientEditData, DashboardData,
     UserDetailData, UserDetailSession, render_user_detail,
     DashboardSparkBucket, DashboardSparkline, Flash, FlashKind, MeAuditEntry, MeSecurityData,
-    MeSessionDescriptor, MfaSetupData, PasskeyDescriptor, PasswordChangeData, ProfileData,
+    MeSessionDescriptor, MfaSetupData, PasskeyDescriptor, PasswordChangeData,
     SettingsAuthenticationData, SettingsBasicData, SettingsChainStatus, SettingsEmailData,
     SettingsLogsData, SettingsOtherData, SettingsSecurityData, SettingsTab,
 };

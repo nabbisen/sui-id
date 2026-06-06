@@ -89,19 +89,19 @@ async fn lang_cookie_overrides_accept_language() {
     );
 }
 
-/// Posting to /admin/profile/lang persists the value, sets the
+/// Posting to /me/security/language persists the value, sets the
 /// cookie, and is reflected on the next render.
 #[tokio::test]
 async fn profile_lang_post_persists_and_sets_cookie() {
     let state = test_app();
     let session = complete_setup_and_login(&state).await;
 
-    // GET /admin/profile to obtain a CSRF token.
+    // GET /me/security/overview to obtain a CSRF token.
     let resp = build_router(state.clone())
         .oneshot(
             Request::builder()
                 .method(Method::GET)
-                .uri("/admin/profile")
+                .uri("/me/security/overview")
                 .header(header::COOKIE, format!("sui_id_session={session}"))
                 .body(Body::empty())
                 .expect("req"),
@@ -110,13 +110,13 @@ async fn profile_lang_post_persists_and_sets_cookie() {
         .expect("profile GET");
     let csrf = extract_csrf_cookie(resp.headers()).expect("csrf");
 
-    // POST /admin/profile/lang with `lang=en`.
-    let body = format!("_csrf={csrf}&lang=en");
+    // POST /me/security/language with `lang=en`.
+    let body = format!("_csrf={csrf}&locale=en");
     let resp = build_router(state.clone())
         .oneshot(
             Request::builder()
                 .method(Method::POST)
-                .uri("/admin/profile/lang")
+                .uri("/me/security/language")
                 .header(
                     header::COOKIE,
                     format!("sui_id_session={session}; sui_id_csrf={csrf}"),
@@ -169,7 +169,7 @@ async fn profile_lang_clear_resets_to_browser_default() {
         .oneshot(
             Request::builder()
                 .method(Method::GET)
-                .uri("/admin/profile")
+                .uri("/me/security/overview")
                 .header(header::COOKIE, format!("sui_id_session={session}"))
                 .body(Body::empty())
                 .expect("req"),
@@ -178,12 +178,12 @@ async fn profile_lang_clear_resets_to_browser_default() {
         .expect("profile GET");
     let csrf = extract_csrf_cookie(resp.headers()).expect("csrf");
 
-    let body = format!("_csrf={csrf}&lang=");
+    let body = format!("_csrf={csrf}&locale=");
     let resp = build_router(state.clone())
         .oneshot(
             Request::builder()
                 .method(Method::POST)
-                .uri("/admin/profile/lang")
+                .uri("/me/security/language")
                 .header(
                     header::COOKIE,
                     format!("sui_id_session={session}; sui_id_csrf={csrf}"),
@@ -224,7 +224,7 @@ async fn profile_lang_post_rejects_unknown_tag() {
         .oneshot(
             Request::builder()
                 .method(Method::GET)
-                .uri("/admin/profile")
+                .uri("/me/security/overview")
                 .header(header::COOKIE, format!("sui_id_session={session}"))
                 .body(Body::empty())
                 .expect("req"),
@@ -233,12 +233,12 @@ async fn profile_lang_post_rejects_unknown_tag() {
         .expect("get");
     let csrf = extract_csrf_cookie(resp.headers()).expect("csrf");
 
-    let body = format!("_csrf={csrf}&lang=xyz");
+    let body = format!("_csrf={csrf}&locale=xyz");
     let resp = build_router(state)
         .oneshot(
             Request::builder()
                 .method(Method::POST)
-                .uri("/admin/profile/lang")
+                .uri("/me/security/language")
                 .header(
                     header::COOKIE,
                     format!("sui_id_session={session}; sui_id_csrf={csrf}"),

@@ -215,7 +215,7 @@ async fn mfa_disable_lets_user_log_in_with_password_only() {
     let router = build_router(state.clone());
     let req = Request::builder()
         .method(Method::POST)
-        .uri("/admin/profile/mfa/disable")
+        .uri("/me/security/mfa/disable")
         .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
         .header(
             header::COOKIE,

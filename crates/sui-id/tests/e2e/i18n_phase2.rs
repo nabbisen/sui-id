@@ -25,7 +25,7 @@ async fn profile_renders_in_en() {
         .oneshot(
             Request::builder()
                 .method(Method::GET)
-                .uri("/admin/profile")
+                .uri("/me/security/overview")
                 .header(header::COOKIE, format!("sui_id_session={session}"))
                 .header(header::ACCEPT_LANGUAGE, "en-US,en;q=0.9")
                 .body(Body::empty())
@@ -54,7 +54,7 @@ async fn profile_renders_in_ja_with_cookie_override() {
         .oneshot(
             Request::builder()
                 .method(Method::GET)
-                .uri("/admin/profile")
+                .uri("/me/security/overview")
                 .header(
                     header::COOKIE,
                     format!("sui_id_session={session}; sui_id_lang=ja"),
@@ -74,19 +74,19 @@ async fn profile_renders_in_ja_with_cookie_override() {
     );
 }
 
-/// MFA setup page (after POST /admin/profile/mfa/enroll/start)
+/// MFA setup page (after POST /me/security/mfa/enroll/start)
 /// renders in English.
 #[tokio::test]
 async fn mfa_setup_renders_in_en() {
     let state = test_app();
     let session = complete_setup_and_login(&state).await;
-    // First GET /admin/profile to obtain a CSRF token cookie.
+    // First GET /me/security/overview to obtain a CSRF token cookie.
     let router = build_router(state.clone());
     let prof_resp = router
         .oneshot(
             Request::builder()
                 .method(Method::GET)
-                .uri("/admin/profile")
+                .uri("/me/security/overview")
                 .header(header::COOKIE, format!("sui_id_session={session}"))
                 .body(Body::empty())
                 .expect("req"),
@@ -99,13 +99,13 @@ async fn mfa_setup_renders_in_en() {
     let body = String::from_utf8_lossy(&body_bytes);
     let csrf_token = extract_csrf_token(&body);
 
-    // POST /admin/profile/mfa/enroll/start.
+    // POST /me/security/mfa/enroll/start.
     let router = build_router(state);
     let resp = router
         .oneshot(
             Request::builder()
                 .method(Method::POST)
-                .uri("/admin/profile/mfa/enroll/start")
+                .uri("/me/security/mfa/enroll/start")
                 .header(
                     header::COOKIE,
                     format!("sui_id_session={session}; sui_id_csrf={csrf}"),

@@ -1,22 +1,47 @@
-//! `/me/security` — self-service security overview.
+//! `/me/security` — self-service security surface.
 //!
-//! This is the *user-facing* counterpart to `/admin/audit` and the
-//! per-user controls scattered across `/admin/users/.../*`. Where
-//! the admin pages are for someone managing other people's
-//! accounts, this page is for someone managing their own:
+//! This is the *user-facing* security control panel. The admin pages
+//! (`/admin/users/*`) are for someone managing other people's accounts;
+//! this surface is for someone managing their own:
 //! seeing where they're signed in, revoking sessions they don't
-//! recognise, and reviewing recent authentication events.
+//! recognise, enrolling MFA, registering passkeys, changing their
+//! password, and choosing a UI language.
 //!
 //! Routes (mounted from `router.rs`):
 //!
-//! - `GET  /me/security`
+//! ### Tab views
+//! - `GET  /me/security` — redirect to overview
+//! - `GET  /me/security/overview` — landing tab
+//! - `GET  /me/security/mfa` — TOTP + passkeys summary
+//! - `GET  /me/security/passkeys` — passkey list + register
+//! - `GET  /me/security/sessions` — active sessions
+//! - `GET  /me/security/language` — language preference
+//!
+//! ### Sessions
 //! - `POST /me/security/sessions/{id}/revoke`
 //! - `POST /me/security/sessions/revoke-all-others`
 //!
-//! The page does not duplicate MFA enrollment UI; that already
-//! exists at `/admin/profile` and is reachable by any authenticated
-//! user (the `profile_get` handler uses `CurrentUser`, not
-//! `CurrentAdmin`). We just deep-link to it.
+//! ### Password
+//! - `GET+POST /me/security/password`
+//!
+//! ### Language
+//! - `POST /me/security/language`
+//!
+//! ### MFA mutative (RFC 055, v0.44.0)
+//! - `POST /me/security/mfa/enroll/start`
+//! - `POST /me/security/mfa/enroll/confirm`
+//! - `POST /me/security/mfa/disable`
+//! - `POST /me/security/mfa/recovery-codes/regenerate`
+//!
+//! ### Passkey mutative (RFC 055, v0.44.0)
+//! - `POST /me/security/passkeys/register/start`
+//! - `POST /me/security/passkeys/register/complete`
+//! - `POST /me/security/passkeys/{id}/rename`
+//! - `POST /me/security/passkeys/{id}/delete`
+//!
+//! Prior to v0.44.0 the MFA and passkey mutative routes lived under
+//! `/admin/profile/*` and were used by a parallel `render_profile`
+//! page. RFC 055 consolidated everything onto `/me/security/*`.
 
 use crate::handlers::admin::with_csrf_cookie;
 use crate::handlers::{enforce_csrf, AppStateExt, CurrentUser};
@@ -447,6 +472,17 @@ pub async fn security_redirect() -> Redirect {
     Redirect::to("/me/security/overview")
 }
 
+/// GET /admin/profile — 301 Permanent Redirect to /me/security/overview.
+///
+/// The legacy `/admin/profile` single-page UI was consolidated onto
+/// `/me/security/*` in v0.44.0 (RFC 055). This stub stays in the
+/// router to honour existing bookmarks. `permanent()` emits HTTP
+/// 308 (the modern method-preserving permanent), but since this
+/// route only accepts GET that's equivalent to 301 here.
+pub async fn admin_profile_redirect() -> Redirect {
+    Redirect::permanent("/me/security/overview")
+}
+
 /// GET /me/security/overview
 pub async fn overview_get(
     state_ext: AppStateExt,
@@ -560,12 +596,24 @@ pub async fn passkey_rename_post(
     Ok(Redirect::to("/me/security/passkeys").into_response())
 }
 
+/// Query parameters for `GET /me/security/language` (RFC 057).
+///
+/// `saved=1` means the user just successfully saved their preference
+/// and should see a confirmation banner. Other values (typo, stale
+/// link) are ignored — we never falsely tell the user their save
+/// succeeded.
+#[derive(serde::Deserialize)]
+pub struct LanguageGetQuery {
+    pub saved: Option<u8>,
+}
+
 /// GET /me/security/language
 pub async fn language_get(
     state_ext: AppStateExt,
     CurrentUser(user_id): CurrentUser,
     jar: CookieJar,
     crate::handlers::RequestLocale(req_locale): crate::handlers::RequestLocale,
+    axum::extract::Query(q): axum::extract::Query<LanguageGetQuery>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
     let lang = req_locale;
@@ -576,6 +624,7 @@ pub async fn language_get(
         is_admin: user.is_admin,
         active_tab: MeTab::Language,
     };
+    let just_saved = q.saved == Some(1);
     let flash: Option<sui_id_web::Flash> = None;
     let csrf_tok = csrf::ensure_token(&jar);
     let resp = axum::response::Html(sui_id_web::render_me_language(
@@ -583,6 +632,7 @@ pub async fn language_get(
             shell,
             current_preferred_lang: user.preferred_lang.clone(),
             csrf_token: csrf_tok.clone(),
+            just_saved,
         },
         flash, app.is_dev_mode, lang,
     )).into_response();
@@ -649,9 +699,12 @@ pub async fn mfa_get(
     let passkey_count = sui_id_store::repos::user_webauthn_credentials::count_for_user(
         &app.db, user_id
     ).await.unwrap_or(0);
-    // Recovery codes remaining: we show a placeholder (8 = full set)
-    // Exact count requires decryption; surfaced in profile page for now.
-    let recovery_codes_remaining: usize = 0;
+    // RFC 056 (v0.44.0): real count via decryption.
+    // unwrap_or(0) — a decryption error shouldn't fail the entire tab
+    // render; the count is a display detail, not a correctness invariant.
+    let recovery_codes_remaining = sui_id_core::mfa::count_recovery_codes_remaining(
+        &app.db, user_id,
+    ).await.unwrap_or(0);
     let csrf_tok = csrf::ensure_token(&jar);
     let resp = axum::response::Html(sui_id_web::render_me_mfa(
         sui_id_web::MeMfaData {
@@ -659,6 +712,7 @@ pub async fn mfa_get(
             totp_enabled,
             passkey_count,
             recovery_codes_remaining,
+            fresh_recovery_codes: None,
             csrf_token: csrf_tok.clone(),
         },
         None, app.is_dev_mode, lang,
@@ -715,4 +769,313 @@ pub async fn sessions_tab_get(
         None, app.is_dev_mode, lang,
     )).into_response();
     Ok(with_csrf_cookie(resp, &app, &csrf_tok))
+}
+
+// ---------------------------------------------------------------
+// MFA mutative routes (RFC 055, v0.44.0)
+//
+// Moved from `handlers/admin.rs::profile_mfa_*`. Identical business
+// logic; new path prefix (`/me/security/mfa/*` instead of
+// `/admin/profile/mfa/*`); post-action redirects target the new
+// tab URL (`/me/security/mfa`) instead of `/admin/profile`; and the
+// confirm/regenerate handlers now render `render_me_mfa` with the
+// fresh recovery codes inline, instead of `render_profile`.
+// ---------------------------------------------------------------
+
+#[derive(Debug, Deserialize)]
+pub struct MfaConfirmForm {
+    pub code: String,
+    #[serde(rename = "_csrf", default)]
+    pub csrf: String,
+}
+
+/// POST /me/security/mfa/enroll/start — begin TOTP enrollment
+pub async fn mfa_enroll_start(
+    state_ext: AppStateExt,
+    CurrentUser(user_id): CurrentUser,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
+    jar: CookieJar,
+    Form(form): Form<crate::handlers::admin::CsrfOnlyForm>,
+) -> Result<Response, HttpError> {
+    let State(app) = state_ext;
+    enforce_csrf(&jar, Some(&form.csrf))?;
+    let user = sui_id_store::repos::users::get(&app.db, user_id)
+        .await.map_err(|e| HttpError::html(CoreError::from(e)))?;
+    let ticket = sui_id_core::mfa::start_enrollment(
+        &app.db, app.issuer(), user_id, &user.username,
+    ).await.map_err(HttpError::html)?;
+    let qr_svg = crate::handlers::admin::render_qr_svg_pub(&ticket.otpauth_uri);
+    let secret_b32 = sui_id_core::totp::base32_encode(&ticket.secret).await;
+    let otpauth_uri = ticket.otpauth_uri;
+    drop(ticket.secret);
+    let token = csrf::ensure_token(&jar);
+    let resp = Html(sui_id_web::render_mfa_setup(
+        sui_id_web::MfaSetupData { otpauth_uri, qr_svg, secret_b32 },
+        None, token.clone(), lang,
+    )).into_response();
+    Ok(with_csrf_cookie(resp, &app, &token))
+}
+
+/// POST /me/security/mfa/enroll/confirm — confirm 6-digit TOTP code,
+/// enable MFA, and surface the fresh recovery codes inline on the
+/// MFA tab.
+pub async fn mfa_enroll_confirm(
+    state_ext: AppStateExt,
+    CurrentUser(user_id): CurrentUser,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
+    jar: CookieJar,
+    Form(form): Form<MfaConfirmForm>,
+) -> Result<Response, HttpError> {
+    let State(app) = state_ext;
+    enforce_csrf(&jar, Some(&form.csrf))?;
+    let code: u32 = form.code.trim().parse()
+        .map_err(|_| HttpError::html(CoreError::BadRequest("verification code must be 6 digits".into())))?;
+    let codes = sui_id_core::mfa::confirm_enrollment(&app.db, &app.clock, user_id, code).await
+        .map_err(HttpError::html)?;
+    let _ = sui_id_store::repos::audit::append(
+        &app.db,
+        &sui_id_store::models::AuditLogRow {
+            at: app.clock.now(),
+            actor: Some(user_id),
+            action: "mfa.enable".into(),
+            target: Some(user_id.to_string()),
+            result: "ok".into(),
+            note: None,
+        },
+    ).await;
+    render_mfa_tab_with_fresh_codes(&app, &jar, user_id, lang, Some(codes),
+        sui_id_web::Flash {
+            kind: sui_id_web::FlashKind::Info,
+            text: lang.strings().profile_mfa_enrolled_flash.into(),
+        }).await
+}
+
+/// POST /me/security/mfa/disable
+pub async fn mfa_disable(
+    state_ext: AppStateExt,
+    CurrentUser(user_id): CurrentUser,
+    jar: CookieJar,
+    Form(form): Form<crate::handlers::admin::CsrfOnlyForm>,
+) -> Result<Response, HttpError> {
+    let State(app) = state_ext;
+    enforce_csrf(&jar, Some(&form.csrf))?;
+    sui_id_core::mfa::disable(&app.db, user_id).await.map_err(HttpError::html)?;
+    let _ = sui_id_store::repos::audit::append(
+        &app.db,
+        &sui_id_store::models::AuditLogRow {
+            at: app.clock.now(),
+            actor: Some(user_id),
+            action: "mfa.disable".into(),
+            target: Some(user_id.to_string()),
+            result: "ok".into(),
+            note: None,
+        },
+    ).await;
+    Ok(Redirect::to("/me/security/mfa").into_response())
+}
+
+/// POST /me/security/mfa/recovery-codes/regenerate
+pub async fn mfa_regenerate_recovery(
+    state_ext: AppStateExt,
+    CurrentUser(user_id): CurrentUser,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
+    jar: CookieJar,
+    Form(form): Form<crate::handlers::admin::CsrfOnlyForm>,
+) -> Result<Response, HttpError> {
+    let State(app) = state_ext;
+    enforce_csrf(&jar, Some(&form.csrf))?;
+    let codes = sui_id_core::mfa::regenerate_recovery_codes(&app.db, user_id).await
+        .map_err(HttpError::html)?;
+    let _ = sui_id_store::repos::audit::append(
+        &app.db,
+        &sui_id_store::models::AuditLogRow {
+            at: app.clock.now(),
+            actor: Some(user_id),
+            action: "mfa.recovery_codes_regenerate".into(),
+            target: Some(user_id.to_string()),
+            result: "ok".into(),
+            note: None,
+        },
+    ).await;
+    render_mfa_tab_with_fresh_codes(&app, &jar, user_id, lang, Some(codes),
+        sui_id_web::Flash {
+            kind: sui_id_web::FlashKind::Info,
+            text: lang.strings().profile_recovery_regenerated_flash.into(),
+        }).await
+}
+
+/// Helper: render the MFA tab page with fresh recovery codes
+/// embedded inline (one-time display) and a flash banner.
+async fn render_mfa_tab_with_fresh_codes(
+    app: &crate::state::AppState,
+    jar: &CookieJar,
+    user_id: sui_id_shared::ids::UserId,
+    lang: sui_id_i18n::Locale,
+    fresh_codes: Option<Vec<String>>,
+    flash: sui_id_web::Flash,
+) -> Result<Response, HttpError> {
+    let user = sui_id_store::repos::users::get(&app.db, user_id)
+        .await.map_err(|e| HttpError::html(CoreError::from(e)))?;
+    let totp_enabled = sui_id_store::repos::user_totp::get(&app.db, user_id)
+        .await.ok().flatten()
+        .map(|r| r.enabled).unwrap_or(false);
+    let passkey_count = sui_id_store::repos::user_webauthn_credentials::count_for_user(
+        &app.db, user_id,
+    ).await.unwrap_or(0);
+    let recovery_codes_remaining = sui_id_core::mfa::count_recovery_codes_remaining(
+        &app.db, user_id,
+    ).await.unwrap_or(0);
+    let shell = sui_id_web::MeShellData {
+        username: user.username,
+        is_admin: user.is_admin,
+        active_tab: sui_id_web::MeTab::Mfa,
+    };
+    let token = csrf::ensure_token(jar);
+    let resp = Html(sui_id_web::render_me_mfa(
+        sui_id_web::MeMfaData {
+            shell,
+            totp_enabled,
+            passkey_count,
+            recovery_codes_remaining,
+            fresh_recovery_codes: fresh_codes,
+            csrf_token: token.clone(),
+        },
+        Some(flash),
+        app.is_dev_mode,
+        lang,
+    )).into_response();
+    Ok(with_csrf_cookie(resp, app, &token))
+}
+
+// ---------------------------------------------------------------
+// Passkey mutative routes (RFC 055, v0.44.0)
+// Moved from `handlers/admin.rs::webauthn_*`.
+// ---------------------------------------------------------------
+
+#[derive(Debug, Deserialize)]
+pub struct PasskeyRegisterStartForm {
+    pub nickname: String,
+    #[serde(rename = "_csrf", default)]
+    pub csrf: String,
+}
+
+/// POST /me/security/passkeys/register/start
+pub async fn passkey_register_start(
+    state_ext: AppStateExt,
+    CurrentUser(user_id): CurrentUser,
+    jar: CookieJar,
+    Form(form): Form<PasskeyRegisterStartForm>,
+) -> Result<Response, HttpError> {
+    let State(app) = state_ext;
+    enforce_csrf(&jar, Some(&form.csrf))?;
+    let started = sui_id_core::webauthn::start_registration(
+        &app.db, &app.clock, app.issuer(), user_id,
+    ).await.map_err(HttpError::html)?;
+    let nickname_cookie = {
+        use axum_extra::extract::cookie::{Cookie, SameSite};
+        let mut c = Cookie::new("sui_id_webauthn_nickname", form.nickname);
+        c.set_path("/");
+        c.set_http_only(true);
+        c.set_same_site(SameSite::Lax);
+        c.set_secure(app.config.server.cookie_secure);
+        c.set_max_age(cookie::time::Duration::minutes(5));
+        c
+    };
+    let pending_cookie = crate::handlers::webauthn_pending_cookie(
+        started.pending_id.to_string(),
+        app.config.server.cookie_secure,
+    );
+    let jar = jar.add(pending_cookie).add(nickname_cookie);
+    let challenge_value: serde_json::Value =
+        serde_json::from_str(&started.challenge_json)
+            .map_err(|_| HttpError::html(CoreError::Internal))?;
+    Ok((jar, axum::Json(challenge_value)).into_response())
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PasskeyRegisterCompleteForm {
+    pub credential: String,
+    #[serde(rename = "_csrf", default)]
+    pub csrf: String,
+}
+
+/// POST /me/security/passkeys/register/complete
+pub async fn passkey_register_complete(
+    state_ext: AppStateExt,
+    CurrentUser(user_id): CurrentUser,
+    jar: CookieJar,
+    Form(form): Form<PasskeyRegisterCompleteForm>,
+) -> Result<Response, HttpError> {
+    let State(app) = state_ext;
+    enforce_csrf(&jar, Some(&form.csrf))?;
+    let pending_value = jar
+        .get(crate::handlers::WEBAUTHN_PENDING_COOKIE)
+        .ok_or_else(|| HttpError::html(CoreError::BadRequest("no pending ceremony".into())))?
+        .value()
+        .to_owned();
+    let pending_id: sui_id_shared::ids::WebauthnPendingId =
+        pending_value.parse().map_err(|_| {
+            HttpError::html(CoreError::BadRequest("malformed pending id".into()))
+        })?;
+    let nickname = jar
+        .get("sui_id_webauthn_nickname")
+        .map(|c| c.value().to_owned())
+        .unwrap_or_default();
+    let credential: webauthn_rs::prelude::RegisterPublicKeyCredential =
+        serde_json::from_str(&form.credential).map_err(|_| {
+            HttpError::html(CoreError::BadRequest("malformed credential JSON".into()))
+        })?;
+    sui_id_core::webauthn::finish_registration(
+        &app.db, &app.clock, app.issuer(),
+        pending_id, user_id, &nickname, &credential,
+    ).await.map_err(HttpError::html)?;
+    let _ = sui_id_store::repos::audit::append(
+        &app.db,
+        &sui_id_store::models::AuditLogRow {
+            at: app.clock.now(),
+            actor: Some(user_id),
+            action: "webauthn.credential.register".into(),
+            target: Some(user_id.to_string()),
+            result: "ok".into(),
+            note: None,
+        },
+    ).await;
+    let jar = jar.add(crate::handlers::clear_webauthn_pending_cookie(
+        app.config.server.cookie_secure,
+    ));
+    Ok((jar, Redirect::to("/me/security/passkeys")).into_response())
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PasskeyDeleteForm {
+    #[serde(rename = "_csrf", default)]
+    pub csrf: String,
+}
+
+/// POST /me/security/passkeys/{id}/delete
+pub async fn passkey_delete(
+    state_ext: AppStateExt,
+    CurrentUser(user_id): CurrentUser,
+    jar: CookieJar,
+    Path(cred_id): Path<String>,
+    Form(form): Form<PasskeyDeleteForm>,
+) -> Result<Response, HttpError> {
+    let State(app) = state_ext;
+    enforce_csrf(&jar, Some(&form.csrf))?;
+    let id = cred_id.parse::<sui_id_shared::ids::WebauthnCredentialId>().map_err(|_| {
+        HttpError::html(CoreError::BadRequest("invalid credential id".into()))
+    })?;
+    sui_id_core::webauthn::delete(&app.db, user_id, id).await.map_err(HttpError::html)?;
+    let _ = sui_id_store::repos::audit::append(
+        &app.db,
+        &sui_id_store::models::AuditLogRow {
+            at: app.clock.now(),
+            actor: Some(user_id),
+            action: "webauthn.credential.delete".into(),
+            target: Some(user_id.to_string()),
+            result: "ok".into(),
+            note: None,
+        },
+    ).await;
+    Ok(Redirect::to("/me/security/passkeys").into_response())
 }

@@ -5,6 +5,164 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.44.0] — Unreleased
+
+**Phase C of the v0.42 → v1.0-rc UI/UX hardening plan.** Two parallel
+implementations of user self-service — `/admin/profile` (single page)
+and `/me/security/*` (five tabs) — collapse into one. The admin Nav
+gains a "Security" entry pointing to the tabbed surface; the legacy
+page is gone. The MFA tab now shows the real count of unused
+recovery codes (not a hardcoded 0). The language tab confirms
+successful saves with a localised banner.
+
+A latent bug from before v0.43.0 is fixed: the `.banner banner--*`
+CSS classes were used in `pages.rs` but **never defined** in
+`components.rs`, so admin-action confirmations and warnings rendered
+without their intended colour cues. v0.44.0 adds the `.banner`
+family symmetric with `.flash`.
+
+---
+
+### RFC 055 — Consolidate self-service onto `/me/security/*`
+
+**Path map** (before → after):
+
+| Action | Old route | New route |
+|--------|---|---|
+| View overview | `GET /admin/profile` | `GET /me/security/overview` |
+| Change language | `POST /admin/profile/lang` | `POST /me/security/language` |
+| TOTP enroll start | `POST /admin/profile/mfa/enroll/start` | `POST /me/security/mfa/enroll/start` |
+| TOTP enroll confirm | `POST /admin/profile/mfa/enroll/confirm` | `POST /me/security/mfa/enroll/confirm` |
+| MFA disable | `POST /admin/profile/mfa/disable` | `POST /me/security/mfa/disable` |
+| Regenerate codes | `POST /admin/profile/mfa/recovery-codes/regenerate` | `POST /me/security/mfa/recovery-codes/regenerate` |
+| Passkey register start | `POST /admin/profile/webauthn/register/start` | `POST /me/security/passkeys/register/start` |
+| Passkey register complete | `POST /admin/profile/webauthn/register/complete` | `POST /me/security/passkeys/register/complete` |
+| Passkey delete | `POST /admin/profile/webauthn/{id}/delete` | `POST /me/security/passkeys/{id}/delete` |
+
+**Compatibility.** `GET /admin/profile` keeps responding — as an HTTP
+308 Permanent Redirect to `/me/security/overview` — so bookmarks
+continue to work. All `POST /admin/profile/*` routes are **removed
+entirely**; their only callers were the forms inside the legacy
+`render_profile` page, which is also gone. Operators with custom
+scripts that POSTed to those URLs (rare for a self-hosted IdP self-
+service surface) will see 404; this is documented as a soft breaking
+change.
+
+**Code changes.**
+
+- 9 handlers (`profile_*` family, `webauthn_register_*`,
+  `webauthn_delete`) moved from `handlers/admin.rs` to
+  `handlers/me_security.rs` and renamed (`profile_mfa_enroll_start`
+  → `mfa_enroll_start`, `webauthn_register_start` →
+  `passkey_register_start`, etc.).
+- New helper `render_mfa_tab_with_fresh_codes` in `me_security.rs`
+  unifies the response paths for `mfa_enroll_confirm` and
+  `mfa_regenerate_recovery`: both render `render_me_mfa` with fresh
+  recovery codes inline plus a localised flash. Previously these
+  two handlers each duplicated a 30-line render block calling the
+  now-removed `render_profile`.
+- `render_profile` (~215 LOC) and `ProfileData` removed from
+  `pages.rs` and the `lib.rs` re-export.
+- `render_me_mfa` extended with enroll / disable / regenerate
+  buttons (moved from `render_profile`) and a fresh-codes inline
+  banner.
+- `render_me_passkey` register button (which previously pointed to
+  the non-existent `/me/security/passkeys/register` page) is now an
+  inline form posting directly to the new
+  `/me/security/passkeys/register/start` route.
+- `render_mfa_setup` form action updated; `Shell current=` flag
+  changes from `"profile"` to `"me"` to match the new Nav highlight.
+- `Nav` entry `("profile", t.nav_profile, "/admin/profile")` →
+  `("me", t.nav_security, "/me/security/overview")`. New i18n key
+  `nav_security` ("Security" / "セキュリティ" / "安全"). The
+  `nav_profile` field stays in the struct for backward compatibility
+  but is no longer wired.
+- `axum::Json` import in `admin.rs` preserved (still used by the
+  WebAuthn login challenge handler that stays in `admin.rs`).
+
+### RFC 056 — Recovery codes remaining count
+
+New function `sui_id_core::mfa::count_recovery_codes_remaining(db, user_id)
+-> CoreResult<usize>` decrypts the recovery-codes JSON blob and
+returns its length. Mirrors `consume_recovery_code`'s
+shrink-the-array semantics: when a code is used, the hash is
+removed; this helper just reports the current length.
+
+`me_security::mfa_get` replaces the previous hardcoded
+`let recovery_codes_remaining: usize = 0;` with a real call
+(wrapped in `unwrap_or(0)` for graceful display fallback). The
+view's previously hardcoded English `format!("{} codes remaining",
+n)` is replaced by `(t.me_security_mfa_recovery_codes_remaining)(n)`
+which routes through the locale tables — finally i18n-clean.
+
+### RFC 057 — Language save confirmation
+
+`me_security::language_post` already redirected to
+`/me/security/language?saved=1` after a successful save, but
+`language_get` ignored the query parameter and the view rendered
+no confirmation. Users couldn't tell if their click took effect.
+
+v0.44.0:
+
+- New `LanguageGetQuery { saved: Option<u8> }` extractor (narrow:
+  accepts `?saved=1` only; ignores other values to prevent a stale
+  link from falsely claiming success).
+- `MeLanguageData::just_saved: bool` field; view renders a
+  `<div class="banner banner--success" role="status">` with the
+  localised message when set.
+- New i18n key `me_security_language_saved_banner`
+  ("Language preference saved." / "言語設定を保存しました。" /
+  "语言偏好已保存。") in three locales.
+
+### RFC 054 — Aria-label nav landmarks
+
+Sweep of the remaining hardcoded English `aria-label` attributes
+in `pages.rs`. After RFC 051's incidental fixes in v0.43.0, only
+three sites remained:
+
+| Site | Was | Now |
+|------|-----|-----|
+| `setup_step_indicator` `<nav>` | `aria-label="Setup steps"` | `aria-label=t.setup_steps_aria` |
+| `me_security_tabs` `<nav>` | `aria-label="Security sections"` | `aria-label=t.me_security_tabs_aria` |
+| `settings_tabs` `<nav>` | `aria-label="Settings tabs"` | `aria-label=t.settings_tabs_aria` |
+
+Plus three new i18n keys in three locales (Japanese: "セットアップ手順",
+"セキュリティ設定タブ", "設定タブ"; Chinese: "设置步骤", "安全选项卡",
+"设置选项卡"). The original RFC projected ~6.5 hours of work; the
+actual scope after RFC 051 was ~30 minutes (the bulk of the work
+was incidentally already done).
+
+### Bug fix: `.banner` CSS family missing
+
+The `pages.rs` view code used `class="banner banner--warning"` in
+two places (RFC 050 confirm screens) and `class="banner
+banner--success"` in v0.44.0 RFC 057. The matching CSS rules were
+never declared in `components.rs`. Browsers silently dropped the
+declarations, so the banners rendered with just the default
+`<div>` style — no colour cue, no padding, no border.
+
+v0.44.0 adds the missing `.banner` rules symmetric with `.flash`:
+base padding/border + `--warning`, `--danger`, `--success` colour
+variants using the RFC 049 token palette. The `success` variant
+uses `var(--success-subtle)` / `var(--success-default)`.
+
+---
+
+### Tests pass count
+
+Build: workspace-wide `cargo check --workspace --tests` PASSES.
+Unit-test counts unchanged from v0.43.0:
+i18n 12 · web 0 · shared 13 · store 36 · core 114 = **175/175**.
+
+### Breaking changes
+
+- All `POST /admin/profile/*` routes return 404 (or whatever the
+  router default is). External integrators scripting against the
+  old paths must migrate to `/me/security/*`. Self-service URLs
+  are not part of the OIDC public API, so this is internal-only.
+
+---
+
 ## [0.43.0] — Unreleased
 
 **Phase B of the v0.42 → v1.0-rc UI/UX hardening plan.** This release

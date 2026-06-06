@@ -476,6 +476,40 @@ tbody tr:hover { background: var(--state-hover); }
 }
 
 /* ------------------------------------------------------------------ */
+/* Banners (RFC 057, v0.44.0)                                          */
+/* ------------------------------------------------------------------ */
+/* Standalone status messages, distinct from inline flash banners.    */
+/* `.banner` is the base; `--warning`, `--danger`, `--success` are    */
+/* the colour variants. Used for in-page confirmations and warnings.  */
+
+.banner {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: var(--border-width-default) solid var(--border-default);
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+.banner--success {
+  background: var(--success-subtle);
+  border-color: var(--success-default);
+  color: var(--fg-default);
+}
+.banner--warning {
+  background: rgba(212, 155, 42, 0.10);
+  border-color: var(--warning-default);
+  color: var(--fg-default);
+}
+.banner--danger {
+  background: var(--danger-subtle);
+  border-color: var(--danger-default);
+  color: var(--fg-default);
+}
+[data-theme="dark"] .banner--warning {
+  background: rgba(230, 184, 92, 0.12);
+}
+
+/* ------------------------------------------------------------------ */
 /* Page header (title + optional actions on right)                     */
 /* ------------------------------------------------------------------ */
 

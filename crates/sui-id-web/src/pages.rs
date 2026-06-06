@@ -146,7 +146,7 @@ fn setup_step_indicator(active: usize, lang: sui_id_i18n::Locale) -> impl IntoVi
         .collect();
     view! {
         <nav class="row"
-             aria-label="Setup steps"
+             aria-label=t.setup_steps_aria
              style="gap:var(--space-3);justify-content:center;margin-bottom:var(--space-4);flex-wrap:wrap;font-size:var(--font-size-caption)">
             {dots}
         </nav>
@@ -457,21 +457,6 @@ pub fn render_mfa_challenge(
 
 // ---------- profile (MFA settings) ----------
 
-pub struct ProfileData {
-    pub username: String,
-    /// True if TOTP is set up.
-    pub totp_enabled: bool,
-    /// Set when the user has just enrolled or regenerated codes.
-    /// Displayed exactly once.
-    pub fresh_recovery_codes: Option<Vec<String>>,
-    /// Registered WebAuthn passkeys for this user.
-    pub passkeys: Vec<PasskeyDescriptor>,
-    /// User's currently-stored language preference (BCP-47 tag).
-    /// `None` means "follow browser default" (the cookie /
-    /// Accept-Language tier of the resolution chain takes over).
-    pub preferred_lang: Option<String>,
-}
-
 pub struct PasskeyDescriptor {
     pub id: String,
     pub nickname: String,
@@ -479,221 +464,6 @@ pub struct PasskeyDescriptor {
     pub last_used_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-pub fn render_profile(
-    data: ProfileData,
-    flash: Option<Flash>,
-    csrf_token: String,
-    lang: sui_id_i18n::Locale,
-) -> String {
-    render(move || {
-        let t = lang.strings();
-        let ProfileData {
-            username,
-            totp_enabled,
-            fresh_recovery_codes,
-            passkeys,
-            preferred_lang,
-        } = data;
-        let csrf_for_disable = csrf_token.clone();
-        let csrf_for_regen = csrf_token.clone();
-        let csrf_for_enroll = csrf_token.clone();
-        let csrf_for_passkey_register = csrf_token.clone();
-        let csrf_for_passkey_delete = csrf_token.clone();
-        let csrf_for_lang = csrf_token.clone();
-        let preferred_lang = preferred_lang;
-        let recovery_block = fresh_recovery_codes.map(|codes| {
-            let lis: Vec<_> = codes
-                .into_iter()
-                .map(|c| view! { <li><span class="code">{c}</span></li> })
-                .collect();
-            view! {
-                <div class="flash warn" role="status">
-                    <div class="stack-tight">
-                        <strong>{t.profile_recovery_save_now}</strong>
-                        <p class="muted">{t.profile_recovery_save_lede}</p>
-                        <ol>{lis}</ol>
-                    </div>
-                </div>
-            }
-        });
-        let mfa_disable_onsubmit = format!(
-            "return confirm('{}');",
-            t.profile_mfa_disable_confirm.replace('\'', "\\'")
-        );
-        let mfa_section = if totp_enabled {
-            view! {
-                <div class="card">
-                    <h3 class="card__title">{t.profile_mfa_totp_card_title}</h3>
-                    <p>
-                        {t.profile_mfa_status_label}
-                        <span class="badge badge--ok" style="margin-left:var(--space-1)">{t.profile_mfa_status_enabled}</span>
-                    </p>
-                    <div class="card__footer">
-                        <form method="post" action="/admin/profile/mfa/recovery-codes/regenerate"
-                              style="display:inline">
-                            <input type="hidden" name="_csrf" value=csrf_for_regen />
-                            <button type="submit" class="secondary">{t.profile_mfa_regenerate_codes}</button>
-                        </form>
-                        <form method="post" action="/admin/profile/mfa/disable"
-                              style="display:inline"
-                              onsubmit=mfa_disable_onsubmit>
-                            <input type="hidden" name="_csrf" value=csrf_for_disable />
-                            <button type="submit" class="danger">{t.profile_mfa_disable_button}</button>
-                        </form>
-                    </div>
-                </div>
-            }
-            .into_any()
-        } else {
-            view! {
-                <div class="card">
-                    <h3 class="card__title">{t.profile_mfa_totp_card_title}</h3>
-                    <p>
-                        {t.profile_mfa_status_label}
-                        <span class="badge badge--warn" style="margin-left:var(--space-1)">{t.profile_mfa_status_not_configured}</span>
-                    </p>
-                    <p class="muted">
-                        {t.profile_mfa_enroll_lede}
-                        " "
-                        {t.profile_mfa_enroll_apps_note}
-                    </p>
-                    <div class="card__footer">
-                        <form method="post" action="/admin/profile/mfa/enroll/start">
-                            <input type="hidden" name="_csrf" value=csrf_for_enroll />
-                            <button type="submit">{t.profile_mfa_enroll_button}</button>
-                        </form>
-                    </div>
-                </div>
-            }
-            .into_any()
-        };
-        let passkey_delete_onsubmit = format!(
-            "return confirm('{}');",
-            t.profile_passkeys_delete_confirm.replace('\'', "\\'")
-        );
-        let passkey_last_used_never = t.profile_passkeys_last_used_never.to_owned();
-        let passkey_delete_label = t.profile_passkeys_delete_button;
-        let passkey_rows: Vec<_> = passkeys
-            .into_iter()
-            .map(|p| {
-                let id = p.id.clone();
-                let delete_url = format!("/admin/profile/webauthn/{id}/delete");
-                let csrf = csrf_for_passkey_delete.clone();
-                let last = p
-                    .last_used_at
-                    .map(fmt_time)
-                    .unwrap_or_else(|| passkey_last_used_never.clone());
-                let onsubmit = passkey_delete_onsubmit.clone();
-                view! {
-                    <tr>
-                        <td>{p.nickname}</td>
-                        <td class="muted">{fmt_time(p.created_at)}</td>
-                        <td class="muted">{last}</td>
-                        <td>
-                            <form method="post" action=delete_url style="display:inline"
-                                  onsubmit=onsubmit>
-                                <input type="hidden" name="_csrf" value=csrf />
-                                <button type="submit" class="danger">{passkey_delete_label}</button>
-                            </form>
-                        </td>
-                    </tr>
-                }
-            })
-            .collect();
-        let passkey_table = if passkey_rows.is_empty() {
-            view! {
-                <p class="muted">{t.profile_passkeys_empty}</p>
-            }
-            .into_any()
-        } else {
-            view! {
-                <div class="table-wrap">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>{t.profile_passkeys_th_name}</th>
-                                <th>{t.profile_passkeys_th_registered}</th>
-                                <th>{t.profile_passkeys_th_last_used}</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody>{passkey_rows}</tbody>
-                    </table>
-                </div>
-            }
-            .into_any()
-        };
-        let subtitle = t.profile_subtitle_template.replace("{username}", &username);
-        view! {
-            <Shell title=t.profile_title.to_string() show_nav=true current=Some("profile".to_string()) lang=lang>
-                <header class="page-header">
-                    <div>
-                        <h1 class="page-header__title">{t.profile_title}</h1>
-                        <p class="page-header__lede">{subtitle}</p>
-                    </div>
-                </header>
-                {flash_banner(flash)}
-                {recovery_block}
-
-                <section>
-                    <h2>{t.profile_mfa_section}</h2>
-                    {mfa_section}
-                </section>
-
-                <section>
-                    <h2>{t.profile_passkeys_section}</h2>
-                    <p class="muted">{t.profile_passkeys_lede}</p>
-                    {passkey_table}
-                    <h3>{t.profile_passkeys_register_section}</h3>
-                    <div class="card">
-                        <form id="passkey-register-form" method="post"
-                              action="/admin/profile/webauthn/register/start" class="stack">
-                            <input type="hidden" name="_csrf" value=csrf_for_passkey_register />
-                            <div class="field">
-                                <label for="pk-nickname" class="field__label">{t.profile_passkeys_nickname_label}</label>
-                                <input id="pk-nickname" name="nickname" type="text" required=true />
-                                <span class="field__hint">{t.profile_passkeys_nickname_hint}</span>
-                            </div>
-                            <div>
-                                <button type="submit">{t.profile_passkeys_register_button}</button>
-                            </div>
-                        </form>
-                    </div>
-                </section>
-
-                <section class="section">
-                    <h2 class="section__title">{t.profile_lang_section}</h2>
-                    <p class="muted">{t.profile_lang_lede}</p>
-                    <div class="card">
-                        <form method="post" action="/admin/profile/lang" class="stack">
-                            <input type="hidden" name="_csrf" value=csrf_for_lang />
-                            <div class="field">
-                                <label for="lang-select" class="field__label">{t.profile_lang_field_label}</label>
-                                <select id="lang-select" name="lang">
-                                    <option value="" selected=preferred_lang.is_none()>
-                                        {t.profile_lang_browser_default}
-                                    </option>
-                                    {sui_id_i18n::Locale::ALL.iter().map(|loc| {
-                                        let tag = loc.tag();
-                                        let selected = preferred_lang.as_deref() == Some(tag);
-                                        let label = loc.native_name();
-                                        view! {
-                                            <option value=tag selected=selected>{label}</option>
-                                        }
-                                    }).collect::<Vec<_>>()}
-                                </select>
-                            </div>
-                            <div>
-                                <button type="submit">{t.button_save}</button>
-                            </div>
-                        </form>
-                    </div>
-                </section>
-                <script src="/static/webauthn.js"></script>
-            </Shell>
-        }
-    })
-}
 
 pub struct MfaSetupData {
     /// otpauth:// URI for the QR code
@@ -715,7 +485,7 @@ pub fn render_mfa_setup(
         let t = lang.strings();
         let MfaSetupData { otpauth_uri, qr_svg, secret_b32 } = data;
         view! {
-            <Shell title=t.mfa_setup_shell_title.to_string() show_nav=true current=Some("profile".to_string()) lang=lang>
+            <Shell title=t.mfa_setup_shell_title.to_string() show_nav=true current=Some("me".to_string()) lang=lang>
                 <header class="page-header">
                     <div>
                         <h1 class="page-header__title">{t.mfa_setup_title}</h1>
@@ -745,7 +515,7 @@ pub fn render_mfa_setup(
 
                 <div class="card">
                     <h3 class="card__title">{t.mfa_setup_verify_card_title}</h3>
-                    <form method="post" action="/admin/profile/mfa/enroll/confirm" class="stack">
+                    <form method="post" action="/me/security/mfa/enroll/confirm" class="stack">
                         <input type="hidden" name="_csrf" value=csrf_token />
                         <div class="field">
                             <label for="code" class="field__label">{t.mfa_setup_code_label}</label>
@@ -2414,6 +2184,9 @@ pub struct MeLanguageData {
     pub shell: MeShellData,
     pub current_preferred_lang: Option<String>,
     pub csrf_token: String,
+    /// True when the page was rendered immediately after a successful
+    /// POST. The view shows a localised success banner (RFC 057).
+    pub just_saved: bool,
 }
 
 fn me_security_tabs(active: MeTab, lang: sui_id_i18n::Locale) -> impl IntoView {
@@ -2430,7 +2203,7 @@ fn me_security_tabs(active: MeTab, lang: sui_id_i18n::Locale) -> impl IntoView {
         view! { <a href=*href class=cls>{*label}</a> }
     }).collect();
     view! {
-        <nav class="tabs" aria-label="Security sections">
+        <nav class="tabs" aria-label=t.me_security_tabs_aria>
             {tab_items}
         </nav>
     }
@@ -2442,6 +2215,10 @@ pub struct MeMfaData {
     pub totp_enabled: bool,
     pub passkey_count: usize,
     pub recovery_codes_remaining: usize,
+    /// Recovery codes shown once after enrollment or regeneration.
+    /// Wrapped in an `<ol>` and prominent banner; this is the only
+    /// chance to copy them since the server only stores hashes.
+    pub fresh_recovery_codes: Option<Vec<String>>,
     pub csrf_token: String,
 }
 
@@ -2461,7 +2238,39 @@ pub fn render_me_mfa(
     render(move || {
         let t = lang.strings();
         let tabs = me_security_tabs(MeTab::Mfa, lang);
-        let MeMfaData { shell: _, totp_enabled, passkey_count, recovery_codes_remaining, csrf_token } = data;
+        let MeMfaData {
+            shell: _,
+            totp_enabled,
+            passkey_count,
+            recovery_codes_remaining,
+            fresh_recovery_codes,
+            csrf_token,
+        } = data;
+        // Recovery codes banner — shown once, immediately after enrollment
+        // or regeneration. The server only keeps hashes; if the user
+        // doesn't save these codes now, they're unrecoverable.
+        let recovery_block = fresh_recovery_codes.map(|codes| {
+            let lis: Vec<_> = codes
+                .into_iter()
+                .map(|c| view! { <li><span class="code">{c}</span></li> })
+                .collect();
+            view! {
+                <div class="flash warn" role="status">
+                    <div class="stack-tight">
+                        <strong>{t.profile_recovery_save_now}</strong>
+                        <p class="muted">{t.profile_recovery_save_lede}</p>
+                        <ol>{lis}</ol>
+                    </div>
+                </div>
+            }
+        });
+        let mfa_disable_onsubmit = format!(
+            "return confirm('{}');",
+            t.profile_mfa_disable_confirm.replace('\'', "\\'")
+        );
+        let csrf_for_enroll = csrf_token.clone();
+        let csrf_for_disable = csrf_token.clone();
+        let csrf_for_regen = csrf_token.clone();
         view! {
             <Shell title=t.me_tab_mfa.to_string() show_nav=true current=Some("me".to_string()) lang=lang>
                 <header class="page-header">
@@ -2469,6 +2278,7 @@ pub fn render_me_mfa(
                 </header>
                 {tabs}
                 {flash_banner(flash)}
+                {recovery_block}
                 <div class="stack" style="margin-top:var(--space-4)">
                     // TOTP card
                     <section class="card">
@@ -2478,8 +2288,8 @@ pub fn render_me_mfa(
                             {if totp_enabled {
                                 view! {
                                     <div>
-                                        {kv_row(t.me_overview_section_activity,
-                                                format!("{} codes remaining", recovery_codes_remaining))}
+                                        {kv_row(t.me_security_mfa_recovery_section_label,
+                                                (t.me_security_mfa_recovery_codes_remaining)(recovery_codes_remaining))}
                                     </div>
                                 }.into_any()
                             } else { view! { <div/> }.into_any() }}
@@ -2488,16 +2298,25 @@ pub fn render_me_mfa(
                             {if totp_enabled {
                                 view! {
                                     <>
-                                    <form method="post" action="/admin/profile/mfa/recovery-codes/regenerate">
-                                        <input type="hidden" name="_csrf" value=csrf_token.clone()/>
+                                    <form method="post" action="/me/security/mfa/recovery-codes/regenerate"
+                                          style="display:inline">
+                                        <input type="hidden" name="_csrf" value=csrf_for_regen />
                                         <button type="submit" class="secondary">{t.profile_mfa_regenerate_codes}</button>
                                     </form>
-                                    <a href="/admin/profile" class="button secondary">{t.me_security_mfa_manage}</a>
+                                    <form method="post" action="/me/security/mfa/disable"
+                                          style="display:inline"
+                                          onsubmit=mfa_disable_onsubmit>
+                                        <input type="hidden" name="_csrf" value=csrf_for_disable />
+                                        <button type="submit" class="danger">{t.profile_mfa_disable_button}</button>
+                                    </form>
                                     </>
                                 }.into_any()
                             } else {
                                 view! {
-                                    <a href="/admin/profile" class="button">{t.me_security_mfa_manage}</a>
+                                    <form method="post" action="/me/security/mfa/enroll/start">
+                                        <input type="hidden" name="_csrf" value=csrf_for_enroll />
+                                        <button type="submit">{t.profile_mfa_enroll_button}</button>
+                                    </form>
                                 }.into_any()
                             }}
                         </div>
@@ -2749,8 +2568,27 @@ pub fn render_me_passkey(
                         }.into_any()
                     }}
                     {origin_eligible.then(|| view! {
-                        <a href="/me/security/passkeys/register" class="button">{t.profile_passkeys_register_button}</a>
+                        <section class="card">
+                            <h3 class="card__title">{t.profile_passkeys_register_section}</h3>
+                            <form id="passkey-register-form" method="post"
+                                  action="/me/security/passkeys/register/start" class="stack">
+                                <input type="hidden" name="_csrf" value=csrf_token.clone()/>
+                                <div class="field">
+                                    <label for="pk-nickname" class="field__label">
+                                        {t.profile_passkeys_nickname_label}
+                                    </label>
+                                    <input id="pk-nickname" name="nickname" type="text" required=true
+                                           placeholder=t.me_passkey_nickname_placeholder
+                                           maxlength="64" />
+                                    <span class="field__hint">{t.profile_passkeys_nickname_hint}</span>
+                                </div>
+                                <div>
+                                    <button type="submit">{t.profile_passkeys_register_button}</button>
+                                </div>
+                            </form>
+                        </section>
                     })}
+                    <script src="/static/webauthn.js"></script>
                 </div>
             </Shell>
         }
@@ -2766,7 +2604,7 @@ pub fn render_me_language(
     render(move || {
         let t = lang.strings();
         let tabs = me_security_tabs(MeTab::Language, lang);
-        let MeLanguageData { shell: _, current_preferred_lang, csrf_token } = data;
+        let MeLanguageData { shell: _, current_preferred_lang, csrf_token, just_saved } = data;
         let cur = current_preferred_lang.clone().unwrap_or_default();
         let cur2 = cur.clone();
         let cur3 = cur.clone();
@@ -2776,6 +2614,12 @@ pub fn render_me_language(
                 <header class="page-header"><h1 class="page-header__title">{t.me_language_title}</h1></header>
                 {tabs}
                 {flash_banner(flash)}
+                {just_saved.then(|| view! {
+                    <div class="banner banner--success" role="status"
+                         style="margin-top:var(--space-3)">
+                        {t.me_security_language_saved_banner}
+                    </div>
+                })}
                 <div class="card" style="margin-top:var(--space-4)">
                     <p class="muted">{t.me_language_lede}</p>
                     <form method="post" action="/me/security/language" class="stack">
@@ -3218,7 +3062,7 @@ fn settings_tabs(active: SettingsTab, lang: sui_id_i18n::Locale) -> impl IntoVie
         })
         .collect();
     view! {
-        <nav class="app-nav" aria-label="Settings tabs" style="margin-bottom:var(--space-4);flex-wrap:wrap">
+        <nav class="app-nav" aria-label=t.settings_tabs_aria style="margin-bottom:var(--space-4);flex-wrap:wrap">
             {links}
         </nav>
     }

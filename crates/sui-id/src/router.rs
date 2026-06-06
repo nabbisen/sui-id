@@ -80,33 +80,12 @@ pub fn build_router(app: AppState) -> Router {
                 .post(crate::handlers::forgot_password::reset_password_post),
         )
         .route("/admin/logout", post(admin::logout))
-        .route("/admin/profile", get(admin::profile_get))
-        .route("/admin/profile/lang", post(admin::profile_lang_post))
-        .route(
-            "/admin/profile/mfa/enroll/start",
-            post(admin::profile_mfa_enroll_start),
-        )
-        .route(
-            "/admin/profile/mfa/enroll/confirm",
-            post(admin::profile_mfa_enroll_confirm),
-        )
-        .route("/admin/profile/mfa/disable", post(admin::profile_mfa_disable))
-        .route(
-            "/admin/profile/mfa/recovery-codes/regenerate",
-            post(admin::profile_mfa_regenerate_recovery),
-        )
-        .route(
-            "/admin/profile/webauthn/register/start",
-            post(admin::webauthn_register_start),
-        )
-        .route(
-            "/admin/profile/webauthn/register/complete",
-            post(admin::webauthn_register_complete),
-        )
-        .route(
-            "/admin/profile/webauthn/{id}/delete",
-            post(admin::webauthn_delete),
-        )
+        // RFC 055 (v0.44.0): /admin/profile consolidated onto /me/security/*.
+        // GET stays as a 301 redirect to honour bookmarks; the POST
+        // routes are removed entirely since their only callers were
+        // the legacy `render_profile` forms.
+        .route("/admin/profile",
+               get(crate::handlers::me_security::admin_profile_redirect))
         .route(
             "/admin/login/webauthn/start",
             post(admin::webauthn_auth_start),
@@ -219,6 +198,22 @@ pub fn build_router(app: AppState) -> Router {
                get(crate::handlers::me_security::passkeys_get))
         .route("/me/security/passkeys/{id}/rename",
                post(crate::handlers::me_security::passkey_rename_post))
+        // MFA mutative routes (RFC 055, v0.44.0)
+        .route("/me/security/mfa/enroll/start",
+               post(crate::handlers::me_security::mfa_enroll_start))
+        .route("/me/security/mfa/enroll/confirm",
+               post(crate::handlers::me_security::mfa_enroll_confirm))
+        .route("/me/security/mfa/disable",
+               post(crate::handlers::me_security::mfa_disable))
+        .route("/me/security/mfa/recovery-codes/regenerate",
+               post(crate::handlers::me_security::mfa_regenerate_recovery))
+        // Passkey mutative routes (RFC 055, v0.44.0)
+        .route("/me/security/passkeys/register/start",
+               post(crate::handlers::me_security::passkey_register_start))
+        .route("/me/security/passkeys/register/complete",
+               post(crate::handlers::me_security::passkey_register_complete))
+        .route("/me/security/passkeys/{id}/delete",
+               post(crate::handlers::me_security::passkey_delete))
         .route("/me/security/language",
                get(crate::handlers::me_security::language_get)
                .post(crate::handlers::me_security::language_post))

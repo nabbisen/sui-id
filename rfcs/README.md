@@ -33,7 +33,6 @@ folders.
 
 | ID  | Title                                                          | Priority |
 |-----|----------------------------------------------------------------|----------|
-| 054 | [Aria-label / title attribute i18n audit](./proposed/054-aria-title-attribute-audit.md) | P1 — Phase C (v0.44.0) |
 | 008 | [Third-party-posture bundle](./proposed/008-third-party-posture.md) | Low-medium — post-1.0 |
 | 025 | [Multi-tenant expansion path: detailed design](./proposed/025-multi-tenant-expansion.md) | Low — post-1.0, no schedule |
 | 004 | [Federation as upstream OIDC client](./proposed/004-federation.md) | Low — post-1.0 |
@@ -45,6 +44,10 @@ folders.
 
 | ID  | Title                                                          | Shipped in |
 |-----|----------------------------------------------------------------|------------|
+| 057 | [Language save confirmation](./done/057-language-save-confirmation.md) | v0.44.0 |
+| 056 | [Recovery codes remaining count](./done/056-recovery-codes-remaining-count.md) | v0.44.0 |
+| 055 | [Consolidate self-service onto `/me/security/*`](./done/055-self-service-unification.md) | v0.44.0 |
+| 054 | [Aria-label / title attribute i18n audit](./done/054-aria-title-attribute-audit.md) | v0.44.0 |
 | 053 | [Copy-button i18n contract](./done/053-copy-button-i18n.md) | v0.43.0 |
 | 052 | [Status word vocabulary unification](./done/052-status-word-vocabulary.md) | v0.43.0 |
 | 051 | [Per-screen i18n completeness audit](./done/051-per-screen-i18n-completeness.md) | v0.43.0 |

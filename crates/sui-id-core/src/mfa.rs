@@ -297,6 +297,34 @@ pub async fn verify_pending_webauthn(
     Ok(session)
 }
 
+/// Returns the number of unused recovery codes for `user_id` (RFC 056).
+///
+/// The count is the post-decryption length of the recovery-codes
+/// JSON array; this is the canonical representation since
+/// `consume_recovery_code` removes hashes from the array when used,
+/// and `regenerate_recovery_codes` replaces the whole array. A return
+/// of 0 means either (a) the user has no TOTP enrolled, (b) the user
+/// has TOTP but recovery codes have never been issued, or (c) every
+/// issued code has been consumed.
+///
+/// Errors only on database / decryption failure. The caller is
+/// expected to `unwrap_or(0)` for display purposes, since failing
+/// the count shouldn't fail the surrounding render.
+pub async fn count_recovery_codes_remaining(
+    db: &Database,
+    user_id: UserId,
+) -> CoreResult<usize> {
+    let Some(row) = user_totp::get(db, user_id).await? else {
+        return Ok(0);
+    };
+    let Some(blob) = user_totp::decrypt_recovery_codes(db, &row).await? else {
+        return Ok(0);
+    };
+    let hashes: Vec<String> =
+        serde_json::from_slice(&blob).map_err(|_| CoreError::Internal)?;
+    Ok(hashes.len())
+}
+
 pub(crate) async fn consume_recovery_code(
     db: &Database,
     user_id: UserId,

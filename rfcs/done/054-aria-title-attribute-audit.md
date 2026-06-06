@@ -1,7 +1,7 @@
 # RFC 054 — Aria-label / title attribute i18n audit
 
-**Status.** Proposed
-**Priority.** P1 — Phase B (v0.43.0)
+**Status.** Implemented (v0.44.0)
+**Priority.** P1 — Phase C (v0.44.0), carry-over from Phase B
 **Tracks.** Completes the i18n half of the "a11y + i18n
 v0.29.x" PDF slide. Closes the screen-reader accessibility
 gap that body-text-only i18n (RFC 051) leaves open.
@@ -9,6 +9,18 @@ gap that body-text-only i18n (RFC 051) leaves open.
 `crates/sui-id-web/src/layout.rs`,
 `crates/sui-id-i18n/src/strings.rs` and locale files,
 `.github/workflows/ci.yml`.
+
+> **Scope revision (2026-05).** After the v0.43.0 RFC 051 sweep, the
+> remaining hardcoded aria-label / title attributes in the
+> codebase are far fewer than the original audit projected. Only
+> **3 sites** in `pages.rs` (`Setup steps`, `Security sections`,
+> `Settings tabs`) and zero sites in `layout.rs` / `components.rs`
+> need work. Most of what this RFC originally projected was
+> incidentally fixed during RFC 051 because the aria-labels lived
+> on the same `<section>`/`<nav>` elements whose body text was
+> being i18n-routed. The original drafts of this RFC below remain
+> for historical reference; the actual v0.44.0 implementation is
+> three string substitutions plus the CI guard.
 
 ## Summary
 

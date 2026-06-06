@@ -375,7 +375,7 @@ pub fn decode_b32(s: &str) -> Vec<u8> {
     out
 }
 
-/// Drive the `/admin/profile/mfa/enroll/start` + `/confirm`
+/// Drive the `/me/security/mfa/enroll/start` + `/confirm`
 /// sequence end-to-end for a logged-in session, returning the
 /// (secret_b32, recovery_codes) pair. The caller can use the
 /// secret to compute valid TOTP codes for subsequent assertions.
@@ -387,7 +387,7 @@ pub async fn enroll_mfa_for(state: &AppState, session: &str) -> (String, Vec<Str
     let router = build_router(state.clone());
     let req = Request::builder()
         .method(Method::POST)
-        .uri("/admin/profile/mfa/enroll/start")
+        .uri("/me/security/mfa/enroll/start")
         .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
         .header(
             header::COOKIE,
@@ -425,7 +425,7 @@ pub async fn enroll_mfa_for(state: &AppState, session: &str) -> (String, Vec<Str
     let router = build_router(state.clone());
     let req = Request::builder()
         .method(Method::POST)
-        .uri("/admin/profile/mfa/enroll/confirm")
+        .uri("/me/security/mfa/enroll/confirm")
         .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
         .header(
             header::COOKIE,

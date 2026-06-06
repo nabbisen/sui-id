@@ -91,6 +91,10 @@ pub struct Strings {
     pub nav_audit: &'static str,
     pub nav_settings: &'static str,
     pub nav_profile: &'static str,
+    /// Nav label for the consolidated self-service security surface
+    /// (RFC 055, v0.44.0). Replaces the use of `nav_profile` which
+    /// pointed to the legacy `/admin/profile` single page.
+    pub nav_security: &'static str,
     pub nav_logout: &'static str,
     pub nav_aria_main: &'static str,
     pub nav_aria_signout: &'static str,
@@ -398,6 +402,19 @@ pub struct Strings {
     pub me_security_mfa_disabled_title: &'static str,
     pub me_security_mfa_disabled_lede: &'static str,
     pub me_security_mfa_manage: &'static str,
+    // ---- Self-service MFA tab extensions (RFC 055, 056) ----
+    pub me_security_mfa_recovery_section_label: &'static str,
+    pub me_security_mfa_recovery_codes_remaining: fn(usize) -> String,
+    /// Success banner shown after `POST /me/security/language` (RFC 057).
+    pub me_security_language_saved_banner: &'static str,
+
+    // ---- Aria-label nav landmarks (RFC 054, v0.44.0) ----
+    // Short navigation cues announced by screen readers. Distinct
+    // from the visible labels so the announcement names the
+    // landmark's purpose without being redundant with on-page text.
+    pub setup_steps_aria: &'static str,
+    pub me_security_tabs_aria: &'static str,
+    pub settings_tabs_aria: &'static str,
     pub me_security_password_change_link: &'static str,
     pub me_security_sessions_section: &'static str,
     pub me_security_sessions_lede: &'static str,

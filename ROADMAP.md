@@ -51,6 +51,7 @@ proposed RFCs once they enter the repository at each phase start.
 
 | Version | What shipped |
 |---|---|
+| v0.44.0 | **Phase C** of the UI/UX hardening plan — RFC 055 (consolidate self-service onto `/me/security/*`: 9 handlers moved, `render_profile` removed, Nav "Profile" → "Security", 301 redirect for the GET endpoint, all old POST routes deleted), RFC 056 (recovery codes remaining: new `count_recovery_codes_remaining()` + i18n template replacing the hardcoded `0`), RFC 057 (language save confirmation banner via `?saved=1`), RFC 054 (aria-label sweep: 3 sites remaining after RFC 051's incidental fixes, now done). Bug fix: `.banner` CSS family was used in code but never declared — added in this release. |
 | v0.43.0 | **Phase B** of the UI/UX hardening plan — RFC 051 (per-screen i18n completeness audit: 95 hardcoded JA strings → 0 across every render function in `pages.rs`; ~100 new typed Strings fields with ja/en/zh values), RFC 052 (status word + empty placeholder vocabulary unification, completing pre-existing partial work), RFC 053 (copy-button i18n contract, last call site `audit_row_view`). Bug fix: missing Chinese option on `/me/security/language`. Language self-name discipline (`locale_native_*`). RFC 048 grep widened to catch 28 additional brace-missing sites missed in v0.42.0. RFC 054 deferred to v0.44.0. |
 | v0.42.0 | **Phase A** of the UI/UX hardening plan — RFC 048 (48 `t.xxx` literal-leak fixes), RFC 049 (CSS token freeze + 7 typo fixes), RFC 050 (admin chrome i18n: Nav, Footer, ThemeToggle). Plus the `/me/security/*` locale-resolution fix. Two new CI invariants (`text-leaks`, `css-tokens`). |
 | v0.41.0 | RFC 040 completion (`/me/security/mfa`+`/sessions`), RFC 045 (user disable reason), RFC 046 (audit copy-ID), RFC 047 (dev summary + secret rotation) |
@@ -75,17 +76,18 @@ Full history: [CHANGELOG.md](CHANGELOG.md)
 
 ## Status
 
-v0.43.0 ships Phase B of the v0.42 → v1.0-rc UI/UX hardening plan:
-the per-screen i18n completeness sweep. Every visible string on every
-admin page now flows through the typed `Strings` table; the count of
-hardcoded Japanese characters in `pages.rs` went from 95 to 0. Three
-locales (ja / en / zh) are fully populated end-to-end across every
-visited admin route. A side discovery — that the v0.42.0 RFC 048 grep
-missed three categories of brace-missing leak — was fixed in the same
-release.
+v0.44.0 ships Phase C: self-service consolidation. The dual
+`/admin/profile` and `/me/security/*` surfaces are gone; one tabbed
+surface remains. The MFA tab finally shows the real count of unused
+recovery codes (previously hardcoded `0`). The language tab now
+confirms successful saves with a localised banner. Aria-labels on
+the three remaining navigation landmarks are i18n-routed (RFC 054,
+finishing the carry-over from Phase B). A latent bug — the
+`.banner` CSS class family was used in code but never defined — was
+fixed in the same pass.
 
-The project is **on hold for v1.0** until Phases C–F land. Phase C
-(self-service unification on `/me/security/*`) is the next milestone.
+The project is **on hold for v1.0** until Phases D–F land. Phase D
+(dangerous-operations contract enforcement) is the next milestone.
 
 ---
 
