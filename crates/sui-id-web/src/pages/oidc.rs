@@ -43,7 +43,7 @@ pub fn render_consent(data: ConsentData, lang: sui_id_i18n::Locale) -> String {
                     <ul style="list-style:none;padding:0;margin-bottom:var(--space-4)">
                         {scope_labels}
                     </ul>
-                    <div class="row" style="gap:var(--space-2)">
+                    <div class="row gap-2">
                         <form method="post" action="/oauth2/consent">
                             <input type="hidden" name="_csrf" value=csrf.clone() />
                             <input type="hidden" name="decision" value="approve" />

@@ -83,7 +83,7 @@ pub fn render_settings_logs(data: SettingsLogsData, flash: Option<Flash>, lang: 
                             </tbody>
                         </table>
                     </div>
-                    <p class="muted" style="margin-top:var(--space-2);margin-bottom:0">
+                    <p class="muted mt-2-mb-0">
                         {t.settings_logs_audit_link_prefix}
                         <a href="/admin/audit">"/admin/audit"</a>
                         {t.settings_logs_audit_link_suffix}
@@ -92,11 +92,11 @@ pub fn render_settings_logs(data: SettingsLogsData, flash: Option<Flash>, lang: 
 
                 <div class="card">
                     <h3 class="card__title">{t.settings_logs_audit_section}</h3>
-                    <div class="row" style="gap:var(--space-3);align-items:center">
+                    <div class="row row-gap3-center">
                         <span>{t.client_edit_label_status}":"</span>
                         {chain_badge}
                     </div>
-                    <p class="muted" style="margin-top:var(--space-2);margin-bottom:0">
+                    <p class="muted mt-2-mb-0">
                         {chain_note}
                     </p>
                 </div>

@@ -121,20 +121,20 @@ pub fn confirm_screen(
     });
     let button_class = if button_danger { "danger" } else { "btn" };
     view! {
-        <div class="auth-card" style="max-width:36rem">
+        <div class="auth-card max-w-card">
             <h1>{title_owned}</h1>
             <p><strong>{identity}</strong></p>
             {impact.map(|s| view! { <p class="muted">{s}</p> })}
             {badge_view.map(|b| view! { <p>{b}</p> })}
             {reversibility_text.map(|s| view! {
-                <p class="muted" style="font-size:var(--font-size-caption)">{s}</p>
+                <p class="muted text-caption">{s}</p>
             })}
-            <form method="post" action=action_url class="stack" style="margin-top:var(--space-4)">
+            <form method="post" action=action_url class="stack mt-4">
                 <input type="hidden" name="_csrf" value=csrf_token />
                 <input type="hidden" name="_confirmed" value="1" />
                 {extra_inputs}
                 {reason_block}
-                <div class="row" style="gap:var(--space-2)">
+                <div class="row gap-2">
                     <button type="submit" class=button_class>{button_label}</button>
                     <a href=cancel_url class="button secondary">{t.confirm_cancel}</a>
                 </div>

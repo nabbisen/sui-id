@@ -225,17 +225,10 @@ fn html_error_response(e: HttpError, code: ApiErrorCode) -> Response {
     let status = e.forced_status.unwrap_or_else(|| {
         StatusCode::from_u16(code.http_status()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)
     });
-    let title = match code {
-        ApiErrorCode::Unauthorized => "Sign in required",
-        ApiErrorCode::Forbidden => "Forbidden",
-        ApiErrorCode::NotFound => "Not found",
-        ApiErrorCode::Conflict => "Conflict",
-        ApiErrorCode::BadRequest => "Bad request",
-        ApiErrorCode::InvalidState => "Wrong system state",
-        ApiErrorCode::TooManyRequests => "Too many requests",
-        ApiErrorCode::Protocol => "Protocol error",
-        ApiErrorCode::Internal => "Something went wrong",
-    };
+    // Per-status titles previously fed a manual error-page renderer;
+    // RFC 042 replaced that path with `sui_id_web::render_error`,
+    // which derives the title from the status code internally. The
+    // local mapping is no longer needed.
     let status_u16 = status.as_u16();
     let body = sui_id_web::render_error(status_u16, &e.request_id, e.lang);
     let mut resp = (status, Html(body)).into_response();

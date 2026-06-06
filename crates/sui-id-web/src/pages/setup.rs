@@ -37,7 +37,7 @@ fn setup_step_indicator(active: usize, lang: sui_id_i18n::Locale) -> impl IntoVi
                 "color:var(--fg-subtle)"
             };
             view! {
-                <span class="row" style="gap:var(--space-1);align-items:center" aria-current=aria>
+                <span class="row gap1-center" aria-current=aria>
                     {badge}
                     <span style=style>{*label}</span>
                 </span>
@@ -65,7 +65,7 @@ pub fn render_setup_welcome(flash: Option<Flash>, lang: sui_id_i18n::Locale) -> 
                 <p class="muted">{t.setup_welcome_lede}</p>
                 <p class="muted">{t.setup_welcome_lede2}</p>
                 {flash_banner(flash)}
-                <p style="margin-top:var(--space-4)">
+                <p class="mt-4">
                     <a href="/setup/admin" class="button">{t.setup_welcome_begin}</a>
                 </p>
             </crate::layout::AuthShell>
@@ -141,23 +141,23 @@ pub fn render_setup_lang(flash: Option<Flash>, current: &str, lang: sui_id_i18n:
                 <p class="muted">{t.setup_lang_lede}</p>
                 {flash_banner(flash)}
                 <form method="post" action="/setup/lang" class="stack">
-                    <fieldset style="border:none;padding:0;margin:0">
+                    <fieldset class="button-reset">
                         <legend class="field__label">{t.setup_lang_field_label}</legend>
-                        <div class="stack" style="gap:var(--space-2)">
-                            <label class="row" style="gap:var(--space-2);align-items:center;cursor:pointer">
+                        <div class="stack gap-2">
+                            <label class="row row-gap2-center-clickable">
                                 <input type="radio" name="lang" value="ja"
                                        checked=ja_checked />
                                 <span>{t.locale_native_ja}</span>
                             </label>
-                            <label class="row" style="gap:var(--space-2);align-items:center;cursor:pointer">
+                            <label class="row row-gap2-center-clickable">
                                 <input type="radio" name="lang" value="en"
                                        checked=en_checked />
                                 <span>{t.locale_native_en}</span>
                             </label>
                         </div>
                     </fieldset>
-                    <p class="muted" style="font-size:var(--font-size-caption)">{t.setup_lang_default_note}</p>
-                    <div class="row" style="justify-content:flex-end">
+                    <p class="muted text-caption">{t.setup_lang_default_note}</p>
+                    <div class="row justify-end">
                         <button type="submit">{t.setup_lang_submit}</button>
                     </div>
                 </form>
@@ -182,36 +182,36 @@ pub fn render_setup_hibp(flash: Option<Flash>, current: &str, lang: sui_id_i18n:
                 <p class="muted">{t.setup_hibp_step_lede}</p>
                 {flash_banner(flash)}
                 <form method="post" action="/setup/hibp" class="stack">
-                    <fieldset style="border:none;padding:0;margin:0">
-                        <div class="stack" style="gap:var(--space-3)">
-                            <label class="card" style="cursor:pointer;display:block">
-                                <div class="row" style="gap:var(--space-2);align-items:center">
+                    <fieldset class="button-reset">
+                        <div class="stack gap-3">
+                            <label class="card clickable-block">
+                                <div class="row row-gap2-center">
                                     <input type="radio" name="hibp_mode" value="off"
                                            checked=off_checked />
                                     <strong>{t.setup_hibp_option_off}</strong>
                                 </div>
-                                <p class="muted" style="margin:var(--space-1) 0 0 calc(1em + var(--space-2));font-size:var(--font-size-caption)">{t.setup_hibp_option_off_desc}</p>
+                                <p class="muted radio-hint">{t.setup_hibp_option_off_desc}</p>
                             </label>
-                            <label class="card" style="cursor:pointer;display:block">
-                                <div class="row" style="gap:var(--space-2);align-items:center">
+                            <label class="card clickable-block">
+                                <div class="row row-gap2-center">
                                     <input type="radio" name="hibp_mode" value="warn"
                                            checked=warn_checked />
                                     <strong>{t.setup_hibp_option_warn}</strong>
                                 </div>
-                                <p class="muted" style="margin:var(--space-1) 0 0 calc(1em + var(--space-2));font-size:var(--font-size-caption)">{t.setup_hibp_option_warn_desc}</p>
+                                <p class="muted radio-hint">{t.setup_hibp_option_warn_desc}</p>
                             </label>
-                            <label class="card" style="cursor:pointer;display:block">
-                                <div class="row" style="gap:var(--space-2);align-items:center">
+                            <label class="card clickable-block">
+                                <div class="row row-gap2-center">
                                     <input type="radio" name="hibp_mode" value="block"
                                            checked=block_checked />
                                     <strong>{t.setup_hibp_option_block}</strong>
                                 </div>
-                                <p class="muted" style="margin:var(--space-1) 0 0 calc(1em + var(--space-2));font-size:var(--font-size-caption)">{t.setup_hibp_option_block_desc}</p>
+                                <p class="muted radio-hint">{t.setup_hibp_option_block_desc}</p>
                             </label>
                         </div>
                     </fieldset>
-                    <p class="muted" style="font-size:var(--font-size-caption)">{t.setup_hibp_step_default_note}</p>
-                    <div class="row" style="justify-content:flex-end">
+                    <p class="muted text-caption">{t.setup_hibp_step_default_note}</p>
+                    <div class="row justify-end">
                         <button type="submit">{t.setup_hibp_step_submit}</button>
                     </div>
                 </form>
@@ -233,13 +233,13 @@ pub fn render_setup_done(initialized: bool, lang: sui_id_i18n::Locale) -> String
                     <p class="muted">{t.setup_done_lede}</p>
                     <div class="card card--callout">
                         <h3 class="card__title">{t.setup_done_next_steps_title}</h3>
-                        <ul class="muted" style="margin:0;padding-left:var(--space-4)">
+                        <ul class="muted ul-indent">
                             <li>{t.setup_done_next_step_register_clients}</li>
                             <li>{t.setup_done_next_step_enable_mfa}</li>
                             <li>{t.setup_done_next_step_review_settings}</li>
                         </ul>
                     </div>
-                    <p style="margin-top:var(--space-4)">
+                    <p class="mt-4">
                         <a href="/admin" class="button">{t.setup_done_enter_admin}</a>
                     </p>
                 </crate::layout::AuthShell>
@@ -251,7 +251,7 @@ pub fn render_setup_done(initialized: bool, lang: sui_id_i18n::Locale) -> String
                     {setup_step_indicator(0, lang)}
                     <h1>{t.setup_not_complete_title}</h1>
                     <p class="muted">{t.setup_not_complete_lede}</p>
-                    <p style="margin-top:var(--space-4)">
+                    <p class="mt-4">
                         <a href="/setup" class="button">{t.setup_welcome_begin}</a>
                     </p>
                 </crate::layout::AuthShell>

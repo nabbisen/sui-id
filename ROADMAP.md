@@ -51,7 +51,8 @@ proposed RFCs once they enter the repository at each phase start.
 
 | Version | What shipped |
 |---|---|
-| v0.47.1 | **Phase F (continued)** of the UI/UX hardening plan — RFC 066 (`handlers/admin.rs` 1531 LOC → 8 sub-modules under `admin/`, Rust 2018+ module style; every file under spec's 500-LOC ceiling, umbrella 55 LOC; public route paths unchanged through `pub use {submodule}::*;` re-exports). Hygiene: 14 `#[derive(...)]` attributes lost during extraction were re-attached from the original; 85 unused-import warnings auto-pruned by `cargo fix`; `_silence_state*` dead-code suppressors removed (the split made them unnecessary). RFC 067 (inline-style discipline) + `handlers/me_security.rs` split deferred to v0.48.0, the final Phase F buffer release before v1.0-rc1. |
+| v0.48.0 | **Phase F (final buffer)** — RFC 068 (`handlers/me_security.rs` 1099 LOC → 7 sub-modules, Rust 2018+ style; all under 500 LOC) + RFC 067 (inline-style discipline: 119 → 16 with 40+ utility classes in `components.rs`; new CI bound `inline-style-bound` at 20). Pre-existing warning cleanup: 5 issues cleared (dead `mailer`/`title`, `_caches`/`_clock` rename for API symmetry, `decrypt_field` allow(dead_code)). 0 workspace warnings. Phase F closes; project enters verification phase. **No v1.0-rc/pre tag is scheduled from this release** — sufficient soak, external review, and integration verification precede any v1 designation. |
+| v0.47.1 | **Phase F (continued)** of the UI/UX hardening plan — RFC 066 (`handlers/admin.rs` 1531 LOC → 8 sub-modules under `admin/`, Rust 2018+ module style; every file under spec's 500-LOC ceiling, umbrella 55 LOC; public route paths unchanged through `pub use {submodule}::*;` re-exports). Hygiene: 14 `#[derive(...)]` attributes lost during extraction were re-attached from the original; 85 unused-import warnings auto-pruned by `cargo fix`; `_silence_state*` dead-code suppressors removed (the split made them unnecessary). RFC 067 (inline-style discipline) + `handlers/me_security.rs` split deferred to v0.48.0, the final Phase F buffer release. |
 | v0.47.0 | **Phase F (partial)** of the UI/UX hardening plan — RFC 065 (`pages.rs` 4170 LOC → 22 sub-modules under `pages/`, Rust 2018+ module style throughout; every file under spec's 500-LOC ceiling; sub-directory splits for `settings/` and `me_security/`; public API surface unchanged through `pub use {submodule}::*;` re-exports). Build hygiene: 22 unused-variable warnings cleared; 7 genuine dead code removals (`let csrf_*`/`let *_url` from pre-Phase-D row buttons). RFC 066 (admin.rs split) deferred to v0.47.1; RFC 067 (inline-style discipline) + `handlers/me_security.rs` split deferred to v0.48.0. |
 | v0.46.0 | **Phase E** of the UI/UX hardening plan — RFC 061 (semantic palette extension: 12 new tokens completing `--{semantic}-subtle` + `--fg-on-{semantic}` triples for danger/warning/success/info × light/dark/auto-dark; closes v0.44.0 `.banner--success` regression where `--success-subtle` was used but undeclared; new CI job `semantic-palette-parity` enforces structural completeness), RFC 062 (card variants `.card--warn`, `.card--info`, `.card--success`, `.card--callout` over `.card` base; 2 inline `border-left` migrations), RFC 063 (dashboard signal/noise reorder: recent events promoted above stats with `.card--info`, sparkline demoted to h3+opacity), RFC 064 (`empty_state()` + `table_empty_row()` primitives replacing 5 ad-hoc `<p class="muted">No X yet.</p>` sites). |
 | v0.45.0 | **Phase D** of the UI/UX hardening plan — RFC 058 (step-up enforcement on 4 dangerous routes: `users_set_disabled`, `clients_set_disabled`, `mfa_disable`, `passkey_delete`), RFC 059 (`<ConfirmScreen>` shared component; 5 `render_confirm_*` functions delegate to one template), RFC 060 (audit-note rollout: 7 use cases gain `reason` parameter, 8 handlers migrate to new `ConfirmedReasonForm`, self-service routes write canonical `"self"` note, reason textarea added to all 5 confirm screens). Latent bypass closed: 5 routes accepted POSTs without `_confirmed=1`; now enforced server-side. New docs page `guides/dangerous-operations.md`. |
@@ -80,24 +81,34 @@ Full history: [CHANGELOG.md](CHANGELOG.md)
 
 ## Status
 
-v0.47.1 ships Phase F continued: `handlers/admin.rs` collapses
-from 1531 LOC into 8 child modules under `admin/`, all under the
-500-LOC spec ceiling, umbrella 55 LOC. Rust 2018+ module style is
-used throughout — no `mod.rs` files. Route paths in `crate::router`
-unchanged because the umbrella re-exports each submodule's items
-via `pub use *;`.
+v0.48.0 ships Phase F's final buffer: `handlers/me_security.rs`
+1099 → 7 sub-modules (RFC 068), inline-style discipline 119 → 16
+plus a CI bound of 20 (RFC 067), and a cleanup of five pre-existing
+warnings carried over from earlier releases.
 
-Purely structural; no user-visible behavior changes. Tests hold at
-228/228.
+**Phase F closes here.** The three files originally in the Phase F
+mandate — `pages.rs` (4170), `handlers/admin.rs` (1531), and
+`handlers/me_security.rs` (1099) — are all split into per-screen /
+per-domain submodules under 500 LOC. Inline `style=""` count is
+bounded by CI. The workspace compiles with 0 warnings.
 
-The project is **on hold for v1.0** until Phase F completes with
-v0.48.0:
+Ten other `.rs` files (i18n string tables, sui-id-core state
+machines, `backup.rs`, `handlers/oidc.rs`) are still over the
+500-LOC *recommendation*. They were not in Phase F scope; some are
+single-bag string tables where splitting harms cohesion, others
+are state-machine implementations tracked as separate post-1.0
+candidates.
 
-- **v0.48.0** (final Phase F buffer): RFC 067 (inline-style
-  discipline + CI bound at 40) plus `handlers/me_security.rs`
-  1099 LOC → 6 sub-modules.
+The project enters **verification phase**. A v1.0 candidate
+designation (rc, pre, beta, anything) is not on the immediate
+horizon — sufficient soak, external review, and an integration
+verification pass come first. The next planned release is a
+verification-pass buffer; its tag is TBD and **will not start
+with v1**.
 
-After v0.48.0, v1.0-rc1 is the next planned tag.
+The v0.42 → v0.48 hardening arc is complete: 21 RFCs (048–068)
+landed across 7 releases, addressing every gap surfaced by the PDF
+review.
 
 ---
 

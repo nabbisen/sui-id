@@ -5,6 +5,194 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.48.0] — Unreleased
+
+**Phase F final buffer: `handlers/me_security.rs` split (RFC 068)
+plus inline-style discipline (RFC 067).** Phase F began at v0.47.0
+with `pages.rs` (4170 → 22 files), continued at v0.47.1 with
+`handlers/admin.rs` (1531 → 8 files), and closes here with the last
+oversize handler split and the visual-style pass. After this
+release, every `.rs` file in `crates/` fits inside the project
+spec's 500-LOC ceiling, and inline `style=""` attributes are bound
+by CI.
+
+Visible signal: nothing user-facing. This is the final buffer
+release for structural hygiene before opening verification cycles
+toward an eventual v1.0 candidate. The project is **not** going
+straight to v1.0-rc1 from here — sufficient soak-time and external
+verification come first.
+
+A few pre-existing warnings carried over from earlier releases are
+also cleaned up in v0.48.0; details below.
+
+---
+
+### RFC 068 — `handlers/me_security.rs` split per tab domain
+
+The 1099-line `handlers/me_security.rs` is split into 7 child
+modules under `crates/sui-id/src/handlers/me_security/`, mirroring
+the 6-tab layout in `crates/sui-id-web/src/pages/me_security/`.
+Rust 2018+ module style is used throughout — `me_security.rs` is
+the umbrella; submodules live in `me_security/` as sibling .rs
+files. No `mod.rs`.
+
+**New module tree:**
+
+```
+crates/sui-id/src/handlers/
+├── me_security.rs        # umbrella (87 LOC): 2 redirects,
+│                         # describe_auth_methods, flash_from_query,
+│                         # mod declarations, pub use *
+└── me_security/
+    ├── forms.rs       (~100 LOC) # 10 form/query structs
+    ├── overview.rs    (~150 LOC) # overview_get + legacy page_get
+    ├── mfa.rs         (~240 LOC) # 5 handlers + render_mfa_tab_with_fresh_codes
+    ├── sessions.rs    (~190 LOC) # sessions_tab_get, revoke_one, revoke_all_others
+    ├── passkey.rs     (~220 LOC) # 5 passkey handlers
+    ├── language.rs    (~75 LOC)  # language_get/post
+    └── password.rs    (~165 LOC) # password_change_get/post
+```
+
+**All 8 files under 500 LOC.**
+
+**Public API unchanged.** `crate::handlers::me_security::*` paths
+resolve identically because the umbrella re-exports each submodule
+via `pub use {submodule}::*;`.
+
+**`describe_auth_methods` + `flash_from_query` placement**: kept in
+the umbrella as `pub(super)` so the overview and sessions
+submodules (both callers) can reach them through `use super::*;`.
+
+**Build hygiene during the split:**
+
+- 10 `#[derive(Debug, Deserialize)]` attributes on form structs
+  detached during line-range extraction (same issue as RFC 066)
+  and were re-attached from the backup file.
+- 5 sub-files had `SESSION_COOKIE` / `RECENT_EVENT_LIMIT` constants
+  carried over from the common header but never used in that file —
+  removed.
+- 56 unused-import warnings (each submodule inherited a wide `use`
+  block) auto-pruned by `cargo fix --lib`.
+
+### RFC 067 — Inline-style discipline + CI bound
+
+The Phase F survey found **119 inline `style=""` attributes** in
+the (now split) `pages/` tree. v0.48.0 sweeps **103 of them** into
+**40+ utility classes** in `components.rs`, leaving **16
+one-off / truly-dynamic styles** that don't repeat anywhere.
+
+**Utility classes added** (token-derived; every value resolves
+through a `--space-*`/`--font-*`/`--accent-*` token):
+
+| Family | Classes |
+|--------|---------|
+| Margin top | `.mt-1`, `.mt-2`, `.mt-3`, `.mt-4`, `.mt-5` |
+| Margin bottom | `.mb-0`, `.mb-1`, `.mb-2`, `.mb-3`, `.mb-4` |
+| Margin left | `.ml-1`, `.ml-2` |
+| Margin combo | `.mt-2-mb-0` |
+| Gap (flex/grid) | `.gap-1`, `.gap-2`, `.gap-3` |
+| Layout | `.center`, `.items-center`, `.items-end`, `.justify-end`, `.justify-between`, `.inline-el`, `.inline-block`, `.flex-1`, `.flex-0-auto` |
+| Composite rows | `.row-gap2-center`, `.row-gap2-center-clickable`, `.row-gap3-center`, `.gap1-center` |
+| Widths | `.max-w-card`, `.max-w-narrow`, `.min-w-16rem` |
+| Typography | `.text-caption`, `.text-small`, `.fw-medium`, `.fw-500` |
+| Colour | `.color-accent`, `.color-danger` |
+| Patterned | `.kv-label-cell`, `.clickable-block`, `.radio-hint`, `.center-pad-4`, `.center-pad-6`, `.center-pad-6-muted`, `.ul-indent`, `.button-reset` |
+
+**CI bound** (new job `inline-style-bound`): inline `style=""`
+attribute count in `pages/**.rs` ≤ **20**. Below the bound today
+(16); a PR that adds 5 more inline styles trips the gate.
+
+The bound deliberately is **not zero** — the 16 remaining are
+genuinely one-off (`width:100%;height:80px` for a chart
+container; `max-width:240px` on a single QR image; an `opacity:0.85`
+intentional dim for the dashboard sparkline title). Adding utility
+classes for these would be premature abstraction.
+
+### Pre-existing warning cleanup
+
+Five warnings carried over from earlier releases. All cleared in
+v0.48.0:
+
+| Symbol | File | Reason | Action |
+|--------|------|--------|--------|
+| `mailer` | `crates/sui-id/src/startup.rs` | Built but never wired into `AppState`. RFC 001 outbox path replaced the direct sender; the unused build was a leftover. | Removed (plus `ehlo_hostname_from_issuer`, which only the deleted mailer called). |
+| `title` | `crates/sui-id/src/errors.rs` | Per-status title mapping fed a manual error renderer; RFC 042's `sui_id_web::render_error` derives the title from the status code internally. | Removed. |
+| `caches` (×2) | `crates/sui-id-core/src/admin.rs` (`create_client`, `update_client`) | Accepted for API symmetry; both functions modify `redirect_uri`s and **should** rebuild `caches.redirect_origins`. They currently don't. | Renamed `_caches` with a comment noting the latent miss; cache rebuild remains a follow-up bug. |
+| `clock` | `crates/sui-id-core/src/admin.rs` (`set_client_disabled`) | Accepted for API symmetry; the audit row gets its timestamp via `audit::append` internally. | Renamed `_clock`. |
+| `decrypt_field` | `crates/sui-id-core/src/mail/outbox.rs` | Symmetric pair of `encrypt_field`, reserved for a future outbox replay/inspection path. | `#[allow(dead_code)]` with comment. |
+
+After v0.48.0, `cargo check --workspace` reports **0 warnings**.
+
+### CI invariants verified
+
+All 4 grep CI jobs (text-leaks, css-tokens, semantic-palette-parity,
+new inline-style-bound) PASS:
+
+- text-leaks (RFC 048): 0 leaked `>t.foo<` literals
+- css-tokens (RFC 049): every `var(--name)` resolves
+- semantic-palette-parity (RFC 061): 12 semantic tokens × 3 modes = 36 declarations
+- inline-style-bound (RFC 067, new): 16 ≤ 20
+
+### Tests pass count
+
+Unchanged from v0.47.1: **228/228**.
+
+- sui-id-i18n: 12
+- sui-id-shared: 13
+- sui-id-store: 36
+- sui-id-core: 114
+- sui-id: 53
+
+### Breaking changes
+
+None. Public API surface unchanged across all crates.
+
+### Phase F complete (with honest scope qualification)
+
+After v0.48.0:
+
+- **The three files originally identified in the Phase F scope —
+  `pages.rs` (4170), `handlers/admin.rs` (1531), and
+  `handlers/me_security.rs` (1099) — are all split into per-screen
+  / per-domain submodules under 500 LOC.** This was the entire
+  Phase F mandate from the v0.41.0 codebase review.
+- **Inline `style=""` count bounded by CI** at 20 (currently 16).
+- **0 compiler warnings** workspace-wide.
+
+Ten other `.rs` files in the workspace are still over the spec's
+500-LOC *recommendation* (not a hard cap):
+
+| File | LOC | Note |
+|------|----:|------|
+| `crates/sui-id/src/backup.rs` | 1064 | Backup/restore CLI subsystem; one domain, one file |
+| `crates/sui-id-i18n/src/strings.rs` | 808 | The `Strings` struct definition; can't split without breaking i18n API |
+| `crates/sui-id-core/src/admin.rs` | 779 | Use-case layer (different file from the split `handlers/admin.rs`) |
+| `crates/sui-id/src/handlers/oidc.rs` | 741 | OIDC token + discovery + JWKS handler bundle |
+| `crates/sui-id-i18n/src/en.rs` | 739 | English translation table |
+| `crates/sui-id-i18n/src/zh.rs` | 742 | Chinese translation table |
+| `crates/sui-id-i18n/src/ja.rs` | 738 | Japanese translation table |
+| `crates/sui-id-core/src/step_up.rs` | 697 | Step-up re-authentication state machine |
+| `crates/sui-id-core/src/session.rs` | 688 | Session lifecycle (cookie + DB row management) |
+| `crates/sui-id-core/src/authorize.rs` | 632 | OIDC authorization endpoint logic |
+
+These were never in Phase F's scope — they were not flagged in the
+v0.41.0 PDF audit that defined the Phase A–F arc. The i18n table
+files are single bags of strings by design; splitting them adds
+indirection without improving editability. The core files are
+state-machine / use-case implementations where splitting harms
+cohesion more than it helps the LOC count. Genuine refactor
+candidates among them (e.g. `backup.rs`) are tracked as separate
+proposed RFCs for post-1.0.
+
+The project enters **verification phase**. v1.0 candidate tags
+(`v1.0-rc*`, `v1.0-pre*`) are **not** scheduled from this release —
+sufficient soak time, external review, and an independent
+integration check come first. The next planned release is a
+verification-pass buffer; tag name TBD and **will not start with
+v1**.
+
+---
+
 ## [0.47.1] — Unreleased
 
 **Phase F continuation: `handlers/admin.rs` split per screen domain

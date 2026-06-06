@@ -1,8 +1,9 @@
 # RFC 067 — Inline-style discipline + CI bound
 
-**Status.** Proposed
-**Priority.** P1 — Phase F (v0.47.0). Lower priority than RFC 065/066;
-shippable independently.
+**Status.** Implemented (v0.48.0)
+**Priority.** P1 — Phase F (v0.48.0). Lower priority than RFC 065/066;
+shippable independently. Bundled with RFC 068 (`handlers/me_security.rs`
+split) as the final Phase F buffer release.
 **Tracks.** PDF "honest visual hierarchy" tail: visual conventions
 should live in `components.rs`, not scattered across screen views.
 **Touches.** `crates/sui-id-web/src/components.rs` (new utility

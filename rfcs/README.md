@@ -33,7 +33,6 @@ folders.
 
 | ID  | Title                                                          | Priority |
 |-----|----------------------------------------------------------------|----------|
-| 067 | [Inline-style discipline + CI bound](./proposed/067-inline-style-discipline.md) | P1 — v0.48.0 |
 | 008 | [Third-party-posture bundle](./proposed/008-third-party-posture.md) | Low-medium — post-1.0 |
 | 025 | [Multi-tenant expansion path: detailed design](./proposed/025-multi-tenant-expansion.md) | Low — post-1.0, no schedule |
 | 004 | [Federation as upstream OIDC client](./proposed/004-federation.md) | Low — post-1.0 |
@@ -45,6 +44,8 @@ folders.
 
 | ID  | Title                                                          | Shipped in |
 |-----|----------------------------------------------------------------|------------|
+| 068 | [`handlers/me_security.rs` split per tab domain](./done/068-me-security-handlers-split.md) | v0.48.0 |
+| 067 | [Inline-style discipline + CI bound](./done/067-inline-style-discipline.md) | v0.48.0 |
 | 066 | [`handlers/admin.rs` split per screen domain](./done/066-admin-handlers-split.md) | v0.47.1 |
 | 065 | [`pages.rs` split per screen domain](./done/065-pages-split-per-screen.md) | v0.47.0 |
 | 064 | [Empty / error state primitives](./done/064-empty-error-state-primitives.md) | v0.46.0 |

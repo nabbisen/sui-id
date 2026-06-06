@@ -360,7 +360,7 @@ pub async fn create_client(
     clock: &SharedClock,
     actor: UserId,
     spec: CreateClientSpec<'_>,
-    caches: &Caches,
+    _caches: &Caches,
 ) -> CoreResult<CreatedClient> {
     require_admin(db, actor).await?;
     if spec.name.trim().is_empty() {
@@ -530,7 +530,7 @@ pub async fn update_client(
     target: ClientId,
     name: Option<&str>,
     redirect_uris: Option<&[String]>,
-    caches: &Caches,
+    _caches: &Caches,
 ) -> CoreResult<()> {
     require_admin(db, actor).await?;
     if let Some(uris) = redirect_uris {
@@ -553,7 +553,7 @@ pub async fn update_client(
 
 pub async fn set_client_disabled(
     db: &Database,
-    clock: &SharedClock,
+    _clock: &SharedClock,
     actor: UserId,
     target: ClientId,
     disabled: bool,

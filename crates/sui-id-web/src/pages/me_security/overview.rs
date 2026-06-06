@@ -42,7 +42,7 @@ pub fn render_me_overview(
             <Shell title=t.me_tab_overview.to_string() show_nav=true current=Some("me".to_string()) lang=lang>
                 <header class="page-header"><h1 class="page-header__title">{t.me_tab_overview}</h1></header>
                 {tabs}
-                <div class="stack" style="margin-top:var(--space-4)">
+                <div class="stack mt-4">
                     <section class="card">
                         <h2 class="card__title">{t.me_overview_section_status}</h2>
                         <dl class="kv-list">

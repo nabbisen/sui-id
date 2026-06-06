@@ -156,7 +156,7 @@ pub fn render_mfa_setup(
                 <div class="card">
                     <h3 class="card__title">{t.mfa_setup_qr_card_title}</h3>
                     <div inner_html=qr_svg style="max-width:240px;margin-bottom:var(--space-3)"></div>
-                    <p>{t.mfa_setup_secret_label}<span class="code" style="margin-left:var(--space-1)">{secret_b32}</span></p>
+                    <p>{t.mfa_setup_secret_label}<span class="code ml-1">{secret_b32}</span></p>
                     <details>
                         <summary class="muted">{t.mfa_setup_otpauth_summary}</summary>
                         <p><span class="code">{otpauth_uri}</span></p>
@@ -249,7 +249,7 @@ pub fn render_password_change(
                         </div>
 
                         <div class="field">
-                            <label class="row" style="gap:var(--space-2)">
+                            <label class="row gap-2">
                                 <input type="checkbox" name="revoke_others" value="1"
                                        checked=revoke_attr />
                                 <span>{t.password_change_revoke_others_label}</span>
@@ -381,7 +381,7 @@ pub fn render_forgot_password_sent(lang: sui_id_i18n::Locale) -> String {
                 <h1>{t.forgot_password_sent_title}</h1>
                 <p class="muted">{t.forgot_password_sent_lede}</p>
                 <p class="muted">{t.forgot_password_sent_lede2}</p>
-                <p style="margin-top:var(--space-4)">
+                <p class="mt-4">
                     <a href="/admin/login" class="button">{t.back_to_login}</a>
                 </p>
             </crate::layout::AuthShell>
@@ -434,7 +434,7 @@ pub fn render_reset_password_invalid(lang: sui_id_i18n::Locale) -> String {
             <crate::layout::AuthShell title=t.reset_password_invalid_title.to_string() lang=lang>
                 <h1>{t.reset_password_invalid_title}</h1>
                 <p class="muted">{t.reset_password_invalid_lede}</p>
-                <p style="margin-top:var(--space-4)">
+                <p class="mt-4">
                     <a href="/forgot-password" class="button">{t.reset_password_invalid_request_again}</a>
                 </p>
             </crate::layout::AuthShell>

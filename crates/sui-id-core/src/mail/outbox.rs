@@ -39,6 +39,9 @@ fn encrypt_field(db: &Database, plaintext: &[u8], aad: &[u8]) -> CoreResult<Vec<
         .map_err(|_| CoreError::Internal)
 }
 
+/// Symmetric pair of `encrypt_field` reserved for a future
+/// outbox replay / inspection path; currently no live caller.
+#[allow(dead_code)]
 fn decrypt_field(db: &Database, ciphertext: &[u8], aad: &[u8]) -> CoreResult<Vec<u8>> {
     sui_id_store::crypto::open(db.key(), ciphertext, aad)
         .map_err(|_| CoreError::Internal)

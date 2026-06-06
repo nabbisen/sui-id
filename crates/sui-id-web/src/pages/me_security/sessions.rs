@@ -70,7 +70,7 @@ pub fn render_me_sessions(
                 </header>
                 {tabs}
                 {flash_banner(flash)}
-                <div class="stack" style="margin-top:var(--space-4)">
+                <div class="stack mt-4">
                     <section class="card">
                         <p class="muted">{t.me_security_sessions_lede}</p>
                         {if session_rows.is_empty() {
@@ -92,7 +92,7 @@ pub fn render_me_sessions(
                                 </div>
                             }.into_any()
                         }}
-                        <div style="margin-top:var(--space-3)">
+                        <div class="mt-3">
                             <form method="post" action="/me/security/sessions/revoke-all-others"
                                   onsubmit=format!("return confirm('{revoke_all_confirm}')")>
                                 <input type="hidden" name="_csrf" value=csrf2/>

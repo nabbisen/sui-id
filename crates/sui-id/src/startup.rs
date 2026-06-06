@@ -180,16 +180,12 @@ pub async fn prepare(cfg: Config) -> Result<Startup> {
     }
 
     let listen_addr = cfg.server.listen_addr.clone();
-    // Build the production mail sender. It captures references to
-    // the database and the master key (cloned, both Arc-shaped
-    // internally) so it can read the live `smtp_config` row on
-    // every send.
-    let mailer: std::sync::Arc<dyn sui_id_core::mail::MailSender> = std::sync::Arc::new(
-        sui_id_core::mail::SmtpMailSender::new(
-            db.clone(),
-            ehlo_hostname_from_issuer(&cfg.server.issuer),
-        ),
-    );
+    // Note: a direct `SmtpMailSender` was historically built here for
+    // synchronous sends, but the RFC 001 outbox path made it
+    // redundant — production routes mail through the
+    // `OutboxMailSender` built below; dev mode uses test helpers
+    // that inject their own sender.
+
     // HIBP (Pwned Passwords) client. Constructed unconditionally
     // — the call site short-circuits when `server_settings.hibp_mode
     // = 'off'`, so a deployment that never wants outbound HIBP
@@ -215,17 +211,6 @@ pub async fn prepare(cfg: Config) -> Result<Startup> {
         ));
     let state = AppState::new(db, cfg, setup_token, outbox_sender, hibp_client, caches);
     Ok(Startup { state, listen_addr, _log_guard: log_guard })
-}
-
-fn ehlo_hostname_from_issuer(issuer: &str) -> String {
-    // Best-effort: parse the issuer URL and pick its host. If it
-    // doesn't parse, fall back to the issuer string itself —
-    // wrong-looking but harmless (the SMTP server logs it; no
-    // delivery decision rests on it for plain SMTP relays).
-    url::Url::parse(issuer)
-        .ok()
-        .and_then(|u| u.host_str().map(str::to_owned))
-        .unwrap_or_else(|| "sui-id.local".to_owned())
 }
 
 fn generate_setup_token() -> String {

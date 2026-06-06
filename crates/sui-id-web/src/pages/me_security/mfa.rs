@@ -68,7 +68,7 @@ pub fn render_me_mfa(
                 {tabs}
                 {flash_banner(flash)}
                 {recovery_block}
-                <div class="stack" style="margin-top:var(--space-4)">
+                <div class="stack mt-4">
                     // TOTP card
                     <section class="card">
                         <h2 class="card__title">{t.profile_mfa_totp_card_title}</h2>
@@ -83,17 +83,17 @@ pub fn render_me_mfa(
                                 }.into_any()
                             } else { view! { <div/> }.into_any() }}
                         </dl>
-                        <div class="row" style="margin-top:var(--space-3)">
+                        <div class="row mt-3">
                             {if totp_enabled {
                                 view! {
                                     <>
                                     <form method="post" action="/me/security/mfa/recovery-codes/regenerate"
-                                          style="display:inline">
+                                          class="inline-el">
                                         <input type="hidden" name="_csrf" value=csrf_for_regen />
                                         <button type="submit" class="secondary">{t.profile_mfa_regenerate_codes}</button>
                                     </form>
                                     <form method="post" action="/me/security/mfa/disable"
-                                          style="display:inline"
+                                          class="inline-el"
                                           onsubmit=mfa_disable_onsubmit>
                                         <input type="hidden" name="_csrf" value=csrf_for_disable />
                                         <button type="submit" class="danger">{t.profile_mfa_disable_button}</button>
@@ -114,7 +114,7 @@ pub fn render_me_mfa(
                     <section class="card">
                         <h2 class="card__title">{t.me_passkey_section_title}</h2>
                         {kv_row(t.profile_passkeys_section, passkey_count.to_string())}
-                        <p style="margin-top:var(--space-3)">
+                        <p class="mt-3">
                             <a href="/me/security/passkeys" class="button secondary">{t.me_tab_passkey}</a>
                         </p>
                     </section>

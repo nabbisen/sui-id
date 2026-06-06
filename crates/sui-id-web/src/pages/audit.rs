@@ -56,13 +56,13 @@ pub fn render_audit(
         let rows: Vec<_> = entries.into_iter().map(|e| audit_row_view(t, e)).collect();
         let chain_banner_view = if chain_ok {
             view! {
-                <p class="badge badge--ok" style="margin-bottom:var(--space-3)">
+                <p class="badge badge--ok mb-3">
                     "✓ " {t.audit_chain_ok}
                 </p>
             }.into_any()
         } else {
             view! {
-                <p class="badge badge--danger" style="margin-bottom:var(--space-3)">
+                <p class="badge badge--danger mb-3">
                     "✗ " {t.audit_chain_broken}
                 </p>
             }.into_any()
@@ -82,12 +82,12 @@ pub fn render_audit(
                 {flash_banner(flash)}
                 {chain_banner_view}
                 <div class="row" style="gap:var(--space-3);margin-bottom:var(--space-3);align-items:flex-end;flex-wrap:wrap">
-                    <form method="get" action="/admin/audit" class="row" style="gap:var(--space-2);align-items:center">
-                        <label for="audit-q" style="font-weight:500">{t.audit_filter_label}</label>
+                    <form method="get" action="/admin/audit" class="row row-gap2-center">
+                        <label for="audit-q" class="fw-500">{t.audit_filter_label}</label>
                         <input id="audit-q" name="q" type="search"
                                placeholder=t.audit_filter_placeholder
                                value=fq_display
-                               style="min-width:16rem" />
+                               class="min-w-16rem" />
                         <button type="submit" class="secondary">{t.audit_filter_button}</button>
                     </form>
                     <a href=csv_href class="button secondary">{t.audit_export_csv}</a>
@@ -105,8 +105,7 @@ pub fn render_audit(
                         </thead>
                         {if rows.is_empty() {
                             view! {
-                                <tbody><tr><td colspan="5" class="muted"
-                                    style="text-align:center;padding:var(--space-6) 0">
+                                <tbody><tr><td colspan="5" class="muted center-pad-6">
                                     "(no matching entries)"
                                 </td></tr></tbody>
                             }.into_any()

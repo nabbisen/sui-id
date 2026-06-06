@@ -109,7 +109,7 @@ pub fn render_settings_security(data: SettingsSecurityData, flash: Option<Flash>
                             </tbody>
                         </table>
                     </div>
-                    <p class="muted" style="margin-top:var(--space-2);margin-bottom:0">
+                    <p class="muted mt-2-mb-0">
                         {t.settings_security_lockout_hint_1}
                         " "
                         {t.settings_security_lockout_hint_2_pre}
@@ -130,7 +130,7 @@ pub fn render_settings_security(data: SettingsSecurityData, flash: Option<Flash>
                             </tbody>
                         </table>
                     </div>
-                    <p class="muted" style="margin-top:var(--space-2);margin-bottom:0">
+                    <p class="muted mt-2-mb-0">
                         {t.settings_security_headers_hint}
                     </p>
                 </div>

@@ -89,7 +89,7 @@ pub fn render_settings_authentication(
                             </tbody>
                         </table>
                     </div>
-                    <p class="muted" style="margin-top:var(--space-2);margin-bottom:0">
+                    <p class="muted mt-2-mb-0">
                         {t.settings_auth_mfa_note_prefix}
                         <a href="/admin/profile">"/admin/profile"</a>
                         {t.settings_auth_mfa_note_suffix}

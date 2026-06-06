@@ -44,9 +44,9 @@ fn client_row_view(
     } else {
         view! {
             <td>
-                <div class="row" style="gap:var(--space-1)">
+                <div class="row gap-1">
                     <a href=edit_url class="button secondary">"Edit"</a>
-                    <form method="post" action=disabled_url style="display:inline">
+                    <form method="post" action=disabled_url class="inline-el">
                         <input type="hidden" name="_csrf" value=csrf_disable />
                         <input type="hidden" name="disabled" value=action_target />
                         <button type="submit" class="secondary">{action_label}</button>
@@ -146,7 +146,7 @@ pub fn render_clients(
                                 </span>
                             </div>
                             // Single-realm note (RFC 027) — now via clients_single_realm_note key
-                            <p class="field__hint" style="margin: 0;">
+                            <p class="field__hint mb-0">
                                 "ℹ  "
                                 {t.clients_single_realm_note}
                             </p>
@@ -155,7 +155,7 @@ pub fn render_clients(
                                 <textarea id="c-logout" name="post_logout_redirect_uris" rows="2"></textarea>
                                 <span class="field__hint">{t.clients_hint_one_per_line}</span>
                             </div>
-                            <label class="row" style="gap:var(--space-2)">
+                            <label class="row gap-2">
                                 <input name="confidential" type="checkbox" value="true" checked=true />
                                 <span>{t.clients_label_confidential_checkbox}</span>
                             </label>
@@ -258,9 +258,9 @@ pub fn render_client_edit(
                 {freshly_rotated_secret.map(|sec| {
                     let sec2 = sec.clone();
                     view! {
-                        <div class="banner banner--warning" role="alert" style="margin-bottom:var(--space-3)">
+                        <div class="banner banner--warning mb-3" role="alert">
                             <strong>{t.client_edit_new_secret_label}</strong>
-                            <span class="code" style="margin-left:var(--space-2)">{sec}</span>
+                            <span class="code ml-2">{sec}</span>
                             {copy_btn(t, sec2, t.copy_noun_client_secret)}
                         </div>
                     }
@@ -270,14 +270,14 @@ pub fn render_client_edit(
                     <h3 class="card__title">{t.client_edit_basic_section}</h3>
                     <div class="stack-tight muted">
                         <div>{t.client_edit_label_client_id}": "<span class="code">{id.clone()}</span>{copy_btn(t, id.clone(), t.copy_noun_client_id)}</div>
-                        <div class="row" style="gap:var(--space-2)">
+                        <div class="row gap-2">
                             <span>{t.client_edit_label_kind}":"</span>
                             <span class="badge badge--accent">{kind}</span>
                             <span>{t.client_edit_label_status}":"</span>
                             {status_view}
                         </div>
                     </div>
-                    <p class="muted" style="margin-top:var(--space-3)">
+                    <p class="muted mt-3">
                         {t.client_edit_basic_note}
                     </p>
                 </div>

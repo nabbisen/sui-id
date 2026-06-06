@@ -106,7 +106,7 @@ pub fn render_settings_basic(data: SettingsBasicData, flash: Option<Flash>, lang
                         <table>
                             <tbody>
                                 <tr>
-                                    <th scope="row" style="width:14rem;font-weight:var(--font-weight-medium);color:var(--fg-muted);text-align:left">{t.dashboard_oidc_endpoint_discovery}</th>
+                                    <th scope="row" class="kv-label-cell">{t.dashboard_oidc_endpoint_discovery}</th>
                                     <td>
                                         {
                                             let url = discovery_url.clone();
@@ -119,7 +119,7 @@ pub fn render_settings_basic(data: SettingsBasicData, flash: Option<Flash>, lang
                                     </td>
                                 </tr>
                                 <tr>
-                                    <th scope="row" style="width:14rem;font-weight:var(--font-weight-medium);color:var(--fg-muted);text-align:left">{t.dashboard_oidc_endpoint_jwks}</th>
+                                    <th scope="row" class="kv-label-cell">{t.dashboard_oidc_endpoint_jwks}</th>
                                     <td>
                                         {
                                             let url = jwks_url.clone();

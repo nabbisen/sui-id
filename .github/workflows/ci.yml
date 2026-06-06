@@ -196,3 +196,27 @@ jobs:
             done
           done
           echo "All 12 semantic tokens (4 families × 3 slots) declared in all 3 mode roots."
+
+  inline-style-bound:
+    # RFC 067 (v0.48.0): bound the inline `style=""` attribute count
+    # in `pages/`. Encourages adding a utility class in
+    # components.rs over reaching for an inline style. The threshold
+    # of 20 leaves a small headroom for genuinely-one-off styles
+    # (truly dynamic content, page tweaks like opacity:0.85).
+    name: Inline style attribute count in pages/
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Count inline style attributes in pages/
+        run: |
+          set -e
+          count=$(grep -rEohn 'style="[^"]*"' \
+                    crates/sui-id-web/src/pages/ \
+                    --include='*.rs' | wc -l)
+          echo "Inline style count in pages/: $count"
+          if [ "$count" -gt 20 ]; then
+            echo "::error::Inline 'style=' count ($count) exceeds bound (20)."
+            echo "Suggest a utility class in components.rs or document"
+            echo "why the inline style is necessary."
+            exit 1
+          fi

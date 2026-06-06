@@ -41,24 +41,24 @@ pub fn render_me_passkey(
                     <td>
                         <strong>{nick}</strong>
                         <br/>
-                        <span class="muted" style="font-size:0.85em">
+                        <span class="muted text-small">
                             {t.profile_passkeys_th_registered} ": " {p.created_at.format("%Y/%m/%d").to_string()}
                         </span>
                     </td>
                     <td>
                         <details>
-                            <summary class="button secondary" style="font-size:0.85em">
+                            <summary class="button secondary text-small">
                                 {t.me_passkey_button_rename}
                             </summary>
                             <form method="post"
                                   action={format!("/me/security/passkeys/{cred_id}/rename")}
-                                  style="margin-top:var(--space-2)">
+                                  class="mt-2">
                                 <input type="hidden" name="_csrf" value=csrf.clone()/>
                                 <div class="row">
                                     <input type="text" name="nickname"
                                            placeholder=t.me_passkey_nickname_placeholder
                                            required=true maxlength="64"
-                                           style="flex:1"/>
+                                           class="flex-1"/>
                                     <button type="submit">{t.button_save}</button>
                                 </div>
                             </form>
@@ -82,7 +82,7 @@ pub fn render_me_passkey(
                 {tabs}
                 {flash_banner(flash)}
                 {warning}
-                <div class="stack" style="margin-top:var(--space-4)">
+                <div class="stack mt-4">
                     {if rows.is_empty() {
                         empty_state(EmptyStateData {
                             message: t.profile_passkeys_empty.into(),

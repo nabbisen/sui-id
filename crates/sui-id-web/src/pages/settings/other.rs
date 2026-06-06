@@ -65,7 +65,7 @@ pub fn render_settings_other(data: SettingsOtherData, flash: Option<Flash>, lang
                             </tbody>
                         </table>
                     </div>
-                    <p class="muted" style="margin-top:var(--space-2);margin-bottom:0">
+                    <p class="muted mt-2-mb-0">
                         {t.settings_advanced_storage_note_prefix}
                         <span class="code">"SUI_ID_MASTER_KEY"</span>
                         {t.settings_advanced_storage_note_suffix}
@@ -78,19 +78,19 @@ pub fn render_settings_other(data: SettingsOtherData, flash: Option<Flash>, lang
                         <table>
                             <tbody>
                                 <tr>
-                                    <th scope="row" style="width:14rem;font-weight:var(--font-weight-medium);color:var(--fg-muted);text-align:left">{t.dashboard_stat_users}</th>
+                                    <th scope="row" class="kv-label-cell">{t.dashboard_stat_users}</th>
                                     <td>
                                         {(t.settings_advanced_users_count)(user_count)}
-                                        <a href="/admin/users" class="muted" style="margin-left:var(--space-2)">
+                                        <a href="/admin/users" class="muted ml-2">
                                             {t.settings_advanced_manage_link}
                                         </a>
                                     </td>
                                 </tr>
                                 <tr>
-                                    <th scope="row" style="width:14rem;font-weight:var(--font-weight-medium);color:var(--fg-muted);text-align:left">{t.dashboard_stat_clients}</th>
+                                    <th scope="row" class="kv-label-cell">{t.dashboard_stat_clients}</th>
                                     <td>
                                         {(t.settings_advanced_clients_count)(client_count)}
-                                        <a href="/admin/clients" class="muted" style="margin-left:var(--space-2)">
+                                        <a href="/admin/clients" class="muted ml-2">
                                             {t.settings_advanced_manage_link}
                                         </a>
                                     </td>

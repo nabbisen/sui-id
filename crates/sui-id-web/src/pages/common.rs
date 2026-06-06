@@ -91,7 +91,7 @@ pub(super) fn kv_row(k: &str, v: impl IntoView + 'static) -> impl IntoView {
     let k = k.to_owned();
     view! {
         <tr>
-            <th scope="row" style="width:14rem;font-weight:var(--font-weight-medium);color:var(--fg-muted);text-align:left">
+            <th scope="row" class="kv-label-cell">
                 {k}
             </th>
             <td>{v}</td>
@@ -150,7 +150,7 @@ pub fn table_empty_row(message: &'static str, colspan: usize) -> impl IntoView {
     view! {
         <tr>
             <td colspan=colspan.to_string()
-                style="text-align:center;padding:var(--space-6) 0;color:var(--fg-muted)">
+                class="center-pad-6-muted">
                 {message}
             </td>
         </tr>

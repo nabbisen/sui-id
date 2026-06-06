@@ -60,7 +60,7 @@ fn user_row_view(
         };
         view! {
             <td>
-                <div class="row" style="gap:var(--space-1)">
+                <div class="row gap-1">
                     {reset_link}
                     <a href=disable_confirm_url class="button secondary">{action_label}</a>
                     " "
@@ -138,7 +138,7 @@ pub fn render_users(
                                 <input id="u-pw" name="password" type="password"
                                        required=true minlength="12" autocomplete="new-password" />
                             </div>
-                            <label class="row" style="gap:var(--space-2)">
+                            <label class="row gap-2">
                                 <input name="is_admin" type="checkbox" value="true" />
                                 <span>{t.users_is_admin_label}</span>
                             </label>
@@ -250,7 +250,7 @@ pub fn render_user_detail(data: UserDetailData, lang: sui_id_i18n::Locale) -> St
             <Shell title=username.clone() show_nav=true
                    current=Some("users".to_string())
                    dev_mode=data.dev_mode lang=lang>
-                <div style="margin-bottom:var(--space-3)">
+                <div class="mb-3">
                     <a href="/admin/users" class="muted">{t.user_detail_back}</a>
                 </div>
 
@@ -264,7 +264,7 @@ pub fn render_user_detail(data: UserDetailData, lang: sui_id_i18n::Locale) -> St
                             <p class="page-header__lede">{display.clone()}</p>
                         })}
                         {(!email.is_empty()).then(|| view! {
-                            <p class="muted" style="font-size:var(--font-size-caption)">{email}</p>
+                            <p class="muted text-caption">{email}</p>
                         })}
                     </div>
                     <div class="row" style="gap:var(--space-2);align-self:flex-start">
@@ -282,7 +282,7 @@ pub fn render_user_detail(data: UserDetailData, lang: sui_id_i18n::Locale) -> St
                     </div>
                 </header>
 
-                <section class="card" style="margin-bottom:var(--space-4)">
+                <section class="card mb-4">
                     <h2 class="card__title">{t.user_detail_auth_section}</h2>
                     <dl class="kv-list">
                         <div class="kv-list__row">
@@ -296,7 +296,7 @@ pub fn render_user_detail(data: UserDetailData, lang: sui_id_i18n::Locale) -> St
                     </dl>
                 </section>
 
-                <section style="margin-bottom:var(--space-4)">
+                <section class="mb-4">
                     <h2>{t.user_detail_sessions_section}</h2>
                     <div class="table-wrap">
                         <table>
@@ -309,8 +309,7 @@ pub fn render_user_detail(data: UserDetailData, lang: sui_id_i18n::Locale) -> St
                             </thead>
                             {if session_rows.is_empty() {
                                 view! {
-                                    <tbody><tr><td colspan="3" class="muted"
-                                        style="text-align:center;padding:var(--space-4) 0">
+                                    <tbody><tr><td colspan="3" class="muted center-pad-4">
                                         {t.muted_none}
                                     </td></tr></tbody>
                                 }.into_any()
@@ -334,8 +333,7 @@ pub fn render_user_detail(data: UserDetailData, lang: sui_id_i18n::Locale) -> St
                             </thead>
                             {if audit_rows.is_empty() {
                                 view! {
-                                    <tbody><tr><td colspan="3" class="muted"
-                                        style="text-align:center;padding:var(--space-4) 0">
+                                    <tbody><tr><td colspan="3" class="muted center-pad-4">
                                         {t.muted_none}
                                     </td></tr></tbody>
                                 }.into_any()

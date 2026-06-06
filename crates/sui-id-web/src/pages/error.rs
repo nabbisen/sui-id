@@ -21,7 +21,7 @@ pub fn render_error(status: u16, request_id: &str, lang: sui_id_i18n::Locale) ->
                     <h1>{status.to_string()}</h1>
                     <h2>{title}</h2>
                     <p class="muted">{lede}</p>
-                    <p class="muted" style="font-size:0.85em">
+                    <p class="muted text-small">
                         {req_id_label} ": "
                         <span class="code">{rid}</span>
                     </p>

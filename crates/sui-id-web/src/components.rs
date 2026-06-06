@@ -280,6 +280,72 @@ code, .code {
   display: inline-block;
 }
 
+/* ------------------------------------------------------------------ */
+/* RFC 067 utility classes (v0.48.0)                                  */
+/* ------------------------------------------------------------------ */
+/* Small, token-derived utility classes for the spacing + layout       */
+/* patterns surfaced in the Phase F inline-style survey. The set is    */
+/* deliberately tight; new utilities require RFC justification.        */
+
+/* Margin: top / bottom */
+.mt-1 { margin-top: var(--space-1); }
+.mt-2 { margin-top: var(--space-2); }
+.mt-3 { margin-top: var(--space-3); }
+.mt-4 { margin-top: var(--space-4); }
+.mt-5 { margin-top: var(--space-5); }
+.mb-0 { margin-bottom: 0; }
+.mb-1 { margin-bottom: var(--space-1); }
+.mb-2 { margin-bottom: var(--space-2); }
+.mb-3 { margin-bottom: var(--space-3); }
+.mb-4 { margin-bottom: var(--space-4); }
+
+/* Margin: left (rare; for inline icon spacing only) */
+.ml-1 { margin-left: var(--space-1); }
+.ml-2 { margin-left: var(--space-2); }
+
+/* Margin combo used by several explainer paragraphs */
+.mt-2-mb-0 { margin-top: var(--space-2); margin-bottom: 0; }
+
+/* Gap (flex/grid spacing) */
+.gap-1 { gap: var(--space-1); }
+.gap-2 { gap: var(--space-2); }
+.gap-3 { gap: var(--space-3); }
+
+/* Layout */
+.center { text-align: center; }
+.items-center { align-items: center; }
+.items-end { align-items: flex-end; }
+.justify-end { justify-content: flex-end; }
+.justify-between { justify-content: space-between; }
+.inline-el { display: inline; }
+.inline-block { display: inline-block; }
+.flex-1 { flex: 1; }
+
+/* Common composite patterns */
+.row-gap2-center { gap: var(--space-2); align-items: center; }
+.row-gap3-center { gap: var(--space-3); align-items: center; }
+
+/* Constrained widths used by auth cards and form pages */
+.max-w-card { max-width: 36rem; }
+.max-w-narrow { max-width: 22rem; }
+.min-w-16rem { min-width: 16rem; }
+
+/* Typography */
+.text-caption { font-size: var(--font-size-caption); }
+.text-small { font-size: 0.85em; }
+.fw-medium { font-weight: var(--font-weight-medium); }
+.fw-500 { font-weight: 500; }
+
+/* The "label cell" pattern used inside every settings <table>:
+ * a 14rem-wide muted-foreground left-aligned <th>. Rolled into a
+ * single class so kv_row() does not need an inline style. */
+.kv-label-cell {
+  width: 14rem;
+  font-weight: var(--font-weight-medium);
+  color: var(--fg-muted);
+  text-align: left;
+}
+
 .stack { display: flex; flex-direction: column; gap: var(--space-3); }
 .stack-tight { display: flex; flex-direction: column; gap: var(--space-2); }
 .row { display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap; }
@@ -807,6 +873,33 @@ textarea {
   background: color-mix(in srgb, var(--fg-muted) 12%, transparent);
   color: var(--fg-muted);
 }
+/* RFC 067 — additional utility classes for less-frequent patterns
+ * that still appear in multiple sites. Keeps the inline-style count
+ * under the CI bound. */
+.clickable-block { cursor: pointer; display: block; }
+.radio-hint {
+  margin: var(--space-1) 0 0 calc(1em + var(--space-2));
+  font-size: var(--font-size-caption);
+}
+.center-pad-4 { text-align: center; padding: var(--space-4) 0; }
+.center-pad-6 { text-align: center; padding: var(--space-6) 0; }
+.center-pad-6-muted {
+  text-align: center;
+  padding: var(--space-6) 0;
+  color: var(--fg-muted);
+}
+.ul-indent { margin: 0; padding-left: var(--space-4); }
+.row-gap2-center-clickable {
+  gap: var(--space-2);
+  align-items: center;
+  cursor: pointer;
+}
+.button-reset { border: none; padding: 0; margin: 0; }
+.color-accent { color: var(--accent-default); }
+.color-danger { color: var(--danger-default); }
+.flex-0-auto { flex: 0 0 auto; }
+.gap1-center { gap: var(--space-1); align-items: center; }
+
 "#;
 
 // ────────────────────────────────────────────────────────────────────

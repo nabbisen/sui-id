@@ -35,33 +35,32 @@ pub fn render_me_language(
                 {tabs}
                 {flash_banner(flash)}
                 {just_saved.then(|| view! {
-                    <div class="banner banner--success" role="status"
-                         style="margin-top:var(--space-3)">
+                    <div class="banner banner--success mt-3" role="status">
                         {t.me_security_language_saved_banner}
                     </div>
                 })}
-                <div class="card" style="margin-top:var(--space-4)">
+                <div class="card mt-4">
                     <p class="muted">{t.me_language_lede}</p>
                     <form method="post" action="/me/security/language" class="stack">
                         <input type="hidden" name="_csrf" value=csrf_token/>
                         <div class="field">
-                            <div class="stack" style="gap:var(--space-2)">
-                                <label class="row" style="align-items:center;gap:var(--space-2)">
+                            <div class="stack gap-2">
+                                <label class="row row-gap2-center">
                                     <input type="radio" name="locale" value=""
                                            checked=move || cur.is_empty()/>
                                     {t.me_language_use_default}
                                 </label>
-                                <label class="row" style="align-items:center;gap:var(--space-2)">
+                                <label class="row row-gap2-center">
                                     <input type="radio" name="locale" value="ja"
                                            checked=move || cur2 == "ja"/>
                                     {t.locale_native_ja}
                                 </label>
-                                <label class="row" style="align-items:center;gap:var(--space-2)">
+                                <label class="row row-gap2-center">
                                     <input type="radio" name="locale" value="en"
                                            checked=move || cur3 == "en"/>
                                     {t.locale_native_en}
                                 </label>
-                                <label class="row" style="align-items:center;gap:var(--space-2)">
+                                <label class="row row-gap2-center">
                                     <input type="radio" name="locale" value="zh"
                                            checked=move || cur4 == "zh"/>
                                     {t.locale_native_zh}

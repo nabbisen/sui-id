@@ -201,11 +201,11 @@ pub fn render_dashboard(data: DashboardData, flash: Option<Flash>, dev_mode: boo
                 {flash_banner(flash)}
 
                 {(warn_smtp_not_configured || warn_hibp_off || warn_cookie_insecure).then(|| view! {
-                    <section class="card card--warn" style="margin-bottom:var(--space-4)" aria-label=t.dashboard_aria_action_required>
+                    <section class="card card--warn mb-4" aria-label=t.dashboard_aria_action_required>
                         <h2 style="font-size:var(--font-size-body);margin:0 0 var(--space-2)">
                             "⚠ " {t.dashboard_action_required_title}
                         </h2>
-                        <ul style="margin:0;padding-left:var(--space-4)">
+                        <ul class="ul-indent">
                             {warn_smtp_not_configured.then(|| view! { <li>{t.dashboard_warn_smtp}</li> })}
                             {warn_hibp_off.then(|| view! { <li>{t.dashboard_warn_hibp}</li> })}
                             {warn_cookie_insecure.then(|| view! { <li>{t.dashboard_warn_cookie_insecure}</li> })}
@@ -253,7 +253,7 @@ pub fn render_dashboard(data: DashboardData, flash: Option<Flash>, dev_mode: boo
                                     <tbody>{rows}</tbody>
                                 </table>
                             </div>
-                            <p class="card__footer" style="margin-top:var(--space-2)">
+                            <p class="card__footer mt-2">
                                 <a href="/admin/audit">{t.dashboard_recent_events_view_all}</a>
                             </p>
                             </>
@@ -298,27 +298,27 @@ pub fn render_dashboard(data: DashboardData, flash: Option<Flash>, dev_mode: boo
                         <h3 style="margin:0;font-weight:var(--font-weight-medium);opacity:0.85">
                             {t.dashboard_activity_title}
                         </h3>
-                        <nav class="app-nav" aria-label=t.dashboard_activity_period style="flex:0 0 auto">
+                        <nav class="app-nav flex-0-auto" aria-label=t.dashboard_activity_period>
                             {range_tabs}
                         </nav>
                     </div>
                     <div class="card">
                         <div class="row" style="gap:var(--space-5);margin-bottom:var(--space-3)">
                             <div class="stat">
-                                <span class="stat__value" style="color:var(--accent-default)">
+                                <span class="stat__value color-accent">
                                     {total_success.to_string()}
                                 </span>
                                 <span class="stat__label">{t.dashboard_activity_success}</span>
                             </div>
                             <div class="stat">
-                                <span class="stat__value" style="color:var(--danger-default)">
+                                <span class="stat__value color-danger">
                                     {total_failure.to_string()}
                                 </span>
                                 <span class="stat__label">{t.dashboard_activity_failure}</span>
                             </div>
                         </div>
                         {svg}
-                        <p class="muted" style="margin-top:var(--space-2);margin-bottom:0">
+                        <p class="muted mt-2-mb-0">
                             {t.dashboard_activity_hover_hint}
                         </p>
                     </div>

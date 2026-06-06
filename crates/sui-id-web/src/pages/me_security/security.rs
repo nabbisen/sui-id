@@ -89,7 +89,7 @@ pub fn render_me_security(
                     let onsubmit_attr = format!("return confirm('{}');", revoke_confirm.replace('\'', "\\'"));
                     view! {
                         <td>
-                            <form method="post" action=post_url style="display:inline"
+                            <form method="post" action=post_url class="inline-el"
                                   onsubmit=onsubmit_attr>
                                 <input type="hidden" name="_csrf" value=csrf_for_row />
                                 <button type="submit" class="secondary">{revoke_label}</button>
@@ -165,8 +165,8 @@ pub fn render_me_security(
             view! {
                 <p>
                     {t.me_security_mfa_status_label}
-                    <span class="badge badge--ok" style="margin-left:var(--space-1)">{t.me_security_mfa_status_enabled}</span>
-                    <span class="muted" style="margin-left:var(--space-2)">{parts}</span>
+                    <span class="badge badge--ok ml-1">{t.me_security_mfa_status_enabled}</span>
+                    <span class="muted ml-2">{parts}</span>
                 </p>
             }
             .into_any()
@@ -175,7 +175,7 @@ pub fn render_me_security(
                 <div class="flash warn" role="status">
                     <div class="stack-tight">
                         <strong>{t.me_security_mfa_disabled_title}</strong>
-                        <p class="muted" style="margin:0">{t.me_security_mfa_disabled_lede}</p>
+                        <p class="muted mb-0">{t.me_security_mfa_disabled_lede}</p>
                     </div>
                 </div>
             }
@@ -232,7 +232,7 @@ pub fn render_me_security(
                         </table>
                     </div>
                     <form method="post" action="/me/security/sessions/revoke-all-others"
-                          style="margin-top:var(--space-3)"
+                          class="mt-3"
                           onsubmit=revoke_all_others_onsubmit>
                         <input type="hidden" name="_csrf" value=csrf_for_revoke_others />
                         <input type="hidden" name="current_session" value=current_session_id />
