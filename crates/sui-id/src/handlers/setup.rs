@@ -75,6 +75,10 @@ use sui_id_web::{
 pub struct WelcomeQuery {
     #[serde(default)]
     pub lang: Option<String>,
+    /// v0.48.4: the setup URL printed at startup embeds the token as
+    /// `?token=xxx` so operators never need to copy-paste it manually.
+    #[serde(default)]
+    pub token: Option<String>,
 }
 
 pub async fn welcome_get(
@@ -110,23 +114,36 @@ pub async fn welcome_get(
             c.set_http_only(false);
             c.set_same_site(axum_extra::extract::cookie::SameSite::Lax);
             c.set_secure(secure);
-            // Long-lived: the choice should outlast a typical
-            // wizard run plus a few browser restarts.
             c.set_max_age(time::Duration::days(365));
             let jar = jar.add(c);
-            return Ok((jar, Redirect::to("/setup")).into_response());
+            // v0.48.4: preserve ?token= through the lang PRG redirect.
+            let redirect = match query.token.as_deref().filter(|t| !t.is_empty()) {
+                Some(tok) => format!("/setup?token={tok}"),
+                None => "/setup".to_owned(),
+            };
+            return Ok((jar, Redirect::to(&redirect)).into_response());
         }
-        // Unrecognised lang code: ignore (fall through to render).
     }
 
-    Ok(Html(render_setup_welcome(None, lang)).into_response())
+    let token = query.token.clone().unwrap_or_default();
+    Ok(Html(render_setup_welcome(None, lang, &token)).into_response())
 }
 
 // ---------- 画面 2 — admin form ----------
 
+/// v0.48.4: `?token=xxx` carries the setup token from the welcome screen.
+/// The admin form renders it as a hidden input so the operator never
+/// needs to type it; the POST handler validates it from the form body.
+#[derive(Debug, serde::Deserialize, Default)]
+pub struct SetupAdminQuery {
+    #[serde(default)]
+    pub token: Option<String>,
+}
+
 pub async fn admin_get(
     state_ext: AppStateExt,
     crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
+    axum::extract::Query(query): axum::extract::Query<SetupAdminQuery>,
 ) -> Result<axum::response::Response, HttpError> {
     let axum::extract::State(app) = state_ext;
     let initialized =
@@ -134,7 +151,8 @@ pub async fn admin_get(
     if initialized {
         return Ok(Redirect::to("/admin/login").into_response());
     }
-    Ok(Html(render_setup_admin(None, lang)).into_response())
+    let token = query.token.unwrap_or_default();
+    Ok(Html(render_setup_admin(None, lang, &token)).into_response())
 }
 
 #[derive(Debug, Deserialize)]
@@ -176,7 +194,7 @@ pub async fn admin_post(
         };
         return Ok((
             axum::http::StatusCode::BAD_REQUEST,
-            Html(render_setup_admin(Some(flash), lang)),
+            Html(render_setup_admin(Some(flash), lang, &form.setup_token)),
         )
             .into_response());
     }
@@ -217,7 +235,7 @@ pub async fn admin_post(
                 };
                 return Ok((
                     axum::http::StatusCode::BAD_REQUEST,
-                    Html(render_setup_admin(Some(flash), lang)),
+                    Html(render_setup_admin(Some(flash), lang, &form.setup_token)),
                 )
                     .into_response());
             }
@@ -268,7 +286,7 @@ pub async fn admin_post(
             tracing::warn!(error = %e, "setup form rejected");
             Ok((
                 axum::http::StatusCode::BAD_REQUEST,
-                Html(render_setup_admin(Some(flash), lang)),
+                Html(render_setup_admin(Some(flash), lang, &form.setup_token)),
             )
                 .into_response())
         }

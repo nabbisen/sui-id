@@ -166,14 +166,19 @@ pub async fn prepare(cfg: Config) -> Result<Startup> {
     let setup_token = generate_setup_token();
     let initialized = state::is_initialized(&db).unwrap_or(false);
     if !initialized {
-        // Use eprintln (stderr) per spec: "管理者操作の無監査化を防ぐ" + "失敗時に内部情報を返しすぎない"
-        // The token never enters the structured tracing pipeline so it does not
-        // leak into log aggregators by accident.
+        // v0.48.4: the setup URL now embeds the token as a query parameter
+        // so the operator only needs to open the printed URL in a browser
+        // — no copy-paste into a text field required.
+        //
+        // Use eprintln (stderr) per spec: the token never enters the
+        // structured tracing pipeline so it does not leak into log
+        // aggregators by accident.
+        let base = cfg.server.issuer.trim_end_matches('/');
         eprintln!("\n  =====================================================");
         eprintln!("  sui-id has not been initialized yet.");
-        eprintln!("  Open  {}/setup", cfg.server.issuer.trim_end_matches('/'));
-        eprintln!("  Setup token (one-time, stays only in this process):");
-        eprintln!("    {setup_token}");
+        eprintln!("  Open the following URL in your browser to begin setup:");
+        eprintln!("    {base}/setup?token={setup_token}");
+        eprintln!("  (One-time token — restart the process to generate a new one.)");
         eprintln!("  =====================================================\n");
     } else {
         tracing::info!("system already initialized; setup endpoint is closed");

@@ -5,6 +5,91 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.48.4] — Unreleased
+
+**Verification-phase UX improvements: setup token via URL parameter;
+setup wizard Chinese language option removed.**
+
+---
+
+### Setup token as URL parameter
+
+Previously the server printed a raw token string to stderr:
+
+```
+  Setup token (one-time, stays only in this process):
+    Xk7q9...
+```
+
+Operators had to copy that string and paste it into a password-type
+input field on the admin-form screen. One mistype or partial-select
+sent the form back with a token error.
+
+v0.48.4 changes the printed output to a **full, click-to-open URL**:
+
+```
+  Open the following URL in your browser to begin setup:
+    http://localhost:8801/setup?token=Xk7q9...
+```
+
+The welcome screen reads `?token=xxx` from the query string and
+forwards it through to the admin-form link (`/setup/admin?token=xxx`).
+The admin-form page renders the token as a `<input type="hidden">`
+rather than a visible `<input type="password">`. The operator sees
+a form with only the fields they need to fill in themselves:
+username, email, display name, password, and password confirmation.
+The token travels invisibly through the form body and is validated
+by the POST handler exactly as before.
+
+**Changes:**
+
+- `crates/sui-id/src/startup.rs`: new startup banner prints the
+  full URL with `?token=` instead of the raw token string.
+- `WelcomeQuery` (setup handler): gains a `token: Option<String>`
+  field. The language PRG redirect preserves the token with
+  `?token=xxx` so language-switching on the welcome screen doesn't
+  lose it.
+- `render_setup_welcome`: takes a `token: &str` parameter; the
+  "Begin setup" button href and the language-picker links include
+  the token in their query strings.
+- `admin_get` handler: new `SetupAdminQuery { token }` extractor.
+  `render_setup_admin` called with the token string.
+- `render_setup_admin`: takes a `token: &str` parameter; visible
+  `<input type="password">` for the token is replaced by
+  `<input type="hidden" value=token>`. The `autofocus` moves
+  to the username field — the first field the operator actually
+  types into.
+- Error-path re-renders (password mismatch, HIBP block, token
+  invalid) all pass `&form.setup_token` through so the hidden
+  input retains its value across form rejections.
+
+**Security note.** The token appears in the URL (and thus in the
+browser's history, any web-server access log, and any referrer
+header if the page links to external resources). Setup pages link
+to no external resources; the `/setup` path is only accessible
+before the system is initialized; and the token is single-use plus
+process-scoped. The tradeoff is the same as any "magic link" setup
+flow and is acceptable for a local-install setup wizard. Operators
+with stricter requirements can continue to extract the token from
+the URL and supply it programmatically.
+
+### Setup wizard: Chinese language option removed
+
+The setup wizard's two-language picker (`日本語 / English`) no
+longer shows a `中文` option. The core i18n support covers only
+Japanese and English; displaying a Chinese option that resolves to
+a partially-complete translation would be misleading. The Chinese
+locale strings remain in the codebase for completeness.
+
+**Change:** `render_setup_welcome` in `pages/setup.rs` — the third
+picker button and its corresponding href are removed.
+
+### Tests pass count
+
+**228/228** unchanged.
+
+---
+
 ## [0.48.3] — Unreleased
 
 **Verification-phase bug fix: `email` claim missing from ID token.**

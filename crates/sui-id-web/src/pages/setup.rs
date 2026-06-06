@@ -54,43 +54,41 @@ fn setup_step_indicator(active: usize, lang: sui_id_i18n::Locale) -> impl IntoVi
 }
 
 /// Step 1 of 3 — welcome.
-
-pub fn render_setup_welcome(flash: Option<Flash>, lang: sui_id_i18n::Locale) -> String {
+///
+/// v0.48.4: accepts `token` (the setup token from the startup URL) so
+/// the "Begin setup" button can carry it to `/setup/admin?token=xxx`.
+/// The zh language option is removed from the picker (v0.48.4);
+/// the core i18n support covers only ja and en.
+pub fn render_setup_welcome(flash: Option<Flash>, lang: sui_id_i18n::Locale, token: &str) -> String {
+    let token = token.to_owned();
     render(move || {
         let t = lang.strings();
         let current_tag = lang.tag();
-        // v0.48.2: explicit language picker at the top of the
-        // welcome screen. The setup wizard pre-dates any user (no
-        // stored preference) and runs before LANG_COOKIE is set,
-        // so without this picker the wizard locks to whatever the
-        // browser's Accept-Language hints at, which surprises
-        // operators whose OS is in English but who want to set
-        // up a Japanese-locale install (or vice versa).
-        //
-        // Each link is a GET to /setup?lang=xx — the handler
-        // validates, persists LANG_COOKIE, and PRGs to /setup so
-        // every subsequent wizard step sees the chosen locale.
+        let admin_href = if token.is_empty() {
+            "/setup/admin".to_owned()
+        } else {
+            format!("/setup/admin?token={token}")
+        };
+        // Language picker links also carry the token through the PRG redirect.
+        let lang_ja = if token.is_empty() { "/setup?lang=ja".to_owned() }
+                      else { format!("/setup?lang=ja&token={token}") };
+        let lang_en = if token.is_empty() { "/setup?lang=en".to_owned() }
+                      else { format!("/setup?lang=en&token={token}") };
         view! {
             <crate::layout::AuthShell title=t.setup_welcome_title.to_string() lang=lang>
                 {setup_step_indicator(0, lang)}
                 <nav class="setup-lang-picker" aria-label=t.setup_welcome_lang_picker_label>
-                    <a href="/setup?lang=ja"
+                    <a href=lang_ja
                        class={if current_tag == "ja" { "setup-lang-picker__opt setup-lang-picker__opt--active" }
                               else { "setup-lang-picker__opt" }}
                        aria-current={if current_tag == "ja" { "true" } else { "false" }}>
                         "日本語"
                     </a>
-                    <a href="/setup?lang=en"
+                    <a href=lang_en
                        class={if current_tag == "en" { "setup-lang-picker__opt setup-lang-picker__opt--active" }
                               else { "setup-lang-picker__opt" }}
                        aria-current={if current_tag == "en" { "true" } else { "false" }}>
                         "English"
-                    </a>
-                    <a href="/setup?lang=zh"
-                       class={if current_tag == "zh" { "setup-lang-picker__opt setup-lang-picker__opt--active" }
-                              else { "setup-lang-picker__opt" }}
-                       aria-current={if current_tag == "zh" { "true" } else { "false" }}>
-                        "中文"
                     </a>
                 </nav>
                 <h1>{t.setup_welcome_title}</h1>
@@ -98,7 +96,7 @@ pub fn render_setup_welcome(flash: Option<Flash>, lang: sui_id_i18n::Locale) -> 
                 <p class="muted">{t.setup_welcome_lede2}</p>
                 {flash_banner(flash)}
                 <p class="mt-4">
-                    <a href="/setup/admin" class="button">{t.setup_welcome_begin}</a>
+                    <a href=admin_href class="button">{t.setup_welcome_begin}</a>
                 </p>
             </crate::layout::AuthShell>
         }
@@ -106,8 +104,12 @@ pub fn render_setup_welcome(flash: Option<Flash>, lang: sui_id_i18n::Locale) -> 
 }
 
 /// Step 2 of 3 — admin form.
-
-pub fn render_setup_admin(flash: Option<Flash>, lang: sui_id_i18n::Locale) -> String {
+///
+/// v0.48.4: `token` is now a hidden input pre-filled from the URL
+/// parameter rather than a visible text field the operator had to
+/// type. The POST handler validates it from the form body unchanged.
+pub fn render_setup_admin(flash: Option<Flash>, lang: sui_id_i18n::Locale, token: &str) -> String {
+    let token = token.to_owned();
     render(move || {
         let t = lang.strings();
         view! {
@@ -117,16 +119,13 @@ pub fn render_setup_admin(flash: Option<Flash>, lang: sui_id_i18n::Locale) -> St
                 <p class="muted">{t.setup_admin_lede}</p>
                 {flash_banner(flash)}
                 <form method="post" action="/setup/admin" class="stack" autocomplete="off">
-                    <div class="field">
-                        <label for="token" class="field__label">{t.setup_admin_token_label}</label>
-                        <input id="token" name="setup_token" type="password"
-                               required=true autocomplete="off" autofocus=true />
-                        <span class="field__hint">{t.setup_admin_token_hint}</span>
-                    </div>
+                    // v0.48.4: token is carried as a hidden field, pre-filled
+                    // from the URL parameter. Operators no longer see or type it.
+                    <input type="hidden" name="setup_token" value=token />
                     <div class="field">
                         <label for="username" class="field__label">{t.setup_admin_username_label}</label>
                         <input id="username" name="username" type="text"
-                               required=true autocomplete="username" />
+                               required=true autocomplete="username" autofocus=true />
                     </div>
                     <div class="field">
                         <label for="email" class="field__label">{t.setup_admin_email_label}</label>
