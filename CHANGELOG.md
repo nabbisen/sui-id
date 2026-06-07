@@ -5,6 +5,91 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.50.0] — Unreleased
+
+**Phase 1 of the Mockup Integration arc opens with `RFC-MI-010`
+(Component CSS Sharding).** The single monolithic
+`crates/sui-id-web/src/components.rs` (1094 lines) is split into
+eleven bounded shards under `components/`. This is the first release
+in the MI arc that modifies **Rust source code**. No visible UI
+change is introduced; the split is purely structural.
+
+---
+
+### Component CSS sharding (`RFC-MI-010`)
+
+The `components.rs` CSS family is reorganised into eleven shards,
+each owning one user-facing concern:
+
+| Shard | Concern |
+|---|---|
+| `chrome.rs` | base reset, typography, Shell layout, page-header, theme toggle, responsive |
+| `cards.rs` | card, panel, callout, metric, empty-state primitives |
+| `forms.rs` | label, hint, validation, required marker |
+| `tables.rs` | table, wrapping, copy-cell affordances |
+| `buttons.rs` | button variants (primary, secondary, danger, ghost, link) |
+| `banners.rs` | inline flash, standalone banners, dev-mode banner |
+| `badges.rs` | `status_badge`, `StatusKind`, status CSS variants |
+| `tabs.rs` | route-based tab strips |
+| `confirm.rs` | reversibility badge, confirm-shell visual cues |
+| `setup.rs` | auth-card centred layout, setup-wizard language picker |
+| `utilities.rs` | RFC 067 bounded utility-class set |
+
+`components.rs` becomes a 130-line umbrella that declares the
+submodules, re-exports `StatusKind` and `status_badge` for backward
+compatibility, and concatenates each shard's CSS in source order.
+
+**Cascade preservation.** Several shards expose multiple sub-constants
+(`CHROME_BASE_CSS`, `CHROME_TYPOGRAPHY_CSS`, `CHROME_LAYOUT_CSS`,
+…) to capture the original interleaving order. Programmatic
+verification: all 25 sub-constants concatenated in source order
+produce a byte-identical CSS body (same MD5 after blank-line
+normalisation) compared with v0.49.1's monolithic string.
+
+**API adjustment.** The RFC's §6 sketch declared
+`pub const COMPONENTS_CSS: &str = concat!(…)` over per-shard
+constants. Rust's `concat!()` accepts only string literals, not
+`const` items; the implementation instead exposes:
+
+```rust
+pub fn components_css() -> &'static str
+```
+
+backed by `std::sync::OnceLock<String>`. Both call sites in
+`layout.rs` were updated. Full explanation in the RFC's
+implementation note.
+
+`StatusKind` and `status_badge` move to `components/badges.rs` and
+are re-exported from `components.rs` so every existing import path
+(`crate::components::StatusKind`, `sui_id_web::StatusKind`,
+`crate::components::status_badge`) continues to compile unchanged.
+
+### Tests, CI, and compatibility
+
+- `cargo check --workspace` passes clean (0 errors, 0 warnings).
+- **228/228 library tests pass** (same 6 executable test binaries,
+  same counts per crate as v0.49.x).
+- All four MI-tracked CI invariants hold at their v0.49.1 values:
+  `text-leaks` = 0, `css-tokens` = 148 declarations,
+  `semantic-palette-parity` = 36 (12 × 3),
+  `inline-style-bound` = 17 (ceiling = 20).
+- No class name changes anywhere in this RFC.
+- No route or handler changes.
+- Zero behaviour change: deploying v0.49.1 → v0.50.0 yields an
+  identical rendered page for every screen.
+
+### RFC-MI-010 → `rfcs/done/`
+
+`rfcs/README.md` Proposed MI table now lists 14 entries (was 15);
+RFC-MI-010 appears in the Implemented table alongside RFC-MI-000.
+
+### Version bumps
+
+- Workspace, all six crate `Cargo.toml`, and `Cargo.lock`:
+  `0.49.1` → `0.50.0`.
+
+---
+
 ## [0.49.1] — Unreleased
 
 **Phase 0 of the Mockup Integration arc completes.** The six

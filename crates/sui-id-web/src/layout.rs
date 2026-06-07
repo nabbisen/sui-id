@@ -15,7 +15,7 @@
 //!   accessibility badges.
 //! - The admin nav (when `show_nav` is true).
 
-use crate::components::COMPONENTS_CSS;
+use crate::components::components_css;
 use crate::tokens::TOKENS_CSS;
 use leptos::prelude::*;
 
@@ -34,7 +34,7 @@ pub fn Shell(
     #[prop(optional)] dev_mode: Option<bool>,
     children: Children,
 ) -> impl IntoView {
-    let stylesheet = format!("{}\n{}", TOKENS_CSS, COMPONENTS_CSS);
+    let stylesheet = format!("{}\n{}", TOKENS_CSS, components_css());
     let lang_tag = lang.tag();
     let dir_attr = lang.direction();
     view! {
@@ -78,7 +78,7 @@ pub fn AuthShell(
     lang: sui_id_i18n::Locale,
     children: Children,
 ) -> impl IntoView {
-    let stylesheet = format!("{}\n{}", TOKENS_CSS, COMPONENTS_CSS);
+    let stylesheet = format!("{}\n{}", TOKENS_CSS, components_css());
     let lang_tag = lang.tag();
     let dir_attr = lang.direction();
     view! {

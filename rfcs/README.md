@@ -68,21 +68,20 @@ artifacts the rest of the arc references live under
 
 | Order | ID | Title | Phase |
 |------:|----|-------|-------|
-| 1 | [RFC-MI-010](./proposed/RFC-MI-010-component-css-sharding.md) | Component CSS Sharding and Export Discipline | Phase 1 |
-| 2 | [RFC-MI-011](./proposed/RFC-MI-011-token-mapping-visual-primitives.md) | Mockup Token Mapping and Visual Primitive Adoption | Phase 1 |
-| 3 | [RFC-MI-012](./proposed/RFC-MI-012-theme-persistence.md) | Theme Persistence Decision | Phase 1 |
-| 4 | [RFC-MI-020](./proposed/RFC-MI-020-shell-layout-integration.md) | Shell Layout Integration | Phase 2 |
-| 5 | [RFC-MI-021](./proposed/RFC-MI-021-server-rendered-csrf-shell.md) | Server-Rendered CSRF for Shell-Level Forms | Phase 2 |
-| 6 | [RFC-MI-022](./proposed/RFC-MI-022-route-based-tab-component.md) | Route-Based Tab Component | Phase 2 |
-| 7 | [RFC-MI-030](./proposed/RFC-MI-030-dashboard-summary.md) | Dashboard and Summary Surface Integration | Phase 3 |
-| 8 | [RFC-MI-031](./proposed/RFC-MI-031-audit-readonly-tables.md) | Audit Log and Read-Only Table Integration | Phase 3 |
-| 9 | [RFC-MI-040](./proposed/RFC-MI-040-setup-wizard-ux.md) | Setup Wizard UX Integration | Phase 4 |
-| 10 | [RFC-MI-041](./proposed/RFC-MI-041-authentication-surfaces.md) | Authentication Surface Integration | Phase 4 |
-| 11 | [RFC-MI-050](./proposed/RFC-MI-050-form-system-validation.md) | Form System and Validation Feedback | Phase 5 |
-| 12 | [RFC-MI-051](./proposed/RFC-MI-051-danger-confirmation.md) | Danger Zone and Confirmation Screen Integration | Phase 5 |
-| 13 | [RFC-MI-060](./proposed/RFC-MI-060-self-service-security-tabs.md) | Self-Service Security Tab Integration | Phase 6 |
-| 14 | [RFC-MI-070](./proposed/RFC-MI-070-oidc-consent-ux.md) | OIDC Consent UX Integration | Phase 7 |
-| 15 | [RFC-MI-080](./proposed/RFC-MI-080-ui-regression-a11y-hardening.md) | UI Regression and Accessibility Hardening | Phase 8 |
+| 1 | [RFC-MI-011](./proposed/RFC-MI-011-token-mapping-visual-primitives.md) | Mockup Token Mapping and Visual Primitive Adoption | Phase 1 |
+| 2 | [RFC-MI-012](./proposed/RFC-MI-012-theme-persistence.md) | Theme Persistence Decision | Phase 1 |
+| 3 | [RFC-MI-020](./proposed/RFC-MI-020-shell-layout-integration.md) | Shell Layout Integration | Phase 2 |
+| 4 | [RFC-MI-021](./proposed/RFC-MI-021-server-rendered-csrf-shell.md) | Server-Rendered CSRF for Shell-Level Forms | Phase 2 |
+| 5 | [RFC-MI-022](./proposed/RFC-MI-022-route-based-tab-component.md) | Route-Based Tab Component | Phase 2 |
+| 6 | [RFC-MI-030](./proposed/RFC-MI-030-dashboard-summary.md) | Dashboard and Summary Surface Integration | Phase 3 |
+| 7 | [RFC-MI-031](./proposed/RFC-MI-031-audit-readonly-tables.md) | Audit Log and Read-Only Table Integration | Phase 3 |
+| 8 | [RFC-MI-040](./proposed/RFC-MI-040-setup-wizard-ux.md) | Setup Wizard UX Integration | Phase 4 |
+| 9 | [RFC-MI-041](./proposed/RFC-MI-041-authentication-surfaces.md) | Authentication Surface Integration | Phase 4 |
+| 10 | [RFC-MI-050](./proposed/RFC-MI-050-form-system-validation.md) | Form System and Validation Feedback | Phase 5 |
+| 11 | [RFC-MI-051](./proposed/RFC-MI-051-danger-confirmation.md) | Danger Zone and Confirmation Screen Integration | Phase 5 |
+| 12 | [RFC-MI-060](./proposed/RFC-MI-060-self-service-security-tabs.md) | Self-Service Security Tab Integration | Phase 6 |
+| 13 | [RFC-MI-070](./proposed/RFC-MI-070-oidc-consent-ux.md) | OIDC Consent UX Integration | Phase 7 |
+| 14 | [RFC-MI-080](./proposed/RFC-MI-080-ui-regression-a11y-hardening.md) | UI Regression and Accessibility Hardening | Phase 8 |
 
 Phase-1 blockers, restated for visibility:
 
@@ -107,6 +106,7 @@ Phase-1 blockers, restated for visibility:
 
 | ID  | Title                                                          | Shipped in |
 |-----|----------------------------------------------------------------|------------|
+| MI-010 | [Component CSS Sharding and Export Discipline](./done/RFC-MI-010-component-css-sharding.md) | v0.50.0 |
 | MI-000 | [Baseline Delta Inventory and Integration Mapping Contract](./done/RFC-MI-000-baseline-delta-inventory.md) | v0.49.1 |
 | 068 | [`handlers/me_security.rs` split per tab domain](./done/068-me-security-handlers-split.md) | v0.48.0 |
 | 067 | [Inline-style discipline + CI bound](./done/067-inline-style-discipline.md) | v0.48.0 |
