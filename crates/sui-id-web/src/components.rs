@@ -62,6 +62,8 @@ pub mod utilities;
 // resolve unchanged.
 pub use badges::{status_badge, StatusKind};
 pub use tabs::{route_tabs, RouteTab};
+pub use setup::{SetupStep, StepState};
+pub use forms::FieldError;
 
 /// The concatenated component stylesheet served by [`crate::layout`].
 ///

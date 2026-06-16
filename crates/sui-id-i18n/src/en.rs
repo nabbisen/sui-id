@@ -12,6 +12,7 @@ pub static STRINGS_EN: Strings = Strings {
     button_back: "Back",
     button_continue: "Continue",
     button_delete: "Delete",
+    danger_zone_title: "Danger Zone",
     button_create: "Create",
     button_confirm: "Confirm",
     button_test: "Test",
@@ -594,6 +595,7 @@ pub static STRINGS_EN: Strings = Strings {
     user_detail_sessions_th_expires: "Expires",
     user_detail_sessions_th_factors: "Factors",
     user_detail_activity_section: "Recent activity",
+    user_detail_danger_zone_body: "These actions affect this user's access and may be permanent. Each leads to a confirmation step.",
 
     // Settings section keys
     settings_page_title_template: "Settings",

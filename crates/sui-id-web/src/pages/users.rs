@@ -268,19 +268,6 @@ pub fn render_user_detail(data: UserDetailData, lang: sui_id_i18n::Locale) -> St
                             <p class="muted text-caption">{email}</p>
                         })}
                     </div>
-                    <div class="row" style="gap:var(--space-2);align-self:flex-start">
-                        {data.totp_enabled.then(|| view! {
-                            <a href=reset_mfa_confirm_url.clone() class="button secondary">
-                                {t.confirm_reset_mfa_button}
-                            </a>
-                        })}
-                        <a href=disable_confirm_url class="button secondary">
-                            {if data.is_disabled { t.confirm_enable_button } else { t.confirm_disable_button }}
-                        </a>
-                        <a href=delete_confirm_url class="button danger">
-                            {t.button_delete}
-                        </a>
-                    </div>
                 </header>
 
                 <section class="card mb-4">
@@ -342,6 +329,28 @@ pub fn render_user_detail(data: UserDetailData, lang: sui_id_i18n::Locale) -> St
                                 view! { <tbody>{audit_rows}</tbody> }.into_any()
                             }}
                         </table>
+                    </div>
+                </section>
+
+                // RFC-MI-051: danger zone — physically and semantically
+                // isolates destructive operations from the read surface.
+                <section class="danger-zone">
+                    <h2 class="danger-zone__title">
+                        "⚠ " {t.danger_zone_title}
+                    </h2>
+                    <p class="danger-zone__body">{t.user_detail_danger_zone_body}</p>
+                    <div class="form-actions">
+                        {data.totp_enabled.then(|| view! {
+                            <a href=reset_mfa_confirm_url class="button secondary">
+                                {t.confirm_reset_mfa_button}
+                            </a>
+                        })}
+                        <a href=disable_confirm_url class="button secondary">
+                            {if data.is_disabled { t.confirm_enable_button } else { t.confirm_disable_button }}
+                        </a>
+                        <a href=delete_confirm_url class="button danger">
+                            {t.button_delete}
+                        </a>
                     </div>
                 </section>
             </Shell>

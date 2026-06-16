@@ -12,6 +12,7 @@ pub static STRINGS_JA: Strings = Strings {
     button_back: "戻る",
     button_continue: "続行",
     button_delete: "削除",
+    danger_zone_title: "危険な操作",
     button_create: "作成",
     button_confirm: "確認",
     button_test: "テスト",
@@ -593,6 +594,7 @@ pub static STRINGS_JA: Strings = Strings {
     user_detail_sessions_th_expires: "期限",
     user_detail_sessions_th_factors: "認証方式",
     user_detail_activity_section: "最近のアクティビティ",
+    user_detail_danger_zone_body: "これらの操作はユーザーのアクセスに影響し、取り消せない場合があります。各操作には確認が必要です。",
 
     // 設定セクションキー
     settings_page_title_template: "設定",

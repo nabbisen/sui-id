@@ -3,13 +3,61 @@
 ```toml
 id = "RFC-MI-050"
 title = "Form System and Validation Feedback"
-status = "Proposed"
+status = "Implemented (v0.54.0)"
 phase = "Phase 5"
 created = "2026-05-18"
+implemented = "2026-05-18"
 project = "sui-id"
 scope = "Mockup integration into sui-id v0.48.4"
 language = "English"
 ```
+
+## Implementation note (added on transition to `done/`)
+
+Implemented in **v0.54.0** alongside RFC-MI-051.
+
+### Changes made
+
+**New form primitives in `components/forms.rs`:**
+
+The following CSS classes were already present from earlier work
+(v0.52.0 or earlier): `.form-actions`, `.form-section`,
+`.form-section__title`, `.form-grid`. Two were still missing and
+are added in this release:
+
+- **`.field--required`** — appends a visible red asterisk (`*`)
+  after the field label via `::after`. The pseudo-element is
+  CSS-generated content and is aria-hidden by default; an
+  explicit visible note or `required` attribute should still be
+  present.
+- **`.review-summary`** — a pre-submit summary panel
+  (`surface-subtle` background + `border-muted` border +
+  `radius-md`). Used for settings confirmations and review
+  screens.
+
+**No `FieldError` / `FormAction` / `FormActionKind` Rust helpers**
+are introduced. The RFC §7 notes "Do not over-generalize" and the
+existing page-specific form handling is explicit and clear.
+
+**The users.rs inline style is eliminated** as a side effect of
+RFC-MI-051: the `<div class="row" style="gap:…;align-self:flex-start">`
+action button row is removed from the page header (moved into the
+danger zone section). `inline-style-bound` drops from 5 to **4**.
+
+### Acceptance criteria
+
+- [x] Common field classes exist: `.field`, `.field__label`,
+  `.field__hint`, `.field__error`, `.field--required`,
+  `.form-actions`, `.form-section`, `.form-grid`, `.review-summary`.
+- [x] Invalid fields have accessible error markup (`.field--invalid`
+  + `aria-invalid` on inputs — markup discipline, not enforced by
+  CSS).
+- [x] Sensitive values not re-rendered (existing page-level
+  contracts unchanged; this RFC adds no new re-render logic).
+- [x] Forms submit without JavaScript (unchanged).
+- [x] CSRF hidden inputs remain explicit (unchanged).
+
+---
 
 ## 1. Summary
 

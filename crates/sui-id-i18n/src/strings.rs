@@ -23,6 +23,7 @@ pub struct Strings {
     pub button_back: &'static str,
     pub button_continue: &'static str,
     pub button_delete: &'static str,
+    pub danger_zone_title: &'static str,
     pub button_create: &'static str,
     pub button_confirm: &'static str,
     pub button_test: &'static str,
@@ -542,6 +543,8 @@ pub struct Strings {
     pub user_detail_sessions_th_expires: &'static str,
     pub user_detail_sessions_th_factors: &'static str,
     pub user_detail_activity_section: &'static str,
+    /// Description paragraph inside the user-detail danger zone.
+    pub user_detail_danger_zone_body: &'static str,
     // ---- Settings: common sections (RFC 029 second pass) ----
     pub settings_page_title_template: &'static str, // "{tab} — Settings"
     // Basic tab sections

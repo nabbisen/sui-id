@@ -85,4 +85,73 @@ input[type="checkbox"], input[type="radio"] {
   outline-color: var(--danger-default);
 }
 
+/* ── Form layout primitives (RFC-MI-050, v0.54.0) ───────────────────── */
+/* .form-actions  — flex row for primary / secondary / cancel buttons.   */
+/*                  align-self:flex-start prevents stretching inside a   */
+/*                  flex column or flex-end-aligned header row.          */
+/* .form-section  — labelled group within a longer form, with a top      */
+/*                  separator and section heading.                       */
+/* .form-grid     — two-column field layout for spacious screens; degrades*/
+/*                  to single column at narrow viewport (via chrome.rs). */
+
+.form-actions {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  flex-wrap: wrap;
+  align-self: flex-start;
+}
+.form-section {
+  border-top: var(--border-width-default) solid var(--border-muted);
+  padding-top: var(--space-4);
+  margin-top: var(--space-4);
+}
+.form-section__title {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  margin: 0 0 var(--space-3);
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-3);
+}
+
+/* ── Remaining form primitives (RFC-MI-050, v0.54.0) ───────────────── */
+/* .field--required — marks a field as required. A visible asterisk      */
+/*   appears after the label text via ::after. The asterisk is           */
+/*   aria-hidden by CSS; use a visually-hidden "required" note or a      */
+/*   form-level note to convey the requirement to AT users.              */
+/* .review-summary  — a pre-submit summary panel listing the values the  */
+/*   operator is about to save. Used on settings confirmations.          */
+.field--required .field__label::after {
+  content: ' *';
+  color: var(--danger-default);
+  font-weight: var(--font-weight-medium);
+  aria-hidden: true; /* ::after content is not exposed to AT */
+}
+.review-summary {
+  background: var(--surface-subtle);
+  border: var(--border-width-default) solid var(--border-muted);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+}
+
 "#;
+
+/// A single server-validated field error (RFC-MI-050, v0.54.0).
+///
+/// Field errors are render-only state. They must never be persisted
+/// to the database and must never be inferred from data that could
+/// reveal whether an account exists (anti-enumeration constraint).
+///
+/// Usage: collect errors in the handler after form parsing, pass as
+/// `Vec<FieldError>` to the render function, and render each error
+/// adjacent to its input with `aria-describedby` + `aria-invalid`.
+#[derive(Debug, Clone)]
+pub struct FieldError {
+    /// The `id` attribute of the field this error belongs to.
+    pub field: &'static str,
+    /// Localised error message (resolved at the handler layer).
+    pub message: String,
+}

@@ -29,25 +29,27 @@ fn setup_step_indicator(active: usize, lang: sui_id_i18n::Locale) -> impl IntoVi
             } else {
                 view! { <span class="badge">{format!("{}", i + 1)}</span> }.into_any()
             };
-            let style = if is_active {
-                "color:var(--fg-default);font-weight:var(--font-weight-medium)"
+            // RFC-MI-040: use CSS classes instead of inline style= attributes.
+            // .setup-step__label--current / --done / --upcoming defined in
+            // components/setup.rs (via StepState::label_class).
+            let label_cls = if is_active {
+                "setup-step__label--current"
             } else if i < active {
-                "color:var(--fg-muted)"
+                "setup-step__label--done"
             } else {
-                "color:var(--fg-subtle)"
+                "setup-step__label--upcoming"
             };
             view! {
                 <span class="row gap1-center" aria-current=aria>
                     {badge}
-                    <span style=style>{*label}</span>
+                    <span class=label_cls>{*label}</span>
                 </span>
             }
         })
         .collect();
     view! {
-        <nav class="row"
-             aria-label=t.setup_steps_aria
-             style="gap:var(--space-3);justify-content:center;margin-bottom:var(--space-4);flex-wrap:wrap;font-size:var(--font-size-caption)">
+        // RFC-MI-040: .setup-steps replaces the inline style= on this nav.
+        <nav class="setup-steps" aria-label=t.setup_steps_aria>
             {dots}
         </nav>
     }

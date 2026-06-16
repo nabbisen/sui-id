@@ -3,13 +3,77 @@
 ```toml
 id = "RFC-MI-051"
 title = "Danger Zone and Confirmation Screen Integration"
-status = "Proposed"
+status = "Implemented (v0.54.0)"
 phase = "Phase 5"
 created = "2026-05-18"
+implemented = "2026-05-18"
 project = "sui-id"
 scope = "Mockup integration into sui-id v0.48.4"
 language = "English"
 ```
+
+## Implementation note (added on transition to `done/`)
+
+Implemented in **v0.54.0** alongside RFC-MI-050.
+
+### Changes made
+
+**`components/confirm.rs`** — The `.danger-zone` and
+`.impact-summary` CSS families were already present in this shard
+from an earlier preparatory commit. The shard docstring was updated
+to reference RFC-MI-051 (v0.54.0) as the formal implementation.
+
+**`pages/users.rs`** — Restructured so destructive operations no
+longer appear in the page header:
+
+- The `<div class="row" style="…">` action button row is **removed
+  from the page header** (this also eliminates the last non-oidc
+  inline style; `inline-style-bound` drops 5 → 4).
+- A new `<section class="danger-zone">` is appended **after all
+  read surfaces** (auth info, sessions, activity). The section
+  contains:
+  - `<h2 class="danger-zone__title">⚠ {t.danger_zone_title}</h2>`
+  - `<p class="danger-zone__body">{t.user_detail_danger_zone_body}</p>`
+  - Action buttons: Reset MFA (if enrolled), Disable/Enable, Delete
+  - Buttons wrapped in `<div class="form-actions">` (no inline style)
+
+**New i18n key `user_detail_danger_zone_body`** added to `Strings`,
+`en.rs`, `ja.rs`, `zh.rs`. The existing `danger_zone_title` key
+is reused.
+
+**Confirmation routes unchanged.** Every action link still points
+to its dedicated GET confirmation route:
+`/admin/users/{id}/delete-confirm`,
+`/admin/users/{id}/disable-confirm`,
+`/admin/users/{uid}/mfa-reset-confirm`. These routes require
+a CSRF-protected POST; the confirmation page collects a reason;
+audit logging fires on the POST.
+
+**Clients and signing keys** — these detail pages have no inline
+styles and already link to their confirmation routes; no structural
+change is needed in this release. A future RFC may apply the same
+danger-zone restructuring for visual consistency.
+
+**Impact summaries on confirm pages** — deferred. The confirm
+screens already describe the target and action clearly. Adding
+structured `ConfirmImpactItem` lists would require handler-side
+changes to compute and pass them; deferred to a maintenance RFC.
+
+### Acceptance criteria
+
+- [x] No destructive action is inline-only (all actions lead to a
+  confirmation route with CSRF).
+- [x] Existing confirmation routes remain (unchanged).
+- [x] CSRF is present on all destructive POSTs (unchanged; the
+  confirmation POST forms carry `_csrf`).
+- [x] Step-up requirements preserved (unchanged; the confirmation
+  handler enforces step-up).
+- [x] Audit event behavior preserved (unchanged).
+- [x] Danger meaning accessible without color (the `.danger-zone`
+  section uses a text heading ("⚠ Danger Zone") and a body
+  paragraph; the color is redundant emphasis only).
+
+---
 
 ## 1. Summary
 

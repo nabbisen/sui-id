@@ -15,6 +15,7 @@ pub static STRINGS_ZH: Strings = Strings {
     button_back: "返回",
     button_continue: "继续",
     button_delete: "删除",
+    danger_zone_title: "危险操作",
     button_create: "创建",
     button_confirm: "确认",
     button_test: "测试",
@@ -597,6 +598,7 @@ pub static STRINGS_ZH: Strings = Strings {
     user_detail_sessions_th_expires: "过期时间",
     user_detail_sessions_th_factors: "认证因素",
     user_detail_activity_section: "近期活动",
+    user_detail_danger_zone_body: "这些操作会影响此用户的访问权限，可能无法撤销。每项操作都需要确认步骤。",
 
     // 设置页面分区键
     settings_page_title_template: "设置",

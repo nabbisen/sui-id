@@ -5,6 +5,132 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.54.0] — Unreleased
+
+**Phase 5 complete: `RFC-MI-050` (Form System + Validation) and
+`RFC-MI-051` (Danger Zone + Confirmation).** `inline-style-bound`
+drops from 5 to **4** — only `pages/oidc.rs` (×4, owned by
+RFC-MI-070 Phase 7) remains.
+
+---
+
+### Form system: two missing primitives (`RFC-MI-050`)
+
+**`.field--required`** added to `components/forms.rs`. Appends a
+red `*` after the label via `::after` (CSS-generated; aria-hidden
+by default; supplement with `required` HTML attribute for full
+accessibility).
+
+**`.review-summary`** added to `components/forms.rs`. A
+`surface-subtle` panel for pre-submit value review.
+
+The other form primitives (`.form-actions`, `.form-section`,
+`.form-section__title`, `.form-grid`) were already present.
+
+No `FieldError` / `FormAction` Rust helper structs introduced —
+the RFC §7 says "Do not over-generalize."
+
+### Danger zone: user detail page restructured (`RFC-MI-051`)
+
+**`components/confirm.rs`** — `.danger-zone` + `.impact-summary`
+CSS families were already present; shard docstring updated.
+
+**`pages/users.rs`** restructured:
+- Action buttons (Reset MFA, Disable/Enable, Delete) **removed
+  from page header** — the `<div class="row" style="…">` wrapper
+  is gone, eliminating the last non-oidc inline style.
+- A **`<section class="danger-zone">`** appended after all read
+  surfaces (auth info → sessions → activity → danger zone).
+  Contains: `⚠ Danger Zone` heading, explanation paragraph, action
+  buttons in `<div class="form-actions">`.
+
+**New i18n key `user_detail_danger_zone_body`** in all three locales
+(en / ja / zh).
+
+All confirmation routes unchanged: every link leads to a
+GET-then-POST confirm page with CSRF, step-up, and audit logging.
+
+### Tests, CI, and compatibility
+
+- `cargo check -p sui-id-web` clean.
+- **228/228 library tests pass**.
+- `text-leaks` = 0, `css-tokens` = 148, `semantic-parity` = 36,
+  **`inline-style-bound` = 4** (was 5; −1 from users.rs).
+
+### 14 of 16 MI RFCs now in `done/`
+
+Only RFC-MI-060 (Phase 6), RFC-MI-070 (Phase 7), and RFC-MI-080
+(Phase 8) remain.
+
+### Version bumps
+
+`0.53.1` → `0.54.0` across workspace, all six crates, `Cargo.lock`.
+
+---
+
+## [0.53.1] — Unreleased
+
+**Phase 4 complete.** `RFC-MI-040` (Setup Wizard UX Integration)
+ships — the second Phase-4 RFC (after MI-041 in v0.53.0).
+
+---
+
+### `StepState` enum and `SetupStep` struct (public API)
+
+Added to `components/setup.rs`, re-exported from `components.rs`:
+
+- **`StepState`** — `Complete | Current | Upcoming`, with
+  `label_class() -> &'static str` mapping each variant to one of
+  the three CSS classes below.
+- **`SetupStep`** — `{ key: &'static str, label: String, state: StepState }`.
+  Available for handler-layer render data.
+
+### `.setup-steps` and step label CSS classes
+
+Three new classes added to `components/setup.rs`:
+
+- `.setup-steps` — flex row, centered, caption-size, wraps.
+  Replaces the step indicator nav's inline
+  `style="gap:…;justify-content:center;…"`.
+- `.setup-step__label--current` — `color: --fg-default; font-weight: medium`.
+- `.setup-step__label--done` — `color: --fg-muted`.
+- `.setup-step__label--upcoming` — `color: --fg-subtle`.
+
+### Two inline styles eliminated in `pages/setup.rs`
+
+`setup_step_indicator()` rewritten to use the classes above:
+the `style=style` computed string and the nav container
+`style="…"` are both replaced with class attributes.
+`inline-style-bound` drops **7 → 5**.
+
+### Setup flow unchanged
+
+Five steps (Welcome, Admin, Language, HIBP, Done), same badge
+system, same `aria-current="step"` on the active entry. Setup token
+URL parameter model unchanged. No route contracts changed. No render
+function signatures changed. No i18n keys added.
+
+### Tests, CI, and compatibility
+
+- `cargo check -p sui-id-web` clean.
+- **228/228 library tests pass**.
+- `text-leaks` = 0, `css-tokens` = 148, `semantic-parity` = 36,
+  **`inline-style-bound` = 5** (was 7; −2).
+
+### Phase 4 complete — 12 of 16 MI RFCs now in `done/`
+
+| RFC | Release |
+|---|---|
+| RFC-MI-041 (auth surfaces) | v0.53.0 |
+| RFC-MI-040 (setup wizard) | **v0.53.1** (this release) |
+
+### Version bumps
+
+`0.53.0` → `0.53.1` across workspace, all six crates, and
+`Cargo.lock`.
+
+---
+
 ## [0.53.0] — Unreleased
 
 **Phase 4 opens with `RFC-MI-041` (Authentication Surface

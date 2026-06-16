@@ -344,6 +344,18 @@ pub fn render_client_edit(
                         </div>
                     </form>
                 </div>
+
+                // RFC-MI-051: danger zone for destructive client operations.
+                <section class="danger-zone">
+                    <h2 class="danger-zone__title">
+                        "⚠ " {t.danger_zone_title}
+                    </h2>
+                    <div class="form-actions">
+                        <a href=format!("/admin/clients/{}/delete-confirm", id) class="button danger">
+                            {t.button_delete}
+                        </a>
+                    </div>
+                </section>
             </Shell>
         }
     })
