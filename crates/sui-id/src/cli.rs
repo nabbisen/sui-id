@@ -96,11 +96,15 @@ pub(crate) fn run_verify_backup_subcommand(args: &[String]) -> Result<()> {
 
 /// Dispatcher for `sui-id admin <subaction> ...`. Currently the only
 /// admin subaction is `unlock-user`, but the surface is shaped to grow.
-pub(crate) fn run_admin_subcommand(args: &[String]) -> Result<()> {
+/// NOTE: async because `main` is `#[tokio::main]` — constructing a second
+/// runtime here (`Runtime::new().block_on`) panics with "Cannot start a
+/// runtime from within a runtime". Surfaced during RFC 077 smoke testing;
+/// the same fix is applied to all async subcommands.
+pub(crate) async fn run_admin_subcommand(args: &[String]) -> Result<()> {
     let action = args.get(2).map(String::as_str);
     match action {
-        Some("unlock-user") => tokio::runtime::Runtime::new().unwrap().block_on(run_admin_unlock_user(args)),
-        Some("rotate-key") => tokio::runtime::Runtime::new().unwrap().block_on(run_admin_rotate_key(args)),
+        Some("unlock-user") => run_admin_unlock_user(args).await,
+        Some("rotate-key") => run_admin_rotate_key(args).await,
         Some(other) => bail!(
             "unknown admin subaction `{other}`. Known subactions: unlock-user, rotate-key"
         ),
@@ -357,6 +361,107 @@ pub(crate) async fn run_admin_rotate_key(args: &[String]) -> Result<()> {
     Ok(())
 }
 
+/// `sui-id setup --admin-username NAME [--admin-email EMAIL]
+///               [--admin-display-name NAME] [--config PATH]`
+///
+/// RFC 077: headless initialization. Creates the first administrator
+/// and bootstraps a signing key without the GUI wizard, enabling
+/// provisioning via Ansible, cloud-init, Docker entrypoints, etc.
+///
+/// Password resolution (deliberately no `--admin-password` flag —
+/// command-line arguments leak into shell history and `ps` output):
+///
+///   1. `SUI_ID_ADMIN_PASSWORD` env var, if set — validated at
+///      Standard level (12+ chars).
+///   2. Otherwise a random 24-char password is generated, stored with
+///      `must_change = true`, and printed ONCE to stdout.
+///
+/// stdout carries only the credential block (machine-capturable);
+/// diagnostics go to stderr.
+///
+/// No setup token: this path requires filesystem access to the
+/// database and master key, which already implies control of the
+/// instance (same trust model as `admin unlock-user`). The web
+/// wizard keeps its boot-time token because it is network-reachable.
+pub(crate) async fn run_setup_subcommand(args: &[String]) -> Result<()> {
+    run_setup(args).await
+}
+
+async fn run_setup(args: &[String]) -> Result<()> {
+    fn flag_value<'a>(args: &'a [String], name: &str) -> Option<&'a str> {
+        args.iter()
+            .position(|a| a == name)
+            .and_then(|i| args.get(i + 1))
+            .map(String::as_str)
+    }
+
+    let username = flag_value(args, "--admin-username")
+        .filter(|s| !s.trim().is_empty())
+        .context("setup requires --admin-username NAME")?;
+    let email = flag_value(args, "--admin-email");
+    let display_name = flag_value(args, "--admin-display-name");
+
+    let config_path = parse_config_path(args).unwrap_or_else(|| PathBuf::from("./sui-id.toml"));
+    let cfg = Config::load(&config_path)
+        .with_context(|| format!("loading config from {}", config_path.display()))?;
+
+    let resolved = sui_id::keyring::resolve(&cfg.storage.key_file)
+        .context("loading master key")?;
+    let db = sui_id_store::Database::open(&cfg.storage.db_path, resolved.key)
+        .context("opening database")?;
+
+    let clock = sui_id_core::time::system_clock();
+
+    // Password: env var wins; otherwise generate and flag for rotation.
+    let env_password = std::env::var("SUI_ID_ADMIN_PASSWORD")
+        .ok()
+        .filter(|s| !s.is_empty());
+    let (password, generated): (zeroize::Zeroizing<String>, bool) = match env_password {
+        Some(p) => (zeroize::Zeroizing::new(p), false),
+        None => (sui_id_core::setup::generate_admin_password(), true),
+    };
+
+    let created = sui_id_core::setup::create_initial_admin_headless(
+        &db,
+        &clock,
+        username,
+        &password,
+        display_name,
+        email,
+        /* must_change */ generated,
+    )
+    .await
+    .map_err(|e| match e {
+        sui_id_core::errors::CoreError::AlreadyInitialized => {
+            anyhow::anyhow!("this instance is already initialized; setup can only run once")
+        }
+        other => anyhow::anyhow!("{other}"),
+    })?;
+
+    let login_url = format!(
+        "{}/admin/login",
+        cfg.server.issuer.trim_end_matches('/')
+    );
+
+    eprintln!("sui-id initialized (admin id={}).", created.user_id);
+    println!();
+    println!("============ INITIAL ADMIN CREDENTIALS ============");
+    println!("  username: {}", created.username);
+    if generated {
+        println!("  password: {}", password.as_str());
+    }
+    println!("  login:    {}", login_url);
+    println!("===================================================");
+    println!();
+    if generated {
+        println!("This password is shown only once. Change it after first");
+        println!("login at /me/security/password.");
+    } else {
+        println!("Password taken from SUI_ID_ADMIN_PASSWORD.");
+    }
+    Ok(())
+}
+
 /// Read a passphrase from stdin (interactive TTY) or from the
 /// `SUI_ID_BACKUP_PASSPHRASE` environment variable (for cron and
 /// scripted use). When `confirm` is true and we're on a TTY, the
@@ -459,6 +564,15 @@ SUBCOMMANDS:
                              this. The previous key file is renamed to
                              '<original>.bak.<timestamp>' beside it; the
                              new key is written to the configured path.
+    setup                    Headless initialization (RFC 077). Creates the
+                             first administrator and bootstraps a signing
+                             key without the GUI wizard. Requires
+                             --admin-username; accepts --admin-email and
+                             --admin-display-name. The password comes from
+                             SUI_ID_ADMIN_PASSWORD if set; otherwise a
+                             random one is generated and printed ONCE to
+                             stdout (change it after first login). Fails
+                             if the instance is already initialized.
                              Use --generate-new-key (default) for the
                              CLI to mint a fresh key, or --new-key PATH
                              to provide one you prepared yourself. Use
@@ -508,6 +622,8 @@ ENVIRONMENT:
                              Overrides the key file if set.
     SUI_ID_BACKUP_PASSPHRASE Passphrase for `--encrypt` / `--decrypt`,
                              when running non-interactively (cron, scripts).
+    SUI_ID_ADMIN_PASSWORD    Initial admin password for `setup`. If unset,
+                             a random password is generated and printed.
 
 DOCUMENTATION:
     See README.md and docs/operators.md for the operator's guide.

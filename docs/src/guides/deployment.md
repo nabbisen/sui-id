@@ -269,6 +269,39 @@ resulting score.
 
 ## 7. Bootstrap the admin
 
+There are two ways to initialize. **Option A is recommended** for
+automated or reproducible deployments.
+
+### Option A — headless CLI
+
+Run `sui-id setup` **before** starting the service, or while it is stopped:
+
+```bash
+sudo -u sui-id sui-id setup \
+  --config /etc/sui-id/sui-id.toml \
+  --admin-username admin \
+  --admin-email admin@idp.example.com
+```
+
+A random 24-character password is printed once to stdout. Save it
+immediately. Then start (or restart) the service:
+
+```bash
+systemctl start sui-id
+```
+
+For fully unattended provisioning, supply the password via environment
+variable — it will not appear in stdout:
+
+```bash
+SUI_ID_ADMIN_PASSWORD="$(systemd-creds cat sui-id-admin-password)" \
+  sudo -u sui-id sui-id setup \
+    --config /etc/sui-id/sui-id.toml \
+    --admin-username admin
+```
+
+### Option B — browser wizard
+
 The first start logs a one-time setup token to stderr. Capture it
 from the journal:
 

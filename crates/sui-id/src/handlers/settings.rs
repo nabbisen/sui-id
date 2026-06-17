@@ -157,7 +157,7 @@ pub struct IdleTimeoutForm {
 
 pub async fn idle_timeout_post(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id): CurrentAdmin,
+    CurrentAdmin(_admin_id): CurrentAdmin,
     jar: CookieJar,
     axum::Form(form): axum::Form<IdleTimeoutForm>,
 ) -> Result<Response, HttpError> {
@@ -188,7 +188,7 @@ pub struct MaxSessionsForm {
 
 pub async fn max_sessions_post(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id): CurrentAdmin,
+    CurrentAdmin(_admin_id): CurrentAdmin,
     jar: CookieJar,
     axum::Form(form): axum::Form<MaxSessionsForm>,
 ) -> Result<Response, HttpError> {

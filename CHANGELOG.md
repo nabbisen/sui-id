@@ -5,6 +5,101 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.63.0] — 2026-06-04
+
+**RFC 077 — Headless setup (`sui-id setup` subcommand).**
+
+### Problem
+
+sui-id could only be initialized through the browser-based setup wizard,
+blocking automation (Ansible, cloud-init, Docker entrypoints, CI smoke
+tests). The wizard remains unchanged for operators who prefer it.
+
+### New subcommand: `sui-id setup`
+
+```
+sui-id setup --config <path> --admin-username <name>
+             [--admin-email <email>] [--admin-display-name <name>]
+```
+
+Runs against the configured database directly — same `Config::load` →
+`keyring::resolve` → `Database::open` path as `backup`/`admin`. No
+setup token required: filesystem access to the database and master key
+already implies host control (same trust model as `admin unlock-user`).
+Fails immediately with exit 1 if the instance is already initialized.
+
+### Password security
+
+There is **no `--admin-password` flag** — command-line arguments leak
+into shell history and `ps` output.
+
+Resolution order:
+
+1. **`SUI_ID_ADMIN_PASSWORD` env var**, if set and non-empty. Validated
+   at `SecurityLevel::Standard` (12+ chars). For provisioning tools
+   that manage secrets already (Ansible vault, Docker secrets).
+2. **Generated password** — 24 alphanumeric characters from the OS RNG
+   (≈143 bits of entropy, rejection-sampled to avoid modulo bias,
+   stored in `Zeroizing<String>`). Printed **once** to stdout in a
+   clearly delimited block with a change advisory. Credential row is
+   stored with `must_change = true` to record the intent durably.
+
+stdout carries only the credential block (machine-capturable).
+All diagnostics (`sui-id initialized (admin id=...)`) go to stderr.
+
+```
+============ INITIAL ADMIN CREDENTIALS ============
+  username: <name>
+  password: <generated>          ← absent when env-var is used
+===================================================
+
+This password is shown only once. Change it after first
+login at /me/security/password.
+```
+
+### Core changes (`sui-id-core/src/setup.rs`)
+
+- `create_initial_admin_headless(db, clock, username, password,
+  display_name, email, must_change)` — new public function, skips
+  the setup-token check, passes `must_change` through to the credential
+  row, records `note: "headless"` in the audit entry.
+- `generate_admin_password() -> Zeroizing<String>` — new function.
+- `create_initial_admin_inner(...)` — new private helper shared by
+  both paths; the web-wizard function delegates to it unchanged.
+
+### Latent bug fixed: nested Tokio runtime panic
+
+`sui-id admin unlock-user` and `admin rotate-key` called
+`Runtime::new().block_on()` inside `#[tokio::main]`, which always
+panics with "Cannot start a runtime from within a runtime". This was
+discovered during the RFC 077 live smoke test. All three async
+subcommand wrappers (`run_admin_subcommand`, `run_setup_subcommand`)
+are now `async fn`; `main.rs` dispatches them with `.await`.
+
+### Tests
+
+Seven new tests in `sui-id-core/src/setup.rs`:
+
+| Test | Guards |
+|---|---|
+| `generated_password_is_24_alphanumeric_chars` | Length and alphabet |
+| `generated_passwords_differ_across_calls` | RNG freshness |
+| `generated_password_satisfies_standard_policy` | Policy integration |
+| `headless_setup_creates_admin_and_marks_initialized` | Happy path; `must_change` persisted |
+| `headless_setup_fails_when_already_initialized` | Idempotency guard |
+| `headless_setup_enforces_standard_password_policy` | "changeme" rejected |
+| `web_wizard_path_still_requires_matching_token` | Existing path untouched; `must_change = false` |
+
+**125/125 library tests pass** (7 more than v0.62.4).
+CI invariants unchanged.
+
+### Docs
+
+`docs/src/reference/configuration.md` subcommand table updated.
+`rfcs/done/077-headless-setup.md` added.
+
+---
+
 ## [0.62.4] — 2026-06-04
 
 **Security level — principled password policy thresholds.**

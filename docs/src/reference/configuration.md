@@ -125,6 +125,7 @@ CLI arguments — apply only to the current process invocation, not persisted.
 
 | Subcommand | Description |
 |---|---|
+| `sui-id setup --config <c> --admin-username <name>` | **Headless initialization (RFC 077).** Creates the first administrator and bootstraps a signing key without the GUI wizard. Accepts `--admin-email` and `--admin-display-name`. Password comes from `SUI_ID_ADMIN_PASSWORD` env var if set; otherwise a random 24-char password is generated and printed once to stdout with a change advisory. Fails if the instance is already initialized. |
 | `sui-id backup --config <c> --dest <path>` | Create an encrypted archive of the database and key file. |
 | `sui-id restore --config <c> --src <path>` | Restore from an archive. Prompts for confirmation before overwriting. |
 | `sui-id verify-backup --src <path>` | Verify archive integrity and print a compatibility report without writing files. |

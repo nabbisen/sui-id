@@ -47,13 +47,25 @@ On first run sui-id:
 2. Prints a one-time **setup token** to stderr.
 3. Waits at the setup wizard (`/setup`).
 
+**Option A — headless CLI (no browser needed):**
+
+Stop the server (Ctrl-C), then run:
+
+```sh
+sui-id setup --config ./sui-id.toml --admin-username admin
+```
+
+A random password is printed once to stdout. Then restart the server.
+
+**Option B — browser wizard:**
+
 Open a browser to `http://127.0.0.1:8801/setup` and complete the three-step wizard:
 
 - **Language** — choose the admin UI language.
 - **Security** — configure HIBP breach-password checking.
 - **Admin account** — enter the setup token and create the first administrator.
 
-After setup, the admin panel is available at `/admin`.
+After setup (either option), the admin panel is available at `/admin`.
 
 ## Try it locally (dev mode)
 

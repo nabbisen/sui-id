@@ -297,6 +297,48 @@ meant.
 
 ## First run
 
+There are two ways to initialize sui-id.
+
+### Option A — Headless CLI (recommended for automation)
+
+No browser required. Run `sui-id setup` before starting the server:
+
+```sh
+sui-id setup --config /etc/sui-id/sui-id.toml \
+             --admin-username admin \
+             --admin-email admin@example.com
+```
+
+A random 24-character password is generated and printed **once** to
+stdout. Record it — it won't appear again.
+
+```
+============ INITIAL ADMIN CREDENTIALS ============
+  username: admin
+  password: SPGWoK2zlmLaU5uYYSyPirVw
+===================================================
+
+This password is shown only once. Change it after first
+login at /me/security/password.
+```
+
+For scripted provisioning (Ansible, cloud-init, Docker), supply the
+password via the `SUI_ID_ADMIN_PASSWORD` environment variable instead
+— it does not appear on stdout in this case:
+
+```sh
+SUI_ID_ADMIN_PASSWORD="$(vault kv get -field=password secret/sui-id)" \
+  sui-id setup --config /etc/sui-id/sui-id.toml --admin-username admin
+```
+
+There is **no `--admin-password` flag** — command-line arguments leak
+into shell history and `ps` output.
+
+After `setup` exits with code 0, start the server normally with
+`sui-id --config ...`. The `/setup` wizard will redirect to `/admin/login`.
+
+### Option B — Browser wizard
+
 1. Start sui-id. It will print a setup token to stderr that looks like:
 
    ```
