@@ -1,9 +1,31 @@
 # Operator's guide
 
 > **Scope.** sui-id is a single-realm, first-party IdP. One flat
-> namespace of users, one of clients, one global admin role. For
+> namespace of users, one of clients, three human roles. For
 > multi-tenant requirements see RFC 025. For the project's design
 > philosophy see the Scope section in [README.md](../README.md).
+
+## Roles
+
+sui-id has three human roles:
+
+| Role | Admin UI | Mutations | Self-service (`/me/*`) |
+|---|---|---|---|
+| **admin** | Full read + write | Yes | Yes |
+| **auditor** | Full read | No — every POST/DELETE returns 403 | Yes |
+| **user** | None | — | Yes |
+
+Admins change a user's role from the user-detail page ("Access role"
+section). The last admin account cannot be demoted — the role-change
+form refuses and shows an error.
+
+An **auditor** sees users, clients, audit log, signing keys, and
+settings in read-only form. All mutation controls (Add User, Edit,
+Delete, Disable, Rotate, Save) are hidden. Auditors authenticate via
+the same login flow as admins; they have their own `/me/*` self-service
+pages.
+
+
 
 
 This is a *reference* for the operational surface of sui-id —

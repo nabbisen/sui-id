@@ -90,6 +90,14 @@ Phase-1 blockers resolved:
 All three UX-rethink RFCs identified in the post-MI-arc audit are now
 implemented. The remaining items in `rfcs/proposed/` are post-1.0
 exploratory work (federation, LDAP, metrics, multi-tenant, etc.).
+
+### Proposed — pre-1.0 polish
+
+| RFC | Title | Priority | Scope |
+|-----|-------|----------|-------|
+| 074 | [Navigation restructuring and UX polish](./proposed/074-nav-ux-polish.md) | P2 | Admin user-menu dropdown, "Apps" rename, settings tabs 6→4, last-login line |
+
+
 ### Proposed — maintenance / dependency refresh
 
 All maintenance RFCs from this category are implemented. See the

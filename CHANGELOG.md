@@ -5,7 +5,26 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.60.0] — Unreleased
+## [0.60.1] — 2026-05-23
+
+**Documentation and housekeeping.**
+
+- All previously "Unreleased" CHANGELOG entries dated from archive timestamps.
+- `README.md`: Scope section updated to describe the three-role model
+  (admin / auditor / user) introduced in v0.59.0. Features list extended
+  with the three items delivered by the UX-rethink arc (RFC 071–073).
+- `docs/src/getting-started/overview.md`: new "Human roles" section.
+- `docs/src/guides/operators.md`: Scope callout updated; new Roles
+  reference table added.
+- `rfcs/proposed/074-nav-ux-polish.md`: new RFC capturing four deferred
+  pre-1.0 polish items (user-menu dropdown, "Apps" nav rename, settings
+  tabs 6→4, last-login anti-phishing line).
+- `ROADMAP.md` Status block updated for v0.60.0 arc completion + RFC 074.
+- No code changes; CI invariants unchanged.
+
+---
+
+## [0.60.0] — 2026-05-23
 
 **RFC 072 — End-user app-access surface.** Completes the three-RFC
 UX-rethink arc. Users can now see which OAuth clients hold a consent
@@ -59,7 +78,7 @@ DB lookup.
 
 ---
 
-## [0.59.0] — Unreleased
+## [0.59.0] — 2026-05-22
 
 **RFC 071 — Auditor role.** Adds a third human role (`auditor`) with
 read-only access to all admin surfaces. No deployment with more than one
@@ -129,7 +148,7 @@ refused with a localised error message. The check uses a new
 
 ---
 
-## [0.58.0] — Unreleased
+## [0.58.0] — 2026-05-22
 
 **RFC 073 — Dashboard action items.** The admin dashboard now surfaces
 operational concerns rather than just vanity counts.
@@ -185,7 +204,7 @@ to `rfcs/proposed/` — the next two items in the UX rethink arc.
 
 ---
 
-## [0.57.1] — Unreleased
+## [0.57.1] — 2026-05-21
 
 **Dependency refresh: RFC 069 (rand 0.10) + RFC 070 (ureq → reqwest).**
 No user-visible behaviour changes; test suite unchanged (228/228 pass).
@@ -239,7 +258,7 @@ correct: `client.check(password).await`.
 
 ---
 
-## [0.57.0] — Unreleased
+## [0.57.0] — 2026-05-19
 
 **Phase 8 complete: `RFC-MI-080` (UI Regression and Accessibility
 Hardening). The Mockup Integration arc is fully closed.**
@@ -299,7 +318,7 @@ Six documents under `docs/src/mockup-integration/`:
 
 ---
 
-## [0.56.0] — Unreleased
+## [0.56.0] — 2026-05-19
 
 **Phase 7 complete: `RFC-MI-070` (OIDC Consent UX Integration).**
 
@@ -370,7 +389,7 @@ are `<button>` elements with equal keyboard access.
 
 ---
 
-## [0.55.0] — Unreleased
+## [0.55.0] — 2026-05-19
 
 **Phase 6 complete: `RFC-MI-060` (Self-Service Security Tab Integration).**
 The last deferred item from RFC-MI-022 is resolved.
@@ -428,7 +447,7 @@ committed to `rfcs/done/RFC-MI-060`.
 
 ---
 
-## [0.54.0] — Unreleased
+## [0.54.0] — 2026-05-19
 
 **Phase 5 complete: `RFC-MI-050` (Form System + Validation) and
 `RFC-MI-051` (Danger Zone + Confirmation).** `inline-style-bound`
@@ -491,7 +510,7 @@ Only RFC-MI-060 (Phase 6), RFC-MI-070 (Phase 7), and RFC-MI-080
 
 ---
 
-## [0.53.1] — Unreleased
+## [0.53.1] — 2026-05-19
 
 **Phase 4 complete.** `RFC-MI-040` (Setup Wizard UX Integration)
 ships — the second Phase-4 RFC (after MI-041 in v0.53.0).
@@ -554,7 +573,7 @@ function signatures changed. No i18n keys added.
 
 ---
 
-## [0.53.0] — Unreleased
+## [0.53.0] — 2026-05-18
 
 **Phase 4 opens with `RFC-MI-041` (Authentication Surface
 Integration).** Shipped **ahead of `RFC-MI-040`** at user request —
@@ -622,7 +641,7 @@ call site needs updating.
 
 ---
 
-## [0.52.0] — Unreleased
+## [0.52.0] — 2026-05-18
 
 **Phase 3 complete: read-only admin screens.** `RFC-MI-030`
 (Dashboard) and `RFC-MI-031` (Audit + Tables) ship together.
@@ -697,7 +716,7 @@ state updated to `colspan="6"`.
 
 ---
 
-## [0.51.1] — Unreleased
+## [0.51.1] — 2026-05-18
 
 **Phase 2 complete.** `RFC-MI-022` (Route-Based Tab Component)
 ships — the last Phase 2 RFC. Phase 2 is now fully closed.
@@ -760,7 +779,7 @@ Workspace, all six crate `Cargo.toml`, and `Cargo.lock`:
 
 ---
 
-## [0.51.0] — Unreleased
+## [0.51.0] — 2026-05-18
 
 **Phase 2 of the Mockup Integration arc opens with `RFC-MI-020`
 (Shell Layout — decision record) and `RFC-MI-021` (Server-Rendered
@@ -818,7 +837,7 @@ Workspace, all six crate `Cargo.toml`, and `Cargo.lock`:
 
 ---
 
-## [0.50.1] — Unreleased
+## [0.50.1] — 2026-05-18
 
 **Phase 1 of the Mockup Integration arc completes.** `RFC-MI-011`
 (Token Mapping + Visual Primitive Adoption) and `RFC-MI-012` (Theme
@@ -898,7 +917,7 @@ Workspace, all six crate `Cargo.toml`, and `Cargo.lock`:
 
 ---
 
-## [0.50.0] — Unreleased
+## [0.50.0] — 2026-05-18
 
 **Phase 1 of the Mockup Integration arc opens with `RFC-MI-010`
 (Component CSS Sharding).** The single monolithic
@@ -983,7 +1002,7 @@ RFC-MI-010 appears in the Implemented table alongside RFC-MI-000.
 
 ---
 
-## [0.49.1] — Unreleased
+## [0.49.1] — 2026-05-18
 
 **Phase 0 of the Mockup Integration arc completes.** The six
 baseline-inventory documents specified by `RFC-MI-000` are produced
@@ -1076,7 +1095,7 @@ The status block restates the verification phase position and the
 
 ---
 
-## [0.49.0] — Unreleased
+## [0.49.0] — 2026-05-18
 
 **Opens the Mockup Integration ("MI") development arc.** Sixteen
 proposed RFCs (`RFC-MI-000` through `RFC-MI-080`) and the supporting
@@ -1197,7 +1216,7 @@ sequence as the MI phases ship.
 
 ---
 
-## [0.48.4] — Unreleased
+## [0.48.4] — 2026-05-17
 
 **Verification-phase UX improvements: setup token via URL parameter;
 setup wizard Chinese language option removed.**
@@ -1282,7 +1301,7 @@ picker button and its corresponding href are removed.
 
 ---
 
-## [0.48.3] — Unreleased
+## [0.48.3] — 2026-05-17
 
 **Verification-phase bug fix: `email` claim missing from ID token.**
 
@@ -1363,7 +1382,7 @@ inline-style-bound 16/20).
 
 ---
 
-## [0.48.2] — Unreleased
+## [0.48.2] — 2026-05-17
 
 **Verification-pass buffer.** Six issues surfaced in the same
 real-environment verification round that produced v0.48.1. None
@@ -1532,7 +1551,7 @@ None.
 
 ---
 
-## [0.48.1] — Unreleased
+## [0.48.1] — 2026-05-17
 
 **Verification-phase hotfix.** Three serious bugs surfaced in
 actual-environment testing of v0.48.0 at `localhost:8801` after
@@ -1696,7 +1715,7 @@ verification-pass buffer release, *not* a v1.0 candidate):
 
 ---
 
-## [0.48.0] — Unreleased
+## [0.48.0] — 2026-05-17
 
 **Phase F final buffer: `handlers/me_security.rs` split (RFC 068)
 plus inline-style discipline (RFC 067).** Phase F began at v0.47.0
@@ -1884,7 +1903,7 @@ v1**.
 
 ---
 
-## [0.47.1] — Unreleased
+## [0.47.1] — 2026-05-17
 
 **Phase F continuation: `handlers/admin.rs` split per screen domain
 (RFC 066).** This is the second of three Phase F releases; RFC 067
@@ -2008,7 +2027,7 @@ v0.48.0 is the final Phase F buffer release; v1.0-rc1 follows.
 
 ---
 
-## [0.47.0] — Unreleased
+## [0.47.0] — 2026-05-17
 
 **Phase F (partial) of the v0.42 → v1.0-rc UI/UX hardening plan:
 code structure cleanup.** This is the only Phase F release in v0.47.x;
@@ -2162,7 +2181,7 @@ None. Public API surface (`sui_id_web::*`) unchanged.
 
 ---
 
-## [0.46.0] — Unreleased
+## [0.46.0] — 2026-05-16
 
 **Phase E of the v0.42 → v1.0-rc UI/UX hardening plan: honest visual
 hierarchy.** The PDF asked for warnings that draw the eye, primary
@@ -2307,7 +2326,7 @@ changes only.
 
 ---
 
-## [0.45.0] — Unreleased
+## [0.45.0] — 2026-05-16
 
 **Phase D of the v0.42 → v1.0-rc UI/UX hardening plan: dangerous
 operations make themselves visible.** The PDF defines this as one of
@@ -2473,7 +2492,7 @@ self-service `note: "self"` discriminator; nothing was removed).
 
 ---
 
-## [0.44.0] — Unreleased
+## [0.44.0] — 2026-05-16
 
 **Phase C of the v0.42 → v1.0-rc UI/UX hardening plan.** Two parallel
 implementations of user self-service — `/admin/profile` (single page)
@@ -2631,7 +2650,7 @@ i18n 12 · web 0 · shared 13 · store 36 · core 114 = **175/175**.
 
 ---
 
-## [0.43.0] — Unreleased
+## [0.43.0] — 2026-05-16
 
 **Phase B of the v0.42 → v1.0-rc UI/UX hardening plan.** This release
 completes the per-screen i18n sweep across every admin page. v0.42.0
@@ -2783,7 +2802,7 @@ in RFC 051, but a dedicated audit pass is still planned for Phase C.
 
 ---
 
-## [0.42.0] — Unreleased
+## [0.42.0] — 2026-05-16
 
 **Phase A of the v0.42 → v1.0-rc UI/UX hardening plan.** This release
 addresses three correctness gaps that left the v0.41.0 admin panel
@@ -2930,7 +2949,7 @@ in this release as the CI pipeline will do that on PR.
 
 ---
 
-## [0.41.0] — Unreleased
+## [0.41.0] — 2026-05-15
 
 **P2 polish pass + RFC 040 completion.** This release fills the two
 tabs left empty in v0.40.0 (`/me/security/mfa` and

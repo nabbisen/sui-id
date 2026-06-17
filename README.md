@@ -28,10 +28,12 @@ can keep healthy on a single VM.
 ## Scope
 
 sui-id is a **single-realm, first-party IdP.** It manages one flat
-namespace of users, one flat namespace of clients, and one global
-admin role. There is no `tenant_id` column, no organisation table,
-no group table, and no per-tenant scoping anywhere in the schema.
-This is a deliberate design choice, not an oversight.
+namespace of users, one flat namespace of clients, and three human
+roles: **admin** (full control), **auditor** (read-only access to all
+admin surfaces), and **user** (end-user self-service only). There is
+no `tenant_id` column, no organisation table, no group table, and no
+per-tenant scoping anywhere in the schema. This is a deliberate design
+choice, not an oversight.
 
 If your use-case is a **single organisation or product** where all
 users belong to the same namespace and all clients are first-party
@@ -131,6 +133,15 @@ After setup, point your relying party at:
 - TOML configuration; master key resolved from env or file
 - Single-process, single-binary, single-file deployment
 - Built on Rust 1.91 with `unsafe_code = "forbid"` enforced workspace-wide
+- **Three operator roles:** admin (full control), auditor (read-only across
+  all admin surfaces), user (self-service only); role-change UI with
+  last-admin safeguard
+- **Actionable dashboard:** Getting Started checklist for fresh instances;
+  action items surface admins without MFA, ageing signing keys, stuck email
+  outbox, and outstanding password resets
+- **Self-service app-access review:** users can see which OAuth clients hold
+  a consent grant, when each was last used, and revoke any grant with
+  immediate refresh-token invalidation
 
 ## Design notes
 

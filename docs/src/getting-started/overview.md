@@ -36,6 +36,22 @@ This is a deliberate design choice: it keeps the schema and the admin UI
 minimal. If you need per-tenant user isolation, see RFC 025 in the
 [roadmap](https://github.com/nabbisen/sui-id/blob/main/ROADMAP.md).
 
+### Human roles
+
+Three human roles exist in sui-id:
+
+- **Admin** — full read/write access to all admin surfaces. Created at
+  setup; additional admins can be added and role-changed by any existing admin.
+- **Auditor** — read-only access to all admin surfaces. Cannot mutate any
+  state; all POST/DELETE routes return 403 for this role. Useful for
+  compliance reviewers, on-call SREs, or incident-response staff who need
+  visibility without mutation capability.
+- **User** — end-user self-service only (`/me/*`). This is the default role
+  for all accounts created through the OIDC consent flow or admin user creation.
+
+All three roles have access to `/me/security/*` (password, MFA, passkeys,
+sessions) and `/me/apps` (review and revoke OAuth consent grants).
+
 ### Supported flows
 
 - Authorization Code + PKCE (S256) — the only supported grant type for interactive login.
