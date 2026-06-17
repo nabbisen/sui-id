@@ -21,6 +21,9 @@ pub struct CreateUserSpec<'a> {
     /// setup wizard recommends but does not enforce filling it in.
     pub email: Option<&'a str>,
     pub is_admin: bool,
+    /// Effective password minimum length — `PASSWORD_MIN_LEN` in
+    /// production, `PASSWORD_MIN_LEN_DEV` when running with `--dev`.
+    pub min_password_len: usize,
 }
 
 pub async fn create_user(
@@ -35,7 +38,7 @@ pub async fn create_user(
     if spec.username.trim().is_empty() {
         return Err(CoreError::BadRequest("username must not be empty".into()));
     }
-    check_password_policy(spec.password)?;
+    check_password_policy(spec.password, spec.min_password_len)?;
     // RFC 041: enforce HIBP consistently with all other password entrypoints.
     let hibp_result = hibp::enforce_hibp(hibp_mode, hibp_client, spec.password).await;
     let hibp_warned = matches!(hibp_result, HibpEnforcement::AllowedWithWarning { .. });
@@ -259,9 +262,10 @@ pub async fn reset_user_password(
     actor: UserId,
     target: UserId,
     new_password: &str,
+    min_password_len: usize,
 ) -> CoreResult<()> {
     require_admin(db, actor).await?;
-    check_password_policy(new_password)?;
+    check_password_policy(new_password, min_password_len)?;
 
     // RFC 003: HIBP breach check on admin-driven password reset.
     // Fail-open: network failures let the reset through.

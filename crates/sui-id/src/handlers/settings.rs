@@ -215,7 +215,7 @@ pub async fn authentication_get(
     let State(app) = state_ext;
     let cfg = app.config.as_ref();
     let data = sui_id_web::SettingsAuthenticationData {
-        password_min_length: 12,
+        password_min_length: app.security_level().password_min_len(),
         password_argon2id: "Argon2id".into(),
         totp_enabled_per_user: true,
         webauthn_enabled_per_user: true,

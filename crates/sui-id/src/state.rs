@@ -84,4 +84,18 @@ impl AppState {
     pub fn issuer(&self) -> &str {
         self.config.server.issuer.trim_end_matches('/')
     }
+
+    /// Active security level for this process.
+    ///
+    /// Returns `SecurityLevel::Development` when running with `--dev`
+    /// and `SecurityLevel::Standard` otherwise. Use this to obtain
+    /// level-appropriate thresholds (e.g. `security_level().password_min_len()`)
+    /// rather than branching on `is_dev_mode` directly at call sites.
+    pub fn security_level(&self) -> sui_id_core::security::SecurityLevel {
+        if self.is_dev_mode {
+            sui_id_core::security::SecurityLevel::Development
+        } else {
+            sui_id_core::security::SecurityLevel::Standard
+        }
+    }
 }

@@ -103,6 +103,7 @@ pub async fn password_change_post(
         &form.new_password,
         Some(keep),
         revoke_others,
+        crate::handlers::password_min_len(&app),
     ).await
     .map_err(HttpError::html)?;
 

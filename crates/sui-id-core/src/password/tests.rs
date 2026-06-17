@@ -1,4 +1,5 @@
 use super::*;
+use crate::security::SecurityLevel;
 
 #[test]
 fn hash_then_verify_roundtrips() {
@@ -21,14 +22,48 @@ fn malformed_stored_hash_returns_password_error() {
 }
 
 #[test]
-fn policy_rejects_short_passwords() {
-    let r = check_password_policy("short");
+fn policy_rejects_short_passwords_at_standard_level() {
+    let min = SecurityLevel::Standard.password_min_len();
+    let r = check_password_policy("short", min);
     assert!(matches!(r, Err(CoreError::BadRequest(_))));
 }
 
 #[test]
+fn policy_accepts_standard_minimum_length() {
+    let min = SecurityLevel::Standard.password_min_len();
+    // "a-perfectly-" = 12 chars — exactly at the Standard floor
+    check_password_policy("a-perfectly-", min).expect("policy");
+}
+
+#[test]
 fn policy_accepts_reasonable_length_password() {
-    check_password_policy("a-perfectly-reasonable-pass").expect("policy");
+    let min = SecurityLevel::Standard.password_min_len();
+    check_password_policy("a-perfectly-reasonable-pass", min).expect("policy");
+}
+
+/// In Development mode, 8-char passwords (e.g. "changeme") must be accepted.
+/// This ensures the dev-mode relaxation works correctly without touching
+/// the Standard-level path.
+#[test]
+fn policy_accepts_dev_password_at_development_level() {
+    let min = SecurityLevel::Development.password_min_len();
+    check_password_policy("changeme", min).expect("dev-mode 8-char password");
+}
+
+/// Passwords shorter than the Development floor are still rejected.
+#[test]
+fn policy_rejects_too_short_even_at_development_level() {
+    let min = SecurityLevel::Development.password_min_len();
+    let r = check_password_policy("short", min);
+    assert!(matches!(r, Err(CoreError::BadRequest(_))));
+}
+
+/// Standard-level must reject a Development-only password.
+#[test]
+fn standard_rejects_development_password() {
+    let min = SecurityLevel::Standard.password_min_len();
+    let r = check_password_policy("changeme", min); // 8 chars < 12
+    assert!(matches!(r, Err(CoreError::BadRequest(_))));
 }
 
 // ---------- property-based tests (v0.13.0) ----------

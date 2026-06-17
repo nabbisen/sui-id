@@ -5,6 +5,68 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.62.4] — 2026-06-04
+
+**Security level — principled password policy thresholds.**
+
+### Problem
+
+The previous approach introduced two ad-hoc constants (`PASSWORD_MIN_LEN = 12`,
+`PASSWORD_MIN_LEN_DEV = 8`) scattered in `password.rs`. This is fragile —
+adding another security threshold (e.g. session minimum lifetime, token
+length) would produce more scattered constants with no coherent model.
+
+### Design: `SecurityLevel`
+
+A new `sui_id_core::security::SecurityLevel` enum replaces the constants.
+Each variant defines a coherent set of policy defaults, modelled after
+browser security/privacy tiers (strict / standard / relaxed).
+
+```
+Standard     — full security; production deployments
+Development  — relaxed constraints; --dev flag only; never production
+```
+
+`SecurityLevel` has one method per threshold:
+
+| Method | Standard | Development |
+|---|---|---|
+| `password_min_len()` | 12 | 8 |
+
+Future thresholds (session lifetime, rate-limit ceiling, etc.) are added
+as methods here — no scattered constants, no new files.
+
+### Changes
+
+- **`crates/sui-id-core/src/security.rs`** — new file; `SecurityLevel`
+  enum with `password_min_len()` method and full doc commentary.
+- **`crates/sui-id-core/src/lib.rs`** — `pub mod security` registered.
+- **`crates/sui-id-core/src/password.rs`** — constants removed; doc updated.
+- **`crates/sui-id-core/src/setup.rs`** — uses
+  `SecurityLevel::Standard.password_min_len()` (setup is always Standard).
+- **`crates/sui-id/src/state.rs`** — `AppState::security_level()` derives
+  the active level from `is_dev_mode`; avoids branching at call sites.
+- **`crates/sui-id/src/handlers.rs`** — `password_min_len(&app)` helper
+  delegates to `app.security_level().password_min_len()`.
+- **`crates/sui-id/src/handlers/settings.rs`** — authentication settings
+  display uses `app.security_level().password_min_len()` (shows 8 in
+  `--dev` mode, 12 in production).
+- **All 4 core function call sites** threaded as before (no change in
+  mechanics, only in the source of the value).
+
+### Tests
+
+Four new tests in `password/tests.rs`:
+- `policy_accepts_standard_minimum_length` — exactly 12 chars passes at Standard
+- `policy_accepts_dev_password_at_development_level` — "changeme" (8) passes at Development
+- `policy_rejects_too_short_even_at_development_level` — "short" (5) rejected at Development
+- `standard_rejects_development_password` — "changeme" (8) rejected at Standard
+
+**118/118 library tests pass** (4 more than v0.62.3).
+CI invariants unchanged.
+
+---
+
 ## [0.62.3] — 2026-06-04
 
 **RFC 6749 §4.1.2.1 compliance — authorize endpoint error handling.**

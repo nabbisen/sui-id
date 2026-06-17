@@ -652,3 +652,13 @@ pub async fn resolve_admin_locale(
     // 3. Hardcoded fallback
     sui_id_i18n::Locale::Ja
 }
+
+/// Effective minimum password length for the current run mode.
+///
+/// Delegates to `AppState::security_level().password_min_len()` so
+/// handler code stays concise and consistent with other level-driven
+/// thresholds.
+#[inline]
+pub fn password_min_len(app: &crate::state::AppState) -> usize {
+    app.security_level().password_min_len()
+}

@@ -192,6 +192,7 @@ pub async fn reset_password_post(
         &form.token,
         &form.password,
         Some(&ip_str),
+        crate::handlers::password_min_len(&app),
     ).await
     {
         Ok(()) => Ok(Redirect::to("/admin/login?reset=ok").into_response()),

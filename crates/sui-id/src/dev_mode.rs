@@ -430,6 +430,9 @@ pub async fn apply_seed(
                 display_name: u.display_name.as_deref(),
                 email: u.email.as_deref(),
                 is_admin: false,
+                // dev_mode always runs at Development level
+                min_password_len: sui_id_core::security::SecurityLevel::Development
+                    .password_min_len(),
             },
         ).await
         .with_context(|| format!("creating dev-mode user {:?}", u.username))?;

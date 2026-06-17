@@ -8,6 +8,7 @@
 use zeroize::Zeroizing;
 use crate::errors::{CoreError, CoreResult};
 use crate::password::{check_password_policy, hash_password};
+use crate::security::SecurityLevel;
 use crate::time::SharedClock;
 use chrono::Utc;
 use ed25519_dalek::SigningKey;
@@ -46,7 +47,9 @@ pub async fn create_initial_admin(
     if username.trim().is_empty() {
         return Err(CoreError::BadRequest("username must not be empty".into()));
     }
-    check_password_policy(password)?;
+    // Setup always runs at Standard level — dev mode seeds the DB directly
+    // via dev_mode.rs and never goes through the setup wizard.
+    check_password_policy(password, SecurityLevel::Standard.password_min_len())?;
 
     let now = clock.now();
 

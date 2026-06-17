@@ -114,6 +114,7 @@ pub async fn users_create(
             display_name: display,
             email,
             is_admin,
+            min_password_len: crate::handlers::password_min_len(&app),
         },
     ).await;
 

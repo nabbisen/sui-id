@@ -41,10 +41,14 @@ pub fn verify_password(password: &str, stored_phc: &str) -> CoreResult<()> {
 
 /// Reasonable minimum-length policy. Intentionally lenient on character
 /// classes: NIST SP 800-63B advises *against* composition rules.
-pub fn check_password_policy(password: &str) -> CoreResult<()> {
-    if password.chars().count() < 12 {
+///
+/// `min_len` comes from `SecurityLevel::password_min_len()` — 12 for
+/// production, 8 in `--dev` mode. Core functions receive the value
+/// from their callers so this function stays unaware of the run mode.
+pub fn check_password_policy(password: &str, min_len: usize) -> CoreResult<()> {
+    if password.chars().count() < min_len {
         return Err(CoreError::BadRequest(
-            "password must be at least 12 characters long".into(),
+            format!("password must be at least {min_len} characters long"),
         ));
     }
     if password.chars().count() > 256 {

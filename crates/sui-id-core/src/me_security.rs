@@ -69,6 +69,7 @@ pub async fn change_password_self(
     new_password: &str,
     keep_current_session: Option<SessionId>,
     revoke_others: bool,
+    min_password_len: usize,
 ) -> CoreResult<PasswordChangeReport> {
     // 1. Load the existing credential row. If it's missing, the
     //    user account exists without a password (shouldn't happen
@@ -86,7 +87,7 @@ pub async fn change_password_self(
     //    so that someone fishing for "is X my password?" via this
     //    endpoint doesn't get differentiated errors based on
     //    whether their guess passed policy.
-    password::check_password_policy(new_password)?;
+    password::check_password_policy(new_password, min_password_len)?;
 
     // 3b. RFC 003: HIBP breach check. Enforced here for consistency with
     //     the setup wizard. Fail-open: network errors let the change
@@ -221,6 +222,7 @@ mod tests {
             "the-new-tester-password",
             None,
             false,
+        crate::security::SecurityLevel::Standard.password_min_len(),
         ).await
         .expect("change");
         assert_eq!(r.sessions_revoked, 0);
@@ -246,6 +248,7 @@ mod tests {
             "the-new-tester-password",
             None,
             false,
+        crate::security::SecurityLevel::Standard.password_min_len(),
         ).await;
         assert!(matches!(r, Err(CoreError::InvalidCredentials)));
         // Stored hash is unchanged.
@@ -268,6 +271,7 @@ mod tests {
             "short",
             None,
             false,
+        crate::security::SecurityLevel::Standard.password_min_len(),
         ).await;
         assert!(matches!(r, Err(CoreError::BadRequest(_))), "{r:?}");
         // Stored hash unchanged — failure must not partially apply.
@@ -303,6 +307,7 @@ mod tests {
             "the-new-tester-password",
             None,
             false,
+        crate::security::SecurityLevel::Standard.password_min_len(),
         ).await
         .expect("change");
         let row = credentials::get(&db, uid).await.expect("cred");
@@ -324,6 +329,7 @@ mod tests {
             "the-new-tester-password",
             None,
             false,
+        crate::security::SecurityLevel::Standard.password_min_len(),
         ).await
         .expect("change");
         let rows = audit::recent(&db, 50).await.expect("audit");

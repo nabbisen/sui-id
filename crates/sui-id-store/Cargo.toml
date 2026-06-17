@@ -16,7 +16,7 @@ readme = "README.md"
 workspace = true
 
 [dependencies]
-sui-id-shared = { version = "0.62.3", path = "../sui-id-shared" }
+sui-id-shared = { version = "0.62.4", path = "../sui-id-shared" }
 
 rusqlite = { workspace = true }
 serde = { workspace = true }

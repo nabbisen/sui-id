@@ -300,8 +300,9 @@ pub async fn consume_and_reset_password(
     plaintext_token: &str,
     new_password: &str,
     requester_ip: Option<&str>,
+    min_password_len: usize,
 ) -> CoreResult<()> {
-    password::check_password_policy(new_password)?;
+    password::check_password_policy(new_password, min_password_len)?;
 
     // RFC 003: HIBP breach check on token-based password reset.
     // Fail-open: network failures let the reset through.
