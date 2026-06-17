@@ -1,9 +1,100 @@
 # RFC 072 — End-user app-access surface
 
-**Status.** Proposed
-**Priority.** P1 — closes the largest end-user information gap. For an
-identity provider, the absence of a "which apps can sign in as me?"
-surface is a transparency / privacy hole.
+**Status.** Implemented (v0.60.0)
+**Priority.** P1 — largest end-user information gap for an IdP; users had
+no way to see or revoke OAuth grants before this RFC.
+**Tracks.** UX rethink — end-user surface (audit notes, v0.57.1 session).
+**Touches.** `crates/sui-id-store` (migration 0029, user_consent repo),
+`crates/sui-id-core` (TokenSet.user_id), `crates/sui-id` (oidc handler,
+me_security apps handler, router), `crates/sui-id-web` (MeTab::Apps,
+render_me_apps, me_security/apps.rs), `crates/sui-id-i18n`.
+
+## Implementation note (v0.60.0)
+
+### Schema — migration 0029
+
+```sql
+ALTER TABLE user_consent ADD COLUMN last_used_at TIMESTAMP;
+```
+
+NULL until the first token exchange after this migration. The UI renders
+the original `granted_at` date in that case so the display is always
+informative.
+
+### Repo additions (`user_consent.rs`)
+
+**`ConsentGrantView`** — struct joining `user_consent` with the client's
+display name (from `clients.name`). Fields: `client_id`, `client_name`,
+`granted_scopes`, `granted_at`, `last_used_at`.
+
+**`list_for_user(db, user_id)`** — SELECT joining `user_consent` ⋈
+`clients` for non-deleted clients; ordered `granted_at DESC`.
+
+**`revoke_with_tokens(db, user_id, client_id)`** — atomic transaction:
+`DELETE FROM refresh_tokens WHERE user_id=? AND client_id=?`, then
+`DELETE FROM user_consent WHERE user_id=? AND client_id=?`. The
+refresh-token deletion is the safety-critical part; without it an app
+holding a stolen refresh token continues to mint access tokens after
+the user revokes.
+
+**`touch_last_used(db, user_id, client_id, now)`** — UPDATE `last_used_at`
+for the grant. Called best-effort after each successful token exchange.
+
+### `TokenSet.user_id: Option<UserId>`
+
+Added to `sui-id-core::tokens::TokenSet`. Populated by `issue_token_set`
+(always `Some` for authorization-code and refresh-token grants). Used by
+the token endpoint to call `touch_last_used` without a separate DB lookup.
+
+### Token endpoint (`handlers/oidc.rs`)
+
+After building `TokenResponse`, calls `touch_last_used` if `set.user_id`
+is `Some`. Errors are swallowed — a failed timestamp update must never
+fail the token response.
+
+### `/me/apps` surface
+
+**`MeTab::Apps`** added to the enum; `key()` returns `"apps"`;
+`ME_SECURITY_TABS_KEYS` entry `("apps", "/me/apps")` inserted between
+Sessions and Language; labels array gains `t.me_tab_apps`.
+
+**`render_me_apps`** at `crates/sui-id-web/src/pages/me_security/apps.rs`.
+Shows a card per grant: client name, Granted / Last used dates, scope list
+(reusing `.consent-scope-item` from RFC-MI-070), and a Revoke button that
+posts to `/me/apps/{client_id}/revoke`. Empty state uses `.callout--info`.
+No new CSS tokens.
+
+**`me_apps_get`** and **`me_apps_revoke`** at
+`crates/sui-id/src/handlers/me_security/apps.rs`.
+
+Routes registered:
+```
+GET  /me/apps                       → me_apps_get
+POST /me/apps/{client_id}/revoke    → me_apps_revoke
+```
+
+### i18n (9 new keys × 3 locales — en/ja/zh)
+
+`me_tab_apps`, `me_apps_title`, `me_apps_intro`, `me_apps_granted_on`,
+`me_apps_last_used`, `me_apps_never_used`, `me_apps_revoke_button`,
+`me_apps_revoked`, `me_apps_empty`.
+
+### Acceptance criteria (verified)
+
+- [x] Migration 0029 adds `last_used_at`; existing rows have NULL.
+- [x] Token endpoint updates `last_used_at` on successful exchange
+  (best-effort; errors logged but not propagated).
+- [x] `GET /me/apps` lists all grants with scopes and dates.
+- [x] `POST /me/apps/{client_id}/revoke` removes the grant and all
+  refresh tokens atomically.
+- [x] Apps tab visible in the me_security tab strip on every `/me/` page.
+- [x] Empty state shown when the user has no grants.
+- [x] 9 i18n keys in en/ja/zh.
+- [x] `cargo check --workspace` clean; 175/175 library tests pass.
+- [x] CI invariants: `text-leaks`=0, `inline-style-bound`=0,
+  `css-tokens`=148, `semantic-parity`=36.
+
+---
 **Tracks.** UX rethink — end-user surface (see audit notes, v0.57.1 session).
 **Touches.** `crates/sui-id-store` (user_consent repo, optional schema
 add), `crates/sui-id-core` (consent revocation logic, refresh-token

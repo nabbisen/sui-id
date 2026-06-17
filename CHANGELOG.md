@@ -5,6 +5,60 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.60.0] — Unreleased
+
+**RFC 072 — End-user app-access surface.** Completes the three-RFC
+UX-rethink arc. Users can now see which OAuth clients hold a consent
+grant and revoke any grant with one click.
+
+---
+
+### Schema: migration 0029
+
+`ALTER TABLE user_consent ADD COLUMN last_used_at TIMESTAMP`. NULL until
+the first token exchange after this migration.
+
+### New repo functions (`user_consent.rs`)
+
+- **`list_for_user(db, user_id)`** — SELECT joining `user_consent` with
+  `clients` for non-deleted clients; returns `Vec<ConsentGrantView>`.
+- **`revoke_with_tokens(db, user_id, client_id)`** — atomic transaction:
+  deletes all `refresh_tokens` for the pair, then the `user_consent` row.
+- **`touch_last_used(db, user_id, client_id, now)`** — UPDATE
+  `last_used_at`; called best-effort at the token endpoint.
+
+### `TokenSet.user_id: Option<UserId>`
+
+Added to `sui-id-core::tokens::TokenSet`; populated by `issue_token_set`.
+Used by the token endpoint to call `touch_last_used` without an extra
+DB lookup.
+
+### `/me/apps` — new self-service surface
+
+- **`MeTab::Apps`** — new variant in the tab enum; appears between Sessions
+  and Language in the tab strip on every `/me/security/*` page.
+- **`render_me_apps`** — one card per grant: client name, Granted / Last
+  used dates, scopes (reusing `.consent-scope-item` CSS from RFC-MI-070),
+  Revoke button. Empty state uses `.callout--info`. No new CSS tokens.
+- **`GET /me/apps`** and **`POST /me/apps/{client_id}/revoke`** routes.
+
+### i18n
+
+9 new keys (× 3 locales — en/ja/zh): `me_tab_apps`, `me_apps_title`,
+`me_apps_intro`, `me_apps_granted_on`, `me_apps_last_used`,
+`me_apps_never_used`, `me_apps_revoke_button`, `me_apps_revoked`,
+`me_apps_empty`.
+
+### Tests and CI
+
+- `cargo check --workspace` clean; 0 errors, 0 warnings.
+- **175/175 library tests pass** (sui-id-i18n 12, sui-id-shared 13,
+  sui-id-web 0, sui-id-store 36, sui-id-core 114).
+- CI invariants unchanged: `text-leaks`=0, `inline-style-bound`=0,
+  `css-tokens`=148, `semantic-parity`=36.
+
+---
+
 ## [0.59.0] — Unreleased
 
 **RFC 071 — Auditor role.** Adds a third human role (`auditor`) with

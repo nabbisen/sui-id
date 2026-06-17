@@ -85,13 +85,11 @@ Phase-1 blockers resolved:
 |-----|-------|---------|
 | 073 | [Dashboard action items](./done/073-dashboard-action-items.md) | v0.58.0 |
 | 071 | [Auditor role](./done/071-auditor-role.md) | v0.59.0 |
+| 072 | [End-user app-access surface](./done/072-end-user-app-access.md) | v0.60.0 |
 
-### Proposed — UX rethink (next)
-
-| RFC | Title | Priority | Scope |
-|-----|-------|----------|-------|
-| 072 | [End-user app-access surface](./proposed/072-end-user-app-access.md) | P1 | New `/me/apps` tab + token-endpoint `last_used_at` touchpoint |
-
+All three UX-rethink RFCs identified in the post-MI-arc audit are now
+implemented. The remaining items in `rfcs/proposed/` are post-1.0
+exploratory work (federation, LDAP, metrics, multi-tenant, etc.).
 ### Proposed — maintenance / dependency refresh
 
 All maintenance RFCs from this category are implemented. See the

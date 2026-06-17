@@ -26,6 +26,7 @@ mod sessions;
 mod passkey;
 mod language;
 mod password;
+mod apps;        // RFC 072
 
 pub use forms::*;
 pub use overview::*;
@@ -34,6 +35,7 @@ pub use sessions::*;
 pub use passkey::*;
 pub use language::*;
 pub use password::*;
+pub use apps::*;
 
 // ---------- umbrella-level redirects ----------
 

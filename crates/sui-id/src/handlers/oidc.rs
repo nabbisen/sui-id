@@ -378,6 +378,18 @@ pub async fn token(
         id_token: set.id_token,
         scope: None,
     };
+
+    // RFC 072: update last_used_at on the consent grant so /me/apps can
+    // show "Last used: …". Best-effort — id_token is only present when
+    // the user_id is known (authorization_code or refresh_token exchange
+    // for a public/confidential client with openid scope). For exchanges
+    // without an id_token (client_credentials, device_code — none shipped)
+    // this is a no-op.
+    if let Some(user_id) = set.user_id {
+        let _ = sui_id_store::repos::user_consent::touch_last_used(
+            &app.db, user_id, client_id, app.clock.now()
+        ).await;
+    }
     let mut out = Json(resp).into_response();
     out.headers_mut().insert(
         header::CACHE_CONTROL,

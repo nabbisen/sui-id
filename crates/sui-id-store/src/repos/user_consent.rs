@@ -22,6 +22,105 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<UserConsentRow> {
     })
 }
 
+/// RFC 072: a consent grant row enriched with the client's display name,
+/// used for the `/me/apps` self-service page.
+#[derive(Debug, Clone)]
+pub struct ConsentGrantView {
+    pub client_id: ClientId,
+    /// The client's human-readable `name` field from the `clients` table.
+    pub client_name: String,
+    /// Space-separated scope tokens that were granted.
+    pub granted_scopes: String,
+    pub granted_at: DateTime<Utc>,
+    /// NULL until the first token exchange after migration 0029.
+    pub last_used_at: Option<DateTime<Utc>>,
+}
+
+/// RFC 072: list all active consent grants for a user, joined with the
+/// client display name. Excludes soft-deleted clients.
+pub async fn list_for_user(
+    db: &Database,
+    user_id: UserId,
+) -> StoreResult<Vec<ConsentGrantView>> {
+    let uid = user_id.to_string();
+    db.with_conn(move |conn| {
+        let mut stmt = conn.prepare(
+            "SELECT uc.client_id, c.name, uc.granted_scopes, uc.granted_at, uc.last_used_at \
+             FROM user_consent uc \
+             JOIN clients c ON c.id = uc.client_id \
+             WHERE uc.user_id = ?1 AND c.is_deleted = 0 \
+             ORDER BY uc.granted_at DESC",
+        )?;
+        let rows = stmt.query_map(rusqlite::params![uid], |row| {
+            Ok(ConsentGrantView {
+                client_id: row.get::<_, String>(0)?
+                    .parse()
+                    .map_err(|e| rusqlite::Error::FromSqlConversionFailure(
+                        0, rusqlite::types::Type::Text, Box::new(e)
+                    ))?,
+                client_name: row.get(1)?,
+                granted_scopes: row.get(2)?,
+                granted_at: row.get(3)?,
+                last_used_at: row.get(4)?,
+            })
+        })?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(crate::errors::StoreError::from)
+    }).await
+}
+
+/// RFC 072: revoke a consent grant and all active refresh tokens for the
+/// same `(user_id, client_id)` in a single atomic transaction.
+/// The security-critical invariant: revoking the grant without invalidating
+/// the refresh tokens would leave the app able to mint access tokens
+/// indefinitely.
+pub async fn revoke_with_tokens(
+    db: &Database,
+    user_id: UserId,
+    client_id: ClientId,
+) -> StoreResult<()> {
+    let uid = user_id.to_string();
+    let cid = client_id.to_string();
+    db.with_conn(move |conn| {
+        conn.execute_batch("BEGIN")?;
+        let r = (|| -> rusqlite::Result<()> {
+            conn.execute(
+                "DELETE FROM refresh_tokens WHERE user_id = ?1 AND client_id = ?2",
+                rusqlite::params![uid.clone(), cid.clone()],
+            )?;
+            conn.execute(
+                "DELETE FROM user_consent WHERE user_id = ?1 AND client_id = ?2",
+                rusqlite::params![uid, cid],
+            )?;
+            Ok(())
+        })();
+        match r {
+            Ok(_) => { conn.execute_batch("COMMIT")?; Ok(()) }
+            Err(e) => { let _ = conn.execute_batch("ROLLBACK"); Err(e.into()) }
+        }
+    }).await
+}
+
+/// RFC 072: set `last_used_at = now()` for a grant after a successful
+/// token exchange. Best-effort — failures are logged but not propagated.
+pub async fn touch_last_used(
+    db: &Database,
+    user_id: UserId,
+    client_id: ClientId,
+    now: DateTime<Utc>,
+) -> StoreResult<()> {
+    let uid = user_id.to_string();
+    let cid = client_id.to_string();
+    db.with_conn(move |conn| {
+        conn.execute(
+            "UPDATE user_consent SET last_used_at = ?3 \
+             WHERE user_id = ?1 AND client_id = ?2",
+            rusqlite::params![uid, cid, now],
+        )?;
+        Ok(())
+    }).await
+}
+
 /// Look up a stored consent for `(user_id, client_id)`.
 /// Returns `None` if no consent has been recorded yet.
 pub async fn get(

@@ -218,6 +218,10 @@ pub fn build_router(app: AppState) -> Router {
         .route("/me/security/language",
                get(crate::handlers::me_security::language_get)
                .post(crate::handlers::me_security::language_post))
+        .route("/me/apps",
+               get(crate::handlers::me_security::me_apps_get))
+        .route("/me/apps/{client_id}/revoke",
+               post(crate::handlers::me_security::me_apps_revoke))
         .route(
             "/me/security/sessions/{id}/revoke",
             post(crate::handlers::me_security::revoke_one),

@@ -31,6 +31,7 @@ pub use pages::{
     render_settings_security, render_setup_admin, render_setup_done, render_setup_hibp,
     render_setup_lang, render_setup_welcome,
     render_me_overview, render_me_mfa, render_me_sessions, render_me_passkey, render_me_language,
+    render_me_apps,                              // RFC 072
     render_consent, render_confirm_delete_client, render_confirm_delete_signing_key,
     render_confirm_delete_user, render_confirm_disable_user, render_confirm_reset_mfa,
     render_signing_keys, render_step_up, render_users,

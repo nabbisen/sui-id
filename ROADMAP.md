@@ -78,7 +78,8 @@ migration plan, codebase handoff, and mockup handoff package.
 | **8** | v0.57.0        | Responsive + a11y hardening (MI arc done)               | RFC-MI-080 → `done/`          |
 | —     | v0.57.1        | Dependency refresh: rand 0.10 + reqwest                 | RFC 069, 070 → `done/`        |
 | —     | v0.58.0        | Dashboard action items                                  | RFC 073 → `done/`             |
-| —     | **v0.59.0**    | **Auditor role (this release)**                         | RFC 071 → `done/`             |
+| —     | v0.59.0        | Auditor role                                            | RFC 071 → `done/`             |
+| —     | **v0.60.0**    | **End-user app-access surface (this release)**          | RFC 072 → `done/`             |
 
 Phase-1 blockers (`D-01` / `D-02` / `D-03` in the migration plan)
 must be resolved before any code-level visual replacement starts:
@@ -93,6 +94,7 @@ deferred (verification phase, spec §22).
 
 | Version | What shipped |
 |---|---|
+| v0.60.0 | **RFC 072 (End-user app-access surface).** Migration 0029 (`user_consent.last_used_at`). `list_for_user`, `revoke_with_tokens`, `touch_last_used` repo helpers. `TokenSet.user_id` for best-effort `last_used_at` update at token exchange. `MeTab::Apps` + `render_me_apps`. `GET /me/apps` + `POST /me/apps/{id}/revoke`. 9 i18n keys. **175/175 tests PASS; all CI invariants unchanged.** |
 | v0.59.0 | **RFC 071 (Auditor role).** `users.role` column (migration 0027) + `audit_log.actor_role` (0028). `Role` enum with `is_admin()` / `can_read_admin()`. `CurrentAdminOrAuditor` extractor on all GET admin routes. `can_write: bool` in 5 render functions hides mutation controls from auditors. Role-change UI on user detail with last-admin safeguard. 7 new i18n keys. **175/175 tests PASS; all CI invariants unchanged.** |
 | v0.58.0 | **RFC 073 (Dashboard action items).** Getting Started checklist (3 items, ☐/✓ ABDD-safe text indicators) + 4 new action items (admins without MFA, old signing key, stuck outbox, pending resets). 4 new read-only repo helpers. 8 i18n keys (×3 locales). `.action-items-list` and `.checklist` CSS. **228/228 tests PASS; all CI invariants unchanged.** |
 | v0.57.1 | **Dependency refresh: RFC 069 (rand 0.10) + RFC 070 (ureq → reqwest).** rand 0.8→0.10 via getrandom; `OsRng.fill_bytes` (×10), `SaltString::generate`, `SigningKey::generate` (Option B: Zeroizing + from_bytes) all migrated. ureq removed; `HibpClient` trait made async via async-trait; `HttpHibpClient` rebuilt on reqwest 0.12. Bug fixed: enforce_hibp now properly awaits the check instead of blocking the tokio thread. **228/228 tests PASS; all CI invariants unchanged.** |
@@ -143,12 +145,17 @@ Full history: [CHANGELOG.md](CHANGELOG.md)
 
 ## Status
 
-**v0.59.0** ships RFC 071 (Auditor role) — the second of the
-three UX-rethink RFCs and the largest structural change since the MI
-arc. The third RFC remains open:
+**v0.60.0** completes the UX-rethink arc (RFCs 071, 072, 073) identified
+in the post-MI-arc audit. All three targeted gaps are closed:
 
-- **RFC 072** — End-user app-access surface (P1; `/me/apps` page,
-  OAuth grant review and revocation)
+- RFC 073 (v0.58.0) — Dashboard action items
+- RFC 071 (v0.59.0) — Auditor role (read-only admin access)
+- RFC 072 (v0.60.0) — End-user app-access surface (`/me/apps`)
+
+The remaining items in `rfcs/proposed/` are all explicitly post-1.0
+exploratory work: federation (RFC 004), LDAP (RFC 005), metrics (RFC 006),
+third-party posture (RFC 008), SQL backends (RFC 009), multi-tenant
+(RFC 025). None are scheduled for any release.
 
 All 16 MI RFCs across Phases 0–8 are implemented and in
 `rfcs/done/`. The arc spanned v0.49.0 through v0.57.0.

@@ -10,12 +10,13 @@ pub enum MeTab {
     Mfa,
     Passkey,
     Sessions,
+    Apps,       // RFC 072
     Language,
 }
 
 impl MeTab {
     /// Returns the URL path slug that identifies this tab (matches the
-    /// route segment under `/me/security/`).
+    /// route segment under `/me/security/` or `/me/`).
     pub fn key(self) -> &'static str {
         match self {
             Self::Overview  => "overview",
@@ -23,6 +24,7 @@ impl MeTab {
             Self::Mfa       => "mfa",
             Self::Passkey   => "passkeys",
             Self::Sessions  => "sessions",
+            Self::Apps      => "apps",
             Self::Language  => "language",
         }
     }
@@ -35,7 +37,7 @@ pub struct MeShellData {
     pub active_tab: MeTab,
 }
 
-/// Static tab definitions for `/me/security/*`.
+/// Static tab definitions for `/me/security/*` and `/me/apps`.
 /// Order matches the visual left-to-right order.
 /// Labels are resolved at render time via the `lang` argument.
 static ME_SECURITY_TABS_KEYS: &[(&str, &str)] = &[
@@ -44,6 +46,7 @@ static ME_SECURITY_TABS_KEYS: &[(&str, &str)] = &[
     ("mfa",       "/me/security/mfa"),
     ("passkeys",  "/me/security/passkeys"),
     ("sessions",  "/me/security/sessions"),
+    ("apps",      "/me/apps"),           // RFC 072
     ("language",  "/me/security/language"),
 ];
 
@@ -60,6 +63,7 @@ pub fn me_security_tabs(active: MeTab, lang: sui_id_i18n::Locale) -> impl IntoVi
         t.me_tab_mfa,
         t.me_tab_passkey,
         t.me_tab_sessions,
+        t.me_tab_apps,       // RFC 072
         t.me_tab_language,
     ];
     // Build RouteTab entries inline — static keys/hrefs, runtime labels.
@@ -92,6 +96,7 @@ mod sessions;
 mod passkey;
 mod language;
 mod security;
+pub mod apps;    // RFC 072: pub so sui-id handler can access AppGrantData/MeAppsData
 
 pub use overview::*;
 pub use mfa::*;
@@ -99,3 +104,4 @@ pub use sessions::*;
 pub use passkey::*;
 pub use language::*;
 pub use security::*;
+pub use apps::*;

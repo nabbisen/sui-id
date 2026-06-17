@@ -103,6 +103,10 @@ pub struct TokenSet {
     pub id_token: Option<String>,
     pub refresh_token: String,
     pub access_expires_in: i64,
+    /// RFC 072: the user this token set was issued for. Present when the
+    /// grant type is authorization_code or refresh_token; None for
+    /// machine-to-machine grants (none shipped yet).
+    pub user_id: Option<UserId>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -184,6 +188,7 @@ pub async fn issue_token_set(
         id_token,
         refresh_token: random_token(32),
         access_expires_in: lifetimes.access_secs,
+        user_id: Some(user),
     })
 }
 
