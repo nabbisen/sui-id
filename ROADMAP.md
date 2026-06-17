@@ -8,6 +8,23 @@ Completed work is tracked in [CHANGELOG.md](CHANGELOG.md) and the
 
 ## Active proposals (proposed RFCs)
 
+**Security-assurance arc — RFCs 078–086 (v0.63.2).** Created by
+the architect audit
+(`docs/security-assurance-audit-v0.63.1.md`). Recommended
+sequencing — each step independently shippable:
+
+| Step | RFC | Theme | Suggested release |
+|---|---|---|---|
+| 1 | [078](rfcs/proposed/078-security-type-modeling-baseline.md) | Type modeling baseline (newtypes, secret redaction) | v0.64.0 |
+| 2 | [080](rfcs/proposed/080-refresh-rotation-atomicity.md) | Refresh rotation atomicity + reuse detection | v0.65.0 |
+| 3 | [079](rfcs/proposed/079-authorization-code-lifecycle-assurance.md) | Auth-code single-use by statement | v0.65.0 |
+| 4 | [081](rfcs/proposed/081-actor-scope-boundary.md) | Actor scope boundary | v0.66.0 |
+| 5 | [082](rfcs/proposed/082-authorization-decision-core.md) | Pure authorization core | v0.66.0 |
+| 6 | [083](rfcs/proposed/083-security-state-machine-testing.md) | State-machine proptest harness | v0.67.0 |
+| 7 | [085](rfcs/proposed/085-audit-event-completeness.md) | Audit completeness + atomicity | v0.67.0 |
+| 8 | [084](rfcs/proposed/084-fuzzing-untrusted-input-boundaries.md) | Fuzzing harness | v0.68.0 |
+| 9 | [086](rfcs/proposed/086-formal-model-checking-pilot.md) | Kani / TLA+ / Flux pilots (time-boxed) | evaluation only |
+
 **Mockup Integration epic — sixteen RFCs, Phase 0 → Phase 8.**
 Introduced in v0.49.0. The full epic table and reading order live
 in [`rfcs/README.md`](rfcs/README.md) ("Proposed — Mockup

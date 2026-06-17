@@ -30,8 +30,8 @@ folders.
 ## A note on namespaces
 
 Most RFCs in this directory share a single sequential numbering line
-(`001-…`, `002-…`, … `068-…` at the time of writing; the next free
-slot is `069`). One **parallel namespace** also exists:
+(`001-…`, `002-…`, … `086-…` at the time of writing; the next free
+slot is `087`). One **parallel namespace** also exists:
 
 - **`RFC-MI-NNN-*`** — the **Mockup Integration epic**, introduced
   in v0.49.0. These RFCs cross-reference each other heavily by their
@@ -104,6 +104,27 @@ All pre-1.0 RFCs are now implemented. The remaining items in
 
 All maintenance RFCs from this category are implemented. See the
 Implemented table above.
+
+### Proposed — security-assurance arc (RFCs 078–086, v0.63.2)
+
+Created from the architect audit requested by
+`security-critical-assurance-strategy-v0.63.1.md`. The audit
+report (gaps G1–G9, Category A–D classification, sequencing) is
+at [`docs/security-assurance-audit-v0.63.1.md`](../docs/security-assurance-audit-v0.63.1.md).
+Recommended order: 078 → 080 → 079 → 081 → 082 → 083 / 085 →
+084 → 086.
+
+| ID  | Title | Category / Priority |
+|-----|-------|---------------------|
+| 078 | [Security-critical type modeling baseline](./proposed/078-security-type-modeling-baseline.md) | A — first; others depend on it |
+| 079 | [Authorization code lifecycle assurance](./proposed/079-authorization-code-lifecycle-assurance.md) | A |
+| 080 | [Refresh rotation atomicity & reuse detection](./proposed/080-refresh-rotation-atomicity.md) | A — highest-risk finding (G1) |
+| 081 | [Actor scope boundary & scoped repository signatures](./proposed/081-actor-scope-boundary.md) | B |
+| 082 | [Authorization decision core & property tests](./proposed/082-authorization-decision-core.md) | B |
+| 083 | [Security state-machine testing with proptest](./proposed/083-security-state-machine-testing.md) | B |
+| 084 | [Fuzzing for untrusted input boundaries](./proposed/084-fuzzing-untrusted-input-boundaries.md) | B/C |
+| 085 | [Audit event completeness for privileged operations](./proposed/085-audit-event-completeness.md) | B |
+| 086 | [Lightweight formal / model-checking pilot](./proposed/086-formal-model-checking-pilot.md) | C — time-boxed pilot only |
 
 ### Proposed — post-1.0 candidates (open for review)
 

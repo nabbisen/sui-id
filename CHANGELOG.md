@@ -5,6 +5,61 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.63.2] — 2026-06-05
+
+**Security-assurance audit, RFC set 078–086, and three baseline fixes.**
+
+### Added — security-critical assurance audit and RFC arc
+
+Deliverables of the architect instruction
+`security-critical-assurance-strategy-v0.63.1.md`:
+
+- `docs/security-assurance-audit-v0.63.1.md` — codebase audit of
+  the security-critical lifecycles (auth codes, refresh-token
+  rotation, sessions, role boundary, secrets, audit events).
+  Nine risk-ranked gaps (G1–G9), Category A–D classification per
+  strategy §6, and the adoption roadmap. Headline findings:
+  refresh rotation spans three non-atomic storage calls and can
+  fork a token family under concurrency (G1); the stored
+  refresh-token model carries a `Debug`-reachable plaintext
+  field (G2).
+- Nine proposed RFCs in `rfcs/proposed/` (078–086): type
+  modeling baseline, auth-code lifecycle assurance, refresh
+  rotation atomicity, actor scope boundary (single-tenant
+  translation of the strategy's tenant theme), pure
+  authorization decision core, state-machine proptest harness,
+  fuzzing strategy, audit-event completeness, and a time-boxed
+  formal-methods pilot. Index updated in `rfcs/README.md`.
+
+No production behaviour changes from the RFC set; implementation
+follows per the roadmap (suggested v0.64.0 onward).
+
+### Fixed — `cargo test --doc` failure in `sui-id-core`
+
+The `security.rs` module doctest referenced `SecurityLevel`
+without importing it (E0433), leaving the doc-test suite red.
+The example now imports the type and asserts the thresholds.
+
+### Fixed — `mod.rs` policy regression (spec §8.3)
+
+`crates/sui-id-core/src/admin/mod.rs` and
+`crates/sui-id/src/backup/mod.rs` crept in during the RFC 075
+split. Both moved to umbrella style (`admin.rs`, `backup.rs`);
+`find crates -name mod.rs` is empty again.
+
+### Fixed — unused-import warning (0-warnings gate)
+
+`handlers/admin/clients.rs` imported `Flash` / `FlashKind`
+without using them; removed.
+
+### Known issue — rustfmt style-edition drift (not fixed here)
+
+`cargo fmt --check` under current stable rustfmt (Rust 2024 style
+edition) reports mechanical diffs across most of the workspace.
+Deliberately deferred to a dedicated fmt-sweep release (or a
+pinned `rust-toolchain.toml`) so this release's diff stays
+reviewable. See the audit report §1.
+
 ## [0.63.1] — 2026-06-04
 
 **Three fixes across admin pages.**

@@ -8,8 +8,10 @@
 //! # Usage
 //!
 //! ```rust
-//! let min = SecurityLevel::Standard.password_min_len(); // 12
-//! let min = SecurityLevel::Development.password_min_len(); // 8
+//! use sui_id_core::security::SecurityLevel;
+//!
+//! assert_eq!(SecurityLevel::Standard.password_min_len(), 12);
+//! assert_eq!(SecurityLevel::Development.password_min_len(), 8);
 //! ```
 //!
 //! The active level is derived from `AppState::security_level()` in the

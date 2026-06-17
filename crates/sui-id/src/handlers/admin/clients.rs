@@ -17,7 +17,7 @@ use sui_id_shared::ids::ClientId;
 use sui_id_store::repos::clients;
 use sui_id_web::{
     pages::ConfirmDeleteClientData, render_clients, render_clients_new,
-    render_confirm_delete_client, Flash, FlashKind,
+    render_confirm_delete_client,
 };
 use super::forms::{DisableForm, ConfirmedReasonForm};
 use super::with_csrf_cookie;
