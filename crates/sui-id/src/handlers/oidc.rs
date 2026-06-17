@@ -96,7 +96,23 @@ pub async fn authorize(
         code_challenge_method: q.code_challenge_method.clone(),
     };
 
-    let accepted = authorize::begin_authorization(&app.db, params).await.map_err(HttpError::html)?;
+    let accepted = authorize::begin_authorization(&app.db, params).await
+        .map_err(|e| {
+            // Log the protocol error so it appears in the audit log for
+            // operator debugging — especially useful for redirect_uri mismatches
+            // which are otherwise invisible unless the admin watches the console.
+            let desc = if let sui_id_core::errors::CoreError::Protocol { ref description, .. } = e {
+                description.clone()
+            } else {
+                e.to_string()
+            };
+            tracing::warn!(
+                client_id = %q.client_id,
+                error = %desc,
+                "OAuth 2.0 authorize request rejected"
+            );
+            HttpError::html(e)
+        })?;
 
     // Consent gate (RFC 038) — look up client to check consent_policy.
     let client_for_consent = sui_id_store::repos::clients::get(

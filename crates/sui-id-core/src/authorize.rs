@@ -86,7 +86,17 @@ pub async fn begin_authorization(db: &Database, params: AuthorizeParams) -> Core
     if !is_redirect_uri_registered(&client.redirect_uris, &params.redirect_uri) {
         return Err(CoreError::Protocol {
             code: ProtocolError::InvalidRequest,
-            description: "redirect_uri does not match a registered URI".into(),
+            description: format!(
+                "redirect_uri does not match any registered URI for this client. \
+                 Submitted: \"{}\". Registered URIs: [{}]. \
+                 The comparison is exact — check for trailing slashes, \
+                 http vs https, and port numbers.",
+                params.redirect_uri,
+                client.redirect_uris.iter()
+                    .map(|u| format!("\"{u}\""))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
         });
     }
     enforce_scope_policy(&client.allowed_scopes, &params.scope, &client.name)?;

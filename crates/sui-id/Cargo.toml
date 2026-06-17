@@ -37,11 +37,11 @@ path = "tests/e2e/main.rs"
 workspace = true
 
 [dependencies]
-sui-id-shared = { version = "0.62.0", path = "../sui-id-shared" }
-sui-id-i18n   = { version = "0.62.0", path = "../sui-id-i18n" }
-sui-id-store  = { version = "0.62.0", path = "../sui-id-store" }
-sui-id-core   = { version = "0.62.0", path = "../sui-id-core" }
-sui-id-web    = { version = "0.62.0", path = "../sui-id-web" }
+sui-id-shared = { version = "0.62.1", path = "../sui-id-shared" }
+sui-id-i18n   = { version = "0.62.1", path = "../sui-id-i18n" }
+sui-id-store  = { version = "0.62.1", path = "../sui-id-store" }
+sui-id-core   = { version = "0.62.1", path = "../sui-id-core" }
+sui-id-web    = { version = "0.62.1", path = "../sui-id-web" }
 
 tokio = { workspace = true }
 axum = { workspace = true }
@@ -87,11 +87,11 @@ url = { workspace = true }
 sha2 = { workspace = true }
 base64ct = { workspace = true }
 percent-encoding = { workspace = true }
-sui-id-store = { version = "0.62.0", path = "../sui-id-store" }
+sui-id-store = { version = "0.62.1", path = "../sui-id-store" }
 # Re-pull the core crate as a dev-dep with the `test-support`
 # feature so e2e tests can construct `InMemoryHibpClient` /
 # `InMemoryMailSender` from `core::test_support`. The library
 # build of the same crate (no feature) is unaffected.
-sui-id-core = { version = "0.62.0", path = "../sui-id-core", features = ["test-support"] }
+sui-id-core = { version = "0.62.1", path = "../sui-id-core", features = ["test-support"] }
 http = "1"
 http-body-util = "0.1"

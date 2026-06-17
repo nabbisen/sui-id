@@ -5,7 +5,7 @@ use crate::handlers::{
     clear_pending_mfa_cookie, clear_pending_mfa_next_cookie, clear_session_cookie,
     pending_mfa_cookie, pending_mfa_next_cookie, session_cookie, AppStateExt, PENDING_MFA_COOKIE, PENDING_MFA_NEXT_COOKIE, SESSION_COOKIE,
 };
-use axum::extract::State;
+use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::Form;
@@ -30,21 +30,39 @@ pub struct LoginForm {
 }
 
 
+/// Query parameters accepted by `GET /admin/login`.
+/// The `next` value is URL-encoded by the `/oauth2/authorize` endpoint
+/// so the login form can redirect back after a successful sign-in.
+#[derive(Debug, Deserialize, Default)]
+pub struct LoginGetQuery {
+    #[serde(default)]
+    pub next: String,
+}
+
+
 pub async fn login_get(
     jar: CookieJar,
     state_ext: AppStateExt,
     crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
+    Query(q): Query<LoginGetQuery>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
-    // Already logged in?
+    // Already logged in? Forward to `next` if present, otherwise /admin.
     if let Some(cookie) = jar.get(SESSION_COOKIE) {
         if let Ok(sid) = SessionId::from_str(cookie.value()) {
             if session::resolve(&app.db, &app.clock, sid).await.is_ok() {
-                return Ok(Redirect::to("/admin").into_response());
+                let dest = if q.next.starts_with('/') {
+                    q.next.clone()
+                } else {
+                    "/admin".into()
+                };
+                return Ok(Redirect::to(&dest).into_response());
             }
         }
     }
-    Ok(Html(render_login(None, None, lang, false)).into_response())
+    // Thread `next` into the form so login_post can redirect to it.
+    let next = if q.next.is_empty() { None } else { Some(q.next) };
+    Ok(Html(render_login(None, next, lang, false)).into_response())
 }
 
 

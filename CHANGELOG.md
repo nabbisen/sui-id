@@ -5,6 +5,89 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.62.1] — 2026-05-23
+
+**Bug fix: OIDC redirect after login broken.**
+
+`login_get` was not extracting the `?next=` query parameter and not
+threading it into the login form. As a result, after a user signed in
+via the OIDC authorization-code flow, the redirect back to the relying
+party (the `redirect_uri`) never happened — the user stayed on the
+sui-id dashboard instead.
+
+### Root cause
+
+The `GET /admin/login?next=<encoded_authorize_url>` handler signature
+had no `Query` extractor and always passed `None` to `render_login`.
+This meant the hidden `<input name="next">` in the login form was always
+empty, so `login_post` fell through to the default `/admin` redirect.
+
+### Fix
+
+Added a `LoginGetQuery { next: String }` extractor to `login_get`.
+The `next` value (when present and starting with `/`) is:
+- Rendered into the hidden form field so `login_post` can redirect to it.
+- Used as the forward destination when an already-logged-in user hits
+  `/admin/login?next=...` (previously always redirected to `/admin`
+  regardless of `next`).
+
+The MFA path was **not** affected — it correctly preserved `next` via
+a short-lived cookie (`SUI_ID_PENDING_MFA_NEXT`).
+
+### Files changed
+
+- `crates/sui-id/src/handlers/admin/auth.rs` — `login_get` signature
+  and body; new `LoginGetQuery` struct; `Query` added to imports.
+
+---
+
+## [0.62.1] — 2026-05-23
+
+**Bugfix: consent route missing; redirect_uri error improvement.**
+
+### Bug 1 — `POST /oauth2/consent` route not registered (critical)
+
+`consent_post` was implemented for RFC 038 (v0.50.x) but its route was
+never wired into the router. Effect: when a client's `consent_policy`
+is `first_time` or `always`, the consent page is shown after login but
+clicking **Allow** POSTs to a 404/405 endpoint. The user cannot complete
+the OIDC flow; they stay on the sui-id consent page indefinitely.
+
+Fix: `.route("/oauth2/consent", post(oidc::consent_post))` added to
+`router.rs`.
+
+Clients with `consent_policy = "none"` (the default) are **not
+affected** — the consent page is never shown for those clients.
+
+### Bug 2 — Cryptic redirect_uri mismatch error
+
+When the `redirect_uri` in an authorization request does not exactly
+match any registered URI, `begin_authorization` returned:
+
+> "redirect_uri does not match a registered URI"
+
+This gave operators no information about what was submitted vs. what was
+registered. Fix: the error message now includes the submitted URI and the
+full list of registered URIs:
+
+> "redirect_uri does not match any registered URI for this client.
+>  Submitted: "http://localhost:3000/callback".
+>  Registered URIs: ["http://localhost:3000/api/auth/callback/myapp"].
+>  The comparison is exact — check for trailing slashes, http vs https,
+>  and port numbers."
+
+Additionally, the authorize handler now emits a `WARN`-level tracing
+event with the client_id and error description on every rejected
+authorization request, so the error is visible in the server log even
+without inspecting the audit table.
+
+### Tests and CI
+
+- `cargo check --workspace` clean.
+- All CI invariants unchanged.
+
+---
+
 ## [0.62.0] — 2026-05-23
 
 **RFC 075 — File-size refactor** and **RFC 076 — Configuration reference.**

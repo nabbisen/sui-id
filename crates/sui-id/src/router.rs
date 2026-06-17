@@ -50,7 +50,8 @@ pub fn build_router(app: AppState) -> Router {
         .merge(public_routes)
         .merge(token_routes)
         .route("/oauth2/authorize", get(oidc::authorize))
-        .route("/oauth2/logout", get(oidc::logout))
+        .route("/oauth2/consent",   post(oidc::consent_post))  // RFC 038: consent gate
+        .route("/oauth2/logout",    get(oidc::logout))
         .route(
             "/oauth2/introspect",
             post(crate::handlers::oauth_token::introspect),
