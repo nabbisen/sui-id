@@ -12,6 +12,8 @@ pub struct SettingsOtherData {
     pub user_count: usize,
     pub client_count: usize,
     pub clock_now: chrono::DateTime<chrono::Utc>,
+    /// RFC 088: false for auditors → render static rows instead of form.
+    pub can_write: bool,
 }
 
 pub fn render_settings_other(
@@ -30,6 +32,7 @@ pub fn render_settings_other(
             user_count,
             client_count,
             clock_now,
+            can_write: _can_write,
         } = data;
         let now_str = clock_now.format("%Y-%m-%d %H:%M:%S UTC").to_string();
         view! {

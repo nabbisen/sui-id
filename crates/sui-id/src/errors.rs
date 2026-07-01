@@ -76,6 +76,23 @@ impl HttpError {
         }
     }
 
+    /// Build a 403 response with auditor-specific copy (RFC 088).
+    ///
+    /// Auditors reaching a mutation-only route receive this instead of a
+    /// login redirect (401). The distinction matters: 403 means the
+    /// session is valid but the role is insufficient, not that
+    /// re-authentication would help.
+    pub fn html_403_auditor() -> Self {
+        Self {
+            inner: CoreError::Forbidden,
+            request_id: new_req_id(),
+            representation: ErrorRepresentation::Html,
+            forced_status: Some(StatusCode::FORBIDDEN),
+            retry_after_secs: None,
+            lang: sui_id_i18n::Locale::default(),
+        }
+    }
+
     /// Build an error response in RFC 6749 §5.2 wire format.
     ///
     /// Use this for all OAuth/OIDC **protocol endpoints** (token, introspect,

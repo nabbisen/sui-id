@@ -609,6 +609,9 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     confirm_delete_signing_key_impact: "由此密钥签名且尚未过期的令牌将立即验证失败。",
     confirm_delete_signing_key_reversibility: "此操作无法撤销，请仅在所有令牌均已过期后删除。",
     confirm_delete_signing_key_button: "删除签名密钥",
+    error_403_auditor_title: "只读访问",
+    error_403_auditor_body: "您的账户具有只读（审计员）访问权限。此操作需要管理员权限。",
+    client_detail_readonly_title: "应用详情",
 
     // Admin: 用户详情 (RFC 035)
     user_detail_back: "← 返回用户列表",

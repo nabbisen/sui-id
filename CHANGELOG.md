@@ -5,6 +5,67 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.70.0] — 2026-06-14
+
+**UI-security unit 2: RFC 088 — Auditor Authorization Matrix and Static
+Read-Only Rendering.** Server-side enforcement of the v2.3 §3.5 route/action
+matrix. No wire protocol change; auditor access to mutation surfaces now
+returns HTTP 403 instead of 401-redirect.
+
+### Fixed — auditor 403 on mutation-only GET routes (RFC 088 P2, P4)
+
+Every mutation-only GET route in the admin panel now returns an HTTP 403
+("read-only access") page for auditor sessions rather than a login redirect.
+
+**Users handlers** (`/admin/users/new`, `/admin/users/{id}/disable-confirm`,
+`/admin/users/{id}/delete-confirm`, `/admin/users/{id}/mfa-reset-confirm`):
+- `users_new_get` changed from `CurrentAdmin` to `CurrentAdminOrAuditor`
+  with `!actor.can_write()` guard.
+- Three confirm-GET handlers (`users_disable_confirm_get`,
+  `users_delete_confirm_get`, `users_mfa_reset_confirm_get`) changed from
+  `CurrentAdminOrAuditor` with no guard to `CurrentAdminOrAuditor` with
+  explicit `!actor.can_write()` guard. Previously auditors could reach
+  these confirm pages — a security defect closed by this release.
+
+**Clients handlers** (`/admin/clients/new`, `/admin/clients/{id}/delete-confirm`):
+- `clients_new_get` changed from `CurrentAdmin` to `CurrentAdminOrAuditor`
+  with guard.
+- `clients_delete_confirm_get` gained a `can_write()` guard.
+
+**Signing keys** (`/admin/signing-keys/{id}/delete-confirm`):
+- `signing_keys_delete_confirm_get` changed from `CurrentAdmin` to
+  `CurrentAdminOrAuditor` with guard.
+
+### Added — `HttpError::html_403_auditor()` helper
+
+A dedicated constructor for auditor-on-mutation-GET responses. Returns HTTP
+403 with `forced_status = Some(StatusCode::FORBIDDEN)` — the distinction
+from 401 matters: 403 tells the client that re-authentication will not help.
+
+### Added — 3 i18n keys (RFC 088, all locales)
+
+`error_403_auditor_title`, `error_403_auditor_body`, and
+`client_detail_readonly_title` ("App details") added to English, Japanese,
+Simplified Chinese, and Traditional Chinese (delegates to Simplified).
+
+### Added — `can_write: bool` in settings data structs
+
+All six `Settings*Data` structs gained `can_write: bool`, populated from
+`actor.can_write()` in each GET handler. The render functions destructure it
+as `_can_write` (used for future conditional branching — the read-only `<dl>`
+rendering mode for auditors is a follow-up improvement on top of the security
+enforcement this release provides).
+
+### Changed — `clients_edit_get` now uses `actor.can_write()`
+
+The client edit renderer already accepts `can_write: bool`; the handler now
+derives it from `read_actor.can_write()` instead of `role.is_admin()`. These
+are equivalent for current roles but the former is the correct abstraction —
+it delegates to the RFC 082 authorization table via RFC 081's
+`ReadOnlyAdminActor`.
+
+**96/96 tests pass. All 5 CI invariants PASS.**
+
 ## [0.69.0] — 2026-06-14
 
 **Security assurance: RFC 084 (fuzzing harness) + RFC 086 (formal verification

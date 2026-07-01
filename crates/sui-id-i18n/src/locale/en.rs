@@ -610,6 +610,9 @@ pub static STRINGS_EN: Strings = Strings {
     confirm_delete_signing_key_impact: "Tokens signed by this key that have not yet expired will fail verification immediately.",
     confirm_delete_signing_key_reversibility: "This cannot be undone. Only delete keys whose tokens have all expired.",
     confirm_delete_signing_key_button: "Delete signing key",
+    error_403_auditor_title: "Read-only access",
+    error_403_auditor_body: "Your account has read-only (auditor) access. This action requires administrator privileges.",
+    client_detail_readonly_title: "App details",
 
     // Admin: User detail (RFC 035)
     user_detail_back: "← Back to users",

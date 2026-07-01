@@ -62,12 +62,16 @@ pub async fn users_get(
 /// `GET /admin/users/new` — isolated create-user form.
 pub async fn users_new_get(
     state_ext: AppStateExt,
-    CurrentAdmin(_admin_id, _): CurrentAdmin,
+    CurrentAdminOrAuditor(admin_id, _role, ref actor): CurrentAdminOrAuditor,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
+    // RFC 088: auditors reach a 403 page, not a login redirect.
+    if !actor.can_write() {
+        return Err(crate::errors::HttpError::html_403_auditor());
+    }
     let State(app) = state_ext;
     let token = crate::csrf::ensure_token(&jar);
-    let lang = crate::handlers::resolve_admin_locale(&app, _admin_id).await;
+    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let resp = Html(render_users_new(None, token.clone(), app.is_dev_mode, lang)).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
 }
@@ -309,10 +313,13 @@ pub async fn users_detail_get(
 
 pub async fn users_disable_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, _): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, ref actor): CurrentAdminOrAuditor,
     jar: CookieJar,
     Path(id): Path<String>,
 ) -> Result<Response, HttpError> {
+    if !actor.can_write() {
+        return Err(crate::errors::HttpError::html_403_auditor());
+    }
     let State(app) = state_ext;
     let target = UserId::from_str(&id)
         .map_err(|_| HttpError::html(CoreError::BadRequest("invalid user id".into())))?;
@@ -334,11 +341,14 @@ pub async fn users_disable_confirm_get(
 
 pub async fn users_delete_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, _): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, ref actor): CurrentAdminOrAuditor,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
 ) -> Result<Response, HttpError> {
+    if !actor.can_write() {
+        return Err(crate::errors::HttpError::html_403_auditor());
+    }
     let State(app) = state_ext;
     let return_to = format!("/admin/users/{id}/delete-confirm");
     if let Err(redirect) =
@@ -365,11 +375,14 @@ pub async fn users_delete_confirm_get(
 
 pub async fn users_mfa_reset_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, _): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, ref actor): CurrentAdminOrAuditor,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
 ) -> Result<Response, HttpError> {
+    if !actor.can_write() {
+        return Err(crate::errors::HttpError::html_403_auditor());
+    }
     let State(app) = state_ext;
     let return_to = format!("/admin/users/{id}/mfa-reset-confirm");
     if let Err(redirect) =

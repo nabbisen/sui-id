@@ -20,11 +20,14 @@ use super::with_csrf_cookie;
 
 pub async fn signing_keys_delete_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id, ref admin_actor): CurrentAdmin,
+    CurrentAdminOrAuditor(admin_id, _role, ref actor): CurrentAdminOrAuditor,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
 ) -> Result<Response, HttpError> {
+    if !actor.can_write() {
+        return Err(crate::errors::HttpError::html_403_auditor());
+    }
     let State(app) = state_ext;
     let return_to = format!("/admin/signing-keys/{id}/delete-confirm");
     if let Err(redirect) =

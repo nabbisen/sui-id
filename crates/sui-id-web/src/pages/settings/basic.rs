@@ -19,6 +19,8 @@ pub struct SettingsBasicData {
     /// rendered without CSRF (legacy callers); the lang form
     /// no-ops when the token is missing.
     pub csrf_token: String,
+    /// RFC 088: false for auditors → render static rows instead of form.
+    pub can_write: bool,
 }
 
 pub fn render_settings_basic(
@@ -37,6 +39,7 @@ pub fn render_settings_basic(
             jwks_url,
             default_lang,
             csrf_token,
+            can_write: _can_write,
         } = data;
         let csrf_for_lang = csrf_token.clone();
         let lang_form = view! {

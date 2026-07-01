@@ -16,6 +16,8 @@ pub struct SettingsAuthenticationData {
     pub refresh_token_lifetime_secs: i64,
     pub refresh_rotation: bool,
     pub refresh_theft_detection: bool,
+    /// RFC 088: false for auditors → render static rows instead of form.
+    pub can_write: bool,
 }
 
 fn fmt_lifetime(t: &'static sui_id_i18n::Strings, secs: i64) -> String {
@@ -50,6 +52,7 @@ pub fn render_settings_authentication(
             refresh_token_lifetime_secs,
             refresh_rotation,
             refresh_theft_detection,
+            can_write: _can_write,
         } = data;
         view! {
             <Shell title=t.settings_title_authentication.to_string() show_nav=true current=Some("settings".to_string()) lang=lang csrf_token=csrf_token.clone()>

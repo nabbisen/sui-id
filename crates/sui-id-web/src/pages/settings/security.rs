@@ -20,6 +20,8 @@ pub struct SettingsSecurityData {
     /// tolerated (forms no-op without it) but production callers
     /// should always pass a real token.
     pub csrf_token: String,
+    /// RFC 088: false for auditors → render static rows instead of form.
+    pub can_write: bool,
 }
 
 pub fn render_settings_security(
@@ -40,6 +42,7 @@ pub fn render_settings_security(
             idle_session_timeout_secs,
             max_concurrent_sessions,
             csrf_token,
+            can_write: _can_write,
         } = data;
         let csrf_for_idle = csrf_token.clone();
         let csrf_for_cap = csrf_token.clone();

@@ -856,4 +856,8 @@ pub struct Strings {
     pub confirm_delete_signing_key_impact: &'static str,
     pub confirm_delete_signing_key_reversibility: &'static str,
     pub confirm_delete_signing_key_button: &'static str,
+    // RFC 088: auditor 403 and client read-only mode
+    pub error_403_auditor_title: &'static str,
+    pub error_403_auditor_body: &'static str,
+    pub client_detail_readonly_title: &'static str,
 }

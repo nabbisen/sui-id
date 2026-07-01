@@ -38,7 +38,7 @@ pub async fn index_redirect() -> Redirect {
 
 pub async fn basic_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, _): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, ref actor): CurrentAdminOrAuditor,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -55,6 +55,7 @@ pub async fn basic_get(
         jwks_url: format!("{}/.well-known/jwks.json", cfg.server.issuer),
         default_lang: server_settings.default_lang,
         csrf_token: token.clone(),
+        can_write: actor.can_write(),
     };
         let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let html = sui_id_web::render_settings_basic(data, None, lang);
@@ -76,7 +77,7 @@ pub struct BasicLangForm {
 
 pub async fn basic_lang_post(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id, _): CurrentAdmin,
+    CurrentAdmin(admin_id, ref admin_actor): CurrentAdmin,
     jar: CookieJar,
     axum::Form(form): axum::Form<BasicLangForm>,
 ) -> Result<Response, HttpError> {
@@ -98,7 +99,7 @@ pub async fn basic_lang_post(
     let server_settings = sui_id_store::repos::server_settings::get(&app.db).await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
     let token = csrf::ensure_token(&jar);
-    let data = sui_id_web::SettingsBasicData {
+    let data = sui_id_web::SettingsBasicData { can_write: admin_actor.as_read_only().can_write(),
         issuer: cfg.server.issuer.clone(),
         listen_addr: cfg.server.listen_addr.clone(),
         cookie_secure: cfg.server.cookie_secure,
@@ -114,11 +115,11 @@ pub async fn basic_lang_post(
     Ok(with_csrf_cookie(resp, &app, &token))
 }
 
-// ---------- セキュリティ ----------
+// ---------- Security ----------
 
 pub async fn security_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, _): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, ref actor): CurrentAdminOrAuditor,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -126,7 +127,7 @@ pub async fn security_get(
     let server_settings = sui_id_store::repos::server_settings::get(&app.db).await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
     let token = csrf::ensure_token(&jar);
-    let data = sui_id_web::SettingsSecurityData {
+    let data = sui_id_web::SettingsSecurityData { can_write: actor.can_write(),
         max_lockout_label: cfg.security.max_lockout.label().to_owned(),
         hsts_enabled: cfg.server.cookie_secure,
         csp_enabled: true,
@@ -209,7 +210,7 @@ pub async fn max_sessions_post(
 
 pub async fn authentication_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, _): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, ref actor): CurrentAdminOrAuditor,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -226,6 +227,7 @@ pub async fn authentication_get(
         refresh_token_lifetime_secs: cfg.tokens.refresh_lifetime_secs,
         refresh_rotation: true,
         refresh_theft_detection: true,
+        can_write: actor.can_write(),
     };
     let token = csrf::ensure_token(&jar);
         let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
@@ -238,7 +240,7 @@ pub async fn authentication_get(
 
 pub async fn logs_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, _): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, ref actor): CurrentAdminOrAuditor,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -276,6 +278,7 @@ pub async fn logs_get(
                 legacy_unhashed: r.legacy_unhashed,
             })
             .map_err(|e| HttpError::html(CoreError::from(e)))?,
+        can_write: actor.can_write(),
     };
     let token = csrf::ensure_token(&jar);
         let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
@@ -288,7 +291,7 @@ pub async fn logs_get(
 
 pub async fn other_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, _): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, ref actor): CurrentAdminOrAuditor,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -307,6 +310,7 @@ pub async fn other_get(
         user_count,
         client_count,
         clock_now: Utc::now(),
+        can_write: actor.can_write(),
     };
     let token = csrf::ensure_token(&jar);
         let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
@@ -341,13 +345,14 @@ pub struct EmailSettingsForm {
 
 pub async fn email_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, _): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, ref actor): CurrentAdminOrAuditor,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
     let cfg_row = sui_id_store::repos::smtp_config::get(&app.db).await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
-    let data = build_email_data(cfg_row.as_ref());
+    let mut data = build_email_data(cfg_row.as_ref());
+    data.can_write = actor.can_write();
     let token = csrf::ensure_token(&jar);
         let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let html = sui_id_web::render_settings_email(data, token.clone(), None, lang);
@@ -469,7 +474,8 @@ pub async fn email_test(
 
     let cfg_row = sui_id_store::repos::smtp_config::get(&app.db).await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
-    let data = build_email_data(cfg_row.as_ref());
+    let mut data = build_email_data(cfg_row.as_ref());
+    data.can_write = true; // email_test is admin-only
     let token = csrf::ensure_token(&jar);
     let flash = match &result {
         Ok(()) => Some(sui_id_web::Flash {
@@ -504,6 +510,7 @@ fn build_email_data(cfg: Option<&sui_id_store::models::SmtpConfigRow>) -> sui_id
             from_address: row.from_address.clone(),
             from_name: row.from_name.clone().unwrap_or_default(),
             base_url: row.base_url.clone(),
+            can_write: false, // overridden by caller via actor.can_write()
         },
         None => sui_id_web::SettingsEmailData {
             configured: false,
@@ -516,6 +523,7 @@ fn build_email_data(cfg: Option<&sui_id_store::models::SmtpConfigRow>) -> sui_id
             from_address: String::new(),
             from_name: String::new(),
             base_url: String::new(),
+            can_write: false, // overridden by caller via actor.can_write()
         },
     }
 }

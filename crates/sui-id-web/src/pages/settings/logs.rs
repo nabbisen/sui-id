@@ -12,6 +12,8 @@ pub struct SettingsLogsData {
     pub login_locked_24h: i64,
     pub password_changed_self_24h: i64,
     pub chain_report: SettingsChainStatus,
+    /// RFC 088: false for auditors → render static rows instead of form.
+    pub can_write: bool,
 }
 
 pub struct SettingsChainStatus {
@@ -36,6 +38,7 @@ pub fn render_settings_logs(
             login_locked_24h,
             password_changed_self_24h,
             chain_report,
+            can_write: _can_write,
         } = data;
 
         let chain_badge = if chain_report.broken_at_seq.is_some() {

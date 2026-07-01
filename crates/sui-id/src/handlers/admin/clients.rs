@@ -24,11 +24,14 @@ use super::with_csrf_cookie;
 
 pub async fn clients_delete_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role, _): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, ref actor): CurrentAdminOrAuditor,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
 ) -> Result<Response, HttpError> {
+    if !actor.can_write() {
+        return Err(crate::errors::HttpError::html_403_auditor());
+    }
     let State(app) = state_ext;
     let return_to = format!("/admin/clients/{id}/delete-confirm");
     if let Err(redirect) =
@@ -84,9 +87,12 @@ pub async fn clients_get(
 /// `GET /admin/clients/new` — isolated register-client form.
 pub async fn clients_new_get(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id, ref admin_actor): CurrentAdmin,
+    CurrentAdminOrAuditor(admin_id, _role, ref actor): CurrentAdminOrAuditor,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
+    if !actor.can_write() {
+        return Err(crate::errors::HttpError::html_403_auditor());
+    }
     let State(app) = state_ext;
     let token = crate::csrf::ensure_token(&jar);
     let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
@@ -259,7 +265,7 @@ pub struct ClientEditQuery {
 
 pub async fn clients_edit_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, role, ref read_actor): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, ref read_actor): CurrentAdminOrAuditor,
     jar: CookieJar,
     Path(id): Path<String>,
     axum::extract::Query(q): axum::extract::Query<ClientEditQuery>,
@@ -269,7 +275,7 @@ pub async fn clients_edit_get(
         .map_err(|_| HttpError::html(CoreError::BadRequest("invalid client id".into())))?;
     let row = admin_uc::get_client(&app.db, read_actor, target).await.map_err(HttpError::html)?;
     let token = crate::csrf::ensure_token(&jar);
-    let resp = Html(sui_id_web::render_client_edit(role.is_admin(), 
+    let resp = Html(sui_id_web::render_client_edit(read_actor.can_write(), 
         sui_id_web::ClientEditData {
             id: row.id.to_string(),
             name: row.name,

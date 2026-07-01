@@ -15,6 +15,8 @@ pub struct SettingsEmailData {
     pub from_address: String,
     pub from_name: String,
     pub base_url: String,
+    /// RFC 088: false for auditors → render static rows instead of form.
+    pub can_write: bool,
 }
 
 pub fn render_settings_email(
@@ -36,6 +38,7 @@ pub fn render_settings_email(
             from_address,
             from_name,
             base_url,
+            can_write: _can_write,
         } = data;
         let csrf_save = csrf_token.clone();
         let csrf_test = csrf_token.clone();
