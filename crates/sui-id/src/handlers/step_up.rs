@@ -50,12 +50,34 @@ use sui_id_web::{Flash, FlashKind};
 /// matching the pending row's TTL); cleared on success or failure.
 const WEBAUTHN_STEP_UP_COOKIE: &str = "sui_id_step_up_webauthn_pending";
 
-/// What we treat as a safe `return_to`: a path-only string that
-/// starts with `/`, doesn't double-slash (which a browser may
-/// interpret as a protocol-relative URL), and contains no
-/// backslash, line break, or NUL. Anything else collapses to the
-/// default fallback.
+/// Route prefixes that may appear as a `?return_to=` value after a
+/// successful step-up challenge (RFC 089).
+///
+/// Prefix matching: any path that starts with one of these values is
+/// permitted. Every prefix is either under admin auth (`/admin/*`) or
+/// self-service auth (`/me/security/*`), both of which are independently
+/// session-gated, so prefix matching is safe.
+const STEP_UP_RETURN_ALLOWLIST: &[&str] = &[
+    "/admin/users/",
+    "/admin/clients/",
+    "/admin/signing-keys/",
+    "/admin/settings/",
+    "/me/security/",
+];
+
+/// Validate a `?return_to=` parameter for the step-up endpoint (RFC 089).
+///
+/// Acceptance criteria (all must pass):
+/// 1. Non-empty, starts with a single `/` (not `//` or `/\`).
+/// 2. Contains no backslash, CR, LF, or NUL.
+/// 3. **Allowlist**: the path begins with one of the step-up-gated
+///    route prefixes in `STEP_UP_RETURN_ALLOWLIST`.
+///
+/// Any path that fails any check collapses to `/me/security` so that
+/// a crafted `?return_to=` cannot redirect the user to an arbitrary
+/// route post-step-up.
 fn sanitise_return_to(raw: &str) -> String {
+    // ── Format checks (unchanged from pre-RFC-089) ──────────────────
     if raw.is_empty() {
         return "/me/security".to_owned();
     }
@@ -69,6 +91,17 @@ fn sanitise_return_to(raw: &str) -> String {
         if c == '\\' || c == '\n' || c == '\r' || c == '\0' {
             return "/me/security".to_owned();
         }
+    }
+    // ── RFC 089: allowlist check ─────────────────────────────────────
+    // Reject any path not under a step-up-gated prefix, collapsing to
+    // the safe default.  This prevents a crafted link from bouncing
+    // the user to an unintended admin surface after a successful
+    // step-up challenge.
+    let in_allowlist = STEP_UP_RETURN_ALLOWLIST
+        .iter()
+        .any(|prefix| raw.starts_with(prefix));
+    if !in_allowlist {
+        return "/me/security".to_owned();
     }
     raw.to_owned()
 }
@@ -285,5 +318,86 @@ pub async fn webauthn_finish(
                 .into_response();
             Ok((jar, resp).into_response())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sanitise_return_to;
+
+    // ── RFC 089: allowlist enforcement ────────────────────────────────────
+
+    #[test]
+    fn allowlisted_admin_users_path_accepted() {
+        let result = sanitise_return_to("/admin/users/some-uuid/delete-confirm");
+        assert_eq!(result, "/admin/users/some-uuid/delete-confirm");
+    }
+
+    #[test]
+    fn allowlisted_admin_signing_keys_path_accepted() {
+        let result = sanitise_return_to("/admin/signing-keys/some-id/delete-confirm");
+        assert_eq!(result, "/admin/signing-keys/some-id/delete-confirm");
+    }
+
+    #[test]
+    fn allowlisted_admin_settings_path_accepted() {
+        let result = sanitise_return_to("/admin/settings/security");
+        assert_eq!(result, "/admin/settings/security");
+    }
+
+    #[test]
+    fn allowlisted_me_security_path_accepted() {
+        let result = sanitise_return_to("/me/security/mfa");
+        assert_eq!(result, "/me/security/mfa");
+    }
+
+    #[test]
+    fn non_allowlisted_admin_dashboard_collapses_to_default() {
+        let result = sanitise_return_to("/admin/dashboard");
+        assert_eq!(result, "/me/security", "admin dashboard is not step-up gated");
+    }
+
+    #[test]
+    fn non_allowlisted_root_collapses_to_default() {
+        let result = sanitise_return_to("/");
+        assert_eq!(result, "/me/security");
+    }
+
+    #[test]
+    fn non_allowlisted_admin_bare_collapses_to_default() {
+        let result = sanitise_return_to("/admin");
+        assert_eq!(result, "/me/security");
+    }
+
+    // ── Existing format-check tests (unchanged) ───────────────────────────
+
+    #[test]
+    fn empty_string_collapses() {
+        assert_eq!(sanitise_return_to(""), "/me/security");
+    }
+
+    #[test]
+    fn absolute_url_collapses() {
+        assert_eq!(sanitise_return_to("https://evil.example/"), "/me/security");
+    }
+
+    #[test]
+    fn protocol_relative_collapses() {
+        assert_eq!(sanitise_return_to("//evil.example"), "/me/security");
+    }
+
+    #[test]
+    fn backslash_prefix_collapses() {
+        assert_eq!(sanitise_return_to("/\\evil"), "/me/security");
+    }
+
+    #[test]
+    fn embedded_newline_collapses() {
+        assert_eq!(sanitise_return_to("/admin/users/\nX-Header: injected"), "/me/security");
+    }
+
+    #[test]
+    fn embedded_nul_collapses() {
+        assert_eq!(sanitise_return_to("/admin/users/\0etc"), "/me/security");
     }
 }

@@ -79,6 +79,15 @@ pub enum StepUpDecision {
 /// - Otherwise, require `last_step_up_at >= now - freshness_secs`.
 ///   Sessions with `last_step_up_at = None` (password-only
 ///   established, or pre-migration row) always need to challenge.
+///
+/// # Factor eligibility (RFC 089)
+///
+/// Only TOTP codes and WebAuthn assertions satisfy step-up.
+/// **Recovery codes are explicitly excluded** — they are for account
+/// recovery, not for routine step-up re-authentication. The step-up
+/// challenge handlers (`/me/security/step-up` GET/POST and the
+/// WebAuthn start/finish endpoints) are the only routes that set
+/// `last_step_up_at`; recovery-code verification does not touch it.
 pub async fn policy_for_session(
     db: &Database,
     clock: &SharedClock,

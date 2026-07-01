@@ -5,6 +5,57 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.71.0] — 2026-06-14
+
+**UI-security unit 3: RFC 089 — Step-up Authentication Contract.**
+Tightens the `?return_to=` parameter validation with a server-side
+allowlist and documents the recovery-code exclusion. No user-facing change
+for well-formed flows; malformed or non-allowlisted `return_to` values now
+fall back to `/me/security` instead of navigating to the supplied path.
+
+Also in this release: **RFCs 089–092 drafted.** All four remaining
+UI-security units (step-up, pending-change, LoginContext/SelfServiceShell,
+and components) have RFC documents in `rfcs/proposed/`, providing the full
+spec-first foundation before any code lands for units 4–6.
+
+### Fixed — `sanitise_return_to` allowlist gate (RFC 089 P1)
+
+The existing `sanitise_return_to` helper in `handlers/step_up.rs` validated
+format only (relative URL, no protocol-relative prefix, no control chars).
+A crafted `?return_to=/admin/dashboard` or any non-step-up-gated path could
+redirect the user post-step-up to a route that didn't need the challenge.
+
+Added `STEP_UP_RETURN_ALLOWLIST: &[&str]` with five prefixes:
+`/admin/users/`, `/admin/clients/`, `/admin/signing-keys/`,
+`/admin/settings/`, `/me/security/`. Any `return_to` that doesn't begin
+with one of these prefixes now falls back to `/me/security`.
+
+12 unit tests: 4 allowlisted paths accepted, 3 non-allowlisted paths
+rejected, 5 existing format-violation tests confirmed still passing.
+
+### Added — Recovery-code exclusion documentation (RFC 089 P2)
+
+`sui-id-core::step_up::policy_for_session` gains a `# Factor eligibility`
+doc comment explicitly stating that recovery codes are excluded from step-up
+factor eligibility. The implementation was already correct (only TOTP and
+WebAuthn set `last_step_up_at`); the doc comment makes this a named invariant.
+
+### Added — RFCs 089–092 (proposed)
+
+- **RFC 089** (done this release).
+- **RFC 090** — Signing-key rotation confirm + settings pending-change object
+  (unit 4). New `pending_settings_change` table, `pending_change::create/apply/
+  cancel/purge_expired` core functions, encrypted-at-rest payload, 5-minute
+  session-bound TTL. SMTP password never in form fields.
+- **RFC 091** — `LoginContext` enum (`AdminPanel`, `OidcAuthorize`, `SelfService`)
+  + trusted client-name derivation + `SelfServiceShell` with horizontal nav
+  (unit 5).
+- **RFC 092** — `ThemeToggle` (`no-js`/`js` root-class swap, `localStorage`
+  try/catch, `<noscript>` fallback), `EmptyState`, `CopyField`
+  (`readonly` + `role="status"`), error summary `role="alert"` (unit 6).
+
+**96/96 tests pass. All 5 CI gates PASS.**
+
 ## [0.70.0] — 2026-06-14
 
 **UI-security unit 2: RFC 088 — Auditor Authorization Matrix and Static

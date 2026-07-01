@@ -31,7 +31,7 @@ folders.
 
 Most RFCs in this directory share a single sequential numbering line
 (`001-…`, `002-…`, … `087-…` at the time of writing; the next free
-slot is `088`). One **parallel namespace** also exists:
+slot is `093`). One **parallel namespace** also exists:
 
 - **`RFC-MI-NNN-*`** — the **Mockup Integration epic**, introduced
   in v0.49.0. These RFCs cross-reference each other heavily by their
@@ -333,3 +333,17 @@ The full lifecycle is described in
    They stay there as a record.
 
 Files are never deleted. The full reasoning is in RFC 018.
+
+
+## UI-Security Contract (RFCs 088–092, v0.70.x–v0.74.x)
+
+Units 2–6 of the v2.3 UI/UX contract. Each unit is one RFC, sequenced by
+dependency.
+
+| RFC | Title | Status |
+|---|---|---|
+| 088 | [Auditor authorization matrix and static read-only rendering](./done/088-auditor-matrix-read-only-rendering.md) | ✅ Shipped v0.70.0 |
+| 089 | [Step-up authentication contract](./proposed/089-step-up-contract.md) | Proposed |
+| 090 | [Signing-key rotation confirm + settings pending-change](./proposed/090-signing-key-confirm-pending-change.md) | Proposed |
+| 091 | [LoginContext rendering and SelfServiceShell navigation](./proposed/091-login-context-self-service-shell.md) | Proposed |
+| 092 | [UI components: ThemeToggle, EmptyState, CopyField, Error summary](./proposed/092-ui-components.md) | Proposed |
