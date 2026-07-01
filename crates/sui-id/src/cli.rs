@@ -4,11 +4,12 @@
 //! `main.rs`; this module contains only the handler functions for each
 //! subcommand so that `main.rs` stays below the 500-line threshold.
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use std::path::PathBuf;
 use sui_id::{backup, config::Config};
 pub(crate) fn run_backup_subcommand(args: &[String]) -> Result<()> {
-    let dest = parse_named_path(args, "--to").context("backup requires --to PATH")?;
+    let dest = parse_named_path(args, "--to")
+        .context("backup requires --to PATH")?;
     let config_path = parse_config_path(args).unwrap_or_else(|| PathBuf::from("./sui-id.toml"));
     let cfg = Config::load(&config_path)
         .with_context(|| format!("loading config from {}", config_path.display()))?;
@@ -38,7 +39,8 @@ pub(crate) fn run_backup_subcommand(args: &[String]) -> Result<()> {
 }
 
 pub(crate) fn run_restore_subcommand(args: &[String]) -> Result<()> {
-    let src = parse_named_path(args, "--from").context("restore requires --from PATH")?;
+    let src = parse_named_path(args, "--from")
+        .context("restore requires --from PATH")?;
     let config_path = parse_config_path(args).unwrap_or_else(|| PathBuf::from("./sui-id.toml"));
     let cfg = Config::load(&config_path)
         .with_context(|| format!("loading config from {}", config_path.display()))?;
@@ -48,7 +50,11 @@ pub(crate) fn run_restore_subcommand(args: &[String]) -> Result<()> {
     } else {
         None
     };
-    backup::run_restore(&cfg, &src, &backup::RestoreOptions { force, passphrase })?;
+    backup::run_restore(
+        &cfg,
+        &src,
+        &backup::RestoreOptions { force, passphrase },
+    )?;
     eprintln!(
         "restored from {} into {} and {}",
         src.display(),
@@ -59,7 +65,8 @@ pub(crate) fn run_restore_subcommand(args: &[String]) -> Result<()> {
 }
 
 pub(crate) fn run_verify_backup_subcommand(args: &[String]) -> Result<()> {
-    let src = parse_named_path(args, "--from").context("verify-backup requires --from PATH")?;
+    let src = parse_named_path(args, "--from")
+        .context("verify-backup requires --from PATH")?;
     let passphrase = if args.iter().any(|a| a == "--decrypt") {
         Some(read_passphrase("Decryption passphrase", false)?)
     } else {
@@ -77,11 +84,7 @@ pub(crate) fn run_verify_backup_subcommand(args: &[String]) -> Result<()> {
     println!("Database size:  {} bytes", report.db_bytes);
     println!(
         "Master key:     {}",
-        if report.key_present {
-            "present"
-        } else {
-            "MISSING"
-        }
+        if report.key_present { "present" } else { "MISSING" }
     );
     println!();
     println!("✓ SQLite integrity check passed");
@@ -106,7 +109,9 @@ pub(crate) async fn run_admin_subcommand(args: &[String]) -> Result<()> {
         Some(other) => bail!(
             "unknown admin subaction `{other}`. Known subactions: unlock-user, rotate-key, rotate-metrics-token"
         ),
-        None => bail!("admin requires a subaction. Try: sui-id admin unlock-user --username NAME"),
+        None => bail!(
+            "admin requires a subaction. Try: sui-id admin unlock-user --username NAME"
+        ),
     }
 }
 
@@ -131,15 +136,14 @@ pub(crate) async fn run_admin_unlock_user(args: &[String]) -> Result<()> {
     // Open the database using the same key-resolution logic the
     // server uses (env var > file). No need to spin up the HTTP
     // layer or the clock; we read one row, write one row, exit.
-    let resolved = sui_id::keyring::resolve(&cfg.storage.key_file).context("loading master key")?;
+    let resolved = sui_id::keyring::resolve(&cfg.storage.key_file)
+        .context("loading master key")?;
     let db = sui_id_store::Database::open(&cfg.storage.db_path, resolved.key)
         .context("opening database")?;
 
-    let user = sui_id_store::repos::users::find_by_username(&db, username)
-        .await
+    let user = sui_id_store::repos::users::find_by_username(&db, username).await
         .with_context(|| format!("looking up user {username:?}"))?;
-    sui_id_store::repos::users::admin_unlock(&db, user.id)
-        .await
+    sui_id_store::repos::users::admin_unlock(&db, user.id).await
         .context("clearing lockout")?;
     // Mirror the operator-facing audit-log entry the live admin UI
     // would write for this action.
@@ -153,8 +157,7 @@ pub(crate) async fn run_admin_unlock_user(args: &[String]) -> Result<()> {
             result: "ok".into(),
             note: Some(format!("unlocked via command line for username={username}")),
         },
-    )
-    .await;
+    ).await;
     eprintln!("unlocked {username} (id={})", user.id);
     Ok(())
 }
@@ -256,8 +259,8 @@ pub(crate) async fn run_admin_rotate_key(args: &[String]) -> Result<()> {
 
     // Resolve OLD key from the configured path (or env, same as
     // the server's startup logic).
-    let resolved_old =
-        sui_id::keyring::resolve(&cfg.storage.key_file).context("loading old master key")?;
+    let resolved_old = sui_id::keyring::resolve(&cfg.storage.key_file)
+        .context("loading old master key")?;
     let db = sui_id_store::Database::open(&cfg.storage.db_path, resolved_old.key)
         .context("opening database with old key")?;
 
@@ -277,8 +280,7 @@ pub(crate) async fn run_admin_rotate_key(args: &[String]) -> Result<()> {
     };
 
     // Re-seal everything atomically.
-    let report = sui_id_core::key_rotation::rotate_master_key(&db, &new_key)
-        .await
+    let report = sui_id_core::key_rotation::rotate_master_key(&db, &new_key).await
         .context("rotating sealed columns under the new key")?;
 
     // Rename the old key file. Done AFTER the transaction
@@ -332,14 +334,16 @@ pub(crate) async fn run_admin_rotate_key(args: &[String]) -> Result<()> {
                 bak_path.display()
             )),
         },
-    )
-    .await;
+    ).await;
 
     eprintln!();
     eprintln!("Rotation complete.");
     eprintln!("  signing_keys:               {}", report.signing_keys);
     eprintln!("  refresh_tokens:             {}", report.refresh_tokens);
-    eprintln!("  user_totp (secrets):        {}", report.user_totp_secrets);
+    eprintln!(
+        "  user_totp (secrets):        {}",
+        report.user_totp_secrets
+    );
     eprintln!(
         "  user_totp (recovery codes): {}",
         report.user_totp_recovery_codes
@@ -402,7 +406,8 @@ async fn run_setup(args: &[String]) -> Result<()> {
     let cfg = Config::load(&config_path)
         .with_context(|| format!("loading config from {}", config_path.display()))?;
 
-    let resolved = sui_id::keyring::resolve(&cfg.storage.key_file).context("loading master key")?;
+    let resolved = sui_id::keyring::resolve(&cfg.storage.key_file)
+        .context("loading master key")?;
     let db = sui_id_store::Database::open(&cfg.storage.db_path, resolved.key)
         .context("opening database")?;
 
@@ -434,7 +439,10 @@ async fn run_setup(args: &[String]) -> Result<()> {
         other => anyhow::anyhow!("{other}"),
     })?;
 
-    let login_url = format!("{}/admin/login", cfg.server.issuer.trim_end_matches('/'));
+    let login_url = format!(
+        "{}/admin/login",
+        cfg.server.issuer.trim_end_matches('/')
+    );
 
     eprintln!("sui-id initialized (admin id={}).", created.user_id);
     println!();
@@ -471,10 +479,7 @@ pub(crate) fn read_passphrase(prompt: &str, confirm: bool) -> Result<String> {
     write!(stderr, "{prompt}: ").ok();
     stderr.flush().ok();
     let mut first = String::new();
-    stdin
-        .lock()
-        .read_line(&mut first)
-        .context("reading passphrase")?;
+    stdin.lock().read_line(&mut first).context("reading passphrase")?;
     let first = first.trim_end_matches(['\r', '\n']).to_string();
     if first.is_empty() {
         bail!("passphrase must not be empty");
@@ -483,10 +488,7 @@ pub(crate) fn read_passphrase(prompt: &str, confirm: bool) -> Result<String> {
         write!(stderr, "{prompt} (again): ").ok();
         stderr.flush().ok();
         let mut second = String::new();
-        stdin
-            .lock()
-            .read_line(&mut second)
-            .context("reading passphrase confirmation")?;
+        stdin.lock().read_line(&mut second).context("reading passphrase confirmation")?;
         let second = second.trim_end_matches(['\r', '\n']).to_string();
         if first != second {
             bail!("passphrases did not match");
@@ -647,20 +649,23 @@ pub(crate) async fn run_admin_rotate_metrics_token(args: &[String]) -> Result<()
     use getrandom::fill as rand_fill;
     use sha2::{Digest, Sha256};
 
-    let config_path =
-        parse_config_path(args).unwrap_or_else(|| std::path::PathBuf::from("./sui-id.toml"));
+    let config_path = parse_config_path(args)
+        .unwrap_or_else(|| std::path::PathBuf::from("./sui-id.toml"));
     let cfg = crate::Config::load(&config_path)
         .with_context(|| format!("loading config from {}", config_path.display()))?;
 
-    let resolved = sui_id::keyring::resolve(&cfg.storage.key_file).context("loading master key")?;
-
+    let resolved = sui_id::keyring::resolve(&cfg.storage.key_file)
+        .context("loading master key")?;
     let db = sui_id_store::Database::open(&cfg.storage.db_path, resolved.key)
         .context("opening database")?;
 
     // Generate a fresh 32-byte random token and encode it as URL-safe base64.
     let mut raw = [0u8; 32];
     rand_fill(&mut raw).context("generating random bytes")?;
-    let token: String = raw.iter().map(|b| format!("{b:02x}")).collect::<String>();
+    let token: String = raw
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>();
 
     // Hash with SHA-256 for storage (constant-time comparison at verify time).
     let hash = Sha256::digest(token.as_bytes())

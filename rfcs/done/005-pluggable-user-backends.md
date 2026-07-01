@@ -1,6 +1,6 @@
 # RFC 005 — Pluggable User Backends (Read-Only LDAP User-Source)
 
-**Status.** Proposed (longer-term, no scheduled delivery)
+**Status.** Implemented (v0.76.1)
 **Priority.** Low. Feature-expansion RFC. Best driven by a concrete
 deployment's requirements; requires explicit owner direction before
 scheduling.

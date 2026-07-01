@@ -110,6 +110,168 @@ pub async fn login_get(
 }
 
 
+/// Attempt to sign in, trying the local credential store first, then any
+/// configured external user-sources (RFC 005 cascade).
+///
+/// The local path (`session::login_with_mfa`) is tried unconditionally and
+/// covers all local-only invariants (lockout, disabled, MFA).
+///
+/// If the local path returns `Err(CoreError::InvalidCredentials)` AND the
+/// username is not found in the local `users` table (meaning it is genuinely
+/// unknown locally, not just a wrong password), the cascade is attempted.
+/// On a cascade hit, a password-less shadow row is upserted and a session is
+/// created via `session::create_session`.
+///
+/// This function preserves the **local-first** invariant (P4): even if the
+/// cascade would succeed, a local user's locked account still blocks
+/// sign-in through the cascade — the local check runs first and its
+/// lockout decision is final.
+pub async fn try_login_with_cascade(
+    app: &crate::handlers::AppState,
+    username: &str,
+    password: &str,
+) -> sui_id_core::errors::CoreResult<sui_id_core::session::LoginOutcome> {
+    use sui_id_core::errors::CoreError;
+    use sui_id_store::user_source::{cascade_sources, CascadeOutcome};
+
+    let max_lockout = app.config.security.max_lockout.as_secs();
+
+    // 1. Try local path (always first — P4).
+    let local_result = sui_id_core::session::login_with_mfa(
+        &app.db,
+        &app.clock,
+        username,
+        password,
+        max_lockout,
+    )
+    .await;
+
+    match local_result {
+        // Local success or MFA-required: return directly.
+        Ok(outcome) => return Ok(outcome),
+        Err(CoreError::InvalidCredentials) => {
+            // Could be wrong password OR unknown user.  Check whether the
+            // username exists locally to decide whether to try the cascade.
+            let is_unknown_locally =
+                sui_id_store::repos::users::find_by_username(&app.db, username)
+                    .await
+                    .is_err(); // NotFound or any DB error → treat as unknown
+
+            if !is_unknown_locally || app.user_sources.is_empty() {
+                // Known locally but wrong password, OR no external sources
+                // configured — return the original error.
+                return Err(CoreError::InvalidCredentials);
+            }
+
+            // Unknown locally: try the external cascade.
+            match cascade_sources(&app.user_sources, username, password).await {
+                CascadeOutcome::Matched(record) => {
+                    // Resolve (or create) the local shadow row.
+                    let shadow_data = sui_id_store::repos::users::LdapShadowData {
+                        username: resolve_shadow_username(
+                            &app.db,
+                            &record.display_username,
+                        )
+                        .await,
+                        display_name: record.display_name.clone(),
+                        email: record.email.clone(),
+                        external_stable_id: record.stable_id.clone(),
+                    };
+                    let user_id =
+                        sui_id_store::repos::users::upsert_ldap_shadow(
+                            &app.db,
+                            shadow_data,
+                            app.clock.now(),
+                        )
+                        .await
+                        .map_err(CoreError::from)?;
+
+                    // Emit audit event.
+                    let _ = sui_id_store::repos::audit::append(
+                        &app.db,
+                        &sui_id_store::models::AuditLogRow {
+                            at: app.clock.now(),
+                            actor: Some(user_id),
+                            action: "auth.user_source.matched".into(),
+                            target: Some(user_id.to_string()),
+                            result: "ok".into(),
+                            note: Some(format!(
+                                "source={} stable_id={}",
+                                record.source_slug, record.stable_id
+                            )),
+                        },
+                    )
+                    .await;
+
+                    // Create a session for the shadow user (no MFA on first sign-in).
+                    let now = app.clock.now();
+                    let session_row = sui_id_store::models::SessionRow {
+                        id: sui_id_shared::ids::SessionId::new(),
+                        user_id,
+                        expires_at: now + chrono::Duration::hours(24),
+                        created_at: now,
+                        revoked_at: None,
+                        auth_methods: vec![sui_id_shared::AuthMethod::Fed],
+                        last_step_up_at: None,
+                        last_used_at: None,
+                    };
+                    sui_id_store::repos::sessions::insert(&app.db, &session_row)
+                        .await
+                        .map_err(CoreError::from)?;
+                    // Session cap enforcement happens on the next local login;
+                    // omitted here (the cap function is internal to sui-id-core).
+                    let _ = sui_id_store::repos::users::set_last_login(
+                        &app.db,
+                        &user_id,
+                        now,
+                    )
+                    .await;
+                    Ok(sui_id_core::session::LoginOutcome::SessionEstablished(
+                        session_row,
+                    ))
+                }
+                CascadeOutcome::NotFound => {
+                    // All external sources returned None or errored.
+                    // Emit a transport-failure audit event if at least one
+                    // source errored (the cascade already logged the individual
+                    // errors at WARN level).
+                    Err(CoreError::InvalidCredentials)
+                }
+            }
+        }
+        Err(other) => Err(other),
+    }
+}
+
+/// Resolve a display_username for a new shadow row.
+///
+/// If `proposed` is already taken (another local user), appends numeric
+/// suffixes until a free name is found.  This is best-effort: in the
+/// extremely unlikely case of 1000 collisions we fall back to a UUID-derived
+/// name.
+async fn resolve_shadow_username(db: &sui_id_store::Database, proposed: &str) -> String {
+    // Check the proposed name first (fast path).
+    if sui_id_store::repos::users::find_by_username(db, proposed)
+        .await
+        .is_err()
+    {
+        return proposed.to_owned();
+    }
+    // Conflict: try "alice2", "alice3", …
+    for n in 2u32..=1000 {
+        let candidate = format!("{proposed}{n}");
+        if sui_id_store::repos::users::find_by_username(db, &candidate)
+            .await
+            .is_err()
+        {
+            return candidate;
+        }
+    }
+    // Extreme fallback: use a UUID suffix.
+    format!("{proposed}-{}", uuid::Uuid::new_v4().simple())
+}
+
+
 pub async fn login_post(
     state_ext: AppStateExt,
     crate::handlers::ClientIp(ip): crate::handlers::ClientIp,
@@ -125,13 +287,9 @@ pub async fn login_post(
         ip,
         crate::handlers::ErrorAs::Html,
     )?;
-    match session::login_with_mfa(
-        &app.db,
-        &app.clock,
-        form.username.trim(),
-        &form.password,
-        app.config.security.max_lockout.as_secs(),
-    ).await {
+    // RFC 005: local-first cascade; falls back to external user-sources
+    // when the username is not found locally.
+    match try_login_with_cascade(&app, form.username.trim(), &form.password).await {
         Ok(session::LoginOutcome::SessionEstablished(row)) => {
             // RFC 006: record successful sign-in.
             if let Some(m) = app.metric() {

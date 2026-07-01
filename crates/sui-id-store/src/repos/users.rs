@@ -65,13 +65,21 @@ fn map_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<UserRow> {
         email_normalized: row.get::<_, Option<String>>(13)?,
         email_verified_at: row.get::<_, Option<chrono::DateTime<chrono::Utc>>>(14)?,
         last_login_at: row.get::<_, Option<chrono::DateTime<chrono::Utc>>>(16)?,
+        // RFC 005: source discriminator and external stable id (migration 0034).
+        source: row
+            .get::<_, Option<String>>(17)?
+            .as_deref()
+            .and_then(crate::models::UserSource::parse)
+            .unwrap_or_default(),
+        external_stable_id: row.get::<_, Option<String>>(18)?,
     })
 }
 
 const SELECT_USER: &str = "SELECT id, username, display_name, is_admin, is_disabled, \
                            is_deleted, created_at, updated_at, user_uuid, \
                            failed_login_count, locked_until, email, preferred_lang, \
-                           email_normalized, email_verified_at, role, last_login_at \
+                           email_normalized, email_verified_at, role, last_login_at, \
+                           source, external_stable_id \
                            FROM users";
 
 pub async fn create(db: &Database, user: &UserRow) -> StoreResult<()> {
@@ -488,4 +496,229 @@ pub async fn set_last_login(
         Ok(())
     })
     .await
+}
+
+// ── RFC 005: LDAP shadow-row management ──────────────────────────────────────
+
+/// Find a user by their external stable identity (RFC 005).
+///
+/// Used during the LDAP auth cascade to detect whether a shadow row already
+/// exists for an externally-authenticated user before creating one.
+pub async fn find_by_external_stable_id(
+    db: &Database,
+    source: &crate::models::UserSource,
+    external_stable_id: &str,
+) -> StoreResult<UserRow> {
+    let source_str = source.as_str().to_owned();
+    let eid = external_stable_id.to_owned();
+    db.with_conn(move |conn| {
+        conn.query_row(
+            &format!("{SELECT_USER} WHERE source = ?1 AND external_stable_id = ?2"),
+            rusqlite::params![source_str, eid],
+            map_row,
+        )
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
+            other => StoreError::from(other),
+        })
+    })
+    .await
+}
+
+/// Data required to create or update an LDAP shadow row (RFC 005).
+pub struct LdapShadowData {
+    pub username: String,
+    pub display_name: Option<String>,
+    pub email: Option<String>,
+    pub external_stable_id: String,
+}
+
+/// Create a new LDAP shadow row or update display fields on an existing one.
+///
+/// **Create path** (first sign-in): inserts a `source='ldap'` user with no
+/// `credentials` row.  The caller must never call `credentials::create` for
+/// this user (P5).
+///
+/// **Update path** (subsequent sign-in, same `external_stable_id`): refreshes
+/// `display_name` and `email` if they have changed upstream.  The `source`
+/// column is never changed.
+///
+/// Returns the `UserId` of the shadow row (new or existing).
+pub async fn upsert_ldap_shadow(
+    db: &Database,
+    data: LdapShadowData,
+    now: chrono::DateTime<chrono::Utc>,
+) -> StoreResult<UserId> {
+    let eid = data.external_stable_id.clone();
+    let source_str = crate::models::UserSource::Ldap.as_str().to_owned();
+
+    // Check whether a shadow already exists for this external stable id.
+    match find_by_external_stable_id(
+        db,
+        &crate::models::UserSource::Ldap,
+        &data.external_stable_id,
+    )
+    .await
+    {
+        Ok(existing) => {
+            // Update display fields if anything changed upstream.
+            let need_update = existing.display_name != data.display_name
+                || existing.email.as_deref() != data.email.as_deref();
+            if need_update {
+                let uid_str = existing.id.to_string();
+                let display_name = data.display_name.clone();
+                let email = data.email.clone();
+                let email_norm = email.as_deref().map(sui_id_shared::normalize_email);
+                db.with_conn(move |conn| {
+                    conn.execute(
+                        "UPDATE users SET display_name = ?1, email = ?2, \
+                         email_normalized = ?3, updated_at = ?4 WHERE id = ?5",
+                        rusqlite::params![display_name, email, email_norm, now, uid_str,],
+                    )?;
+                    Ok(())
+                })
+                .await?;
+            }
+            Ok(existing.id)
+        }
+        Err(StoreError::NotFound) => {
+            // First sign-in: create a password-less shadow row.
+            let new_id = UserId::new();
+            let new_id_str = new_id.to_string();
+            let username = data.username.clone();
+            let display_name = data.display_name.clone();
+            let email = data.email.clone();
+            let email_norm = email.as_deref().map(sui_id_shared::normalize_email);
+            let user_uuid = uuid::Uuid::new_v4().to_string();
+            db.with_conn(move |conn| {
+                conn.execute(
+                    "INSERT INTO users \
+                     (id, username, display_name, is_admin, role, is_disabled, is_deleted, \
+                      user_uuid, failed_login_count, email, email_normalized, \
+                      source, external_stable_id, created_at, updated_at) \
+                     VALUES (?1, ?2, ?3, 0, 'user', 0, 0, ?4, 0, ?5, ?6, ?7, ?8, ?9, ?10)",
+                    rusqlite::params![
+                        new_id_str,
+                        username,
+                        display_name,
+                        user_uuid,
+                        email,
+                        email_norm,
+                        source_str,
+                        eid,
+                        now,
+                        now,
+                    ],
+                )?;
+                Ok(())
+            })
+            .await?;
+            Ok(new_id)
+        }
+        Err(e) => Err(e),
+    }
+}
+
+// ── RFC 005: shadow row tests ─────────────────────────────────────────────────
+
+#[cfg(test)]
+#[allow(clippy::expect_used, clippy::unwrap_used)]
+mod tests_rfc005 {
+    use super::*;
+    use crate::{Database, crypto::MasterKey};
+
+    fn fresh_db() -> Database {
+        Database::open_in_memory(MasterKey::generate()).expect("db")
+    }
+
+    #[tokio::test]
+    async fn upsert_ldap_shadow_creates_on_first_signin() {
+        let db = fresh_db();
+        let data = LdapShadowData {
+            username: "alice".into(),
+            display_name: Some("Alice Test".into()),
+            email: Some("alice@example.com".into()),
+            external_stable_id: "uid=alice,dc=test".into(),
+        };
+        let id = upsert_ldap_shadow(&db, data, chrono::Utc::now())
+            .await
+            .expect("upsert");
+        let row =
+            find_by_external_stable_id(&db, &crate::models::UserSource::Ldap, "uid=alice,dc=test")
+                .await
+                .expect("find");
+        assert_eq!(row.id, id);
+        assert_eq!(row.source, crate::models::UserSource::Ldap);
+        assert_eq!(row.external_stable_id.as_deref(), Some("uid=alice,dc=test"));
+        assert_eq!(row.display_name.as_deref(), Some("Alice Test"));
+        assert_eq!(row.email.as_deref(), Some("alice@example.com"));
+    }
+
+    #[tokio::test]
+    async fn upsert_ldap_shadow_updates_on_second_signin() {
+        let db = fresh_db();
+        let now = chrono::Utc::now();
+        upsert_ldap_shadow(
+            &db,
+            LdapShadowData {
+                username: "alice".into(),
+                display_name: Some("Old Name".into()),
+                email: Some("old@example.com".into()),
+                external_stable_id: "uid=alice,dc=test".into(),
+            },
+            now,
+        )
+        .await
+        .expect("first");
+        upsert_ldap_shadow(
+            &db,
+            LdapShadowData {
+                username: "alice".into(),
+                display_name: Some("New Name".into()),
+                email: Some("new@example.com".into()),
+                external_stable_id: "uid=alice,dc=test".into(),
+            },
+            now + chrono::Duration::seconds(1),
+        )
+        .await
+        .expect("second");
+        let row =
+            find_by_external_stable_id(&db, &crate::models::UserSource::Ldap, "uid=alice,dc=test")
+                .await
+                .expect("find");
+        assert_eq!(row.display_name.as_deref(), Some("New Name"));
+        assert_eq!(row.email.as_deref(), Some("new@example.com"));
+    }
+
+    #[tokio::test]
+    async fn shadow_row_source_is_ldap() {
+        let db = fresh_db();
+        let _ = upsert_ldap_shadow(
+            &db,
+            LdapShadowData {
+                username: "bob".into(),
+                display_name: None,
+                email: None,
+                external_stable_id: "uid=bob,dc=test".into(),
+            },
+            chrono::Utc::now(),
+        )
+        .await
+        .expect("upsert");
+        let row =
+            find_by_external_stable_id(&db, &crate::models::UserSource::Ldap, "uid=bob,dc=test")
+                .await
+                .expect("find");
+        assert_eq!(row.source, crate::models::UserSource::Ldap);
+        assert!(row.external_stable_id.is_some());
+    }
+
+    #[tokio::test]
+    async fn find_by_external_stable_id_not_found_for_unknown() {
+        let db = fresh_db();
+        let err = find_by_external_stable_id(&db, &crate::models::UserSource::Ldap, "nonexistent")
+            .await
+            .expect_err("must be NotFound");
+        assert!(matches!(err, crate::StoreError::NotFound));
+    }
 }

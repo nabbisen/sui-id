@@ -146,6 +146,10 @@ const MIGRATIONS: &[Migration] = &[
         version: 33,
         sql: include_str!("./migrations/0033_server_settings_metrics_token.sql"),
     },
+    Migration {
+        version: 34,
+        sql: include_str!("./migrations/0034_users_source.sql"),
+    },
 ];
 
 /// The highest schema version this build of sui-id-store knows how to

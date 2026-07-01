@@ -25,6 +25,8 @@ pub enum AuthMethod {
     RecoveryCode,
     /// WebAuthn assertion (passkey / hardware key).
     Webauthn,
+    /// External user-source authentication (RFC 005: LDAP bind).
+    Fed,
 }
 
 impl AuthMethod {
@@ -43,6 +45,7 @@ impl AuthMethod {
             // hardware-secured key". This is what a passkey or
             // security key stored in a TPM/Secure Enclave is.
             Self::Webauthn => "hwk",
+            Self::Fed => "fed",
         }
     }
 
@@ -52,7 +55,7 @@ impl AuthMethod {
     pub fn is_second_factor(self) -> bool {
         match self {
             Self::Pwd => false,
-            Self::Totp | Self::RecoveryCode | Self::Webauthn => true,
+            Self::Totp | Self::RecoveryCode | Self::Webauthn | Self::Fed => true,
         }
     }
 
@@ -62,6 +65,11 @@ impl AuthMethod {
     /// 6-digit code is interceptable inside its 30-second window).
     pub fn is_phishing_resistant(self) -> bool {
         matches!(self, Self::Webauthn)
+    }
+
+    /// The RFC 005 source slug for external-source sessions.
+    pub fn is_federated(self) -> bool {
+        matches!(self, Self::Fed)
     }
 }
 

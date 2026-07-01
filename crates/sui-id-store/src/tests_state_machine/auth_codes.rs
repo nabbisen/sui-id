@@ -66,6 +66,8 @@ fn make_seeded_db() -> SeededDb {
                 updated_at: now,
                 failed_login_count: 0,
                 locked_until: None,
+                source: crate::models::UserSource::Local,
+                external_stable_id: None,
             },
         )
         .await

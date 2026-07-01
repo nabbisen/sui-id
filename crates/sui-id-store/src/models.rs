@@ -52,6 +52,35 @@ impl Role {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+/// Source of a user's identity (RFC 005).
+pub enum UserSource {
+    /// Credentials stored locally in the `credentials` table.
+    #[default]
+    Local,
+    /// Authenticated via a read-only LDAP bind; no local password stored.
+    Ldap,
+}
+
+impl UserSource {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Local => "local",
+            Self::Ldap => "ldap",
+        }
+    }
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "local" => Some(Self::Local),
+            "ldap" => Some(Self::Ldap),
+            _ => None,
+        }
+    }
+    pub fn is_local(&self) -> bool {
+        matches!(self, Self::Local)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct UserRow {
     pub id: UserId,
@@ -101,6 +130,13 @@ pub struct UserRow {
     /// `t` already in the past represents a stale lock that has
     /// expired and will be cleared on the next sign-in.
     pub locked_until: Option<DateTime<Utc>>,
+    /// RFC 005: source of this user's identity.
+    /// `'local'` — password stored in `credentials` table.
+    /// `'ldap'`  — authenticated via LDAP bind; no `credentials` row.
+    pub source: UserSource,
+    /// RFC 005: opaque stable identifier from the external source
+    /// (objectGUID, entryUUID, DN).  `None` for `source='local'` users.
+    pub external_stable_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]

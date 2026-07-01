@@ -64,6 +64,13 @@ event name, required fields, and atomicity class. The CI gate
 | `settings.pending_change.cancelled` | Pending change cancelled | admin user id | — | `id=…` | B |
 | `settings.pending_change.binding_failed` | Binding check failed on apply | admin user id | — | `intent=… id=…` | B |
 
+### External user-source authentication (`auth.user_source.*`, RFC 005)
+
+| Event name | Operation | Actor | Target | Note fields | Class |
+|---|---|---|---|---|---|
+| `auth.user_source.matched` | External source authenticated a user | shadow user id | shadow user id | `source=… stable_id=…` | B |
+| `auth.user_source.transport_failure` | Directory unreachable during cascade | — | — | `source=… error=…` | B |
+
 ### Self-service settings (`auth.smtp_config.*`)
 
 | Event name | Operation | Actor | Target | Note fields | Class |

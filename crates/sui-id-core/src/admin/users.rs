@@ -4,12 +4,12 @@ use crate::errors::{CoreError, CoreResult};
 use crate::hibp::{self, HibpClient, HibpEnforcement};
 use crate::password::{check_password_policy, hash_password};
 use crate::time::SharedClock;
-use sui_id_store::models::{CredentialRow, HibpMode, UserRow};
-use sui_id_store::repos::{
-    audit, auth_codes, credentials, refresh_tokens, sessions, user_totp,
-    user_webauthn_credentials, users,
-};
 use sui_id_store::Database;
+use sui_id_store::models::{CredentialRow, HibpMode, UserRow, UserSource};
+use sui_id_store::repos::{
+    audit, auth_codes, credentials, refresh_tokens, sessions, user_totp, user_webauthn_credentials,
+    users,
+};
 // Shared audit helpers from parent module.
 use super::{audit_ok, audit_with_note};
 pub struct CreateUserSpec<'a> {
@@ -63,15 +63,21 @@ pub async fn create_user(
         // language on /me/profile.
         preferred_lang: None,
         is_admin: spec.is_admin,
-        role: if spec.is_admin { sui_id_store::models::Role::Admin } else { sui_id_store::models::Role::User },
+        role: if spec.is_admin {
+            sui_id_store::models::Role::Admin
+        } else {
+            sui_id_store::models::Role::User
+        },
         last_login_at: None,
         is_disabled: false,
         is_deleted: false,
-     user_uuid: uuid::Uuid::new_v4(),
+        user_uuid: uuid::Uuid::new_v4(),
         created_at: now,
         updated_at: now,
         failed_login_count: 0,
         locked_until: None,
+        source: UserSource::default(),
+        external_stable_id: None,
     };
     users::create(db, &row).await.map_err(|e| match e {
         sui_id_store::StoreError::Conflict => CoreError::Conflict("username already in use".into()),
@@ -86,8 +92,13 @@ pub async fn create_user(
             must_change: false,
             updated_at: now,
         },
-    ).await?;
-    let action = if hibp_warned { "user.create_warned_hibp" } else { "user.create" };
+    )
+    .await?;
+    let action = if hibp_warned {
+        "user.create_warned_hibp"
+    } else {
+        "user.create"
+    };
     audit_ok(db, actor_id, action, Some(row.id.to_string())).await;
     Ok(row)
 }
@@ -110,10 +121,12 @@ pub async fn set_user_disabled(
             "cannot disable your own account; have another administrator do it".into(),
         ));
     }
-    users::set_disabled(db, target, disabled).await.map_err(|e| match e {
-        sui_id_store::StoreError::NotFound => CoreError::NotFound,
-        other => CoreError::from(other),
-    })?;
+    users::set_disabled(db, target, disabled)
+        .await
+        .map_err(|e| match e {
+            sui_id_store::StoreError::NotFound => CoreError::NotFound,
+            other => CoreError::from(other),
+        })?;
     if disabled {
         sessions::revoke_all_for_user(db, target).await?;
         refresh_tokens::revoke_all_for_user(db, target).await?;
@@ -122,10 +135,15 @@ pub async fn set_user_disabled(
     audit_with_note(
         db,
         actor_id,
-        if disabled { "user.disable" } else { "user.enable" },
+        if disabled {
+            "user.disable"
+        } else {
+            "user.enable"
+        },
         Some(target.to_string()),
         if disabled { reason } else { None },
-    ).await;
+    )
+    .await;
     Ok(())
 }
 
@@ -148,7 +166,14 @@ pub async fn delete_user(
     sessions::revoke_all_for_user(db, target).await?;
     refresh_tokens::revoke_all_for_user(db, target).await?;
     auth_codes::invalidate_all_for_user(db, target).await?;
-    audit_with_note(db, actor_id, "user.delete", Some(target.to_string()), reason).await;
+    audit_with_note(
+        db,
+        actor_id,
+        "user.delete",
+        Some(target.to_string()),
+        reason,
+    )
+    .await;
     Ok(())
 }
 
@@ -233,7 +258,8 @@ pub async fn admin_reset_mfa(
             result: "ok".into(),
             note: Some(note),
         },
-    ).await;
+    )
+    .await;
 
     // After resetting, we leave any active sessions for the target
     // alone. The reset is intended to restore login capability, not
@@ -288,13 +314,19 @@ pub async fn reset_user_password(
             must_change: false,
             updated_at: now,
         },
-    ).await?;
+    )
+    .await?;
     sessions::revoke_all_for_user(db, target).await?;
     refresh_tokens::revoke_all_for_user(db, target).await?;
     auth_codes::invalidate_all_for_user(db, target).await?;
-    audit_ok(db, actor_id, "user.reset_password", Some(target.to_string())).await;
+    audit_ok(
+        db,
+        actor_id,
+        "user.reset_password",
+        Some(target.to_string()),
+    )
+    .await;
     Ok(())
 }
 
 // ---------- clients ----------
-

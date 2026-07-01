@@ -11,6 +11,7 @@ use sui_id_core::tokens::TokenLifetimes;
 use sui_id_core::cache::Caches;
 use sui_id_store::Database;
 use sui_id_store::metrics::Metrics;
+use sui_id_store::user_source::UserSource;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -43,6 +44,10 @@ pub struct AppState {
     /// True when the process was started with `--dev`. Used to render the
     /// browser-side dev-mode banner on every page (RFC 032).
     pub is_dev_mode: bool,
+    /// RFC 005: configured external user-sources for the auth cascade.
+    /// Empty when no `[[user_source]]` blocks are in the config.
+    pub user_sources: Vec<Arc<dyn UserSource>>,
+
     /// Prometheus metrics registry (RFC 006).
     /// `None` when `metrics_enabled = false` in config — no counters are
     /// incremented and the `/metrics` route is not registered.
@@ -76,6 +81,7 @@ impl AppState {
             caches,
             is_dev_mode: false,
             metrics: None,
+            user_sources: Vec::new(),
         }
     }
 

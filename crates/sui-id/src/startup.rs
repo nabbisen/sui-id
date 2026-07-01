@@ -230,6 +230,47 @@ pub async fn prepare(cfg: Config) -> Result<Startup> {
             }
         }
     }
+    // RFC 005: build the user-source cascade from config.
+    for cfg in &state.config.user_sources {
+        match cfg.validate_and_resolve_password() {
+            Ok(password) => {
+                #[cfg(feature = "ldap")]
+                if cfg.kind == "ldap" {
+                    let ldap_cfg = sui_id_store::ldap_source::LdapUserSourceConfig {
+                        slug: cfg.slug.clone(),
+                        url: cfg.url.clone(),
+                        bind_dn: cfg.bind_dn.clone(),
+                        bind_password: password,
+                        user_search_base: cfg.user_search_base.clone(),
+                        user_search_filter: cfg.user_search_filter.clone(),
+                        stable_id_attribute: cfg.stable_id_attribute.clone(),
+                        display_name_attribute: cfg.display_name_attribute.clone(),
+                        email_attribute: cfg.email_attribute.clone(),
+                        connect_timeout_secs: cfg.connect_timeout_secs,
+                        search_timeout_secs: cfg.search_timeout_secs,
+                    };
+                    state.user_sources.push(
+                        std::sync::Arc::new(
+                            sui_id_store::ldap_source::LdapUserSource::new(ldap_cfg)
+                        )
+                    );
+                    tracing::info!(slug = %cfg.slug, "LDAP user-source registered");
+                }
+                #[cfg(not(feature = "ldap"))]
+                {
+                    tracing::warn!(
+                        slug = %cfg.slug,
+                        "user_source configured but sui-id was built without the \
+                         'ldap' feature — source ignored"
+                    );
+                    let _ = password;
+                }
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "user_source config error; source skipped");
+            }
+        }
+    }
     Ok(Startup { state, listen_addr, _log_guard: log_guard })
 }
 

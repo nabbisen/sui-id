@@ -16,6 +16,9 @@
 #![forbid(unsafe_code)]
 
 pub mod crypto;
+#[cfg(feature = "ldap")]
+pub mod ldap_source;
+pub mod user_source;
 
 // ── Global metrics handle (RFC 006) ─────────────────────────────────────────
 //

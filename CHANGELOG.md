@@ -5,6 +5,89 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.76.1] — 2026-06-14
+
+**RFC 005 — Pluggable User Backends (Read-Only LDAP User-Source).** Adds a
+`UserSource` trait and an LDAP implementation that lets sui-id authenticate
+users against an external directory without owning their credentials.  Local
+users are always checked first (P4); LDAP is purely additive.
+
+### Added — `UserSource` trait (`sui-id-store::user_source`)
+
+- `UserSource: Send + Sync` async trait with `authenticate(username, password)`
+  returning `Ok(Some(ExternalUserRecord))` on success, `Ok(None)` on miss
+  or wrong password (deliberately conflated — P3), `Err(UserSourceError)` on
+  transport failure.
+- `ExternalUserRecord`: `stable_id`, `display_username`, `email`, `display_name`,
+  `source_slug`.
+- `cascade_sources(sources, username, password)` — tries each source in order;
+  transport errors are logged and the cascade continues (P4 fail-soft).
+- `InMemoryUserSource` — in-memory test double.
+- 5 unit tests: match/miss/wrong-password/cascade-first-match/cascade-past-error.
+
+### Added — LDAP implementation (`sui-id-store::ldap_source`, `ldap` feature)
+
+Behind the `ldap` feature flag (enabled in the release binary; off by default
+for tests).
+
+- `LdapUserSource` / `LdapUserSourceConfig` using `ldap3 = "0.12"` (Tokio,
+  Rustls — no openssl).
+- **P1 (DN injection):** `escape_filter_value` escapes RFC 4515 metacharacters
+  `* ( ) \ NUL` before substituting `{username}` into the search filter.
+- **P2 (TLS):** URL must start with `ldaps://`; checked at config-load and at
+  connect time.
+- **P3 (timing):** search-then-bind; both miss and wrong-password return
+  `Ok(None)`.
+- **P6 (least-privilege):** service account used read-only for search.
+- 4 unit tests for RFC 4515 escaping (plain / metacharacters / NUL / injection).
+
+### Added — migration 0034 (`users.source`, `users.external_stable_id`)
+
+```sql
+ALTER TABLE users ADD COLUMN source TEXT NOT NULL DEFAULT 'local'
+    CHECK (source IN ('local', 'ldap'));
+ALTER TABLE users ADD COLUMN external_stable_id TEXT;
+CREATE UNIQUE INDEX idx_users_external ON users (source, external_stable_id)
+    WHERE external_stable_id IS NOT NULL;
+```
+
+### Added — `UserSource` enum in models, users repo additions
+
+- `UserSource { Local, Ldap }` enum with `as_str()`, `parse()`, `Default`
+  (`Local`).
+- `UserRow` gains `source: UserSource` and `external_stable_id: Option<String>`.
+- `users::find_by_external_stable_id` — lookup by `(source, external_stable_id)`.
+- `users::upsert_ldap_shadow` — creates a password-less shadow row on first
+  LDAP sign-in; updates display fields on subsequent sign-ins; returns `UserId`.
+- 4 unit tests: create/update/source-field/not-found.
+
+### Added — `AuthMethod::Fed` variant
+
+New `Fed` variant in `sui-id-shared::AuthMethod` for LDAP-sourced sessions,
+with `as_amr() = "fed"`, `is_second_factor() = true`,
+`is_phishing_resistant() = false`.
+
+### Added — cascade hook in binary crate
+
+- `AppState.user_sources: Vec<Arc<dyn UserSource>>` — populated from
+  `[[user_source]]` config blocks in `startup.rs`.
+- `UserSourceConfig` in `config.rs` with `validate_and_resolve_password()`
+  (reads bind password from environment variable — P2; rejects `ldap://` — P2;
+  rejects empty `bind_dn` — P2 no anonymous bind).
+- `try_login_with_cascade` in `auth.rs` — calls local `login_with_mfa` first;
+  if `InvalidCredentials` and the username is unknown locally, runs the
+  cascade; on `Matched`, upserts the shadow row, emits
+  `auth.user_source.matched` audit event, creates a session.
+- `login_post` updated to call `try_login_with_cascade`.
+
+### Added — audit events and matrix
+
+`auth.user_source.matched` and `auth.user_source.transport_failure` added to
+`docs/src/reference/audit-coverage-matrix.md`. Gate passes at **45 × 45**.
+
+**122/122 tests pass** (19 shared + 20 store-pre + 80 store-all + 3 web).
+0 clippy errors. All 5 CI gates PASS.
+
 ## [0.76.0] — 2026-06-14
 
 **RFC 006 — Prometheus Metrics Endpoint.** Adds a `/metrics` endpoint
