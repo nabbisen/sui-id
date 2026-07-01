@@ -5,6 +5,93 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.76.0] — 2026-06-14
+
+**RFC 006 — Prometheus Metrics Endpoint.** Adds a `/metrics` endpoint
+(disabled by default) exposing a bounded, no-PII Prometheus catalog of
+counters, gauges, and histograms for operational observability.
+
+### Added — `sui_id_store::metrics` module (`prometheus = "0.13"`)
+
+A `Metrics` struct owns the entire metric registry: 10 counters,
+3 gauges, and 2 histograms.  Typed increment helpers (`m.signin(result)`,
+`m.token_issued(kind)`, …) are the sole call-site API; no call site
+imports Prometheus types directly.  Published catalog (P3/P4 — no PII,
+no UUID labels):
+
+**Counters:**
+`sui_id_signin_attempts_total{result}`,
+`sui_id_signin_via_passkey_total`,
+`sui_id_token_issued_total{kind}`,
+`sui_id_token_revoked_total{reason}`,
+`sui_id_mfa_enrolled_total{kind}`,
+`sui_id_mfa_recovery_consumed_total`,
+`sui_id_forgot_password_requested_total`,
+`sui_id_audit_appended_total`,
+`sui_id_email_outbox_enqueued_total`,
+`sui_id_email_outbox_failed_total{reason}`.
+
+**Gauges:**
+`sui_id_active_sessions`,
+`sui_id_signing_keys_active`,
+`sui_id_signing_keys_retired`.
+
+**Histograms:**
+`sui_id_http_request_duration_seconds{route, status_class}` (buckets
+5ms–10s), `sui_id_argon2_verify_duration_seconds` (buckets 10ms–5s).
+
+5 unit tests: registry construction, counter increments by kind, gauge
+set, catalog presence + PII guard.
+
+### Added — global metrics handle (`sui_id_store::set_global_metrics`)
+
+A `OnceLock`-backed global handle installed at startup lets store
+internals (`audit::append`, `email_outbox::enqueue`) increment counters
+without any signature change at their 40+ call sites.
+
+### Added — `AppState.metrics: Option<Arc<Metrics>>`
+
+`None` when `metrics_enabled = false`; handlers use the
+`app.metric()` accessor which returns `Option<&Metrics>`.
+
+### Added — call-site hooks
+
+- **`audit::append`** → `audit_appended_total` (via global handle).
+- **`email_outbox::enqueue`** → `email_outbox_enqueued_total` (via
+  global handle).
+- **`handlers/admin/auth.rs`** — `login_post` and `mfa_challenge_post`:
+  `signin_attempts_total{result=success|wrong_password|mfa_failed}`.
+- **`handlers/oidc.rs`** — token endpoint: `token_issued_total{kind}`.
+
+### Added — `GET /metrics` handler (RFC 006 P1/P2/P5)
+
+Registered **only** when `metrics_enabled = true` (P5 — no route, no
+404-vs-empty signal). Auth: admin session cookie OR `Authorization:
+Bearer <token>` with constant-time SHA-256 comparison against
+`server_settings.metrics_token_hash` (P2). No credential → 401.
+Output: Prometheus text format.
+
+### Added — migration 0033
+
+`ALTER TABLE server_settings ADD COLUMN metrics_token_hash TEXT` (nullable).
+Populated via `sui-id admin rotate-metrics-token`.
+
+### Added — `sui-id admin rotate-metrics-token` CLI subcommand
+
+Generates a fresh 32-byte random token, SHA-256-hashes it into
+`server_settings.metrics_token_hash`, prints the raw token once to
+stdout. Rotation is immediate — no two-valid-tokens grace window (P6).
+
+### Added — config (`[server]` section)
+
+`metrics_enabled = false` (default), `metrics_listen_addr = ""` (blank =
+same listener; set to e.g. `"127.0.0.1:9090"` for a private port).
+
+**112/112 tests pass** (19 shared + 20 store-pre + 70 store-all
+including 5 new metrics tests + 3 web).
+All 5 CI gates PASS (text-leaks, css-tokens, semantic-parity=36,
+inline-style=1, audit-matrix=43×43).
+
 ## [0.75.1] — 2026-06-14
 
 **Documentation: detailed write-ups for the six proposed post-1.0 RFCs.**

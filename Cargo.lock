@@ -1833,6 +1833,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92daf443525c4cce67b150400bc2316076100ce0b3686209eb8cf3c31612e6f0"
 
 [[package]]
+name = "lock_api"
+version = "0.4.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "224399e74b87b5f3557511d98dff8b14089b3dadafcab6bb93eab67d3aace965"
+dependencies = [
+ "scopeguard",
+]
+
+[[package]]
 name = "log"
 version = "0.4.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2076,6 +2085,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f38d5652c16fde515bb1ecef450ab0f6a219d619a7274976324d5e377f7dceba"
 
 [[package]]
+name = "parking_lot"
+version = "0.12.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93857453250e3077bd71ff98b6a65ea6621a19bb0f559a85248955ac12c45a1a"
+dependencies = [
+ "lock_api",
+ "parking_lot_core",
+]
+
+[[package]]
+name = "parking_lot_core"
+version = "0.9.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2621685985a2ebf1c516881c026032ac7deafcda1a2c9b7850dc81e3dfcb64c1"
+dependencies = [
+ "cfg-if",
+ "libc",
+ "redox_syscall",
+ "smallvec",
+ "windows-link",
+]
+
+[[package]]
 name = "password-hash"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2260,6 +2292,20 @@ dependencies = [
  "syn",
  "version_check",
  "yansi",
+]
+
+[[package]]
+name = "prometheus"
+version = "0.13.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d33c28a30771f7f96db69893f78b857f7450d7e0237e9c8fc6427a81bae7ed1"
+dependencies = [
+ "cfg-if",
+ "fnv",
+ "lazy_static",
+ "memchr",
+ "parking_lot",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -2507,6 +2553,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "redox_syscall"
+version = "0.5.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed2bf2547551a7053d6fdfafda3f938979645c44812fbfcda098faae3f1a362d"
+dependencies = [
+ "bitflags",
 ]
 
 [[package]]
@@ -2759,6 +2814,12 @@ checksum = "91c1b7e4904c873ef0710c1f407dde2e6287de2bebc1bbbf7d430bb7cbffd939"
 dependencies = [
  "windows-sys 0.61.2",
 ]
+
+[[package]]
+name = "scopeguard"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
 name = "secrecy"
@@ -3112,7 +3173,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "sui-id"
-version = "0.75.1"
+version = "0.76.0"
 dependencies = [
  "anyhow",
  "argon2",
@@ -3128,6 +3189,7 @@ dependencies = [
  "hyper",
  "include_dir",
  "percent-encoding",
+ "prometheus",
  "proptest",
  "qrcode",
  "rand 0.10.1",
@@ -3160,7 +3222,7 @@ dependencies = [
 
 [[package]]
 name = "sui-id-core"
-version = "0.75.1"
+version = "0.76.0"
 dependencies = [
  "argon2",
  "async-trait",
@@ -3197,7 +3259,7 @@ dependencies = [
 
 [[package]]
 name = "sui-id-i18n"
-version = "0.75.1"
+version = "0.76.0"
 dependencies = [
  "chrono",
  "serde",
@@ -3206,7 +3268,7 @@ dependencies = [
 
 [[package]]
 name = "sui-id-shared"
-version = "0.75.1"
+version = "0.76.0"
 dependencies = [
  "base64ct",
  "chrono",
@@ -3221,12 +3283,13 @@ dependencies = [
 
 [[package]]
 name = "sui-id-store"
-version = "0.75.1"
+version = "0.76.0"
 dependencies = [
  "base64ct",
  "chacha20poly1305",
  "chrono",
  "getrandom 0.4.2",
+ "prometheus",
  "proptest",
  "rand 0.10.1",
  "rusqlite",
@@ -3246,7 +3309,7 @@ dependencies = [
 
 [[package]]
 name = "sui-id-web"
-version = "0.75.1"
+version = "0.76.0"
 dependencies = [
  "chrono",
  "leptos",

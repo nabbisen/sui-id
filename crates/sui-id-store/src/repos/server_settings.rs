@@ -36,13 +36,15 @@ fn map_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ServerSettingsRow> {
         hibp_mode,
         idle_session_timeout_secs: row.get(3)?,
         max_concurrent_sessions: row.get(4)?,
-        created_at: row.get::<_, DateTime<Utc>>(5)?,
-        updated_at: row.get::<_, DateTime<Utc>>(6)?,
+        metrics_token_hash: row.get(5)?,
+        created_at: row.get::<_, DateTime<Utc>>(6)?,
+        updated_at: row.get::<_, DateTime<Utc>>(7)?,
     })
 }
 
 const SELECT_COLUMNS: &str = "id, default_lang, hibp_mode, \
                               idle_session_timeout_secs, max_concurrent_sessions, \
+                              metrics_token_hash, \
                               created_at, updated_at";
 
 /// Fetch the singleton server-settings row. Migration 0016 inserts
@@ -138,6 +140,28 @@ pub async fn update_max_concurrent_sessions(
             "UPDATE server_settings SET max_concurrent_sessions = ?1, \
              updated_at = ?2 WHERE id = ?3",
             params![cap, now, SINGLETON_ID],
+        )?;
+        if n == 0 {
+            Err(StoreError::NotFound)
+        } else {
+            Ok(())
+        }
+    })
+    .await
+}
+
+/// Store the hashed bearer token for the `/metrics` endpoint (RFC 006).
+/// Pass `None` to clear the token (disables bearer-token auth).
+pub async fn update_metrics_token_hash(
+    db: &Database,
+    hash: Option<&str>,
+    now: DateTime<Utc>,
+) -> StoreResult<()> {
+    let hash = hash.map(|h| h.to_owned());
+    db.with_conn(move |conn| {
+        let n = conn.execute(
+            "UPDATE server_settings SET metrics_token_hash = ?1, updated_at = ?2 WHERE id = ?3",
+            params![hash, now, SINGLETON_ID],
         )?;
         if n == 0 {
             Err(StoreError::NotFound)

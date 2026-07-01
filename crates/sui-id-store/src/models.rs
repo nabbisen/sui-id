@@ -514,6 +514,11 @@ pub struct ServerSettingsRow {
     /// exceed the cap evicts the oldest existing session (FIFO).
     /// Application-validated to be in `[0, 1000]`.
     pub max_concurrent_sessions: i64,
+    /// Hashed bearer token for the `/metrics` endpoint (RFC 006).
+    /// `None` means no token has been generated; the bearer-token auth
+    /// path is not available until the operator runs
+    /// `sui-id admin rotate-metrics-token`.
+    pub metrics_token_hash: Option<String>,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }

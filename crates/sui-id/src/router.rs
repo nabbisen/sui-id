@@ -258,7 +258,18 @@ pub fn build_router(app: AppState) -> Router {
             "/me/security/step-up/webauthn/finish",
             post(crate::handlers::step_up::webauthn_finish),
         )
-        .route("/static/{*path}", get(crate::assets::serve))
+        .route("/static/{*path}", get(crate::assets::serve));
+
+    // RFC 006: mount /metrics only when metrics_enabled = true (P5).
+    // When disabled, the route is not registered — returns 404, not an
+    // empty endpoint, so the endpoint's existence is not leaked.
+    let router = if app.config.server.metrics_enabled {
+        router.route("/metrics", get(crate::handlers::metrics::metrics_get))
+    } else {
+        router
+    };
+
+    let router = router
         .with_state(app.clone())
         // Security-headers middleware applies to *every* response,
         // including the OIDC public ones merged above. State-aware so

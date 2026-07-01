@@ -447,6 +447,15 @@ pub async fn token(
         scope: None,
     };
 
+    // RFC 006: count token issuances.
+    if let Some(m) = app.metric() {
+        m.token_issued(sui_id_store::metrics::token_kind::ACCESS);
+        m.token_issued(sui_id_store::metrics::token_kind::REFRESH);
+        if resp.id_token.is_some() {
+            m.token_issued(sui_id_store::metrics::token_kind::ID);
+        }
+    }
+
     // RFC 072: update last_used_at on the consent grant so /me/apps can
     // show "Last used: …". Best-effort — id_token is only present when
     // the user_id is known (authorization_code or refresh_token exchange

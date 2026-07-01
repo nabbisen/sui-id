@@ -16,8 +16,32 @@
 #![forbid(unsafe_code)]
 
 pub mod crypto;
+
+// ── Global metrics handle (RFC 006) ─────────────────────────────────────────
+//
+// Set once at startup by the binary crate via `set_global_metrics()`. Store
+// internals (e.g. `audit::append`) can then call the metrics registry without
+// any signature change at their 40+ call sites.
+
+use std::sync::OnceLock;
+static GLOBAL_METRICS: OnceLock<std::sync::Arc<metrics::Metrics>> = OnceLock::new();
+
+/// Install the global metrics registry.  Safe to call once; subsequent calls
+/// are no-ops (the `OnceLock` ignores them).  Called by the binary crate
+/// immediately after constructing `AppState` when `metrics_enabled = true`.
+pub fn set_global_metrics(m: std::sync::Arc<metrics::Metrics>) {
+    let _ = GLOBAL_METRICS.set(m);
+}
+
+/// Borrow the global metrics registry, or `None` when metrics are disabled.
+#[inline]
+pub fn global_metrics() -> Option<&'static metrics::Metrics> {
+    GLOBAL_METRICS.get().map(|m| m.as_ref())
+}
+
 pub mod db;
 pub mod errors;
+pub mod metrics;
 pub mod migrations;
 pub mod models;
 pub mod repos;

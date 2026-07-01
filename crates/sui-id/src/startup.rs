@@ -213,7 +213,23 @@ pub async fn prepare(cfg: Config) -> Result<Startup> {
             db.clone(),
             system_clock(),
         ));
-    let state = AppState::new(db, cfg, setup_token, outbox_sender, hibp_client, caches);
+    let mut state = AppState::new(db, cfg, setup_token, outbox_sender, hibp_client, caches);
+    // RFC 006: initialise the Prometheus metrics registry when enabled.
+    if state.config.server.metrics_enabled {
+        match sui_id_store::metrics::Metrics::new() {
+            Ok(m) => {
+                // Install as the global handle so store internals
+                // (audit::append, email_outbox::enqueue) can increment
+                // counters without any signature change.
+                sui_id_store::set_global_metrics(m.clone());
+                state.metrics = Some(m);
+                tracing::info!("metrics enabled");
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "failed to initialise metrics registry; metrics disabled");
+            }
+        }
+    }
     Ok(Startup { state, listen_addr, _log_guard: log_guard })
 }
 

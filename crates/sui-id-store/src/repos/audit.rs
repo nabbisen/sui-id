@@ -95,6 +95,11 @@ fn compute_hash(prev_hash_hex: &str, row: &AuditLogRow) -> String {
 }
 
 pub async fn append(db: &Database, row: &AuditLogRow) -> StoreResult<()> {
+    // RFC 006: increment the audit counter unconditionally (no-op when metrics
+    // are disabled — global_metrics() returns None).
+    if let Some(m) = crate::global_metrics() {
+        m.audit_appended();
+    }
     let row = row.clone();
     db.with_conn(move |conn| {
         let tx = conn.unchecked_transaction()?;

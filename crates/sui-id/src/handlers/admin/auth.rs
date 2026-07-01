@@ -133,6 +133,10 @@ pub async fn login_post(
         app.config.security.max_lockout.as_secs(),
     ).await {
         Ok(session::LoginOutcome::SessionEstablished(row)) => {
+            // RFC 006: record successful sign-in.
+            if let Some(m) = app.metric() {
+                m.signin(sui_id_store::metrics::signin_result::SUCCESS);
+            }
             let target = if form.next.starts_with('/') {
                 form.next.clone()
             } else {
@@ -174,6 +178,10 @@ pub async fn login_post(
             Ok((jar, Redirect::to(&target)).into_response())
         }
         Ok(session::LoginOutcome::MfaRequired { pending }) => {
+            // RFC 006: password correct but MFA still required.
+            if let Some(m) = app.metric() {
+                m.signin(sui_id_store::metrics::signin_result::MFA_FAILED);
+            }
             // Drop the user a short-lived cookie pointing at the
             // pending row, and bounce them into the MFA challenge page.
             let cookie = pending_mfa_cookie(
@@ -196,6 +204,10 @@ pub async fn login_post(
             Ok((jar, Redirect::to("/admin/login/mfa")).into_response())
         }
         Err(_) => {
+            // RFC 006: failed sign-in (wrong password, locked, or disabled).
+            if let Some(m) = app.metric() {
+                m.signin(sui_id_store::metrics::signin_result::WRONG_PASSWORD);
+            }
             let flash = Flash {
                 kind: FlashKind::Error,
                 text: "Sign-in failed. Check your username and password.".into(),
@@ -301,6 +313,10 @@ pub async fn mfa_challenge_post(
                     note: None,
                 },
             ).await;
+            // RFC 006: MFA verified → full sign-in success.
+            if let Some(m) = app.metric() {
+                m.signin(sui_id_store::metrics::signin_result::SUCCESS);
+            }
             let jar = jar
                 .add(cookie)
                 .add(clear_pending_mfa_cookie(app.config.server.cookie_secure))
@@ -324,6 +340,10 @@ pub async fn mfa_challenge_post(
                     note: None,
                 },
             ).await;
+            // RFC 006: MFA code rejected.
+            if let Some(m) = app.metric() {
+                m.signin(sui_id_store::metrics::signin_result::MFA_FAILED);
+            }
             let has_passkey = {
                 let pid_opt2 = jar
                     .get(crate::handlers::PENDING_MFA_COOKIE)

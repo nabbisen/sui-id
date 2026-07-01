@@ -47,6 +47,10 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<EmailOutboxRow> {
 
 /// Persist a new outbox row in `queued` state. Returns the row's id.
 pub async fn enqueue(db: &Database, row: EmailOutboxRow) -> StoreResult<EmailOutboxId> {
+    // RFC 006: track outbox enqueue volume.
+    if let Some(m) = crate::global_metrics() {
+        m.email_outbox_enqueued();
+    }
     let id = row.id;
     db.with_conn(move |conn| {
         conn.execute(

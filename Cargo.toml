@@ -10,7 +10,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.75.1"
+version = "0.76.0"
 edition = "2024"
 rust-version = "1.91"
 license = "Apache-2.0"
@@ -64,6 +64,7 @@ webauthn-rs = { version = "0.5", features = ["danger-allow-state-serialisation"]
 proptest = "1.5"
 hmac = "0.12"
 subtle = "2.6"
+prometheus = { version = "0.13", default-features = false }
 zeroize = { version = "1.8", features = ["derive"] }
 secrecy = { version = "0.10", features = ["serde"] }
 base64ct = { version = "1.6", features = ["alloc"] }

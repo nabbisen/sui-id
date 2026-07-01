@@ -1,6 +1,6 @@
 # RFC 006 — Prometheus Metrics Endpoint
 
-**Status.** Proposed (longer-term, no scheduled delivery)
+**Status.** Implemented (v0.76.0)
 **Priority.** Low. Operability feature; no new behaviour beyond an
 auth-gated endpoint. Requires explicit owner direction before scheduling.
 **Tracks.** ROADMAP / Longer term — "Metrics".

@@ -38,6 +38,17 @@ pub struct ServerConfig {
     /// for guidance.
     #[serde(default)]
     pub trusted_proxies: Vec<String>,
+    /// Enable the Prometheus `/metrics` endpoint (RFC 006).
+    /// Default: `false`. When `false` the route is not registered and
+    /// returns 404 so that the endpoint's existence is not leaked.
+    #[serde(default)]
+    pub metrics_enabled: bool,
+    /// Optional separate listen address for the `/metrics` endpoint.
+    /// Empty string (the default) mounts `/metrics` on the same listener
+    /// as the main application. Set to e.g. `"127.0.0.1:9090"` to bind
+    /// a private management port (strongly recommended for production).
+    #[serde(default)]
+    pub metrics_listen_addr: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -216,7 +227,7 @@ impl Config {
     /// Reasonable defaults useful for first-run output and tests.
     pub fn sample() -> Self {
         Self {
-            server: ServerConfig {
+            server: ServerConfig { metrics_enabled: bool::default(), metrics_listen_addr: String::default(),
                 listen_addr: "127.0.0.1:8801".into(),
                 issuer: "http://127.0.0.1:8801".into(),
                 cookie_secure: false,

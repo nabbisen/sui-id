@@ -10,6 +10,7 @@ use sui_id_core::time::{system_clock, SharedClock};
 use sui_id_core::tokens::TokenLifetimes;
 use sui_id_core::cache::Caches;
 use sui_id_store::Database;
+use sui_id_store::metrics::Metrics;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -42,6 +43,10 @@ pub struct AppState {
     /// True when the process was started with `--dev`. Used to render the
     /// browser-side dev-mode banner on every page (RFC 032).
     pub is_dev_mode: bool,
+    /// Prometheus metrics registry (RFC 006).
+    /// `None` when `metrics_enabled = false` in config — no counters are
+    /// incremented and the `/metrics` route is not registered.
+    pub metrics: Option<Arc<Metrics>>,
 }
 
 impl AppState {
@@ -70,6 +75,7 @@ impl AppState {
             hibp_client,
             caches,
             is_dev_mode: false,
+            metrics: None,
         }
     }
 
@@ -91,6 +97,14 @@ impl AppState {
     /// and `SecurityLevel::Standard` otherwise. Use this to obtain
     /// level-appropriate thresholds (e.g. `security_level().password_min_len()`)
     /// rather than branching on `is_dev_mode` directly at call sites.
+    /// Convenience accessor for the metrics registry.
+    /// Returns `None` when metrics are disabled (`metrics_enabled = false`).
+    /// Call sites: `if let Some(m) = self.metric() { m.signin(result); }`
+    #[inline]
+    pub fn metric(&self) -> Option<&sui_id_store::metrics::Metrics> {
+        self.metrics.as_deref()
+    }
+
     pub fn security_level(&self) -> sui_id_core::security::SecurityLevel {
         if self.is_dev_mode {
             sui_id_core::security::SecurityLevel::Development
