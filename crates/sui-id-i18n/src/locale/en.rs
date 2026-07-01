@@ -495,7 +495,6 @@ pub static STRINGS_EN: Strings = Strings {
     users_table_th_status: "Status",
     users_table_th_mfa: "MFA",
     users_is_admin_label: "Grant admin privileges",
-    users_empty: "No users yet. Create the first user above.",
     // Users extensions (RFC 051)
     users_count_caption: |n| format!("{n} registered."),
     users_label_username: "Username",
@@ -523,7 +522,6 @@ pub static STRINGS_EN: Strings = Strings {
     clients_table_th_name: "Name",
     clients_table_th_kind: "Type",
     clients_table_th_status: "Status",
-    clients_empty: "No OIDC clients registered. Use the form above to add one.",
     clients_single_realm_note: "sui-id is a single-realm IdP. All users can access all clients. Scopes restrict what information a client can request, not which users can log in.",
     // Clients page extensions (RFC 051)
     clients_table_th_client_id: "Client ID",
@@ -567,13 +565,11 @@ pub static STRINGS_EN: Strings = Strings {
     signing_keys_lede: "Ed25519 signing keys for JWT issuance.",
     signing_keys_rotate_section: "Key rotation",
     signing_keys_rotate_button: "Rotate signing key",
-    signing_keys_rotate_warning: "Rotation issues a new key and retires the current one. Retired keys remain in JWKS so tokens issued under them stay verifiable until they expire.",
     signing_keys_table_section: "All keys",
     signing_keys_th_algorithm: "Algorithm",
     signing_keys_th_status: "Status",
     signing_keys_th_created: "Created",
     signing_keys_th_retired: "Retired",
-    signing_keys_empty: "No signing keys. Click \"Rotate signing key\" to generate the first key.",
     signing_keys_in_use_badge: "(active)",
     // Signing keys extensions (RFC 051)
     signing_keys_count_caption: |n| format!("{n} registered."),
@@ -753,12 +749,6 @@ pub static STRINGS_EN: Strings = Strings {
     settings_email_test_hint: "Attempts SMTP connection with current settings. No mail is sent.",
 
     // Error pages (RFC 042)
-    error_404_title: "Not found",
-    error_404_lede: "That page does not exist or has been removed.",
-    error_429_title: "Too many requests",
-    error_429_lede: "Please wait a moment and try again.",
-    error_500_title: "Server error",
-    error_500_lede: "Something went wrong. Please contact the server administrator.",
     error_generic_lede: "We could not process the request.",
     error_request_id_label: "Request ID",
     error_back_home: "Back to home",

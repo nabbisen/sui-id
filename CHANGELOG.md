@@ -5,6 +5,82 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.75.0] — 2026-06-14
+
+**Codebase audit pass.** No new features. No wire-protocol change.
+Findings and fixes across five audit dimensions:
+
+### Fixed — RFC 088 gap: 403 page now uses auditor-specific copy
+
+`render_error` previously rendered HTTP 403 with the generic
+`error_generic_title / error_generic_lede` strings because the `match`
+had no arm for 403. The `error_403_auditor_title` and
+`error_403_auditor_body` keys introduced in RFC 088 were therefore
+unreachable. Added `403 => (t.error_403_auditor_title, t.error_403_auditor_body)`
+to the match, so auditors hitting a mutation-only GET now see
+"Read-only access — Your account has read-only (auditor) access."
+instead of the generic error page.
+
+### Fixed — audit coverage matrix: `auth.login.password_ok_mfa_required` added
+
+The event literal `"auth.login.password_ok_mfa_required"` exists in the
+source but was absent from `docs/src/reference/audit-coverage-matrix.md`,
+causing the backward-check CI gate to fail. Added to the matrix under
+the Authentication flow section. Gate now passes 43 × 43 bidirectional.
+
+### Fixed — ROADMAP stale link: RFC 085 pointed to `proposed/`
+
+The auth-core arc table in `ROADMAP.md` had one stale row linking
+RFC 085 to `rfcs/proposed/` instead of `rfcs/done/`. Fixed. Also
+marked that row `✅` (it shipped in v0.68.0 alongside RFC 083).
+
+### Removed — dead i18n keys (10 keys, all locales)
+
+Keys removed from `strings.rs` and `en.rs` / `ja.rs` / `zh_hans.rs`:
+
+| Key | Reason for removal |
+|---|---|
+| `users_empty` | Replaced by `empty_users` (RFC 092) |
+| `clients_empty` | Replaced by `empty_clients` (RFC 092) |
+| `signing_keys_empty` | Replaced by `empty_signing_keys` (RFC 092) |
+| `error_404_title` | Old name; codebase uses `error_not_found_title` |
+| `error_404_lede` | Old name; codebase uses `error_not_found_lede` |
+| `error_429_title` | Old name; codebase uses `error_too_many_requests_label` |
+| `error_429_lede` | Old name; codebase uses `error_too_many_requests_lede` |
+| `error_500_title` | Old name; codebase uses `error_internal` |
+| `error_500_lede` | Old name; codebase uses `error_internal_lede` |
+| `signing_keys_rotate_warning` | Replaced by confirm-page copy (RFC 090) |
+
+29 `audit_event_*` keys are **kept** (marked with a comment explaining
+they are planned future copy for audit-log display localisation, not yet
+wired to any renderer).
+
+### Removed — `table_empty_row` from public exports
+
+`table_empty_row` has zero call sites in page renderers after RFC 092
+wired `empty_state` into all four list surfaces. The function definition
+is retained (it is still `pub(super)` inside `pages/common.rs`, used
+by the old `EmptyStateData` path which `passkey.rs` and `dashboard.rs`
+still use), but removed from the `sui_id_web` crate root `pub use` and
+from `pages.rs`'s re-export list.
+
+### Added — 3 tests for `get_summary` (`sui-id-store`, RFC 090)
+
+`pending_settings_change::get_summary` was introduced in RFC 090 but had
+no test. Three tests added:
+
+- `get_summary_returns_summary_for_live_row` — P6 (non-secret summary
+  returned for a live, non-expired row).
+- `get_summary_returns_not_found_for_absent_id` — P3 (absent id is
+  indistinguishable from expired).
+- `get_summary_returns_not_found_for_expired_row` — P4 (expired row
+  returns `NotFound`) and **non-destructive contract** (the row is
+  not deleted by `get_summary`, only by `consume` or `purge_expired`).
+
+**107/107 tests pass** (19 shared + 20 store-pre + 65 store-all + 3 web).
+All 5 CI gates PASS (text-leaks, css-tokens, semantic-parity=36,
+inline-style=1, audit-matrix=43×43).
+
 ## [0.74.0] — 2026-06-14
 
 **UI-security unit 6: RFC 092 — UI Component Suite.**

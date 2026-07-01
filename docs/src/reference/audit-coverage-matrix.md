@@ -78,6 +78,7 @@ funnel; they do not guard state mutations.
 | Event name | Trigger | Actor | Class |
 |---|---|---|---|
 | `auth.login` | Login attempt initiated | — | B |
+| `auth.login.password_ok_mfa_required` | Password correct; MFA challenge pending | user id | B |
 | `auth.login.success` | Login succeeded | user id | B |
 | `auth.login.failure` | Wrong password | — | B |
 | `auth.login.locked` | Account locked at login | — | B |

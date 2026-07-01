@@ -495,7 +495,6 @@ pub static STRINGS_JA: Strings = Strings {
     users_table_th_status: "状態",
     users_table_th_mfa: "MFA",
     users_is_admin_label: "管理者権限を付与する",
-    users_empty: "ユーザーはまだいません。上のフォームで最初のユーザーを作成してください。",
     // Users extensions (RFC 051)
     users_count_caption: |n| format!("現在 {n} 名。"),
     users_label_username: "ユーザー名",
@@ -522,7 +521,6 @@ pub static STRINGS_JA: Strings = Strings {
     clients_table_th_name: "名前",
     clients_table_th_kind: "種別",
     clients_table_th_status: "状態",
-    clients_empty: "OIDC クライアントはまだありません。上のフォームで登録してください。",
     clients_single_realm_note: "sui-id は単一レルム IdP です。すべてのユーザーがすべてのクライアントを利用できます。スコープはユーザーを制限するのではなく、クライアントが要求できる情報の範囲を制限します。",
     // Clients page extensions (RFC 051)
     clients_table_th_client_id: "クライアント ID",
@@ -564,13 +562,11 @@ pub static STRINGS_JA: Strings = Strings {
     signing_keys_lede: "JWT 署名用 Ed25519 キーの管理。",
     signing_keys_rotate_section: "キーローテーション",
     signing_keys_rotate_button: "署名キーをローテーション",
-    signing_keys_rotate_warning: "ローテーションを実行すると新しいキーが発行され、現行キーは退役状態に遷移します。退役キーは JWKS に残り、既発行トークンは有効期限内は検証可能です。",
     signing_keys_table_section: "全キー",
     signing_keys_th_algorithm: "アルゴリズム",
     signing_keys_th_status: "状態",
     signing_keys_th_created: "作成日",
     signing_keys_th_retired: "退役日",
-    signing_keys_empty: "署名キーがありません。「署名キーをローテーション」で最初のキーを生成してください。",
     signing_keys_in_use_badge: "(使用中)",
     // Signing keys extensions (RFC 051)
     signing_keys_count_caption: |n| format!("{n} 件登録。"),
@@ -750,12 +746,6 @@ pub static STRINGS_JA: Strings = Strings {
     settings_email_test_hint: "現在の設定で SMTP サーバーへの接続を試みます。メールは送信されません。",
 
     // エラーページ (RFC 042)
-    error_404_title: "見つかりませんでした",
-    error_404_lede: "そのページは存在しないか、削除されました。",
-    error_429_title: "リクエストが多すぎます",
-    error_429_lede: "しばらく時間をおいてから、もう一度お試しください。",
-    error_500_title: "サーバーエラー",
-    error_500_lede: "問題が発生しました。サーバー管理者にお問い合わせください。",
     error_generic_lede: "リクエストを処理できませんでした。",
     error_request_id_label: "リクエスト ID",
     error_back_home: "ホームへ戻る",

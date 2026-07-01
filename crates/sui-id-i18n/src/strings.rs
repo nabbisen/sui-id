@@ -474,12 +474,6 @@ pub struct Strings {
     pub error_request_id_label: &'static str,
     pub error_back_home: &'static str,
     // Aliases used in locale files from prior sessions — kept for compatibility.
-    pub error_404_title: &'static str,
-    pub error_404_lede: &'static str,
-    pub error_429_title: &'static str,
-    pub error_429_lede: &'static str,
-    pub error_500_title: &'static str,
-    pub error_500_lede: &'static str,
 
     // ---- Audit log labels ----
     pub audit_title: &'static str,
@@ -492,6 +486,9 @@ pub struct Strings {
     // ---- Settings tab (RFC 023 renames "Other" → "Advanced") ----
 
     // ---- Audit event labels (RFC 002 § D) ----
+    // The following audit_event_* keys are defined for future localisation
+    // of the audit-log display page (action name → human-readable label).
+    // They are not yet used by any renderer but are kept as planned copy.
     pub audit_event_auth_login_success: &'static str,
     pub audit_event_auth_login_failure: &'static str,
     pub audit_event_auth_login_locked: &'static str,
@@ -744,7 +741,6 @@ pub struct Strings {
     pub users_table_th_status: &'static str,
     pub users_table_th_mfa: &'static str,
     pub users_is_admin_label: &'static str,
-    pub users_empty: &'static str,
     // ---- Admin: Users extensions (RFC 051) ----
     pub users_count_caption: fn(usize) -> String,
     pub users_label_username: &'static str,
@@ -771,7 +767,6 @@ pub struct Strings {
     pub clients_table_th_name: &'static str,
     pub clients_table_th_kind: &'static str,
     pub clients_table_th_status: &'static str,
-    pub clients_empty: &'static str,
     pub clients_single_realm_note: &'static str,
     // ---- Clients page extensions (RFC 051) ----
     pub clients_table_th_client_id: &'static str,
@@ -810,13 +805,11 @@ pub struct Strings {
     pub signing_keys_lede: &'static str,
     pub signing_keys_rotate_section: &'static str,
     pub signing_keys_rotate_button: &'static str,
-    pub signing_keys_rotate_warning: &'static str,
     pub signing_keys_table_section: &'static str,
     pub signing_keys_th_algorithm: &'static str,
     pub signing_keys_th_status: &'static str,
     pub signing_keys_th_created: &'static str,
     pub signing_keys_th_retired: &'static str,
-    pub signing_keys_empty: &'static str,
     pub signing_keys_in_use_badge: &'static str,
     // ---- Signing keys extensions (RFC 051) ----
     pub signing_keys_count_caption: fn(usize) -> String,

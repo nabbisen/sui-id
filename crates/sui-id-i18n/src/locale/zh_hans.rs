@@ -496,7 +496,6 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     users_table_th_status: "状态",
     users_table_th_mfa: "双重认证",
     users_is_admin_label: "授予管理员权限",
-    users_empty: "暂无用户，请在上方表单中创建第一个用户。",
     // Users extensions (RFC 051)
     users_count_caption: |n| format!("当前 {n} 名。"),
     users_label_username: "用户名",
@@ -524,7 +523,6 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     clients_table_th_name: "名称",
     clients_table_th_kind: "类型",
     clients_table_th_status: "状态",
-    clients_empty: "暂无 OIDC 客户端，请使用上方表单注册。",
     clients_single_realm_note: "sui-id 是单域 IdP，所有用户均可访问所有客户端。权限范围限制客户端可请求的信息，而非限制哪些用户可以登录。",
     // Clients page extensions (RFC 051)
     clients_table_th_client_id: "Client ID",
@@ -566,13 +564,11 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     signing_keys_lede: "用于签发 JWT 的 Ed25519 密钥管理。",
     signing_keys_rotate_section: "密钥轮换",
     signing_keys_rotate_button: "轮换签名密钥",
-    signing_keys_rotate_warning: "轮换将生成新密钥并将当前密钥设为退役状态。退役密钥仍保留在 JWKS 中，以便已签发的令牌在有效期内继续可用。",
     signing_keys_table_section: "所有密钥",
     signing_keys_th_algorithm: "算法",
     signing_keys_th_status: "状态",
     signing_keys_th_created: "创建时间",
     signing_keys_th_retired: "退役时间",
-    signing_keys_empty: "暂无签名密钥，请点击\"轮换签名密钥\"生成第一个密钥。",
     signing_keys_in_use_badge: "（使用中）",
     // Signing keys extensions (RFC 051)
     signing_keys_count_caption: |n| format!("已登记 {n} 个。"),
@@ -752,12 +748,6 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     settings_email_test_hint: "使用当前设置尝试连接 SMTP 服务器，不会发送邮件。",
 
     // 错误页面 (RFC 042)
-    error_404_title: "未找到页面",
-    error_404_lede: "该页面不存在或已被删除。",
-    error_429_title: "请求过多",
-    error_429_lede: "请稍候片刻后再试。",
-    error_500_title: "服务器错误",
-    error_500_lede: "发生了问题，请联系服务器管理员。",
     error_generic_lede: "无法处理该请求。",
     error_request_id_label: "请求 ID",
     error_back_home: "返回首页",

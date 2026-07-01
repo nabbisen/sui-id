@@ -246,3 +246,66 @@ async fn purge_expired_removes_only_expired_rows() {
         .expect("query");
     assert_eq!(count, 1, "live row must not be purged");
 }
+
+// ── get_summary ───────────────────────────────────────────────────────────────
+
+/// get_summary on a live row returns the non-secret summary string.
+#[tokio::test]
+async fn get_summary_returns_summary_for_live_row() {
+    let db = fresh_db();
+    let row = sample_row(300);
+    let id = row.id;
+    let expected = row.summary.clone();
+    pending_settings_change::insert(&db, &row)
+        .await
+        .expect("insert");
+
+    let got = pending_settings_change::get_summary(&db, id, Utc::now())
+        .await
+        .expect("get_summary must succeed");
+    assert_eq!(got, expected);
+}
+
+/// get_summary on an absent id returns NotFound.
+#[tokio::test]
+async fn get_summary_returns_not_found_for_absent_id() {
+    let db = fresh_db();
+    let err = pending_settings_change::get_summary(&db, PendingChangeId::new(), Utc::now())
+        .await
+        .expect_err("absent id must fail");
+    assert!(matches!(err, StoreError::NotFound));
+}
+
+/// get_summary on an expired row returns NotFound (does NOT consume the row).
+#[tokio::test]
+async fn get_summary_returns_not_found_for_expired_row() {
+    let db = fresh_db();
+    let row = sample_row(-10); // already expired
+    let id = row.id;
+    let id_str = id.to_string();
+    pending_settings_change::insert(&db, &row)
+        .await
+        .expect("insert");
+
+    let err = pending_settings_change::get_summary(&db, id, Utc::now())
+        .await
+        .expect_err("expired row must fail");
+    assert!(matches!(err, StoreError::NotFound));
+
+    // Crucially: get_summary did NOT delete the row (non-destructive).
+    let count: i64 = db
+        .with_conn_sync(|conn| {
+            Ok(conn
+                .query_row(
+                    "SELECT COUNT(*) FROM pending_settings_change WHERE id = ?1",
+                    [id_str.as_str()],
+                    |r| r.get(0),
+                )
+                .expect("count"))
+        })
+        .expect("query");
+    assert_eq!(
+        count, 1,
+        "get_summary must not delete the row even on expiry"
+    );
+}

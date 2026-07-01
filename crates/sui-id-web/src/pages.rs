@@ -33,9 +33,7 @@ pub mod users;
 pub use audit::*;
 pub use auth::*;
 pub use clients::*;
-pub use common::{
-    EmptyStateAction, EmptyStateData, Flash, FlashKind, empty_state, table_empty_row,
-};
+pub use common::{EmptyStateAction, EmptyStateData, Flash, FlashKind, empty_state};
 pub use confirm::*;
 pub use dashboard::*;
 pub use error::*;

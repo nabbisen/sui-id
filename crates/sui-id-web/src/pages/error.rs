@@ -6,6 +6,7 @@ use leptos::prelude::*;
 pub fn render_error(status: u16, request_id: &str, lang: sui_id_i18n::Locale) -> String {
     let t = lang.strings();
     let (title, lede) = match status {
+        403 => (t.error_403_auditor_title, t.error_403_auditor_body),
         404 => (t.error_not_found_title, t.error_not_found_lede),
         429 => (
             t.error_too_many_requests_label,
