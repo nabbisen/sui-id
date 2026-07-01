@@ -7,24 +7,16 @@ use super::audit::audit_row_view;
 use sui_id_shared::api::UserSummary;
 
 fn user_row_view(
-    can_write: bool,
     t: &'static sui_id_i18n::Strings,
     u: UserSummary,
     current_user: String,
-    _csrf: String,
 ) -> impl IntoView {
-    let display = u.display_name.clone().unwrap_or_default();
     let id_str = u.id.to_string();
     let is_self = u.username == current_user;
-    let is_disabled = u.is_disabled;
     let is_deleted = u.is_deleted;
+    let is_disabled = u.is_disabled;
     let is_admin = u.is_admin;
     let mfa_enabled = u.mfa_enabled;
-    let action_label = if is_disabled { "Enable" } else { "Disable" };
-    // RFC 030/058 routed every dangerous action through a separate
-    // confirm screen; the older `let disabled_url`/`let delete_url`/
-    // `let reset_mfa_url` form-action vars are no longer used and
-    // were trimmed during the RFC 065 split.
 
     let status_view = if is_deleted {
         crate::components::status_badge(t, crate::components::StatusKind::Deleted).into_any()
@@ -42,47 +34,21 @@ fn user_row_view(
         view! { <td><span class="muted">{t.status_off}</span></td> }.into_any()
     };
 
-    let actions = if is_self {
+    let detail_cell = if is_self {
         view! { <td><span class="muted">"(you)"</span></td> }.into_any()
     } else if is_deleted {
         view! { <td><span class="muted">{t.empty_dash}</span></td> }.into_any()
     } else {
-        let disable_confirm_url = format!("/admin/users/{id_str}/disable-confirm");
-        let delete_confirm_url = format!("/admin/users/{id_str}/delete-confirm");
-        let reset_mfa_confirm_url = format!("/admin/users/{id_str}/mfa-reset-confirm");
-        let reset_link = if mfa_enabled {
-            view! {
-                <a href=reset_mfa_confirm_url class="button secondary">"Reset MFA"</a>
-                " "
-            }
-            .into_any()
-        } else {
-            view! { <></> }.into_any()
-        };
-        view! {
-            <td>
-                // RFC 071: auditors see no mutation controls.
-                {can_write.then(|| view! {
-                    <div class="row gap-1">
-                        {reset_link}
-                        <a href=disable_confirm_url class="button secondary">{action_label}</a>
-                        " "
-                        <a href=delete_confirm_url class="button danger">"Delete"</a>
-                    </div>
-                })}
-            </td>
-        }
-        .into_any()
+        let detail_url = format!("/admin/users/{id_str}");
+        view! { <td><a href=detail_url class="button secondary">{t.button_view_detail}</a></td> }.into_any()
     };
 
     view! {
         <tr>
             <td><span class="code">{u.username}</span></td>
-            <td>{display}</td>
             <td>{status_view}</td>
             {mfa_cell}
-            <td class="muted">{fmt_time(u.created_at)}</td>
-            {actions}
+            {detail_cell}
         </tr>
     }
 }
@@ -99,11 +65,10 @@ pub fn render_users(
 ) -> String {
     render(move || {
         let t = lang.strings();
-        let csrf_for_rows = csrf_token.clone();
         let user_count = users.len();
         let rows: Vec<_> = users
             .into_iter()
-            .map(|u| user_row_view(can_write, t, u, current_user.clone(), csrf_for_rows.clone()))
+            .map(|u| user_row_view(t, u, current_user.clone()))
             .collect();
         view! {
             <Shell title=t.users_title.to_string() show_nav=true current=Some("users".to_string()) dev_mode=dev_mode lang=lang csrf_token=csrf_token.clone()>
@@ -135,16 +100,14 @@ pub fn render_users(
                             <thead>
                                 <tr>
                                     <th>{t.login_username_label}</th>
-                                    <th>{t.users_table_th_display}</th>
                                     <th>{t.users_table_th_status}</th>
                                     <th>{t.users_table_th_mfa}</th>
-                                    <th>{t.users_table_th_created}</th>
                                     <th></th>
                                 </tr>
                             </thead>
                             {if rows.is_empty() {
                                 view! {
-                                    <tbody>{table_empty_row(t.users_empty, 6)}</tbody>
+                                    <tbody>{table_empty_row(t.users_empty, 4)}</tbody>
                                 }.into_any()
                             } else {
                                 view! { <tbody>{rows}</tbody> }.into_any()
@@ -153,12 +116,6 @@ pub fn render_users(
                     </div>
                 </section>
 
-                // RFC 071: only admins can create users.
-                {can_write.then(|| view! {
-                    <div>
-                        <a href="/admin/users/new" class="button button--wide">{t.users_create_section}</a>
-                    </div>
-                })}
             </Shell>
         }
     })

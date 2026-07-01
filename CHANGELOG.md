@@ -5,6 +5,62 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.64.2] — 2026-06-06
+
+**UI/UX: "Less is more" — noise reduction pass.**
+
+### Changed — admin users list
+
+The users table shrinks from 6 columns to 4: **username, status, MFA,
+detail link**. The `display_name` column (often empty, not needed for
+identification) and `created_at` column (not a scanning criterion) are
+removed. The three per-row action buttons (Reset MFA, Disable, Delete)
+are removed from the list entirely — all mutations happen on the user
+detail page. The detail page already existed and has everything. One
+extra click to reach a mutation is appropriate friction; the list is for
+*finding*, not *doing*. The duplicate "Create user" button below the
+table is also removed (the `+` button in the page header is sufficient).
+
+### Changed — admin clients list
+
+The clients table shrinks from 7 columns to 5: **name, client ID (copy),
+kind, status, Edit + Enable/Disable**. The `scopes` column (the default
+`openid profile email` is the same for nearly every client) and the
+`logout_count` column (a number that means nothing in the list context)
+are removed. The `Delete` button is removed from the list row — deletion
+happens on the edit page. The duplicate "Register client" button below
+the table is also removed.
+
+### Changed — dashboard
+
+The "OIDC Endpoints" section (issuer, discovery URL, JWKS URL) is
+removed from the dashboard. These URLs are already shown in
+**Settings → Basic** and are standard, unchanging URLs any OIDC-aware
+operator knows. Repeating them on the most-visited admin page adds
+length without value. The `issuer` field is removed from `DashboardData`
+and its population removed from the dashboard handler.
+
+### Changed — /me/security overview
+
+The three shortcut buttons at the bottom of the overview (linking to
+MFA, Passkeys, and Sessions) are removed. The tab bar at the top of the
+page already provides identical navigation; the buttons were a redundant
+second copy.
+
+### Removed — string keys
+
+Six string keys retired from `Strings` and all locale files:
+`users_table_th_display`, `users_table_th_created`,
+`clients_table_th_scopes`, `clients_table_th_logout`,
+`dashboard_oidc_endpoints_section`, `dashboard_oidc_endpoint_issuer`.
+(The `dashboard_oidc_endpoint_discovery` and `_jwks` keys are retained
+— Settings → Basic uses them.)
+
+### Added — string keys
+
+`button_edit` and `button_view_detail` added to `Strings` (used by the
+simplified action cells in both list pages).
+
 ## [0.64.1] — 2026-06-06
 
 **Maintenance: i18n source layout and zh locale split.**

@@ -80,11 +80,6 @@ pub fn render_me_overview(
                             }.into_any()
                         }}
                     </section>
-                    <div class="row">
-                        <a href="/me/security/mfa" class="button secondary">{t.me_tab_mfa}</a>
-                        <a href="/me/security/passkeys" class="button secondary">{t.me_tab_passkey}</a>
-                        <a href="/me/security/sessions" class="button secondary">{t.me_tab_sessions}</a>
-                    </div>
                 </div>
             </Shell>
         }

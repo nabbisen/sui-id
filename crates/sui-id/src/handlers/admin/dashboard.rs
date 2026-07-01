@@ -128,7 +128,6 @@ pub async fn dashboard(
         user_count: users_n,
         client_count: clients_n,
         active_session_count: session_count,
-        issuer: app.issuer().to_owned(),
         sparkline,
         warn_smtp_not_configured: !smtp_configured,
         warn_hibp_off: hibp_is_off,

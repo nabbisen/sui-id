@@ -40,7 +40,6 @@ pub struct DashboardData {
     pub user_count: usize,
     pub client_count: usize,
     pub active_session_count: usize,
-    pub issuer: String,
     pub sparkline: DashboardSparkline,
     // Operator action prompts — shown when condition is true (RFC 031)
     pub warn_smtp_not_configured: bool,
@@ -195,7 +194,6 @@ pub fn render_dashboard(data: DashboardData, flash: Option<Flash>, csrf_token: S
             user_count,
             client_count,
             active_session_count,
-            issuer,
             sparkline,
             warn_smtp_not_configured,
             warn_hibp_off,
@@ -404,30 +402,6 @@ pub fn render_dashboard(data: DashboardData, flash: Option<Flash>, csrf_token: S
                     </div>
                 </section>
 
-                <section>
-                    <h2>{t.dashboard_oidc_endpoints_section}</h2>
-                    <div class="table-wrap">
-                        <table>
-                            <tbody>
-                                <tr>
-                                    <th scope="row">{t.dashboard_oidc_endpoint_issuer}</th>
-                                    <td><span class="code">{issuer}</span></td>
-                                </tr>
-                                <tr>
-                                    <th scope="row">{t.dashboard_oidc_endpoint_discovery}</th>
-                                    <td><a href="/.well-known/openid-configuration"><span class="code">"/.well-known/openid-configuration"</span></a></td>
-                                </tr>
-                                <tr>
-                                    <th scope="row">{t.dashboard_oidc_endpoint_jwks}</th>
-                                    <td>
-                                        <a href="/.well-known/jwks.json"><span class="code">"/.well-known/jwks.json"</span></a>
-                                        {copy_btn(t, "/.well-known/jwks.json".to_string(), t.copy_noun_jwks_uri)}
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
             </Shell>
         }
     })

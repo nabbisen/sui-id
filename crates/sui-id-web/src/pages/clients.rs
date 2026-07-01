@@ -18,18 +18,6 @@ fn client_row_view(
     let action_label = if is_disabled { "Enable" } else { "Disable" };
     let action_target = if is_disabled { "false" } else { "true" };
     let disabled_url = format!("/admin/clients/{id_str}/disabled");
-    let csrf_disable = csrf.clone();
-    let scopes_display = if c.allowed_scopes.trim().is_empty() {
-        t.empty_any.to_string()
-    } else {
-        c.allowed_scopes.clone()
-    };
-    let logout_count = c.post_logout_redirect_uris.len();
-    let logout_display = if logout_count == 0 {
-        t.empty_falls_back_redirect_uris.to_string()
-    } else {
-        format!("{logout_count} URI(s)")
-    };
 
     let status_view = if is_deleted {
         crate::components::status_badge(t, crate::components::StatusKind::Deleted).into_any()
@@ -45,26 +33,21 @@ fn client_row_view(
     } else if !can_write {
         // RFC 071: auditors see no mutation controls.
         view! {
-            <td>
-                <a href=edit_url class="button secondary">"View"</a>
-            </td>
-        }
-        .into_any()
+            <td><a href=edit_url class="button secondary">{t.button_view_detail}</a></td>
+        }.into_any()
     } else {
         view! {
             <td>
                 <div class="row gap-1">
-                    <a href=edit_url class="button secondary">"Edit"</a>
+                    <a href=edit_url class="button secondary">{t.button_edit}</a>
                     <form method="post" action=disabled_url class="inline-el">
-                        <input type="hidden" name="_csrf" value=csrf_disable />
+                        <input type="hidden" name="_csrf" value=csrf />
                         <input type="hidden" name="disabled" value=action_target />
                         <button type="submit" class="secondary">{action_label}</button>
                     </form>
-                    <a href=format!("/admin/clients/{}/delete-confirm", id_str.clone()) class="button danger">"Delete"</a>
                 </div>
             </td>
-        }
-        .into_any()
+        }.into_any()
     };
 
     let id_for_copy = id_str.clone();
@@ -76,8 +59,6 @@ fn client_row_view(
                 {copy_btn(t, id_for_copy, t.copy_noun_client_id)}
             </td>
             <td>{kind}</td>
-            <td><span class="code">{scopes_display}</span></td>
-            <td class="muted">{logout_display}</td>
             <td>{status_view}</td>
             {actions}
         </tr>
@@ -145,15 +126,13 @@ pub fn render_clients(
                                     <th>{t.clients_table_th_name}</th>
                                     <th>{t.clients_table_th_client_id}</th>
                                     <th>{t.clients_table_th_kind}</th>
-                                    <th>{t.clients_table_th_scopes}</th>
-                                    <th>{t.clients_table_th_logout}</th>
                                     <th>{t.clients_table_th_status}</th>
                                     <th></th>
                                 </tr>
                             </thead>
                             {if rows.is_empty() {
                                 view! {
-                                    <tbody>{table_empty_row(t.clients_empty, 7)}</tbody>
+                                    <tbody>{table_empty_row(t.clients_empty, 5)}</tbody>
                                 }.into_any()
                             } else {
                                 view! { <tbody>{rows}</tbody> }.into_any()
@@ -161,12 +140,6 @@ pub fn render_clients(
                         </table>
                     </div>
                 </section>
-
-                {can_write.then(|| view! {
-                    <div>
-                        <a href="/admin/clients/new" class="button button--wide">{t.clients_create_section}</a>
-                    </div>
-                })}
 
             </Shell>
         }
