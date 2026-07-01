@@ -17,7 +17,7 @@ use super::with_csrf_cookie;
 
 pub async fn dashboard(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, _): CurrentAdminOrAuditor,
     jar: CookieJar,
     axum::extract::Query(q): axum::extract::Query<DashboardQuery>,
 ) -> Result<Response, HttpError> {

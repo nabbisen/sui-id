@@ -12,7 +12,8 @@ use sui_id_store::repos::users;
 const SESSION_COOKIE: &str = "sui_id_session";
 
 use super::forms::*;
-use crate::handlers::{AppStateExt, CurrentUser};
+use crate::handlers::{AppStateExt, CurrentUser, SessionContext};
+use sui_id_core::actor::SelfActor;
 use crate::handlers::admin::with_csrf_cookie;
 
 pub async fn password_change_get(
@@ -40,7 +41,7 @@ pub async fn password_change_get(
 
 pub async fn password_change_post(
     state_ext: AppStateExt,
-    CurrentUser(user_id): CurrentUser,
+    SessionContext { user_id, session_id: _session_id }: SessionContext,
     crate::handlers::ClientIp(ip): crate::handlers::ClientIp,
     crate::handlers::RequestLocale(_lang): crate::handlers::RequestLocale,
     jar: CookieJar,
@@ -93,12 +94,21 @@ pub async fn password_change_post(
         .map(|s| s.hibp_mode)
         .unwrap_or_default();
 
+    // RFC 081: SelfActor scopes the call to this user only.
+    let self_actor = sui_id_core::actor::Actor::from_session(
+        user_id,
+        // Role doesn't matter for SelfActor; User is a safe floor.
+        sui_id_store::models::Role::User,
+        keep,
+    )
+    .into_self();
+
     let report = sui_id_core::me_security::change_password_self(
         &app.db,
         &app.clock,
         Some(app.hibp_client.as_ref()),
         hibp_mode,
-        user_id,
+        &self_actor,
         &form.current_password,
         &form.new_password,
         Some(keep),

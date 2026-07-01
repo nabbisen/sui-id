@@ -1,6 +1,6 @@
 # RFC 082 — Authorization Decision Core and Property Tests
 
-**Status.** Proposed
+**Status.** Implemented (v0.67.0)
 **Tracks.** Strategy theme 5 (audit gap G5). Category B.
 **Touches.** New `sui-id-core/src/authz.rs` (+ `authz/tests.rs`),
 `sui-id-core/src/actor.rs` (RFC 081), call sites of role checks

@@ -54,6 +54,13 @@ async fn audit_with_note(
     ).await;
 }
 
+/// Check if a user has admin rights by fetching their record.
+///
+/// **Deprecated by RFC 081.** New code must use [`crate::actor::Actor::into_admin`]
+/// instead; the capability type provides compile-time proof of admin privilege.
+/// This function is retained for the binary crate's Axum extractors, which need
+/// to verify session roles before constructing an `Actor`.
+#[deprecated(since = "0.66.0", note = "Use Actor::into_admin (RFC 081) for domain functions")]
 pub async fn require_admin(db: &Database, user_id: UserId) -> CoreResult<()> {
     let user = users_repo::get(db, user_id).await.map_err(|e| match e {
         sui_id_store::StoreError::NotFound => CoreError::Forbidden,

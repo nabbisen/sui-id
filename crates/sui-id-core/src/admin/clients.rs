@@ -4,14 +4,15 @@ use crate::password::hash_password;
 use crate::time::SharedClock;
 use crate::tokens;
 use crate::cache::Caches;
-use sui_id_shared::ids::{ClientId, UserId};
+use sui_id_shared::ids::ClientId;
 use sui_id_store::models::ClientRow;
 use sui_id_store::repos::{
     clients, refresh_tokens,
 };
 use sui_id_store::Database;
 // Shared audit helpers from parent module.
-use super::{audit_ok, audit_with_note, require_admin};
+use crate::actor::{AdminActor, ReadOnlyAdminActor};
+use super::{audit_ok, audit_with_note};
 pub struct CreatedClient {
     pub row: ClientRow,
     pub generated_secret: Option<String>,
@@ -33,11 +34,11 @@ pub struct CreateClientSpec<'a> {
 pub async fn create_client(
     db: &Database,
     clock: &SharedClock,
-    actor: UserId,
+    actor: &AdminActor,
     spec: CreateClientSpec<'_>,
     _caches: &Caches,
 ) -> CoreResult<CreatedClient> {
-    require_admin(db, actor).await?;
+    let actor_id = actor.user_id();
     if spec.name.trim().is_empty() {
         return Err(CoreError::BadRequest("client name must not be empty".into()));
     }
@@ -92,7 +93,7 @@ pub async fn create_client(
         updated_at: now,
     };
     clients::create(db, &row).await?;
-    audit_ok(db, actor, "client.create", Some(row.id.to_string())).await;
+    audit_ok(db, actor_id, "client.create", Some(row.id.to_string())).await;
     Ok(CreatedClient {
         row,
         generated_secret: secret_plain,
@@ -102,11 +103,11 @@ pub async fn create_client(
 /// Update the per-client scope policy. Empty string means "permit any".
 pub async fn set_client_allowed_scopes(
     db: &Database,
-    actor: UserId,
+    actor: &AdminActor,
     target: ClientId,
     scopes: &str,
 ) -> CoreResult<()> {
-    require_admin(db, actor).await?;
+    let actor_id = actor.user_id();
     for tok in scopes.split_whitespace() {
         if !tok
             .chars()
@@ -121,18 +122,18 @@ pub async fn set_client_allowed_scopes(
         sui_id_store::StoreError::NotFound => CoreError::NotFound,
         other => CoreError::from(other),
     })?;
-    audit_ok(db, actor, "client.set_allowed_scopes", Some(target.to_string())).await;
+    audit_ok(db, actor_id, "client.set_allowed_scopes", Some(target.to_string())).await;
     Ok(())
 }
 
 /// Replace the `post_logout_redirect_uris` for a client.
 pub async fn set_client_post_logout_redirect_uris(
     db: &Database,
-    actor: UserId,
+    actor: &AdminActor,
     target: ClientId,
     uris: &[String],
 ) -> CoreResult<()> {
-    require_admin(db, actor).await?;
+    let actor_id = actor.user_id();
     for uri in uris {
         validate_redirect_uri(uri)?;
     }
@@ -142,7 +143,7 @@ pub async fn set_client_post_logout_redirect_uris(
     })?;
     audit_ok(
         db,
-        actor,
+        actor_id,
         "client.set_post_logout_redirect_uris",
         Some(target.to_string()),
     ).await;
@@ -154,13 +155,13 @@ pub async fn set_client_post_logout_redirect_uris(
 /// and `secret_hash` are immutable.
 pub async fn update_client_basic(
     db: &Database,
-    actor: UserId,
+    actor: &AdminActor,
     target: ClientId,
     name: &str,
     redirect_uris: &[String],
     caches: &Caches,
 ) -> CoreResult<()> {
-    require_admin(db, actor).await?;
+    let actor_id = actor.user_id();
     if name.trim().is_empty() {
         return Err(CoreError::BadRequest("client name must not be empty".into()));
     }
@@ -178,7 +179,7 @@ pub async fn update_client_basic(
             other => CoreError::from(other),
         }
     })?;
-    audit_ok(db, actor, "client.update", Some(target.to_string())).await;
+    audit_ok(db, actor_id, "client.update", Some(target.to_string())).await;
     if let Err(e) = caches.redirect_origins.rebuild(db).await {
         tracing::warn!(error = %e, "cache rebuild failed after update_client");
     }
@@ -186,28 +187,28 @@ pub async fn update_client_basic(
 }
 
 /// Convenience: fetch a single client (admin-gated).
-pub async fn get_client(db: &Database, actor: UserId, target: ClientId) -> CoreResult<ClientRow> {
-    require_admin(db, actor).await?;
+pub async fn get_client(db: &Database, actor: &ReadOnlyAdminActor, target: ClientId) -> CoreResult<ClientRow> {
+    let _ = actor;
     clients::get(db, target).await.map_err(|e| match e {
         sui_id_store::StoreError::NotFound => CoreError::NotFound,
         other => CoreError::from(other),
     })
 }
 
-pub async fn list_clients(db: &Database, actor: UserId) -> CoreResult<Vec<ClientRow>> {
-    require_admin(db, actor).await?;
+pub async fn list_clients(db: &Database, actor: &ReadOnlyAdminActor) -> CoreResult<Vec<ClientRow>> {
+    let _ = actor;
     Ok(clients::list(db).await?)
 }
 
 pub async fn update_client(
     db: &Database,
-    actor: UserId,
+    actor: &AdminActor,
     target: ClientId,
     name: Option<&str>,
     redirect_uris: Option<&[String]>,
     _caches: &Caches,
 ) -> CoreResult<()> {
-    require_admin(db, actor).await?;
+    let actor_id = actor.user_id();
     if let Some(uris) = redirect_uris {
         if uris.is_empty() {
             return Err(CoreError::BadRequest(
@@ -222,20 +223,20 @@ pub async fn update_client(
         sui_id_store::StoreError::NotFound => CoreError::NotFound,
         other => CoreError::from(other),
     })?;
-    audit_ok(db, actor, "client.update", Some(target.to_string())).await;
+    audit_ok(db, actor_id, "client.update", Some(target.to_string())).await;
     Ok(())
 }
 
 pub async fn set_client_disabled(
     db: &Database,
     _clock: &SharedClock,
-    actor: UserId,
+    actor: &AdminActor,
     target: ClientId,
     disabled: bool,
     reason: Option<String>,
     caches: &Caches,
 ) -> CoreResult<()> {
-    require_admin(db, actor).await?;
+    let actor_id = actor.user_id();
     clients::set_disabled(db, target, disabled).await.map_err(|e| match e {
         sui_id_store::StoreError::NotFound => CoreError::NotFound,
         other => CoreError::from(other),
@@ -245,7 +246,7 @@ pub async fn set_client_disabled(
     }
     audit_with_note(
         db,
-        actor,
+        actor_id,
         if disabled { "client.disable" } else { "client.enable" },
         Some(target.to_string()),
         if disabled { reason } else { None },
@@ -258,12 +259,12 @@ pub async fn set_client_disabled(
 
 pub async fn delete_client(
     db: &Database,
-    actor: UserId,
+    actor: &AdminActor,
     target: ClientId,
     reason: Option<String>,
     caches: &Caches,
 ) -> CoreResult<()> {
-    require_admin(db, actor).await?;
+    let actor_id = actor.user_id();
     clients::soft_delete(db, target).await.map_err(|e| match e {
         sui_id_store::StoreError::NotFound => CoreError::NotFound,
         other => CoreError::from(other),
@@ -272,7 +273,7 @@ pub async fn delete_client(
         tracing::warn!(error = %e, "cache rebuild failed after delete_client");
     }
     refresh_tokens::revoke_all_for_client(db, target).await?;
-    audit_with_note(db, actor, "client.delete", Some(target.to_string()), reason).await;
+    audit_with_note(db, actor_id, "client.delete", Some(target.to_string()), reason).await;
     Ok(())
 }
 
@@ -348,11 +349,11 @@ use super::validate_redirect_uri;
 pub async fn rotate_client_secret(
     db: &Database,
     clock: &SharedClock,
-    actor: UserId,
+    actor: &AdminActor,
     client_id: ClientId,
     reason: Option<String>,
 ) -> CoreResult<String> {
-    require_admin(db, actor).await?;
+    let actor_id = actor.user_id();
     let client = clients::get(db, client_id).await.map_err(|e| match e {
         sui_id_store::StoreError::NotFound => CoreError::NotFound,
         other => CoreError::from(other),
@@ -367,7 +368,7 @@ pub async fn rotate_client_secret(
     clients::set_secret_hash(db, client_id, Some(&new_hash), clock.now()).await
         .map_err(CoreError::from)?;
     audit_with_note(
-        db, actor, "client.rotate_secret", Some(client_id.to_string()), reason
+        db, actor_id, "client.rotate_secret", Some(client_id.to_string()), reason
     ).await;
     Ok(new_secret)
 }

@@ -24,7 +24,7 @@ use super::with_csrf_cookie;
 
 pub async fn clients_delete_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, _): CurrentAdminOrAuditor,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -55,11 +55,11 @@ pub async fn clients_delete_confirm_get(
 
 pub async fn clients_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, role): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, role, ref read_actor): CurrentAdminOrAuditor,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
-    let rows = admin_uc::list_clients(&app.db, admin_id).await.map_err(HttpError::html)?;
+    let rows = admin_uc::list_clients(&app.db, read_actor).await.map_err(HttpError::html)?;
     let summaries: Vec<ClientSummary> = rows
         .into_iter()
         .map(|r| ClientSummary {
@@ -84,7 +84,7 @@ pub async fn clients_get(
 /// `GET /admin/clients/new` — isolated register-client form.
 pub async fn clients_new_get(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id): CurrentAdmin,
+    CurrentAdmin(admin_id, ref admin_actor): CurrentAdmin,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -112,7 +112,7 @@ pub struct CreateClientForm {
 
 pub async fn clients_create(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id): CurrentAdmin,
+    CurrentAdmin(admin_id, ref admin_actor): CurrentAdmin,
     jar: CookieJar,
     Form(form): Form<CreateClientForm>,
 ) -> Result<Response, HttpError> {
@@ -153,7 +153,7 @@ pub async fn clients_create(
     let created = admin_uc::create_client(
         &app.db,
         &app.clock,
-        admin_id,
+        admin_actor,
         sui_id_core::admin::CreateClientSpec {
             name: form.name.trim(),
             redirect_uris: &uris,
@@ -166,7 +166,7 @@ pub async fn clients_create(
     .map_err(HttpError::html)?;
 
     // Re-list and pass the secret through to the page so it is shown once.
-    let rows = admin_uc::list_clients(&app.db, admin_id).await.map_err(HttpError::html)?;
+    let rows = admin_uc::list_clients(&app.db, &admin_actor.as_read_only()).await.map_err(HttpError::html)?;
     let summaries: Vec<ClientSummary> = rows
         .into_iter()
         .map(|r| ClientSummary {
@@ -194,7 +194,7 @@ pub async fn clients_create(
 
 pub async fn clients_set_disabled(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id): CurrentAdmin,
+    CurrentAdmin(admin_id, ref admin_actor): CurrentAdmin,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -218,7 +218,7 @@ pub async fn clients_set_disabled(
     } else {
         Some(form.reason.trim().to_string())
     };
-    admin_uc::set_client_disabled(&app.db, &app.clock, admin_id, target, value,
+    admin_uc::set_client_disabled(&app.db, &app.clock, admin_actor, target, value,
         reason_opt, &app.caches).await.map_err(HttpError::html)?;
     Ok(Redirect::to("/admin/clients").into_response())
 }
@@ -226,7 +226,7 @@ pub async fn clients_set_disabled(
 
 pub async fn clients_delete(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id): CurrentAdmin,
+    CurrentAdmin(admin_id, ref admin_actor): CurrentAdmin,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -243,7 +243,7 @@ pub async fn clients_delete(
     }
     let target = ClientId::from_str(&id)
         .map_err(|_| HttpError::html(CoreError::BadRequest("invalid client id".into())))?;
-    admin_uc::delete_client(&app.db, admin_id, target, form.reason_opt(), &app.caches)
+    admin_uc::delete_client(&app.db, admin_actor, target, form.reason_opt(), &app.caches)
         .await.map_err(HttpError::html)?;
     Ok(Redirect::to("/admin/clients").into_response())
 }
@@ -259,7 +259,7 @@ pub struct ClientEditQuery {
 
 pub async fn clients_edit_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, role): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, role, ref read_actor): CurrentAdminOrAuditor,
     jar: CookieJar,
     Path(id): Path<String>,
     axum::extract::Query(q): axum::extract::Query<ClientEditQuery>,
@@ -267,7 +267,7 @@ pub async fn clients_edit_get(
     let State(app) = state_ext;
     let target = ClientId::from_str(&id)
         .map_err(|_| HttpError::html(CoreError::BadRequest("invalid client id".into())))?;
-    let row = admin_uc::get_client(&app.db, admin_id, target).await.map_err(HttpError::html)?;
+    let row = admin_uc::get_client(&app.db, read_actor, target).await.map_err(HttpError::html)?;
     let token = crate::csrf::ensure_token(&jar);
     let resp = Html(sui_id_web::render_client_edit(role.is_admin(), 
         sui_id_web::ClientEditData {
@@ -307,7 +307,7 @@ pub struct EditClientForm {
 
 pub async fn clients_edit_post(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id): CurrentAdmin,
+    CurrentAdmin(admin_id, ref admin_actor): CurrentAdmin,
     jar: CookieJar,
     Path(id): Path<String>,
     Form(form): Form<EditClientForm>,
@@ -332,18 +332,18 @@ pub async fn clients_edit_post(
     // separately; the operator sees three audit-log entries per save,
     // which is desirable — it makes it possible to track exactly which
     // facet of a client changed when.
-    admin_uc::update_client_basic(&app.db, admin_id, target, form.name.trim(), &uris, &app.caches).await
+    admin_uc::update_client_basic(&app.db, admin_actor, target, form.name.trim(), &uris, &app.caches).await
         .map_err(HttpError::html)?;
     admin_uc::set_client_allowed_scopes(
         &app.db,
-        admin_id,
+        admin_actor,
         target,
         form.allowed_scopes.trim(),
     ).await
     .map_err(HttpError::html)?;
     admin_uc::set_client_post_logout_redirect_uris(
         &app.db,
-        admin_id,
+        admin_actor,
         target,
         &post_logout_uris,
     ).await
@@ -360,7 +360,7 @@ pub async fn clients_edit_post(
 
 pub async fn clients_rotate_secret_post(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id): CurrentAdmin,
+    CurrentAdmin(admin_id, ref admin_actor): CurrentAdmin,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -377,7 +377,7 @@ pub async fn clients_rotate_secret_post(
     let target = ClientId::from_str(&id)
         .map_err(|_| HttpError::html(CoreError::BadRequest("invalid client id".into())))?;
     let new_secret = admin_uc::rotate_client_secret(
-        &app.db, &app.clock, admin_id, target, form.reason_opt()
+        &app.db, &app.clock, admin_actor, target, form.reason_opt()
     ).await.map_err(HttpError::html)?;
     // Redirect to edit page with the new secret in the query string.
     // The secret is URL-encoded; the edit page displays it once and the

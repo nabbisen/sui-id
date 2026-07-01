@@ -2,15 +2,15 @@
 use crate::cache::Caches;
 use crate::errors::{CoreError, CoreResult};
 use crate::time::SharedClock;
-use sui_id_shared::ids::UserId;
 use sui_id_store::Database;
 use zeroize::Zeroizing;
-use super::{audit_with_note, require_admin};
+use crate::actor::{AdminActor, ReadOnlyAdminActor};
+use super::audit_with_note;
 pub async fn list_signing_keys(
     db: &Database,
-    actor: UserId,
+    actor: &ReadOnlyAdminActor,
 ) -> CoreResult<Vec<sui_id_store::models::SigningKeyRow>> {
-    require_admin(db, actor).await?;
+    let actor_id = actor.user_id();
     Ok(sui_id_store::repos::signing_keys::list_published(db).await?)
 }
 
@@ -26,7 +26,7 @@ pub async fn rotate_signing_key(
     db: &Database,
     clock: &SharedClock,
     keyring_path: &str,
-    actor: UserId,
+    actor: &AdminActor,
     reason: Option<String>,
     caches: &Caches,
 ) -> CoreResult<sui_id_shared::ids::SigningKeyId> {
@@ -34,7 +34,7 @@ pub async fn rotate_signing_key(
     use sui_id_shared::ids::SigningKeyId;
     use sui_id_store::repos::signing_keys;
 
-    require_admin(db, actor).await?;
+    let actor_id = actor.user_id();
 
     // Generate the new key material first (outside the DB lock).
     // RFC 069: getrandom + from_bytes replaces SigningKey::generate(&mut OsRng).
@@ -62,7 +62,7 @@ pub async fn rotate_signing_key(
     }
     let _ = clock;
     let _ = keyring_path;
-    audit_with_note(db, actor, "signing_key.rotate", Some(new_id.to_string()), reason).await;
+    audit_with_note(db, actor_id, "signing_key.rotate", Some(new_id.to_string()), reason).await;
     Ok(new_id)
 }
 
@@ -71,12 +71,12 @@ pub async fn rotate_signing_key(
 pub async fn delete_signing_key(
     db: &Database,
     clock: &SharedClock,
-    actor: UserId,
+    actor: &AdminActor,
     target: sui_id_shared::ids::SigningKeyId,
     reason: Option<String>,
     caches: &Caches,
 ) -> CoreResult<()> {
-    require_admin(db, actor).await?;
+    let actor_id = actor.user_id();
     sui_id_store::repos::signing_keys::delete(db, target).await.map_err(|e| match e {
         sui_id_store::StoreError::NotFound => CoreError::NotFound,
         sui_id_store::StoreError::Conflict => CoreError::Conflict(
@@ -85,7 +85,7 @@ pub async fn delete_signing_key(
         other => CoreError::from(other),
     })?;
     let _ = clock;
-    audit_with_note(db, actor, "signing_key.delete", Some(target.to_string()), reason).await;
+    audit_with_note(db, actor_id, "signing_key.delete", Some(target.to_string()), reason).await;
     if let Err(e) = caches.jwks.rebuild(db).await {
         tracing::warn!(error = %e, "cache rebuild failed after delete_signing_key");
     }

@@ -31,12 +31,12 @@ use super::with_csrf_cookie;
 
 pub async fn users_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, role): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, role, ref read_actor): CurrentAdminOrAuditor,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
     let admin = users::get(&app.db, admin_id).await.map_err(|e| HttpError::html(CoreError::from(e)))?;
-    let rows = admin_uc::list_users(&app.db, admin_id).await.map_err(HttpError::html)?;
+    let rows = admin_uc::list_users(&app.db, read_actor).await.map_err(HttpError::html)?;
     let mut summaries = Vec::with_capacity(rows.len());
     for r in rows {
         let mfa_enabled =
@@ -62,7 +62,7 @@ pub async fn users_get(
 /// `GET /admin/users/new` — isolated create-user form.
 pub async fn users_new_get(
     state_ext: AppStateExt,
-    CurrentAdmin(_admin_id): CurrentAdmin,
+    CurrentAdmin(_admin_id, _): CurrentAdmin,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -90,7 +90,7 @@ pub struct CreateUserForm {
 
 pub async fn users_create(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id): CurrentAdmin,
+    CurrentAdmin(admin_id, ref admin_actor): CurrentAdmin,
     jar: CookieJar,
     Form(form): Form<CreateUserForm>,
 ) -> Result<Response, HttpError> {
@@ -120,7 +120,7 @@ pub async fn users_create(
                 .map(|s| s.hibp_mode)
                 .unwrap_or_default()
         },
-        admin_id,
+        admin_actor,
         CreateUserSpec {
             username: form.username.trim(),
             password: &form.password,
@@ -148,7 +148,7 @@ pub async fn users_create(
 
 pub async fn users_set_disabled(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id): CurrentAdmin,
+    CurrentAdmin(admin_id, ref admin_actor): CurrentAdmin,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -175,14 +175,14 @@ pub async fn users_set_disabled(
     } else {
         Some(form.reason.trim().to_string())
     };
-    admin_uc::set_user_disabled(&app.db, admin_id, target, value, reason_opt)
+    admin_uc::set_user_disabled(&app.db, admin_actor, target, value, reason_opt)
         .await.map_err(HttpError::html)?;
     Ok(Redirect::to("/admin/users").into_response())
 }
 
 pub async fn users_delete(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id): CurrentAdmin,
+    CurrentAdmin(admin_id, ref admin_actor): CurrentAdmin,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -198,7 +198,7 @@ pub async fn users_delete(
     }
     let target = UserId::from_str(&id)
         .map_err(|_| HttpError::html(CoreError::BadRequest("invalid user id".into())))?;
-    admin_uc::delete_user(&app.db, admin_id, target, form.reason_opt())
+    admin_uc::delete_user(&app.db, admin_actor, target, form.reason_opt())
         .await.map_err(HttpError::html)?;
     Ok(Redirect::to("/admin/users").into_response())
 }
@@ -208,7 +208,7 @@ pub async fn users_delete(
 
 pub async fn users_mfa_reset(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id): CurrentAdmin,
+    CurrentAdmin(admin_id, ref admin_actor): CurrentAdmin,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -224,7 +224,7 @@ pub async fn users_mfa_reset(
     }
     let target = UserId::from_str(&id)
         .map_err(|_| HttpError::html(CoreError::BadRequest("invalid user id".into())))?;
-    admin_uc::admin_reset_mfa(&app.db, admin_id, target, form.reason_opt())
+    admin_uc::admin_reset_mfa(&app.db, admin_actor, target, form.reason_opt())
         .await.map_err(HttpError::html)?;
     Ok(Redirect::to("/admin/users").into_response())
 }
@@ -234,7 +234,7 @@ pub async fn users_mfa_reset(
 
 pub async fn users_detail_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, role): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, role, ref read_actor): CurrentAdminOrAuditor,
     jar: CookieJar,
     Path(id): Path<String>,
 ) -> Result<Response, HttpError> {
@@ -309,7 +309,7 @@ pub async fn users_detail_get(
 
 pub async fn users_disable_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, _): CurrentAdminOrAuditor,
     jar: CookieJar,
     Path(id): Path<String>,
 ) -> Result<Response, HttpError> {
@@ -334,7 +334,7 @@ pub async fn users_disable_confirm_get(
 
 pub async fn users_delete_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, _): CurrentAdminOrAuditor,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -365,7 +365,7 @@ pub async fn users_delete_confirm_get(
 
 pub async fn users_mfa_reset_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, _): CurrentAdminOrAuditor,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -397,7 +397,7 @@ pub async fn users_mfa_reset_confirm_get(
 /// Admin-only; enforces the last-admin safeguard before any demotion.
 pub async fn users_set_role(
     State(app): AppStateExt,
-    CurrentAdmin(admin_id): CurrentAdmin,
+    CurrentAdmin(admin_id, ref admin_actor): CurrentAdmin,
     jar: CookieJar,
     Path(id): Path<String>,
     Form(form): Form<CsrfRoleForm>,
@@ -410,22 +410,28 @@ pub async fn users_set_role(
     let new_role = sui_id_store::models::Role::from_db_str(form.role.as_str())
         .ok_or_else(|| HttpError::html(CoreError::BadRequest("invalid role value".into())))?;
 
-    // Last-admin safeguard: refuse to demote the last remaining admin.
-    if !new_role.is_admin() {
-        let target_user = users::get(&app.db, target)
-            .await.map_err(|e| HttpError::html(CoreError::from(e)))?;
-        if target_user.role.is_admin() {
-            let count = sui_id_store::repos::users::count_admins(&app.db)
-                .await.unwrap_or(1);
-            if count <= 1 {
-                return Err(HttpError::html(CoreError::BadRequest(
-                    {
-                        let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
-                        lang.strings().user_detail_role_last_admin.to_owned()
-                    }.into()
-                )));
-            }
-        }
+    // Last-admin safeguard: consult the RFC 082 authorization core.
+    // We resolve `target_is_last_admin` here (the environmental fact)
+    // and pass it into the pure decision table.
+    let target_user = users::get(&app.db, target)
+        .await.map_err(|e| HttpError::html(CoreError::from(e)))?;
+    let target_is_last_admin = if target_user.role.is_admin() && !new_role.is_admin() {
+        sui_id_store::repos::users::count_admins(&app.db)
+            .await
+            .unwrap_or(1)
+            <= 1
+    } else {
+        false
+    };
+    if sui_id_core::authz::authorize(
+        admin_actor.actor().role(),
+        sui_id_core::authz::Action::AdminChangeUserRole { target_is_last_admin },
+    ) == sui_id_core::authz::Decision::Deny
+    {
+        let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
+        return Err(HttpError::html(CoreError::BadRequest(
+            lang.strings().user_detail_role_last_admin.to_owned().into(),
+        )));
     }
 
     sui_id_store::repos::users::set_role(&app.db, &target, new_role)

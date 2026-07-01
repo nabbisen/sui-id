@@ -20,7 +20,7 @@ use super::with_csrf_cookie;
 
 pub async fn signing_keys_delete_confirm_get(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id): CurrentAdmin,
+    CurrentAdmin(admin_id, ref admin_actor): CurrentAdmin,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -49,11 +49,11 @@ pub async fn signing_keys_delete_confirm_get(
 
 pub async fn signing_keys_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, role): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, role, ref read_actor): CurrentAdminOrAuditor,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
-    let rows = admin_uc::list_signing_keys(&app.db, admin_id).await.map_err(HttpError::html)?;
+    let rows = admin_uc::list_signing_keys(&app.db, read_actor).await.map_err(HttpError::html)?;
     let summaries: Vec<sui_id_shared::api::SigningKeySummary> = rows
         .into_iter()
         .map(|r| sui_id_shared::api::SigningKeySummary {
@@ -73,7 +73,7 @@ pub async fn signing_keys_get(
 
 pub async fn signing_keys_rotate(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id): CurrentAdmin,
+    CurrentAdmin(admin_id, ref admin_actor): CurrentAdmin,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Form(form): Form<ConfirmedReasonForm>,
@@ -88,7 +88,7 @@ pub async fn signing_keys_rotate(
     }
     admin_uc::rotate_signing_key(&app.db, &app.clock,
         app.config.storage.key_file.to_str().unwrap_or_default(),
-        admin_id, form.reason_opt(), &app.caches)
+        admin_actor, form.reason_opt(), &app.caches)
         .await.map_err(HttpError::html)?;
     Ok(Redirect::to("/admin/signing-keys").into_response())
 }
@@ -96,7 +96,7 @@ pub async fn signing_keys_rotate(
 
 pub async fn signing_keys_delete(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id): CurrentAdmin,
+    CurrentAdmin(admin_id, ref admin_actor): CurrentAdmin,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -112,7 +112,7 @@ pub async fn signing_keys_delete(
     }
     let target = sui_id_shared::ids::SigningKeyId::from_str(&id)
         .map_err(|_| HttpError::html(CoreError::BadRequest("invalid signing key id".into())))?;
-    admin_uc::delete_signing_key(&app.db, &app.clock, admin_id, target,
+    admin_uc::delete_signing_key(&app.db, &app.clock, admin_actor, target,
         form.reason_opt(), &app.caches)
         .await.map_err(HttpError::html)?;
     Ok(Redirect::to("/admin/signing-keys").into_response())

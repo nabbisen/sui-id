@@ -10,6 +10,7 @@ use axum::http::request::Parts;
 use axum::response::IntoResponse;
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use std::str::FromStr;
+use sui_id_core::actor::{Actor, AdminActor, ReadOnlyAdminActor};
 use sui_id_core::errors::CoreError;
 use sui_id_core::session;
 use sui_id_shared::ids::{SessionId, UserId};
@@ -193,7 +194,8 @@ where
 /// Like [`CurrentUser`] but additionally enforces administrator privilege
 /// (write access). Returns 403 for auditors and plain users.
 /// Used on all POST / DELETE / PUT admin routes.
-pub struct CurrentAdmin(pub UserId);
+/// RFC 081: produces an [`AdminActor`] alongside the raw `UserId`.
+pub struct CurrentAdmin(pub UserId, pub AdminActor);
 
 impl<S> FromRequestParts<S> for CurrentAdmin
 where
@@ -203,21 +205,29 @@ where
     type Rejection = HttpError;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let CurrentUser(uid) = CurrentUser::from_request_parts(parts, state).await?;
+        let SessionContext { user_id: uid, session_id } =
+            SessionContext::from_request_parts(parts, state).await?;
         let app: AppState = AppState::from_ref(state);
-        let user = users::get(&app.db, uid).await.map_err(|_| HttpError::html(CoreError::Forbidden))?;
-        // RFC 071: use role.is_admin() — admins only for mutation.
+        let user = users::get(&app.db, uid)
+            .await
+            .map_err(|_| HttpError::html(CoreError::Forbidden))?;
+        // RFC 071: admins only for mutation surfaces.
         if !user.role.is_admin() || user.is_disabled || user.is_deleted {
             return Err(HttpError::html(CoreError::Forbidden));
         }
-        Ok(CurrentAdmin(uid))
+        // RFC 081: construct typed AdminActor.
+        let actor = Actor::from_session(uid, user.role, session_id)
+            .into_admin()
+            .map_err(|_| HttpError::html(CoreError::Forbidden))?;
+        Ok(CurrentAdmin(uid, actor))
     }
 }
 
 /// Admin OR auditor — passes for `role ∈ {admin, auditor}`.
 /// Used on all GET admin routes so auditors can view without mutating.
 /// Returns `(UserId, Role)` so handlers can pass role to render fns.
-pub struct CurrentAdminOrAuditor(pub UserId, pub sui_id_store::models::Role);
+/// RFC 081: also produces a [`ReadOnlyAdminActor`] for domain read functions.
+pub struct CurrentAdminOrAuditor(pub UserId, pub sui_id_store::models::Role, pub ReadOnlyAdminActor);
 
 impl<S> FromRequestParts<S> for CurrentAdminOrAuditor
 where
@@ -227,14 +237,20 @@ where
     type Rejection = HttpError;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let CurrentUser(uid) = CurrentUser::from_request_parts(parts, state).await?;
+        let SessionContext { user_id: uid, session_id } =
+            SessionContext::from_request_parts(parts, state).await?;
         let app: AppState = AppState::from_ref(state);
-        let user = users::get(&app.db, uid).await
+        let user = users::get(&app.db, uid)
+            .await
             .map_err(|_| HttpError::html(CoreError::Forbidden))?;
         if !user.role.can_read_admin() || user.is_disabled || user.is_deleted {
             return Err(HttpError::html(CoreError::Forbidden));
         }
-        Ok(CurrentAdminOrAuditor(uid, user.role))
+        // RFC 081: construct typed ReadOnlyAdminActor.
+        let actor = Actor::from_session(uid, user.role, session_id)
+            .into_read_admin()
+            .map_err(|_| HttpError::html(CoreError::Forbidden))?;
+        Ok(CurrentAdminOrAuditor(uid, user.role, actor))
     }
 }
 

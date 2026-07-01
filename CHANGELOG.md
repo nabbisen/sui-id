@@ -5,6 +5,99 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.67.0] — 2026-06-14
+
+**Security structure: RFC 081 (actor scope boundary) + RFC 082 (authorization
+decision core).** Two Category-B structural hardening RFCs from the audit arc,
+shipped together as planned. No wire-behaviour change; internally a privileged
+call without proof of privilege is now a compile error.
+
+### Added — pure authorization decision core (`authz.rs`, RFC 082)
+
+A new pure module `sui_id_core::authz` contains:
+
+- `Action` enum — every privileged operation in the system, enumerated. The
+  `AdminChangeUserRole`, `AdminDisableUser`, and `AdminDeleteUser` variants
+  carry `target_is_last_admin: bool` so the function remains a pure `(Role,
+  Action) → Decision` table; the caller resolves the environmental fact and
+  passes it in as data.
+- `Decision` enum — `Permit` / `Deny`.
+- `authorize(role: Role, action: Action) -> Decision` — the single normative
+  authorization table. Deny-by-default: the final match arm is `_ => Deny`;
+  any unlisted pair denies without a code-review finding.
+
+Security properties verified by `authz/tests.rs`:
+- **P1** Totality / deny-by-default — exhaustive matrix test (hand-written
+  expected matrix agrees with the live table; two artifacts must agree) plus a
+  no-panic sweep.
+- **P2** Role monotonicity — `permit(User, a) ⇒ permit(Admin, a)` for all `a`.
+- **P3** Read/write separation — Auditor permitted ⊆ read-only actions; every
+  mutation action is `Deny` for `Auditor`.
+- **P4** Last-admin protection — all three last-admin variants deny for every
+  role, including `Admin`.
+- **P5** Self-scope — `User` permitted ⊆ `Self*` actions.
+
+### Added — actor capability types (`actor.rs`, RFC 081)
+
+A new module `sui_id_core::actor` introduces:
+
+- `Actor` — proof of an authenticated principal. Private constructor
+  (`pub(crate) from_session`), no `Deserialize`, no `Clone`. Cannot be forged
+  or cached across requests (P4, P5).
+- `AdminActor` — write-capable proof. Constructible only via
+  `Actor::into_admin`, which delegates to the RFC 082 table.
+- `ReadOnlyAdminActor` — read-only admin or auditor proof. The `can_write()`
+  method replaces the free-floating `can_write: bool` rendering flag;
+  `into_read_admin` accepts both `Admin` and `Auditor` roles.
+- `SelfActor` — any authenticated actor, self-scoped. Self-service mutations
+  call `actor.user_id()` for the target; a caller-supplied user id is not
+  accepted, making cross-user targeting via `/me/*` structurally impossible
+  (P3).
+
+Tests in `actor.rs`: all conversion paths, `can_write` derivation, and a
+pinned test that `SelfActor::user_id` returns the authenticated user's id —
+not a caller-supplied one.
+
+### Changed — domain function signatures
+
+Every privileged admin mutation now requires `&AdminActor`; every admin read
+requires `&ReadOnlyAdminActor`; `change_password_self` requires `&SelfActor`.
+The `require_admin(db, user_id)` DB check is replaced by the structural
+guarantee — the capability type is proof the check already passed.
+
+Affected domain functions:
+
+- `admin::users` — `create_user`, `set_user_disabled`, `delete_user`,
+  `admin_reset_mfa`, `reset_user_password` take `&AdminActor`;
+  `list_users` takes `&ReadOnlyAdminActor`.
+- `admin::clients` — all 8 mutations take `&AdminActor`;
+  `get_client`, `list_clients` take `&ReadOnlyAdminActor`.
+- `admin::signing_keys` — `rotate_signing_key`, `delete_signing_key` take
+  `&AdminActor`; `list_signing_keys` takes `&ReadOnlyAdminActor`.
+- `me_security::change_password_self` — takes `&SelfActor`.
+
+### Changed — Axum extractors
+
+`CurrentAdmin` now produces `(UserId, AdminActor)`; `CurrentAdminOrAuditor`
+produces `(UserId, Role, ReadOnlyAdminActor)`. The new fields flow through
+to handler call sites, which pass `&admin_actor` / `&read_actor` to domain
+functions.
+
+### Changed — last-admin safeguard
+
+The last-admin check in `users_set_role` now calls `authz::authorize(role,
+AdminChangeUserRole { target_is_last_admin })` — the RFC 082 table is the
+single normative source of the last-admin rule.
+
+### Deprecated — `require_admin`
+
+`admin::require_admin` is deprecated with a `#[deprecated]` attribute pointing
+to `Actor::into_admin`. It is retained for the binary-crate extractors, which
+must verify session roles before constructing an `Actor`; domain functions no
+longer call it.
+
+**90/90 tests pass.** All CI invariants unchanged.
+
 ## [0.66.0] — 2026-06-14
 
 **Security: RFC 079 (auth-code lifecycle assurance) + RFC 080 (refresh-token

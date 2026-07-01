@@ -6,12 +6,13 @@
 //! password change; future entries will land here too — for example
 //! a self-serve recovery-email change once email support arrives.
 
+use crate::actor::SelfActor;
 use crate::errors::{CoreError, CoreResult};
 use crate::hibp::{self, HibpClient, HibpEnforcement};
 use crate::password;
 use crate::time::SharedClock;
 use chrono::Utc;
-use sui_id_shared::ids::{SessionId, UserId};
+use sui_id_shared::ids::UserId;
 use sui_id_store::models::{AuditLogRow, CredentialRow, HibpMode};
 use sui_id_store::repos::{audit, credentials, refresh_tokens, sessions};
 use sui_id_store::Database;
@@ -64,13 +65,14 @@ pub async fn change_password_self(
     clock: &SharedClock,
     hibp_client: Option<&dyn HibpClient>,
     hibp_mode: HibpMode,
-    user_id: UserId,
+    actor: &SelfActor,
     current_password: &str,
     new_password: &str,
-    keep_current_session: Option<SessionId>,
+    keep_current_session: Option<sui_id_shared::ids::SessionId>,
     revoke_others: bool,
     min_password_len: usize,
 ) -> CoreResult<PasswordChangeReport> {
+    let user_id = actor.user_id();
     // 1. Load the existing credential row. If it's missing, the
     //    user account exists without a password (shouldn't happen
     //    in practice, but be explicit) — refuse the same as a

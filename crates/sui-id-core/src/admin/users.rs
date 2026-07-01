@@ -1,9 +1,9 @@
 //! User admin operations (RFC 075, v0.62.0).
+use crate::actor::{AdminActor, ReadOnlyAdminActor};
 use crate::errors::{CoreError, CoreResult};
 use crate::hibp::{self, HibpClient, HibpEnforcement};
 use crate::password::{check_password_policy, hash_password};
 use crate::time::SharedClock;
-use sui_id_shared::ids::UserId;
 use sui_id_store::models::{CredentialRow, HibpMode, UserRow};
 use sui_id_store::repos::{
     audit, auth_codes, credentials, refresh_tokens, sessions, user_totp,
@@ -11,7 +11,7 @@ use sui_id_store::repos::{
 };
 use sui_id_store::Database;
 // Shared audit helpers from parent module.
-use super::{audit_ok, audit_with_note, require_admin};
+use super::{audit_ok, audit_with_note};
 pub struct CreateUserSpec<'a> {
     pub username: &'a str,
     pub password: &'a str,
@@ -31,10 +31,10 @@ pub async fn create_user(
     clock: &SharedClock,
     hibp_client: Option<&dyn HibpClient>,
     hibp_mode: sui_id_store::models::HibpMode,
-    actor: UserId,
+    actor: &AdminActor,
     spec: CreateUserSpec<'_>,
 ) -> CoreResult<UserRow> {
-    require_admin(db, actor).await?;
+    let actor_id = actor.user_id();
     if spec.username.trim().is_empty() {
         return Err(CoreError::BadRequest("username must not be empty".into()));
     }
@@ -45,7 +45,7 @@ pub async fn create_user(
 
     let now = clock.now();
     let row = UserRow {
-        id: UserId::new(),
+        id: actor_id,
         username: spec.username.to_owned(),
         display_name: spec.display_name.map(str::to_owned),
         email: spec
@@ -88,24 +88,24 @@ pub async fn create_user(
         },
     ).await?;
     let action = if hibp_warned { "user.create_warned_hibp" } else { "user.create" };
-    audit_ok(db, actor, action, Some(row.id.to_string())).await;
+    audit_ok(db, actor_id, action, Some(row.id.to_string())).await;
     Ok(row)
 }
 
-pub async fn list_users(db: &Database, actor: UserId) -> CoreResult<Vec<UserRow>> {
-    require_admin(db, actor).await?;
+pub async fn list_users(db: &Database, actor: &ReadOnlyAdminActor) -> CoreResult<Vec<UserRow>> {
+    let _ = actor; // capability proof; target list is implicit
     Ok(users::list(db).await?)
 }
 
 pub async fn set_user_disabled(
     db: &Database,
-    actor: UserId,
-    target: UserId,
+    actor: &AdminActor,
+    target: sui_id_shared::ids::UserId,
     disabled: bool,
     reason: Option<String>,
 ) -> CoreResult<()> {
-    require_admin(db, actor).await?;
-    if actor == target && disabled {
+    let actor_id = actor.user_id();
+    if actor_id == target && disabled {
         return Err(CoreError::BadRequest(
             "cannot disable your own account; have another administrator do it".into(),
         ));
@@ -121,7 +121,7 @@ pub async fn set_user_disabled(
     }
     audit_with_note(
         db,
-        actor,
+        actor_id,
         if disabled { "user.disable" } else { "user.enable" },
         Some(target.to_string()),
         if disabled { reason } else { None },
@@ -131,12 +131,12 @@ pub async fn set_user_disabled(
 
 pub async fn delete_user(
     db: &Database,
-    actor: UserId,
-    target: UserId,
+    actor: &AdminActor,
+    target: sui_id_shared::ids::UserId,
     reason: Option<String>,
 ) -> CoreResult<()> {
-    require_admin(db, actor).await?;
-    if actor == target {
+    let actor_id = actor.user_id();
+    if actor_id == target {
         return Err(CoreError::BadRequest(
             "cannot delete your own account".into(),
         ));
@@ -148,7 +148,7 @@ pub async fn delete_user(
     sessions::revoke_all_for_user(db, target).await?;
     refresh_tokens::revoke_all_for_user(db, target).await?;
     auth_codes::invalidate_all_for_user(db, target).await?;
-    audit_with_note(db, actor, "user.delete", Some(target.to_string()), reason).await;
+    audit_with_note(db, actor_id, "user.delete", Some(target.to_string()), reason).await;
     Ok(())
 }
 
@@ -179,11 +179,11 @@ pub struct MfaResetReport {
 /// admin to act on their behalf.
 pub async fn admin_reset_mfa(
     db: &Database,
-    actor: UserId,
-    target: UserId,
+    actor: &AdminActor,
+    target: sui_id_shared::ids::UserId,
     reason: Option<String>,
 ) -> CoreResult<MfaResetReport> {
-    require_admin(db, actor).await?;
+    let actor_id = actor.user_id();
     // Check the target exists and is not soft-deleted, to give a
     // clear error rather than a silently-no-op outcome.
     let _user = users::get(db, target).await.map_err(|e| match e {
@@ -227,7 +227,7 @@ pub async fn admin_reset_mfa(
         db,
         &sui_id_store::models::AuditLogRow {
             at: chrono::Utc::now(),
-            actor: Some(actor),
+            actor: Some(actor_id),
             action: "mfa.admin_reset".into(),
             target: Some(target.to_string()),
             result: "ok".into(),
@@ -259,12 +259,12 @@ pub async fn reset_user_password(
     clock: &SharedClock,
     hibp_client: Option<&dyn HibpClient>,
     hibp_mode: HibpMode,
-    actor: UserId,
-    target: UserId,
+    actor: &AdminActor,
+    target: sui_id_shared::ids::UserId,
     new_password: &str,
     min_password_len: usize,
 ) -> CoreResult<()> {
-    require_admin(db, actor).await?;
+    let actor_id = actor.user_id();
     check_password_policy(new_password, min_password_len)?;
 
     // RFC 003: HIBP breach check on admin-driven password reset.
@@ -292,7 +292,7 @@ pub async fn reset_user_password(
     sessions::revoke_all_for_user(db, target).await?;
     refresh_tokens::revoke_all_for_user(db, target).await?;
     auth_codes::invalidate_all_for_user(db, target).await?;
-    audit_ok(db, actor, "user.reset_password", Some(target.to_string())).await;
+    audit_ok(db, actor_id, "user.reset_password", Some(target.to_string())).await;
     Ok(())
 }
 

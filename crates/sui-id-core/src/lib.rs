@@ -18,6 +18,8 @@ pub mod jwt;
 pub mod jwks;
 pub mod discovery;
 pub mod authorize;
+pub mod authz;
+pub mod actor;
 pub mod session;
 pub mod setup;
 pub mod admin;

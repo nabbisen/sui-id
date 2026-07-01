@@ -38,7 +38,7 @@ pub async fn index_redirect() -> Redirect {
 
 pub async fn basic_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, _): CurrentAdminOrAuditor,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -76,7 +76,7 @@ pub struct BasicLangForm {
 
 pub async fn basic_lang_post(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id): CurrentAdmin,
+    CurrentAdmin(admin_id, _): CurrentAdmin,
     jar: CookieJar,
     axum::Form(form): axum::Form<BasicLangForm>,
 ) -> Result<Response, HttpError> {
@@ -118,7 +118,7 @@ pub async fn basic_lang_post(
 
 pub async fn security_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, _): CurrentAdminOrAuditor,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -157,7 +157,7 @@ pub struct IdleTimeoutForm {
 
 pub async fn idle_timeout_post(
     state_ext: AppStateExt,
-    CurrentAdmin(_admin_id): CurrentAdmin,
+    CurrentAdmin(_admin_id, _): CurrentAdmin,
     jar: CookieJar,
     axum::Form(form): axum::Form<IdleTimeoutForm>,
 ) -> Result<Response, HttpError> {
@@ -188,7 +188,7 @@ pub struct MaxSessionsForm {
 
 pub async fn max_sessions_post(
     state_ext: AppStateExt,
-    CurrentAdmin(_admin_id): CurrentAdmin,
+    CurrentAdmin(_admin_id, _): CurrentAdmin,
     jar: CookieJar,
     axum::Form(form): axum::Form<MaxSessionsForm>,
 ) -> Result<Response, HttpError> {
@@ -209,7 +209,7 @@ pub async fn max_sessions_post(
 
 pub async fn authentication_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, _): CurrentAdminOrAuditor,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -238,7 +238,7 @@ pub async fn authentication_get(
 
 pub async fn logs_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, _): CurrentAdminOrAuditor,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -288,7 +288,7 @@ pub async fn logs_get(
 
 pub async fn other_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, _): CurrentAdminOrAuditor,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -341,7 +341,7 @@ pub struct EmailSettingsForm {
 
 pub async fn email_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(admin_id, _role): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(admin_id, _role, _): CurrentAdminOrAuditor,
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
@@ -357,7 +357,7 @@ pub async fn email_get(
 
 pub async fn email_post(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id): CurrentAdmin,
+    CurrentAdmin(admin_id, _): CurrentAdmin,
     jar: CookieJar,
     axum::Form(form): axum::Form<EmailSettingsForm>,
 ) -> Result<Response, HttpError> {
@@ -450,7 +450,7 @@ pub struct EmailTestForm {
 
 pub async fn email_test(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id): CurrentAdmin,
+    CurrentAdmin(admin_id, _): CurrentAdmin,
     jar: CookieJar,
     axum::Form(form): axum::Form<EmailTestForm>,
 ) -> Result<Response, HttpError> {

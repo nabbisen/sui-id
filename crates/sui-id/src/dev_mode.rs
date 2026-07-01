@@ -423,7 +423,7 @@ pub async fn apply_seed(
             clock,
             None,                                    // dev-mode: HIBP off
             sui_id_store::models::HibpMode::Off,
-            admin_id,
+            &sui_id_core::actor::Actor::from_session(admin_id, sui_id_store::models::Role::Admin, sui_id_shared::ids::SessionId::new()).into_admin().unwrap_or_else(|_| unreachable!("dev-mode initial admin must be admin")),
             CreateUserSpec {
                 username: &u.username,
                 password: &u.password,
@@ -451,7 +451,7 @@ pub async fn apply_seed(
         let created_client = create_client(
             db,
             clock,
-            admin_id,
+            &sui_id_core::actor::Actor::from_session(admin_id, sui_id_store::models::Role::Admin, sui_id_shared::ids::SessionId::new()).into_admin().unwrap_or_else(|_| unreachable!("dev-mode initial admin must be admin")),
             CreateClientSpec {
                 name: &c.name,
                 redirect_uris: &c.redirect_uris,

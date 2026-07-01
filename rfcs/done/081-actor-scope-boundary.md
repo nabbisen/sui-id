@@ -1,6 +1,6 @@
 # RFC 081 — Actor Scope Boundary and Scoped Repository Signatures
 
-**Status.** Proposed
+**Status.** Implemented (v0.67.0)
 **Tracks.** Strategy theme 4 ("tenant boundary"), translated for
 a single-tenant codebase (audit gap G9, G5 partially). Category B.
 **Touches.** New `sui-id-core/src/actor.rs`,

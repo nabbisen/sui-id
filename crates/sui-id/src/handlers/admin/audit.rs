@@ -24,7 +24,7 @@ pub struct AuditQuery {
 
 pub async fn audit_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(_, _role): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(_, _role, _): CurrentAdminOrAuditor,
     jar: CookieJar,
     axum::extract::Query(query): axum::extract::Query<AuditQuery>,
 ) -> Result<Response, HttpError> {
@@ -54,7 +54,7 @@ pub async fn audit_get(
 
 pub async fn audit_csv_get(
     state_ext: AppStateExt,
-    CurrentAdminOrAuditor(_, _role): CurrentAdminOrAuditor,
+    CurrentAdminOrAuditor(_, _role, _): CurrentAdminOrAuditor,
     axum::extract::Query(query): axum::extract::Query<AuditQuery>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
