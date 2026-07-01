@@ -12,11 +12,11 @@ use sui_id_store::repos::{audit, sessions};
 
 const SESSION_COOKIE: &str = "sui_id_session";
 
-use super::forms::*;
-use crate::handlers::{AppStateExt, CurrentUser, enforce_csrf};
-use crate::handlers::admin::with_csrf_cookie;
-use sui_id_web::pages::{MeShellData, MeTab};
 use super::describe_auth_methods;
+use super::forms::*;
+use crate::handlers::admin::with_csrf_cookie;
+use crate::handlers::{AppStateExt, CurrentUser, enforce_csrf};
+use sui_id_web::pages::{MeShellData, MeTab};
 
 pub async fn revoke_one(
     state_ext: AppStateExt,
@@ -47,7 +47,9 @@ pub async fn revoke_one(
         return Ok(Redirect::to("/me/security?msg=unknown").into_response());
     }
 
-    sessions::revoke(&app.db, target_id).await.map_err(|e| HttpError::html(e.into()))?;
+    sessions::revoke(&app.db, target_id)
+        .await
+        .map_err(|e| HttpError::html(e.into()))?;
 
     // If the user just revoked their *own* current session, clear
     // the cookie so the next request is clean. They'll bounce to
@@ -88,18 +90,16 @@ pub async fn revoke_all_others(
     // doc comment for why a password re-prompt would buy
     // nothing). After step-up the operator is bounced back to
     // /me/security and can click the form again.
-    if let Err(redirect) = crate::handlers::require_fresh_step_up(
-        &app,
-        &ctx,
-        "/me/security",
-    ).await {
+    if let Err(redirect) = crate::handlers::require_fresh_step_up(&app, &ctx, "/me/security").await
+    {
         return Ok(redirect);
     }
 
     let user_id = ctx.user_id;
     let keep = ctx.session_id;
 
-    let n = sessions::revoke_all_for_user_except(&app.db, user_id, keep).await
+    let n = sessions::revoke_all_for_user_except(&app.db, user_id, keep)
+        .await
         .map_err(|e| HttpError::html(e.into()))?;
 
     // Audit: emit one row capturing how many sessions were swept.
@@ -114,7 +114,8 @@ pub async fn revoke_all_others(
             result: "ok".into(),
             note: Some(format!("revoked {n} other session(s)")),
         },
-    ).await;
+    )
+    .await;
 
     let target = if n == 0 {
         "/me/security?msg=no_other_sessions"
@@ -123,15 +124,12 @@ pub async fn revoke_all_others(
     };
     let mut resp = Response::default();
     *resp.status_mut() = axum::http::StatusCode::SEE_OTHER;
-    resp.headers_mut().insert(
-        LOCATION,
-        target.parse().expect("static header value"),
-    );
+    resp.headers_mut()
+        .insert(LOCATION, target.parse().expect("static header value"));
     Ok(resp)
 }
 
 // ---------- helpers ----------
-
 
 pub async fn sessions_tab_get(
     state_ext: AppStateExt,
@@ -142,7 +140,8 @@ pub async fn sessions_tab_get(
     let State(app) = state_ext;
     let lang = req_locale;
     let user = sui_id_store::repos::users::get(&app.db, user_id)
-        .await.map_err(|e| HttpError::html(CoreError::from(e)).with_lang(lang))?;
+        .await
+        .map_err(|e| HttpError::html(CoreError::from(e)).with_lang(lang))?;
     let shell = MeShellData {
         username: user.username,
         is_admin: user.is_admin,
@@ -156,19 +155,23 @@ pub async fn sessions_tab_get(
     let current_session_id = raw_session;
 
     let session_rows = sessions::list_active_for_user(&app.db, user_id)
-        .await.map_err(|e| HttpError::html(e.into()).with_lang(lang))?;
+        .await
+        .map_err(|e| HttpError::html(e.into()).with_lang(lang))?;
 
-    let sessions_view: Vec<sui_id_web::MeSessionDescriptor> = session_rows.into_iter().map(|s| {
-        let auth_methods = describe_auth_methods(&s.auth_methods);
-        let is_current = s.id.to_string() == current_session_id;
-        sui_id_web::MeSessionDescriptor {
-            id: s.id.to_string(),
-            created_at: s.created_at,
-            expires_at: s.expires_at,
-            auth_methods,
-            is_current,
-        }
-    }).collect();
+    let sessions_view: Vec<sui_id_web::MeSessionDescriptor> = session_rows
+        .into_iter()
+        .map(|s| {
+            let auth_methods = describe_auth_methods(&s.auth_methods);
+            let is_current = s.id.to_string() == current_session_id;
+            sui_id_web::MeSessionDescriptor {
+                id: s.id.to_string(),
+                created_at: s.created_at,
+                expires_at: s.expires_at,
+                auth_methods,
+                is_current,
+            }
+        })
+        .collect();
 
     let csrf_tok = csrf::ensure_token(&jar);
     let resp = axum::response::Html(sui_id_web::render_me_sessions(
@@ -178,7 +181,10 @@ pub async fn sessions_tab_get(
             sessions: sessions_view,
             csrf_token: csrf_tok.clone(),
         },
-        None, app.is_dev_mode, lang,
-    )).into_response();
+        None,
+        app.is_dev_mode,
+        lang,
+    ))
+    .into_response();
     Ok(with_csrf_cookie(resp, &app, &csrf_tok))
 }

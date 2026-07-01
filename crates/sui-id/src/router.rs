@@ -1,10 +1,10 @@
 //! Axum router construction.
 
+use crate::AppState;
 use crate::handlers::{admin, index, oidc, setup};
 use crate::security_headers::SecurityHeaderConfig;
-use crate::AppState;
-use axum::routing::{get, post};
 use axum::Router;
+use axum::routing::{get, post};
 use tower_http::trace::TraceLayer;
 
 pub fn build_router(app: AppState) -> Router {
@@ -42,29 +42,23 @@ pub fn build_router(app: AppState) -> Router {
             "/setup/admin",
             get(setup::admin_get).post(setup::admin_post),
         )
-        .route(
-            "/setup/lang",
-            get(setup::lang_get).post(setup::lang_post),
-        )
-        .route(
-            "/setup/hibp",
-            get(setup::hibp_get).post(setup::hibp_post),
-        )
+        .route("/setup/lang", get(setup::lang_get).post(setup::lang_post))
+        .route("/setup/hibp", get(setup::hibp_get).post(setup::hibp_post))
         .route("/setup/done", get(setup::done_get))
         .merge(public_routes)
         .merge(token_routes)
         .route("/oauth2/authorize", get(oidc::authorize))
-        .route("/oauth2/consent",   post(oidc::consent_post))  // RFC 038: consent gate
-        .route("/oauth2/logout",    get(oidc::logout))
+        .route("/oauth2/consent", post(oidc::consent_post)) // RFC 038: consent gate
+        .route("/oauth2/logout", get(oidc::logout))
         .route(
             "/oauth2/introspect",
             post(crate::handlers::oauth_token::introspect),
         )
+        .route("/oauth2/revoke", post(crate::handlers::oauth_token::revoke))
         .route(
-            "/oauth2/revoke",
-            post(crate::handlers::oauth_token::revoke),
+            "/admin/login",
+            get(admin::login_get).post(admin::login_post),
         )
-        .route("/admin/login", get(admin::login_get).post(admin::login_post))
         .route(
             "/admin/login/mfa",
             get(admin::mfa_challenge_get).post(admin::mfa_challenge_post),
@@ -102,8 +96,10 @@ pub fn build_router(app: AppState) -> Router {
         // GET stays as a 301 redirect to honour bookmarks; the POST
         // routes are removed entirely since their only callers were
         // the legacy `render_profile` forms.
-        .route("/admin/profile",
-               get(crate::handlers::me_security::admin_profile_redirect))
+        .route(
+            "/admin/profile",
+            get(crate::handlers::me_security::admin_profile_redirect),
+        )
         .route(
             "/admin/login/webauthn/start",
             post(admin::webauthn_auth_start),
@@ -113,18 +109,30 @@ pub fn build_router(app: AppState) -> Router {
             post(admin::webauthn_auth_complete),
         )
         .route("/admin", get(admin::dashboard))
-        .route("/admin/users", get(admin::users_get).post(admin::users_create))
+        .route(
+            "/admin/users",
+            get(admin::users_get).post(admin::users_create),
+        )
         .route("/admin/users/new", get(admin::users_new_get))
         .route("/admin/users/{id}", get(admin::users_detail_get))
-        .route("/admin/users/{id}/disabled", post(admin::users_set_disabled))
-        .route("/admin/users/{id}/disable-confirm",
-               get(admin::users_disable_confirm_get))
+        .route(
+            "/admin/users/{id}/disabled",
+            post(admin::users_set_disabled),
+        )
+        .route(
+            "/admin/users/{id}/disable-confirm",
+            get(admin::users_disable_confirm_get),
+        )
         .route("/admin/users/{id}/delete", post(admin::users_delete))
-        .route("/admin/users/{id}/delete-confirm",
-               get(admin::users_delete_confirm_get))
+        .route(
+            "/admin/users/{id}/delete-confirm",
+            get(admin::users_delete_confirm_get),
+        )
         .route("/admin/users/{id}/mfa-reset", post(admin::users_mfa_reset))
-        .route("/admin/users/{id}/mfa-reset-confirm",
-               get(admin::users_mfa_reset_confirm_get))
+        .route(
+            "/admin/users/{id}/mfa-reset-confirm",
+            get(admin::users_mfa_reset_confirm_get),
+        )
         .route("/admin/users/{id}/role", post(admin::users_set_role))
         .route(
             "/admin/clients",
@@ -136,18 +144,27 @@ pub fn build_router(app: AppState) -> Router {
             post(admin::clients_set_disabled),
         )
         .route("/admin/clients/{id}/delete", post(admin::clients_delete))
-        .route("/admin/clients/{id}/delete-confirm",
-               get(admin::clients_delete_confirm_get))
+        .route(
+            "/admin/clients/{id}/delete-confirm",
+            get(admin::clients_delete_confirm_get),
+        )
         .route(
             "/admin/clients/{id}/edit",
             get(admin::clients_edit_get).post(admin::clients_edit_post),
         )
         .route("/admin/signing-keys", get(admin::signing_keys_get))
-        .route("/admin/signing-keys/rotate-confirm",
-               get(admin::signing_keys_rotate_confirm_get))
-        .route("/admin/signing-keys/rotate", post(admin::signing_keys_rotate))
-        .route("/admin/clients/{id}/rotate-secret",
-               post(admin::clients_rotate_secret_post))
+        .route(
+            "/admin/signing-keys/rotate-confirm",
+            get(admin::signing_keys_rotate_confirm_get),
+        )
+        .route(
+            "/admin/signing-keys/rotate",
+            post(admin::signing_keys_rotate),
+        )
+        .route(
+            "/admin/clients/{id}/rotate-secret",
+            post(admin::clients_rotate_secret_post),
+        )
         .route(
             "/admin/signing-keys/{id}/delete",
             post(admin::signing_keys_delete),
@@ -197,8 +214,7 @@ pub fn build_router(app: AppState) -> Router {
         )
         .route(
             "/admin/settings/email",
-            get(crate::handlers::settings::email_get)
-                .post(crate::handlers::settings::email_post),
+            get(crate::handlers::settings::email_get).post(crate::handlers::settings::email_post),
         )
         .route(
             "/admin/settings/email/confirm",
@@ -214,41 +230,70 @@ pub fn build_router(app: AppState) -> Router {
         // require admin privilege; they're for any signed-in user.
         // The handler enforces ownership: a user can only see and
         // revoke their own sessions.
-        .route("/me/security",
-               get(crate::handlers::me_security::security_redirect))
-        .route("/me/security/overview",
-               get(crate::handlers::me_security::overview_get))
-        .route("/me/security/mfa",
-               get(crate::handlers::me_security::mfa_get))
-        .route("/me/security/sessions",
-               get(crate::handlers::me_security::sessions_tab_get))
-        .route("/me/security/passkeys",
-               get(crate::handlers::me_security::passkeys_get))
-        .route("/me/security/passkeys/{id}/rename",
-               post(crate::handlers::me_security::passkey_rename_post))
+        .route(
+            "/me/security",
+            get(crate::handlers::me_security::security_redirect),
+        )
+        .route(
+            "/me/security/overview",
+            get(crate::handlers::me_security::overview_get),
+        )
+        .route(
+            "/me/security/mfa",
+            get(crate::handlers::me_security::mfa_get),
+        )
+        .route(
+            "/me/security/sessions",
+            get(crate::handlers::me_security::sessions_tab_get),
+        )
+        .route(
+            "/me/security/passkeys",
+            get(crate::handlers::me_security::passkeys_get),
+        )
+        .route(
+            "/me/security/passkeys/{id}/rename",
+            post(crate::handlers::me_security::passkey_rename_post),
+        )
         // MFA mutative routes (RFC 055, v0.44.0)
-        .route("/me/security/mfa/enroll/start",
-               post(crate::handlers::me_security::mfa_enroll_start))
-        .route("/me/security/mfa/enroll/confirm",
-               post(crate::handlers::me_security::mfa_enroll_confirm))
-        .route("/me/security/mfa/disable",
-               post(crate::handlers::me_security::mfa_disable))
-        .route("/me/security/mfa/recovery-codes/regenerate",
-               post(crate::handlers::me_security::mfa_regenerate_recovery))
+        .route(
+            "/me/security/mfa/enroll/start",
+            post(crate::handlers::me_security::mfa_enroll_start),
+        )
+        .route(
+            "/me/security/mfa/enroll/confirm",
+            post(crate::handlers::me_security::mfa_enroll_confirm),
+        )
+        .route(
+            "/me/security/mfa/disable",
+            post(crate::handlers::me_security::mfa_disable),
+        )
+        .route(
+            "/me/security/mfa/recovery-codes/regenerate",
+            post(crate::handlers::me_security::mfa_regenerate_recovery),
+        )
         // Passkey mutative routes (RFC 055, v0.44.0)
-        .route("/me/security/passkeys/register/start",
-               post(crate::handlers::me_security::passkey_register_start))
-        .route("/me/security/passkeys/register/complete",
-               post(crate::handlers::me_security::passkey_register_complete))
-        .route("/me/security/passkeys/{id}/delete",
-               post(crate::handlers::me_security::passkey_delete))
-        .route("/me/security/language",
-               get(crate::handlers::me_security::language_get)
-               .post(crate::handlers::me_security::language_post))
-        .route("/me/apps",
-               get(crate::handlers::me_security::me_apps_get))
-        .route("/me/apps/{client_id}/revoke",
-               post(crate::handlers::me_security::me_apps_revoke))
+        .route(
+            "/me/security/passkeys/register/start",
+            post(crate::handlers::me_security::passkey_register_start),
+        )
+        .route(
+            "/me/security/passkeys/register/complete",
+            post(crate::handlers::me_security::passkey_register_complete),
+        )
+        .route(
+            "/me/security/passkeys/{id}/delete",
+            post(crate::handlers::me_security::passkey_delete),
+        )
+        .route(
+            "/me/security/language",
+            get(crate::handlers::me_security::language_get)
+                .post(crate::handlers::me_security::language_post),
+        )
+        .route("/me/apps", get(crate::handlers::me_security::me_apps_get))
+        .route(
+            "/me/apps/{client_id}/revoke",
+            post(crate::handlers::me_security::me_apps_revoke),
+        )
         .route(
             "/me/security/sessions/{id}/revoke",
             post(crate::handlers::me_security::revoke_one),

@@ -34,8 +34,8 @@
 
 use crate::time::SharedClock;
 use sui_id_shared::ids::UserId;
-use sui_id_store::repos::audit;
 use sui_id_store::Database;
+use sui_id_store::repos::audit;
 
 /// Outcome flag — kept narrow on purpose so SIEM queries can pivot
 /// reliably.
@@ -214,9 +214,7 @@ impl SecurityEvent {
             | Self::TokenIssued {
                 user_id, client_id, ..
             }
-            | Self::TokenRefreshed { user_id, client_id } => {
-                Some(format!("{user_id}:{client_id}"))
-            }
+            | Self::TokenRefreshed { user_id, client_id } => Some(format!("{user_id}:{client_id}")),
             Self::AuthorizeRejected { client_id, .. } => client_id.clone(),
             Self::TokenIntrospected { client_id, .. } | Self::TokenRevoked { client_id, .. } => {
                 Some(client_id.clone())
@@ -278,16 +276,13 @@ impl SecurityEvent {
                 if *totp_removed { "removed" } else { "absent" },
                 passkeys_removed
             )),
-            Self::PasswordResetRequested { user_id } => Some(format!(
-                "matched={}",
-                user_id.is_some()
-            )),
+            Self::PasswordResetRequested { user_id } => {
+                Some(format!("matched={}", user_id.is_some()))
+            }
             Self::PasswordResetThrottled { outstanding, .. } => {
                 Some(format!("outstanding={outstanding}"))
             }
-            Self::PasswordResetEmailFailed { reason, .. } => {
-                Some(format!("reason={reason}"))
-            }
+            Self::PasswordResetEmailFailed { reason, .. } => Some(format!("reason={reason}")),
             _ => None,
         }
     }
@@ -387,7 +382,9 @@ pub async fn emit(db: &Database, clock: &SharedClock, ctx: &Context, event: Secu
             result: outcome.as_str().into(),
             note,
         },
-    ).await {
+    )
+    .await
+    {
         // Don't fail the caller; the tracing line above is still
         // there as a fallback record.
         tracing::warn!(

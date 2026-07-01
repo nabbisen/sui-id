@@ -2,21 +2,17 @@
 
 use crate::errors::HttpError;
 use crate::handlers::AppStateExt;
-use axum::response::{IntoResponse, Redirect};
 use axum::Json;
+use axum::response::{IntoResponse, Redirect};
 use serde::Serialize;
 use sui_id_core::errors::CoreError;
 use sui_id_store::repos::state;
 
 pub async fn root(state_ext: AppStateExt) -> Result<axum::response::Response, HttpError> {
     let axum::extract::State(app) = state_ext;
-    let initialized = state::is_initialized(&app.db)
-        .map_err(|e| HttpError::html(CoreError::from(e)))?;
-    let target = if !initialized {
-        "/setup"
-    } else {
-        "/admin"
-    };
+    let initialized =
+        state::is_initialized(&app.db).map_err(|e| HttpError::html(CoreError::from(e)))?;
+    let target = if !initialized { "/setup" } else { "/admin" };
     Ok(Redirect::to(target).into_response())
 }
 

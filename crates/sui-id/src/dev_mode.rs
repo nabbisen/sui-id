@@ -29,15 +29,15 @@
 //! Things that ARE relaxed in dev mode (with operator-visible
 //! warnings) are listed in `print_dev_warnings`.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
-use sui_id_core::admin::{create_client, create_user, CreateClientSpec, CreateUserSpec};
+use sui_id_core::admin::{CreateClientSpec, CreateUserSpec, create_client, create_user};
 use sui_id_core::setup::create_initial_admin;
 use sui_id_core::time::SharedClock;
-use sui_id_store::crypto::MasterKey;
 use sui_id_store::Database;
+use sui_id_store::crypto::MasterKey;
 
 // ---------- Public seed API ----------
 
@@ -214,8 +214,9 @@ impl DevSeedToml {
                 .enumerate()
                 .map(|(i, c)| {
                     let name = c.name.unwrap_or_else(|| format!("Dev client #{}", i + 1));
-                    let allowed_scopes =
-                        c.allowed_scopes.unwrap_or_else(|| "openid profile email".into());
+                    let allowed_scopes = c
+                        .allowed_scopes
+                        .unwrap_or_else(|| "openid profile email".into());
                     // `public = true` means "PKCE-only public client"
                     // (no secret); any explicit `client_secret` wins.
                     let client_secret = if c.public && c.client_secret.is_none() {
@@ -299,8 +300,10 @@ pub fn print_seed_summary(seed: &DevSeed, outcome: &SeedOutcome, listen_addr: &s
     for c in &outcome.clients {
         let secret_part = c.client_secret.as_deref().unwrap_or("(public)");
         let uris = c.redirect_uris.join(",");
-        eprintln!("client\t{}\t{}\t{}\t{}",
-            c.name, c.client_id, secret_part, uris);
+        eprintln!(
+            "client\t{}\t{}\t{}\t{}",
+            c.name, c.client_id, secret_part, uris
+        );
     }
     eprintln!("=====================================================");
     eprintln!("OIDC discovery:\thttp://{listen_addr}/.well-known/openid-configuration");
@@ -353,8 +356,7 @@ pub fn confirm_external_bind(bind: &str) -> Result<()> {
 pub fn open_dev_db(path: Option<&Path>) -> Result<Database> {
     let key = MasterKey::generate();
     match path {
-        None => Database::open_in_memory(key)
-            .context("opening in-memory dev database"),
+        None => Database::open_in_memory(key).context("opening in-memory dev database"),
         Some(p) => {
             // Truncate any previous file so we don't try to decrypt
             // ciphertext under the new master key. Dev-mode writes
@@ -413,7 +415,8 @@ pub async fn apply_seed(
         &seed.admin.password,
         seed.admin.display_name.as_deref(),
         seed.admin.email.as_deref(),
-    ).await
+    )
+    .await
     .context("creating dev-mode admin")?;
     let admin_id = created.user_id;
 
@@ -421,9 +424,15 @@ pub async fn apply_seed(
         create_user(
             db,
             clock,
-            None,                                    // dev-mode: HIBP off
+            None, // dev-mode: HIBP off
             sui_id_store::models::HibpMode::Off,
-            &sui_id_core::actor::Actor::from_session(admin_id, sui_id_store::models::Role::Admin, sui_id_shared::ids::SessionId::new()).into_admin().unwrap_or_else(|_| unreachable!("dev-mode initial admin must be admin")),
+            &sui_id_core::actor::Actor::from_session(
+                admin_id,
+                sui_id_store::models::Role::Admin,
+                sui_id_shared::ids::SessionId::new(),
+            )
+            .into_admin()
+            .unwrap_or_else(|_| unreachable!("dev-mode initial admin must be admin")),
             CreateUserSpec {
                 username: &u.username,
                 password: &u.password,
@@ -434,7 +443,8 @@ pub async fn apply_seed(
                 min_password_len: sui_id_core::security::SecurityLevel::Development
                     .password_min_len(),
             },
-        ).await
+        )
+        .await
         .with_context(|| format!("creating dev-mode user {:?}", u.username))?;
     }
 
@@ -451,7 +461,13 @@ pub async fn apply_seed(
         let created_client = create_client(
             db,
             clock,
-            &sui_id_core::actor::Actor::from_session(admin_id, sui_id_store::models::Role::Admin, sui_id_shared::ids::SessionId::new()).into_admin().unwrap_or_else(|_| unreachable!("dev-mode initial admin must be admin")),
+            &sui_id_core::actor::Actor::from_session(
+                admin_id,
+                sui_id_store::models::Role::Admin,
+                sui_id_shared::ids::SessionId::new(),
+            )
+            .into_admin()
+            .unwrap_or_else(|_| unreachable!("dev-mode initial admin must be admin")),
             CreateClientSpec {
                 name: &c.name,
                 redirect_uris: &c.redirect_uris,
@@ -460,7 +476,8 @@ pub async fn apply_seed(
                 post_logout_redirect_uris: &c.post_logout_redirect_uris,
             },
             &_dev_caches,
-        ).await
+        )
+        .await
         .with_context(|| format!("creating dev-mode client {:?}", c.name))?;
 
         // The runtime API auto-generates a secret for confidential
@@ -477,7 +494,8 @@ pub async fn apply_seed(
                         db,
                         created_client.row.id,
                         Some(&hash),
-                    ).await
+                    )
+                    .await
                     .context("patching dev-mode client_secret_hash")?;
                     Some(custom.to_owned())
                 }
@@ -542,7 +560,10 @@ mod tests {
         assert!(seed.users.iter().any(|u| u.username == "bob"));
         assert_eq!(seed.clients.len(), 1);
         assert_eq!(seed.clients[0].name, "Dev test client");
-        assert_eq!(seed.clients[0].client_secret.as_deref(), Some("test-secret"));
+        assert_eq!(
+            seed.clients[0].client_secret.as_deref(),
+            Some("test-secret")
+        );
     }
 
     #[test]

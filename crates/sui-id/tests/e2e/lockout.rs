@@ -6,11 +6,11 @@
 #![allow(dead_code)]
 
 use axum::body::Body;
-use axum::http::{header, Method, Request, StatusCode};
+use axum::http::{Method, Request, StatusCode, header};
 use sui_id::build_router;
 
-use tower::ServiceExt;
 use super::common::*;
+use tower::ServiceExt;
 
 // ---------- account lockout (v0.16.0) ----------
 
@@ -56,7 +56,9 @@ async fn three_consecutive_wrong_passwords_lock_the_account() {
         .method(Method::POST)
         .uri("/admin/login")
         .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .body(Body::from("username=alice&password=alice-the-tester-password"))
+        .body(Body::from(
+            "username=alice&password=alice-the-tester-password",
+        ))
         .expect("req");
     let resp = router.oneshot(req).await.expect("login");
     assert_eq!(
@@ -66,7 +68,9 @@ async fn three_consecutive_wrong_passwords_lock_the_account() {
     );
 
     // Confirm the audit log records `auth.login.locked`.
-    let recent = sui_id_store::repos::audit::recent(&state.db, 50).await.expect("audit list");
+    let recent = sui_id_store::repos::audit::recent(&state.db, 50)
+        .await
+        .expect("audit list");
     let count = recent
         .iter()
         .filter(|r| r.action == "auth.login.locked")
@@ -95,14 +99,20 @@ async fn admin_unlock_clears_an_active_lock() {
             .expect("req");
         let _ = router.oneshot(req).await.expect("login");
     }
-    let alice = users::find_by_username(&state.db, "alice").await.expect("alice");
+    let alice = users::find_by_username(&state.db, "alice")
+        .await
+        .expect("alice");
     assert!(alice.locked_until.is_some(), "expected locked");
     assert!(alice.failed_login_count >= 3);
 
     // Direct admin_unlock — same call the CLI subcommand makes.
-    users::admin_unlock(&state.db, alice.id).await.expect("unlock");
+    users::admin_unlock(&state.db, alice.id)
+        .await
+        .expect("unlock");
 
-    let alice2 = users::find_by_username(&state.db, "alice").await.expect("alice");
+    let alice2 = users::find_by_username(&state.db, "alice")
+        .await
+        .expect("alice");
     assert!(alice2.locked_until.is_none(), "lock should be cleared");
     assert_eq!(alice2.failed_login_count, 0);
 
@@ -112,7 +122,9 @@ async fn admin_unlock_clears_an_active_lock() {
         .method(Method::POST)
         .uri("/admin/login")
         .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .body(Body::from("username=alice&password=alice-the-tester-password"))
+        .body(Body::from(
+            "username=alice&password=alice-the-tester-password",
+        ))
         .expect("req");
     let resp = router.oneshot(req).await.expect("login");
     assert_eq!(
@@ -140,7 +152,9 @@ async fn successful_login_clears_partial_failure_count() {
             .expect("req");
         let _ = router.oneshot(req).await.expect("login");
     }
-    let alice = users::find_by_username(&state.db, "alice").await.expect("alice");
+    let alice = users::find_by_username(&state.db, "alice")
+        .await
+        .expect("alice");
     assert_eq!(alice.failed_login_count, 2);
     assert!(alice.locked_until.is_none());
 
@@ -150,15 +164,18 @@ async fn successful_login_clears_partial_failure_count() {
         .method(Method::POST)
         .uri("/admin/login")
         .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .body(Body::from("username=alice&password=alice-the-tester-password"))
+        .body(Body::from(
+            "username=alice&password=alice-the-tester-password",
+        ))
         .expect("req");
     let resp = router.oneshot(req).await.expect("login");
     assert_eq!(resp.status(), StatusCode::SEE_OTHER);
 
-    let alice2 = users::find_by_username(&state.db, "alice").await.expect("alice");
+    let alice2 = users::find_by_username(&state.db, "alice")
+        .await
+        .expect("alice");
     assert_eq!(
         alice2.failed_login_count, 0,
         "successful login must reset counter"
     );
 }
-

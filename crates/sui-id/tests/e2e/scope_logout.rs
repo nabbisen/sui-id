@@ -6,11 +6,11 @@
 #![allow(dead_code)]
 
 use axum::body::Body;
-use axum::http::{header, Method, Request};
+use axum::http::{Method, Request, header};
 use sui_id::build_router;
 
-use tower::ServiceExt;
 use super::common::*;
+use tower::ServiceExt;
 
 // ---------- scope policy and post_logout_redirect_uris (v0.6.0) ----------
 
@@ -21,7 +21,8 @@ async fn authorize_rejects_scope_outside_client_policy() {
 
     let state = test_app();
     let session = complete_setup_and_login(&state).await;
-    let admin_id = sui_id_store::repos::users::find_by_username(&state.db, "alice").await
+    let admin_id = sui_id_store::repos::users::find_by_username(&state.db, "alice")
+        .await
         .expect("admin")
         .id;
 
@@ -38,7 +39,8 @@ async fn authorize_rejects_scope_outside_client_policy() {
             post_logout_redirect_uris: &[],
         },
         &state.caches,
-    ).await
+    )
+    .await
     .expect("create");
     let client_id = created.row.id.to_string();
 
@@ -59,7 +61,11 @@ async fn authorize_rejects_scope_outside_client_policy() {
     let resp = router.oneshot(req).await.expect("authorize");
     // sui-id should redirect with `error=invalid_scope` per RFC 6749 §4.1.2.1.
     if resp.status().is_redirection() {
-        let loc = resp.headers().get(header::LOCATION).and_then(|v| v.to_str().ok()).unwrap_or("");
+        let loc = resp
+            .headers()
+            .get(header::LOCATION)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
         assert!(
             loc.contains("error=invalid_scope"),
             "expected invalid_scope error redirect, got: {loc}"
@@ -71,7 +77,9 @@ async fn authorize_rejects_scope_outside_client_policy() {
     }
 
     // Sanity: with a permitted scope, the same flow succeeds.
-    let _ = clients::get(&state.db, created.row.id).await.expect("still there");
+    let _ = clients::get(&state.db, created.row.id)
+        .await
+        .expect("still there");
     let auth_url_ok = format!(
         "/oauth2/authorize?client_id={client_id}&redirect_uri=https%3A%2F%2Frp.test%2Fcb\
          &response_type=code&scope=openid&code_challenge={challenge}&code_challenge_method=S256"
@@ -84,7 +92,11 @@ async fn authorize_rejects_scope_outside_client_policy() {
         .body(Body::empty())
         .expect("req");
     let resp = router.oneshot(req).await.expect("authorize ok");
-    let loc = resp.headers().get(header::LOCATION).and_then(|v| v.to_str().ok()).unwrap_or("");
+    let loc = resp
+        .headers()
+        .get(header::LOCATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
     assert!(
         loc.starts_with("https://rp.test/cb?code="),
         "expected success redirect with code, got: {loc}"
@@ -99,7 +111,8 @@ async fn authorize_with_empty_policy_permits_any_scope() {
 
     let state = test_app();
     let session = complete_setup_and_login(&state).await;
-    let admin_id = sui_id_store::repos::users::find_by_username(&state.db, "alice").await
+    let admin_id = sui_id_store::repos::users::find_by_username(&state.db, "alice")
+        .await
         .expect("admin")
         .id;
     let created = sui_id_core::admin::create_client(
@@ -114,7 +127,8 @@ async fn authorize_with_empty_policy_permits_any_scope() {
             post_logout_redirect_uris: &[],
         },
         &state.caches,
-    ).await
+    )
+    .await
     .expect("create");
     let client_id = created.row.id.to_string();
     let (_v, challenge) = pkce_pair();
@@ -131,8 +145,15 @@ async fn authorize_with_empty_policy_permits_any_scope() {
         .body(Body::empty())
         .expect("req");
     let resp = router.oneshot(req).await.expect("authorize");
-    let loc = resp.headers().get(header::LOCATION).and_then(|v| v.to_str().ok()).unwrap_or("");
-    assert!(loc.starts_with("https://rp.test/cb?code="), "expected code, got: {loc}");
+    let loc = resp
+        .headers()
+        .get(header::LOCATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    assert!(
+        loc.starts_with("https://rp.test/cb?code="),
+        "expected code, got: {loc}"
+    );
 }
 
 #[tokio::test]
@@ -141,7 +162,8 @@ async fn logout_uses_post_logout_redirect_uris_when_registered() {
 
     let state = test_app();
     let session = complete_setup_and_login(&state).await;
-    let admin_id = sui_id_store::repos::users::find_by_username(&state.db, "alice").await
+    let admin_id = sui_id_store::repos::users::find_by_username(&state.db, "alice")
+        .await
         .expect("admin")
         .id;
 
@@ -160,7 +182,8 @@ async fn logout_uses_post_logout_redirect_uris_when_registered() {
             post_logout_redirect_uris: &["https://rp.test/goodbye".into()],
         },
         &state.caches,
-    ).await
+    )
+    .await
     .expect("create");
     let client_id = created.row.id.to_string();
 
@@ -177,7 +200,11 @@ async fn logout_uses_post_logout_redirect_uris_when_registered() {
         .expect("req");
     let resp = router.oneshot(req).await.expect("logout");
     assert!(resp.status().is_redirection());
-    let loc = resp.headers().get(header::LOCATION).and_then(|v| v.to_str().ok()).unwrap_or("");
+    let loc = resp
+        .headers()
+        .get(header::LOCATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
     assert!(loc.starts_with("https://rp.test/goodbye"), "got: {loc}");
 
     // Conversely: a redirect_uri that is *not* in post_logout list
@@ -193,7 +220,11 @@ async fn logout_uses_post_logout_redirect_uris_when_registered() {
         .expect("req");
     let resp = router.oneshot(req).await.expect("logout 2");
     if resp.status().is_redirection() {
-        let loc = resp.headers().get(header::LOCATION).and_then(|v| v.to_str().ok()).unwrap_or("");
+        let loc = resp
+            .headers()
+            .get(header::LOCATION)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
         assert!(
             !loc.starts_with("https://rp.test/cb"),
             "redirect_uris must not leak into logout when post_logout list is set"
@@ -209,7 +240,8 @@ async fn logout_falls_back_to_redirect_uris_when_post_logout_list_empty() {
 
     let state = test_app();
     let session = complete_setup_and_login(&state).await;
-    let admin_id = sui_id_store::repos::users::find_by_username(&state.db, "alice").await
+    let admin_id = sui_id_store::repos::users::find_by_username(&state.db, "alice")
+        .await
         .expect("admin")
         .id;
     let created = sui_id_core::admin::create_client(
@@ -224,7 +256,8 @@ async fn logout_falls_back_to_redirect_uris_when_post_logout_list_empty() {
             post_logout_redirect_uris: &[], // empty -> fallback
         },
         &state.caches,
-    ).await
+    )
+    .await
     .expect("create");
     let client_id = created.row.id.to_string();
     let url = format!(
@@ -239,7 +272,10 @@ async fn logout_falls_back_to_redirect_uris_when_post_logout_list_empty() {
         .expect("req");
     let resp = router.oneshot(req).await.expect("logout");
     assert!(resp.status().is_redirection());
-    let loc = resp.headers().get(header::LOCATION).and_then(|v| v.to_str().ok()).unwrap_or("");
+    let loc = resp
+        .headers()
+        .get(header::LOCATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
     assert!(loc.starts_with("https://rp.test/cb"));
 }
-

@@ -6,11 +6,11 @@
 #![allow(dead_code)]
 
 use axum::body::Body;
-use axum::http::{header, Method, Request, StatusCode};
+use axum::http::{Method, Request, StatusCode, header};
 use sui_id::build_router;
 
-use tower::ServiceExt;
 use super::common::*;
+use tower::ServiceExt;
 
 // ---------- v0.29.1: i18n auth-flow phase 2 ----------
 
@@ -93,8 +93,7 @@ async fn mfa_setup_renders_in_en() {
         )
         .await
         .expect("profile GET");
-    let csrf = extract_set_cookie(prof_resp.headers(), "sui_id_csrf")
-        .expect("csrf cookie");
+    let csrf = extract_set_cookie(prof_resp.headers(), "sui_id_csrf").expect("csrf cookie");
     let body_bytes = read_body(prof_resp.into_body()).await;
     let body = String::from_utf8_lossy(&body_bytes);
     let csrf_token = extract_csrf_token(&body);

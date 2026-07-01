@@ -6,12 +6,12 @@
 #![allow(dead_code)]
 
 use axum::body::Body;
-use axum::http::{header, Method, Request, StatusCode};
-use sui_id::{build_router, AppState};
+use axum::http::{Method, Request, StatusCode, header};
+use sui_id::{AppState, build_router};
 
-use url::Url;
-use tower::ServiceExt;
 use super::common::*;
+use tower::ServiceExt;
+use url::Url;
 
 // ---------- RFC 7662 introspection + RFC 7009 revocation (v0.11.0) ----------
 
@@ -69,9 +69,7 @@ async fn obtain_tokens(state: &AppState) -> (String, String, String, String) {
 async fn introspect_returns_active_for_valid_access_token() {
     let state = test_app();
     let (client_id, client_secret, access, _refresh) = obtain_tokens(&state).await;
-    let body = format!(
-        "token={access}&client_id={client_id}&client_secret={client_secret}"
-    );
+    let body = format!("token={access}&client_id={client_id}&client_secret={client_secret}");
     let router = build_router(state.clone());
     let req = Request::builder()
         .method(Method::POST)
@@ -117,9 +115,8 @@ async fn introspect_returns_active_for_valid_refresh_token() {
 async fn introspect_returns_inactive_for_garbage_token() {
     let state = test_app();
     let (client_id, client_secret, _access, _refresh) = obtain_tokens(&state).await;
-    let body = format!(
-        "token=this.is.not.a.token&client_id={client_id}&client_secret={client_secret}"
-    );
+    let body =
+        format!("token=this.is.not.a.token&client_id={client_id}&client_secret={client_secret}");
     let router = build_router(state.clone());
     let req = Request::builder()
         .method(Method::POST)
@@ -177,9 +174,7 @@ async fn revoke_then_introspect_shows_inactive_for_access_token() {
     assert_eq!(resp.status(), StatusCode::OK);
 
     // Now introspect should report inactive.
-    let body = format!(
-        "token={access}&client_id={client_id}&client_secret={client_secret}"
-    );
+    let body = format!("token={access}&client_id={client_id}&client_secret={client_secret}");
     let router = build_router(state.clone());
     let req = Request::builder()
         .method(Method::POST)
@@ -255,9 +250,7 @@ async fn revoke_is_idempotent() {
     let (client_id, client_secret, access, _refresh) = obtain_tokens(&state).await;
 
     for _ in 0..3 {
-        let body = format!(
-            "token={access}&client_id={client_id}&client_secret={client_secret}"
-        );
+        let body = format!("token={access}&client_id={client_id}&client_secret={client_secret}");
         let router = build_router(state.clone());
         let req = Request::builder()
             .method(Method::POST)
@@ -270,9 +263,7 @@ async fn revoke_is_idempotent() {
     }
 
     // And a totally bogus token also returns 200.
-    let body = format!(
-        "token=garbage&client_id={client_id}&client_secret={client_secret}"
-    );
+    let body = format!("token=garbage&client_id={client_id}&client_secret={client_secret}");
     let router = build_router(state.clone());
     let req = Request::builder()
         .method(Method::POST)
@@ -336,9 +327,7 @@ async fn introspect_other_clients_token_returns_inactive() {
     let access = v["access_token"].as_str().unwrap().to_owned();
 
     // Client B introspects A's token. Must come back inactive.
-    let body = format!(
-        "token={access}&client_id={client_b}&client_secret={secret_b}"
-    );
+    let body = format!("token={access}&client_id={client_b}&client_secret={secret_b}");
     let router = build_router(state.clone());
     let req = Request::builder()
         .method(Method::POST)
@@ -369,8 +358,18 @@ async fn discovery_advertises_introspect_and_revoke_endpoints() {
     let resp = router.oneshot(req).await.expect("discovery");
     assert_eq!(resp.status(), StatusCode::OK);
     let v: serde_json::Value = serde_json::from_slice(&read_body(resp.into_body()).await).unwrap();
-    assert!(v["introspection_endpoint"].as_str().unwrap().ends_with("/oauth2/introspect"));
-    assert!(v["revocation_endpoint"].as_str().unwrap().ends_with("/oauth2/revoke"));
+    assert!(
+        v["introspection_endpoint"]
+            .as_str()
+            .unwrap()
+            .ends_with("/oauth2/introspect")
+    );
+    assert!(
+        v["revocation_endpoint"]
+            .as_str()
+            .unwrap()
+            .ends_with("/oauth2/revoke")
+    );
     let methods = v["introspection_endpoint_auth_methods_supported"]
         .as_array()
         .unwrap();
@@ -379,4 +378,3 @@ async fn discovery_advertises_introspect_and_revoke_endpoints() {
     // Public clients (auth method "none") must NOT be listed.
     assert!(!methods_set.contains(&"none"));
 }
-

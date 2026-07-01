@@ -7,10 +7,9 @@ use axum_extra::extract::cookie::CookieJar;
 use sui_id_core::errors::CoreError;
 use sui_id_store::repos::user_totp;
 
-
 use super::forms::*;
-use crate::handlers::{AppStateExt, CurrentUser, enforce_csrf};
 use crate::handlers::admin::with_csrf_cookie;
+use crate::handlers::{AppStateExt, CurrentUser, enforce_csrf};
 use sui_id_web::pages::{MeShellData, MeTab};
 
 pub async fn mfa_get(
@@ -22,24 +21,30 @@ pub async fn mfa_get(
     let State(app) = state_ext;
     let lang = req_locale;
     let user = sui_id_store::repos::users::get(&app.db, user_id)
-        .await.map_err(|e| HttpError::html(CoreError::from(e)).with_lang(lang))?;
+        .await
+        .map_err(|e| HttpError::html(CoreError::from(e)).with_lang(lang))?;
     let shell = MeShellData {
         username: user.username,
         is_admin: user.is_admin,
         active_tab: MeTab::Mfa,
     };
     let totp_enabled = user_totp::get(&app.db, user_id)
-        .await.ok().flatten()
-        .map(|r| r.enabled).unwrap_or(false);
-    let passkey_count = sui_id_store::repos::user_webauthn_credentials::count_for_user(
-        &app.db, user_id
-    ).await.unwrap_or(0);
+        .await
+        .ok()
+        .flatten()
+        .map(|r| r.enabled)
+        .unwrap_or(false);
+    let passkey_count =
+        sui_id_store::repos::user_webauthn_credentials::count_for_user(&app.db, user_id)
+            .await
+            .unwrap_or(0);
     // RFC 056 (v0.44.0): real count via decryption.
     // unwrap_or(0) — a decryption error shouldn't fail the entire tab
     // render; the count is a display detail, not a correctness invariant.
-    let recovery_codes_remaining = sui_id_core::mfa::count_recovery_codes_remaining(
-        &app.db, user_id,
-    ).await.unwrap_or(0);
+    let recovery_codes_remaining =
+        sui_id_core::mfa::count_recovery_codes_remaining(&app.db, user_id)
+            .await
+            .unwrap_or(0);
     let csrf_tok = csrf::ensure_token(&jar);
     let resp = axum::response::Html(sui_id_web::render_me_mfa(
         sui_id_web::MeMfaData {
@@ -50,8 +55,11 @@ pub async fn mfa_get(
             fresh_recovery_codes: None,
             csrf_token: csrf_tok.clone(),
         },
-        None, app.is_dev_mode, lang,
-    )).into_response();
+        None,
+        app.is_dev_mode,
+        lang,
+    ))
+    .into_response();
     Ok(with_csrf_cookie(resp, &app, &csrf_tok))
 }
 
@@ -67,19 +75,27 @@ pub async fn mfa_enroll_start(
     let State(app) = state_ext;
     enforce_csrf(&jar, Some(&form.csrf))?;
     let user = sui_id_store::repos::users::get(&app.db, user_id)
-        .await.map_err(|e| HttpError::html(CoreError::from(e)))?;
-    let ticket = sui_id_core::mfa::start_enrollment(
-        &app.db, app.issuer(), user_id, &user.username,
-    ).await.map_err(HttpError::html)?;
+        .await
+        .map_err(|e| HttpError::html(CoreError::from(e)))?;
+    let ticket = sui_id_core::mfa::start_enrollment(&app.db, app.issuer(), user_id, &user.username)
+        .await
+        .map_err(HttpError::html)?;
     let qr_svg = crate::handlers::admin::render_qr_svg_pub(&ticket.otpauth_uri);
     let secret_b32 = sui_id_core::totp::base32_encode(&ticket.secret).await;
     let otpauth_uri = ticket.otpauth_uri;
     drop(ticket.secret);
     let token = csrf::ensure_token(&jar);
     let resp = Html(sui_id_web::render_mfa_setup(
-        sui_id_web::MfaSetupData { otpauth_uri, qr_svg, secret_b32 },
-        None, token.clone(), lang,
-    )).into_response();
+        sui_id_web::MfaSetupData {
+            otpauth_uri,
+            qr_svg,
+            secret_b32,
+        },
+        None,
+        token.clone(),
+        lang,
+    ))
+    .into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
 }
 
@@ -96,9 +112,13 @@ pub async fn mfa_enroll_confirm(
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
     enforce_csrf(&jar, Some(&form.csrf))?;
-    let code: u32 = form.code.trim().parse()
-        .map_err(|_| HttpError::html(CoreError::BadRequest("verification code must be 6 digits".into())))?;
-    let codes = sui_id_core::mfa::confirm_enrollment(&app.db, &app.clock, user_id, code).await
+    let code: u32 = form.code.trim().parse().map_err(|_| {
+        HttpError::html(CoreError::BadRequest(
+            "verification code must be 6 digits".into(),
+        ))
+    })?;
+    let codes = sui_id_core::mfa::confirm_enrollment(&app.db, &app.clock, user_id, code)
+        .await
         .map_err(HttpError::html)?;
     let _ = sui_id_store::repos::audit::append(
         &app.db,
@@ -110,12 +130,20 @@ pub async fn mfa_enroll_confirm(
             result: "ok".into(),
             note: None,
         },
-    ).await;
-    render_mfa_tab_with_fresh_codes(&app, &jar, user_id, lang, Some(codes),
+    )
+    .await;
+    render_mfa_tab_with_fresh_codes(
+        &app,
+        &jar,
+        user_id,
+        lang,
+        Some(codes),
         sui_id_web::Flash {
             kind: sui_id_web::FlashKind::Info,
             text: lang.strings().profile_mfa_enrolled_flash.into(),
-        }).await
+        },
+    )
+    .await
 }
 
 /// POST /me/security/mfa/disable
@@ -137,7 +165,9 @@ pub async fn mfa_disable(
     {
         return Ok(redirect);
     }
-    sui_id_core::mfa::disable(&app.db, user_id).await.map_err(HttpError::html)?;
+    sui_id_core::mfa::disable(&app.db, user_id)
+        .await
+        .map_err(HttpError::html)?;
     let _ = sui_id_store::repos::audit::append(
         &app.db,
         &sui_id_store::models::AuditLogRow {
@@ -148,7 +178,8 @@ pub async fn mfa_disable(
             result: "ok".into(),
             note: Some("self".into()),
         },
-    ).await;
+    )
+    .await;
     Ok(Redirect::to("/me/security/mfa").into_response())
 }
 
@@ -163,7 +194,8 @@ pub async fn mfa_regenerate_recovery(
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
     enforce_csrf(&jar, Some(&form.csrf))?;
-    let codes = sui_id_core::mfa::regenerate_recovery_codes(&app.db, user_id).await
+    let codes = sui_id_core::mfa::regenerate_recovery_codes(&app.db, user_id)
+        .await
         .map_err(HttpError::html)?;
     let _ = sui_id_store::repos::audit::append(
         &app.db,
@@ -175,12 +207,20 @@ pub async fn mfa_regenerate_recovery(
             result: "ok".into(),
             note: None,
         },
-    ).await;
-    render_mfa_tab_with_fresh_codes(&app, &jar, user_id, lang, Some(codes),
+    )
+    .await;
+    render_mfa_tab_with_fresh_codes(
+        &app,
+        &jar,
+        user_id,
+        lang,
+        Some(codes),
         sui_id_web::Flash {
             kind: sui_id_web::FlashKind::Info,
             text: lang.strings().profile_recovery_regenerated_flash.into(),
-        }).await
+        },
+    )
+    .await
 }
 
 /// Helper: render the MFA tab page with fresh recovery codes
@@ -195,16 +235,22 @@ async fn render_mfa_tab_with_fresh_codes(
     flash: sui_id_web::Flash,
 ) -> Result<Response, HttpError> {
     let user = sui_id_store::repos::users::get(&app.db, user_id)
-        .await.map_err(|e| HttpError::html(CoreError::from(e)))?;
+        .await
+        .map_err(|e| HttpError::html(CoreError::from(e)))?;
     let totp_enabled = sui_id_store::repos::user_totp::get(&app.db, user_id)
-        .await.ok().flatten()
-        .map(|r| r.enabled).unwrap_or(false);
-    let passkey_count = sui_id_store::repos::user_webauthn_credentials::count_for_user(
-        &app.db, user_id,
-    ).await.unwrap_or(0);
-    let recovery_codes_remaining = sui_id_core::mfa::count_recovery_codes_remaining(
-        &app.db, user_id,
-    ).await.unwrap_or(0);
+        .await
+        .ok()
+        .flatten()
+        .map(|r| r.enabled)
+        .unwrap_or(false);
+    let passkey_count =
+        sui_id_store::repos::user_webauthn_credentials::count_for_user(&app.db, user_id)
+            .await
+            .unwrap_or(0);
+    let recovery_codes_remaining =
+        sui_id_core::mfa::count_recovery_codes_remaining(&app.db, user_id)
+            .await
+            .unwrap_or(0);
     let shell = sui_id_web::MeShellData {
         username: user.username,
         is_admin: user.is_admin,
@@ -223,6 +269,7 @@ async fn render_mfa_tab_with_fresh_codes(
         Some(flash),
         app.is_dev_mode,
         lang,
-    )).into_response();
+    ))
+    .into_response();
     Ok(with_csrf_cookie(resp, app, &token))
 }

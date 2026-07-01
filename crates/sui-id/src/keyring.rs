@@ -39,14 +39,20 @@ pub fn resolve(key_file: &Path) -> Result<ResolvedKey> {
         // but we run this before any threads are spawned.
         // We deliberately leave it set so an admin can confirm the source via `env`,
         // but operators are expected to scope it tightly via the deployment system.
-        return Ok(ResolvedKey { key, origin: KeyOrigin::Env });
+        return Ok(ResolvedKey {
+            key,
+            origin: KeyOrigin::Env,
+        });
     }
     if key_file.exists() {
         let s = std::fs::read_to_string(key_file)
             .with_context(|| format!("failed to read key file {}", key_file.display()))?;
         let key = MasterKey::from_base64(s.trim())
             .with_context(|| format!("key file {} is malformed", key_file.display()))?;
-        return Ok(ResolvedKey { key, origin: KeyOrigin::KeyFile });
+        return Ok(ResolvedKey {
+            key,
+            origin: KeyOrigin::KeyFile,
+        });
     }
     // Generate a new key, persist with restrictive permissions, and tell the
     // caller. The startup wrapper logs a prominent notice.

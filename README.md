@@ -3,11 +3,27 @@
 > A self-hosted, single-binary OpenID Connect provider written in Rust.
 > Quiet, careful, and small enough to read end to end.
 
-![Status](https://img.shields.io/badge/status-unstable-red)
-[![crates.io](https://img.shields.io/crates/v/sui-id?label=rust)](https://crates.io/crates/sui-id)
+[![License](https://img.shields.io/github/license/nabbisen/sui-id)](LICENSE)
+[![crates.io](https://img.shields.io/crates/v/sui-id?label=sui-id)](https://crates.io/crates/sui-id)
 [![Rust Documentation](https://docs.rs/sui-id/badge.svg?version=latest)](https://docs.rs/sui-id)
 [![Dependency Status](https://deps.rs/crate/sui-id/latest/status.svg)](https://deps.rs/crate/sui-id)
-[![License](https://img.shields.io/github/license/nabbisen/sui-id)](https://github.com/nabbisen/sui-id/blob/main/LICENSE)
+
+[![crates.io](https://img.shields.io/crates/v/sui-id-core?label=core)](https://crates.io/crates/sui-id-core)
+[![Rust Documentation](https://docs.rs/sui-id-core/badge.svg?version=latest)](https://docs.rs/sui-id-core)
+[![Dependency Status](https://deps.rs/crate/sui-id-core/latest/status.svg)](https://deps.rs/crate/sui-id-core)
+[![crates.io](https://img.shields.io/crates/v/sui-id-i18n?label=i18n)](https://crates.io/crates/sui-id-i18n)
+[![Rust Documentation](https://docs.rs/sui-id-i18n/badge.svg?version=latest)](https://docs.rs/sui-id-i18n)
+[![Dependency Status](https://deps.rs/crate/sui-id-i18n/latest/status.svg)](https://deps.rs/crate/sui-id-i18n)
+[![crates.io](https://img.shields.io/crates/v/sui-id-shared?label=shared)](https://crates.io/crates/sui-id-shared)
+[![Rust Documentation](https://docs.rs/sui-id-shared/badge.svg?version=latest)](https://docs.rs/sui-id-shared)
+[![Dependency Status](https://deps.rs/crate/sui-id-shared/latest/status.svg)](https://deps.rs/crate/sui-id-shared)
+[![crates.io](https://img.shields.io/crates/v/sui-id-store?label=store)](https://crates.io/crates/sui-id-store)
+[![Rust Documentation](https://docs.rs/sui-id-store/badge.svg?version=latest)](https://docs.rs/sui-id-store)
+[![Dependency Status](https://deps.rs/crate/sui-id-store/latest/status.svg)](https://deps.rs/crate/sui-id-store)
+[![crates.io](https://img.shields.io/crates/v/sui-id-web?label=web)](https://crates.io/crates/sui-id-web)
+[![Rust Documentation](https://docs.rs/sui-id-web/badge.svg?version=latest)](https://docs.rs/sui-id-web)
+[![Dependency Status](https://deps.rs/crate/sui-id-web/latest/status.svg)](https://deps.rs/crate/sui-id-web)
+
 
 ![logo](https://raw.githubusercontent.com/nabbisen/sui-id/main/docs/assets/logo.png)
 

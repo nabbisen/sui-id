@@ -5,7 +5,7 @@
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::Serialize;
-use sui_id_store::{models::SigningKeyRow, repos::signing_keys, Database};
+use sui_id_store::{Database, models::SigningKeyRow, repos::signing_keys};
 
 #[derive(Debug, Serialize)]
 pub struct Jwks {

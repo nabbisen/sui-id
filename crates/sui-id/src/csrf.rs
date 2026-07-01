@@ -30,11 +30,11 @@
 //! `SameSite=Lax` is set on both. `Secure` follows the operator's
 //! `cookie_secure` config, the same as the session cookie.
 
-use getrandom;
 use crate::handlers::AppStateExt;
 use axum::http::HeaderMap;
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use base64ct::{Base64UrlUnpadded, Encoding};
+use getrandom;
 use subtle::ConstantTimeEq;
 
 /// Cookie name used to carry the CSRF token alongside the session.
@@ -93,11 +93,7 @@ pub fn check_token(jar: &CookieJar, form_field: Option<&str>) -> Option<String> 
     if cookie_value.is_empty() || provided.is_empty() {
         return None;
     }
-    if cookie_value
-        .as_bytes()
-        .ct_eq(provided.as_bytes())
-        .into()
-    {
+    if cookie_value.as_bytes().ct_eq(provided.as_bytes()).into() {
         Some(cookie_value)
     } else {
         None
@@ -106,9 +102,7 @@ pub fn check_token(jar: &CookieJar, form_field: Option<&str>) -> Option<String> 
 
 /// Convenience helper for handlers: pull the form's `_csrf` field out of
 /// a `serde_urlencoded`-decoded body. Returns `None` if absent.
-pub fn extract_field<'a>(
-    pairs: impl IntoIterator<Item = (&'a str, &'a str)>,
-) -> Option<&'a str> {
+pub fn extract_field<'a>(pairs: impl IntoIterator<Item = (&'a str, &'a str)>) -> Option<&'a str> {
     for (k, v) in pairs {
         if k == CSRF_FIELD {
             return Some(v);
@@ -150,9 +144,10 @@ mod tests {
         let t = new_token();
         // Base64URL no-pad of 32 bytes is 43 chars.
         assert_eq!(t.len(), 43);
-        assert!(t
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'));
+        assert!(
+            t.chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        );
     }
 
     #[test]
@@ -171,7 +166,10 @@ mod tests {
     #[test]
     fn check_token_accepts_matching_pair() {
         let jar = jar_with_cookie("the-secret");
-        assert_eq!(check_token(&jar, Some("the-secret")).as_deref(), Some("the-secret"));
+        assert_eq!(
+            check_token(&jar, Some("the-secret")).as_deref(),
+            Some("the-secret")
+        );
     }
 
     #[test]

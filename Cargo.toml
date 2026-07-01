@@ -10,45 +10,52 @@ members = [
 ]
 
 [workspace.package]
-version = "0.76.7"
-edition = "2024"
-rust-version = "1.91"
-license = "Apache-2.0"
-repository = "https://github.com/nabbisen/sui-id"
-homepage = "https://github.com/nabbisen/sui-id"
-documentation = "https://docs.rs/sui-id"
-authors = ["nabbisen"]
-keywords = ["oidc", "oauth2", "idaas", "identity", "authentication"]
-categories = ["authentication", "web-programming::http-server"]
-readme = "README.md"
+version = "0.76.8"
+edition                 = "2024"
+rust-version            = "1.91"
+license                 = "Apache-2.0"
+authors                 = ["nabbisen"]
+repository              = "https://github.com/nabbisen/sui-id"
+homepage                = "https://github.com/nabbisen/sui-id"
+documentation           = "https://docs.rs/sui-id"
+categories              = ["authentication", "web-programming::http-server"]
+keywords                = ["oidc", "oauth2", "idaas", "identity", "authentication"]
+readme                  = "README.md"
 
 [workspace.dependencies]
+sui-id-core                 = { version = "0", path = "crates/sui-id-core" }
+sui-id-i18n                 = { version = "0", path = "crates/sui-id-i18n" }
+sui-id-shared               = { version = "0", path = "crates/sui-id-shared" }
+sui-id-store                = { version = "0", path = "crates/sui-id-store" }
+sui-id-web                  = { version = "0", path = "crates/sui-id-web" }
+
 # Async runtime / web
-tokio = { version = "1.40", features = ["macros", "rt-multi-thread", "signal", "fs", "sync", "time"] }
-axum = { version = "0.8", features = ["macros"] }
-axum-extra = { version = "0.12", features = ["cookie"] }
-tower = "0.5"
-tower-http = { version = "0.6", features = ["trace", "compression-gzip", "set-header"] }
-hyper = "1.4"
+tokio                       = { version = "1.40", features = ["macros", "rt-multi-thread", "signal", "fs", "sync", "time"] }
+axum                        = { version = "0.8", features = ["macros"] }
+axum-extra                  = { version = "0.12", features = ["cookie"] }
+tower                       = "0.5"
+tower-http                  = { version = "0.6", features = ["trace", "compression-gzip", "set-header"] }
+hyper                       = "1.4"
+cookie                      = "0.18"
 
 # Serde / config
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-toml = "0.8"
+serde                       = { version = "1", features = ["derive"] }
+serde_json                  = "1"
+toml                        = "0.8"
 
 # Storage
-rusqlite = { version = "0.39", features = ["bundled", "chrono"] }
+rusqlite                    = { version = "0.39", features = ["bundled", "chrono"] }
 
 # Crypto / hashing
-argon2 = "0.5"
-getrandom = "0.4"
-rand = "0.10"
-rand_core = { version = "0.10" }
-chacha20poly1305 = "0.10"
-ed25519-dalek = { version = "2.1", features = ["rand_core", "pkcs8"] }
-sha2 = "0.10"
-sha1 = { version = "0.10", default-features = false }
-qrcode = { version = "0.14", default-features = false, features = ["svg"] }
+argon2                      = "0.5"
+getrandom                   = "0.4"
+rand                        = "0.10"
+rand_core                   = { version = "0.10" }
+chacha20poly1305            = "0.10"
+ed25519-dalek               = { version = "2.1", features = ["rand_core", "pkcs8"] }
+sha2                        = "0.10"
+sha1                        = { version = "0.10", default-features = false }
+qrcode                      = { version = "0.14", default-features = false, features = ["svg"] }
 # WebAuthn / passkey support. We use the high-level safe wrapper from
 # webauthn-rs; the lower-level webauthn-rs-core has explicit warnings
 # in its docs not to use it directly. Pinned to 0.5.x.
@@ -59,29 +66,30 @@ qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 # state escape the trust boundary. We never expose it over the wire —
 # it stays on the server, behind the master key boundary like any other
 # row.
-webauthn-rs = { version = "0.5", features = ["danger-allow-state-serialisation"] }
+webauthn-rs                 = { version = "0.5", features = ["danger-allow-state-serialisation"] }
 # Property-based testing. Dev-only — never reaches production builds.
-proptest = "1.5"
-hmac = "0.12"
-subtle = "2.6"
-prometheus = { version = "0.13", default-features = false }
-ldap3 = { version = "0.12", default-features = false, features = ["tls-rustls"] }
-zeroize = { version = "1.8", features = ["derive"] }
-secrecy = { version = "0.10", features = ["serde"] }
-base64ct = { version = "1.6", features = ["alloc"] }
+proptest                    = "1.5"
+hmac                        = "0.12"
+subtle                      = "2.6"
+prometheus                  = { version = "0.13", default-features = false }
+ldap3                       = { version = "0.12", default-features = false, features = ["tls-rustls"] }
+zeroize                     = { version = "1.8", features = ["derive"] }
+secrecy                     = { version = "0.10", features = ["serde"] }
+base64ct                    = { version = "1.6", features = ["alloc"] }
 
 # Logging / errors
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
-tracing-appender = "0.2"
-thiserror = "2.0"
-anyhow = "1.0"
+tracing                     = "0.1"
+tracing-subscriber          = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+tracing-appender            = "0.2"
+thiserror                   = "2"
+anyhow                      = "1"
 
 # Misc
-uuid = { version = "1.10", features = ["v4", "serde"] }
-chrono = { version = "0.4", features = ["serde"] }
-url = { version = "2.5", features = ["serde"] }
-percent-encoding = "2.3"
+uuid                        = { version = "1.10", features = ["v4", "serde"] }
+chrono                      = { version = "0.4", features = ["serde"] }
+url                         = { version = "2.5", features = ["serde"] }
+percent-encoding            = "2.3"
+time                        = "0.3"
 
 # Email — wasm-smtp v0.9 family.
 # - core (`wasm-smtp`) drives the SMTP state machine, message parsing and
@@ -97,44 +105,46 @@ percent-encoding = "2.3"
 #     `getrandom_backend="wasm_js"` cfg).
 # - `mail-builder` is a small, no-required-deps RFC 5322 / MIME composer
 #   from Stalwart Labs. `wasm-smtp`'s docs explicitly recommend it.
-wasm-smtp = { version = "0.9", features = ["mail-builder"] }
-wasm-smtp-tokio = "0.9"
-mail-builder = "0.4"
+wasm-smtp                   = { version = "0.9", features = ["mail-builder"] }
+wasm-smtp-tokio             = "0.9"
+mail-builder                = "0.4"
 
 # Outbound HTTP — used for the optional Pwned Passwords (HIBP)
 # breach check. reqwest (async, rustls) replaces the former ureq
 # (sync, spawn_blocking) after RFC 070 (v0.57.1). The HIBP handler
 # is now a plain async fn; reqwest::Client is stored in AppState.
-async-trait = "0.1"
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+async-trait                 = "0.1"
+reqwest                     = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 
 # UI (Leptos used in SSR-only mode for the admin panel; no WASM/JS bundle is shipped
 #  in line with the project's minimal-runtime philosophy).
-leptos = { version = "0.8", default-features = false, features = ["ssr"] }
+leptos                      = { version = "0.8", default-features = false, features = ["ssr"] }
 
 # Asset embedding
-include_dir = "0.7"
+include_dir                 = "0.7"
 
 # Test helpers
-tempfile = "3.13"
+tempfile                    = "3.13"
+http                        = "1"
+http-body-util              = "0.1"
 
 [workspace.lints.rust]
-unsafe_code = "forbid"
+unsafe_code     = "forbid"
 unused_must_use = "deny"
 
 [workspace.lints.clippy]
-unwrap_used = "warn"
-expect_used = "warn"
-panic = "warn"
-todo = "warn"
-unimplemented = "warn"
+unwrap_used     = "warn"
+expect_used     = "warn"
+panic           = "warn"
+todo            = "warn"
+unimplemented   = "warn"
 
 [profile.release]
-opt-level = 3
-lto = "thin"
-codegen-units = 1
-strip = "symbols"
-panic = "abort"
+opt-level       = 3
+lto             = "thin"
+codegen-units   = 1
+strip           = "symbols"
+panic           = "abort"
 
 [profile.dev]
-opt-level = 0
+opt-level       = 0

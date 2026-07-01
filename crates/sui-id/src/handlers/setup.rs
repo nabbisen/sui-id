@@ -50,17 +50,17 @@
 //!   and a link to step 1.
 
 use crate::errors::HttpError;
-use crate::handlers::{session_cookie, AppStateExt};
-use axum::response::{Html, IntoResponse, Redirect};
+use crate::handlers::{AppStateExt, session_cookie};
 use axum::Form;
+use axum::response::{Html, IntoResponse, Redirect};
 use axum_extra::extract::cookie::CookieJar;
 use serde::Deserialize;
 use sui_id_core::errors::CoreError;
 use sui_id_core::{session, setup};
 use sui_id_store::repos::{server_settings, state};
 use sui_id_web::{
-    render_setup_admin, render_setup_done, render_setup_hibp, render_setup_lang,
-    render_setup_welcome, Flash, FlashKind,
+    Flash, FlashKind, render_setup_admin, render_setup_done, render_setup_hibp, render_setup_lang,
+    render_setup_welcome,
 };
 
 // ---------- 画面 1 — welcome ----------
@@ -204,13 +204,15 @@ pub async fn admin_post(
     // The setup wizard runs once at install time, so this is the
     // RFC 070 (v0.57.1): HIBP check is now async via reqwest;
     // the former spawn_blocking wrapper is no longer needed.
-    let hibp_settings = sui_id_store::repos::server_settings::get(&app.db).await
+    let hibp_settings = sui_id_store::repos::server_settings::get(&app.db)
+        .await
         .map_err(|e| HttpError::html(sui_id_core::errors::CoreError::from(e)))?;
     let hibp_mode = hibp_settings.hibp_mode;
     if hibp_mode != sui_id_store::models::HibpMode::Off {
         let client = app.hibp_client.clone();
         let pw_for_check = form.password.clone();
-        let outcome = sui_id_core::hibp::enforce_hibp(hibp_mode, Some(client.as_ref()), &pw_for_check).await;
+        let outcome =
+            sui_id_core::hibp::enforce_hibp(hibp_mode, Some(client.as_ref()), &pw_for_check).await;
         match outcome {
             sui_id_core::hibp::HibpEnforcement::Allowed => {}
             sui_id_core::hibp::HibpEnforcement::AllowedWithWarning { count } => {
@@ -250,7 +252,8 @@ pub async fn admin_post(
         &form.password,
         display,
         email,
-    ).await;
+    )
+    .await;
 
     match outcome {
         Ok(_) => {
@@ -264,7 +267,8 @@ pub async fn admin_post(
                 form.username.trim(),
                 &form.password,
                 app.config.security.max_lockout.as_secs(),
-            ).await
+            )
+            .await
             .map_err(HttpError::html)?;
             let cookie =
                 session_cookie(session_row.id.to_string(), app.config.server.cookie_secure);
@@ -308,7 +312,8 @@ pub async fn lang_get(
         return Ok(Redirect::to("/setup").into_response());
     }
     // Pre-fill with current server default (falls back to "ja" if not yet set).
-    let current = server_settings::get(&app.db).await
+    let current = server_settings::get(&app.db)
+        .await
         .map(|s| s.default_lang)
         .unwrap_or_else(|_| "ja".into());
     Ok(Html(render_setup_lang(None, &current, lang)).into_response())
@@ -332,7 +337,8 @@ pub async fn lang_post(
     };
     // Parse as Locale to confirm it's a valid tag before writing.
     let locale = sui_id_i18n::Locale::parse(chosen).unwrap_or_default();
-    server_settings::update_default_lang(&app.db, locale.tag(), chrono::Utc::now()).await
+    server_settings::update_default_lang(&app.db, locale.tag(), chrono::Utc::now())
+        .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
     Ok(Redirect::to("/setup/hibp").into_response())
 }
@@ -355,7 +361,8 @@ pub async fn hibp_get(
     if !initialized {
         return Ok(Redirect::to("/setup").into_response());
     }
-    let current = server_settings::get(&app.db).await
+    let current = server_settings::get(&app.db)
+        .await
         .map(|s| s.hibp_mode.as_str().to_owned())
         .unwrap_or_else(|_| "warn".into());
     Ok(Html(render_setup_hibp(None, &current, lang)).into_response())
@@ -377,7 +384,8 @@ pub async fn hibp_post(
         "block" => sui_id_store::models::HibpMode::Block,
         _ => sui_id_store::models::HibpMode::Warn,
     };
-    server_settings::update_hibp_mode(&app.db, mode, chrono::Utc::now()).await
+    server_settings::update_hibp_mode(&app.db, mode, chrono::Utc::now())
+        .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
     let _ = lang; // used by future flash messages if needed
     Ok(Redirect::to("/setup/done").into_response())
@@ -399,11 +407,7 @@ pub async fn done_get(
 
 fn trimmed_or_none(s: &str) -> Option<&str> {
     let t = s.trim();
-    if t.is_empty() {
-        None
-    } else {
-        Some(t)
-    }
+    if t.is_empty() { None } else { Some(t) }
 }
 
 fn friendly_error_text(e: &CoreError, lang: sui_id_i18n::Locale) -> String {

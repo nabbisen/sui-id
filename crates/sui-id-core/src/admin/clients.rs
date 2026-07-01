@@ -1,18 +1,16 @@
 //! Client admin operations (RFC 075, v0.62.0).
+use crate::cache::Caches;
 use crate::errors::{CoreError, CoreResult};
 use crate::password::hash_password;
 use crate::time::SharedClock;
 use crate::tokens;
-use crate::cache::Caches;
 use sui_id_shared::ids::ClientId;
-use sui_id_store::models::ClientRow;
-use sui_id_store::repos::{
-    clients, refresh_tokens,
-};
 use sui_id_store::Database;
+use sui_id_store::models::ClientRow;
+use sui_id_store::repos::{clients, refresh_tokens};
 // Shared audit helpers from parent module.
-use crate::actor::{AdminActor, ReadOnlyAdminActor};
 use super::{audit_ok, audit_with_note};
+use crate::actor::{AdminActor, ReadOnlyAdminActor};
 pub struct CreatedClient {
     pub row: ClientRow,
     pub generated_secret: Option<String>,
@@ -40,7 +38,9 @@ pub async fn create_client(
 ) -> CoreResult<CreatedClient> {
     let actor_id = actor.user_id();
     if spec.name.trim().is_empty() {
-        return Err(CoreError::BadRequest("client name must not be empty".into()));
+        return Err(CoreError::BadRequest(
+            "client name must not be empty".into(),
+        ));
     }
     if spec.redirect_uris.is_empty() {
         return Err(CoreError::BadRequest(
@@ -123,11 +123,19 @@ pub async fn set_client_allowed_scopes(
             )));
         }
     }
-    clients::set_allowed_scopes(db, target, scopes).await.map_err(|e| match e {
-        sui_id_store::StoreError::NotFound => CoreError::NotFound,
-        other => CoreError::from(other),
-    })?;
-    audit_ok(db, actor_id, "client.set_allowed_scopes", Some(target.to_string())).await;
+    clients::set_allowed_scopes(db, target, scopes)
+        .await
+        .map_err(|e| match e {
+            sui_id_store::StoreError::NotFound => CoreError::NotFound,
+            other => CoreError::from(other),
+        })?;
+    audit_ok(
+        db,
+        actor_id,
+        "client.set_allowed_scopes",
+        Some(target.to_string()),
+    )
+    .await;
     Ok(())
 }
 
@@ -142,16 +150,19 @@ pub async fn set_client_post_logout_redirect_uris(
     for uri in uris {
         validate_redirect_uri(uri)?;
     }
-    clients::set_post_logout_redirect_uris(db, target, uris).await.map_err(|e| match e {
-        sui_id_store::StoreError::NotFound => CoreError::NotFound,
-        other => CoreError::from(other),
-    })?;
+    clients::set_post_logout_redirect_uris(db, target, uris)
+        .await
+        .map_err(|e| match e {
+            sui_id_store::StoreError::NotFound => CoreError::NotFound,
+            other => CoreError::from(other),
+        })?;
     audit_ok(
         db,
         actor_id,
         "client.set_post_logout_redirect_uris",
         Some(target.to_string()),
-    ).await;
+    )
+    .await;
     Ok(())
 }
 
@@ -168,7 +179,9 @@ pub async fn update_client_basic(
 ) -> CoreResult<()> {
     let actor_id = actor.user_id();
     if name.trim().is_empty() {
-        return Err(CoreError::BadRequest("client name must not be empty".into()));
+        return Err(CoreError::BadRequest(
+            "client name must not be empty".into(),
+        ));
     }
     if redirect_uris.is_empty() {
         return Err(CoreError::BadRequest(
@@ -178,12 +191,12 @@ pub async fn update_client_basic(
     for uri in redirect_uris {
         validate_redirect_uri(uri)?;
     }
-    clients::update_basic(db, target, Some(name.trim()), Some(redirect_uris)).await.map_err(|e| {
-        match e {
+    clients::update_basic(db, target, Some(name.trim()), Some(redirect_uris))
+        .await
+        .map_err(|e| match e {
             sui_id_store::StoreError::NotFound => CoreError::NotFound,
             other => CoreError::from(other),
-        }
-    })?;
+        })?;
     audit_ok(db, actor_id, "client.update", Some(target.to_string())).await;
     if let Err(e) = caches.redirect_origins.rebuild(db).await {
         tracing::warn!(error = %e, "cache rebuild failed after update_client");
@@ -192,7 +205,11 @@ pub async fn update_client_basic(
 }
 
 /// Convenience: fetch a single client (admin-gated).
-pub async fn get_client(db: &Database, actor: &ReadOnlyAdminActor, target: ClientId) -> CoreResult<ClientRow> {
+pub async fn get_client(
+    db: &Database,
+    actor: &ReadOnlyAdminActor,
+    target: ClientId,
+) -> CoreResult<ClientRow> {
     let _ = actor;
     clients::get(db, target).await.map_err(|e| match e {
         sui_id_store::StoreError::NotFound => CoreError::NotFound,
@@ -224,10 +241,12 @@ pub async fn update_client(
             validate_redirect_uri(u)?;
         }
     }
-    clients::update_basic(db, target, name, redirect_uris).await.map_err(|e| match e {
-        sui_id_store::StoreError::NotFound => CoreError::NotFound,
-        other => CoreError::from(other),
-    })?;
+    clients::update_basic(db, target, name, redirect_uris)
+        .await
+        .map_err(|e| match e {
+            sui_id_store::StoreError::NotFound => CoreError::NotFound,
+            other => CoreError::from(other),
+        })?;
     audit_ok(db, actor_id, "client.update", Some(target.to_string())).await;
     Ok(())
 }
@@ -242,20 +261,27 @@ pub async fn set_client_disabled(
     caches: &Caches,
 ) -> CoreResult<()> {
     let actor_id = actor.user_id();
-    clients::set_disabled(db, target, disabled).await.map_err(|e| match e {
-        sui_id_store::StoreError::NotFound => CoreError::NotFound,
-        other => CoreError::from(other),
-    })?;
+    clients::set_disabled(db, target, disabled)
+        .await
+        .map_err(|e| match e {
+            sui_id_store::StoreError::NotFound => CoreError::NotFound,
+            other => CoreError::from(other),
+        })?;
     if disabled {
         refresh_tokens::revoke_all_for_client(db, target).await?;
     }
     audit_with_note(
         db,
         actor_id,
-        if disabled { "client.disable" } else { "client.enable" },
+        if disabled {
+            "client.disable"
+        } else {
+            "client.enable"
+        },
         Some(target.to_string()),
         if disabled { reason } else { None },
-    ).await;
+    )
+    .await;
     if let Err(e) = caches.redirect_origins.rebuild(db).await {
         tracing::warn!(error = %e, "cache rebuild failed after set_client_disabled");
     }
@@ -270,15 +296,24 @@ pub async fn delete_client(
     caches: &Caches,
 ) -> CoreResult<()> {
     let actor_id = actor.user_id();
-    clients::soft_delete(db, target).await.map_err(|e| match e {
-        sui_id_store::StoreError::NotFound => CoreError::NotFound,
-        other => CoreError::from(other),
-    })?;
+    clients::soft_delete(db, target)
+        .await
+        .map_err(|e| match e {
+            sui_id_store::StoreError::NotFound => CoreError::NotFound,
+            other => CoreError::from(other),
+        })?;
     if let Err(e) = caches.redirect_origins.rebuild(db).await {
         tracing::warn!(error = %e, "cache rebuild failed after delete_client");
     }
     refresh_tokens::revoke_all_for_client(db, target).await?;
-    audit_with_note(db, actor_id, "client.delete", Some(target.to_string()), reason).await;
+    audit_with_note(
+        db,
+        actor_id,
+        "client.delete",
+        Some(target.to_string()),
+        reason,
+    )
+    .await;
     Ok(())
 }
 
@@ -287,9 +322,8 @@ pub async fn delete_client(
 /// Validate a redirect URI. Public so other crates (e.g. dynamic
 /// registration handler) can call it without duplicating the logic.
 pub fn validate_redirect_uri(uri: &str) -> CoreResult<()> {
-    let parsed = url::Url::parse(uri).map_err(|_| {
-        CoreError::BadRequest(format!("redirect_uri is not a valid URL: {uri}"))
-    })?;
+    let parsed = url::Url::parse(uri)
+        .map_err(|_| CoreError::BadRequest(format!("redirect_uri is not a valid URL: {uri}")))?;
     let scheme = parsed.scheme();
     let host = parsed.host_str().unwrap_or("");
     // Permit https everywhere; permit http only on loopback addresses for
@@ -315,8 +349,8 @@ pub fn validate_redirect_uri(uri: &str) -> CoreResult<()> {
 #[cfg(test)]
 mod tests {
     use crate::errors::CoreError;
-// Shared audit helpers from parent module.
-use super::validate_redirect_uri;
+    // Shared audit helpers from parent module.
+    use super::validate_redirect_uri;
 
     #[test]
     fn https_redirect_is_accepted() {
@@ -372,10 +406,16 @@ pub async fn rotate_client_secret(
     }
     let new_secret = tokens::random_token(32);
     let new_hash = crate::password::hash_password(&new_secret)?;
-    clients::set_secret_hash(db, client_id, Some(&new_hash), clock.now()).await
+    clients::set_secret_hash(db, client_id, Some(&new_hash), clock.now())
+        .await
         .map_err(CoreError::from)?;
     audit_with_note(
-        db, actor_id, "client.rotate_secret", Some(client_id.to_string()), reason
-    ).await;
+        db,
+        actor_id,
+        "client.rotate_secret",
+        Some(client_id.to_string()),
+        reason,
+    )
+    .await;
     Ok(new_secret)
 }

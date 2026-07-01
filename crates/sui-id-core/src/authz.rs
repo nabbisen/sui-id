@@ -55,11 +55,17 @@ pub enum Action {
     // ── Last-admin–protected mutations ────────────────────────────────────
     /// Change a user's role. Denied for every role when the target is the
     /// last active admin (passing `target_is_last_admin = true`).
-    AdminChangeUserRole { target_is_last_admin: bool },
+    AdminChangeUserRole {
+        target_is_last_admin: bool,
+    },
     /// Disable a user account. Denied when the target is the last admin.
-    AdminDisableUser { target_is_last_admin: bool },
+    AdminDisableUser {
+        target_is_last_admin: bool,
+    },
     /// Soft-delete a user account. Denied when the target is the last admin.
-    AdminDeleteUser { target_is_last_admin: bool },
+    AdminDeleteUser {
+        target_is_last_admin: bool,
+    },
 
     // ── Self-service ──────────────────────────────────────────────────────
     SelfReadSecurity,
@@ -121,14 +127,44 @@ pub fn authorize(role: Role, action: Action) -> Decision {
         // ── Last-admin–protected: deny when target is the last admin ──────
         // Even an Admin cannot demote, disable, or delete the last admin
         // (P4). When `target_is_last_admin = false` the Admin is permitted.
-        (Admin, AdminChangeUserRole { target_is_last_admin: false })
-        | (Admin, AdminDisableUser { target_is_last_admin: false })
-        | (Admin, AdminDeleteUser { target_is_last_admin: false }) => Permit,
+        (
+            Admin,
+            AdminChangeUserRole {
+                target_is_last_admin: false,
+            },
+        )
+        | (
+            Admin,
+            AdminDisableUser {
+                target_is_last_admin: false,
+            },
+        )
+        | (
+            Admin,
+            AdminDeleteUser {
+                target_is_last_admin: false,
+            },
+        ) => Permit,
 
         // Any role, target is the last admin → always deny (P4).
-        (_, AdminChangeUserRole { target_is_last_admin: true })
-        | (_, AdminDisableUser { target_is_last_admin: true })
-        | (_, AdminDeleteUser { target_is_last_admin: true }) => Deny,
+        (
+            _,
+            AdminChangeUserRole {
+                target_is_last_admin: true,
+            },
+        )
+        | (
+            _,
+            AdminDisableUser {
+                target_is_last_admin: true,
+            },
+        )
+        | (
+            _,
+            AdminDeleteUser {
+                target_is_last_admin: true,
+            },
+        ) => Deny,
 
         // Non-last-admin targets, non-Admin roles → deny (Auditor/User
         // cannot mutate users regardless of last-admin status).
@@ -214,9 +250,13 @@ mod kani_proofs {
         let action: Action = kani::any();
         kani::assume(matches!(
             action,
-            Action::AdminChangeUserRole { target_is_last_admin: true }
-                | Action::AdminDisableUser { target_is_last_admin: true }
-                | Action::AdminDeleteUser { target_is_last_admin: true }
+            Action::AdminChangeUserRole {
+                target_is_last_admin: true
+            } | Action::AdminDisableUser {
+                target_is_last_admin: true
+            } | Action::AdminDeleteUser {
+                target_is_last_admin: true
+            }
         ));
         kani::assert(
             authorize(role, action) == Decision::Deny,

@@ -1,7 +1,7 @@
 //! Minimal hand-rolled ustar tar writer and reader (no runtime dep on tar crate).
 
+use anyhow::{Context, Result, bail};
 use std::io::Write;
-use anyhow::{bail, Context, Result};
 
 // ---------- minimal POSIX ustar tar writer / reader ----------------------
 // The `tar` crate is a perfectly good dependency, but for two files we can
@@ -115,4 +115,3 @@ pub(crate) fn read_octal(buf: &[u8]) -> Result<u64> {
     }
     Ok(v)
 }
-

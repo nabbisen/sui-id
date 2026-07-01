@@ -19,16 +19,14 @@
 //! - Dynamically registered clients start disabled so an operator must
 //!   consciously enable them before they can obtain tokens (P4).
 
+use axum::Json;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use subtle::ConstantTimeEq;
 
 use crate::errors::HttpError;
-use crate::handlers::AppState;
 use crate::handlers::AppStateExt;
 use sui_id_core::errors::CoreError;
 use sui_id_shared::ids::ClientId;
@@ -150,9 +148,7 @@ pub async fn dynamic_register(
         ));
     }
     for uri in &body.redirect_uris {
-        sui_id_core::admin::clients::validate_redirect_uri(uri).map_err(|e| {
-            HttpError::api(e)
-        })?;
+        sui_id_core::admin::clients::validate_redirect_uri(uri).map_err(|e| HttpError::api(e))?;
     }
 
     let client_name = match body.client_name.as_deref().filter(|s| !s.is_empty()) {
@@ -187,10 +183,7 @@ pub async fn dynamic_register(
         None
     };
     let secret_hash = match secret_plain.as_deref() {
-        Some(s) => Some(
-            sui_id_core::password::hash_password(s)
-                .map_err(|e| HttpError::api(e))?,
-        ),
+        Some(s) => Some(sui_id_core::password::hash_password(s).map_err(|e| HttpError::api(e))?),
         None => None,
     };
 
@@ -241,9 +234,10 @@ pub async fn dynamic_register(
 
     // ── RFC 7591 §3.2.1 response ──────────────────────────────────────────────
 
-    let grant_types = body.grant_types.clone().unwrap_or_else(|| {
-        vec!["authorization_code".into(), "refresh_token".into()]
-    });
+    let grant_types = body
+        .grant_types
+        .clone()
+        .unwrap_or_else(|| vec!["authorization_code".into(), "refresh_token".into()]);
 
     let resp = RegistrationResponse {
         client_id: client_id.to_string(),
@@ -278,10 +272,7 @@ fn sha256_hex(input: &str) -> String {
     hash.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-fn validated_uri(
-    uri: Option<String>,
-    field: &'static str,
-) -> Result<Option<String>, HttpError> {
+fn validated_uri(uri: Option<String>, field: &'static str) -> Result<Option<String>, HttpError> {
     match uri {
         None => Ok(None),
         Some(u) if u.is_empty() => Ok(None),

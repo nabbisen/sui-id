@@ -24,27 +24,25 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use sui_id_shared::ids::EmailOutboxId;
-use sui_id_store::repos::email_outbox;
-use sui_id_store::models::{EmailOutboxRow, EmailOutboxState};
 use sui_id_store::Database;
+use sui_id_store::models::{EmailOutboxRow, EmailOutboxState};
+use sui_id_store::repos::email_outbox;
 
 use crate::errors::{CoreError, CoreResult};
-use crate::mail::{MailSender, MailSendOutcome, OutgoingMail, SmtpMailSender};
+use crate::mail::{MailSendOutcome, MailSender, OutgoingMail, SmtpMailSender};
 use crate::time::SharedClock;
 
 // ── Encryption helpers ────────────────────────────────────────────────────────
 
 fn encrypt_field(db: &Database, plaintext: &[u8], aad: &[u8]) -> CoreResult<Vec<u8>> {
-    sui_id_store::crypto::seal(db.key(), plaintext, aad)
-        .map_err(|_| CoreError::Internal)
+    sui_id_store::crypto::seal(db.key(), plaintext, aad).map_err(|_| CoreError::Internal)
 }
 
 /// Symmetric pair of `encrypt_field` reserved for a future
 /// outbox replay / inspection path; currently no live caller.
 #[allow(dead_code)]
 fn decrypt_field(db: &Database, ciphertext: &[u8], aad: &[u8]) -> CoreResult<Vec<u8>> {
-    sui_id_store::crypto::open(db.key(), ciphertext, aad)
-        .map_err(|_| CoreError::Internal)
+    sui_id_store::crypto::open(db.key(), ciphertext, aad).map_err(|_| CoreError::Internal)
 }
 
 // ── OutboxMailSender ──────────────────────────────────────────────────────────
@@ -53,7 +51,7 @@ fn decrypt_field(db: &Database, ciphertext: &[u8], aad: &[u8]) -> CoreResult<Vec
 /// Returns immediately; delivery is handled by `OutboxWorker`.
 #[derive(Clone)]
 pub struct OutboxMailSender {
-    db:    Database,
+    db: Database,
     clock: SharedClock,
 }
 
@@ -67,39 +65,44 @@ impl MailSender for OutboxMailSender {
     fn send<'a>(
         &'a self,
         mail: OutgoingMail,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = CoreResult<MailSendOutcome>> + Send + 'a>> {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = CoreResult<MailSendOutcome>> + Send + 'a>>
+    {
         Box::pin(async move {
             let now = self.clock.now();
-            let recipient_enc = encrypt_field(&self.db, mail.to.as_bytes(), email_outbox::RECIPIENT_AAD)?;
+            let recipient_enc =
+                encrypt_field(&self.db, mail.to.as_bytes(), email_outbox::RECIPIENT_AAD)?;
             let payload = serde_json::to_vec(&OutboxPayload {
-                to:        mail.to.clone(),
-                subject:   mail.subject.clone(),
+                to: mail.to.clone(),
+                subject: mail.subject.clone(),
                 text_body: mail.text_body.clone(),
                 html_body: mail.html_body.clone(),
-            }).map_err(|_| CoreError::Internal)?;
+            })
+            .map_err(|_| CoreError::Internal)?;
             let payload_enc = encrypt_field(&self.db, &payload, email_outbox::PAYLOAD_AAD)?;
 
             let row = EmailOutboxRow {
-                id:              EmailOutboxId::new(),
-                state:           EmailOutboxState::Queued,
-                template:        "direct".into(),
+                id: EmailOutboxId::new(),
+                state: EmailOutboxState::Queued,
+                template: "direct".into(),
                 recipient_enc,
                 payload_enc,
-                attempt_count:   0,
+                attempt_count: 0,
                 next_attempt_at: now,
-                last_error:      None,
+                last_error: None,
                 // locale is resolved at the call site and stored here so the
                 // worker renders in the recipient's language (RFC 002 § C).
-                locale:          mail.locale.map(|l| l.tag().to_owned()),
-                created_at:      now,
-                updated_at:      now,
+                locale: mail.locale.map(|l| l.tag().to_owned()),
+                created_at: now,
+                updated_at: now,
             };
-            email_outbox::enqueue(&self.db, row).await.map_err(CoreError::from)?;
+            email_outbox::enqueue(&self.db, row)
+                .await
+                .map_err(CoreError::from)?;
 
             // Return a synthetic outcome — actual delivery happens asynchronously.
             Ok(MailSendOutcome {
-                from:    "(queued)".into(),
-                to:      mail.to,
+                from: "(queued)".into(),
+                to: mail.to,
                 subject: mail.subject,
             })
         })
@@ -110,8 +113,8 @@ impl MailSender for OutboxMailSender {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 struct OutboxPayload {
-    to:        String,
-    subject:   String,
+    to: String,
+    subject: String,
     text_body: String,
     html_body: Option<String>,
 }
@@ -133,11 +136,11 @@ fn next_attempt_at(attempt_count: i64, now: DateTime<Utc>) -> DateTime<Utc> {
 
 /// Background task that drains the outbox by attempting SMTP delivery.
 pub struct OutboxWorker {
-    db:           Database,
-    smtp:         Arc<SmtpMailSender>,
-    clock:        SharedClock,
+    db: Database,
+    smtp: Arc<SmtpMailSender>,
+    clock: SharedClock,
     /// How long to sleep between drain cycles when the queue is empty.
-    idle_tick:    Duration,
+    idle_tick: Duration,
     /// Maximum delivery attempts before a row is marked permanently failed.
     max_attempts: u32,
 }
@@ -170,9 +173,9 @@ impl OutboxWorker {
     async fn run(self) {
         // Reset any rows that were mid-send when the process last exited.
         let stuck_threshold = self.clock.now() - chrono::Duration::seconds(60);
-        if let Err(e) = email_outbox::requeue_stuck_sending(
-            &self.db, stuck_threshold, self.clock.now()
-        ).await {
+        if let Err(e) =
+            email_outbox::requeue_stuck_sending(&self.db, stuck_threshold, self.clock.now()).await
+        {
             tracing::warn!(error = %e, "outbox: could not reset stuck rows at startup");
         }
 
@@ -207,8 +210,12 @@ impl OutboxWorker {
             Err(_) => {
                 tracing::error!(id = %row.id, "outbox: payload decryption failed — marking failed");
                 let _ = email_outbox::mark_permanently_failed(
-                    &self.db, row.id, "decryption_error".into(), now
-                ).await;
+                    &self.db,
+                    row.id,
+                    "decryption_error".into(),
+                    now,
+                )
+                .await;
                 return;
             }
         };
@@ -217,19 +224,23 @@ impl OutboxWorker {
             Err(e) => {
                 tracing::error!(id = %row.id, error = %e, "outbox: payload deserialisation failed");
                 let _ = email_outbox::mark_permanently_failed(
-                    &self.db, row.id, format!("deserialise_error: {e}"), now
-                ).await;
+                    &self.db,
+                    row.id,
+                    format!("deserialise_error: {e}"),
+                    now,
+                )
+                .await;
                 return;
             }
         };
 
         let mail = OutgoingMail {
-            to:        payload.to,
-            subject:   payload.subject,
+            to: payload.to,
+            subject: payload.subject,
             text_body: payload.text_body,
             html_body: payload.html_body,
-        locale: None,
-    };
+            locale: None,
+        };
 
         // Attempt delivery.
         match self.smtp.send(mail).await {
@@ -245,18 +256,16 @@ impl OutboxWorker {
                         id = %row.id, attempts = attempt,
                         "outbox: permanent failure after max attempts"
                     );
-                    let _ = email_outbox::mark_permanently_failed(
-                        &self.db, row.id, err_str, now
-                    ).await;
+                    let _ =
+                        email_outbox::mark_permanently_failed(&self.db, row.id, err_str, now).await;
                 } else {
                     let next = next_attempt_at(attempt, now);
                     tracing::debug!(
                         id = %row.id, attempt, ?next,
                         "outbox: transient failure, scheduled retry"
                     );
-                    let _ = email_outbox::record_failure(
-                        &self.db, row.id, err_str, next, now
-                    ).await;
+                    let _ =
+                        email_outbox::record_failure(&self.db, row.id, err_str, next, now).await;
                 }
             }
         }

@@ -6,12 +6,12 @@
 #![allow(dead_code)]
 
 use axum::body::Body;
-use axum::http::{header, Method, Request, StatusCode};
+use axum::http::{Method, Request, StatusCode, header};
 use sui_id::build_router;
 
-use url::Url;
-use tower::ServiceExt;
 use super::common::*;
+use tower::ServiceExt;
+use url::Url;
 
 #[tokio::test]
 async fn logout_with_id_token_hint_revokes_session_and_redirects() {
@@ -33,9 +33,18 @@ async fn logout_with_id_token_hint_revokes_session_and_redirects() {
         .body(Body::empty())
         .expect("req");
     let resp = router.oneshot(req).await.expect("authorize");
-    let location = resp.headers().get(header::LOCATION).and_then(|v| v.to_str().ok()).unwrap_or("").to_owned();
+    let location = resp
+        .headers()
+        .get(header::LOCATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_owned();
     let parsed = Url::parse(&location).expect("redirect");
-    let code = parsed.query_pairs().find(|(k, _)| k == "code").map(|(_, v)| v.into_owned()).expect("code");
+    let code = parsed
+        .query_pairs()
+        .find(|(k, _)| k == "code")
+        .map(|(_, v)| v.into_owned())
+        .expect("code");
 
     let body = format!(
         "grant_type=authorization_code&code={code}&redirect_uri=https%3A%2F%2Frp.test%2Fcb\
@@ -170,7 +179,11 @@ async fn signing_key_rotation_publishes_both_keys_in_jwks() {
         .body(Body::from(format!("_csrf={csrf}")))
         .expect("req");
     let resp = router.oneshot(req).await.expect("rotate");
-    assert!(resp.status().is_redirection(), "expected redirect, got {}", resp.status());
+    assert!(
+        resp.status().is_redirection(),
+        "expected redirect, got {}",
+        resp.status()
+    );
 
     // After rotation, JWKS should publish two keys: the new active one
     // plus the retired previous one (grace window).
@@ -189,11 +202,16 @@ async fn signing_key_rotation_publishes_both_keys_in_jwks() {
         .iter()
         .filter_map(|k| k["kid"].as_str())
         .collect();
-    assert!(kids.contains(&kid_before.as_str()), "old kid {kid_before} should still be present");
+    assert!(
+        kids.contains(&kid_before.as_str()),
+        "old kid {kid_before} should still be present"
+    );
 
     // The active row should be the *newer* one — verified by checking that
     // the store reports a different active kid than before.
-    let active = sui_id_store::repos::signing_keys::active(&state.db).await.expect("active");
+    let active = sui_id_store::repos::signing_keys::active(&state.db)
+        .await
+        .expect("active");
     assert_ne!(active.id.to_string(), kid_before);
 }
 
@@ -219,9 +237,18 @@ async fn rotation_does_not_break_existing_authorization_flow() {
         .body(Body::empty())
         .expect("req");
     let resp = router.oneshot(req).await.expect("authorize");
-    let location = resp.headers().get(header::LOCATION).and_then(|v| v.to_str().ok()).unwrap_or("").to_owned();
+    let location = resp
+        .headers()
+        .get(header::LOCATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_owned();
     let parsed = Url::parse(&location).expect("redirect");
-    let code = parsed.query_pairs().find(|(k, _)| k == "code").map(|(_, v)| v.into_owned()).expect("code");
+    let code = parsed
+        .query_pairs()
+        .find(|(k, _)| k == "code")
+        .map(|(_, v)| v.into_owned())
+        .expect("code");
 
     let body = format!(
         "grant_type=authorization_code&code={code}&redirect_uri=https%3A%2F%2Frp.test%2Fcb\
@@ -238,7 +265,10 @@ async fn rotation_does_not_break_existing_authorization_flow() {
     assert_eq!(resp.status(), StatusCode::OK);
     let body_bytes = read_body(resp.into_body()).await;
     let json: serde_json::Value = serde_json::from_slice(&body_bytes).expect("json");
-    let access_old = json["access_token"].as_str().expect("access_token").to_owned();
+    let access_old = json["access_token"]
+        .as_str()
+        .expect("access_token")
+        .to_owned();
 
     // Rotate.
     let csrf = fetch_csrf(&state, &session).await;
@@ -265,7 +295,11 @@ async fn rotation_does_not_break_existing_authorization_flow() {
         .body(Body::empty())
         .expect("req");
     let resp = router.oneshot(req).await.expect("userinfo");
-    assert_eq!(resp.status(), StatusCode::OK, "old token should still verify in grace window");
+    assert_eq!(
+        resp.status(),
+        StatusCode::OK,
+        "old token should still verify in grace window"
+    );
 }
 
 #[tokio::test]
@@ -273,7 +307,9 @@ async fn cannot_delete_active_signing_key() {
     let state = test_app();
     let session = complete_setup_and_login(&state).await;
 
-    let active = sui_id_store::repos::signing_keys::active(&state.db).await.expect("active");
+    let active = sui_id_store::repos::signing_keys::active(&state.db)
+        .await
+        .expect("active");
     let active_id = active.id.to_string();
 
     let csrf = fetch_csrf(&state, &session).await;
@@ -292,8 +328,9 @@ async fn cannot_delete_active_signing_key() {
     assert_eq!(resp.status(), StatusCode::CONFLICT);
 
     // Active key should still exist.
-    let still_active =
-        sui_id_store::repos::signing_keys::active(&state.db).await.expect("still active");
+    let still_active = sui_id_store::repos::signing_keys::active(&state.db)
+        .await
+        .expect("still active");
     assert_eq!(still_active.id.to_string(), active_id);
 }
 
@@ -303,7 +340,8 @@ async fn delete_retired_signing_key_drops_it_from_jwks() {
     let session = complete_setup_and_login(&state).await;
 
     // First key (created during setup), then rotate to retire it.
-    let original_id = sui_id_store::repos::signing_keys::active(&state.db).await
+    let original_id = sui_id_store::repos::signing_keys::active(&state.db)
+        .await
         .expect("active")
         .id
         .to_string();
@@ -354,6 +392,8 @@ async fn delete_retired_signing_key_drops_it_from_jwks() {
         .filter_map(|k| k["kid"].as_str())
         .collect();
     assert_eq!(kids.len(), 1);
-    assert!(!kids.contains(&original_id.as_str()), "retired+deleted key must be gone");
+    assert!(
+        !kids.contains(&original_id.as_str()),
+        "retired+deleted key must be gone"
+    );
 }
-

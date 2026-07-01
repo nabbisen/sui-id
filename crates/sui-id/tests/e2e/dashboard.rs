@@ -6,11 +6,11 @@
 #![allow(dead_code)]
 
 use axum::body::Body;
-use axum::http::{header, Method, Request, StatusCode};
+use axum::http::{Method, Request, StatusCode, header};
 use sui_id::build_router;
 
-use tower::ServiceExt;
 use super::common::*;
+use tower::ServiceExt;
 
 // ---------- dashboard sparkline (v0.20.2) ----------
 
@@ -34,7 +34,10 @@ async fn dashboard_sparkline_renders_with_default_range() {
     let body = String::from_utf8_lossy(&bytes);
     // Sparkline-related markers we expect on the page.
     assert!(body.contains("サインイン活動"), "missing sparkline section");
-    assert!(body.contains("過去 7 日間"), "missing default range tab label");
+    assert!(
+        body.contains("過去 7 日間"),
+        "missing default range tab label"
+    );
     // The SVG element with our aria-label must be there.
     assert!(
         body.contains(r#"aria-label="サインイン活動のスパークライン""#),
@@ -76,10 +79,7 @@ async fn dashboard_sparkline_honours_explicit_range_query() {
         // anchor. Detect that by string-search around the matching
         // href value.
         let needle = format!(r#"href="/admin?range={range}""#);
-        assert!(
-            body.contains(&needle),
-            "expected anchor for range={range}"
-        );
+        assert!(body.contains(&needle), "expected anchor for range={range}");
     }
 }
 
@@ -105,4 +105,3 @@ async fn dashboard_sparkline_falls_back_to_default_on_garbage_range() {
     let body = String::from_utf8_lossy(&bytes);
     assert!(body.contains("サインイン活動"));
 }
-

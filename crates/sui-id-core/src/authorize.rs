@@ -27,9 +27,9 @@ use chrono::Duration;
 use ed25519_dalek::SigningKey;
 use sui_id_shared::ids::{ClientId, UserId};
 use sui_id_shared::{CodeHash, FamilyId, RawRefreshToken, RefreshTokenHash, RefreshTokenId};
+use sui_id_store::Database;
 use sui_id_store::models::{AuditLogRow, AuthorizationCodeRow, RefreshTokenRow};
 use sui_id_store::repos::{audit, auth_codes, clients, refresh_tokens, signing_keys, users};
-use sui_id_store::Database;
 
 /// Lifetime of an authorization code (kept very short by design).
 const AUTH_CODE_LIFETIME_SECS: i64 = 60;
@@ -91,7 +91,9 @@ pub async fn validate_client_and_redirect_uri(
                  Submitted: \"{redirect_uri}\". Registered URIs: [{}]. \
                  The comparison is exact — check for trailing slashes, \
                  http vs https, and port numbers.",
-                client.redirect_uris.iter()
+                client
+                    .redirect_uris
+                    .iter()
                     .map(|u| format!("\"{u}\""))
                     .collect::<Vec<_>>()
                     .join(", ")
@@ -101,12 +103,18 @@ pub async fn validate_client_and_redirect_uri(
     Ok(client)
 }
 
-pub async fn begin_authorization(db: &Database, params: AuthorizeParams) -> CoreResult<AcceptedAuthorize> {
+pub async fn begin_authorization(
+    db: &Database,
+    params: AuthorizeParams,
+) -> CoreResult<AcceptedAuthorize> {
     // RFC 6749 §4.1.1 — only "code" is supported.
     if params.response_type != "code" {
         return Err(CoreError::Protocol {
             code: ProtocolError::UnsupportedResponseType,
-            description: format!("only response_type=code is supported, got {}", params.response_type),
+            description: format!(
+                "only response_type=code is supported, got {}",
+                params.response_type
+            ),
         });
     }
     // PKCE is mandatory.
@@ -122,13 +130,15 @@ pub async fn begin_authorization(db: &Database, params: AuthorizeParams) -> Core
             description: "code_challenge_method must be S256".into(),
         });
     }
-    let client = clients::get(db, params.client_id).await.map_err(|e| match e {
-        sui_id_store::StoreError::NotFound => CoreError::Protocol {
-            code: ProtocolError::InvalidClient,
-            description: "unknown client_id".into(),
-        },
-        other => CoreError::from(other),
-    })?;
+    let client = clients::get(db, params.client_id)
+        .await
+        .map_err(|e| match e {
+            sui_id_store::StoreError::NotFound => CoreError::Protocol {
+                code: ProtocolError::InvalidClient,
+                description: "unknown client_id".into(),
+            },
+            other => CoreError::from(other),
+        })?;
     if client.is_disabled || client.is_deleted {
         return Err(CoreError::Protocol {
             code: ProtocolError::UnauthorizedClient,
@@ -144,7 +154,9 @@ pub async fn begin_authorization(db: &Database, params: AuthorizeParams) -> Core
                  The comparison is exact — check for trailing slashes, \
                  http vs https, and port numbers.",
                 params.redirect_uri,
-                client.redirect_uris.iter()
+                client
+                    .redirect_uris
+                    .iter()
                     .map(|u| format!("\"{u}\""))
                     .collect::<Vec<_>>()
                     .join(", ")
@@ -192,8 +204,7 @@ fn enforce_scope_policy(allowed: &str, requested: &str, client_name: &str) -> Co
     if allowed_trimmed.is_empty() {
         return Ok(());
     }
-    let allowed_set: std::collections::HashSet<&str> =
-        allowed_trimmed.split_whitespace().collect();
+    let allowed_set: std::collections::HashSet<&str> = allowed_trimmed.split_whitespace().collect();
     for tok in requested.split_whitespace() {
         if !allowed_set.contains(tok) {
             return Err(CoreError::Protocol {
@@ -203,8 +214,7 @@ fn enforce_scope_policy(allowed: &str, requested: &str, client_name: &str) -> Co
                      (allowed: {:?}). \
                      Go to Admin → Clients → edit this client and add {tok:?} \
                      to the Allowed scopes field.",
-                    client_name,
-                    allowed_trimmed,
+                    client_name, allowed_trimmed,
                 ),
             });
         }
@@ -390,10 +400,7 @@ pub async fn exchange_code(
 
 /// Step 2: verify that the code was issued to the same client and redirect URI
 /// as in the exchange request.
-fn bind_code(
-    consumed: ConsumedCode,
-    req: &CodeExchangeRequest,
-) -> CoreResult<BoundCode> {
+fn bind_code(consumed: ConsumedCode, req: &CodeExchangeRequest) -> CoreResult<BoundCode> {
     if consumed.0.client_id != req.client_id {
         return Err(CoreError::Protocol {
             code: ProtocolError::InvalidGrant,
@@ -410,10 +417,7 @@ fn bind_code(
 }
 
 /// Step 3: verify the PKCE code_verifier against the stored challenge.
-fn verify_pkce_step(
-    bound: BoundCode,
-    req: &CodeExchangeRequest,
-) -> CoreResult<PkceVerifiedCode> {
+fn verify_pkce_step(bound: BoundCode, req: &CodeExchangeRequest) -> CoreResult<PkceVerifiedCode> {
     tokens::verify_pkce(
         &bound.0.code_challenge_method,
         &req.code_verifier,
@@ -521,7 +525,10 @@ pub async fn exchange_refresh(
         // We do not distinguish the "concurrent winner" case from a
         // "token-already-rotated replay" case — both look identical to the
         // caller (RFC 080 P5).
-        refresh_tokens::RotationLookup::ReuseDetected { row, family_revoked } => {
+        refresh_tokens::RotationLookup::ReuseDetected {
+            row,
+            family_revoked,
+        } => {
             let _ = audit::append(
                 db,
                 &AuditLogRow {
@@ -544,8 +551,7 @@ pub async fn exchange_refresh(
         }
 
         // ── Expired or unknown: opaque denial ────────────────────────────
-        refresh_tokens::RotationLookup::Expired(_)
-        | refresh_tokens::RotationLookup::Unknown => {
+        refresh_tokens::RotationLookup::Expired(_) | refresh_tokens::RotationLookup::Unknown => {
             return Err(CoreError::Protocol {
                 code: ProtocolError::InvalidGrant,
                 description: "refresh token is unknown or revoked".into(),
@@ -566,8 +572,9 @@ pub async fn exchange_refresh(
         } else {
             None
         };
-    let email_arg: Option<(&str, bool)> =
-        email_for_token.as_ref().map(|(addr, v)| (addr.as_str(), *v));
+    let email_arg: Option<(&str, bool)> = email_for_token
+        .as_ref()
+        .map(|(addr, v)| (addr.as_str(), *v));
 
     issue_for_with_family(
         db,
@@ -631,7 +638,8 @@ async fn issue_for(
         auth_methods,
         None,
         user_email,
-    ).await
+    )
+    .await
 }
 
 /// The actual issuance routine. `family_id` is `None` for initial
@@ -656,7 +664,10 @@ async fn issue_for_with_family(
         other => CoreError::from(other),
     })?;
     let private_bytes = signing_keys::unseal_private(db, &key_row).await?;
-    let sk_arr: [u8; 32] = private_bytes.as_slice().try_into().map_err(|_| CoreError::Internal)?;
+    let sk_arr: [u8; 32] = private_bytes
+        .as_slice()
+        .try_into()
+        .map_err(|_| CoreError::Internal)?;
     let sk = SigningKey::from_bytes(&sk_arr);
 
     let include_id_token = scope.split_whitespace().any(|s| s == "openid");
@@ -673,7 +684,8 @@ async fn issue_for_with_family(
         clock,
         auth_methods,
         user_email,
-    ).await?;
+    )
+    .await?;
 
     let now = clock.now();
     let new_id = RefreshTokenId::generate();

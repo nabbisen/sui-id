@@ -12,10 +12,9 @@ use crate::hibp::{self, HibpClient, HibpEnforcement};
 use crate::password;
 use crate::time::SharedClock;
 use chrono::Utc;
-use sui_id_shared::ids::UserId;
+use sui_id_store::Database;
 use sui_id_store::models::{AuditLogRow, CredentialRow, HibpMode};
 use sui_id_store::repos::{audit, credentials, refresh_tokens, sessions};
-use sui_id_store::Database;
 
 /// Result of a successful self-service password change. The numbers
 /// let the caller decide what to put in a flash message
@@ -98,7 +97,8 @@ pub async fn change_password_self(
     let hibp_warned = match hibp::enforce_hibp(hibp_mode, hibp_client, new_password).await {
         HibpEnforcement::Blocked { .. } => {
             return Err(CoreError::BadRequest(
-                "New password found in known data breaches. Please choose a different password.".into(),
+                "New password found in known data breaches. Please choose a different password."
+                    .into(),
             ));
         }
         HibpEnforcement::AllowedWithWarning { .. } => true,
@@ -116,7 +116,8 @@ pub async fn change_password_self(
             must_change: false,
             updated_at: Utc::now(),
         },
-    ).await?;
+    )
+    .await?;
 
     // 5. Optionally sweep other live state. The caller asked for
     //    this when the box was checked; we revoke every other
@@ -152,7 +153,8 @@ pub async fn change_password_self(
                 report.sessions_revoked, report.refresh_tokens_revoked
             )),
         },
-    ).await;
+    )
+    .await;
 
     Ok(report)
 }
@@ -179,8 +181,12 @@ mod tests {
                 username: "alice".into(),
                 display_name: None,
                 is_admin: true,
-        role: if true { sui_id_store::models::Role::Admin } else { sui_id_store::models::Role::User },
-        last_login_at: None,
+                role: if true {
+                    sui_id_store::models::Role::Admin
+                } else {
+                    sui_id_store::models::Role::User
+                },
+                last_login_at: None,
                 is_disabled: false,
                 is_deleted: false,
                 user_uuid: uuid::Uuid::new_v4(),
@@ -193,7 +199,8 @@ mod tests {
                 email_normalized: None,
                 email_verified_at: None,
             },
-        ).await
+        )
+        .await
         .expect("create user");
         let phc = password::hash_password(password).expect("hash");
         credentials::upsert(
@@ -204,7 +211,8 @@ mod tests {
                 must_change: false,
                 updated_at: now,
             },
-        ).await
+        )
+        .await
         .expect("set credential");
         id
     }
@@ -224,13 +232,17 @@ mod tests {
             "the-new-tester-password",
             None,
             false,
-        crate::security::SecurityLevel::Standard.password_min_len(),
-        ).await
+            crate::security::SecurityLevel::Standard.password_min_len(),
+        )
+        .await
         .expect("change");
         assert_eq!(r.sessions_revoked, 0);
         assert_eq!(r.refresh_tokens_revoked, 0);
         // Old password no longer verifies; new one does.
-        let stored = credentials::get(&db, uid).await.expect("cred").password_hash;
+        let stored = credentials::get(&db, uid)
+            .await
+            .expect("cred")
+            .password_hash;
         assert!(password::verify_password("the-old-tester-password", &stored).is_err());
         assert!(password::verify_password("the-new-tester-password", &stored).is_ok());
     }
@@ -250,11 +262,15 @@ mod tests {
             "the-new-tester-password",
             None,
             false,
-        crate::security::SecurityLevel::Standard.password_min_len(),
-        ).await;
+            crate::security::SecurityLevel::Standard.password_min_len(),
+        )
+        .await;
         assert!(matches!(r, Err(CoreError::InvalidCredentials)));
         // Stored hash is unchanged.
-        let stored = credentials::get(&db, uid).await.expect("cred").password_hash;
+        let stored = credentials::get(&db, uid)
+            .await
+            .expect("cred")
+            .password_hash;
         assert!(password::verify_password("the-old-tester-password", &stored).is_ok());
     }
 
@@ -273,11 +289,15 @@ mod tests {
             "short",
             None,
             false,
-        crate::security::SecurityLevel::Standard.password_min_len(),
-        ).await;
+            crate::security::SecurityLevel::Standard.password_min_len(),
+        )
+        .await;
         assert!(matches!(r, Err(CoreError::BadRequest(_))), "{r:?}");
         // Stored hash unchanged — failure must not partially apply.
-        let stored = credentials::get(&db, uid).await.expect("cred").password_hash;
+        let stored = credentials::get(&db, uid)
+            .await
+            .expect("cred")
+            .password_hash;
         assert!(password::verify_password("the-old-tester-password", &stored).is_ok());
     }
 
@@ -297,7 +317,8 @@ mod tests {
                 must_change: true,
                 updated_at: Utc::now(),
             },
-        ).await
+        )
+        .await
         .expect("upsert");
         change_password_self(
             &db,
@@ -309,8 +330,9 @@ mod tests {
             "the-new-tester-password",
             None,
             false,
-        crate::security::SecurityLevel::Standard.password_min_len(),
-        ).await
+            crate::security::SecurityLevel::Standard.password_min_len(),
+        )
+        .await
         .expect("change");
         let row = credentials::get(&db, uid).await.expect("cred");
         assert!(!row.must_change, "must_change should be cleared");
@@ -331,12 +353,14 @@ mod tests {
             "the-new-tester-password",
             None,
             false,
-        crate::security::SecurityLevel::Standard.password_min_len(),
-        ).await
+            crate::security::SecurityLevel::Standard.password_min_len(),
+        )
+        .await
         .expect("change");
         let rows = audit::recent(&db, 50).await.expect("audit");
         assert!(
-            rows.iter().any(|r| r.action == "auth.password.changed_self"),
+            rows.iter()
+                .any(|r| r.action == "auth.password.changed_self"),
             "expected auth.password.changed_self in audit log; got: {:?}",
             rows.iter().map(|r| r.action.as_str()).collect::<Vec<_>>()
         );

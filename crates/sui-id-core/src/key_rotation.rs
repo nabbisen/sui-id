@@ -49,11 +49,11 @@
 //! when (or whether) to remove them.
 
 use crate::errors::{CoreError, CoreResult};
-use sui_id_store::crypto::{open, seal, MasterKey};
+use sui_id_store::Database;
+use sui_id_store::crypto::{MasterKey, open, seal};
 use sui_id_store::repos::{
     email_outbox, refresh_tokens, signing_keys, smtp_config, user_totp, user_webauthn_credentials,
 };
-use sui_id_store::Database;
 
 /// Result of running a rotation. Counts of re-sealed rows in
 /// each table — useful for the CLI to print and for tests to
@@ -96,10 +96,7 @@ impl RotationReport {
 ///   `MasterKey::generate` or `from_base64`;
 /// - renaming the old key file out of the way after this
 ///   function returns successfully (the CLI does this).
-pub async fn rotate_master_key(
-    db: &Database,
-    new_key: &MasterKey,
-) -> CoreResult<RotationReport> {
+pub async fn rotate_master_key(db: &Database, new_key: &MasterKey) -> CoreResult<RotationReport> {
     let old_key = db.key();
     let mut report = RotationReport::default();
 
@@ -136,8 +133,7 @@ pub async fn reseal_one(
 ) -> CoreResult<Vec<u8>> {
     let plaintext = open(old_key, sealed, aad)
         .map_err(|_| CoreError::BadRequest("decrypt with old key failed".into()))?;
-    let resealed = seal(new_key, &plaintext, aad)
-        .map_err(|_| CoreError::Internal)?;
+    let resealed = seal(new_key, &plaintext, aad).map_err(|_| CoreError::Internal)?;
     Ok(resealed)
 }
 
@@ -147,7 +143,7 @@ mod tests {
     use sui_id_store::crypto::MasterKey;
 
     #[tokio::test]
-    async     fn reseal_one_round_trip() {
+    async fn reseal_one_round_trip() {
         let old = MasterKey::generate();
         let new = MasterKey::generate();
         let aad = b"test-aad";
@@ -162,7 +158,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async     fn reseal_one_fails_with_wrong_old_key() {
+    async fn reseal_one_fails_with_wrong_old_key() {
         let real_old = MasterKey::generate();
         let wrong_old = MasterKey::generate();
         let new = MasterKey::generate();
@@ -173,7 +169,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async     fn reseal_one_with_wrong_aad_fails() {
+    async fn reseal_one_with_wrong_aad_fails() {
         let old = MasterKey::generate();
         let new = MasterKey::generate();
         let sealed = seal(&old, b"data", b"correct-aad").expect("seal");
@@ -181,7 +177,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async     fn rotation_report_total_sums_columns() {
+    async fn rotation_report_total_sums_columns() {
         let r = RotationReport {
             signing_keys: 1,
             refresh_tokens: 5,

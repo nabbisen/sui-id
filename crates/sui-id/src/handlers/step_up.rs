@@ -35,7 +35,7 @@
 //!   model can be extended into later if we have a need.
 
 use crate::errors::HttpError;
-use crate::handlers::{enforce_csrf, AppStateExt, SessionContext};
+use crate::handlers::{AppStateExt, SessionContext, enforce_csrf};
 use crate::{csrf, handlers::admin::with_csrf_cookie};
 use axum::extract::{Query, State};
 use axum::response::{Html, IntoResponse, Json, Redirect, Response};
@@ -122,10 +122,10 @@ pub async fn get(
     let State(app) = state_ext;
     let return_to = sanitise_return_to(&q.return_to);
     let token = csrf::ensure_token(&jar);
-    let has_passkey = sui_id_core::webauthn::has_credentials(&app.db, ctx.user_id).await
+    let has_passkey = sui_id_core::webauthn::has_credentials(&app.db, ctx.user_id)
+        .await
         .map_err(HttpError::html)?;
-    let html =
-        sui_id_web::render_step_up(&return_to, token.clone(), has_passkey, None, lang);
+    let html = sui_id_web::render_step_up(&return_to, token.clone(), has_passkey, None, lang);
     let resp = Html(html).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
 }
@@ -157,7 +157,9 @@ pub async fn post(
         ctx.user_id,
         ctx.session_id,
         &form.code,
-    ).await {
+    )
+    .await
+    {
         Ok(()) => {
             // The CSRF cookie was valid; rotate the in-process
             // token but don't burn a fresh one — the sensitive
@@ -166,9 +168,9 @@ pub async fn post(
         }
         Err(CoreError::InvalidCredentials) => {
             let token = csrf::ensure_token(&jar);
-            let has_passkey =
-                sui_id_core::webauthn::has_credentials(&app.db, ctx.user_id).await
-                    .map_err(HttpError::html)?;
+            let has_passkey = sui_id_core::webauthn::has_credentials(&app.db, ctx.user_id)
+                .await
+                .map_err(HttpError::html)?;
             let flash = Flash {
                 kind: FlashKind::Error,
                 text: t.step_up_code_invalid.into(),
@@ -220,22 +222,20 @@ pub async fn webauthn_start(
     let State(app) = state_ext;
     enforce_csrf(&jar, Some(&form.csrf))?;
     let _return_to = sanitise_return_to(&form.return_to); // validated for the
-                                                          // finish redirect, no
-                                                          // direct use here
+    // finish redirect, no
+    // direct use here
 
     let started = sui_id_core::step_up::start_webauthn(
         &app.db,
         &app.clock,
         &app.config.server.issuer,
         ctx.user_id,
-    ).await
+    )
+    .await
     .map_err(HttpError::html)?;
 
     let pending_cookie = {
-        let mut c = Cookie::new(
-            WEBAUTHN_STEP_UP_COOKIE,
-            started.pending_id.to_string(),
-        );
+        let mut c = Cookie::new(WEBAUTHN_STEP_UP_COOKIE, started.pending_id.to_string());
         c.set_path("/");
         c.set_http_only(true);
         c.set_same_site(SameSite::Lax);
@@ -290,7 +290,8 @@ pub async fn webauthn_finish(
         ctx.session_id,
         pending_id,
         &form.credential,
-    ).await;
+    )
+    .await;
 
     // Always clear the pending cookie — success and failure alike
     // burn the ceremony.
@@ -354,7 +355,10 @@ mod tests {
     #[test]
     fn non_allowlisted_admin_dashboard_collapses_to_default() {
         let result = sanitise_return_to("/admin/dashboard");
-        assert_eq!(result, "/me/security", "admin dashboard is not step-up gated");
+        assert_eq!(
+            result, "/me/security",
+            "admin dashboard is not step-up gated"
+        );
     }
 
     #[test]
@@ -393,7 +397,10 @@ mod tests {
 
     #[test]
     fn embedded_newline_collapses() {
-        assert_eq!(sanitise_return_to("/admin/users/\nX-Header: injected"), "/me/security");
+        assert_eq!(
+            sanitise_return_to("/admin/users/\nX-Header: injected"),
+            "/me/security"
+        );
     }
 
     #[test]

@@ -5,7 +5,10 @@ fn random_token_has_expected_length_and_alphabet() {
     let t = random_token(32);
     // base64url-no-pad of 32 bytes is ceil(32 * 4 / 3) = 43 chars.
     assert_eq!(t.len(), 43);
-    assert!(t.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'));
+    assert!(
+        t.chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    );
 }
 
 #[test]
@@ -63,9 +66,9 @@ fn pkce_unsupported_method_is_rejected_as_invalid_grant() {
 
 // ---------- property-based tests (v0.13.0) ----------
 
+use base64ct::{Base64UrlUnpadded, Encoding};
 use proptest::prelude::*;
 use sha2::{Digest, Sha256};
-use base64ct::{Base64UrlUnpadded, Encoding};
 
 /// Reference implementation: derive an S256 PKCE challenge from a
 /// verifier the way RFC 7636 §4.2 describes, with no shared code

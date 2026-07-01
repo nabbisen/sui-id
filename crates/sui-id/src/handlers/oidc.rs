@@ -2,13 +2,13 @@
 
 use crate::errors::HttpError;
 use crate::handlers::AppStateExt;
-use axum::extract::Query;
-use axum::http::{header, HeaderMap};
-use axum::response::{IntoResponse, Redirect, Response};
 use axum::Form;
 use axum::Json;
+use axum::extract::Query;
+use axum::http::{HeaderMap, header};
+use axum::response::{IntoResponse, Redirect, Response};
 use base64ct::{Base64, Encoding};
-use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use sui_id_core::authorize::{
@@ -17,9 +17,9 @@ use sui_id_core::authorize::{
 use sui_id_core::discovery::Discovery;
 use sui_id_core::errors::{CoreError, ProtocolError};
 use sui_id_core::jwks;
+use sui_id_shared::RawRefreshToken;
 use sui_id_shared::ids::ClientId;
 use sui_id_shared::ids::UserId;
-use sui_id_shared::RawRefreshToken;
 use sui_id_store::models::ConsentPolicy;
 use sui_id_store::repos::users;
 use sui_id_web::{pages::ConsentData, render_consent};
@@ -33,10 +33,16 @@ pub async fn discovery(state_ext: AppStateExt) -> impl IntoResponse {
 
 pub async fn jwks(state_ext: AppStateExt) -> Result<Response, HttpError> {
     let axum::extract::State(app) = state_ext;
-    let body = jwks::build(&app.db).await.map_err(|e| HttpError::api(CoreError::from(e)))?;
+    let body = jwks::build(&app.db)
+        .await
+        .map_err(|e| HttpError::api(CoreError::from(e)))?;
     let mut resp = Json(body).into_response();
-    resp.headers_mut()
-        .insert(header::CACHE_CONTROL, "public, max-age=300".parse().unwrap_or_else(|_| "no-store".parse().expect("static")));
+    resp.headers_mut().insert(
+        header::CACHE_CONTROL,
+        "public, max-age=300"
+            .parse()
+            .unwrap_or_else(|_| "no-store".parse().expect("static")),
+    );
     Ok(resp)
 }
 
@@ -132,26 +138,36 @@ pub async fn authorize(
                 "authorize: request parameters rejected (redirecting with error)"
             );
             // Redirect the error back to the RP — the redirect_uri is trusted.
-            return Ok(protocol_error_redirect(&q.redirect_uri, q.state.as_deref(), e));
+            return Ok(protocol_error_redirect(
+                &q.redirect_uri,
+                q.state.as_deref(),
+                e,
+            ));
         }
     };
 
     // Consent gate (RFC 038) — look up client to check consent_policy.
-    let client_for_consent = sui_id_store::repos::clients::get(
-        &app.db, accepted.params.client_id
-    ).await.map_err(|e| HttpError::html(CoreError::from(e)))?;
+    let client_for_consent = sui_id_store::repos::clients::get(&app.db, accepted.params.client_id)
+        .await
+        .map_err(|e| HttpError::html(CoreError::from(e)))?;
     let scope = accepted.params.scope.clone();
     let needs_consent = match client_for_consent.consent_policy {
         ConsentPolicy::None => false,
         ConsentPolicy::Always => true,
         ConsentPolicy::FirstTime => {
             let stored = sui_id_store::repos::user_consent::get(
-                &app.db, session_user, client_for_consent.id
-            ).await.unwrap_or(None);
+                &app.db,
+                session_user,
+                client_for_consent.id,
+            )
+            .await
+            .unwrap_or(None);
             match stored {
-                Some(row) if sui_id_store::repos::user_consent::covers(
-                    &row.granted_scopes, &scope
-                ) => false,
+                Some(row)
+                    if sui_id_store::repos::user_consent::covers(&row.granted_scopes, &scope) =>
+                {
+                    false
+                }
                 _ => true,
             }
         }
@@ -177,30 +193,27 @@ pub async fn authorize(
             "code_challenge_method": accepted.params.code_challenge_method,
             "auth_methods": serde_json::to_value(&session_auth_methods).unwrap_or_default(),
         });
-        let cs_json = serde_json::to_string(&cs)
-            .map_err(|_| HttpError::html(CoreError::Internal))?;
+        let cs_json =
+            serde_json::to_string(&cs).map_err(|_| HttpError::html(CoreError::Internal))?;
 
-        let scopes: Vec<String> = scope.split_whitespace()
-            .map(|s| s.to_string()).collect();
+        let scopes: Vec<String> = scope.split_whitespace().map(|s| s.to_string()).collect();
         let csrf_tok = crate::csrf::new_token();
-        let consent_html = render_consent(ConsentData {
-            client_name: client_for_consent.name.clone(),
-            requested_scopes: scopes,
-            csrf_token: csrf_tok.clone(),
-            // RFC 008: application identity from ClientRow.
-            logo_uri: client_for_consent.logo_uri.clone(),
-            homepage_uri: client_for_consent.homepage_uri.clone(),
-        }, lang);
+        let consent_html = render_consent(
+            ConsentData {
+                client_name: client_for_consent.name.clone(),
+                requested_scopes: scopes,
+                csrf_token: csrf_tok.clone(),
+                // RFC 008: application identity from ClientRow.
+                logo_uri: client_for_consent.logo_uri.clone(),
+                homepage_uri: client_for_consent.homepage_uri.clone(),
+            },
+            lang,
+        );
 
-        let cookie_val = format!(
-            "sui_id_consent={cs_json}; HttpOnly; SameSite=Lax; Max-Age=300; Path=/"
-        );
-        let csrf_cookie_val = format!(
-            "sui_id_csrf={csrf_tok}; SameSite=Lax; Max-Age=300; Path=/"
-        );
-        let mut resp = axum::response::Response::new(
-            axum::body::Body::from(consent_html)
-        );
+        let cookie_val =
+            format!("sui_id_consent={cs_json}; HttpOnly; SameSite=Lax; Max-Age=300; Path=/");
+        let csrf_cookie_val = format!("sui_id_csrf={csrf_tok}; SameSite=Lax; Max-Age=300; Path=/");
+        let mut resp = axum::response::Response::new(axum::body::Body::from(consent_html));
         *resp.status_mut() = axum::http::StatusCode::OK;
         resp.headers_mut().append(
             axum::http::header::SET_COOKIE,
@@ -225,7 +238,8 @@ pub async fn authorize(
         session_user,
         &session_auth_methods,
         accepted,
-    ).await
+    )
+    .await
     .map_err(HttpError::html)?;
 
     let mut url = redirect.redirect_uri;
@@ -247,7 +261,10 @@ async fn resolve_session(
     use axum_extra::extract::cookie::CookieJar;
     use sui_id_shared::ids::SessionId;
     let jar = CookieJar::from_headers(headers);
-    let raw = jar.get(crate::handlers::SESSION_COOKIE)?.value().to_string();
+    let raw = jar
+        .get(crate::handlers::SESSION_COOKIE)?
+        .value()
+        .to_string();
     let id = SessionId::from_str(&raw).ok()?;
     // Resolve hits the database both for validity (expiry / revocation)
     // and to fetch the recorded auth_methods. Cheaper to do it once
@@ -407,7 +424,8 @@ pub async fn token(
                     client_secret,
                     code_verifier,
                 },
-            ).await
+            )
+            .await
             .map_err(HttpError::oauth)?
         }
         "refresh_token" => {
@@ -426,7 +444,8 @@ pub async fn token(
                     client_id,
                     client_secret,
                 },
-            ).await
+            )
+            .await
             .map_err(HttpError::oauth)?
         }
         other => {
@@ -467,8 +486,12 @@ pub async fn token(
     // this is a no-op.
     if let Some(user_id) = set.user_id {
         let _ = sui_id_store::repos::user_consent::touch_last_used(
-            &app.db, user_id, client_id, app.clock.now()
-        ).await;
+            &app.db,
+            user_id,
+            client_id,
+            app.clock.now(),
+        )
+        .await;
     }
     let mut out = Json(resp).into_response();
     out.headers_mut().insert(
@@ -526,10 +549,7 @@ pub struct UserInfo {
 /// Standard OIDC userinfo endpoint. Authenticates via the Bearer access
 /// token: we verify the JWT signature against our own JWKS, check expiry,
 /// and look up the subject.
-pub async fn userinfo(
-    state_ext: AppStateExt,
-    headers: HeaderMap,
-) -> Result<Response, HttpError> {
+pub async fn userinfo(state_ext: AppStateExt, headers: HeaderMap) -> Result<Response, HttpError> {
     let axum::extract::State(app) = state_ext;
     let raw = headers
         .get(header::AUTHORIZATION)
@@ -537,11 +557,13 @@ pub async fn userinfo(
         .and_then(|s| s.strip_prefix("Bearer "))
         .ok_or_else(|| HttpError::api(CoreError::Unauthenticated))?;
 
-    let claims = sui_id_core::tokens::verify_access_token_cached(&app.caches, &app.clock, raw).await
+    let claims = sui_id_core::tokens::verify_access_token_cached(&app.caches, &app.clock, raw)
+        .await
         .map_err(HttpError::api)?;
     // RFC 7009: a revoked access token must stop being honoured at
     // protected endpoints. We consult the deny-list before serving.
-    if sui_id_store::repos::revoked_access_tokens::is_revoked(&app.db, &claims.jti).await
+    if sui_id_store::repos::revoked_access_tokens::is_revoked(&app.db, &claims.jti)
+        .await
         .map_err(|e| HttpError::api(CoreError::from(e)))?
     {
         return Err(HttpError::api(CoreError::Unauthenticated));
@@ -550,7 +572,9 @@ pub async fn userinfo(
         .sub
         .parse()
         .map_err(|_| HttpError::api(CoreError::Internal))?;
-    let row = users::get(&app.db, uid).await.map_err(|_| HttpError::api(CoreError::Unauthenticated))?;
+    let row = users::get(&app.db, uid)
+        .await
+        .map_err(|_| HttpError::api(CoreError::Unauthenticated))?;
     if row.is_disabled || row.is_deleted {
         return Err(HttpError::api(CoreError::Unauthenticated));
     }
@@ -622,7 +646,9 @@ pub async fn logout(
     if let Some(token) = &q.id_token_hint {
         // Verify the signature; accept expired tokens so the user can still
         // log out after their session has gone stale.
-        if let Ok(claims) = sui_id_core::tokens::verify_id_token_cached(&app.caches, &app.clock, token, true).await {
+        if let Ok(claims) =
+            sui_id_core::tokens::verify_id_token_cached(&app.caches, &app.clock, token, true).await
+        {
             user_id = claims.sub.parse().ok();
             hinted_client = claims.aud.parse().ok();
         } else {
@@ -632,15 +658,14 @@ pub async fn logout(
 
     // Fall back to the session cookie for the user identification.
     if user_id.is_none() {
-        if let Some(cookie) = headers
-            .get(header::COOKIE)
-            .and_then(|v| v.to_str().ok())
-        {
+        if let Some(cookie) = headers.get(header::COOKIE).and_then(|v| v.to_str().ok()) {
             for part in cookie.split(';') {
                 let part = part.trim();
                 if let Some(value) = part.strip_prefix("sui_id_session=") {
                     if let Ok(sid) = value.parse() {
-                        if let Ok(uid) = sui_id_core::session::resolve(&app.db, &app.clock, sid).await {
+                        if let Ok(uid) =
+                            sui_id_core::session::resolve(&app.db, &app.clock, sid).await
+                        {
                             user_id = Some(uid);
                         }
                     }
@@ -650,7 +675,8 @@ pub async fn logout(
     }
 
     if let Some(uid) = user_id {
-        sui_id_core::session::logout_user(&app.db, &app.clock, uid).await
+        sui_id_core::session::logout_user(&app.db, &app.clock, uid)
+            .await
             .map_err(HttpError::html)?;
     }
 
@@ -696,7 +722,11 @@ pub async fn logout(
     // Always clear the session cookie before redirecting / responding.
     let clear_cookie = format!(
         "sui_id_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0{}",
-        if app.config.server.cookie_secure { "; Secure" } else { "" }
+        if app.config.server.cookie_secure {
+            "; Secure"
+        } else {
+            ""
+        }
     );
 
     if let Some(mut url) = redirect_target {
@@ -753,11 +783,14 @@ pub async fn consent_post(
     let axum::extract::State(app) = state_ext;
 
     // Read the consent session cookie
-    let cs_json = jar.get("sui_id_consent")
+    let cs_json = jar
+        .get("sui_id_consent")
         .map(|c| c.value().to_string())
-        .ok_or_else(|| HttpError::html(CoreError::BadRequest(
-            "consent session expired or missing; restart the login flow".into()
-        )))?;
+        .ok_or_else(|| {
+            HttpError::html(CoreError::BadRequest(
+                "consent session expired or missing; restart the login flow".into(),
+            ))
+        })?;
 
     // Validate CSRF
     crate::handlers::enforce_csrf(&jar, Some(&form.csrf))?;
@@ -781,16 +814,22 @@ pub async fn consent_post(
     }
 
     // Parse the session params and re-run complete_authorization
-    let user_id = get_str("user_id").parse::<UserId>()
-        .map_err(|_| HttpError::html(CoreError::BadRequest("invalid user_id in consent session".into())))?;
-    let client_id = get_str("client_id").parse::<ClientId>()
-        .map_err(|_| HttpError::html(CoreError::BadRequest("invalid client_id in consent session".into())))?;
+    let user_id = get_str("user_id").parse::<UserId>().map_err(|_| {
+        HttpError::html(CoreError::BadRequest(
+            "invalid user_id in consent session".into(),
+        ))
+    })?;
+    let client_id = get_str("client_id").parse::<ClientId>().map_err(|_| {
+        HttpError::html(CoreError::BadRequest(
+            "invalid client_id in consent session".into(),
+        ))
+    })?;
     let scope = get_str("scope");
 
     // Store the consent grant
-    sui_id_store::repos::user_consent::upsert(
-        &app.db, user_id, client_id, scope.clone()
-    ).await.map_err(|e| HttpError::html(CoreError::from(e)))?;
+    sui_id_store::repos::user_consent::upsert(&app.db, user_id, client_id, scope.clone())
+        .await
+        .map_err(|e| HttpError::html(CoreError::from(e)))?;
 
     // Reconstruct auth_methods from cookie
     let auth_methods: Vec<sui_id_shared::AuthMethod> =
@@ -820,8 +859,14 @@ pub async fn consent_post(
     };
 
     let redirect = sui_id_core::authorize::complete_authorization(
-        &app.db, &app.clock, user_id, &auth_methods, accepted,
-    ).await.map_err(HttpError::html)?;
+        &app.db,
+        &app.clock,
+        user_id,
+        &auth_methods,
+        accepted,
+    )
+    .await
+    .map_err(HttpError::html)?;
 
     let mut url = redirect.redirect_uri;
     let sep = if url.contains('?') { '&' } else { '?' };
@@ -839,4 +884,3 @@ pub async fn consent_post(
 fn url_encode(s: &str) -> String {
     percent_encoding::utf8_percent_encode(s, percent_encoding::NON_ALPHANUMERIC).to_string()
 }
-

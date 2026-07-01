@@ -14,7 +14,7 @@
 use crate::errors::{CoreError, CoreResult};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 /// Standard JWT header for our EdDSA tokens.
 #[derive(Debug, Serialize, Deserialize)]
@@ -100,7 +100,10 @@ where
     let vk = resolver(&parsed.kid).ok_or(CoreError::Jwt)?;
     let signing_input = format!("{h}.{p}");
     let sig_bytes = b64u_decode(s)?;
-    let sig_arr: [u8; 64] = sig_bytes.as_slice().try_into().map_err(|_| CoreError::Jwt)?;
+    let sig_arr: [u8; 64] = sig_bytes
+        .as_slice()
+        .try_into()
+        .map_err(|_| CoreError::Jwt)?;
     let signature = Signature::from_bytes(&sig_arr);
     vk.verify(signing_input.as_bytes(), &signature)
         .map_err(|_| CoreError::Jwt)?;

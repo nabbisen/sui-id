@@ -6,11 +6,11 @@
 #![allow(dead_code)]
 
 use axum::body::Body;
-use axum::http::{header, Method, Request, StatusCode};
+use axum::http::{Method, Request, StatusCode, header};
 use sui_id::build_router;
 
-use tower::ServiceExt;
 use super::common::*;
+use tower::ServiceExt;
 
 // ---------- /admin/settings/* (v0.20.3) ----------
 
@@ -202,4 +202,3 @@ async fn settings_pages_require_admin() {
         assert_ne!(resp.status(), StatusCode::OK, "{path} leaked to anon");
     }
 }
-

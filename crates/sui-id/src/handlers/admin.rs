@@ -14,25 +14,25 @@
 //! `mod.rs`.
 
 use crate::state::AppState;
-use axum::http::{header, HeaderValue};
+use axum::http::{HeaderValue, header};
 use axum::response::Response;
 
-pub mod forms;
-mod auth;
-mod dashboard;
-mod users;
-mod clients;
-mod signing_keys;
 mod audit;
+mod auth;
+mod clients;
+mod dashboard;
+pub mod forms;
+mod signing_keys;
+mod users;
 mod webauthn;
 
-pub use forms::{DisableForm, CsrfOnlyForm, ConfirmedForm, ConfirmedReasonForm};
-pub use auth::*;
-pub use dashboard::*;
-pub use users::*;
-pub use clients::*;
-pub use signing_keys::*;
 pub use audit::*;
+pub use auth::*;
+pub use clients::*;
+pub use dashboard::*;
+pub use forms::{ConfirmedForm, ConfirmedReasonForm, CsrfOnlyForm, DisableForm};
+pub use signing_keys::*;
+pub use users::*;
 pub use webauthn::*;
 
 // ---------- umbrella-level helpers ----------
@@ -59,15 +59,16 @@ pub(crate) fn with_csrf_cookie(mut resp: Response, app: &AppState, token: &str) 
 /// `crate::handlers::me_security::mfa_enroll_start` through the
 /// public wrapper below.
 fn render_qr_svg(uri: &str) -> String {
-    use qrcode::render::svg;
     use qrcode::QrCode;
+    use qrcode::render::svg;
     match QrCode::new(uri.as_bytes()) {
         Ok(code) => code
             .render::<svg::Color>()
             .min_dimensions(220, 220)
             .quiet_zone(true)
             .build(),
-        Err(_) => "<p class=\"muted\">QR rendering failed; use the secret key below instead.</p>".to_string(),
+        Err(_) => "<p class=\"muted\">QR rendering failed; use the secret key below instead.</p>"
+            .to_string(),
     }
 }
 

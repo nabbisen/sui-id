@@ -3,32 +3,27 @@
 //! All names that were previously `pub` in the flat `admin.rs` are
 //! re-exported here, so callers outside this crate need no changes.
 
-mod users;
 pub mod clients;
 mod signing_keys;
+mod users;
 
-pub use users::{
-    CreateUserSpec, MfaResetReport,
-    create_user, list_users, set_user_disabled,
-    delete_user, admin_reset_mfa, reset_user_password,
-};
 pub use clients::{
-    CreatedClient, CreateClientSpec,
-    create_client, get_client, list_clients,
-    update_client, update_client_basic,
-    set_client_allowed_scopes, set_client_post_logout_redirect_uris,
-    set_client_disabled, delete_client, rotate_client_secret,
+    CreateClientSpec, CreatedClient, create_client, delete_client, get_client, list_clients,
+    rotate_client_secret, set_client_allowed_scopes, set_client_disabled,
+    set_client_post_logout_redirect_uris, update_client, update_client_basic,
 };
-pub use signing_keys::{
-    list_signing_keys, rotate_signing_key, delete_signing_key,
+pub use signing_keys::{delete_signing_key, list_signing_keys, rotate_signing_key};
+pub use users::{
+    CreateUserSpec, MfaResetReport, admin_reset_mfa, create_user, delete_user, list_users,
+    reset_user_password, set_user_disabled,
 };
 
 use crate::errors::{CoreError, CoreResult};
 use chrono::Utc;
 use sui_id_shared::ids::UserId;
+use sui_id_store::Database;
 use sui_id_store::repos::users as users_repo;
 use sui_id_store::{models::AuditLogRow, repos::audit};
-use sui_id_store::Database;
 
 async fn audit_ok(db: &Database, actor: UserId, action: &str, target: Option<String>) {
     audit_with_note(db, actor, action, target, None).await;
@@ -51,7 +46,8 @@ async fn audit_with_note(
             result: "ok".into(),
             note,
         },
-    ).await;
+    )
+    .await;
 }
 
 /// Check if a user has admin rights by fetching their record.
@@ -60,7 +56,10 @@ async fn audit_with_note(
 /// instead; the capability type provides compile-time proof of admin privilege.
 /// This function is retained for the binary crate's Axum extractors, which need
 /// to verify session roles before constructing an `Actor`.
-#[deprecated(since = "0.66.0", note = "Use Actor::into_admin (RFC 081) for domain functions")]
+#[deprecated(
+    since = "0.66.0",
+    note = "Use Actor::into_admin (RFC 081) for domain functions"
+)]
 pub async fn require_admin(db: &Database, user_id: UserId) -> CoreResult<()> {
     let user = users_repo::get(db, user_id).await.map_err(|e| match e {
         sui_id_store::StoreError::NotFound => CoreError::Forbidden,
@@ -74,4 +73,3 @@ pub async fn require_admin(db: &Database, user_id: UserId) -> CoreResult<()> {
 }
 
 // ---------- users ----------
-

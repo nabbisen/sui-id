@@ -50,9 +50,19 @@ impl Discovery {
             response_types_supported: vec!["code"],
             subject_types_supported: vec!["public"],
             id_token_signing_alg_values_supported: vec!["EdDSA"],
-            token_endpoint_auth_methods_supported: vec!["client_secret_basic", "client_secret_post", "none"],
-            introspection_endpoint_auth_methods_supported: vec!["client_secret_basic", "client_secret_post"],
-            revocation_endpoint_auth_methods_supported: vec!["client_secret_basic", "client_secret_post"],
+            token_endpoint_auth_methods_supported: vec![
+                "client_secret_basic",
+                "client_secret_post",
+                "none",
+            ],
+            introspection_endpoint_auth_methods_supported: vec![
+                "client_secret_basic",
+                "client_secret_post",
+            ],
+            revocation_endpoint_auth_methods_supported: vec![
+                "client_secret_basic",
+                "client_secret_post",
+            ],
             grant_types_supported: vec!["authorization_code", "refresh_token"],
             code_challenge_methods_supported: vec!["S256"],
             scopes_supported: vec!["openid", "profile", "email", "offline_access"],
@@ -65,7 +75,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async     fn discovery_uses_issuer_without_trailing_slash() {
+    async fn discovery_uses_issuer_without_trailing_slash() {
         let d = Discovery::build("https://idp.example.com/");
         assert_eq!(d.issuer, "https://idp.example.com");
         assert_eq!(d.token_endpoint, "https://idp.example.com/oauth2/token");
@@ -73,7 +83,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async     fn implicit_and_hybrid_flows_are_not_advertised() {
+    async fn implicit_and_hybrid_flows_are_not_advertised() {
         let d = Discovery::build("https://x");
         assert!(!d.response_types_supported.contains(&"id_token"));
         assert!(!d.response_types_supported.contains(&"token"));

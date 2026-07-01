@@ -82,8 +82,8 @@ fn hmac_state(app: &AppState, data: &[u8]) -> String {
     let mut key_material = Vec::with_capacity(32 + HMAC_KEY_SUFFIX.len());
     key_material.extend_from_slice(raw_key.as_bytes());
     key_material.extend_from_slice(HMAC_KEY_SUFFIX);
-    let mut mac = Hmac::<Sha256>::new_from_slice(&key_material)
-        .expect("HMAC accepts any key length");
+    let mut mac =
+        Hmac::<Sha256>::new_from_slice(&key_material).expect("HMAC accepts any key length");
     mac.update(data);
     let result = mac.finalize().into_bytes();
     result.iter().map(|b| format!("{b:02x}")).collect()
@@ -100,10 +100,7 @@ struct OidcDiscovery {
     issuer: String,
 }
 
-async fn fetch_discovery(
-    client: &reqwest::Client,
-    issuer: &str,
-) -> Result<OidcDiscovery, String> {
+async fn fetch_discovery(client: &reqwest::Client, issuer: &str) -> Result<OidcDiscovery, String> {
     let url = format!(
         "{}/.well-known/openid-configuration",
         issuer.trim_end_matches('/')
@@ -163,7 +160,6 @@ pub async fn federated_start(
 
     // Build PKCE (S256).
     let pkce_verifier = sui_id_core::tokens::random_token(32);
-    let pkce_challenge = sui_id_core::tokens::sha256_hex(&pkce_verifier);
     // base64url-encode the SHA-256 digest bytes (PKCE uses raw bytes, not hex).
     use base64ct::{Base64UrlUnpadded, Encoding};
     let verifier_bytes = pkce_verifier.as_bytes();
@@ -191,19 +187,21 @@ pub async fn federated_start(
         pkce_verifier,
         provider_slug: slug.clone(),
         expires_at: (chrono::Utc::now() + Duration::seconds(STATE_TTL_SECS)).timestamp(),
-        next: if q.next.starts_with('/') { Some(q.next) } else { None },
+        next: if q.next.starts_with('/') {
+            Some(q.next)
+        } else {
+            None
+        },
         upstream_state: state_param.clone(),
     };
-    let sealed = seal_state(&app, &fed_state).map_err(|_| {
-        HttpError::html(CoreError::Internal)
-    })?;
+    let sealed = seal_state(&app, &fed_state).map_err(|_| HttpError::html(CoreError::Internal))?;
 
     // Build the upstream authorization URL.
     let redirect_uri = format!(
         "{}/auth/federated/callback",
         app.config.server.issuer.trim_end_matches('/')
     );
-    use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+    use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
     let enc = |s: &str| utf8_percent_encode(s, NON_ALPHANUMERIC).to_string();
 
     let _upstream_url = format!(
@@ -226,7 +224,9 @@ pub async fn federated_start(
         c.set_same_site(axum_extra::extract::cookie::SameSite::Lax);
         c.set_max_age(time::Duration::seconds(STATE_TTL_SECS));
         c.set_path("/auth/federated");
-        if app.config.server.cookie_secure { c.set_secure(true); }
+        if app.config.server.cookie_secure {
+            c.set_secure(true);
+        }
         c
     };
 
@@ -272,13 +272,13 @@ pub async fn federated_callback(
     // Reject upstream errors.
     if let Some(err) = q.error {
         tracing::warn!(upstream_error = %err, "federation callback: upstream returned error");
-        let jar = jar.remove(Cookie::named(STATE_COOKIE));
+        let jar = jar.remove(Cookie::build(STATE_COOKIE));
         return Ok((jar, Redirect::to("/admin/login?fed_error=upstream")).into_response());
     }
 
-    let code = q.code.ok_or_else(|| {
-        HttpError::html(CoreError::BadRequest("missing code in callback".into()))
-    })?;
+    let code = q
+        .code
+        .ok_or_else(|| HttpError::html(CoreError::BadRequest("missing code in callback".into())))?;
 
     // Validate and consume the state cookie (P5).
     let sealed = jar
@@ -292,12 +292,14 @@ pub async fn federated_callback(
     // P5 CSRF: verify the upstream echoes back the same state we sent.
     let returned_state = q.state.as_deref().unwrap_or("");
     use subtle::ConstantTimeEq;
-    let state_ok: bool = fed_state.upstream_state.as_bytes()
+    let state_ok: bool = fed_state
+        .upstream_state
+        .as_bytes()
         .ct_eq(returned_state.as_bytes())
         .into();
     if !state_ok {
         tracing::warn!(slug = %fed_state.provider_slug, "federation: state mismatch — possible CSRF");
-        let jar = jar.remove(Cookie::named(STATE_COOKIE));
+        let jar = jar.remove(Cookie::build(STATE_COOKIE));
         return Ok((jar, Redirect::to("/admin/login?fed_error=state_mismatch")).into_response());
     }
 
@@ -326,11 +328,9 @@ pub async fn federated_callback(
         })?;
 
     // Decrypt client secret (P6 — used for token exchange only, not stored).
-    let client_secret = sui_id_store::repos::federation_provider::decrypt_secret(
-        app.db.key(),
-        &provider,
-    )
-    .map_err(|e| HttpError::html(CoreError::from(e)))?;
+    let client_secret =
+        sui_id_store::repos::federation_provider::decrypt_secret(app.db.key(), &provider)
+            .map_err(|e| HttpError::html(CoreError::from(e)))?;
 
     // Exchange the code for tokens at the upstream token_endpoint.
     let redirect_uri = format!(
@@ -356,18 +356,13 @@ pub async fn federated_callback(
         .await
         .and_then(|r| r.error_for_status());
 
-
-
-
-
-
-
     let token_resp = match token_resp {
         Ok(r) => r,
         Err(e) => {
             tracing::warn!(error = %e, slug = %provider.slug, "token exchange failed");
             let _ = emit_audit_soon(
-                app.db.clone(), app.clock.now(),
+                app.db.clone(),
+                app.clock.now(),
                 sui_id_store::repos::federation_provider::AUDIT_SIGNIN_UPSTREAM_FAILURE,
                 Some(format!("provider={} error={e}", provider.slug)),
             );
@@ -406,8 +401,8 @@ pub async fn federated_callback(
                     }
                 }
             } else {
-                return Ok(Redirect::to("/admin/login?fed_error=no_id_token").into_response()); }
-
+                return Ok(Redirect::to("/admin/login?fed_error=no_id_token").into_response());
+            }
         }
     };
 
@@ -427,13 +422,10 @@ pub async fn federated_callback(
 
     // Resolve the federation link by (provider_id, upstream_sub) — P1.
     let now = app.clock.now();
-    let link_opt = sui_id_store::repos::federation_link::find_by_sub(
-        &app.db,
-        provider.id,
-        &id_claims.sub,
-    )
-    .await
-    .map_err(|e| HttpError::html(CoreError::from(e)))?;
+    let link_opt =
+        sui_id_store::repos::federation_link::find_by_sub(&app.db, provider.id, &id_claims.sub)
+            .await
+            .map_err(|e| HttpError::html(CoreError::from(e)))?;
 
     let user_id: UserId = match link_opt {
         // ── Known user: update last_seen and proceed to MFA gate ─────────────
@@ -459,12 +451,11 @@ pub async fn federated_callback(
             // P2: check for email collision with an existing user that has a
             // different provider link (attempted account takeover).
             if let Some(ref email) = id_claims.email {
-                if let Ok(Some(_collision)) =
-                    sui_id_store::repos::users::find_by_email_normalized(
-                        &app.db,
-                        &sui_id_shared::normalize_email(email),
-                    )
-                    .await
+                if let Ok(Some(_collision)) = sui_id_store::repos::users::find_by_email_normalized(
+                    &app.db,
+                    &sui_id_shared::normalize_email(email),
+                )
+                .await
                 {
                     // An existing local user has this email but is NOT linked
                     // to this provider. Treat as attempted takeover.
@@ -478,14 +469,18 @@ pub async fn federated_callback(
                         &AuditLogRow {
                             at: now,
                             actor: None,
-                            action: sui_id_store::repos::federation_provider::AUDIT_TAKEOVER_BLOCKED.into(),
+                            action:
+                                sui_id_store::repos::federation_provider::AUDIT_TAKEOVER_BLOCKED
+                                    .into(),
                             target: None,
                             result: "denied".into(),
                             note: Some(format!("provider={} email={email}", provider.slug)),
                         },
                     )
                     .await;
-                    return Ok(Redirect::to("/admin/login?fed_error=email_collision").into_response());
+                    return Ok(
+                        Redirect::to("/admin/login?fed_error=email_collision").into_response()
+                    );
                 }
             }
 
@@ -499,7 +494,9 @@ pub async fn federated_callback(
                     // Block only when email is present but unverified.
                     if id_claims.email.is_some() && !id_claims.email_verified {
                         tracing::info!(slug = %provider.slug, "provision held: unverified email");
-                        return Ok(Redirect::to("/admin/login?fed_error=unverified_email").into_response());
+                        return Ok(
+                            Redirect::to("/admin/login?fed_error=unverified_email").into_response()
+                        );
                     }
                     // P7: derive username, never trust upstream directly.
                     let proposed = derive_username(&id_claims);
@@ -511,13 +508,9 @@ pub async fn federated_callback(
                         email: id_claims.email.clone(),
                         external_stable_id: format!("{}:{}", provider.id, id_claims.sub),
                     };
-                    let uid = sui_id_store::repos::users::upsert_ldap_shadow(
-                        &app.db,
-                        shadow,
-                        now,
-                    )
-                    .await
-                    .map_err(|e| HttpError::html(CoreError::from(e)))?;
+                    let uid = sui_id_store::repos::users::upsert_ldap_shadow(&app.db, shadow, now)
+                        .await
+                        .map_err(|e| HttpError::html(CoreError::from(e)))?;
 
                     // Insert federation link.
                     sui_id_store::repos::federation_link::upsert(
@@ -539,7 +532,8 @@ pub async fn federated_callback(
                         &AuditLogRow {
                             at: now,
                             actor: Some(uid),
-                            action: sui_id_store::repos::federation_provider::AUDIT_LINK_CREATED.into(),
+                            action: sui_id_store::repos::federation_provider::AUDIT_LINK_CREATED
+                                .into(),
                             target: Some(uid.to_string()),
                             result: "ok".into(),
                             note: Some(format!("provider={} sub={}", provider.slug, id_claims.sub)),
@@ -566,7 +560,9 @@ pub async fn federated_callback(
                     c.set_same_site(axum_extra::extract::cookie::SameSite::Lax);
                     c.set_max_age(time::Duration::seconds(600));
                     c.set_path("/auth/federated");
-                    if app.config.server.cookie_secure { c.set_secure(true); }
+                    if app.config.server.cookie_secure {
+                        c.set_secure(true);
+                    }
                     let jar = jar.add(c);
                     return Ok((jar, Redirect::to("/auth/federated/link")).into_response());
                 }
@@ -580,11 +576,7 @@ pub async fn federated_callback(
 
 // ── GET /auth/federated/link — link-only approval ────────────────────────────
 
-pub async fn federated_link_get(
-    state_ext: AppStateExt,
-    jar: CookieJar,
-) -> Result<Response, HttpError> {
-    let State(app) = state_ext;
+pub async fn federated_link_get(jar: CookieJar) -> Result<Response, HttpError> {
     // If no pending cookie, redirect to login.
     if jar.get("sui_id_fed_pending").is_none() {
         return Ok(Redirect::to("/admin/login").into_response());
@@ -670,9 +662,7 @@ async fn complete_federated_signin(
     }
 
     let cookie = session_cookie(session_row.id.to_string(), app.config.server.cookie_secure);
-    let jar = jar
-        .add(cookie)
-        .remove(Cookie::named(STATE_COOKIE));
+    let jar = jar.add(cookie).remove(Cookie::build(STATE_COOKIE));
     Ok((jar, Redirect::to("/admin")).into_response())
 }
 
@@ -755,7 +745,9 @@ async fn fetch_userinfo(
         .send()
         .await
         .map_err(|e| e.to_string())?;
-    resp.json::<IdTokenClaims>().await.map_err(|e| e.to_string())
+    resp.json::<IdTokenClaims>()
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// Fire-and-forget audit append (for paths where we can't await).

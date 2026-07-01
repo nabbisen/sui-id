@@ -5,7 +5,6 @@
 
 #![allow(dead_code)]
 
-
 use super::common::*;
 
 // ---------- v0.26.0: Master-key rotation ----------
@@ -23,8 +22,9 @@ async fn rotation_reseal_succeeds_and_old_key_no_longer_decrypts() {
     // The setup wizard creates a signing key (active) — that's
     // already one sealed row. Add an SMTP password to also exercise
     // the smtp_config path.
-    let user =
-        sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await.expect("user");
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+        .await
+        .expect("user");
 
     // Add an SMTP config row with a sealed password so rotation
     // has something to re-key in that table.
@@ -71,7 +71,9 @@ async fn rotation_reseal_succeeds_and_old_key_no_longer_decrypts() {
     // works (the key field is unchanged). Reading sealed columns
     // through that old handle would now FAIL — which is exactly
     // what we assert.
-    let report = rotate_master_key(&state.db, &new_key).await.expect("rotate");
+    let report = rotate_master_key(&state.db, &new_key)
+        .await
+        .expect("rotate");
 
     assert!(
         report.signing_keys >= 1,
@@ -84,7 +86,9 @@ async fn rotation_reseal_succeeds_and_old_key_no_longer_decrypts() {
     // The OLD key (still held by `state.db`) must no longer
     // decrypt the signing key column — it has been re-sealed
     // under `new_key`.
-    let signing_row = sui_id_store::repos::signing_keys::active(&state.db).await.expect("active");
+    let signing_row = sui_id_store::repos::signing_keys::active(&state.db)
+        .await
+        .expect("active");
     let opened_old = sui_id_store::crypto::open(
         state.db.key(),
         &signing_row.private_key_enc,
@@ -106,7 +110,8 @@ async fn rotation_reseal_succeeds_and_old_key_no_longer_decrypts() {
     );
 
     // SMTP password also re-sealed.
-    let smtp_row = sui_id_store::repos::smtp_config::get(&state.db).await
+    let smtp_row = sui_id_store::repos::smtp_config::get(&state.db)
+        .await
         .expect("smtp")
         .expect("smtp configured");
     let smtp_enc = smtp_row.password_enc.expect("password set");
@@ -152,7 +157,9 @@ async fn rotation_on_minimal_db_only_rekeys_signing_key() {
     // exercised here. TOTP / WebAuthn / SMTP all require admin
     // action.)
     let new_key = MasterKey::generate();
-    let report = rotate_master_key(&state.db, &new_key).await.expect("rotate");
+    let report = rotate_master_key(&state.db, &new_key)
+        .await
+        .expect("rotate");
     assert_eq!(report.signing_keys, 1);
     assert_eq!(report.refresh_tokens, 0);
     assert_eq!(report.user_totp_secrets, 0);
@@ -161,4 +168,3 @@ async fn rotation_on_minimal_db_only_rekeys_signing_key() {
     assert_eq!(report.smtp_config, 0);
     assert_eq!(report.total(), 1);
 }
-

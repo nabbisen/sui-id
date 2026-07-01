@@ -6,12 +6,12 @@
 #![allow(dead_code)]
 
 use axum::body::Body;
-use axum::http::{header, Method, Request, StatusCode};
+use axum::http::{Method, Request, StatusCode, header};
 use sui_id::build_router;
 
-use url::Url;
-use tower::ServiceExt;
 use super::common::*;
+use tower::ServiceExt;
+use url::Url;
 
 #[tokio::test]
 async fn full_flow_setup_authorize_token_userinfo_refresh() {
@@ -33,7 +33,11 @@ async fn full_flow_setup_authorize_token_userinfo_refresh() {
         .body(Body::empty())
         .expect("req");
     let resp = router.oneshot(req).await.expect("authorize");
-    assert!(resp.status().is_redirection(), "expected redirect, got {}", resp.status());
+    assert!(
+        resp.status().is_redirection(),
+        "expected redirect, got {}",
+        resp.status()
+    );
     let location = resp
         .headers()
         .get(header::LOCATION)
@@ -64,9 +68,18 @@ async fn full_flow_setup_authorize_token_userinfo_refresh() {
     assert_eq!(resp.status(), StatusCode::OK, "/token should succeed");
     let body_bytes = read_body(resp.into_body()).await;
     let json: serde_json::Value = serde_json::from_slice(&body_bytes).expect("json");
-    let access = json["access_token"].as_str().expect("access_token").to_owned();
-    let refresh = json["refresh_token"].as_str().expect("refresh_token").to_owned();
-    assert!(json["id_token"].is_string(), "openid scope should yield id_token");
+    let access = json["access_token"]
+        .as_str()
+        .expect("access_token")
+        .to_owned();
+    let refresh = json["refresh_token"]
+        .as_str()
+        .expect("refresh_token")
+        .to_owned();
+    assert!(
+        json["id_token"].is_string(),
+        "openid scope should yield id_token"
+    );
     assert_eq!(json["token_type"].as_str(), Some("Bearer"));
 
     // /userinfo with the bearer access token
@@ -113,7 +126,11 @@ async fn full_flow_setup_authorize_token_userinfo_refresh() {
         .body(Body::from(body))
         .expect("req");
     let resp = router.oneshot(req).await.expect("replay");
-    assert_eq!(resp.status(), StatusCode::BAD_REQUEST, "replayed refresh must fail");
+    assert_eq!(
+        resp.status(),
+        StatusCode::BAD_REQUEST,
+        "replayed refresh must fail"
+    );
 }
 
 #[tokio::test]
@@ -135,9 +152,18 @@ async fn pkce_mismatch_is_rejected() {
         .body(Body::empty())
         .expect("req");
     let resp = router.oneshot(req).await.expect("authorize");
-    let location = resp.headers().get(header::LOCATION).and_then(|v| v.to_str().ok()).unwrap_or("").to_owned();
+    let location = resp
+        .headers()
+        .get(header::LOCATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_owned();
     let parsed = Url::parse(&location).expect("redirect");
-    let code = parsed.query_pairs().find(|(k, _)| k == "code").map(|(_, v)| v.into_owned()).expect("code");
+    let code = parsed
+        .query_pairs()
+        .find(|(k, _)| k == "code")
+        .map(|(_, v)| v.into_owned())
+        .expect("code");
 
     // Use a *wrong* verifier.
     let body = format!(
@@ -187,7 +213,11 @@ async fn redirect_uri_mismatch_is_rejected_at_authorize() {
         );
     } else {
         // 400-class response also acceptable.
-        assert!(resp.status().is_client_error(), "expected error, got {}", resp.status());
+        assert!(
+            resp.status().is_client_error(),
+            "expected error, got {}",
+            resp.status()
+        );
     }
 }
 
@@ -262,7 +292,10 @@ async fn login_rate_limit_returns_429_with_retry_after() {
         .expect("req");
     let resp = router.oneshot(req).await.expect("login throttled");
     assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
-    let retry = resp.headers().get(header::RETRY_AFTER).expect("retry-after header");
+    let retry = resp
+        .headers()
+        .get(header::RETRY_AFTER)
+        .expect("retry-after header");
     let secs: i64 = retry.to_str().expect("ascii").parse().expect("integer");
     assert!(secs > 0 && secs <= 60);
 }
@@ -279,7 +312,8 @@ async fn gc_purges_expired_auth_codes() {
     // so we need real referents to insert a test row.
     let session = complete_setup_and_login(&state).await;
     let (client_id_str, _) = create_client(&state, &session).await;
-    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+        .await
         .expect("find user");
     let client_id: sui_id_shared::ids::ClientId = client_id_str.parse().expect("client_id");
 
@@ -325,4 +359,3 @@ async fn gc_purges_expired_auth_codes() {
         .expect("query");
     assert_eq!(count_after, 0, "expired auth code should have been GCed");
 }
-

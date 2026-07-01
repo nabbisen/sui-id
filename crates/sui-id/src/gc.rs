@@ -59,7 +59,9 @@ pub async fn run_once(state: &AppState) {
         Err(e) => tracing::warn!(error = %e, "gc: webauthn_pending purge failed"),
     }
     match revoked_access_tokens::purge_expired(db).await {
-        Ok(n) if n > 0 => tracing::info!(deleted = n, "gc: removed expired access-token deny entries"),
+        Ok(n) if n > 0 => {
+            tracing::info!(deleted = n, "gc: removed expired access-token deny entries")
+        }
         Ok(_) => {}
         Err(e) => tracing::warn!(error = %e, "gc: revoked_access_tokens purge failed"),
     }

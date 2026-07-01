@@ -10,7 +10,7 @@ struct TestClaims {
 
 #[test]
 fn sign_then_verify_recovers_claims() {
-        let sk = SigningKey::from_bytes(&[1u8; 32]);
+    let sk = SigningKey::from_bytes(&[1u8; 32]);
     let vk = sk.verifying_key();
     let claims = TestClaims {
         sub: "user-123".into(),
@@ -25,7 +25,7 @@ fn sign_then_verify_recovers_claims() {
 
 #[test]
 fn tampered_payload_fails_verification() {
-        let sk = SigningKey::from_bytes(&[1u8; 32]);
+    let sk = SigningKey::from_bytes(&[1u8; 32]);
     let vk = sk.verifying_key();
     let token = sign(
         "k1",
@@ -47,7 +47,7 @@ fn tampered_payload_fails_verification() {
 
 #[test]
 fn unknown_kid_is_rejected() {
-        let sk = SigningKey::from_bytes(&[1u8; 32]);
+    let sk = SigningKey::from_bytes(&[1u8; 32]);
     let token = sign(
         "k1",
         &sk,
@@ -63,7 +63,7 @@ fn unknown_kid_is_rejected() {
 
 #[test]
 fn malformed_token_is_rejected() {
-        let sk = SigningKey::from_bytes(&[1u8; 32]);
+    let sk = SigningKey::from_bytes(&[1u8; 32]);
     let vk = sk.verifying_key();
     let r: Result<Decoded<TestClaims>, _> = verify("not.a.jwt.at.all", |_| Some(vk));
     assert!(matches!(r, Err(CoreError::Jwt)));

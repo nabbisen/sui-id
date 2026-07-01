@@ -1,27 +1,27 @@
 [package]
-name = "sui-id-shared"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
-license.workspace = true
-repository.workspace = true
-homepage.workspace = true
-authors.workspace = true
-keywords.workspace = true
-categories.workspace = true
+name        = "sui-id-shared"
 description = "Shared types and DTOs for sui-id, a self-hosted Rust OIDC provider."
-readme = "README.md"
+readme      = "README.md"
+version.workspace       = true
+edition.workspace       = true
+rust-version.workspace  = true
+license.workspace       = true
+authors.workspace       = true
+repository.workspace    = true
+homepage.workspace      = true
+categories.workspace    = true
+keywords.workspace      = true
+
+[dependencies]
+serde                       = { workspace = true }
+serde_json                  = { workspace = true }
+thiserror                   = { workspace = true }
+uuid                        = { workspace = true }
+chrono                      = { workspace = true }
+sha2                        = { workspace = true }
+getrandom                   = { workspace = true }
+base64ct                    = { workspace = true }
+zeroize                     = { workspace = true }
 
 [lints]
 workspace = true
-
-[dependencies]
-serde = { workspace = true }
-serde_json = { workspace = true }
-thiserror = { workspace = true }
-uuid = { workspace = true }
-chrono = { workspace = true }
-sha2 = { workspace = true }
-getrandom = { workspace = true }
-base64ct = { workspace = true }
-zeroize = { workspace = true }

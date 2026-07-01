@@ -17,7 +17,7 @@
 //! attaches them route-by-route rather than as a global layer.
 
 use axum::extract::Request;
-use axum::http::{header, HeaderValue, Method};
+use axum::http::{HeaderValue, Method, header};
 use axum::middleware::Next;
 use axum::response::Response;
 
@@ -139,7 +139,10 @@ fn append_vary(h: &mut axum::http::HeaderMap, value: &str) {
         .to_owned();
     let merged = if existing.is_empty() {
         value.to_owned()
-    } else if existing.split(',').any(|s| s.trim().eq_ignore_ascii_case(value)) {
+    } else if existing
+        .split(',')
+        .any(|s| s.trim().eq_ignore_ascii_case(value))
+    {
         existing
     } else {
         format!("{existing}, {value}")

@@ -12,9 +12,9 @@
 //!   (`{"error":...,"error_description":...}`) for the token, introspect, and
 //!   revoke endpoints. Integrators depend on this exact wire format.
 
+use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Redirect, Response};
-use axum::Json;
 use serde::Serialize;
 use sui_id_core::errors::{CoreError, ProtocolError};
 use sui_id_shared::errors::{ApiError, ApiErrorCode};
@@ -184,9 +184,11 @@ fn oauth_error_response(e: HttpError) -> Response {
             };
             (status, code.as_str(), Some(description.clone()))
         }
-        CoreError::Unauthenticated | CoreError::InvalidCredentials => {
-            (StatusCode::UNAUTHORIZED, "invalid_client", Some("client authentication failed".into()))
-        }
+        CoreError::Unauthenticated | CoreError::InvalidCredentials => (
+            StatusCode::UNAUTHORIZED,
+            "invalid_client",
+            Some("client authentication failed".into()),
+        ),
         _ => {
             // Do not leak internal error details over the protocol wire.
             (StatusCode::INTERNAL_SERVER_ERROR, "server_error", None)
@@ -194,7 +196,10 @@ fn oauth_error_response(e: HttpError) -> Response {
     };
 
     let status = e.forced_status.unwrap_or(status);
-    let body = OAuthErrorBody { error: error_code, error_description: description };
+    let body = OAuthErrorBody {
+        error: error_code,
+        error_description: description,
+    };
 
     let mut resp = (status, Json(body)).into_response();
 
@@ -202,11 +207,10 @@ fn oauth_error_response(e: HttpError) -> Response {
     // Basic and that authentication fails, it MUST include a
     // WWW-Authenticate header.
     if status == StatusCode::UNAUTHORIZED {
-        resp.headers_mut()
-            .insert(
-                axum::http::header::WWW_AUTHENTICATE,
-                axum::http::HeaderValue::from_static("Basic realm=\"sui-id\""),
-            );
+        resp.headers_mut().insert(
+            axum::http::header::WWW_AUTHENTICATE,
+            axum::http::HeaderValue::from_static("Basic realm=\"sui-id\""),
+        );
     }
     // RFC 6749 §5.1 / BCP 212: token endpoint responses must not be cached.
     if let Ok(val) = axum::http::HeaderValue::from_str("no-store") {
@@ -287,7 +291,11 @@ fn html_error_response(e: HttpError, code: ApiErrorCode) -> Response {
 
 fn build_api_error(err: &CoreError, request_id: &str, code: ApiErrorCode) -> ApiError {
     let mut payload = ApiError::new(code, safe_user_message(err), request_id.to_owned());
-    if let CoreError::Protocol { code: pe, description } = err {
+    if let CoreError::Protocol {
+        code: pe,
+        description,
+    } = err
+    {
         payload = payload.with_protocol_code(pe.as_str());
         payload.message = description.clone();
     }
@@ -308,9 +316,10 @@ fn safe_user_message(err: &CoreError) -> String {
         CoreError::NotInitialized => "This server has not been initialized yet.".into(),
         CoreError::AlreadyInitialized => "This server is already initialized.".into(),
         CoreError::Protocol { description, .. } => description.clone(),
-        CoreError::Store(_) | CoreError::Password | CoreError::Jwt | CoreError::Internal
-        | CoreError::ConfigError(_) => {
-            "An internal error occurred.".into()
-        }
+        CoreError::Store(_)
+        | CoreError::Password
+        | CoreError::Jwt
+        | CoreError::Internal
+        | CoreError::ConfigError(_) => "An internal error occurred.".into(),
     }
 }

@@ -12,7 +12,7 @@
 //!    replayed token reaches the `theft_detected` branch.
 
 use axum::body::Body;
-use axum::http::{header, Method, Request, StatusCode};
+use axum::http::{Method, Request, StatusCode, header};
 use tower::ServiceExt;
 use url::Url;
 
@@ -107,9 +107,11 @@ async fn exchange_code_rejected_when_user_disabled_before_exchange() {
     let (code, verifier) = get_auth_code(&state, &session, &client_id).await;
 
     // Disable the user before exchanging the code.
-    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+        .await
         .expect("find user");
-    sui_id_store::repos::users::set_disabled(&state.db, user.id, true).await
+    sui_id_store::repos::users::set_disabled(&state.db, user.id, true)
+        .await
         .expect("disable user");
 
     // Exchange should return invalid_grant, not a token set.
@@ -130,11 +132,16 @@ async fn exchange_code_rejected_when_user_disabled_before_exchange() {
     );
 
     // The audit log should contain the user_revoked event.
-    let audit = sui_id_store::repos::audit::recent(&state.db, 50).await.expect("audit");
+    let audit = sui_id_store::repos::audit::recent(&state.db, 50)
+        .await
+        .expect("audit");
     let has_event = audit
         .iter()
         .any(|e| e.action == "oauth2.exchange_code.user_revoked");
-    assert!(has_event, "expected oauth2.exchange_code.user_revoked in audit log");
+    assert!(
+        has_event,
+        "expected oauth2.exchange_code.user_revoked in audit log"
+    );
 }
 
 /// RFC 019 § 3: auth codes are invalidated when a user is disabled,
@@ -151,15 +158,19 @@ async fn auth_codes_invalidated_on_user_disable() {
     // Disable the user via the store-level call (which `set_user_disabled`
     // delegates to after the admin/self-check). This is the path that
     // invalidates outstanding auth codes.
-    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+        .await
         .expect("find user");
-    sui_id_store::repos::users::set_disabled(&state.db, user.id, true).await
+    sui_id_store::repos::users::set_disabled(&state.db, user.id, true)
+        .await
         .expect("set_disabled");
-    sui_id_store::repos::auth_codes::invalidate_all_for_user(&state.db, user.id).await
+    sui_id_store::repos::auth_codes::invalidate_all_for_user(&state.db, user.id)
+        .await
         .expect("invalidate_auth_codes");
 
     // Re-enable the user immediately to check that the code is still dead.
-    sui_id_store::repos::users::set_disabled(&state.db, user.id, false).await
+    sui_id_store::repos::users::set_disabled(&state.db, user.id, false)
+        .await
         .expect("re-enable user");
 
     // The code should now be consumed and must return invalid_grant.
@@ -171,7 +182,11 @@ async fn auth_codes_invalidated_on_user_disable() {
     );
     let body = read_body(resp.into_body()).await;
     let json: serde_json::Value = serde_json::from_slice(&body).expect("json");
-    assert_eq!(json["error"].as_str(), Some("invalid_grant"), "expected invalid_grant");
+    assert_eq!(
+        json["error"].as_str(),
+        Some("invalid_grant"),
+        "expected invalid_grant"
+    );
 }
 
 /// RFC 019 § 5 (GC fix): a revoked-but-unexpired refresh token survives
@@ -188,7 +203,10 @@ async fn refresh_token_theft_detection_survives_gc() {
     assert_eq!(resp.status(), StatusCode::OK);
     let body = read_body(resp.into_body()).await;
     let json: serde_json::Value = serde_json::from_slice(&body).expect("json");
-    let refresh_a = json["refresh_token"].as_str().expect("refresh_token").to_owned();
+    let refresh_a = json["refresh_token"]
+        .as_str()
+        .expect("refresh_token")
+        .to_owned();
 
     // Rotate: use refresh_a to get refresh_b (this revokes refresh_a).
     let rotate_body = format!(
@@ -209,7 +227,10 @@ async fn refresh_token_theft_detection_survives_gc() {
     assert_eq!(resp.status(), StatusCode::OK, "rotation should succeed");
     let body = read_body(resp.into_body()).await;
     let json2: serde_json::Value = serde_json::from_slice(&body).expect("json2");
-    assert!(json2["refresh_token"].is_string(), "should get a new refresh token");
+    assert!(
+        json2["refresh_token"].is_string(),
+        "should get a new refresh token"
+    );
 
     // Run GC. The old refresh_a is revoked but not yet expired: the
     // fixed GC only deletes rows WHERE expires_at < now, so refresh_a
@@ -239,7 +260,9 @@ async fn refresh_token_theft_detection_survives_gc() {
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST, "replay must fail");
 
     // The audit log should contain the theft_detected event.
-    let audit = sui_id_store::repos::audit::recent(&state.db, 50).await.expect("audit");
+    let audit = sui_id_store::repos::audit::recent(&state.db, 50)
+        .await
+        .expect("audit");
     let has_theft = audit
         .iter()
         .any(|e| e.action == "auth.refresh.theft_detected");

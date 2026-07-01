@@ -6,12 +6,12 @@
 #![allow(dead_code)]
 
 use axum::body::Body;
-use axum::http::{header, Method, Request, StatusCode};
+use axum::http::{Method, Request, StatusCode, header};
 use sui_id::build_router;
 
-use url::Url;
-use tower::ServiceExt;
 use super::common::*;
+use tower::ServiceExt;
+use url::Url;
 
 // ---------- self-service password change (v0.19.0) ----------
 
@@ -64,9 +64,8 @@ async fn me_password_change_happy_path_replaces_password() {
         csrf,
         urlencode(PASSWORD),
         urlencode(new_pw),
-        urlencode(new_pw)
-        // revoke_others omitted = unchecked for this test, so we can
-        // inspect "old session still alive" cleanly afterwards
+        urlencode(new_pw) // revoke_others omitted = unchecked for this test, so we can
+                          // inspect "old session still alive" cleanly afterwards
     );
     let resp = build_router(state.clone())
         .oneshot(
@@ -163,7 +162,10 @@ async fn me_password_change_wrong_current_is_refused() {
 
     // Original password must still work.
     let cookie = login_again_for_admin(&state, USERNAME, PASSWORD).await;
-    assert!(!cookie.is_empty(), "original password must still authenticate");
+    assert!(
+        !cookie.is_empty(),
+        "original password must still authenticate"
+    );
 }
 
 #[tokio::test]
@@ -365,4 +367,3 @@ async fn me_password_change_with_revoke_others_sweeps_other_sessions_and_refresh
         "refresh token must be revoked across password change"
     );
 }
-

@@ -12,10 +12,10 @@ use sui_id_store::repos::{audit, sessions, user_totp, users};
 const SESSION_COOKIE: &str = "sui_id_session";
 const RECENT_EVENT_LIMIT: i64 = 30;
 
-use crate::handlers::{AppStateExt, CurrentUser};
-use crate::handlers::admin::with_csrf_cookie;
-use sui_id_web::pages::{MeShellData, MeTab, MeOverviewData};
 use super::{describe_auth_methods, flash_from_query};
+use crate::handlers::admin::with_csrf_cookie;
+use crate::handlers::{AppStateExt, CurrentUser};
+use sui_id_web::pages::{MeOverviewData, MeShellData, MeTab};
 
 pub async fn page_get(
     state_ext: AppStateExt,
@@ -37,19 +37,24 @@ pub async fn page_get(
     let current_session_id = SessionId::from_str(&raw_session)
         .map_err(|_| HttpError::html(CoreError::Unauthenticated))?;
 
-    let user = users::get(&app.db, user_id).await.map_err(|e| HttpError::html(CoreError::from(e)))?;
+    let user = users::get(&app.db, user_id)
+        .await
+        .map_err(|e| HttpError::html(CoreError::from(e)))?;
 
-    let totp_enabled = user_totp::get(&app.db, user_id).await
+    let totp_enabled = user_totp::get(&app.db, user_id)
+        .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?
         .map(|r| r.enabled)
         .unwrap_or(false);
 
-    let passkey_count = sui_id_core::webauthn::list_for_user(&app.db, user_id).await
+    let passkey_count = sui_id_core::webauthn::list_for_user(&app.db, user_id)
+        .await
         .map_err(HttpError::html)?
         .len();
 
-    let session_rows =
-        sessions::list_active_for_user(&app.db, user_id).await.map_err(|e| HttpError::html(e.into()))?;
+    let session_rows = sessions::list_active_for_user(&app.db, user_id)
+        .await
+        .map_err(|e| HttpError::html(e.into()))?;
     let mut sessions_view = Vec::with_capacity(session_rows.len());
     for s in session_rows {
         let auth_methods = describe_auth_methods(&s.auth_methods);
@@ -63,7 +68,8 @@ pub async fn page_get(
         });
     }
 
-    let event_rows = audit::recent_for_user(&app.db, user_id, RECENT_EVENT_LIMIT).await
+    let event_rows = audit::recent_for_user(&app.db, user_id, RECENT_EVENT_LIMIT)
+        .await
         .map_err(|e| HttpError::html(e.into()))?;
     let events_view: Vec<_> = event_rows
         .into_iter()
@@ -111,23 +117,30 @@ pub async fn overview_get(
     let State(app) = state_ext;
     let lang = req_locale;
     let user = sui_id_store::repos::users::get(&app.db, user_id)
-        .await.map_err(|e| HttpError::html(CoreError::from(e)).with_lang(lang))?;
+        .await
+        .map_err(|e| HttpError::html(CoreError::from(e)).with_lang(lang))?;
     let shell = MeShellData {
         username: user.username,
         is_admin: user.is_admin,
         active_tab: MeTab::Overview,
     };
     let totp_enabled = user_totp::get(&app.db, user_id)
-        .await.ok().flatten()
-        .map(|r| r.enabled).unwrap_or(false);
-    let passkey_count = sui_id_store::repos::user_webauthn_credentials::count_for_user(
-        &app.db, user_id
-    ).await.unwrap_or(0);
+        .await
+        .ok()
+        .flatten()
+        .map(|r| r.enabled)
+        .unwrap_or(false);
+    let passkey_count =
+        sui_id_store::repos::user_webauthn_credentials::count_for_user(&app.db, user_id)
+            .await
+            .unwrap_or(0);
     let active_session_count = sessions::list_active_for_user(&app.db, user_id)
-        .await.map(|v| v.len()).unwrap_or(0);
-    let recent_events: Vec<sui_id_web::MeAuditEntry> =
-        audit::recent_for_user(&app.db, user_id, 10)
-        .await.unwrap_or_default()
+        .await
+        .map(|v| v.len())
+        .unwrap_or(0);
+    let recent_events: Vec<sui_id_web::MeAuditEntry> = audit::recent_for_user(&app.db, user_id, 10)
+        .await
+        .unwrap_or_default()
         .into_iter()
         .map(|r| sui_id_web::MeAuditEntry {
             at: r.at,
@@ -138,8 +151,18 @@ pub async fn overview_get(
         .collect();
     let csrf_tok = csrf::ensure_token(&jar);
     let resp = axum::response::Html(sui_id_web::render_me_overview(
-        MeOverviewData { shell, totp_enabled, passkey_count, active_session_count, recent_events, csrf_token: csrf_tok.clone(), last_login_at: user.last_login_at },
-        app.is_dev_mode, lang,
-    )).into_response();
+        MeOverviewData {
+            shell,
+            totp_enabled,
+            passkey_count,
+            active_session_count,
+            recent_events,
+            csrf_token: csrf_tok.clone(),
+            last_login_at: user.last_login_at,
+        },
+        app.is_dev_mode,
+        lang,
+    ))
+    .into_response();
     Ok(with_csrf_cookie(resp, &app, &csrf_tok))
 }

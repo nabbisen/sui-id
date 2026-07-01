@@ -1,64 +1,64 @@
 [package]
-name = "sui-id-core"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
-license.workspace = true
-repository.workspace = true
-homepage.workspace = true
-authors.workspace = true
-keywords.workspace = true
-categories.workspace = true
+name        = "sui-id-core"
 description = "Authentication / authorization core (OIDC / OAuth2 + PKCE) for sui-id, a self-hosted Rust OIDC provider."
-readme = "README.md"
-
-[lints]
-workspace = true
-
-[dependencies]
-sui-id-shared = { version = "0.76.7", path = "../sui-id-shared" }
-sui-id-store  = { version = "0.76.7", path = "../sui-id-store" }
-sui-id-i18n   = { version = "0.76.7", path = "../sui-id-i18n" }
-
-serde = { workspace = true }
-serde_json = { workspace = true }
-thiserror = { workspace = true }
-tracing = { workspace = true }
-chrono = { workspace = true }
-uuid = { workspace = true }
-url = { workspace = true }
-webauthn-rs = { workspace = true }
-
-argon2 = { workspace = true }
-ed25519-dalek = { workspace = true }
-sha2 = { workspace = true }
-sha1 = { workspace = true }
-hmac = { workspace = true }
-rand = { workspace = true }
-getrandom = { workspace = true }
-subtle = { workspace = true }
-secrecy = { workspace = true }
-zeroize = { workspace = true }
-async-trait = { workspace = true }
-
-base64ct = { workspace = true }
-reqwest = { workspace = true }
-
-rusqlite = { workspace = true }
-
-# Email — see workspace dependency notes for rationale.
-wasm-smtp = { workspace = true }
-wasm-smtp-tokio = { workspace = true }
-mail-builder = { workspace = true }
-tokio = { workspace = true }
-
-[dev-dependencies]
-proptest = { workspace = true }
-tempfile = { workspace = true }
+readme      = "README.md"
+version.workspace       = true
+edition.workspace       = true
+rust-version.workspace  = true
+license.workspace       = true
+authors.workspace       = true
+repository.workspace    = true
+homepage.workspace      = true
+categories.workspace    = true
+keywords.workspace      = true
 
 [features]
-default = []
+default           = []
 # Exposes deterministic in-memory implementations of the
 # `HibpClient` and `MailSender` traits so downstream test code
 # (sui-id e2e) can inject them into the AppState.
-test-support = []
+test-support      = []
+
+[dependencies]
+sui-id-shared               = { workspace = true }
+sui-id-store                = { workspace = true }
+sui-id-i18n                 = { workspace = true }
+
+serde                       = { workspace = true }
+serde_json                  = { workspace = true }
+thiserror                   = { workspace = true }
+tracing                     = { workspace = true }
+chrono                      = { workspace = true }
+uuid                        = { workspace = true }
+url                         = { workspace = true }
+webauthn-rs                 = { workspace = true }
+
+argon2                      = { workspace = true }
+ed25519-dalek               = { workspace = true }
+sha2                        = { workspace = true }
+sha1                        = { workspace = true }
+hmac                        = { workspace = true }
+rand                        = { workspace = true }
+getrandom                   = { workspace = true }
+subtle                      = { workspace = true }
+secrecy                     = { workspace = true }
+zeroize                     = { workspace = true }
+async-trait                 = { workspace = true }
+
+base64ct                    = { workspace = true }
+reqwest                     = { workspace = true }
+
+rusqlite                    = { workspace = true }
+
+# Email — see workspace dependency notes for rationale.
+wasm-smtp                   = { workspace = true }
+wasm-smtp-tokio             = { workspace = true }
+mail-builder                = { workspace = true }
+tokio                       = { workspace = true }
+
+[dev-dependencies]
+proptest                    = { workspace = true }
+tempfile                    = { workspace = true }
+
+[lints]
+workspace = true

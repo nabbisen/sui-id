@@ -50,7 +50,7 @@ impl SecurityLevel {
     /// project's production floor.
     pub fn password_min_len(self) -> usize {
         match self {
-            Self::Standard    => 12,
+            Self::Standard => 12,
             Self::Development => 8,
         }
     }

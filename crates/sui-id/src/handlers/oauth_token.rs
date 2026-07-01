@@ -58,9 +58,11 @@ pub async fn introspect(
     Form(form): Form<IntrospectForm>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
-    let (client_id, client_secret) = client_credentials(&headers, &form.client_id, &form.client_secret)
-        .ok_or_else(|| HttpError::oauth(CoreError::Unauthenticated))?;
-    let cid = sui_id_core::oauth_token::authenticate_client(&app.db, &client_id, &client_secret).await
+    let (client_id, client_secret) =
+        client_credentials(&headers, &form.client_id, &form.client_secret)
+            .ok_or_else(|| HttpError::oauth(CoreError::Unauthenticated))?;
+    let cid = sui_id_core::oauth_token::authenticate_client(&app.db, &client_id, &client_secret)
+        .await
         .map_err(HttpError::oauth)?;
     let resp = sui_id_core::oauth_token::introspect(
         &app.db,
@@ -68,7 +70,8 @@ pub async fn introspect(
         cid,
         &form.token,
         form.token_type_hint.as_deref(),
-    ).await
+    )
+    .await
     .map_err(HttpError::oauth)?;
     let wire = IntrospectionWire {
         active: resp.active,
@@ -89,10 +92,15 @@ pub async fn introspect(
             actor: None,
             action: "token.introspect".into(),
             target: Some(cid.to_string()),
-            result: if resp.active { "active".into() } else { "inactive".into() },
+            result: if resp.active {
+                "active".into()
+            } else {
+                "inactive".into()
+            },
             note: resp.kind.map(|k| k.to_string()),
         },
-    ).await;
+    )
+    .await;
     Ok(Json(wire).into_response())
 }
 
@@ -113,9 +121,11 @@ pub async fn revoke(
     Form(form): Form<RevokeForm>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
-    let (client_id, client_secret) = client_credentials(&headers, &form.client_id, &form.client_secret)
-        .ok_or_else(|| HttpError::oauth(CoreError::Unauthenticated))?;
-    let cid = sui_id_core::oauth_token::authenticate_client(&app.db, &client_id, &client_secret).await
+    let (client_id, client_secret) =
+        client_credentials(&headers, &form.client_id, &form.client_secret)
+            .ok_or_else(|| HttpError::oauth(CoreError::Unauthenticated))?;
+    let cid = sui_id_core::oauth_token::authenticate_client(&app.db, &client_id, &client_secret)
+        .await
         .map_err(HttpError::oauth)?;
     sui_id_core::oauth_token::revoke(
         &app.db,
@@ -123,7 +133,8 @@ pub async fn revoke(
         cid,
         &form.token,
         form.token_type_hint.as_deref(),
-    ).await
+    )
+    .await
     .map_err(HttpError::oauth)?;
     let _ = sui_id_store::repos::audit::append(
         &app.db,
@@ -135,7 +146,8 @@ pub async fn revoke(
             result: "ok".into(),
             note: form.token_type_hint,
         },
-    ).await;
+    )
+    .await;
     // RFC 7009 §2.2: 200 OK with empty body.
     Ok(StatusCode::OK.into_response())
 }

@@ -6,11 +6,11 @@
 #![allow(dead_code)]
 
 use axum::body::Body;
-use axum::http::{header, Method, Request, StatusCode};
+use axum::http::{Method, Request, StatusCode, header};
 use sui_id::build_router;
 
-use tower::ServiceExt;
 use super::common::*;
+use tower::ServiceExt;
 
 // ---------- v0.29.0: Auth-flow i18n (setup wizard / forgot-password / step-up) ----------
 
@@ -33,7 +33,11 @@ async fn setup_welcome_renders_in_en() {
     assert_eq!(resp.status(), StatusCode::OK);
     let body_bytes = read_body(resp.into_body()).await;
     let body = String::from_utf8_lossy(&body_bytes);
-    assert!(body.contains("lang=\"en\""), "expected lang=en, got: {}", &body[..200.min(body.len())]);
+    assert!(
+        body.contains("lang=\"en\""),
+        "expected lang=en, got: {}",
+        &body[..200.min(body.len())]
+    );
     assert!(
         body.contains("Welcome to sui-id") || body.contains("Begin setup"),
         "expected English wording in setup welcome"
@@ -165,7 +169,10 @@ async fn locale_cookie_overrides_accept_language() {
         .expect("welcome");
     let body_bytes = read_body(resp.into_body()).await;
     let body = String::from_utf8_lossy(&body_bytes);
-    assert!(body.contains("lang=\"en\""), "cookie should win over Accept-Language");
+    assert!(
+        body.contains("lang=\"en\""),
+        "cookie should win over Accept-Language"
+    );
 }
 
 /// Helper: enable SMTP so forgot-password / reset-password endpoints
@@ -199,4 +206,3 @@ async fn enable_smtp(state: &sui_id::AppState) {
     .await
     .expect("upsert smtp");
 }
-

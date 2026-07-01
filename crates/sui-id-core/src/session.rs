@@ -13,10 +13,10 @@ use crate::errors::{CoreError, CoreResult};
 use crate::password::verify_password;
 use crate::time::SharedClock;
 use chrono::Duration;
+use sui_id_shared::ids::{SessionId, UserId};
+use sui_id_store::Database;
 use sui_id_store::models::{AuditLogRow, SessionRow};
 use sui_id_store::repos::{audit, credentials, sessions, users};
-use sui_id_store::Database;
-use sui_id_shared::ids::{SessionId, UserId};
 
 const SESSION_LIFETIME_HOURS: i64 = 12;
 
@@ -67,7 +67,8 @@ async fn record_login_failure(db: &Database, clock: &SharedClock, username: &str
             result: "denied".into(),
             note: Some(reason.to_owned()),
         },
-    ).await;
+    )
+    .await;
 }
 
 async fn record_login_success(db: &Database, clock: &SharedClock, user_id: UserId) {
@@ -81,7 +82,8 @@ async fn record_login_success(db: &Database, clock: &SharedClock, user_id: UserI
             result: "ok".into(),
             note: None,
         },
-    ).await;
+    )
+    .await;
 }
 
 pub async fn login(
@@ -170,7 +172,9 @@ pub async fn login_with_mfa(
         // and audit. The lock window is computed from the new count
         // — so the third failure stamps the first 30-second lock,
         // the fourth stamps a one-minute lock, and so on.
-        let next_count = users::record_login_failure(db, user.id, None).await.unwrap_or(0);
+        let next_count = users::record_login_failure(db, user.id, None)
+            .await
+            .unwrap_or(0);
         if let Some(window) = lockout_backoff(next_count, max_lockout_secs) {
             let until = clock.now() + window;
             let _ = users::record_login_failure(db, user.id, Some(until)).await;
@@ -190,7 +194,8 @@ pub async fn login_with_mfa(
                         window.num_seconds()
                     )),
                 },
-            ).await;
+            )
+            .await;
         } else {
             record_login_failure(db, clock, username, "wrong password").await;
         }
@@ -215,7 +220,8 @@ pub async fn login_with_mfa(
                 result: "ok".into(),
                 note: None,
             },
-        ).await;
+        )
+        .await;
         return Ok(LoginOutcome::MfaRequired { pending });
     }
 
@@ -236,7 +242,7 @@ pub async fn login_with_mfa(
         // and behave appropriately for a no-MFA account — see the
         // `is_fresh` doc comment.
         last_step_up_at: None,
-            last_used_at: None,
+        last_used_at: None,
     };
     sessions::insert(db, &row).await?;
     enforce_concurrent_session_cap(db, clock, user.id).await;
@@ -344,11 +350,7 @@ pub async fn resolve(db: &Database, clock: &SharedClock, id: SessionId) -> CoreR
 /// stored separately; the throttle decision is made by comparing
 /// the row's existing `last_used_at` against `now -
 /// LAST_USED_AT_THROTTLE_SECS`.
-pub async fn touch_last_used(
-    db: &Database,
-    clock: &SharedClock,
-    id: SessionId,
-) -> CoreResult<()> {
+pub async fn touch_last_used(db: &Database, clock: &SharedClock, id: SessionId) -> CoreResult<()> {
     let now = clock.now();
     let row = match sessions::get(db, id).await {
         Ok(r) => r,
@@ -473,10 +475,10 @@ mod lockout_tests {
 mod session_limit_tests {
     //! Idle-session timeout and concurrent-session cap (v0.25.0).
     use super::*;
-    use crate::time::{system_clock, MockClock, SharedClock};
+    use crate::time::{MockClock, SharedClock, system_clock};
     use chrono::{Duration as ChronoDuration, TimeZone, Utc};
-    use sui_id_store::crypto::MasterKey;
     use sui_id_store::Database;
+    use sui_id_store::crypto::MasterKey;
 
     fn fresh_db() -> Database {
         Database::open_in_memory(MasterKey::generate()).expect("db")
@@ -494,8 +496,12 @@ mod session_limit_tests {
                 username: "alice".into(),
                 display_name: None,
                 is_admin: false,
-        role: if false { sui_id_store::models::Role::Admin } else { sui_id_store::models::Role::User },
-        last_login_at: None,
+                role: if false {
+                    sui_id_store::models::Role::Admin
+                } else {
+                    sui_id_store::models::Role::User
+                },
+                last_login_at: None,
                 is_disabled: false,
                 is_deleted: false,
                 user_uuid: uuid::Uuid::new_v4(),
@@ -508,7 +514,8 @@ mod session_limit_tests {
                 email_normalized: None,
                 email_verified_at: None,
             },
-        ).await
+        )
+        .await
         .expect("user");
         id
     }
@@ -532,7 +539,8 @@ mod session_limit_tests {
                 last_step_up_at: None,
                 last_used_at,
             },
-        ).await
+        )
+        .await
         .expect("insert");
         id
     }
@@ -555,12 +563,9 @@ mod session_limit_tests {
         let db = fresh_db();
         let uid = make_user(&db).await;
         // Configure a 60-second idle timeout.
-        sui_id_store::repos::server_settings::update_idle_session_timeout(
-            &db,
-            60,
-            Utc::now(),
-        ).await
-        .expect("set timeout");
+        sui_id_store::repos::server_settings::update_idle_session_timeout(&db, 60, Utc::now())
+            .await
+            .expect("set timeout");
         // Make a session that was last used 2 minutes ago and a
         // mock clock at "now", so elapsed = 120s > 60s.
         let now = Utc::now();
@@ -581,12 +586,9 @@ mod session_limit_tests {
     async fn resolve_passes_within_idle_window() {
         let db = fresh_db();
         let uid = make_user(&db).await;
-        sui_id_store::repos::server_settings::update_idle_session_timeout(
-            &db,
-            300,
-            Utc::now(),
-        ).await
-        .expect("set timeout");
+        sui_id_store::repos::server_settings::update_idle_session_timeout(&db, 300, Utc::now())
+            .await
+            .expect("set timeout");
         let now = Utc::now();
         let recent = now - ChronoDuration::seconds(10);
         let sid = insert_session(&db, uid, now - ChronoDuration::hours(1), Some(recent)).await;
@@ -598,12 +600,9 @@ mod session_limit_tests {
     async fn resolve_treats_null_last_used_at_as_created_at() {
         let db = fresh_db();
         let uid = make_user(&db).await;
-        sui_id_store::repos::server_settings::update_idle_session_timeout(
-            &db,
-            60,
-            Utc::now(),
-        ).await
-        .expect("set timeout");
+        sui_id_store::repos::server_settings::update_idle_session_timeout(&db, 60, Utc::now())
+            .await
+            .expect("set timeout");
         // last_used_at = None: created 2 minutes ago, so falling
         // back to created_at means 120 > 60 = revoked.
         let now = Utc::now();
@@ -651,16 +650,12 @@ mod session_limit_tests {
         let uid = make_user(&db).await;
         // Insert 5 active sessions; cap = 0 = disabled.
         for i in 0..5 {
-            let _ = insert_session(
-                &db,
-                uid,
-                Utc::now() - ChronoDuration::seconds(i),
-                None,
-            ).await;
+            let _ = insert_session(&db, uid, Utc::now() - ChronoDuration::seconds(i), None).await;
         }
         enforce_concurrent_session_cap(&db, &clock, uid).await;
-        let active =
-            sessions::count_active_for_user(&db, uid, Utc::now()).await.expect("count");
+        let active = sessions::count_active_for_user(&db, uid, Utc::now())
+            .await
+            .expect("count");
         assert_eq!(active, 5);
     }
 
@@ -670,12 +665,9 @@ mod session_limit_tests {
         let clock = system_clock();
         let uid = make_user(&db).await;
         // Cap = 2; insert 4 sessions with distinct created_at.
-        sui_id_store::repos::server_settings::update_max_concurrent_sessions(
-            &db,
-            2,
-            Utc::now(),
-        ).await
-        .expect("set cap");
+        sui_id_store::repos::server_settings::update_max_concurrent_sessions(&db, 2, Utc::now())
+            .await
+            .expect("set cap");
         let base = Utc::now() - ChronoDuration::hours(1);
         let s1 = insert_session(&db, uid, base, None).await;
         let s2 = insert_session(&db, uid, base + ChronoDuration::seconds(1), None).await;
@@ -685,9 +677,37 @@ mod session_limit_tests {
         // are revoked.
         enforce_concurrent_session_cap(&db, &clock, uid).await;
         // Can't use closure with .await; inline checks instead:
-        assert!(sessions::get(&db, s1).await.expect("get").revoked_at.is_some(), "s1 should be revoked");
-        assert!(sessions::get(&db, s2).await.expect("get").revoked_at.is_some(), "s2 should be revoked");
-        assert!(sessions::get(&db, s3).await.expect("get").revoked_at.is_none(), "s3 should remain");
-        assert!(sessions::get(&db, s4).await.expect("get").revoked_at.is_none(), "s4 should remain");
+        assert!(
+            sessions::get(&db, s1)
+                .await
+                .expect("get")
+                .revoked_at
+                .is_some(),
+            "s1 should be revoked"
+        );
+        assert!(
+            sessions::get(&db, s2)
+                .await
+                .expect("get")
+                .revoked_at
+                .is_some(),
+            "s2 should be revoked"
+        );
+        assert!(
+            sessions::get(&db, s3)
+                .await
+                .expect("get")
+                .revoked_at
+                .is_none(),
+            "s3 should remain"
+        );
+        assert!(
+            sessions::get(&db, s4)
+                .await
+                .expect("get")
+                .revoked_at
+                .is_none(),
+            "s4 should remain"
+        );
     }
 }

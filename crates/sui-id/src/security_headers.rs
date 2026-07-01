@@ -53,7 +53,7 @@
 //!   flow for an SPA RP that fetches our public endpoints.
 
 use axum::extract::Request;
-use axum::http::{header, HeaderName, HeaderValue};
+use axum::http::{HeaderName, HeaderValue, header};
 use axum::middleware::Next;
 use axum::response::Response;
 
@@ -151,19 +151,16 @@ pub async fn middleware(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::Router;
     use axum::body::Body;
     use axum::http::{Method, Request, StatusCode};
     use axum::routing::get;
-    use axum::Router;
     use tower::ServiceExt;
 
     fn app(enable_hsts: bool) -> Router {
-        Router::new()
-            .route("/", get(|| async { "ok" }))
-            .layer(axum::middleware::from_fn_with_state(
-                SecurityHeaderConfig { enable_hsts },
-                middleware,
-            ))
+        Router::new().route("/", get(|| async { "ok" })).layer(
+            axum::middleware::from_fn_with_state(SecurityHeaderConfig { enable_hsts }, middleware),
+        )
     }
 
     #[tokio::test]
@@ -189,11 +186,12 @@ mod tests {
             h.get(&X_CONTENT_TYPE_OPTIONS).map(|v| v.to_str().unwrap()),
             Some("nosniff")
         );
-        assert!(h
-            .get(&REFERRER_POLICY)
-            .map(|v| v.to_str().unwrap())
-            .unwrap_or("")
-            .contains("strict-origin"));
+        assert!(
+            h.get(&REFERRER_POLICY)
+                .map(|v| v.to_str().unwrap())
+                .unwrap_or("")
+                .contains("strict-origin")
+        );
         assert!(h.contains_key(&PERMISSIONS_POLICY_HDR));
         // HSTS is *not* set when enable_hsts=false.
         assert!(!h.contains_key(header::STRICT_TRANSPORT_SECURITY));

@@ -9,35 +9,35 @@
 
 #![forbid(unsafe_code)]
 
-pub mod cache;
-pub mod errors;
-pub mod password;
-pub mod security;
-pub mod tokens;
-pub mod jwt;
-pub mod jwks;
-pub mod discovery;
+pub mod actor;
+pub mod admin;
+pub mod audit_guard;
 pub mod authorize;
 pub mod authz;
-pub mod actor;
-pub mod audit_guard;
+pub mod cache;
+pub mod dashboard;
+pub mod discovery;
+pub mod errors;
+pub mod events;
+pub mod forgot_password;
+pub mod hibp;
+pub mod i18n;
+pub mod jwks;
+pub mod jwt;
+pub mod key_rotation;
+pub mod mail;
+pub mod me_security;
+pub mod mfa;
+pub mod oauth_token;
+pub mod password;
 pub mod pending_change;
+pub mod security;
 pub mod session;
 pub mod setup;
-pub mod admin;
-pub mod dashboard;
-pub mod me_security;
 pub mod step_up;
 pub mod time;
+pub mod tokens;
 pub mod totp;
-pub mod mfa;
 pub mod webauthn;
-pub mod oauth_token;
-pub mod events;
-pub mod mail;
-pub mod forgot_password;
-pub mod i18n;
-pub mod hibp;
-pub mod key_rotation;
 
 pub use errors::{CoreError, CoreResult};

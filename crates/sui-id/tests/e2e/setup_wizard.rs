@@ -6,11 +6,11 @@
 #![allow(dead_code)]
 
 use axum::body::Body;
-use axum::http::{header, Method, Request, StatusCode};
-use sui_id::{build_router, AppState};
+use axum::http::{Method, Request, StatusCode, header};
+use sui_id::{AppState, build_router};
 
-use tower::ServiceExt;
 use super::common::*;
+use tower::ServiceExt;
 
 // ---------- v0.20.4: setup wizard 3-step ----------
 
@@ -127,7 +127,8 @@ async fn setup_admin_post_creates_admin_with_email_and_redirects_to_done() {
     assert!(extract_set_cookie(resp.headers(), "sui_id_session").is_some());
 
     // The email was persisted on the user row.
-    let row = sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await
+    let row = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+        .await
         .expect("user exists");
     assert_eq!(row.email.as_deref(), Some("alice@example.test"));
 }
@@ -254,11 +255,11 @@ async fn admin_users_create_form_accepts_email() {
     assert!(resp.status().is_redirection() || resp.status() == StatusCode::OK);
 
     // Verify the user has the email persisted.
-    let row = sui_id_store::repos::users::find_by_username(&state.db, "bob").await
+    let row = sui_id_store::repos::users::find_by_username(&state.db, "bob")
+        .await
         .expect("bob exists");
     assert_eq!(row.email.as_deref(), Some("bob@example.test"));
 }
-
 
 // ---------- RFC 012: Extended wizard (lang + HIBP steps) ----------
 
@@ -338,14 +339,21 @@ async fn setup_wizard_lang_step_saves_selection() {
         "expected redirect to /setup/hibp, got {}",
         resp.status()
     );
-    let loc = resp.headers().get(header::LOCATION)
+    let loc = resp
+        .headers()
+        .get(header::LOCATION)
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
     assert_eq!(loc, "/setup/hibp");
 
     // Verify server_settings updated
-    let settings = sui_id_store::repos::server_settings::get(&state.db).await.expect("settings");
-    assert_eq!(settings.default_lang, "en", "default_lang should be 'en' after selecting English");
+    let settings = sui_id_store::repos::server_settings::get(&state.db)
+        .await
+        .expect("settings");
+    assert_eq!(
+        settings.default_lang, "en",
+        "default_lang should be 'en' after selecting English"
+    );
 }
 
 #[tokio::test]
@@ -367,7 +375,9 @@ async fn setup_wizard_lang_step_defaults_to_ja() {
         .expect("POST /setup/lang empty");
     assert!(resp.status().is_redirection());
 
-    let settings = sui_id_store::repos::server_settings::get(&state.db).await.expect("settings");
+    let settings = sui_id_store::repos::server_settings::get(&state.db)
+        .await
+        .expect("settings");
     assert_eq!(settings.default_lang, "ja", "should default to 'ja'");
 }
 
@@ -389,7 +399,10 @@ async fn setup_wizard_hibp_step_renders() {
     assert_eq!(resp.status(), StatusCode::OK);
     let bytes = read_body(resp.into_body()).await;
     let body = String::from_utf8_lossy(&bytes);
-    assert!(body.contains(r#"name="hibp_mode""#), "hibp_mode radio button missing");
+    assert!(
+        body.contains(r#"name="hibp_mode""#),
+        "hibp_mode radio button missing"
+    );
     assert!(body.contains(r#"value="off""#));
     assert!(body.contains(r#"value="warn""#));
     assert!(body.contains(r#"value="block""#));
@@ -412,12 +425,16 @@ async fn setup_wizard_hibp_step_saves_block() {
         .await
         .expect("POST /setup/hibp");
     assert!(resp.status().is_redirection());
-    let loc = resp.headers().get(header::LOCATION)
+    let loc = resp
+        .headers()
+        .get(header::LOCATION)
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
     assert_eq!(loc, "/setup/done");
 
-    let settings = sui_id_store::repos::server_settings::get(&state.db).await.expect("settings");
+    let settings = sui_id_store::repos::server_settings::get(&state.db)
+        .await
+        .expect("settings");
     assert_eq!(settings.hibp_mode, sui_id_store::models::HibpMode::Block);
 }
 
@@ -440,7 +457,9 @@ async fn setup_wizard_hibp_step_defaults_to_warn() {
         .expect("POST /setup/hibp empty");
     assert!(resp.status().is_redirection());
 
-    let settings = sui_id_store::repos::server_settings::get(&state.db).await.expect("settings");
+    let settings = sui_id_store::repos::server_settings::get(&state.db)
+        .await
+        .expect("settings");
     assert_eq!(settings.hibp_mode, sui_id_store::models::HibpMode::Warn);
 }
 
@@ -492,7 +511,9 @@ async fn setup_wizard_full_extended_flow_completes() {
     assert_eq!(resp.status(), StatusCode::OK);
 
     // Verify final settings
-    let settings = sui_id_store::repos::server_settings::get(&state.db).await.expect("settings");
+    let settings = sui_id_store::repos::server_settings::get(&state.db)
+        .await
+        .expect("settings");
     assert_eq!(settings.default_lang, "en");
     assert_eq!(settings.hibp_mode, sui_id_store::models::HibpMode::Off);
 }

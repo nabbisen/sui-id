@@ -21,6 +21,7 @@
 mod common;
 
 mod acr_amr;
+mod auth_flow_integrity;
 mod backup;
 mod clients_edit;
 mod csrf;
@@ -43,6 +44,8 @@ mod oidc_flow;
 mod password_change;
 mod refresh_theft;
 mod request_id;
+mod rfc030_033_035;
+mod rfc6749_error_format;
 mod scope_logout;
 mod sec_headers;
 mod session_limits;
@@ -50,7 +53,4 @@ mod settings;
 mod setup_wizard;
 mod step_up_totp;
 mod step_up_webauthn;
-mod auth_flow_integrity;
-mod rfc6749_error_format;
 mod user_identity_invariants;
-mod rfc030_033_035;

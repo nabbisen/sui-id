@@ -6,12 +6,12 @@
 #![allow(dead_code)]
 
 use axum::body::Body;
-use axum::http::{header, Method, Request, StatusCode};
+use axum::http::{Method, Request, StatusCode, header};
 use sui_id::build_router;
 
-use url::Url;
-use tower::ServiceExt;
 use super::common::*;
+use tower::ServiceExt;
+use url::Url;
 
 // ---------- security headers + CORS (v0.17.0) ----------
 
@@ -39,14 +39,16 @@ async fn admin_responses_carry_security_headers() {
         Some("DENY")
     );
     assert_eq!(
-        h.get("x-content-type-options").and_then(|v| v.to_str().ok()),
+        h.get("x-content-type-options")
+            .and_then(|v| v.to_str().ok()),
         Some("nosniff")
     );
-    assert!(h
-        .get("referrer-policy")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("")
-        .contains("strict-origin"));
+    assert!(
+        h.get("referrer-policy")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .contains("strict-origin")
+    );
     assert!(h.contains_key("permissions-policy"));
 }
 
@@ -136,7 +138,10 @@ async fn userinfo_response_carries_no_store_cache_control() {
     let resp = router.oneshot(req).await.expect("token");
     let bytes = read_body(resp.into_body()).await;
     let json: serde_json::Value = serde_json::from_slice(&bytes).expect("json");
-    let access = json["access_token"].as_str().expect("access_token").to_owned();
+    let access = json["access_token"]
+        .as_str()
+        .expect("access_token")
+        .to_owned();
 
     // Now hit userinfo and assert Cache-Control.
     let router = build_router(state);
@@ -154,4 +159,3 @@ async fn userinfo_response_carries_no_store_cache_control() {
         .and_then(|v| v.to_str().ok());
     assert_eq!(cc, Some("no-store"), "userinfo must not be cacheable");
 }
-

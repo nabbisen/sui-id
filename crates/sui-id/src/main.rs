@@ -8,7 +8,7 @@
 //!
 //! With no `--config`, the program looks for `./sui-id.toml`.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use std::path::PathBuf;
 use sui_id::{build_router, config::Config, startup};
 
@@ -47,9 +47,7 @@ async fn main() -> Result<()> {
         Some("verify-backup") => return cli::run_verify_backup_subcommand(&args),
         Some("admin") => return cli::run_admin_subcommand(&args).await,
         Some("setup") => return cli::run_setup_subcommand(&args).await,
-        Some(other) => bail!(
-            "unknown subcommand {other:?}. Run `sui-id --help` for usage."
-        ),
+        Some(other) => bail!("unknown subcommand {other:?}. Run `sui-id --help` for usage."),
         None => {} // fall through to `serve`.
     }
 
@@ -83,7 +81,8 @@ fn find_subcommand(args: &[String]) -> Option<String> {
 }
 
 async fn serve(args: &[String]) -> Result<()> {
-    let config_path = cli::parse_config_path(args).unwrap_or_else(|| PathBuf::from("./sui-id.toml"));
+    let config_path =
+        cli::parse_config_path(args).unwrap_or_else(|| PathBuf::from("./sui-id.toml"));
     let cfg = Config::load(&config_path)
         .with_context(|| format!("loading config from {}", config_path.display()))?;
 
@@ -101,8 +100,8 @@ async fn serve(args: &[String]) -> Result<()> {
             startup.state.db.clone(),
             smtp,
             startup.state.clock.clone(),
-            5,   // idle_tick_secs
-            5,   // max_attempts
+            5, // idle_tick_secs
+            5, // max_attempts
         );
         worker.spawn();
     }
@@ -194,7 +193,10 @@ async fn serve_dev(args: &[String]) -> Result<()> {
     // 0.0.0.0 (or any non-loopback) binding requires explicit
     // `yes` confirmation. We treat anything that is not `127.*`
     // or `[::1]` or `localhost` as "external" for this check.
-    let host_part = dev_bind.rsplit_once(':').map(|(h, _)| h).unwrap_or(&dev_bind);
+    let host_part = dev_bind
+        .rsplit_once(':')
+        .map(|(h, _)| h)
+        .unwrap_or(&dev_bind);
     let is_loopback = host_part.starts_with("127.")
         || host_part == "::1"
         || host_part == "[::1]"
@@ -229,9 +231,10 @@ async fn serve_dev(args: &[String]) -> Result<()> {
     // unset by pointing them at /dev/null-style placeholders that
     // the dev-mode flow does not read from.
     cfg.storage.db_path = std::path::PathBuf::from(
-        dev_db.as_deref().map(|p| p.to_path_buf()).unwrap_or_else(|| {
-            std::path::PathBuf::from(":memory:")
-        }),
+        dev_db
+            .as_deref()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| std::path::PathBuf::from(":memory:")),
     );
 
     // Open DB and seed.
@@ -266,7 +269,7 @@ async fn serve_dev(args: &[String]) -> Result<()> {
         std::sync::Arc::new(sui_id_core::hibp::HttpHibpClient::new());
     let caches = std::sync::Arc::new(sui_id_core::cache::Caches::new());
     let mut state = sui_id::AppState::new(db, cfg, setup_token, mailer, hibp_client, caches);
-    state.is_dev_mode = true;  // RFC 032: enable browser-side dev banner
+    state.is_dev_mode = true; // RFC 032: enable browser-side dev banner
 
     let router = build_router(state.clone());
     sui_id::gc::spawn(state.clone());
@@ -305,7 +308,8 @@ async fn shutdown_signal() {
     };
     #[cfg(unix)]
     let term = async {
-        if let Ok(mut s) = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+        if let Ok(mut s) = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        {
             s.recv().await;
         }
     };

@@ -6,11 +6,11 @@
 #![allow(dead_code)]
 
 use axum::body::Body;
-use axum::http::{header, Method, Request};
-use sui_id::{build_router, AppState};
+use axum::http::{Method, Request, header};
+use sui_id::{AppState, build_router};
 
-use tower::ServiceExt;
 use super::common::*;
+use tower::ServiceExt;
 
 // ---------- v0.22.0: password-change notification mail ----------
 
@@ -18,20 +18,23 @@ use super::common::*;
 /// runs through `/setup/admin` which doesn't accept an email
 /// post-setup; we bypass that by writing the column ourselves.
 async fn set_admin_email(state: &AppState, email: &str) {
-    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+        .await
         .expect("user");
     let uid = user.id;
     let email_owned = email.to_owned();
-    state.db.with_conn(move |conn| {
-        conn.execute(
-            "UPDATE users SET email = ?1, email_normalized = lower(trim(?1)) WHERE id = ?2",
-            rusqlite::params![email_owned, uid.to_string()],
-        )
-        .expect("update");
-        Ok(())
-    })
-    .await
-    .expect("set email");
+    state
+        .db
+        .with_conn(move |conn| {
+            conn.execute(
+                "UPDATE users SET email = ?1, email_normalized = lower(trim(?1)) WHERE id = ?2",
+                rusqlite::params![email_owned, uid.to_string()],
+            )
+            .expect("update");
+            Ok(())
+        })
+        .await
+        .expect("set email");
 }
 
 #[tokio::test]
@@ -153,4 +156,3 @@ async fn password_change_sends_no_mail_when_email_is_unset() {
         sent.len()
     );
 }
-

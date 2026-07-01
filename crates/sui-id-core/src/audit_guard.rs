@@ -42,11 +42,7 @@
 //! - **P4 (no forgery):** `AuditReceipt` has no public constructor; the
 //!   only way to obtain one is through this module's functions.
 
-use sui_id_store::{
-    models::AuditLogRow,
-    repos::audit,
-    Database, StoreResult,
-};
+use sui_id_store::{Database, StoreResult, models::AuditLogRow, repos::audit};
 
 /// Proof that an audit record was appended. Constructible only by the
 /// functions in this module — there is no public constructor.
@@ -91,11 +87,7 @@ impl<T> Audited<T> {
 /// audit append must not suppress the primary response.
 ///
 /// For **Class A** operations, use [`audit_and_tx`] instead.
-pub async fn audit_best_effort<T>(
-    db: &Database,
-    row: AuditLogRow,
-    value: T,
-) -> Audited<T> {
+pub async fn audit_best_effort<T>(db: &Database, row: AuditLogRow, value: T) -> Audited<T> {
     // Fire-and-forget; failures are recorded in the store's error log
     // but do not bubble to the caller (Class B contract).
     let _ = audit::append(db, &row).await;
@@ -165,14 +157,20 @@ mod tests {
     #[test]
     fn audited_wraps_and_unwraps_value() {
         let receipt = AuditReceipt { _private: () };
-        let audited = Audited { value: 42u32, receipt };
+        let audited = Audited {
+            value: 42u32,
+            receipt,
+        };
         assert_eq!(audited.into_inner(), 42u32);
     }
 
     #[test]
     fn audited_value_ref() {
         let receipt = AuditReceipt { _private: () };
-        let audited = Audited { value: "hello", receipt };
+        let audited = Audited {
+            value: "hello",
+            receipt,
+        };
         assert_eq!(*audited.value(), "hello");
     }
 }

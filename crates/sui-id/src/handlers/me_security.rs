@@ -19,23 +19,23 @@
 use axum::response::Redirect;
 use axum_extra::extract::cookie::CookieJar;
 
+mod apps;
 pub mod forms;
-mod overview;
-mod mfa;
-mod sessions;
-mod passkey;
 mod language;
+mod mfa;
+mod overview;
+mod passkey;
 mod password;
-mod apps;        // RFC 072
+mod sessions; // RFC 072
 
-pub use forms::*;
-pub use overview::*;
-pub use mfa::*;
-pub use sessions::*;
-pub use passkey::*;
-pub use language::*;
-pub use password::*;
 pub use apps::*;
+pub use forms::*;
+pub use language::*;
+pub use mfa::*;
+pub use overview::*;
+pub use passkey::*;
+pub use password::*;
+pub use sessions::*;
 
 // ---------- umbrella-level redirects ----------
 

@@ -10,7 +10,7 @@
 //! - `Cache-Control: no-store` is present on protocol error responses.
 
 use axum::body::Body;
-use axum::http::{header, Method, Request, StatusCode};
+use axum::http::{Method, Request, StatusCode, header};
 use serde_json::Value;
 use sui_id::build_router;
 use tower::ServiceExt;
@@ -19,10 +19,7 @@ use super::common::*;
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-async fn post_token(
-    state: &sui_id::AppState,
-    body: &str,
-) -> axum::response::Response {
+async fn post_token(state: &sui_id::AppState, body: &str) -> axum::response::Response {
     build_router(state.clone())
         .oneshot(
             Request::builder()
@@ -36,10 +33,7 @@ async fn post_token(
         .expect("token")
 }
 
-async fn post_introspect(
-    state: &sui_id::AppState,
-    body: &str,
-) -> axum::response::Response {
+async fn post_introspect(state: &sui_id::AppState, body: &str) -> axum::response::Response {
     build_router(state.clone())
         .oneshot(
             Request::builder()
@@ -68,8 +62,7 @@ async fn token_unsupported_grant_type_returns_rfc6749_error() {
     .await;
 
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
-    let body: Value =
-        serde_json::from_slice(&read_body(resp.into_body()).await).expect("json");
+    let body: Value = serde_json::from_slice(&read_body(resp.into_body()).await).expect("json");
 
     assert_eq!(
         body["error"].as_str(),
@@ -81,9 +74,18 @@ async fn token_unsupported_grant_type_returns_rfc6749_error() {
         "error_description must be present; got {body}"
     );
     // Must NOT contain the internal envelope fields.
-    assert!(body.get("code").is_none(), "internal 'code' field must be absent");
-    assert!(body.get("protocol_code").is_none(), "internal 'protocol_code' must be absent");
-    assert!(body.get("request_id").is_none(), "request_id must be absent from protocol errors");
+    assert!(
+        body.get("code").is_none(),
+        "internal 'code' field must be absent"
+    );
+    assert!(
+        body.get("protocol_code").is_none(),
+        "internal 'protocol_code' must be absent"
+    );
+    assert!(
+        body.get("request_id").is_none(),
+        "request_id must be absent from protocol errors"
+    );
 }
 
 #[tokio::test]
@@ -123,8 +125,7 @@ async fn token_invalid_grant_returns_rfc6749_error() {
     .await;
 
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
-    let body: Value =
-        serde_json::from_slice(&read_body(resp.into_body()).await).expect("json");
+    let body: Value = serde_json::from_slice(&read_body(resp.into_body()).await).expect("json");
 
     assert_eq!(
         body["error"].as_str(),
@@ -161,8 +162,7 @@ async fn token_missing_client_id_returns_invalid_client_401() {
         www_auth.contains("Basic"),
         "WWW-Authenticate must contain Basic; got {www_auth:?}"
     );
-    let body: Value =
-        serde_json::from_slice(&read_body(resp.into_body()).await).expect("json");
+    let body: Value = serde_json::from_slice(&read_body(resp.into_body()).await).expect("json");
     assert_eq!(
         body["error"].as_str(),
         Some("invalid_client"),
@@ -186,8 +186,7 @@ async fn token_wrong_client_secret_returns_invalid_client_401() {
     .await;
 
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
-    let body: Value =
-        serde_json::from_slice(&read_body(resp.into_body()).await).expect("json");
+    let body: Value = serde_json::from_slice(&read_body(resp.into_body()).await).expect("json");
     assert_eq!(body["error"].as_str(), Some("invalid_client"));
 }
 
@@ -196,11 +195,7 @@ async fn token_protocol_error_has_cache_control_no_store() {
     let state = test_app();
     let _ = complete_setup_and_login(&state).await;
 
-    let resp = post_token(
-        &state,
-        "grant_type=unknown_grant",
-    )
-    .await;
+    let resp = post_token(&state, "grant_type=unknown_grant").await;
 
     let cache_control = resp
         .headers()
@@ -236,8 +231,7 @@ async fn introspect_unauthenticated_returns_rfc6749_invalid_client() {
         www_auth.contains("Basic"),
         "introspect 401 must include WWW-Authenticate: Basic; got {www_auth:?}"
     );
-    let body: Value =
-        serde_json::from_slice(&read_body(resp.into_body()).await).expect("json");
+    let body: Value = serde_json::from_slice(&read_body(resp.into_body()).await).expect("json");
     assert_eq!(
         body["error"].as_str(),
         Some("invalid_client"),
@@ -260,8 +254,7 @@ async fn introspect_valid_client_but_garbage_token_returns_inactive() {
     .await;
 
     assert_eq!(resp.status(), StatusCode::OK);
-    let body: Value =
-        serde_json::from_slice(&read_body(resp.into_body()).await).expect("json");
+    let body: Value = serde_json::from_slice(&read_body(resp.into_body()).await).expect("json");
     assert_eq!(
         body["active"].as_bool(),
         Some(false),

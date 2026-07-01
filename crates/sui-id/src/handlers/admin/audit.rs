@@ -1,9 +1,8 @@
 //! Admin handlers for audit (RFC 066).
 
+use super::with_csrf_cookie;
 use crate::errors::HttpError;
-use crate::handlers::{
-    AppStateExt, CurrentAdminOrAuditor,
-};
+use crate::handlers::{AppStateExt, CurrentAdminOrAuditor};
 use axum::extract::State;
 use axum::http::header;
 use axum::response::{Html, IntoResponse, Response};
@@ -12,7 +11,6 @@ use sui_id_core::errors::CoreError;
 use sui_id_shared::api::AuditLogEntryDto;
 use sui_id_store::repos::audit;
 use sui_id_web::render_audit;
-use super::with_csrf_cookie;
 
 #[derive(Debug, serde::Deserialize, Default)]
 
@@ -21,7 +19,6 @@ pub struct AuditQuery {
     pub q: String,
 }
 
-
 pub async fn audit_get(
     state_ext: AppStateExt,
     CurrentAdminOrAuditor(_, _role, _): CurrentAdminOrAuditor,
@@ -29,28 +26,46 @@ pub async fn audit_get(
     axum::extract::Query(query): axum::extract::Query<AuditQuery>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
-    let filter = if query.q.is_empty() { None } else { Some(query.q.clone()) };
-    let entries = audit::recent_filtered(&app.db, 200, filter.clone()).await
+    let filter = if query.q.is_empty() {
+        None
+    } else {
+        Some(query.q.clone())
+    };
+    let entries = audit::recent_filtered(&app.db, 200, filter.clone())
+        .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
-    let chain = audit::verify_chain_tail(&app.db, 500).await
-        .unwrap_or(sui_id_store::repos::audit::ChainVerifyReport {
-            checked: 0, broken_at_seq: None, legacy_unhashed: 0
-        });
+    let chain = audit::verify_chain_tail(&app.db, 500).await.unwrap_or(
+        sui_id_store::repos::audit::ChainVerifyReport {
+            checked: 0,
+            broken_at_seq: None,
+            legacy_unhashed: 0,
+        },
+    );
     let chain_ok = chain.broken_at_seq.is_none();
     let dtos: Vec<AuditLogEntryDto> = entries
         .into_iter()
         .map(|r| AuditLogEntryDto {
-            at: r.at, actor: r.actor, action: r.action,
-            target: r.target, result: r.result, note: r.note,
+            at: r.at,
+            actor: r.actor,
+            action: r.action,
+            target: r.target,
+            result: r.result,
+            note: r.note,
         })
         .collect();
     let token = crate::csrf::ensure_token(&jar);
     let resp = Html(render_audit(
-        dtos, chain_ok, filter, None, token.clone(), app.is_dev_mode, sui_id_i18n::Locale::Ja,
-    )).into_response();
+        dtos,
+        chain_ok,
+        filter,
+        None,
+        token.clone(),
+        app.is_dev_mode,
+        sui_id_i18n::Locale::Ja,
+    ))
+    .into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
 }
-
 
 pub async fn audit_csv_get(
     state_ext: AppStateExt,
@@ -58,8 +73,13 @@ pub async fn audit_csv_get(
     axum::extract::Query(query): axum::extract::Query<AuditQuery>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
-    let filter = if query.q.is_empty() { None } else { Some(query.q.clone()) };
-    let entries = audit::recent_filtered(&app.db, 2000, filter).await
+    let filter = if query.q.is_empty() {
+        None
+    } else {
+        Some(query.q.clone())
+    };
+    let entries = audit::recent_filtered(&app.db, 2000, filter)
+        .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
 
     let mut csv = String::from("when,actor,action,target,result,note\n");

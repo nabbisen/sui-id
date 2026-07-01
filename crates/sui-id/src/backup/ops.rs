@@ -55,11 +55,11 @@
 //! build can run. Both are reversible operator failures: rebuild
 //! with the right binary version.
 
-use getrandom;
 use crate::config::Config;
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use chacha20poly1305::aead::Aead;
 use chacha20poly1305::{KeyInit, XChaCha20Poly1305, XNonce};
+use getrandom;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
@@ -72,10 +72,9 @@ const ENTRY_KEY: &str = "sui-id.key";
 /// On-disk format version for the MANIFEST and the encrypted
 /// envelope. Bumped when the layout changes in a way that older
 /// restores can't read.
-
-use super::tar::{write_tar_entry, write_tar_terminator, read_tar};
-use super::types::{Manifest, BackupOptions, RestoreOptions, VerifyReport};
-const FORMAT_VERSION: u32 = 1;  // mirrors backup::FORMAT_VERSION
+use super::tar::{read_tar, write_tar_entry, write_tar_terminator};
+use super::types::{BackupOptions, Manifest, RestoreOptions, VerifyReport};
+const FORMAT_VERSION: u32 = 1; // mirrors backup::FORMAT_VERSION
 const ENCRYPTED_MAGIC: &[u8; 8] = b"SUIDIDBK";
 const ARGON2_M_COST_KIB: u32 = 64 * 1024;
 const ARGON2_T_COST: u32 = 3;
@@ -138,8 +137,7 @@ pub fn run_backup(cfg: &Config, dest: &Path, opts: &BackupOptions) -> Result<()>
         hostname: hostname_or_unknown(),
         issuer: cfg.server.issuer.clone(),
     };
-    let manifest_bytes = serde_json::to_vec_pretty(&manifest)
-        .context("serialising MANIFEST")?;
+    let manifest_bytes = serde_json::to_vec_pretty(&manifest).context("serialising MANIFEST")?;
 
     // Step 3: build the inner tar in memory so we can optionally
     // encrypt it as one blob.
@@ -227,16 +225,15 @@ pub fn run_verify(src: &Path, passphrase: Option<&str>) -> Result<VerifyReport> 
     }
     let bytes = std::fs::read(src).with_context(|| format!("reading {}", src.display()))?;
     let encrypted = is_encrypted(&bytes);
-    let (tar_bytes_len, manifest, db_bytes, key_bytes) =
-        parse_backup(&bytes, passphrase)?;
+    let (tar_bytes_len, manifest, db_bytes, key_bytes) = parse_backup(&bytes, passphrase)?;
     // Run a SQLite integrity check on the inner database. This catches
     // a corrupted snapshot before the operator commits to the restore.
     {
         let dir = tempfile_dir()?;
         let temp_db = dir.join("verify.sqlite");
         std::fs::write(&temp_db, &db_bytes).context("staging snapshot for integrity check")?;
-        let conn = rusqlite::Connection::open(&temp_db)
-            .context("opening snapshot for integrity check")?;
+        let conn =
+            rusqlite::Connection::open(&temp_db).context("opening snapshot for integrity check")?;
         let result: String = conn
             .query_row("PRAGMA integrity_check", [], |r| r.get(0))
             .context("running integrity_check")?;
@@ -268,9 +265,8 @@ fn parse_backup(
     passphrase: Option<&str>,
 ) -> Result<(usize, Manifest, Vec<u8>, Vec<u8>)> {
     let tar_bytes: Vec<u8> = if is_encrypted(bytes) {
-        let pass = passphrase.context(
-            "this backup is encrypted; supply --decrypt and provide the passphrase",
-        )?;
+        let pass = passphrase
+            .context("this backup is encrypted; supply --decrypt and provide the passphrase")?;
         decrypt_envelope(pass, bytes)?
     } else {
         if passphrase.is_some() {
@@ -446,9 +442,6 @@ fn tempfile_dir() -> Result<PathBuf> {
     // refuses to write into an existing file.
     use std::time::{SystemTime, UNIX_EPOCH};
 
-
-
-
     let base = std::env::temp_dir();
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -467,4 +460,3 @@ fn tempfile_dir() -> Result<PathBuf> {
     std::fs::create_dir_all(&dir).context("creating temp dir for snapshot")?;
     Ok(dir)
 }
-

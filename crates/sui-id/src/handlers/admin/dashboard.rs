@@ -1,19 +1,14 @@
 //! Admin handlers for dashboard (RFC 066).
 
+use super::with_csrf_cookie;
 use crate::errors::HttpError;
-use crate::handlers::{
-    AppStateExt, CurrentAdminOrAuditor,
-};
+use crate::handlers::{AppStateExt, CurrentAdminOrAuditor};
 use axum::extract::State;
 use axum::response::{Html, IntoResponse, Response};
 use axum_extra::extract::cookie::CookieJar;
 use sui_id_core::errors::CoreError;
 use sui_id_store::repos::{clients, users};
-use sui_id_web::{
-    pages::DashboardData,
-    render_dashboard,
-};
-use super::with_csrf_cookie;
+use sui_id_web::{pages::DashboardData, render_dashboard};
 
 pub async fn dashboard(
     state_ext: AppStateExt,
@@ -22,11 +17,15 @@ pub async fn dashboard(
     axum::extract::Query(q): axum::extract::Query<DashboardQuery>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
-    let admin = users::get(&app.db, admin_id).await.map_err(|e| HttpError::html(CoreError::from(e)))?;
-    let users_n = users::list(&app.db).await
+    let admin = users::get(&app.db, admin_id)
+        .await
+        .map_err(|e| HttpError::html(CoreError::from(e)))?;
+    let users_n = users::list(&app.db)
+        .await
         .map(|v| v.len())
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
-    let clients_n = clients::list(&app.db).await
+    let clients_n = clients::list(&app.db)
+        .await
         .map(|v| v.len())
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
 
@@ -37,7 +36,8 @@ pub async fn dashboard(
         .as_deref()
         .and_then(sui_id_core::dashboard::SparklineRange::from_query)
         .unwrap_or_default();
-    let activity = sui_id_core::dashboard::login_activity(&app.db, &app.clock, range).await
+    let activity = sui_id_core::dashboard::login_activity(&app.db, &app.clock, range)
+        .await
         .map_err(HttpError::html)?;
 
     // Format bucket labels per the bucket size — 1-hour buckets get
@@ -70,53 +70,70 @@ pub async fn dashboard(
     };
 
     let session_count = sui_id_store::repos::sessions::count_active_total(&app.db)
-        .await.unwrap_or(0);
+        .await
+        .unwrap_or(0);
     // HibpMode: Off = show warning; anything else = configured
-    let hibp_is_off = sui_id_store::repos::server_settings::get(&app.db).await
+    let hibp_is_off = sui_id_store::repos::server_settings::get(&app.db)
+        .await
         .map(|s| matches!(s.hibp_mode, sui_id_store::models::HibpMode::Off))
-        .unwrap_or(true);  // assume Off if settings missing
+        .unwrap_or(true); // assume Off if settings missing
     let smtp_configured = sui_id_store::repos::smtp_config::get(&app.db)
-        .await.map(|o| o.is_some()).unwrap_or(false);
+        .await
+        .map(|o| o.is_some())
+        .unwrap_or(false);
 
     // RFC 073 action items (v0.58.0). Each is a small read-only
     // aggregate; total added latency is well under 20ms on indexed
     // columns. All conditions fail open (best-effort) so a single
     // failing query never breaks the whole dashboard.
     let admins_without_mfa = sui_id_store::repos::users::count_admins_without_mfa(&app.db)
-        .await.unwrap_or(0);
+        .await
+        .unwrap_or(0);
     let oldest_active_key_age_days = sui_id_store::repos::signing_keys::list_active(&app.db)
-        .await.ok()
+        .await
+        .ok()
         .and_then(|keys| keys.iter().map(|k| k.created_at).min())
         .map(|oldest| (app.clock.now() - oldest).num_days());
     let outbox_stuck_count = sui_id_store::repos::email_outbox::count_stuck_pending(
-        &app.db, chrono::Duration::hours(1), app.clock.now()
-    ).await.unwrap_or(0);
-    let pending_password_resets = sui_id_store::repos::password_reset_tokens::count_outstanding(
-        &app.db, app.clock.now()
-    ).await.unwrap_or(0);
+        &app.db,
+        chrono::Duration::hours(1),
+        app.clock.now(),
+    )
+    .await
+    .unwrap_or(0);
+    let pending_password_resets =
+        sui_id_store::repos::password_reset_tokens::count_outstanding(&app.db, app.clock.now())
+            .await
+            .unwrap_or(0);
 
     // Getting Started checklist (RFC 073).
     let gs_smtp_configured = smtp_configured;
     let gs_first_app_added = clients_n > 0;
     let gs_admin_mfa = sui_id_store::repos::users::has_mfa(&app.db, &admin_id)
-        .await.unwrap_or(false);
+        .await
+        .unwrap_or(false);
 
     // RFC 043: fetch last 5 important audit events for the dashboard card.
     let audit_rows = sui_id_store::repos::audit::recent_important(&app.db, 5)
-        .await.unwrap_or_default();
+        .await
+        .unwrap_or_default();
     // Best-effort: resolve actor IDs to usernames.
-    let actor_ids: Vec<_> = audit_rows.iter()
+    let actor_ids: Vec<_> = audit_rows
+        .iter()
         .filter_map(|r| r.actor)
         .collect::<std::collections::HashSet<_>>()
-        .into_iter().collect();
+        .into_iter()
+        .collect();
     let actor_map = sui_id_store::repos::users::resolve_usernames(&app.db, &actor_ids)
-        .await.unwrap_or_default();
+        .await
+        .unwrap_or_default();
     let recent_important: Vec<sui_id_web::DashboardEventRow> = audit_rows
         .into_iter()
         .map(|r| sui_id_web::DashboardEventRow {
             at: r.at,
             action: r.action,
-            actor_label: r.actor
+            actor_label: r
+                .actor
                 .and_then(|id| actor_map.get(&id).cloned())
                 .unwrap_or_default(),
             result: r.result,
@@ -143,7 +160,14 @@ pub async fn dashboard(
     };
     let token = crate::csrf::ensure_token(&jar);
     let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
-    let resp = Html(render_dashboard(data, None, token.clone(), app.is_dev_mode, lang)).into_response();
+    let resp = Html(render_dashboard(
+        data,
+        None,
+        token.clone(),
+        app.is_dev_mode,
+        lang,
+    ))
+    .into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
 }
 

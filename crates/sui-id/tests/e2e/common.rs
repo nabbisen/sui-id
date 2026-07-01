@@ -8,13 +8,13 @@
 
 #![allow(dead_code)]
 
-use axum::body::{to_bytes, Body};
-use axum::http::{header, Method, Request, StatusCode};
+use axum::body::{Body, to_bytes};
+use axum::http::{Method, Request, StatusCode, header};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use sha2::{Digest, Sha256};
 use sui_id::config::{Config, LogConfig, ServerConfig, StorageConfig, TokensConfig};
-use sui_id::{build_router, AppState};
-use sui_id_store::{crypto::MasterKey, Database};
+use sui_id::{AppState, build_router};
+use sui_id_store::{Database, crypto::MasterKey};
 use tower::ServiceExt;
 
 pub const SETUP_TOKEN: &str = "test-setup-token-do-not-use-in-prod";
@@ -30,7 +30,10 @@ pub fn test_app() -> AppState {
 
 /// Like `test_app` but also returns the in-memory mail sender so
 /// the caller can assert on captures.
-pub fn test_app_with_mailer() -> (AppState, std::sync::Arc<sui_id_core::mail::InMemoryMailSender>) {
+pub fn test_app_with_mailer() -> (
+    AppState,
+    std::sync::Arc<sui_id_core::mail::InMemoryMailSender>,
+) {
     let key = MasterKey::generate();
     let db = Database::open_in_memory(key).expect("open db");
     let cfg = Config {
@@ -108,12 +111,9 @@ pub fn test_app_with_hibp() -> (
 /// to flip between modes without going through the admin settings
 /// page.
 pub async fn set_hibp_mode(state: &AppState, mode: sui_id_store::models::HibpMode) {
-    sui_id_store::repos::server_settings::update_hibp_mode(
-        &state.db,
-        mode,
-        chrono::Utc::now(),
-    ).await
-    .expect("update hibp_mode");
+    sui_id_store::repos::server_settings::update_hibp_mode(&state.db, mode, chrono::Utc::now())
+        .await
+        .expect("update hibp_mode");
 }
 
 pub async fn read_body(body: Body) -> Vec<u8> {
@@ -164,7 +164,8 @@ pub async fn complete_setup_and_login(state: &AppState) -> String {
         .expect("req");
     let resp = router.oneshot(req).await.expect("setup");
     assert!(
-        resp.status() == StatusCode::SEE_OTHER || resp.status() == StatusCode::TEMPORARY_REDIRECT
+        resp.status() == StatusCode::SEE_OTHER
+            || resp.status() == StatusCode::TEMPORARY_REDIRECT
             || resp.status() == StatusCode::FOUND,
         "expected redirect after setup, got {}",
         resp.status()
@@ -219,7 +220,11 @@ pub async fn create_client_with_scopes(
         .body(Body::from(body))
         .expect("req");
     let resp = router.oneshot(req).await.expect("create client");
-    assert_eq!(resp.status(), StatusCode::OK, "expected 200 from clients page");
+    assert_eq!(
+        resp.status(),
+        StatusCode::OK,
+        "expected 200 from clients page"
+    );
     let body_bytes = read_body(resp.into_body()).await;
     let html = String::from_utf8_lossy(&body_bytes).to_string();
     // The page surfacesthe new client's id+secret as <span class="code">value</span>.
@@ -234,7 +239,10 @@ pub async fn create_client_with_scopes(
             break;
         }
     }
-    assert!(codes.len() >= 2, "expected client id and secret in HTML, found {codes:?}");
+    assert!(
+        codes.len() >= 2,
+        "expected client id and secret in HTML, found {codes:?}"
+    );
     (codes[0].clone(), codes[1].clone())
 }
 
@@ -253,7 +261,7 @@ pub async fn fetch_csrf(state: &AppState, session_cookie: &str) -> String {
 }
 
 pub fn utf8_encode(s: &str) -> String {
-    use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+    use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
     utf8_percent_encode(s, NON_ALPHANUMERIC).to_string()
 }
 
@@ -449,6 +457,11 @@ pub async fn enroll_mfa_for(state: &AppState, session: &str) -> (String, Vec<Str
             break;
         }
     }
-    assert_eq!(codes.len(), 8, "expected 8 recovery codes, got {}: {codes:?}", codes.len());
+    assert_eq!(
+        codes.len(),
+        8,
+        "expected 8 recovery codes, got {}: {codes:?}",
+        codes.len()
+    );
     (secret_b32, codes)
 }

@@ -27,10 +27,10 @@
 //! module has no side effects and is trivially testable.
 
 use crate::errors::CoreResult;
-pub use sui_id_i18n::{negotiate_from_accept_language, Locale, Strings, STRINGS_EN, STRINGS_JA};
+pub use sui_id_i18n::{Locale, STRINGS_EN, STRINGS_JA, Strings, negotiate_from_accept_language};
 use sui_id_shared::ids::UserId;
-use sui_id_store::repos::{server_settings, users};
 use sui_id_store::Database;
+use sui_id_store::repos::{server_settings, users};
 
 /// Inputs to the resolver. Constructing this struct in the HTTP
 /// layer keeps the `resolve` function testable without a request
@@ -111,8 +111,12 @@ mod tests {
                 username: "alice".into(),
                 display_name: None,
                 is_admin: false,
-        role: if false { sui_id_store::models::Role::Admin } else { sui_id_store::models::Role::User },
-        last_login_at: None,
+                role: if false {
+                    sui_id_store::models::Role::Admin
+                } else {
+                    sui_id_store::models::Role::User
+                },
+                last_login_at: None,
                 is_disabled: false,
                 is_deleted: false,
                 user_uuid: uuid::Uuid::new_v4(),
@@ -125,7 +129,8 @@ mod tests {
                 email_normalized: None,
                 email_verified_at: None,
             },
-        ).await
+        )
+        .await
         .expect("user");
         let _ = hash_password("alice-the-tester-password");
         let _ = CredentialRow {
@@ -138,7 +143,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async     fn user_preference_wins() {
+    async fn user_preference_wins() {
         let db = fresh_db();
         let uid = make_user(&db, Some("en")).await;
         let loc = resolve(
@@ -148,13 +153,14 @@ mod tests {
                 cookie: Some("ja"),
                 accept_language: Some("ja"),
             },
-        ).await
+        )
+        .await
         .expect("resolve");
         assert_eq!(loc, Locale::En);
     }
 
     #[tokio::test]
-    async     fn cookie_wins_over_accept_language() {
+    async fn cookie_wins_over_accept_language() {
         let db = fresh_db();
         let loc = resolve(
             &db,
@@ -163,13 +169,14 @@ mod tests {
                 cookie: Some("en"),
                 accept_language: Some("ja"),
             },
-        ).await
+        )
+        .await
         .expect("resolve");
         assert_eq!(loc, Locale::En);
     }
 
     #[tokio::test]
-    async     fn accept_language_used_when_no_user_or_cookie() {
+    async fn accept_language_used_when_no_user_or_cookie() {
         let db = fresh_db();
         let loc = resolve(
             &db,
@@ -178,13 +185,14 @@ mod tests {
                 cookie: None,
                 accept_language: Some("en-US,en;q=0.9"),
             },
-        ).await
+        )
+        .await
         .expect("resolve");
         assert_eq!(loc, Locale::En);
     }
 
     #[tokio::test]
-    async     fn falls_back_to_server_default_when_nothing_matches() {
+    async fn falls_back_to_server_default_when_nothing_matches() {
         let db = fresh_db();
         // Migration default is "ja"; nothing else matches.
         let loc = resolve(
@@ -192,15 +200,16 @@ mod tests {
             &LocaleInputs {
                 user_id: None,
                 cookie: None,
-                accept_language: Some("xx"),  // unknown locale → fall back
+                accept_language: Some("xx"), // unknown locale → fall back
             },
-        ).await
+        )
+        .await
         .expect("resolve");
         assert_eq!(loc, Locale::Ja);
     }
 
     #[tokio::test]
-    async     fn user_preference_with_unknown_tag_falls_through() {
+    async fn user_preference_with_unknown_tag_falls_through() {
         // After a hypothetical downgrade, a row could hold a tag
         // we don't recognise. Resolution should not error; it
         // should fall through to subsequent tiers.
@@ -214,7 +223,8 @@ mod tests {
                 cookie: Some("en"),
                 accept_language: None,
             },
-        ).await
+        )
+        .await
         .expect("resolve");
         assert_eq!(loc, Locale::En);
     }

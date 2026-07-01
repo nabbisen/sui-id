@@ -6,12 +6,12 @@
 #![allow(dead_code)]
 
 use axum::body::Body;
-use axum::http::{header, Method, Request, StatusCode};
+use axum::http::{Method, Request, StatusCode, header};
 use sui_id::build_router;
 
-use url::Url;
-use tower::ServiceExt;
 use super::common::*;
+use tower::ServiceExt;
+use url::Url;
 
 // ---------- CSRF tests ----------
 
@@ -112,9 +112,18 @@ async fn oidc_endpoints_are_not_subject_to_csrf() {
         .body(Body::empty())
         .expect("req");
     let resp = router.oneshot(req).await.expect("authorize");
-    let location = resp.headers().get(header::LOCATION).and_then(|v| v.to_str().ok()).unwrap_or("").to_owned();
+    let location = resp
+        .headers()
+        .get(header::LOCATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_owned();
     let parsed = Url::parse(&location).expect("redirect");
-    let code = parsed.query_pairs().find(|(k, _)| k == "code").map(|(_, v)| v.into_owned()).expect("code");
+    let code = parsed
+        .query_pairs()
+        .find(|(k, _)| k == "code")
+        .map(|(_, v)| v.into_owned())
+        .expect("code");
 
     // /token exchange with NO csrf cookie or field — must succeed.
     let body = format!(
@@ -129,6 +138,9 @@ async fn oidc_endpoints_are_not_subject_to_csrf() {
         .body(Body::from(body))
         .expect("req");
     let resp = router.oneshot(req).await.expect("token");
-    assert_eq!(resp.status(), StatusCode::OK, "OIDC token endpoint must not require CSRF");
+    assert_eq!(
+        resp.status(),
+        StatusCode::OK,
+        "OIDC token endpoint must not require CSRF"
+    );
 }
-

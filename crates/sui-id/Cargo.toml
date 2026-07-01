@@ -1,16 +1,16 @@
 [package]
-name = "sui-id"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
-license.workspace = true
-repository.workspace = true
-homepage.workspace = true
-authors.workspace = true
-keywords.workspace = true
-categories.workspace = true
+name        = "sui-id"
 description = "Self-hosted, single-binary OpenID Connect provider in Rust. Install with `cargo install sui-id`."
-readme = "../../README.md"
+readme      = "../../README.md"
+version.workspace       = true
+edition.workspace       = true
+rust-version.workspace  = true
+license.workspace       = true
+authors.workspace       = true
+repository.workspace    = true
+homepage.workspace      = true
+categories.workspace    = true
+keywords.workspace      = true
 
 # Restrict what gets uploaded to crates.io. `cargo publish` automatically
 # resolves `readme = "../../README.md"` and copies the file into the
@@ -37,68 +37,69 @@ path = "tests/e2e/main.rs"
 workspace = true
 
 [dependencies]
-sui-id-shared = { version = "0.76.7", path = "../sui-id-shared" }
-sui-id-i18n   = { version = "0.76.7", path = "../sui-id-i18n" }
-sui-id-store  = { version = "0.76.7", path = "../sui-id-store" }
-sui-id-core   = { version = "0.76.7", path = "../sui-id-core" }
-sui-id-web    = { version = "0.76.7", path = "../sui-id-web" }
+sui-id-shared               = { workspace = true }
+sui-id-i18n                 = { workspace = true }
+sui-id-store                = { workspace = true }
+sui-id-core                 = { workspace = true }
+sui-id-web                  = { workspace = true }
 
-tokio = { workspace = true }
-axum = { workspace = true }
-axum-extra = { workspace = true }
-tower = { workspace = true }
-tower-http = { workspace = true }
-hyper = { workspace = true }
-time = "0.3"
-cookie = "0.18"
+tokio                       = { workspace = true }
+axum                        = { workspace = true }
+axum-extra                  = { workspace = true }
+tower                       = { workspace = true }
+tower-http                  = { workspace = true }
+hyper                       = { workspace = true }
+time                        = { workspace = true }
+cookie                      = { workspace = true }
 
-serde = { workspace = true }
-serde_json = { workspace = true }
-toml = { workspace = true }
-thiserror = { workspace = true }
-anyhow = { workspace = true }
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
-tracing-appender = { workspace = true }
-chrono = { workspace = true }
-uuid = { workspace = true }
-url = { workspace = true }
-secrecy = { workspace = true }
-rand = { workspace = true }
-getrandom = { workspace = true }
-prometheus = { workspace = true }
-zeroize = { workspace = true }
-base64ct = { workspace = true }
-reqwest = { workspace = true }
-chacha20poly1305 = { workspace = true }
-argon2 = { workspace = true }
-include_dir = { workspace = true }
-percent-encoding = { workspace = true }
-hmac = { workspace = true }
-subtle = { workspace = true }
-qrcode = { workspace = true }
-webauthn-rs = { workspace = true }
-rusqlite = { workspace = true }
-tempfile = { workspace = true }
-sha2 = { workspace = true }
+serde                       = { workspace = true }
+serde_json                  = { workspace = true }
+toml                        = { workspace = true }
+thiserror                   = { workspace = true }
+anyhow                      = { workspace = true }
+tracing                     = { workspace = true }
+tracing-subscriber          = { workspace = true }
+tracing-appender            = { workspace = true }
+chrono                      = { workspace = true }
+uuid                        = { workspace = true }
+url                         = { workspace = true }
+secrecy                     = { workspace = true }
+rand                        = { workspace = true }
+getrandom                   = { workspace = true }
+prometheus                  = { workspace = true }
+zeroize                     = { workspace = true }
+base64ct                    = { workspace = true }
+reqwest                     = { workspace = true }
+chacha20poly1305            = { workspace = true }
+argon2                      = { workspace = true }
+include_dir                 = { workspace = true }
+percent-encoding            = { workspace = true }
+hmac                        = { workspace = true }
+subtle                      = { workspace = true }
+qrcode                      = { workspace = true }
+webauthn-rs                 = { workspace = true }
+rusqlite                    = { workspace = true }
+tempfile                    = { workspace = true }
+sha2                        = { workspace = true }
 
 [dev-dependencies]
-proptest = { workspace = true }
-tempfile = { workspace = true }
-
-tokio = { workspace = true }
-tower = { workspace = true }
-serde_json = { workspace = true }
-url = { workspace = true }
-
-base64ct = { workspace = true }
-reqwest = { workspace = true }
-percent-encoding = { workspace = true }
-sui-id-store = { version = "0.76.7", path = "../sui-id-store" }
+sui-id-store                = { workspace = true }
 # Re-pull the core crate as a dev-dep with the `test-support`
 # feature so e2e tests can construct `InMemoryHibpClient` /
 # `InMemoryMailSender` from `core::test_support`. The library
 # build of the same crate (no feature) is unaffected.
-sui-id-core = { version = "0.76.7", path = "../sui-id-core", features = ["test-support"] }
-http = "1"
-http-body-util = "0.1"
+sui-id-core                 = { workspace = true }
+
+proptest                    = { workspace = true }
+tempfile                    = { workspace = true }
+
+tokio                       = { workspace = true }
+tower                       = { workspace = true }
+serde_json                  = { workspace = true }
+url                         = { workspace = true }
+
+base64ct                    = { workspace = true }
+reqwest                     = { workspace = true }
+percent-encoding            = { workspace = true }
+http                        = { workspace = true }
+http-body-util              = { workspace = true }

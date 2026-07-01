@@ -76,17 +76,9 @@ pub async fn middleware(mut req: Request, next: Next) -> Response {
     let status = resp.status().as_u16();
     let latency_ms = started.elapsed().as_millis() as u64;
     if status >= 500 {
-        tracing::warn!(
-            status,
-            latency_ms,
-            "request completed with server error"
-        );
+        tracing::warn!(status, latency_ms, "request completed with server error");
     } else {
-        tracing::info!(
-            status,
-            latency_ms,
-            "request completed"
-        );
+        tracing::info!(status, latency_ms, "request completed");
     }
 
     if let Ok(value) = HeaderValue::from_str(&id) {

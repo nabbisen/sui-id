@@ -314,15 +314,9 @@ mod tests {
     fn actor_authorize_delegates_to_authz_core() {
         use crate::authz::Decision;
         let admin = make_actor(Role::Admin);
-        assert_eq!(
-            admin.authorize(Action::AdminWriteUsers),
-            Decision::Permit
-        );
+        assert_eq!(admin.authorize(Action::AdminWriteUsers), Decision::Permit);
         let user = make_actor(Role::User);
-        assert_eq!(
-            user.authorize(Action::AdminWriteUsers),
-            Decision::Deny
-        );
+        assert_eq!(user.authorize(Action::AdminWriteUsers), Decision::Deny);
     }
 
     // ── Self-scope: user_id comes from actor, not caller ─────────────────────

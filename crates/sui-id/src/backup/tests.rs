@@ -77,10 +77,25 @@ mod tests_inner {
             write_tar_terminator(&mut f).unwrap();
         }
         // db & key already exist, so restore must refuse.
-        let r = run_restore(&cfg, &backup_path, &RestoreOptions { force: false, passphrase: None });
+        let r = run_restore(
+            &cfg,
+            &backup_path,
+            &RestoreOptions {
+                force: false,
+                passphrase: None,
+            },
+        );
         assert!(r.is_err(), "expected refusal to overwrite without --force");
         // With --force, it succeeds.
-        run_restore(&cfg, &backup_path, &RestoreOptions { force: true, passphrase: None }).expect("force restore");
+        run_restore(
+            &cfg,
+            &backup_path,
+            &RestoreOptions {
+                force: true,
+                passphrase: None,
+            },
+        )
+        .expect("force restore");
         assert_eq!(std::fs::read(&db).unwrap(), b"db-bytes");
         assert_eq!(std::fs::read(&key).unwrap(), b"key-bytes");
     }
@@ -115,7 +130,15 @@ mod tests_inner {
             write_tar_entry(&mut f, ENTRY_KEY, b"key-bytes").unwrap();
             write_tar_terminator(&mut f).unwrap();
         }
-        run_restore(&cfg, &backup_path, &RestoreOptions { force: false, passphrase: None }).expect("restore");
+        run_restore(
+            &cfg,
+            &backup_path,
+            &RestoreOptions {
+                force: false,
+                passphrase: None,
+            },
+        )
+        .expect("restore");
         assert!(cfg.storage.db_path.exists());
         assert!(cfg.storage.key_file.exists());
     }
@@ -168,7 +191,15 @@ mod tests_inner {
             log: cfg.log.clone(),
             security: cfg.security.clone(),
         };
-        run_restore(&cfg2, &dest, &RestoreOptions { force: false, passphrase: None }).expect("restore");
+        run_restore(
+            &cfg2,
+            &dest,
+            &RestoreOptions {
+                force: false,
+                passphrase: None,
+            },
+        )
+        .expect("restore");
         let conn = rusqlite::Connection::open(&cfg2.storage.db_path).unwrap();
         let v: String = conn
             .query_row("SELECT k FROM t LIMIT 1", [], |r| r.get(0))
@@ -176,7 +207,10 @@ mod tests_inner {
         assert_eq!(v, "hello");
         // Key file restored byte-for-byte.
         let restored_key = std::fs::read(&cfg2.storage.key_file).unwrap();
-        assert_eq!(restored_key, b"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=");
+        assert_eq!(
+            restored_key,
+            b"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+        );
     }
 
     // ---------- v0.13.0 additions: encryption, manifest, verify ----------
@@ -205,7 +239,10 @@ mod tests_inner {
                 cookie_secure: false,
                 trusted_proxies: Vec::new(),
             },
-            storage: crate::config::StorageConfig { db_path: db, key_file: key },
+            storage: crate::config::StorageConfig {
+                db_path: db,
+                key_file: key,
+            },
             tokens: crate::config::TokensConfig::default(),
             log: crate::config::LogConfig::default(),
             security: crate::config::SecurityConfig::default(),
@@ -326,7 +363,10 @@ mod tests_inner {
         let r = run_restore(
             &cfg2,
             &dest,
-            &RestoreOptions { force: false, passphrase: None },
+            &RestoreOptions {
+                force: false,
+                passphrase: None,
+            },
         );
         let msg = format!("{}", r.unwrap_err().chain().next().unwrap());
         assert!(
@@ -431,7 +471,10 @@ mod tests_inner {
         let r = run_restore(
             &cfg,
             &dest,
-            &RestoreOptions { force: false, passphrase: None },
+            &RestoreOptions {
+                force: false,
+                passphrase: None,
+            },
         );
         let msg = format!("{}", r.unwrap_err().chain().next().unwrap());
         assert!(msg.contains("schema_version"), "got: {msg}");

@@ -18,7 +18,6 @@ pub struct DisableForm {
     pub reason: String,
 }
 
-
 #[derive(Debug, Deserialize, Default)]
 
 pub struct CsrfOnlyForm {
@@ -57,6 +56,10 @@ impl ConfirmedReasonForm {
     /// Trimmed reason, `None` if empty after trim.
     pub fn reason_opt(&self) -> Option<String> {
         let t = self.reason.trim();
-        if t.is_empty() { None } else { Some(t.to_owned()) }
+        if t.is_empty() {
+            None
+        } else {
+            Some(t.to_owned())
+        }
     }
 }

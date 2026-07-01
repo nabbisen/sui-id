@@ -2,16 +2,16 @@
 //! database, generate (or print) the setup token, and hand back a ready-to-
 //! mount [`AppState`] plus the listen address.
 
-use getrandom;
+use crate::AppState;
 use crate::config::Config;
 use crate::keyring::{self, KeyOrigin};
-use crate::AppState;
-use sui_id_core::time::system_clock;
 use anyhow::{Context, Result};
 use base64ct::{Base64, Encoding};
+use getrandom;
 use std::sync::Once;
-use sui_id_store::repos::state;
+use sui_id_core::time::system_clock;
 use sui_id_store::Database;
+use sui_id_store::repos::state;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -56,11 +56,12 @@ const AUDIT_VERIFY_TAIL: i64 = 5_000;
 /// When `log.file` is set, log output goes to both stderr and the
 /// daily-rotated file. The two sinks are separate non-blocking layers so
 /// neither blocks the async runtime.
-pub fn init_tracing(cfg: &crate::config::LogConfig) -> Option<tracing_appender::non_blocking::WorkerGuard> {
+pub fn init_tracing(
+    cfg: &crate::config::LogConfig,
+) -> Option<tracing_appender::non_blocking::WorkerGuard> {
     let mut guard = None;
     INIT_TRACING.call_once(|| {
-        let env_filter = EnvFilter::try_new(&cfg.filter)
-            .unwrap_or_else(|_| EnvFilter::new("info"));
+        let env_filter = EnvFilter::try_new(&cfg.filter).unwrap_or_else(|_| EnvFilter::new("info"));
 
         if let Some(log_dir) = &cfg.file {
             // File output: stderr layer + file layer, combined with the
@@ -128,8 +129,7 @@ pub async fn prepare(cfg: Config) -> Result<Startup> {
             std::fs::create_dir_all(parent).ok();
         }
     }
-    let db = Database::open(&cfg.storage.db_path, resolved.key)
-        .context("opening database")?;
+    let db = Database::open(&cfg.storage.db_path, resolved.key).context("opening database")?;
 
     // Verify the tail of the audit-log hash chain. A mismatch here
     // indicates DB-level tampering since the most recent restart;
@@ -208,11 +208,9 @@ pub async fn prepare(cfg: Config) -> Result<Startup> {
     };
     // RFC 001: use the persistent outbox sender in production (not dev-mode).
     // Dev mode retains the direct SmtpMailSender (via test_app() helpers).
-    let outbox_sender: std::sync::Arc<dyn sui_id_core::mail::MailSender> =
-        std::sync::Arc::new(sui_id_core::mail::outbox::OutboxMailSender::new(
-            db.clone(),
-            system_clock(),
-        ));
+    let outbox_sender: std::sync::Arc<dyn sui_id_core::mail::MailSender> = std::sync::Arc::new(
+        sui_id_core::mail::outbox::OutboxMailSender::new(db.clone(), system_clock()),
+    );
     let mut state = AppState::new(db, cfg, setup_token, outbox_sender, hibp_client, caches);
     // RFC 006: initialise the Prometheus metrics registry when enabled.
     if state.config.server.metrics_enabled {
@@ -249,11 +247,9 @@ pub async fn prepare(cfg: Config) -> Result<Startup> {
                         connect_timeout_secs: cfg.connect_timeout_secs,
                         search_timeout_secs: cfg.search_timeout_secs,
                     };
-                    state.user_sources.push(
-                        std::sync::Arc::new(
-                            sui_id_store::ldap_source::LdapUserSource::new(ldap_cfg)
-                        )
-                    );
+                    state.user_sources.push(std::sync::Arc::new(
+                        sui_id_store::ldap_source::LdapUserSource::new(ldap_cfg),
+                    ));
                     tracing::info!(slug = %cfg.slug, "LDAP user-source registered");
                 }
                 #[cfg(not(feature = "ldap"))]
@@ -275,8 +271,8 @@ pub async fn prepare(cfg: Config) -> Result<Startup> {
     // Each [[federation_provider]] block is upserted so operators
     // can manage enabled/disabled state via the admin UI.
     for cfg in &state.config.federation_providers {
-        use sui_id_store::models::{FederationProviderRow, ProvisionMode};
         use sui_id_shared::ids::FederationProviderId;
+        use sui_id_store::models::{FederationProviderRow, ProvisionMode};
         let secret = match cfg.resolve_secret() {
             Ok(s) => s,
             Err(e) => {
@@ -286,9 +282,7 @@ pub async fn prepare(cfg: Config) -> Result<Startup> {
             }
         };
         // Check if already in DB; create if missing.
-        match sui_id_store::repos::federation_provider::get_by_slug(
-            &state.db, &cfg.slug
-        ).await {
+        match sui_id_store::repos::federation_provider::get_by_slug(&state.db, &cfg.slug).await {
             Ok(_) => {} // already exists; admin manages enabled state
             Err(sui_id_store::StoreError::NotFound) => {
                 let now = state.clock.now();
@@ -306,8 +300,12 @@ pub async fn prepare(cfg: Config) -> Result<Startup> {
                     updated_at: now,
                 };
                 if let Err(e) = sui_id_store::repos::federation_provider::create(
-                    &state.db, &row, secret.as_deref()
-                ).await {
+                    &state.db,
+                    &row,
+                    secret.as_deref(),
+                )
+                .await
+                {
                     tracing::error!(error = %e, slug = %cfg.slug,
                         "failed to register federation provider");
                 } else {
@@ -317,16 +315,18 @@ pub async fn prepare(cfg: Config) -> Result<Startup> {
             Err(e) => tracing::error!(error = %e, "federation_provider lookup failed"),
         }
     }
-    Ok(Startup { state, listen_addr, _log_guard: log_guard })
+    Ok(Startup {
+        state,
+        listen_addr,
+        _log_guard: log_guard,
+    })
 }
 
 fn generate_setup_token() -> String {
     let mut buf = [0u8; 24];
     getrandom::fill(&mut buf).expect("system RNG unavailable");
     let mut out = vec![0u8; 64];
-    let n = Base64::encode(&buf, &mut out)
-        .map(str::len)
-        .unwrap_or(0);
+    let n = Base64::encode(&buf, &mut out).map(str::len).unwrap_or(0);
     out.truncate(n);
     String::from_utf8(out).unwrap_or_else(|_| "ERROR_GENERATING_TOKEN".into())
 }

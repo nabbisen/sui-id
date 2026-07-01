@@ -6,12 +6,12 @@
 #![allow(dead_code)]
 
 use axum::body::Body;
-use axum::http::{header, Method, Request, StatusCode};
+use axum::http::{Method, Request, StatusCode, header};
 use sui_id::build_router;
 
-use url::Url;
-use tower::ServiceExt;
 use super::common::*;
+use tower::ServiceExt;
+use url::Url;
 
 // ---------- refresh token theft detection (v0.17.0) ----------
 
@@ -205,7 +205,9 @@ async fn theft_detection_writes_audit_event() {
     let _ = router.oneshot(req).await.expect("replay");
 
     // Audit log should contain `auth.refresh.theft_detected`.
-    let recent = sui_id_store::repos::audit::recent(&state.db, 50).await.expect("audit list");
+    let recent = sui_id_store::repos::audit::recent(&state.db, 50)
+        .await
+        .expect("audit list");
     let count = recent
         .iter()
         .filter(|r| r.action == "auth.refresh.theft_detected")
@@ -215,4 +217,3 @@ async fn theft_detection_writes_audit_event() {
         "expected at least one auth.refresh.theft_detected audit row"
     );
 }
-

@@ -36,20 +36,22 @@
 //! The handler always shows a generic "if an account exists, we've
 //! sent the link" page.
 
-use getrandom;
 use crate::errors::{CoreError, CoreResult};
-use crate::hibp::{self, HibpClient, HibpEnforcement};
 use crate::events::{self, Context, SecurityEvent};
+use crate::hibp::{self, HibpClient, HibpEnforcement};
 use crate::mail::{MailSender, OutgoingMail};
 use crate::password;
 use crate::time::SharedClock;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::Duration;
+use getrandom;
 use sha2::{Digest, Sha256};
 use sui_id_shared::ids::{PasswordResetTokenId, UserId};
-use sui_id_store::models::{CredentialRow, HibpMode, PasswordResetTokenRow};
-use sui_id_store::repos::{credentials, password_reset_tokens, refresh_tokens, sessions, smtp_config, users};
 use sui_id_store::Database;
+use sui_id_store::models::{CredentialRow, HibpMode, PasswordResetTokenRow};
+use sui_id_store::repos::{
+    credentials, password_reset_tokens, refresh_tokens, sessions, smtp_config, users,
+};
 
 /// 30 minutes — a balance between user-friendly delivery delays
 /// and a reasonably tight attack window.
@@ -105,7 +107,8 @@ pub async fn request_reset(
             clock,
             &ctx,
             SecurityEvent::PasswordResetRequested { user_id: None },
-        ).await;
+        )
+        .await;
         return Ok(());
     };
 
@@ -117,13 +120,13 @@ pub async fn request_reset(
             SecurityEvent::PasswordResetRequested {
                 user_id: Some(user_row.id),
             },
-        ).await;
+        )
+        .await;
         return Ok(());
     }
 
     // Outstanding-token throttle.
-    let outstanding =
-        password_reset_tokens::count_active_for_user(db, user_row.id, now).await?;
+    let outstanding = password_reset_tokens::count_active_for_user(db, user_row.id, now).await?;
     if outstanding >= MAX_OUTSTANDING_TOKENS_PER_USER {
         events::emit(
             db,
@@ -133,7 +136,8 @@ pub async fn request_reset(
                 user_id: user_row.id,
                 outstanding,
             },
-        ).await;
+        )
+        .await;
         return Ok(());
     }
 
@@ -165,7 +169,8 @@ pub async fn request_reset(
                     user_id: user_row.id,
                     reason: "smtp_unconfigured".into(),
                 },
-            ).await;
+            )
+            .await;
             return Ok(());
         }
     };
@@ -182,7 +187,8 @@ pub async fn request_reset(
     // be the requester). Falling through to server default if the
     // user has expressed no preference matches the resolution
     // chain in `core::i18n::resolve`.
-    let default_locale = sui_id_store::repos::server_settings::get(db).await
+    let default_locale = sui_id_store::repos::server_settings::get(db)
+        .await
         .ok()
         .and_then(|s| sui_id_i18n::Locale::parse(&s.default_lang))
         .unwrap_or_default();
@@ -204,7 +210,10 @@ pub async fn request_reset(
     let mail = OutgoingMail {
         // Deliver to the original-case address the user registered with;
         // the normalised form was only needed for the lookup.
-        to: user_row.email.clone().unwrap_or_else(|| normalized_email.clone()),
+        to: user_row
+            .email
+            .clone()
+            .unwrap_or_else(|| normalized_email.clone()),
         subject: t.email_subject_password_reset.to_string(),
         text_body: format!(
             "{greeting}\n\
@@ -243,7 +252,8 @@ pub async fn request_reset(
                 SecurityEvent::PasswordResetEmailSent {
                     user_id: user_row.id,
                 },
-            ).await;
+            )
+            .await;
         }
         Err(e) => {
             events::emit(
@@ -254,7 +264,8 @@ pub async fn request_reset(
                     user_id: user_row.id,
                     reason: e.to_string(),
                 },
-            ).await;
+            )
+            .await;
         }
     }
     Ok(())
@@ -269,7 +280,8 @@ pub async fn validate_token(
     plaintext_token: &str,
 ) -> CoreResult<UserId> {
     let hash = hash_token(plaintext_token);
-    let row = password_reset_tokens::find_by_hash(db, &hash).await?
+    let row = password_reset_tokens::find_by_hash(db, &hash)
+        .await?
         .ok_or(CoreError::InvalidCredentials)?;
     if row.consumed_at.is_some() {
         return Err(CoreError::InvalidCredentials);
@@ -315,7 +327,8 @@ pub async fn consume_and_reset_password(
         ));
     }
     let hash = hash_token(plaintext_token);
-    let row = password_reset_tokens::find_by_hash(db, &hash).await?
+    let row = password_reset_tokens::find_by_hash(db, &hash)
+        .await?
         .ok_or(CoreError::InvalidCredentials)?;
     let now = clock.now();
     if row.consumed_at.is_some() || row.expires_at < now {
@@ -346,7 +359,8 @@ pub async fn consume_and_reset_password(
         sessions::revoke_all_for_user_within_tx(tx, row_user_id, now)?;
         refresh_tokens::revoke_all_for_user_within_tx(tx, row_user_id, now)?;
         Ok(())
-    }).await?;
+    })
+    .await?;
 
     let mut ctx = Context::default().with_actor(row.user_id);
     if let Some(ip) = requester_ip {
@@ -359,7 +373,8 @@ pub async fn consume_and_reset_password(
         SecurityEvent::PasswordResetCompleted {
             user_id: row.user_id,
         },
-    ).await;
+    )
+    .await;
 
     // Best-effort post-reset notification mail. Failures here do
     // not affect the password change itself. The recipient's
@@ -367,21 +382,19 @@ pub async fn consume_and_reset_password(
     // through to the server default.
     if let Ok(Some(user_row)) = users::find_by_id_opt(db, row.user_id).await {
         if let Some(email) = user_row.email.as_deref() {
-            let default_locale_pw = sui_id_store::repos::server_settings::get(db).await
+            let default_locale_pw = sui_id_store::repos::server_settings::get(db)
+                .await
                 .ok()
                 .and_then(|s| sui_id_i18n::Locale::parse(&s.default_lang))
                 .unwrap_or_default();
-        let recipient_locale = user_row
+            let recipient_locale = user_row
                 .preferred_lang
                 .as_deref()
                 .and_then(sui_id_i18n::Locale::parse)
                 .unwrap_or(default_locale_pw);
-            let _ = notify_password_changed(
-                mailer,
-                email,
-                &user_row.display_name,
-                recipient_locale,
-            ).await;
+            let _ =
+                notify_password_changed(mailer, email, &user_row.display_name, recipient_locale)
+                    .await;
         }
     }
 

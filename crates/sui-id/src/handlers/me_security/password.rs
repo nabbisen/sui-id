@@ -12,9 +12,8 @@ use sui_id_store::repos::users;
 const SESSION_COOKIE: &str = "sui_id_session";
 
 use super::forms::*;
-use crate::handlers::{AppStateExt, CurrentUser, SessionContext};
-use sui_id_core::actor::SelfActor;
 use crate::handlers::admin::with_csrf_cookie;
+use crate::handlers::{AppStateExt, CurrentUser, SessionContext};
 
 pub async fn password_change_get(
     state_ext: AppStateExt,
@@ -23,7 +22,9 @@ pub async fn password_change_get(
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
-    let user = users::get(&app.db, user_id).await.map_err(|e| HttpError::html(CoreError::from(e)))?;
+    let user = users::get(&app.db, user_id)
+        .await
+        .map_err(|e| HttpError::html(CoreError::from(e)))?;
     let token = csrf::ensure_token(&jar);
     let html = sui_id_web::render_password_change(
         sui_id_web::PasswordChangeData {
@@ -38,10 +39,12 @@ pub async fn password_change_get(
     Ok(with_csrf_cookie(resp, &app, &token))
 }
 
-
 pub async fn password_change_post(
     state_ext: AppStateExt,
-    SessionContext { user_id, session_id: _session_id }: SessionContext,
+    SessionContext {
+        user_id,
+        session_id: _session_id,
+    }: SessionContext,
     crate::handlers::ClientIp(ip): crate::handlers::ClientIp,
     crate::handlers::RequestLocale(_lang): crate::handlers::RequestLocale,
     jar: CookieJar,
@@ -90,7 +93,8 @@ pub async fn password_change_post(
         .map_err(|_| HttpError::html(CoreError::Unauthenticated))?;
 
     // RFC 003: load HIBP settings from the DB for this request.
-    let hibp_mode = sui_id_store::repos::server_settings::get(&app.db).await
+    let hibp_mode = sui_id_store::repos::server_settings::get(&app.db)
+        .await
         .map(|s| s.hibp_mode)
         .unwrap_or_default();
 
@@ -114,7 +118,8 @@ pub async fn password_change_post(
         Some(keep),
         revoke_others,
         crate::handlers::password_min_len(&app),
-    ).await
+    )
+    .await
     .map_err(HttpError::html)?;
 
     let _ = report; // counts are in the audit event already; nothing to surface
@@ -133,9 +138,7 @@ pub async fn password_change_post(
     // (single-digit seconds in production), which is
     // operationally fine for a self-service action that already
     // holds a database write.
-    if let Ok(Some(user_row)) =
-        sui_id_store::repos::users::find_by_id_opt(&app.db, user_id).await
-    {
+    if let Ok(Some(user_row)) = sui_id_store::repos::users::find_by_id_opt(&app.db, user_id).await {
         if let Some(email) = user_row.email.as_deref() {
             // Recipient's preferred locale, falling through to
             // the server default if unset. Resolved here rather
@@ -151,7 +154,8 @@ pub async fn password_change_post(
                 email,
                 &user_row.display_name,
                 recipient_locale,
-            ).await
+            )
+            .await
             {
                 tracing::warn!(
                     error = %e,
@@ -166,4 +170,3 @@ pub async fn password_change_post(
 // =====================================================================
 // RFC 040 — /me/security tabbed pages
 // =====================================================================
-

@@ -9,8 +9,8 @@ use axum::body::Body;
 use axum::http::{Method, Request};
 use sui_id::build_router;
 
-use tower::ServiceExt;
 use super::common::*;
+use tower::ServiceExt;
 
 // ---------- request-id middleware (v0.12.0) ----------
 
@@ -100,5 +100,3 @@ async fn caller_supplied_x_request_id_with_unsafe_chars_is_replaced() {
     assert!(!id.contains(' '));
     assert_eq!(id.len(), 36);
 }
-
-

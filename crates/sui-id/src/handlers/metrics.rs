@@ -40,12 +40,14 @@ pub async fn metrics_get(
     let State(app) = state_ext;
 
     // Retrieve the metrics registry (registered only when metrics_enabled).
-    let metrics = app.metrics.as_deref().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let metrics = app
+        .metrics
+        .as_deref()
+        .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
 
     // ── P1: authentication ────────────────────────────────────────────────────
 
-    let authed = is_session_authed(&app, &jar).await
-        || is_bearer_authed(&app, &headers).await;
+    let authed = is_session_authed(&app, &jar).await || is_bearer_authed(&app, &headers).await;
 
     if !authed {
         return Err(StatusCode::UNAUTHORIZED);
@@ -77,8 +79,8 @@ async fn is_session_authed(
     jar: &axum_extra::extract::cookie::CookieJar,
 ) -> bool {
     use crate::handlers::SESSION_COOKIE;
-    use sui_id_shared::ids::SessionId;
     use std::str::FromStr;
+    use sui_id_shared::ids::SessionId;
 
     let Some(cookie) = jar.get(SESSION_COOKIE) else {
         return false;
@@ -101,10 +103,7 @@ async fn is_session_authed(
 
 /// Check `Authorization: Bearer <token>` against the stored hash.
 /// Comparison is done in constant time (P2).
-async fn is_bearer_authed(
-    app: &crate::handlers::AppState,
-    headers: &HeaderMap,
-) -> bool {
+async fn is_bearer_authed(app: &crate::handlers::AppState, headers: &HeaderMap) -> bool {
     use subtle::ConstantTimeEq;
 
     let Some(auth_value) = headers.get(axum::http::header::AUTHORIZATION) else {

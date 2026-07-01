@@ -17,16 +17,16 @@ use sui_id_shared::ids::{SessionId, UserId};
 use sui_id_store::repos::users;
 
 pub mod admin;
+pub mod dynamic_register;
+pub mod federation;
 pub mod forgot_password;
 pub mod index;
 pub mod me_security;
+pub mod metrics;
 pub mod oauth_token;
 pub mod oidc;
 pub mod settings;
 pub mod setup;
-pub mod dynamic_register;
-pub mod federation;
-pub mod metrics;
 pub mod step_up;
 
 /// Cookie name for the in-flight WebAuthn ceremony id (used by both
@@ -144,10 +144,14 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let app: AppState = AppState::from_ref(state);
         let jar = CookieJar::from_headers(&parts.headers);
-        let raw = jar.get(SESSION_COOKIE).ok_or_else(|| HttpError::html(CoreError::Unauthenticated))?;
+        let raw = jar
+            .get(SESSION_COOKIE)
+            .ok_or_else(|| HttpError::html(CoreError::Unauthenticated))?;
         let id = SessionId::from_str(raw.value())
             .map_err(|_| HttpError::html(CoreError::Unauthenticated))?;
-        let user_id = session::resolve(&app.db, &app.clock, id).await.map_err(HttpError::html)?;
+        let user_id = session::resolve(&app.db, &app.clock, id)
+            .await
+            .map_err(HttpError::html)?;
         // Refresh the session's `last_used_at` so the v0.25.0
         // idle-timeout check has an accurate reference. Throttled
         // by the core layer (~one DB write per minute per
@@ -185,7 +189,9 @@ where
             .ok_or_else(|| HttpError::html(CoreError::Unauthenticated))?;
         let id = SessionId::from_str(raw.value())
             .map_err(|_| HttpError::html(CoreError::Unauthenticated))?;
-        let user_id = session::resolve(&app.db, &app.clock, id).await.map_err(HttpError::html)?;
+        let user_id = session::resolve(&app.db, &app.clock, id)
+            .await
+            .map_err(HttpError::html)?;
         let _ = session::touch_last_used(&app.db, &app.clock, id).await;
         Ok(SessionContext {
             user_id,
@@ -208,8 +214,10 @@ where
     type Rejection = HttpError;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let SessionContext { user_id: uid, session_id } =
-            SessionContext::from_request_parts(parts, state).await?;
+        let SessionContext {
+            user_id: uid,
+            session_id,
+        } = SessionContext::from_request_parts(parts, state).await?;
         let app: AppState = AppState::from_ref(state);
         let user = users::get(&app.db, uid)
             .await
@@ -230,7 +238,11 @@ where
 /// Used on all GET admin routes so auditors can view without mutating.
 /// Returns `(UserId, Role)` so handlers can pass role to render fns.
 /// RFC 081: also produces a [`ReadOnlyAdminActor`] for domain read functions.
-pub struct CurrentAdminOrAuditor(pub UserId, pub sui_id_store::models::Role, pub ReadOnlyAdminActor);
+pub struct CurrentAdminOrAuditor(
+    pub UserId,
+    pub sui_id_store::models::Role,
+    pub ReadOnlyAdminActor,
+);
 
 impl<S> FromRequestParts<S> for CurrentAdminOrAuditor
 where
@@ -240,8 +252,10 @@ where
     type Rejection = HttpError;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let SessionContext { user_id: uid, session_id } =
-            SessionContext::from_request_parts(parts, state).await?;
+        let SessionContext {
+            user_id: uid,
+            session_id,
+        } = SessionContext::from_request_parts(parts, state).await?;
         let app: AppState = AppState::from_ref(state);
         let user = users::get(&app.db, uid)
             .await
@@ -273,12 +287,18 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let app: AppState = AppState::from_ref(state);
         let jar = CookieJar::from_headers(&parts.headers);
-        let raw = jar.get(SESSION_COOKIE).ok_or_else(|| HttpError::api(CoreError::Unauthenticated))?;
+        let raw = jar
+            .get(SESSION_COOKIE)
+            .ok_or_else(|| HttpError::api(CoreError::Unauthenticated))?;
         let id = SessionId::from_str(raw.value())
             .map_err(|_| HttpError::api(CoreError::Unauthenticated))?;
-        let uid = session::resolve(&app.db, &app.clock, id).await.map_err(HttpError::api)?;
+        let uid = session::resolve(&app.db, &app.clock, id)
+            .await
+            .map_err(HttpError::api)?;
         let _ = session::touch_last_used(&app.db, &app.clock, id).await;
-        let user = users::get(&app.db, uid).await.map_err(|_| HttpError::api(CoreError::Forbidden))?;
+        let user = users::get(&app.db, uid)
+            .await
+            .map_err(|_| HttpError::api(CoreError::Forbidden))?;
         if !user.is_admin || user.is_disabled || user.is_deleted {
             return Err(HttpError::api(CoreError::Forbidden));
         }
@@ -402,7 +422,8 @@ where
                 .and_then(|c| c.value().parse().ok());
             if let Some(sid) = sid_opt {
                 sui_id_store::repos::sessions::get(&app.db, sid)
-                    .await.ok()
+                    .await
+                    .ok()
                     .map(|row| row.user_id)
             } else {
                 None
@@ -424,7 +445,8 @@ where
             cookie: cookie_lang.as_deref(),
             accept_language: accept_language.as_deref(),
         };
-        let locale = sui_id_core::i18n::resolve(&app.db, &inputs).await
+        let locale = sui_id_core::i18n::resolve(&app.db, &inputs)
+            .await
             .unwrap_or_default();
         Ok(RequestLocale(locale))
     }
@@ -601,7 +623,9 @@ pub async fn require_fresh_step_up(
         ctx.user_id,
         session_row.last_step_up_at,
         sui_id_core::step_up::STEP_UP_FRESHNESS_SECS,
-    ).await {
+    )
+    .await
+    {
         Ok(d) => d,
         Err(e) => return Err(HttpError::html(e).into_response()),
     };
@@ -616,9 +640,8 @@ pub async fn require_fresh_step_up(
             // challenge.
             let encoded: String =
                 url::form_urlencoded::byte_serialize(return_to.as_bytes()).collect();
-            let redirect = axum::response::Redirect::to(&format!(
-                "/me/security/step-up?return_to={encoded}"
-            ));
+            let redirect =
+                axum::response::Redirect::to(&format!("/me/security/step-up?return_to={encoded}"));
             Err(redirect.into_response())
         }
     }

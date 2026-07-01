@@ -109,7 +109,9 @@ impl CoreError {
             Self::Protocol { .. } => ApiErrorCode::Protocol,
             Self::Store(sui_id_store::StoreError::NotFound) => ApiErrorCode::NotFound,
             Self::Store(sui_id_store::StoreError::Conflict) => ApiErrorCode::Conflict,
-            Self::Store(_) | Self::Password | Self::Jwt | Self::Internal | Self::ConfigError(_) => ApiErrorCode::Internal,
+            Self::Store(_) | Self::Password | Self::Jwt | Self::Internal | Self::ConfigError(_) => {
+                ApiErrorCode::Internal
+            }
         }
     }
 }

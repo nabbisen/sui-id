@@ -6,11 +6,11 @@
 #![allow(dead_code)]
 
 use axum::body::Body;
-use axum::http::{header, Method, Request, StatusCode};
+use axum::http::{Method, Request, StatusCode, header};
 use sui_id::build_router;
 
-use tower::ServiceExt;
 use super::common::*;
+use tower::ServiceExt;
 
 // ---------- client edit (v0.8.0) ----------
 
@@ -64,16 +64,23 @@ async fn client_edit_updates_name_and_scopes() {
         resp.status()
     );
     assert_eq!(
-        resp.headers().get(header::LOCATION).and_then(|v| v.to_str().ok()),
+        resp.headers()
+            .get(header::LOCATION)
+            .and_then(|v| v.to_str().ok()),
         Some("/admin/clients")
     );
 
     // Verify the row was actually updated.
     use sui_id_shared::ids::ClientId;
     let id = client_id.parse::<ClientId>().expect("parse");
-    let row = sui_id_store::repos::clients::get(&state.db, id).await.expect("get");
+    let row = sui_id_store::repos::clients::get(&state.db, id)
+        .await
+        .expect("get");
     assert_eq!(row.name, "renamed-rp");
-    assert_eq!(row.redirect_uris, vec!["https://rp.test/new-cb".to_string()]);
+    assert_eq!(
+        row.redirect_uris,
+        vec!["https://rp.test/new-cb".to_string()]
+    );
     assert_eq!(row.allowed_scopes, "openid");
     assert_eq!(
         row.post_logout_redirect_uris,
@@ -88,7 +95,8 @@ async fn client_edit_then_authorize_uses_new_scope_policy() {
     use sui_id_core::admin::CreateClientSpec;
     let state = test_app();
     let session = complete_setup_and_login(&state).await;
-    let admin_id = sui_id_store::repos::users::find_by_username(&state.db, "alice").await
+    let admin_id = sui_id_store::repos::users::find_by_username(&state.db, "alice")
+        .await
         .expect("admin")
         .id;
     let created = sui_id_core::admin::create_client(
@@ -103,7 +111,8 @@ async fn client_edit_then_authorize_uses_new_scope_policy() {
             post_logout_redirect_uris: &[],
         },
         &state.caches,
-    ).await
+    )
+    .await
     .expect("create");
     let client_id = created.row.id.to_string();
 
@@ -175,4 +184,3 @@ async fn client_edit_then_authorize_uses_new_scope_policy() {
         assert!(resp.status().is_client_error());
     }
 }
-

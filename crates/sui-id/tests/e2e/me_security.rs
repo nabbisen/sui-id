@@ -6,11 +6,11 @@
 #![allow(dead_code)]
 
 use axum::body::Body;
-use axum::http::{header, Method, Request, StatusCode};
+use axum::http::{Method, Request, StatusCode, header};
 use sui_id::build_router;
 
-use tower::ServiceExt;
 use super::common::*;
+use tower::ServiceExt;
 
 // ---------- /me/security (v0.18.0) ----------
 
@@ -33,9 +33,18 @@ async fn me_security_page_renders_for_authenticated_user() {
     // section headings, the username, and the "current session"
     // marker for the row that matches the cookie.
     assert!(body.contains("アカウントセキュリティ"), "missing heading");
-    assert!(body.contains("サインイン中の場所"), "missing sessions section");
-    assert!(body.contains("最近のアクティビティ"), "missing audit section");
-    assert!(body.contains("current session"), "current session not marked");
+    assert!(
+        body.contains("サインイン中の場所"),
+        "missing sessions section"
+    );
+    assert!(
+        body.contains("最近のアクティビティ"),
+        "missing audit section"
+    );
+    assert!(
+        body.contains("current session"),
+        "current session not marked"
+    );
 }
 
 #[tokio::test]
@@ -123,7 +132,10 @@ async fn me_security_revoke_one_signs_target_session_out() {
         .header(header::COOKIE, format!("sui_id_session={s2}"))
         .body(Body::empty())
         .expect("req");
-    let resp = build_router(state).oneshot(req).await.expect("post-revoke s2");
+    let resp = build_router(state)
+        .oneshot(req)
+        .await
+        .expect("post-revoke s2");
     assert_ne!(resp.status(), StatusCode::OK, "s2 must be dead now");
 }
 
@@ -180,7 +192,11 @@ async fn me_security_revoke_all_others_keeps_current_session() {
             .await
             .expect("post-revoke probe");
         if alive {
-            assert_eq!(resp.status(), StatusCode::OK, "s1 (current) must remain alive");
+            assert_eq!(
+                resp.status(),
+                StatusCode::OK,
+                "s1 (current) must remain alive"
+            );
         } else {
             assert_ne!(resp.status(), StatusCode::OK, "{sid} should be revoked");
         }
@@ -206,9 +222,8 @@ async fn me_security_cannot_revoke_someone_elses_session() {
         .await
         .expect("users page");
     let csrf = extract_csrf_cookie(resp.headers()).expect("csrf");
-    let body = format!(
-        "_csrf={csrf}&username=bob&display_name=Bob&password=bob-the-tester-password"
-    );
+    let body =
+        format!("_csrf={csrf}&username=bob&display_name=Bob&password=bob-the-tester-password");
     let _ = build_router(state.clone())
         .oneshot(
             Request::builder()
@@ -276,4 +291,3 @@ async fn me_security_cannot_revoke_someone_elses_session() {
         "bob's session must NOT have been revoked by the admin's attempt"
     );
 }
-

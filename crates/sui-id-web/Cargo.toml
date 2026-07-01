@@ -1,26 +1,26 @@
 [package]
-name = "sui-id-web"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
-license.workspace = true
-repository.workspace = true
-homepage.workspace = true
-authors.workspace = true
-keywords.workspace = true
-categories.workspace = true
+name        = "sui-id-web"
 description = "Server-rendered admin and setup UI (Leptos SSR) for sui-id, a self-hosted Rust OIDC provider."
-readme = "README.md"
+readme      = "README.md"
+version.workspace       = true
+edition.workspace       = true
+rust-version.workspace  = true
+license.workspace       = true
+authors.workspace       = true
+repository.workspace    = true
+homepage.workspace      = true
+categories.workspace    = true
+keywords.workspace      = true
+
+[dependencies]
+sui-id-store                = { workspace = true }
+sui-id-shared               = { workspace = true }
+sui-id-i18n                 = { workspace = true }
+
+url                         = { workspace = true }
+leptos                      = { workspace = true }
+serde                       = { workspace = true }
+chrono                      = { workspace = true }
 
 [lints]
 workspace = true
-
-[dependencies]
-sui-id-store = { version = "0.76.7", path = "../sui-id-store" }
-url = { workspace = true }
-sui-id-shared = { version = "0.76.7", path = "../sui-id-shared" }
-sui-id-i18n   = { version = "0.76.7", path = "../sui-id-i18n" }
-
-leptos = { workspace = true }
-serde = { workspace = true }
-chrono = { workspace = true }

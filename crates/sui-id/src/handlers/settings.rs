@@ -45,7 +45,8 @@ pub async fn basic_get(
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
     let cfg = app.config.as_ref();
-    let server_settings = sui_id_store::repos::server_settings::get(&app.db).await
+    let server_settings = sui_id_store::repos::server_settings::get(&app.db)
+        .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
     let token = csrf::ensure_token(&jar);
     let data = sui_id_web::SettingsBasicData {
@@ -59,7 +60,7 @@ pub async fn basic_get(
         csrf_token: token.clone(),
         can_write: actor.can_write(),
     };
-        let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
+    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let html = sui_id_web::render_settings_basic(data, None, lang);
     let resp = Html(html).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
@@ -88,7 +89,8 @@ pub async fn basic_lang_post(
     let parsed = sui_id_i18n::Locale::parse(&form.default_lang)
         .ok_or_else(|| HttpError::html(CoreError::BadRequest("unknown language tag".into())))?;
     let now = app.clock.now();
-    sui_id_store::repos::server_settings::update_default_lang(&app.db, &form.default_lang, now).await
+    sui_id_store::repos::server_settings::update_default_lang(&app.db, &form.default_lang, now)
+        .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
 
     // Re-render with a success flash so the admin sees the change took effect.
@@ -98,10 +100,12 @@ pub async fn basic_lang_post(
         text: t.me_language_saved_flash.into(),
     });
     let cfg = app.config.as_ref();
-    let server_settings = sui_id_store::repos::server_settings::get(&app.db).await
+    let server_settings = sui_id_store::repos::server_settings::get(&app.db)
+        .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
     let token = csrf::ensure_token(&jar);
-    let data = sui_id_web::SettingsBasicData { can_write: admin_actor.as_read_only().can_write(),
+    let data = sui_id_web::SettingsBasicData {
+        can_write: admin_actor.as_read_only().can_write(),
         issuer: cfg.server.issuer.clone(),
         listen_addr: cfg.server.listen_addr.clone(),
         cookie_secure: cfg.server.cookie_secure,
@@ -126,10 +130,12 @@ pub async fn security_get(
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
     let cfg = app.config.as_ref();
-    let server_settings = sui_id_store::repos::server_settings::get(&app.db).await
+    let server_settings = sui_id_store::repos::server_settings::get(&app.db)
+        .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
     let token = csrf::ensure_token(&jar);
-    let data = sui_id_web::SettingsSecurityData { can_write: actor.can_write(),
+    let data = sui_id_web::SettingsSecurityData {
+        can_write: actor.can_write(),
         max_lockout_label: cfg.security.max_lockout.label().to_owned(),
         hsts_enabled: cfg.server.cookie_secure,
         csp_enabled: true,
@@ -141,7 +147,7 @@ pub async fn security_get(
         max_concurrent_sessions: server_settings.max_concurrent_sessions,
         csrf_token: token.clone(),
     };
-        let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
+    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let html = sui_id_web::render_settings_security(data, None, lang);
     let resp = Html(html).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
@@ -173,7 +179,8 @@ pub async fn idle_timeout_post(
         )));
     }
     let now = app.clock.now();
-    sui_id_store::repos::server_settings::update_idle_session_timeout(&app.db, form.secs, now).await
+    sui_id_store::repos::server_settings::update_idle_session_timeout(&app.db, form.secs, now)
+        .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
     Ok(axum::response::Redirect::to("/admin/settings/security").into_response())
 }
@@ -203,7 +210,8 @@ pub async fn max_sessions_post(
         )));
     }
     let now = app.clock.now();
-    sui_id_store::repos::server_settings::update_max_concurrent_sessions(&app.db, form.cap, now).await
+    sui_id_store::repos::server_settings::update_max_concurrent_sessions(&app.db, form.cap, now)
+        .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
     Ok(axum::response::Redirect::to("/admin/settings/security").into_response())
 }
@@ -232,7 +240,7 @@ pub async fn authentication_get(
         can_write: actor.can_write(),
     };
     let token = csrf::ensure_token(&jar);
-        let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
+    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let html = sui_id_web::render_settings_authentication(data, None, token.clone(), lang);
     let resp = Html(html).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
@@ -254,7 +262,12 @@ pub async fn logs_get(
     // interesting actions. We do four queries rather than one
     // because count_by_action_in_window groups per bucket; for the
     // logs tab we just want totals.
-    async fn count_action(db: &sui_id_store::Database, action: &str, since: chrono::DateTime<chrono::Utc>, until: chrono::DateTime<chrono::Utc>) -> Result<i64, HttpError> {
+    async fn count_action(
+        db: &sui_id_store::Database,
+        action: &str,
+        since: chrono::DateTime<chrono::Utc>,
+        until: chrono::DateTime<chrono::Utc>,
+    ) -> Result<i64, HttpError> {
         let buckets = audit::count_by_action_in_window(db, &[action], since, until, 60 * 24)
             .await
             .map_err(|e| HttpError::html(CoreError::from(e)))?;
@@ -263,7 +276,8 @@ pub async fn logs_get(
     let login_success = count_action(&app.db, "auth.login.success", since_24h, now).await?;
     let login_failure = count_action(&app.db, "auth.login.failure", since_24h, now).await?;
     let login_locked = count_action(&app.db, "auth.login.locked", since_24h, now).await?;
-    let password_changed = count_action(&app.db, "auth.password.changed_self", since_24h, now).await?;
+    let password_changed =
+        count_action(&app.db, "auth.password.changed_self", since_24h, now).await?;
     let data = sui_id_web::SettingsLogsData {
         log_format: app.config.log.format.clone(),
         log_filter: app.config.log.filter.clone(),
@@ -273,7 +287,8 @@ pub async fn logs_get(
         password_changed_self_24h: password_changed,
         // Audit chain status — small tail check, same shape the
         // boot-time verifier uses.
-        chain_report: audit::verify_chain_tail(&app.db, 100).await
+        chain_report: audit::verify_chain_tail(&app.db, 100)
+            .await
             .map(|r| sui_id_web::SettingsChainStatus {
                 checked: r.checked,
                 broken_at_seq: r.broken_at_seq,
@@ -283,7 +298,7 @@ pub async fn logs_get(
         can_write: actor.can_write(),
     };
     let token = csrf::ensure_token(&jar);
-        let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
+    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let html = sui_id_web::render_settings_logs(data, None, token.clone(), lang);
     let resp = Html(html).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
@@ -298,10 +313,12 @@ pub async fn other_get(
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
     let cfg = app.config.as_ref();
-    let user_count = users::list(&app.db).await
+    let user_count = users::list(&app.db)
+        .await
         .map(|v| v.len())
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
-    let client_count = clients::list(&app.db).await
+    let client_count = clients::list(&app.db)
+        .await
         .map(|v| v.len())
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
     let data = sui_id_web::SettingsOtherData {
@@ -315,7 +332,7 @@ pub async fn other_get(
         can_write: actor.can_write(),
     };
     let token = csrf::ensure_token(&jar);
-        let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
+    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let html = sui_id_web::render_settings_other(data, None, token.clone(), lang);
     let resp = Html(html).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
@@ -351,12 +368,13 @@ pub async fn email_get(
     jar: CookieJar,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
-    let cfg_row = sui_id_store::repos::smtp_config::get(&app.db).await
+    let cfg_row = sui_id_store::repos::smtp_config::get(&app.db)
+        .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
     let mut data = build_email_data(cfg_row.as_ref());
     data.can_write = actor.can_write();
     let token = csrf::ensure_token(&jar);
-        let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
+    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let html = sui_id_web::render_settings_email(data, token.clone(), None, lang);
     let resp = Html(html).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
@@ -404,7 +422,8 @@ pub async fn email_post(
     // Password handling: empty string means "keep existing".
     // RFC 090: if a new password is provided, route through pending-change
     // so the secret never appears in a form field after initial entry.
-    let existing = sui_id_store::repos::smtp_config::get(&app.db).await
+    let existing = sui_id_store::repos::smtp_config::get(&app.db)
+        .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
 
     if !form.password.is_empty() {
@@ -436,7 +455,8 @@ pub async fn email_post(
         let csrf_token_for_confirm = crate::csrf::ensure_token(&jar);
         let summary = format!(
             "SMTP password: will be updated | host: {} | port: {}",
-            form.host.trim(), form.port
+            form.host.trim(),
+            form.port
         );
         let pending = sui_id_core::pending_change::create(
             &app.db,
@@ -477,7 +497,8 @@ pub async fn email_post(
         created_at,
         updated_at: now,
     };
-    sui_id_store::repos::smtp_config::upsert(&app.db, &row).await
+    sui_id_store::repos::smtp_config::upsert(&app.db, &row)
+        .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
 
     let _ = sui_id_store::repos::audit::append(
@@ -495,7 +516,8 @@ pub async fn email_post(
                 row.tls_mode.as_str()
             )),
         },
-    ).await;
+    )
+    .await;
 
     Ok(Redirect::to("/admin/settings/email").into_response())
 }
@@ -525,7 +547,8 @@ pub async fn email_test(
     );
     let result = probe.test_connection().await;
 
-    let cfg_row = sui_id_store::repos::smtp_config::get(&app.db).await
+    let cfg_row = sui_id_store::repos::smtp_config::get(&app.db)
+        .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
     let mut data = build_email_data(cfg_row.as_ref());
     data.can_write = true; // email_test is admin-only
@@ -544,7 +567,7 @@ pub async fn email_test(
             text: format!("SMTP 接続テストに失敗しました: {e}"),
         }),
     };
-        let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
+    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let html = sui_id_web::render_settings_email(data, token.clone(), flash, lang);
     let resp = Html(html).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
@@ -577,17 +600,23 @@ pub async fn email_confirm_get(
         app.clock.now(),
     )
     .await
-    .map_err(|_| HttpError::html(CoreError::BadRequest(
-        "This pending change has expired or is no longer valid.".into(),
-    )))?;
+    .map_err(|_| {
+        HttpError::html(CoreError::BadRequest(
+            "This pending change has expired or is no longer valid.".into(),
+        ))
+    })?;
     let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let data = sui_id_web::SettingsEmailConfirmData {
         pending_change_id: id_str,
         summary,
         csrf_token: token.clone(),
     };
-    let resp = Html(sui_id_web::render_settings_email_confirm(data, app.is_dev_mode, lang))
-        .into_response();
+    let resp = Html(sui_id_web::render_settings_email_confirm(
+        data,
+        app.is_dev_mode,
+        lang,
+    ))
+    .into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
 }
 
@@ -612,15 +641,12 @@ pub async fn email_confirm_post(
     crate::handlers::enforce_csrf(&jar, Some(&form.csrf))?;
     // RFC 090 P5: revalidate step-up on the final confirm POST.
     if let Err(redirect) =
-        crate::handlers::require_fresh_step_up(&app, &ctx,
-            "/admin/settings/email/confirm").await
+        crate::handlers::require_fresh_step_up(&app, &ctx, "/admin/settings/email/confirm").await
     {
         return Ok(redirect);
     }
     let pending_id = sui_id_shared::ids::PendingChangeId::from_str(&form.pending_change_id)
-        .map_err(|_| HttpError::html(CoreError::BadRequest(
-            "Invalid pending_change_id.".into(),
-        )))?;
+        .map_err(|_| HttpError::html(CoreError::BadRequest("Invalid pending_change_id.".into())))?;
     // Apply the pending change: verifies session, actor, CSRF (P2), consumes row (P3).
     #[derive(serde::Deserialize)]
     struct SmtpPendingPayload {
@@ -645,15 +671,20 @@ pub async fn email_confirm_post(
     .await
     .map_err(HttpError::html)?;
     // Validate and apply the settings.
-    let tls_mode = sui_id_store::models::SmtpTlsMode::parse(&payload.tls_mode)
-        .ok_or_else(|| HttpError::html(CoreError::BadRequest(
-            format!("unknown tls_mode: {}", payload.tls_mode),
-        )))?;
+    let tls_mode =
+        sui_id_store::models::SmtpTlsMode::parse(&payload.tls_mode).ok_or_else(|| {
+            HttpError::html(CoreError::BadRequest(format!(
+                "unknown tls_mode: {}",
+                payload.tls_mode
+            )))
+        })?;
     let now = app.clock.now();
-    let existing = sui_id_store::repos::smtp_config::get(&app.db).await
+    let existing = sui_id_store::repos::smtp_config::get(&app.db)
+        .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
     let password_enc = Some(
-        sui_id_store::repos::smtp_config::seal_password(&payload.password, app.db.key()).await
+        sui_id_store::repos::smtp_config::seal_password(&payload.password, app.db.key())
+            .await
             .map_err(|e| HttpError::html(CoreError::from(e)))?,
     );
     let row = sui_id_store::models::SmtpConfigRow {
@@ -669,14 +700,16 @@ pub async fn email_confirm_post(
         created_at: existing.map(|r| r.created_at).unwrap_or(now),
         updated_at: now,
     };
-    sui_id_store::repos::smtp_config::upsert(&app.db, &row).await
+    sui_id_store::repos::smtp_config::upsert(&app.db, &row)
+        .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
     let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let flash = sui_id_web::Flash {
         kind: sui_id_web::FlashKind::Info,
         text: "Email settings saved.".to_owned(),
     };
-    let cfg_row = sui_id_store::repos::smtp_config::get(&app.db).await
+    let cfg_row = sui_id_store::repos::smtp_config::get(&app.db)
+        .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
     let mut data = build_email_data(cfg_row.as_ref());
     data.can_write = true;
@@ -686,7 +719,9 @@ pub async fn email_confirm_post(
     Ok(with_csrf_cookie(resp, &app, &token))
 }
 
-fn build_email_data(cfg: Option<&sui_id_store::models::SmtpConfigRow>) -> sui_id_web::SettingsEmailData {
+fn build_email_data(
+    cfg: Option<&sui_id_store::models::SmtpConfigRow>,
+) -> sui_id_web::SettingsEmailData {
     match cfg {
         Some(row) => sui_id_web::SettingsEmailData {
             configured: true,

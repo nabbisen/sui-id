@@ -5,6 +5,69 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.76.8] — 2026-06-14
+
+**Workspace dependency consolidation — version bumps now touch one line only.** Also, housekeeping.
+
+No code changes.  Pure Cargo manifest restructuring.
+
+### Problem
+
+Before this change, each crate's `Cargo.toml` declared its dependencies on
+sibling workspace crates with an explicit version string:
+
+```toml
+# crates/sui-id-core/Cargo.toml  (before)
+sui-id-shared = { version = "0.76.7", path = "../sui-id-shared" }
+sui-id-store  = { version = "0.76.7", path = "../sui-id-store" }
+sui-id-i18n   = { version = "0.76.7", path = "../sui-id-i18n" }
+```
+
+Every version bump required updating 14+ lines spread across all six crate
+`Cargo.toml` files — and was historically done with a `sed` loop across
+all `crates/*/Cargo.toml`. A missed file would produce a version mismatch
+that silently passes `cargo build` (path deps resolve regardless of version)
+but ships a broken crate set to a registry.
+
+### Fix
+
+1. The five sibling crates are declared once in `[workspace.dependencies]`
+   in the root `Cargo.toml`:
+
+   ```toml
+   [workspace.dependencies]
+   # Internal workspace crates — version is authoritative here.
+   sui-id-shared = { version = "0", path = "crates/sui-id-shared" }
+   sui-id-i18n   = { version = "0", path = "crates/sui-id-i18n" }
+   sui-id-store  = { version = "0", path = "crates/sui-id-store" }
+   sui-id-core   = { version = "0", path = "crates/sui-id-core" }
+   sui-id-web    = { version = "0", path = "crates/sui-id-web" }
+   ```
+
+2. Each consuming crate uses `{ workspace = true }`:
+
+   ```toml
+   # crates/sui-id-core/Cargo.toml  (after)
+   sui-id-shared = { workspace = true }
+   sui-id-store  = { workspace = true }
+   sui-id-i18n   = { workspace = true }
+   ```
+
+### Result
+
+A version bump is now a single line as long as staying at v0.
+
+The version appears once in that one file (`[workspace.package]`) and 0 times in any crate's
+`Cargo.toml`.
+
+**141/141 tests pass.  All crates at 0.76.8.**
+
+### Housekeeping
+
+* Codebase: `cargo fmt`, unused imports, unused variables, deprecated function (`Cookie::named()` replaced with `Cookie::build()`).
+* `Cargo.toml` formats.
+* `README.md` GitHub badges. 
+
 ## [0.76.7] — 2026-06-14
 
 **Doc verification pass — spec/implementation divergences corrected,

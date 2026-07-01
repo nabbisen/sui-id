@@ -6,12 +6,12 @@
 #![allow(dead_code)]
 
 use axum::body::Body;
-use axum::http::{header, Method, Request, StatusCode};
-use sui_id::{build_router, AppState};
+use axum::http::{Method, Request, StatusCode, header};
+use sui_id::{AppState, build_router};
 
-use url::Url;
-use tower::ServiceExt;
 use super::common::*;
+use tower::ServiceExt;
+use url::Url;
 
 // ---------- acr / amr in ID tokens (v0.15.0) ----------
 
@@ -97,10 +97,7 @@ async fn id_token_carries_acr_1_and_amr_pwd_for_password_only_login() {
 
 /// Helper: enrol TOTP for the freshly-set-up admin and return the
 /// shared secret bytes ready for `totp::code_for_step`.
-async fn enroll_totp_for_test(
-    state: &AppState,
-    session_cookie: &str,
-) -> Vec<u8> {
+async fn enroll_totp_for_test(state: &AppState, session_cookie: &str) -> Vec<u8> {
     let (secret_b32, _codes) = enroll_mfa_for(state, session_cookie).await;
     decode_b32(&secret_b32)
 }
@@ -115,11 +112,13 @@ async fn login_with_totp_for_test(state: &AppState, secret: &[u8]) -> String {
         .method(Method::POST)
         .uri("/admin/login")
         .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .body(Body::from("username=alice&password=alice-the-tester-password"))
+        .body(Body::from(
+            "username=alice&password=alice-the-tester-password",
+        ))
         .expect("req");
     let resp = router.oneshot(req).await.expect("login");
-    let pending = extract_set_cookie(resp.headers(), "sui_id_pending_mfa")
-        .expect("pending_mfa cookie");
+    let pending =
+        extract_set_cookie(resp.headers(), "sui_id_pending_mfa").expect("pending_mfa cookie");
 
     let step = chrono::Utc::now().timestamp() / 30 + 1;
     let code = totp::code_for_step(secret, step).await;
@@ -146,8 +145,7 @@ async fn login_with_totp_for_test(state: &AppState, secret: &[u8]) -> String {
         .body(Body::from(format!("code={code:06}&_csrf={csrf}")))
         .expect("req");
     let resp = router.oneshot(req).await.expect("mfa POST");
-    extract_set_cookie(resp.headers(), "sui_id_session")
-        .expect("session cookie after MFA success")
+    extract_set_cookie(resp.headers(), "sui_id_session").expect("session cookie after MFA success")
 }
 
 #[tokio::test]
@@ -254,4 +252,3 @@ async fn refresh_grant_preserves_acr_and_amr_from_original_session() {
         .collect();
     assert_eq!(amr, vec!["pwd", "otp", "mfa"]);
 }
-

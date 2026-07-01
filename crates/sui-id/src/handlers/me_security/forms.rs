@@ -2,7 +2,6 @@
 
 use serde::Deserialize;
 
-
 #[derive(Debug, Deserialize)]
 pub struct CsrfOnlyForm {
     #[serde(rename = "_csrf")]
@@ -20,7 +19,6 @@ pub struct RevokeAllOthersForm {
     pub current_session: String,
 }
 
-
 #[derive(Debug, Deserialize)]
 pub struct PasswordChangeForm {
     #[serde(rename = "_csrf")]
@@ -34,7 +32,6 @@ pub struct PasswordChangeForm {
     #[serde(default)]
     pub revoke_others: Option<String>,
 }
-
 
 #[derive(serde::Deserialize)]
 pub struct PasskeyRenameForm {

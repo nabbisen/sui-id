@@ -23,11 +23,9 @@ use crate::errors::{CoreError, CoreResult};
 use crate::time::SharedClock;
 use chrono::Duration;
 use sui_id_shared::ids::{UserId, WebauthnCredentialId, WebauthnPendingId};
-use sui_id_store::models::{
-    UserWebauthnCredentialRow, WebauthnPendingKind, WebauthnPendingRow,
-};
-use sui_id_store::repos::{user_webauthn_credentials, users, webauthn_pending};
 use sui_id_store::Database;
+use sui_id_store::models::{UserWebauthnCredentialRow, WebauthnPendingKind, WebauthnPendingRow};
+use sui_id_store::repos::{user_webauthn_credentials, users, webauthn_pending};
 use webauthn_rs::prelude::{
     Passkey, PasskeyAuthentication, PasskeyRegistration, PublicKeyCredential,
     RegisterPublicKeyCredential, Webauthn, WebauthnBuilder,
@@ -52,8 +50,7 @@ use webauthn_rs::prelude::{
 /// - `https://` with any host
 /// - `http://` with `localhost`, `127.0.0.1`, or `::1`
 pub async fn build(issuer_url: &str) -> CoreResult<Webauthn> {
-    let parsed = url::Url::parse(issuer_url)
-        .map_err(|_| CoreError::Internal)?;
+    let parsed = url::Url::parse(issuer_url).map_err(|_| CoreError::Internal)?;
     let scheme = parsed.scheme();
     let host = parsed.host_str().ok_or(CoreError::Internal)?;
 
@@ -75,8 +72,7 @@ pub async fn build(issuer_url: &str) -> CoreResult<Webauthn> {
         origin_str.push_str(&format!(":{port}"));
     }
     let origin = url::Url::parse(&origin_str).map_err(|_| CoreError::Internal)?;
-    let builder =
-        WebauthnBuilder::new(&rp_id, &origin).map_err(|_| CoreError::Internal)?;
+    let builder = WebauthnBuilder::new(&rp_id, &origin).map_err(|_| CoreError::Internal)?;
     let builder = builder.rp_name("sui-id");
     builder.build().map_err(|_| CoreError::Internal)
 }
@@ -112,11 +108,16 @@ pub async fn start_registration(
     // second-attempt scan from the same authenticator gets a useful
     // error rather than a duplicate.
     let exclude: Vec<webauthn_rs::prelude::CredentialID> =
-        user_webauthn_credentials::list_for_user(db, user_id).await?
+        user_webauthn_credentials::list_for_user(db, user_id)
+            .await?
             .into_iter()
             .map(|c| webauthn_rs::prelude::CredentialID::from(c.credential_id))
             .collect();
-    let exclude = if exclude.is_empty() { None } else { Some(exclude) };
+    let exclude = if exclude.is_empty() {
+        None
+    } else {
+        Some(exclude)
+    };
     let (ccr, reg_state) = webauthn
         .start_passkey_registration(user.user_uuid, &user.username, &display, exclude)
         .map_err(|_| CoreError::Internal)?;
@@ -148,7 +149,8 @@ pub async fn finish_registration(
     credential: &RegisterPublicKeyCredential,
 ) -> CoreResult<UserWebauthnCredentialRow> {
     let webauthn = build(issuer_url).await?;
-    let pending = webauthn_pending::get(db, pending_id).await?
+    let pending = webauthn_pending::get(db, pending_id)
+        .await?
         .ok_or(CoreError::Unauthenticated)?;
     if pending.expires_at < clock.now()
         || pending.kind != WebauthnPendingKind::Register
@@ -157,8 +159,8 @@ pub async fn finish_registration(
         let _ = webauthn_pending::delete(db, pending_id).await;
         return Err(CoreError::Unauthenticated);
     }
-    let reg_state: PasskeyRegistration = serde_json::from_str(&pending.state_json)
-        .map_err(|_| CoreError::Internal)?;
+    let reg_state: PasskeyRegistration =
+        serde_json::from_str(&pending.state_json).map_err(|_| CoreError::Internal)?;
     let passkey = webauthn
         .finish_passkey_registration(credential, &reg_state)
         .map_err(|_| CoreError::BadRequest("WebAuthn registration verification failed".into()))?;
@@ -240,7 +242,8 @@ pub async fn finish_authentication(
     credential: &PublicKeyCredential,
 ) -> CoreResult<()> {
     let webauthn = build(issuer_url).await?;
-    let pending = webauthn_pending::get(db, pending_id).await?
+    let pending = webauthn_pending::get(db, pending_id)
+        .await?
         .ok_or(CoreError::Unauthenticated)?;
     if pending.expires_at < clock.now()
         || pending.kind != WebauthnPendingKind::Authenticate
@@ -249,15 +252,16 @@ pub async fn finish_authentication(
         let _ = webauthn_pending::delete(db, pending_id).await;
         return Err(CoreError::Unauthenticated);
     }
-    let auth_state: PasskeyAuthentication = serde_json::from_str(&pending.state_json)
-        .map_err(|_| CoreError::Internal)?;
+    let auth_state: PasskeyAuthentication =
+        serde_json::from_str(&pending.state_json).map_err(|_| CoreError::Internal)?;
     let result = webauthn
         .finish_passkey_authentication(credential, &auth_state)
         .map_err(|_| CoreError::Unauthenticated)?;
 
     // Update the matching credential's stored passkey blob (for the
     // signature counter, in particular) and bump last_used_at.
-    let row = user_webauthn_credentials::find_by_credential_id(db, result.cred_id().as_ref()).await?
+    let row = user_webauthn_credentials::find_by_credential_id(db, result.cred_id().as_ref())
+        .await?
         .ok_or(CoreError::Unauthenticated)?;
     if row.user_id != expected_user_id {
         // The credential id points at a different user — protocol
@@ -284,8 +288,12 @@ pub struct CredentialDescriptor {
     pub last_used_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-pub async fn list_for_user(db: &Database, user_id: UserId) -> CoreResult<Vec<CredentialDescriptor>> {
-    Ok(user_webauthn_credentials::list_for_user(db, user_id).await?
+pub async fn list_for_user(
+    db: &Database,
+    user_id: UserId,
+) -> CoreResult<Vec<CredentialDescriptor>> {
+    Ok(user_webauthn_credentials::list_for_user(db, user_id)
+        .await?
         .into_iter()
         .map(|r| CredentialDescriptor {
             id: r.id,
@@ -296,11 +304,17 @@ pub async fn list_for_user(db: &Database, user_id: UserId) -> CoreResult<Vec<Cre
         .collect())
 }
 
-pub async fn delete(db: &Database, user_id: UserId, credential_id: WebauthnCredentialId) -> CoreResult<()> {
-    user_webauthn_credentials::delete(db, credential_id, user_id).await.map_err(|e| match e {
-        sui_id_store::StoreError::NotFound => CoreError::NotFound,
-        other => CoreError::from(other),
-    })?;
+pub async fn delete(
+    db: &Database,
+    user_id: UserId,
+    credential_id: WebauthnCredentialId,
+) -> CoreResult<()> {
+    user_webauthn_credentials::delete(db, credential_id, user_id)
+        .await
+        .map_err(|e| match e {
+            sui_id_store::StoreError::NotFound => CoreError::NotFound,
+            other => CoreError::from(other),
+        })?;
     Ok(())
 }
 
@@ -314,25 +328,27 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async     fn build_accepts_https_url() {
+    async fn build_accepts_https_url() {
         let w = build("https://idp.example/").await.expect("build");
         let _ = w; // we just want it to construct without panicking.
     }
 
     #[tokio::test]
-    async     fn build_accepts_https_with_port() {
+    async fn build_accepts_https_with_port() {
         let w = build("https://idp.example:8443/").await.expect("build");
         let _ = w;
     }
 
     #[tokio::test]
-    async     fn build_accepts_localhost_http() {
-        let w = build("http://localhost:8080/").await.expect("localhost http");
+    async fn build_accepts_localhost_http() {
+        let w = build("http://localhost:8080/")
+            .await
+            .expect("localhost http");
         let _ = w;
     }
 
     #[tokio::test]
-    async     fn build_accepts_127_0_0_1_http() {
+    async fn build_accepts_127_0_0_1_http() {
         // webauthn-rs requires a hostname for rp_id, not a raw IP address.
         // 127.0.0.1 passes our transport check (it's a loopback address)
         // but is rejected at the WebauthnBuilder level with an Err — which
@@ -352,7 +368,7 @@ mod tests {
 
     // RFC 011: http on a non-localhost host must be rejected at startup.
     #[tokio::test]
-    async     fn build_rejects_http_on_public_host() {
+    async fn build_rejects_http_on_public_host() {
         let r = build("http://idp.example/").await;
         assert!(
             r.is_err(),
@@ -366,7 +382,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async     fn build_rejects_url_without_host() {
+    async fn build_rejects_url_without_host() {
         // file:// has no host — webauthn-rs (and our wrapper) reject this.
         let r = build("file:///etc/passwd").await;
         assert!(r.is_err());
@@ -377,10 +393,10 @@ mod tests {
 mod integration_tests {
     use super::*;
     use crate::time::system_clock;
+    use sui_id_store::Database;
     use sui_id_store::crypto::MasterKey;
     use sui_id_store::models::UserRow;
     use sui_id_store::repos::{users, webauthn_pending};
-    use sui_id_store::Database;
 
     async fn fresh_db_with_user() -> (Database, UserId) {
         let key = MasterKey::generate();
@@ -393,8 +409,12 @@ mod integration_tests {
                 username: "alice".into(),
                 display_name: None,
                 is_admin: true,
-        role: if true { sui_id_store::models::Role::Admin } else { sui_id_store::models::Role::User },
-        last_login_at: None,
+                role: if true {
+                    sui_id_store::models::Role::Admin
+                } else {
+                    sui_id_store::models::Role::User
+                },
+                last_login_at: None,
                 is_disabled: false,
                 is_deleted: false,
                 user_uuid: uuid::Uuid::new_v4(),
@@ -407,7 +427,8 @@ mod integration_tests {
                 email_normalized: None,
                 email_verified_at: None,
             },
-        ).await
+        )
+        .await
         .expect("insert user");
         (db, uid)
     }
@@ -416,10 +437,12 @@ mod integration_tests {
     async fn start_registration_persists_pending_row_and_returns_challenge_json() {
         let (db, uid) = fresh_db_with_user().await;
         let clock = system_clock();
-        let started =
-            start_registration(&db, &clock, "https://idp.example", uid).await.expect("start");
+        let started = start_registration(&db, &clock, "https://idp.example", uid)
+            .await
+            .expect("start");
         // Pending row must exist and be of kind Register.
-        let row = webauthn_pending::get(&db, started.pending_id).await
+        let row = webauthn_pending::get(&db, started.pending_id)
+            .await
             .expect("get")
             .expect("present");
         assert_eq!(
@@ -428,13 +451,12 @@ mod integration_tests {
         );
         assert_eq!(row.user_id, Some(uid));
         // Challenge JSON should parse and contain a publicKey.challenge.
-        let v: serde_json::Value =
-            serde_json::from_str(&started.challenge_json).expect("json");
+        let v: serde_json::Value = serde_json::from_str(&started.challenge_json).expect("json");
         assert!(v.get("publicKey").is_some(), "got: {v}");
     }
 
     #[tokio::test]
-    async     fn start_authentication_rejects_users_with_no_credentials() {
+    async fn start_authentication_rejects_users_with_no_credentials() {
         let (db, uid) = fresh_db_with_user().await;
         let clock = system_clock();
         let r = start_authentication(&db, &clock, "https://idp.example", uid).await;
@@ -460,7 +482,8 @@ mod integration_tests {
                 expires_at: now - chrono::Duration::seconds(1),
                 created_at: now - chrono::Duration::seconds(601),
             },
-        ).await
+        )
+        .await
         .expect("insert");
         // Build a dummy credential JSON; we never get past the expiry
         // check, so its content does not matter — but it must
@@ -478,10 +501,8 @@ mod integration_tests {
             uid,
             "test",
             &dummy,
-        ).await;
-        assert!(matches!(
-            r,
-            Err(crate::errors::CoreError::Unauthenticated)
-        ));
+        )
+        .await;
+        assert!(matches!(r, Err(crate::errors::CoreError::Unauthenticated)));
     }
 }

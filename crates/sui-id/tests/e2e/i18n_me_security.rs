@@ -6,11 +6,11 @@
 #![allow(dead_code)]
 
 use axum::body::Body;
-use axum::http::{header, Method, Request, StatusCode};
+use axum::http::{Method, Request, StatusCode, header};
 use sui_id::build_router;
 
-use tower::ServiceExt;
 use super::common::*;
+use tower::ServiceExt;
 
 // ---------- v0.29.1: /me/security i18n ----------
 
@@ -121,4 +121,3 @@ async fn me_security_cookie_overrides_accept_language() {
     let body = String::from_utf8_lossy(&body_bytes);
     assert!(body.contains("lang=\"en\""), "cookie should win");
 }
-

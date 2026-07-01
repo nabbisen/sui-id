@@ -1,26 +1,25 @@
 //! Admin handlers for auth (RFC 066).
 
+use super::forms::CsrfOnlyForm;
+use super::with_csrf_cookie;
 use crate::errors::HttpError;
 use crate::handlers::{
+    AppStateExt, PENDING_MFA_COOKIE, PENDING_MFA_NEXT_COOKIE, SESSION_COOKIE,
     clear_pending_mfa_cookie, clear_pending_mfa_next_cookie, clear_session_cookie,
-    pending_mfa_cookie, pending_mfa_next_cookie, session_cookie, AppStateExt, PENDING_MFA_COOKIE, PENDING_MFA_NEXT_COOKIE, SESSION_COOKIE,
+    pending_mfa_cookie, pending_mfa_next_cookie, session_cookie,
 };
+use axum::Form;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Redirect, Response};
-use axum::Form;
 use axum_extra::extract::cookie::CookieJar;
 use serde::Deserialize;
 use std::str::FromStr;
-use sui_id_core::session;
 use sui_id_core::errors::CoreError;
+use sui_id_core::session;
 use sui_id_shared::ids::SessionId;
 use sui_id_store::repos::users;
-use sui_id_web::{
-    render_login, Flash, FlashKind, LoginContext,
-};
-use super::forms::CsrfOnlyForm;
-use super::with_csrf_cookie;
+use sui_id_web::{Flash, FlashKind, LoginContext, render_login};
 
 #[derive(Debug, Deserialize)]
 
@@ -31,7 +30,6 @@ pub struct LoginForm {
     pub next: String,
 }
 
-
 /// Query parameters accepted by `GET /admin/login`.
 /// The `next` value is URL-encoded by the `/oauth2/authorize` endpoint
 /// so the login form can redirect back after a successful sign-in.
@@ -41,16 +39,12 @@ pub struct LoginGetQuery {
     pub next: String,
 }
 
-
 /// Derive the `LoginContext` from the `?next=` parameter (RFC 091).
 ///
 /// Trusted-name invariant: `OidcAuthorize` is only produced after a
 /// successful synchronous lookup of the client record by UUID.
 /// A malformed or unknown client_id falls back to `AdminPanel`.
-async fn derive_login_context(
-    db: &sui_id_store::Database,
-    next: &str,
-) -> LoginContext {
+async fn derive_login_context(db: &sui_id_store::Database, next: &str) -> LoginContext {
     if next.starts_with("/oauth2/") {
         // Extract client_id from the authorize URL and look up the
         // registered client name.  Any parse or DB failure → AdminPanel.
@@ -103,12 +97,15 @@ pub async fn login_get(
         }
     }
     // Thread `next` into the form so login_post can redirect to it.
-    let next = if q.next.is_empty() { None } else { Some(q.next.clone()) };
+    let next = if q.next.is_empty() {
+        None
+    } else {
+        Some(q.next.clone())
+    };
     // RFC 091: derive LoginContext from `next` for context-aware copy.
     let login_ctx = derive_login_context(&app.db, &q.next).await;
     Ok(Html(render_login(None, next, lang, false, Some(login_ctx))).into_response())
 }
-
 
 /// Attempt to sign in, trying the local credential store first, then any
 /// configured external user-sources (RFC 005 cascade).
@@ -132,19 +129,14 @@ pub async fn try_login_with_cascade(
     password: &str,
 ) -> sui_id_core::errors::CoreResult<sui_id_core::session::LoginOutcome> {
     use sui_id_core::errors::CoreError;
-    use sui_id_store::user_source::{cascade_sources, CascadeOutcome};
+    use sui_id_store::user_source::{CascadeOutcome, cascade_sources};
 
     let max_lockout = app.config.security.max_lockout.as_secs();
 
     // 1. Try local path (always first — P4).
-    let local_result = sui_id_core::session::login_with_mfa(
-        &app.db,
-        &app.clock,
-        username,
-        password,
-        max_lockout,
-    )
-    .await;
+    let local_result =
+        sui_id_core::session::login_with_mfa(&app.db, &app.clock, username, password, max_lockout)
+            .await;
 
     match local_result {
         // Local success or MFA-required: return directly.
@@ -168,23 +160,18 @@ pub async fn try_login_with_cascade(
                 CascadeOutcome::Matched(record) => {
                     // Resolve (or create) the local shadow row.
                     let shadow_data = sui_id_store::repos::users::LdapShadowData {
-                        username: resolve_shadow_username(
-                            &app.db,
-                            &record.display_username,
-                        )
-                        .await,
+                        username: resolve_shadow_username(&app.db, &record.display_username).await,
                         display_name: record.display_name.clone(),
                         email: record.email.clone(),
                         external_stable_id: record.stable_id.clone(),
                     };
-                    let user_id =
-                        sui_id_store::repos::users::upsert_ldap_shadow(
-                            &app.db,
-                            shadow_data,
-                            app.clock.now(),
-                        )
-                        .await
-                        .map_err(CoreError::from)?;
+                    let user_id = sui_id_store::repos::users::upsert_ldap_shadow(
+                        &app.db,
+                        shadow_data,
+                        app.clock.now(),
+                    )
+                    .await
+                    .map_err(CoreError::from)?;
 
                     // Emit audit event.
                     let _ = sui_id_store::repos::audit::append(
@@ -220,12 +207,8 @@ pub async fn try_login_with_cascade(
                         .map_err(CoreError::from)?;
                     // Session cap enforcement happens on the next local login;
                     // omitted here (the cap function is internal to sui-id-core).
-                    let _ = sui_id_store::repos::users::set_last_login(
-                        &app.db,
-                        &user_id,
-                        now,
-                    )
-                    .await;
+                    let _ =
+                        sui_id_store::repos::users::set_last_login(&app.db, &user_id, now).await;
                     Ok(sui_id_core::session::LoginOutcome::SessionEstablished(
                         session_row,
                     ))
@@ -271,7 +254,6 @@ async fn resolve_shadow_username(db: &sui_id_store::Database, proposed: &str) ->
     format!("{proposed}-{}", uuid::Uuid::new_v4().simple())
 }
 
-
 pub async fn login_post(
     state_ext: AppStateExt,
     crate::handlers::ClientIp(ip): crate::handlers::ClientIp,
@@ -311,10 +293,10 @@ pub async fn login_post(
             // The session row is already written at this point; if the
             // role check fails we simply don't hand out the cookie and the
             // row expires unused after its normal 24-hour lifetime.
-            let is_oidc_or_me = target.starts_with("/oauth2/")
-                || target.starts_with("/me/");
+            let is_oidc_or_me = target.starts_with("/oauth2/") || target.starts_with("/me/");
             if !is_oidc_or_me {
-                let user = users::get(&app.db, row.user_id).await
+                let user = users::get(&app.db, row.user_id)
+                    .await
                     .map_err(|e| HttpError::html(CoreError::from(e)))?;
                 if !user.role.can_read_admin() {
                     let t = lang.strings();
@@ -327,7 +309,9 @@ pub async fn login_post(
                     } else {
                         Some(form.next)
                     };
-                    return Ok(Html(render_login(Some(flash), next, lang, false, None)).into_response());
+                    return Ok(
+                        Html(render_login(Some(flash), next, lang, false, None)).into_response()
+                    );
                 }
             }
 
@@ -342,10 +326,8 @@ pub async fn login_post(
             }
             // Drop the user a short-lived cookie pointing at the
             // pending row, and bounce them into the MFA challenge page.
-            let cookie = pending_mfa_cookie(
-                pending.id.to_string(),
-                app.config.server.cookie_secure,
-            );
+            let cookie =
+                pending_mfa_cookie(pending.id.to_string(), app.config.server.cookie_secure);
             let next_cookie = if !form.next.is_empty() {
                 Some(pending_mfa_next_cookie(
                     form.next.clone(),
@@ -375,14 +357,14 @@ pub async fn login_post(
             } else {
                 Some(form.next)
             };
-            Ok(
-                (StatusCode::UNAUTHORIZED, Html(render_login(Some(flash), next, lang, false, None)))
-                    .into_response(),
+            Ok((
+                StatusCode::UNAUTHORIZED,
+                Html(render_login(Some(flash), next, lang, false, None)),
             )
+                .into_response())
         }
     }
 }
-
 
 pub async fn mfa_challenge_get(
     state_ext: AppStateExt,
@@ -400,15 +382,28 @@ pub async fn mfa_challenge_get(
             .and_then(|c| c.value().parse::<sui_id_shared::ids::PendingMfaId>().ok());
         if let Some(pid) = pid_opt {
             let row_opt = sui_id_store::repos::login_pending_mfa::get(&app.db, pid)
-                .await.ok().flatten();
+                .await
+                .ok()
+                .flatten();
             if let Some(row) = row_opt {
-                sui_id_core::webauthn::has_credentials(&app.db, row.user_id).await.unwrap_or(false)
-            } else { false }
-        } else { false }
+                sui_id_core::webauthn::has_credentials(&app.db, row.user_id)
+                    .await
+                    .unwrap_or(false)
+            } else {
+                false
+            }
+        } else {
+            false
+        }
     };
     let token = crate::csrf::ensure_token(&jar);
-    let resp =
-        Html(sui_id_web::render_mfa_challenge(None, token.clone(), has_passkey, lang)).into_response();
+    let resp = Html(sui_id_web::render_mfa_challenge(
+        None,
+        token.clone(),
+        has_passkey,
+        lang,
+    ))
+    .into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
 }
 
@@ -419,7 +414,6 @@ pub struct MfaChallengeForm {
     #[serde(rename = "_csrf", default)]
     pub csrf: String,
 }
-
 
 pub async fn mfa_challenge_post(
     state_ext: AppStateExt,
@@ -451,8 +445,7 @@ pub async fn mfa_challenge_post(
     };
     match sui_id_core::mfa::verify_pending(&app.db, &app.clock, pending_id, &form.code).await {
         Ok(session) => {
-            let cookie =
-                session_cookie(session.id.to_string(), app.config.server.cookie_secure);
+            let cookie = session_cookie(session.id.to_string(), app.config.server.cookie_secure);
             // Compose the redirect target from the optional next cookie.
             let next_target = jar
                 .get(PENDING_MFA_NEXT_COOKIE)
@@ -470,7 +463,8 @@ pub async fn mfa_challenge_post(
                     result: "ok".into(),
                     note: None,
                 },
-            ).await;
+            )
+            .await;
             // RFC 006: MFA verified → full sign-in success.
             if let Some(m) = app.metric() {
                 m.signin(sui_id_store::metrics::signin_result::SUCCESS);
@@ -478,7 +472,9 @@ pub async fn mfa_challenge_post(
             let jar = jar
                 .add(cookie)
                 .add(clear_pending_mfa_cookie(app.config.server.cookie_secure))
-                .add(clear_pending_mfa_next_cookie(app.config.server.cookie_secure));
+                .add(clear_pending_mfa_next_cookie(
+                    app.config.server.cookie_secure,
+                ));
             Ok((jar, Redirect::to(&next_target)).into_response())
         }
         Err(_) => {
@@ -497,7 +493,8 @@ pub async fn mfa_challenge_post(
                     result: "denied".into(),
                     note: None,
                 },
-            ).await;
+            )
+            .await;
             // RFC 006: MFA code rejected.
             if let Some(m) = app.metric() {
                 m.signin(sui_id_store::metrics::signin_result::MFA_FAILED);
@@ -508,11 +505,19 @@ pub async fn mfa_challenge_post(
                     .and_then(|c| c.value().parse::<sui_id_shared::ids::PendingMfaId>().ok());
                 if let Some(pid) = pid_opt2 {
                     let row_opt2 = sui_id_store::repos::login_pending_mfa::get(&app.db, pid)
-                        .await.ok().flatten();
+                        .await
+                        .ok()
+                        .flatten();
                     if let Some(row) = row_opt2 {
-                        sui_id_core::webauthn::has_credentials(&app.db, row.user_id).await.unwrap_or(false)
-                    } else { false }
-                } else { false }
+                        sui_id_core::webauthn::has_credentials(&app.db, row.user_id)
+                            .await
+                            .unwrap_or(false)
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
             };
             let token = crate::csrf::ensure_token(&jar);
             let resp = (
@@ -529,7 +534,6 @@ pub async fn mfa_challenge_post(
         }
     }
 }
-
 
 pub async fn logout(
     jar: CookieJar,

@@ -10,13 +10,11 @@
 
 use crate::errors::{CoreError, CoreResult};
 use crate::time::SharedClock;
-use crate::tokens::{verify_access_token, AccessTokenClaims};
+use crate::tokens::{AccessTokenClaims, verify_access_token};
 use chrono::DateTime;
-use sui_id_shared::{ids::ClientId, RawRefreshToken};
-use sui_id_store::repos::{
-    clients, refresh_tokens, revoked_access_tokens as deny_list, users,
-};
+use sui_id_shared::{RawRefreshToken, ids::ClientId};
 use sui_id_store::Database;
+use sui_id_store::repos::{clients, refresh_tokens, revoked_access_tokens as deny_list, users};
 
 /// What the introspection endpoint reports back.
 ///
@@ -238,7 +236,8 @@ async fn try_revoke_access(
             revoked_by_user: user_id,
             revoked_by_client: Some(authenticating_client),
         },
-    ).await?;
+    )
+    .await?;
     Ok(true)
 }
 

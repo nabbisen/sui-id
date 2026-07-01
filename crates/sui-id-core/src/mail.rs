@@ -36,12 +36,11 @@
 
 pub mod outbox;
 
-
 use crate::errors::{CoreError, CoreResult};
 use crate::time::SharedClock;
 use mail_builder::MessageBuilder;
-use sui_id_store::repos::smtp_config;
 use sui_id_store::Database;
+use sui_id_store::repos::smtp_config;
 use tokio::sync::Mutex;
 use wasm_smtp::SmtpClient;
 use wasm_smtp_tokio::{TokioPlainTransport, TokioTlsTransport};
@@ -87,9 +86,7 @@ pub trait MailSender: Send + Sync {
     fn send<'a>(
         &'a self,
         mail: OutgoingMail,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = CoreResult<MailSendOutcome>> + Send + 'a>,
-    >;
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = CoreResult<MailSendOutcome>> + Send + 'a>>;
 }
 
 // ---------- production: SmtpMailSender ----------
@@ -135,10 +132,12 @@ impl SmtpMailSender {
     /// directly — it's the kind of error an operator wants to see
     /// verbatim ("550 5.7.1 relay denied", "auth failed", etc).
     pub async fn test_connection(&self) -> CoreResult<()> {
-        let cfg = smtp_config::get(&self.db).await?
+        let cfg = smtp_config::get(&self.db)
+            .await?
             .ok_or_else(|| CoreError::BadRequest("SMTP is not configured".into()))?;
         let password = smtp_config::decrypt_password(&cfg, self.db.key()).await?;
-        run_smtp_session(&cfg, password.as_deref(), &self.ehlo_hostname, None).await
+        run_smtp_session(&cfg, password.as_deref(), &self.ehlo_hostname, None)
+            .await
             .map_err(|e| CoreError::BadRequest(format!("SMTP test failed: {e}")))?;
         Ok(())
     }
@@ -148,11 +147,11 @@ impl MailSender for SmtpMailSender {
     fn send<'a>(
         &'a self,
         mail: OutgoingMail,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = CoreResult<MailSendOutcome>> + Send + 'a>,
-    > {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = CoreResult<MailSendOutcome>> + Send + 'a>>
+    {
         Box::pin(async move {
-            let cfg = smtp_config::get(&self.db).await?
+            let cfg = smtp_config::get(&self.db)
+                .await?
                 .ok_or_else(|| CoreError::BadRequest("SMTP is not configured".into()))?;
             if !cfg.enabled {
                 return Err(CoreError::BadRequest("SMTP is disabled".into()));
@@ -161,7 +160,8 @@ impl MailSender for SmtpMailSender {
             let from = cfg.from_address.clone();
             let subject = mail.subject.clone();
             let to_addr = mail.to.clone();
-            run_smtp_session(&cfg, password.as_deref(), &self.ehlo_hostname, Some(&mail)).await
+            run_smtp_session(&cfg, password.as_deref(), &self.ehlo_hostname, Some(&mail))
+                .await
                 .map_err(|e| {
                     tracing::warn!(error = %e, "SMTP send failed");
                     CoreError::BadRequest(format!("SMTP send failed: {e}"))
@@ -198,8 +198,7 @@ async fn run_smtp_session(
             authenticate_and_dispatch(client, cfg, password, mail).await?;
         }
         SmtpTlsMode::StartTls => {
-            let transport =
-                TokioPlainTransport::connect(&cfg.host, cfg.port, &cfg.host).await?;
+            let transport = TokioPlainTransport::connect(&cfg.host, cfg.port, &cfg.host).await?;
             let client = SmtpClient::connect_starttls(transport, ehlo_hostname).await?;
             authenticate_and_dispatch(client, cfg, password, mail).await?;
         }
@@ -236,7 +235,10 @@ async fn authenticate_and_dispatch<T: wasm_smtp::Transport>(
     Ok(())
 }
 
-fn build_from<'a>(addr: &'a str, name: Option<&'a str>) -> mail_builder::headers::address::Address<'a> {
+fn build_from<'a>(
+    addr: &'a str,
+    name: Option<&'a str>,
+) -> mail_builder::headers::address::Address<'a> {
     match name {
         Some(n) => (n, addr).into(),
         None => addr.into(),
@@ -275,9 +277,8 @@ impl MailSender for InMemoryMailSender {
     fn send<'a>(
         &'a self,
         mail: OutgoingMail,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = CoreResult<MailSendOutcome>> + Send + 'a>,
-    > {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = CoreResult<MailSendOutcome>> + Send + 'a>>
+    {
         Box::pin(async move {
             let outcome = MailSendOutcome {
                 from: "test@sui-id.test".into(),

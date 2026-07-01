@@ -10,7 +10,7 @@
 //! 5. UserInfo with no user email omits both claims.
 
 use axum::body::Body;
-use axum::http::{header, Method, Request, StatusCode};
+use axum::http::{Method, Request, StatusCode, header};
 use tower::ServiceExt;
 use url::Url;
 
@@ -38,10 +38,7 @@ async fn enable_smtp_row(state: &sui_id::AppState) {
         .expect("enable smtp row");
 }
 
-async fn post_forgot_password(
-    state: &sui_id::AppState,
-    email: &str,
-) -> axum::response::Response {
+async fn post_forgot_password(state: &sui_id::AppState, email: &str) -> axum::response::Response {
     let get_resp = build_router(state.clone())
         .oneshot(
             Request::builder()
@@ -145,14 +142,16 @@ async fn forgot_password_case_insensitive() {
     let _ = complete_setup_and_login(&state).await;
     enable_smtp_row(&state).await;
 
-    let user =
-        sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await.expect("find user");
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+        .await
+        .expect("find user");
     sui_id_store::repos::users::update_email(
         &state.db,
         user.id,
         Some("Alice@Example.com"),
         chrono::Utc::now(),
-    ).await
+    )
+    .await
     .expect("set mixed-case email");
 
     let resp = post_forgot_password(&state, "alice@example.com").await;
@@ -173,14 +172,16 @@ async fn email_uniqueness_is_case_insensitive() {
     let state = test_app();
     let session = complete_setup_and_login(&state).await;
 
-    let user =
-        sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await.expect("find user");
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+        .await
+        .expect("find user");
     sui_id_store::repos::users::update_email(
         &state.db,
         user.id,
         Some("admin@example.com"),
         chrono::Utc::now(),
-    ).await
+    )
+    .await
     .expect("set email");
 
     let csrf = fetch_csrf(&state, &session).await;
@@ -219,22 +220,24 @@ async fn email_uniqueness_is_case_insensitive() {
 async fn userinfo_returns_email_when_scope_email() {
     let state = test_app();
     let session = complete_setup_and_login(&state).await;
-    let (client_id, client_secret) = create_client_with_scopes(&state, &session, "openid email").await;
+    let (client_id, client_secret) =
+        create_client_with_scopes(&state, &session, "openid email").await;
 
-    let user =
-        sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await.expect("find user");
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+        .await
+        .expect("find user");
     sui_id_store::repos::users::update_email(
         &state.db,
         user.id,
         Some("alice@idp.test"),
         chrono::Utc::now(),
-    ).await
+    )
+    .await
     .expect("set email");
 
-    let access = get_access_token_with_scope(
-        &state, &session, &client_id, &client_secret, "openid email",
-    )
-    .await;
+    let access =
+        get_access_token_with_scope(&state, &session, &client_id, &client_secret, "openid email")
+            .await;
 
     let resp = build_router(state.clone())
         .oneshot(
@@ -264,16 +267,19 @@ async fn userinfo_returns_email_when_scope_email() {
 async fn userinfo_omits_email_without_email_scope() {
     let state = test_app();
     let session = complete_setup_and_login(&state).await;
-    let (client_id, client_secret) = create_client_with_scopes(&state, &session, "openid email").await;
+    let (client_id, client_secret) =
+        create_client_with_scopes(&state, &session, "openid email").await;
 
-    let user =
-        sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await.expect("find user");
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+        .await
+        .expect("find user");
     sui_id_store::repos::users::update_email(
         &state.db,
         user.id,
         Some("alice@idp.test"),
         chrono::Utc::now(),
-    ).await
+    )
+    .await
     .expect("set email");
 
     let access =
@@ -293,7 +299,10 @@ async fn userinfo_omits_email_without_email_scope() {
     let body = read_body(resp.into_body()).await;
     let info: serde_json::Value = serde_json::from_slice(&body).expect("json");
 
-    assert!(info.get("email").is_none(), "email must be absent with openid scope only");
+    assert!(
+        info.get("email").is_none(),
+        "email must be absent with openid scope only"
+    );
     assert!(info.get("email_verified").is_none());
 }
 
@@ -303,13 +312,13 @@ async fn userinfo_omits_email_without_email_scope() {
 async fn userinfo_omits_email_when_user_has_no_email() {
     let state = test_app();
     let session = complete_setup_and_login(&state).await;
-    let (client_id, client_secret) = create_client_with_scopes(&state, &session, "openid email").await;
+    let (client_id, client_secret) =
+        create_client_with_scopes(&state, &session, "openid email").await;
 
     // The default test user has no email after complete_setup_and_login.
-    let access = get_access_token_with_scope(
-        &state, &session, &client_id, &client_secret, "openid email",
-    )
-    .await;
+    let access =
+        get_access_token_with_scope(&state, &session, &client_id, &client_secret, "openid email")
+            .await;
 
     let resp = build_router(state.clone())
         .oneshot(

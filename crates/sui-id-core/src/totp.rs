@@ -46,7 +46,12 @@ pub async fn code_for_step(secret: &[u8], step: i64) -> u32 {
 ///
 /// On success returns the matching `step` so the caller can persist it
 /// as `last_used_step` (replay defence). On failure returns `None`.
-pub async fn verify(secret: &[u8], unix_time: i64, supplied: u32, last_used_step: i64) -> Option<i64> {
+pub async fn verify(
+    secret: &[u8],
+    unix_time: i64,
+    supplied: u32,
+    last_used_step: i64,
+) -> Option<i64> {
     if supplied >= 10u32.pow(DIGITS) {
         return None;
     }
@@ -59,11 +64,7 @@ pub async fn verify(secret: &[u8], unix_time: i64, supplied: u32, last_used_step
         }
         let expected = code_for_step(secret, step).await;
         // Constant-time compare. `u32` → 4 bytes BE.
-        if expected
-            .to_be_bytes()
-            .ct_eq(&supplied.to_be_bytes())
-            .into()
-        {
+        if expected.to_be_bytes().ct_eq(&supplied.to_be_bytes()).into() {
             return Some(step);
         }
     }
@@ -115,7 +116,7 @@ mod tests {
     const RFC_SECRET: &[u8] = b"12345678901234567890";
 
     #[tokio::test]
-    async     fn rfc6238_appendix_b_vectors() {
+    async fn rfc6238_appendix_b_vectors() {
         // From the RFC: time, expected code (HMAC-SHA1).
         // step = time / 30
         let cases = [
@@ -137,7 +138,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async     fn verify_accepts_current_step() {
+    async fn verify_accepts_current_step() {
         let now = 1_700_000_000_i64;
         let step = now.div_euclid(STEP_SECS);
         let code = code_for_step(RFC_SECRET, step).await;
@@ -146,7 +147,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async     fn verify_accepts_minus_one_step() {
+    async fn verify_accepts_minus_one_step() {
         let now = 1_700_000_000_i64;
         let step = now.div_euclid(STEP_SECS) - 1;
         let code = code_for_step(RFC_SECRET, step).await;
@@ -154,7 +155,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async     fn verify_rejects_replay_within_window() {
+    async fn verify_rejects_replay_within_window() {
         let now = 1_700_000_000_i64;
         let step = now.div_euclid(STEP_SECS);
         let code = code_for_step(RFC_SECRET, step).await;
@@ -165,19 +166,23 @@ mod tests {
     }
 
     #[tokio::test]
-    async     fn verify_rejects_wrong_code() {
+    async fn verify_rejects_wrong_code() {
         let now = 1_700_000_000_i64;
         assert!(verify(RFC_SECRET, now, 000000, 0).await.is_none());
     }
 
     #[tokio::test]
-    async     fn verify_rejects_overlong_code() {
+    async fn verify_rejects_overlong_code() {
         // 7-digit submission — must fail without trying the HMAC.
-        assert!(verify(RFC_SECRET, 1_700_000_000, 1_234_567, 0).await.is_none());
+        assert!(
+            verify(RFC_SECRET, 1_700_000_000, 1_234_567, 0)
+                .await
+                .is_none()
+        );
     }
 
     #[tokio::test]
-    async     fn base32_round_trip_known_vectors() {
+    async fn base32_round_trip_known_vectors() {
         assert_eq!(base32_encode(b"").await, "");
         assert_eq!(base32_encode(b"f").await, "MY");
         assert_eq!(base32_encode(b"fo").await, "MZXQ");
@@ -188,7 +193,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async     fn otpauth_uri_has_required_fields() {
+    async fn otpauth_uri_has_required_fields() {
         let uri = otpauth_uri("sui-id", "alice", b"01234567890123456789").await;
         assert!(uri.starts_with("otpauth://totp/sui-id:alice?"));
         assert!(uri.contains("secret="));

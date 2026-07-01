@@ -6,11 +6,10 @@ use axum::response::{IntoResponse, Redirect, Response};
 use axum_extra::extract::cookie::CookieJar;
 use sui_id_core::errors::CoreError;
 
-
 use super::forms::*;
-use crate::handlers::{AppStateExt, CurrentUser, enforce_csrf};
 use crate::handlers::admin::with_csrf_cookie;
-use sui_id_web::pages::{MeShellData, MeTab, MePasskeyData};
+use crate::handlers::{AppStateExt, CurrentUser, enforce_csrf};
+use sui_id_web::pages::{MePasskeyData, MeShellData, MeTab};
 
 pub async fn passkeys_get(
     state_ext: AppStateExt,
@@ -21,21 +20,25 @@ pub async fn passkeys_get(
     let State(app) = state_ext;
     let lang = req_locale;
     let user = sui_id_store::repos::users::get(&app.db, user_id)
-        .await.map_err(|e| HttpError::html(CoreError::from(e)).with_lang(lang))?;
+        .await
+        .map_err(|e| HttpError::html(CoreError::from(e)).with_lang(lang))?;
     let shell = MeShellData {
         username: user.username,
         is_admin: user.is_admin,
         active_tab: MeTab::Passkey,
     };
-    let passkeys = sui_id_store::repos::user_webauthn_credentials::list_for_user(
-        &app.db, user_id
-    ).await.map_err(|e| HttpError::html(CoreError::from(e)).with_lang(lang))?;
-    let descriptors = passkeys.into_iter().map(|p| sui_id_web::PasskeyDescriptor {
-        id: p.id.to_string(),
-        nickname: p.nickname,
-        created_at: p.created_at,
-        last_used_at: None,
-    }).collect();
+    let passkeys = sui_id_store::repos::user_webauthn_credentials::list_for_user(&app.db, user_id)
+        .await
+        .map_err(|e| HttpError::html(CoreError::from(e)).with_lang(lang))?;
+    let descriptors = passkeys
+        .into_iter()
+        .map(|p| sui_id_web::PasskeyDescriptor {
+            id: p.id.to_string(),
+            nickname: p.nickname,
+            created_at: p.created_at,
+            last_used_at: None,
+        })
+        .collect();
     // Check if issuer is HTTPS or localhost
     let origin_eligible = {
         let issuer = app.issuer();
@@ -46,9 +49,17 @@ pub async fn passkeys_get(
     let flash: Option<sui_id_web::Flash> = None;
     let csrf_tok = csrf::ensure_token(&jar);
     let resp = axum::response::Html(sui_id_web::render_me_passkey(
-        MePasskeyData { shell, passkeys: descriptors, origin_eligible, csrf_token: csrf_tok.clone() },
-        flash, app.is_dev_mode, lang,
-    )).into_response();
+        MePasskeyData {
+            shell,
+            passkeys: descriptors,
+            origin_eligible,
+            csrf_token: csrf_tok.clone(),
+        },
+        flash,
+        app.is_dev_mode,
+        lang,
+    ))
+    .into_response();
     Ok(with_csrf_cookie(resp, &app, &csrf_tok))
 }
 
@@ -64,12 +75,14 @@ pub async fn passkey_rename_post(
     let new_name = form.nickname.trim();
     if new_name.is_empty() || new_name.len() > 64 {
         return Err(HttpError::html(CoreError::BadRequest(
-            "nickname must be 1–64 characters".into()
+            "nickname must be 1–64 characters".into(),
         )));
     }
     sui_id_store::repos::user_webauthn_credentials::update_nickname(
         &app.db, &cred_id, user_id, new_name,
-    ).await.map_err(|e| HttpError::html(CoreError::from(e)))?;
+    )
+    .await
+    .map_err(|e| HttpError::html(CoreError::from(e)))?;
     Ok(Redirect::to("/me/security/passkeys").into_response())
 }
 
@@ -87,9 +100,10 @@ pub async fn passkey_register_start(
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
     enforce_csrf(&jar, Some(&form.csrf))?;
-    let started = sui_id_core::webauthn::start_registration(
-        &app.db, &app.clock, app.issuer(), user_id,
-    ).await.map_err(HttpError::html)?;
+    let started =
+        sui_id_core::webauthn::start_registration(&app.db, &app.clock, app.issuer(), user_id)
+            .await
+            .map_err(HttpError::html)?;
     let nickname_cookie = {
         use axum_extra::extract::cookie::{Cookie, SameSite};
         let mut c = Cookie::new("sui_id_webauthn_nickname", form.nickname);
@@ -105,9 +119,8 @@ pub async fn passkey_register_start(
         app.config.server.cookie_secure,
     );
     let jar = jar.add(pending_cookie).add(nickname_cookie);
-    let challenge_value: serde_json::Value =
-        serde_json::from_str(&started.challenge_json)
-            .map_err(|_| HttpError::html(CoreError::Internal))?;
+    let challenge_value: serde_json::Value = serde_json::from_str(&started.challenge_json)
+        .map_err(|_| HttpError::html(CoreError::Internal))?;
     Ok((jar, axum::Json(challenge_value)).into_response())
 }
 
@@ -124,10 +137,9 @@ pub async fn passkey_register_complete(
         .ok_or_else(|| HttpError::html(CoreError::BadRequest("no pending ceremony".into())))?
         .value()
         .to_owned();
-    let pending_id: sui_id_shared::ids::WebauthnPendingId =
-        pending_value.parse().map_err(|_| {
-            HttpError::html(CoreError::BadRequest("malformed pending id".into()))
-        })?;
+    let pending_id: sui_id_shared::ids::WebauthnPendingId = pending_value
+        .parse()
+        .map_err(|_| HttpError::html(CoreError::BadRequest("malformed pending id".into())))?;
     let nickname = jar
         .get("sui_id_webauthn_nickname")
         .map(|c| c.value().to_owned())
@@ -137,9 +149,16 @@ pub async fn passkey_register_complete(
             HttpError::html(CoreError::BadRequest("malformed credential JSON".into()))
         })?;
     sui_id_core::webauthn::finish_registration(
-        &app.db, &app.clock, app.issuer(),
-        pending_id, user_id, &nickname, &credential,
-    ).await.map_err(HttpError::html)?;
+        &app.db,
+        &app.clock,
+        app.issuer(),
+        pending_id,
+        user_id,
+        &nickname,
+        &credential,
+    )
+    .await
+    .map_err(HttpError::html)?;
     let _ = sui_id_store::repos::audit::append(
         &app.db,
         &sui_id_store::models::AuditLogRow {
@@ -150,7 +169,8 @@ pub async fn passkey_register_complete(
             result: "ok".into(),
             note: None,
         },
-    ).await;
+    )
+    .await;
     let jar = jar.add(crate::handlers::clear_webauthn_pending_cookie(
         app.config.server.cookie_secure,
     ));
@@ -175,10 +195,12 @@ pub async fn passkey_delete(
     {
         return Ok(redirect);
     }
-    let id = cred_id.parse::<sui_id_shared::ids::WebauthnCredentialId>().map_err(|_| {
-        HttpError::html(CoreError::BadRequest("invalid credential id".into()))
-    })?;
-    sui_id_core::webauthn::delete(&app.db, user_id, id).await.map_err(HttpError::html)?;
+    let id = cred_id
+        .parse::<sui_id_shared::ids::WebauthnCredentialId>()
+        .map_err(|_| HttpError::html(CoreError::BadRequest("invalid credential id".into())))?;
+    sui_id_core::webauthn::delete(&app.db, user_id, id)
+        .await
+        .map_err(HttpError::html)?;
     let _ = sui_id_store::repos::audit::append(
         &app.db,
         &sui_id_store::models::AuditLogRow {
@@ -189,6 +211,7 @@ pub async fn passkey_delete(
             result: "ok".into(),
             note: Some("self".into()),
         },
-    ).await;
+    )
+    .await;
     Ok(Redirect::to("/me/security/passkeys").into_response())
 }

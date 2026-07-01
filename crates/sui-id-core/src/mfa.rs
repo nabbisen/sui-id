@@ -16,7 +16,6 @@
 //!    against a TOTP code (or a recovery code), creating a real session
 //!    and deleting the pending row.
 
-use getrandom;
 use crate::errors::{CoreError, CoreResult};
 use crate::password::{hash_password, verify_password};
 use crate::time::SharedClock;
@@ -24,10 +23,11 @@ use crate::tokens::random_token;
 use crate::totp;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::Duration;
+use getrandom;
 use sui_id_shared::ids::{PendingMfaId, SessionId, UserId};
+use sui_id_store::Database;
 use sui_id_store::models::{LoginPendingMfaRow, SessionRow};
 use sui_id_store::repos::{login_pending_mfa, sessions, user_totp};
-use sui_id_store::Database;
 use zeroize::Zeroize;
 
 const TOTP_SECRET_LEN: usize = 20; // RFC 6238: 160 bits.
@@ -42,7 +42,8 @@ const SESSION_LIFETIME_HOURS: i64 = 12;
 /// credential counts; the user picks which factor to present at the
 /// challenge page.
 pub async fn is_mfa_enabled(db: &Database, user_id: UserId) -> CoreResult<bool> {
-    let totp_on = user_totp::get(db, user_id).await?
+    let totp_on = user_totp::get(db, user_id)
+        .await?
         .map(|r| r.enabled)
         .unwrap_or(false);
     if totp_on {
@@ -98,7 +99,8 @@ pub async fn confirm_enrollment(
     user_id: UserId,
     supplied_code: u32,
 ) -> CoreResult<Vec<String>> {
-    let row = user_totp::get(db, user_id).await?
+    let row = user_totp::get(db, user_id)
+        .await?
         .ok_or_else(|| CoreError::BadRequest("no pending TOTP enrolment".into()))?;
     if row.enabled {
         return Err(CoreError::Conflict(
@@ -109,7 +111,8 @@ pub async fn confirm_enrollment(
     let now = clock.now().timestamp();
     let step = totp::verify(&secret, now, supplied_code, row.last_used_step).await;
     secret.zeroize();
-    let step = step.ok_or_else(|| CoreError::BadRequest("verification code is incorrect".into()))?;
+    let step =
+        step.ok_or_else(|| CoreError::BadRequest("verification code is incorrect".into()))?;
 
     let plain_codes: Vec<String> = (0..RECOVERY_CODE_COUNT)
         .map(|_| generate_recovery_code())
@@ -118,8 +121,7 @@ pub async fn confirm_enrollment(
     for c in &plain_codes {
         hashed.push(hash_password(c)?);
     }
-    let blob = serde_json::to_vec(&hashed)
-        .map_err(|_| CoreError::Internal)?;
+    let blob = serde_json::to_vec(&hashed).map_err(|_| CoreError::Internal)?;
     user_totp::confirm_with_recovery(db, user_id, &blob).await?;
     user_totp::set_last_used_step(db, user_id, step).await?;
     Ok(plain_codes)
@@ -139,7 +141,9 @@ pub async fn disable(db: &Database, user_id: UserId) -> CoreResult<()> {
 /// Regenerate recovery codes (the user lost their copy). Requires that
 /// MFA is already enabled. Returns the new plaintext codes.
 pub async fn regenerate_recovery_codes(db: &Database, user_id: UserId) -> CoreResult<Vec<String>> {
-    let row = user_totp::get(db, user_id).await?.ok_or(CoreError::NotFound)?;
+    let row = user_totp::get(db, user_id)
+        .await?
+        .ok_or(CoreError::NotFound)?;
     if !row.enabled {
         return Err(CoreError::BadRequest("MFA is not enabled".into()));
     }
@@ -186,13 +190,15 @@ pub async fn verify_pending(
     pending_id: PendingMfaId,
     code_input: &str,
 ) -> CoreResult<SessionRow> {
-    let pending = login_pending_mfa::get(db, pending_id).await?
+    let pending = login_pending_mfa::get(db, pending_id)
+        .await?
         .ok_or(CoreError::Unauthenticated)?;
     if pending.expires_at < clock.now() {
         let _ = login_pending_mfa::delete(db, pending_id).await;
         return Err(CoreError::Unauthenticated);
     }
-    let totp_row = user_totp::get(db, pending.user_id).await?
+    let totp_row = user_totp::get(db, pending.user_id)
+        .await?
         .ok_or(CoreError::Unauthenticated)?;
     if !totp_row.enabled {
         return Err(CoreError::Unauthenticated);
@@ -240,7 +246,7 @@ pub async fn verify_pending(
         // immediately ask the user to re-prove themselves on a
         // session that's seconds old.
         last_step_up_at: Some(now),
-            last_used_at: None,
+        last_used_at: None,
     };
     sessions::insert(db, &session).await?;
     crate::session::enforce_concurrent_session_cap(db, clock, session.user_id).await;
@@ -263,7 +269,8 @@ pub async fn verify_pending_webauthn(
     pending_id: sui_id_shared::ids::PendingMfaId,
     expected_user_id: UserId,
 ) -> CoreResult<SessionRow> {
-    let pending = login_pending_mfa::get(db, pending_id).await?
+    let pending = login_pending_mfa::get(db, pending_id)
+        .await?
         .ok_or(CoreError::Unauthenticated)?;
     if pending.expires_at < clock.now() {
         let _ = login_pending_mfa::delete(db, pending_id).await;
@@ -289,7 +296,7 @@ pub async fn verify_pending_webauthn(
         ],
         // Phishing-resistant step-up just succeeded.
         last_step_up_at: Some(now),
-            last_used_at: None,
+        last_used_at: None,
     };
     sessions::insert(db, &session).await?;
     crate::session::enforce_concurrent_session_cap(db, clock, session.user_id).await;
@@ -310,18 +317,14 @@ pub async fn verify_pending_webauthn(
 /// Errors only on database / decryption failure. The caller is
 /// expected to `unwrap_or(0)` for display purposes, since failing
 /// the count shouldn't fail the surrounding render.
-pub async fn count_recovery_codes_remaining(
-    db: &Database,
-    user_id: UserId,
-) -> CoreResult<usize> {
+pub async fn count_recovery_codes_remaining(db: &Database, user_id: UserId) -> CoreResult<usize> {
     let Some(row) = user_totp::get(db, user_id).await? else {
         return Ok(0);
     };
     let Some(blob) = user_totp::decrypt_recovery_codes(db, &row).await? else {
         return Ok(0);
     };
-    let hashes: Vec<String> =
-        serde_json::from_slice(&blob).map_err(|_| CoreError::Internal)?;
+    let hashes: Vec<String> = serde_json::from_slice(&blob).map_err(|_| CoreError::Internal)?;
     Ok(hashes.len())
 }
 
@@ -335,8 +338,7 @@ pub(crate) async fn consume_recovery_code(
         Some(b) => b,
         None => return Ok(false),
     };
-    let mut hashes: Vec<String> =
-        serde_json::from_slice(&blob).map_err(|_| CoreError::Internal)?;
+    let mut hashes: Vec<String> = serde_json::from_slice(&blob).map_err(|_| CoreError::Internal)?;
     let mut hit_idx: Option<usize> = None;
     for (i, h) in hashes.iter().enumerate() {
         if verify_password(candidate, h).is_ok() {
@@ -384,7 +386,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async     fn recovery_code_format() {
+    async fn recovery_code_format() {
         let c = generate_recovery_code();
         assert_eq!(c.len(), 17);
         assert_eq!(c.as_bytes()[5], b'-');
@@ -396,10 +398,10 @@ mod tests {
 mod integration_tests {
     use super::*;
     use crate::time::system_clock;
+    use sui_id_store::Database;
     use sui_id_store::crypto::MasterKey;
     use sui_id_store::models::UserRow;
     use sui_id_store::repos::users;
-    use sui_id_store::Database;
 
     async fn fresh_db_with_user() -> (Database, UserId) {
         let key = MasterKey::generate();
@@ -412,8 +414,12 @@ mod integration_tests {
                 username: "alice".into(),
                 display_name: None,
                 is_admin: true,
-        role: if true { sui_id_store::models::Role::Admin } else { sui_id_store::models::Role::User },
-        last_login_at: None,
+                role: if true {
+                    sui_id_store::models::Role::Admin
+                } else {
+                    sui_id_store::models::Role::User
+                },
+                last_login_at: None,
                 is_disabled: false,
                 is_deleted: false,
                 user_uuid: uuid::Uuid::new_v4(),
@@ -426,46 +432,59 @@ mod integration_tests {
                 email_normalized: None,
                 email_verified_at: None,
             },
-        ).await
+        )
+        .await
         .expect("insert user");
         (db, uid)
     }
 
     #[tokio::test]
-    async     fn enroll_then_confirm_completes_and_returns_8_recovery_codes() {
+    async fn enroll_then_confirm_completes_and_returns_8_recovery_codes() {
         let (db, uid) = fresh_db_with_user().await;
         let clock = system_clock();
-        let ticket = start_enrollment(&db, "sui-id", uid, "alice").await.expect("start");
+        let ticket = start_enrollment(&db, "sui-id", uid, "alice")
+            .await
+            .expect("start");
         assert_eq!(ticket.secret.len(), 20);
         let now = clock.now().timestamp();
         let step = now / 30;
         let code = crate::totp::code_for_step(&ticket.secret, step).await;
-        let codes = confirm_enrollment(&db, &clock, uid, code).await.expect("confirm");
+        let codes = confirm_enrollment(&db, &clock, uid, code)
+            .await
+            .expect("confirm");
         assert_eq!(codes.len(), 8);
         // The user should now report MFA enabled.
         assert!(is_mfa_enabled(&db, uid).await.unwrap());
     }
 
     #[tokio::test]
-    async     fn confirm_with_wrong_code_returns_bad_request() {
+    async fn confirm_with_wrong_code_returns_bad_request() {
         let (db, uid) = fresh_db_with_user().await;
         let clock = system_clock();
-        let _ = start_enrollment(&db, "sui-id", uid, "alice").await.expect("start");
+        let _ = start_enrollment(&db, "sui-id", uid, "alice")
+            .await
+            .expect("start");
         let r = confirm_enrollment(&db, &clock, uid, 000000).await;
         assert!(matches!(r, Err(crate::CoreError::BadRequest(_))));
     }
 
     #[tokio::test]
-    async     fn disable_then_re_enroll_works() {
+    async fn disable_then_re_enroll_works() {
         let (db, uid) = fresh_db_with_user().await;
         let clock = system_clock();
-        let ticket = start_enrollment(&db, "sui-id", uid, "alice").await.expect("start");
+        let ticket = start_enrollment(&db, "sui-id", uid, "alice")
+            .await
+            .expect("start");
         let step = clock.now().timestamp() / 30;
         let code = crate::totp::code_for_step(&ticket.secret, step).await;
-        let _ = confirm_enrollment(&db, &clock, uid, code).await.expect("confirm");
+        let _ = confirm_enrollment(&db, &clock, uid, code)
+            .await
+            .expect("confirm");
         disable(&db, uid).await.expect("disable");
         assert!(!is_mfa_enabled(&db, uid).await.unwrap());
         // Re-enrol from scratch should succeed.
-        let _ = start_enrollment(&db, "sui-id", uid, "alice").await.expect("re-start");
+        let _ = start_enrollment(&db, "sui-id", uid, "alice")
+            .await
+            .expect("re-start");
     }
 }

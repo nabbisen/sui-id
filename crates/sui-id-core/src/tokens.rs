@@ -10,16 +10,16 @@
 //! * **Refresh Token** — opaque random string; stored sealed in the database.
 //!   Lifetime defaults to 14 days; rotates on each use.
 
-use getrandom;
 use crate::errors::{CoreError, CoreResult};
 use crate::jwt;
 use crate::time::SharedClock;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use ed25519_dalek::SigningKey;
+use getrandom;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use sui_id_shared::ids::{ClientId, UserId};
 use sui_id_shared::RawRefreshToken;
+use sui_id_shared::ids::{ClientId, UserId};
 
 /// Standard claims for an access token.
 #[derive(Debug, Serialize, Deserialize)]
@@ -251,7 +251,11 @@ pub fn verify_pkce(method: &str, verifier: &str, expected_challenge: &str) -> Co
             });
         }
     };
-    if computed.as_bytes().ct_eq(expected_challenge.as_bytes()).into() {
+    if computed
+        .as_bytes()
+        .ct_eq(expected_challenge.as_bytes())
+        .into()
+    {
         Ok(())
     } else {
         Err(CoreError::Protocol {
@@ -268,13 +272,11 @@ pub fn verify_pkce(method: &str, verifier: &str, expected_challenge: &str) -> Co
 /// RP-initiated logout, where the spec encourages accepting expired hints
 /// so the user can still sign out after their token has aged.
 
-
 /// Verify a sui-id access token against the active and recently-rotated
 /// signing keys. Returns the validated claims.
 ///
 /// This wraps the `jwt::verify` + JWKS lookup + expiry check so that the
 /// HTTP layer does not have to know about Ed25519 specifics.
-
 
 // ── JWT verification helpers (RFC 014) ───────────────────────────────────────
 

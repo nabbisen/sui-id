@@ -15,7 +15,7 @@
 
 use sui_id_store::models::Role;
 
-use crate::authz::{authorize, Action, Decision};
+use crate::authz::{Action, Decision, authorize};
 use Decision::{Deny, Permit};
 use Role::{Admin, Auditor, User};
 
@@ -40,12 +40,24 @@ fn all_actions() -> Vec<Action> {
         AdminRotateClientSecret,
         AdminResetUserMfa,
         AdminForceLogout,
-        AdminChangeUserRole { target_is_last_admin: false },
-        AdminChangeUserRole { target_is_last_admin: true },
-        AdminDisableUser { target_is_last_admin: false },
-        AdminDisableUser { target_is_last_admin: true },
-        AdminDeleteUser { target_is_last_admin: false },
-        AdminDeleteUser { target_is_last_admin: true },
+        AdminChangeUserRole {
+            target_is_last_admin: false,
+        },
+        AdminChangeUserRole {
+            target_is_last_admin: true,
+        },
+        AdminDisableUser {
+            target_is_last_admin: false,
+        },
+        AdminDisableUser {
+            target_is_last_admin: true,
+        },
+        AdminDeleteUser {
+            target_is_last_admin: false,
+        },
+        AdminDeleteUser {
+            target_is_last_admin: true,
+        },
         SelfReadSecurity,
         SelfWriteSecurity,
         SelfRevokeOwnSessions,
@@ -69,9 +81,15 @@ fn expected(role: Role, action: Action) -> Decision {
 
     // Last-admin variants → Deny for every role, every action type.
     match action {
-        AdminChangeUserRole { target_is_last_admin: true }
-        | AdminDisableUser { target_is_last_admin: true }
-        | AdminDeleteUser { target_is_last_admin: true } => return Deny,
+        AdminChangeUserRole {
+            target_is_last_admin: true,
+        }
+        | AdminDisableUser {
+            target_is_last_admin: true,
+        }
+        | AdminDeleteUser {
+            target_is_last_admin: true,
+        } => return Deny,
         _ => {}
     }
 
@@ -90,9 +108,24 @@ fn expected(role: Role, action: Action) -> Decision {
         | (Admin, AdminRotateClientSecret)
         | (Admin, AdminResetUserMfa)
         | (Admin, AdminForceLogout)
-        | (Admin, AdminChangeUserRole { target_is_last_admin: false })
-        | (Admin, AdminDisableUser { target_is_last_admin: false })
-        | (Admin, AdminDeleteUser { target_is_last_admin: false }) => Permit,
+        | (
+            Admin,
+            AdminChangeUserRole {
+                target_is_last_admin: false,
+            },
+        )
+        | (
+            Admin,
+            AdminDisableUser {
+                target_is_last_admin: false,
+            },
+        )
+        | (
+            Admin,
+            AdminDeleteUser {
+                target_is_last_admin: false,
+            },
+        ) => Permit,
 
         // Auditor: reads only.
         (Auditor, AdminReadUsers)
@@ -212,9 +245,15 @@ fn mutation_actions() -> Vec<Action> {
         AdminRotateClientSecret,
         AdminResetUserMfa,
         AdminForceLogout,
-        AdminChangeUserRole { target_is_last_admin: false },
-        AdminDisableUser { target_is_last_admin: false },
-        AdminDeleteUser { target_is_last_admin: false },
+        AdminChangeUserRole {
+            target_is_last_admin: false,
+        },
+        AdminDisableUser {
+            target_is_last_admin: false,
+        },
+        AdminDeleteUser {
+            target_is_last_admin: false,
+        },
     ]
 }
 
@@ -241,9 +280,15 @@ fn auditor_is_denied_all_mutations() {
 fn last_admin_actions_deny_for_all_roles() {
     use Action::*;
     let last_admin_actions = [
-        AdminChangeUserRole { target_is_last_admin: true },
-        AdminDisableUser { target_is_last_admin: true },
-        AdminDeleteUser { target_is_last_admin: true },
+        AdminChangeUserRole {
+            target_is_last_admin: true,
+        },
+        AdminDisableUser {
+            target_is_last_admin: true,
+        },
+        AdminDeleteUser {
+            target_is_last_admin: true,
+        },
     ];
     let mut violations = Vec::new();
     for role in all_roles() {
@@ -278,9 +323,15 @@ fn admin_scoped_actions() -> Vec<Action> {
         AdminRotateClientSecret,
         AdminResetUserMfa,
         AdminForceLogout,
-        AdminChangeUserRole { target_is_last_admin: false },
-        AdminDisableUser { target_is_last_admin: false },
-        AdminDeleteUser { target_is_last_admin: false },
+        AdminChangeUserRole {
+            target_is_last_admin: false,
+        },
+        AdminDisableUser {
+            target_is_last_admin: false,
+        },
+        AdminDeleteUser {
+            target_is_last_admin: false,
+        },
     ]
 }
 
@@ -306,15 +357,30 @@ fn user_is_denied_all_admin_actions() {
 fn admin_permitted_non_last_admin_mutations() {
     use Action::*;
     assert_eq!(
-        authorize(Admin, AdminChangeUserRole { target_is_last_admin: false }),
+        authorize(
+            Admin,
+            AdminChangeUserRole {
+                target_is_last_admin: false
+            }
+        ),
         Permit
     );
     assert_eq!(
-        authorize(Admin, AdminDisableUser { target_is_last_admin: false }),
+        authorize(
+            Admin,
+            AdminDisableUser {
+                target_is_last_admin: false
+            }
+        ),
         Permit
     );
     assert_eq!(
-        authorize(Admin, AdminDeleteUser { target_is_last_admin: false }),
+        authorize(
+            Admin,
+            AdminDeleteUser {
+                target_is_last_admin: false
+            }
+        ),
         Permit
     );
 }

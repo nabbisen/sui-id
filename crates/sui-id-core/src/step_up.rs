@@ -42,8 +42,8 @@ use crate::time::SharedClock;
 use crate::webauthn;
 use chrono::{DateTime, Duration};
 use sui_id_shared::ids::{SessionId, UserId};
-use sui_id_store::repos::{sessions, user_totp};
 use sui_id_store::Database;
+use sui_id_store::repos::{sessions, user_totp};
 
 /// Default freshness window: a session whose last step-up
 /// happened within this many seconds is treated as fresh. Long
@@ -113,7 +113,8 @@ pub async fn policy_for_session(
 /// Whether the user has any MFA factor enrolled (TOTP enabled
 /// *or* at least one WebAuthn credential).
 pub async fn user_has_mfa(db: &Database, user_id: UserId) -> CoreResult<bool> {
-    let totp = user_totp::get(db, user_id).await?
+    let totp = user_totp::get(db, user_id)
+        .await?
         .map(|r| r.enabled)
         .unwrap_or(false);
     if totp {
@@ -162,7 +163,8 @@ pub async fn verify_totp_code(
     use crate::totp;
     use zeroize::Zeroize;
 
-    let totp_row = user_totp::get(db, user_id).await?
+    let totp_row = user_totp::get(db, user_id)
+        .await?
         .ok_or(CoreError::InvalidCredentials)?;
     if !totp_row.enabled {
         return Err(CoreError::InvalidCredentials);
@@ -257,7 +259,8 @@ pub async fn start_webauthn(
     // a tiny re-write, but the alternative — duplicating
     // start_authentication's body — would mean two places to keep
     // in sync if webauthn-rs ever changes shape.
-    let row = webauthn_pending::get(db, started.pending_id).await?
+    let row = webauthn_pending::get(db, started.pending_id)
+        .await?
         .ok_or(CoreError::Internal)?;
     let stepped = WebauthnPendingRow {
         id: row.id,
@@ -305,7 +308,8 @@ pub async fn finish_webauthn(
     // login-MFA flow that owns the row should still be able to
     // complete). The invariant we want: a step-up finish on a
     // login-MFA pending row is a no-op for the row.
-    let pending = webauthn_pending::get(db, pending_id).await?
+    let pending = webauthn_pending::get(db, pending_id)
+        .await?
         .ok_or(CoreError::InvalidCredentials)?;
     if pending.kind != WebauthnPendingKind::StepUp {
         return Err(CoreError::InvalidCredentials);
@@ -317,8 +321,8 @@ pub async fn finish_webauthn(
         return Err(CoreError::InvalidCredentials);
     }
 
-    let credential: PublicKeyCredential = serde_json::from_str(credential_json)
-        .map_err(|_| CoreError::InvalidCredentials)?;
+    let credential: PublicKeyCredential =
+        serde_json::from_str(credential_json).map_err(|_| CoreError::InvalidCredentials)?;
 
     // Hand off to the existing finish function — it consumes the
     // pending row on success or expiry, runs the webauthn-rs
@@ -345,14 +349,9 @@ pub async fn finish_webauthn(
         webauthn_pending::insert(db, &switched).await?;
     }
 
-    match webauthn::finish_authentication(
-        db,
-        clock,
-        issuer_url,
-        pending_id,
-        user_id,
-        &credential,
-    ).await {
+    match webauthn::finish_authentication(db, clock, issuer_url, pending_id, user_id, &credential)
+        .await
+    {
         Ok(()) => {
             touch_step_up(db, clock, session_id).await?;
             Ok(())
@@ -385,8 +384,12 @@ mod tests {
                 username: "u".into(),
                 display_name: None,
                 is_admin: false,
-        role: if false { sui_id_store::models::Role::Admin } else { sui_id_store::models::Role::User },
-        last_login_at: None,
+                role: if false {
+                    sui_id_store::models::Role::Admin
+                } else {
+                    sui_id_store::models::Role::User
+                },
+                last_login_at: None,
                 is_disabled: false,
                 is_deleted: false,
                 user_uuid: uuid::Uuid::new_v4(),
@@ -399,7 +402,8 @@ mod tests {
                 email_normalized: None,
                 email_verified_at: None,
             },
-        ).await
+        )
+        .await
         .expect("create user");
         let phc = password::hash_password("the-tester-password").expect("hash");
         credentials::upsert(
@@ -410,7 +414,8 @@ mod tests {
                 must_change: false,
                 updated_at: now,
             },
-        ).await
+        )
+        .await
         .expect("cred");
         id
     }
@@ -418,17 +423,22 @@ mod tests {
     async fn enrol_totp(db: &Database, user_id: UserId) {
         // Enrolment goes through pending-then-confirm; for tests we
         // just need an "MFA enrolled" row, so do both halves.
-        user_totp::upsert_pending(db, user_id, b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09").await
+        user_totp::upsert_pending(db, user_id, b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09")
+            .await
             .expect("upsert pending");
-        user_totp::confirm_with_recovery(db, user_id, b"[]").await.expect("confirm");
+        user_totp::confirm_with_recovery(db, user_id, b"[]")
+            .await
+            .expect("confirm");
     }
 
     #[tokio::test]
-    async     fn user_with_no_mfa_is_always_allowed() {
+    async fn user_with_no_mfa_is_always_allowed() {
         let db = fresh_db();
         let clock = crate::time::system_clock();
         let uid = create_user(&db).await;
-        let r = policy_for_session(&db, &clock, uid, None, STEP_UP_FRESHNESS_SECS).await.unwrap();
+        let r = policy_for_session(&db, &clock, uid, None, STEP_UP_FRESHNESS_SECS)
+            .await
+            .unwrap();
         assert_eq!(r, StepUpDecision::Allow);
         let r = policy_for_session(
             &db,
@@ -436,40 +446,47 @@ mod tests {
             uid,
             Some(Utc::now() - Duration::days(7)),
             STEP_UP_FRESHNESS_SECS,
-        ).await
+        )
+        .await
         .unwrap();
         assert_eq!(r, StepUpDecision::Allow);
     }
 
     #[tokio::test]
-    async     fn mfa_user_with_no_step_up_must_challenge() {
+    async fn mfa_user_with_no_step_up_must_challenge() {
         let db = fresh_db();
         let clock = crate::time::system_clock();
         let uid = create_user(&db).await;
         enrol_totp(&db, uid).await;
-        let r = policy_for_session(&db, &clock, uid, None, STEP_UP_FRESHNESS_SECS).await.unwrap();
+        let r = policy_for_session(&db, &clock, uid, None, STEP_UP_FRESHNESS_SECS)
+            .await
+            .unwrap();
         assert_eq!(r, StepUpDecision::Challenge);
     }
 
     #[tokio::test]
-    async     fn mfa_user_with_fresh_step_up_is_allowed() {
+    async fn mfa_user_with_fresh_step_up_is_allowed() {
         let db = fresh_db();
         let clock = crate::time::system_clock();
         let uid = create_user(&db).await;
         enrol_totp(&db, uid).await;
         let now = clock.now();
-        let r = policy_for_session(&db, &clock, uid, Some(now), STEP_UP_FRESHNESS_SECS).await.unwrap();
+        let r = policy_for_session(&db, &clock, uid, Some(now), STEP_UP_FRESHNESS_SECS)
+            .await
+            .unwrap();
         assert_eq!(r, StepUpDecision::Allow);
     }
 
     #[tokio::test]
-    async     fn mfa_user_with_stale_step_up_must_challenge_again() {
+    async fn mfa_user_with_stale_step_up_must_challenge_again() {
         let db = fresh_db();
         let clock = crate::time::system_clock();
         let uid = create_user(&db).await;
         enrol_totp(&db, uid).await;
         let stale = clock.now() - Duration::seconds(STEP_UP_FRESHNESS_SECS + 60);
-        let r = policy_for_session(&db, &clock, uid, Some(stale), STEP_UP_FRESHNESS_SECS).await.unwrap();
+        let r = policy_for_session(&db, &clock, uid, Some(stale), STEP_UP_FRESHNESS_SECS)
+            .await
+            .unwrap();
         assert_eq!(r, StepUpDecision::Challenge);
     }
 
@@ -493,7 +510,8 @@ mod tests {
                 last_step_up_at: None,
                 last_used_at: None,
             },
-        ).await
+        )
+        .await
         .expect("insert");
 
         touch_step_up(&db, &clock, session_id).await.expect("touch");
@@ -517,7 +535,8 @@ mod tests {
                 last_step_up_at: None,
                 last_used_at: None,
             },
-        ).await
+        )
+        .await
         .expect("insert session");
         session_id
     }
@@ -531,15 +550,20 @@ mod tests {
         // Enrol TOTP with a known secret so we can compute the
         // expected code locally.
         let secret = b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09";
-        user_totp::upsert_pending(&db, uid, secret).await.expect("pending");
-        user_totp::confirm_with_recovery(&db, uid, b"[]").await.expect("confirm");
+        user_totp::upsert_pending(&db, uid, secret)
+            .await
+            .expect("pending");
+        user_totp::confirm_with_recovery(&db, uid, b"[]")
+            .await
+            .expect("confirm");
 
         let session_id = fresh_session(&db, &clock, uid).await;
         let now = clock.now().timestamp();
         let step = now / 30;
         let code = totp::code_for_step(secret, step).await;
 
-        verify_totp_code(&db, &clock, uid, session_id, &code.to_string()).await
+        verify_totp_code(&db, &clock, uid, session_id, &code.to_string())
+            .await
             .expect("verify ok");
 
         let row = sessions::get(&db, session_id).await.expect("get");
@@ -552,8 +576,12 @@ mod tests {
         let clock = crate::time::system_clock();
         let uid = create_user(&db).await;
         let secret = b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09";
-        user_totp::upsert_pending(&db, uid, secret).await.expect("pending");
-        user_totp::confirm_with_recovery(&db, uid, b"[]").await.expect("confirm");
+        user_totp::upsert_pending(&db, uid, secret)
+            .await
+            .expect("pending");
+        user_totp::confirm_with_recovery(&db, uid, b"[]")
+            .await
+            .expect("confirm");
 
         let session_id = fresh_session(&db, &clock, uid).await;
 
@@ -561,7 +589,10 @@ mod tests {
         // that's unlikely to coincide with the real one — and even
         // if it did, the next pass would still be wrong).
         let result = verify_totp_code(&db, &clock, uid, session_id, "000000").await;
-        assert!(matches!(result, Err(crate::errors::CoreError::InvalidCredentials)));
+        assert!(matches!(
+            result,
+            Err(crate::errors::CoreError::InvalidCredentials)
+        ));
 
         let row = sessions::get(&db, session_id).await.expect("get");
         assert!(
@@ -571,7 +602,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async     fn verify_totp_code_for_user_without_totp_returns_invalid_credentials() {
+    async fn verify_totp_code_for_user_without_totp_returns_invalid_credentials() {
         let db = fresh_db();
         let clock = crate::time::system_clock();
         let uid = create_user(&db).await;
@@ -580,7 +611,10 @@ mod tests {
         let result = verify_totp_code(&db, &clock, uid, session_id, "123456").await;
         // Same error shape as a wrong code: a step-up form should
         // not leak whether MFA is enrolled.
-        assert!(matches!(result, Err(crate::errors::CoreError::InvalidCredentials)));
+        assert!(matches!(
+            result,
+            Err(crate::errors::CoreError::InvalidCredentials)
+        ));
     }
 
     #[tokio::test]
@@ -590,9 +624,9 @@ mod tests {
         // user_id matches and the row hasn't expired. This test
         // pins that invariant — the kind check is the *whole*
         // reason migration 0013 widened the CHECK constraint.
+        use sui_id_shared::ids::WebauthnPendingId;
         use sui_id_store::models::{WebauthnPendingKind, WebauthnPendingRow};
         use sui_id_store::repos::webauthn_pending;
-        use sui_id_shared::ids::WebauthnPendingId;
 
         let db = fresh_db();
         let clock = crate::time::system_clock();
@@ -610,7 +644,8 @@ mod tests {
                 expires_at: now + Duration::seconds(60),
                 created_at: now,
             },
-        ).await
+        )
+        .await
         .expect("insert");
 
         let issuer = "https://test.example";
@@ -623,13 +658,18 @@ mod tests {
             session_id,
             pending_id,
             r#"{"id":"x","rawId":"x","type":"public-key","response":{}}"#,
-        ).await;
-        assert!(matches!(result, Err(crate::errors::CoreError::InvalidCredentials)));
+        )
+        .await;
+        assert!(matches!(
+            result,
+            Err(crate::errors::CoreError::InvalidCredentials)
+        ));
 
         // The pending row is intact — refusing a step-up finish on
         // an Authenticate row must not consume it, so the legitimate
         // login-MFA flow that owns the row can still complete.
-        let still_there = webauthn_pending::get(&db, pending_id).await
+        let still_there = webauthn_pending::get(&db, pending_id)
+            .await
             .expect("query")
             .expect("row preserved");
         assert_eq!(still_there.kind, WebauthnPendingKind::Authenticate);
@@ -640,9 +680,9 @@ mod tests {
         // Even a kind = StepUp pending must be refused if it
         // belongs to a different user. Prevents pending-id
         // smuggling across sessions.
+        use sui_id_shared::ids::WebauthnPendingId;
         use sui_id_store::models::{WebauthnPendingKind, WebauthnPendingRow};
         use sui_id_store::repos::webauthn_pending;
-        use sui_id_shared::ids::WebauthnPendingId;
 
         let db = fresh_db();
         let clock = crate::time::system_clock();
@@ -659,8 +699,12 @@ mod tests {
                     username: "imposter".into(),
                     display_name: None,
                     is_admin: false,
-        role: if false { sui_id_store::models::Role::Admin } else { sui_id_store::models::Role::User },
-        last_login_at: None,
+                    role: if false {
+                        sui_id_store::models::Role::Admin
+                    } else {
+                        sui_id_store::models::Role::User
+                    },
+                    last_login_at: None,
                     is_disabled: false,
                     is_deleted: false,
                     user_uuid: uuid::Uuid::new_v4(),
@@ -669,11 +713,12 @@ mod tests {
                     failed_login_count: 0,
                     locked_until: None,
                     email: None,
-                preferred_lang: None,
+                    preferred_lang: None,
                     email_normalized: None,
                     email_verified_at: None,
                 },
-            ).await
+            )
+            .await
             .expect("imposter");
             id
         };
@@ -690,7 +735,8 @@ mod tests {
                 expires_at: now + Duration::seconds(60),
                 created_at: now,
             },
-        ).await
+        )
+        .await
         .expect("insert");
 
         let result = finish_webauthn(
@@ -701,10 +747,19 @@ mod tests {
             session_id,
             pending_id,
             r#"{"id":"x","rawId":"x","type":"public-key","response":{}}"#,
-        ).await;
-        assert!(matches!(result, Err(crate::errors::CoreError::InvalidCredentials)));
+        )
+        .await;
+        assert!(matches!(
+            result,
+            Err(crate::errors::CoreError::InvalidCredentials)
+        ));
 
         // Pending row was NOT consumed — owner can still complete.
-        assert!(webauthn_pending::get(&db, pending_id).await.expect("query").is_some());
+        assert!(
+            webauthn_pending::get(&db, pending_id)
+                .await
+                .expect("query")
+                .is_some()
+        );
     }
 }

@@ -6,11 +6,11 @@
 #![allow(dead_code)]
 
 use axum::body::Body;
-use axum::http::{header, Method, Request, StatusCode};
+use axum::http::{Method, Request, StatusCode, header};
 use sui_id::build_router;
 
-use tower::ServiceExt;
 use super::common::*;
+use tower::ServiceExt;
 
 // ---------- v0.21.0: step-up auth ----------
 
@@ -94,12 +94,15 @@ async fn step_up_post_with_correct_totp_marks_session_fresh_and_redirects() {
     // so we can compute the expected code locally without going
     // through the enrolment flow (which would itself need the
     // running router).
-    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+        .await
         .expect("alice exists");
     let secret = b"step-up-test-secret\x00\x00\x00";
-    sui_id_store::repos::user_totp::upsert_pending(&state.db, user.id, secret).await
+    sui_id_store::repos::user_totp::upsert_pending(&state.db, user.id, secret)
+        .await
         .expect("upsert pending totp");
-    sui_id_store::repos::user_totp::confirm_with_recovery(&state.db, user.id, b"[]").await
+    sui_id_store::repos::user_totp::confirm_with_recovery(&state.db, user.id, b"[]")
+        .await
         .expect("confirm totp");
 
     // Acquire CSRF cookie via the GET.
@@ -156,8 +159,9 @@ async fn step_up_post_with_correct_totp_marks_session_fresh_and_redirects() {
     let session_id = sui_id_shared::ids::SessionId::from_uuid(
         session.parse::<uuid::Uuid>().expect("session id is uuid"),
     );
-    let row =
-        sui_id_store::repos::sessions::get(&state.db, session_id).await.expect("session row");
+    let row = sui_id_store::repos::sessions::get(&state.db, session_id)
+        .await
+        .expect("session row");
     assert!(
         row.last_step_up_at.is_some(),
         "session must be marked fresh after a successful step-up"
@@ -170,12 +174,15 @@ async fn step_up_post_with_wrong_code_returns_400_with_flash() {
     let session = complete_setup_and_login(&state).await;
 
     // Enrol TOTP so the verify path actually runs.
-    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+        .await
         .expect("alice exists");
     let secret = b"step-up-bad-code-secret\x00";
-    sui_id_store::repos::user_totp::upsert_pending(&state.db, user.id, secret).await
+    sui_id_store::repos::user_totp::upsert_pending(&state.db, user.id, secret)
+        .await
         .expect("upsert pending");
-    sui_id_store::repos::user_totp::confirm_with_recovery(&state.db, user.id, b"[]").await
+    sui_id_store::repos::user_totp::confirm_with_recovery(&state.db, user.id, b"[]")
+        .await
         .expect("confirm");
 
     let resp = build_router(state.clone())
@@ -226,12 +233,15 @@ async fn step_up_redirects_when_mfa_admin_lacks_fresh() {
 
     // Enrol MFA on the admin so the gate has something to gate
     // against.
-    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+        .await
         .expect("alice exists");
     let secret = b"gate-test-secret\x00\x00\x00\x00\x00";
-    sui_id_store::repos::user_totp::upsert_pending(&state.db, user.id, secret).await
+    sui_id_store::repos::user_totp::upsert_pending(&state.db, user.id, secret)
+        .await
         .expect("pending");
-    sui_id_store::repos::user_totp::confirm_with_recovery(&state.db, user.id, b"[]").await
+    sui_id_store::repos::user_totp::confirm_with_recovery(&state.db, user.id, b"[]")
+        .await
         .expect("confirm");
 
     // The session predates the MFA enrolment, so its
@@ -338,4 +348,3 @@ async fn admin_with_no_mfa_passes_step_up_gate_transparently() {
         .unwrap_or("");
     assert_eq!(location, "/admin/signing-keys");
 }
-

@@ -6,11 +6,11 @@
 #![allow(dead_code)]
 
 use axum::body::Body;
-use axum::http::{header, Method, Request, StatusCode};
+use axum::http::{Method, Request, StatusCode, header};
 use sui_id::build_router;
 
-use tower::ServiceExt;
 use super::common::*;
+use tower::ServiceExt;
 
 #[tokio::test]
 async fn mfa_enroll_then_login_with_totp_succeeds() {
@@ -29,16 +29,29 @@ async fn mfa_enroll_then_login_with_totp_succeeds() {
         .method(Method::POST)
         .uri("/admin/login")
         .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .body(Body::from("username=alice&password=alice-the-tester-password"))
+        .body(Body::from(
+            "username=alice&password=alice-the-tester-password",
+        ))
         .expect("req");
     let resp = router.oneshot(req).await.expect("login");
-    assert_eq!(resp.status(), StatusCode::SEE_OTHER, "expected redirect to MFA");
-    let loc = resp.headers().get(header::LOCATION).and_then(|v| v.to_str().ok()).unwrap_or("");
+    assert_eq!(
+        resp.status(),
+        StatusCode::SEE_OTHER,
+        "expected redirect to MFA"
+    );
+    let loc = resp
+        .headers()
+        .get(header::LOCATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
     assert!(loc.ends_with("/admin/login/mfa"), "got: {loc}");
-    let pending = extract_set_cookie(resp.headers(), "sui_id_pending_mfa")
-        .expect("pending_mfa cookie set");
+    let pending =
+        extract_set_cookie(resp.headers(), "sui_id_pending_mfa").expect("pending_mfa cookie set");
     let session_cookie = extract_set_cookie(resp.headers(), "sui_id_session");
-    assert!(session_cookie.is_none(), "session cookie must not be set before MFA");
+    assert!(
+        session_cookie.is_none(),
+        "session cookie must not be set before MFA"
+    );
 
     // Submit a fresh TOTP code.
     let now = chrono::Utc::now().timestamp();
@@ -68,7 +81,11 @@ async fn mfa_enroll_then_login_with_totp_succeeds() {
         .body(Body::from(format!("code={code:06}&_csrf={csrf}")))
         .expect("req");
     let resp = router.oneshot(req).await.expect("mfa POST");
-    assert_eq!(resp.status(), StatusCode::SEE_OTHER, "expected redirect to /admin");
+    assert_eq!(
+        resp.status(),
+        StatusCode::SEE_OTHER,
+        "expected redirect to /admin"
+    );
     let session_cookie = extract_set_cookie(resp.headers(), "sui_id_session")
         .expect("session cookie issued after MFA success");
     assert!(!session_cookie.is_empty());
@@ -86,7 +103,9 @@ async fn mfa_login_with_wrong_code_returns_401() {
         .method(Method::POST)
         .uri("/admin/login")
         .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .body(Body::from("username=alice&password=alice-the-tester-password"))
+        .body(Body::from(
+            "username=alice&password=alice-the-tester-password",
+        ))
         .expect("req");
     let resp = router.oneshot(req).await.expect("login");
     let pending = extract_set_cookie(resp.headers(), "sui_id_pending_mfa").expect("pending");
@@ -130,7 +149,9 @@ async fn mfa_login_with_recovery_code_succeeds_and_consumes_code() {
         .method(Method::POST)
         .uri("/admin/login")
         .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .body(Body::from("username=alice&password=alice-the-tester-password"))
+        .body(Body::from(
+            "username=alice&password=alice-the-tester-password",
+        ))
         .expect("req");
     let resp = router.oneshot(req).await.expect("login");
     let pending = extract_set_cookie(resp.headers(), "sui_id_pending_mfa").expect("pending");
@@ -160,7 +181,11 @@ async fn mfa_login_with_recovery_code_succeeds_and_consumes_code() {
         )))
         .expect("req");
     let resp = router.oneshot(req).await.expect("mfa POST");
-    assert_eq!(resp.status(), StatusCode::SEE_OTHER, "recovery code should accept");
+    assert_eq!(
+        resp.status(),
+        StatusCode::SEE_OTHER,
+        "recovery code should accept"
+    );
     assert!(extract_set_cookie(resp.headers(), "sui_id_session").is_some());
 
     // Reusing the same recovery code must fail. We need a new pending row.
@@ -169,7 +194,9 @@ async fn mfa_login_with_recovery_code_succeeds_and_consumes_code() {
         .method(Method::POST)
         .uri("/admin/login")
         .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .body(Body::from("username=alice&password=alice-the-tester-password"))
+        .body(Body::from(
+            "username=alice&password=alice-the-tester-password",
+        ))
         .expect("req");
     let resp = router.oneshot(req).await.expect("login 2");
     let pending2 = extract_set_cookie(resp.headers(), "sui_id_pending_mfa").expect("pending2");
@@ -232,11 +259,17 @@ async fn mfa_disable_lets_user_log_in_with_password_only() {
         .method(Method::POST)
         .uri("/admin/login")
         .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .body(Body::from("username=alice&password=alice-the-tester-password"))
+        .body(Body::from(
+            "username=alice&password=alice-the-tester-password",
+        ))
         .expect("req");
     let resp = router.oneshot(req).await.expect("login post-disable");
     assert!(resp.status().is_redirection());
-    let loc = resp.headers().get(header::LOCATION).and_then(|v| v.to_str().ok()).unwrap_or("");
+    let loc = resp
+        .headers()
+        .get(header::LOCATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
     assert!(!loc.ends_with("/admin/login/mfa"));
     assert!(extract_set_cookie(resp.headers(), "sui_id_session").is_some());
 }
@@ -245,13 +278,14 @@ async fn mfa_disable_lets_user_log_in_with_password_only() {
 
 #[tokio::test]
 async fn admin_can_reset_users_mfa_factors() {
-    use sui_id_core::admin::{admin_reset_mfa, CreateUserSpec};
+    use sui_id_core::admin::{CreateUserSpec, admin_reset_mfa};
     use sui_id_core::mfa;
     use sui_id_core::time::system_clock;
 
     let state = test_app();
     let _ = complete_setup_and_login(&state).await;
-    let admin_id = sui_id_store::repos::users::find_by_username(&state.db, "alice").await
+    let admin_id = sui_id_store::repos::users::find_by_username(&state.db, "alice")
+        .await
         .expect("admin")
         .id;
     let clock = system_clock();
@@ -270,25 +304,35 @@ async fn admin_can_reset_users_mfa_factors() {
             email: None,
             is_admin: false,
         },
-    ).await
+    )
+    .await
     .expect("create");
-    let bob = sui_id_store::repos::users::find_by_username(&state.db, "bob").await
+    let bob = sui_id_store::repos::users::find_by_username(&state.db, "bob")
+        .await
         .expect("bob")
         .id;
-    let ticket = mfa::start_enrollment(&state.db, "sui-id", bob, "bob").await.expect("start");
+    let ticket = mfa::start_enrollment(&state.db, "sui-id", bob, "bob")
+        .await
+        .expect("start");
     let step = clock.now().timestamp() / 30;
     let code = sui_id_core::totp::code_for_step(&ticket.secret, step).await;
-    let _ = mfa::confirm_enrollment(&state.db, &clock, bob, code).await.expect("confirm");
+    let _ = mfa::confirm_enrollment(&state.db, &clock, bob, code)
+        .await
+        .expect("confirm");
     assert!(mfa::is_mfa_enabled(&state.db, bob).await.unwrap());
 
     // Admin resets it.
-    let report = admin_reset_mfa(&state.db, admin_id, bob, None).await.expect("reset");
+    let report = admin_reset_mfa(&state.db, admin_id, bob, None)
+        .await
+        .expect("reset");
     assert!(report.totp_removed);
     assert_eq!(report.passkeys_removed, 0);
 
     // MFA is now off for bob, and the audit log captured the reset.
     assert!(!mfa::is_mfa_enabled(&state.db, bob).await.unwrap());
-    let audit = sui_id_store::repos::audit::recent(&state.db, 50).await.expect("audit");
+    let audit = sui_id_store::repos::audit::recent(&state.db, 50)
+        .await
+        .expect("audit");
     let reset_entries: Vec<_> = audit
         .iter()
         .filter(|e| e.action == "mfa.admin_reset")
@@ -311,7 +355,8 @@ async fn admin_mfa_reset_via_http_redirects_and_disables_mfa_requirement() {
 
     let state = test_app();
     let session = complete_setup_and_login(&state).await;
-    let admin_id = sui_id_store::repos::users::find_by_username(&state.db, "alice").await
+    let admin_id = sui_id_store::repos::users::find_by_username(&state.db, "alice")
+        .await
         .expect("admin")
         .id;
     let clock = system_clock();
@@ -329,15 +374,21 @@ async fn admin_mfa_reset_via_http_redirects_and_disables_mfa_requirement() {
             email: None,
             is_admin: false,
         },
-    ).await
+    )
+    .await
     .expect("create");
-    let carol = sui_id_store::repos::users::find_by_username(&state.db, "carol").await
+    let carol = sui_id_store::repos::users::find_by_username(&state.db, "carol")
+        .await
         .expect("carol")
         .id;
-    let ticket = mfa::start_enrollment(&state.db, "sui-id", carol, "carol").await.expect("start");
+    let ticket = mfa::start_enrollment(&state.db, "sui-id", carol, "carol")
+        .await
+        .expect("start");
     let step = clock.now().timestamp() / 30;
     let code = sui_id_core::totp::code_for_step(&ticket.secret, step).await;
-    let _ = mfa::confirm_enrollment(&state.db, &clock, carol, code).await.expect("confirm");
+    let _ = mfa::confirm_enrollment(&state.db, &clock, carol, code)
+        .await
+        .expect("confirm");
 
     // Sanity: a fresh password login for carol now goes to MFA challenge.
     let router = build_router(state.clone());
@@ -345,7 +396,9 @@ async fn admin_mfa_reset_via_http_redirects_and_disables_mfa_requirement() {
         .method(Method::POST)
         .uri("/admin/login")
         .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .body(Body::from("username=carol&password=carol-very-strong-password"))
+        .body(Body::from(
+            "username=carol&password=carol-very-strong-password",
+        ))
         .expect("req");
     let resp = router.oneshot(req).await.expect("login");
     assert!(resp.status().is_redirection());
@@ -372,7 +425,9 @@ async fn admin_mfa_reset_via_http_redirects_and_disables_mfa_requirement() {
     let resp = router.oneshot(req).await.expect("reset");
     assert!(resp.status().is_redirection(), "got {}", resp.status());
     assert_eq!(
-        resp.headers().get(header::LOCATION).and_then(|v| v.to_str().ok()),
+        resp.headers()
+            .get(header::LOCATION)
+            .and_then(|v| v.to_str().ok()),
         Some("/admin/users")
     );
 
@@ -382,7 +437,9 @@ async fn admin_mfa_reset_via_http_redirects_and_disables_mfa_requirement() {
         .method(Method::POST)
         .uri("/admin/login")
         .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .body(Body::from("username=carol&password=carol-very-strong-password"))
+        .body(Body::from(
+            "username=carol&password=carol-very-strong-password",
+        ))
         .expect("req");
     let resp = router.oneshot(req).await.expect("login post-reset");
     assert!(resp.status().is_redirection());
@@ -391,7 +448,9 @@ async fn admin_mfa_reset_via_http_redirects_and_disables_mfa_requirement() {
         .get(header::LOCATION)
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
-    assert!(!loc.ends_with("/admin/login/mfa"), "should not require MFA; got: {loc}");
+    assert!(
+        !loc.ends_with("/admin/login/mfa"),
+        "should not require MFA; got: {loc}"
+    );
     assert!(extract_set_cookie(resp.headers(), "sui_id_session").is_some());
 }
-

@@ -30,11 +30,11 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sui_id_shared::ids::{PendingChangeId, SessionId, UserId};
+use sui_id_shared::ids::{PendingChangeId, SessionId};
 use sui_id_store::{
+    Database,
     models::AuditLogRow,
     repos::{audit, pending_settings_change},
-    Database,
 };
 
 use crate::{
@@ -98,8 +98,8 @@ pub async fn create<T: Serialize>(
     let json = serde_json::to_vec(payload).map_err(|_| {
         CoreError::Internal // serialisation failure should never happen
     })?;
-    let payload_enc = sui_id_store::crypto::seal(db.key(), &json, PENDING_CHANGE_AAD)
-        .map_err(CoreError::from)?;
+    let payload_enc =
+        sui_id_store::crypto::seal(db.key(), &json, PENDING_CHANGE_AAD).map_err(CoreError::from)?;
 
     let row = pending_settings_change::PendingSettingsChangeRow {
         id,
@@ -198,13 +198,10 @@ pub async fn apply<T: for<'de> Deserialize<'de>>(
     }
 
     // Decrypt the payload.
-    let plaintext =
-        sui_id_store::crypto::open(db.key(), &row.payload_enc, PENDING_CHANGE_AAD)
-            .map_err(|_| {
-                CoreError::BadRequest(
-                    "This pending change has expired or is no longer valid.".into(),
-                )
-            })?;
+    let plaintext = sui_id_store::crypto::open(db.key(), &row.payload_enc, PENDING_CHANGE_AAD)
+        .map_err(|_| {
+            CoreError::BadRequest("This pending change has expired or is no longer valid.".into())
+        })?;
     let payload: T = serde_json::from_slice(&plaintext).map_err(|_| {
         CoreError::Internal // should not happen unless schema changed mid-flight
     })?;

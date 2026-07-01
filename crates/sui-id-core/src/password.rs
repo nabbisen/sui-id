@@ -5,9 +5,7 @@
 //! constant time.
 
 use crate::errors::{CoreError, CoreResult};
-use argon2::password_hash::{
-    PasswordHash, PasswordHasher, PasswordVerifier, SaltString,
-};
+use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use argon2::{Algorithm, Argon2, Params, Version};
 
 fn argon2() -> Argon2<'static> {
@@ -47,9 +45,9 @@ pub fn verify_password(password: &str, stored_phc: &str) -> CoreResult<()> {
 /// from their callers so this function stays unaware of the run mode.
 pub fn check_password_policy(password: &str, min_len: usize) -> CoreResult<()> {
     if password.chars().count() < min_len {
-        return Err(CoreError::BadRequest(
-            format!("password must be at least {min_len} characters long"),
-        ));
+        return Err(CoreError::BadRequest(format!(
+            "password must be at least {min_len} characters long"
+        )));
     }
     if password.chars().count() > 256 {
         return Err(CoreError::BadRequest(

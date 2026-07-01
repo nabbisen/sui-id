@@ -4,9 +4,9 @@
 //! so the static asset surface is intentionally tiny: a favicon and a
 //! robots.txt. They live in `/static` at the workspace root.
 
-use axum::http::{header, StatusCode};
+use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use include_dir::{include_dir, Dir};
+use include_dir::{Dir, include_dir};
 
 static STATIC_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/static");
 

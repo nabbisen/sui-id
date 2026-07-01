@@ -1,50 +1,47 @@
 [package]
-name = "sui-id-store"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
-license.workspace = true
-repository.workspace = true
-homepage.workspace = true
-authors.workspace = true
-keywords.workspace = true
-categories.workspace = true
+name        = "sui-id-store"
 description = "Persistence layer (SQLite + field-level encryption) for sui-id, a self-hosted Rust OIDC provider."
-readme = "README.md"
-
-[lints]
-workspace = true
-
-[dependencies]
-async-trait = { workspace = true }
-prometheus = { workspace = true }
-sui-id-shared = { version = "0.76.7", path = "../sui-id-shared" }
-
-rusqlite = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-thiserror = { workspace = true }
-tracing = { workspace = true }
-chrono = { workspace = true }
-uuid = { workspace = true }
-secrecy = { workspace = true }
-zeroize = { workspace = true }
-chacha20poly1305 = { workspace = true }
-rand = { workspace = true }
-getrandom = { workspace = true }
-base64ct = { workspace = true }
-sha2 = { workspace = true }
-subtle = { workspace = true }
-tokio = { workspace = true, features = ["rt"] }
-
-[dev-dependencies]
-proptest = { workspace = true }
-tempfile = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+readme      = "README.md"
+version.workspace       = true
+edition.workspace       = true
+rust-version.workspace  = true
+license.workspace       = true
+authors.workspace       = true
+repository.workspace    = true
+homepage.workspace      = true
+categories.workspace    = true
+keywords.workspace      = true
 
 [features]
 ldap = ["dep:ldap3"]
 
-[dependencies.ldap3]
-workspace = true
-optional = true
+[dependencies]
+sui-id-shared               = { workspace = true }
+
+async-trait                 = { workspace = true }
+prometheus                  = { workspace = true }
+rusqlite                    = { workspace = true }
+serde                       = { workspace = true }
+serde_json                  = { workspace = true }
+thiserror                   = { workspace = true }
+tracing                     = { workspace = true }
+chrono                      = { workspace = true }
+uuid                        = { workspace = true }
+secrecy                     = { workspace = true }
+zeroize                     = { workspace = true }
+chacha20poly1305            = { workspace = true }
+rand                        = { workspace = true }
+getrandom                   = { workspace = true }
+base64ct                    = { workspace = true }
+sha2                        = { workspace = true }
+subtle                      = { workspace = true }
+tokio                       = { workspace = true, features = ["rt"] }
+ldap3                       = { workspace = true, optional = true }
+
+[dev-dependencies]
+proptest                    = { workspace = true }
+tempfile                    = { workspace = true }
+tokio                       = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[lints]
+workspace   = true

@@ -39,7 +39,11 @@ fn origin_from_uri(uri: &str) -> Option<String> {
     };
     let scheme = uri.split_once("://")?.0;
     // Normalise to lowercase for case-insensitive comparison.
-    Some(format!("{}://{}", scheme.to_lowercase(), host_and_port.to_lowercase()))
+    Some(format!(
+        "{}://{}",
+        scheme.to_lowercase(),
+        host_and_port.to_lowercase()
+    ))
 }
 
 // ── CORS redirect-origins cache ───────────────────────────────────────────────

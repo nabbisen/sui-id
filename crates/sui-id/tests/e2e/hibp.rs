@@ -6,11 +6,11 @@
 #![allow(dead_code)]
 
 use axum::body::Body;
-use axum::http::{header, Method, Request, StatusCode};
+use axum::http::{Method, Request, StatusCode, header};
 use sui_id::build_router;
 
-use tower::ServiceExt;
 use super::common::*;
+use tower::ServiceExt;
 
 // ---------- v0.24.0: HIBP password breach check ----------
 
@@ -117,4 +117,3 @@ async fn setup_wizard_fails_open_when_hibp_unavailable_in_block_mode() {
     // password — fail-open.
     let _session = complete_setup_and_login(&state).await;
 }
-

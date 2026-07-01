@@ -11,7 +11,7 @@
 #![allow(dead_code)]
 
 use axum::body::Body;
-use axum::http::{header, Method, Request, StatusCode};
+use axum::http::{Method, Request, StatusCode, header};
 use sui_id::build_router;
 use tower::ServiceExt;
 
@@ -29,17 +29,25 @@ async fn delete_user_without_confirmed_is_rejected() {
 
     // Create a target user directly in the DB.
     let admin_id = sui_id_store::repos::users::find_by_username(&state.db, "alice")
-        .await.expect("alice").id;
+        .await
+        .expect("alice")
+        .id;
     let target = sui_id_core::admin::create_user(
-        &state.db, &clock, None, sui_id_store::models::HibpMode::Off, admin_id,
+        &state.db,
+        &clock,
+        None,
+        sui_id_store::models::HibpMode::Off,
+        admin_id,
         sui_id_core::admin::CreateUserSpec {
             username: "target-for-delete-test".into(),
             display_name: None,
             email: None,
             password: "target-password-12345".into(),
             is_admin: false,
-        }
-    ).await.expect("create target");
+        },
+    )
+    .await
+    .expect("create target");
 
     let csrf = fetch_csrf(&state, &session).await;
 
@@ -51,7 +59,10 @@ async fn delete_user_without_confirmed_is_rejected() {
                 .method(Method::POST)
                 .uri(format!("/admin/users/{}/delete", target.id))
                 .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-                .header(header::COOKIE, format!("sui_id_session={session}; sui_id_csrf={csrf}"))
+                .header(
+                    header::COOKIE,
+                    format!("sui_id_session={session}; sui_id_csrf={csrf}"),
+                )
                 .body(Body::from(body))
                 .expect("req"),
         )
@@ -60,17 +71,18 @@ async fn delete_user_without_confirmed_is_rejected() {
 
     // Must be rejected (400 Bad Request) — user should NOT be deleted.
     assert!(
-        resp.status() == StatusCode::BAD_REQUEST
-            || resp.status().as_u16() >= 400,
+        resp.status() == StatusCode::BAD_REQUEST || resp.status().as_u16() >= 400,
         "expected rejection, got {}",
         resp.status()
     );
 
     // Verify the user still exists.
-    let still_there = sui_id_store::repos::users::find_by_username(
-        &state.db, "target-for-delete-test"
-    ).await;
-    assert!(still_there.is_ok(), "user should still exist after rejected delete");
+    let still_there =
+        sui_id_store::repos::users::find_by_username(&state.db, "target-for-delete-test").await;
+    assert!(
+        still_there.is_ok(),
+        "user should still exist after rejected delete"
+    );
 }
 
 /// A direct POST to /admin/users/{id}/mfa-reset without `_confirmed=1`
@@ -81,26 +93,38 @@ async fn mfa_reset_without_confirmed_is_rejected() {
     let session = complete_setup_and_login(&state).await;
     let clock = sui_id_core::time::system_clock();
     let admin_id = sui_id_store::repos::users::find_by_username(&state.db, "alice")
-        .await.expect("alice").id;
+        .await
+        .expect("alice")
+        .id;
     let target = sui_id_core::admin::create_user(
-        &state.db, &clock, None, sui_id_store::models::HibpMode::Off, admin_id,
+        &state.db,
+        &clock,
+        None,
+        sui_id_store::models::HibpMode::Off,
+        admin_id,
         sui_id_core::admin::CreateUserSpec {
             username: "target-mfa-test".into(),
-            display_name: None, email: None,
+            display_name: None,
+            email: None,
             password: "target-pw-mfa-123456".into(),
             is_admin: false,
-        }
-    ).await.expect("create");
+        },
+    )
+    .await
+    .expect("create");
 
     let csrf = fetch_csrf(&state, &session).await;
-    let body = format!("_csrf={csrf}");   // no _confirmed
+    let body = format!("_csrf={csrf}"); // no _confirmed
     let resp = build_router(state.clone())
         .oneshot(
             Request::builder()
                 .method(Method::POST)
                 .uri(format!("/admin/users/{}/mfa-reset", target.id))
                 .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-                .header(header::COOKIE, format!("sui_id_session={session}; sui_id_csrf={csrf}"))
+                .header(
+                    header::COOKIE,
+                    format!("sui_id_session={session}; sui_id_csrf={csrf}"),
+                )
                 .body(Body::from(body))
                 .expect("req"),
         )
@@ -124,16 +148,25 @@ async fn delete_confirm_page_renders() {
     let session = complete_setup_and_login(&state).await;
     let clock = sui_id_core::time::system_clock();
     let admin_id = sui_id_store::repos::users::find_by_username(&state.db, "alice")
-        .await.expect("alice").id;
+        .await
+        .expect("alice")
+        .id;
     let target = sui_id_core::admin::create_user(
-        &state.db, &clock, None, sui_id_store::models::HibpMode::Off, admin_id,
+        &state.db,
+        &clock,
+        None,
+        sui_id_store::models::HibpMode::Off,
+        admin_id,
         sui_id_core::admin::CreateUserSpec {
             username: "confirm-page-target".into(),
-            display_name: None, email: None,
+            display_name: None,
+            email: None,
             password: "confirm-pw-12345678".into(),
             is_admin: false,
-        }
-    ).await.expect("create");
+        },
+    )
+    .await
+    .expect("create");
 
     // Step-up is required for delete-confirm; complete it via direct DB touch.
     // For this test we simply verify the step-up redirect happens OR the page renders.
@@ -181,7 +214,8 @@ async fn audit_csv_export_returns_csv() {
         .expect("resp");
 
     assert_eq!(resp.status(), StatusCode::OK, "expected 200");
-    let ct = resp.headers()
+    let ct = resp
+        .headers()
         .get(header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
@@ -219,7 +253,10 @@ async fn audit_filter_by_event_prefix() {
     let bytes = read_body(resp.into_body()).await;
     let body = String::from_utf8_lossy(&bytes);
     // The filter value should be echoed in the search input.
-    assert!(body.contains("auth.login"), "filter value not found in page");
+    assert!(
+        body.contains("auth.login"),
+        "filter value not found in page"
+    );
 }
 
 // ---------- RFC 031: dashboard operator prompts ----------
@@ -262,17 +299,25 @@ async fn user_detail_page_renders() {
     let session = complete_setup_and_login(&state).await;
     let clock = sui_id_core::time::system_clock();
     let admin_id = sui_id_store::repos::users::find_by_username(&state.db, "alice")
-        .await.expect("alice").id;
+        .await
+        .expect("alice")
+        .id;
     let target = sui_id_core::admin::create_user(
-        &state.db, &clock, None, sui_id_store::models::HibpMode::Off, admin_id,
+        &state.db,
+        &clock,
+        None,
+        sui_id_store::models::HibpMode::Off,
+        admin_id,
         sui_id_core::admin::CreateUserSpec {
             username: "detail-page-user".into(),
             display_name: Some("Detail Page User".into()),
             email: None,
             password: "detail-pw-12345678".into(),
             is_admin: false,
-        }
-    ).await.expect("create");
+        },
+    )
+    .await
+    .expect("create");
 
     let resp = build_router(state.clone())
         .oneshot(
@@ -286,7 +331,11 @@ async fn user_detail_page_renders() {
         .await
         .expect("resp");
 
-    assert_eq!(resp.status(), StatusCode::OK, "expected 200 for user detail");
+    assert_eq!(
+        resp.status(),
+        StatusCode::OK,
+        "expected 200 for user detail"
+    );
     let bytes = read_body(resp.into_body()).await;
     let body = String::from_utf8_lossy(&bytes);
     assert!(

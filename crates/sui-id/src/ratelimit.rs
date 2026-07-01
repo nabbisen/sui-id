@@ -55,9 +55,10 @@ impl Limiter {
             let cutoff = now - self.window * 4;
             guard.retain(|_, w| w.started_at >= cutoff);
         }
-        let entry = guard
-            .entry((key.to_owned(), ip))
-            .or_insert(Window { started_at: now, count: 0 });
+        let entry = guard.entry((key.to_owned(), ip)).or_insert(Window {
+            started_at: now,
+            count: 0,
+        });
         if now - entry.started_at >= self.window {
             entry.started_at = now;
             entry.count = 0;

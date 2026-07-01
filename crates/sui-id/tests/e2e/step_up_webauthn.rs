@@ -6,11 +6,11 @@
 #![allow(dead_code)]
 
 use axum::body::Body;
-use axum::http::{header, Method, Request, StatusCode};
+use axum::http::{Method, Request, StatusCode, header};
 use sui_id::build_router;
 
-use tower::ServiceExt;
 use super::common::*;
+use tower::ServiceExt;
 
 // ---------- v0.21.1: WebAuthn step-up ----------
 
@@ -19,7 +19,8 @@ async fn step_up_form_shows_passkey_section_for_users_with_passkey() {
     use chrono::Utc;
     let state = test_app();
     let session = complete_setup_and_login(&state).await;
-    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+        .await
         .expect("alice");
 
     // Insert a fake passkey row directly. The contents need not be
@@ -34,7 +35,8 @@ async fn step_up_form_shows_passkey_section_for_users_with_passkey() {
         created_at: Utc::now(),
         last_used_at: None,
     };
-    sui_id_store::repos::user_webauthn_credentials::create(&state.db, &cred_row, b"{}").await
+    sui_id_store::repos::user_webauthn_credentials::create(&state.db, &cred_row, b"{}")
+        .await
         .expect("create passkey");
 
     let resp = build_router(state)
@@ -51,7 +53,10 @@ async fn step_up_form_shows_passkey_section_for_users_with_passkey() {
     assert_eq!(resp.status(), StatusCode::OK);
     let bytes = read_body(resp.into_body()).await;
     let body = String::from_utf8_lossy(&bytes);
-    assert!(body.contains(r#"id="step-up-passkey-form""#), "passkey form should render");
+    assert!(
+        body.contains(r#"id="step-up-passkey-form""#),
+        "passkey form should render"
+    );
     assert!(body.contains("/me/security/step-up/webauthn/start"));
     assert!(body.contains("/static/step-up-webauthn.js"));
 }
@@ -186,4 +191,3 @@ async fn step_up_webauthn_start_for_user_without_passkey_returns_bad_request() {
     // The user has no passkey, so start_webauthn returns BadRequest.
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 }
-

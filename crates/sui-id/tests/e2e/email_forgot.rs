@@ -6,11 +6,11 @@
 #![allow(dead_code)]
 
 use axum::body::Body;
-use axum::http::{header, Method, Request, StatusCode};
-use sui_id::{build_router, AppState};
+use axum::http::{Method, Request, StatusCode, header};
+use sui_id::{AppState, build_router};
 
-use tower::ServiceExt;
 use super::common::*;
+use tower::ServiceExt;
 
 // ---------- v0.22.0: email features ----------
 
@@ -36,7 +36,8 @@ async fn enable_smtp_in_db(state: &AppState) {
         created_at: now,
         updated_at: now,
     };
-    sui_id_store::repos::smtp_config::upsert(&state.db, &row).await
+    sui_id_store::repos::smtp_config::upsert(&state.db, &row)
+        .await
         .expect("upsert smtp_config");
 }
 
@@ -122,7 +123,8 @@ async fn forgot_password_post_sends_mail_for_known_email() {
 
     // The default test admin doesn't have an email set; assign one
     // directly so the forgot-password lookup matches.
-    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+        .await
         .expect("alice");
     let mut updated = user.clone();
     updated.email = Some("alice@test.invalid".into());
@@ -135,7 +137,8 @@ async fn forgot_password_post_sends_mail_for_known_email() {
         user.id,
         updated.email.as_deref(),
         chrono::Utc::now(),
-    ).await
+    )
+    .await
     .expect("set email");
 
     // CSRF cookie via GET.
@@ -206,14 +209,16 @@ async fn reset_password_full_flow_changes_password_and_sends_notification() {
     enable_smtp_in_db(&state).await;
 
     // Set the admin's email so they can reset.
-    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+        .await
         .expect("alice");
     sui_id_store::repos::users::update_email(
         &state.db,
         user.id,
         Some("alice@test.invalid"),
         chrono::Utc::now(),
-    ).await
+    )
+    .await
     .expect("set email");
 
     // 1) POST /forgot-password to mint a token + capture mail
@@ -246,11 +251,7 @@ async fn reset_password_full_flow_changes_password_and_sends_notification() {
     // Extract the token from the captured mail.
     let mail = mailer.last().await.expect("reset mail");
     let prefix = "/reset-password?token=";
-    let start = mail
-        .text_body
-        .find(prefix)
-        .expect("link in mail")
-        + prefix.len();
+    let start = mail.text_body.find(prefix).expect("link in mail") + prefix.len();
     let end = mail.text_body[start..]
         .find(|c: char| c == '\n' || c.is_whitespace())
         .map(|i| start + i)
@@ -277,9 +278,7 @@ async fn reset_password_full_flow_changes_password_and_sends_notification() {
 
     // 3) POST /reset-password with new password
     let new_pw = "brand-new-secure-pw-12345";
-    let body = format!(
-        "_csrf={csrf2}&token={token}&password={new_pw}&confirm_password={new_pw}"
-    );
+    let body = format!("_csrf={csrf2}&token={token}&password={new_pw}&confirm_password={new_pw}");
     let resp = build_router(state.clone())
         .oneshot(
             Request::builder()
@@ -292,7 +291,11 @@ async fn reset_password_full_flow_changes_password_and_sends_notification() {
         )
         .await
         .expect("POST reset");
-    assert!(resp.status().is_redirection(), "expected redirect, got {}", resp.status());
+    assert!(
+        resp.status().is_redirection(),
+        "expected redirect, got {}",
+        resp.status()
+    );
     let location = resp
         .headers()
         .get(header::LOCATION)
@@ -304,9 +307,11 @@ async fn reset_password_full_flow_changes_password_and_sends_notification() {
     //    post-reset password-changed notification.
     assert_eq!(mailer.count().await, 2);
     let drained = mailer.drain().await;
-    assert!(drained
-        .iter()
-        .any(|m| m.subject.contains("パスワードが変更されました")));
+    assert!(
+        drained
+            .iter()
+            .any(|m| m.subject.contains("パスワードが変更されました"))
+    );
 
     // 5) Replay of the same token returns 400 + invalid page.
     let resp = build_router(state.clone())
@@ -379,7 +384,6 @@ async fn settings_email_get_requires_admin() {
     assert_ne!(resp.status(), StatusCode::OK);
 }
 
-
 // ---------- RFC 010: forgot-password reset revokes sessions and refresh tokens ----------
 
 /// Helper: extract a password-reset token from a mail captured by the in-memory
@@ -395,7 +399,11 @@ fn extract_reset_token_from_mail(mail: &sui_id_core::mail::OutgoingMail) -> Stri
 }
 
 /// Helper: issue a forgot-password request and return the captured token.
-async fn issue_reset_token(state: &AppState, mailer: &sui_id_core::mail::InMemoryMailSender, email: &str) -> String {
+async fn issue_reset_token(
+    state: &AppState,
+    mailer: &sui_id_core::mail::InMemoryMailSender,
+    email: &str,
+) -> String {
     // GET for CSRF cookie.
     let resp = build_router(state.clone())
         .oneshot(
@@ -467,16 +475,19 @@ async fn redeem_reset_token(state: &AppState, token: &str, new_password: &str) {
 
 /// Count the active sessions for the user identified by `username`.
 async fn count_active_sessions(state: &AppState, username: &str) -> usize {
-    let user = sui_id_store::repos::users::find_by_username(&state.db, username).await
+    let user = sui_id_store::repos::users::find_by_username(&state.db, username)
+        .await
         .expect("user row");
-    sui_id_store::repos::sessions::list_active_for_user(&state.db, user.id).await
+    sui_id_store::repos::sessions::list_active_for_user(&state.db, user.id)
+        .await
         .expect("sessions")
         .len()
 }
 
 /// Count the active (non-revoked) refresh tokens for the user identified by `username`.
 async fn count_active_refresh_tokens(state: &AppState, username: &str) -> usize {
-    let user = sui_id_store::repos::users::find_by_username(&state.db, username).await
+    let user = sui_id_store::repos::users::find_by_username(&state.db, username)
+        .await
         .expect("user row");
     let uid = user.id;
     state
@@ -503,20 +514,27 @@ async fn forgot_password_reset_revokes_all_sessions_and_refresh_tokens() {
     enable_smtp_in_db(&state).await;
 
     // Give the admin user an email so forgot-password can proceed.
-    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await.expect("user");
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+        .await
+        .expect("user");
     sui_id_store::repos::users::update_email(
         &state.db,
         user.id,
         Some("alice@reset.test"),
         chrono::Utc::now(),
-    ).await
+    )
+    .await
     .expect("set email");
 
     // Sign in again to get a second session.
     let _session_b = login_again_for_admin(&state, USERNAME, PASSWORD).await;
 
     // Sanity: two active sessions before the reset.
-    assert_eq!(count_active_sessions(&state, USERNAME).await, 2, "expected 2 active sessions before reset");
+    assert_eq!(
+        count_active_sessions(&state, USERNAME).await,
+        2,
+        "expected 2 active sessions before reset"
+    );
 
     // Issue and redeem a forgot-password token.
     let token = issue_reset_token(&state, &mailer, "alice@reset.test").await;
@@ -565,13 +583,16 @@ async fn forgot_password_reset_is_no_op_when_user_has_no_sessions() {
     let _session = complete_setup_and_login(&state).await;
     enable_smtp_in_db(&state).await;
 
-    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await.expect("user");
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+        .await
+        .expect("user");
     sui_id_store::repos::users::update_email(
         &state.db,
         user.id,
         Some("bob@reset.test"),
         chrono::Utc::now(),
-    ).await
+    )
+    .await
     .expect("set email");
     // Revoke the one session we created so we start with zero.
     let uid2 = user.id;
@@ -587,7 +608,11 @@ async fn forgot_password_reset_is_no_op_when_user_has_no_sessions() {
         .await
         .expect("setup no-session state");
 
-    assert_eq!(count_active_sessions(&state, USERNAME).await, 0, "pre-condition: no sessions");
+    assert_eq!(
+        count_active_sessions(&state, USERNAME).await,
+        0,
+        "pre-condition: no sessions"
+    );
 
     let token = issue_reset_token(&state, &mailer, "bob@reset.test").await;
     // Should succeed even with no sessions to revoke.

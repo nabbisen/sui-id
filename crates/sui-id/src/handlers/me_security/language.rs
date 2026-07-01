@@ -6,11 +6,10 @@ use axum::response::{IntoResponse, Redirect, Response};
 use axum_extra::extract::cookie::CookieJar;
 use sui_id_core::errors::CoreError;
 
-
 use super::forms::*;
-use crate::handlers::{AppStateExt, CurrentUser, enforce_csrf};
 use crate::handlers::admin::with_csrf_cookie;
-use sui_id_web::pages::{MeShellData, MeTab, MeLanguageData};
+use crate::handlers::{AppStateExt, CurrentUser, enforce_csrf};
+use sui_id_web::pages::{MeLanguageData, MeShellData, MeTab};
 
 pub async fn language_get(
     state_ext: AppStateExt,
@@ -22,7 +21,8 @@ pub async fn language_get(
     let State(app) = state_ext;
     let lang = req_locale;
     let user = sui_id_store::repos::users::get(&app.db, user_id)
-        .await.map_err(|e| HttpError::html(CoreError::from(e)).with_lang(lang))?;
+        .await
+        .map_err(|e| HttpError::html(CoreError::from(e)).with_lang(lang))?;
     let shell = MeShellData {
         username: user.username.clone(),
         is_admin: user.is_admin,
@@ -38,8 +38,11 @@ pub async fn language_get(
             csrf_token: csrf_tok.clone(),
             just_saved,
         },
-        flash, app.is_dev_mode, lang,
-    )).into_response();
+        flash,
+        app.is_dev_mode,
+        lang,
+    ))
+    .into_response();
     Ok(with_csrf_cookie(resp, &app, &csrf_tok))
 }
 
@@ -58,9 +61,12 @@ pub async fn language_post(
     } else {
         match sui_id_i18n::Locale::parse(form.locale.trim()) {
             Some(loc) => Some(loc.tag().to_string()),
-            None => return Err(HttpError::html(CoreError::BadRequest(
-                "unsupported locale".into()
-            )).with_lang(lang)),
+            None => {
+                return Err(
+                    HttpError::html(CoreError::BadRequest("unsupported locale".into()))
+                        .with_lang(lang),
+                );
+            }
         }
     };
     sui_id_store::repos::users::set_preferred_lang(
@@ -68,6 +74,8 @@ pub async fn language_post(
         user_id,
         new_lang.as_deref(),
         app.clock.now(),
-    ).await.map_err(|e| HttpError::html(CoreError::from(e)).with_lang(lang))?;
+    )
+    .await
+    .map_err(|e| HttpError::html(CoreError::from(e)).with_lang(lang))?;
     Ok(Redirect::to("/me/security/language?saved=1").into_response())
 }

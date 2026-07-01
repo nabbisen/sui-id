@@ -6,11 +6,11 @@
 #![allow(dead_code)]
 
 use axum::body::Body;
-use axum::http::{header, Method, Request, StatusCode};
-use sui_id::{build_router, AppState};
+use axum::http::{Method, Request, StatusCode, header};
+use sui_id::{AppState, build_router};
 
-use tower::ServiceExt;
 use super::common::*;
+use tower::ServiceExt;
 
 // ---------- v0.23.0: Multilingual support ----------
 
@@ -146,7 +146,9 @@ async fn profile_lang_post_persists_and_sets_cookie() {
     );
 
     // DB has been updated.
-    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await.expect("user");
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+        .await
+        .expect("user");
     assert_eq!(user.preferred_lang.as_deref(), Some("en"));
 }
 
@@ -156,13 +158,16 @@ async fn profile_lang_clear_resets_to_browser_default() {
     let state = test_app();
     let session = complete_setup_and_login(&state).await;
     // Pre-set to "en" first.
-    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await.expect("user");
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+        .await
+        .expect("user");
     sui_id_store::repos::users::set_preferred_lang(
         &state.db,
         user.id,
         Some("en"),
         chrono::Utc::now(),
-    ).await
+    )
+    .await
     .expect("preset");
 
     let resp = build_router(state.clone())
@@ -211,7 +216,9 @@ async fn profile_lang_clear_resets_to_browser_default() {
         set_cookies
     );
 
-    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await.expect("user");
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+        .await
+        .expect("user");
     assert_eq!(user.preferred_lang, None);
 }
 
@@ -293,7 +300,9 @@ async fn admin_settings_basic_default_lang_change() {
         .expect("post");
     assert!(resp.status().is_redirection());
 
-    let row = sui_id_store::repos::server_settings::get(&state.db).await.expect("settings");
+    let row = sui_id_store::repos::server_settings::get(&state.db)
+        .await
+        .expect("settings");
     assert_eq!(row.default_lang, "en");
 }
 
@@ -306,7 +315,9 @@ async fn forgot_password_email_in_user_preferred_locale() {
 
     // Configure SMTP and set the user's email + preferred lang to en.
     enable_smtp_with_inmemory_mailer(&state).await;
-    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME).await.expect("user");
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+        .await
+        .expect("user");
     let user_id = user.id;
     state
         .db
@@ -352,12 +363,7 @@ async fn forgot_password_email_in_user_preferred_locale() {
     let _ = resp.status();
 
     let sent = mailer.drain().await;
-    assert_eq!(
-        sent.len(),
-        1,
-        "expected one email, got {}",
-        sent.len()
-    );
+    assert_eq!(sent.len(), 1, "expected one email, got {}", sent.len());
     let mail = &sent[0];
     // English subject contains the English string from STRINGS_EN.
     assert!(
@@ -397,4 +403,3 @@ async fn enable_smtp_with_inmemory_mailer(state: &AppState) {
     .await
     .expect("smtp upsert");
 }
-
