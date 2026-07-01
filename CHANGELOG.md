@@ -5,6 +5,63 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.76.7] — 2026-06-14
+
+**Doc verification pass — spec/implementation divergences corrected,
+all v0.76.x features documented in reference and guide docs.**
+
+No code changes.  All changes are to documentation and RFC files.
+
+### RFC doc corrections
+
+**RFC 004 (`rfcs/done/004-federation.md`):**
+
+- `amr` claim value corrected: spec said `"fed:{slug}"` (e.g. `"fed:google"`);
+  implementation emits `"fed"` (a static string; `AuthMethod::Fed.as_amr()` returns
+  `"fed"`).  The spec now matches the implementation.  Per-provider identity is
+  traceable via the audit log, not the `amr` claim.
+- P3 held-state note added: the spec says unverified email → held state awaiting
+  admin approval; the Phase 1 implementation redirects to
+  `/admin/login?fed_error=unverified_email` instead.  The held-state admin-approval
+  UI is deferred.  The RFC now says so explicitly.
+
+**RFC 008 (`rfcs/done/008-third-party-posture.md`):**
+
+- `consent_policy` SQL values corrected: the design section used draft names
+  `'always_prompt'`/`'first_time_only'`; the actual DB (from RFC 038 which preceded
+  this RFC) uses `'none'`/`'first_time'`/`'always'`.  SQL snippet and prose updated.
+- `scope_definition.requires_consent` future-work note added to §3: the table and
+  repo are implemented; wiring it into the authorize consent gate is deferred.
+
+### Reference doc updates
+
+**`docs/src/reference/oidc-api.md`:**
+- Federation `amr` rows added to the sign-in table: `["fed"]` for federated
+  only, `["fed", "otp", "mfa"]` for federated + local TOTP, etc.
+- `"Dynamic client registration"` removed from the "What sui-id does not do"
+  list (it shipped in v0.76.3).
+- JWKS future hardening note added (ID-token signature not yet verified against
+  upstream JWKS).
+
+### Guide doc updates
+
+**`docs/src/guides/upgrade.md`:**
+- `### v0.76.x` section added: new migrations (0033–0038), new routes, new
+  config sections, new CLI subcommands — all items an operator must know before
+  upgrading.
+
+**`docs/src/guides/operators.md`:**
+- Four new sections added: External user sources (LDAP), Federated sign-in
+  (upstream OIDC), Prometheus metrics, Dynamic client registration.  Each covers
+  operational setup, security notes, and pointers to the configuration reference.
+
+**`docs/src/getting-started/overview.md`:**
+- "Not in scope" list updated: LDAP, dynamic client registration, and federation
+  all moved to a new "Supported (as of v0.76.x)" section.  Only SAML and
+  multi-tenant remain in "Not in scope".
+
+**141/141 tests pass.  0 clippy errors.  All 5 CI gates PASS.**
+
 ## [0.76.6] — 2026-06-14
 
 **Full security audit of all 104 done RFCs. Two real flaws found and fixed.**

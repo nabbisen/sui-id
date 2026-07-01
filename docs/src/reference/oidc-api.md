@@ -285,6 +285,9 @@ Examples of what your RP will see:
 | Password + TOTP             | `"2"` | `["pwd", "otp", "mfa"]`     |
 | Password + recovery code    | `"2"` | `["pwd", "otp", "mfa"]`     |
 | Password + WebAuthn passkey | `"3"` | `["pwd", "hwk", "mfa"]`     |
+| Federated sign-in only      | `"1"` | `["fed"]`                   |
+| Federated + local TOTP      | `"2"` | `["fed", "otp", "mfa"]`     |
+| Federated + local WebAuthn  | `"3"` | `["fed", "hwk", "mfa"]`     |
 
 `acr` and `amr` describe the *originating* sign-in. They do not
 change as the user uses your application: a session that started

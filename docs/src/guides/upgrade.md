@@ -30,6 +30,41 @@ Migrations that add columns use `ADD COLUMN` with a default value or
 
 ## Version-specific notes
 
+### v0.76.x
+
+**New migrations (0033–0038).** All run automatically and are backwards-compatible
+(`ADD COLUMN` with defaults, new tables):
+
+| Migration | Table | What changed |
+|---|---|---|
+| 0033 | `server_settings` | `metrics_token_hash` column for Prometheus auth |
+| 0034 | `users` | `source`, `external_stable_id` columns for LDAP shadow rows |
+| 0035 | `clients` | `registered_via`, `logo_uri`, `homepage_uri`, `privacy_policy_uri`, `tos_uri` |
+| 0036 | new: `scope_definition`, `client_registration_token` | Scope catalog (seeded) and RFC 7591 registration tokens |
+| 0037 | new: `federation_provider` | Upstream OIDC IdP configurations (encrypted secrets) |
+| 0038 | new: `federation_link` | Per-user upstream identity links |
+
+**New routes.** If you run sui-id behind a strict allowlist firewall or WAF,
+add these paths:
+
+- `GET /metrics` — Prometheus metrics (only if `metrics_enabled = true`)
+- `POST /oauth2/register` — RFC 7591 dynamic client registration
+- `GET /auth/federated/{slug}/start` — Federation sign-in initiation
+- `GET /auth/federated/callback` — Federation sign-in callback
+- `GET /auth/federated/link` — Federation link-only flow
+
+**New configuration sections.** Optional; existing deployments that do not
+add them continue to work without change:
+
+- `[metrics]` — enable Prometheus metrics endpoint
+- `[[user_source]]` — LDAP external user source
+- `[[federation_provider]]` — upstream OIDC provider
+
+**New CLI subcommands:**
+
+- `sui-id admin rotate-metrics-token` — generate/rotate a Prometheus bearer token
+- `sui-id admin issue-registration-token` — issue an RFC 7591 initial-access token
+
 ### v0.36.x
 
 - Dangerous operations (user disable/delete, MFA reset, client delete,

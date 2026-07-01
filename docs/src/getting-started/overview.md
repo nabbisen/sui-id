@@ -59,12 +59,22 @@ sessions) and `/me/apps` (review and revoke OAuth consent grants).
 - Client Credentials — not supported (no machine-to-machine grant).
 - Implicit / Hybrid / Device Flow — not supported.
 
+### Supported (as of v0.76.x)
+
+- LDAP / Active Directory external user source (RFC 005) — read-only bind; shadow
+  rows for sessions and MFA; local-first cascade with fail-soft.
+- Dynamic client registration — RFC 7591 (RFC 008) — initial-access-token gated;
+  clients start disabled pending admin approval.
+- Federation as upstream OIDC relying party (RFC 004) — "Sign in with X" via any
+  OIDC-compliant provider; `link_only` or `provision_on_first_login` modes; local
+  MFA enforced post-callback.
+- Prometheus metrics endpoint (RFC 006) — disabled by default; session-cookie or
+  bearer-token auth.
+
 ### Not in scope
 
 - SAML IdP or SP
-- LDAP / Active Directory user backend
-- Dynamic client registration (RFC 7591)
-- Multi-tenant namespacing
+- Multi-tenant namespacing (design in RFC 025; no schedule)
 
 ## Design principles
 

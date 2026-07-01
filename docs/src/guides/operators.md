@@ -1301,6 +1301,107 @@ takes effect immediately; loosening too. There is no token-issuance
 window for a previously-issued code to slip through with a now-
 forbidden scope.
 
+
+## External user sources — LDAP / Active Directory
+
+Configure one or more `[[user_source]]` blocks in `sui-id.toml` to authenticate
+users against an LDAP directory. See [configuration reference](../reference/configuration.md)
+for the full field list.
+
+The login cascade is **local-first**: sui-id always checks the local `credentials`
+table before consulting LDAP. If the local check returns `InvalidCredentials` *and*
+the username is not found locally, the cascade continues to LDAP. A transport
+failure from LDAP is logged and the cascade continues — it does not lock out
+local-only accounts.
+
+**Operational notes:**
+
+- Users who first sign in via LDAP get a *shadow row* in the `users` table for
+  sessions, MFA factors, and audit linkage. No local password is stored.
+- An admin cannot reset the password of an LDAP-source user — the reset must
+  happen in the upstream directory.
+- Disable an LDAP user in the directory to prevent new sessions. Their existing
+  sessions continue until they expire; use the admin panel to revoke them early.
+- Service account must be read-only (search + bind). Write-back is not supported.
+
+---
+
+## Federated sign-in (upstream OIDC)
+
+Configure `[[federation_provider]]` blocks to enable "Sign in with Google/Microsoft/…"
+buttons on the login page. See [configuration reference](../reference/configuration.md).
+
+**Provision modes:**
+
+- `link_only` (default) — users must log in locally first to link their account.
+  On first federated sign-in, they are redirected to the link-approval page.
+- `provision_on_first_login` — a local account is created automatically on the
+  user's first successful federated sign-in (requires `email_verified = true`
+  from the upstream; otherwise the sign-in is rejected).
+
+**Enabling a provider:**
+
+New providers start with `enabled = false`. After verifying the configuration,
+set `enabled = true` in the config file and restart sui-id to register it.
+Then enable it in the admin panel under **Admin → Federation**.
+
+**Security notes:**
+
+- The upstream access token is used only to fetch user claims and is then
+  discarded — it is never persisted.
+- Local MFA (TOTP / passkey) is always enforced after a federated sign-in. The
+  upstream's own MFA assertion is never accepted as a substitute.
+- Email collision protection: if a federated identity asserts an email that
+  already belongs to a local user with no link to this provider, the sign-in
+  is denied and an audit event `auth.federation.takeover_blocked` is emitted.
+
+---
+
+## Prometheus metrics
+
+Enable the metrics endpoint in `[metrics]`:
+
+```toml
+[metrics]
+enabled     = true
+listen_addr = "127.0.0.1:9091"   # Restrict to internal interface.
+```
+
+Issue or rotate the bearer token:
+
+```sh
+sui-id admin rotate-metrics-token --config sui-id.toml
+```
+
+The endpoint `GET /metrics` accepts either an admin session cookie or
+`Authorization: Bearer <token>`. No credential → 401. The token is stored
+hashed; if you lose it, rotate a new one.
+
+**What is exposed:** counters and histograms for sign-in outcomes, token
+issuance, email outbox depth, and HTTP latency. No user IDs, email addresses,
+or client IDs appear in metric labels.
+
+---
+
+## Dynamic client registration (RFC 7591)
+
+Third-party applications can self-register via `POST /oauth2/register` using
+an initial-access token:
+
+```sh
+sui-id admin issue-registration-token --config sui-id.toml \
+  --max-uses 1 --note "Acme Corp onboarding"
+```
+
+Dynamically-registered clients start **disabled**. An administrator must enable
+them in the admin panel before they can obtain tokens. This is intentional —
+operators review third-party registrations before granting access.
+
+See the [OIDC API reference](../reference/oidc-api.md#dynamic-client-registration-rfc-7591)
+for the request/response format.
+
+---
+
 ## Auditing dependencies for known vulnerabilities
 
 sui-id pins its dependency tree via `Cargo.lock`. New advisories

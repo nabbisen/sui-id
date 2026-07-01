@@ -87,7 +87,9 @@ upstream and local identities disagree (the account-takeover surface).
 - **P3 (provision gated on verified email).** Provision-on-first-login
   honours an upstream email for new-account creation only if the upstream
   marks it `email_verified: true`. Otherwise the new account enters a
-  held state requiring admin approval.
+  held state requiring admin approval. (Phase 1 implementation: redirects to
+  `/admin/login?fed_error=unverified_email` instead; a held-state admin-approval
+  UI is deferred to a future iteration.)
 - **P4 (local MFA is not bypassed).** Federated sign-in skips the local
   password but never the local MFA challenge. The upstream's own MFA
   assertion (`amr`) is not trusted as a substitute, because the upstream's
@@ -171,7 +173,10 @@ The login screen lists enabled providers as buttons. "Sign in with X":
 ### `amr` reflection
 
 A federated sign-in followed by local TOTP produces an issued `amr` of
-`["fed:google", "totp"]`. The federation factor is recorded; local MFA is
+`["fed", "totp"]`. The federation factor is recorded as `"fed"`
+(the slug is not included — `AuthMethod::Fed` emits a single static
+`"fed"` string; per-provider distinction is via the audit log, not the
+`amr` claim). Local MFA is
 additive, not replaced.
 
 ## Data model impact
@@ -186,7 +191,7 @@ new migrations.
 New routes: `GET /auth/federated/{slug}/start`,
 `GET /auth/federated/callback`, `GET|POST /auth/federated/link`, and admin
 provider CRUD under `/admin/federation/*`. No change to existing IdP-role
-endpoints. The issued-token `amr` claim gains `fed:{slug}` values.
+endpoints. The issued-token `amr` claim gains `"fed"` for the federation factor.
 
 ## Testing strategy
 

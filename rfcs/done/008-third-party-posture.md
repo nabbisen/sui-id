@@ -123,8 +123,8 @@ CREATE TABLE user_consent (
 );
 ```
 
-Two per-client policy modes (`consent_policy` column): `always_prompt`
-(every authorize hits consent) and `first_time_only` (first authorize
+Two per-client policy modes (`consent_policy` column): `always`
+(every authorize hits consent) and `first_time` (first authorize
 prompts; same-or-narrower scopes thereafter use stored grants; a broader
 request re-prompts, P2). Default `first_time_only`.
 
@@ -137,8 +137,10 @@ an initial access token (`Authorization: Bearer <token>`); no token → 401.
 ```sql
 ALTER TABLE clients ADD COLUMN registered_via TEXT NOT NULL DEFAULT 'admin'
     CHECK (registered_via IN ('admin','dynamic'));
-ALTER TABLE clients ADD COLUMN consent_policy TEXT NOT NULL DEFAULT 'first_time_only'
-    CHECK (consent_policy IN ('always_prompt','first_time_only'));
+ALTER TABLE clients ADD COLUMN consent_policy TEXT NOT NULL DEFAULT 'none'
+    CHECK (consent_policy IN ('none','first_time','always'));
+-- Note: values use RFC 038's original naming ('none'/'first_time'/'always'),
+-- not the draft names used in this RFC's initial design section.
 ALTER TABLE clients ADD COLUMN logo_uri TEXT;
 ALTER TABLE clients ADD COLUMN homepage_uri TEXT;
 ALTER TABLE clients ADD COLUMN privacy_policy_uri TEXT;
@@ -149,6 +151,13 @@ Optional open-registration mode (no token), behind an explicit admin
 setting, IP-rate-limited; default off (P4).
 
 ### 3. Per-client scope policy refinement
+
+> **Implementation note (v0.76.3):** `scope_definition` is created and seeded
+> by migration 0036, and its CRUD repo is implemented.  The `requires_consent`
+> column is not yet wired into the authorize flow — the consent gate still
+> uses `client.consent_policy` exclusively.  Using `scope_definition.requires_consent`
+> to drive per-scope consent decisions is deferred to a future iteration.
+
 
 ```sql
 CREATE TABLE scope_definition (
