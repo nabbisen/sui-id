@@ -1,6 +1,6 @@
 # RFC 091 — LoginContext Rendering and SelfServiceShell Navigation
 
-**Status.** Proposed
+**Status.** Implemented (v0.73.0)
 **Tracks.** UI/UX handoff v2.3 §4 (Login), §5 (Navigation, SelfServiceShell)
 — unit 5. Category B.
 **Touches.** `sui-id-core/src/authorize.rs` or `session.rs` (LoginContext

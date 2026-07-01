@@ -617,6 +617,11 @@ pub static STRINGS_JA: Strings = Strings {
     confirm_email_settings_title: "メール設定の確認",
     confirm_email_settings_impact: "以下のメール設定が保存されます：",
     confirm_email_settings_button: "設定を保存",
+    login_title_admin: "sui-id の管理にサインイン",
+    login_body_admin: "管理者または監査者アカウントを使用してください。",
+    login_title_self_service: "セキュリティ管理にサインイン",
+    login_body_self_service: "MFA、パスキー、セッション、パスワードを管理します。",
+    login_body_oidc: "sui-id がこのアプリケーションのためにあなたの本人確認を行います。",
 
     // Admin: ユーザー詳細 (RFC 035)
     user_detail_back: "← ユーザー一覧へ",

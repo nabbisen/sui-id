@@ -869,4 +869,10 @@ pub struct Strings {
     pub confirm_email_settings_title: &'static str,
     pub confirm_email_settings_impact: &'static str,
     pub confirm_email_settings_button: &'static str,
+    // RFC 091: LoginContext copy
+    pub login_title_admin: &'static str,
+    pub login_body_admin: &'static str,
+    pub login_title_self_service: &'static str,
+    pub login_body_self_service: &'static str,
+    pub login_body_oidc: &'static str,
 }

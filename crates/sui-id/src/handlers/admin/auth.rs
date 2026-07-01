@@ -17,7 +17,7 @@ use sui_id_core::errors::CoreError;
 use sui_id_shared::ids::SessionId;
 use sui_id_store::repos::users;
 use sui_id_web::{
-    render_login, Flash, FlashKind,
+    render_login, Flash, FlashKind, LoginContext,
 };
 use super::forms::CsrfOnlyForm;
 use super::with_csrf_cookie;
@@ -42,6 +42,46 @@ pub struct LoginGetQuery {
 }
 
 
+/// Derive the `LoginContext` from the `?next=` parameter (RFC 091).
+///
+/// Trusted-name invariant: `OidcAuthorize` is only produced after a
+/// successful synchronous lookup of the client record by UUID.
+/// A malformed or unknown client_id falls back to `AdminPanel`.
+async fn derive_login_context(
+    db: &sui_id_store::Database,
+    next: &str,
+) -> LoginContext {
+    if next.starts_with("/oauth2/") {
+        // Extract client_id from the authorize URL and look up the
+        // registered client name.  Any parse or DB failure → AdminPanel.
+        let client_name = url::Url::parse(&format!("https://localhost{next}"))
+            .ok()
+            .and_then(|u| {
+                u.query_pairs()
+                    .find(|(k, _)| k == "client_id")
+                    .map(|(_, v)| v.into_owned())
+            })
+            .and_then(|cid| cid.parse::<sui_id_shared::ids::ClientId>().ok())
+            .and_then(|cid| {
+                // Block-in-place is acceptable here because login_get is
+                // already on an async Tokio thread and this is a single
+                // short SQLite lookup.
+                tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current()
+                        .block_on(sui_id_store::repos::clients::get(db, cid))
+                        .ok()
+                })
+            })
+            .map(|r| r.name);
+        if let Some(name) = client_name {
+            return LoginContext::OidcAuthorize { client_name: name };
+        }
+    } else if next.starts_with("/me/") {
+        return LoginContext::SelfService;
+    }
+    LoginContext::AdminPanel
+}
+
 pub async fn login_get(
     jar: CookieJar,
     state_ext: AppStateExt,
@@ -63,8 +103,10 @@ pub async fn login_get(
         }
     }
     // Thread `next` into the form so login_post can redirect to it.
-    let next = if q.next.is_empty() { None } else { Some(q.next) };
-    Ok(Html(render_login(None, next, lang, false)).into_response())
+    let next = if q.next.is_empty() { None } else { Some(q.next.clone()) };
+    // RFC 091: derive LoginContext from `next` for context-aware copy.
+    let login_ctx = derive_login_context(&app.db, &q.next).await;
+    Ok(Html(render_login(None, next, lang, false, Some(login_ctx))).into_response())
 }
 
 
@@ -123,7 +165,7 @@ pub async fn login_post(
                     } else {
                         Some(form.next)
                     };
-                    return Ok(Html(render_login(Some(flash), next, lang, false)).into_response());
+                    return Ok(Html(render_login(Some(flash), next, lang, false, None)).into_response());
                 }
             }
 
@@ -164,7 +206,7 @@ pub async fn login_post(
                 Some(form.next)
             };
             Ok(
-                (StatusCode::UNAUTHORIZED, Html(render_login(Some(flash), next, lang, false)))
+                (StatusCode::UNAUTHORIZED, Html(render_login(Some(flash), next, lang, false, None)))
                     .into_response(),
             )
         }
@@ -338,7 +380,7 @@ pub async fn logout(
     };
     Ok((
         jar,
-        Html(render_login(Some(flash), None, lang, false)),
+        Html(render_login(Some(flash), None, lang, false, None)),
     )
         .into_response())
 }

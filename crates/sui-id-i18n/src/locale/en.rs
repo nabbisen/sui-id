@@ -620,6 +620,11 @@ pub static STRINGS_EN: Strings = Strings {
     confirm_email_settings_title: "Confirm email settings",
     confirm_email_settings_impact: "The following email settings will be saved:",
     confirm_email_settings_button: "Save settings",
+    login_title_admin: "Sign in to manage sui-id",
+    login_body_admin: "Use an administrator or auditor account.",
+    login_title_self_service: "Sign in to manage your security",
+    login_body_self_service: "Manage MFA, passkeys, sessions, and password.",
+    login_body_oidc: "sui-id will verify your identity for this application.",
 
     // Admin: User detail (RFC 035)
     user_detail_back: "← Back to users",

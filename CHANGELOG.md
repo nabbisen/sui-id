@@ -5,6 +5,52 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.73.0] — 2026-06-14
+
+**UI-security unit 5: RFC 091 — LoginContext Rendering.**
+The login page now renders context-appropriate copy based on why the user
+is logging in, with a server-side trusted-name invariant for OIDC flows.
+
+### Added — `LoginContext` enum and context-aware login copy (RFC 091)
+
+`LoginContext` is a new public enum in `sui-id-web`:
+
+```rust
+pub enum LoginContext {
+    AdminPanel,
+    OidcAuthorize { client_name: String },
+    SelfService,
+}
+```
+
+`render_login` gains an `Option<LoginContext>` parameter (`None` → `AdminPanel`).
+Copy per context:
+
+| Context | Title | Body |
+|---|---|---|
+| AdminPanel | "Sign in to manage sui-id" | "Use an administrator or auditor account." |
+| OidcAuthorize | "Sign in" (existing) | "{client_name}: sui-id will verify your identity…" |
+| SelfService | "Sign in to manage your security" | "Manage MFA, passkeys, sessions, and password." |
+
+**Trusted-name invariant (v2.3 §4 P0):** `OidcAuthorize` is only produced
+after a successful lookup of the client record by UUID parsed from `?client_id`.
+A malformed or unregistered `client_id` in the `next` URL falls back to
+`AdminPanel` — the untrusted value is never echoed to the page.
+
+5 new i18n keys across English, Japanese, Simplified Chinese (Traditional
+delegates to Simplified): `login_title_admin`, `login_body_admin`,
+`login_title_self_service`, `login_body_self_service`, `login_body_oidc`.
+
+### Added — `derive_login_context` helper in auth handler
+
+A `async fn derive_login_context(db, next)` reads the `?client_id=` from
+a `/oauth2/…` `next` URL, looks up the client name in the database, and
+returns the appropriate `LoginContext`. All existing `render_login` call
+sites receive `None` (AdminPanel default) except `login_get` which passes
+the derived context.
+
+**104/104 tests pass. All 5 CI gates PASS.**
+
 ## [0.72.0] — 2026-06-14
 
 **UI-security unit 4: RFC 090 — Signing-Key Rotation Confirm Page and

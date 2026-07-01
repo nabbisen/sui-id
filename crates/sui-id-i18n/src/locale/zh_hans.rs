@@ -619,6 +619,11 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     confirm_email_settings_title: "确认邮件设置",
     confirm_email_settings_impact: "以下邮件设置将被保存：",
     confirm_email_settings_button: "保存设置",
+    login_title_admin: "登录以管理 sui-id",
+    login_body_admin: "请使用管理员或审计员账户。",
+    login_title_self_service: "登录以管理您的安全设置",
+    login_body_self_service: "管理 MFA、通行密钥、会话和密码。",
+    login_body_oidc: "sui-id 将为此应用程序验证您的身份。",
 
     // Admin: 用户详情 (RFC 035)
     user_detail_back: "← 返回用户列表",

@@ -8,19 +8,54 @@ use leptos::prelude::*;
 // already carry (deferred from RFC-MI-022).
 use super::me_security::{MeTab, me_security_tabs};
 
+/// Context that drives login-page copy (RFC 091 / v2.3 §4).
+///
+/// Derived in the handler from the `?next=` parameter; never from
+/// user-supplied query params that haven't been validated.
+#[derive(Debug, Clone)]
+pub enum LoginContext {
+    /// Default: admin panel or unknown destination.
+    AdminPanel,
+    /// User is signing in to authorise an OIDC client.
+    /// `client_name` comes from the *validated* client record.
+    OidcAuthorize { client_name: String },
+    /// User is signing in to manage their own security settings.
+    SelfService,
+}
+
 pub fn render_login(
     flash: Option<Flash>,
     next: Option<String>,
     lang: sui_id_i18n::Locale,
     // When true, renders a passkey sign-in button above the password form (RFC 034).
     show_passkey_option: bool,
+    // RFC 091: context-aware copy. None defaults to AdminPanel.
+    context: Option<LoginContext>,
 ) -> String {
     render(move || {
         let next_value = next.clone().unwrap_or_default();
         let t = lang.strings();
+        let ctx = context.unwrap_or(LoginContext::AdminPanel);
+        let (page_title, page_body): (&'static str, Option<String>) = match &ctx {
+            LoginContext::AdminPanel => (t.login_title_admin, Some(t.login_body_admin.to_owned())),
+            LoginContext::OidcAuthorize { client_name } => {
+                // RFC 091 trusted-name invariant: client_name came from the
+                // validated client record, never from a raw query param.
+                (
+                    t.login_title,
+                    Some(format!("{} {client_name}", t.login_body_oidc)),
+                )
+            }
+            LoginContext::SelfService => (
+                t.login_title_self_service,
+                Some(t.login_body_self_service.to_owned()),
+            ),
+        };
+        let body_clone = page_body.clone();
         view! {
-            <crate::layout::AuthShell title=t.login_title.to_string() lang=lang>
-                <h1>{t.login_title}</h1>
+            <crate::layout::AuthShell title=page_title.to_string() lang=lang>
+                <h1>{page_title}</h1>
+                {body_clone.map(|b| view! { <p class="muted">{b}</p> })}
                 {flash_banner(flash)}
                 {show_passkey_option.then(|| view! {
                     <form id="passkey-login-form" method="post"
