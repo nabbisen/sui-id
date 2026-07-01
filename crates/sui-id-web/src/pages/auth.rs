@@ -1,12 +1,12 @@
 //! Page renderers for the "auth" screen domain (RFC 065).
 
-use leptos::prelude::*;
-use crate::layout::Shell;
 use super::common::*;
+use crate::layout::Shell;
+use leptos::prelude::*;
 // RFC-MI-060: import the me_security tab helpers so render_password_change
 // can render the route-tab strip that the other five /me/security/* pages
 // already carry (deferred from RFC-MI-022).
-use super::me_security::{me_security_tabs, MeTab};
+use super::me_security::{MeTab, me_security_tabs};
 
 pub fn render_login(
     flash: Option<Flash>,
@@ -59,7 +59,6 @@ pub fn render_login(
 
 // ---------- MFA challenge ----------
 
-
 pub fn render_mfa_challenge(
     flash: Option<Flash>,
     csrf_token: String,
@@ -83,7 +82,10 @@ pub fn render_mfa_challenge(
             }
             .into_any()
         } else {
-            view! { <></> }.into_any()
+            {
+                let _: () = view! { <></> };
+                ().into_any()
+            }
         };
         view! {
             <crate::layout::AuthShell title=t.mfa_challenge_shell_title.to_string() lang=lang>
@@ -108,15 +110,12 @@ pub fn render_mfa_challenge(
 
 // ---------- profile (MFA settings) ----------
 
-
 pub struct PasskeyDescriptor {
     pub id: String,
     pub nickname: String,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub last_used_at: Option<chrono::DateTime<chrono::Utc>>,
 }
-
-
 
 pub struct MfaSetupData {
     /// otpauth:// URI for the QR code
@@ -128,7 +127,6 @@ pub struct MfaSetupData {
     pub secret_b32: String,
 }
 
-
 pub fn render_mfa_setup(
     data: MfaSetupData,
     flash: Option<Flash>,
@@ -137,7 +135,11 @@ pub fn render_mfa_setup(
 ) -> String {
     render(move || {
         let t = lang.strings();
-        let MfaSetupData { otpauth_uri, qr_svg, secret_b32 } = data;
+        let MfaSetupData {
+            otpauth_uri,
+            qr_svg,
+            secret_b32,
+        } = data;
         view! {
             <Shell title=t.mfa_setup_shell_title.to_string() show_nav=true current=Some("me".to_string()) lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">
@@ -193,7 +195,6 @@ pub fn render_mfa_setup(
 /// wants it: pre-formatted display label, plus the two raw counts.
 /// The renderer doesn't need to know the bucket spacing or the
 /// range — that's the caller's job.
-
 pub struct PasswordChangeData {
     pub username: String,
     /// Pre-filled checked value of "sign out other sessions". The
@@ -201,7 +202,6 @@ pub struct PasswordChangeData {
     /// keeps the user's previous choice.
     pub revoke_others_default: bool,
 }
-
 
 pub fn render_password_change(
     data: PasswordChangeData,
@@ -215,7 +215,11 @@ pub fn render_password_change(
             username,
             revoke_others_default,
         } = data;
-        let revoke_attr = if revoke_others_default { Some("") } else { None };
+        let revoke_attr = if revoke_others_default {
+            Some("")
+        } else {
+            None
+        };
         view! {
             // RFC-MI-060: show_nav=true + current="me" so the admin nav
             // highlights "Security". Tab strip added (deferred from RFC-MI-022).
@@ -312,7 +316,10 @@ pub fn render_step_up(
             }
             .into_any()
         } else {
-            view! { <></> }.into_any()
+            {
+                let _: () = view! { <></> };
+                ().into_any()
+            }
         };
         view! {
             <Shell title=t.step_up_title.to_string() show_nav=false current=None lang=lang csrf_token=csrf_token.clone()>
@@ -349,7 +356,6 @@ pub fn render_step_up(
 
 // ---------- /forgot-password & /reset-password (v0.22.0) ----------
 
-
 pub fn render_forgot_password(
     csrf_token: String,
     flash: Option<Flash>,
@@ -379,7 +385,6 @@ pub fn render_forgot_password(
     })
 }
 
-
 pub fn render_forgot_password_sent(lang: sui_id_i18n::Locale) -> String {
     render(move || {
         let t = lang.strings();
@@ -395,7 +400,6 @@ pub fn render_forgot_password_sent(lang: sui_id_i18n::Locale) -> String {
         }
     })
 }
-
 
 pub fn render_reset_password(
     token: String,
@@ -432,7 +436,6 @@ pub fn render_reset_password(
         }
     })
 }
-
 
 pub fn render_reset_password_invalid(lang: sui_id_i18n::Locale) -> String {
     render(move || {

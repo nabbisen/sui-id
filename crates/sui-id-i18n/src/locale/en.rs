@@ -5,12 +5,11 @@
 //! Every field must be present — the compiler enforces completeness.
 //! After editing, run `cargo test -p sui-id-i18n` to confirm all tests pass.
 
-use crate::formatters::{fmt_count_shared, fmt_time_shared, Formatters};
+use crate::formatters::{Formatters, fmt_count_shared, fmt_time_shared};
 use crate::strings::Strings;
 use chrono::{DateTime, Datelike, Utc};
 
 // ── Strings ──────────────────────────────────────────────────────────────────
-
 
 pub static STRINGS_EN: Strings = Strings {
     // Generic UI
@@ -470,14 +469,18 @@ pub static STRINGS_EN: Strings = Strings {
     dashboard_oidc_endpoint_discovery: "Discovery",
     dashboard_oidc_endpoint_jwks: "JWKS",
     dashboard_sparkline_aria: "Sign-in activity sparkline",
-    dashboard_sparkline_tooltip: |label, success, failure| format!("{label} : success {success} / failure {failure}"),
+    dashboard_sparkline_tooltip: |label, success, failure| {
+        format!("{label} : success {success} / failure {failure}")
+    },
 
     // Dashboard operator prompts (RFC 031)
     dashboard_warn_smtp: "Forgot-password email is disabled. Configure SMTP in Settings → Email to enable it.",
     dashboard_warn_hibp: "Password breach checking is off. Enable it in Settings → Authentication.",
     dashboard_warn_cookie_insecure: "Cookie Secure flag is off. Set cookie_secure = true in production (Settings → Security).",
     dashboard_warn_admins_no_mfa: |n| format!("{n} admin account(s) without MFA."),
-    dashboard_warn_old_signing_key: |age| format!("Oldest signing key is {age} days old — rotation recommended."),
+    dashboard_warn_old_signing_key: |age| {
+        format!("Oldest signing key is {age} days old — rotation recommended.")
+    },
     dashboard_warn_outbox_stuck: |n| format!("{n} email(s) have been queued for over an hour."),
     dashboard_warn_pending_resets: |n| format!("{n} password-reset link(s) outstanding."),
     dashboard_getting_started_title: "Getting Started",
@@ -554,8 +557,12 @@ pub static STRINGS_EN: Strings = Strings {
     // Audit log extensions (RFC 051)
     audit_entry_count_caption: |n| format!("({n})"),
     audit_filter_button: "Filter",
-    audit_chain_broken_note: |seq| format!("Mismatch detected at seq={seq}. Investigate immediately."),
-    audit_chain_ok_note: |checked, legacy| format!("Last {checked} rows inspected. Legacy unhashed rows (pre-v0.17): {legacy}"),
+    audit_chain_broken_note: |seq| {
+        format!("Mismatch detected at seq={seq}. Investigate immediately.")
+    },
+    audit_chain_ok_note: |checked, legacy| {
+        format!("Last {checked} rows inspected. Legacy unhashed rows (pre-v0.17): {legacy}")
+    },
 
     // Admin: Signing keys (RFC 029)
     signing_keys_title: "Signing keys",
@@ -787,8 +794,7 @@ pub static STRINGS_EN: Strings = Strings {
 // ── Formatters ───────────────────────────────────────────────────────────────
 
 const EN_MONTHS: &[&str] = &[
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 
 fn en_fmt_date(dt: DateTime<Utc>) -> String {
@@ -840,11 +846,11 @@ fn en_fmt_relative(at: DateTime<Utc>, now: DateTime<Utc>) -> String {
 
 /// English date and number formatters.
 pub static FORMATTERS_EN: Formatters = Formatters {
-    fmt_date:      en_fmt_date,
-    fmt_time:      fmt_time_shared,
+    fmt_date: en_fmt_date,
+    fmt_time: fmt_time_shared,
     fmt_date_time: en_fmt_date_time,
-    fmt_relative:  en_fmt_relative,
-    fmt_count:     fmt_count_shared,
+    fmt_relative: en_fmt_relative,
+    fmt_count: fmt_count_shared,
 };
 
 // ── tests ─────────────────────────────────────────────────────────────────────
@@ -868,9 +874,15 @@ mod tests {
     #[test]
     fn en_relative_formatting() {
         let now = ts(2024, 5, 12, 15, 0);
-        assert_eq!(en_fmt_relative(ts(2024, 5, 12, 14, 59), now), "1 minute ago");
-        assert_eq!(en_fmt_relative(ts(2024, 5, 12, 14, 57), now), "3 minutes ago");
+        assert_eq!(
+            en_fmt_relative(ts(2024, 5, 12, 14, 59), now),
+            "1 minute ago"
+        );
+        assert_eq!(
+            en_fmt_relative(ts(2024, 5, 12, 14, 57), now),
+            "3 minutes ago"
+        );
         assert_eq!(en_fmt_relative(ts(2024, 5, 12, 12, 0), now), "3 hours ago");
-        assert_eq!(en_fmt_relative(ts(2024, 5,  9, 15, 0), now), "3 days ago");
+        assert_eq!(en_fmt_relative(ts(2024, 5, 9, 15, 0), now), "3 days ago");
     }
 }

@@ -1,10 +1,9 @@
 //! /me/security passkey (RFC 065).
 
-use leptos::prelude::*;
-use crate::layout::Shell;
-use super::super::common::*;
 use super::super::auth::PasskeyDescriptor;
-use super::*;  // MeShellData + MeTab + me_security_tabs
+use super::super::common::*;
+use super::*;
+use crate::layout::Shell;
 
 pub struct MePasskeyData {
     pub shell: MeShellData,
@@ -13,7 +12,6 @@ pub struct MePasskeyData {
     pub origin_eligible: bool,
     pub csrf_token: String,
 }
-
 
 pub fn render_me_passkey(
     data: MePasskeyData,
@@ -24,11 +22,18 @@ pub fn render_me_passkey(
     render(move || {
         let t = lang.strings();
         let tabs = me_security_tabs(MeTab::Passkey, lang);
-        let MePasskeyData { shell: _, passkeys, origin_eligible, csrf_token } = data;
-        let warning = (!origin_eligible).then(|| view! {
-            <div class="banner banner--warning" role="alert">
-                {t.me_passkey_origin_warning}
-            </div>
+        let MePasskeyData {
+            shell: _,
+            passkeys,
+            origin_eligible,
+            csrf_token,
+        } = data;
+        let warning = (!origin_eligible).then(|| {
+            view! {
+                <div class="banner banner--warning" role="alert">
+                    {t.me_passkey_origin_warning}
+                </div>
+            }
         });
         let rows: Vec<_> = passkeys.iter().map(|p| {
             let cred_id = p.id.clone();

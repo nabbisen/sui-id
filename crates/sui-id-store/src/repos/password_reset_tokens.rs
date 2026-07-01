@@ -3,7 +3,7 @@
 //! The plaintext token is never stored. Callers compute SHA-256
 //! and pass the hash bytes to `find_by_hash` / `consume`.
 
-use crate::{models::PasswordResetTokenRow, Database, StoreError, StoreResult};
+use crate::{Database, StoreError, StoreResult, models::PasswordResetTokenRow};
 use chrono::{DateTime, Utc};
 use rusqlite::params;
 use sui_id_shared::ids::{PasswordResetTokenId, UserId};
@@ -55,13 +55,17 @@ pub async fn insert(db: &Database, row: &PasswordResetTokenRow) -> StoreResult<(
             other => StoreError::from(other),
         })?;
         Ok(())
-    }).await
+    })
+    .await
 }
 
 /// Look up a token row by its hashed value. Returns `None` if no
 /// row matches. The caller is responsible for checking that the row
 /// is unconsumed and not expired before honouring it.
-pub async fn find_by_hash(db: &Database, token_hash: &[u8]) -> StoreResult<Option<PasswordResetTokenRow>> {
+pub async fn find_by_hash(
+    db: &Database,
+    token_hash: &[u8],
+) -> StoreResult<Option<PasswordResetTokenRow>> {
     let token_hash = token_hash.to_vec();
     db.with_conn(move |conn| {
         let mut stmt = conn.prepare(&format!(
@@ -73,7 +77,8 @@ pub async fn find_by_hash(db: &Database, token_hash: &[u8]) -> StoreResult<Optio
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(e) => Err(e.into()),
         }
-    }).await
+    })
+    .await
 }
 
 /// Mark a token row as consumed. Idempotent in practice: the
@@ -95,7 +100,8 @@ pub async fn mark_consumed(
         } else {
             Ok(())
         }
-    }).await
+    })
+    .await
 }
 
 /// Same as [`mark_consumed`] but runs inside a caller-owned transaction.
@@ -126,7 +132,8 @@ pub async fn delete_expired(db: &Database, before: DateTime<Utc>) -> StoreResult
             params![before],
         )?;
         Ok(n)
-    }).await
+    })
+    .await
 }
 
 /// Count outstanding (unconsumed, unexpired) reset tokens for a
@@ -145,7 +152,8 @@ pub async fn count_active_for_user(
             |row| row.get(0),
         )?;
         Ok(n)
-    }).await
+    })
+    .await
 }
 
 /// RFC 073: Count password-reset tokens that have been issued but not
@@ -164,5 +172,6 @@ pub async fn count_outstanding(
             |row| row.get(0),
         )?;
         Ok(n as usize)
-    }).await
+    })
+    .await
 }

@@ -30,26 +30,22 @@ fn map_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<UserRow> {
         uuid::Uuid::nil()
     } else {
         uuid::Uuid::parse_str(&user_uuid_str).map_err(|e| {
-            rusqlite::Error::FromSqlConversionFailure(
-                8,
-                rusqlite::types::Type::Text,
-                Box::new(e),
-            )
+            rusqlite::Error::FromSqlConversionFailure(8, rusqlite::types::Type::Text, Box::new(e))
         })?
     };
     Ok(UserRow {
-        id: row
-            .get::<_, String>(0)?
-            .parse()
-            .map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?,
+        id: row.get::<_, String>(0)?.parse().map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
+        })?,
         username: row.get(1)?,
         display_name: row.get(2)?,
         is_admin: row.get::<_, i64>(3)? != 0,
         // RFC 071: read role column; fall back to is_admin for rows
         // that predate migration 0027 (role will be '' or NULL in that case).
-        role: row.get::<_, Option<String>>(15)?
+        role: row
+            .get::<_, Option<String>>(15)?
             .as_deref()
-            .and_then(crate::models::Role::from_str)
+            .and_then(crate::models::Role::from_db_str)
             .unwrap_or_else(|| {
                 if row.get::<_, i64>(3).unwrap_or(0) != 0 {
                     crate::models::Role::Admin
@@ -79,10 +75,7 @@ const SELECT_USER: &str = "SELECT id, username, display_name, is_admin, is_disab
                            FROM users";
 
 pub async fn create(db: &Database, user: &UserRow) -> StoreResult<()> {
-    let email_normalized = user
-        .email
-        .as_deref()
-        .map(sui_id_shared::normalize_email);
+    let email_normalized = user.email.as_deref().map(sui_id_shared::normalize_email);
     let user = user.clone();
     db.with_conn(move |conn| {
         conn.execute(
@@ -142,7 +135,8 @@ pub async fn set_preferred_lang(
         } else {
             Ok(())
         }
-    }).await
+    })
+    .await
 }
 
 pub async fn get(db: &Database, id: UserId) -> StoreResult<UserRow> {
@@ -156,7 +150,8 @@ pub async fn get(db: &Database, id: UserId) -> StoreResult<UserRow> {
             rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
             other => StoreError::from(other),
         })
-    }).await
+    })
+    .await
 }
 
 pub async fn find_by_username(db: &Database, username: &str) -> StoreResult<UserRow> {
@@ -171,7 +166,8 @@ pub async fn find_by_username(db: &Database, username: &str) -> StoreResult<User
             rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
             other => StoreError::from(other),
         })
-    }).await
+    })
+    .await
 }
 
 /// Find a user by normalised email address. The caller should pass a
@@ -180,7 +176,10 @@ pub async fn find_by_username(db: &Database, username: &str) -> StoreResult<User
 /// so the lookup is O(log n) and case-insensitive.
 ///
 /// Returns `Ok(None)` when no user matches.
-pub async fn find_by_email_normalized(db: &Database, normalized: &str) -> StoreResult<Option<UserRow>> {
+pub async fn find_by_email_normalized(
+    db: &Database,
+    normalized: &str,
+) -> StoreResult<Option<UserRow>> {
     let normalized = normalized.to_owned();
     db.with_conn(move |conn| {
         let mut stmt = conn.prepare(&format!("{SELECT_USER} WHERE email_normalized = ?1"))?;
@@ -190,7 +189,8 @@ pub async fn find_by_email_normalized(db: &Database, normalized: &str) -> StoreR
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(e) => Err(e.into()),
         }
-    }).await
+    })
+    .await
 }
 
 /// Find a user by email address, normalising the input automatically.
@@ -213,7 +213,8 @@ pub async fn find_by_id_opt(db: &Database, id: UserId) -> StoreResult<Option<Use
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(e) => Err(e.into()),
         }
-    }).await
+    })
+    .await
 }
 
 pub async fn list(db: &Database) -> StoreResult<Vec<UserRow>> {
@@ -223,7 +224,8 @@ pub async fn list(db: &Database) -> StoreResult<Vec<UserRow>> {
             .query_map([], map_row)?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(rows)
-    }).await
+    })
+    .await
 }
 
 /// Toggle the `is_disabled` flag (suspend / un-suspend).
@@ -237,7 +239,8 @@ pub async fn set_disabled(db: &Database, id: UserId, disabled: bool) -> StoreRes
             return Err(StoreError::NotFound);
         }
         Ok(())
-    }).await
+    })
+    .await
 }
 
 /// Soft-delete a user. Hard delete is intentionally not exposed at this
@@ -252,7 +255,8 @@ pub async fn soft_delete(db: &Database, id: UserId) -> StoreResult<()> {
             return Err(StoreError::NotFound);
         }
         Ok(())
-    }).await
+    })
+    .await
 }
 
 /// Increment the user's consecutive-failure counter and (when the
@@ -341,7 +345,8 @@ pub async fn update_email(
         } else {
             Ok(())
         }
-    }).await
+    })
+    .await
 }
 
 /// Batch-resolve user IDs to usernames (RFC 043 dashboard).
@@ -353,9 +358,7 @@ pub async fn resolve_usernames(
     if ids.is_empty() {
         return Ok(std::collections::HashMap::new());
     }
-    let placeholders: Vec<String> = (1..=ids.len())
-        .map(|i| format!("?{i}"))
-        .collect();
+    let placeholders: Vec<String> = (1..=ids.len()).map(|i| format!("?{i}")).collect();
     let sql = format!(
         "SELECT id, username FROM users WHERE id IN ({})",
         placeholders.join(", ")
@@ -363,8 +366,10 @@ pub async fn resolve_usernames(
     let id_strings: Vec<String> = ids.iter().map(|id| id.to_string()).collect();
     db.with_conn(move |conn| {
         let mut stmt = conn.prepare(&sql)?;
-        let params: Vec<rusqlite::types::Value> =
-            id_strings.iter().map(|s| rusqlite::types::Value::Text(s.clone())).collect();
+        let params: Vec<rusqlite::types::Value> = id_strings
+            .iter()
+            .map(|s| rusqlite::types::Value::Text(s.clone()))
+            .collect();
         let rows = stmt
             .query_map(rusqlite::params_from_iter(params.iter()), |row| {
                 let id_str: String = row.get(0)?;
@@ -379,7 +384,8 @@ pub async fn resolve_usernames(
             }
         }
         Ok(map)
-    }).await
+    })
+    .await
 }
 
 /// RFC 073: Count admin users (role = 'admin' OR is_admin = 1, since the
@@ -405,7 +411,8 @@ pub async fn count_admins_without_mfa(db: &Database) -> StoreResult<usize> {
             |row| row.get(0),
         )?;
         Ok(n as usize)
-    }).await
+    })
+    .await
 }
 
 /// RFC 073: True if the user has at least one MFA factor enrolled
@@ -421,7 +428,8 @@ pub async fn has_mfa(db: &Database, user_id: &UserId) -> StoreResult<bool> {
             |row| row.get(0),
         )?;
         Ok(n > 0)
-    }).await
+    })
+    .await
 }
 
 /// RFC 071: Change a user's role. Writes both `role` (new) and `is_admin`
@@ -442,10 +450,11 @@ pub async fn set_role(
             params![uid, role_str, is_admin_val],
         )?;
         if rows == 0 {
-            return Err(StoreError::NotFound.into());
+            return Err(StoreError::NotFound);
         }
         Ok(())
-    }).await
+    })
+    .await
 }
 
 /// RFC 071: Count non-deleted users whose role = 'admin'.
@@ -458,7 +467,8 @@ pub async fn count_admins(db: &Database) -> StoreResult<usize> {
             |row| row.get(0),
         )?;
         Ok(n as usize)
-    }).await
+    })
+    .await
 }
 
 /// RFC 074: record a successful login timestamp.
@@ -476,5 +486,6 @@ pub async fn set_last_login(
             rusqlite::params![uid, now],
         )?;
         Ok(())
-    }).await
+    })
+    .await
 }

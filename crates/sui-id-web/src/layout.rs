@@ -45,11 +45,13 @@ pub fn Shell(
     /// empty string is a contract violation.
     csrf_token: String,
     /// When true, renders the DEV MODE banner (RFC 032).
-    #[prop(optional)] dev_mode: Option<bool>,
+    #[prop(optional)]
+    dev_mode: Option<bool>,
     /// RFC 074: username/display-name for the user-menu dropdown.
     /// `None` → nav renders without the user-menu (anonymous / me-only
     /// pages that never show the admin nav).
-    #[prop(optional)] admin_username: Option<String>,
+    #[prop(optional)]
+    admin_username: Option<String>,
     children: Children,
 ) -> impl IntoView {
     let stylesheet = format!("{}\n{}", TOKENS_CSS, components_css());
@@ -99,11 +101,7 @@ pub fn Shell(
 /// "card on a quiet field" look the design memo asks for on
 /// auth-style screens.
 #[component]
-pub fn AuthShell(
-    title: String,
-    lang: sui_id_i18n::Locale,
-    children: Children,
-) -> impl IntoView {
+pub fn AuthShell(title: String, lang: sui_id_i18n::Locale, children: Children) -> impl IntoView {
     let stylesheet = format!("{}\n{}", TOKENS_CSS, components_css());
     let t = lang.strings();
     let lang_tag = lang.tag();
@@ -146,12 +144,12 @@ fn Nav(
     // RFC 074: "clients" renamed to "apps" in nav label (route unchanged).
     // "me" (Security link) removed — replaced by user-menu dropdown.
     let items: [(&'static str, &'static str, &'static str); 6] = [
-        ("dashboard",    t.nav_dashboard,    "/admin"),
-        ("users",        t.nav_users,        "/admin/users"),
-        ("clients",      t.nav_apps,         "/admin/clients"),   // label: Apps
+        ("dashboard", t.nav_dashboard, "/admin"),
+        ("users", t.nav_users, "/admin/users"),
+        ("clients", t.nav_apps, "/admin/clients"), // label: Apps
         ("signing-keys", t.nav_signing_keys, "/admin/signing-keys"),
-        ("audit",        t.nav_audit,        "/admin/audit"),
-        ("settings",     t.nav_settings,     "/admin/settings"),
+        ("audit", t.nav_audit, "/admin/audit"),
+        ("settings", t.nav_settings, "/admin/settings"),
     ];
     view! {
         <nav class="app-nav" aria-label=t.nav_aria_main>

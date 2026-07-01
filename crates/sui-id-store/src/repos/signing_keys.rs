@@ -12,10 +12,9 @@ const AAD: &[u8] = b"sui-id/signing_key/v1";
 
 fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<SigningKeyRow> {
     Ok(SigningKeyRow {
-        id: row
-            .get::<_, String>(0)?
-            .parse()
-            .map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?,
+        id: row.get::<_, String>(0)?.parse().map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
+        })?,
         algorithm: row.get(1)?,
         private_key_enc: row.get(2)?,
         public_key: row.get(3)?,
@@ -143,7 +142,8 @@ pub async fn retire(db: &Database, id: SigningKeyId) -> StoreResult<()> {
             }
         }
         Ok(())
-    }).await
+    })
+    .await
 }
 
 /// Hard-delete a signing key row. Only permitted for already-retired keys
@@ -162,14 +162,12 @@ pub async fn delete(db: &Database, id: SigningKeyId) -> StoreResult<()> {
             None => Err(StoreError::NotFound),
             Some(1) => Err(StoreError::Conflict),
             Some(_) => {
-                conn.execute(
-                    "DELETE FROM signing_keys WHERE id = ?1",
-                    [id.to_string()],
-                )?;
+                conn.execute("DELETE FROM signing_keys WHERE id = ?1", [id.to_string()])?;
                 Ok(())
             }
         }
-    }).await
+    })
+    .await
 }
 
 /// Decrypt the private key bytes for a row.
@@ -269,7 +267,8 @@ pub async fn rotate_atomic(
         // Step 2: insert the new active key.
         insert_sealed_on_conn(tx, new_id, algorithm_owned.as_str(), &sealed, &pk_vec, true)?;
         Ok(())
-    }).await?;
+    })
+    .await?;
     Ok(SigningKeyRow {
         id: new_id,
         algorithm: algorithm_ret,

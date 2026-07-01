@@ -11,7 +11,7 @@ use crate::db::Database;
 use crate::errors::{StoreError, StoreResult};
 use crate::models::UserTotpRow;
 use chrono::{DateTime, Utc};
-use rusqlite::{params, OptionalExtension};
+use rusqlite::{OptionalExtension, params};
 use sui_id_shared::ids::UserId;
 
 const AAD: &[u8] = b"sui-id/user_totp/v1";
@@ -44,7 +44,8 @@ pub async fn get(db: &Database, user_id: UserId) -> StoreResult<Option<UserTotpR
                 map,
             )
             .optional()?)
-    }).await
+    })
+    .await
 }
 
 /// Insert (or replace) a TOTP enrolment for the user. Used by both the
@@ -68,7 +69,7 @@ pub async fn upsert_pending(
 
 /// Decrypt and return the raw TOTP secret. Caller must zero the buffer.
 pub async fn decrypt_secret(db: &Database, row: &UserTotpRow) -> StoreResult<Vec<u8>> {
-    Ok(open(db.key(), &row.secret_enc, AAD)?)
+    open(db.key(), &row.secret_enc, AAD)
 }
 
 /// Mark the enrolment as confirmed and store the (already-hashed) recovery
@@ -90,12 +91,16 @@ pub async fn confirm_with_recovery(
             return Err(StoreError::NotFound);
         }
         Ok(())
-    }).await
+    })
+    .await
 }
 
 /// Decrypt the recovery codes JSON. Returns `None` when the user has
 /// never confirmed enrolment.
-pub async fn decrypt_recovery_codes(db: &Database, row: &UserTotpRow) -> StoreResult<Option<Vec<u8>>> {
+pub async fn decrypt_recovery_codes(
+    db: &Database,
+    row: &UserTotpRow,
+) -> StoreResult<Option<Vec<u8>>> {
     match &row.recovery_codes_enc {
         Some(blob) => Ok(Some(open(db.key(), blob, RECOVERY_AAD)?)),
         None => Ok(None),
@@ -119,7 +124,8 @@ pub async fn set_recovery_codes(
             return Err(StoreError::NotFound);
         }
         Ok(())
-    }).await
+    })
+    .await
 }
 
 /// Update the replay-defence cursor. Should be called immediately after
@@ -131,7 +137,8 @@ pub async fn set_last_used_step(db: &Database, user_id: UserId, step: i64) -> St
             params![step, user_id.to_string()],
         )?;
         Ok(())
-    }).await
+    })
+    .await
 }
 
 /// Disable TOTP for the user (delete the row entirely). Used by the
@@ -146,7 +153,8 @@ pub async fn delete(db: &Database, user_id: UserId) -> StoreResult<()> {
             return Err(StoreError::NotFound);
         }
         Ok(())
-    }).await
+    })
+    .await
 }
 
 /// Re-seal both `secret_enc` and `recovery_codes_enc` columns
@@ -157,9 +165,7 @@ pub fn reseal_all(
     old_key: &crate::crypto::MasterKey,
     new_key: &crate::crypto::MasterKey,
 ) -> StoreResult<(u64, u64)> {
-    let mut stmt = tx.prepare(
-        "SELECT user_id, secret_enc, recovery_codes_enc FROM user_totp",
-    )?;
+    let mut stmt = tx.prepare("SELECT user_id, secret_enc, recovery_codes_enc FROM user_totp")?;
     let rows = stmt
         .query_map([], |row| {
             let user_id: String = row.get(0)?;

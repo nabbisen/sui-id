@@ -137,6 +137,8 @@ deferred (verification phase, spec §22).
 
 | Version | What shipped |
 |---|---|
+| v0.65.1 | **RFC 087 (clippy/rustfmt baseline cleanup).** All four buildable crates clippy-clean (`--all-targets -D warnings`) and fmt-clean under Rust 1.96. Fixes across sui-id-web (16), sui-id-shared (2), sui-id-store (16 lib + test-target), sui-id-i18n (3). 31 files reformatted. No logic change. **78/78 tests; all CI invariants unchanged.** |
+| v0.65.0 | **WCAG AA contrast correction — token foundation (UI/UX handoff unit 1).** Dark-mode AA defect fixed (all 5 colour pairs were failing, worst 1.5:1). Light-mode fills darkened to pass AA. Explicit `--fg-disabled`/`--bg-disabled` tokens; `button:disabled` wired to explicit tokens. Contrast CI test (`tokens/tests.rs`) validates all pairs in 3 modes. Dangling `--surface-overlay` reference fixed. **78/78 tests; all CI invariants unchanged.** |
 | v0.62.0 | **RFC 075 + RFC 076 (soak cleanup).** Mechanical file splits: `admin.rs`→`admin/`, `backup.rs`→`backup/`, `main.rs`→`cli.rs`. Full `configuration.md` reference (10 fields, env vars, flags, examples). **175/175 tests; all CI invariants unchanged.** |
 | v0.61.0 | **RFC 074 (Navigation + UX polish).** User-menu dropdown replaces flat Security link. "Apps" nav label. Settings: Basic→General, Other→Advanced. Migration 0030 (`last_login_at`); last-login anti-phishing line on `/me/security/overview`. 6 i18n keys. **175/175 tests PASS; all CI invariants unchanged.** |
 | v0.60.1 | **v0.60.1 (Documentation).** CHANGELOG dated; README and docs updated for three-role model and UX-rethink arc; RFC 074 filed. No code changes. |

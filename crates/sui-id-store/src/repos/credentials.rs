@@ -10,10 +10,9 @@ use sui_id_shared::ids::UserId;
 
 fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<CredentialRow> {
     Ok(CredentialRow {
-        user_id: row
-            .get::<_, String>(0)?
-            .parse()
-            .map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?,
+        user_id: row.get::<_, String>(0)?.parse().map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
+        })?,
         password_hash: row.get(1)?,
         must_change: row.get::<_, i64>(2)? != 0,
         updated_at: row.get::<_, DateTime<Utc>>(3)?,
@@ -38,14 +37,12 @@ pub async fn upsert(db: &Database, cred: &CredentialRow) -> StoreResult<()> {
             ],
         )?;
         Ok(())
-    }).await
+    })
+    .await
 }
 
 /// Same as [`upsert`] but runs inside a caller-owned transaction.
-pub fn upsert_within_tx(
-    tx: &rusqlite::Transaction<'_>,
-    cred: &CredentialRow,
-) -> StoreResult<()> {
+pub fn upsert_within_tx(tx: &rusqlite::Transaction<'_>, cred: &CredentialRow) -> StoreResult<()> {
     tx.execute(
         "INSERT INTO credentials(user_id, password_hash, must_change, updated_at) \
          VALUES(?1, ?2, ?3, ?4) \

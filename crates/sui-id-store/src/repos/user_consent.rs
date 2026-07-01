@@ -9,16 +9,14 @@ use crate::models::UserConsentRow;
 
 fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<UserConsentRow> {
     Ok(UserConsentRow {
-        user_id: row
-            .get::<_, String>(0)?
-            .parse()
-            .map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?,
-        client_id: row
-            .get::<_, String>(1)?
-            .parse()
-            .map_err(|e| rusqlite::Error::FromSqlConversionFailure(1, rusqlite::types::Type::Text, Box::new(e)))?,
+        user_id: row.get::<_, String>(0)?.parse().map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
+        })?,
+        client_id: row.get::<_, String>(1)?.parse().map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(1, rusqlite::types::Type::Text, Box::new(e))
+        })?,
         granted_scopes: row.get(2)?,
-        granted_at:     row.get(3)?,
+        granted_at: row.get(3)?,
     })
 }
 
@@ -38,10 +36,7 @@ pub struct ConsentGrantView {
 
 /// RFC 072: list all active consent grants for a user, joined with the
 /// client display name. Excludes soft-deleted clients.
-pub async fn list_for_user(
-    db: &Database,
-    user_id: UserId,
-) -> StoreResult<Vec<ConsentGrantView>> {
+pub async fn list_for_user(db: &Database, user_id: UserId) -> StoreResult<Vec<ConsentGrantView>> {
     let uid = user_id.to_string();
     db.with_conn(move |conn| {
         let mut stmt = conn.prepare(
@@ -53,11 +48,13 @@ pub async fn list_for_user(
         )?;
         let rows = stmt.query_map(rusqlite::params![uid], |row| {
             Ok(ConsentGrantView {
-                client_id: row.get::<_, String>(0)?
-                    .parse()
-                    .map_err(|e| rusqlite::Error::FromSqlConversionFailure(
-                        0, rusqlite::types::Type::Text, Box::new(e)
-                    ))?,
+                client_id: row.get::<_, String>(0)?.parse().map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        0,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?,
                 client_name: row.get(1)?,
                 granted_scopes: row.get(2)?,
                 granted_at: row.get(3)?,
@@ -66,7 +63,8 @@ pub async fn list_for_user(
         })?;
         rows.collect::<rusqlite::Result<Vec<_>>>()
             .map_err(crate::errors::StoreError::from)
-    }).await
+    })
+    .await
 }
 
 /// RFC 072: revoke a consent grant and all active refresh tokens for the
@@ -95,10 +93,17 @@ pub async fn revoke_with_tokens(
             Ok(())
         })();
         match r {
-            Ok(_) => { conn.execute_batch("COMMIT")?; Ok(()) }
-            Err(e) => { let _ = conn.execute_batch("ROLLBACK"); Err(e.into()) }
+            Ok(_) => {
+                conn.execute_batch("COMMIT")?;
+                Ok(())
+            }
+            Err(e) => {
+                let _ = conn.execute_batch("ROLLBACK");
+                Err(e.into())
+            }
         }
-    }).await
+    })
+    .await
 }
 
 /// RFC 072: set `last_used_at = now()` for a grant after a successful
@@ -118,7 +123,8 @@ pub async fn touch_last_used(
             rusqlite::params![uid, cid, now],
         )?;
         Ok(())
-    }).await
+    })
+    .await
 }
 
 /// Look up a stored consent for `(user_id, client_id)`.
@@ -140,7 +146,8 @@ pub async fn get(
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(e) => Err(e.into()),
         }
-    }).await
+    })
+    .await
 }
 
 /// Upsert a consent grant.
@@ -169,23 +176,21 @@ pub async fn upsert(
             ],
         )?;
         Ok(())
-    }).await
+    })
+    .await
 }
 
 /// Remove a stored consent grant. Called when a client is deleted.
 /// No-ops silently if no row exists.
-pub async fn revoke(
-    db: &Database,
-    user_id: UserId,
-    client_id: ClientId,
-) -> StoreResult<()> {
+pub async fn revoke(db: &Database, user_id: UserId, client_id: ClientId) -> StoreResult<()> {
     db.with_conn(move |conn| {
         conn.execute(
             "DELETE FROM user_consent WHERE user_id = ?1 AND client_id = ?2",
             rusqlite::params![user_id.to_string(), client_id.to_string()],
         )?;
         Ok(())
-    }).await
+    })
+    .await
 }
 
 /// Check whether a stored consent covers `requested_scopes`.
@@ -194,7 +199,9 @@ pub async fn revoke(
 /// `granted_scopes`. Empty `requested_scopes` is always covered.
 pub fn covers(granted_scopes: &str, requested_scopes: &str) -> bool {
     let granted: std::collections::HashSet<&str> = granted_scopes.split_whitespace().collect();
-    requested_scopes.split_whitespace().all(|s| granted.contains(s))
+    requested_scopes
+        .split_whitespace()
+        .all(|s| granted.contains(s))
 }
 
 #[cfg(test)]

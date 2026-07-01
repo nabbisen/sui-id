@@ -1,9 +1,8 @@
 //! Settings authentication tab (RFC 065).
 
-use leptos::prelude::*;
-use crate::layout::Shell;
 use super::super::common::*;
-use super::*;  // SettingsTab + settings_tabs
+use super::*;
+use crate::layout::Shell;
 
 pub struct SettingsAuthenticationData {
     pub password_min_length: usize,
@@ -19,7 +18,6 @@ pub struct SettingsAuthenticationData {
     pub refresh_theft_detection: bool,
 }
 
-
 fn fmt_lifetime(t: &'static sui_id_i18n::Strings, secs: i64) -> String {
     if secs % 86400 == 0 {
         (t.fmt_lifetime_days)(secs / 86400, secs)
@@ -31,7 +29,6 @@ fn fmt_lifetime(t: &'static sui_id_i18n::Strings, secs: i64) -> String {
         format!("{secs} s")
     }
 }
-
 
 pub fn render_settings_authentication(
     data: SettingsAuthenticationData,

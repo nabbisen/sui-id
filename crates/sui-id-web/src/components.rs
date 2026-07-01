@@ -60,10 +60,10 @@ pub mod utilities;
 // is class-preserving and contract-preserving; `crate::components::
 // status_badge` and `crate::components::StatusKind` continue to
 // resolve unchanged.
-pub use badges::{status_badge, StatusKind};
-pub use tabs::{route_tabs, RouteTab};
-pub use setup::{SetupStep, StepState};
+pub use badges::{StatusKind, status_badge};
 pub use forms::FieldError;
+pub use setup::{SetupStep, StepState};
+pub use tabs::{RouteTab, route_tabs};
 
 /// The concatenated component stylesheet served by [`crate::layout`].
 ///

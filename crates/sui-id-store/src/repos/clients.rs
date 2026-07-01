@@ -15,15 +15,15 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<ClientRow> {
     })?;
     let allowed_scopes: String = row.get(7)?;
     let post_logout_json: String = row.get(8)?;
-    let post_logout_redirect_uris: Vec<String> = serde_json::from_str(&post_logout_json).map_err(|e| {
-        rusqlite::Error::FromSqlConversionFailure(8, rusqlite::types::Type::Text, Box::new(e))
-    })?;
+    let post_logout_redirect_uris: Vec<String> =
+        serde_json::from_str(&post_logout_json).map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(8, rusqlite::types::Type::Text, Box::new(e))
+        })?;
     let consent_policy_str: String = row.get(11).unwrap_or_else(|_| "none".to_string());
     Ok(ClientRow {
-        id: row
-            .get::<_, String>(0)?
-            .parse()
-            .map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?,
+        id: row.get::<_, String>(0)?.parse().map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
+        })?,
         name: row.get(1)?,
         confidential: row.get::<_, i64>(2)? != 0,
         secret_hash: row.get(3)?,
@@ -74,31 +74,28 @@ pub async fn create(db: &Database, c: &ClientRow) -> StoreResult<()> {
             ],
         )?;
         Ok(())
-    }).await
+    })
+    .await
 }
 
 pub async fn get(db: &Database, id: ClientId) -> StoreResult<ClientRow> {
     db.with_conn(move |conn| {
-        conn.query_row(
-            &format!("{SELECT} WHERE id = ?1"),
-            [id.to_string()],
-            map,
-        )
-        .map_err(|e| match e {
-            rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
-            other => StoreError::from(other),
-        })
-    }).await
+        conn.query_row(&format!("{SELECT} WHERE id = ?1"), [id.to_string()], map)
+            .map_err(|e| match e {
+                rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
+                other => StoreError::from(other),
+            })
+    })
+    .await
 }
 
 pub async fn list(db: &Database) -> StoreResult<Vec<ClientRow>> {
     db.with_conn(move |conn| {
         let mut stmt = conn.prepare(&format!("{SELECT} ORDER BY created_at ASC"))?;
-        let rows = stmt
-            .query_map([], map)?
-            .collect::<Result<Vec<_>, _>>()?;
+        let rows = stmt.query_map([], map)?.collect::<Result<Vec<_>, _>>()?;
         Ok(rows)
-    }).await
+    })
+    .await
 }
 
 pub async fn update_basic(
@@ -111,14 +108,12 @@ pub async fn update_basic(
     let redirect_uris = redirect_uris.map(<[_]>::to_vec);
     db.with_conn(move |conn| {
         // Read current row to merge new values.
-        let current: ClientRow = conn.query_row(
-            &format!("{SELECT} WHERE id = ?1"),
-            [id.to_string()],
-            map,
-        ).map_err(|e| match e {
-            rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
-            other => StoreError::from(other),
-        })?;
+        let current: ClientRow = conn
+            .query_row(&format!("{SELECT} WHERE id = ?1"), [id.to_string()], map)
+            .map_err(|e| match e {
+                rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
+                other => StoreError::from(other),
+            })?;
         let new_name = name.as_deref().unwrap_or(&current.name);
         let new_uris = redirect_uris.unwrap_or(current.redirect_uris.clone());
         let uris_json = serde_json::to_string(&new_uris)?;
@@ -128,7 +123,8 @@ pub async fn update_basic(
             params![new_name, uris_json, Utc::now(), id.to_string()],
         )?;
         Ok(())
-    }).await
+    })
+    .await
 }
 
 /// Replace the `allowed_scopes` policy for a client.
@@ -143,7 +139,8 @@ pub async fn set_allowed_scopes(db: &Database, id: ClientId, scopes: &str) -> St
             return Err(StoreError::NotFound);
         }
         Ok(())
-    }).await
+    })
+    .await
 }
 
 /// Replace the `post_logout_redirect_uris` list for a client.
@@ -163,7 +160,8 @@ pub async fn set_post_logout_redirect_uris(
             return Err(StoreError::NotFound);
         }
         Ok(())
-    }).await
+    })
+    .await
 }
 
 pub async fn set_disabled(db: &Database, id: ClientId, disabled: bool) -> StoreResult<()> {
@@ -176,7 +174,8 @@ pub async fn set_disabled(db: &Database, id: ClientId, disabled: bool) -> StoreR
             return Err(StoreError::NotFound);
         }
         Ok(())
-    }).await
+    })
+    .await
 }
 
 pub async fn soft_delete(db: &Database, id: ClientId) -> StoreResult<()> {
@@ -189,7 +188,8 @@ pub async fn soft_delete(db: &Database, id: ClientId) -> StoreResult<()> {
             return Err(StoreError::NotFound);
         }
         Ok(())
-    }).await
+    })
+    .await
 }
 
 /// Patch a client's `secret_hash` to a caller-supplied value.
@@ -211,7 +211,8 @@ pub async fn set_dev_secret_hash(
             return Err(StoreError::NotFound);
         }
         Ok(())
-    }).await
+    })
+    .await
 }
 
 /// Update the consent policy for a client (RFC 038).
@@ -227,7 +228,8 @@ pub async fn update_consent_policy(
             rusqlite::params![policy.as_str(), now, id.to_string()],
         )?;
         Ok(())
-    }).await
+    })
+    .await
 }
 
 /// Update the client secret hash (RFC 047 — secret rotation).
@@ -244,5 +246,6 @@ pub async fn set_secret_hash(
             rusqlite::params![h, now, id.to_string()],
         )?;
         Ok(())
-    }).await
+    })
+    .await
 }

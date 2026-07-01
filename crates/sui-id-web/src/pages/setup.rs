@@ -1,7 +1,7 @@
 //! Page renderers for the "setup" screen domain (RFC 065).
 
-use leptos::prelude::*;
 use super::common::*;
+use leptos::prelude::*;
 
 fn setup_step_indicator(active: usize, lang: sui_id_i18n::Locale) -> impl IntoView {
     // Five labelled dots showing which step the operator is on.
@@ -21,11 +21,9 @@ fn setup_step_indicator(active: usize, lang: sui_id_i18n::Locale) -> impl IntoVi
             let is_active = i == active;
             let aria = if is_active { Some("step") } else { None };
             let badge = if i < active {
-                view! { <span class="badge badge--ok">{format!("{}", i + 1)}</span> }
-                    .into_any()
+                view! { <span class="badge badge--ok">{format!("{}", i + 1)}</span> }.into_any()
             } else if is_active {
-                view! { <span class="badge badge--accent">{format!("{}", i + 1)}</span> }
-                    .into_any()
+                view! { <span class="badge badge--accent">{format!("{}", i + 1)}</span> }.into_any()
             } else {
                 view! { <span class="badge">{format!("{}", i + 1)}</span> }.into_any()
             };
@@ -61,7 +59,11 @@ fn setup_step_indicator(active: usize, lang: sui_id_i18n::Locale) -> impl IntoVi
 /// the "Begin setup" button can carry it to `/setup/admin?token=xxx`.
 /// The zh language option is removed from the picker (v0.48.4);
 /// the core i18n support covers only ja and en.
-pub fn render_setup_welcome(flash: Option<Flash>, lang: sui_id_i18n::Locale, token: &str) -> String {
+pub fn render_setup_welcome(
+    flash: Option<Flash>,
+    lang: sui_id_i18n::Locale,
+    token: &str,
+) -> String {
     let token = token.to_owned();
     render(move || {
         let t = lang.strings();
@@ -72,10 +74,16 @@ pub fn render_setup_welcome(flash: Option<Flash>, lang: sui_id_i18n::Locale, tok
             format!("/setup/admin?token={token}")
         };
         // Language picker links also carry the token through the PRG redirect.
-        let lang_ja = if token.is_empty() { "/setup?lang=ja".to_owned() }
-                      else { format!("/setup?lang=ja&token={token}") };
-        let lang_en = if token.is_empty() { "/setup?lang=en".to_owned() }
-                      else { format!("/setup?lang=en&token={token}") };
+        let lang_ja = if token.is_empty() {
+            "/setup?lang=ja".to_owned()
+        } else {
+            format!("/setup?lang=ja&token={token}")
+        };
+        let lang_en = if token.is_empty() {
+            "/setup?lang=en".to_owned()
+        } else {
+            format!("/setup?lang=en&token={token}")
+        };
         view! {
             <crate::layout::AuthShell title=t.setup_welcome_title.to_string() lang=lang>
                 {setup_step_indicator(0, lang)}
@@ -160,7 +168,6 @@ pub fn render_setup_admin(flash: Option<Flash>, lang: sui_id_i18n::Locale, token
 }
 
 /// Step 3 of 5 — language selection (RFC 012).
-
 pub fn render_setup_lang(flash: Option<Flash>, current: &str, lang: sui_id_i18n::Locale) -> String {
     let current = current.to_owned();
     render(move || {
@@ -200,7 +207,6 @@ pub fn render_setup_lang(flash: Option<Flash>, current: &str, lang: sui_id_i18n:
 }
 
 /// Step 4 of 5 — HIBP policy selection (RFC 012).
-
 pub fn render_setup_hibp(flash: Option<Flash>, current: &str, lang: sui_id_i18n::Locale) -> String {
     let current = current.to_owned();
     render(move || {
@@ -254,7 +260,6 @@ pub fn render_setup_hibp(flash: Option<Flash>, current: &str, lang: sui_id_i18n:
 }
 
 /// Step 5 of 5 — completion.
-
 pub fn render_setup_done(initialized: bool, lang: sui_id_i18n::Locale) -> String {
     render(move || {
         let t = lang.strings();

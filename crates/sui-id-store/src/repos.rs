@@ -5,11 +5,10 @@
 //! the caller can distinguish "not found" from real failures.
 
 pub mod audit;
-pub mod email_outbox;
 pub mod auth_codes;
 pub mod clients;
-pub mod user_consent;
 pub mod credentials;
+pub mod email_outbox;
 pub mod json_util;
 pub mod login_pending_mfa;
 pub mod password_reset_tokens;
@@ -20,6 +19,7 @@ pub mod sessions;
 pub mod signing_keys;
 pub mod smtp_config;
 pub mod state;
+pub mod user_consent;
 pub mod user_totp;
 pub mod user_webauthn_credentials;
 pub mod users;

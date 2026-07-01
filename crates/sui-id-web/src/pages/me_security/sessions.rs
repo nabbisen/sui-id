@@ -1,9 +1,8 @@
 //! /me/security sessions (RFC 065).
 
-use leptos::prelude::*;
-use crate::layout::Shell;
 use super::super::common::*;
-use super::*;  // MeShellData + MeTab + me_security_tabs
+use super::*;
+use crate::layout::Shell;
 
 pub struct MeSessionsData {
     pub shell: MeShellData,
@@ -11,7 +10,6 @@ pub struct MeSessionsData {
     pub sessions: Vec<MeSessionDescriptor>,
     pub csrf_token: String,
 }
-
 
 pub fn render_me_sessions(
     data: MeSessionsData,
@@ -22,7 +20,12 @@ pub fn render_me_sessions(
     render(move || {
         let t = lang.strings();
         let tabs = me_security_tabs(MeTab::Sessions, lang);
-        let MeSessionsData { shell: _, current_session_id: _, sessions, csrf_token } = data;
+        let MeSessionsData {
+            shell: _,
+            current_session_id: _,
+            sessions,
+            csrf_token,
+        } = data;
         let revoke_label = t.me_security_sessions_revoke;
         let revoke_confirm = t.me_security_sessions_revoke_confirm.to_owned();
         let current_badge = t.me_security_sessions_current_badge;
@@ -36,7 +39,7 @@ pub fn render_me_sessions(
             let is_current = s.is_current;
             let csrf_row = csrf_token.clone();
             let revoke_action = format!("/me/security/sessions/{sid}/revoke");
-            let confirm_js = revoke_confirm.replace('\'', "\'");
+            let confirm_js = revoke_confirm.clone();
             let action_cell = if is_current {
                 view! {
                     <td><span class="badge badge--ok">{current_badge}</span></td>
@@ -62,7 +65,7 @@ pub fn render_me_sessions(
             }
         }).collect();
 
-        let revoke_all_confirm = t.me_security_sessions_revoke_all_others_confirm.replace('\'', "\'");
+        let revoke_all_confirm = t.me_security_sessions_revoke_all_others_confirm;
         view! {
             <Shell title=t.me_security_sessions_section.to_string() show_nav=true current=Some("me".to_string()) lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">

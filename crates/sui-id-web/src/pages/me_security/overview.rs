@@ -1,9 +1,8 @@
 //! /me/security overview (RFC 065).
 
-use leptos::prelude::*;
-use crate::layout::Shell;
 use super::super::common::*;
-use super::*;  // MeShellData + MeTab + me_security_tabs
+use super::*;
+use crate::layout::Shell;
 
 pub struct MeOverviewData {
     pub shell: MeShellData,
@@ -17,7 +16,6 @@ pub struct MeOverviewData {
     pub last_login_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-
 pub fn render_me_overview(
     data: MeOverviewData,
     _is_dev: bool,
@@ -27,21 +25,34 @@ pub fn render_me_overview(
         let t = lang.strings();
         let tabs = me_security_tabs(MeTab::Overview, lang);
         let last_login_at = data.last_login_at;
-        let MeOverviewData { shell: _, totp_enabled, passkey_count, active_session_count, recent_events, .. } = data;
-        let event_rows: Vec<_> = recent_events.iter().map(|e| {
-            let badge = match e.result.as_str() {
-                "ok"   => view! { <span class="badge badge--ok">{"ok"}</span> }.into_any(),
-                "fail" | "denied" => view! { <span class="badge badge--danger">{e.result.clone()}</span> }.into_any(),
-                other  => view! { <span class="badge">{other.to_string()}</span> }.into_any(),
-            };
-            view! {
-                <tr>
-                    <td><time>{e.at.format("%Y/%m/%d %H:%M").to_string()}</time></td>
-                    <td><code>{e.action.clone()}</code></td>
-                    <td>{badge}</td>
-                </tr>
-            }
-        }).collect();
+        let MeOverviewData {
+            shell: _,
+            totp_enabled,
+            passkey_count,
+            active_session_count,
+            recent_events,
+            ..
+        } = data;
+        let event_rows: Vec<_> = recent_events
+            .iter()
+            .map(|e| {
+                let badge = match e.result.as_str() {
+                    "ok" => view! { <span class="badge badge--ok">{"ok"}</span> }.into_any(),
+                    "fail" | "denied" => {
+                        view! { <span class="badge badge--danger">{e.result.clone()}</span> }
+                            .into_any()
+                    }
+                    other => view! { <span class="badge">{other.to_string()}</span> }.into_any(),
+                };
+                view! {
+                    <tr>
+                        <td><time>{e.at.format("%Y/%m/%d %H:%M").to_string()}</time></td>
+                        <td><code>{e.action.clone()}</code></td>
+                        <td>{badge}</td>
+                    </tr>
+                }
+            })
+            .collect();
         // RFC 074: anti-phishing last-login line.
         let last_login_line = match last_login_at {
             Some(ts) => {
@@ -49,7 +60,9 @@ pub fn render_me_overview(
                 let text = t.me_overview_last_login.replace("{date}", &date);
                 view! { <p class="muted text-caption">{text}</p> }.into_any()
             }
-            None => view! { <p class="muted text-caption">{t.me_overview_first_login}</p> }.into_any(),
+            None => {
+                view! { <p class="muted text-caption">{t.me_overview_first_login}</p> }.into_any()
+            }
         };
         view! {
             <Shell title=t.me_tab_overview.to_string() show_nav=true current=Some("me".to_string()) lang=lang csrf_token=data.csrf_token.clone()>

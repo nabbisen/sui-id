@@ -1,8 +1,8 @@
 //! Page renderers for the "confirm" screen domain (RFC 065).
 
-use leptos::prelude::*;
-use crate::layout::Shell;
 use super::common::*;
+use crate::layout::Shell;
+use leptos::prelude::*;
 
 fn reversibility_badge(recoverable: bool, t: &'static sui_id_i18n::Strings) -> impl IntoView {
     if recoverable {
@@ -10,21 +10,25 @@ fn reversibility_badge(recoverable: bool, t: &'static sui_id_i18n::Strings) -> i
             <span class="reversibility-badge reversibility-badge--recoverable">
                 "✓ " {t.badge_recoverable}
             </span>
-        }.into_any()
+        }
+        .into_any()
     } else {
         view! {
             <span class="reversibility-badge reversibility-badge--permanent">
                 "✗ " {t.badge_not_recoverable}
             </span>
-        }.into_any()
+        }
+        .into_any()
     }
 }
 
 /// Reversibility classification for the confirm-screen badge (RFC 059).
 /// `Recoverable` shows the green check; `Irreversible` shows the
 /// permanent-action badge. Colour is never the only signal.
-
-pub enum ReversibilityKind { Recoverable, Irreversible }
+pub enum ReversibilityKind {
+    Recoverable,
+    Irreversible,
+}
 
 /// Data driving the shared `confirm_screen` component (RFC 059).
 ///
@@ -32,7 +36,6 @@ pub enum ReversibilityKind { Recoverable, Irreversible }
 /// delegates the body rendering to `confirm_screen`. The caller still
 /// owns the Shell wrap (so it can set the right `current=` nav
 /// highlight); this struct owns the page body.
-
 pub struct ConfirmScreenData {
     /// Page heading (also used as Shell title at the call site).
     pub title: String,
@@ -81,11 +84,7 @@ pub struct ConfirmScreenData {
 ///
 /// The Shell wrap stays at the caller: `current=` must reflect the
 /// route's nav highlight, which differs per call site.
-
-pub fn confirm_screen(
-    data: ConfirmScreenData,
-    lang: sui_id_i18n::Locale,
-) -> impl IntoView {
+pub fn confirm_screen(data: ConfirmScreenData, lang: sui_id_i18n::Locale) -> impl IntoView {
     let t = lang.strings();
     let ConfirmScreenData {
         title,
@@ -106,18 +105,23 @@ pub fn confirm_screen(
         ReversibilityKind::Recoverable => reversibility_badge(true, t).into_any(),
         ReversibilityKind::Irreversible => reversibility_badge(false, t).into_any(),
     });
-    let extra_inputs: Vec<_> = extra_hidden.into_iter().map(|(n, v)| {
-        view! { <input type="hidden" name=n value=v /> }
-    }).collect();
-    let reason_block = include_reason_field.then(|| view! {
-        <div class="field">
-            <label for="disable-reason" class="field__label">
-                {t.disable_reason_label}
-            </label>
-            <textarea id="disable-reason" name="reason" rows="2" maxlength="200"
-                      placeholder=t.disable_reason_placeholder></textarea>
-            <span class="field__hint">{t.disable_reason_hint}</span>
-        </div>
+    let extra_inputs: Vec<_> = extra_hidden
+        .into_iter()
+        .map(|(n, v)| {
+            view! { <input type="hidden" name=n value=v /> }
+        })
+        .collect();
+    let reason_block = include_reason_field.then(|| {
+        view! {
+            <div class="field">
+                <label for="disable-reason" class="field__label">
+                    {t.disable_reason_label}
+                </label>
+                <textarea id="disable-reason" name="reason" rows="2" maxlength="200"
+                          placeholder=t.disable_reason_placeholder></textarea>
+                <span class="field__hint">{t.disable_reason_hint}</span>
+            </div>
+        }
     });
     let button_class = if button_danger { "danger" } else { "btn" };
     view! {
@@ -143,14 +147,12 @@ pub fn confirm_screen(
     }
 }
 
-
 pub struct ConfirmDisableData {
     pub user_id: String,
     pub username: String,
     pub is_disabled: bool,
     pub csrf_token: String,
 }
-
 
 pub fn render_confirm_disable_user(
     data: ConfirmDisableData,
@@ -161,29 +163,39 @@ pub fn render_confirm_disable_user(
         let t = lang.strings();
         let new_state = if data.is_disabled { "false" } else { "true" };
         let (title, impact_opt, rev_opt, btn, btn_danger) = if data.is_disabled {
-            (t.confirm_enable_title, None::<&'static str>, None::<&'static str>,
-             t.confirm_enable_button, false)
+            (
+                t.confirm_enable_title,
+                None::<&'static str>,
+                None::<&'static str>,
+                t.confirm_enable_button,
+                false,
+            )
         } else {
-            (t.confirm_disable_title,
-             Some(t.confirm_disable_impact),
-             Some(t.confirm_disable_reversibility),
-             t.confirm_disable_button,
-             true)
+            (
+                t.confirm_disable_title,
+                Some(t.confirm_disable_impact),
+                Some(t.confirm_disable_reversibility),
+                t.confirm_disable_button,
+                true,
+            )
         };
-        let body = confirm_screen(ConfirmScreenData {
-            title: title.into(),
-            identity: data.username.clone(),
-            impact: impact_opt.map(|s| s.into()),
-            badge: (!data.is_disabled).then_some(ReversibilityKind::Recoverable),
-            reversibility_text: rev_opt.map(|s| s.into()),
-            action_url: format!("/admin/users/{}/disabled", data.user_id),
-            csrf_token: data.csrf_token.clone(),
-            extra_hidden: vec![("disabled".into(), new_state.into())],
-            include_reason_field: !data.is_disabled,
-            button_label: btn.into(),
-            button_danger: btn_danger,
-            cancel_url: "/admin/users".into(),
-        }, lang);
+        let body = confirm_screen(
+            ConfirmScreenData {
+                title: title.into(),
+                identity: data.username.clone(),
+                impact: impact_opt.map(|s| s.into()),
+                badge: (!data.is_disabled).then_some(ReversibilityKind::Recoverable),
+                reversibility_text: rev_opt.map(|s| s.into()),
+                action_url: format!("/admin/users/{}/disabled", data.user_id),
+                csrf_token: data.csrf_token.clone(),
+                extra_hidden: vec![("disabled".into(), new_state.into())],
+                include_reason_field: !data.is_disabled,
+                button_label: btn.into(),
+                button_danger: btn_danger,
+                cancel_url: "/admin/users".into(),
+            },
+            lang,
+        );
         view! {
             <Shell title=title.to_string() show_nav=true
                    current=Some("users".to_string()) dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
@@ -193,13 +205,11 @@ pub fn render_confirm_disable_user(
     })
 }
 
-
 pub struct ConfirmDeleteUserData {
     pub user_id: String,
     pub username: String,
     pub csrf_token: String,
 }
-
 
 pub fn render_confirm_delete_user(
     data: ConfirmDeleteUserData,
@@ -208,20 +218,23 @@ pub fn render_confirm_delete_user(
 ) -> String {
     render(move || {
         let t = lang.strings();
-        let body = confirm_screen(ConfirmScreenData {
-            title: t.confirm_delete_user_title.into(),
-            identity: data.username.clone(),
-            impact: Some(t.confirm_delete_user_impact.into()),
-            badge: Some(ReversibilityKind::Irreversible),
-            reversibility_text: Some(t.confirm_delete_user_reversibility.into()),
-            action_url: format!("/admin/users/{}/delete", data.user_id),
-            csrf_token: data.csrf_token.clone(),
-            extra_hidden: vec![],
-            include_reason_field: true,
-            button_label: t.confirm_delete_user_button.into(),
-            button_danger: true,
-            cancel_url: "/admin/users".into(),
-        }, lang);
+        let body = confirm_screen(
+            ConfirmScreenData {
+                title: t.confirm_delete_user_title.into(),
+                identity: data.username.clone(),
+                impact: Some(t.confirm_delete_user_impact.into()),
+                badge: Some(ReversibilityKind::Irreversible),
+                reversibility_text: Some(t.confirm_delete_user_reversibility.into()),
+                action_url: format!("/admin/users/{}/delete", data.user_id),
+                csrf_token: data.csrf_token.clone(),
+                extra_hidden: vec![],
+                include_reason_field: true,
+                button_label: t.confirm_delete_user_button.into(),
+                button_danger: true,
+                cancel_url: "/admin/users".into(),
+            },
+            lang,
+        );
         view! {
             <Shell title=t.confirm_delete_user_title.to_string() show_nav=true
                    current=Some("users".to_string()) dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
@@ -231,13 +244,11 @@ pub fn render_confirm_delete_user(
     })
 }
 
-
 pub struct ConfirmResetMfaData {
     pub user_id: String,
     pub username: String,
     pub csrf_token: String,
 }
-
 
 pub fn render_confirm_reset_mfa(
     data: ConfirmResetMfaData,
@@ -246,20 +257,23 @@ pub fn render_confirm_reset_mfa(
 ) -> String {
     render(move || {
         let t = lang.strings();
-        let body = confirm_screen(ConfirmScreenData {
-            title: t.confirm_reset_mfa_title.into(),
-            identity: data.username.clone(),
-            impact: Some(t.confirm_reset_mfa_impact.into()),
-            badge: Some(ReversibilityKind::Recoverable),
-            reversibility_text: Some(t.confirm_reset_mfa_reversibility.into()),
-            action_url: format!("/admin/users/{}/mfa-reset", data.user_id),
-            csrf_token: data.csrf_token.clone(),
-            extra_hidden: vec![],
-            include_reason_field: true,
-            button_label: t.confirm_reset_mfa_button.into(),
-            button_danger: true,
-            cancel_url: "/admin/users".into(),
-        }, lang);
+        let body = confirm_screen(
+            ConfirmScreenData {
+                title: t.confirm_reset_mfa_title.into(),
+                identity: data.username.clone(),
+                impact: Some(t.confirm_reset_mfa_impact.into()),
+                badge: Some(ReversibilityKind::Recoverable),
+                reversibility_text: Some(t.confirm_reset_mfa_reversibility.into()),
+                action_url: format!("/admin/users/{}/mfa-reset", data.user_id),
+                csrf_token: data.csrf_token.clone(),
+                extra_hidden: vec![],
+                include_reason_field: true,
+                button_label: t.confirm_reset_mfa_button.into(),
+                button_danger: true,
+                cancel_url: "/admin/users".into(),
+            },
+            lang,
+        );
         view! {
             <Shell title=t.confirm_reset_mfa_title.to_string() show_nav=true
                    current=Some("users".to_string()) dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
@@ -269,13 +283,11 @@ pub fn render_confirm_reset_mfa(
     })
 }
 
-
 pub struct ConfirmDeleteClientData {
     pub client_id: String,
     pub client_name: String,
     pub csrf_token: String,
 }
-
 
 pub fn render_confirm_delete_client(
     data: ConfirmDeleteClientData,
@@ -284,20 +296,23 @@ pub fn render_confirm_delete_client(
 ) -> String {
     render(move || {
         let t = lang.strings();
-        let body = confirm_screen(ConfirmScreenData {
-            title: t.confirm_delete_client_title.into(),
-            identity: data.client_name.clone(),
-            impact: Some(t.confirm_delete_client_impact.into()),
-            badge: Some(ReversibilityKind::Irreversible),
-            reversibility_text: Some(t.confirm_delete_client_reversibility.into()),
-            action_url: format!("/admin/clients/{}/delete", data.client_id),
-            csrf_token: data.csrf_token.clone(),
-            extra_hidden: vec![],
-            include_reason_field: true,
-            button_label: t.confirm_delete_client_button.into(),
-            button_danger: true,
-            cancel_url: "/admin/clients".into(),
-        }, lang);
+        let body = confirm_screen(
+            ConfirmScreenData {
+                title: t.confirm_delete_client_title.into(),
+                identity: data.client_name.clone(),
+                impact: Some(t.confirm_delete_client_impact.into()),
+                badge: Some(ReversibilityKind::Irreversible),
+                reversibility_text: Some(t.confirm_delete_client_reversibility.into()),
+                action_url: format!("/admin/clients/{}/delete", data.client_id),
+                csrf_token: data.csrf_token.clone(),
+                extra_hidden: vec![],
+                include_reason_field: true,
+                button_label: t.confirm_delete_client_button.into(),
+                button_danger: true,
+                cancel_url: "/admin/clients".into(),
+            },
+            lang,
+        );
         view! {
             <Shell title=t.confirm_delete_client_title.to_string() show_nav=true
                    current=Some("clients".to_string()) dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
@@ -307,13 +322,11 @@ pub fn render_confirm_delete_client(
     })
 }
 
-
 pub struct ConfirmDeleteSigningKeyData {
     pub key_id: String,
     pub algorithm: String,
     pub csrf_token: String,
 }
-
 
 pub fn render_confirm_delete_signing_key(
     data: ConfirmDeleteSigningKeyData,
@@ -323,20 +336,23 @@ pub fn render_confirm_delete_signing_key(
     render(move || {
         let t = lang.strings();
         let identity = format!("{} ({})", data.key_id, data.algorithm);
-        let body = confirm_screen(ConfirmScreenData {
-            title: t.confirm_delete_signing_key_title.into(),
-            identity,
-            impact: Some(t.confirm_delete_signing_key_impact.into()),
-            badge: Some(ReversibilityKind::Irreversible),
-            reversibility_text: Some(t.confirm_delete_signing_key_reversibility.into()),
-            action_url: format!("/admin/signing-keys/{}/delete", data.key_id),
-            csrf_token: data.csrf_token.clone(),
-            extra_hidden: vec![],
-            include_reason_field: true,
-            button_label: t.confirm_delete_signing_key_button.into(),
-            button_danger: true,
-            cancel_url: "/admin/signing-keys".into(),
-        }, lang);
+        let body = confirm_screen(
+            ConfirmScreenData {
+                title: t.confirm_delete_signing_key_title.into(),
+                identity,
+                impact: Some(t.confirm_delete_signing_key_impact.into()),
+                badge: Some(ReversibilityKind::Irreversible),
+                reversibility_text: Some(t.confirm_delete_signing_key_reversibility.into()),
+                action_url: format!("/admin/signing-keys/{}/delete", data.key_id),
+                csrf_token: data.csrf_token.clone(),
+                extra_hidden: vec![],
+                include_reason_field: true,
+                button_label: t.confirm_delete_signing_key_button.into(),
+                button_danger: true,
+                cancel_url: "/admin/signing-keys".into(),
+            },
+            lang,
+        );
         view! {
             <Shell title=t.confirm_delete_signing_key_title.to_string() show_nav=true
                    current=Some("signing_keys".to_string()) dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>

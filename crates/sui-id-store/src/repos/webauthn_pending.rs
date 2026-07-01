@@ -10,7 +10,7 @@ use crate::db::Database;
 use crate::errors::{StoreError, StoreResult};
 use crate::models::{WebauthnPendingKind, WebauthnPendingRow};
 use chrono::{DateTime, Utc};
-use rusqlite::{params, OptionalExtension};
+use rusqlite::{OptionalExtension, params};
 use sui_id_shared::ids::{UserId, WebauthnPendingId};
 
 const SELECT: &str = "SELECT id, kind, user_id, state_json, expires_at, created_at \
@@ -64,7 +64,8 @@ pub async fn insert(db: &Database, row: &WebauthnPendingRow) -> StoreResult<()> 
             ],
         )?;
         Ok(())
-    }).await
+    })
+    .await
 }
 
 pub async fn get(db: &Database, id: WebauthnPendingId) -> StoreResult<Option<WebauthnPendingRow>> {
@@ -72,7 +73,8 @@ pub async fn get(db: &Database, id: WebauthnPendingId) -> StoreResult<Option<Web
         Ok(conn
             .query_row(&format!("{SELECT} WHERE id = ?1"), [id.to_string()], map)
             .optional()?)
-    }).await
+    })
+    .await
 }
 
 pub async fn delete(db: &Database, id: WebauthnPendingId) -> StoreResult<()> {
@@ -85,7 +87,8 @@ pub async fn delete(db: &Database, id: WebauthnPendingId) -> StoreResult<()> {
             return Err(StoreError::NotFound);
         }
         Ok(())
-    }).await
+    })
+    .await
 }
 
 /// Hygiene: drop expired ceremonies. Called from the GC task.
@@ -96,5 +99,6 @@ pub async fn purge_expired(db: &Database) -> StoreResult<usize> {
             [Utc::now()],
         )?;
         Ok(n)
-    }).await
+    })
+    .await
 }

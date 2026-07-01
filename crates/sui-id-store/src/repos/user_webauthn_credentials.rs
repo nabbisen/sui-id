@@ -13,7 +13,7 @@ use crate::db::Database;
 use crate::errors::{StoreError, StoreResult};
 use crate::models::UserWebauthnCredentialRow;
 use chrono::{DateTime, Utc};
-use rusqlite::{params, OptionalExtension};
+use rusqlite::{OptionalExtension, params};
 use sui_id_shared::ids::{UserId, WebauthnCredentialId};
 
 const AAD: &[u8] = b"sui-id/user_webauthn_credentials/passkey/v1";
@@ -39,7 +39,10 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<UserWebauthnCredentialRow> {
 const SELECT: &str = "SELECT id, user_id, credential_id, passkey_enc, nickname, \
                       created_at, last_used_at FROM user_webauthn_credentials";
 
-pub async fn list_for_user(db: &Database, user_id: UserId) -> StoreResult<Vec<UserWebauthnCredentialRow>> {
+pub async fn list_for_user(
+    db: &Database,
+    user_id: UserId,
+) -> StoreResult<Vec<UserWebauthnCredentialRow>> {
     db.with_conn(move |conn| {
         let mut stmt = conn.prepare(&format!(
             "{SELECT} WHERE user_id = ?1 ORDER BY created_at ASC"
@@ -48,7 +51,8 @@ pub async fn list_for_user(db: &Database, user_id: UserId) -> StoreResult<Vec<Us
             .query_map([user_id.to_string()], map)?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(rows)
-    }).await
+    })
+    .await
 }
 
 pub async fn count_for_user(db: &Database, user_id: UserId) -> StoreResult<usize> {
@@ -59,7 +63,8 @@ pub async fn count_for_user(db: &Database, user_id: UserId) -> StoreResult<usize
             |r| r.get(0),
         )?;
         Ok(n as usize)
-    }).await
+    })
+    .await
 }
 
 pub async fn find_by_credential_id(
@@ -75,7 +80,8 @@ pub async fn find_by_credential_id(
                 map,
             )
             .optional()?)
-    }).await
+    })
+    .await
 }
 
 pub async fn create(
@@ -109,11 +115,15 @@ pub async fn create(
             other => StoreError::from(other),
         })?;
         Ok(())
-    }).await
+    })
+    .await
 }
 
-pub async fn decrypt_passkey(db: &Database, row: &UserWebauthnCredentialRow) -> StoreResult<Vec<u8>> {
-    Ok(open(db.key(), &row.passkey_enc, AAD)?)
+pub async fn decrypt_passkey(
+    db: &Database,
+    row: &UserWebauthnCredentialRow,
+) -> StoreResult<Vec<u8>> {
+    open(db.key(), &row.passkey_enc, AAD)
 }
 
 /// Replace the sealed passkey blob (used after authentication when the
@@ -148,7 +158,8 @@ pub async fn delete(db: &Database, id: WebauthnCredentialId, user_id: UserId) ->
             return Err(StoreError::NotFound);
         }
         Ok(())
-    }).await
+    })
+    .await
 }
 
 /// Re-seal every `passkey_enc` row under `new_key`. Used by
@@ -159,9 +170,7 @@ pub fn reseal_all(
     old_key: &crate::crypto::MasterKey,
     new_key: &crate::crypto::MasterKey,
 ) -> StoreResult<u64> {
-    let mut stmt = tx.prepare(
-        "SELECT id, passkey_enc FROM user_webauthn_credentials",
-    )?;
+    let mut stmt = tx.prepare("SELECT id, passkey_enc FROM user_webauthn_credentials")?;
     let rows = stmt
         .query_map([], |row| {
             let id: String = row.get(0)?;
@@ -201,5 +210,6 @@ pub async fn update_nickname(
             rusqlite::params![nick, cid, user_id.to_string()],
         )?;
         Ok(())
-    }).await
+    })
+    .await
 }

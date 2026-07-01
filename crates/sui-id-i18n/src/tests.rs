@@ -1,6 +1,7 @@
+#![allow(clippy::unwrap_used)]
 //! Unit tests for `sui-id-i18n`.
 
-use crate::{negotiate_from_accept_language, Locale, STRINGS_JA};
+use crate::{Locale, STRINGS_JA, negotiate_from_accept_language};
 
 #[test]
 fn parse_round_trip() {
@@ -17,37 +18,46 @@ fn parse_round_trip() {
 fn parse_tolerates_region_suffix() {
     assert_eq!(Locale::parse("en-US"), Some(Locale::En));
     assert_eq!(Locale::parse("ja_JP"), Some(Locale::Ja));
-    assert_eq!(Locale::parse("EN"),    Some(Locale::En));
+    assert_eq!(Locale::parse("EN"), Some(Locale::En));
 }
 
 #[test]
 fn parse_zh_variants() {
     // Simplified
-    assert_eq!(Locale::parse("zh"),       Some(Locale::ZhHans)); // legacy / bare
-    assert_eq!(Locale::parse("zh-Hans"),  Some(Locale::ZhHans));
-    assert_eq!(Locale::parse("zh-CN"),    Some(Locale::ZhHans));
-    assert_eq!(Locale::parse("zh-SG"),    Some(Locale::ZhHans));
+    assert_eq!(Locale::parse("zh"), Some(Locale::ZhHans)); // legacy / bare
+    assert_eq!(Locale::parse("zh-Hans"), Some(Locale::ZhHans));
+    assert_eq!(Locale::parse("zh-CN"), Some(Locale::ZhHans));
+    assert_eq!(Locale::parse("zh-SG"), Some(Locale::ZhHans));
     // Traditional
-    assert_eq!(Locale::parse("zh-Hant"),  Some(Locale::ZhHant));
-    assert_eq!(Locale::parse("zh-TW"),    Some(Locale::ZhHant));
-    assert_eq!(Locale::parse("zh-HK"),    Some(Locale::ZhHant));
-    assert_eq!(Locale::parse("zh-MO"),    Some(Locale::ZhHant));
+    assert_eq!(Locale::parse("zh-Hant"), Some(Locale::ZhHant));
+    assert_eq!(Locale::parse("zh-TW"), Some(Locale::ZhHant));
+    assert_eq!(Locale::parse("zh-HK"), Some(Locale::ZhHant));
+    assert_eq!(Locale::parse("zh-MO"), Some(Locale::ZhHant));
 }
 
 #[test]
 fn parse_unknown_returns_none() {
-    assert_eq!(Locale::parse(""),          None);
-    assert_eq!(Locale::parse("xyz"),       None);
-    assert_eq!(Locale::parse("fr-FR"),     None);
+    assert_eq!(Locale::parse(""), None);
+    assert_eq!(Locale::parse("xyz"), None);
+    assert_eq!(Locale::parse("fr-FR"), None);
 }
 
 #[test]
 fn negotiate_picks_first_recognised() {
-    assert_eq!(negotiate_from_accept_language("fr;q=1, en;q=0.5"), Some(Locale::En));
-    assert_eq!(negotiate_from_accept_language("ja, en"),            Some(Locale::Ja));
-    assert_eq!(negotiate_from_accept_language(""),                  None);
-    assert_eq!(negotiate_from_accept_language("zh, fr"),            Some(Locale::ZhHans));
-    assert_eq!(negotiate_from_accept_language("zh-TW, zh"),         Some(Locale::ZhHant));
+    assert_eq!(
+        negotiate_from_accept_language("fr;q=1, en;q=0.5"),
+        Some(Locale::En)
+    );
+    assert_eq!(negotiate_from_accept_language("ja, en"), Some(Locale::Ja));
+    assert_eq!(negotiate_from_accept_language(""), None);
+    assert_eq!(
+        negotiate_from_accept_language("zh, fr"),
+        Some(Locale::ZhHans)
+    );
+    assert_eq!(
+        negotiate_from_accept_language("zh-TW, zh"),
+        Some(Locale::ZhHant)
+    );
 }
 
 #[test]
@@ -80,8 +90,14 @@ fn locale_native_names_in_strings_tables() {
     // Every locale's strings table carries names for both zh variants.
     for &loc in &[Locale::Ja, Locale::En, Locale::ZhHans] {
         let s = loc.strings();
-        assert!(!s.locale_native_zh_hans.is_empty(), "{loc:?}.locale_native_zh_hans empty");
-        assert!(!s.locale_native_zh_hant.is_empty(), "{loc:?}.locale_native_zh_hant empty");
+        assert!(
+            !s.locale_native_zh_hans.is_empty(),
+            "{loc:?}.locale_native_zh_hans empty"
+        );
+        assert!(
+            !s.locale_native_zh_hant.is_empty(),
+            "{loc:?}.locale_native_zh_hant empty"
+        );
     }
 }
 

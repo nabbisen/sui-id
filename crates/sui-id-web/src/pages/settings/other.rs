@@ -1,9 +1,8 @@
 //! Settings other tab (RFC 065).
 
-use leptos::prelude::*;
-use crate::layout::Shell;
 use super::super::common::*;
-use super::*;  // SettingsTab + settings_tabs
+use super::*;
+use crate::layout::Shell;
 
 pub struct SettingsOtherData {
     pub binary_version: String,
@@ -15,8 +14,12 @@ pub struct SettingsOtherData {
     pub clock_now: chrono::DateTime<chrono::Utc>,
 }
 
-
-pub fn render_settings_other(data: SettingsOtherData, flash: Option<Flash>, csrf_token: String, lang: sui_id_i18n::Locale) -> String {
+pub fn render_settings_other(
+    data: SettingsOtherData,
+    flash: Option<Flash>,
+    csrf_token: String,
+    lang: sui_id_i18n::Locale,
+) -> String {
     render(move || {
         let t = lang.strings();
         let SettingsOtherData {

@@ -1,9 +1,8 @@
 //! /me/security security (RFC 065).
 
-use leptos::prelude::*;
-use crate::layout::Shell;
 use super::super::common::*;
-use super::*;  // MeShellData + MeTab + me_security_tabs
+use super::*;
+use crate::layout::Shell;
 
 pub struct MeSecurityData {
     pub username: String,
@@ -20,7 +19,6 @@ pub struct MeSecurityData {
     pub recent_events: Vec<MeAuditEntry>,
 }
 
-
 pub struct MeSessionDescriptor {
     pub id: String,
     pub created_at: chrono::DateTime<chrono::Utc>,
@@ -30,14 +28,12 @@ pub struct MeSessionDescriptor {
     pub is_current: bool,
 }
 
-
 pub struct MeAuditEntry {
     pub at: chrono::DateTime<chrono::Utc>,
     pub action: String,
     pub result: String,
     pub note: Option<String>,
 }
-
 
 pub fn render_me_security(
     data: MeSecurityData,
@@ -86,7 +82,8 @@ pub fn render_me_security(
                 } else {
                     let csrf_for_row = csrf_token.clone();
                     let post_url = format!("/me/security/sessions/{id}/revoke");
-                    let onsubmit_attr = format!("return confirm('{}');", revoke_confirm.replace('\'', "\\'"));
+                    let onsubmit_attr =
+                        format!("return confirm('{}');", revoke_confirm.replace('\'', "\\'"));
                     view! {
                         <td>
                             <form method="post" action=post_url class="inline-el"
@@ -156,7 +153,7 @@ pub fn render_me_security(
                 }
                 if passkey_count > 0 {
                     v.push(
-                        {t.me_security_mfa_factor_passkey_n}
+                        { t.me_security_mfa_factor_passkey_n }
                             .replace("{n}", &passkey_count.to_string()),
                     );
                 }
@@ -184,7 +181,8 @@ pub fn render_me_security(
 
         let revoke_all_others_onsubmit = format!(
             "return confirm('{}');",
-            t.me_security_sessions_revoke_all_others_confirm.replace('\'', "\\'")
+            t.me_security_sessions_revoke_all_others_confirm
+                .replace('\'', "\\'")
         );
 
         view! {

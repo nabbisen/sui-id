@@ -278,6 +278,7 @@ pub fn run(conn: &mut Connection) -> StoreResult<()> {
 /// Uses the same `apply_migration()` as `run()`, so FK_DISABLE_REQUIRED
 /// migrations are handled identically.
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 pub(crate) fn run_up_to(conn: &mut Connection, max_version: i32) -> StoreResult<()> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS sui_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);",
@@ -304,6 +305,7 @@ pub(crate) fn run_up_to(conn: &mut Connection, max_version: i32) -> StoreResult<
 /// version does not exist — this is intentionally strict so that test
 /// helper code fails loudly when migrations are renumbered.
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::panic)]
 pub(crate) fn sql_for_version(version: i32) -> &'static str {
     MIGRATIONS
         .iter()

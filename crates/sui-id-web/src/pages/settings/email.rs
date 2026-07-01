@@ -1,9 +1,8 @@
 //! Settings email tab (RFC 065).
 
-use leptos::prelude::*;
-use crate::layout::Shell;
 use super::super::common::*;
-use super::*;  // SettingsTab + settings_tabs
+use super::*;
+use crate::layout::Shell;
 
 pub struct SettingsEmailData {
     pub configured: bool,
@@ -17,7 +16,6 @@ pub struct SettingsEmailData {
     pub from_name: String,
     pub base_url: String,
 }
-
 
 pub fn render_settings_email(
     data: SettingsEmailData,
@@ -48,8 +46,16 @@ pub fn render_settings_email(
             t.settings_email_password_placeholder_none
         };
         let enabled_attr = if enabled { Some("checked") } else { None };
-        let tls_implicit = if tls_mode == "implicit" { Some("selected") } else { None };
-        let tls_starttls = if tls_mode == "starttls" { Some("selected") } else { None };
+        let tls_implicit = if tls_mode == "implicit" {
+            Some("selected")
+        } else {
+            None
+        };
+        let tls_starttls = if tls_mode == "starttls" {
+            Some("selected")
+        } else {
+            None
+        };
 
         view! {
             <Shell title=t.settings_email_page_title.to_string() show_nav=true current=Some("settings".to_string()) lang=lang csrf_token=csrf_token.clone()>

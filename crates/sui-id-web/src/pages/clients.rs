@@ -1,8 +1,8 @@
 //! Page renderers for the "clients" screen domain (RFC 065).
 
-use leptos::prelude::*;
-use crate::layout::Shell;
 use super::common::*;
+use crate::layout::Shell;
+use leptos::prelude::*;
 use sui_id_shared::api::ClientSummary;
 
 fn client_row_view(
@@ -13,7 +13,11 @@ fn client_row_view(
 ) -> impl IntoView {
     let is_disabled = c.is_disabled;
     let is_deleted = c.is_deleted;
-    let kind = if c.confidential { "confidential" } else { "public" };
+    let kind = if c.confidential {
+        "confidential"
+    } else {
+        "public"
+    };
     let id_str = c.id.to_string();
     let action_label = if is_disabled { "Enable" } else { "Disable" };
     let action_target = if is_disabled { "false" } else { "true" };
@@ -34,7 +38,8 @@ fn client_row_view(
         // RFC 071: auditors see no mutation controls.
         view! {
             <td><a href=edit_url class="button secondary">{t.button_view_detail}</a></td>
-        }.into_any()
+        }
+        .into_any()
     } else {
         view! {
             <td>
@@ -47,7 +52,8 @@ fn client_row_view(
                     </form>
                 </div>
             </td>
-        }.into_any()
+        }
+        .into_any()
     };
 
     let id_for_copy = id_str.clone();
@@ -64,7 +70,6 @@ fn client_row_view(
         </tr>
     }
 }
-
 
 pub fn render_clients(
     can_write: bool,
@@ -217,7 +222,6 @@ pub fn render_clients_new(
 
 // ---------- client edit ----------
 
-
 pub struct ClientEditData {
     pub id: String,
     pub name: String,
@@ -233,7 +237,6 @@ pub struct ClientEditData {
     /// RFC 047: populated only when the secret was just rotated. Shown once.
     pub freshly_rotated_secret: Option<String>,
 }
-
 
 pub fn render_client_edit(
     can_write: bool,
@@ -256,7 +259,11 @@ pub fn render_client_edit(
             freshly_rotated_secret,
         } = data;
         let post_url = format!("/admin/clients/{id}/edit");
-        let kind = if confidential { "confidential" } else { "public" };
+        let kind = if confidential {
+            "confidential"
+        } else {
+            "public"
+        };
         let redirect_uris_value = redirect_uris.join("\n");
         let post_logout_value = post_logout_redirect_uris.join("\n");
 

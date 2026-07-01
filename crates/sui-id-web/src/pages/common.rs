@@ -146,7 +146,11 @@ pub struct EmptyStateData {
 }
 
 pub fn empty_state(data: EmptyStateData) -> impl IntoView {
-    let cls = if data.compact { "empty-state empty-state--compact" } else { "empty-state" };
+    let cls = if data.compact {
+        "empty-state empty-state--compact"
+    } else {
+        "empty-state"
+    };
     view! {
         <div class=cls>
             <p class="empty-state__message">{data.message}</p>

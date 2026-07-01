@@ -53,7 +53,7 @@ pub(crate) fn fmt_count_shared(n: u64) -> String {
     let mut out = String::with_capacity(s.len() + s.len() / 3);
     for (i, ch) in s.chars().enumerate() {
         let remaining = s.len() - i;
-        if i > 0 && remaining % 3 == 0 {
+        if i > 0 && remaining.is_multiple_of(3) {
             out.push(',');
         }
         out.push(ch);

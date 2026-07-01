@@ -1,13 +1,16 @@
 //! Page renderers for the "error" screen domain (RFC 065).
 
-use leptos::prelude::*;
 use super::common::*;
+use leptos::prelude::*;
 
 pub fn render_error(status: u16, request_id: &str, lang: sui_id_i18n::Locale) -> String {
     let t = lang.strings();
     let (title, lede) = match status {
         404 => (t.error_not_found_title, t.error_not_found_lede),
-        429 => (t.error_too_many_requests_label, t.error_too_many_requests_lede),
+        429 => (
+            t.error_too_many_requests_label,
+            t.error_too_many_requests_lede,
+        ),
         500..=599 => (t.error_internal, t.error_internal_lede),
         _ => (t.error_generic_title, t.error_generic_lede),
     };

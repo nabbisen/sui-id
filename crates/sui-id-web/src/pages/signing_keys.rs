@@ -1,8 +1,8 @@
 //! Page renderers for the "signing_keys" screen domain (RFC 065).
 
-use leptos::prelude::*;
-use crate::layout::Shell;
 use super::common::*;
+use crate::layout::Shell;
+use leptos::prelude::*;
 
 fn signing_key_row_view(
     can_write: bool,
@@ -48,7 +48,6 @@ fn signing_key_row_view(
         </tr>
     }
 }
-
 
 pub fn render_signing_keys(
     can_write: bool,

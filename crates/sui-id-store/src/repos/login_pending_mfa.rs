@@ -12,7 +12,7 @@ use crate::db::Database;
 use crate::errors::{StoreError, StoreResult};
 use crate::models::LoginPendingMfaRow;
 use chrono::{DateTime, Utc};
-use rusqlite::{params, OptionalExtension};
+use rusqlite::{OptionalExtension, params};
 use sui_id_shared::ids::PendingMfaId;
 
 const SELECT: &str = "SELECT id, user_id, expires_at, created_at FROM login_pending_mfa";
@@ -21,9 +21,9 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<LoginPendingMfaRow> {
     let id_str: String = row.get(0)?;
     let user_id_str: String = row.get(1)?;
     Ok(LoginPendingMfaRow {
-        id: id_str
-            .parse()
-            .map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?,
+        id: id_str.parse().map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
+        })?,
         user_id: user_id_str.parse().map_err(|e| {
             rusqlite::Error::FromSqlConversionFailure(1, rusqlite::types::Type::Text, Box::new(e))
         })?,
@@ -46,7 +46,8 @@ pub async fn insert(db: &Database, row: &LoginPendingMfaRow) -> StoreResult<()> 
             ],
         )?;
         Ok(())
-    }).await
+    })
+    .await
 }
 
 pub async fn get(db: &Database, id: PendingMfaId) -> StoreResult<Option<LoginPendingMfaRow>> {
@@ -54,7 +55,8 @@ pub async fn get(db: &Database, id: PendingMfaId) -> StoreResult<Option<LoginPen
         Ok(conn
             .query_row(&format!("{SELECT} WHERE id = ?1"), [id.to_string()], map)
             .optional()?)
-    }).await
+    })
+    .await
 }
 
 pub async fn delete(db: &Database, id: PendingMfaId) -> StoreResult<()> {
@@ -67,7 +69,8 @@ pub async fn delete(db: &Database, id: PendingMfaId) -> StoreResult<()> {
             return Err(StoreError::NotFound);
         }
         Ok(())
-    }).await
+    })
+    .await
 }
 
 /// Hygiene: drop expired rows. Called from the GC task.
@@ -78,5 +81,6 @@ pub async fn purge_expired(db: &Database) -> StoreResult<usize> {
             [Utc::now()],
         )?;
         Ok(n)
-    }).await
+    })
+    .await
 }

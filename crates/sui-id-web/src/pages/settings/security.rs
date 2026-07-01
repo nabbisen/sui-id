@@ -1,9 +1,8 @@
 //! Settings security tab (RFC 065).
 
-use leptos::prelude::*;
-use crate::layout::Shell;
 use super::super::common::*;
-use super::*;  // SettingsTab + settings_tabs
+use super::*;
+use crate::layout::Shell;
 
 pub struct SettingsSecurityData {
     pub max_lockout_label: String,
@@ -23,8 +22,11 @@ pub struct SettingsSecurityData {
     pub csrf_token: String,
 }
 
-
-pub fn render_settings_security(data: SettingsSecurityData, flash: Option<Flash>, lang: sui_id_i18n::Locale) -> String {
+pub fn render_settings_security(
+    data: SettingsSecurityData,
+    flash: Option<Flash>,
+    lang: sui_id_i18n::Locale,
+) -> String {
     render(move || {
         let t = lang.strings();
         let SettingsSecurityData {

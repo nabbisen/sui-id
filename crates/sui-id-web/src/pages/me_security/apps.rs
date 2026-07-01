@@ -1,9 +1,8 @@
 //! `/me/apps` — self-service view of OAuth consent grants (RFC 072, v0.60.0).
 
-use chrono::{DateTime, Utc};
-use leptos::prelude::*;
 use super::super::common::*;
-use super::*;  // me_security_tabs, MeTab, Flash from me_security glob
+use super::*;
+use chrono::{DateTime, Utc};
 
 /// Render data for one consent grant (resolved from `ConsentGrantView`).
 pub struct AppGrantData {
@@ -20,69 +19,82 @@ pub struct MeAppsData {
     pub dev_mode: bool,
 }
 
-pub fn render_me_apps(
-    data: MeAppsData,
-    flash: Option<Flash>,
-    lang: sui_id_i18n::Locale,
-) -> String {
+pub fn render_me_apps(data: MeAppsData, flash: Option<Flash>, lang: sui_id_i18n::Locale) -> String {
     render(move || {
         let t = lang.strings();
-        let MeAppsData { grants, csrf_token, dev_mode } = data;
+        let MeAppsData {
+            grants,
+            csrf_token,
+            dev_mode,
+        } = data;
 
-        let grant_items: Vec<_> = grants.into_iter().map(|g| {
-            let client_id   = g.client_id.clone();
-            let client_name = g.client_name.clone();
-            let granted_at  = fmt_time(g.granted_at);
-            let last_used   = g.last_used_at
-                .map(fmt_time)
-                .unwrap_or_else(|| t.me_apps_never_used.to_owned());
-            let csrf_val    = csrf_token.clone();
-            let scope_list: Vec<_> = g.granted_scopes.iter().map(|s| {
-                let (label, desc): (&'static str, Option<&'static str>) = match s.as_str() {
-                    "openid"         => (t.consent_scope_openid, Some(t.consent_scope_openid_desc)),
-                    "profile"        => (t.consent_scope_profile, Some(t.consent_scope_profile_desc)),
-                    "email"          => (t.consent_scope_email, Some(t.consent_scope_email_desc)),
-                    "offline_access" => (t.consent_scope_offline_access, Some(t.consent_scope_offline_access_desc)),
-                    _                => ("—", None),
-                };
-                let slug = s.clone();
+        let grant_items: Vec<_> = grants
+            .into_iter()
+            .map(|g| {
+                let client_id = g.client_id.clone();
+                let client_name = g.client_name.clone();
+                let granted_at = fmt_time(g.granted_at);
+                let last_used = g
+                    .last_used_at
+                    .map(fmt_time)
+                    .unwrap_or_else(|| t.me_apps_never_used.to_owned());
+                let csrf_val = csrf_token.clone();
+                let scope_list: Vec<_> = g
+                    .granted_scopes
+                    .iter()
+                    .map(|s| {
+                        let (label, desc): (&'static str, Option<&'static str>) = match s.as_str() {
+                            "openid" => (t.consent_scope_openid, Some(t.consent_scope_openid_desc)),
+                            "profile" => {
+                                (t.consent_scope_profile, Some(t.consent_scope_profile_desc))
+                            }
+                            "email" => (t.consent_scope_email, Some(t.consent_scope_email_desc)),
+                            "offline_access" => (
+                                t.consent_scope_offline_access,
+                                Some(t.consent_scope_offline_access_desc),
+                            ),
+                            _ => ("—", None),
+                        };
+                        let slug = s.clone();
+                        view! {
+                            <li class="consent-scope-item">
+                                <span class="consent-scope-item__title">{label}</span>
+                                {desc.map(|d| view! {
+                                    <span class="consent-scope-item__desc">{d}</span>
+                                })}
+                                <code class="text-caption muted">{slug}</code>
+                            </li>
+                        }
+                    })
+                    .collect();
+
                 view! {
-                    <li class="consent-scope-item">
-                        <span class="consent-scope-item__title">{label}</span>
-                        {desc.map(|d| view! {
-                            <span class="consent-scope-item__desc">{d}</span>
-                        })}
-                        <code class="text-caption muted">{slug}</code>
-                    </li>
-                }
-            }).collect();
-
-            view! {
-                <div class="card">
-                    <div class="card__header row gap-2">
-                        <div class="card__header-meta">
-                            <strong>{client_name}</strong>
-                            <p class="muted text-caption">
-                                {t.me_apps_granted_on}": "{granted_at}
-                                " · "
-                                {t.me_apps_last_used}": "{last_used}
-                            </p>
+                    <div class="card">
+                        <div class="card__header row gap-2">
+                            <div class="card__header-meta">
+                                <strong>{client_name}</strong>
+                                <p class="muted text-caption">
+                                    {t.me_apps_granted_on}": "{granted_at}
+                                    " · "
+                                    {t.me_apps_last_used}": "{last_used}
+                                </p>
+                            </div>
+                            <form method="post"
+                                  action=format!("/me/apps/{}/revoke", client_id)
+                                  class="form-actions">
+                                <input type="hidden" name="_csrf" value=csrf_val />
+                                <button type="submit" class="danger">
+                                    {t.me_apps_revoke_button}
+                                </button>
+                            </form>
                         </div>
-                        <form method="post"
-                              action=format!("/me/apps/{}/revoke", client_id)
-                              class="form-actions">
-                            <input type="hidden" name="_csrf" value=csrf_val />
-                            <button type="submit" class="danger">
-                                {t.me_apps_revoke_button}
-                            </button>
-                        </form>
+                        <ul class="consent-scope-list">
+                            {scope_list}
+                        </ul>
                     </div>
-                    <ul class="consent-scope-list">
-                        {scope_list}
-                    </ul>
-                </div>
-            }
-        }).collect();
+                }
+            })
+            .collect();
 
         view! {
             <crate::layout::Shell
@@ -115,4 +127,3 @@ pub fn render_me_apps(
         }
     })
 }
-

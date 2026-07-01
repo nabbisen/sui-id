@@ -1,9 +1,8 @@
 //! /me/security language (RFC 065).
 
-use leptos::prelude::*;
-use crate::layout::Shell;
 use super::super::common::*;
-use super::*;  // MeShellData + MeTab + me_security_tabs
+use super::*;
+use crate::layout::Shell;
 
 pub struct MeLanguageData {
     pub shell: MeShellData,
@@ -14,7 +13,6 @@ pub struct MeLanguageData {
     pub just_saved: bool,
 }
 
-
 pub fn render_me_language(
     data: MeLanguageData,
     flash: Option<Flash>,
@@ -24,7 +22,12 @@ pub fn render_me_language(
     render(move || {
         let t = lang.strings();
         let tabs = me_security_tabs(MeTab::Language, lang);
-        let MeLanguageData { shell: _, current_preferred_lang, csrf_token, just_saved } = data;
+        let MeLanguageData {
+            shell: _,
+            current_preferred_lang,
+            csrf_token,
+            just_saved,
+        } = data;
         let cur = current_preferred_lang.clone().unwrap_or_default();
         let cur2 = cur.clone();
         let cur3 = cur.clone();

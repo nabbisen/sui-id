@@ -27,17 +27,19 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<EmailOutboxRow> {
         rusqlite::Error::FromSqlConversionFailure(1, rusqlite::types::Type::Text, Box::new(e))
     })?;
     Ok(EmailOutboxRow {
-        id:              row.get::<_, String>(0)?.parse().map_err(|e: uuid::Error| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?,
+        id: row.get::<_, String>(0)?.parse().map_err(|e: uuid::Error| {
+            rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
+        })?,
         state,
-        template:        row.get(2)?,
-        recipient_enc:   row.get(3)?,
-        payload_enc:     row.get(4)?,
-        attempt_count:   row.get(5)?,
+        template: row.get(2)?,
+        recipient_enc: row.get(3)?,
+        payload_enc: row.get(4)?,
+        attempt_count: row.get(5)?,
         next_attempt_at: row.get(6)?,
-        last_error:      row.get(7)?,
-        locale:          row.get(8)?,
-        created_at:      row.get(9)?,
-        updated_at:      row.get(10)?,
+        last_error: row.get(7)?,
+        locale: row.get(8)?,
+        created_at: row.get(9)?,
+        updated_at: row.get(10)?,
     })
 }
 
@@ -45,7 +47,7 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<EmailOutboxRow> {
 
 /// Persist a new outbox row in `queued` state. Returns the row's id.
 pub async fn enqueue(db: &Database, row: EmailOutboxRow) -> StoreResult<EmailOutboxId> {
-    let id = row.id.clone();
+    let id = row.id;
     db.with_conn(move |conn| {
         conn.execute(
             "INSERT INTO email_outbox \
@@ -110,11 +112,7 @@ pub async fn claim_one_eligible(
 }
 
 /// Mark a `sending` row as successfully sent.
-pub async fn mark_sent(
-    db: &Database,
-    id: EmailOutboxId,
-    now: DateTime<Utc>,
-) -> StoreResult<()> {
+pub async fn mark_sent(db: &Database, id: EmailOutboxId, now: DateTime<Utc>) -> StoreResult<()> {
     db.with_conn(move |conn| {
         conn.execute(
             "UPDATE email_outbox SET state = 'sent', updated_at = ?1 WHERE id = ?2",
@@ -195,9 +193,7 @@ pub fn reseal_all(
 ) -> StoreResult<usize> {
     use crate::crypto::{open, seal};
     let rows = {
-        let mut stmt = tx.prepare(
-            "SELECT id, recipient_enc, payload_enc FROM email_outbox",
-        )?;
+        let mut stmt = tx.prepare("SELECT id, recipient_enc, payload_enc FROM email_outbox")?;
         let rows: Vec<(String, Vec<u8>, Vec<u8>)> = stmt
             .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
             .collect::<rusqlite::Result<_>>()?;
@@ -205,10 +201,14 @@ pub fn reseal_all(
     };
     let n = rows.len();
     for (id, rec_enc, pay_enc) in rows {
-        let rec_plain = open(old_key, &rec_enc, RECIPIENT_AAD).map_err(|_| crate::errors::StoreError::Crypto)?;
-        let pay_plain = open(old_key, &pay_enc, PAYLOAD_AAD).map_err(|_| crate::errors::StoreError::Crypto)?;
-        let new_rec = seal(new_key, &rec_plain, RECIPIENT_AAD).map_err(|_| crate::errors::StoreError::Crypto)?;
-        let new_pay = seal(new_key, &pay_plain, PAYLOAD_AAD).map_err(|_| crate::errors::StoreError::Crypto)?;
+        let rec_plain = open(old_key, &rec_enc, RECIPIENT_AAD)
+            .map_err(|_| crate::errors::StoreError::Crypto)?;
+        let pay_plain =
+            open(old_key, &pay_enc, PAYLOAD_AAD).map_err(|_| crate::errors::StoreError::Crypto)?;
+        let new_rec = seal(new_key, &rec_plain, RECIPIENT_AAD)
+            .map_err(|_| crate::errors::StoreError::Crypto)?;
+        let new_pay = seal(new_key, &pay_plain, PAYLOAD_AAD)
+            .map_err(|_| crate::errors::StoreError::Crypto)?;
         tx.execute(
             "UPDATE email_outbox SET recipient_enc = ?1, payload_enc = ?2 WHERE id = ?3",
             rusqlite::params![new_rec, new_pay, id],
@@ -219,8 +219,31 @@ pub fn reseal_all(
 
 // ── tests ─────────────────────────────────────────────────────────────────────
 
+/// RFC 073: Count rows that have been pending in `queued` state for
+/// longer than `stuck_threshold`. Used by the dashboard to surface
+/// "outbox stuck" warnings — typically when SMTP credentials are wrong
+/// or the SMTP host is unreachable.
+pub async fn count_stuck_pending(
+    db: &Database,
+    stuck_threshold: chrono::Duration,
+    now: chrono::DateTime<chrono::Utc>,
+) -> StoreResult<usize> {
+    let cutoff = (now - stuck_threshold).to_rfc3339();
+    db.with_conn(move |conn| {
+        let n: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM email_outbox \
+             WHERE state = 'queued' AND created_at < ?1",
+            rusqlite::params![cutoff],
+            |row| row.get(0),
+        )?;
+        Ok(n as usize)
+    })
+    .await
+}
+
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::expect_used, clippy::unwrap_used, clippy::clone_on_copy)]
     use super::*;
     use crate::Database;
     use chrono::Utc;
@@ -254,7 +277,10 @@ mod tests {
         let id = enqueue(&db, row.clone()).await.expect("enqueue");
         assert_eq!(id, row.id);
 
-        let claimed = claim_one_eligible(&db, Utc::now()).await.expect("claim").expect("some");
+        let claimed = claim_one_eligible(&db, Utc::now())
+            .await
+            .expect("claim")
+            .expect("some");
         assert_eq!(claimed.id, id);
         assert_eq!(claimed.state, EmailOutboxState::Sending);
     }
@@ -276,8 +302,13 @@ mod tests {
         let db = fresh_db();
         let row = sample_row();
         let id = enqueue(&db, row).await.expect("enqueue");
-        claim_one_eligible(&db, Utc::now()).await.expect("claim").expect("some");
-        mark_sent(&db, id.clone(), Utc::now()).await.expect("mark sent");
+        claim_one_eligible(&db, Utc::now())
+            .await
+            .expect("claim")
+            .expect("some");
+        mark_sent(&db, id.clone(), Utc::now())
+            .await
+            .expect("mark sent");
 
         // Should not appear as eligible anymore
         let claimed2 = claim_one_eligible(&db, Utc::now()).await.expect("claim2");
@@ -289,15 +320,27 @@ mod tests {
         let db = fresh_db();
         let row = sample_row();
         let id = enqueue(&db, row).await.expect("enqueue");
-        claim_one_eligible(&db, Utc::now()).await.expect("claim").expect("some");
+        claim_one_eligible(&db, Utc::now())
+            .await
+            .expect("claim")
+            .expect("some");
 
         let next_try = Utc::now() + chrono::Duration::seconds(30);
-        record_failure(&db, id.clone(), "connection refused".into(), next_try, Utc::now())
-            .await.expect("record failure");
+        record_failure(
+            &db,
+            id.clone(),
+            "connection refused".into(),
+            next_try,
+            Utc::now(),
+        )
+        .await
+        .expect("record failure");
 
         // Advance to after next_try
         let claimed2 = claim_one_eligible(&db, next_try + chrono::Duration::seconds(1))
-            .await.expect("claim2").expect("some");
+            .await
+            .expect("claim2")
+            .expect("some");
         assert_eq!(claimed2.attempt_count, 1);
     }
 
@@ -306,34 +349,18 @@ mod tests {
         let db = fresh_db();
         let row = sample_row();
         enqueue(&db, row).await.expect("enqueue");
-        claim_one_eligible(&db, Utc::now()).await.expect("claim").expect("some");
+        claim_one_eligible(&db, Utc::now())
+            .await
+            .expect("claim")
+            .expect("some");
         // Threshold is in the future: any sending row older than it gets reset.
         let threshold = Utc::now() + chrono::Duration::seconds(1);
-        let n = requeue_stuck_sending(&db, threshold, Utc::now()).await.expect("requeue");
+        let n = requeue_stuck_sending(&db, threshold, Utc::now())
+            .await
+            .expect("requeue");
         assert_eq!(n, 1);
         // Now it should be claimable again
         let claimed = claim_one_eligible(&db, Utc::now()).await.expect("claim2");
         assert!(claimed.is_some());
     }
-}
-
-/// RFC 073: Count rows that have been pending in `queued` state for
-/// longer than `stuck_threshold`. Used by the dashboard to surface
-/// "outbox stuck" warnings — typically when SMTP credentials are wrong
-/// or the SMTP host is unreachable.
-pub async fn count_stuck_pending(
-    db: &Database,
-    stuck_threshold: chrono::Duration,
-    now: chrono::DateTime<chrono::Utc>,
-) -> StoreResult<usize> {
-    let cutoff = (now - stuck_threshold).to_rfc3339();
-    db.with_conn(move |conn| {
-        let n: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM email_outbox \
-             WHERE state = 'queued' AND created_at < ?1",
-            rusqlite::params![cutoff],
-            |row| row.get(0),
-        )?;
-        Ok(n as usize)
-    }).await
 }

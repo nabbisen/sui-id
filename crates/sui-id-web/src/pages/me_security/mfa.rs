@@ -1,9 +1,8 @@
 //! /me/security mfa (RFC 065).
 
-use leptos::prelude::*;
-use crate::layout::Shell;
 use super::super::common::*;
-use super::*;  // MeShellData + MeTab + me_security_tabs
+use super::*;
+use crate::layout::Shell;
 
 pub struct MeMfaData {
     pub shell: MeShellData,
@@ -16,7 +15,6 @@ pub struct MeMfaData {
     pub fresh_recovery_codes: Option<Vec<String>>,
     pub csrf_token: String,
 }
-
 
 pub fn render_me_mfa(
     data: MeMfaData,

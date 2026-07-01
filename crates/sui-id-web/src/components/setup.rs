@@ -35,9 +35,9 @@ impl StepState {
     /// CSS class for the step's text label.
     pub fn label_class(self) -> &'static str {
         match self {
-            Self::Complete  => "setup-step__label--done",
-            Self::Current   => "setup-step__label--current",
-            Self::Upcoming  => "setup-step__label--upcoming",
+            Self::Complete => "setup-step__label--done",
+            Self::Current => "setup-step__label--current",
+            Self::Upcoming => "setup-step__label--upcoming",
         }
     }
 }
@@ -176,4 +176,3 @@ pub const SETUP_LANG_PICKER_CSS: &str = r#"/* v0.48.2 — setup wizard language 
 }
 
 "#;
-

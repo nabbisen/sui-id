@@ -8,13 +8,13 @@
 //! The master key is provided externally and must be exactly 32 bytes. It
 //! never touches the database.
 
-use getrandom;
 use crate::errors::{StoreError, StoreResult};
 use base64ct::{Base64, Encoding};
 use chacha20poly1305::{
-    aead::{Aead, KeyInit, Payload},
     XChaCha20Poly1305, XNonce,
+    aead::{Aead, KeyInit, Payload},
 };
+use getrandom;
 use secrecy::{ExposeSecret, SecretBox};
 use zeroize::Zeroize;
 
@@ -46,6 +46,8 @@ impl MasterKey {
     /// Generate a new random 32-byte key from the OS RNG.
     pub fn generate() -> Self {
         let mut k = [0u8; 32];
+        // System RNG failure is unrecoverable; panic is the correct fail-safe.
+        #[allow(clippy::expect_used)]
         getrandom::fill(&mut k).expect("system RNG unavailable");
         let out = Self::from_bytes(k);
         k.zeroize();
@@ -57,11 +59,15 @@ impl MasterKey {
     pub fn to_base64(&self) -> String {
         let bytes = self.0.expose_secret();
         let mut out = vec![0u8; 64];
+        // Buffer is sized for the input; encode cannot fail here.
+        #[allow(clippy::expect_used)]
         let n = Base64::encode(bytes, &mut out)
             .expect("output buffer sized for 32-byte input")
             .len();
         out.truncate(n);
         // out is plain text base64, fine to surface to operator
+        // base64 output is ASCII; from_utf8 is infallible here.
+        #[allow(clippy::expect_used)]
         String::from_utf8(out).expect("base64 is ascii")
     }
 
@@ -76,10 +82,18 @@ const NONCE_LEN: usize = 24;
 pub fn seal(key: &MasterKey, plaintext: &[u8], aad: &[u8]) -> StoreResult<Vec<u8>> {
     let cipher = key.cipher();
     let mut nonce = [0u8; NONCE_LEN];
+    // System RNG failure is unrecoverable; panic is the correct fail-safe.
+    #[allow(clippy::expect_used)]
     getrandom::fill(&mut nonce).expect("system RNG unavailable");
     let xnonce = XNonce::from_slice(&nonce);
     let ct = cipher
-        .encrypt(xnonce, Payload { msg: plaintext, aad })
+        .encrypt(
+            xnonce,
+            Payload {
+                msg: plaintext,
+                aad,
+            },
+        )
         .map_err(|_| StoreError::Crypto)?;
     let mut out = Vec::with_capacity(NONCE_LEN + ct.len());
     out.extend_from_slice(&nonce);

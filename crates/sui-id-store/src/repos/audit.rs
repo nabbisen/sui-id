@@ -33,7 +33,11 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<AuditLogRow> {
             .map(|s| s.parse())
             .transpose()
             .map_err(|e: uuid::Error| {
-                rusqlite::Error::FromSqlConversionFailure(1, rusqlite::types::Type::Text, Box::new(e))
+                rusqlite::Error::FromSqlConversionFailure(
+                    1,
+                    rusqlite::types::Type::Text,
+                    Box::new(e),
+                )
             })?,
         action: row.get(2)?,
         target: row.get(3)?,
@@ -120,7 +124,8 @@ pub async fn append(db: &Database, row: &AuditLogRow) -> StoreResult<()> {
         )?;
         tx.commit()?;
         Ok(())
-    }).await
+    })
+    .await
 }
 
 pub async fn recent(db: &Database, limit: i64) -> StoreResult<Vec<AuditLogRow>> {
@@ -134,7 +139,6 @@ pub async fn recent(db: &Database, limit: i64) -> StoreResult<Vec<AuditLogRow>> 
         Ok(rows)
     }).await
 }
-
 
 /// Fetch recent audit rows, optionally filtered by event-name prefix.
 ///
@@ -191,39 +195,41 @@ pub struct ChainVerifyReport {
 /// thousand rows): more than enough to catch a recent tampering
 /// attempt, cheap enough to not noticeably extend boot time.
 pub async fn verify_chain_tail(db: &Database, limit: i64) -> StoreResult<ChainVerifyReport> {
-    let rows: Vec<(i64, AuditLogRow, String, String)> = db.with_conn(move |conn| {
-        let mut stmt = conn.prepare(
-            "SELECT seq, at, actor, action, target, result, note, prev_hash, hash \
+    let rows: Vec<(i64, AuditLogRow, String, String)> = db
+        .with_conn(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT seq, at, actor, action, target, result, note, prev_hash, hash \
              FROM audit_log ORDER BY seq DESC LIMIT ?1",
-        )?;
-        let collected = stmt
-            .query_map([limit], |r| {
-                let seq: i64 = r.get(0)?;
-                let row = AuditLogRow {
-                    at: r.get(1)?,
-                    actor: r
-                        .get::<_, Option<String>>(2)?
-                        .map(|s| s.parse())
-                        .transpose()
-                        .map_err(|e: uuid::Error| {
-                            rusqlite::Error::FromSqlConversionFailure(
-                                2,
-                                rusqlite::types::Type::Text,
-                                Box::new(e),
-                            )
-                        })?,
-                    action: r.get(3)?,
-                    target: r.get(4)?,
-                    result: r.get(5)?,
-                    note: r.get(6)?,
-                };
-                let prev: String = r.get(7)?;
-                let hash: String = r.get(8)?;
-                Ok((seq, row, prev, hash))
-            })?
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(collected)
-    }).await?;
+            )?;
+            let collected = stmt
+                .query_map([limit], |r| {
+                    let seq: i64 = r.get(0)?;
+                    let row = AuditLogRow {
+                        at: r.get(1)?,
+                        actor: r
+                            .get::<_, Option<String>>(2)?
+                            .map(|s| s.parse())
+                            .transpose()
+                            .map_err(|e: uuid::Error| {
+                                rusqlite::Error::FromSqlConversionFailure(
+                                    2,
+                                    rusqlite::types::Type::Text,
+                                    Box::new(e),
+                                )
+                            })?,
+                        action: r.get(3)?,
+                        target: r.get(4)?,
+                        result: r.get(5)?,
+                        note: r.get(6)?,
+                    };
+                    let prev: String = r.get(7)?;
+                    let hash: String = r.get(8)?;
+                    Ok((seq, row, prev, hash))
+                })?
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(collected)
+        })
+        .await?;
 
     let mut report = ChainVerifyReport {
         checked: 0,
@@ -248,6 +254,7 @@ pub async fn verify_chain_tail(db: &Database, limit: i64) -> StoreResult<ChainVe
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::expect_used, clippy::unwrap_used)]
     use super::*;
     use crate::crypto::MasterKey;
     use sui_id_shared::ids::UserId;
@@ -272,7 +279,9 @@ mod tests {
     async fn appended_rows_form_a_consistent_chain() {
         let db = fresh_db();
         for i in 0..5 {
-            append(&db, &sample_row(&format!("act.{i}"))).await.expect("append");
+            append(&db, &sample_row(&format!("act.{i}")))
+                .await
+                .expect("append");
         }
         let r = verify_chain_tail(&db, 100).await.expect("verify");
         assert_eq!(r.checked, 5);
@@ -286,12 +295,11 @@ mod tests {
         append(&db, &sample_row("first")).await.expect("append");
         let (prev, hash): (String, String) = db
             .with_conn(|c| {
-                let (p, h): (String, String) = c
-                    .query_row(
-                        "SELECT prev_hash, hash FROM audit_log ORDER BY seq ASC LIMIT 1",
-                        [],
-                        |r| Ok((r.get(0)?, r.get(1)?)),
-                    )?;
+                let (p, h): (String, String) = c.query_row(
+                    "SELECT prev_hash, hash FROM audit_log ORDER BY seq ASC LIMIT 1",
+                    [],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )?;
                 Ok((p, h))
             })
             .await
@@ -310,10 +318,7 @@ mod tests {
         // Rewrite row #2's `action` directly via SQL — exactly the
         // attack the chain is supposed to detect.
         db.with_conn(|c| {
-            c.execute(
-                "UPDATE audit_log SET action = 'tampered' WHERE seq = 2",
-                [],
-            )?;
+            c.execute("UPDATE audit_log SET action = 'tampered' WHERE seq = 2", [])?;
             Ok(())
         })
         .await
@@ -340,7 +345,9 @@ mod tests {
         })
         .await
         .unwrap();
-        append(&db, &sample_row("post-upgrade")).await.expect("append");
+        append(&db, &sample_row("post-upgrade"))
+            .await
+            .expect("append");
 
         let r = verify_chain_tail(&db, 100).await.expect("verify");
         assert_eq!(r.checked, 1);
@@ -398,7 +405,8 @@ pub async fn recent_for_user(
             .query_map(rusqlite::params![uid, limit], map)?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(rows)
-    }).await
+    })
+    .await
 }
 
 /// One bucket of a counted audit-action time series.
@@ -485,20 +493,17 @@ pub async fn count_by_action_in_window(
                 let bucket_unix: i64 = row.get(0)?;
                 let action: String = row.get(1)?;
                 let count: i64 = row.get(2)?;
-                let bucket_start = chrono::DateTime::<chrono::Utc>::from_timestamp(
-                    bucket_unix,
-                    0,
-                )
-                .ok_or_else(|| {
-                    rusqlite::Error::FromSqlConversionFailure(
-                        0,
-                        rusqlite::types::Type::Integer,
-                        Box::new(std::io::Error::new(
-                            std::io::ErrorKind::InvalidData,
-                            "bucket_unix out of range",
-                        )),
-                    )
-                })?;
+                let bucket_start = chrono::DateTime::<chrono::Utc>::from_timestamp(bucket_unix, 0)
+                    .ok_or_else(|| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            0,
+                            rusqlite::types::Type::Integer,
+                            Box::new(std::io::Error::new(
+                                std::io::ErrorKind::InvalidData,
+                                "bucket_unix out of range",
+                            )),
+                        )
+                    })?;
                 Ok(ActionCountBucket {
                     bucket_start,
                     action,
@@ -507,7 +512,8 @@ pub async fn count_by_action_in_window(
             })?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(rows)
-    }).await
+    })
+    .await
 }
 
 /// Action prefix patterns that are surfaced on the admin dashboard
@@ -530,10 +536,7 @@ pub const DASHBOARD_IMPORTANT_PREFIXES: &[&str] = &[
 
 /// Fetch the `n` most-recent audit rows whose `action` starts with any
 /// of [`DASHBOARD_IMPORTANT_PREFIXES`]. Used by the admin dashboard.
-pub async fn recent_important(
-    db: &Database,
-    n: usize,
-) -> StoreResult<Vec<AuditLogRow>> {
+pub async fn recent_important(db: &Database, n: usize) -> StoreResult<Vec<AuditLogRow>> {
     let n_i64 = n as i64;
     let clauses: Vec<String> = (0..DASHBOARD_IMPORTANT_PREFIXES.len())
         .map(|i| format!("action LIKE ?{}", i + 2))
@@ -546,8 +549,7 @@ pub async fn recent_important(
     );
     db.with_conn(move |conn| {
         let mut stmt = conn.prepare(&sql)?;
-        let mut params: Vec<rusqlite::types::Value> =
-            vec![rusqlite::types::Value::Integer(n_i64)];
+        let mut params: Vec<rusqlite::types::Value> = vec![rusqlite::types::Value::Integer(n_i64)];
         for p in DASHBOARD_IMPORTANT_PREFIXES {
             params.push(rusqlite::types::Value::Text(format!("{p}%")));
         }
@@ -555,5 +557,6 @@ pub async fn recent_important(
             .query_map(rusqlite::params_from_iter(params.iter()), map)?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(rows)
-    }).await
+    })
+    .await
 }

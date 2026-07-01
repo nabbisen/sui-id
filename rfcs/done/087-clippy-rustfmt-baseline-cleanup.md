@@ -1,6 +1,6 @@
 # RFC 087 — Clippy and Rustfmt Baseline Cleanup (Rust 1.96)
 
-**Status.** Proposed
+**Status.** Implemented (v0.65.1)
 **Tracks.** Toolchain hygiene / technical debt. Category D.
 **Touches.** `crates/sui-id-web/src/` (pages and components),
 `crates/sui-id-shared/src/secrets.rs`. No behaviour change.

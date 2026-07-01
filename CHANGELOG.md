@@ -5,6 +5,84 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.65.1] — 2026-06-14
+
+**Maintenance: RFC 087 — clippy and rustfmt baseline cleanup (Rust 1.96).**
+
+Resolves accumulated toolchain drift so the CI-signal build is clean under
+the current stable toolchain (`rustc 1.96.0`). No logic change anywhere.
+
+### Fixed — clippy (`--workspace --all-targets -D warnings`)
+
+**`sui-id-web`** (16 findings cleared):
+
+- `empty_line_after_doc_comments` — removed stray blank lines between doc
+  comments and the items they document in `auth.rs`, `confirm.rs`,
+  `dashboard.rs`, `settings.rs`, and `setup.rs`.
+- `doc_lazy_continuation` — inserted a blank `//!` line in `chrome.rs` to
+  break the list-continuation misparse.
+- `unit_arg` — two `view! { <></> }.into_any()` empty-fragment calls in
+  `auth.rs` rewritten to the `let _: () = …; ().into_any()` form clippy
+  suggests (Leptos SSR empty-view pattern, no behaviour change).
+- `unnecessary_map_or` — one `map_or(false, …)` in `dashboard.rs` replaced
+  with `is_some_and(…)`.
+- `no_effect_replace` — two no-op `.replace(''', "\'")` calls (replacing
+  a character with itself) removed from `sessions.rs`; the FnMut closure
+  capture was updated to `.clone()` so the per-iteration move is safe.
+- Redundant `use leptos::prelude::*;` removed from 13 child modules under
+  `pages/me_security/` and `pages/settings/`; the symbol comes in via the
+  parent module's glob re-export and the own import was always redundant.
+
+**`sui-id-shared`** (2 findings cleared):
+
+- `expect_used` in `secrets.rs:random_base64url` — two `#[allow]` attrs
+  with rationale comments: the `getrandom` call panics on RNG failure (correct
+  fail-safe) and the `from_utf8` call is infallible on base64url output.
+
+**`sui-id-store`** (16 lib findings + test-target findings cleared):
+
+- `expect_used` — `crypto.rs` (RNG + buffer-size + ascii-infallible),
+  `db.rs` (mutex-poisoned × 4): targeted `#[allow]` with rationale.
+- `should_implement_trait` — `Role::from_str` renamed `Role::from_db_str`
+  to avoid confusion with `std::str::FromStr`; the one call site in
+  `users.rs` updated.
+- `Default` derive — manual `impl Default for HibpMode` replaced with
+  `#[derive(Default)]` + `#[default]` on the `Warn` variant.
+- `clone_on_copy` — `EmailOutboxId` is `Copy`; `.clone()` removed in
+  `email_outbox.rs`.
+- `collapsible_if` — two nested `if let Ok(…) { if … }` blocks in
+  `refresh_tokens.rs` collapsed to `if let Ok(…) && … {}` (constant-time
+  compare path; evaluation order preserved).
+- `needless_question_mark` — `Ok(expr?)` simplified to `expr` in
+  `user_totp.rs` and `user_webauthn_credentials.rs`.
+- `useless_conversion` — `StoreError::NotFound.into()` → `StoreError::NotFound`
+  in `users.rs`.
+- `items_after_test_module` — `mod tests` block moved to the bottom of
+  `email_outbox.rs`.
+- Test-target lints (`expect_used`, `unwrap_used`, `clone_on_copy`, `panic`)
+  suppressed with scoped `#![allow]` inside each `mod tests` block and on
+  `#[cfg(test)]` helper functions in `migrations.rs`; test logic unchanged.
+
+**`sui-id-i18n`** (3 findings cleared):
+
+- `manual_is_multiple_of` — `remaining % 3 == 0` → `remaining.is_multiple_of(3)`
+  in `formatters.rs`.
+- `non_minimal_char_comparison` — `split(|c: char| c == '-' || c == '_')` →
+  `split(['-', '_'])` in `lib.rs`.
+- `Default` derive — manual `impl Default for Locale` replaced with
+  `#[derive(Default)]` + `#[default]` on `Locale::Ja`.
+
+### Fixed — rustfmt (`cargo fmt --check --all`)
+
+All four buildable crates are now default-fmt-clean. Previously, 31 files
+across `sui-id-web`, `sui-id-shared`, `sui-id-store`, and `sui-id-i18n`
+had diffs against `rustfmt 1.9.0` defaults (no `rustfmt.toml`). All
+formatted; no `rustfmt.toml` introduced.
+
+CI invariants hold: `text-leaks` = 0, `inline-style-bound` = 1,
+`css-tokens` resolves, `semantic-palette-parity` = 36.
+78/78 buildable-crate tests pass.
+
 ## [0.65.0] — 2026-06-14
 
 **Accessibility: WCAG AA contrast correction — design-token foundation.**

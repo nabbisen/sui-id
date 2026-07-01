@@ -88,23 +88,20 @@ pub enum StatusKind {
 /// Render a status badge with localised text and the matching CSS
 /// class. The badge sits inline; wrap it in a `<td>` or other parent
 /// at the call site if needed.
-pub fn status_badge(
-    t: &'static sui_id_i18n::Strings,
-    kind: StatusKind,
-) -> impl IntoView {
+pub fn status_badge(t: &'static sui_id_i18n::Strings, kind: StatusKind) -> impl IntoView {
     let (class, text) = match kind {
-        StatusKind::Active     => ("badge badge--ok",     t.status_active),
-        StatusKind::Disabled   => ("badge badge--warn",   t.status_disabled),
-        StatusKind::Deleted    => ("badge badge--danger", t.status_deleted),
-        StatusKind::Admin      => ("badge badge--accent", t.status_admin),
-        StatusKind::On         => ("badge badge--ok",     t.status_on),
-        StatusKind::Off        => ("badge",               t.status_off),
-        StatusKind::InUse      => ("badge badge--ok",     t.status_in_use),
-        StatusKind::Retired    => ("badge badge--muted",  t.status_retired),
-        StatusKind::Published  => ("badge badge--ok",     t.status_published),
-        StatusKind::Pending    => ("badge badge--info",   t.status_pending),
-        StatusKind::Healthy    => ("badge badge--ok",     t.status_healthy),
-        StatusKind::Unhealthy  => ("badge badge--danger", t.status_unhealthy),
+        StatusKind::Active => ("badge badge--ok", t.status_active),
+        StatusKind::Disabled => ("badge badge--warn", t.status_disabled),
+        StatusKind::Deleted => ("badge badge--danger", t.status_deleted),
+        StatusKind::Admin => ("badge badge--accent", t.status_admin),
+        StatusKind::On => ("badge badge--ok", t.status_on),
+        StatusKind::Off => ("badge", t.status_off),
+        StatusKind::InUse => ("badge badge--ok", t.status_in_use),
+        StatusKind::Retired => ("badge badge--muted", t.status_retired),
+        StatusKind::Published => ("badge badge--ok", t.status_published),
+        StatusKind::Pending => ("badge badge--info", t.status_pending),
+        StatusKind::Healthy => ("badge badge--ok", t.status_healthy),
+        StatusKind::Unhealthy => ("badge badge--danger", t.status_unhealthy),
     };
     view! { <span class=class>{text}</span> }
 }

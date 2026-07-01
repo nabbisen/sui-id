@@ -1,9 +1,9 @@
 //! Page renderers for the "users" screen domain (RFC 065).
 
-use leptos::prelude::*;
-use crate::layout::Shell;
-use super::common::*;
 use super::audit::audit_row_view;
+use super::common::*;
+use crate::layout::Shell;
+use leptos::prelude::*;
 use sui_id_shared::api::UserSummary;
 
 fn user_row_view(
@@ -29,7 +29,8 @@ fn user_row_view(
     };
 
     let mfa_cell = if mfa_enabled {
-        view! { <td>{crate::components::status_badge(t, crate::components::StatusKind::On)}</td> }.into_any()
+        view! { <td>{crate::components::status_badge(t, crate::components::StatusKind::On)}</td> }
+            .into_any()
     } else {
         view! { <td><span class="muted">{t.status_off}</span></td> }.into_any()
     };
@@ -40,7 +41,8 @@ fn user_row_view(
         view! { <td><span class="muted">{t.empty_dash}</span></td> }.into_any()
     } else {
         let detail_url = format!("/admin/users/{id_str}");
-        view! { <td><a href=detail_url class="button secondary">{t.button_view_detail}</a></td> }.into_any()
+        view! { <td><a href=detail_url class="button secondary">{t.button_view_detail}</a></td> }
+            .into_any()
     };
 
     view! {
@@ -52,7 +54,6 @@ fn user_row_view(
         </tr>
     }
 }
-
 
 pub fn render_users(
     can_write: bool,
@@ -180,7 +181,6 @@ pub fn render_users_new(
 
 // ---------- clients ----------
 
-
 pub struct UserDetailData {
     pub user_id: String,
     pub username: String,
@@ -198,16 +198,17 @@ pub struct UserDetailData {
     pub csrf_token: String,
 }
 
-
 pub struct UserDetailSession {
     pub started: chrono::DateTime<chrono::Utc>,
     pub expires: chrono::DateTime<chrono::Utc>,
     pub factors: String,
 }
 
-
 pub fn render_user_detail(
-    can_write: bool,data: UserDetailData, lang: sui_id_i18n::Locale) -> String {
+    can_write: bool,
+    data: UserDetailData,
+    lang: sui_id_i18n::Locale,
+) -> String {
     render(move || {
         let t = lang.strings();
         let badge = if data.is_disabled {
@@ -228,25 +229,31 @@ pub fn render_user_detail(
             view! { <span class="muted">{t.profile_mfa_status_not_configured}</span> }.into_any()
         };
 
-        let session_rows: Vec<_> = data.sessions.iter().map(|s| {
-            let started = fmt_time(s.started);
-            let expires = fmt_time(s.expires);
-            let factors = s.factors.clone();
-            view! {
-                <tr>
-                    <td class="muted">{started}</td>
-                    <td class="muted">{expires}</td>
-                    <td>{factors}</td>
-                </tr>
-            }
-        }).collect();
+        let session_rows: Vec<_> = data
+            .sessions
+            .iter()
+            .map(|s| {
+                let started = fmt_time(s.started);
+                let expires = fmt_time(s.expires);
+                let factors = s.factors.clone();
+                view! {
+                    <tr>
+                        <td class="muted">{started}</td>
+                        <td class="muted">{expires}</td>
+                        <td>{factors}</td>
+                    </tr>
+                }
+            })
+            .collect();
 
-        let audit_rows: Vec<_> = data.recent_audit.iter().map(|e| {
-            audit_row_view(t, e.clone())
-        }).collect();
+        let audit_rows: Vec<_> = data
+            .recent_audit
+            .iter()
+            .map(|e| audit_row_view(t, e.clone()))
+            .collect();
 
         let disable_confirm_url = format!("/admin/users/{uid}/disable-confirm");
-        let delete_confirm_url  = format!("/admin/users/{uid}/delete-confirm");
+        let delete_confirm_url = format!("/admin/users/{uid}/delete-confirm");
         let reset_mfa_confirm_url = format!("/admin/users/{uid}/mfa-reset-confirm");
 
         view! {

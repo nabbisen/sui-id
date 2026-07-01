@@ -15,8 +15,8 @@ use crate::models::RefreshTokenRow;
 use chrono::{DateTime, Utc};
 use rusqlite::params;
 use sui_id_shared::{
-    ids::{ClientId, UserId},
     FamilyId, RawRefreshToken, RefreshTokenHash, RefreshTokenId,
+    ids::{ClientId, UserId},
 };
 
 fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<RefreshTokenRow> {
@@ -26,14 +26,12 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<RefreshTokenRow> {
     })?;
     Ok(RefreshTokenRow {
         id: RefreshTokenId::from_stored(row.get::<_, String>(0)?),
-        user_id: row
-            .get::<_, String>(2)?
-            .parse()
-            .map_err(|e| rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, Box::new(e)))?,
-        client_id: row
-            .get::<_, String>(3)?
-            .parse()
-            .map_err(|e| rusqlite::Error::FromSqlConversionFailure(3, rusqlite::types::Type::Text, Box::new(e)))?,
+        user_id: row.get::<_, String>(2)?.parse().map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, Box::new(e))
+        })?,
+        client_id: row.get::<_, String>(3)?.parse().map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(3, rusqlite::types::Type::Text, Box::new(e))
+        })?,
         scope: row.get(4)?,
         expires_at: row.get::<_, DateTime<Utc>>(5)?,
         revoked_at: row.get::<_, Option<DateTime<Utc>>>(6)?,
@@ -51,7 +49,11 @@ const AAD: &[u8] = b"sui-id/refresh_token/v1";
 /// sealed with the master key before writing. The `RefreshTokenRow` itself
 /// carries no plaintext field — the plaintext is only held by the caller's
 /// `RawRefreshToken` value until it is delivered to the client.
-pub async fn insert(db: &Database, row: &RefreshTokenRow, token: &RawRefreshToken) -> StoreResult<()> {
+pub async fn insert(
+    db: &Database,
+    row: &RefreshTokenRow,
+    token: &RawRefreshToken,
+) -> StoreResult<()> {
     let sealed = seal(db.key(), token.expose().as_bytes(), AAD)?;
     let hash = RefreshTokenHash::of(token).as_bytes().to_vec();
     let methods_json = serde_json::to_string(&row.auth_methods)?;
@@ -78,7 +80,8 @@ pub async fn insert(db: &Database, row: &RefreshTokenRow, token: &RawRefreshToke
             ],
         )?;
         Ok(())
-    }).await
+    })
+    .await
 }
 
 /// Look up an active token row by plaintext value.
@@ -99,46 +102,50 @@ pub async fn find_active(db: &Database, token: &RawRefreshToken) -> StoreResult<
     let pt_bytes: Vec<u8> = token.expose().as_bytes().to_vec();
 
     // --- fast path: indexed lookup ---
-    let fast: Option<RefreshTokenRow> = db.with_conn(move |conn| {
-        let mut stmt = conn.prepare(
-            "SELECT id, token_enc, user_id, client_id, scope, expires_at, revoked_at, \
+    let fast: Option<RefreshTokenRow> = db
+        .with_conn(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT id, token_enc, user_id, client_id, scope, expires_at, revoked_at, \
              created_at, auth_methods, family_id \
              FROM refresh_tokens \
              WHERE token_hash = ?1 AND revoked_at IS NULL AND expires_at > ?2",
-        )?;
-        match stmt.query_row(params![hash, now], map) {
-            Ok(row) => Ok(Some(row)),
-            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-            Err(e) => Err(StoreError::from(e)),
-        }
-    }).await?;
+            )?;
+            match stmt.query_row(params![hash, now], map) {
+                Ok(row) => Ok(Some(row)),
+                Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+                Err(e) => Err(StoreError::from(e)),
+            }
+        })
+        .await?;
     if let Some(row) = fast {
         return Ok(row);
     }
 
     // --- fallback: decrypt-scan for NULL token_hash rows (backfill pending) ---
-    let candidates: Vec<(RefreshTokenRow, Vec<u8>)> = db.with_conn(move |conn| {
-        let mut stmt = conn.prepare(
-            "SELECT id, token_enc, user_id, client_id, scope, expires_at, revoked_at, \
+    let candidates: Vec<(RefreshTokenRow, Vec<u8>)> = db
+        .with_conn(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT id, token_enc, user_id, client_id, scope, expires_at, revoked_at, \
              created_at, auth_methods, family_id \
              FROM refresh_tokens \
              WHERE token_hash IS NULL AND revoked_at IS NULL AND expires_at > ?1",
-        )?;
-        let rows = stmt
-            .query_map([now], |r| {
-                let row = map(r)?;
-                let enc: Vec<u8> = r.get(1)?;
-                Ok((row, enc))
-            })?
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(rows)
-    }).await?;
+            )?;
+            let rows = stmt
+                .query_map([now], |r| {
+                    let row = map(r)?;
+                    let enc: Vec<u8> = r.get(1)?;
+                    Ok((row, enc))
+                })?
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(rows)
+        })
+        .await?;
 
     for (row, enc) in candidates {
-        if let Ok(opened) = open(db.key(), &enc, AAD) {
-            if opened.ct_eq(&pt_bytes).into() {
-                return Ok(row);
-            }
+        if let Ok(opened) = open(db.key(), &enc, AAD)
+            && opened.ct_eq(&pt_bytes).into()
+        {
+            return Ok(row);
         }
     }
     Err(StoreError::NotFound)
@@ -152,7 +159,8 @@ pub async fn revoke(db: &Database, id: &RefreshTokenId) -> StoreResult<()> {
             params![Utc::now(), id],
         )?;
         Ok(())
-    }).await
+    })
+    .await
 }
 
 pub async fn revoke_all_for_user(db: &Database, user_id: UserId) -> StoreResult<usize> {
@@ -162,7 +170,8 @@ pub async fn revoke_all_for_user(db: &Database, user_id: UserId) -> StoreResult<
             params![Utc::now(), user_id.to_string()],
         )?;
         Ok(n)
-    }).await
+    })
+    .await
 }
 
 /// Same as [`revoke_all_for_user`] but runs inside a caller-owned
@@ -186,7 +195,8 @@ pub async fn revoke_all_for_client(db: &Database, client_id: ClientId) -> StoreR
             params![Utc::now(), client_id.to_string()],
         )?;
         Ok(n)
-    }).await
+    })
+    .await
 }
 
 /// Delete expired refresh tokens. Retains revoked-but-unexpired rows so
@@ -204,7 +214,8 @@ pub async fn purge_expired(db: &Database) -> StoreResult<usize> {
             [Utc::now()],
         )?;
         Ok(n)
-    }).await
+    })
+    .await
 }
 
 /// Find a refresh token row by plaintext, *including* revoked rows
@@ -229,46 +240,50 @@ pub async fn find_any(db: &Database, token: &RawRefreshToken) -> StoreResult<Ref
     let pt_bytes: Vec<u8> = token.expose().as_bytes().to_vec();
 
     // --- fast path: indexed lookup (includes revoked rows) ---
-    let fast: Option<RefreshTokenRow> = db.with_conn(move |conn| {
-        let mut stmt = conn.prepare(
-            "SELECT id, token_enc, user_id, client_id, scope, expires_at, revoked_at, \
+    let fast: Option<RefreshTokenRow> = db
+        .with_conn(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT id, token_enc, user_id, client_id, scope, expires_at, revoked_at, \
              created_at, auth_methods, family_id \
              FROM refresh_tokens \
              WHERE token_hash = ?1",
-        )?;
-        match stmt.query_row([hash], map) {
-            Ok(row) => Ok(Some(row)),
-            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-            Err(e) => Err(StoreError::from(e)),
-        }
-    }).await?;
+            )?;
+            match stmt.query_row([hash], map) {
+                Ok(row) => Ok(Some(row)),
+                Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+                Err(e) => Err(StoreError::from(e)),
+            }
+        })
+        .await?;
     if let Some(row) = fast {
         return Ok(row);
     }
 
     // --- fallback: decrypt-scan for NULL token_hash rows (backfill pending) ---
-    let candidates: Vec<(RefreshTokenRow, Vec<u8>)> = db.with_conn(move |conn| {
-        let mut stmt = conn.prepare(
-            "SELECT id, token_enc, user_id, client_id, scope, expires_at, revoked_at, \
+    let candidates: Vec<(RefreshTokenRow, Vec<u8>)> = db
+        .with_conn(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT id, token_enc, user_id, client_id, scope, expires_at, revoked_at, \
              created_at, auth_methods, family_id \
              FROM refresh_tokens \
              WHERE token_hash IS NULL",
-        )?;
-        let rows = stmt
-            .query_map([], |r| {
-                let row = map(r)?;
-                let enc: Vec<u8> = r.get(1)?;
-                Ok((row, enc))
-            })?
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(rows)
-    }).await?;
+            )?;
+            let rows = stmt
+                .query_map([], |r| {
+                    let row = map(r)?;
+                    let enc: Vec<u8> = r.get(1)?;
+                    Ok((row, enc))
+                })?
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(rows)
+        })
+        .await?;
 
     for (row, enc) in candidates {
-        if let Ok(opened) = open(db.key(), &enc, AAD) {
-            if opened.ct_eq(&pt_bytes).into() {
-                return Ok(row);
-            }
+        if let Ok(opened) = open(db.key(), &enc, AAD)
+            && opened.ct_eq(&pt_bytes).into()
+        {
+            return Ok(row);
         }
     }
     Err(StoreError::NotFound)
@@ -285,7 +300,8 @@ pub async fn revoke_family(db: &Database, family_id: &FamilyId) -> StoreResult<u
             params![Utc::now(), family_id],
         )?;
         Ok(n)
-    }).await
+    })
+    .await
 }
 
 /// Re-seal every `token_enc` row under `new_key`. Used by
@@ -332,19 +348,20 @@ pub fn reseal_all(
 ///
 /// Returns the number of rows successfully backfilled.
 pub async fn backfill_token_hashes(db: &Database) -> StoreResult<usize> {
-    let rows_to_fill: Vec<(String, Vec<u8>)> = db.with_conn(move |conn| {
-        let mut stmt = conn.prepare(
-            "SELECT id, token_enc FROM refresh_tokens WHERE token_hash IS NULL",
-        )?;
-        let rows = stmt
-            .query_map([], |r| {
-                let id: String = r.get(0)?;
-                let enc: Vec<u8> = r.get(1)?;
-                Ok((id, enc))
-            })?
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(rows)
-    }).await?;
+    let rows_to_fill: Vec<(String, Vec<u8>)> = db
+        .with_conn(move |conn| {
+            let mut stmt =
+                conn.prepare("SELECT id, token_enc FROM refresh_tokens WHERE token_hash IS NULL")?;
+            let rows = stmt
+                .query_map([], |r| {
+                    let id: String = r.get(0)?;
+                    let enc: Vec<u8> = r.get(1)?;
+                    Ok((id, enc))
+                })?
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(rows)
+        })
+        .await?;
 
     let mut count = 0usize;
     for (id, enc) in rows_to_fill {
@@ -372,13 +389,16 @@ pub async fn backfill_token_hashes(db: &Database) -> StoreResult<usize> {
         let hash = RefreshTokenHash::of(&RawRefreshToken::from_untrusted(plain_str.to_owned()))
             .as_bytes()
             .to_vec();
-        match db.with_conn(move |conn| {
-            conn.execute(
+        match db
+            .with_conn(move |conn| {
+                conn.execute(
                 "UPDATE refresh_tokens SET token_hash = ?1 WHERE id = ?2 AND token_hash IS NULL",
                 rusqlite::params![hash, id],
             )?;
-            Ok(())
-        }).await {
+                Ok(())
+            })
+            .await
+        {
             Ok(()) => count += 1,
             Err(e) => {
                 tracing::warn!(id = %id_for_log, error = %e, "refresh_token backfill: write failed; skipping");

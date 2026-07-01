@@ -26,20 +26,20 @@ pub enum Role {
 
 impl Role {
     /// Parse from the database string value.
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn from_db_str(s: &str) -> Option<Self> {
         match s {
-            "admin"   => Some(Self::Admin),
+            "admin" => Some(Self::Admin),
             "auditor" => Some(Self::Auditor),
-            "user"    => Some(Self::User),
-            _         => None,
+            "user" => Some(Self::User),
+            _ => None,
         }
     }
     /// Database / API string representation.
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Admin   => "admin",
+            Self::Admin => "admin",
             Self::Auditor => "auditor",
-            Self::User    => "user",
+            Self::User => "user",
         }
     }
     /// True if the role permits administrative READ access (admin or auditor).
@@ -111,7 +111,6 @@ pub struct CredentialRow {
     pub updated_at: DateTime<Utc>,
 }
 
-
 /// Per-client consent screen policy (RFC 038).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum ConsentPolicy {
@@ -128,17 +127,17 @@ pub enum ConsentPolicy {
 impl ConsentPolicy {
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::None      => "none",
+            Self::None => "none",
             Self::FirstTime => "first_time",
-            Self::Always    => "always",
+            Self::Always => "always",
         }
     }
 
     pub fn parse(s: &str) -> Self {
         match s {
             "first_time" => Self::FirstTime,
-            "always"     => Self::Always,
-            _            => Self::None,
+            "always" => Self::Always,
+            _ => Self::None,
         }
     }
 }
@@ -167,15 +166,14 @@ pub struct ClientRow {
     pub updated_at: DateTime<Utc>,
 }
 
-
 /// A stored user consent record (RFC 038).
 #[derive(Debug, Clone)]
 pub struct UserConsentRow {
-    pub user_id:        UserId,
-    pub client_id:      ClientId,
+    pub user_id: UserId,
+    pub client_id: ClientId,
     /// Space-separated granted scope tokens.
     pub granted_scopes: String,
-    pub granted_at:     DateTime<Utc>,
+    pub granted_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone)]
@@ -460,13 +458,14 @@ pub struct PasswordResetTokenRow {
 /// HIBP (Pwned Passwords) check operational mode. Stored as the
 /// string `'off' | 'warn' | 'block'` in `server_settings.hibp_mode`
 /// (CHECK-constrained), see migration 0017.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum HibpMode {
     /// No check performed; no outbound request made. The right
     /// setting for offline / air-gapped deployments.
     Off,
     /// Check performed; a hit is recorded as an audit event but
     /// the password is accepted. Default at install time.
+    #[default]
     Warn,
     /// Check performed; a hit refuses the password.
     Block,
@@ -487,12 +486,6 @@ impl HibpMode {
             "block" => Some(Self::Block),
             _ => None,
         }
-    }
-}
-
-impl Default for HibpMode {
-    fn default() -> Self {
-        Self::Warn
     }
 }
 
@@ -538,10 +531,10 @@ pub enum EmailOutboxState {
 impl EmailOutboxState {
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Queued  => "queued",
+            Self::Queued => "queued",
             Self::Sending => "sending",
-            Self::Sent    => "sent",
-            Self::Failed  => "failed",
+            Self::Sent => "sent",
+            Self::Failed => "failed",
         }
     }
 }
@@ -550,13 +543,13 @@ impl std::str::FromStr for EmailOutboxState {
     type Err = crate::errors::StoreError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "queued"  => Ok(Self::Queued),
+            "queued" => Ok(Self::Queued),
             "sending" => Ok(Self::Sending),
-            "sent"    => Ok(Self::Sent),
-            "failed"  => Ok(Self::Failed),
-            other     => Err(crate::errors::StoreError::InvalidData(
-                format!("unknown outbox state: {other:?}"),
-            )),
+            "sent" => Ok(Self::Sent),
+            "failed" => Ok(Self::Failed),
+            other => Err(crate::errors::StoreError::InvalidData(format!(
+                "unknown outbox state: {other:?}"
+            ))),
         }
     }
 }
@@ -565,19 +558,18 @@ impl std::str::FromStr for EmailOutboxState {
 /// are AAD-bound ciphertext sealed under the master key.
 #[derive(Debug, Clone)]
 pub struct EmailOutboxRow {
-    pub id:              EmailOutboxId,
-    pub state:           EmailOutboxState,
+    pub id: EmailOutboxId,
+    pub state: EmailOutboxState,
     /// Stable template identifier, e.g. `"forgot_password"`.
-    pub template:        String,
-    pub recipient_enc:   Vec<u8>,
-    pub payload_enc:     Vec<u8>,
-    pub attempt_count:   i64,
+    pub template: String,
+    pub recipient_enc: Vec<u8>,
+    pub payload_enc: Vec<u8>,
+    pub attempt_count: i64,
     pub next_attempt_at: DateTime<Utc>,
-    pub last_error:      Option<String>,
+    pub last_error: Option<String>,
     /// BCP-47 locale tag resolved at enqueue time from the recipient's
     /// `preferred_lang`. `None` means "fall back to server default".
-    pub locale:          Option<String>,
-    pub created_at:      DateTime<Utc>,
-    pub updated_at:      DateTime<Utc>,
+    pub locale: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
-

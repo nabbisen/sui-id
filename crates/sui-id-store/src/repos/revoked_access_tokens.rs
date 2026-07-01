@@ -35,7 +35,8 @@ pub async fn insert(db: &Database, row: &RevokedAccessTokenRow) -> StoreResult<(
             ],
         )?;
         Ok(())
-    }).await
+    })
+    .await
 }
 
 pub async fn is_revoked(db: &Database, jti: &str) -> StoreResult<bool> {
@@ -47,7 +48,8 @@ pub async fn is_revoked(db: &Database, jti: &str) -> StoreResult<bool> {
             |r| r.get(0),
         )?;
         Ok(n > 0)
-    }).await
+    })
+    .await
 }
 
 /// Drop entries whose underlying token has expired anyway.
@@ -58,5 +60,6 @@ pub async fn purge_expired(db: &Database) -> StoreResult<usize> {
             [Utc::now()],
         )?;
         Ok(n)
-    }).await
+    })
+    .await
 }

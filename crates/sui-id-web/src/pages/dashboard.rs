@@ -1,8 +1,8 @@
 //! Page renderers for the "dashboard" screen domain (RFC 065).
 
-use leptos::prelude::*;
-use crate::layout::Shell;
 use super::common::*;
+use crate::layout::Shell;
+use leptos::prelude::*;
 
 pub struct DashboardSparkBucket {
     /// Human-readable label for hover tooltip ("2026-04-26 14:00").
@@ -10,7 +10,6 @@ pub struct DashboardSparkBucket {
     pub success: i64,
     pub failure: i64,
 }
-
 
 pub struct DashboardSparkline {
     /// Active range, used to highlight the right tab.
@@ -26,14 +25,12 @@ pub struct DashboardSparkline {
     pub buckets: Vec<DashboardSparkBucket>,
 }
 
-
 pub struct DashboardEventRow {
     pub at: chrono::DateTime<chrono::Utc>,
     pub action: String,
     pub actor_label: String,
     pub result: String,
 }
-
 
 pub struct DashboardData {
     pub admin_username: String,
@@ -73,7 +70,7 @@ impl DashboardData {
             || self.warn_hibp_off
             || self.warn_cookie_insecure
             || self.admins_without_mfa > 0
-            || self.oldest_active_key_age_days.map_or(false, |d| d >= 330)
+            || self.oldest_active_key_age_days.is_some_and(|d| d >= 330)
             || self.outbox_stuck_count > 0
             || self.pending_password_resets >= 5
     }
@@ -92,8 +89,10 @@ impl DashboardData {
 /// - successes stack on top of failures
 /// - each bucket carries an invisible `<rect>` with a `<title>`
 ///   child so hovering shows the tooltip natively (no JS)
-
-fn render_sparkline(t: &'static sui_id_i18n::Strings, buckets: Vec<DashboardSparkBucket>) -> impl IntoView {
+fn render_sparkline(
+    t: &'static sui_id_i18n::Strings,
+    buckets: Vec<DashboardSparkBucket>,
+) -> impl IntoView {
     const WIDTH: f64 = 200.0;
     const HEIGHT: f64 = 60.0;
     const PAD_TOP: f64 = 4.0;
@@ -181,8 +180,13 @@ fn render_sparkline(t: &'static sui_id_i18n::Strings, buckets: Vec<DashboardSpar
     }
 }
 
-
-pub fn render_dashboard(data: DashboardData, flash: Option<Flash>, csrf_token: String, dev_mode: bool, lang: sui_id_i18n::Locale) -> String {
+pub fn render_dashboard(
+    data: DashboardData,
+    flash: Option<Flash>,
+    csrf_token: String,
+    dev_mode: bool,
+    lang: sui_id_i18n::Locale,
+) -> String {
     render(move || {
         let t = lang.strings();
         // RFC 073: compute visibility flags before destructuring so we
@@ -214,7 +218,11 @@ pub fn render_dashboard(data: DashboardData, flash: Option<Flash>, csrf_token: S
             .iter()
             .map(|(q, label)| {
                 let href = format!("/admin?range={q}#sparkline");
-                let aria = if *q == active_range { Some("page") } else { None };
+                let aria = if *q == active_range {
+                    Some("page")
+                } else {
+                    None
+                };
                 view! {
                     <a class="app-nav__link" href=href aria-current=aria>{label.clone()}</a>
                 }

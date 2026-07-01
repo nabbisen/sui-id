@@ -8,7 +8,7 @@
 //! Target: Mainland Simplified Chinese (zh-Hans / zh-CN).
 //! Use standard Mainland Mandarin conventions and Simplified script (简体).
 
-use crate::formatters::{fmt_count_shared, fmt_time_shared, Formatters};
+use crate::formatters::{Formatters, fmt_count_shared, fmt_time_shared};
 use crate::strings::Strings;
 use chrono::{DateTime, Datelike, Utc};
 
@@ -472,7 +472,9 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     dashboard_oidc_endpoint_discovery: "Discovery",
     dashboard_oidc_endpoint_jwks: "JWKS",
     dashboard_sparkline_aria: "登录活动迷你图",
-    dashboard_sparkline_tooltip: |label, success, failure| format!("{label} : 成功 {success} / 失败 {failure}"),
+    dashboard_sparkline_tooltip: |label, success, failure| {
+        format!("{label} : 成功 {success} / 失败 {failure}")
+    },
 
     // 仪表盘：操作员提示 (RFC 031)
     dashboard_warn_smtp: "密码重置邮件已禁用，请在设置 → 邮件中配置 SMTP。",
@@ -557,7 +559,9 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     audit_entry_count_caption: |n| format!("({n} 条)"),
     audit_filter_button: "筛选",
     audit_chain_broken_note: |seq| format!("在 seq={seq} 处检测到不一致，请立即调查。"),
-    audit_chain_ok_note: |checked, legacy| format!("已检查最近 {checked} 行。遗留（v0.17 之前）未哈希行：{legacy}"),
+    audit_chain_ok_note: |checked, legacy| {
+        format!("已检查最近 {checked} 行。遗留（v0.17 之前）未哈希行：{legacy}")
+    },
 
     // Admin: 签名密钥 (RFC 029)
     signing_keys_title: "签名密钥",
@@ -798,27 +802,39 @@ fn zh_hans_fmt_date_time(dt: DateTime<Utc>) -> String {
 
 fn zh_hans_fmt_relative(at: DateTime<Utc>, now: DateTime<Utc>) -> String {
     let secs = (now - at).num_seconds();
-    if secs < 0 { return "刚刚".into(); }
-    if secs < 60 { return format!("{secs} 秒前"); }
+    if secs < 0 {
+        return "刚刚".into();
+    }
+    if secs < 60 {
+        return format!("{secs} 秒前");
+    }
     let mins = secs / 60;
-    if mins < 60 { return format!("{mins} 分钟前"); }
+    if mins < 60 {
+        return format!("{mins} 分钟前");
+    }
     let hours = mins / 60;
-    if hours < 24 { return format!("{hours} 小时前"); }
+    if hours < 24 {
+        return format!("{hours} 小时前");
+    }
     let days = hours / 24;
-    if days < 30 { return format!("{days} 天前"); }
+    if days < 30 {
+        return format!("{days} 天前");
+    }
     let months = days / 30;
-    if months < 12 { return format!("{months} 个月前"); }
+    if months < 12 {
+        return format!("{months} 个月前");
+    }
     let years = months / 12;
     format!("{years} 年前")
 }
 
 /// Chinese Simplified (zh-Hans) date and number formatters.
 pub static FORMATTERS_ZH_HANS: Formatters = Formatters {
-    fmt_date:      zh_hans_fmt_date,
-    fmt_time:      fmt_time_shared,
+    fmt_date: zh_hans_fmt_date,
+    fmt_time: fmt_time_shared,
     fmt_date_time: zh_hans_fmt_date_time,
-    fmt_relative:  zh_hans_fmt_relative,
-    fmt_count:     fmt_count_shared,
+    fmt_relative: zh_hans_fmt_relative,
+    fmt_count: fmt_count_shared,
 };
 
 // ── tests ─────────────────────────────────────────────────────────────────────
@@ -842,8 +858,14 @@ mod tests {
     #[test]
     fn zh_hans_relative_formatting() {
         let now = ts(2024, 5, 12, 15, 0);
-        assert_eq!(zh_hans_fmt_relative(ts(2024, 5, 12, 14, 57), now), "3 分钟前");
-        assert_eq!(zh_hans_fmt_relative(ts(2024, 5, 12, 12, 0), now), "3 小时前");
-        assert_eq!(zh_hans_fmt_relative(ts(2024, 5,  9, 15, 0), now), "3 天前");
+        assert_eq!(
+            zh_hans_fmt_relative(ts(2024, 5, 12, 14, 57), now),
+            "3 分钟前"
+        );
+        assert_eq!(
+            zh_hans_fmt_relative(ts(2024, 5, 12, 12, 0), now),
+            "3 小时前"
+        );
+        assert_eq!(zh_hans_fmt_relative(ts(2024, 5, 9, 15, 0), now), "3 天前");
     }
 }

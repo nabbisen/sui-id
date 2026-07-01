@@ -37,14 +37,24 @@ impl Database {
         conn.pragma_update(None, "synchronous", "NORMAL")?;
         conn.pragma_update(None, "foreign_keys", "ON")?;
         migrations::run(&mut conn)?;
-        Ok(Self { inner: Arc::new(Inner { conn: Mutex::new(conn), key: Arc::new(key) }) })
+        Ok(Self {
+            inner: Arc::new(Inner {
+                conn: Mutex::new(conn),
+                key: Arc::new(key),
+            }),
+        })
     }
 
     pub fn open_in_memory(key: MasterKey) -> StoreResult<Self> {
         let mut conn = Connection::open_in_memory()?;
         conn.pragma_update(None, "foreign_keys", "ON")?;
         migrations::run(&mut conn)?;
-        Ok(Self { inner: Arc::new(Inner { conn: Mutex::new(conn), key: Arc::new(key) }) })
+        Ok(Self {
+            inner: Arc::new(Inner {
+                conn: Mutex::new(conn),
+                key: Arc::new(key),
+            }),
+        })
     }
 
     /// Execute a synchronous closure on a Tokio blocking thread.
@@ -56,6 +66,8 @@ impl Database {
     {
         let db = self.clone();
         tokio::task::spawn_blocking(move || {
+            // Poisoned mutex = thread panic while holding the lock; unrecoverable.
+            #[allow(clippy::expect_used)]
             let guard = db.inner.conn.lock().expect("database mutex poisoned");
             f(&guard)
         })
@@ -72,6 +84,7 @@ impl Database {
     {
         let db = self.clone();
         tokio::task::spawn_blocking(move || {
+            #[allow(clippy::expect_used)]
             let mut guard = db.inner.conn.lock().expect("database mutex poisoned");
             let tx = guard.transaction().map_err(StoreError::from)?;
             let result = f(&tx)?;
@@ -88,6 +101,7 @@ impl Database {
         &self,
         f: impl FnOnce(&Connection) -> StoreResult<R>,
     ) -> StoreResult<R> {
+        #[allow(clippy::expect_used)]
         let guard = self.inner.conn.lock().expect("database mutex poisoned");
         f(&guard)
     }
@@ -97,6 +111,7 @@ impl Database {
         &self,
         f: impl FnOnce(&rusqlite::Transaction<'_>) -> StoreResult<R>,
     ) -> StoreResult<R> {
+        #[allow(clippy::expect_used)]
         let mut guard = self.inner.conn.lock().expect("database mutex poisoned");
         let tx = guard.transaction()?;
         let result = f(&tx)?;

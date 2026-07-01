@@ -3,6 +3,7 @@
 //! Owns: base reset (body, focus ring, links), typography (h1–h6, p,
 //! .muted, code), the `Shell`-level layout (header, nav, main, footer
 //! + a11y badges, sign-out button, tagline), the cross-screen
+//!
 //! `.page-header` primitive, the footer theme toggle, and the mobile
 //! responsive breakpoints that affect the chrome itself.
 //!

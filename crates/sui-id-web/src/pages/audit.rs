@@ -1,11 +1,14 @@
 //! Page renderers for the "audit" screen domain (RFC 065).
 
-use leptos::prelude::*;
-use crate::layout::Shell;
 use super::common::*;
+use crate::layout::Shell;
+use leptos::prelude::*;
 use sui_id_shared::api::AuditLogEntryDto;
 
-pub(super) fn audit_row_view(t: &'static sui_id_i18n::Strings, e: AuditLogEntryDto) -> impl IntoView {
+pub(super) fn audit_row_view(
+    t: &'static sui_id_i18n::Strings,
+    e: AuditLogEntryDto,
+) -> impl IntoView {
     let result_badge = match e.result.as_str() {
         "ok" => view! { <span class="badge badge--ok">"ok"</span> }.into_any(),
         "fail" | "error" | "denied" => {
@@ -37,7 +40,6 @@ pub(super) fn audit_row_view(t: &'static sui_id_i18n::Strings, e: AuditLogEntryD
     }
 }
 
-
 pub fn render_audit(
     entries: Vec<AuditLogEntryDto>,
     chain_ok: bool,
@@ -63,13 +65,15 @@ pub fn render_audit(
                 <p class="badge badge--ok mb-3">
                     "✓ " {t.audit_chain_ok}
                 </p>
-            }.into_any()
+            }
+            .into_any()
         } else {
             view! {
                 <p class="badge badge--danger mb-3">
                     "✗ " {t.audit_chain_broken}
                 </p>
-            }.into_any()
+            }
+            .into_any()
         };
         view! {
             <Shell title=t.audit_title.to_string() show_nav=true current=Some("audit".to_string()) dev_mode=dev_mode lang=lang csrf_token=csrf_token.clone()>
@@ -123,7 +127,6 @@ pub fn render_audit(
         }
     })
 }
-
 
 fn url_encode(s: &str) -> String {
     url::form_urlencoded::byte_serialize(s.as_bytes()).collect()

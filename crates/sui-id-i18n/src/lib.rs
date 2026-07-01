@@ -48,8 +48,8 @@ mod tests;
 
 pub use crate::formatters::Formatters;
 pub use crate::locale::{
-    FORMATTERS_EN, FORMATTERS_JA, FORMATTERS_ZH_HANS, FORMATTERS_ZH_HANT,
-    STRINGS_EN, STRINGS_JA, STRINGS_ZH_HANS, STRINGS_ZH_HANT,
+    FORMATTERS_EN, FORMATTERS_JA, FORMATTERS_ZH_HANS, FORMATTERS_ZH_HANT, STRINGS_EN, STRINGS_JA,
+    STRINGS_ZH_HANS, STRINGS_ZH_HANT,
 };
 pub use crate::strings::Strings;
 
@@ -64,9 +64,10 @@ use serde::{Deserialize, Serialize};
 ///
 /// Add the variant to [`Locale::ALL`] only when the translation is
 /// complete and has been reviewed by a native speaker.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum Locale {
     #[serde(rename = "ja")]
+    #[default]
     Ja,
     #[serde(rename = "en")]
     En,
@@ -94,8 +95,8 @@ impl Locale {
     /// the user-preference column. Stable — never change without a migration.
     pub fn tag(self) -> &'static str {
         match self {
-            Self::Ja     => "ja",
-            Self::En     => "en",
+            Self::Ja => "ja",
+            Self::En => "en",
             Self::ZhHans => "zh-Hans",
             Self::ZhHant => "zh-Hant",
         }
@@ -106,8 +107,8 @@ impl Locale {
     /// language can still recognise their own.
     pub fn native_name(self) -> &'static str {
         match self {
-            Self::Ja     => "日本語",
-            Self::En     => "English",
+            Self::Ja => "日本語",
+            Self::En => "English",
             Self::ZhHans => "中文（简体）",
             Self::ZhHant => "中文（繁體）",
         }
@@ -121,24 +122,24 @@ impl Locale {
     /// Unknown tags return `None`.
     pub fn parse(tag: &str) -> Option<Locale> {
         // Split on '-' or '_'; match on primary + optional first subtag.
-        let mut parts = tag.split(|c: char| c == '-' || c == '_');
+        let mut parts = tag.split(['-', '_']);
         let primary = parts.next().unwrap_or("").to_ascii_lowercase();
-        let subtag  = parts.next().map(|s| s.to_ascii_lowercase());
+        let subtag = parts.next().map(|s| s.to_ascii_lowercase());
         match (primary.as_str(), subtag.as_deref()) {
-            ("ja", _)                              => Some(Locale::Ja),
-            ("en", _)                              => Some(Locale::En),
+            ("ja", _) => Some(Locale::Ja),
+            ("en", _) => Some(Locale::En),
             ("zh", None | Some("hans") | Some("cn") | Some("sg")) => Some(Locale::ZhHans),
             ("zh", Some("hant") | Some("tw") | Some("hk") | Some("mo")) => Some(Locale::ZhHant),
-            ("zh", _)                              => Some(Locale::ZhHans), // unknown zh-* → simplified
-            _                                      => None,
+            ("zh", _) => Some(Locale::ZhHans), // unknown zh-* → simplified
+            _ => None,
         }
     }
 
     /// Strings table for this locale.
     pub fn strings(self) -> &'static Strings {
         match self {
-            Self::Ja     => &STRINGS_JA,
-            Self::En     => &STRINGS_EN,
+            Self::Ja => &STRINGS_JA,
+            Self::En => &STRINGS_EN,
             Self::ZhHans => &STRINGS_ZH_HANS,
             Self::ZhHant => &STRINGS_ZH_HANT,
         }
@@ -147,8 +148,8 @@ impl Locale {
     /// Locale-aware date and number formatters.
     pub fn formatters(self) -> &'static Formatters {
         match self {
-            Self::Ja     => &FORMATTERS_JA,
-            Self::En     => &FORMATTERS_EN,
+            Self::Ja => &FORMATTERS_JA,
+            Self::En => &FORMATTERS_EN,
             Self::ZhHans => &FORMATTERS_ZH_HANS,
             Self::ZhHant => &FORMATTERS_ZH_HANT,
         }
@@ -160,12 +161,6 @@ impl Locale {
         match self {
             Self::Ja | Self::En | Self::ZhHans | Self::ZhHant => "ltr",
         }
-    }
-}
-
-impl Default for Locale {
-    fn default() -> Self {
-        Locale::Ja
     }
 }
 

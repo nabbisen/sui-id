@@ -5,9 +5,9 @@
 //! update by primary key).
 
 use crate::{
-    crypto::{open, seal, MasterKey},
-    models::{SmtpConfigRow, SmtpTlsMode},
     Database, StoreError, StoreResult,
+    crypto::{MasterKey, open, seal},
+    models::{SmtpConfigRow, SmtpTlsMode},
 };
 use chrono::{DateTime, Utc};
 use rusqlite::params;
@@ -61,7 +61,8 @@ pub async fn get(db: &Database) -> StoreResult<Option<SmtpConfigRow>> {
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(e) => Err(e.into()),
         }
-    }).await
+    })
+    .await
 }
 
 /// Insert or update the singleton SMTP configuration row.
@@ -102,7 +103,8 @@ pub async fn upsert(db: &Database, row: &SmtpConfigRow) -> StoreResult<()> {
             ],
         )?;
         Ok(())
-    }).await
+    })
+    .await
 }
 
 /// Decrypt the SMTP password using the supplied master key.

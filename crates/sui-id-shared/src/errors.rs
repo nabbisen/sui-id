@@ -68,7 +68,11 @@ pub struct ApiError {
 }
 
 impl ApiError {
-    pub fn new(code: ApiErrorCode, message: impl Into<String>, request_id: impl Into<String>) -> Self {
+    pub fn new(
+        code: ApiErrorCode,
+        message: impl Into<String>,
+        request_id: impl Into<String>,
+    ) -> Self {
         Self {
             code,
             message: message.into(),

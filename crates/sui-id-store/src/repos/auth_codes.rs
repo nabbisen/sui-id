@@ -10,7 +10,7 @@ use crate::errors::{StoreError, StoreResult};
 use crate::models::AuthorizationCodeRow;
 use chrono::{DateTime, Utc};
 use rusqlite::params;
-use sui_id_shared::{ids::UserId, CodeHash};
+use sui_id_shared::{CodeHash, ids::UserId};
 
 fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<AuthorizationCodeRow> {
     let auth_methods_json: String = row.get(11)?;
@@ -19,14 +19,12 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<AuthorizationCodeRow> {
     })?;
     Ok(AuthorizationCodeRow {
         code_hash: CodeHash::from_stored(row.get(0)?),
-        client_id: row
-            .get::<_, String>(1)?
-            .parse()
-            .map_err(|e| rusqlite::Error::FromSqlConversionFailure(1, rusqlite::types::Type::Text, Box::new(e)))?,
-        user_id: row
-            .get::<_, String>(2)?
-            .parse()
-            .map_err(|e| rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, Box::new(e)))?,
+        client_id: row.get::<_, String>(1)?.parse().map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(1, rusqlite::types::Type::Text, Box::new(e))
+        })?,
+        user_id: row.get::<_, String>(2)?.parse().map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, Box::new(e))
+        })?,
         redirect_uri: row.get(3)?,
         scope: row.get(4)?,
         nonce: row.get(5)?,
@@ -88,10 +86,14 @@ pub async fn consume(db: &Database, code_hash: &CodeHash) -> StoreResult<Authori
         if row.consumed || row.expires_at <= Utc::now() {
             return Err(StoreError::NotFound);
         }
-        tx.execute("UPDATE auth_codes SET consumed = 1 WHERE code_hash = ?1", [hash_str.as_str()])?;
+        tx.execute(
+            "UPDATE auth_codes SET consumed = 1 WHERE code_hash = ?1",
+            [hash_str.as_str()],
+        )?;
         tx.commit()?;
         Ok(row)
-    }).await
+    })
+    .await
 }
 
 /// Mark all unconsumed auth codes for the given user as consumed. Called
@@ -104,17 +106,16 @@ pub async fn invalidate_all_for_user(db: &Database, user_id: UserId) -> StoreRes
             [user_id.to_string()],
         )?;
         Ok(n)
-    }).await
+    })
+    .await
 }
 
 /// Periodic cleanup of expired entries. Called from a background task or on
 /// admin demand; never required for correctness, just hygiene.
 pub async fn purge_expired(db: &Database) -> StoreResult<usize> {
     db.with_conn(move |conn| {
-        let n = conn.execute(
-            "DELETE FROM auth_codes WHERE expires_at < ?1",
-            [Utc::now()],
-        )?;
+        let n = conn.execute("DELETE FROM auth_codes WHERE expires_at < ?1", [Utc::now()])?;
         Ok(n)
-    }).await
+    })
+    .await
 }

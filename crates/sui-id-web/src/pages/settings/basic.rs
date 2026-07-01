@@ -1,9 +1,8 @@
 //! Settings basic tab (RFC 065).
 
-use leptos::prelude::*;
-use crate::layout::Shell;
 use super::super::common::*;
-use super::*;  // SettingsTab + settings_tabs
+use super::*;
+use crate::layout::Shell;
 
 pub struct SettingsBasicData {
     pub issuer: String,
@@ -22,8 +21,11 @@ pub struct SettingsBasicData {
     pub csrf_token: String,
 }
 
-
-pub fn render_settings_basic(data: SettingsBasicData, flash: Option<Flash>, lang: sui_id_i18n::Locale) -> String {
+pub fn render_settings_basic(
+    data: SettingsBasicData,
+    flash: Option<Flash>,
+    lang: sui_id_i18n::Locale,
+) -> String {
     render(move || {
         let t = lang.strings();
         let SettingsBasicData {

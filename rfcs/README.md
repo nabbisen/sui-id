@@ -129,7 +129,7 @@ Recommended order: 078 → 080 → 079 → 081 → 082 → 083 / 085 →
 
 | # | Title | Category |
 |---|---|---|
-| 087 | [Clippy and rustfmt baseline cleanup (Rust 1.96)](./proposed/087-clippy-rustfmt-baseline-cleanup.md) | D — no logic change |
+| 087 | [Clippy and rustfmt baseline cleanup (Rust 1.96)](./done/087-clippy-rustfmt-baseline-cleanup.md) | D — shipped v0.65.1 |
 
 ### Proposed — post-1.0 candidates (open for review)
 

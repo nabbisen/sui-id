@@ -5,12 +5,11 @@
 //! Every field must be present — the compiler enforces completeness.
 //! After editing, run `cargo test -p sui-id-i18n` to confirm all tests pass.
 
-use crate::formatters::{fmt_count_shared, fmt_time_shared, Formatters};
+use crate::formatters::{Formatters, fmt_count_shared, fmt_time_shared};
 use crate::strings::Strings;
 use chrono::{DateTime, Datelike, Utc};
 
 // ── Strings ──────────────────────────────────────────────────────────────────
-
 
 pub static STRINGS_JA: Strings = Strings {
     // Generic UI
@@ -470,14 +469,18 @@ pub static STRINGS_JA: Strings = Strings {
     dashboard_oidc_endpoint_discovery: "Discovery",
     dashboard_oidc_endpoint_jwks: "JWKS",
     dashboard_sparkline_aria: "サインイン活動のスパークライン",
-    dashboard_sparkline_tooltip: |label, success, failure| format!("{label} : 成功 {success} / 失敗 {failure}"),
+    dashboard_sparkline_tooltip: |label, success, failure| {
+        format!("{label} : 成功 {success} / 失敗 {failure}")
+    },
 
     // ダッシュボード：オペレータープロンプト (RFC 031)
     dashboard_warn_smtp: "パスワードリセットメールが無効です。設定 → メール で SMTP を設定してください。",
     dashboard_warn_hibp: "パスワード漏洩チェックがオフです。設定 → 認証 で有効にすることを推奨します。",
     dashboard_warn_cookie_insecure: "Cookie Secure フラグがオフです。本番環境では設定 → セキュリティ で有効にしてください。",
     dashboard_warn_admins_no_mfa: |n| format!("管理者{n}名にMFA未設定。"),
-    dashboard_warn_old_signing_key: |age| format!("最も古い署名鍵は{age}日経過 — ローテーション推奨。"),
+    dashboard_warn_old_signing_key: |age| {
+        format!("最も古い署名鍵は{age}日経過 — ローテーション推奨。")
+    },
     dashboard_warn_outbox_stuck: |n| format!("{n}件のメールが1時間以上送信待ち。"),
     dashboard_warn_pending_resets: |n| format!("未使用のパスワードリセットリンク{n}件。"),
     dashboard_getting_started_title: "はじめに",
@@ -554,7 +557,9 @@ pub static STRINGS_JA: Strings = Strings {
     audit_entry_count_caption: |n| format!("({n} 件)"),
     audit_filter_button: "フィルター",
     audit_chain_broken_note: |seq| format!("seq={seq} で不一致を検出。すぐに調査してください。"),
-    audit_chain_ok_note: |checked, legacy| format!("末尾 {checked} 行を検査。レガシー(v0.17 以前)未ハッシュ行: {legacy}"),
+    audit_chain_ok_note: |checked, legacy| {
+        format!("末尾 {checked} 行を検査。レガシー(v0.17 以前)未ハッシュ行: {legacy}")
+    },
 
     // Admin: 署名キー (RFC 029)
     signing_keys_title: "署名キー",
@@ -804,27 +809,39 @@ fn ja_fmt_date_time(dt: DateTime<Utc>) -> String {
 
 fn ja_fmt_relative(at: DateTime<Utc>, now: DateTime<Utc>) -> String {
     let secs = (now - at).num_seconds();
-    if secs < 0 { return "たった今".into(); }
-    if secs < 60 { return format!("{secs} 秒前"); }
+    if secs < 0 {
+        return "たった今".into();
+    }
+    if secs < 60 {
+        return format!("{secs} 秒前");
+    }
     let mins = secs / 60;
-    if mins < 60 { return format!("{mins} 分前"); }
+    if mins < 60 {
+        return format!("{mins} 分前");
+    }
     let hours = mins / 60;
-    if hours < 24 { return format!("{hours} 時間前"); }
+    if hours < 24 {
+        return format!("{hours} 時間前");
+    }
     let days = hours / 24;
-    if days < 30 { return format!("{days} 日前"); }
+    if days < 30 {
+        return format!("{days} 日前");
+    }
     let months = days / 30;
-    if months < 12 { return format!("{months} ヶ月前"); }
+    if months < 12 {
+        return format!("{months} ヶ月前");
+    }
     let years = months / 12;
     format!("{years} 年前")
 }
 
 /// Japanese (ja) date and number formatters.
 pub static FORMATTERS_JA: Formatters = Formatters {
-    fmt_date:      ja_fmt_date,
-    fmt_time:      fmt_time_shared,
+    fmt_date: ja_fmt_date,
+    fmt_time: fmt_time_shared,
     fmt_date_time: ja_fmt_date_time,
-    fmt_relative:  ja_fmt_relative,
-    fmt_count:     fmt_count_shared,
+    fmt_relative: ja_fmt_relative,
+    fmt_count: fmt_count_shared,
 };
 
 // ── tests ─────────────────────────────────────────────────────────────────────
@@ -850,6 +867,6 @@ mod tests {
         let now = ts(2024, 5, 12, 15, 0);
         assert_eq!(ja_fmt_relative(ts(2024, 5, 12, 14, 57), now), "3 分前");
         assert_eq!(ja_fmt_relative(ts(2024, 5, 12, 12, 0), now), "3 時間前");
-        assert_eq!(ja_fmt_relative(ts(2024, 5,  9, 15, 0), now), "3 日前");
+        assert_eq!(ja_fmt_relative(ts(2024, 5, 9, 15, 0), now), "3 日前");
     }
 }

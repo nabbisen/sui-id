@@ -51,7 +51,10 @@ macro_rules! define_id {
 }
 
 define_id!(UserId, "Identifier of a normal user account.");
-define_id!(ClientId, "Identifier of an OAuth/OIDC client (relying party).");
+define_id!(
+    ClientId,
+    "Identifier of an OAuth/OIDC client (relying party)."
+);
 define_id!(SessionId, "Identifier of a server-side session.");
 define_id!(SigningKeyId, "Identifier of a JWT signing key.");
 define_id!(

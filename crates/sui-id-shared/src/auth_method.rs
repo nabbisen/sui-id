@@ -158,7 +158,12 @@ mod tests {
 
     #[test]
     fn duplicates_are_deduped_and_mfa_isnt_added_twice() {
-        let m = [AuthMethod::Pwd, AuthMethod::Pwd, AuthMethod::Totp, AuthMethod::Totp];
+        let m = [
+            AuthMethod::Pwd,
+            AuthMethod::Pwd,
+            AuthMethod::Totp,
+            AuthMethod::Totp,
+        ];
         assert_eq!(amr_from_methods(&m), vec!["pwd", "otp", "mfa"]);
     }
 

@@ -12,11 +12,9 @@ pub mod errors;
 pub mod ids;
 pub mod secrets;
 
-pub use auth_method::{acr_from_methods, amr_from_methods, AuthMethod};
+pub use auth_method::{AuthMethod, acr_from_methods, amr_from_methods};
 pub use errors::{ApiError, ApiErrorCode};
-pub use secrets::{
-    CodeHash, FamilyId, RawRefreshToken, RefreshTokenHash, RefreshTokenId,
-};
+pub use secrets::{CodeHash, FamilyId, RawRefreshToken, RefreshTokenHash, RefreshTokenId};
 
 /// Normalise an email address for case-insensitive uniqueness checks and
 /// lookup. The original-case form is preserved separately in `UserRow.email`

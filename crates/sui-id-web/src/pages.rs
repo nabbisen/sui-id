@@ -30,13 +30,12 @@ pub mod users;
 // `sui_id_web::pages::dashboard::render_dashboard`. `pub use *` from
 // each submodule reconstructs the flat interface that lib.rs
 // previously had directly.
-pub use common::{
-    Flash, FlashKind, EmptyStateData, EmptyStateAction,
-    empty_state, table_empty_row,
-};
 pub use audit::*;
 pub use auth::*;
 pub use clients::*;
+pub use common::{
+    EmptyStateAction, EmptyStateData, Flash, FlashKind, empty_state, table_empty_row,
+};
 pub use confirm::*;
 pub use dashboard::*;
 pub use error::*;

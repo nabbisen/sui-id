@@ -12,8 +12,8 @@
 //! have run.
 
 use crate::{
-    models::{HibpMode, ServerSettingsRow},
     Database, StoreError, StoreResult,
+    models::{HibpMode, ServerSettingsRow},
 };
 use chrono::{DateTime, Utc};
 use rusqlite::params;
@@ -58,17 +58,14 @@ pub async fn get(db: &Database) -> StoreResult<ServerSettingsRow> {
             rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
             other => StoreError::from(other),
         })
-    }).await
+    })
+    .await
 }
 
 /// Update the server default UI language. `lang` is a BCP-47 tag
 /// — application-layer validation should ensure it is one of
 /// `Locale::ALL` before calling.
-pub async fn update_default_lang(
-    db: &Database,
-    lang: &str,
-    now: DateTime<Utc>,
-) -> StoreResult<()> {
+pub async fn update_default_lang(db: &Database, lang: &str, now: DateTime<Utc>) -> StoreResult<()> {
     let lang = lang.to_owned();
     db.with_conn(move |conn| {
         let n = conn.execute(
@@ -80,7 +77,8 @@ pub async fn update_default_lang(
         } else {
             Ok(())
         }
-    }).await
+    })
+    .await
 }
 
 /// Update the server-wide Pwned Passwords (HIBP) check mode.
@@ -99,7 +97,8 @@ pub async fn update_hibp_mode(
         } else {
             Ok(())
         }
-    }).await
+    })
+    .await
 }
 
 /// Update the idle-session-timeout value, in seconds. `0` means
@@ -122,7 +121,8 @@ pub async fn update_idle_session_timeout(
         } else {
             Ok(())
         }
-    }).await
+    })
+    .await
 }
 
 /// Update the concurrent-session cap. `0` means no cap. The
@@ -144,5 +144,6 @@ pub async fn update_max_concurrent_sessions(
         } else {
             Ok(())
         }
-    }).await
+    })
+    .await
 }

@@ -1,7 +1,7 @@
 //! Settings sub-screens (RFC 065 sub-split).
 
-use leptos::prelude::*;
 use super::common::*;
+use leptos::prelude::*;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum SettingsTab {
@@ -26,25 +26,52 @@ impl SettingsTab {
     }
 }
 
-
 fn settings_tabs(active: SettingsTab, lang: sui_id_i18n::Locale) -> impl IntoView {
     let t = lang.strings();
     // RFC 074: Basic → "General", Other → "Advanced" (label-only rename;
     // routes and underlying pages unchanged). Full 6→4 group consolidation
     // is deferred to a future RFC (requires handler merging).
     let items = [
-        (SettingsTab::Basic,          t.settings_tab_general,         "/admin/settings/basic"),
-        (SettingsTab::Security,       t.settings_tab_security,        "/admin/settings/security"),
-        (SettingsTab::Authentication, t.settings_tab_authentication,  "/admin/settings/authentication"),
-        (SettingsTab::Logs,           t.settings_tab_logs,            "/admin/settings/logs"),
-        (SettingsTab::Email,          t.settings_tab_email,           "/admin/settings/email"),
-        (SettingsTab::Other,          t.settings_tab_advanced,        "/admin/settings/other"),
+        (
+            SettingsTab::Basic,
+            t.settings_tab_general,
+            "/admin/settings/basic",
+        ),
+        (
+            SettingsTab::Security,
+            t.settings_tab_security,
+            "/admin/settings/security",
+        ),
+        (
+            SettingsTab::Authentication,
+            t.settings_tab_authentication,
+            "/admin/settings/authentication",
+        ),
+        (
+            SettingsTab::Logs,
+            t.settings_tab_logs,
+            "/admin/settings/logs",
+        ),
+        (
+            SettingsTab::Email,
+            t.settings_tab_email,
+            "/admin/settings/email",
+        ),
+        (
+            SettingsTab::Other,
+            t.settings_tab_advanced,
+            "/admin/settings/other",
+        ),
     ];
     let active_key = active.key();
     let links: Vec<_> = items
         .iter()
         .map(|(tab, label, href)| {
-            let aria = if tab.key() == active_key { Some("page") } else { None };
+            let aria = if tab.key() == active_key {
+                Some("page")
+            } else {
+                None
+            };
             view! {
                 <a class="route-tabs__link" href=*href aria-current=aria>{*label}</a>
             }
@@ -61,20 +88,18 @@ fn settings_tabs(active: SettingsTab, lang: sui_id_i18n::Locale) -> impl IntoVie
     }
 }
 
+mod authentication;
 /// Two-column key/value table used inside each settings card. Keeps
 /// per-tab content boring and consistent.
-
-
 mod basic;
-mod security;
-mod authentication;
-mod logs;
 mod email;
+mod logs;
 mod other;
+mod security;
 
-pub use basic::*;
-pub use security::*;
 pub use authentication::*;
-pub use logs::*;
+pub use basic::*;
 pub use email::*;
+pub use logs::*;
 pub use other::*;
+pub use security::*;

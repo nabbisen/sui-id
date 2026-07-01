@@ -1,9 +1,8 @@
 //! Settings logs tab (RFC 065).
 
-use leptos::prelude::*;
-use crate::layout::Shell;
 use super::super::common::*;
-use super::*;  // SettingsTab + settings_tabs
+use super::*;
+use crate::layout::Shell;
 
 pub struct SettingsLogsData {
     pub log_format: String,
@@ -15,15 +14,18 @@ pub struct SettingsLogsData {
     pub chain_report: SettingsChainStatus,
 }
 
-
 pub struct SettingsChainStatus {
     pub checked: usize,
     pub broken_at_seq: Option<i64>,
     pub legacy_unhashed: usize,
 }
 
-
-pub fn render_settings_logs(data: SettingsLogsData, flash: Option<Flash>, csrf_token: String, lang: sui_id_i18n::Locale) -> String {
+pub fn render_settings_logs(
+    data: SettingsLogsData,
+    flash: Option<Flash>,
+    csrf_token: String,
+    lang: sui_id_i18n::Locale,
+) -> String {
     render(move || {
         let t = lang.strings();
         let SettingsLogsData {

@@ -47,4 +47,3 @@ pub enum StoreError {
 }
 
 pub type StoreResult<T> = Result<T, StoreError>;
-

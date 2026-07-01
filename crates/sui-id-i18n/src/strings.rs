@@ -735,10 +735,6 @@ pub struct Strings {
     pub consent_policy_first_time: &'static str,
     pub consent_policy_always: &'static str,
 
-
-
-
-
     // ---- Admin: Users (RFC 029) ----
     pub users_title: &'static str,
     pub users_lede: &'static str,
@@ -808,7 +804,6 @@ pub struct Strings {
     pub audit_filter_button: &'static str,
     pub audit_chain_broken_note: fn(i64) -> String,
     pub audit_chain_ok_note: fn(usize, usize) -> String,
-
 
     // ---- Admin: Signing keys (RFC 029) ----
     pub signing_keys_title: &'static str,

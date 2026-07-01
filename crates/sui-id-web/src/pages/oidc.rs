@@ -1,14 +1,13 @@
 //! Page renderers for the "oidc" screen domain (RFC 065).
 
-use leptos::prelude::*;
 use super::common::*;
+use leptos::prelude::*;
 
 pub struct ConsentData {
     pub client_name: String,
     pub requested_scopes: Vec<String>,
     pub csrf_token: String,
 }
-
 
 pub fn render_consent(data: ConsentData, lang: sui_id_i18n::Locale) -> String {
     render(move || {
@@ -18,25 +17,32 @@ pub fn render_consent(data: ConsentData, lang: sui_id_i18n::Locale) -> String {
         // with a bold short label and a muted description sentence.
         // The raw scope slug is kept as a <code> tag for developer context.
         // Unmapped scopes fall back to the raw slug with no description.
-        let scope_items: Vec<_> = data.requested_scopes.iter().map(|s| {
-            let (label, desc): (&'static str, Option<&'static str>) = match s.as_str() {
-                "openid"         => (t.consent_scope_openid,         Some(t.consent_scope_openid_desc)),
-                "profile"        => (t.consent_scope_profile,        Some(t.consent_scope_profile_desc)),
-                "email"          => (t.consent_scope_email,          Some(t.consent_scope_email_desc)),
-                "offline_access" => (t.consent_scope_offline_access, Some(t.consent_scope_offline_access_desc)),
-                _                => ("—",                            None),
-            };
-            let scope_str = s.clone();
-            view! {
-                <li class="consent-scope-item">
-                    <span class="consent-scope-item__title">{label}</span>
-                    {desc.map(|d| view! {
-                        <span class="consent-scope-item__desc">{d}</span>
-                    })}
-                    <code class="text-caption muted">{scope_str}</code>
-                </li>
-            }
-        }).collect();
+        let scope_items: Vec<_> = data
+            .requested_scopes
+            .iter()
+            .map(|s| {
+                let (label, desc): (&'static str, Option<&'static str>) = match s.as_str() {
+                    "openid" => (t.consent_scope_openid, Some(t.consent_scope_openid_desc)),
+                    "profile" => (t.consent_scope_profile, Some(t.consent_scope_profile_desc)),
+                    "email" => (t.consent_scope_email, Some(t.consent_scope_email_desc)),
+                    "offline_access" => (
+                        t.consent_scope_offline_access,
+                        Some(t.consent_scope_offline_access_desc),
+                    ),
+                    _ => ("—", None),
+                };
+                let scope_str = s.clone();
+                view! {
+                    <li class="consent-scope-item">
+                        <span class="consent-scope-item__title">{label}</span>
+                        {desc.map(|d| view! {
+                            <span class="consent-scope-item__desc">{d}</span>
+                        })}
+                        <code class="text-caption muted">{scope_str}</code>
+                    </li>
+                }
+            })
+            .collect();
 
         let csrf = data.csrf_token.clone();
         view! {

@@ -211,12 +211,17 @@ impl CodeHash {
 /// base64url (no-pad) string. Used by the generate() constructors above.
 fn random_base64url(byte_len: usize) -> String {
     let mut buf = vec![0u8; byte_len];
+    // System RNG failure is unrecoverable: no entropy means no safe token
+    // generation. Panicking here is the correct fail-safe behaviour.
+    #[allow(clippy::expect_used)]
     getrandom::fill(&mut buf).expect("system RNG unavailable");
     let mut out = vec![0u8; byte_len * 2 + 4];
     let n = Base64UrlUnpadded::encode(&buf, &mut out)
         .map(str::len)
         .unwrap_or(0);
     out.truncate(n);
+    // base64url output is guaranteed ASCII; from_utf8 is infallible here.
+    #[allow(clippy::expect_used)]
     String::from_utf8(out).expect("base64url is ascii")
 }
 
@@ -230,7 +235,10 @@ mod tests {
     fn raw_refresh_token_debug_does_not_contain_value() {
         let t = RawRefreshToken::from_untrusted("super-secret-12345".to_owned());
         let dbg = format!("{t:?}");
-        assert!(!dbg.contains("super-secret-12345"), "debug must not expose value");
+        assert!(
+            !dbg.contains("super-secret-12345"),
+            "debug must not expose value"
+        );
         assert!(dbg.contains("REDACTED"));
     }
 
@@ -276,6 +284,10 @@ mod tests {
         // 16 bytes base64url → ~22 chars (no padding)
         assert!(id.as_str().len() >= 20);
         // Only base64url chars
-        assert!(id.as_str().chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_'));
+        assert!(
+            id.as_str()
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+        );
     }
 }
