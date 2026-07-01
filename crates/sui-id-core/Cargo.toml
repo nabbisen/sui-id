@@ -16,9 +16,9 @@ readme = "README.md"
 workspace = true
 
 [dependencies]
-sui-id-shared = { version = "0.76.3", path = "../sui-id-shared" }
-sui-id-store  = { version = "0.76.3", path = "../sui-id-store" }
-sui-id-i18n   = { version = "0.76.3", path = "../sui-id-i18n" }
+sui-id-shared = { version = "0.76.4", path = "../sui-id-shared" }
+sui-id-store  = { version = "0.76.4", path = "../sui-id-store" }
+sui-id-i18n   = { version = "0.76.4", path = "../sui-id-i18n" }
 
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -40,8 +40,10 @@ subtle = { workspace = true }
 secrecy = { workspace = true }
 zeroize = { workspace = true }
 async-trait = { workspace = true }
-reqwest = { workspace = true }
+
 base64ct = { workspace = true }
+reqwest = { workspace = true }
+
 rusqlite = { workspace = true }
 
 # Email — see workspace dependency notes for rationale.

@@ -64,6 +64,15 @@ event name, required fields, and atomicity class. The CI gate
 | `settings.pending_change.cancelled` | Pending change cancelled | admin user id | — | `id=…` | B |
 | `settings.pending_change.binding_failed` | Binding check failed on apply | admin user id | — | `intent=… id=…` | B |
 
+### Federation sign-in (`auth.federation.*`, RFC 004)
+
+| Event name | Operation | Actor | Target | Note fields | Class |
+|---|---|---|---|---|---|
+| `auth.federation.signin.success` | Federated sign-in completed | user id | user id | `provider=… sub=…` | B |
+| `auth.federation.signin.upstream_failure` | Upstream IdP returned an error | — | — | `provider=… error=…` | B |
+| `auth.federation.link.created` | Federation link created (first sign-in or explicit link) | user id | user id | `provider=… sub=…` | B |
+| `auth.federation.takeover_blocked` | Email collision rejected as potential takeover | — | — | `provider=… email=…` | A |
+
 ### Dynamic client registration (`client.dynamic_register`, RFC 008)
 
 | Event name | Operation | Actor | Target | Note fields | Class |

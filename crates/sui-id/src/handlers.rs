@@ -25,6 +25,7 @@ pub mod oidc;
 pub mod settings;
 pub mod setup;
 pub mod dynamic_register;
+pub mod federation;
 pub mod metrics;
 pub mod step_up;
 

@@ -19,6 +19,10 @@ pub struct Config {
     /// Each entry corresponds to one `[[user_source]]` block in the config file.
     #[serde(default)]
     pub user_sources: Vec<UserSourceConfig>,
+    /// RFC 004: upstream OIDC federation providers.
+    /// Each entry corresponds to one `[[federation_provider]]` block.
+    #[serde(default)]
+    pub federation_providers: Vec<FederationProviderConfig>,
     #[serde(default)]
     pub tokens: TokensConfig,
     #[serde(default)]
@@ -230,7 +234,7 @@ impl Config {
 
     /// Reasonable defaults useful for first-run output and tests.
     pub fn sample() -> Self {
-        Self { user_sources: vec![],
+        Self { user_sources: vec![], federation_providers: vec![],
             server: ServerConfig { metrics_enabled: bool::default(), metrics_listen_addr: String::default(),
                 listen_addr: "127.0.0.1:8801".into(),
                 issuer: "http://127.0.0.1:8801".into(),
@@ -366,5 +370,55 @@ impl UserSourceConfig {
             )
         })?;
         Ok(password)
+    }
+}
+
+/// Configuration for one `[[federation_provider]]` block (RFC 004).
+///
+/// The client secret is read from the environment variable named in
+/// `client_secret_env` — never stored in the config file as plaintext.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FederationProviderConfig {
+    /// URL-safe slug used in routes: `/auth/federated/{slug}/start`.
+    pub slug: String,
+    /// Human-readable label for the "Sign in with X" button.
+    pub display_name: String,
+    /// OIDC issuer URL (used to fetch `/.well-known/openid-configuration`).
+    pub issuer: String,
+    /// OAuth2 client id registered at the upstream.
+    pub client_id: String,
+    /// Name of the env var holding the client secret (never inline).
+    /// Leave empty or omit for public clients (no secret).
+    #[serde(default)]
+    pub client_secret_env: String,
+    /// Space-separated scopes to request. Default: `"openid email"`.
+    #[serde(default = "default_fed_scopes")]
+    pub scopes: String,
+    /// `link_only` (default) or `provision_on_first_login`.
+    #[serde(default = "default_provision_mode")]
+    pub provision_mode: String,
+    /// Whether the button is shown on the login screen.
+    #[serde(default)]
+    pub enabled: bool,
+}
+
+fn default_fed_scopes() -> String { "openid email".into() }
+fn default_provision_mode() -> String { "link_only".into() }
+
+impl FederationProviderConfig {
+    /// Resolve the client secret from the environment.
+    /// Returns `None` for public clients (empty `client_secret_env`).
+    pub fn resolve_secret(&self) -> anyhow::Result<Option<String>> {
+        if self.client_secret_env.is_empty() {
+            return Ok(None);
+        }
+        let secret = std::env::var(&self.client_secret_env).map_err(|_| {
+            anyhow::anyhow!(
+                "federation_provider[{}]: env var {:?} not set",
+                self.slug, self.client_secret_env
+            )
+        })?;
+        Ok(Some(secret))
     }
 }

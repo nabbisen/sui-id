@@ -5,6 +5,79 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.76.4] — 2026-06-14
+
+**RFC 004 — Federation as Upstream OIDC Relying Party.** sui-id can now
+authenticate users against an external IdP (Google, Entra, Keycloak) and
+map the federated identity onto a local user row.
+
+### Added — store layer
+
+**`FederationProviderId`** added to `sui-id-shared::ids`.
+
+**Migration 0037** — `federation_provider` table: `id`, `slug` (unique),
+`display_name`, `issuer`, `client_id`, `client_secret_enc` (encrypted BLOB,
+AAD=`"federation_provider.client_secret"`), `scopes`, `provision_mode`
+CHECK, `enabled`, timestamps.
+
+**Migration 0038** — `federation_link` table: `(user_id, provider_id)` PK,
+`UNIQUE (provider_id, upstream_sub)` enforcing P1 (sub, not email, is the
+mapping key), `upstream_email` (metadata only), `linked_at`, `last_seen_at`.
+
+**`ProvisionMode`**, **`FederationProviderRow`**, **`FederationLinkRow`**
+added to `models.rs`.
+
+**`repos::federation_provider`** — list, list_enabled, get, get_by_slug,
+`decrypt_secret` (sync, P6 — key never enters the async closure),
+`create` (encrypts secret before `with_conn`), `set_enabled`, `delete`;
+audit event string constants (P2/success/upstream_failure/link_created);
+3 tests.
+
+**`repos::federation_link`** — `find_by_sub` (P1 lookup), `find_any_by_email`
+(P2 takeover guard), `list_for_user`, `upsert` (ON CONFLICT updates
+email+last_seen_at), `delete`; 3 tests.
+
+**`MasterKey::as_bytes()`** — exposes raw key bytes for HMAC state-cookie
+signing (RFC 004 P5).
+
+### Added — binary layer
+
+**`AppState.http_client: Arc<reqwest::Client>`** — shared HTTP client for
+upstream discovery fetches and token exchanges (P6 — access token is used
+once and discarded, never persisted).
+
+**`config::FederationProviderConfig`** — `[[federation_provider]]` TOML blocks
+with `client_secret_env` indirection (secret read from environment, never
+inline).
+
+**`startup.rs`** — syncs `[[federation_provider]]` config blocks into the
+DB on startup; creates rows for new providers, leaves existing rows alone
+(admin manages `enabled` state).
+
+**`crates/sui-id/src/handlers/federation.rs`** — three handlers:
+
+- `GET /auth/federated/{slug}/start` — fetches upstream OIDC discovery,
+  generates PKCE S256 challenge + nonce, seals state in an HMAC'd HttpOnly
+  cookie (P5), redirects to upstream `authorization_endpoint`.
+- `GET /auth/federated/callback` — validates state cookie (HMAC + TTL, P5),
+  exchanges code at `token_endpoint`, decodes ID-token claims, enforces
+  nonce (P5), resolves link by `(provider_id, upstream_sub)` (P1), checks
+  email collision → denied + audit (P2), provisions shadow user on first
+  login (P3 — `email_verified` required), enforces local MFA (P4), issues
+  session with `AuthMethod::Fed`.
+- `GET /auth/federated/link` — link-only flow skeleton (sends to login page
+  with `fed_link=pending`; full link-approval UI is a future iteration per
+  RFC open questions).
+
+### Audit matrix
+
+Four new federation events → **50 × 50**:
+`auth.federation.signin.success`, `auth.federation.signin.upstream_failure`,
+`auth.federation.link.created`, `auth.federation.takeover_blocked`.
+
+**141/141 tests pass** (99 in store including 6 new federation tests).
+0 clippy errors. All 5 CI gates PASS.
+
 ## [0.76.3] — 2026-06-14
 
 **RFC 008 — Third-Party-Posture Bundle.** Completes the five-capability

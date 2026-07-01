@@ -47,6 +47,9 @@ pub struct AppState {
     /// RFC 005: configured external user-sources for the auth cascade.
     /// Empty when no `[[user_source]]` blocks are in the config.
     pub user_sources: Vec<Arc<dyn UserSource>>,
+    /// RFC 004: shared HTTP client for upstream federation requests
+    /// (discovery fetches, token exchanges).
+    pub http_client: Arc<reqwest::Client>,
 
     /// Prometheus metrics registry (RFC 006).
     /// `None` when `metrics_enabled = false` in config — no counters are
@@ -82,6 +85,12 @@ impl AppState {
             is_dev_mode: false,
             metrics: None,
             user_sources: Vec::new(),
+            http_client: Arc::new(
+                reqwest::Client::builder()
+                    .timeout(std::time::Duration::from_secs(10))
+                    .build()
+                    .expect("failed to build federation HTTP client"),
+            ),
         }
     }
 

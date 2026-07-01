@@ -84,6 +84,11 @@ define_id!(
 );
 
 define_id!(
+    FederationProviderId,
+    "Identifier of a federated identity provider row (RFC 004)."
+);
+
+define_id!(
     RegistrationTokenId,
     "Identifier of an RFC 7591 initial access token row (RFC 008). The raw token value is stored hashed; this id is the row's primary key."
 );

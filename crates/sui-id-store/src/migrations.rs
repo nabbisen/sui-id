@@ -158,6 +158,14 @@ const MIGRATIONS: &[Migration] = &[
         version: 36,
         sql: include_str!("./migrations/0036_scope_definition_and_reg_token.sql"),
     },
+    Migration {
+        version: 37,
+        sql: include_str!("./migrations/0037_federation_provider.sql"),
+    },
+    Migration {
+        version: 38,
+        sql: include_str!("./migrations/0038_federation_link.sql"),
+    },
 ];
 
 /// The highest schema version this build of sui-id-store knows how to

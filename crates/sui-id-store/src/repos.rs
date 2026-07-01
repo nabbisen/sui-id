@@ -10,6 +10,8 @@ pub mod client_registration_token;
 pub mod clients;
 pub mod credentials;
 pub mod email_outbox;
+pub mod federation_link;
+pub mod federation_provider;
 pub mod json_util;
 pub mod login_pending_mfa;
 pub mod password_reset_tokens;

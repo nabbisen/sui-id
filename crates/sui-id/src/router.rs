@@ -69,6 +69,19 @@ pub fn build_router(app: AppState) -> Router {
             "/admin/login/mfa",
             get(admin::mfa_challenge_get).post(admin::mfa_challenge_post),
         )
+        // RFC 004: federated sign-in routes
+        .route(
+            "/auth/federated/{slug}/start",
+            get(crate::handlers::federation::federated_start),
+        )
+        .route(
+            "/auth/federated/callback",
+            get(crate::handlers::federation::federated_callback),
+        )
+        .route(
+            "/auth/federated/link",
+            get(crate::handlers::federation::federated_link_get),
+        )
         // ---------- forgot-password (since v0.22.0) ----------
         // Forgot-password lives under the public path, not /admin/*,
         // because the user is by definition not signed in. Both the

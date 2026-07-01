@@ -1,6 +1,6 @@
 # RFC 004 — Federation as Upstream OIDC Relying Party
 
-**Status.** Proposed (longer-term, no scheduled delivery)
+**Status.** Implemented (v0.76.4)
 **Priority.** Low. Feature-expansion RFC. Requires explicit owner
 direction and real-environment soak of the current core before scheduling.
 **Tracks.** ROADMAP / Longer term — "Federation".

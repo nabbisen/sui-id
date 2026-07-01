@@ -139,6 +139,66 @@ pub struct UserRow {
     pub external_stable_id: Option<String>,
 }
 
+// ── Federation (RFC 004) ────────────────────────────────────────────────────
+
+/// Upstream provisioning policy for a federation provider.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum ProvisionMode {
+    /// User must authenticate locally to create the link.
+    #[default]
+    LinkOnly,
+    /// Create a password-less local user on first sign-in (gated on
+    /// `email_verified = true`; otherwise held for admin approval).
+    ProvisionOnFirstLogin,
+}
+
+impl ProvisionMode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::LinkOnly => "link_only",
+            Self::ProvisionOnFirstLogin => "provision_on_first_login",
+        }
+    }
+    pub fn parse(s: &str) -> Self {
+        match s {
+            "provision_on_first_login" => Self::ProvisionOnFirstLogin,
+            _ => Self::LinkOnly,
+        }
+    }
+}
+
+/// Upstream OIDC identity-provider configuration (RFC 004).
+#[derive(Debug, Clone)]
+pub struct FederationProviderRow {
+    pub id: sui_id_shared::ids::FederationProviderId,
+    pub slug: String,
+    pub display_name: String,
+    pub issuer: String,
+    pub client_id: String,
+    /// XChaCha20-Poly1305 ciphertext of the client secret.
+    /// `None` for public clients (no secret).
+    pub client_secret_enc: Option<Vec<u8>>,
+    /// Space-separated requested scopes (e.g. `"openid email"`).
+    pub scopes: String,
+    pub provision_mode: ProvisionMode,
+    pub enabled: bool,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// A confirmed link between a local user and an upstream identity (RFC 004).
+#[derive(Debug, Clone)]
+pub struct FederationLinkRow {
+    pub user_id: sui_id_shared::ids::UserId,
+    pub provider_id: sui_id_shared::ids::FederationProviderId,
+    /// The `sub` claim from the upstream ID token — the mapping key (P1).
+    pub upstream_sub: String,
+    /// Last-seen upstream email; metadata only — never used for mapping (P1).
+    pub upstream_email: Option<String>,
+    pub linked_at: chrono::DateTime<chrono::Utc>,
+    pub last_seen_at: chrono::DateTime<chrono::Utc>,
+}
+
 #[derive(Debug, Clone)]
 pub struct CredentialRow {
     pub user_id: UserId,

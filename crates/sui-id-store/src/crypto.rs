@@ -71,6 +71,12 @@ impl MasterKey {
         String::from_utf8(out).expect("base64 is ascii")
     }
 
+    /// Expose the raw key bytes for HMAC derivation (RFC 004).
+    /// Callers must not log or persist the returned bytes.
+    pub fn as_bytes(&self) -> &[u8; 32] {
+        self.0.expose_secret()
+    }
+
     fn cipher(&self) -> XChaCha20Poly1305 {
         XChaCha20Poly1305::new(self.0.expose_secret().into())
     }

@@ -10,7 +10,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.76.3"
+version = "0.76.4"
 edition = "2024"
 rust-version = "1.91"
 license = "Apache-2.0"
@@ -106,7 +106,7 @@ mail-builder = "0.4"
 # (sync, spawn_blocking) after RFC 070 (v0.57.1). The HIBP handler
 # is now a plain async fn; reqwest::Client is stored in AppState.
 async-trait = "0.1"
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 
 # UI (Leptos used in SSR-only mode for the admin panel; no WASM/JS bundle is shipped
 #  in line with the project's minimal-runtime philosophy).

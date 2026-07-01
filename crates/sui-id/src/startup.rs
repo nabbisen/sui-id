@@ -271,6 +271,52 @@ pub async fn prepare(cfg: Config) -> Result<Startup> {
             }
         }
     }
+    // RFC 004: sync federation provider config into the DB.
+    // Each [[federation_provider]] block is upserted so operators
+    // can manage enabled/disabled state via the admin UI.
+    for cfg in &state.config.federation_providers {
+        use sui_id_store::models::{FederationProviderRow, ProvisionMode};
+        use sui_id_shared::ids::FederationProviderId;
+        let secret = match cfg.resolve_secret() {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::error!(error = %e, slug = %cfg.slug,
+                    "federation_provider secret error; provider skipped");
+                continue;
+            }
+        };
+        // Check if already in DB; create if missing.
+        match sui_id_store::repos::federation_provider::get_by_slug(
+            &state.db, &cfg.slug
+        ).await {
+            Ok(_) => {} // already exists; admin manages enabled state
+            Err(sui_id_store::StoreError::NotFound) => {
+                let now = state.clock.now();
+                let row = FederationProviderRow {
+                    id: FederationProviderId::new(),
+                    slug: cfg.slug.clone(),
+                    display_name: cfg.display_name.clone(),
+                    issuer: cfg.issuer.clone(),
+                    client_id: cfg.client_id.clone(),
+                    client_secret_enc: None, // encrypted by create()
+                    scopes: cfg.scopes.clone(),
+                    provision_mode: ProvisionMode::parse(&cfg.provision_mode),
+                    enabled: cfg.enabled,
+                    created_at: now,
+                    updated_at: now,
+                };
+                if let Err(e) = sui_id_store::repos::federation_provider::create(
+                    &state.db, &row, secret.as_deref()
+                ).await {
+                    tracing::error!(error = %e, slug = %cfg.slug,
+                        "failed to register federation provider");
+                } else {
+                    tracing::info!(slug = %cfg.slug, "federation provider registered");
+                }
+            }
+            Err(e) => tracing::error!(error = %e, "federation_provider lookup failed"),
+        }
+    }
     Ok(Startup { state, listen_addr, _log_guard: log_guard })
 }
 
