@@ -5,6 +5,67 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.65.0] — 2026-06-14
+
+**Accessibility: WCAG AA contrast correction — design-token foundation.**
+
+Unit 1 of the v0.65.0 UI-security handoff: a focused correction to the
+design-token colour values so every text-on-colour pair clears WCAG 2.1
+AA (4.5:1 for normal text) in light, explicit-dark, and auto-dark modes.
+No copy, layout, or i18n keys change.
+
+### Fixed — dark-mode text contrast (AA defect)
+
+In `[data-theme="dark"]` (and the matching `@media (prefers-color-scheme:
+dark)` root) every coloured fill rendered white or near-white text over a
+bright pastel, so all five text-on-colour pairs failed AA — as low as
+1.5:1 for warning. The foreground on dark accent / danger / warning /
+success / info now uses a single dark ink (`#1A1720`), pairing the bright
+pastels with dark text the same way light mode pairs darker fills with
+white text. The worst dark pair is now ~5.8:1.
+
+### Changed — light-mode semantic + accent contrast
+
+The light fills are darkened so white text passes AA: accent
+`#7C6BCF → #6956C0` (emphasis `#6956C0 → #5A48AD`), danger
+`#C94A4A → #BE3F3F`, success `#3FA37A → #2F7D5E`, info
+`#4A7FC9 → #3B6EA8`. Warning moves from a pale amber carrying dark ink to
+a darker amber `#D49B2A → #8A6500` with white text, consistent with the
+other semantics. The focus ring and accent border track the new accent
+(`--state-focus`, `--border-accent`). `::selection` behaviour is
+unchanged; its doc-comment ratios are corrected.
+
+### Added — explicit disabled tokens
+
+`--fg-disabled` / `--bg-disabled` are declared in all three mode roots
+(light `#5F5A66` on `#EFEAF4` = 5.65:1; dark `#9D96AA` on `#211D2A` =
+5.79:1). `button:disabled` now uses these tokens instead of
+`opacity: 0.7` over the live fill — opacity over colour degrades contrast
+unpredictably. Per the contrast contract, a disabled control is never the
+sole carrier of a meaningful value; read-only values use static rows.
+
+### Added — contrast CI test
+
+`crates/sui-id-web/src/tokens/tests.rs` parses the live `TOKENS_CSS`,
+resolves all three modes, and recomputes the WCAG ratio for every
+text-on-colour pair — failing the build if any drops below 4.5:1 (and the
+focus ring below the 3:1 UI-component threshold). It also asserts the
+explicit-dark and auto-dark roots stay in lockstep. The test validates
+the specification against the live tokens, not a hand-copied table.
+
+### Fixed — dangling `--surface-overlay` token reference
+
+`components/chrome.rs` set the user-menu popover background to
+`var(--surface-overlay)`, a token declared nowhere in the closed
+five-member surface scale. The reference is corrected to the intended
+`--surface-elevated` (the documented elevated surface for cards and
+popovers). This restores the `css-tokens` (RFC 049) gate, which the prior
+tree failed on this reference.
+
+CI invariants hold: `text-leaks` = 0, `inline-style-bound` = 1,
+`css-tokens` resolves, `semantic-palette-parity` = 36. The new contrast
+test passes in all three modes.
+
 ## [0.64.2] — 2026-06-06
 
 **UI/UX: "Less is more" — noise reduction pass.**

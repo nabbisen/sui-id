@@ -4,11 +4,14 @@
 //! CSS custom properties (variables) so themes can swap with a single
 //! `[data-theme="dark"]` attribute on the document root.
 //!
-//! The palette is **Lavender-Jade**: lavender accent (#7C6BCF light /
-//! #A89BFF dark), jade-influenced success (#3FA37A / #5FC49A), neutral
+//! The palette is **Lavender-Jade**: lavender accent (#6956C0 light /
+//! #A89BFF dark), jade-influenced success (#2F7D5E / #5FC49A), neutral
 //! cool greys for surfaces and foreground. Semantic colours (danger /
-//! warning / info / success) are tuned per mode for AA+ contrast on the
-//! default surface.
+//! warning / info / success) are tuned per mode for AA contrast on the
+//! default surface: light mode darkens the fills so white text passes;
+//! dark mode pairs the bright pastels with dark ink. A contrast test in
+//! tokens/tests.rs re-verifies every text-on-colour pair (>= 4.5:1) in
+//! all three modes (light / dark / auto-dark).
 //!
 //! Token naming follows the convention from the design memo:
 //!   --surface-* / --fg-* / --accent-* / --border-* / --state-* / --semantic.
@@ -33,9 +36,16 @@ pub const TOKENS_CSS: &str = r#"
   --fg-on-accent:  #FFFFFF;
   --fg-inverse:    #F6F5F9;
 
+  /* Disabled controls — explicit AA-compliant tokens, not opacity.
+     #5F5A66 on #EFEAF4 = 5.65:1. A disabled control must never be the
+     sole carrier of a meaningful value (read-only values use static
+     rows); see the UI/UX contrast contract. */
+  --fg-disabled:   #5F5A66;
+  --bg-disabled:   #EFEAF4;
+
   /* Accent */
-  --accent-default:  #7C6BCF;
-  --accent-emphasis: #6956C0;
+  --accent-default:  #6956C0;
+  --accent-emphasis: #5A48AD;
   --accent-subtle:   #E6E1F5;
 
   /* Semantic — full set per RFC 061 (v0.46.0).
@@ -44,32 +54,32 @@ pub const TOKENS_CSS: &str = r#"
    *   --{name}-subtle  — the tinted background for cards/banners
    *   --fg-on-{name}   — the foreground when text sits ON a -default fill
    * Contrast pairs all clear WCAG AA. */
-  --danger-default:  #C94A4A;
+  --danger-default:  #BE3F3F;
   --danger-subtle:   #F6E3E3;
   --fg-on-danger:    #FFFFFF;
 
-  --warning-default: #D49B2A;
+  --warning-default: #8A6500;
   --warning-subtle:  #FBF1D9;
-  --fg-on-warning:   #2A1F00;
+  --fg-on-warning:   #FFFFFF;
 
-  --success-default: #3FA37A;
+  --success-default: #2F7D5E;
   --success-subtle:  #DFF3E9;
   --fg-on-success:   #FFFFFF;
 
-  --info-default:    #4A7FC9;
+  --info-default:    #3B6EA8;
   --info-subtle:     #E2ECF8;
   --fg-on-info:      #FFFFFF;
 
   /* Interaction */
   --state-hover:    rgba(0, 0, 0, 0.05);
   --state-active:   rgba(0, 0, 0, 0.10);
-  --state-focus:    #7C6BCF;
+  --state-focus:    #6956C0;
   --state-disabled: rgba(31, 27, 36, 0.38);
 
   /* Border */
   --border-default: #D6D1DE;
   --border-muted:   #E9E4EF;
-  --border-accent:  #7C6BCF;
+  --border-accent:  #6956C0;
 
   /* Shadow (light) */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
@@ -173,8 +183,13 @@ pub const TOKENS_CSS: &str = r#"
   --fg-default:    #F1EEF6;
   --fg-muted:      #B8B2C4;
   --fg-subtle:     #7E788A;
-  --fg-on-accent:  #FFFFFF;
+  --fg-on-accent:  #1A1720;
   --fg-inverse:    #1F1B24;
+
+  /* Disabled controls — explicit AA-compliant tokens, not opacity.
+     #9D96AA on #211D2A = 5.79:1. */
+  --fg-disabled:   #9D96AA;
+  --bg-disabled:   #211D2A;
 
   --accent-default:  #A89BFF;
   --accent-emphasis: #C1B6FF;
@@ -182,19 +197,19 @@ pub const TOKENS_CSS: &str = r#"
 
   --danger-default:  #FF6B6B;
   --danger-subtle:   #3A1F22;
-  --fg-on-danger:    #FFFFFF;
+  --fg-on-danger:    #1A1720;
 
   --warning-default: #E6B85C;
   --warning-subtle:  #3A2E14;
-  --fg-on-warning:   #FFE7B3;
+  --fg-on-warning:   #1A1720;
 
   --success-default: #5FC49A;
   --success-subtle:  #1E3A2D;
-  --fg-on-success:   #FFFFFF;
+  --fg-on-success:   #1A1720;
 
   --info-default:    #6FA8FF;
   --info-subtle:     #1F2D44;
-  --fg-on-info:      #FFFFFF;
+  --fg-on-info:      #1A1720;
 
   --state-hover:    rgba(255, 255, 255, 0.06);
   --state-active:   rgba(255, 255, 255, 0.12);
@@ -224,8 +239,13 @@ pub const TOKENS_CSS: &str = r#"
     --fg-default:    #F1EEF6;
     --fg-muted:      #B8B2C4;
     --fg-subtle:     #7E788A;
-    --fg-on-accent:  #FFFFFF;
+    --fg-on-accent:  #1A1720;
     --fg-inverse:    #1F1B24;
+
+    /* Disabled controls — explicit AA-compliant tokens, not opacity.
+       #9D96AA on #211D2A = 5.79:1. */
+    --fg-disabled:   #9D96AA;
+    --bg-disabled:   #211D2A;
 
     --accent-default:  #A89BFF;
     --accent-emphasis: #C1B6FF;
@@ -233,19 +253,19 @@ pub const TOKENS_CSS: &str = r#"
 
     --danger-default:  #FF6B6B;
     --danger-subtle:   #3A1F22;
-    --fg-on-danger:    #FFFFFF;
+    --fg-on-danger:    #1A1720;
 
     --warning-default: #E6B85C;
     --warning-subtle:  #3A2E14;
-    --fg-on-warning:   #FFE7B3;
+    --fg-on-warning:   #1A1720;
 
     --success-default: #5FC49A;
     --success-subtle:  #1E3A2D;
-    --fg-on-success:   #FFFFFF;
+    --fg-on-success:   #1A1720;
 
     --info-default:    #6FA8FF;
     --info-subtle:     #1F2D44;
-    --fg-on-info:      #FFFFFF;
+    --fg-on-info:      #1A1720;
 
     --state-hover:    rgba(255, 255, 255, 0.06);
     --state-active:   rgba(255, 255, 255, 0.12);
@@ -287,12 +307,15 @@ pub const TOKENS_CSS: &str = r#"
    saturated accent gives the selection a strong, unambiguous
    shape regardless of where on the page it falls.
 
-   Light: #7C6BCF on text → 4.7:1 (selection text), strong
-          against #FAFAFA page bg.
-   Dark:  #A89BFF on text → 7.1:1 (selection text), strong
-          against #16121F page bg. */
+   Light: selection #6956C0 bg / #FFFFFF text → 5.69:1, strong
+          against the #F6F5F9 page bg.
+   Dark:  selection #A89BFF bg / #1A1720 ink text → 7.41:1, strong
+          against the #16131B page bg. */
 ::selection {
   background-color: var(--accent-default);
   color: var(--fg-on-accent);
 }
 "#;
+
+#[cfg(test)]
+mod tests;

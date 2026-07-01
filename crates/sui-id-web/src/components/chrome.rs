@@ -192,7 +192,7 @@ pub const CHROME_LAYOUT_CSS: &str = r#"
   right: 0;
   top: calc(100% + var(--space-1));
   min-width: 11rem;
-  background: var(--surface-overlay);
+  background: var(--surface-elevated);
   border: var(--border-width-default) solid var(--border-default);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-md);

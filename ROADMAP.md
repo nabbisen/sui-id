@@ -25,6 +25,32 @@ sequencing — each step independently shippable:
 | 8 | [084](rfcs/proposed/084-fuzzing-untrusted-input-boundaries.md) | Fuzzing harness | v0.68.0 |
 | 9 | [086](rfcs/proposed/086-formal-model-checking-pilot.md) | Kani / TLA+ / Flux pilots (time-boxed) | evaluation only |
 
+**Note — v0.65.0 took the token-foundation slot.** v0.65.0 shipped the
+UI-security handoff's Unit 1 (WCAG AA contrast + explicit disabled tokens
++ a contrast CI test; see CHANGELOG). The auth-core suggested releases
+above therefore shift forward by one (079 / 080 → v0.66.0, 081 / 082 →
+v0.67.0, 083 / 085 → v0.68.0, 084 → v0.69.0); 086 stays evaluation-only.
+Targets remain indicative, not commitments.
+
+**UI-security contract — handoff units 1–6.** The approved v2.3 UI/UX
+contract defines six units. Unit 1 (design tokens) is done (v0.65.0).
+Units 2–6 are `[NEW CONTRACT]` items and will each be filed as an RFC
+**behind the existing auth-core set** — RFC 087 onward, sequenced after
+079–086 — because they build on those primitives: the actor-scope
+boundary (081) underpins the auditor authorization matrix; the
+authorization-decision core (082) underpins 403-before-step-up and
+final-POST revalidation; audit completeness (085) underpins pending-change
+audit events. RFC numbers are assigned at file creation, not pre-reserved.
+Before drafting 087+, the v2.3 contract is reconciled against the
+as-built 081 / 082 shapes.
+
+_Known deferred prerequisite (→ unit 6)._ The `ThemeToggle` contract
+(blocking theme-init in `<head>`, `no-js` / `js` root-class swap,
+`<noscript>` fallback, `localStorage` try/catch) is held whole for unit 6
+rather than split across releases. The current `defer`-loaded init can
+flash an unthemed frame on first paint — a visual-only issue with no
+security impact, lowest in the priority order.
+
 **Mockup Integration epic — sixteen RFCs, Phase 0 → Phase 8.**
 Introduced in v0.49.0. The full epic table and reading order live
 in [`rfcs/README.md`](rfcs/README.md) ("Proposed — Mockup

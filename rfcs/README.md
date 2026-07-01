@@ -30,8 +30,8 @@ folders.
 ## A note on namespaces
 
 Most RFCs in this directory share a single sequential numbering line
-(`001-…`, `002-…`, … `086-…` at the time of writing; the next free
-slot is `087`). One **parallel namespace** also exists:
+(`001-…`, `002-…`, … `087-…` at the time of writing; the next free
+slot is `088`). One **parallel namespace** also exists:
 
 - **`RFC-MI-NNN-*`** — the **Mockup Integration epic**, introduced
   in v0.49.0. These RFCs cross-reference each other heavily by their
@@ -124,6 +124,12 @@ Recommended order: 078 → 080 → 079 → 081 → 082 → 083 / 085 →
 | 084 | [Fuzzing for untrusted input boundaries](./proposed/084-fuzzing-untrusted-input-boundaries.md) | B/C |
 | 085 | [Audit event completeness for privileged operations](./proposed/085-audit-event-completeness.md) | B |
 | 086 | [Lightweight formal / model-checking pilot](./proposed/086-formal-model-checking-pilot.md) | C — time-boxed pilot only |
+
+### Proposed — toolchain maintenance
+
+| # | Title | Category |
+|---|---|---|
+| 087 | [Clippy and rustfmt baseline cleanup (Rust 1.96)](./proposed/087-clippy-rustfmt-baseline-cleanup.md) | D — no logic change |
 
 ### Proposed — post-1.0 candidates (open for review)
 

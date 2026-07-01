@@ -75,9 +75,14 @@ button.ghost:hover:not(:disabled), .button.ghost:hover:not(.disabled) {
 }
 
 button:disabled, .button.disabled {
-  color: var(--state-disabled);
+  /* Explicit AA-compliant disabled tokens, not opacity: opacity over a
+     coloured fill degrades contrast unpredictably. fg-disabled on
+     bg-disabled clears WCAG AA in both modes (light 5.65:1 / dark
+     5.79:1). A disabled control must never be the sole carrier of a
+     meaningful value (see tokens.rs / the UI/UX contrast contract). */
+  color: var(--fg-disabled);
+  background: var(--bg-disabled);
   cursor: not-allowed;
-  opacity: 0.7;
 }
 
 /* Pure-text link styled as an inline action */
