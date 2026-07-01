@@ -880,4 +880,12 @@ pub struct Strings {
     // RFC 092: error summary heading
     pub error_summary_heading: &'static str,
     // RFC 092: copy field noun
+    // RFC 008: dynamic client registration
+    pub dynamic_reg_token_issued_flash: &'static str,
+    pub dynamic_reg_token_revoked_flash: &'static str,
+    pub dynamic_reg_registered_flash: &'static str,
+    pub dynamic_reg_token_invalid: &'static str,
+    pub dynamic_reg_token_expired: &'static str,
+    pub scope_catalog_created_flash: &'static str,
+    pub scope_catalog_deleted_flash: &'static str,
 }

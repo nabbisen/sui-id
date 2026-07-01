@@ -28,6 +28,10 @@ pub fn build_router(app: AppState) -> Router {
 
     let token_routes = Router::new()
         .route("/oauth2/token", post(oidc::token))
+        .route(
+            "/oauth2/register",
+            post(crate::handlers::dynamic_register::dynamic_register),
+        )
         .layer(token_cors);
 
     let router = Router::new()

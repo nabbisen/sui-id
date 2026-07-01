@@ -297,15 +297,15 @@ mod tests {
     #[test]
     fn admin_read_only_can_write_is_true() {
         let actor = make_actor(Role::Admin);
-        let ro = actor.into_read_admin();
-        assert!(ro.is_ok_and(|x| x.can_write()));
+        let ro = actor.into_read_admin().unwrap();
+        assert!(ro.can_write());
     }
 
     #[test]
     fn auditor_read_only_can_write_is_false() {
         let actor = make_actor(Role::Auditor);
-        let ro = actor.into_read_admin();
-        assert!(!ro.is_ok_and(|x| x.can_write()));
+        let ro = actor.into_read_admin().unwrap();
+        assert!(!ro.can_write());
     }
 
     // ── Actor.authorize delegates to authz core ───────────────────────────────

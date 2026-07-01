@@ -1,6 +1,6 @@
 # RFC 008 — Third-Party-Posture Bundle
 
-**Status.** Proposed (longer-term, no scheduled delivery)
+**Status.** Implemented (v0.76.3)
 **Priority.** Low. Single-phase feature bundle; must land coherently in
 one release, not piecemeal. Requires explicit owner direction before
 scheduling.

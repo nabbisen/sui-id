@@ -20,6 +20,7 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<ClientRow> {
             rusqlite::Error::FromSqlConversionFailure(8, rusqlite::types::Type::Text, Box::new(e))
         })?;
     let consent_policy_str: String = row.get(11).unwrap_or_else(|_| "none".to_string());
+    let registered_via_str: String = row.get(12).unwrap_or_else(|_| "admin".to_string());
     Ok(ClientRow {
         id: row.get::<_, String>(0)?.parse().map_err(|e| {
             rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
@@ -33,6 +34,11 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<ClientRow> {
         is_disabled: row.get::<_, i64>(5)? != 0,
         is_deleted: row.get::<_, i64>(6)? != 0,
         consent_policy: crate::models::ConsentPolicy::parse(&consent_policy_str),
+        registered_via: crate::models::RegistrationSource::parse(&registered_via_str),
+        logo_uri: row.get(13)?,
+        homepage_uri: row.get(14)?,
+        privacy_policy_uri: row.get(15)?,
+        tos_uri: row.get(16)?,
         created_at: row.get::<_, DateTime<Utc>>(9)?,
         updated_at: row.get::<_, DateTime<Utc>>(10)?,
     })
@@ -43,7 +49,9 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<ClientRow> {
 //                         post_logout_redirect_uris, created_at, updated_at.
 const SELECT: &str = "SELECT id, name, confidential, secret_hash, redirect_uris, \
                       is_disabled, is_deleted, allowed_scopes, \
-                      post_logout_redirect_uris, created_at, updated_at, consent_policy FROM clients";
+                      post_logout_redirect_uris, created_at, updated_at, consent_policy, \
+                      registered_via, logo_uri, homepage_uri, privacy_policy_uri, tos_uri \
+                      FROM clients";
 
 pub async fn create(db: &Database, c: &ClientRow) -> StoreResult<()> {
     let uris = serde_json::to_string(&c.redirect_uris)?;
@@ -248,4 +256,85 @@ pub async fn set_secret_hash(
         Ok(())
     })
     .await
+}
+
+/// RFC 008: update a client's application-identity fields.
+///
+/// Validates that any non-None URI is HTTPS (or http://localhost).  Returns
+/// `StoreError::InvalidData` if any URL fails the check (P6).
+pub async fn update_app_identity(
+    db: &Database,
+    id: ClientId,
+    logo_uri: Option<String>,
+    homepage_uri: Option<String>,
+    privacy_policy_uri: Option<String>,
+    tos_uri: Option<String>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> StoreResult<()> {
+    for uri in [&logo_uri, &homepage_uri, &privacy_policy_uri, &tos_uri]
+        .into_iter()
+        .flatten()
+    {
+        if !is_valid_app_uri(uri) {
+            return Err(StoreError::InvalidData(format!(
+                "application-identity URI must be HTTPS (or http://localhost): {uri}"
+            )));
+        }
+    }
+    let id_str = id.to_string();
+    db.with_conn(move |conn| {
+        let n = conn.execute(
+            "UPDATE clients SET logo_uri = ?1, homepage_uri = ?2, \
+             privacy_policy_uri = ?3, tos_uri = ?4, updated_at = ?5 WHERE id = ?6",
+            params![
+                logo_uri,
+                homepage_uri,
+                privacy_policy_uri,
+                tos_uri,
+                now,
+                id_str
+            ],
+        )?;
+        if n == 0 {
+            Err(StoreError::NotFound)
+        } else {
+            Ok(())
+        }
+    })
+    .await
+}
+
+/// Update the `registered_via` field on a client row.
+pub async fn set_registered_via(
+    db: &Database,
+    id: ClientId,
+    via: crate::models::RegistrationSource,
+    now: chrono::DateTime<chrono::Utc>,
+) -> StoreResult<()> {
+    let id_str = id.to_string();
+    let via_str = via.as_str().to_owned();
+    db.with_conn(move |conn| {
+        let n = conn.execute(
+            "UPDATE clients SET registered_via = ?1, updated_at = ?2 WHERE id = ?3",
+            params![via_str, now, id_str],
+        )?;
+        if n == 0 {
+            Err(StoreError::NotFound)
+        } else {
+            Ok(())
+        }
+    })
+    .await
+}
+
+/// Returns true when the URI is HTTPS or http://localhost (P6).
+pub fn is_valid_app_uri(uri: &str) -> bool {
+    if uri.starts_with("https://") {
+        return true;
+    }
+    // Allow http://localhost for development registrations.
+    if uri.starts_with("http://localhost") || uri.starts_with("http://127.0.0.1") {
+        return true;
+    }
+    false
 }

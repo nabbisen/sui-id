@@ -624,6 +624,13 @@ pub static STRINGS_JA: Strings = Strings {
     empty_signing_keys: "署名鍵が見つかりません。",
     empty_audit: "まだ監査イベントがありません。",
     error_summary_heading: "以下を修正してください：",
+    dynamic_reg_token_issued_flash: "登録トークンを発行しました。",
+    dynamic_reg_token_revoked_flash: "登録トークンを無効にしました。",
+    dynamic_reg_registered_flash: "クライアントを登録しました。",
+    dynamic_reg_token_invalid: "登録トークンが無効、使い切り、または期限切れです。",
+    dynamic_reg_token_expired: "登録トークンの有効期限が切れています。",
+    scope_catalog_created_flash: "スコープを作成しました。",
+    scope_catalog_deleted_flash: "スコープを削除しました。",
     button_edit: "編集",
     button_view_detail: "詳細を表示",
 

@@ -626,6 +626,13 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     empty_signing_keys: "未找到签名密钥。",
     empty_audit: "暂无审计事件。",
     error_summary_heading: "请修正以下问题：",
+    dynamic_reg_token_issued_flash: "注册令牌已签发。",
+    dynamic_reg_token_revoked_flash: "注册令牌已撤销。",
+    dynamic_reg_registered_flash: "客户端注册成功。",
+    dynamic_reg_token_invalid: "注册令牌无效、已耗尽或已过期。",
+    dynamic_reg_token_expired: "注册令牌已过期。",
+    scope_catalog_created_flash: "范围已创建。",
+    scope_catalog_deleted_flash: "范围已删除。",
     button_edit: "编辑",
     button_view_detail: "查看详情",
 

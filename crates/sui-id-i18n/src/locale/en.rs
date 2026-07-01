@@ -627,6 +627,13 @@ pub static STRINGS_EN: Strings = Strings {
     empty_signing_keys: "No signing keys found.",
     empty_audit: "No audit events yet.",
     error_summary_heading: "Please fix the following:",
+    dynamic_reg_token_issued_flash: "Registration token issued.",
+    dynamic_reg_token_revoked_flash: "Registration token revoked.",
+    dynamic_reg_registered_flash: "Client registered successfully.",
+    dynamic_reg_token_invalid: "Registration token is invalid, exhausted, or expired.",
+    dynamic_reg_token_expired: "Registration token has expired.",
+    scope_catalog_created_flash: "Scope created.",
+    scope_catalog_deleted_flash: "Scope deleted.",
     button_edit: "Edit",
     button_view_detail: "View details",
 

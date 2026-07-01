@@ -83,5 +83,10 @@ define_id!(
     "Identifier of a queued outbound email row in the persistent outbox."
 );
 
+define_id!(
+    RegistrationTokenId,
+    "Identifier of an RFC 7591 initial access token row (RFC 008). The raw token value is stored hashed; this id is the row's primary key."
+);
+
 #[cfg(test)]
 mod tests;

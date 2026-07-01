@@ -187,6 +187,9 @@ pub async fn authorize(
             client_name: client_for_consent.name.clone(),
             requested_scopes: scopes,
             csrf_token: csrf_tok.clone(),
+            // RFC 008: application identity from ClientRow.
+            logo_uri: client_for_consent.logo_uri.clone(),
+            homepage_uri: client_for_consent.homepage_uri.clone(),
         }, lang);
 
         let cookie_val = format!(

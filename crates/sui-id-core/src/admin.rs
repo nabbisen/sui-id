@@ -4,7 +4,7 @@
 //! re-exported here, so callers outside this crate need no changes.
 
 mod users;
-mod clients;
+pub mod clients;
 mod signing_keys;
 
 pub use users::{

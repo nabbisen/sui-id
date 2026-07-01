@@ -89,6 +89,11 @@ pub async fn create_client(
         is_disabled: false,
         is_deleted: false,
         consent_policy: sui_id_store::models::ConsentPolicy::default(),
+        registered_via: sui_id_store::models::RegistrationSource::Admin,
+        logo_uri: None,
+        homepage_uri: None,
+        privacy_policy_uri: None,
+        tos_uri: None,
         created_at: now,
         updated_at: now,
     };
@@ -279,7 +284,9 @@ pub async fn delete_client(
 
 // ---------- signing keys ----------
 
-fn validate_redirect_uri(uri: &str) -> CoreResult<()> {
+/// Validate a redirect URI. Public so other crates (e.g. dynamic
+/// registration handler) can call it without duplicating the logic.
+pub fn validate_redirect_uri(uri: &str) -> CoreResult<()> {
     let parsed = url::Url::parse(uri).map_err(|_| {
         CoreError::BadRequest(format!("redirect_uri is not a valid URL: {uri}"))
     })?;

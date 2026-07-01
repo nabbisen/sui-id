@@ -7,6 +7,10 @@ pub struct ConsentData {
     pub client_name: String,
     pub requested_scopes: Vec<String>,
     pub csrf_token: String,
+    /// RFC 008: optional application logo URL (validated HTTPS, never fetched).
+    pub logo_uri: Option<String>,
+    /// RFC 008: optional application home-page URL.
+    pub homepage_uri: Option<String>,
 }
 
 pub fn render_consent(data: ConsentData, lang: sui_id_i18n::Locale) -> String {
@@ -44,17 +48,40 @@ pub fn render_consent(data: ConsentData, lang: sui_id_i18n::Locale) -> String {
             })
             .collect();
 
+        // RFC 008: application identity — logo and homepage link.
+        let logo_uri = data.logo_uri.clone();
+        let homepage_uri = data.homepage_uri.clone();
+        let client_name_display = client_name.clone();
+
         let csrf = data.csrf_token.clone();
         view! {
             <crate::layout::AuthShell title=t.consent_title.to_string() lang=lang>
                 // RFC-MI-070: .consent-card overrides the auth-card max-width to
                 // give the scope list comfortable reading room (32rem vs 28rem).
-                // The four inline styles present before this RFC are eliminated.
                 <div class="auth-card consent-card">
+                    // RFC 008: show app logo if provided.
+                    {logo_uri.map(|uri| view! {
+                        <div class="consent-app-logo">
+                            <img src=uri alt=client_name_display.clone()
+                                 class="consent-app-logo__img" />
+                            <p class="text-caption muted">{"App logo provided by the application"}</p>
+                        </div>
+                    })}
                     <h1>{t.consent_title}</h1>
                     <p class="consent-intro">
-                        <strong>{client_name}</strong>
-                        " " {t.consent_app_wants_access}
+                        // RFC 008: wrap client name in a link to homepage if available.
+                        {match homepage_uri {
+                            Some(hp) => view! {
+                                <><a href=hp target="_blank" rel="noopener noreferrer">
+                                    <strong>{client_name}</strong>
+                                </a>
+                                " " {t.consent_app_wants_access}</>
+                            }.into_any(),
+                            None => view! {
+                                <><strong>{client_name}</strong>
+                                " " {t.consent_app_wants_access}</>
+                            }.into_any(),
+                        }}
                     </p>
                     <ul class="consent-scope-list">
                         {scope_items}

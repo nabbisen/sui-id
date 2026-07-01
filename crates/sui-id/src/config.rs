@@ -230,10 +230,8 @@ impl Config {
 
     /// Reasonable defaults useful for first-run output and tests.
     pub fn sample() -> Self {
-        Self {
-            server: ServerConfig {
-                metrics_enabled: bool::default(),
-                metrics_listen_addr: String::default(),
+        Self { user_sources: vec![],
+            server: ServerConfig { metrics_enabled: bool::default(), metrics_listen_addr: String::default(),
                 listen_addr: "127.0.0.1:8801".into(),
                 issuer: "http://127.0.0.1:8801".into(),
                 cookie_secure: false,
@@ -246,7 +244,6 @@ impl Config {
             tokens: TokensConfig::default(),
             log: LogConfig::default(),
             security: SecurityConfig::default(),
-            user_sources: vec![],
         }
     }
 
@@ -257,8 +254,7 @@ impl Config {
         if self.tokens.refresh_lifetime_secs <= self.tokens.access_lifetime_secs {
             anyhow::bail!("tokens.refresh_lifetime_secs should exceed access_lifetime_secs");
         }
-        if !self.server.issuer.starts_with("http://") && !self.server.issuer.starts_with("https://")
-        {
+        if !self.server.issuer.starts_with("http://") && !self.server.issuer.starts_with("https://") {
             anyhow::bail!("server.issuer must be an absolute http(s) URL");
         }
         for cidr in &self.server.trusted_proxies {
@@ -341,12 +337,8 @@ pub struct UserSourceConfig {
     pub search_timeout_secs: u64,
 }
 
-fn default_connect_timeout() -> u64 {
-    5
-}
-fn default_search_timeout() -> u64 {
-    10
-}
+fn default_connect_timeout() -> u64 { 5 }
+fn default_search_timeout() -> u64 { 10 }
 
 impl UserSourceConfig {
     /// Validate the config block, reading the bind password from the environment.
@@ -354,31 +346,23 @@ impl UserSourceConfig {
     /// the environment variable is absent.
     pub fn validate_and_resolve_password(&self) -> anyhow::Result<String> {
         if self.kind != "ldap" {
-            anyhow::bail!(
-                "user_source: unknown kind {:?}; only \"ldap\" is supported",
-                self.kind
-            );
+            anyhow::bail!("user_source: unknown kind {:?}; only \"ldap\" is supported", self.kind);
         }
         if !self.url.starts_with("ldaps://") {
             anyhow::bail!(
                 "user_source[{}]: url must start with ldaps:// (P2 — TLS required); \
                  got {:?}",
-                self.slug,
-                self.url
+                self.slug, self.url
             );
         }
         if self.bind_dn.is_empty() {
-            anyhow::bail!(
-                "user_source[{}]: bind_dn must not be empty (P2 — no anonymous bind)",
-                self.slug
-            );
+            anyhow::bail!("user_source[{}]: bind_dn must not be empty (P2 — no anonymous bind)", self.slug);
         }
         let password = std::env::var(&self.bind_password_env).map_err(|_| {
             anyhow::anyhow!(
                 "user_source[{}]: env var {:?} not set; the service-account \
                  password must be supplied via the environment, never inline",
-                self.slug,
-                self.bind_password_env
+                self.slug, self.bind_password_env
             )
         })?;
         Ok(password)

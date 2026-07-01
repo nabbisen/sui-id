@@ -19,23 +19,23 @@
 use axum::response::Redirect;
 use axum_extra::extract::cookie::CookieJar;
 
-mod apps;
 pub mod forms;
-mod language;
-mod mfa;
 mod overview;
+mod mfa;
+mod sessions;
 mod passkey;
+mod language;
 mod password;
-mod sessions; // RFC 072
+mod apps;        // RFC 072
 
-pub use apps::*;
 pub use forms::*;
-pub use language::*;
-pub use mfa::*;
 pub use overview::*;
-pub use passkey::*;
-pub use password::*;
+pub use mfa::*;
 pub use sessions::*;
+pub use passkey::*;
+pub use language::*;
+pub use password::*;
+pub use apps::*;
 
 // ---------- umbrella-level redirects ----------
 
@@ -71,7 +71,7 @@ pub(super) fn describe_auth_methods(methods: &[sui_id_shared::AuthMethod]) -> St
             AuthMethod::Totp => "TOTP",
             AuthMethod::RecoveryCode => "recovery code",
             AuthMethod::Webauthn => "passkey",
-            AuthMethod::Fed => "LDAP",
+            AuthMethod::Fed => "fed",
         })
         .collect();
     parts.join(" + ")

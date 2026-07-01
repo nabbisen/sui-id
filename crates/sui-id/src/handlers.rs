@@ -24,6 +24,7 @@ pub mod oauth_token;
 pub mod oidc;
 pub mod settings;
 pub mod setup;
+pub mod dynamic_register;
 pub mod metrics;
 pub mod step_up;
 

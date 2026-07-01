@@ -6,6 +6,7 @@
 
 pub mod audit;
 pub mod auth_codes;
+pub mod client_registration_token;
 pub mod clients;
 pub mod credentials;
 pub mod email_outbox;
@@ -15,6 +16,7 @@ pub mod password_reset_tokens;
 pub mod pending_settings_change;
 pub mod refresh_tokens;
 pub mod revoked_access_tokens;
+pub mod scope_definition;
 pub mod server_settings;
 pub mod sessions;
 pub mod signing_keys;

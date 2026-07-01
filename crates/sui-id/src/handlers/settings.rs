@@ -117,7 +117,7 @@ pub async fn basic_lang_post(
     Ok(with_csrf_cookie(resp, &app, &token))
 }
 
-// ---------- Security ----------
+// ---------- セキュリティ ----------
 
 pub async fn security_get(
     state_ext: AppStateExt,

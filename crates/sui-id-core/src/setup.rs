@@ -5,19 +5,19 @@
 //! layer. Once the first admin is created we mark the system initialized;
 //! subsequent calls to that endpoint must fail.
 
+use zeroize::Zeroizing;
 use crate::errors::{CoreError, CoreResult};
 use crate::password::{check_password_policy, hash_password};
 use crate::security::SecurityLevel;
 use crate::time::SharedClock;
 use chrono::Utc;
 use ed25519_dalek::SigningKey;
-use subtle::ConstantTimeEq;
 use sui_id_shared::ids::{SigningKeyId, UserId};
+use sui_id_store::models::{CredentialRow, UserRow};
+use sui_id_store::repos::{audit, credentials, signing_keys, state, users};
 use sui_id_store::Database;
 use sui_id_store::models::AuditLogRow;
-use sui_id_store::models::{CredentialRow, UserRow, UserSource};
-use sui_id_store::repos::{audit, credentials, signing_keys, state, users};
-use zeroize::Zeroizing;
+use subtle::ConstantTimeEq;
 
 pub struct CreatedInitialAdmin {
     pub user_id: UserId,
@@ -44,25 +44,15 @@ pub async fn create_initial_admin(
         return Err(CoreError::AlreadyInitialized);
     }
 
-    if !bool::from(
-        supplied_setup_token
-            .as_bytes()
-            .ct_eq(expected_setup_token.as_bytes()),
-    ) {
+    if !bool::from(supplied_setup_token.as_bytes().ct_eq(expected_setup_token.as_bytes())) {
         return Err(CoreError::Forbidden);
     }
 
     create_initial_admin_inner(
-        db,
-        clock,
-        username,
-        password,
-        display_name,
-        email,
+        db, clock, username, password, display_name, email,
         /* must_change */ false,
         /* headless */ false,
-    )
-    .await
+    ).await
 }
 
 /// Create the first administrator from the CLI (RFC 077) — **headless** path.
@@ -89,16 +79,10 @@ pub async fn create_initial_admin_headless(
     }
 
     create_initial_admin_inner(
-        db,
-        clock,
-        username,
-        password,
-        display_name,
-        email,
+        db, clock, username, password, display_name, email,
         must_change,
         /* headless */ true,
-    )
-    .await
+    ).await
 }
 
 /// Generate a random initial-admin password: 24 chars from `[A-Za-z0-9]`
@@ -153,7 +137,7 @@ async fn create_initial_admin_inner(
     let now = clock.now();
 
     // 1. Create user.
-    let user = UserRow {
+    let user = UserRow { source: sui_id_store::models::UserSource::default(), external_stable_id: None,
         id: UserId::new(),
         username: username.to_owned(),
         display_name: display_name.map(str::to_owned),
@@ -175,13 +159,11 @@ async fn create_initial_admin_inner(
         last_login_at: None,
         is_disabled: false,
         is_deleted: false,
-        user_uuid: uuid::Uuid::new_v4(),
+     user_uuid: uuid::Uuid::new_v4(),
         created_at: now,
         updated_at: now,
         failed_login_count: 0,
         locked_until: None,
-        source: UserSource::default(),
-        external_stable_id: None,
     };
     users::create(db, &user).await.map_err(|e| match e {
         sui_id_store::StoreError::Conflict => CoreError::Conflict("username already in use".into()),
@@ -214,8 +196,7 @@ async fn create_initial_admin_inner(
             sk.to_bytes().as_ref(),
             pk.to_bytes().as_ref(),
             true,
-        )
-        .await?;
+        ).await?;
     }
 
     // 4. Mark system initialized.
@@ -230,14 +211,9 @@ async fn create_initial_admin_inner(
             action: "setup.create_initial_admin".into(),
             target: Some(user.id.to_string()),
             result: "ok".into(),
-            note: if headless {
-                Some("headless".into())
-            } else {
-                None
-            },
+            note: if headless { Some("headless".into()) } else { None },
         },
-    )
-    .await?;
+    ).await?;
 
     Ok(CreatedInitialAdmin {
         user_id: user.id,
@@ -285,26 +261,20 @@ mod tests {
         let clock = crate::time::system_clock();
 
         let created = create_initial_admin_headless(
-            &db,
-            &clock,
+            &db, &clock,
             "first-admin",
             "a-long-enough-password",
             Some("First Admin"),
             Some("admin@example.com"),
             /* must_change */ true,
-        )
-        .await
-        .expect("headless setup");
+        ).await.expect("headless setup");
 
         assert_eq!(created.username, "first-admin");
         assert!(state::is_initialized(&db).expect("state read"));
 
         // must_change persisted as passed.
         let cred = credentials::get(&db, created.user_id).await.expect("cred");
-        assert!(
-            cred.must_change,
-            "generated-password intent must be recorded"
-        );
+        assert!(cred.must_change, "generated-password intent must be recorded");
     }
 
     #[tokio::test]
@@ -313,27 +283,14 @@ mod tests {
         let clock = crate::time::system_clock();
 
         create_initial_admin_headless(
-            &db,
-            &clock,
-            "first-admin",
-            "a-long-enough-password",
-            None,
-            None,
-            false,
-        )
-        .await
-        .expect("first setup");
+            &db, &clock, "first-admin", "a-long-enough-password",
+            None, None, false,
+        ).await.expect("first setup");
 
         let second = create_initial_admin_headless(
-            &db,
-            &clock,
-            "second-admin",
-            "another-long-password",
-            None,
-            None,
-            false,
-        )
-        .await;
+            &db, &clock, "second-admin", "another-long-password",
+            None, None, false,
+        ).await;
         assert!(matches!(second, Err(CoreError::AlreadyInitialized)));
     }
 
@@ -344,15 +301,8 @@ mod tests {
 
         // 8 chars passes Development but must fail here: setup is always Standard.
         let r = create_initial_admin_headless(
-            &db,
-            &clock,
-            "first-admin",
-            "changeme",
-            None,
-            None,
-            false,
-        )
-        .await;
+            &db, &clock, "first-admin", "changeme", None, None, false,
+        ).await;
         assert!(matches!(r, Err(CoreError::BadRequest(_))));
         assert!(!state::is_initialized(&db).expect("state read"));
     }
@@ -363,34 +313,22 @@ mod tests {
         let clock = crate::time::system_clock();
 
         let r = create_initial_admin(
-            &db,
-            &clock,
-            "expected-token",
-            "wrong-token",
-            "first-admin",
-            "a-long-enough-password",
-            None,
-            None,
-        )
-        .await;
+            &db, &clock,
+            "expected-token", "wrong-token",
+            "first-admin", "a-long-enough-password",
+            None, None,
+        ).await;
         assert!(matches!(r, Err(CoreError::Forbidden)));
 
         let ok = create_initial_admin(
-            &db,
-            &clock,
-            "expected-token",
-            "expected-token",
-            "first-admin",
-            "a-long-enough-password",
-            None,
-            None,
-        )
-        .await;
+            &db, &clock,
+            "expected-token", "expected-token",
+            "first-admin", "a-long-enough-password",
+            None, None,
+        ).await;
         assert!(ok.is_ok());
         // Wizard-created credential is NOT flagged must_change.
-        let cred = credentials::get(&db, ok.unwrap().user_id)
-            .await
-            .expect("cred");
+        let cred = credentials::get(&db, ok.unwrap().user_id).await.expect("cred");
         assert!(!cred.must_change);
     }
 }

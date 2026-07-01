@@ -178,6 +178,31 @@ impl ConsentPolicy {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+/// How a client was registered (RFC 008).
+pub enum RegistrationSource {
+    /// Registered by an operator via the admin panel (default).
+    #[default]
+    Admin,
+    /// Self-registered via RFC 7591 dynamic client registration.
+    Dynamic,
+}
+
+impl RegistrationSource {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Admin => "admin",
+            Self::Dynamic => "dynamic",
+        }
+    }
+    pub fn parse(s: &str) -> Self {
+        match s {
+            "dynamic" => Self::Dynamic,
+            _ => Self::Admin,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ClientRow {
     pub id: ClientId,
@@ -198,6 +223,13 @@ pub struct ClientRow {
     pub is_deleted: bool,
     /// Per-client consent policy (RFC 038).
     pub consent_policy: ConsentPolicy,
+    /// RFC 008: how the client was registered.
+    pub registered_via: RegistrationSource,
+    /// RFC 008: application identity URLs (validated HTTPS, never fetched).
+    pub logo_uri: Option<String>,
+    pub homepage_uri: Option<String>,
+    pub privacy_policy_uri: Option<String>,
+    pub tos_uri: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

@@ -5,6 +5,86 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.76.3] — 2026-06-14
+
+**RFC 008 — Third-Party-Posture Bundle.** Completes the five-capability
+bundle enabling sui-id to serve third-party OAuth clients with a proper
+consent boundary.
+
+### Added — store layer
+
+**Migration 0035** — `clients` table widened: `registered_via TEXT NOT NULL
+DEFAULT 'admin' CHECK (... IN ('admin','dynamic'))`, `logo_uri TEXT`,
+`homepage_uri TEXT`, `privacy_policy_uri TEXT`, `tos_uri TEXT`.
+
+**Migration 0036** — two new tables:
+
+- `scope_definition(name PK, requires_consent, is_default, created_at)` —
+  seeded with `openid` (no consent), `profile`, `email`, `offline_access`
+  (consent required). Operators extend via admin pages.
+- `client_registration_token(id PK, token_hash UNIQUE, max_uses, used_count,
+  expires_at, revoked_at, note, created_at, updated_at)` — RFC 7591 initial
+  access tokens, stored hashed (P5).
+
+**`RegistrationSource { Admin, Dynamic }`** enum in `models.rs`.
+**`RegistrationTokenId`** added to `sui-id-shared::ids`.
+
+**`repos::scope_definition`** — list, get, create, delete, consented_names;
+4 unit tests.
+
+**`repos::client_registration_token`** — create, list, get, find_by_hash,
+`consume` (atomic: reads + validates + increments used_count in one
+transaction; `?`-propagates Err to trigger rollback on failure), revoke;
+4 unit tests.
+
+**`repos::clients`** — SELECT + map_row extended for 5 new columns;
+`update_app_identity` (validates HTTPS-or-localhost per P6);
+`set_registered_via`; `is_valid_app_uri` helper.
+
+### Added — `POST /oauth2/register` (RFC 7591)
+
+Handler `crates/sui-id/src/handlers/dynamic_register.rs`:
+
+- Bearer token extracted from `Authorization` header and SHA-256-hashed
+  before calling `consume()` (P4/P5).
+- Unknown or expired/exhausted token → 400 `invalid_token`.
+- `redirect_uris` and `client_name` required; application-identity URIs
+  validated HTTPS-or-localhost (P6); validation delegates to core's
+  `validate_redirect_uri` (now `pub`).
+- Client created with `is_disabled = true` (admin must explicitly enable;
+  P4), `consent_policy = 'first_time_only'`, `registered_via = 'dynamic'`.
+- Returns RFC 7591 `ClientInformation` JSON with `client_id`,
+  `client_secret` (for confidential clients), and reflected metadata.
+- Audit event `client.dynamic_register` emitted.
+
+### Added — CLI `sui-id admin issue-registration-token`
+
+Generates a 32-byte random token, SHA-256-hashes it into
+`client_registration_token`, prints the raw token once with usage example.
+Accepts `--max-uses N` (default 1) and `--note TEXT`.
+
+### Changed — consent screen (RFC 008 capability 4)
+
+`ConsentData` gains `logo_uri: Option<String>` and `homepage_uri:
+Option<String>`.  `render_consent` displays the app logo (with "App logo
+provided by the application" label per P6) and wraps the client name in a
+link to the homepage.  The consent gate in `oidc.rs` passes both fields
+from `ClientRow`.
+
+### Added — i18n strings (7 × 3 locales)
+
+`dynamic_reg_token_issued_flash`, `dynamic_reg_token_revoked_flash`,
+`dynamic_reg_registered_flash`, `dynamic_reg_token_invalid`,
+`dynamic_reg_token_expired`, `scope_catalog_created_flash`,
+`scope_catalog_deleted_flash` — in English, Japanese, Chinese Simplified.
+
+### Audit matrix
+
+`client.dynamic_register` added → **46 × 46**.
+
+**135/135 tests pass** (93 in store including 8 new RFC 008 tests).
+0 clippy errors. All 5 CI gates PASS.
+
 ## [0.76.2] — 2026-06-14
 
 **RFC 009 — Pluggable SQL Backends, Step 1: `Backend` trait + `SqliteBackend`.**
