@@ -5,6 +5,65 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.69.0] — 2026-06-14
+
+**Security assurance: RFC 084 (fuzzing harness) + RFC 086 (formal verification
+pilot).** The final two RFCs of the auth-core assurance arc (078–086). No
+wire-behaviour change; no production-code logic change.
+
+### Added — cargo-fuzz harness (RFC 084)
+
+`fuzz/` is a separate cargo workspace (excluded from the main workspace and
+release archives) with six fuzz targets:
+
+| Target | Input surface | Invariants |
+|---|---|---|
+| `accept_language` | Any bytes → `negotiate_from_accept_language` | P1 no-panic; P3 round-trip `tag()` → `Locale::parse` |
+| `ids_fromstr` | Any bytes → all 9 typed-ID `FromStr` impls | P1 no-panic; P3 round-trip `Ok(v) ⇒ v.to_string().parse() == Ok(v)` |
+| `pkce_verify` | NUL-separated (method, verifier, challenge) | P1 no-panic; P2 accept ⇒ method=S256 and SHA-256(verifier)=challenge |
+| `authorize_params` | Structured `(registered, submitted)` pairs | P1 no-panic; P2 accept ⇒ exact membership |
+| `jwt_parse` | Arbitrary bytes → `jwt::verify` with fixed test key | P1 no-panic |
+| `logout_params` | Structured `(registered, submitted)` pairs | P1 no-panic; P2 accept ⇒ exact membership |
+
+`pkce_verify`, `authorize_params`, `jwt_parse`, and `logout_params` are gated
+behind the `core-targets` cargo feature (require `libssl-dev`); `accept_language`
+and `ids_fromstr` build and run in the openssl-free CI environment.
+
+**Smoke run (1 000 iterations each):** `accept_language` and `ids_fromstr`
+both completed clean — 0 panics, 0 findings, libFuzzer growing corpus
+(31 entries / 82 bytes and 16 entries / 34 bytes respectively).
+
+`fuzz/rust-toolchain.toml` pins the nightly toolchain so the stable MSRV
+of the main workspace is untouched. Corpus seeds are committed under
+`fuzz/corpus/`. A scheduled CI workflow (`.github/workflows/fuzz.yml`) runs
+at 100 000 iterations per openssl-free target every Monday; PRs touching
+`fuzz/` get a `cargo fuzz build` smoke check.
+
+### Added — formal verification pilot (RFC 086)
+
+Three time-boxed pilots evaluated. Deliverables committed:
+
+**Pilot K (Kani):** Five proof harnesses in `crates/sui-id-core/src/authz.rs`
+under `#[cfg(kani)]`, exhaustively verifying P1–P5 of the RFC 082 decision
+table over the complete finite input space. Recommendation: **Adopt** for
+`authorize` (scheduled CI once Kani is available); **Defer** for `verify_pkce`
+(SHA-256 stub required, fuzz already covers panic-freedom).
+
+**Pilot T (TLA+):** `verification/refresh_rotation.tla` models the RFC 080
+rotation protocol with both the guarded variant (Inv1 holds) and a
+deliberately guard-less variant (Inv1 must be violated — the pre-RFC-080
+bug in model form). Recommendation: **Adopt** as living design documentation;
+schedule TLC verification once TLA+ Toolbox is available in CI.
+
+**Pilot F (Flux):** Desk evaluation only. Recommendation: **Defer** — annotation
+burden and nightly-fork requirement are incompatible with the project's
+"understandable to normal Rust developers" principle (strategy §4).
+
+Full reports with effort, findings, and revisit triggers in
+`verification/pilot-reports.md`.
+
+**96/96 tests pass. All 5 CI invariants PASS.**
+
 ## [0.68.0] — 2026-06-14
 
 **Security assurance: RFC 083 (security state-machine testing) + RFC 085

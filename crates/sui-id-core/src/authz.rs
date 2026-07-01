@@ -147,5 +147,100 @@ pub fn authorize(role: Role, action: Action) -> Decision {
     }
 }
 
+/// Kani verification harnesses (RFC 086, Pilot K).
+///
+/// These harnesses are only compiled when `--cfg=kani` is active (i.e. when
+/// running `cargo kani`). They have zero cost in normal builds. They prove
+/// RFC 082 properties P1–P5 exhaustively over the finite input space.
+///
+/// To run (requires Kani to be installed):
+/// ```sh
+/// cargo kani --tests -- authz::verify_p1 authz::verify_p2 authz::verify_p3 \
+///            authz::verify_p4 authz::verify_p5
+/// ```
+#[cfg(kani)]
+mod kani_proofs {
+    use super::*;
+    use kani::Arbitrary;
+
+    /// P1 (deny-by-default): the function terminates for every input.
+    #[kani::proof]
+    fn verify_p1_totality() {
+        let role: Role = kani::any();
+        let action: Action = kani::any();
+        // If this proof succeeds, the function is total (no panics, no hangs).
+        let _ = authorize(role, action);
+    }
+
+    /// P2 (role monotonicity): if User is permitted, Admin must also be permitted.
+    #[kani::proof]
+    fn verify_p2_monotonicity_user_implies_admin() {
+        let action: Action = kani::any();
+        if authorize(Role::User, action) == Decision::Permit {
+            kani::assert(
+                authorize(Role::Admin, action) == Decision::Permit,
+                "P2: User permitted but Admin denied",
+            );
+        }
+    }
+
+    /// P3 (read/write separation): Auditor is denied every mutation action.
+    #[kani::proof]
+    fn verify_p3_auditor_write_impossibility() {
+        let action: Action = kani::any();
+        kani::assume(matches!(
+            action,
+            Action::AdminWriteUsers
+                | Action::AdminWriteClients
+                | Action::AdminWriteSettings
+                | Action::AdminRotateSigningKey
+                | Action::AdminRotateClientSecret
+                | Action::AdminResetUserMfa
+                | Action::AdminForceLogout
+                | Action::AdminChangeUserRole { .. }
+                | Action::AdminDisableUser { .. }
+                | Action::AdminDeleteUser { .. }
+        ));
+        kani::assert(
+            authorize(Role::Auditor, action) == Decision::Deny,
+            "P3: Auditor permitted a mutation action",
+        );
+    }
+
+    /// P4 (last-admin protection): last-admin variants deny for every role.
+    #[kani::proof]
+    fn verify_p4_last_admin_denial() {
+        let role: Role = kani::any();
+        let action: Action = kani::any();
+        kani::assume(matches!(
+            action,
+            Action::AdminChangeUserRole { target_is_last_admin: true }
+                | Action::AdminDisableUser { target_is_last_admin: true }
+                | Action::AdminDeleteUser { target_is_last_admin: true }
+        ));
+        kani::assert(
+            authorize(role, action) == Decision::Deny,
+            "P4: last-admin action permitted",
+        );
+    }
+
+    /// P5 (self-scope): User permits are confined to Self* actions.
+    #[kani::proof]
+    fn verify_p5_user_self_scope() {
+        let action: Action = kani::any();
+        kani::assume(!matches!(
+            action,
+            Action::SelfReadSecurity
+                | Action::SelfWriteSecurity
+                | Action::SelfRevokeOwnSessions
+                | Action::SelfRevokeConsent
+        ));
+        kani::assert(
+            authorize(Role::User, action) == Decision::Deny,
+            "P5: User permitted a non-Self action",
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests;

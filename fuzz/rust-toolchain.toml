@@ -1,0 +1,5 @@
+[toolchain]
+# Pinned nightly for cargo-fuzz / libFuzzer (-Zsanitizer support).
+# Updated deliberately; failures stay in the scheduled CI job, not on
+# the PR critical path. The main workspace stable MSRV is untouched.
+channel = "nightly"

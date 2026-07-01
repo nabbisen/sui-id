@@ -1,6 +1,6 @@
 # RFC 084 — Fuzzing Strategy for Untrusted Input Boundaries
 
-**Status.** Proposed
+**Status.** Implemented (v0.69.0)
 **Tracks.** Strategy theme 7 (audit gap G7). Category B
 (infrastructure) / C (target growth).
 **Touches.** New top-level `fuzz/` cargo-fuzz workspace

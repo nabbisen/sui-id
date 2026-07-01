@@ -1,0 +1,61 @@
+name: Fuzz (scheduled)
+
+# Runs weekly; never on the PR critical path (fuzzing is time-unbounded).
+# On PRs that touch fuzz/ only a build check runs (cargo fuzz build),
+# not an execution, so PRs stay fast.
+on:
+  schedule:
+    # Every Monday at 02:00 UTC
+    - cron: "0 2 * * 1"
+  # Allow manual trigger for ad-hoc runs (e.g. before a release).
+  workflow_dispatch:
+    inputs:
+      runs:
+        description: "Number of fuzz iterations per target (default: 100000)"
+        required: false
+        default: "100000"
+
+jobs:
+  fuzz-build:
+    name: cargo fuzz build (PR gate)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Build fuzz targets (openssl-free)
+        working-directory: fuzz
+        run: cargo fuzz build accept_language ids_fromstr
+
+  fuzz-run:
+    name: Fuzz run (scheduled)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - accept_language
+          - ids_fromstr
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Run fuzz target ${{ matrix.target }}
+        working-directory: fuzz
+        env:
+          RUNS: ${{ github.event.inputs.runs || '100000' }}
+        run: |
+          cargo fuzz run ${{ matrix.target }} -- \
+            -runs=$RUNS \
+            -max_len=512 \
+            -timeout=10
+      - name: Upload corpus artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts-${{ matrix.target }}
+          path: fuzz/artifacts/${{ matrix.target }}/

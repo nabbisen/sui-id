@@ -1,0 +1,75 @@
+[workspace]
+
+[package]
+name = "sui-id-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+# cargo-fuzz metadata — marks this as a fuzz workspace
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+
+# Crates that don't pull openssl (safe to depend on in this workspace):
+sui-id-shared = { path = "../crates/sui-id-shared" }
+sui-id-i18n   = { path = "../crates/sui-id-i18n" }
+
+# sui-id-core pulls webauthn-rs → openssl. It is optional so that
+# the openssl-free targets (accept_language, ids_fromstr) build in
+# environments without libssl-dev. Enable with --features core-targets.
+sui-id-core   = { path = "../crates/sui-id-core", optional = true }
+# Additional deps for core-dependent targets (jwt_parse uses ed25519-dalek).
+ed25519-dalek = { version = "2.1", features = ["rand_core", "pkcs8"] }
+serde_json    = "1.0"
+
+[features]
+# Enable fuzz targets that depend on sui-id-core (requires libssl-dev).
+core-targets = ["dep:sui-id-core"]
+
+# Fuzz targets — each is a separate binary.
+
+[[bin]]
+name = "accept_language"
+path = "fuzz_targets/accept_language.rs"
+test = false
+doc  = false
+bench = false
+
+[[bin]]
+name = "ids_fromstr"
+path = "fuzz_targets/ids_fromstr.rs"
+test = false
+doc  = false
+bench = false
+
+[[bin]]
+name = "pkce_verify"
+path = "fuzz_targets/pkce_verify.rs"
+test = false
+doc  = false
+bench = false
+
+[[bin]]
+name = "authorize_params"
+path = "fuzz_targets/authorize_params.rs"
+test = false
+doc  = false
+bench = false
+
+[[bin]]
+name = "jwt_parse"
+path = "fuzz_targets/jwt_parse.rs"
+test = false
+doc  = false
+bench = false
+
+[[bin]]
+name = "logout_params"
+path = "fuzz_targets/logout_params.rs"
+test = false
+doc  = false
+bench = false

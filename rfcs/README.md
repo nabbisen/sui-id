@@ -123,7 +123,7 @@ Recommended order: 078 → 080 → 079 → 081 → 082 → 083 / 085 →
 | 083 | [Security state-machine testing with proptest](./proposed/083-security-state-machine-testing.md) | B |
 | 084 | [Fuzzing for untrusted input boundaries](./proposed/084-fuzzing-untrusted-input-boundaries.md) | B/C |
 | 085 | [Audit event completeness for privileged operations](./proposed/085-audit-event-completeness.md) | B |
-| 086 | [Lightweight formal / model-checking pilot](./proposed/086-formal-model-checking-pilot.md) | C — time-boxed pilot only |
+| 086 | [Lightweight formal / model-checking pilot](./done/086-formal-model-checking-pilot.md) | C — shipped v0.69.0 |
 
 ### Proposed — toolchain maintenance
 

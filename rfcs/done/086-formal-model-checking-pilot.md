@@ -1,6 +1,6 @@
 # RFC 086 — Lightweight Formal / Model-Checking Pilot
 
-**Status.** Proposed
+**Status.** Implemented (v0.69.0)
 **Tracks.** Strategy theme 9. Category C — pilot only; explicitly
 time-boxed; outcome is a recommendation, not adoption.
 **Touches.** New `verification/` directory (excluded from release

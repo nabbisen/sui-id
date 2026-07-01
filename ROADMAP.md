@@ -23,7 +23,9 @@ sequencing — each step independently shippable:
 | 6 | [083](rfcs/proposed/083-security-state-machine-testing.md) | State-machine proptest harness | v0.67.0 |
 | 7 | [085](rfcs/proposed/085-audit-event-completeness.md) | Audit completeness + atomicity | v0.67.0 |
 | 8 | [084](rfcs/proposed/084-fuzzing-untrusted-input-boundaries.md) | Fuzzing harness | v0.68.0 |
-| 9 | [086](rfcs/proposed/086-formal-model-checking-pilot.md) | Kani / TLA+ / Flux pilots (time-boxed) | evaluation only |
+| ✅ 9 | [086](rfcs/done/086-formal-model-checking-pilot.md) | Kani / TLA+ / Flux pilots (time-boxed) | evaluation only |
+
+**Auth-core assurance arc (RFCs 078–086): COMPLETE as of v0.69.0.**
 
 **Note — v0.65.0 took the token-foundation slot.** v0.65.0 shipped the
 UI-security handoff's Unit 1 (WCAG AA contrast + explicit disabled tokens
@@ -137,6 +139,7 @@ deferred (verification phase, spec §22).
 
 | Version | What shipped |
 |---|---|
+| v0.69.0 | **RFC 084 + RFC 086 (fuzzing + formal verification pilot).** Six cargo-fuzz targets; smoke runs clean (1 000 iter each on openssl-free targets); nightly toolchain pinned; scheduled weekly CI job. TLA+ spec for RFC 080 rotation protocol (guarded = Inv1 holds; guard-less = Inv1 violated). Five Kani proof harnesses for RFC 082 P1–P5 under #[cfg(kani)]. Pilot reports: Kani(authorize)=Adopt, TLA+(rotation)=Adopt(doc), Flux=Defer. **96/96 tests; all 5 CI invariants PASS.** |
 | v0.68.0 | **RFC 083 + RFC 085 (state-machine testing + audit completeness).** Three proptest state-machine harnesses (auth-codes, refresh-tokens, sessions) — 256 cases each, named INV_* invariants, 27s total. `audit::append_within_tx` for Class-A atomicity. `AuditReceipt`/`Audited<T>` types in `sui-id-core`. Normative audit coverage matrix (39 events) + CI gate (bidirectional, 39×39 PASS). Fixed stale dashboard prefix. **96/96 tests; all 5 CI invariants PASS.** |
 | v0.67.0 | **RFC 081 + RFC 082 (actor scope boundary + authorization decision core).** `Actor`/`AdminActor`/`ReadOnlyAdminActor`/`SelfActor` capability types; pure `authorize(role, action) -> Decision` table with exhaustive tests (P1–P5). All admin mutations now require `&AdminActor`; self-service requires `&SelfActor`; a privileged call without proof of privilege is a compile error. Last-admin safeguard delegates to the authz table. `require_admin` deprecated. **90/90 tests; all CI invariants unchanged.** |
 | v0.66.0 | **RFC 079 + RFC 080 (auth-code lifecycle assurance + refresh-token rotation atomicity).** `consume` enforced by SQL predicate + rows-affected guard. Typestate pipeline (`ConsumedCode`→`BoundCode`→`PkceVerifiedCode`→`IssuableGrant`) in `exchange_code`. `begin_rotation` closes the 3-closure TOCTOU race with a single-tx rows-affected arbitration; `RotationLookup` makes reuse-detection explicit. Migration 0031. **90/90 tests; all CI invariants unchanged.** |
