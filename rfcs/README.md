@@ -133,6 +133,14 @@ Recommended order: 078 → 080 → 079 → 081 → 082 → 083 / 085 →
 
 ### Proposed — post-1.0 candidates (open for review)
 
+Each of these now carries a full detailed design (the standard
+15-section RFC structure: Summary, Motivation, Background, Target code
+areas, Security properties, Non-goals, Proposed design, Data model
+impact, API impact, Testing strategy, Migration strategy, Rollout plan,
+Risks, Acceptance criteria, Open questions). They remain `Proposed`
+with no scheduled delivery; each requires explicit owner direction and
+real-environment soak of the current core before any implementation.
+
 | ID  | Title                                                          | Priority |
 |-----|----------------------------------------------------------------|----------|
 | 008 | [Third-party-posture bundle](./proposed/008-third-party-posture.md) | Low-medium — post-1.0 |

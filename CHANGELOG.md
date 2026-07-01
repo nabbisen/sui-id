@@ -5,6 +5,61 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.75.1] — 2026-06-14
+
+**Documentation: detailed write-ups for the six proposed post-1.0 RFCs.**
+No code change. The exploratory sketches for RFCs 004, 005, 006, 008, 009,
+and 025 were expanded into the project's canonical 15-section RFC structure
+(Summary, Motivation, Background, Target code areas, Security properties,
+Non-goals, Proposed design, Data model impact, API impact, Testing
+strategy, Migration strategy, Rollout plan, Risks and mitigations,
+Acceptance criteria, Open questions).
+
+All six remain `Proposed` with no scheduled delivery; each requires
+explicit owner direction and real-environment soak before implementation.
+
+### Written up
+
+- **RFC 004 — Federation (upstream OIDC RP).** Trust-boundary design
+  settled: mapping by upstream `sub` (never email), no auto-merge by
+  email, provision-on-first-login gated on verified email, local MFA never
+  bypassed, no upstream-token storage. Two new tables
+  (`federation_provider`, `federation_link`).
+- **RFC 005 — Pluggable user backends (read-only LDAP).** `UserSource`
+  trait, local-first hardcoded cascade (fail-soft so a flaky directory
+  never locks out the local admin), password-less shadow rows, RFC 4515
+  filter escaping, TLS-required, timing-equivalent miss/wrong-password.
+- **RFC 006 — Prometheus metrics endpoint.** Auth-gated `/metrics`
+  (admin session or constant-time bearer token), bounded no-PII catalog,
+  no per-user/per-client cardinality, disabled-by-default (404 when off).
+- **RFC 008 — Third-party-posture bundle.** Single-release bundle: consent
+  screen (the security boundary), RFC 7591 dynamic registration
+  (token-gated by default, clients start disabled), per-client scope
+  policy + localised scope catalog, application identity (validated-not-
+  fetched URLs), per-user refresh-token revocation. Explicitly ships
+  whole-or-not.
+- **RFC 009 — Pluggable SQL backends (PostgreSQL, MariaDB).** `Backend`
+  trait over `sqlx` (recommended Option C), AAD invariant across backends
+  (encrypted-column round-trip canary), per-driver migration directories,
+  env-indirected connection secrets, batched-save-point master-key
+  rotation, driver/data startup match check. SQLite stays the default
+  forever.
+- **RFC 025 — Multi-tenant expansion (detailed design).** Flat tenants,
+  single-source-of-truth `tenant_id` propagation, per-tenant signing keys
+  / audit chains / rate limiting, global-vs-tenant admin with audited
+  assumption, slug-validated routing (404 unknown / 503 suspended,
+  privacy-preserving), both-issuer one-version migration transition.
+  Detailed-design only — exists to prevent piecemeal tenancy and to inform
+  current schema decisions.
+
+### Index
+
+`rfcs/README.md` proposed-section note added: these six now carry full
+detailed designs and remain post-1.0 candidates out of the v1.0 critical
+path.
+
+**107/107 tests pass (unchanged). All 5 CI gates PASS. No code change.**
+
 ## [0.75.0] — 2026-06-14
 
 **Codebase audit pass.** No new features. No wire-protocol change.

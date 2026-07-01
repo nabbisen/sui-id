@@ -1,46 +1,102 @@
-# RFC 005 — Pluggable user backends (LDAP shim)
+# RFC 005 — Pluggable User Backends (Read-Only LDAP User-Source)
 
-**Status.** Exploratory
+**Status.** Proposed (longer-term, no scheduled delivery)
+**Priority.** Low. Feature-expansion RFC. Best driven by a concrete
+deployment's requirements; requires explicit owner direction before
+scheduling.
 **Tracks.** ROADMAP / Longer term — "Pluggable user backends".
-**Touches.** new trait module `sui-id-core::user_source`, new
-crate or feature flag for the LDAP implementation, schema
-addition (`users.source` discriminator).
+**Touches.** New trait module `sui-id-core::user_source`; an LDAP
+implementation behind a feature flag (or a sibling crate); schema
+addition (`users.source` discriminator, `users.external_stable_id`);
+auth-handler cascade in `sui-id`; config (`[[user_source]]` blocks with
+env-indirected bind secret).
 
 ## Summary
 
-Some operators run an existing directory (Active Directory,
-OpenLDAP) and want sui-id to authenticate against it instead of
-sui-id's local user table. The current storage layer assumes
-sui-id owns the user table outright; this RFC proposes a
-read-only LDAP user-source plug-in shape that lets the local
-table fall back to the directory for users it doesn't know.
+Some operators run an existing directory (Active Directory, OpenLDAP) and
+want sui-id to authenticate against it instead of sui-id's local user
+table. The current storage layer assumes sui-id owns the user table
+outright; this RFC proposes a *read-only* LDAP user-source plug-in shape
+that lets the local table fall back to the directory for users it does not
+know.
 
-This is exploratory because LDAP-as-an-auth-source has well-known
-sharp edges (referrals, group nesting, paged search semantics,
-DN-vs-uid identity ambiguity), and the design is best driven by
-a concrete deployment's requirements. The shape proposed here is
-the *minimum* — pure authentication, no group sync, no SCIM.
+The scope is deliberately the *minimum*: pure authentication and a stable
+identity. No group membership sync, no SCIM, no write-back. LDAP users get
+a local *shadow* row in `users` (for sessions, MFA, audit linkage) created
+on first successful bind and never holding a password.
+
+## Motivation
+
+sui-id's value proposition is "the simple thing for small deployments."
+An operator with an existing directory should not have to choose between
+sui-id and their directory; a bounded read-only auth-source lets sui-id
+sit in front of the directory without owning credentials. The bounded
+scope is the point — every capability beyond authentication (groups,
+write-back, SCIM) adds config, operational, and security surface that
+would erode the simplicity that makes sui-id worth choosing.
 
 ## Background
 
-sui-id's value proposition is "the simple thing for small
-deployments." The moment we add a user backend, we add a config
-surface, an operational surface (what happens when the LDAP
-server is unreachable), and a security surface (DN injection,
-unbound search). All of these need to stay deliberately bounded
-to keep that value proposition.
+LDAP-as-an-auth-source has well-known sharp edges: referrals, group
+nesting, paged-search semantics, DN-vs-uid identity ambiguity. The design
+here sidesteps all of them by doing the least possible:
 
-Concrete shape this RFC defends against:
+- The LDAP backend is *read-only*. sui-id never writes to the directory.
+- It supplies *authentication* and a stable identity, nothing else.
+- LDAP-authenticated users have a *shadow* row in `users` for sessions,
+  MFA, and audit linkage. The shadow is created on first successful bind
+  and never holds a password (the existing nullable `credentials` FK
+  already supports a password-less user).
 
-- The LDAP backend is *read-only*. We don't write back, ever.
-- The LDAP backend supplies *authentication* and a stable
-  identity, nothing else. No group membership sync. No SCIM.
-- Users authenticated via LDAP have a *shadow* row in `users`
-  for the purposes of sessions, MFA, audit linkage. The shadow
-  is created on first successful LDAP bind and never holds a
-  password.
+## Target code areas
 
-## Design (sketch)
+- **`sui-id-core/src/user_source.rs`** (new) — the `UserSource` trait and
+  `ExternalUserRecord` type; the cascade resolver that tries local first,
+  then configured sources in order.
+- **LDAP implementation** — behind a `ldap` feature flag (or a sibling
+  crate `sui-id-ldap`), using a vetted async LDAP client; RFC 4515 filter
+  escaping; search-then-bind with fixed-cost search.
+- **`sui-id-store`** — migration adding `users.source` and
+  `users.external_stable_id`; shadow-row creation/update repo methods.
+- **`sui-id` auth handlers** — `/admin/login` and `/oauth2/authorize`
+  resolve usernames through the cascade.
+- **config** — `[[user_source]]` blocks; bind secret via
+  `bind_password_env` indirection.
+
+## Security properties / invariants
+
+- **P1 (DN injection prevented).** The `user_search_filter` admits exactly
+  one substitution `{username}`, escaped per RFC 4515. No DN templating.
+- **P2 (TLS required).** Cleartext `ldap://` is rejected at config load.
+  Only `ldaps://` or `ldap://` + STARTTLS is accepted. Anonymous bind is
+  disallowed at config load.
+- **P3 (timing equivalence).** `authenticate` returns `Ok(None)` for both
+  "unknown user" and "wrong password," and the implementation spends
+  roughly equal time on both branches (search-then-bind with a fixed-cost
+  search even on a miss). This matches the existing local-auth
+  dummy-Argon2id posture.
+- **P4 (local admin is always reachable).** The cascade is local-first and
+  hardcoded. A flaky or misconfigured directory never locks out the local
+  admin — a transport error from a source is logged and the cascade
+  continues (fail-soft).
+- **P5 (no password ever stored for LDAP users).** A `source='ldap'` user
+  has no `credentials` row. sui-id sees the password only transiently
+  during the bind and never persists it, hashed or otherwise.
+- **P6 (least-privilege service account).** Documentation requires the
+  `bind_dn` account to have read-only access to the user-search subtree
+  and nothing more.
+
+## Non-goals
+
+- Write-back of any kind (password change, attribute update).
+- Group / role / membership sync.
+- SCIM.
+- Configurable cascade order (local-first is hardcoded — see P4).
+- Running HIBP on LDAP-sourced passwords (sui-id does not hold the
+  password long enough, and refusing an LDAP-managed password is not
+  sui-id's call — see Open questions).
+
+## Proposed design
 
 ### Trait
 
@@ -48,12 +104,11 @@ Concrete shape this RFC defends against:
 // sui-id-core/src/user_source.rs
 
 pub trait UserSource: Send + Sync {
-    /// Returns `Ok(Some(record))` if the source authenticates
-    /// the credentials, `Ok(None)` if the username is unknown to
-    /// this source, and `Err(_)` only for transport-layer issues
-    /// (e.g. directory unreachable). Wrong-password is
-    /// `Ok(None)`, deliberately conflated with unknown-user, so
-    /// that callers cannot distinguish them via timing.
+    /// `Ok(Some(record))` if the source authenticates the credentials,
+    /// `Ok(None)` if the username is unknown to this source OR the
+    /// password is wrong (deliberately conflated to defeat timing
+    /// distinction), and `Err(_)` only for transport-layer issues
+    /// (directory unreachable).
     fn authenticate(
         &self,
         username: &str,
@@ -71,7 +126,7 @@ pub struct ExternalUserRecord {
 
 ### Schema
 
-Migration `0021_users_source.sql`:
+Migration `00NN_users_source.sql`:
 
 ```sql
 ALTER TABLE users ADD COLUMN source TEXT NOT NULL DEFAULT 'local'
@@ -83,36 +138,25 @@ CREATE UNIQUE INDEX idx_users_external
     WHERE external_stable_id IS NOT NULL;
 ```
 
-A user with `source='ldap'` has no row in `credentials` (the
-existing nullable foreign key already supports this); their
-password is *never* stored locally, even hashed.
+### Auth cascade
 
-### Auth handler change
+`/admin/login` and `/oauth2/authorize` resolve a username through:
 
-`/admin/login` and `/oauth2/authorize` resolve a username
-through a *cascade* of sources:
+1. **Local** — the existing `credentials::verify` path.
+2. **Configured `UserSource` instances**, in declaration order.
 
-1. Local: existing `credentials::verify` path.
-2. Configured `UserSource` instances, in declaration order.
-
-The first source that returns `Ok(Some(_))` wins. A source
-returning `Err(_)` (transport failure) is logged and the
-cascade continues — fail-soft, so a flaky LDAP server doesn't
-take out local sign-in for the local admin.
-
-A successful LDAP authentication for a username sui-id has
-not seen before triggers shadow-user creation: insert a row
-into `users` with `source='ldap'`, `external_stable_id =
-record.stable_id`, no `credentials` row.
-
-A second sign-in for the same `external_stable_id` updates
-the shadow's display fields if the upstream changed them.
+The first source returning `Ok(Some(_))` wins. A source returning
+`Err(_)` (transport failure) is logged and the cascade continues
+(fail-soft, P4). A first successful LDAP authentication for an unknown
+username triggers shadow-user creation; a subsequent sign-in for the same
+`external_stable_id` updates the shadow's display fields if the upstream
+changed them.
 
 ### MFA over an LDAP-sourced user
 
-MFA is a sui-id concern, not LDAP's. An LDAP user can enrol
-TOTP and passkeys against their shadow row exactly like a
-local user. The challenge screen doesn't change.
+MFA is a sui-id concern, not LDAP's. An LDAP user enrols TOTP and passkeys
+against their shadow row exactly like a local user; the challenge screen
+is unchanged.
 
 ### Configuration
 
@@ -132,73 +176,98 @@ connect_timeout_secs = 5
 search_timeout_secs = 10
 ```
 
-The `bind_password_env` indirection is non-negotiable: secrets
-do not go in the config file plaintext.
+`bind_password_env` indirection is non-negotiable: secrets never go in the
+config file as plaintext.
 
 ### Failure modes
 
-- **Directory unreachable.** Cascade continues to next source;
-  failed source emits `auth.user_source.transport_failure`.
-- **Directory bind fails (sui-id's own service-account
-  credentials wrong).** Same as above. Operator-visible alert
-  via the audit log.
-- **User exists in LDAP but objectGUID disagrees with shadow.**
-  Treat as a stale shadow: rebind under the new stable_id,
-  flag the old shadow as "potential conflict" for admin
-  attention. Do not auto-merge.
+- **Directory unreachable** → cascade continues; emit
+  `auth.user_source.transport_failure`.
+- **Service-account bind fails** → same as above; operator-visible via
+  the audit log.
+- **`stable_id` disagrees with an existing shadow** → treat as a stale
+  shadow: rebind under the new `stable_id`, flag the old shadow as
+  "potential conflict" for admin attention. Never auto-merge.
 
-## Tests (sketch)
+## Data model impact
 
-- In-memory LDAP server fixture (existing crates like
-  `simple-ldap-server-test` or a hand-rolled async stub).
-- Cascade order test: local user wins over LDAP user with the
-  same username.
-- Shadow creation: first LDAP sign-in creates a `users` row
-  with `source='ldap'`.
-- Re-sign-in: shadow display fields update if upstream changes.
-- MFA over LDAP: TOTP enrol, sign in via LDAP, MFA challenge
-  appears, succeeds.
-- Transport failure: LDAP unreachable, local users still sign
-  in fine.
-- Audit: `auth.user_source.matched`,
-  `auth.user_source.transport_failure` events recorded.
+Two new columns on `users` (`source`, `external_stable_id`) plus a partial
+unique index. No new tables. One migration. Existing rows default to
+`source='local'`.
 
-## Security considerations
+## API impact
 
-- **DN injection.** The `user_search_filter` admits exactly
-  one substitution `{username}`, and the substitution
-  escapes LDAP filter metacharacters per RFC 4515. No
-  DN-templating.
-- **TLS required.** `ldap://` (cleartext) is rejected at
-  config load with a clear error. `ldaps://` or `ldap://` +
-  STARTTLS only.
-- **Service account least-privilege.** Documentation
-  emphasises that the `bind_dn` user needs read-only access
-  to the user-search subtree; nothing more.
-- **Anonymous bind.** Disallowed at config load.
-- **Password timing.** `authenticate` returns `Ok(None)` for
-  both "unknown user" and "wrong password". Implementations
-  must take care to spend roughly equal time on both
-  branches; the LDAP shim should issue a search-then-bind
-  flow with a fixed-cost search even when the search misses.
-  This matches the existing local-auth dummy-Argon2id
-  posture.
-- **Shadow row removal.** When an admin deletes an LDAP
-  shadow, the next sign-in by that LDAP user re-creates a
-  *new* shadow with new MFA state. Document this loudly —
-  it's the correct behaviour but surprising.
+No new routes. The behaviour of `/admin/login` and `/oauth2/authorize`
+changes internally (the cascade), but the request/response contract is
+unchanged. New audit events `auth.user_source.matched` and
+`auth.user_source.transport_failure`.
+
+## Testing strategy
+
+- An in-memory LDAP fixture (a vetted test server crate or a hand-rolled
+  async stub).
+- Cascade order: a local user wins over an LDAP user with the same
+  username.
+- Shadow creation: first LDAP sign-in creates a `users` row with
+  `source='ldap'`.
+- Re-sign-in: shadow display fields update when the upstream changes.
+- MFA over LDAP: TOTP enrol, sign in via LDAP, challenge appears,
+  succeeds.
+- Transport failure: directory unreachable, local users still sign in
+  (P4).
+- Timing: search-miss and wrong-password branches spend comparable time
+  (P3).
+- Filter escaping: a username containing LDAP filter metacharacters does
+  not alter the search filter (P1).
+- TLS guard: `ldap://` cleartext config is rejected at load (P2).
+
+## Migration strategy
+
+One additive migration. Existing users default to `source='local'`; no
+behavioural change for deployments that configure no `[[user_source]]`.
+LDAP is opt-in by configuration after upgrade. Removing the configuration
+stops new LDAP sign-ins; existing shadow rows remain (they are ordinary
+`users` rows) until an admin deletes them.
+
+## Rollout plan
+
+Two increments: (1) the `UserSource` trait, the cascade, and the schema —
+with a trivial in-memory test source, no LDAP yet; (2) the LDAP
+implementation behind a feature flag. Default builds and the default
+deployment story are unchanged at every step. No version designation
+without owner direction and soak.
+
+## Risks and mitigations
+
+- *Risk:* DN/filter injection. *Mitigation:* P1 — single escaped
+  substitution, no DN templating.
+- *Risk:* cleartext credential exposure. *Mitigation:* P2 — TLS required,
+  anonymous bind disallowed.
+- *Risk:* a flaky directory locks out the local admin. *Mitigation:* P4 —
+  local-first, fail-soft cascade.
+- *Risk:* surprising shadow-row removal behaviour (deleting a shadow
+  resets MFA state on next sign-in). *Mitigation:* document loudly; it is
+  correct but counter-intuitive.
+
+## Acceptance criteria
+
+- Local users always resolve before any external source.
+- An LDAP-authenticated unknown username creates a password-less shadow
+  row.
+- LDAP users can enrol and use local MFA.
+- A directory outage does not affect local sign-in.
+- Wrong-password and unknown-user are timing-indistinguishable.
+- Cleartext LDAP config is rejected at load.
+- 0 warnings; full suite green; all CI gates hold.
 
 ## Open questions
 
-- Is the cascade order configurable, or always local-first?
-  Recommend local-first, hardcoded. The local admin is the
-  sui-id-itself escape hatch and must be addressable even
-  if every external source is misconfigured.
-- Do we ever need *write* support? Recommend no, and treat
-  any deployment that needs it as out of scope. SCIM is a
-  much bigger conversation.
-- How does the LDAP source interact with HIBP? Recommend:
-  HIBP is not run on LDAP-sourced passwords (we don't see
-  the password long enough to hash and submit, and even if
-  we did, refusing to authenticate against an LDAP-managed
-  password isn't sui-id's call to make).
+- Cascade order configurable, or always local-first? Recommend
+  **local-first, hardcoded** — the local admin is the escape hatch.
+- Write support ever? Recommend **no** — any deployment needing it is out
+  of scope; SCIM is a much larger conversation.
+- HIBP over LDAP passwords? Recommend **no** — sui-id does not hold the
+  password long enough, and refusing an LDAP-managed password is not
+  sui-id's decision.
+- Shadow-row removal UX — should the admin UI warn that deletion resets
+  MFA state? Recommend yes; defer exact copy to implementation.
