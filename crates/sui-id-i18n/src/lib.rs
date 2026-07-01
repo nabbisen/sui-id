@@ -4,59 +4,54 @@
 //!
 //! All user-facing strings are fields on a [`Strings`] struct. Each
 //! supported locale has a `static Strings` constant with all fields
-//! filled in ([`STRINGS_JA`], [`STRINGS_EN`]). Adding a locale means
-//! adding a variant to [`Locale`] and a new `static Strings`
-//! constant — the compiler then guarantees every translation is
-//! complete via the exhaustive `match` in [`Locale::strings`].
-//! Adding a string means adding a field to [`Strings`] — the
-//! compiler then yells at every per-locale constant until it's
-//! filled in.
+//! filled in. Adding a locale means adding a variant to [`Locale`] and a
+//! new file under `locale/` — the compiler guarantees every translation
+//! is complete via the exhaustive `match` in [`Locale::strings`].
+//! Adding a string means adding a field to [`Strings`] — the compiler
+//! then errors at every per-locale constant until it is filled in.
 //!
-//! Strings without variable interpolation are `&'static str`.
-//! Strings with interpolation use small format functions that
-//! take parameters and return `String`. We deliberately avoid a
-//! generic templating layer (Fluent, MessageFormat, etc) at this
-//! tier — the interpolation patterns we have are simple,
-//! enumeration-style ("3 outstanding tokens"), and a per-locale
-//! function is more readable than a templated string.
+//! Strings without variable interpolation are `&'static str`. Strings
+//! with interpolation use small format functions that take parameters and
+//! return `String`. We deliberately avoid a generic templating layer
+//! (Fluent, MessageFormat, etc.) — the patterns are simple and
+//! per-locale functions are more readable than templated strings.
 //!
 //! ## What lives here, what doesn't
 //!
 //! - **Lives here**: UI labels, button text, flash messages,
-//!   page titles, email subjects/bodies. Anything a human reads.
+//!   page titles, email subjects/bodies — anything a human reads.
 //! - **Does not live here**: log messages, audit-event names
-//!   (those are stable identifiers operators query against),
-//!   error machine codes, configuration keys.
+//!   (stable identifiers operators query against), error machine codes,
+//!   configuration keys.
 //!
 //! ## Module layout
 //!
-//! - [`strings`] — the [`Strings`] struct (every translatable
-//!   field).
-//! - [`ja`], [`en`] — per-locale `static Strings` constants.
-//! - [`tests`] — unit tests, kept out of `lib.rs` to keep the
-//!   public surface tidy.
+//! - [`strings`] — the [`Strings`] struct (every translatable field).
+//! - [`formatters`] — the [`Formatters`] struct + shared helper functions.
+//! - [`locale`] — per-locale submodules; each file is self-contained:
+//!   one `STRINGS_*` constant and one `FORMATTERS_*` constant.
+//!   - `locale/en.rs` — English
+//!   - `locale/ja.rs` — Japanese
+//!   - `locale/zh_hans.rs` — Chinese Simplified (zh-Hans)
+//!   - `locale/zh_hant.rs` — Chinese Traditional (zh-Hant) — stub, see file
+//! - [`tests`] — unit tests.
 //!
-//! ## Future expansion (see sui-id ROADMAP)
+//! ## Adding a locale
 //!
-//! - More locales (zh, ko, etc) — add `Locale::Zh` and
-//!   `STRINGS_ZH`; the type system handles the rest.
-//! - Date/number formatting localisation — currently we use a
-//!   single ISO-ish format across locales for simplicity. v2
-//!   will add per-locale formatters.
+//! See `locale.rs` for step-by-step instructions.
 
-mod en;
 mod formatters;
-mod ja;
+mod locale;
 mod strings;
-mod zh;
 #[cfg(test)]
 mod tests;
 
-pub use crate::en::STRINGS_EN;
-pub use crate::formatters::{Formatters, FORMATTERS_EN, FORMATTERS_JA, FORMATTERS_ZH};
-pub use crate::ja::STRINGS_JA;
+pub use crate::formatters::Formatters;
+pub use crate::locale::{
+    FORMATTERS_EN, FORMATTERS_JA, FORMATTERS_ZH_HANS, FORMATTERS_ZH_HANT,
+    STRINGS_EN, STRINGS_JA, STRINGS_ZH_HANS, STRINGS_ZH_HANT,
+};
 pub use crate::strings::Strings;
-pub use crate::zh::STRINGS_ZH;
 
 use serde::{Deserialize, Serialize};
 
@@ -64,91 +59,106 @@ use serde::{Deserialize, Serialize};
 ///
 /// New variants must:
 ///   - have a stable BCP-47-style tag returned by [`Locale::tag`];
-///   - have a `static STRINGS_*` constant matched in [`Locale::strings`].
+///   - have a `static STRINGS_*` constant matched in [`Locale::strings`];
+///   - have a `static FORMATTERS_*` constant matched in [`Locale::formatters`].
+///
+/// Add the variant to [`Locale::ALL`] only when the translation is
+/// complete and has been reviewed by a native speaker.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
 pub enum Locale {
+    #[serde(rename = "ja")]
     Ja,
+    #[serde(rename = "en")]
     En,
-    /// Chinese (Simplified), zh-Hans.
-    Zh,
+    /// Chinese Simplified (zh-Hans / zh-CN).
+    ///
+    /// Serde accepts the legacy tag `"zh"` as an alias for backward
+    /// compatibility with stored preferences written before this split.
+    #[serde(rename = "zh-Hans", alias = "zh")]
+    ZhHans,
+    /// Chinese Traditional (zh-Hant / zh-TW).
+    ///
+    /// **Not yet in [`Locale::ALL`]** — translations are a stub.
+    /// See `locale/zh_hant.rs` for contribution instructions.
+    #[serde(rename = "zh-Hant")]
+    ZhHant,
 }
 
 impl Locale {
-    /// All locales sui-id recognises, in display order.
-    /// All locales available as selectable options in the UI.
-    /// Add a new variant here when its translation file is complete
-    /// and reviewed. `Zh` exists as a variant (and `zh.rs` is
-    /// compiled in) but is excluded here until the zh locale is
-    /// officially supported as a server-default option.
+    /// All locales available as selectable options in the UI and as
+    /// server-default choices. Add a variant here only when its translation
+    /// file is complete and reviewed.
     pub const ALL: &'static [Locale] = &[Locale::Ja, Locale::En];
 
-    /// BCP-47 language tag. Used in HTML `lang=` attributes,
-    /// cookies, and the user preference column. Stable.
+    /// BCP-47 language tag. Used in HTML `lang=` attributes, cookies, and
+    /// the user-preference column. Stable — never change without a migration.
     pub fn tag(self) -> &'static str {
         match self {
-            Self::Ja => "ja",
-            Self::En => "en",
-            Self::Zh => "zh",
+            Self::Ja     => "ja",
+            Self::En     => "en",
+            Self::ZhHans => "zh-Hans",
+            Self::ZhHant => "zh-Hant",
         }
     }
 
-    /// Native-language name of this locale, displayed in the
-    /// language picker. Always shown in the locale's own script
-    /// so a user who has accidentally landed on the wrong language
-    /// can still recognise their own.
+    /// Native-language name of this locale. Always shown in the locale's
+    /// own script so a user who has accidentally landed on the wrong
+    /// language can still recognise their own.
     pub fn native_name(self) -> &'static str {
         match self {
-            Self::Ja => "日本語",
-            Self::En => "English",
-            Self::Zh => "中文",
+            Self::Ja     => "日本語",
+            Self::En     => "English",
+            Self::ZhHans => "中文（简体）",
+            Self::ZhHant => "中文（繁體）",
         }
     }
 
-    /// Parse a tag back into a `Locale`. Tolerant of region
-    /// suffixes (`en-US` → `En`) and capitalisation. Unknown tags
-    /// return `None`; callers should fall back through their
-    /// preference chain rather than choosing here.
+    /// Parse a BCP-47 tag back into a `Locale`. Tolerant of region and
+    /// script suffixes (`en-US` → `En`, `zh-CN` → `ZhHans`,
+    /// `zh-TW` → `ZhHant`). Case-insensitive. The bare tag `"zh"` maps
+    /// to `ZhHans` (most common web convention and backward-compatible
+    /// with preferences stored before the Simplified/Traditional split).
+    /// Unknown tags return `None`.
     pub fn parse(tag: &str) -> Option<Locale> {
-        let primary = tag
-            .split(|c: char| c == '-' || c == '_')
-            .next()
-            .unwrap_or("")
-            .to_ascii_lowercase();
-        match primary.as_str() {
-            "ja" => Some(Locale::Ja),
-            "en" => Some(Locale::En),
-            "zh" => Some(Locale::Zh),
-            _ => None,
+        // Split on '-' or '_'; match on primary + optional first subtag.
+        let mut parts = tag.split(|c: char| c == '-' || c == '_');
+        let primary = parts.next().unwrap_or("").to_ascii_lowercase();
+        let subtag  = parts.next().map(|s| s.to_ascii_lowercase());
+        match (primary.as_str(), subtag.as_deref()) {
+            ("ja", _)                              => Some(Locale::Ja),
+            ("en", _)                              => Some(Locale::En),
+            ("zh", None | Some("hans") | Some("cn") | Some("sg")) => Some(Locale::ZhHans),
+            ("zh", Some("hant") | Some("tw") | Some("hk") | Some("mo")) => Some(Locale::ZhHant),
+            ("zh", _)                              => Some(Locale::ZhHans), // unknown zh-* → simplified
+            _                                      => None,
         }
     }
 
-    /// Strings table for this locale. The exhaustive match is the
-    /// completeness guarantee — adding a `Locale` variant without a
-    /// strings table fails to compile.
+    /// Strings table for this locale.
     pub fn strings(self) -> &'static Strings {
         match self {
-            Self::Ja => &STRINGS_JA,
-            Self::En => &STRINGS_EN,
-            Self::Zh => &STRINGS_ZH,
+            Self::Ja     => &STRINGS_JA,
+            Self::En     => &STRINGS_EN,
+            Self::ZhHans => &STRINGS_ZH_HANS,
+            Self::ZhHant => &STRINGS_ZH_HANT,
         }
     }
 
-    /// Locale-aware date and number formatters (RFC 002 § B).
+    /// Locale-aware date and number formatters.
     pub fn formatters(self) -> &'static Formatters {
         match self {
-            Self::Ja => &FORMATTERS_JA,
-            Self::En => &FORMATTERS_EN,
-            Self::Zh => &FORMATTERS_ZH,
+            Self::Ja     => &FORMATTERS_JA,
+            Self::En     => &FORMATTERS_EN,
+            Self::ZhHans => &FORMATTERS_ZH_HANS,
+            Self::ZhHant => &FORMATTERS_ZH_HANT,
         }
     }
 
-    /// Text direction for this locale. Used in the HTML `dir=`
-    /// attribute. All current locales are LTR; RTL locales will
+    /// Text direction. All current locales are LTR; RTL locales will
     /// override this when added (RFC 002 § E).
     pub fn direction(self) -> &'static str {
         match self {
-            Self::Ja | Self::En | Self::Zh => "ltr",
+            Self::Ja | Self::En | Self::ZhHans | Self::ZhHant => "ltr",
         }
     }
 }
@@ -161,12 +171,10 @@ impl Default for Locale {
 
 /// Pick a locale from a `q`-weighted Accept-Language header.
 ///
-/// Cheap parser: split on commas, take each token's primary
-/// subtag, return the first one we recognise. We ignore `q=`
-/// weights — for a two-locale catalogue the cost of a real parser
-/// outweighs the benefit. A user with `Accept-Language: fr;q=1, en;q=0.5`
-/// will get English (the first recognised tag), which matches the
-/// "best available match" intent close enough.
+/// Cheap parser: split on commas, take each token's primary subtag (plus
+/// the first script/region suffix when present), return the first
+/// recognised locale. `q=` weights are ignored — for a small catalogue
+/// the cost of a full parser outweighs the benefit.
 pub fn negotiate_from_accept_language(header: &str) -> Option<Locale> {
     for raw in header.split(',') {
         let tag = raw.split(';').next().unwrap_or("").trim();

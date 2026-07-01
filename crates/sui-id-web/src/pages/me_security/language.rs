@@ -61,9 +61,9 @@ pub fn render_me_language(
                                     {t.locale_native_en}
                                 </label>
                                 <label class="row row-gap2-center">
-                                    <input type="radio" name="locale" value="zh"
-                                           checked=move || cur4 == "zh"/>
-                                    {t.locale_native_zh}
+                                    <input type="radio" name="locale" value="zh-Hans"
+                                           checked=move || cur4 == "zh-Hans"/>
+                                    {t.locale_native_zh_hans}
                                 </label>
                             </div>
                         </div>

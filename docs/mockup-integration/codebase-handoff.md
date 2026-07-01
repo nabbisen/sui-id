@@ -411,15 +411,16 @@ map to the four `.banner--*` CSS classes.
 
 ### 6.1 Locales and tables
 
-`crates/sui-id-i18n/` has three translation tables:
+`crates/sui-id-i18n/` holds translation tables under `src/locale/`:
 
-- `en.rs` (~740 LOC)
-- `ja.rs` (~740 LOC)
-- `zh.rs` (~740 LOC)
+- `locale/en.rs` (~850 LOC) — English strings + formatters
+- `locale/ja.rs` (~835 LOC) — Japanese strings + formatters
+- `locale/zh_hans.rs` (~830 LOC) — Simplified Chinese strings + formatters
+- `locale/zh_hant.rs` — Traditional Chinese stub (delegates to zh_hans)
 
-Plus `strings.rs` (~810 LOC), the canonical `Strings` struct definition.
-The structure is a 620-field struct with `&'static str` per field; each
-language file constructs one literal-string instance. The
+Plus `strings.rs` (~870 LOC), the canonical `Strings` struct definition.
+The structure is a ~620-field struct with `&'static str` per field; each
+locale file constructs one literal-string instance. The
 `Locale::strings()` method returns the right one based on enum variant.
 
 **~620 string keys** today. Recent additions (v0.48.2):
@@ -476,10 +477,11 @@ patterns that are intentional, not omissions:
 - **No third-party CSS**. No Tailwind, no Bootstrap. The utility-class
   layer in `components.rs` is hand-rolled and bounded.
 - **Two languages in the picker** (`日本語 / English`), even though
-  `zh.rs` exists. The Chinese table is kept current with the
-  English/Japanese pair but is hidden from the setup wizard's
-  picker (v0.48.4); decisions about surfacing it elsewhere are
-  open.
+  `locale/zh_hans.rs` (Simplified Chinese) and the `zh-Hans` stub in
+  the language-preference picker exist. The Chinese table is kept
+  current but is not in `Locale::ALL` pending a full copy review.
+  Traditional Chinese (`locale/zh_hant.rs`) is a stub awaiting a
+  contributor.
 - **One breakpoint** at 768 px. Tablet-and-narrower gets simplified
   layout; everything wider uses desktop.
 - **No animations** beyond CSS transitions on hover. `prefers-reduced-motion`
@@ -591,10 +593,10 @@ build step. The current discipline is "no build step beyond
 cargo" — breaking it is a significant policy choice.
 
 **Q9. i18n key additions.** Every new piece of user-visible copy
-in the mockup needs a key in the Strings struct + a value in each
-of `en.rs`, `ja.rs`, `zh.rs`. The translation effort scales
-linearly with the mockup's text density. The architect should
-quantify this.
+in the mockup needs a key in the `Strings` struct + a value in each
+file under `locale/` (`en.rs`, `ja.rs`, `zh_hans.rs`). The translation
+effort scales linearly with the mockup's text density. The architect
+should quantify this.
 
 **Q10. Migration strategy.** Big-bang switch vs screen-by-screen
 roll-in. The latter is the codebase's established pattern

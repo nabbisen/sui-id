@@ -1,9 +1,16 @@
-//! English (`en`) translation table.
+//! English (`en`) translation table and date/number formatters.
 //!
-//! All field values are exhaustively populated against
-//! [`crate::strings::Strings`]; missing fields fail compilation.
+//! **Translator guide:**
+//! Edit the string values between `\"…\"` only. Do not rename field names.
+//! Every field must be present — the compiler enforces completeness.
+//! After editing, run `cargo test -p sui-id-i18n` to confirm all tests pass.
 
+use crate::formatters::{fmt_count_shared, fmt_time_shared, Formatters};
 use crate::strings::Strings;
+use chrono::{DateTime, Datelike, Utc};
+
+// ── Strings ──────────────────────────────────────────────────────────────────
+
 
 pub static STRINGS_EN: Strings = Strings {
     // Generic UI
@@ -28,7 +35,8 @@ pub static STRINGS_EN: Strings = Strings {
     // Language native names (RFC 051) — identical across all locales.
     locale_native_ja: "日本語",
     locale_native_en: "English",
-    locale_native_zh: "中文",
+    locale_native_zh_hans: "中文（简体）",
+    locale_native_zh_hant: "中文（繁體）",
 
     // Lifetime formatting (RFC 051)
     fmt_lifetime_days: |n, secs| format!("{n} d ({secs}s)"),
@@ -779,3 +787,94 @@ pub static STRINGS_EN: Strings = Strings {
 
     disable_reason_hint: "Recorded in the audit log so future administrators can understand the context.",
 };
+
+// ── Formatters ───────────────────────────────────────────────────────────────
+
+const EN_MONTHS: &[&str] = &[
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+fn en_fmt_date(dt: DateTime<Utc>) -> String {
+    format!(
+        "{} {} {}",
+        dt.day(),
+        EN_MONTHS[(dt.month() - 1) as usize],
+        dt.year()
+    )
+}
+
+fn en_fmt_date_time(dt: DateTime<Utc>) -> String {
+    format!("{} {}", en_fmt_date(dt), fmt_time_shared(dt))
+}
+
+fn en_fmt_relative(at: DateTime<Utc>, now: DateTime<Utc>) -> String {
+    let secs = (now - at).num_seconds();
+    if secs < 0 {
+        return "just now".into();
+    }
+    if secs < 60 {
+        let s = if secs == 1 { "second" } else { "seconds" };
+        return format!("{secs} {s} ago");
+    }
+    let mins = secs / 60;
+    if mins < 60 {
+        let s = if mins == 1 { "minute" } else { "minutes" };
+        return format!("{mins} {s} ago");
+    }
+    let hours = mins / 60;
+    if hours < 24 {
+        let s = if hours == 1 { "hour" } else { "hours" };
+        return format!("{hours} {s} ago");
+    }
+    let days = hours / 24;
+    if days < 30 {
+        let s = if days == 1 { "day" } else { "days" };
+        return format!("{days} {s} ago");
+    }
+    let months = days / 30;
+    if months < 12 {
+        let s = if months == 1 { "month" } else { "months" };
+        return format!("{months} {s} ago");
+    }
+    let years = months / 12;
+    let s = if years == 1 { "year" } else { "years" };
+    format!("{years} {s} ago")
+}
+
+/// English date and number formatters.
+pub static FORMATTERS_EN: Formatters = Formatters {
+    fmt_date:      en_fmt_date,
+    fmt_time:      fmt_time_shared,
+    fmt_date_time: en_fmt_date_time,
+    fmt_relative:  en_fmt_relative,
+    fmt_count:     fmt_count_shared,
+};
+
+// ── tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::{TimeZone, Utc};
+
+    fn ts(y: i32, mo: u32, d: u32, h: u32, mi: u32) -> DateTime<Utc> {
+        Utc.with_ymd_and_hms(y, mo, d, h, mi, 0).unwrap()
+    }
+
+    #[test]
+    fn en_date_formatting() {
+        let dt = ts(2024, 5, 12, 14, 7);
+        assert_eq!(en_fmt_date(dt), "12 May 2024");
+        assert_eq!(en_fmt_date_time(dt), "12 May 2024 14:07");
+    }
+
+    #[test]
+    fn en_relative_formatting() {
+        let now = ts(2024, 5, 12, 15, 0);
+        assert_eq!(en_fmt_relative(ts(2024, 5, 12, 14, 59), now), "1 minute ago");
+        assert_eq!(en_fmt_relative(ts(2024, 5, 12, 14, 57), now), "3 minutes ago");
+        assert_eq!(en_fmt_relative(ts(2024, 5, 12, 12, 0), now), "3 hours ago");
+        assert_eq!(en_fmt_relative(ts(2024, 5,  9, 15, 0), now), "3 days ago");
+    }
+}

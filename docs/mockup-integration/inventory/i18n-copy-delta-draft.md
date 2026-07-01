@@ -150,7 +150,7 @@ Sample (proposed keys, mockup as-is, requires translation):
 Each requires:
 - An entry in `crates/sui-id-i18n/src/strings.rs` (the canonical
   struct).
-- A `&'static str` value in each of `en.rs`, `ja.rs`, `zh.rs`.
+- A `&'static str` value in each of `locale/en.rs`, `locale/ja.rs`, `locale/zh_hans.rs`.
 - **Anti-enumeration / security review**: the impact-summary copy
   must not leak information (e.g. existence of a refresh token
   family). The example above does — that is acceptable for the

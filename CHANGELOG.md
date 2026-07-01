@@ -5,6 +5,84 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.64.1] — 2026-06-06
+
+**Maintenance: i18n source layout and zh locale split.**
+
+### Changed — i18n crate structure
+
+The three flat translation files (`en.rs`, `ja.rs`, `zh.rs`) that sat
+alongside module files in `crates/sui-id-i18n/src/` have been moved
+into a dedicated subdirectory. Each locale file is now fully
+self-contained — its `STRINGS_*` constant and `FORMATTERS_*` constant
+in one place.
+
+New layout:
+
+```
+src/
+  lib.rs          — Locale enum, negotiation, re-exports
+  strings.rs      — Strings struct (schema only)
+  formatters.rs   — Formatters struct + two shared helpers (fmt_time, fmt_count)
+  locale.rs       — umbrella: pub mod en/ja/zh_hans/zh_hant + re-exports
+  locale/
+    en.rs         — STRINGS_EN + FORMATTERS_EN
+    ja.rs         — STRINGS_JA + FORMATTERS_JA
+    zh_hans.rs    — STRINGS_ZH_HANS + FORMATTERS_ZH_HANS
+    zh_hant.rs    — Traditional Chinese stub (delegates to zh_hans)
+```
+
+`formatters.rs` reduced from 285 lines to 88 (struct + two helpers);
+the per-locale formatter functions moved into their respective locale
+files. Each locale file now contains inline `#[cfg(test)]` formatter
+tests.
+
+### Changed — Simplified / Traditional Chinese split
+
+`Locale::Zh` is renamed to `Locale::ZhHans` (BCP-47 tag `"zh-Hans"`).
+`Locale::ZhHant` (`"zh-Hant"`) is added as a stub.
+
+- `Locale::ZhHans` serde: `#[serde(rename = "zh-Hans", alias = "zh")]`.
+  Existing stored user preferences with the value `"zh"` continue to
+  deserialise correctly; new writes produce `"zh-Hans"`.
+- `Locale::parse()` now handles regional subtags:
+  `zh-CN` / `zh-SG` → `ZhHans`; `zh-Hant` / `zh-TW` / `zh-HK` / `zh-MO` → `ZhHant`.
+  The bare tag `"zh"` maps to `ZhHans` (backward-compatible).
+- Both variants remain outside `Locale::ALL` (neither is promoted as a
+  server default yet).
+- The language-preference picker value changed from `"zh"` to `"zh-Hans"`.
+
+### Changed — Strings field rename
+
+`Strings.locale_native_zh` renamed to `locale_native_zh_hans`;
+`locale_native_zh_hant` added. Values in all locale files updated to
+include the script disambiguation (`"中文（简体）"` / `"中文（繁體）"`).
+
+### Added
+
+- `Locale::ZhHant` stub with a full contributor guide in `locale/zh_hant.rs`.
+- 7 new tests: `parse_zh_variants`, `serde_round_trip`,
+  `serde_legacy_zh_deserialises_to_zh_hans`, `locale_native_names_in_strings_tables`,
+  `zh_hans_strings_are_non_empty`, `zh_hans_date_formatting`,
+  `zh_hans_relative_formatting`.
+
+### Documentation updated
+
+- `docs/src/contributing/translators.md` — rewritten for the new layout.
+- `docs/development-specification.md` §11.10 — updated file paths and zh description.
+- `docs/mockup-integration/codebase-handoff.md` — updated §6.1 and Q9.
+- `docs/mockup-integration/inventory/i18n-copy-delta-draft.md` — updated paths.
+
+### Test count
+
+| Crate | Before | After |
+|---|---|---|
+| `sui-id-i18n` | 13 | 19 (+6 formatter tests now inline per locale) |
+| `sui-id-shared` | 20 | 20 |
+| `sui-id-store` | 36 | 36 |
+| `sui-id-core` | 125 | 125 |
+| **Total** | **194** | **201** |
+
 ## [0.64.0] — 2026-06-05
 
 **RFC 078 — Security-Critical Type Modeling Baseline.**

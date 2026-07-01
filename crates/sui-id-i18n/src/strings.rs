@@ -44,7 +44,12 @@ pub struct Strings {
     // makes the convention explicit and silences the CJK grep.
     pub locale_native_ja: &'static str,
     pub locale_native_en: &'static str,
-    pub locale_native_zh: &'static str,
+    /// Name of the Simplified Chinese locale in the current locale's language.
+    /// Used by the language picker.
+    pub locale_native_zh_hans: &'static str,
+    /// Name of the Traditional Chinese locale in the current locale's language.
+    /// Used by the language picker once zh-Hant translations are complete.
+    pub locale_native_zh_hant: &'static str,
 
     // ---- Lifetime formatting (RFC 051) ----
     // Used by fmt_lifetime() to render durations like "30 days (2592000s)".

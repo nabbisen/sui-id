@@ -1,14 +1,20 @@
-//! Chinese Simplified (`zh`) translation table.
+//! Chinese Simplified (`zh-Hans`) translation table and date/number formatters.
 //!
-//! All field values are exhaustively populated against
-//! [`crate::strings::Strings`]; missing fields fail compilation.
+//! **Translator guide:**
+//! Edit the string values between `\"…\"` only. Do not rename field names.
+//! Every field must be present — the compiler enforces completeness.
+//! After editing, run `cargo test -p sui-id-i18n` to confirm all tests pass.
 //!
-//! Target: Mainland Simplified Chinese (zh-Hans). The translations
-//! use standard Mainland Mandarin conventions.
+//! Target: Mainland Simplified Chinese (zh-Hans / zh-CN).
+//! Use standard Mainland Mandarin conventions and Simplified script (简体).
 
+use crate::formatters::{fmt_count_shared, fmt_time_shared, Formatters};
 use crate::strings::Strings;
+use chrono::{DateTime, Datelike, Utc};
 
-pub static STRINGS_ZH: Strings = Strings {
+// ── Strings ──────────────────────────────────────────────────────────────────
+
+pub static STRINGS_ZH_HANS: Strings = Strings {
     // Generic UI
     button_save: "保存",
     button_cancel: "取消",
@@ -31,7 +37,8 @@ pub static STRINGS_ZH: Strings = Strings {
     // Language native names (RFC 051) — identical across all locales.
     locale_native_ja: "日本語",
     locale_native_en: "English",
-    locale_native_zh: "中文",
+    locale_native_zh_hans: "中文（简体）",
+    locale_native_zh_hant: "中文（繁体）",
 
     // Lifetime formatting (RFC 051)
     fmt_lifetime_days: |n, secs| format!("{n} 天 ({secs}s)"),
@@ -782,3 +789,65 @@ pub static STRINGS_ZH: Strings = Strings {
 
     disable_reason_hint: "将记录在审计日志中，便于未来管理员了解背景。",
 };
+
+// ── Formatters ───────────────────────────────────────────────────────────────
+
+fn zh_hans_fmt_date(dt: DateTime<Utc>) -> String {
+    format!("{}年{}月{}日", dt.year(), dt.month(), dt.day())
+}
+
+fn zh_hans_fmt_date_time(dt: DateTime<Utc>) -> String {
+    format!("{} {}", zh_hans_fmt_date(dt), fmt_time_shared(dt))
+}
+
+fn zh_hans_fmt_relative(at: DateTime<Utc>, now: DateTime<Utc>) -> String {
+    let secs = (now - at).num_seconds();
+    if secs < 0 { return "刚刚".into(); }
+    if secs < 60 { return format!("{secs} 秒前"); }
+    let mins = secs / 60;
+    if mins < 60 { return format!("{mins} 分钟前"); }
+    let hours = mins / 60;
+    if hours < 24 { return format!("{hours} 小时前"); }
+    let days = hours / 24;
+    if days < 30 { return format!("{days} 天前"); }
+    let months = days / 30;
+    if months < 12 { return format!("{months} 个月前"); }
+    let years = months / 12;
+    format!("{years} 年前")
+}
+
+/// Chinese Simplified (zh-Hans) date and number formatters.
+pub static FORMATTERS_ZH_HANS: Formatters = Formatters {
+    fmt_date:      zh_hans_fmt_date,
+    fmt_time:      fmt_time_shared,
+    fmt_date_time: zh_hans_fmt_date_time,
+    fmt_relative:  zh_hans_fmt_relative,
+    fmt_count:     fmt_count_shared,
+};
+
+// ── tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::{TimeZone, Utc};
+
+    fn ts(y: i32, mo: u32, d: u32, h: u32, mi: u32) -> DateTime<Utc> {
+        Utc.with_ymd_and_hms(y, mo, d, h, mi, 0).unwrap()
+    }
+
+    #[test]
+    fn zh_hans_date_formatting() {
+        let dt = ts(2024, 5, 12, 14, 7);
+        assert_eq!(zh_hans_fmt_date(dt), "2024年5月12日");
+        assert_eq!(zh_hans_fmt_date_time(dt), "2024年5月12日 14:07");
+    }
+
+    #[test]
+    fn zh_hans_relative_formatting() {
+        let now = ts(2024, 5, 12, 15, 0);
+        assert_eq!(zh_hans_fmt_relative(ts(2024, 5, 12, 14, 57), now), "3 分钟前");
+        assert_eq!(zh_hans_fmt_relative(ts(2024, 5, 12, 12, 0), now), "3 小时前");
+        assert_eq!(zh_hans_fmt_relative(ts(2024, 5,  9, 15, 0), now), "3 天前");
+    }
+}

@@ -1,9 +1,16 @@
-//! Japanese (`ja`) translation table.
+//! Japanese (`ja`) translation table and date/number formatters.
 //!
-//! All field values are exhaustively populated against
-//! [`crate::strings::Strings`]; missing fields fail compilation.
+//! **Translator guide:**
+//! Edit the string values between `\"…\"` only. Do not rename field names.
+//! Every field must be present — the compiler enforces completeness.
+//! After editing, run `cargo test -p sui-id-i18n` to confirm all tests pass.
 
+use crate::formatters::{fmt_count_shared, fmt_time_shared, Formatters};
 use crate::strings::Strings;
+use chrono::{DateTime, Datelike, Utc};
+
+// ── Strings ──────────────────────────────────────────────────────────────────
+
 
 pub static STRINGS_JA: Strings = Strings {
     // Generic UI
@@ -28,7 +35,8 @@ pub static STRINGS_JA: Strings = Strings {
     // Language native names (RFC 051) — identical across all locales.
     locale_native_ja: "日本語",
     locale_native_en: "English",
-    locale_native_zh: "中文",
+    locale_native_zh_hans: "中文（简体）",
+    locale_native_zh_hant: "中文（繁体）",
 
     // Lifetime formatting (RFC 051)
     fmt_lifetime_days: |n, secs| format!("{n} 日 ({secs}s)"),
@@ -778,3 +786,74 @@ pub static STRINGS_JA: Strings = Strings {
 
     disable_reason_hint: "監査ログに記録されます。将来の管理者が経緯を確認できます。",
 };
+
+// ── Formatters ───────────────────────────────────────────────────────────────
+
+const JA_MONTHS: &[&str] = &[
+    "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12",
+];
+
+fn ja_fmt_date(dt: DateTime<Utc>) -> String {
+    format!(
+        "{}年{}月{}日",
+        dt.year(),
+        JA_MONTHS[(dt.month() - 1) as usize],
+        dt.day()
+    )
+}
+
+fn ja_fmt_date_time(dt: DateTime<Utc>) -> String {
+    format!("{} {}", ja_fmt_date(dt), fmt_time_shared(dt))
+}
+
+fn ja_fmt_relative(at: DateTime<Utc>, now: DateTime<Utc>) -> String {
+    let secs = (now - at).num_seconds();
+    if secs < 0 { return "たった今".into(); }
+    if secs < 60 { return format!("{secs} 秒前"); }
+    let mins = secs / 60;
+    if mins < 60 { return format!("{mins} 分前"); }
+    let hours = mins / 60;
+    if hours < 24 { return format!("{hours} 時間前"); }
+    let days = hours / 24;
+    if days < 30 { return format!("{days} 日前"); }
+    let months = days / 30;
+    if months < 12 { return format!("{months} ヶ月前"); }
+    let years = months / 12;
+    format!("{years} 年前")
+}
+
+/// Japanese (ja) date and number formatters.
+pub static FORMATTERS_JA: Formatters = Formatters {
+    fmt_date:      ja_fmt_date,
+    fmt_time:      fmt_time_shared,
+    fmt_date_time: ja_fmt_date_time,
+    fmt_relative:  ja_fmt_relative,
+    fmt_count:     fmt_count_shared,
+};
+
+// ── tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::{TimeZone, Utc};
+
+    fn ts(y: i32, mo: u32, d: u32, h: u32, mi: u32) -> DateTime<Utc> {
+        Utc.with_ymd_and_hms(y, mo, d, h, mi, 0).unwrap()
+    }
+
+    #[test]
+    fn ja_date_formatting() {
+        let dt = ts(2024, 5, 12, 14, 7);
+        assert_eq!(ja_fmt_date(dt), "2024年5月12日");
+        assert_eq!(ja_fmt_date_time(dt), "2024年5月12日 14:07");
+    }
+
+    #[test]
+    fn ja_relative_formatting() {
+        let now = ts(2024, 5, 12, 15, 0);
+        assert_eq!(ja_fmt_relative(ts(2024, 5, 12, 14, 57), now), "3 分前");
+        assert_eq!(ja_fmt_relative(ts(2024, 5, 12, 12, 0), now), "3 時間前");
+        assert_eq!(ja_fmt_relative(ts(2024, 5,  9, 15, 0), now), "3 日前");
+    }
+}

@@ -365,7 +365,7 @@ gives only the summary.
 | **`sui-id-core`** | Use-case layer free of handler/HTTP concerns. Authn/authz, OIDC code/token/discovery/JWKS/introspection/revocation, password hashing, JWT signing, MFA (TOTP + WebAuthn + recovery codes), session lifecycle (idle timeout, concurrent-session cap), lockout, step-up, mail dispatch, HIBP client, master-key rotation, domain error types. |
 | **`sui-id-store`** | SQLite persistence, migrations, column-level encryption, repository implementations, audit-log persistence (SHA-256 hash chain). |
 | **`sui-id-web`** | Leptos SSR. Admin / setup / settings / self-service UIs, design tokens (`tokens.rs`), component CSS (`components.rs`), layout shells (`layout.rs`), per-screen render functions (`pages/`). |
-| **`sui-id-i18n`** | `Locale` enum + `Strings` struct, locale tables (`en.rs`, `ja.rs`, `zh.rs`), Accept-Language negotiation. |
+| **`sui-id-i18n`** | `Locale` enum + `Strings` struct, per-locale files under `locale/` (`en.rs`, `ja.rs`, `zh_hans.rs`, `zh_hant.rs` stub), Accept-Language negotiation. |
 | **`sui-id-shared`** | Cross-crate DTOs, typed UUID IDs (`UserId`, `ClientId`, `SessionId`, …), `AuthMethod` enum. |
 
 ---
@@ -523,12 +523,14 @@ history.
 
 ### 11.10 Internationalisation
 
-Languages: **Japanese (default)** and **English**. The Chinese
-locale table (`zh.rs`) is maintained in parallel with the other
-two so it can be re-introduced once it has matured. As of v0.48.4
-**Chinese is not surfaced in the setup-wizard picker** because the
-overall application copy has been audited in ja + en only and a
-half-translated experience is misleading.
+Languages: **Japanese (default)** and **English**. Simplified Chinese
+(`zh-Hans`) is compiled and maintained in `locale/zh_hans.rs` but is
+not yet included in `Locale::ALL` — it requires a full copy review
+before being surfaced as a server-default option. A Traditional
+Chinese (`zh-Hant`) stub exists in `locale/zh_hant.rs`; it delegates
+to `zh-Hans` until a contributor supplies reviewed translations.
+See `docs/src/contributing/translators.md` for how to add or promote
+a locale.
 
 Resolution chain (top to bottom):
 
