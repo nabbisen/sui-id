@@ -5,6 +5,66 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.76.5] — Unreleased
+
+**Security audit + documentation pass.**  No new features; all changes
+are security hardening or documentation corrections.
+
+### Security — RFC 004 (federation) hardening
+
+**P3 logic clarified** (`crates/sui-id/src/handlers/federation.rs`):
+the `email_verified` gate on `provision_on_first_login` was written as
+`!email_verified && email.is_some()` which passes silently when email is
+absent (the condition is `false`). The condition is now
+`email.is_some() && !email_verified`, with a comment making the three
+cases explicit:
+  - email present and verified → provisioning permitted
+  - email present but unverified → provisioning held
+  - email absent → no email-based assertion, provisioning permitted
+
+**State cookie cleared on upstream-error path** (defence in depth):
+previously `Cookie::remove(STATE_COOKIE)` only ran on the success path.
+The upstream-error early return now also clears the state cookie,
+preventing stale cookies from accumulating in the user's browser.
+
+### Documentation — security audit record updated
+
+`docs/security-assurance-audit-v0.63.1.md`:
+- §7 category-classification table: all 8 entries (RFCs 079–086)
+  updated from `Proposed` to `✅ Shipped (v0.6x.x)`.
+- §9 adoption roadmap table: all 9 rows updated from `Proposed` to
+  `✅ Shipped`; links updated from `rfcs/proposed/` to `rfcs/done/`.
+- Resolution note added at the top of §9 flagging the update.
+
+### Documentation — reference docs updated for v0.76.x features
+
+**`docs/src/reference/audit-events.md`** — three new sections:
+- Federation events: `auth.federation.signin.success`,
+  `auth.federation.signin.upstream_failure`,
+  `auth.federation.link.created`, `auth.federation.takeover_blocked`
+- Dynamic registration: `client.dynamic_register`
+- User-source events: `auth.user_source.matched`,
+  `auth.user_source.transport_failure`
+
+**`docs/src/reference/configuration.md`** — four new sections:
+- `[[user_source]]` — LDAP external user source configuration
+- `[[federation_provider]]` — upstream OIDC provider configuration
+  with security note on `enabled = false` default and env-variable
+  secret indirection
+- `[metrics]` — Prometheus metrics endpoint configuration
+- Two new CLI subcommands: `rotate-metrics-token`,
+  `issue-registration-token`
+
+**`docs/src/reference/oidc-api.md`**:
+- New section "Dynamic client registration (RFC 7591)" with `POST
+  /oauth2/register` usage, token issuance, and the admin-enable gate.
+- New section "Federated sign-in (RFC 004)" describing the flow.
+- "What sui-id does not do (yet)": removed "Dynamic client
+  registration" (now done); added note on future JWKS signature
+  verification for federation ID tokens.
+
+**141/141 tests pass.  0 clippy errors.  All 5 CI gates PASS.**
+
 ## [0.76.4] — 2026-06-14
 
 **RFC 004 — Federation as Upstream OIDC Relying Party.** sui-id can now
