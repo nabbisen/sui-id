@@ -20,6 +20,7 @@ pub mod discovery;
 pub mod authorize;
 pub mod authz;
 pub mod actor;
+pub mod audit_guard;
 pub mod session;
 pub mod setup;
 pub mod admin;

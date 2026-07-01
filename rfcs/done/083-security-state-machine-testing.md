@@ -1,6 +1,6 @@
 # RFC 083 — Security State-Machine Testing with proptest
 
-**Status.** Proposed
+**Status.** Implemented (v0.68.0)
 **Tracks.** Strategy theme 6 (audit gap G6). Category B.
 **Touches.** New test-only modules:
 `sui-id-store/src/repos/tests_state_machine/` (or integration

@@ -27,3 +27,6 @@ pub use errors::{StoreError, StoreResult};
 
 #[cfg(test)]
 mod tests_rfc021;
+
+#[cfg(test)]
+mod tests_state_machine;

@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc a9ccd43e033313cf5cb026fa3a8d41d28f4c8609ff6c0668df91b3a371d1270d # shrinks to ops = [Issue { ttl_secs: 1 }, Issue { ttl_secs: 1 }, Issue { ttl_secs: 1 }, Issue { ttl_secs: 1 }, Issue { ttl_secs: 1 }, PurgeExpired, Consume { idx: 0 }]

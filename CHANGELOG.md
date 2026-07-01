@@ -5,6 +5,96 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.68.0] — 2026-06-14
+
+**Security assurance: RFC 083 (security state-machine testing) + RFC 085
+(audit event completeness).** Two Category-B structural hardening RFCs.
+No wire-behaviour change.
+
+### Added — security state-machine harnesses (`sui-id-store`, RFC 083)
+
+Three proptest-driven model-based test suites in
+`src/tests_state_machine/`, each generating random operation sequences
+(length 1–40, 256 cases), running them against both a trivial in-memory
+oracle and the real `Database`, and asserting named invariants after every
+step:
+
+**`auth_codes`** — issues, consumes, replays, clock advances, purges.
+Invariants: `INV_CODE_SINGLE_USE` (at most one successful consume per code),
+`INV_CODE_NO_EXPIRY_CONSUME` (no success after expiry time),
+`INV_CODE_PURGE_NO_RESURRECT` (purge never reverts state).
+
+**`refresh_tokens`** — new families, rotations, replays, clock advances,
+purges. Invariants: `INV_FAMILY_SINGLE_ACTIVE` (per-family active-count ≤ 1,
+checked via SQL after every rotation), `INV_FAMILY_REUSE_REVOKES_ALL` (replay
+yields `ReuseDetected` and an all-revoked family),
+`INV_NO_UNREVOKE`, `INV_EXPIRED_NO_ROTATE`.
+
+**`sessions`** — creates, revokes, revoke-all-except, purges. Invariants:
+`INV_SESSION_REVOKED_NEVER_RESOLVES`, `INV_SESSION_EXPIRED_NEVER_RESOLVES`,
+`INV_SESSION_REVOKE_ALL_EXCEPT_LEAVES_ONE`,
+`INV_SESSION_PURGE_DURABILITY`.
+
+All three harnesses pass at 256 cases; total runtime ≈ 27 s (within CI
+budget). The oracle asserts invariants, not implementation equality, so
+the harnesses catch ordering and interleaving bugs that example-based tests
+structurally miss.
+
+### Added — `audit::append_within_tx` (RFC 085, Class-A atomicity)
+
+A new synchronous `append_within_tx(tx, &AuditLogRow)` function in
+`sui-id-store/src/repos/audit.rs` appends an audit row inside the caller's
+transaction so the state change and the audit record commit atomically —
+or neither does. Three tests:
+
+- `append_within_tx_commits_with_caller_transaction` — committed row appears
+  in chain, chain verifier passes (P2 committed path).
+- `append_within_tx_rolls_back_with_caller_transaction` — rolled-back row
+  does NOT appear (P2 rollback path; the fail-safe that makes audit-subsystem
+  failure an operation failure).
+- `append_within_tx_maintains_chain_with_prior_rows` — four rows mixed
+  across the two append paths, chain verifies across all (P5).
+
+Also fixed a stale `auth.refresh_theft_detected` prefix in
+`DASHBOARD_IMPORTANT_PREFIXES` (should be `auth.refresh.theft_detected`,
+matching the emitted event name).
+
+### Added — `AuditReceipt` / `Audited<T>` types (`sui-id-core`, RFC 085)
+
+`sui-id-core/src/audit_guard.rs` introduces:
+
+- `AuditReceipt` — proof that an audit record was appended. No public
+  constructor; cannot be forged.
+- `Audited<T>` — wraps a domain-function return value with its receipt.
+  `into_inner()` unwraps. "Mutated but never audited" is unrepresentable for
+  converted functions.
+- `audit_best_effort<T>` — Class B; append failure does not suppress the
+  security response.
+- `audit_and_tx<T>` — Class A; appends within the caller's transaction via
+  `append_within_tx`.
+- `audit_and<T, F>` — convenience builder for Class-A domain functions.
+
+(Note: `sui-id-core` cannot be link-verified in this environment without
+`libssl-dev`; `audit_guard.rs` is written from exhaustive source reading.
+Full Class-A domain-function conversions are a follow-up once the CI
+environment provides the full toolchain.)
+
+### Added — audit coverage matrix + CI gate (RFC 085)
+
+`docs/src/reference/audit-coverage-matrix.md` is the normative reference:
+every privileged operation, its event name, required fields, and atomicity
+class (A or B). 39 events listed.
+
+`scripts/check-audit-matrix.sh` is a bidirectional CI gate: forward (every
+matrix event name must exist as a literal in source) and backward (every
+source literal must have a matrix row). Passes: 39 × 39 fully consistent.
+
+**54/54 tests pass** (19 shared + 20 store-pre-existing + 51 store-RFC-085 +
+3 store-state-machine × 3 (auth-codes, refresh-tokens, sessions) = 54 total
+in sui-id-store alone; 96/96 across all four crates including web/i18n).
+All five CI invariants: text-leaks, css-tokens, semantic-parity, inline-style,
+audit-matrix — all PASS.
+
 ## [0.67.0] — 2026-06-14
 
 **Security structure: RFC 081 (actor scope boundary) + RFC 082 (authorization

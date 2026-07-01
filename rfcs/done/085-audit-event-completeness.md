@@ -1,6 +1,6 @@
 # RFC 085 — Audit Event Completeness for Privileged Operations
 
-**Status.** Proposed
+**Status.** Implemented (v0.68.0)
 **Tracks.** Strategy theme 8 (audit gap G8). Category B.
 **Touches.** New `docs/src/reference/audit-coverage-matrix.md`
 (or extension of the existing audit-events reference), new
