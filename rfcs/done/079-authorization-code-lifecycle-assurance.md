@@ -1,6 +1,6 @@
 # RFC 079 — Authorization Code Lifecycle Assurance
 
-**Status.** Proposed
+**Status.** Implemented (v0.66.0)
 **Tracks.** Strategy theme 2 (audit gap G4). Category A.
 **Touches.** `sui-id-store/src/repos/auth_codes.rs`,
 `sui-id-core/src/authorize.rs::exchange_code`, migration

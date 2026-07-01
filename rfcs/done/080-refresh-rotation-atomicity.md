@@ -1,6 +1,6 @@
 # RFC 080 — Refresh Token Rotation Atomicity and Reuse Detection Assurance
 
-**Status.** Proposed
+**Status.** Implemented (v0.66.0)
 **Tracks.** Strategy theme 3 (audit gap G1 — highest-ranked
 finding). Category A.
 **Touches.** `sui-id-store/src/repos/refresh_tokens.rs`,

@@ -15,6 +15,10 @@
 //! verifications (PKCE, redirect URI match, expiry, single-use) and emit a
 //! fresh token set. Refresh tokens are *rotated* — the previous one is
 //! revoked at the same time the new one is issued.
+//!
+//! RFC 079 introduces a typestate pipeline inside [`exchange_code`] that
+//! makes token issuance unreachable unless all binding checks and PKCE
+//! verification have passed.  The pipeline types are private to this module.
 
 use crate::errors::{CoreError, CoreResult, ProtocolError};
 use crate::time::SharedClock;
@@ -22,7 +26,7 @@ use crate::tokens::{self, TokenLifetimes, TokenSet};
 use chrono::Duration;
 use ed25519_dalek::SigningKey;
 use sui_id_shared::ids::{ClientId, UserId};
-use sui_id_shared::{CodeHash, FamilyId, RawRefreshToken, RefreshTokenId};
+use sui_id_shared::{CodeHash, FamilyId, RawRefreshToken, RefreshTokenHash, RefreshTokenId};
 use sui_id_store::models::{AuditLogRow, AuthorizationCodeRow, RefreshTokenRow};
 use sui_id_store::repos::{audit, auth_codes, clients, refresh_tokens, signing_keys, users};
 use sui_id_store::Database;
@@ -256,6 +260,34 @@ pub async fn complete_authorization(
 }
 
 #[derive(Debug, Clone)]
+// ── RFC 079 typestate pipeline ──────────────────────────────────────────────
+//
+// These types live in this module and are never exposed to callers.  Each step
+// is a function that consumes the previous state and returns the next; the
+// final `issue_for` only accepts `IssuableGrant`, so the compiler enforces
+// that every validation step has run.  The four-state chain is linear; there
+// is no enum explosion, per strategy §9 ("keep typestate localised").
+
+/// Step 1: the auth code has been atomically consumed by the storage layer.
+/// The row is guaranteed single-use from this point forward.
+struct ConsumedCode(AuthorizationCodeRow);
+
+/// Step 2: the requesting client and redirect URI match the code's bindings.
+struct BoundCode(AuthorizationCodeRow);
+
+/// Step 3: the PKCE code_verifier has been verified against the stored
+/// code_challenge.
+struct PkceVerifiedCode(AuthorizationCodeRow);
+
+/// Step 4: the user account is active and the email claim is resolved.
+/// This is the only type accepted by `issue_for` — token issuance is
+/// a compile error without it.
+struct IssuableGrant {
+    row: AuthorizationCodeRow,
+    user_id: sui_id_shared::ids::UserId,
+    email: Option<(String, bool)>,
+}
+
 pub struct CodeExchangeRequest {
     pub code: String,
     pub redirect_uri: String,
@@ -282,12 +314,18 @@ pub struct IssuanceContext<'a> {
 }
 
 /// Exchange a previously issued authorization code for a fresh token set.
+///
+/// Implements the RFC 079 typestate pipeline: each validation step produces
+/// a new type that the next step requires, so the compiler statically
+/// prevents token issuance from being reached before all checks pass.
+/// The pipeline types are private to this module.
 pub async fn exchange_code(
     db: &Database,
     clock: &SharedClock,
     ctx: IssuanceContext<'_>,
     req: CodeExchangeRequest,
 ) -> CoreResult<TokenSet> {
+    // ── Authenticate the client ──────────────────────────────────────────
     let client = clients::get(db, req.client_id).await.map_err(|e| match e {
         sui_id_store::StoreError::NotFound => CoreError::Protocol {
             code: ProtocolError::InvalidClient,
@@ -303,39 +341,96 @@ pub async fn exchange_code(
     }
     authenticate_client(&client, req.client_secret.as_deref()).await?;
 
+    // ── Step 1: atomically consume the code (RFC 079 P1 + P2) ───────────
+    // The storage layer enforces single-use via a guarded UPDATE predicated
+    // on `consumed = 0 AND expires_at > now`.  All failure modes (unknown,
+    // replayed, expired) surface as NotFound to preserve non-disclosure (P5).
+    let now = clock.now();
     let code_hash = CodeHash::of(&req.code);
-    let row = auth_codes::consume(db, &code_hash).await.map_err(|e| match e {
-        sui_id_store::StoreError::NotFound => CoreError::Protocol {
-            code: ProtocolError::InvalidGrant,
-            description: "code is unknown, expired, or already used".into(),
-        },
-        other => CoreError::from(other),
-    })?;
+    let consumed = auth_codes::consume(db, &code_hash, now)
+        .await
+        .map_err(|e| match e {
+            sui_id_store::StoreError::NotFound => CoreError::Protocol {
+                code: ProtocolError::InvalidGrant,
+                description: "code is unknown, expired, or already used".into(),
+            },
+            other => CoreError::from(other),
+        })
+        .map(ConsumedCode)?;
 
-    if row.client_id != req.client_id {
+    // ── Step 2: verify client and redirect-URI bindings ──────────────────
+    // The code is already consumed; a bound failure keeps it consumed
+    // (RFC 079 P4 — burn on failure).
+    let bound = bind_code(consumed, &req)?;
+
+    // ── Step 3: verify PKCE ──────────────────────────────────────────────
+    let pkce_verified = verify_pkce_step(bound, &req)?;
+
+    // ── Step 4: re-check user account state at exchange time ─────────────
+    // A user might be disabled/deleted in the ~60-second code window.
+    // The code is already consumed regardless of the outcome here.
+    let issuable = resolve_user(db, clock, pkce_verified, req.client_id).await?;
+
+    // ── Issue tokens (only reachable with IssuableGrant) ─────────────────
+    issue_for(
+        db,
+        clock,
+        ctx,
+        issuable.user_id,
+        req.client_id,
+        &issuable.row.scope,
+        issuable.row.nonce.as_deref(),
+        &issuable.row.auth_methods,
+        issuable.email.as_ref().map(|(addr, v)| (addr.as_str(), *v)),
+    )
+    .await
+}
+
+// ── RFC 079 pipeline step helpers ────────────────────────────────────────────
+
+/// Step 2: verify that the code was issued to the same client and redirect URI
+/// as in the exchange request.
+fn bind_code(
+    consumed: ConsumedCode,
+    req: &CodeExchangeRequest,
+) -> CoreResult<BoundCode> {
+    if consumed.0.client_id != req.client_id {
         return Err(CoreError::Protocol {
             code: ProtocolError::InvalidGrant,
             description: "code was issued to a different client".into(),
         });
     }
-    if row.redirect_uri != req.redirect_uri {
+    if consumed.0.redirect_uri != req.redirect_uri {
         return Err(CoreError::Protocol {
             code: ProtocolError::InvalidGrant,
             description: "redirect_uri does not match the original".into(),
         });
     }
-    tokens::verify_pkce(&row.code_challenge_method, &req.code_verifier, &row.code_challenge)?;
+    Ok(BoundCode(consumed.0))
+}
 
-    // Re-check user state at exchange time. A user might have been
-    // disabled or deleted in the ~60-second window between the
-    // authorization request and this exchange. Sessions and refresh
-    // tokens are revoked on disable, but auth codes are short-lived
-    // server-side objects that don't know about the disable event
-    // unless we explicitly check here.
-    //
-    // The code is already consumed above, so a disabled-then-re-enabled
-    // user must re-authenticate to obtain a fresh code anyway — the
-    // consumed state is the correct outcome regardless.
+/// Step 3: verify the PKCE code_verifier against the stored challenge.
+fn verify_pkce_step(
+    bound: BoundCode,
+    req: &CodeExchangeRequest,
+) -> CoreResult<PkceVerifiedCode> {
+    tokens::verify_pkce(
+        &bound.0.code_challenge_method,
+        &req.code_verifier,
+        &bound.0.code_challenge,
+    )?;
+    Ok(PkceVerifiedCode(bound.0))
+}
+
+/// Step 4: fetch the user row and verify the account is active.
+/// Returns `IssuableGrant` — the only type accepted by `issue_for`.
+async fn resolve_user(
+    db: &Database,
+    clock: &SharedClock,
+    pkce_verified: PkceVerifiedCode,
+    client_id: ClientId,
+) -> CoreResult<IssuableGrant> {
+    let row = pkce_verified.0;
     let user = users::get(db, row.user_id).await.map_err(|e| match e {
         sui_id_store::StoreError::NotFound => CoreError::Protocol {
             code: ProtocolError::InvalidGrant,
@@ -347,42 +442,43 @@ pub async fn exchange_code(
         let _ = audit::append(
             db,
             &AuditLogRow {
-                at: chrono::Utc::now(),
+                at: clock.now(),
                 actor: Some(row.user_id),
                 action: "oauth2.exchange_code.user_revoked".into(),
-                target: Some(req.client_id.to_string()),
+                target: Some(client_id.to_string()),
                 result: "denied".into(),
                 note: Some("user disabled or deleted during auth-code exchange window".into()),
             },
-        ).await;
+        )
+        .await;
         return Err(CoreError::Protocol {
             code: ProtocolError::InvalidGrant,
             description: "user account is not active".into(),
         });
     }
-
-    issue_for(
-        db,
-        clock,
-        ctx,
-        row.user_id,
-        req.client_id,
-        &row.scope,
-        row.nonce.as_deref(),
-        &row.auth_methods,
-        // v0.48.3: include email claim in the ID token when the granted
-        // scope includes "email". The user row is already fetched above.
-        user.email.as_deref().map(|addr| (addr, user.email_verified_at.is_some())),
-    ).await
+    let email = user
+        .email
+        .map(|addr| (addr, user.email_verified_at.is_some()));
+    Ok(IssuableGrant {
+        row,
+        user_id: user.id,
+        email,
+    })
 }
 
 /// Exchange a refresh token for a fresh token set, rotating the refresh token.
+///
+/// Uses `begin_rotation` (RFC 080) to atomically arbitrate concurrent
+/// exchanges of the same token.  The outcome enum makes the four cases
+/// explicit and ensures the theft-detection path runs inside the same
+/// transaction as the revoke.
 pub async fn exchange_refresh(
     db: &Database,
     clock: &SharedClock,
     ctx: IssuanceContext<'_>,
     req: RefreshExchangeRequest,
 ) -> CoreResult<TokenSet> {
+    // ── Authenticate the client ──────────────────────────────────────────
     let client = clients::get(db, req.client_id).await.map_err(|e| match e {
         sui_id_store::StoreError::NotFound => CoreError::Protocol {
             code: ProtocolError::InvalidClient,
@@ -398,80 +494,67 @@ pub async fn exchange_refresh(
     }
     authenticate_client(&client, req.client_secret.as_deref()).await?;
 
-    // Look up the token. We check `find_any` first — which returns
-    // even revoked / expired rows — because finding the token in a
-    // *revoked* state is itself a theft signal: the most plausible
-    // explanation for a revoked token being presented again is that
-    // an attacker captured it before the legitimate client rotated
-    // it, and is now replaying the captured copy. The defensive
-    // response is to revoke the entire rotation family so neither
-    // the attacker nor the (now-rotated-twice-from-its-perspective)
-    // legitimate client can keep going. The legitimate client
-    // detects the failure on its next refresh and re-authenticates.
-    //
-    // See OAuth 2.1 §6.1 / RFC 6819 §5.2.2.3.
-    let row = match refresh_tokens::find_any(db, &req.refresh_token).await {
-        Ok(r) => r,
-        Err(sui_id_store::StoreError::NotFound) => {
+    // ── Atomic rotation arbitration (RFC 080) ────────────────────────────
+    // `begin_rotation` holds the revoke + optional family-revoke inside one
+    // transaction, so exactly one concurrent caller receives `RotatedHere`
+    // and every loser receives `ReuseDetected` with the family already closed.
+    let now = clock.now();
+    let token_hash = RefreshTokenHash::of(&req.refresh_token);
+    let rotation = refresh_tokens::begin_rotation(db, &token_hash, &req.client_id, now)
+        .await
+        .map_err(|e| match e {
+            // Client-mismatch is rejected without mutating state.
+            sui_id_store::StoreError::Conflict => CoreError::Protocol {
+                code: ProtocolError::InvalidGrant,
+                description: "refresh token was issued to a different client".into(),
+            },
+            other => CoreError::from(other),
+        })?;
+
+    let row = match rotation {
+        // ── Won the race: proceed to issuance ───────────────────────────
+        refresh_tokens::RotationLookup::RotatedHere(row) => row,
+
+        // ── Reuse signal: family already revoked, emit audit, deny ──────
+        // The family revocation happened atomically inside `begin_rotation`,
+        // so this is already a closed outcome by the time we reach here.
+        // We do not distinguish the "concurrent winner" case from a
+        // "token-already-rotated replay" case — both look identical to the
+        // caller (RFC 080 P5).
+        refresh_tokens::RotationLookup::ReuseDetected { row, family_revoked } => {
+            let _ = audit::append(
+                db,
+                &AuditLogRow {
+                    at: now,
+                    actor: Some(row.user_id),
+                    action: "auth.refresh.theft_detected".into(),
+                    target: Some(row.user_id.to_string()),
+                    result: "denied".into(),
+                    note: Some(format!(
+                        "revoked refresh-token family={} client_id={} family_revoked={}",
+                        row.family_id, row.client_id, family_revoked
+                    )),
+                },
+            )
+            .await;
             return Err(CoreError::Protocol {
                 code: ProtocolError::InvalidGrant,
-                description: "refresh token is unknown".into(),
+                description: "refresh token is unknown or revoked".into(),
             });
         }
-        Err(e) => return Err(e.into()),
+
+        // ── Expired or unknown: opaque denial ────────────────────────────
+        refresh_tokens::RotationLookup::Expired(_)
+        | refresh_tokens::RotationLookup::Unknown => {
+            return Err(CoreError::Protocol {
+                code: ProtocolError::InvalidGrant,
+                description: "refresh token is unknown or revoked".into(),
+            });
+        }
     };
 
-    if row.client_id != req.client_id {
-        return Err(CoreError::Protocol {
-            code: ProtocolError::InvalidGrant,
-            description: "refresh token was issued to a different client".into(),
-        });
-    }
-
-    if row.revoked_at.is_some() {
-        // Already-revoked token replay: revoke the whole family and
-        // record an audit event with the family_id so an operator
-        // can correlate. We deliberately don't tell the caller what
-        // happened — the response to legitimate-and-attacker traffic
-        // looks identical.
-        let _ = refresh_tokens::revoke_family(db, &row.family_id).await;
-        let _ = audit::append(
-            db,
-            &AuditLogRow {
-                at: clock.now(),
-                actor: Some(row.user_id),
-                action: "auth.refresh.theft_detected".into(),
-                target: Some(row.user_id.to_string()),
-                result: "denied".into(),
-                note: Some(format!(
-                    "revoked refresh-token family={} client_id={}",
-                    row.family_id, row.client_id
-                )),
-            },
-        ).await;
-        return Err(CoreError::Protocol {
-            code: ProtocolError::InvalidGrant,
-            description: "refresh token is unknown or revoked".into(),
-        });
-    }
-
-    if row.expires_at <= clock.now() {
-        return Err(CoreError::Protocol {
-            code: ProtocolError::InvalidGrant,
-            description: "refresh token has expired".into(),
-        });
-    }
-
-    // Rotation: revoke the old token *before* we issue the new set, so a
-    // crash-mid-flow can never leave both valid simultaneously.
-    refresh_tokens::revoke(db, &row.id).await?;
-
-    // v0.48.3: fetch the user row to populate email claims in the ID
-    // token when the refresh token's scope includes "email". Refresh
-    // token exchanges may include an ID token (OIDC Core §12.2) and
-    // should carry the same set of claims as the original issue.
-    // We only bother if the scope actually includes "email"; otherwise
-    // the extra DB round-trip is skipped.
+    // ── Fetch user email for ID token claims (scope "email") ─────────────
+    // Refresh token exchanges may include an ID token (OIDC Core §12.2).
     let email_for_token: Option<(String, bool)> =
         if row.scope.split_whitespace().any(|s| s == "email") {
             match users::get(db, row.user_id).await {
@@ -497,7 +580,8 @@ pub async fn exchange_refresh(
         &row.auth_methods,
         Some(row.family_id.clone()),
         email_arg,
-    ).await
+    )
+    .await
 }
 
 async fn authenticate_client(

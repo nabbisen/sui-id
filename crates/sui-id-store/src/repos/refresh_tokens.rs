@@ -304,6 +304,129 @@ pub async fn revoke_family(db: &Database, family_id: &FamilyId) -> StoreResult<u
     .await
 }
 
+/// The outcome of an atomic refresh-token rotation attempt (RFC 080).
+///
+/// Every concurrent exchange of the same token hash receives exactly one
+/// variant.  The caller matches on this to implement the grant path and
+/// the theft-detection path; no raw revoke/find calls are needed in core.
+#[derive(Debug)]
+pub enum RotationLookup {
+    /// This caller won the race: the row was active and is now atomically
+    /// revoked by this call.  Proceed to issue the successor token.
+    RotatedHere(RefreshTokenRow),
+    /// The row exists but was already revoked — either by a prior rotation
+    /// or by a concurrent winner of this exact exchange.  This is the
+    /// theft-detection signal: family revocation has ALREADY been performed
+    /// inside the same transaction, so the family is fully revoked by the
+    /// time this variant is returned.  `family_revoked` is the number of
+    /// previously-active rows that were revoked in that sweep (useful for
+    /// the audit note).
+    ReuseDetected {
+        row: RefreshTokenRow,
+        family_revoked: usize,
+    },
+    /// The row exists, has not been revoked, but its `expires_at` is ≤ `now`.
+    Expired(RefreshTokenRow),
+    /// No row with this token hash exists (or the row was already purged).
+    Unknown,
+}
+
+/// Atomically attempt to rotate a refresh token (RFC 080).
+///
+/// Implements the rows-affected arbitration that closes the TOCTOU window
+/// in the previous read-check-revoke-insert sequence:
+///
+/// 1. SELECT the row by hash (no filters) inside a transaction.
+/// 2. If absent → `Unknown`.
+/// 3. If `expires_at ≤ now` and `revoked_at IS NULL` → `Expired`.
+/// 4. `UPDATE SET revoked_at = now WHERE id = ? AND revoked_at IS NULL`:
+///    - rows_affected = 1 → this call won; return `RotatedHere`.
+///    - rows_affected = 0 → already revoked (concurrent winner or prior
+///      rotation); immediately `UPDATE … WHERE family_id = ? AND revoked_at
+///      IS NULL` to revoke all remaining family members, then return
+///      `ReuseDetected`.
+///
+/// The `expected_client` guard runs before step 4: if the presented token
+/// belongs to a different client than the requester, the function returns
+/// `Err(StoreError::Conflict)` without mutating any state — matching the
+/// pre-existing behaviour where a client mismatch is rejected before any
+/// revocation.
+///
+/// Security properties guaranteed by this function (RFC 080 §Security):
+/// - **P1**: exactly one concurrent caller receives `RotatedHere`.
+/// - **P2**: every concurrent loser receives `ReuseDetected` and the
+///   family is fully revoked before that variant reaches the caller.
+/// - **P3**: after any rotation chain, the per-family active-token count
+///   is ≤ 1.
+pub async fn begin_rotation(
+    db: &Database,
+    token_hash: &RefreshTokenHash,
+    expected_client: &sui_id_shared::ids::ClientId,
+    now: DateTime<Utc>,
+) -> StoreResult<RotationLookup> {
+    let hash_bytes = token_hash.as_bytes().to_vec();
+    let expected_client_str = expected_client.to_string();
+
+    db.with_tx(move |tx| {
+        // Step 1: fetch the row by hash (including revoked / expired rows so
+        // we can distinguish every outcome).
+        let row: Option<RefreshTokenRow> = match tx.query_row(
+            "SELECT id, token_enc, user_id, client_id, scope, expires_at, revoked_at,              created_at, auth_methods, family_id              FROM refresh_tokens WHERE token_hash = ?1",
+            [hash_bytes.as_slice()],
+            map,
+        ) {
+            Ok(r) => Some(r),
+            Err(rusqlite::Error::QueryReturnedNoRows) => None,
+            Err(e) => return Err(StoreError::from(e)),
+        };
+
+        // Step 2: unknown token.
+        let row = match row {
+            None => return Ok(RotationLookup::Unknown),
+            Some(r) => r,
+        };
+
+        // Client-binding check: reject without mutating if the token belongs
+        // to a different client than the one presenting it.  Matches pre-RFC
+        // behaviour where mismatch is rejected before any state change.
+        if row.client_id.to_string() != expected_client_str {
+            return Err(StoreError::Conflict);
+        }
+
+        // Step 3: expired-but-not-yet-revoked.
+        if row.expires_at <= now && row.revoked_at.is_none() {
+            return Ok(RotationLookup::Expired(row));
+        }
+
+        // Step 4: atomic arbitration via rows-affected guard.
+        let id_str = row.id.as_str().to_owned();
+        let family_str = row.family_id.as_str().to_owned();
+
+        let affected = tx.execute(
+            "UPDATE refresh_tokens SET revoked_at = ?1              WHERE id = ?2 AND revoked_at IS NULL",
+            params![now, id_str],
+        )?;
+
+        if affected == 1 {
+            // This caller won the race.
+            Ok(RotationLookup::RotatedHere(row))
+        } else {
+            // Already revoked (row.revoked_at was Some, or a concurrent winner
+            // just beat us).  Revoke all remaining family members in the same
+            // transaction so the family is fully closed before we return.
+            let family_revoked = tx.execute(
+                "UPDATE refresh_tokens SET revoked_at = ?1                  WHERE family_id = ?2 AND revoked_at IS NULL",
+                params![now, family_str],
+            )?;
+            Ok(RotationLookup::ReuseDetected {
+                row,
+                family_revoked,
+            })
+        }
+    })
+    .await
+}
+
 /// Re-seal every `token_enc` row under `new_key`. Used by
 /// master-key rotation. Runs inside the caller's transaction —
 /// the function does not commit.
@@ -407,3 +530,6 @@ pub async fn backfill_token_hashes(db: &Database) -> StoreResult<usize> {
     }
     Ok(count)
 }
+
+#[cfg(test)]
+mod tests;

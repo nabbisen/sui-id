@@ -1,0 +1,11 @@
+-- RFC 079: auth-code lifecycle assurance.
+--
+-- The consume UPDATE now includes `AND expires_at > ?now` so the storage
+-- layer enforces single-use + expiry atomically.  This index covers the
+-- `expires_at`-based purge query and the new predicate on the UPDATE.
+--
+-- No schema shape change: PRIMARY KEY on code_hash already enforces
+-- uniqueness; the consumed flag + expiry predicate in the UPDATE
+-- statement are sufficient for one-shot enforcement.  This index is
+-- additive performance hygiene.
+CREATE INDEX IF NOT EXISTS idx_auth_codes_expiry ON auth_codes (expires_at);

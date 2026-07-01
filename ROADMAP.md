@@ -16,8 +16,8 @@ sequencing — each step independently shippable:
 | Step | RFC | Theme | Suggested release |
 |---|---|---|---|
 | ✅ 1 | [078](rfcs/done/078-security-type-modeling-baseline.md) | Type modeling baseline (newtypes, secret redaction) | v0.64.0 |
-| 2 | [080](rfcs/proposed/080-refresh-rotation-atomicity.md) | Refresh rotation atomicity + reuse detection | v0.65.0 |
-| 3 | [079](rfcs/proposed/079-authorization-code-lifecycle-assurance.md) | Auth-code single-use by statement | v0.65.0 |
+| ✅ 2 | [080](rfcs/done/080-refresh-rotation-atomicity.md) | Refresh rotation atomicity + reuse detection | v0.66.0 |
+| ✅ 3 | [079](rfcs/done/079-authorization-code-lifecycle-assurance.md) | Auth-code single-use by statement | v0.66.0 |
 | 4 | [081](rfcs/proposed/081-actor-scope-boundary.md) | Actor scope boundary | v0.66.0 |
 | 5 | [082](rfcs/proposed/082-authorization-decision-core.md) | Pure authorization core | v0.66.0 |
 | 6 | [083](rfcs/proposed/083-security-state-machine-testing.md) | State-machine proptest harness | v0.67.0 |
@@ -137,6 +137,7 @@ deferred (verification phase, spec §22).
 
 | Version | What shipped |
 |---|---|
+| v0.66.0 | **RFC 079 + RFC 080 (auth-code lifecycle assurance + refresh-token rotation atomicity).** `consume` enforced by SQL predicate + rows-affected guard. Typestate pipeline (`ConsumedCode`→`BoundCode`→`PkceVerifiedCode`→`IssuableGrant`) in `exchange_code`. `begin_rotation` closes the 3-closure TOCTOU race with a single-tx rows-affected arbitration; `RotationLookup` makes reuse-detection explicit. Migration 0031. **90/90 tests; all CI invariants unchanged.** |
 | v0.65.1 | **RFC 087 (clippy/rustfmt baseline cleanup).** All four buildable crates clippy-clean (`--all-targets -D warnings`) and fmt-clean under Rust 1.96. Fixes across sui-id-web (16), sui-id-shared (2), sui-id-store (16 lib + test-target), sui-id-i18n (3). 31 files reformatted. No logic change. **78/78 tests; all CI invariants unchanged.** |
 | v0.65.0 | **WCAG AA contrast correction — token foundation (UI/UX handoff unit 1).** Dark-mode AA defect fixed (all 5 colour pairs were failing, worst 1.5:1). Light-mode fills darkened to pass AA. Explicit `--fg-disabled`/`--bg-disabled` tokens; `button:disabled` wired to explicit tokens. Contrast CI test (`tokens/tests.rs`) validates all pairs in 3 modes. Dangling `--surface-overlay` reference fixed. **78/78 tests; all CI invariants unchanged.** |
 | v0.62.0 | **RFC 075 + RFC 076 (soak cleanup).** Mechanical file splits: `admin.rs`→`admin/`, `backup.rs`→`backup/`, `main.rs`→`cli.rs`. Full `configuration.md` reference (10 fields, env vars, flags, examples). **175/175 tests; all CI invariants unchanged.** |

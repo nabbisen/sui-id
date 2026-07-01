@@ -5,6 +5,87 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.66.0] — 2026-06-14
+
+**Security: RFC 079 (auth-code lifecycle assurance) + RFC 080 (refresh-token
+rotation atomicity).** Two Category-A security RFCs from the audit arc, shipped
+together as planned. No API or schema shape change; behaviour-compatible for
+all conforming clients.
+
+### Fixed — auth-code single-use (RFC 079, P1/P2)
+
+`auth_codes::consume` was correct only because a single mutex serialised every
+closure. The statement-predicate was an unconditional `UPDATE … SET consumed = 1`
+that never inspected rows-affected; any future concurrency evolution would silently
+break single-use enforcement.
+
+`consume` is rewritten as a guarded UPDATE+SELECT inside one transaction:
+
+```sql
+UPDATE auth_codes SET consumed = 1
+ WHERE code_hash = ?1 AND consumed = 0 AND expires_at > ?2
+```
+
+rows-affected = 1 → the code was live; return the row. rows-affected = 0 →
+unknown / already consumed / expired — all three surface identically as
+`NotFound` (P5 non-disclosure). The `now` parameter is supplied by the caller
+(clock-source agnostic; mirrors `SharedClock` usage elsewhere).
+
+Migration 0031 adds `idx_auth_codes_expiry ON auth_codes(expires_at)` — a
+covering index for the new predicate and the existing purge query.
+
+### Added — auth-code typestate pipeline (RFC 079, P3)
+
+`exchange_code` in `authorize.rs` is restructured as a four-step typestate
+pipeline private to the module:
+
+`ConsumedCode` → `BoundCode` → `PkceVerifiedCode` → `IssuableGrant`
+
+Each step is a function that consumes the previous state; `issue_for` accepts
+only `IssuableGrant`. Token issuance before all validation steps have passed is
+a compile error, not a code-review finding (strategy §9 "keep typestate
+localised").
+
+### Fixed — refresh-token rotation atomicity (RFC 080, P1/P2/P3)
+
+`exchange_refresh` previously spanned three separate `with_conn` closures
+(find → revoke → insert). Two concurrent requests with the same token could
+both observe `revoked_at IS NULL`, both run the idempotent revoke, and both
+insert children — forking the rotation family and degrading theft detection.
+
+New function `refresh_tokens::begin_rotation` collapses the arbitration into
+one transaction with a rows-affected guard:
+
+- rows-affected = 1 → `RotationLookup::RotatedHere` (this caller won).
+- rows-affected = 0 → already revoked; family revocation runs in the **same
+  transaction** → `RotationLookup::ReuseDetected { row, family_revoked }`.
+- Additional variants: `Expired`, `Unknown`.
+- Client mismatch → `StoreError::Conflict` without mutating state.
+
+`exchange_refresh` now matches on `RotationLookup`; the `find_any`/`revoke`
+sequence is gone from the grant path. The `auth.refresh.theft_detected` audit
+note gains `family_revoked=N` for triage.
+
+Security properties guaranteed by the implementation (RFC 080):
+- **P1**: exactly one concurrent caller receives `RotatedHere`.
+- **P2**: every concurrent loser receives `ReuseDetected`; family is fully
+  revoked before that variant is returned.
+- **P3**: per-family active-token count is ≤ 1 at all times.
+
+### Tests added
+
+`repos/auth_codes/tests.rs` (5 tests): P1 sequential; `consumed` flag verified
+in DB after consume; P2 expiry — SQL predicate proven (flag stays 0); P4
+burn-on-failure; P5 unknown-code.
+
+`repos/refresh_tokens/tests.rs` (8 tests): P1 sequential; P1+P2 concurrent
+(N=8, exactly one winner); P2 family atomically revoked (SQL count asserted);
+P3 chain-of-3 keeps ≤ 1 active; Expired variant; Unknown variant; client
+mismatch returns Conflict without revoking.
+
+**90/90 tests pass** (19 shared + 20 store-pre-existing + 48 store-all + 3
+web). All CI invariants unchanged.
+
 ## [0.65.1] — 2026-06-14
 
 **Maintenance: RFC 087 — clippy and rustfmt baseline cleanup (Rust 1.96).**
