@@ -5,6 +5,58 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.76.2] — 2026-06-14
+
+**RFC 009 — Pluggable SQL Backends, Step 1: `Backend` trait + `SqliteBackend`.**
+A pure architectural refactor with no observable behaviour change.  Introduces
+the storage-backend seam that Steps 2 (Postgres) and 3 (MariaDB) will build on.
+
+### Added — `sui-id-store::backend` module
+
+- **`Backend` trait** — object-safe via type erasure.  Two erased methods:
+  `with_conn_erased(ConnFn)` and `with_tx_erased(TxFn)`.  Also exposes
+  `key()`, `driver_name()`, and `as_any()` for downcast.
+  - `ConnFn = Box<dyn FnOnce(&Connection) -> Box<dyn Any + Send> + Send>`
+  - `TxFn  = Box<dyn FnOnce(&Transaction<'_>) -> StoreResult<Box<dyn Any + Send>> + Send>`
+  - `TxFn` returns `StoreResult` so `with_tx_erased` can `?`-propagate errors
+    to trigger rollback before commit (correct transaction semantics).
+
+- **`SqliteBackend`** — wraps `Arc<Mutex<rusqlite::Connection>>` (cheap clone,
+  `'static`-safe for `spawn_blocking`).  Implements `Backend` with the same
+  `spawn_blocking`-dispatch strategy as the old `Database::inner`.  Adds
+  `with_conn_sync` / `with_tx_sync` (used by the migration runner and blocking
+  tests).  `driver_name() = "sqlite"`.
+
+### Changed — `sui-id-store::db`
+
+`Database` is now `struct Database { backend: Arc<dyn Backend> }`.  The
+public API is **identical** to before:
+
+- `Database::open(path, key)` → opens SQLite, runs migrations, wraps a
+  `SqliteBackend`.
+- `Database::open_in_memory(key)` → same for in-memory SQLite (tests).
+- `with_conn<F,R>`, `with_tx<F,R>` → generic wrappers that box the caller's
+  closure into the erased `ConnFn`/`TxFn`, dispatch through the `Backend`
+  trait, and unbox the result.  The caller API is byte-for-byte identical.
+- `with_conn_sync`, `with_tx_sync` → downcast to `SqliteBackend` (Step 1 only).
+- `key()`, `driver_name()` → forwarded to the backend.
+
+### Added — 5 backend tests
+
+`driver_name_is_sqlite`, `with_conn_executes_on_blocking_thread`,
+`with_tx_commits`, `with_tx_rolls_back_on_error`, `sync_methods_work`.
+
+### Why this matters
+
+Steps 2 and 3 (Postgres, MariaDB) will implement `Backend` and be
+swapped in by constructing a different `Arc<dyn Backend>` — zero call-site
+changes above the repo layer.  The P6 startup driver-match check will read
+`driver_name()` and compare it with the `sui_meta.schema_version` record.
+
+**127/127 tests pass** (up from 122).  0 clippy errors.
+All 5 CI gates PASS (text-leaks, css-tokens, semantic-parity=36,
+inline-style=1, audit-matrix=45×45).
+
 ## [0.76.1] — 2026-06-14
 
 **RFC 005 — Pluggable User Backends (Read-Only LDAP User-Source).** Adds a
