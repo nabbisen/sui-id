@@ -131,6 +131,8 @@ CLI arguments — apply only to the current process invocation, not persisted.
 | `sui-id verify-backup --src <path>` | Verify archive integrity and print a compatibility report without writing files. |
 | `sui-id admin unlock-user --config <c> <username>` | Clear an automatically-locked account immediately. |
 | `sui-id admin rotate-key --config <c>` | Create and activate a new Ed25519 signing key; retire the old one. |
+| `sui-id admin rotate-metrics-token --config <c>` | Generate a new Prometheus metrics bearer token and print it once. |
+| `sui-id admin issue-registration-token --config <c> [--max-uses N] [--note TEXT]` | Generate an RFC 7591 initial-access token for dynamic client registration. Printed once — save it immediately. |
 
 Run `sui-id --help` for the full flag listings.
 
@@ -183,6 +185,109 @@ max_lockout = "24h"            # Default; suits most deployments.
 ```
 
 ---
+
+
+---
+
+## `[[user_source]]` (RFC 005)
+
+Zero or more `[[user_source]]` blocks configure external user sources for the
+authentication cascade. Currently only LDAP is supported.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `slug` | string | **yes** | — | Internal identifier used in logs and audit events. |
+| `kind` | string | **yes** | — | Source type. Only `"ldap"` is currently supported. |
+| `url` | string | **yes** | — | LDAP server URL. Must start with `ldaps://` (TLS required). |
+| `bind_dn` | string | **yes** | — | DN of the service account used to search. Empty bind DN is rejected (no anonymous bind). |
+| `bind_password_env` | string | **yes** | — | Name of the environment variable holding the service-account password. Never put the password inline. |
+| `base_dn` | string | **yes** | — | Base DN for user searches. |
+| `user_filter` | string | no | `"(uid={username})"` | LDAP search filter. `{username}` is substituted with the login username (RFC 4515-escaped). |
+| `email_attribute` | string | no | `"mail"` | LDAP attribute name for the user's email address. |
+| `connect_timeout_secs` | integer | no | `5` | TCP connect timeout. |
+| `search_timeout_secs` | integer | no | `10` | LDAP search/bind timeout. |
+
+```toml
+[[user_source]]
+slug               = "corporate-ldap"
+kind               = "ldap"
+url                = "ldaps://ldap.corp.example.com:636"
+bind_dn            = "cn=svc-sui-id,ou=service-accounts,dc=corp,dc=example,dc=com"
+bind_password_env  = "LDAP_BIND_PASSWORD"
+base_dn            = "ou=people,dc=corp,dc=example,dc=com"
+user_filter        = "(uid={username})"
+email_attribute    = "mail"
+```
+
+---
+
+## `[[federation_provider]]` (RFC 004)
+
+Zero or more `[[federation_provider]]` blocks configure upstream OIDC identity
+providers for federated sign-in (the "Sign in with X" flow).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `slug` | string | **yes** | — | URL-safe identifier used in routes: `/auth/federated/{slug}/start`. Must be lowercase alphanumeric with optional hyphens. |
+| `display_name` | string | **yes** | — | Human-readable label for the "Sign in with X" button. |
+| `issuer` | string | **yes** | — | Upstream OIDC issuer URL. Used to fetch `/.well-known/openid-configuration`. |
+| `client_id` | string | **yes** | — | OAuth 2.0 client ID registered at the upstream. |
+| `client_secret_env` | string | no | `""` | Name of the environment variable holding the client secret. Omit or set empty for public clients (no secret). Never put the secret inline. |
+| `scopes` | string | no | `"openid email"` | Space-separated scopes to request from the upstream. |
+| `provision_mode` | string | no | `"link_only"` | `"link_only"` — user must authenticate locally to link; `"provision_on_first_login"` — a password-less local account is created on first sign-in (requires `email_verified = true` from the upstream). |
+| `enabled` | bool | no | `false` | Whether the "Sign in with X" button is shown and callbacks are accepted. |
+
+> **Security note.** New providers start with `enabled = false` and with
+> `is_disabled = true` on the first locally-provisioned user. An administrator
+> must explicitly enable the provider after verifying the configuration.
+
+```toml
+[[federation_provider]]
+slug               = "google"
+display_name       = "Google"
+issuer             = "https://accounts.google.com"
+client_id          = "1234567890-abc.apps.googleusercontent.com"
+client_secret_env  = "GOOGLE_CLIENT_SECRET"
+scopes             = "openid email profile"
+provision_mode     = "provision_on_first_login"
+enabled            = true
+
+[[federation_provider]]
+slug               = "entra"
+display_name       = "Microsoft"
+issuer             = "https://login.microsoftonline.com/{tenant}/v2.0"
+client_id          = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+client_secret_env  = "ENTRA_CLIENT_SECRET"
+provision_mode     = "link_only"
+enabled            = false
+```
+
+---
+
+## `[metrics]` (RFC 006)
+
+Optional Prometheus metrics endpoint.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `enabled` | bool | no | `false` | Expose the metrics endpoint at `GET /metrics`. |
+| `listen_addr` | string | no | same as `[server].listen_addr` | Override the address for the metrics endpoint. Useful to restrict metrics to an internal network interface. |
+
+The metrics endpoint is protected by a bearer token stored (hashed) in the
+database. Issue or rotate the token with:
+
+```sh
+sui-id admin rotate-metrics-token --config sui-id.toml
+```
+
+Present the token as `Authorization: Bearer <token>` or as a session cookie
+(for browser access via the admin panel).
+
+```toml
+[metrics]
+enabled     = true
+listen_addr = "127.0.0.1:9091"   # Only reachable from localhost / monitoring agent.
+```
 
 ## See also
 

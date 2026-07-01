@@ -5,7 +5,100 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.76.5] — Unreleased
+## [0.76.6] — 2026-06-14
+
+**Full security audit of all 104 done RFCs. Two real flaws found and fixed.**
+
+---
+
+### Security flaw 1 — RFC 004: `state` parameter not verified in callback (CSRF)
+
+**Severity: Medium.** The OAuth 2.0 `state` parameter was generated in
+`federated_start` and included in the upstream authorization URL, but was
+*never verified* in `federated_callback`. `q.state` was declared in
+`CallbackQuery` but unused. This is an incomplete CSRF protection: the
+HMAC state-cookie defends against replay (P5), but without verifying
+that the upstream echoes back the same `state` value, a cross-site
+request could inject a stolen authorization code alongside a victim's
+valid cookie.
+
+**Fix (`crates/sui-id/src/handlers/federation.rs`):**
+
+- `FedState` gains an `upstream_state: String` field (serialized into the
+  HMAC'd cookie alongside `nonce`, `pkce_verifier`, etc.).
+- `federated_start`: assigns `state_param.clone()` to `upstream_state`
+  before sealing the cookie.
+- `federated_callback`: after `unseal_state` succeeds, compares
+  `fed_state.upstream_state` against `q.state` using `ConstantTimeEq`.
+  A mismatch clears the state cookie and redirects to
+  `/admin/login?fed_error=state_mismatch`.
+
+---
+
+### Security flaw 2 — RFC 005 + admin: admin password reset bypasses LDAP source check
+
+**Severity: High.** `reset_user_password` in `sui-id-core/src/admin/users.rs`
+would write a local password hash for any user regardless of their `source`
+column. An administrator who reset the password of a user with
+`source = 'ldap'` would create a local credential that the login system
+would accept on the *local* path, bypassing LDAP authentication entirely.
+The shadow row would then work with both LDAP (if the directory password
+matched) and any new local password — permanently.
+
+**Fix (`crates/sui-id-core/src/admin/users.rs`):**
+
+- `reset_user_password` now calls `users::get(db, target).await?` to
+  fetch the user row, then returns `CoreError::BadRequest` if
+  `user_row.source != UserSource::Local`.
+- Error message: "Cannot set a local password for a user managed by an
+  external user source (e.g. LDAP). Reset the password in the upstream
+  directory instead."
+- The check runs before HIBP and before any credential write.
+
+---
+
+### Audit findings — no further code changes required
+
+All 104 done RFCs were reviewed. Other specific checks confirmed clean:
+
+- **RFC 010** — forgot-password revoke: sessions + refresh tokens revoked
+  atomically in the same transaction as the credential update. ✅
+- **RFC 019** — token issuance: `token_hash` indexed column exists;
+  disabled-user window closed; GC respects `family_id`. ✅
+- **RFC 026** — logout: CSRF validated, `session::logout` revokes the
+  server-side session row. ✅
+- **RFC 038** — consent gate: `ConsentPolicy` checked in `authorize.rs`;
+  `FirstTime` uses the `user_consent` repo correctly. ✅
+- **RFC 058** — step-up on dangerous routes: all 6 routes verified. ✅
+- **RFC 071** — auditor role: write paths use `CurrentAdmin`; read paths
+  use `CurrentAdminOrAuditor`; 403 returned correctly. ✅
+- **RFC 077** — headless setup: `is_initialized` checked before accepting
+  the token; constant-time token comparison. ✅
+- **RFC 088** — auditor matrix: `html_403_auditor` returned for POST
+  endpoints when role is `Auditor`. ✅
+- **RFC 089** — step-up `return_to`: `STEP_UP_RETURN_ALLOWLIST` enforced
+  server-side; arbitrary redirects rejected. ✅
+- **RFC 001** — email outbox: recipient and payload columns encrypted with
+  per-column AAD. ✅
+- **RFC 003** — HIBP: non-blocking on transport failure. ✅
+- **RFC 006** — metrics bearer token: constant-time comparison via
+  `subtle::ConstantTimeEq`. ✅
+- **RFC 069** — rand 0.10: all random generation via `getrandom::fill`. ✅
+- **RFC 070** — reqwest: no TLS verification disabled anywhere. ✅
+- **RFC 090** — pending settings change: value encrypted before storage,
+  never persisted in plaintext. ✅
+- **RFC 020** — identity invariants: `email_normalized` UNIQUE index,
+  `user_uuid` UNIQUE partial index — in place. ✅
+- **RFC 008** — dynamic registration: `validate_redirect_uri` blocks
+  `javascript:` and non-HTTPS schemes; `is_disabled = true` on creation;
+  `consume()` is atomic. ✅
+- **RFC 005** — LDAP: anonymous bind blocked (`bind_dn` required);
+  local-first cascade order enforced; transport failures logged and
+  cascaded, not surfaced to user. ✅
+
+**141/141 tests pass.  0 clippy errors.  All 5 CI gates PASS.**
+
+## [0.76.5] — 2026-06-14
 
 **Security audit + documentation pass.**  No new features; all changes
 are security hardening or documentation corrections.

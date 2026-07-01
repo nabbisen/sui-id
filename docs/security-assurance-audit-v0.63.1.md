@@ -226,14 +226,14 @@ seam for RFC 025. → RFC 081.
 | Item | Category | Status |
 |---|---|---|
 | Newtypes / private constructors / secret-redacting types (RFC 078) | **A** | ✅ v0.64.0 |
-| Auth-code consume hardening: predicate + rows-affected + property tests (RFC 079) | **A** | Proposed |
-| Transactional refresh rotation + reuse guard (RFC 080) | **A** | Proposed |
-| Actor-scope boundary & scoped repository signatures (RFC 081) | **B** | Proposed |
-| Pure authorization core + property tests (RFC 082) | **B** | Proposed |
-| State-machine proptest harness (RFC 083) | **B** | Proposed |
-| Fuzzing harness for input boundaries (RFC 084) | **B/C** | Proposed |
-| Audit completeness matrix + transactional audit (RFC 085) | **B** | Proposed |
-| Kani / TLA+ / Flux pilots (RFC 086) | **C** | Proposed |
+| Auth-code consume hardening: predicate + rows-affected + property tests (RFC 079) | **A** | ✅ Shipped (v0.65.x) |
+| Transactional refresh rotation + reuse guard (RFC 080) | **A** | ✅ Shipped (v0.65.x) |
+| Actor-scope boundary & scoped repository signatures (RFC 081) | **B** | ✅ Shipped (v0.66.x) |
+| Pure authorization core + property tests (RFC 082) | **B** | ✅ Shipped (v0.66.x) |
+| State-machine proptest harness (RFC 083) | **B** | ✅ Shipped (v0.67.x) |
+| Fuzzing harness for input boundaries (RFC 084) | **B/C** | ✅ Shipped (v0.67.x) |
+| Audit completeness matrix + transactional audit (RFC 085) | **B** | ✅ Shipped (v0.67.x) |
+| Kani / TLA+ / Flux pilots (RFC 086) | **C** | ✅ Shipped (v0.68.x) |
 | Verus adoption; typestate for UI state; formal verification of repos; policy engine | **D** | Deferred |
 
 ## 8. Validation of the strategy's default direction
@@ -257,6 +257,10 @@ is adopted as written.
 
 ## 9. Adoption roadmap (deliverable 10.3)
 
+> **Resolution update (v0.76.4):** All nine RFCs (078–086) are shipped and in
+> `rfcs/done/`. The table below is the historical planned order; Status column
+> updated to reflect actual delivery.
+
 Order respects dependencies: types first (everything else names
 them), then the two storage-atomicity RFCs (highest risk), then
 the boundary/decision layer, then the test-infrastructure RFCs
@@ -265,14 +269,14 @@ that exercise all of the above, then pilots.
 | Step | RFC | Target release | Depends on | Status |
 |---|---|---|---|---|
 | 1 | [078 type modeling baseline](../rfcs/done/078-security-type-modeling-baseline.md) | v0.64.0 | — | ✅ Shipped |
-| 2 | [080 refresh rotation atomicity](../rfcs/proposed/080-refresh-rotation-atomicity.md) | v0.65.0 | 078 | Proposed |
-| 3 | [079 auth-code lifecycle](../rfcs/proposed/079-authorization-code-lifecycle-assurance.md) | v0.65.0 | 078 | Proposed |
-| 4 | [081 actor scope boundary](../rfcs/proposed/081-actor-scope-boundary.md) | v0.66.0 | 078 | Proposed |
-| 5 | [082 authorization decision core](../rfcs/proposed/082-authorization-decision-core.md) | v0.66.0 | 081 | Proposed |
-| 6 | [083 state-machine proptest](../rfcs/proposed/083-security-state-machine-testing.md) | v0.67.0 | 079, 080 | Proposed |
-| 7 | [085 audit completeness](../rfcs/proposed/085-audit-event-completeness.md) | v0.67.0 | 081 | Proposed |
-| 8 | [084 fuzzing harness](../rfcs/proposed/084-fuzzing-untrusted-input-boundaries.md) | v0.68.0 | 078 | Proposed |
-| 9 | [086 formal pilot (time-boxed)](../rfcs/proposed/086-formal-model-checking-pilot.md) | evaluation only | 080, 082 | Proposed |
+| 2 | [080 refresh rotation atomicity](../rfcs/done/080-refresh-rotation-atomicity.md) | v0.65.0 | 078 | ✅ Shipped |
+| 3 | [079 auth-code lifecycle](../rfcs/done/079-authorization-code-lifecycle-assurance.md) | v0.65.0 | 078 | ✅ Shipped |
+| 4 | [081 actor scope boundary](../rfcs/done/081-actor-scope-boundary.md) | v0.66.0 | 078 | ✅ Shipped |
+| 5 | [082 authorization decision core](../rfcs/done/082-authorization-decision-core.md) | v0.66.0 | 081 | ✅ Shipped |
+| 6 | [083 state-machine proptest](../rfcs/done/083-security-state-machine-testing.md) | v0.67.0 | 079, 080 | ✅ Shipped |
+| 7 | [085 audit completeness](../rfcs/done/085-audit-event-completeness.md) | v0.67.0 | 081 | ✅ Shipped |
+| 8 | [084 fuzzing harness](../rfcs/done/084-fuzzing-untrusted-input-boundaries.md) | v0.68.0 | 078 | ✅ Shipped |
+| 9 | [086 formal pilot (time-boxed)](../rfcs/done/086-formal-model-checking-pilot.md) | evaluation only | 080, 082 | ✅ Shipped |
 
 Releases above are *suggested* groupings; each RFC remains
 independently shippable. No step gates the verification-phase

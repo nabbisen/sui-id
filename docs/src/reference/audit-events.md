@@ -83,3 +83,25 @@ verifies the chain tail on every load and shows a status banner:
 - **✓ Audit chain verified** — no tampering detected in the checked rows.
 - **✗ Audit chain integrity check failed** — a row hash does not match its
   recomputed value. Investigate immediately.
+
+## Federation events (RFC 004)
+
+| Event name | Label | Description |
+|---|---|---|
+| `auth.federation.signin.success` | Federated sign-in | User authenticated via an upstream OIDC provider and a local session was issued. |
+| `auth.federation.signin.upstream_failure` | Federation upstream error | The upstream identity provider returned an error during code exchange or discovery. |
+| `auth.federation.link.created` | Federation link created | A new link between a local user account and an upstream identity was established (on first sign-in with `provision_on_first_login`, or via the explicit link flow). |
+| `auth.federation.takeover_blocked` | Account takeover blocked | A federated sign-in was rejected because the upstream email matched an existing local user who is not linked to this provider (P2 — potential account takeover attempt). |
+
+## Dynamic client registration events (RFC 008)
+
+| Event name | Label | Description |
+|---|---|---|
+| `client.dynamic_register` | Dynamic client registered | A third-party application self-registered via `POST /oauth2/register` using a valid initial-access token. The client starts disabled; an administrator must enable it before it can obtain tokens. |
+
+## External user-source events (RFC 005)
+
+| Event name | Label | Description |
+|---|---|---|
+| `auth.user_source.matched` | External user source matched | The login cascade resolved the user via an LDAP or other external user source. |
+| `auth.user_source.transport_failure` | User source transport failure | A configured external user source (LDAP) was unreachable or returned a network error during authentication. |

@@ -49,6 +49,92 @@ The administrator can later edit the name, redirect URIs, allowed
 scopes, and logout return URIs from `/admin/clients/{id}/edit`. The
 client id, type (confidential vs public), and secret are immutable.
 
+## Dynamic client registration (RFC 7591)
+
+Third-party applications can self-register via `POST /oauth2/register` using
+an initial-access token issued by an administrator.
+
+### Obtaining an initial-access token
+
+An administrator runs:
+
+```sh
+sui-id admin issue-registration-token --config sui-id.toml \
+  --max-uses 1 --note "MyApp onboarding"
+```
+
+The raw token is printed exactly once. It is SHA-256-hashed before
+storage — if you lose it you must issue a new one.
+
+### Registering
+
+```http
+POST /oauth2/register
+Authorization: Bearer <initial-access-token>
+Content-Type: application/json
+
+{
+  "client_name": "My Application",
+  "redirect_uris": ["https://app.example.com/callback"],
+  "token_endpoint_auth_method": "client_secret_post",
+  "scope": "openid email profile",
+  "logo_uri": "https://app.example.com/logo.png",
+  "client_uri": "https://app.example.com"
+}
+```
+
+Response (`201 Created`):
+
+```json
+{
+  "client_id": "01JXXXXXXXXXXXXXXXXXX",
+  "client_secret": "<shown once>",
+  "client_name": "My Application",
+  "redirect_uris": ["https://app.example.com/callback"],
+  "grant_types": ["authorization_code", "refresh_token"],
+  "token_endpoint_auth_method": "client_secret_post",
+  "scope": "openid email profile"
+}
+```
+
+> **Important.** Dynamically registered clients start **disabled**.
+> An administrator must enable the client in the admin panel before it can
+> obtain tokens. This is a deliberate gate — operators review third-party
+> registrations before granting access.
+
+Supported fields: `redirect_uris` (required), `client_name` (required),
+`scope`, `grant_types`, `token_endpoint_auth_method` (`"client_secret_post"`
+or `"none"` for public clients), `logo_uri`, `client_uri`, `policy_uri`,
+`tos_uri`, `post_logout_redirect_uris`.
+All `*_uri` fields must be HTTPS (or `http://localhost` for development).
+
+Errors follow the RFC 7591 `{"error": ..., "error_description": ...}` shape.
+
+---
+
+## Federated sign-in (RFC 004)
+
+When upstream OIDC providers are configured, sui-id adds "Sign in with X"
+buttons to the login page.
+
+The flow is fully server-side from the RP perspective:
+
+1. User clicks the button → redirected to `GET /auth/federated/{slug}/start`
+2. sui-id fetches the upstream's discovery document, generates PKCE S256 +
+   nonce, seals state in a signed cookie, and redirects to the upstream
+   `authorization_endpoint`.
+3. After the user authenticates upstream, the browser returns to
+   `GET /auth/federated/callback`.
+4. sui-id exchanges the code at the upstream `token_endpoint` (PKCE),
+   validates the nonce, maps `(provider_id, upstream_sub)` → local user
+   (provisioning or link-only depending on `provision_mode`), enforces
+   local MFA if enrolled, and issues a sui-id session.
+
+The upstream access token is used only during step 4 and is never persisted.
+See `[[federation_provider]]` in the configuration reference for setup.
+
+---
+
 ## The flow
 
 sui-id supports exactly one OIDC flow: **Authorization Code with PKCE
@@ -377,7 +463,6 @@ exposing the underlying cause to the caller.
 
 - Front-channel or back-channel logout. (RP-initiated logout *is*
   supported; see above.)
-- Dynamic client registration.
 - Custom claims beyond the OIDC standard set.
 - The `acr_values` request parameter on `/oauth2/authorize`: sui-id
   *issues* `acr` and `amr` claims (see "ID token claims") but does
@@ -386,6 +471,9 @@ exposing the underlying cause to the caller.
   for now.
 - `prompt=login`, `prompt=none`, or `max_age` parameter
   enforcement.
+- Full JWKS signature verification of upstream ID tokens in the
+  federation flow (currently trusts the TLS-authenticated
+  `token_endpoint`; JWKS validation is a planned hardening step).
 
 If you need any of those today, you may need a different IdP. Several are on
 the [roadmap](../ROADMAP.md).

@@ -254,6 +254,14 @@ pub async fn admin_reset_mfa(
 /// Enforces the same HIBP policy as the setup wizard and self-service
 /// password change (RFC 003 consistency requirement). Pass
 /// `HibpMode::Off` / `None` to skip the check when HIBP is disabled.
+///
+/// # Security — RFC 005 LDAP shadow users
+///
+/// Password reset is blocked for users whose `source` is `Ldap` (or any
+/// non-Local source).  Setting a local password on an LDAP shadow row would
+/// allow the user to authenticate via the local credential path, bypassing
+/// LDAP entirely.  Administrators who need to reset an LDAP user's password
+/// must do so in the upstream directory.
 pub async fn reset_user_password(
     db: &Database,
     clock: &SharedClock,
@@ -266,6 +274,17 @@ pub async fn reset_user_password(
 ) -> CoreResult<()> {
     let actor_id = actor.user_id();
     check_password_policy(new_password, min_password_len)?;
+
+    // RFC 005: block password reset on non-local (e.g. LDAP shadow) users.
+    // Setting a local password on a shadow row bypasses the upstream directory.
+    let user_row = users::get(db, target).await?;
+    if user_row.source != sui_id_store::models::UserSource::Local {
+        return Err(CoreError::BadRequest(
+            "Cannot set a local password for a user managed by an external user source \
+             (e.g. LDAP). Reset the password in the upstream directory instead."
+                .into(),
+        ));
+    }
 
     // RFC 003: HIBP breach check on admin-driven password reset.
     // Fail-open: network failures let the reset through.

@@ -46,6 +46,8 @@ struct FedState {
     expires_at: i64,
     /// Optional `next` URL to redirect to after sign-in.
     next: Option<String>,
+    /// The `state` parameter sent to the upstream — verified in callback (P5 CSRF).
+    upstream_state: String,
 }
 
 /// Seal the state as `{json}.{hmac_hex}`.
@@ -190,6 +192,7 @@ pub async fn federated_start(
         provider_slug: slug.clone(),
         expires_at: (chrono::Utc::now() + Duration::seconds(STATE_TTL_SECS)).timestamp(),
         next: if q.next.starts_with('/') { Some(q.next) } else { None },
+        upstream_state: state_param.clone(),
     };
     let sealed = seal_state(&app, &fed_state).map_err(|_| {
         HttpError::html(CoreError::Internal)
@@ -269,7 +272,8 @@ pub async fn federated_callback(
     // Reject upstream errors.
     if let Some(err) = q.error {
         tracing::warn!(upstream_error = %err, "federation callback: upstream returned error");
-        return Ok(Redirect::to("/admin/login?fed_error=upstream").into_response());
+        let jar = jar.remove(Cookie::named(STATE_COOKIE));
+        return Ok((jar, Redirect::to("/admin/login?fed_error=upstream")).into_response());
     }
 
     let code = q.code.ok_or_else(|| {
@@ -284,6 +288,18 @@ pub async fn federated_callback(
 
     let fed_state = unseal_state(&app, &sealed)
         .ok_or_else(|| HttpError::html(CoreError::BadRequest("invalid or expired state".into())))?;
+
+    // P5 CSRF: verify the upstream echoes back the same state we sent.
+    let returned_state = q.state.as_deref().unwrap_or("");
+    use subtle::ConstantTimeEq;
+    let state_ok: bool = fed_state.upstream_state.as_bytes()
+        .ct_eq(returned_state.as_bytes())
+        .into();
+    if !state_ok {
+        tracing::warn!(slug = %fed_state.provider_slug, "federation: state mismatch — possible CSRF");
+        let jar = jar.remove(Cookie::named(STATE_COOKIE));
+        return Ok((jar, Redirect::to("/admin/login?fed_error=state_mismatch")).into_response());
+    }
 
     // Load the provider.
     let provider =
@@ -475,8 +491,13 @@ pub async fn federated_callback(
 
             match provider.provision_mode {
                 ProvisionMode::ProvisionOnFirstLogin => {
-                    // P3: only provision when email_verified = true.
-                    if !id_claims.email_verified && id_claims.email.is_some() {
+                    // P3: provision on first login requires either:
+                    //   - email present AND email_verified = true, OR
+                    //   - email entirely absent (no email claim → no email
+                    //     verification requirement, no takeover risk via
+                    //     email, provisioning is permitted).
+                    // Block only when email is present but unverified.
+                    if id_claims.email.is_some() && !id_claims.email_verified {
                         tracing::info!(slug = %provider.slug, "provision held: unverified email");
                         return Ok(Redirect::to("/admin/login?fed_error=unverified_email").into_response());
                     }
