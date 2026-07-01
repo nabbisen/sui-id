@@ -1,6 +1,7 @@
 //! Page renderers for the "clients" screen domain (RFC 065).
 
 use super::common::*;
+use crate::components::empty_state;
 use crate::layout::Shell;
 use leptos::prelude::*;
 use sui_id_shared::api::ClientSummary;
@@ -125,24 +126,26 @@ pub fn render_clients(
                 <section>
                     <h2>{t.clients_table_section}</h2>
                     <div class="table-wrap">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>{t.clients_table_th_name}</th>
-                                    <th>{t.clients_table_th_client_id}</th>
-                                    <th>{t.clients_table_th_kind}</th>
-                                    <th>{t.clients_table_th_status}</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            {if rows.is_empty() {
-                                view! {
-                                    <tbody>{table_empty_row(t.clients_empty, 5)}</tbody>
-                                }.into_any()
-                            } else {
-                                view! { <tbody>{rows}</tbody> }.into_any()
-                            }}
-                        </table>
+                        {if rows.is_empty() {
+                            empty_state(t.empty_clients,
+                                if can_write { Some(("/admin/clients/new", t.empty_clients_cta)) } else { None })
+                            .into_any()
+                        } else {
+                            view! {
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>{t.clients_table_th_name}</th>
+                                            <th>{t.clients_table_th_client_id}</th>
+                                            <th>{t.clients_table_th_kind}</th>
+                                            <th>{t.clients_table_th_status}</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>{rows}</tbody>
+                                </table>
+                            }.into_any()
+                        }}
                     </div>
                 </section>
 

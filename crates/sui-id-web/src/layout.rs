@@ -59,14 +59,14 @@ pub fn Shell(
     let lang_tag = lang.tag();
     let dir_attr = lang.direction();
     view! {
-        <html lang=lang_tag dir=dir_attr>
+        <html lang=lang_tag dir=dir_attr class="no-js">
             <head>
                 <meta charset="utf-8" />
                 <meta name="viewport" content="width=device-width, initial-scale=1" />
                 <meta name="referrer" content="same-origin" />
                 <title>{format!("{title} · sui-id")}</title>
                 <style>{stylesheet}</style>
-                <script src="/static/theme-init.js" defer></script>
+                <script src="/static/theme-init.js"></script>
                 <script src="/static/copy.js" defer></script>
             </head>
             <body>
@@ -107,14 +107,14 @@ pub fn AuthShell(title: String, lang: sui_id_i18n::Locale, children: Children) -
     let lang_tag = lang.tag();
     let dir_attr = lang.direction();
     view! {
-        <html lang=lang_tag dir=dir_attr>
+        <html lang=lang_tag dir=dir_attr class="no-js">
             <head>
                 <meta charset="utf-8" />
                 <meta name="viewport" content="width=device-width, initial-scale=1" />
                 <meta name="referrer" content="same-origin" />
                 <title>{format!("{title} · sui-id")}</title>
                 <style>{stylesheet}</style>
-                <script src="/static/theme-init.js" defer></script>
+                <script src="/static/theme-init.js"></script>
             </head>
             <body>
                 <a href="#main-content" class="skip-link">
@@ -281,5 +281,11 @@ fn ThemeToggle(lang: sui_id_i18n::Locale) -> impl IntoView {
                 "☾ " {t.theme_toggle_dark}
             </button>
         </div>
+        // RFC 092: no-JS fallback note. Hidden by `.js .theme-no-js-note { display:none }`.
+        // Visible only when JavaScript is disabled; informs the user that
+        // theme follows system preference.
+        <p class="theme-no-js-note muted">
+            {t.theme_noscript_note}
+        </p>
     }
 }

@@ -382,6 +382,18 @@ pub const CHROME_THEME_TOGGLE_CSS: &str = r#"
   color: var(--accent-default);
 }
 
+
+/* ------------------------------------------------------------------ */
+/* RFC 092: no-js / js root-class visibility rules                    */
+/* ------------------------------------------------------------------ */
+
+/* Hide the interactive toggle button in no-JS environments so users   */
+/* do not see a non-functional control.                                */
+.no-js .theme-toggle { display: none; }
+
+/* Hide the noscript note in JS environments.                          */
+.js .theme-no-js-note { display: none; }
+
 "#;
 
 pub const CHROME_RESPONSIVE_CSS: &str = r#"

@@ -1,6 +1,6 @@
 # RFC 092 — UI Components: ThemeToggle, EmptyState, CopyField, Error Summary
 
-**Status.** Proposed
+**Status.** Implemented (v0.74.0)
 **Tracks.** UI/UX handoff v2.3 §5 (ThemeToggle, EmptyState, CopyField,
 Error Summary) — unit 6. Category B.
 **Touches.** `sui-id-web/src/components/` (new components), `static/theme-init.js`

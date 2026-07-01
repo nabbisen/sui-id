@@ -346,4 +346,4 @@ dependency.
 | 089 | [Step-up authentication contract](./proposed/089-step-up-contract.md) | Proposed |
 | 090 | [Signing-key rotation confirm + settings pending-change](./done/090-signing-key-confirm-pending-change.md) | ✅ Shipped v0.72.0 |
 | 091 | [LoginContext rendering and SelfServiceShell navigation](./done/091-login-context-self-service-shell.md) | ✅ Shipped v0.73.0 |
-| 092 | [UI components: ThemeToggle, EmptyState, CopyField, Error summary](./proposed/092-ui-components.md) | Proposed |
+| 092 | [UI components: ThemeToggle, EmptyState, CopyField, Error summary](./done/092-ui-components.md) | ✅ Shipped v0.74.0 |

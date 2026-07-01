@@ -1,6 +1,7 @@
 //! Page renderers for the "audit" screen domain (RFC 065).
 
 use super::common::*;
+use crate::components::empty_state;
 use crate::layout::Shell;
 use leptos::prelude::*;
 use sui_id_shared::api::AuditLogEntryDto;
@@ -113,9 +114,10 @@ pub fn render_audit(
                             </tr>
                         </thead>
                         {if rows.is_empty() {
+                            // No CTA for audit log — read-only surface.
                             view! {
-                                <tbody><tr><td colspan="6" class="muted center-pad-6">
-                                    "(no matching entries)"
+                                <tbody><tr><td colspan="6">
+                                    {empty_state(t.empty_audit, None)}
                                 </td></tr></tbody>
                             }.into_any()
                         } else {

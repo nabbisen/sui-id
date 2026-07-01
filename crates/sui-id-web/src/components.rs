@@ -56,6 +56,10 @@ pub mod tables;
 pub mod tabs;
 pub mod utilities;
 
+// RFC 092 public re-exports
+pub use forms::error_summary;
+pub use utilities::{copy_field, empty_state};
+
 // Backward-compatible re-export for existing call sites. RFC-MI-010
 // is class-preserving and contract-preserving; `crate::components::
 // status_badge` and `crate::components::StatusKind` continue to
@@ -136,6 +140,10 @@ pub fn components_css() -> &'static str {
             setup::SETUP_LANG_PICKER_CSS,
             // ---- chrome part 3: responsive @media breakpoints ----
             chrome::CHROME_RESPONSIVE_CSS,
+            // ---- RFC 092: EmptyState + CopyField + error-summary ----
+            utilities::EMPTY_STATE_CSS,
+            utilities::COPY_FIELD_CSS,
+            forms::ERROR_SUMMARY_CSS,
         ]
         .concat()
     })

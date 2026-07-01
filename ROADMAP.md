@@ -34,7 +34,7 @@ above therefore shift forward by one (079 / 080 → v0.66.0, 081 / 082 →
 v0.67.0, 083 / 085 → v0.68.0, 084 → v0.69.0); 086 stays evaluation-only.
 Targets remain indicative, not commitments.
 
-**UI-security contract — handoff units 1–6.** The approved v2.3 UI/UX
+**UI-security contract — handoff units 1–6. ✅ COMPLETE as of v0.74.0.** The approved v2.3 UI/UX
 contract defines six units. Unit 1 (design tokens) is done (v0.65.0).
 Units 2–6 are `[NEW CONTRACT]` items and will each be filed as an RFC
 **behind the existing auth-core set** — RFC 087 onward, sequenced after
@@ -139,6 +139,7 @@ deferred (verification phase, spec §22).
 
 | Version | What shipped |
 |---|---|
+| v0.74.0 | **RFC 092 (UI component suite).** ThemeToggle: `no-js`→`js` class swap, blocking `theme-init.js`, noscript fallback. `EmptyState` wired into users/clients/signing-keys/audit. `CopyField` (`readonly` + `role="status"`). `error_summary` (`role="alert"`). 10 i18n keys. CSS token fixes. **UI-security arc (RFCs 087–092) COMPLETE.** **104/104 tests; all 5 CI gates PASS.** |
 | v0.73.0 | **RFC 091 (LoginContext rendering).** `LoginContext` enum in `sui-id-web`; trusted-name `OidcAuthorize` derivation via DB lookup; context-aware copy on login page (`AdminPanel` / `OidcAuthorize` / `SelfService`); 5 i18n keys. **104/104 tests; all 5 CI gates PASS.** |
 | v0.72.0 | **RFC 090 (signing-key rotation confirm + settings pending-change).** Migration 0032; `pending_settings_change` repo (8 tests); `PendingChangeId` newtype; `pending_change` core domain (create/apply/cancel/purge); `GET /admin/signing-keys/rotate-confirm` + step-up revalidation on POST; SMTP `email_post` → pending-change redirect when password provided; `GET|POST /admin/settings/email/confirm`; 7 i18n keys; 4 audit events. **104/104 tests; all 5 CI gates PASS.** |
 | v0.71.0 | **RFC 089 (step-up contract).** `sanitise_return_to` gains `STEP_UP_RETURN_ALLOWLIST` — non-allowlisted `?return_to=` falls back to `/me/security`. 12 unit tests. Recovery-code exclusion documented in `policy_for_session`. RFCs 089–092 proposed (UI-security units 3–6). **96/96 tests; all 5 CI gates PASS.** |

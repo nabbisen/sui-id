@@ -155,3 +155,69 @@ pub struct FieldError {
     /// Localised error message (resolved at the handler layer).
     pub message: String,
 }
+
+// ── RFC 092: error_summary component ─────────────────────────────────────────
+
+pub(crate) const ERROR_SUMMARY_CSS: &str = r#"
+/* ---- error-summary (RFC 092) ---- */
+.error-summary {
+  background: var(--danger-subtle);
+  border: var(--border-width-default) solid var(--danger-default);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+  color: var(--fg-default);
+}
+.error-summary__heading {
+  font-weight: var(--font-weight-medium);
+  margin: 0 0 var(--space-2);
+  color: var(--fg-on-danger);
+}
+.error-summary__list {
+  margin: 0;
+  padding-left: var(--space-4);
+}
+.error-summary__list li {
+  margin-bottom: var(--space-1);
+}
+"#;
+
+/// Accessible error summary block for forms with multiple field errors
+/// (RFC 092 / v2.3 §5).
+///
+/// Rendered only when `errors.len() > 1`. Uses `role="alert"` and
+/// `aria-live="assertive"` so screen readers announce the error list
+/// immediately when the page loads after a failed submission.
+///
+/// Individual field errors continue to render inline via the existing
+/// per-field error mechanisms; this summary provides an at-a-glance list
+/// at the top of the form.
+pub fn error_summary(
+    t: &'static sui_id_i18n::Strings,
+    errors: &[FieldError],
+) -> Option<impl leptos::prelude::IntoView> {
+    use leptos::prelude::*;
+    if errors.len() <= 1 {
+        return None;
+    }
+    let heading = t.error_summary_heading;
+    let items: Vec<_> = errors
+        .iter()
+        .map(|e| {
+            let msg = e.message.clone();
+            view! { <li>{msg}</li> }
+        })
+        .collect();
+    Some(view! {
+        <div
+            class="error-summary"
+            role="alert"
+            aria-live="assertive"
+        >
+            <p class="error-summary__heading">{heading}</p>
+            <ul class="error-summary__list">
+                {items}
+            </ul>
+        </div>
+    })
+}

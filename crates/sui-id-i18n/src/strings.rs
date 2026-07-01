@@ -875,4 +875,16 @@ pub struct Strings {
     pub login_title_self_service: &'static str,
     pub login_body_self_service: &'static str,
     pub login_body_oidc: &'static str,
+    // RFC 092: ThemeToggle noscript note
+    pub theme_noscript_note: &'static str,
+    // RFC 092: EmptyState per-list copy
+    pub empty_users: &'static str,
+    pub empty_users_cta: &'static str,
+    pub empty_clients: &'static str,
+    pub empty_clients_cta: &'static str,
+    pub empty_signing_keys: &'static str,
+    pub empty_audit: &'static str,
+    // RFC 092: error summary heading
+    pub error_summary_heading: &'static str,
+    // RFC 092: copy field noun
 }

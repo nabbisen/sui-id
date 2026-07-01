@@ -1,6 +1,7 @@
 //! Page renderers for the "signing_keys" screen domain (RFC 065).
 
 use super::common::*;
+use crate::components::empty_state;
 use crate::layout::Shell;
 use leptos::prelude::*;
 
@@ -97,25 +98,26 @@ pub fn render_signing_keys(
                 <section>
                     <h2>{t.signing_keys_table_section}</h2>
                     <div class="table-wrap">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>{t.signing_keys_th_key_id}</th>
-                                    <th>{t.signing_keys_th_algorithm}</th>
-                                    <th>{t.signing_keys_th_status}</th>
-                                    <th>{t.signing_keys_th_created}</th>
-                                    <th>{t.signing_keys_th_retired}</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            {if rows.is_empty() {
-                                view! {
-                                    <tbody>{table_empty_row(t.signing_keys_empty, 6)}</tbody>
-                                }.into_any()
-                            } else {
-                                view! { <tbody>{rows}</tbody> }.into_any()
-                            }}
-                        </table>
+                        {if rows.is_empty() {
+                            // No CTA — signing keys are issued via the rotate form below.
+                            empty_state(t.empty_signing_keys, None).into_any()
+                        } else {
+                            view! {
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>{t.signing_keys_th_key_id}</th>
+                                            <th>{t.signing_keys_th_algorithm}</th>
+                                            <th>{t.signing_keys_th_status}</th>
+                                            <th>{t.signing_keys_th_created}</th>
+                                            <th>{t.signing_keys_th_retired}</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>{rows}</tbody>
+                                </table>
+                            }.into_any()
+                        }}
                     </div>
                 </section>
 

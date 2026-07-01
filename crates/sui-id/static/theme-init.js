@@ -1,22 +1,28 @@
-// sui-id theme initialization (RFC 062 + v0.48.1 hotfix).
+// sui-id theme initialization (RFC 062 + v0.48.1 hotfix + RFC 092).
 //
-// Runs early to apply the user's theme choice from localStorage
-// before first paint, then attaches click listeners to the footer's
-// theme toggle buttons (replacing v0.47.x inline `onclick=` handlers
-// that were blocked by the CSP `script-src 'self'` policy).
+// RFC 092 additions:
+//   1. Swap the `<html class="no-js">` root class to `js` immediately so
+//      CSS rules `.no-js .theme-toggle { display:none }` and
+//      `.js .theme-no-js-note { display:none }` take effect before first paint.
+//   2. localStorage access is already wrapped in try/catch; all storage
+//      errors are swallowed and the CSS / system-preference fallback applies.
 //
-// Loaded via `<script src="/static/theme-init.js" defer></script>`.
-// The `defer` is fine here — FOUT protection is already provided by
-// the synchronous CSS in <style>, and the theme application only
-// affects the `data-theme` attribute on <html> which the CSS
-// references through attribute selectors.
+// Loaded as a BLOCKING script in <head> — no defer, no async.
+// This is intentional: the root-class swap and data-theme attribute MUST
+// be applied before the first style-dependent paint to prevent a flash of
+// unstyled or wrong-theme content.
 
 (function () {
   try {
-    var KEY = "sui_id_theme";
-    var saved = localStorage.getItem(KEY);
-    var mode = (saved === "light" || saved === "dark") ? saved : "system";
+    // RFC 092: swap no-js → js immediately. CSS uses this class to hide the
+    // non-functional toggle button in no-JS environments.
     var root = document.documentElement;
+    root.classList.replace('no-js', 'js');
+
+    var KEY = "sui_id_theme";
+    var saved;
+    try { saved = localStorage.getItem(KEY); } catch (e) { saved = null; }
+    var mode = (saved === "light" || saved === "dark") ? saved : "system";
 
     function apply(m) {
       if (m === "system") {
@@ -49,12 +55,10 @@
     };
 
     // Attach click listeners to toggle buttons by `data-theme-value`.
-    // Replaces inline `onclick=` handlers (blocked by CSP
-    // `script-src 'self'` — `script-src-attr`).
+    // Replaces inline `onclick=` handlers (blocked by CSP `script-src 'self'`).
     function attachToggleListeners() {
       document.querySelectorAll(".theme-toggle__btn[data-theme-value]")
         .forEach(function (b) {
-          // aria-pressed initial state
           b.setAttribute(
             "aria-pressed",
             b.getAttribute("data-theme-value") === mode ? "true" : "false"

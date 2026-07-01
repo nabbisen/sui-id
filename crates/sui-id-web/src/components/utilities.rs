@@ -271,3 +271,108 @@ pub const UTILITIES_ADDITIONAL_CSS: &str = r#"
 }
 
 "#;
+
+// ── RFC 092: EmptyState component ─────────────────────────────────────────────
+
+pub(crate) const EMPTY_STATE_CSS: &str = r#"
+/* ---- EmptyState (RFC 092) ---- */
+.empty-state {
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+  color: var(--fg-muted);
+}
+.empty-state__message {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-body);
+}
+"#;
+
+/// Consistent empty-list presentation (RFC 092 / v2.3 §5).
+///
+/// Renders a centred message and an optional CTA link. The CTA is omitted
+/// when `cta` is `None` — auditors see the message without mutation controls.
+///
+/// # Arguments
+/// - `message` — already-localised message string (from `t.empty_*`)
+/// - `cta` — optional `(href, label)` for the "create first …" link
+pub fn empty_state(
+    message: impl Into<String>,
+    cta: Option<(&'static str, &'static str)>,
+) -> impl leptos::prelude::IntoView {
+    use leptos::prelude::*;
+    let message = message.into();
+    view! {
+        <div class="empty-state">
+            <p class="empty-state__message">{message}</p>
+            {cta.map(|(href, label)| view! {
+                <a href=href class="button">{label}</a>
+            })}
+        </div>
+    }
+}
+
+// ── RFC 092: CopyField component ──────────────────────────────────────────────
+
+pub(crate) const COPY_FIELD_CSS: &str = r#"
+/* ---- CopyField (RFC 092) ---- */
+.copy-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.copy-field__input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+  padding: var(--space-1) var(--space-2);
+  border: var(--border-width-default) solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  color: var(--fg-default);
+}
+"#;
+
+/// A read-only value field with a copy-to-clipboard button (RFC 092 / v2.3 §5).
+///
+/// The `<input readonly>` carries `role="status"` so assistive technology
+/// can announce the value without it being an interactive control. The copy
+/// button reuses the existing `copy.js` / `copy-btn` mechanism.
+///
+/// # Arguments
+/// - `t` — localised strings
+/// - `value` — the value to display and copy
+/// - `noun` — copy-button noun (e.g. `t.copy_noun_client_id`)
+/// - `aria_label` — label for the read-only input (for screen readers)
+pub fn copy_field(
+    t: &'static sui_id_i18n::Strings,
+    value: String,
+    noun: &'static str,
+    aria_label: &'static str,
+) -> impl leptos::prelude::IntoView {
+    use leptos::prelude::*;
+    let phrase = t.copy_button_aria_template.replace("{noun}", noun);
+    let aria = phrase.clone();
+    let v2 = value.clone();
+    view! {
+        <div class="copy-field">
+            <input
+                type="text"
+                class="copy-field__input"
+                readonly
+                role="status"
+                aria-label=aria_label
+                value=value
+            />
+            <button
+                type="button"
+                class="copy-btn"
+                data-copy=v2
+                data-copy-done=t.copy_button_label_done
+                aria-label=aria
+                title=phrase>
+                {t.copy_button_label}
+            </button>
+        </div>
+    }
+}

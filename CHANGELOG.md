@@ -5,6 +5,85 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.74.0] — 2026-06-14
+
+**UI-security unit 6: RFC 092 — UI Component Suite.**
+Completes the v2.3 contract. ThemeToggle P1–P3 (Appendix E) all met.
+EmptyState wired into all four list surfaces. CopyField component.
+Error-summary component. No wire-protocol change.
+
+### Changed — `theme-init.js` robustness (RFC 092 P1, P2, P3)
+
+`crates/sui-id/static/theme-init.js` updated:
+- **No-JS/JS root-class swap:** adds
+  `document.documentElement.classList.replace('no-js', 'js')` at the
+  top of the IIFE, before any `localStorage` access. The swap runs
+  unconditionally on any JS-enabled browser regardless of storage
+  permission.
+- **localStorage isolation:** the `localStorage.getItem` call is now
+  in its own inner `try/catch` separate from the outer IIFE wrapper,
+  so a storage exception falls back to the `"system"` default without
+  stopping theme application.
+- **Blocking load** (Appendix E): `<script src="/static/theme-init.js"
+  defer>` → `<script src="/static/theme-init.js">` in both `Shell`
+  and `AuthShell` in `layout.rs`. Removes the flash-of-wrong-theme
+  risk on first paint.
+
+### Changed — `<html class="no-js">` in both shells (RFC 092)
+
+Both `Shell` and `AuthShell` now emit `<html ... class="no-js">`.
+`theme-init.js` upgrades it to `class="js"` immediately; on any JS-
+disabled browser the class stays `no-js` and the CSS rules hide the
+non-functional toggle button.
+
+### Added — ThemeToggle no-JS fallback text (RFC 092 P3)
+
+A `<p class="theme-no-js-note">` is rendered after the toggle button
+group, carrying `{t.theme_noscript_note}`. CSS hides it when JS is
+enabled (`.js .theme-no-js-note { display:none }`). No-JS users see
+"Theme follows your system setting." instead of a dead button.
+
+### Added — no-JS/JS visibility CSS rules (RFC 092)
+
+Two new structural rules appended to `CHROME_THEME_TOGGLE_CSS`:
+`.no-js .theme-toggle { display:none }` and
+`.js .theme-no-js-note { display:none }`.
+
+### Added — `EmptyState` component (`utilities.rs`, RFC 092)
+
+`pub fn empty_state(message, cta: Option<(&str, &str)>)` renders a
+centred message and an optional CTA link. The CTA is omitted when
+`can_write` is false so auditors see the message without a mutation
+control. Wired into:
+- Users list — "No users yet." + "Create first user" CTA (admin only).
+- Clients list — "No applications registered yet." + CTA (admin only).
+- Signing-keys list — "No signing keys found." (no CTA — use rotate form).
+- Audit log — "No audit events yet." (no CTA — read-only).
+
+### Added — `CopyField` component (`utilities.rs`, RFC 092)
+
+`pub fn copy_field(t, value, noun, aria_label)` renders a
+`<input readonly role="status">` plus a copy-to-clipboard button
+reusing the existing `copy-btn` CSS and `copy.js` mechanism.
+
+### Added — `error_summary` component (`forms.rs`, RFC 092)
+
+`pub fn error_summary(t, errors: &[FieldError])` renders a
+`role="alert" aria-live="assertive"` block listing all field errors
+when `errors.len() > 1`. Only rendered when multiple errors exist;
+no DOM presence on clean pages.
+
+### Added — 10 i18n keys (RFC 092)
+
+`theme_noscript_note`, `empty_users`, `empty_users_cta`,
+`empty_clients`, `empty_clients_cta`, `empty_signing_keys`,
+`empty_audit`, `error_summary_heading` across English, Japanese,
+Simplified Chinese. (`button_edit`, `button_view_detail` already
+existed from a prior release.)
+
+**104/104 tests pass. All 5 CI gates PASS.**
+UI-security contract (RFCs 087–092) complete.
+
 ## [0.73.0] — 2026-06-14
 
 **UI-security unit 5: RFC 091 — LoginContext Rendering.**
