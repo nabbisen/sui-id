@@ -22,6 +22,7 @@ use crate::tokens::{self, TokenLifetimes, TokenSet};
 use chrono::Duration;
 use ed25519_dalek::SigningKey;
 use sui_id_shared::ids::{ClientId, UserId};
+use sui_id_shared::{CodeHash, FamilyId, RawRefreshToken, RefreshTokenId};
 use sui_id_store::models::{AuditLogRow, AuthorizationCodeRow, RefreshTokenRow};
 use sui_id_store::repos::{audit, auth_codes, clients, refresh_tokens, signing_keys, users};
 use sui_id_store::Database;
@@ -224,7 +225,7 @@ pub async fn complete_authorization(
 ) -> CoreResult<AuthorizationResponseRedirect> {
     let now = clock.now();
     let code_plain = tokens::random_token(32);
-    let code_hash = tokens::sha256_hex(&code_plain);
+    let code_hash = CodeHash::of(&code_plain);
     let row = AuthorizationCodeRow {
         code_hash,
         client_id: accepted.params.client_id,
@@ -264,9 +265,12 @@ pub struct CodeExchangeRequest {
     pub code_verifier: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct RefreshExchangeRequest {
-    pub refresh_token: String,
+    /// The plaintext refresh token value supplied by the client. Wrapped as
+    /// `RawRefreshToken` so it cannot appear in `Debug` output and is
+    /// zeroed on drop.
+    pub refresh_token: RawRefreshToken,
     pub client_id: ClientId,
     pub client_secret: Option<String>,
 }
@@ -299,7 +303,7 @@ pub async fn exchange_code(
     }
     authenticate_client(&client, req.client_secret.as_deref()).await?;
 
-    let code_hash = tokens::sha256_hex(&req.code);
+    let code_hash = CodeHash::of(&req.code);
     let row = auth_codes::consume(db, &code_hash).await.map_err(|e| match e {
         sui_id_store::StoreError::NotFound => CoreError::Protocol {
             code: ProtocolError::InvalidGrant,
@@ -560,7 +564,7 @@ async fn issue_for_with_family(
     scope: &str,
     nonce: Option<&str>,
     auth_methods: &[sui_id_shared::AuthMethod],
-    family_id: Option<String>,
+    family_id: Option<FamilyId>,
     user_email: Option<(&str, bool)>,
 ) -> CoreResult<TokenSet> {
     let key_row = signing_keys::active(db).await.map_err(|e| match e {
@@ -588,13 +592,12 @@ async fn issue_for_with_family(
     ).await?;
 
     let now = clock.now();
-    let new_id = tokens::random_token(16);
+    let new_id = RefreshTokenId::generate();
     // First issuance roots a new family at this new row's id; a
     // rotation copies the parent's family forward unchanged.
-    let family = family_id.unwrap_or_else(|| new_id.clone());
+    let family = family_id.unwrap_or_else(|| FamilyId::root_of(&new_id));
     let rt_row = RefreshTokenRow {
         id: new_id,
-        token_plain: Some(set.refresh_token.clone()),
         user_id,
         client_id,
         scope: scope.to_owned(),
@@ -604,7 +607,8 @@ async fn issue_for_with_family(
         auth_methods: auth_methods.to_vec(),
         family_id: family,
     };
-    refresh_tokens::insert(db, &rt_row).await?;
+    // Pass the plaintext token separately — RefreshTokenRow carries no plaintext.
+    refresh_tokens::insert(db, &rt_row, &set.refresh_token).await?;
     Ok(set)
 }
 

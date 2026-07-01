@@ -7,6 +7,7 @@
 
 use chrono::{DateTime, Utc};
 use sui_id_shared::ids::{ClientId, EmailOutboxId, SessionId, SigningKeyId, UserId};
+use sui_id_shared::{CodeHash, FamilyId, RefreshTokenId};
 
 /// Administrative access level for a user account (RFC 071, migration 0027).
 ///
@@ -179,7 +180,9 @@ pub struct UserConsentRow {
 
 #[derive(Debug, Clone)]
 pub struct AuthorizationCodeRow {
-    pub code_hash: String,
+    /// SHA-256 hex digest of the code plaintext. The plaintext is never
+    /// stored; a DB leak cannot expose outstanding codes for replay.
+    pub code_hash: CodeHash,
     pub client_id: ClientId,
     pub user_id: UserId,
     pub redirect_uri: String,
@@ -235,8 +238,8 @@ pub struct SessionRow {
 
 #[derive(Debug, Clone)]
 pub struct RefreshTokenRow {
-    pub id: String,
-    pub token_plain: Option<String>, // populated only at issuance
+    /// Opaque row identifier (16-byte CSPRNG, base64url-encoded).
+    pub id: RefreshTokenId,
     pub user_id: UserId,
     pub client_id: ClientId,
     pub scope: String,
@@ -255,7 +258,21 @@ pub struct RefreshTokenRow {
     /// onto the new row. If a revoked token is later replayed, we
     /// revoke every row in the same family — see the refresh-grant
     /// flow in `sui_id_core::authorize`.
-    pub family_id: String,
+    pub family_id: FamilyId,
+}
+
+/// The result of issuing a new refresh token.
+///
+/// Separates the stored row (which never carries the plaintext) from the
+/// single-use plaintext token returned to the caller at issuance time.
+/// After `insert`, the caller is responsible for delivering `token` to
+/// the client and then letting it drop (zeroize on drop).
+#[derive(Debug)]
+pub struct IssuedRefreshToken {
+    /// The row as it was written to the database (no plaintext field).
+    pub row: RefreshTokenRow,
+    /// The plaintext token to hand to the client. Redacted from `Debug`.
+    pub token: sui_id_shared::RawRefreshToken,
 }
 
 #[derive(Debug, Clone)]

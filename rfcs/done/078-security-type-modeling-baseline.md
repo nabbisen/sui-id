@@ -1,6 +1,6 @@
 # RFC 078 — Security-Critical Type Modeling Baseline
 
-**Status.** Proposed
+**Status.** Implemented — v0.64.0
 **Tracks.** Strategy theme 1 (audit gap G2, G3). Category A.
 **Touches.** `sui-id-shared/src/ids.rs`, new
 `sui-id-shared/src/secrets.rs`, `sui-id-store/src/models.rs`,

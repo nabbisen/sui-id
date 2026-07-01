@@ -15,7 +15,7 @@ macro_rules! define_id {
             Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize,
         )]
         #[serde(transparent)]
-        pub struct $name(pub Uuid);
+        pub struct $name(Uuid);
 
         impl $name {
             pub fn new() -> Self {

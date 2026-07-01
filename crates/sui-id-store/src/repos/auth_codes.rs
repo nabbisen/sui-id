@@ -1,16 +1,16 @@
-//! Authorization code single-use storage.
+//! Authorization code single-use storage (RFC 078: typed CodeHash).
 //!
-//! The plaintext code is never stored: we keep only a SHA-256 hash so that
-//! a database leak does not let an attacker replay outstanding codes. Codes
-//! are single-use; consumption flips the `consumed` flag inside the same
-//! transaction that issues the access token.
+//! The plaintext code is never stored: we keep only a SHA-256 hex hash so
+//! that a database leak does not let an attacker replay outstanding codes.
+//! Codes are single-use; consumption flips the `consumed` flag inside the
+//! same transaction that issues the access token.
 
 use crate::db::Database;
 use crate::errors::{StoreError, StoreResult};
 use crate::models::AuthorizationCodeRow;
 use chrono::{DateTime, Utc};
 use rusqlite::params;
-use sui_id_shared::ids::UserId;
+use sui_id_shared::{ids::UserId, CodeHash};
 
 fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<AuthorizationCodeRow> {
     let auth_methods_json: String = row.get(11)?;
@@ -18,7 +18,7 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<AuthorizationCodeRow> {
         rusqlite::Error::FromSqlConversionFailure(11, rusqlite::types::Type::Text, Box::new(e))
     })?;
     Ok(AuthorizationCodeRow {
-        code_hash: row.get(0)?,
+        code_hash: CodeHash::from_stored(row.get(0)?),
         client_id: row
             .get::<_, String>(1)?
             .parse()
@@ -41,13 +41,14 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<AuthorizationCodeRow> {
 
 pub async fn insert(db: &Database, row: &AuthorizationCodeRow) -> StoreResult<()> {
     let methods_json = serde_json::to_string(&row.auth_methods)?;
+    let code_hash = row.code_hash.as_str().to_owned();
     let row = row.clone();
     db.with_conn(move |conn| {
         conn.execute(
             "INSERT INTO auth_codes(code_hash, client_id, user_id, redirect_uri, scope, nonce, code_challenge, code_challenge_method, expires_at, consumed, created_at, auth_methods) \
              VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             params![
-                row.code_hash,
+                code_hash,
                 row.client_id.to_string(),
                 row.user_id.to_string(),
                 row.redirect_uri,
@@ -68,14 +69,16 @@ pub async fn insert(db: &Database, row: &AuthorizationCodeRow) -> StoreResult<()
 /// Atomically fetch and mark-as-consumed an authorization code. Returns
 /// `NotFound` if the code does not exist, was already consumed, or has
 /// expired.
-pub async fn consume(db: &Database, code_hash: &str) -> StoreResult<AuthorizationCodeRow> {
-    let code_hash_owned = code_hash.to_owned();
+pub async fn consume(db: &Database, code_hash: &CodeHash) -> StoreResult<AuthorizationCodeRow> {
+    let hash_str = code_hash.as_str().to_owned();
     db.with_conn(move |conn| {
         let tx = conn.unchecked_transaction()?;
         let row: AuthorizationCodeRow = tx
             .query_row(
-                "SELECT code_hash, client_id, user_id, redirect_uri, scope, nonce, code_challenge, code_challenge_method, expires_at, consumed, created_at, auth_methods FROM auth_codes WHERE code_hash = ?1",
-                [code_hash_owned.as_str()],
+                "SELECT code_hash, client_id, user_id, redirect_uri, scope, nonce, \
+                 code_challenge, code_challenge_method, expires_at, consumed, created_at, \
+                 auth_methods FROM auth_codes WHERE code_hash = ?1",
+                [hash_str.as_str()],
                 map,
             )
             .map_err(|e| match e {
@@ -85,7 +88,7 @@ pub async fn consume(db: &Database, code_hash: &str) -> StoreResult<Authorizatio
         if row.consumed || row.expires_at <= Utc::now() {
             return Err(StoreError::NotFound);
         }
-        tx.execute("UPDATE auth_codes SET consumed = 1 WHERE code_hash = ?1", [code_hash_owned.as_str()])?;
+        tx.execute("UPDATE auth_codes SET consumed = 1 WHERE code_hash = ?1", [hash_str.as_str()])?;
         tx.commit()?;
         Ok(row)
     }).await

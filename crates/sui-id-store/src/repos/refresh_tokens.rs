@@ -1,4 +1,4 @@
-//! Refresh token storage.
+//! Refresh token storage (RFC 078: typed identifiers and RawRefreshToken).
 //!
 //! The plaintext token is sealed with the master key before insertion. On
 //! lookup we first try the indexed `token_hash` path (O(log n)), falling
@@ -14,8 +14,10 @@ use crate::errors::{StoreError, StoreResult};
 use crate::models::RefreshTokenRow;
 use chrono::{DateTime, Utc};
 use rusqlite::params;
-use sha2::{Digest, Sha256};
-use sui_id_shared::ids::{ClientId, UserId};
+use sui_id_shared::{
+    ids::{ClientId, UserId},
+    FamilyId, RawRefreshToken, RefreshTokenHash, RefreshTokenId,
+};
 
 fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<RefreshTokenRow> {
     let auth_methods_json: String = row.get(8)?;
@@ -23,8 +25,7 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<RefreshTokenRow> {
         rusqlite::Error::FromSqlConversionFailure(8, rusqlite::types::Type::Text, Box::new(e))
     })?;
     Ok(RefreshTokenRow {
-        id: row.get(0)?,
-        token_plain: None,
+        id: RefreshTokenId::from_stored(row.get::<_, String>(0)?),
         user_id: row
             .get::<_, String>(2)?
             .parse()
@@ -38,38 +39,32 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<RefreshTokenRow> {
         revoked_at: row.get::<_, Option<DateTime<Utc>>>(6)?,
         created_at: row.get::<_, DateTime<Utc>>(7)?,
         auth_methods,
-        family_id: row.get(9)?,
+        family_id: FamilyId::from_stored(row.get::<_, String>(9)?),
     })
 }
 
 const AAD: &[u8] = b"sui-id/refresh_token/v1";
 
-/// Compute the SHA-256 hash of a plaintext refresh token.
-/// Used as the indexed lookup key (no pepper needed: tokens are
-/// 32-byte CSPRNG outputs with full entropy).
-fn token_hash_bytes(plaintext: &str) -> Vec<u8> {
-    let mut h = Sha256::new();
-    h.update(plaintext.as_bytes());
-    h.finalize().to_vec()
-}
-
-/// Insert a new refresh token row. The plaintext token is taken from
-/// `row.token_plain`; the caller is responsible for generating it.
-pub async fn insert(db: &Database, row: &RefreshTokenRow) -> StoreResult<()> {
-    let plain = row
-        .token_plain
-        .as_deref()
-        .ok_or_else(|| StoreError::Integrity("refresh token: missing plaintext on insert".into()))?;
-    let sealed = seal(db.key(), plain.as_bytes(), AAD)?;
-    let hash = token_hash_bytes(plain);
+/// Insert a new refresh token row.
+///
+/// The `token` is the plaintext value that the client will receive; it is
+/// sealed with the master key before writing. The `RefreshTokenRow` itself
+/// carries no plaintext field — the plaintext is only held by the caller's
+/// `RawRefreshToken` value until it is delivered to the client.
+pub async fn insert(db: &Database, row: &RefreshTokenRow, token: &RawRefreshToken) -> StoreResult<()> {
+    let sealed = seal(db.key(), token.expose().as_bytes(), AAD)?;
+    let hash = RefreshTokenHash::of(token).as_bytes().to_vec();
     let methods_json = serde_json::to_string(&row.auth_methods)?;
+    let id = row.id.as_str().to_owned();
+    let family_id = row.family_id.as_str().to_owned();
     let row = row.clone();
     db.with_conn(move |conn| {
         conn.execute(
-            "INSERT INTO refresh_tokens(id, token_enc, token_hash, user_id, client_id, scope, expires_at, revoked_at, created_at, auth_methods, family_id) \
+            "INSERT INTO refresh_tokens(id, token_enc, token_hash, user_id, client_id, scope, \
+             expires_at, revoked_at, created_at, auth_methods, family_id) \
              VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
-                row.id,
+                id,
                 sealed,
                 hash,
                 row.user_id.to_string(),
@@ -79,7 +74,7 @@ pub async fn insert(db: &Database, row: &RefreshTokenRow) -> StoreResult<()> {
                 row.revoked_at,
                 row.created_at,
                 methods_json,
-                row.family_id,
+                family_id,
             ],
         )?;
         Ok(())
@@ -95,12 +90,13 @@ pub async fn insert(db: &Database, row: &RefreshTokenRow) -> StoreResult<()> {
 /// not yet backfilled by the startup task), decrypt each candidate and
 /// compare in constant time. This fallback is removed once the backfill
 /// is complete and a follow-up migration ensures the column is NOT NULL.
-pub async fn find_active(db: &Database, plaintext: &str) -> StoreResult<RefreshTokenRow> {
+pub async fn find_active(db: &Database, token: &RawRefreshToken) -> StoreResult<RefreshTokenRow> {
     use subtle::ConstantTimeEq;
 
     let now = Utc::now();
-    let hash = token_hash_bytes(plaintext);
-    let plaintext_owned = plaintext.to_owned();
+    let hash = RefreshTokenHash::of(token).as_bytes().to_vec();
+    // Copy the plaintext bytes for use in the fallback closure.
+    let pt_bytes: Vec<u8> = token.expose().as_bytes().to_vec();
 
     // --- fast path: indexed lookup ---
     let fast: Option<RefreshTokenRow> = db.with_conn(move |conn| {
@@ -138,13 +134,9 @@ pub async fn find_active(db: &Database, plaintext: &str) -> StoreResult<RefreshT
         Ok(rows)
     }).await?;
 
-    let pt = plaintext_owned.as_bytes();
     for (row, enc) in candidates {
-        // Decryption itself authenticates the ciphertext; if it succeeds we
-        // know the bytes were stored by us. We then constant-time compare to
-        // the supplied plaintext to avoid timing oracles.
         if let Ok(opened) = open(db.key(), &enc, AAD) {
-            if opened.ct_eq(pt).into() {
+            if opened.ct_eq(&pt_bytes).into() {
                 return Ok(row);
             }
         }
@@ -152,8 +144,8 @@ pub async fn find_active(db: &Database, plaintext: &str) -> StoreResult<RefreshT
     Err(StoreError::NotFound)
 }
 
-pub async fn revoke(db: &Database, id: &str) -> StoreResult<()> {
-    let id = id.to_owned();
+pub async fn revoke(db: &Database, id: &RefreshTokenId) -> StoreResult<()> {
+    let id = id.as_str().to_owned();
     db.with_conn(move |conn| {
         conn.execute(
             "UPDATE refresh_tokens SET revoked_at = ?1 WHERE id = ?2 AND revoked_at IS NULL",
@@ -230,11 +222,11 @@ pub async fn purge_expired(db: &Database) -> StoreResult<usize> {
 /// expiry filter applied so that the caller sees the `revoked_at`
 /// field and can trigger theft detection). Fallback: decrypt-scan
 /// for NULL-hash rows not yet backfilled.
-pub async fn find_any(db: &Database, plaintext: &str) -> StoreResult<RefreshTokenRow> {
+pub async fn find_any(db: &Database, token: &RawRefreshToken) -> StoreResult<RefreshTokenRow> {
     use subtle::ConstantTimeEq;
 
-    let hash = token_hash_bytes(plaintext);
-    let plaintext_owned = plaintext.to_owned();
+    let hash = RefreshTokenHash::of(token).as_bytes().to_vec();
+    let pt_bytes: Vec<u8> = token.expose().as_bytes().to_vec();
 
     // --- fast path: indexed lookup (includes revoked rows) ---
     let fast: Option<RefreshTokenRow> = db.with_conn(move |conn| {
@@ -272,10 +264,9 @@ pub async fn find_any(db: &Database, plaintext: &str) -> StoreResult<RefreshToke
         Ok(rows)
     }).await?;
 
-    let pt = plaintext_owned.as_bytes();
     for (row, enc) in candidates {
         if let Ok(opened) = open(db.key(), &enc, AAD) {
-            if opened.ct_eq(pt).into() {
+            if opened.ct_eq(&pt_bytes).into() {
                 return Ok(row);
             }
         }
@@ -283,12 +274,11 @@ pub async fn find_any(db: &Database, plaintext: &str) -> StoreResult<RefreshToke
     Err(StoreError::NotFound)
 }
 
-
 /// Revoke every active row in the given rotation family. Returns
 /// the number of rows updated. Idempotent: rows already revoked
 /// are not re-revoked.
-pub async fn revoke_family(db: &Database, family_id: &str) -> StoreResult<usize> {
-    let family_id = family_id.to_owned();
+pub async fn revoke_family(db: &Database, family_id: &FamilyId) -> StoreResult<usize> {
+    let family_id = family_id.as_str().to_owned();
     db.with_conn(move |conn| {
         let n = conn.execute(
             "UPDATE refresh_tokens SET revoked_at = ?1 WHERE family_id = ?2 AND revoked_at IS NULL",
@@ -342,7 +332,6 @@ pub fn reseal_all(
 ///
 /// Returns the number of rows successfully backfilled.
 pub async fn backfill_token_hashes(db: &Database) -> StoreResult<usize> {
-    // Collect all rows with token_hash IS NULL.
     let rows_to_fill: Vec<(String, Vec<u8>)> = db.with_conn(move |conn| {
         let mut stmt = conn.prepare(
             "SELECT id, token_enc FROM refresh_tokens WHERE token_hash IS NULL",
@@ -371,7 +360,6 @@ pub async fn backfill_token_hashes(db: &Database) -> StoreResult<usize> {
                 continue;
             }
         };
-        // token_enc stores the raw plaintext bytes; interpret as UTF-8 to hash.
         let plain_str = match std::str::from_utf8(&plain) {
             Ok(s) => s,
             Err(_) => {
@@ -379,7 +367,11 @@ pub async fn backfill_token_hashes(db: &Database) -> StoreResult<usize> {
                 continue;
             }
         };
-        let hash = token_hash_bytes(plain_str);
+        // Compute hash via the same path as insert: wrap plaintext in
+        // RawRefreshToken::from_untrusted, then RefreshTokenHash::of.
+        let hash = RefreshTokenHash::of(&RawRefreshToken::from_untrusted(plain_str.to_owned()))
+            .as_bytes()
+            .to_vec();
         match db.with_conn(move |conn| {
             conn.execute(
                 "UPDATE refresh_tokens SET token_hash = ?1 WHERE id = ?2 AND token_hash IS NULL",

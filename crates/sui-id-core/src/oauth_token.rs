@@ -12,7 +12,7 @@ use crate::errors::{CoreError, CoreResult};
 use crate::time::SharedClock;
 use crate::tokens::{verify_access_token, AccessTokenClaims};
 use chrono::DateTime;
-use sui_id_shared::ids::ClientId;
+use sui_id_shared::{ids::ClientId, RawRefreshToken};
 use sui_id_store::repos::{
     clients, refresh_tokens, revoked_access_tokens as deny_list, users,
 };
@@ -152,7 +152,8 @@ async fn try_introspect_refresh(
     authenticating_client: ClientId,
     token: &str,
 ) -> CoreResult<IntrospectionResponse> {
-    let row = match refresh_tokens::find_active(db, token).await {
+    let raw = RawRefreshToken::from_untrusted(token.to_owned());
+    let row = match refresh_tokens::find_active(db, &raw).await {
         Ok(r) => r,
         Err(_) => return Ok(IntrospectionResponse::inactive()),
     };
@@ -246,7 +247,8 @@ async fn try_revoke_refresh(
     authenticating_client: ClientId,
     token: &str,
 ) -> CoreResult<bool> {
-    let row = match refresh_tokens::find_active(db, token).await {
+    let raw = RawRefreshToken::from_untrusted(token.to_owned());
+    let row = match refresh_tokens::find_active(db, &raw).await {
         Ok(r) => r,
         Err(_) => return Ok(false),
     };

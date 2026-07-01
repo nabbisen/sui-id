@@ -15,7 +15,7 @@ sequencing — each step independently shippable:
 
 | Step | RFC | Theme | Suggested release |
 |---|---|---|---|
-| 1 | [078](rfcs/proposed/078-security-type-modeling-baseline.md) | Type modeling baseline (newtypes, secret redaction) | v0.64.0 |
+| ✅ 1 | [078](rfcs/done/078-security-type-modeling-baseline.md) | Type modeling baseline (newtypes, secret redaction) | v0.64.0 |
 | 2 | [080](rfcs/proposed/080-refresh-rotation-atomicity.md) | Refresh rotation atomicity + reuse detection | v0.65.0 |
 | 3 | [079](rfcs/proposed/079-authorization-code-lifecycle-assurance.md) | Auth-code single-use by statement | v0.65.0 |
 | 4 | [081](rfcs/proposed/081-actor-scope-boundary.md) | Actor scope boundary | v0.66.0 |

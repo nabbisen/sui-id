@@ -2,7 +2,14 @@
 
 *Deliverable 10.1 of the Security-Critical Assurance Strategy
 (architect instruction, v0.63.1). Companion deliverables: RFCs
-078–086 (`rfcs/proposed/`) and the adoption roadmap (§9 below).*
+078–086 (`rfcs/proposed/` → progressively to `rfcs/done/`) and
+the adoption roadmap (§9 below).*
+
+*This is a **historical audit record**: it describes the state of
+the codebase at v0.63.1. Resolution notes (marked **✅ Fixed**) are
+added in-place as each gap is closed. Readers who only need the
+current security posture should start at §9 (roadmap) and follow
+the resolved-RFC links.*
 
 ---
 
@@ -20,14 +27,14 @@ Baseline measured during the audit (this environment; the main
 `sui-id` crate test binary is excluded because its ~2 GB link
 step exhausts memory here — it remains covered by upstream CI):
 
-| Crate | Unit/integration tests |
-|---|---|
-| `sui-id-shared` | 12 |
-| `sui-id-i18n` | 13 |
-| `sui-id-store` | 36 |
-| `sui-id-core` | 125 |
-| `sui-id-web` | 0 (render-only crate) |
-| **Total (5 crates)** | **186 passing** |
+| Crate | Tests at v0.63.1 | Tests at latest |
+|---|---|---|
+| `sui-id-shared` | 12 | 20 (+8 secrets tests, v0.64.0) |
+| `sui-id-i18n` | 13 | 13 |
+| `sui-id-store` | 36 | 36 |
+| `sui-id-core` | 125 | 125 |
+| `sui-id-web` | 0 (render-only crate) | 0 |
+| **Total (5 crates)** | **186 passing** | **194 passing** |
 
 Two baseline regressions were found and fixed before RFC work
 (shipped as v0.63.2):
@@ -122,21 +129,33 @@ must affect exactly 1 row; 0 rows ⇒ treat as replay). → RFC 080.
 
 ### G2 — Plaintext refresh token is `Debug`-reachable (High)
 
-`RefreshTokenRow` derives `Debug` and carries
+**✅ Fixed in v0.64.0 (RFC 078).** `RefreshTokenRow.token_plain`
+was removed. The plaintext is now held exclusively in
+`RawRefreshToken` whose `Debug`/`Display` print `[REDACTED]`.
+The single intentional egress is `.expose()`, called at HTTP
+response serialization only. 8 unit tests pin the redaction
+behaviour.
+
+*At v0.63.1:* `RefreshTokenRow` derived `Debug` and carried
 `token_plain: Option<String>`. Any `{:?}` of the row (error
-context, future tracing) prints the live token. Spec §6.2
-prohibits secrets in logs; the type system currently does not
-help enforce it. Same pattern risk exists for any future field.
-→ RFC 078 (`RawRefreshToken` newtype with redacting `Debug`,
-plus splitting "issuance result" from "stored row").
+context, future tracing) printed the live token. Spec §6.2
+prohibited secrets in logs; the type system did not help
+enforce it. → RFC 078.
 
 ### G3 — Typed IDs have public constructors; token identifiers are bare strings (Medium)
 
-`ids.rs` newtypes expose `pub struct X(pub Uuid)` — any code can
-fabricate or transmute IDs. Refresh-token `id` / `family_id` and
-`code_hash` are plain `String`, so the classic mix-up bug class
-(passing a family id where a token id is expected) is open.
-→ RFC 078.
+**✅ Fixed in v0.64.0 (RFC 078).** The `define_id!` macro
+inner field is now private (`Uuid` not `pub Uuid`) — struct
+literal construction outside the module is a compile error.
+`RefreshTokenRow.id` is now `RefreshTokenId`, `.family_id` is
+`FamilyId`, `AuthorizationCodeRow.code_hash` is `CodeHash`.
+Cross-type assignment (passing a family id where a token id is
+expected) is a compile error.
+
+*At v0.63.1:* `ids.rs` newtypes exposed `pub struct X(pub Uuid)`
+— any code could fabricate or transmute IDs. Refresh-token `id`
+/ `family_id` and `code_hash` were plain `String`, so the
+classic mix-up bug class was open. → RFC 078.
 
 ### G4 — Auth-code consume correctness leans on the connection model (Medium)
 
@@ -187,33 +206,35 @@ therefore translated to the boundaries the codebase actually has:
 self-service scope*. The translation keeps a forward-compatible
 seam for RFC 025. → RFC 081.
 
-## 6. Current test coverage of the gaps
+## 6. Test coverage of the gaps
 
-| Gap | Existing coverage |
-|---|---|
-| G1 | None for concurrency; single-flow rotation covered by example tests |
-| G2 | None (formatting behaviour untested) |
-| G3 | ID parse/display tests only |
-| G4 | Single-use covered by example test (sequential) |
-| G5 | Extractor-level integration tests in the binary crate |
-| G6 | proptest on pure comparators only |
-| G7 | None |
-| G8 | Presence asserted for a few events, no matrix |
+*Coverage at v0.63.1 (baseline) and current state.*
+
+| Gap | Coverage at v0.63.1 | Coverage now |
+|---|---|---|
+| G1 | None for concurrency; single-flow rotation covered by example tests | Unchanged — RFC 080 pending |
+| G2 | None (formatting behaviour untested) | **✅ 8 unit tests** in `sui-id-shared::secrets` pin `Debug`/`Display` redaction (v0.64.0) |
+| G3 | ID parse/display tests only | **✅** compile-fail intent documented; existing ID tests still pass with private inner (v0.64.0) |
+| G4 | Single-use covered by example test (sequential) | Unchanged — RFC 079 pending |
+| G5 | Extractor-level integration tests in the binary crate | Unchanged — RFC 082 pending |
+| G6 | proptest on pure comparators only | Unchanged — RFC 083 pending |
+| G7 | None | Unchanged — RFC 084 pending |
+| G8 | Presence asserted for a few events, no matrix | Unchanged — RFC 085 pending |
 
 ## 7. Category classification (strategy §6)
 
-| Item | Category |
-|---|---|
-| Newtypes / private constructors / secret-redacting types (RFC 078) | **A — must implement now** |
-| Auth-code consume hardening: predicate + rows-affected + property tests (RFC 079) | **A** |
-| Transactional refresh rotation + reuse guard (RFC 080) | **A** |
-| Actor-scope boundary & scoped repository signatures (RFC 081) | **B — implement soon** |
-| Pure authorization core + property tests (RFC 082) | **B** |
-| State-machine proptest harness (RFC 083) | **B** |
-| Fuzzing harness for input boundaries (RFC 084) | **B** (infrastructure) / **C** (scope growth) |
-| Audit completeness matrix + transactional audit (RFC 085) | **B** |
-| Kani / TLA+ / Flux pilots (RFC 086) | **C — pilot only** |
-| Verus adoption; typestate for UI state; formal verification of repos; policy engine | **D — defer / do not adopt** |
+| Item | Category | Status |
+|---|---|---|
+| Newtypes / private constructors / secret-redacting types (RFC 078) | **A** | ✅ v0.64.0 |
+| Auth-code consume hardening: predicate + rows-affected + property tests (RFC 079) | **A** | Proposed |
+| Transactional refresh rotation + reuse guard (RFC 080) | **A** | Proposed |
+| Actor-scope boundary & scoped repository signatures (RFC 081) | **B** | Proposed |
+| Pure authorization core + property tests (RFC 082) | **B** | Proposed |
+| State-machine proptest harness (RFC 083) | **B** | Proposed |
+| Fuzzing harness for input boundaries (RFC 084) | **B/C** | Proposed |
+| Audit completeness matrix + transactional audit (RFC 085) | **B** | Proposed |
+| Kani / TLA+ / Flux pilots (RFC 086) | **C** | Proposed |
+| Verus adoption; typestate for UI state; formal verification of repos; policy engine | **D** | Deferred |
 
 ## 8. Validation of the strategy's default direction
 
@@ -241,17 +262,17 @@ them), then the two storage-atomicity RFCs (highest risk), then
 the boundary/decision layer, then the test-infrastructure RFCs
 that exercise all of the above, then pilots.
 
-| Step | RFC | Target release | Depends on |
-|---|---|---|---|
-| 1 | 078 type modeling baseline | v0.64.0 | — |
-| 2 | 080 refresh rotation atomicity | v0.65.0 | 078 |
-| 3 | 079 auth-code lifecycle | v0.65.0 | 078 |
-| 4 | 081 actor scope boundary | v0.66.0 | 078 |
-| 5 | 082 authorization decision core | v0.66.0 | 081 |
-| 6 | 083 state-machine proptest | v0.67.0 | 079, 080 |
-| 7 | 085 audit completeness | v0.67.0 | 081 |
-| 8 | 084 fuzzing harness | v0.68.0 | 078 |
-| 9 | 086 formal pilot (time-boxed) | evaluation only | 080, 082 |
+| Step | RFC | Target release | Depends on | Status |
+|---|---|---|---|---|
+| 1 | [078 type modeling baseline](../rfcs/done/078-security-type-modeling-baseline.md) | v0.64.0 | — | ✅ Shipped |
+| 2 | [080 refresh rotation atomicity](../rfcs/proposed/080-refresh-rotation-atomicity.md) | v0.65.0 | 078 | Proposed |
+| 3 | [079 auth-code lifecycle](../rfcs/proposed/079-authorization-code-lifecycle-assurance.md) | v0.65.0 | 078 | Proposed |
+| 4 | [081 actor scope boundary](../rfcs/proposed/081-actor-scope-boundary.md) | v0.66.0 | 078 | Proposed |
+| 5 | [082 authorization decision core](../rfcs/proposed/082-authorization-decision-core.md) | v0.66.0 | 081 | Proposed |
+| 6 | [083 state-machine proptest](../rfcs/proposed/083-security-state-machine-testing.md) | v0.67.0 | 079, 080 | Proposed |
+| 7 | [085 audit completeness](../rfcs/proposed/085-audit-event-completeness.md) | v0.67.0 | 081 | Proposed |
+| 8 | [084 fuzzing harness](../rfcs/proposed/084-fuzzing-untrusted-input-boundaries.md) | v0.68.0 | 078 | Proposed |
+| 9 | [086 formal pilot (time-boxed)](../rfcs/proposed/086-formal-model-checking-pilot.md) | evaluation only | 080, 082 | Proposed |
 
 Releases above are *suggested* groupings; each RFC remains
 independently shippable. No step gates the verification-phase

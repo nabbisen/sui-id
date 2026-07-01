@@ -18,9 +18,10 @@ use sui_id_core::discovery::Discovery;
 use sui_id_core::errors::{CoreError, ProtocolError};
 use sui_id_core::jwks;
 use sui_id_shared::ids::ClientId;
-use sui_id_store::repos::users;
-use sui_id_store::models::ConsentPolicy;
 use sui_id_shared::ids::UserId;
+use sui_id_shared::RawRefreshToken;
+use sui_id_store::models::ConsentPolicy;
+use sui_id_store::repos::users;
 use sui_id_web::{pages::ConsentData, render_consent};
 
 // ---------- discovery & JWKS ----------
@@ -418,7 +419,7 @@ pub async fn token(
                 &app.clock,
                 ctx,
                 RefreshExchangeRequest {
-                    refresh_token,
+                    refresh_token: RawRefreshToken::from_untrusted(refresh_token),
                     client_id,
                     client_secret,
                 },
@@ -437,7 +438,11 @@ pub async fn token(
         access_token: set.access_token,
         token_type: "Bearer",
         expires_in: set.access_expires_in,
-        refresh_token: set.refresh_token,
+        // expose() is the single, intentional plaintext egress point for
+        // the refresh token — immediately after it is inserted into the DB
+        // and before it is handed to the client. The RawRefreshToken is
+        // dropped at end of this scope.
+        refresh_token: set.refresh_token.expose().to_owned(),
         id_token: set.id_token,
         scope: None,
     };

@@ -5,6 +5,75 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.64.0] — 2026-06-05
+
+**RFC 078 — Security-Critical Type Modeling Baseline.**
+
+### Security — type-safety hardening for secret and identifier values
+
+- **`RawRefreshToken` newtype** (`sui-id-shared::secrets`): wraps plaintext
+  refresh-token material in a `Zeroizing<String>` that zeroes the allocation
+  on drop, with a `Debug` / `Display` implementation that prints only
+  `[REDACTED]`. The single intentional plaintext egress is `expose()`, called
+  exactly once at HTTP response serialization. Previously `TokenSet.refresh_token:
+  String` was Debug-printable and carried the live credential through the whole
+  exchange path.
+
+- **`RefreshTokenHash` newtype**: SHA-256 hash of a `RawRefreshToken`,
+  constructible only via `RefreshTokenHash::of(token)`. Replaces the
+  implicit `sha2` dependency in `refresh_tokens.rs`. Lookup and backfill
+  now go through the typed hash.
+
+- **`RefreshTokenId` and `FamilyId` newtypes**: opaque string wrappers for
+  the `refresh_tokens.id` and `refresh_tokens.family_id` columns. Private
+  inner fields; constructors are `generate()` (new random value) and
+  `from_stored(s: String)` (reconstitution from DB). `RefreshTokenRow.id`
+  and `.family_id` are now these types; the former bare `String` fields are
+  gone. Cross-type assignment — passing a family id where a token id is
+  expected — is now a compile error.
+
+- **`CodeHash` newtype**: SHA-256 hex digest of an authorization code,
+  constructible only via `CodeHash::of(code)`. `AuthorizationCodeRow.code_hash`
+  and `auth_codes::consume` now require `&CodeHash`. Passing an unhashed
+  plaintext code to the consume path is a compile error.
+
+- **Removed `RefreshTokenRow.token_plain`**: the `Option<String>` field that
+  carried the plaintext token in the row struct (populated at issuance, `None`
+  at all other times) is gone. `repos::refresh_tokens::insert` now takes a
+  separate `&RawRefreshToken` parameter; the row struct itself never holds
+  plaintext.
+
+- **`IssuedRefreshToken` struct** in `sui-id-store::models`: separates the
+  stored row from the at-issuance plaintext cleanly — `row: RefreshTokenRow`
+  + `token: RawRefreshToken` (with redacting Debug).
+
+- **UUID ID macro**: the `define_id!` macro inner field changed from `pub Uuid`
+  to private `Uuid`. Construction requires `new()` / `from_uuid()`;
+  direct `.0` access outside the module is a compile error. Closes the
+  identifier-fabrication class of bugs for all nine UUID-backed ID types.
+
+### Changed
+
+- `TokenSet.refresh_token: String` → `RawRefreshToken` (core crate).
+  Handlers call `.expose().to_owned()` at serialization.
+- `RefreshExchangeRequest.refresh_token: String` → `RawRefreshToken`.
+  The token endpoint wraps the form field with
+  `RawRefreshToken::from_untrusted(...)` before constructing the request.
+- `authorize::exchange_code` and `complete_authorization` use `CodeHash::of`
+  instead of the free `tokens::sha256_hex`.
+- `oauth_token::try_introspect_refresh` and `try_revoke_refresh` wrap their
+  `&str` parameters internally.
+- `sui-id-shared` gains `sha2`, `getrandom`, `base64ct`, `zeroize` as
+  direct dependencies to support the new types.
+
+### Test coverage
+
+- 8 new unit tests in `sui-id-shared::secrets`: redaction of Debug/Display,
+  expose() value, hash determinism, CodeHash format, FamilyId root equality,
+  RefreshTokenId alphabet.
+- Baseline suite (186 tests across 5 crates) passes unchanged. The new
+  secrets tests raise the count to 194.
+
 ## [0.63.2] — 2026-06-05
 
 **Security-assurance audit, RFC set 078–086, and three baseline fixes.**

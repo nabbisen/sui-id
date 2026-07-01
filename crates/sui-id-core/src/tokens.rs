@@ -19,6 +19,7 @@ use ed25519_dalek::SigningKey;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sui_id_shared::ids::{ClientId, UserId};
+use sui_id_shared::RawRefreshToken;
 
 /// Standard claims for an access token.
 #[derive(Debug, Serialize, Deserialize)]
@@ -101,7 +102,10 @@ impl Default for TokenLifetimes {
 pub struct TokenSet {
     pub access_token: String,
     pub id_token: Option<String>,
-    pub refresh_token: String,
+    /// The plaintext refresh token, held as a `RawRefreshToken` so it is
+    /// zeroed on drop and never appears in `Debug` output. The handler
+    /// calls `.expose()` exactly once when serializing the HTTP response.
+    pub refresh_token: RawRefreshToken,
     pub access_expires_in: i64,
     /// RFC 072: the user this token set was issued for. Present when the
     /// grant type is authorization_code or refresh_token; None for
@@ -186,7 +190,7 @@ pub async fn issue_token_set(
     Ok(TokenSet {
         access_token,
         id_token,
-        refresh_token: random_token(32),
+        refresh_token: RawRefreshToken::generate(),
         access_expires_in: lifetimes.access_secs,
         user_id: Some(user),
     })

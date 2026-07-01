@@ -116,7 +116,6 @@ Recommended order: 078 → 080 → 079 → 081 → 082 → 083 / 085 →
 
 | ID  | Title | Category / Priority |
 |-----|-------|---------------------|
-| 078 | [Security-critical type modeling baseline](./proposed/078-security-type-modeling-baseline.md) | A — first; others depend on it |
 | 079 | [Authorization code lifecycle assurance](./proposed/079-authorization-code-lifecycle-assurance.md) | A |
 | 080 | [Refresh rotation atomicity & reuse detection](./proposed/080-refresh-rotation-atomicity.md) | A — highest-risk finding (G1) |
 | 081 | [Actor scope boundary & scoped repository signatures](./proposed/081-actor-scope-boundary.md) | B |
@@ -141,6 +140,7 @@ Recommended order: 078 → 080 → 079 → 081 → 082 → 083 / 085 →
 
 | ID  | Title                                                          | Shipped in |
 |-----|----------------------------------------------------------------|------------|
+| 078 | [Security-critical type modeling baseline](./done/078-security-type-modeling-baseline.md) | v0.64.0 |
 | MI-080 | [UI Regression and Accessibility Hardening](./done/RFC-MI-080-ui-regression-a11y-hardening.md) | v0.57.0 |
 | MI-070 | [OIDC Consent UX Integration](./done/RFC-MI-070-oidc-consent-ux.md) | v0.56.0 |
 | MI-060 | [Self-Service Security Tab Integration](./done/RFC-MI-060-self-service-security-tabs.md) | v0.55.0 |
