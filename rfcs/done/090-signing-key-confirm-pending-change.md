@@ -1,6 +1,6 @@
 # RFC 090 — Signing-Key Rotation Confirm Page and Settings Pending-Change Object
 
-**Status.** Proposed
+**Status.** Implemented (v0.72.0)
 **Tracks.** UI/UX handoff v2.3 §3.6, §4 (Signing Keys), §6 — unit 4.
 Category A. Prerequisite: RFC 089 (step-up allowlist) must ship first.
 **Touches.** `sui-id-store` (new `pending_settings_change` table + migration),

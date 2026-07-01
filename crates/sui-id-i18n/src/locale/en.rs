@@ -613,6 +613,13 @@ pub static STRINGS_EN: Strings = Strings {
     error_403_auditor_title: "Read-only access",
     error_403_auditor_body: "Your account has read-only (auditor) access. This action requires administrator privileges.",
     client_detail_readonly_title: "App details",
+    confirm_rotate_signing_key_title: "Rotate signing key",
+    confirm_rotate_signing_key_impact: "A new signing key will be issued. Existing tokens signed with the previous key remain valid until they expire.",
+    confirm_rotate_signing_key_reversibility: "This cannot be undone. The previous key will be retired.",
+    confirm_rotate_signing_key_button: "Rotate key",
+    confirm_email_settings_title: "Confirm email settings",
+    confirm_email_settings_impact: "The following email settings will be saved:",
+    confirm_email_settings_button: "Save settings",
 
     // Admin: User detail (RFC 035)
     user_detail_back: "← Back to users",

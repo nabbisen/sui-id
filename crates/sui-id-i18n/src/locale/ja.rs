@@ -610,6 +610,13 @@ pub static STRINGS_JA: Strings = Strings {
     error_403_auditor_title: "読み取り専用アクセス",
     error_403_auditor_body: "お使いのアカウントは読み取り専用（監査者）アクセスです。この操作には管理者権限が必要です。",
     client_detail_readonly_title: "アプリの詳細",
+    confirm_rotate_signing_key_title: "署名鍵のローテーション",
+    confirm_rotate_signing_key_impact: "新しい署名鍵が発行されます。以前の鍵で署名されたトークンは有効期限まで引き続き有効です。",
+    confirm_rotate_signing_key_reversibility: "この操作は元に戻せません。以前の鍵は廃止されます。",
+    confirm_rotate_signing_key_button: "鍵をローテーション",
+    confirm_email_settings_title: "メール設定の確認",
+    confirm_email_settings_impact: "以下のメール設定が保存されます：",
+    confirm_email_settings_button: "設定を保存",
 
     // Admin: ユーザー詳細 (RFC 035)
     user_detail_back: "← ユーザー一覧へ",

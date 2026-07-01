@@ -12,6 +12,7 @@ pub mod email_outbox;
 pub mod json_util;
 pub mod login_pending_mfa;
 pub mod password_reset_tokens;
+pub mod pending_settings_change;
 pub mod refresh_tokens;
 pub mod revoked_access_tokens;
 pub mod server_settings;

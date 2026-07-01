@@ -55,6 +55,15 @@ event name, required fields, and atomicity class. The CI gate
 | `admin.master_key.rotated` | Master key rotation | CLI principal | — | `keys_resealed=N` | A |
 | `admin.user.unlock` | Clear account lockout | admin user id | target user id | — | A |
 
+### Pending settings changes (`settings.pending_change.*`)
+
+| Event name | Operation | Actor | Target | Note fields | Class |
+|---|---|---|---|---|---|
+| `settings.pending_change.created` | Pending change stored | admin user id | — | `intent=… id=… summary=…` | B |
+| `settings.pending_change.applied` | Pending change applied | admin user id | — | `intent=… summary=…` | B |
+| `settings.pending_change.cancelled` | Pending change cancelled | admin user id | — | `id=…` | B |
+| `settings.pending_change.binding_failed` | Binding check failed on apply | admin user id | — | `intent=… id=…` | B |
+
 ### Self-service settings (`auth.smtp_config.*`)
 
 | Event name | Operation | Actor | Target | Note fields | Class |

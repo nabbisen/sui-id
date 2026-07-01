@@ -860,4 +860,13 @@ pub struct Strings {
     pub error_403_auditor_title: &'static str,
     pub error_403_auditor_body: &'static str,
     pub client_detail_readonly_title: &'static str,
+    // RFC 090: signing-key rotation confirm
+    pub confirm_rotate_signing_key_title: &'static str,
+    pub confirm_rotate_signing_key_impact: &'static str,
+    pub confirm_rotate_signing_key_reversibility: &'static str,
+    pub confirm_rotate_signing_key_button: &'static str,
+    // RFC 090: email settings pending-change confirm
+    pub confirm_email_settings_title: &'static str,
+    pub confirm_email_settings_impact: &'static str,
+    pub confirm_email_settings_button: &'static str,
 }

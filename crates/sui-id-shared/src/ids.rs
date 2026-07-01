@@ -56,6 +56,10 @@ define_id!(
     "Identifier of an OAuth/OIDC client (relying party)."
 );
 define_id!(SessionId, "Identifier of a server-side session.");
+define_id!(
+    PendingChangeId,
+    "Identifier of a pending settings change (RFC 090)."
+);
 define_id!(SigningKeyId, "Identifier of a JWT signing key.");
 define_id!(
     PendingMfaId,

@@ -344,6 +344,6 @@ dependency.
 |---|---|---|
 | 088 | [Auditor authorization matrix and static read-only rendering](./done/088-auditor-matrix-read-only-rendering.md) | ✅ Shipped v0.70.0 |
 | 089 | [Step-up authentication contract](./proposed/089-step-up-contract.md) | Proposed |
-| 090 | [Signing-key rotation confirm + settings pending-change](./proposed/090-signing-key-confirm-pending-change.md) | Proposed |
+| 090 | [Signing-key rotation confirm + settings pending-change](./done/090-signing-key-confirm-pending-change.md) | ✅ Shipped v0.72.0 |
 | 091 | [LoginContext rendering and SelfServiceShell navigation](./proposed/091-login-context-self-service-shell.md) | Proposed |
 | 092 | [UI components: ThemeToggle, EmptyState, CopyField, Error summary](./proposed/092-ui-components.md) | Proposed |

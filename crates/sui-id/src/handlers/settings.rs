@@ -23,6 +23,8 @@ use crate::{csrf, errors::HttpError};
 use axum::extract::State;
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum_extra::extract::cookie::CookieJar;
+use std::str::FromStr;
+
 use chrono::{Duration, Utc};
 use sui_id_core::errors::CoreError;
 use sui_id_store::repos::{audit, clients, users};
@@ -362,7 +364,8 @@ pub async fn email_get(
 
 pub async fn email_post(
     state_ext: AppStateExt,
-    CurrentAdmin(admin_id, _): CurrentAdmin,
+    CurrentAdmin(admin_id, ref admin_actor): CurrentAdmin,
+    ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     axum::Form(form): axum::Form<EmailSettingsForm>,
 ) -> Result<Response, HttpError> {
@@ -399,16 +402,66 @@ pub async fn email_post(
         .unwrap_or(false);
 
     // Password handling: empty string means "keep existing".
+    // RFC 090: if a new password is provided, route through pending-change
+    // so the secret never appears in a form field after initial entry.
     let existing = sui_id_store::repos::smtp_config::get(&app.db).await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
-    let password_enc = if form.password.is_empty() {
-        existing.as_ref().and_then(|r| r.password_enc.clone())
-    } else {
-        Some(
-            sui_id_store::repos::smtp_config::seal_password(&form.password, app.db.key()).await
-                .map_err(|e| HttpError::html(CoreError::from(e)))?,
+
+    if !form.password.is_empty() {
+        // Seal the payload for pending-change storage.
+        use serde::{Deserialize, Serialize};
+        #[derive(Serialize, Deserialize)]
+        struct SmtpPendingPayload {
+            enabled: bool,
+            host: String,
+            port: u16,
+            tls_mode: String,
+            username: Option<String>,
+            password: String, // plaintext; encrypted inside pending_change::create
+            from_address: String,
+            from_name: Option<String>,
+            base_url: String,
+        }
+        let payload = SmtpPendingPayload {
+            enabled,
+            host: form.host.trim().to_owned(),
+            port: form.port,
+            tls_mode: form.tls_mode.clone(),
+            username: username.clone(),
+            password: form.password.clone(),
+            from_address: form.from_address.trim().to_owned(),
+            from_name: from_name.clone(),
+            base_url: form.base_url.trim().trim_end_matches('/').to_owned(),
+        };
+        let csrf_token_for_confirm = crate::csrf::ensure_token(&jar);
+        let summary = format!(
+            "SMTP password: will be updated | host: {} | port: {}",
+            form.host.trim(), form.port
+        );
+        let pending = sui_id_core::pending_change::create(
+            &app.db,
+            admin_actor,
+            ctx.session_id,
+            "smtp_password_update",
+            &payload,
+            &summary,
+            &csrf_token_for_confirm,
+            &app.clock,
         )
-    };
+        .await
+        .map_err(HttpError::html)?;
+        let redirect_url = format!(
+            "/admin/settings/email/confirm?pending_change_id={}",
+            pending.id
+        );
+        return Ok(with_csrf_cookie(
+            axum::response::Redirect::to(&redirect_url).into_response(),
+            &app,
+            &csrf_token_for_confirm,
+        ));
+    }
+
+    let password_enc = existing.as_ref().and_then(|r| r.password_enc.clone());
     let created_at = existing.map(|r| r.created_at).unwrap_or(now);
 
     let row = sui_id_store::models::SmtpConfigRow {
@@ -493,6 +546,142 @@ pub async fn email_test(
     };
         let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let html = sui_id_web::render_settings_email(data, token.clone(), flash, lang);
+    let resp = Html(html).into_response();
+    Ok(with_csrf_cookie(resp, &app, &token))
+}
+
+/// `GET /admin/settings/email/confirm` — display non-secret summary of a
+/// pending SMTP settings change (RFC 090).
+pub async fn email_confirm_get(
+    state_ext: AppStateExt,
+    CurrentAdmin(admin_id, _): CurrentAdmin,
+    jar: CookieJar,
+    axum::extract::Query(q): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Result<Response, HttpError> {
+    let State(app) = state_ext;
+    let id_str = q.get("pending_change_id").cloned().unwrap_or_default();
+    // Validate that the id looks like a UUID before rendering (no DB lookup needed;
+    // the confirm POST does the authoritative check).
+    if id_str.is_empty() {
+        return Err(HttpError::html(CoreError::BadRequest(
+            "Missing pending_change_id.".into(),
+        )));
+    }
+    let token = crate::csrf::ensure_token(&jar);
+    // Fetch the non-secret summary for display (does not consume the row).
+    let pending_id = sui_id_shared::ids::PendingChangeId::from_str(&id_str)
+        .map_err(|_| HttpError::html(CoreError::BadRequest("Invalid pending_change_id.".into())))?;
+    let summary = sui_id_store::repos::pending_settings_change::get_summary(
+        &app.db,
+        pending_id,
+        app.clock.now(),
+    )
+    .await
+    .map_err(|_| HttpError::html(CoreError::BadRequest(
+        "This pending change has expired or is no longer valid.".into(),
+    )))?;
+    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
+    let data = sui_id_web::SettingsEmailConfirmData {
+        pending_change_id: id_str,
+        summary,
+        csrf_token: token.clone(),
+    };
+    let resp = Html(sui_id_web::render_settings_email_confirm(data, app.is_dev_mode, lang))
+        .into_response();
+    Ok(with_csrf_cookie(resp, &app, &token))
+}
+
+/// `POST /admin/settings/email/confirm` — apply a pending SMTP settings change
+/// (RFC 090). Final security boundary: revalidates admin role, session binding,
+/// CSRF, step-up freshness, and change expiry before applying.
+#[derive(Debug, serde::Deserialize)]
+pub struct EmailConfirmForm {
+    #[serde(rename = "_csrf", default)]
+    pub csrf: String,
+    pub pending_change_id: String,
+}
+
+pub async fn email_confirm_post(
+    state_ext: AppStateExt,
+    CurrentAdmin(admin_id, ref admin_actor): CurrentAdmin,
+    ctx: crate::handlers::SessionContext,
+    jar: CookieJar,
+    axum::Form(form): axum::Form<EmailConfirmForm>,
+) -> Result<Response, HttpError> {
+    let State(app) = state_ext;
+    crate::handlers::enforce_csrf(&jar, Some(&form.csrf))?;
+    // RFC 090 P5: revalidate step-up on the final confirm POST.
+    if let Err(redirect) =
+        crate::handlers::require_fresh_step_up(&app, &ctx,
+            "/admin/settings/email/confirm").await
+    {
+        return Ok(redirect);
+    }
+    let pending_id = sui_id_shared::ids::PendingChangeId::from_str(&form.pending_change_id)
+        .map_err(|_| HttpError::html(CoreError::BadRequest(
+            "Invalid pending_change_id.".into(),
+        )))?;
+    // Apply the pending change: verifies session, actor, CSRF (P2), consumes row (P3).
+    #[derive(serde::Deserialize)]
+    struct SmtpPendingPayload {
+        enabled: bool,
+        host: String,
+        port: u16,
+        tls_mode: String,
+        username: Option<String>,
+        password: String,
+        from_address: String,
+        from_name: Option<String>,
+        base_url: String,
+    }
+    let payload: SmtpPendingPayload = sui_id_core::pending_change::apply(
+        &app.db,
+        pending_id,
+        admin_actor,
+        ctx.session_id,
+        &form.csrf,
+        &app.clock,
+    )
+    .await
+    .map_err(HttpError::html)?;
+    // Validate and apply the settings.
+    let tls_mode = sui_id_store::models::SmtpTlsMode::parse(&payload.tls_mode)
+        .ok_or_else(|| HttpError::html(CoreError::BadRequest(
+            format!("unknown tls_mode: {}", payload.tls_mode),
+        )))?;
+    let now = app.clock.now();
+    let existing = sui_id_store::repos::smtp_config::get(&app.db).await
+        .map_err(|e| HttpError::html(CoreError::from(e)))?;
+    let password_enc = Some(
+        sui_id_store::repos::smtp_config::seal_password(&payload.password, app.db.key()).await
+            .map_err(|e| HttpError::html(CoreError::from(e)))?,
+    );
+    let row = sui_id_store::models::SmtpConfigRow {
+        enabled: payload.enabled,
+        host: payload.host.trim().to_owned(),
+        port: payload.port,
+        tls_mode,
+        username: payload.username,
+        password_enc,
+        from_address: payload.from_address.trim().to_owned(),
+        from_name: payload.from_name,
+        base_url: payload.base_url.trim().trim_end_matches('/').to_owned(),
+        created_at: existing.map(|r| r.created_at).unwrap_or(now),
+        updated_at: now,
+    };
+    sui_id_store::repos::smtp_config::upsert(&app.db, &row).await
+        .map_err(|e| HttpError::html(CoreError::from(e)))?;
+    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
+    let flash = sui_id_web::Flash {
+        kind: sui_id_web::FlashKind::Info,
+        text: "Email settings saved.".to_owned(),
+    };
+    let cfg_row = sui_id_store::repos::smtp_config::get(&app.db).await
+        .map_err(|e| HttpError::html(CoreError::from(e)))?;
+    let mut data = build_email_data(cfg_row.as_ref());
+    data.can_write = true;
+    let token = crate::csrf::ensure_token(&jar);
+    let html = sui_id_web::render_settings_email(data, token.clone(), Some(flash), lang);
     let resp = Html(html).into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
 }

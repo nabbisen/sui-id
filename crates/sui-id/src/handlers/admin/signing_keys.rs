@@ -12,8 +12,9 @@ use std::str::FromStr;
 use sui_id_core::admin::{self as admin_uc};
 use sui_id_core::errors::CoreError;
 use sui_id_web::{
-    pages::ConfirmDeleteSigningKeyData,
-    render_confirm_delete_signing_key, render_signing_keys,
+    pages::{ConfirmDeleteSigningKeyData, ConfirmRotateSigningKeyData},
+    render_confirm_delete_signing_key, render_confirm_rotate_signing_key,
+    render_signing_keys,
 };
 use super::forms::ConfirmedReasonForm;
 use super::with_csrf_cookie;
@@ -50,6 +51,46 @@ pub async fn signing_keys_delete_confirm_get(
 // ---------- clients ----------
 
 
+/// `GET /admin/signing-keys/rotate-confirm` — step-up-gated confirm page
+/// before issuing a new signing key (RFC 090).
+///
+/// P4 (auditor 403): RFC 088 already gates this route via can_write().
+/// P5 (no auto-execute): after step-up the user lands here; the rotation
+/// only happens when the user submits the confirm POST.
+pub async fn signing_keys_rotate_confirm_get(
+    state_ext: AppStateExt,
+    CurrentAdminOrAuditor(admin_id, _role, ref actor): CurrentAdminOrAuditor,
+    ctx: crate::handlers::SessionContext,
+    jar: CookieJar,
+) -> Result<Response, HttpError> {
+    if !actor.can_write() {
+        return Err(crate::errors::HttpError::html_403_auditor());
+    }
+    let State(app) = state_ext;
+    // RFC 089: /admin/signing-keys/ is in the step-up allowlist.
+    if let Err(redirect) =
+        crate::handlers::require_fresh_step_up(&app, &ctx,
+            "/admin/signing-keys/rotate-confirm").await
+    {
+        return Ok(redirect);
+    }
+    // Count active keys for the impact message.
+    let read_actor = actor;
+    let keys = sui_id_core::admin::list_signing_keys(&app.db, read_actor)
+        .await
+        .unwrap_or_default();
+    let active_key_count = keys.iter().filter(|k| k.is_active).count();
+    let token = crate::csrf::ensure_token(&jar);
+    let data = ConfirmRotateSigningKeyData {
+        csrf_token: token.clone(),
+        active_key_count,
+    };
+    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
+    let resp = Html(render_confirm_rotate_signing_key(data, app.is_dev_mode, lang))
+        .into_response();
+    Ok(with_csrf_cookie(resp, &app, &token))
+}
+
 pub async fn signing_keys_get(
     state_ext: AppStateExt,
     CurrentAdminOrAuditor(admin_id, role, ref read_actor): CurrentAdminOrAuditor,
@@ -84,8 +125,9 @@ pub async fn signing_keys_rotate(
     let State(app) = state_ext;
     crate::handlers::enforce_csrf(&jar, Some(&form.csrf))?;
     crate::handlers::require_confirmed(&form.confirmed)?;
+    // RFC 090: revalidate step-up on the final confirm POST.
     if let Err(redirect) =
-        crate::handlers::require_fresh_step_up(&app, &ctx, "/admin/signing-keys").await
+        crate::handlers::require_fresh_step_up(&app, &ctx, "/admin/signing-keys/rotate-confirm").await
     {
         return Ok(redirect);
     }

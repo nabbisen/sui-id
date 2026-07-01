@@ -5,6 +5,87 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.72.0] — 2026-06-14
+
+**UI-security unit 4: RFC 090 — Signing-Key Rotation Confirm Page and
+Settings Pending-Change Object.** Two security-sensitive flows that were
+previously unguarded are now gated on step-up and explicit confirmation.
+SMTP password never passes through a form field after initial entry.
+
+### Added — `pending_settings_change` table (migration 0032, RFC 090 P1/P2/P3/P4)
+
+New SQLite table stores encrypted, session-bound, short-lived (5 min) change
+objects for high-risk settings that include secrets. Columns: `id` (opaque UUID),
+`session_id` + `actor_id` (binding, P2), `intent`, `payload_enc` (AES-GCM
+under master key, P1), `summary` (non-secret for display and audit, P6),
+`csrf_token`, `expires_at` (P4), `created_at`. Covered index on `expires_at`.
+
+Store repo (`repos/pending_settings_change.rs`): `insert`, `get_summary`
+(non-destructive, for confirm page display), `consume` (atomic delete + return;
+expired rows surface as `NotFound`, P3/P4), `cancel` (idempotent delete),
+`purge_expired`. 8 unit tests covering all invariants.
+
+### Added — `PendingChangeId` newtype (sui-id-shared)
+
+UUID newtype with private inner field, redacting `Debug` impl, `FromStr` /
+`Display`, consistent with the RFC 078 type-modeling baseline.
+
+### Added — `sui-id-core::pending_change` domain module (RFC 090)
+
+`create<T: Serialize>` — serialises payload to JSON, encrypts with
+`crypto::seal(PENDING_CHANGE_AAD)`, inserts row, emits `settings.pending_change.created`
+audit event. Returns `PendingChange { id, intent, summary, expires_at }` (no ciphertext).
+
+`apply<T: DeserializeOwned>` — consumes row atomically; verifies all five bindings
+(admin role via `&AdminActor`, session, actor, CSRF, expiry); decrypts payload;
+emits `settings.pending_change.applied`; returns typed payload. Any binding
+failure or decryption error → neutral "expired or invalid" `BadRequest` (P3).
+
+`cancel` — idempotent delete + `settings.pending_change.cancelled` audit event.
+`purge_expired` — clears stale rows; called at startup.
+
+### Added — signing-key rotation confirm page (RFC 090)
+
+New `GET /admin/signing-keys/rotate-confirm` handler
+(`signing_keys_rotate_confirm_get`): guarded by RFC 088 `can_write()` and
+RFC 089 step-up allowlist; step-up fresh required before rendering. Shows
+count of active keys in the impact text.
+
+The existing `POST /admin/signing-keys/rotate` now revalidates step-up on
+the final POST (P5: no auto-execute) and calls `rotate_signing_key` with
+`&AdminActor` (RFC 081).
+
+New web-layer types: `ConfirmRotateSigningKeyData` + `render_confirm_rotate_signing_key`.
+4 new i18n keys (rotate confirm title, impact, reversibility, button) in all
+locales.
+
+### Added — SMTP settings pending-change flow (RFC 090)
+
+`POST /admin/settings/email` — when the password field is non-empty, creates
+a pending change via `pending_change::create`, redirects to
+`/admin/settings/email/confirm?pending_change_id={id}`. The password never
+appears in any redirect or hidden field.
+
+`GET /admin/settings/email/confirm` — fetches non-secret summary via
+`get_summary` (non-destructive), renders confirm page.
+
+`POST /admin/settings/email/confirm` — applies via `pending_change::apply`
+(binding check + decrypt), re-seals password with `seal_password`, upserts
+SMTP config. Step-up revalidated on this POST (P5).
+
+New web-layer types: `SettingsEmailConfirmData` + `render_settings_email_confirm`.
+3 new i18n keys (confirm title, impact, button) in all locales.
+
+### Added — 7 i18n keys, audit events
+
+7 new string keys across English, Japanese, Simplified Chinese (Traditional
+delegates to Simplified). 4 new audit event names
+(`settings.pending_change.{created,applied,cancelled,binding_failed}`) added
+to the coverage matrix; gate passes at 43 × 43.
+
+**104/104 tests pass** (19 shared + 20 store-pre + 62 store-all including 8
+new pending-change tests + 3 web). All 5 CI gates PASS.
+
 ## [0.71.0] — 2026-06-14
 
 **UI-security unit 3: RFC 089 — Step-up Authentication Contract.**

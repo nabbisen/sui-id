@@ -361,3 +361,100 @@ pub fn render_confirm_delete_signing_key(
         }
     })
 }
+
+// ── RFC 090: Signing-key rotation confirm ────────────────────────────────────
+
+pub struct ConfirmRotateSigningKeyData {
+    pub csrf_token: String,
+    pub active_key_count: usize,
+}
+
+pub fn render_confirm_rotate_signing_key(
+    data: ConfirmRotateSigningKeyData,
+    dev_mode: bool,
+    lang: sui_id_i18n::Locale,
+) -> String {
+    render(move || {
+        let t = lang.strings();
+        let impact_text = format!(
+            "{} {}",
+            t.confirm_rotate_signing_key_impact,
+            if data.active_key_count > 0 {
+                format!(
+                    "({} active key{} will become retired)",
+                    data.active_key_count,
+                    if data.active_key_count == 1 { "" } else { "s" }
+                )
+            } else {
+                String::new()
+            }
+        );
+        let body = confirm_screen(
+            ConfirmScreenData {
+                title: t.confirm_rotate_signing_key_title.into(),
+                identity: String::new(),
+                impact: Some(impact_text),
+                badge: Some(ReversibilityKind::Irreversible),
+                reversibility_text: Some(t.confirm_rotate_signing_key_reversibility.into()),
+                action_url: "/admin/signing-keys/rotate".into(),
+                csrf_token: data.csrf_token.clone(),
+                extra_hidden: vec![],
+                include_reason_field: false,
+                button_label: t.confirm_rotate_signing_key_button.into(),
+                button_danger: true,
+                cancel_url: "/admin/signing-keys".into(),
+            },
+            lang,
+        );
+        view! {
+            <Shell title=t.confirm_rotate_signing_key_title.to_string() show_nav=true
+                   current=Some("signing_keys".to_string()) dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
+                {body}
+            </Shell>
+        }
+    })
+}
+
+// ── RFC 090: SMTP settings pending-change confirm ─────────────────────────────
+
+pub struct SettingsEmailConfirmData {
+    /// The opaque pending-change id (safe to include in the form).
+    pub pending_change_id: String,
+    /// Non-secret human-readable description of the pending change.
+    pub summary: String,
+    /// CSRF token for the confirm POST.
+    pub csrf_token: String,
+}
+
+pub fn render_settings_email_confirm(
+    data: SettingsEmailConfirmData,
+    dev_mode: bool,
+    lang: sui_id_i18n::Locale,
+) -> String {
+    render(move || {
+        let t = lang.strings();
+        let body = confirm_screen(
+            ConfirmScreenData {
+                title: t.confirm_email_settings_title.into(),
+                identity: data.summary.clone(),
+                impact: Some(t.confirm_email_settings_impact.into()),
+                badge: None,
+                reversibility_text: None,
+                action_url: "/admin/settings/email/confirm".into(),
+                csrf_token: data.csrf_token.clone(),
+                extra_hidden: vec![("pending_change_id".into(), data.pending_change_id.clone())],
+                include_reason_field: false,
+                button_label: t.confirm_email_settings_button.into(),
+                button_danger: false,
+                cancel_url: "/admin/settings/email".into(),
+            },
+            lang,
+        );
+        view! {
+            <Shell title=t.confirm_email_settings_title.to_string() show_nav=true
+                   current=Some("settings".to_string()) dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
+                {body}
+            </Shell>
+        }
+    })
+}

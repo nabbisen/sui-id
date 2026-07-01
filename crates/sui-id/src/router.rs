@@ -126,6 +126,8 @@ pub fn build_router(app: AppState) -> Router {
             get(admin::clients_edit_get).post(admin::clients_edit_post),
         )
         .route("/admin/signing-keys", get(admin::signing_keys_get))
+        .route("/admin/signing-keys/rotate-confirm",
+               get(admin::signing_keys_rotate_confirm_get))
         .route("/admin/signing-keys/rotate", post(admin::signing_keys_rotate))
         .route("/admin/clients/{id}/rotate-secret",
                post(admin::clients_rotate_secret_post))
@@ -180,6 +182,11 @@ pub fn build_router(app: AppState) -> Router {
             "/admin/settings/email",
             get(crate::handlers::settings::email_get)
                 .post(crate::handlers::settings::email_post),
+        )
+        .route(
+            "/admin/settings/email/confirm",
+            get(crate::handlers::settings::email_confirm_get)
+                .post(crate::handlers::settings::email_confirm_post),
         )
         .route(
             "/admin/settings/email/test",

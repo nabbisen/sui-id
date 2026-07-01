@@ -612,6 +612,13 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     error_403_auditor_title: "只读访问",
     error_403_auditor_body: "您的账户具有只读（审计员）访问权限。此操作需要管理员权限。",
     client_detail_readonly_title: "应用详情",
+    confirm_rotate_signing_key_title: "轮换签名密钥",
+    confirm_rotate_signing_key_impact: "将颁发新的签名密钥。使用旧密钥签名的现有令牌在过期前仍然有效。",
+    confirm_rotate_signing_key_reversibility: "此操作无法撤销。旧密钥将被停用。",
+    confirm_rotate_signing_key_button: "轮换密钥",
+    confirm_email_settings_title: "确认邮件设置",
+    confirm_email_settings_impact: "以下邮件设置将被保存：",
+    confirm_email_settings_button: "保存设置",
 
     // Admin: 用户详情 (RFC 035)
     user_detail_back: "← 返回用户列表",
