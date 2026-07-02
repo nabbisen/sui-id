@@ -5,6 +5,37 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.76.10] — 2026-07-02
+
+**Source-layout housekeeping after the 0.76.9 release. No behavior changes
+intended.**
+
+### Changed
+
+- Reorganized `sui-id-core` source files into domain directories:
+  `account/`, `authn/`, `communication/`, `identity/`, `oidc/`, and
+  `settings/`, while preserving the existing public module names.
+- Grouped the binary crate's HTTP-facing modules under `crates/sui-id/src/http/`
+  and runtime/support modules under `crates/sui-id/src/runtime/`, keeping the
+  public crate module surface stable.
+- Split setup-wizard page rendering into workflow files under
+  `crates/sui-id-web/src/pages/setup/`, with `pages/setup.rs` kept as the
+  umbrella module to match the existing no-`mod.rs` layout.
+- Moved the dev seed sample from `examples/dev-seed.toml` to
+  `samples/dev-seed.toml`, added root READMEs for `samples/`, `fuzz/`, and
+  `verification/`, and removed the unused cargo-fuzz placeholder target.
+
+### Verification
+
+- `cargo fmt --all -- --check`
+- `cargo check --workspace --all-targets`
+- `cargo test --workspace` — 539 passed
+- `cargo test -p sui-id-core` — 149 passed
+- `cargo test -p sui-id-web` — 3 passed
+- `cargo test -p sui-id --lib` — 68 passed
+- `cargo test -p sui-id --test e2e` — 180 passed
+- `cargo test -p sui-id --test e2e setup_wizard` — 21 passed
+
 ## [0.76.9] — 2026-07-02
 
 **Internal quality and release-hardening pass. Two production defects fixed,

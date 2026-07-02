@@ -58,4 +58,5 @@ pub fn check_password_policy(password: &str, min_len: usize) -> CoreResult<()> {
 }
 
 #[cfg(test)]
+#[path = "password/tests.rs"]
 mod tests;

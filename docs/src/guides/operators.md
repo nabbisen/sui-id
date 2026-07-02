@@ -242,7 +242,7 @@ weakening the OIDC implementation.
 Three sources, in priority order (highest first):
 
 1. **TOML file** via `--dev-seed PATH`. Full schema in
-   `examples/dev-seed.toml`. Sections that aren't in the file
+   `samples/dev-seed.toml`. Sections that aren't in the file
    fall back to defaults.
 2. **CLI flag overrides**: `--dev-admin-password STR`,
    `--dev-client-secret STR`.

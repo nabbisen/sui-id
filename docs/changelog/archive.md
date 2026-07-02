@@ -1451,7 +1451,7 @@ plaintext seed credentials to whatever LAN the host is on.
 
 #### Examples
 
-- `examples/dev-seed.toml` — annotated sample TOML
+- `samples/dev-seed.toml` — annotated sample TOML
   illustrating every option (`[admin]`, multiple `[[user]]`,
   confidential and public `[[client]]` blocks). Included so
   developers can copy-edit-paste rather than reading the

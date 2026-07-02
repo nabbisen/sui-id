@@ -17,13 +17,21 @@ use crate::state::AppState;
 use axum::http::{HeaderValue, header};
 use axum::response::Response;
 
+#[path = "admin/audit.rs"]
 mod audit;
+#[path = "admin/auth.rs"]
 mod auth;
+#[path = "admin/clients.rs"]
 mod clients;
+#[path = "admin/dashboard.rs"]
 mod dashboard;
+#[path = "admin/forms.rs"]
 pub mod forms;
+#[path = "admin/signing_keys.rs"]
 mod signing_keys;
+#[path = "admin/users.rs"]
 mod users;
+#[path = "admin/webauthn.rs"]
 mod webauthn;
 
 pub use audit::*;

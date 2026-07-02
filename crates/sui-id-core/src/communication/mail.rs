@@ -34,6 +34,7 @@
 //! - **No DKIM signing.** Out of scope for v0.22.0 — see the
 //!   ROADMAP entry on email deliverability.
 
+#[path = "mail/outbox.rs"]
 pub mod outbox;
 
 use crate::errors::{CoreError, CoreResult};

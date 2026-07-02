@@ -19,13 +19,21 @@
 use axum::response::Redirect;
 use axum_extra::extract::cookie::CookieJar;
 
+#[path = "me_security/apps.rs"]
 mod apps;
+#[path = "me_security/forms.rs"]
 pub mod forms;
+#[path = "me_security/language.rs"]
 mod language;
+#[path = "me_security/mfa.rs"]
 mod mfa;
+#[path = "me_security/overview.rs"]
 mod overview;
+#[path = "me_security/passkey.rs"]
 mod passkey;
+#[path = "me_security/password.rs"]
 mod password;
+#[path = "me_security/sessions.rs"]
 mod sessions; // RFC 072
 
 pub use apps::*;

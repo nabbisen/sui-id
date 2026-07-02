@@ -112,4 +112,5 @@ where
 }
 
 #[cfg(test)]
+#[path = "jwt/tests.rs"]
 mod tests;

@@ -16,17 +16,29 @@ use sui_id_core::session;
 use sui_id_shared::ids::{SessionId, UserId};
 use sui_id_store::repos::users;
 
+#[path = "handlers/admin.rs"]
 pub mod admin;
+#[path = "handlers/dynamic_register.rs"]
 pub mod dynamic_register;
+#[path = "handlers/federation.rs"]
 pub mod federation;
+#[path = "handlers/forgot_password.rs"]
 pub mod forgot_password;
+#[path = "handlers/index.rs"]
 pub mod index;
+#[path = "handlers/me_security.rs"]
 pub mod me_security;
+#[path = "handlers/metrics.rs"]
 pub mod metrics;
+#[path = "handlers/oauth_token.rs"]
 pub mod oauth_token;
+#[path = "handlers/oidc.rs"]
 pub mod oidc;
+#[path = "handlers/settings.rs"]
 pub mod settings;
+#[path = "handlers/setup.rs"]
 pub mod setup;
+#[path = "handlers/step_up.rs"]
 pub mod step_up;
 
 /// Cookie name for the in-flight WebAuthn ceremony id (used by both

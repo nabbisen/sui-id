@@ -356,4 +356,5 @@ pub async fn verify_access_token_cached(
 }
 
 #[cfg(test)]
+#[path = "tokens/tests.rs"]
 mod tests;

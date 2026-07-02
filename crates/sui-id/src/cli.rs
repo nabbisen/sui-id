@@ -609,7 +609,7 @@ OPTIONS:
                              truncated each restart.
     --dev-seed PATH          TOML file describing dev-mode admin /
                              users / OIDC clients to seed. See
-                             examples/dev-seed.toml.
+                             samples/dev-seed.toml.
     --dev-admin-password STR Override the dev-mode admin password
                              (default: 'admin').
     --dev-client-secret STR  Override the first dev-mode client's

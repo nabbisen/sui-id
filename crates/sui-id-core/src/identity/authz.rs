@@ -283,4 +283,5 @@ mod kani_proofs {
 }
 
 #[cfg(test)]
+#[path = "authz/tests.rs"]
 mod tests;

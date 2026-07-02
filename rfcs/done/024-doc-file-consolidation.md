@@ -112,7 +112,7 @@ Before:                      After:
                                  integrators.md
                                  operators.md
                                  threat-model.md
-  examples/                    examples/
+  samples/                    samples/
   rfcs/                        rfcs/
   sui-id.example.toml          sui-id.example.toml
 ```

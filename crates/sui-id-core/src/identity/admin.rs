@@ -3,8 +3,11 @@
 //! All names that were previously `pub` in the flat `admin.rs` are
 //! re-exported here, so callers outside this crate need no changes.
 
+#[path = "admin/clients.rs"]
 pub mod clients;
+#[path = "admin/signing_keys.rs"]
 mod signing_keys;
+#[path = "admin/users.rs"]
 mod users;
 
 pub use clients::{

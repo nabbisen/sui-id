@@ -349,7 +349,7 @@ gives only the summary.
 │   ├── 000-rfc-lifecycle-policy.md
 │   ├── done/                      # 60+ implemented RFCs
 │   └── proposed/                  # open candidates
-├── examples/dev-seed.toml
+├── samples/dev-seed.toml
 ├── .github/                       # CI / SECURITY / templates
 ├── .vscode/
 ├── README.md / LICENSE / NOTICE
@@ -945,7 +945,7 @@ conventions:
 - `docs/threat-model.md`
 - `docs/ui-ux-contracts.md`
 - `docs/src/` (mdbook-compatible content)
-- `examples/dev-seed.toml`
+- `samples/dev-seed.toml`
 
 `README.md` does not bloat; depth lives under `docs/`.
 
