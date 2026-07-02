@@ -50,9 +50,7 @@ sui-id-web                  = { workspace = true }
 tokio                       = { workspace = true }
 axum                        = { workspace = true }
 axum-extra                  = { workspace = true }
-tower                       = { workspace = true }
 tower-http                  = { workspace = true }
-hyper                       = { workspace = true }
 time                        = { workspace = true }
 cookie                      = { workspace = true }
 
@@ -103,7 +101,4 @@ serde_json                  = { workspace = true }
 url                         = { workspace = true }
 
 base64ct                    = { workspace = true }
-reqwest                     = { workspace = true }
 percent-encoding            = { workspace = true }
-http                        = { workspace = true }
-http-body-util              = { workspace = true }

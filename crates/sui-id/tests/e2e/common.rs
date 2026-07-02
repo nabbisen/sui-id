@@ -140,7 +140,7 @@ pub async fn read_body(body: Body) -> Vec<u8> {
         .to_vec()
 }
 
-pub fn extract_set_cookie(headers: &http::HeaderMap, name: &str) -> Option<String> {
+pub fn extract_set_cookie(headers: &axum::http::HeaderMap, name: &str) -> Option<String> {
     for v in headers.get_all(header::SET_COOKIE) {
         let raw = v.to_str().ok()?;
         if let Some(rest) = raw.strip_prefix(&format!("{name}=")) {
@@ -341,7 +341,7 @@ pub fn extract_csrf_token(html: &str) -> String {
 /// headers. Equivalent to `extract_set_cookie(headers, "sui_id_csrf")`
 /// but kept as a named helper for readability at call sites that
 /// only ever care about CSRF.
-pub fn extract_csrf_cookie(headers: &http::HeaderMap) -> Option<String> {
+pub fn extract_csrf_cookie(headers: &axum::http::HeaderMap) -> Option<String> {
     extract_set_cookie(headers, "sui_id_csrf")
 }
 

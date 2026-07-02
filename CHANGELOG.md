@@ -5,6 +5,29 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.76.11] — 2026-07-02
+
+**Dependency-surface cleanup after the 0.76.10 release. No behavior changes
+intended.**
+
+### Changed
+
+- Removed unused direct `hyper`, `http`, and `http-body-util` workspace
+  dependency declarations.
+- Narrowed the binary crate's direct dependency surface by removing production
+  `tower` and `hyper` declarations that were only needed transitively through
+  `axum`, `tower-http`, or `reqwest`.
+- Removed duplicate e2e/test helper dependencies on `reqwest`, `http`, and
+  `http-body-util`, using `axum::http::HeaderMap` where direct HTTP types were
+  needed in tests.
+
+### Verification
+
+- `cargo fmt --all -- --check`
+- `cargo check --workspace --all-targets`
+- `cargo test -p sui-id --lib` — 68 passed
+- `git diff --check`
+
 ## [0.76.10] — 2026-07-02
 
 **Source-layout housekeeping after the 0.76.9 release. No behavior changes
