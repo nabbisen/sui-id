@@ -10,7 +10,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.76.11"
+version = "0.76.12"
 edition                 = "2024"
 rust-version            = "1.91"
 license                 = "Apache-2.0"
@@ -34,26 +34,26 @@ tokio                       = { version = "1.40", features = ["macros", "rt-mult
 axum                        = { version = "0.8", features = ["macros"] }
 axum-extra                  = { version = "0.12", features = ["cookie"] }
 tower                       = "0.5"
-tower-http                  = { version = "0.6", features = ["trace", "compression-gzip", "set-header"] }
+tower-http                  = { version = "0.7", features = ["trace", "compression-gzip", "set-header"] }
 cookie                      = "0.18"
 
 # Serde / config
 serde                       = { version = "1", features = ["derive"] }
 serde_json                  = "1"
-toml                        = "0.8"
+toml                        = "1.1"
 
 # Storage
-rusqlite                    = { version = "0.39", features = ["bundled", "chrono"] }
+rusqlite                    = { version = "0.40", features = ["bundled", "chrono"] }
 
 # Crypto / hashing
 argon2                      = "0.5"
 getrandom                   = "0.4"
 rand                        = "0.10"
 rand_core                   = { version = "0.10" }
-chacha20poly1305            = "0.10"
+chacha20poly1305            = "0.11"
 ed25519-dalek               = { version = "2.1", features = ["rand_core", "pkcs8"] }
-sha2                        = "0.10"
-sha1                        = { version = "0.10", default-features = false }
+sha2                        = "0.11"
+sha1                        = { version = "0.11", default-features = false }
 qrcode                      = { version = "0.14", default-features = false, features = ["svg"] }
 # WebAuthn / passkey support. We use the high-level safe wrapper from
 # webauthn-rs; the lower-level webauthn-rs-core has explicit warnings
@@ -68,9 +68,9 @@ qrcode                      = { version = "0.14", default-features = false, feat
 webauthn-rs                 = { version = "0.5", features = ["danger-allow-state-serialisation"] }
 # Property-based testing. Dev-only — never reaches production builds.
 proptest                    = "1.5"
-hmac                        = "0.12"
+hmac                        = "0.13"
 subtle                      = "2.6"
-prometheus                  = { version = "0.13", default-features = false }
+prometheus                  = { version = "0.14", default-features = false }
 ldap3                       = { version = "0.12", default-features = false, features = ["tls-rustls"] }
 zeroize                     = { version = "1.8", features = ["derive"] }
 secrecy                     = { version = "0.10", features = ["serde"] }
@@ -90,7 +90,7 @@ url                         = { version = "2.5", features = ["serde"] }
 percent-encoding            = "2.3"
 time                        = "0.3"
 
-# Email — wasm-smtp v0.9 family.
+# Email — wasm-smtp v0.15 family.
 # - core (`wasm-smtp`) drives the SMTP state machine, message parsing and
 #   error classification, and is runtime-agnostic. We enable `mail-builder`
 #   so `SmtpClient::send_message` accepts a `mail_builder::MessageBuilder`
@@ -104,8 +104,8 @@ time                        = "0.3"
 #     `getrandom_backend="wasm_js"` cfg).
 # - `mail-builder` is a small, no-required-deps RFC 5322 / MIME composer
 #   from Stalwart Labs. `wasm-smtp`'s docs explicitly recommend it.
-wasm-smtp                   = { version = "0.9", features = ["mail-builder"] }
-wasm-smtp-tokio             = "0.9"
+wasm-smtp                   = { version = "0.15", features = ["mail-builder"] }
+wasm-smtp-tokio             = "0.15"
 mail-builder                = "0.4"
 
 # Outbound HTTP — used for the optional Pwned Passwords (HIBP)
@@ -113,7 +113,7 @@ mail-builder                = "0.4"
 # (sync, spawn_blocking) after RFC 070 (v0.57.1). The HIBP handler
 # is now a plain async fn; reqwest::Client is stored in AppState.
 async-trait                 = "0.1"
-reqwest                     = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+reqwest                     = { version = "0.13", default-features = false, features = ["rustls", "json", "form"] }
 
 # UI (Leptos used in SSR-only mode for the admin panel; no WASM/JS bundle is shipped
 #  in line with the project's minimal-runtime philosophy).

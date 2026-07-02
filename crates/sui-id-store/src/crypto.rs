@@ -91,7 +91,7 @@ pub fn seal(key: &MasterKey, plaintext: &[u8], aad: &[u8]) -> StoreResult<Vec<u8
     // System RNG failure is unrecoverable; panic is the correct fail-safe.
     #[allow(clippy::expect_used)]
     getrandom::fill(&mut nonce).expect("system RNG unavailable");
-    let xnonce = XNonce::from_slice(&nonce);
+    let xnonce = <&XNonce>::try_from(nonce.as_slice()).map_err(|_| StoreError::Crypto)?;
     let ct = cipher
         .encrypt(
             xnonce,
@@ -114,7 +114,7 @@ pub fn open(key: &MasterKey, sealed: &[u8], aad: &[u8]) -> StoreResult<Vec<u8>> 
     }
     let cipher = key.cipher();
     let (nonce_bytes, ct) = sealed.split_at(NONCE_LEN);
-    let xnonce = XNonce::from_slice(nonce_bytes);
+    let xnonce = <&XNonce>::try_from(nonce_bytes).map_err(|_| StoreError::Crypto)?;
     cipher
         .decrypt(xnonce, Payload { msg: ct, aad })
         .map_err(|_| StoreError::Crypto)

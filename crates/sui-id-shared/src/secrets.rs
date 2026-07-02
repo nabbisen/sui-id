@@ -191,7 +191,12 @@ impl CodeHash {
     /// Compute the SHA-256 hex digest of the given authorization code.
     pub fn of(code: &str) -> Self {
         let digest = Sha256::digest(code.as_bytes());
-        Self(format!("{digest:x}"))
+        let mut out = String::with_capacity(digest.len() * 2);
+        for b in digest {
+            use std::fmt::Write;
+            let _ = write!(&mut out, "{b:02x}");
+        }
+        Self(out)
     }
 
     /// Reconstruct a code hash previously read from the database.

@@ -17,7 +17,7 @@
 //! drift either way. Replays within a step are blocked at the storage
 //! layer via `last_used_step`.
 
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use sha1::Sha1;
 use subtle::ConstantTimeEq;
 

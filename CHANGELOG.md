@@ -5,6 +5,32 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.76.12] — 2026-07-02
+
+**Dependency-security refresh after the 0.76.11 release. No behavior changes
+intended.**
+
+### Changed
+
+- Updated direct workspace dependency requirements for current package lines,
+  including `toml`, `tower-http`, `prometheus`, `reqwest`, `rusqlite`,
+  `chacha20poly1305`, `hmac`, `sha1`, `sha2`, `wasm-smtp`, and
+  `wasm-smtp-tokio`.
+- Refreshed `Cargo.lock` to the latest Rust 1.91-compatible dependency graph.
+- Adjusted compatibility code for the upgraded crates: explicit `reqwest`
+  `form`/`rustls` features, `hmac::KeyInit` imports, explicit SHA hex
+  encoding, updated XChaCha nonce/key conversions, and the `prometheus`
+  metric-family name accessor.
+
+### Verification
+
+- `cargo fmt --all -- --check`
+- `cargo check --workspace --all-targets`
+- `cargo test --workspace` — 539 passed, 4 ignored
+- `cargo audit` — 0 vulnerability failures; 2 allowed unmaintained warnings
+- `cargo outdated --workspace --root-deps-only`
+- `git diff --check`
+
 ## [0.76.11] — 2026-07-02
 
 **Dependency-surface cleanup after the 0.76.10 release. No behavior changes

@@ -343,8 +343,9 @@ fn encrypt_envelope(passphrase: &str, plaintext: &[u8]) -> Result<Vec<u8>> {
     getrandom::fill(&mut nonce).expect("system RNG unavailable");
     let key = derive_key(passphrase, &salt)?;
     let cipher = XChaCha20Poly1305::new((&key).into());
+    let xnonce = <&XNonce>::from(&nonce);
     let ciphertext = cipher
-        .encrypt(XNonce::from_slice(&nonce), plaintext)
+        .encrypt(xnonce, plaintext)
         .map_err(|_| anyhow::anyhow!("encryption failed"))?;
 
     let mut out = Vec::with_capacity(8 + 4 + 16 + 24 + ciphertext.len());
@@ -377,14 +378,13 @@ fn decrypt_envelope(passphrase: &str, bytes: &[u8]) -> Result<Vec<u8>> {
     let (salt, rest) = rest.split_at(16);
     let (nonce, ciphertext) = rest.split_at(24);
     let key = derive_key(passphrase, salt)?;
-    let cipher = XChaCha20Poly1305::new(key.as_slice().into());
-    let plaintext = cipher
-        .decrypt(XNonce::from_slice(nonce), ciphertext)
-        .map_err(|_| {
-            anyhow::anyhow!(
-                "could not decrypt backup — wrong passphrase, or the file has been tampered with"
-            )
-        })?;
+    let cipher = XChaCha20Poly1305::new((&key).into());
+    let xnonce = <&XNonce>::try_from(nonce).context("encrypted backup nonce has invalid length")?;
+    let plaintext = cipher.decrypt(xnonce, ciphertext).map_err(|_| {
+        anyhow::anyhow!(
+            "could not decrypt backup — wrong passphrase, or the file has been tampered with"
+        )
+    })?;
     Ok(plaintext)
 }
 

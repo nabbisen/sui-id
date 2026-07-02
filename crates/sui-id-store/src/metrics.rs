@@ -449,7 +449,7 @@ mod tests {
         m.observe_argon2(0.1);
 
         let families = m.registry.gather();
-        let names: Vec<_> = families.iter().map(|f| f.get_name().to_owned()).collect();
+        let names: Vec<_> = families.iter().map(|f| f.name().to_owned()).collect();
 
         // Every expected metric must appear in the gathered output.
         let expected = [
