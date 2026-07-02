@@ -102,7 +102,7 @@ async fn client_edit_then_authorize_uses_new_scope_policy() {
     let created = sui_id_core::admin::create_client(
         &state.db,
         &state.clock,
-        admin_id,
+        &admin_actor_for(admin_id),
         CreateClientSpec {
             name: "rp",
             redirect_uris: &["https://rp.test/cb".into()],

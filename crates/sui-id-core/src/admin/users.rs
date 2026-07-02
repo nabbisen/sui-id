@@ -4,6 +4,7 @@ use crate::errors::{CoreError, CoreResult};
 use crate::hibp::{self, HibpClient, HibpEnforcement};
 use crate::password::{check_password_policy, hash_password};
 use crate::time::SharedClock;
+use sui_id_shared::ids::UserId;
 use sui_id_store::Database;
 use sui_id_store::models::{CredentialRow, HibpMode, UserRow};
 use sui_id_store::repos::{
@@ -47,7 +48,7 @@ pub async fn create_user(
     let row = UserRow {
         source: sui_id_store::models::UserSource::default(),
         external_stable_id: None,
-        id: actor_id,
+        id: UserId::new(),
         username: spec.username.to_owned(),
         display_name: spec.display_name.map(str::to_owned),
         email: spec
@@ -288,6 +289,7 @@ pub async fn admin_reset_mfa(
 /// allow the user to authenticate via the local credential path, bypassing
 /// LDAP entirely.  Administrators who need to reset an LDAP user's password
 /// must do so in the upstream directory.
+#[allow(clippy::too_many_arguments)]
 pub async fn reset_user_password(
     db: &Database,
     clock: &SharedClock,
@@ -346,6 +348,50 @@ pub async fn reset_user_password(
     )
     .await;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::actor::Actor;
+    use crate::time::system_clock;
+    use sui_id_shared::ids::SessionId;
+    use sui_id_store::crypto::MasterKey;
+    use sui_id_store::models::{HibpMode, Role};
+
+    fn admin_actor_for(user_id: UserId) -> crate::actor::AdminActor {
+        Actor::from_session(user_id, Role::Admin, SessionId::new())
+            .into_admin()
+            .expect("admin actor")
+    }
+
+    #[tokio::test]
+    async fn create_user_allocates_fresh_user_id_not_actor_id() {
+        let db = Database::open_in_memory(MasterKey::generate()).expect("db");
+        let clock = system_clock();
+        let actor_id = UserId::new();
+        let actor = admin_actor_for(actor_id);
+
+        let created = create_user(
+            &db,
+            &clock,
+            None,
+            HibpMode::Off,
+            &actor,
+            CreateUserSpec {
+                username: "created",
+                password: "created-user-password",
+                display_name: None,
+                email: None,
+                is_admin: false,
+                min_password_len: 12,
+            },
+        )
+        .await
+        .expect("create user");
+
+        assert_ne!(created.id, actor_id);
+    }
 }
 
 // ---------- clients ----------

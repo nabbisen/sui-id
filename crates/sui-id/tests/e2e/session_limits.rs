@@ -34,7 +34,7 @@ async fn session_no_idle_timeout_when_disabled() {
         .with_conn(move |conn| {
             conn.execute(
                 "UPDATE sessions SET last_used_at = ?1 WHERE user_id = ?2",
-                rusqlite::params![stale, user.id.to_string()],
+                rusqlite::params![stale, user_id_owned.to_string()],
             )
             .expect("update");
             Ok(())
@@ -80,7 +80,7 @@ async fn session_idle_timeout_revokes_after_window() {
         .with_conn(move |conn| {
             conn.execute(
                 "UPDATE sessions SET last_used_at = ?1 WHERE user_id = ?2",
-                rusqlite::params![stale, user.id.to_string()],
+                rusqlite::params![stale, user_id_owned.to_string()],
             )
             .expect("update");
             Ok(())

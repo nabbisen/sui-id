@@ -92,7 +92,7 @@ async fn settings_security_renders_lockout_and_headers() {
     assert_eq!(resp.status(), StatusCode::OK);
     let bytes = read_body(resp.into_body()).await;
     let body = String::from_utf8_lossy(&bytes);
-    assert!(body.contains("最大ロックアウト時間"));
+    assert!(body.contains("アカウントロックアウト"));
     assert!(body.contains("HSTS"));
     assert!(body.contains("Content-Security-Policy"));
     assert!(body.contains("X-Frame-Options"));
@@ -169,7 +169,7 @@ async fn settings_other_renders_versions_and_paths() {
     let bytes = read_body(resp.into_body()).await;
     let body = String::from_utf8_lossy(&bytes);
     assert!(body.contains("sui-id バージョン"));
-    assert!(body.contains("対応スキーマバージョン"));
+    assert!(body.contains("スキーマバージョン"));
     assert!(body.contains("DB ファイル"));
     assert!(body.contains("マスターキーファイル"));
     assert!(body.contains("/admin/users"));

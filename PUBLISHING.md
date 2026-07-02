@@ -57,10 +57,9 @@ Before tagging a release and running the steps above:
 4. `cargo package -p sui-id-shared --allow-dirty` produces a package and the
    verify build succeeds (the others can only be verified end-to-end after
    `sui-id-shared` is on the index).
-5. The version field in the workspace `[workspace.package]` has been
-   bumped, and the `path = "..."` dependencies in each crate have a matching
-   `version = "..."` so the published crates pin a registry version, not
-   just a path.
+5. The version field in the workspace `[workspace.package]` has been bumped
+   and `Cargo.lock` has been refreshed. Internal workspace crate dependencies
+   are centralized in root `[workspace.dependencies]`.
 6. `CHANGELOG.md` has an entry for the new version.
 7. The git working tree is clean (no `--allow-dirty` for the actual publish).
 

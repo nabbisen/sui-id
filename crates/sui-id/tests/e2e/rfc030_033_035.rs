@@ -37,12 +37,13 @@ async fn delete_user_without_confirmed_is_rejected() {
         &clock,
         None,
         sui_id_store::models::HibpMode::Off,
-        admin_id,
+        &admin_actor_for(admin_id),
         sui_id_core::admin::CreateUserSpec {
             username: "target-for-delete-test".into(),
             display_name: None,
             email: None,
             password: "target-password-12345".into(),
+            min_password_len: 12,
             is_admin: false,
         },
     )
@@ -101,12 +102,13 @@ async fn mfa_reset_without_confirmed_is_rejected() {
         &clock,
         None,
         sui_id_store::models::HibpMode::Off,
-        admin_id,
+        &admin_actor_for(admin_id),
         sui_id_core::admin::CreateUserSpec {
             username: "target-mfa-test".into(),
             display_name: None,
             email: None,
             password: "target-pw-mfa-123456".into(),
+            min_password_len: 12,
             is_admin: false,
         },
     )
@@ -156,12 +158,13 @@ async fn delete_confirm_page_renders() {
         &clock,
         None,
         sui_id_store::models::HibpMode::Off,
-        admin_id,
+        &admin_actor_for(admin_id),
         sui_id_core::admin::CreateUserSpec {
             username: "confirm-page-target".into(),
             display_name: None,
             email: None,
             password: "confirm-pw-12345678".into(),
+            min_password_len: 12,
             is_admin: false,
         },
     )
@@ -307,12 +310,13 @@ async fn user_detail_page_renders() {
         &clock,
         None,
         sui_id_store::models::HibpMode::Off,
-        admin_id,
+        &admin_actor_for(admin_id),
         sui_id_core::admin::CreateUserSpec {
             username: "detail-page-user".into(),
             display_name: Some("Detail Page User".into()),
             email: None,
             password: "detail-pw-12345678".into(),
+            min_password_len: 12,
             is_admin: false,
         },
     )

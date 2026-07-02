@@ -55,12 +55,12 @@ slot is `093`). One **parallel namespace** also exists:
 
 ## Index
 
-### Proposed — Mockup Integration epic (Phase 0 → Phase 8)
+### Implemented — Mockup Integration epic (Phase 0 → Phase 8)
 
 **The mockup integration arc is complete as of v0.57.0.**
 
 All 16 MI RFCs have been implemented across Phases 0–8.
-See the Implemented table above for the full list with release versions.
+See the Implemented table below for the full list with release versions.
 
 The migration plan (`docs/mockup-integration/migration-plan.md`) and
 verification matrices (`docs/src/mockup-integration/`) document the
@@ -105,7 +105,7 @@ All pre-1.0 RFCs are now implemented. The remaining items in
 All maintenance RFCs from this category are implemented. See the
 Implemented table above.
 
-### Proposed — security-assurance arc (RFCs 078–086, v0.63.2)
+### Implemented — security-assurance arc (RFCs 078–086)
 
 Created from the architect audit requested by
 `security-critical-assurance-strategy-v0.63.1.md`. The audit
@@ -114,16 +114,17 @@ at [`docs/security-assurance-audit-v0.63.1.md`](../docs/security-assurance-audit
 Recommended order: 078 → 080 → 079 → 081 → 082 → 083 / 085 →
 084 → 086.
 
-| ID  | Title | Category / Priority |
-|-----|-------|---------------------|
-| 079 | [Authorization code lifecycle assurance](./proposed/079-authorization-code-lifecycle-assurance.md) | A |
-| 080 | [Refresh rotation atomicity & reuse detection](./proposed/080-refresh-rotation-atomicity.md) | A — highest-risk finding (G1) |
-| 081 | [Actor scope boundary & scoped repository signatures](./proposed/081-actor-scope-boundary.md) | B |
-| 082 | [Authorization decision core & property tests](./proposed/082-authorization-decision-core.md) | B |
-| 083 | [Security state-machine testing with proptest](./proposed/083-security-state-machine-testing.md) | B |
-| 084 | [Fuzzing for untrusted input boundaries](./proposed/084-fuzzing-untrusted-input-boundaries.md) | B/C |
-| 085 | [Audit event completeness for privileged operations](./proposed/085-audit-event-completeness.md) | B |
-| 086 | [Lightweight formal / model-checking pilot](./done/086-formal-model-checking-pilot.md) | C — shipped v0.69.0 |
+| ID  | Title | Release |
+|-----|-------|---------|
+| 078 | [Security-critical type modeling baseline](./done/078-security-type-modeling-baseline.md) | v0.64.0 |
+| 079 | [Authorization code lifecycle assurance](./done/079-authorization-code-lifecycle-assurance.md) | v0.66.0 |
+| 080 | [Refresh rotation atomicity & reuse detection](./done/080-refresh-rotation-atomicity.md) | v0.66.0 |
+| 081 | [Actor scope boundary & scoped repository signatures](./done/081-actor-scope-boundary.md) | v0.67.0 |
+| 082 | [Authorization decision core & property tests](./done/082-authorization-decision-core.md) | v0.67.0 |
+| 083 | [Security state-machine testing with proptest](./done/083-security-state-machine-testing.md) | v0.68.0 |
+| 084 | [Fuzzing for untrusted input boundaries](./done/084-fuzzing-untrusted-input-boundaries.md) | v0.69.0 |
+| 085 | [Audit event completeness for privileged operations](./done/085-audit-event-completeness.md) | v0.68.0 |
+| 086 | [Lightweight formal / model-checking pilot](./done/086-formal-model-checking-pilot.md) | v0.69.0 |
 
 ### Proposed — toolchain maintenance
 
@@ -143,18 +144,17 @@ real-environment soak of the current core before any implementation.
 
 | ID  | Title                                                          | Priority |
 |-----|----------------------------------------------------------------|----------|
-| 008 | [Third-party-posture bundle](./done/008-third-party-posture.md) | ✅ Shipped v0.76.3 |
+| 008 | [Third-party-posture bundle](./done/008-third-party-posture.md) | Shipped v0.76.3 |
 | 025 | [Multi-tenant expansion path: detailed design](./proposed/025-multi-tenant-expansion.md) | Low — post-1.0, no schedule |
-| 004 | [Federation as upstream OIDC relying party](./done/004-federation.md) | ✅ Shipped v0.76.4 |
-| 005 | [Pluggable user backends (LDAP)](./done/005-pluggable-user-backends.md) | ✅ Shipped v0.76.1 |
-| 006 | [Prometheus metrics endpoint](./done/006-metrics.md) | ✅ Shipped v0.76.0 |
+| 004 | [Federation as upstream OIDC relying party](./done/004-federation.md) | Shipped v0.76.4 |
+| 005 | [Pluggable user backends (LDAP)](./done/005-pluggable-user-backends.md) | Shipped v0.76.1 |
+| 006 | [Prometheus metrics endpoint](./done/006-metrics.md) | Shipped v0.76.0 |
 | 009 | [Pluggable SQL backends (PostgreSQL, MariaDB)](./proposed/009-sql-backends.md) | Low — post-1.0 (Step 1 done v0.76.2) |
 
 ### Implemented
 
 | ID  | Title                                                          | Shipped in |
 |-----|----------------------------------------------------------------|------------|
-| 078 | [Security-critical type modeling baseline](./done/078-security-type-modeling-baseline.md) | v0.64.0 |
 | MI-080 | [UI Regression and Accessibility Hardening](./done/RFC-MI-080-ui-regression-a11y-hardening.md) | v0.57.0 |
 | MI-070 | [OIDC Consent UX Integration](./done/RFC-MI-070-oidc-consent-ux.md) | v0.56.0 |
 | MI-060 | [Self-Service Security Tab Integration](./done/RFC-MI-060-self-service-security-tabs.md) | v0.55.0 |
@@ -238,15 +238,15 @@ real-environment soak of the current core before any implementation.
 |-----|----------------|------------------------------------------------------------|
 | 007 | [Multi-tenancy](./archive/007-multi-tenancy.md) | Superseded by [RFC 025](./proposed/025-multi-tenant-expansion.md) |
 
-## Implementation order
+## Historical implementation order
 
-The current near-term direction is the v0.42 → v1.0-rc UI/UX
-hardening plan, six phases (A through F) one per release:
+The v0.42 → v0.48 UI/UX hardening plan shipped in six phases
+(A through F):
 
 - **Phase A (v0.42.0, shipped):** RFCs 048, 049, 050 — stop the
   bleeding (rendered `t.xxx` literals, undefined CSS variables,
   non-i18n chrome).
-- **Phase B (v0.43.0, in `proposed/`):** RFCs 051, 052, 053, 054 —
+- **Phase B (v0.43.0):** RFCs 051, 052, 053, 054 —
   i18n completeness sweep across every page body, status words,
   copy buttons, and ARIA attributes.
 - **Phase C (v0.44.0):** Self-service unification onto `/me/security/*`.
@@ -257,9 +257,9 @@ hardening plan, six phases (A through F) one per release:
 - **Buffer (v0.48.0):** RFC index reconciliation and per-screen
   verification doc.
 
-After Phase F, v1.0-rc opens. The post-1.0 backlog (RFCs 004, 005,
-006, 008, 009, 025) targets longer-term work and is intentionally
-out of the v1.0 critical path.
+After Phase F, the project entered verification soak rather than a
+v1 designation. Current remaining proposed RFCs are owner-gated
+follow-up work.
 
 ## Template
 

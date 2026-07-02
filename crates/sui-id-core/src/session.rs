@@ -146,15 +146,17 @@ pub async fn login_with_mfa(
     // account that we already know we're going to refuse. To
     // preserve timing equivalence with the active-and-wrong-password
     // path, we still run a dummy Argon2 verify before returning.
-    if let Some(locked_until) = user.locked_until {
-        if locked_until > clock.now() {
-            let _ = verify_password(password, DUMMY_PHC);
-            // Audit-logged with a different reason so operators can
-            // distinguish a brute-force attempt from honest typos.
-            // The HTTP response is the same generic 401 either way.
-            record_login_failure(db, clock, username, "account locked").await;
-            return Err(CoreError::InvalidCredentials);
-        }
+    if let Some(locked_until) = user.locked_until
+        && locked_until > clock.now()
+    {
+        let _ = verify_password(password, DUMMY_PHC);
+        // Audit-logged with a different reason so operators can
+        // distinguish a brute-force attempt from honest typos.
+        // The HTTP response is the same generic 401 either way.
+        record_login_failure(db, clock, username, "account locked").await;
+        return Err(CoreError::InvalidCredentials);
+    }
+    if user.locked_until.is_some() {
         // Stale lock — `locked_until` is in the past. Fall through;
         // a successful password will clear it via `clear_lockout`,
         // and a failure restarts the counter from where it was
@@ -509,6 +511,8 @@ mod session_limit_tests {
                 updated_at: now,
                 failed_login_count: 0,
                 locked_until: None,
+                source: sui_id_store::models::UserSource::Local,
+                external_stable_id: None,
                 email: None,
                 preferred_lang: None,
                 email_normalized: None,

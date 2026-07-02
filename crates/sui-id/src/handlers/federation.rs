@@ -97,7 +97,6 @@ struct OidcDiscovery {
     token_endpoint: String,
     #[serde(default)]
     userinfo_endpoint: Option<String>,
-    issuer: String,
 }
 
 async fn fetch_discovery(client: &reqwest::Client, issuer: &str) -> Result<OidcDiscovery, String> {
@@ -246,8 +245,6 @@ pub struct CallbackQuery {
 struct TokenResponse {
     access_token: String,
     id_token: Option<String>,
-    #[serde(default)]
-    token_type: String,
 }
 
 #[derive(Deserialize)]
@@ -382,14 +379,13 @@ pub async fn federated_callback(
     // We trust the token_endpoint over TLS; full signature verification would
     // require fetching the upstream JWKS — out of scope for Step 1.
     let id_claims: IdTokenClaims = match tokens.id_token.as_deref() {
-        Some(jwt) => decode_id_token_claims(jwt).unwrap_or(IdTokenClaims {
-            sub: String::new(),
-            email: None,
-            email_verified: false,
-            preferred_username: None,
-            name: None,
-            nonce: None,
-        }),
+        Some(jwt) => match decode_id_token_claims(jwt) {
+            Some(claims) => claims,
+            None => {
+                tracing::warn!("federation ID token claims parse failed");
+                return Ok(Redirect::to("/admin/login?fed_error=token_parse").into_response());
+            }
+        },
         None => {
             // No id_token: fall back to userinfo endpoint if available.
             if let Some(ref ui_url) = discovery.userinfo_endpoint {
@@ -721,16 +717,8 @@ fn decode_id_token_claims(jwt: &str) -> Option<IdTokenClaims> {
     use base64ct::{Base64UrlUnpadded, Encoding};
     let parts: Vec<&str> = jwt.split('.').collect();
     let payload = parts.get(1)?;
-    // Pad base64 to a multiple of 4
-    let padded = {
-        let rem = payload.len() % 4;
-        if rem == 0 {
-            payload.to_string()
-        } else {
-            format!("{}{}", payload, "=".repeat(4 - rem))
-        }
-    };
-    let decoded = Base64UrlUnpadded::decode_vec(&padded).ok()?;
+    // JWT compact serialization uses unpadded base64url.
+    let decoded = Base64UrlUnpadded::decode_vec(payload).ok()?;
     serde_json::from_slice(&decoded).ok()
 }
 
@@ -768,4 +756,35 @@ fn emit_audit_soon(
     tokio::spawn(async move {
         let _ = sui_id_store::repos::audit::append(&db, &row).await;
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::decode_id_token_claims;
+    use base64ct::{Base64UrlUnpadded, Encoding};
+
+    fn jwt_with_payload(payload: &[u8]) -> String {
+        let header = Base64UrlUnpadded::encode_string(br#"{"alg":"none"}"#);
+        let payload = Base64UrlUnpadded::encode_string(payload);
+        format!("{header}.{payload}.")
+    }
+
+    #[test]
+    fn decode_id_token_claims_accepts_unpadded_jwt_payload() {
+        let jwt = jwt_with_payload(
+            br#"{"sub":"upstream-123","email":"alice@example.com","email_verified":true,"nonce":"n"}"#,
+        );
+
+        let claims = decode_id_token_claims(&jwt).expect("claims should decode");
+
+        assert_eq!(claims.sub, "upstream-123");
+        assert_eq!(claims.email.as_deref(), Some("alice@example.com"));
+        assert!(claims.email_verified);
+        assert_eq!(claims.nonce.as_deref(), Some("n"));
+    }
+
+    #[test]
+    fn decode_id_token_claims_rejects_malformed_payload() {
+        assert!(decode_id_token_claims("header.not-base64url.signature").is_none());
+    }
 }

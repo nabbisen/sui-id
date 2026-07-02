@@ -30,6 +30,7 @@ pub struct CreatedInitialAdmin {
 /// This is the **web wizard** path: the setup token printed at boot must
 /// match (constant-time comparison) because the endpoint is
 /// network-reachable before the instance has an owner.
+#[allow(clippy::too_many_arguments)]
 pub async fn create_initial_admin(
     db: &Database,
     clock: &SharedClock,
@@ -107,6 +108,7 @@ pub async fn create_initial_admin_headless(
 ///
 /// Returned in `Zeroizing` so the plaintext is wiped from memory when the
 /// caller drops it after printing.
+#[allow(clippy::expect_used)]
 pub fn generate_admin_password() -> Zeroizing<String> {
     const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     const LEN: usize = 24;
@@ -133,6 +135,7 @@ pub fn generate_admin_password() -> Zeroizing<String> {
 /// bootstrap, initialized flag, audit entry. Callers have already done
 /// their path-specific authorization (token check / filesystem trust)
 /// and the already-initialized check.
+#[allow(clippy::too_many_arguments)]
 async fn create_initial_admin_inner(
     db: &Database,
     clock: &SharedClock,
@@ -204,7 +207,7 @@ async fn create_initial_admin_inner(
         // Semantically equivalent: secret key material from OS RNG; memory
         // zeroized on drop via Zeroizing<>.
         let mut secret = Zeroizing::new([0u8; 32]);
-        getrandom::fill(secret.as_mut()).expect("system RNG unavailable");
+        getrandom::fill(secret.as_mut()).map_err(|_| CoreError::Internal)?;
         let sk = SigningKey::from_bytes(&secret);
         let pk = sk.verifying_key();
         signing_keys::insert_with_plaintext(

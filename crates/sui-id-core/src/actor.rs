@@ -35,6 +35,7 @@ use crate::authz::{self, Action, Decision};
 /// session-resolution path (the `from_session` factory below, called from
 /// the Axum extractors). Has no public constructor, no `Deserialize`, and
 /// no `Clone` — it cannot be forged or cached (RFC 081 P4, P5).
+#[derive(Debug)]
 pub struct Actor {
     user_id: UserId,
     role: Role,

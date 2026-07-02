@@ -22,7 +22,7 @@ async fn step_up_get_renders_form_with_return_to() {
         .oneshot(
             Request::builder()
                 .method(Method::GET)
-                .uri("/me/security/step-up?return_to=/admin/users")
+                .uri("/me/security/step-up?return_to=/admin/users/")
                 .header(header::COOKIE, format!("sui_id_session={session}"))
                 .body(Body::empty())
                 .expect("req"),
@@ -36,7 +36,7 @@ async fn step_up_get_renders_form_with_return_to() {
     assert!(body.contains(r#"name="code""#));
     assert!(body.contains(r#"name="return_to""#));
     // The supplied return_to round-trips into the form.
-    assert!(body.contains(r#"value="/admin/users""#));
+    assert!(body.contains(r#"value="/admin/users/""#));
 }
 
 #[tokio::test]
@@ -110,7 +110,7 @@ async fn step_up_post_with_correct_totp_marks_session_fresh_and_redirects() {
         .oneshot(
             Request::builder()
                 .method(Method::GET)
-                .uri("/me/security/step-up?return_to=/admin/users")
+                .uri("/me/security/step-up?return_to=/admin/users/")
                 .header(header::COOKIE, format!("sui_id_session={session}"))
                 .body(Body::empty())
                 .expect("req"),
@@ -126,7 +126,7 @@ async fn step_up_post_with_correct_totp_marks_session_fresh_and_redirects() {
     let body = format!(
         "_csrf={csrf}\
          &code={code}\
-         &return_to=/admin/users"
+         &return_to=/admin/users/"
     );
     let resp = build_router(state.clone())
         .oneshot(
@@ -153,7 +153,7 @@ async fn step_up_post_with_correct_totp_marks_session_fresh_and_redirects() {
         .get(header::LOCATION)
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
-    assert_eq!(location, "/admin/users");
+    assert_eq!(location, "/admin/users/");
 
     // And the session row's last_step_up_at is now set.
     let session_id = sui_id_shared::ids::SessionId::from_uuid(
@@ -261,7 +261,7 @@ async fn step_up_redirects_when_mfa_admin_lacks_fresh() {
         .expect("signing-keys GET");
     let csrf = extract_set_cookie(resp.headers(), "sui_id_csrf").expect("csrf");
 
-    let body = format!("_csrf={csrf}");
+    let body = format!("_csrf={csrf}&_confirmed=1");
     let resp = build_router(state)
         .oneshot(
             Request::builder()
@@ -322,7 +322,7 @@ async fn admin_with_no_mfa_passes_step_up_gate_transparently() {
         .expect("GET");
     let csrf = extract_set_cookie(resp.headers(), "sui_id_csrf").expect("csrf");
 
-    let body = format!("_csrf={csrf}");
+    let body = format!("_csrf={csrf}&_confirmed=1");
     let resp = build_router(state)
         .oneshot(
             Request::builder()

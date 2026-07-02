@@ -36,12 +36,16 @@ async fn backup_then_restore_preserves_users_and_clients() {
             issuer: "https://idp.test".into(),
             cookie_secure: false,
             trusted_proxies: Vec::new(),
+            metrics_enabled: false,
+            metrics_listen_addr: String::new(),
         },
         storage: StorageConfig {
             db_path: db_path.clone(),
             key_file: key_path.clone(),
         },
         tokens: TokensConfig::default(),
+        user_sources: Vec::new(),
+        federation_providers: Vec::new(),
         log: LogConfig {
             format: "fmt".into(),
             filter: "off".into(),

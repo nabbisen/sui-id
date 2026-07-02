@@ -39,7 +39,7 @@ pub async fn rotate_signing_key(
     // Semantically equivalent: secret key material from OS RNG; memory
     // zeroized on drop via Zeroizing<>.
     let mut secret = Zeroizing::new([0u8; 32]);
-    getrandom::fill(secret.as_mut()).expect("system RNG unavailable");
+    getrandom::fill(secret.as_mut()).map_err(|_| CoreError::Internal)?;
     let sk = SigningKey::from_bytes(&secret);
     let pk = sk.verifying_key();
     let new_id = SigningKeyId::new();

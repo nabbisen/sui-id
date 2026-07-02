@@ -214,7 +214,7 @@ async fn admin_users_create_form_accepts_email() {
         .oneshot(
             Request::builder()
                 .method(Method::GET)
-                .uri("/admin/users")
+                .uri("/admin/users/new")
                 .header(header::COOKIE, format!("sui_id_session={session}"))
                 .body(Body::empty())
                 .expect("req"),

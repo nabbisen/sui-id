@@ -80,6 +80,7 @@ pub struct PendingChange {
 /// audit log).
 ///
 /// Returns the public `PendingChange` (no ciphertext, no secrets).
+#[allow(clippy::too_many_arguments)]
 pub async fn create<T: Serialize>(
     db: &Database,
     actor: &AdminActor,

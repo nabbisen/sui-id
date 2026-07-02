@@ -27,6 +27,7 @@ const DIGITS: u32 = 6;
 /// Compute the 6-digit TOTP for the given secret and time step.
 ///
 /// `step = floor(unix_time / 30)`.
+#[allow(clippy::expect_used)]
 pub async fn code_for_step(secret: &[u8], step: i64) -> u32 {
     let counter = (step as u64).to_be_bytes();
     let mut mac = Hmac::<Sha1>::new_from_slice(secret).expect("HMAC accepts any key length");

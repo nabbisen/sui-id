@@ -8,6 +8,15 @@
 //! layer and pure data; the wiring to Axum lives in `sui-id-bin`.
 
 #![forbid(unsafe_code)]
+#![cfg_attr(
+    test,
+    allow(
+        clippy::expect_used,
+        clippy::items_after_test_module,
+        clippy::panic,
+        clippy::unwrap_used
+    )
+)]
 
 pub mod actor;
 pub mod admin;

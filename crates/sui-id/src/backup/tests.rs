@@ -2,10 +2,20 @@ use super::*;
 
 // (moved from backup.rs by RFC 075)
 mod tests_inner {
+    use crate::config::Config;
+
+    use super::tar::{read_tar, write_tar_entry, write_tar_terminator};
     use super::*;
     use std::fs::File;
+    use std::fs::OpenOptions;
     use std::io::Read;
+    use std::os::unix::fs::OpenOptionsExt;
+    use std::path::{Path, PathBuf};
     use tempfile::TempDir;
+
+    const ENTRY_MANIFEST: &str = "MANIFEST.json";
+    const ENTRY_DB: &str = "sui-id.sqlite";
+    const ENTRY_KEY: &str = "sui-id.key";
 
     fn fake_files(dir: &Path) -> (PathBuf, PathBuf) {
         let db = dir.join("sui-id.sqlite");
@@ -53,11 +63,15 @@ mod tests_inner {
                 issuer: "https://x".into(),
                 cookie_secure: false,
                 trusted_proxies: Vec::new(),
+                metrics_enabled: false,
+                metrics_listen_addr: String::new(),
             },
             storage: crate::config::StorageConfig {
                 db_path: db.clone(),
                 key_file: key.clone(),
             },
+            user_sources: Vec::new(),
+            federation_providers: Vec::new(),
             tokens: crate::config::TokensConfig::default(),
             log: crate::config::LogConfig::default(),
             security: crate::config::SecurityConfig::default(),
@@ -109,11 +123,15 @@ mod tests_inner {
                 issuer: "https://x".into(),
                 cookie_secure: false,
                 trusted_proxies: Vec::new(),
+                metrics_enabled: false,
+                metrics_listen_addr: String::new(),
             },
             storage: crate::config::StorageConfig {
                 db_path: tmp.path().join("subdir").join("sui-id.sqlite"),
                 key_file: tmp.path().join("subdir").join("sui-id.key"),
             },
+            user_sources: Vec::new(),
+            federation_providers: Vec::new(),
             tokens: crate::config::TokensConfig::default(),
             log: crate::config::LogConfig::default(),
             security: crate::config::SecurityConfig::default(),
@@ -163,11 +181,15 @@ mod tests_inner {
                 issuer: "https://x".into(),
                 cookie_secure: false,
                 trusted_proxies: Vec::new(),
+                metrics_enabled: false,
+                metrics_listen_addr: String::new(),
             },
             storage: crate::config::StorageConfig {
                 db_path: db.clone(),
                 key_file: key.clone(),
             },
+            user_sources: Vec::new(),
+            federation_providers: Vec::new(),
             tokens: crate::config::TokensConfig::default(),
             log: crate::config::LogConfig::default(),
             security: crate::config::SecurityConfig::default(),
@@ -187,6 +209,8 @@ mod tests_inner {
                 db_path: tmp.path().join("restored.sqlite"),
                 key_file: tmp.path().join("restored.key"),
             },
+            user_sources: cfg.user_sources.clone(),
+            federation_providers: cfg.federation_providers.clone(),
             tokens: cfg.tokens.clone(),
             log: cfg.log.clone(),
             security: cfg.security.clone(),
@@ -238,11 +262,15 @@ mod tests_inner {
                 issuer: "https://idp.test".into(),
                 cookie_secure: false,
                 trusted_proxies: Vec::new(),
+                metrics_enabled: false,
+                metrics_listen_addr: String::new(),
             },
             storage: crate::config::StorageConfig {
                 db_path: db,
                 key_file: key,
             },
+            user_sources: Vec::new(),
+            federation_providers: Vec::new(),
             tokens: crate::config::TokensConfig::default(),
             log: crate::config::LogConfig::default(),
             security: crate::config::SecurityConfig::default(),

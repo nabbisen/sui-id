@@ -22,6 +22,10 @@ include = [
     "Cargo.toml",
 ]
 
+[features]
+default = []
+ldap    = ["sui-id-store/ldap"]
+
 [[bin]]
 name = "sui-id"
 path = "src/main.rs"
@@ -40,7 +44,7 @@ workspace = true
 sui-id-shared               = { workspace = true }
 sui-id-i18n                 = { workspace = true }
 sui-id-store                = { workspace = true }
-sui-id-core                 = { workspace = true }
+sui-id-core                 = { workspace = true, features = ["test-support"] }
 sui-id-web                  = { workspace = true }
 
 tokio                       = { workspace = true }

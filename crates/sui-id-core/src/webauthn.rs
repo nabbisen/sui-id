@@ -6,6 +6,7 @@
 //! Two ceremonies, mirroring the WebAuthn spec:
 //!
 //! 1. **Registration.** A logged-in user enrols a new passkey.
+//!
 //!    `start_registration` calls `webauthn-rs::start_passkey_registration`,
 //!    serialises the in-progress state to a `webauthn_pending` row, and
 //!    returns the `CreationChallengeResponse` JSON for the browser.
@@ -13,11 +14,11 @@
 //!    `RegisterPublicKeyCredential`, lets webauthn-rs verify, and
 //!    persists the resulting `Passkey` sealed under the master key.
 //!
-//! 2. **Authentication.** Same pattern, with `start_passkey_authentication`
-//!    + `finish_passkey_authentication`. On success the matching
-//!    credential's signature counter is updated and a session is
-//!    promoted (the bin layer wraps this together with the pending-MFA
-//!    cookie flow).
+//! 2. **Authentication.** Same pattern, with
+//!    `start_passkey_authentication` and `finish_passkey_authentication`.
+//!    On success the matching credential's signature counter is updated
+//!    and a session is promoted (the bin layer wraps this together with
+//!    the pending-MFA cookie flow).
 
 use crate::errors::{CoreError, CoreResult};
 use crate::time::SharedClock;
@@ -422,6 +423,8 @@ mod integration_tests {
                 updated_at: chrono::Utc::now(),
                 failed_login_count: 0,
                 locked_until: None,
+                source: sui_id_store::models::UserSource::Local,
+                external_stable_id: None,
                 email: None,
                 preferred_lang: None,
                 email_normalized: None,

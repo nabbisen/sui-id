@@ -62,12 +62,12 @@ pub const DEFAULT_TOKEN_TTL: Duration = Duration::minutes(30);
 /// can't tell). Prevents a single user's inbox from being spammed.
 const MAX_OUTSTANDING_TOKENS_PER_USER: i64 = 3;
 
-fn mint_random_token() -> (String, Vec<u8>) {
+fn mint_random_token() -> CoreResult<(String, Vec<u8>)> {
     let mut bytes = [0u8; 32];
-    getrandom::fill(&mut bytes).expect("system RNG unavailable");
+    getrandom::fill(&mut bytes).map_err(|_| CoreError::Internal)?;
     let plaintext = Base64UrlUnpadded::encode_string(&bytes);
     let hash = Sha256::digest(plaintext.as_bytes()).to_vec();
-    (plaintext, hash)
+    Ok((plaintext, hash))
 }
 
 fn hash_token(plaintext: &str) -> Vec<u8> {
@@ -142,7 +142,7 @@ pub async fn request_reset(
     }
 
     // Mint a token, persist its hash.
-    let (plaintext, hash) = mint_random_token();
+    let (plaintext, hash) = mint_random_token()?;
     let row = PasswordResetTokenRow {
         id: PasswordResetTokenId::new(),
         user_id: user_row.id,
@@ -303,6 +303,7 @@ pub async fn validate_token(
 ///
 /// The revoke matches the behaviour of the admin-driven and self-service
 /// password-change paths, which both revoke on write.
+#[allow(clippy::too_many_arguments)]
 pub async fn consume_and_reset_password(
     db: &Database,
     clock: &SharedClock,
@@ -380,22 +381,21 @@ pub async fn consume_and_reset_password(
     // not affect the password change itself. The recipient's
     // locale comes from their `preferred_lang` if set, falling
     // through to the server default.
-    if let Ok(Some(user_row)) = users::find_by_id_opt(db, row.user_id).await {
-        if let Some(email) = user_row.email.as_deref() {
-            let default_locale_pw = sui_id_store::repos::server_settings::get(db)
-                .await
-                .ok()
-                .and_then(|s| sui_id_i18n::Locale::parse(&s.default_lang))
-                .unwrap_or_default();
-            let recipient_locale = user_row
-                .preferred_lang
-                .as_deref()
-                .and_then(sui_id_i18n::Locale::parse)
-                .unwrap_or(default_locale_pw);
-            let _ =
-                notify_password_changed(mailer, email, &user_row.display_name, recipient_locale)
-                    .await;
-        }
+    if let Ok(Some(user_row)) = users::find_by_id_opt(db, row.user_id).await
+        && let Some(email) = user_row.email.as_deref()
+    {
+        let default_locale_pw = sui_id_store::repos::server_settings::get(db)
+            .await
+            .ok()
+            .and_then(|s| sui_id_i18n::Locale::parse(&s.default_lang))
+            .unwrap_or_default();
+        let recipient_locale = user_row
+            .preferred_lang
+            .as_deref()
+            .and_then(sui_id_i18n::Locale::parse)
+            .unwrap_or(default_locale_pw);
+        let _ =
+            notify_password_changed(mailer, email, &user_row.display_name, recipient_locale).await;
     }
 
     Ok(())

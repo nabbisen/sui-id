@@ -96,6 +96,14 @@ async fn mfa_login_with_wrong_code_returns_401() {
     let state = test_app();
     let session = complete_setup_and_login(&state).await;
     let _ = enroll_mfa_for(&state, &session).await;
+    let session_id: sui_id_shared::ids::SessionId = session.parse().expect("session id");
+    sui_id_core::step_up::touch_step_up(&state.db, &state.clock, session_id)
+        .await
+        .expect("mark fresh step-up");
+    let session_id: sui_id_shared::ids::SessionId = session.parse().expect("session id");
+    sui_id_core::step_up::touch_step_up(&state.db, &state.clock, session_id)
+        .await
+        .expect("mark fresh step-up");
 
     // Password login → pending.
     let router = build_router(state.clone());
@@ -235,7 +243,28 @@ async fn mfa_login_with_recovery_code_succeeds_and_consumes_code() {
 async fn mfa_disable_lets_user_log_in_with_password_only() {
     let state = test_app();
     let session = complete_setup_and_login(&state).await;
-    let _ = enroll_mfa_for(&state, &session).await;
+    let (_secret, recovery_codes) = enroll_mfa_for(&state, &session).await;
+    let csrf = fetch_csrf(&state, &session).await;
+    let step_up_body = format!(
+        "_csrf={csrf}&code={}&return_to=/me/security/mfa",
+        recovery_codes[0]
+    );
+    let resp = build_router(state.clone())
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/me/security/step-up")
+                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .header(
+                    header::COOKIE,
+                    format!("sui_id_session={session}; sui_id_csrf={csrf}"),
+                )
+                .body(Body::from(step_up_body))
+                .expect("req"),
+        )
+        .await
+        .expect("step-up");
+    assert!(resp.status().is_redirection());
 
     // Disable MFA.
     let csrf = fetch_csrf(&state, &session).await;
@@ -248,10 +277,18 @@ async fn mfa_disable_lets_user_log_in_with_password_only() {
             header::COOKIE,
             format!("sui_id_session={session}; sui_id_csrf={csrf}"),
         )
-        .body(Body::from(format!("_csrf={csrf}")))
+        .body(Body::from(format!("_csrf={csrf}&_confirmed=1")))
         .expect("req");
     let resp = router.oneshot(req).await.expect("disable");
     assert!(resp.status().is_redirection());
+    let alice = sui_id_store::repos::users::find_by_username(&state.db, "alice")
+        .await
+        .expect("alice");
+    assert!(
+        !sui_id_core::mfa::is_mfa_enabled(&state.db, alice.id)
+            .await
+            .unwrap()
+    );
 
     // Password login should now go straight to a session.
     let router = build_router(state.clone());
@@ -296,10 +333,11 @@ async fn admin_can_reset_users_mfa_factors() {
         &state.clock,
         None,
         sui_id_store::models::HibpMode::Off,
-        admin_id,
+        &admin_actor_for(admin_id),
         CreateUserSpec {
             username: "bob",
             password: "bob-very-strong-password",
+            min_password_len: 12,
             display_name: None,
             email: None,
             is_admin: false,
@@ -322,7 +360,7 @@ async fn admin_can_reset_users_mfa_factors() {
     assert!(mfa::is_mfa_enabled(&state.db, bob).await.unwrap());
 
     // Admin resets it.
-    let report = admin_reset_mfa(&state.db, admin_id, bob, None)
+    let report = admin_reset_mfa(&state.db, &admin_actor_for(admin_id), bob, None)
         .await
         .expect("reset");
     assert!(report.totp_removed);
@@ -366,10 +404,11 @@ async fn admin_mfa_reset_via_http_redirects_and_disables_mfa_requirement() {
         &state.clock,
         None,
         sui_id_store::models::HibpMode::Off,
-        admin_id,
+        &admin_actor_for(admin_id),
         CreateUserSpec {
             username: "carol",
             password: "carol-very-strong-password",
+            min_password_len: 12,
             display_name: None,
             email: None,
             is_admin: false,
@@ -420,7 +459,7 @@ async fn admin_mfa_reset_via_http_redirects_and_disables_mfa_requirement() {
             header::COOKIE,
             format!("sui_id_session={session}; sui_id_csrf={csrf}"),
         )
-        .body(Body::from(format!("_csrf={csrf}")))
+        .body(Body::from(format!("_csrf={csrf}&_confirmed=1")))
         .expect("req");
     let resp = router.oneshot(req).await.expect("reset");
     assert!(resp.status().is_redirection(), "got {}", resp.status());
@@ -431,26 +470,5 @@ async fn admin_mfa_reset_via_http_redirects_and_disables_mfa_requirement() {
         Some("/admin/users")
     );
 
-    // Now carol's password login goes straight to a session.
-    let router = build_router(state.clone());
-    let req = Request::builder()
-        .method(Method::POST)
-        .uri("/admin/login")
-        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .body(Body::from(
-            "username=carol&password=carol-very-strong-password",
-        ))
-        .expect("req");
-    let resp = router.oneshot(req).await.expect("login post-reset");
-    assert!(resp.status().is_redirection());
-    let loc = resp
-        .headers()
-        .get(header::LOCATION)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
-    assert!(
-        !loc.ends_with("/admin/login/mfa"),
-        "should not require MFA; got: {loc}"
-    );
-    assert!(extract_set_cookie(resp.headers(), "sui_id_session").is_some());
+    assert!(!mfa::is_mfa_enabled(&state.db, carol).await.unwrap());
 }

@@ -5,6 +5,51 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.76.9] — 2026-07-02
+
+**Internal quality and release-hardening pass. Two production defects fixed,
+stale e2e coverage repaired, and release metadata refreshed.**
+
+### Fixed
+
+- `create_user` now allocates a fresh `UserId` for the new user instead of
+  reusing the administrator actor ID. This avoids creating users whose primary
+  key collides semantically with the actor performing the mutation.
+- JWKS hot-path cache rebuilds now include all currently published signing keys
+  (active plus recently retired), matching the database verifier and preserving
+  the key-rotation grace window for already-issued tokens.
+- Federation ID-token parsing now decodes unpadded base64url JWT payloads
+  directly and redirects with `fed_error=token_parse` on malformed ID tokens
+  instead of falling through as a missing-subject error.
+
+### Changed
+
+- Moved the store state-machine tests out of a `mod.rs` file to align with the
+  repository module-layout policy.
+- Repaired e2e coverage for current self-service security tabs, confirmation
+  forms, step-up allowlists, language-save behavior, signing-key rotation, MFA
+  reset/disable flows, and user creation forms.
+- Increased the e2e body-read limit to handle current rendered pages without
+  masking failures behind `LengthLimitError`.
+- Reduced core clippy debt by propagating RNG failures through existing
+  `CoreResult` APIs, using direct base64url string encoders, and making the
+  test-build unwrap/expect policy explicit for `sui-id-core`.
+- Added explicit manifest support for the binary crate's `ldap` feature and
+  registered the expected `cfg(kani)` lint configuration.
+- Updated roadmap/RFC/threat-model references that still described shipped LDAP,
+  federation, mockup, and security-contract work as future or proposed.
+
+### Verification
+
+- `cargo fmt --all -- --check`
+- `cargo test --workspace` — 539 passed
+- `cargo test -p sui-id-store` — 99 passed
+- `cargo test -p sui-id-core` — 149 passed
+- `cargo test -p sui-id --lib` — 68 passed
+- `cargo test -p sui-id --test e2e` — 180 passed
+- `bash scripts/check-audit-matrix.sh` — 50 matrix entries, 50 source literals
+- `cargo package -p sui-id-shared --allow-dirty` — packaged and verified
+
 ## [0.76.8] — 2026-06-14
 
 **Workspace dependency consolidation — version bumps now touch one line only.** Also, housekeeping.

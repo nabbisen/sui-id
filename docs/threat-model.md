@@ -1096,10 +1096,10 @@ relevant items are:
   authorization-code is the only flow we support.
 - **OPAQUE / aPAKE password upgrade.** Argon2id over the
   TLS channel is the in-scope password verification.
-- **External user-store backends** (LDAP, AD). The current
-  storage layer assumes sui-id owns the user table. A
-  read-only LDAP shim is on the longer-term roadmap; an
-  equivalent for AD is not.
+- **External user-store backends beyond the current LDAP shim.**
+  sui-id supports a read-only LDAP authentication source with
+  local shadow rows. Broader directory ownership, write-back, and
+  AD-specific semantics remain out of scope.
 - **Multi-tenancy.** Every client and every user share one
   flat namespace.
 

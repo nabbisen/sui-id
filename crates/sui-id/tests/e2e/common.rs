@@ -14,6 +14,9 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use sha2::{Digest, Sha256};
 use sui_id::config::{Config, LogConfig, ServerConfig, StorageConfig, TokensConfig};
 use sui_id::{AppState, build_router};
+use sui_id_core::actor::{Actor, AdminActor};
+use sui_id_shared::ids::{SessionId, UserId};
+use sui_id_store::models::Role;
 use sui_id_store::{Database, crypto::MasterKey};
 use tower::ServiceExt;
 
@@ -42,12 +45,16 @@ pub fn test_app_with_mailer() -> (
             issuer: "https://idp.test".into(),
             cookie_secure: false,
             trusted_proxies: Vec::new(),
+            metrics_enabled: false,
+            metrics_listen_addr: String::new(),
         },
         storage: StorageConfig {
             db_path: "/tmp/unused.sqlite".into(),
             key_file: "/tmp/unused.key".into(),
         },
         tokens: TokensConfig::default(),
+        user_sources: Vec::new(),
+        federation_providers: Vec::new(),
         log: LogConfig {
             format: "fmt".into(),
             filter: "off".into(),
@@ -84,12 +91,16 @@ pub fn test_app_with_hibp() -> (
             issuer: "https://idp.test".into(),
             cookie_secure: false,
             trusted_proxies: Vec::new(),
+            metrics_enabled: false,
+            metrics_listen_addr: String::new(),
         },
         storage: StorageConfig {
             db_path: "/tmp/unused.sqlite".into(),
             key_file: "/tmp/unused.key".into(),
         },
         tokens: TokensConfig::default(),
+        user_sources: Vec::new(),
+        federation_providers: Vec::new(),
         log: LogConfig {
             format: "fmt".into(),
             filter: "off".into(),
@@ -107,6 +118,12 @@ pub fn test_app_with_hibp() -> (
     (state, mailer, hibp)
 }
 
+pub fn admin_actor_for(user_id: UserId) -> AdminActor {
+    Actor::from_session(user_id, Role::Admin, SessionId::new())
+        .into_admin()
+        .expect("admin actor")
+}
+
 /// Set the server-settings `hibp_mode` directly. Tests use this
 /// to flip between modes without going through the admin settings
 /// page.
@@ -117,7 +134,10 @@ pub async fn set_hibp_mode(state: &AppState, mode: sui_id_store::models::HibpMod
 }
 
 pub async fn read_body(body: Body) -> Vec<u8> {
-    to_bytes(body, 64 * 1024).await.expect("body").to_vec()
+    to_bytes(body, 2 * 1024 * 1024)
+        .await
+        .expect("body")
+        .to_vec()
 }
 
 pub fn extract_set_cookie(headers: &http::HeaderMap, name: &str) -> Option<String> {
@@ -170,6 +190,12 @@ pub async fn complete_setup_and_login(state: &AppState) -> String {
         "expected redirect after setup, got {}",
         resp.status()
     );
+    state
+        .caches
+        .jwks
+        .rebuild(&state.db)
+        .await
+        .expect("rebuild jwks cache after setup");
     extract_set_cookie(resp.headers(), "sui_id_session").expect("session cookie set")
 }
 
@@ -404,9 +430,10 @@ pub async fn enroll_mfa_for(state: &AppState, session: &str) -> (String, Vec<Str
         .body(Body::from(format!("_csrf={csrf}")))
         .expect("req");
     let resp = router.oneshot(req).await.expect("enroll start");
-    assert_eq!(resp.status(), StatusCode::OK, "enroll start failed");
+    let status = resp.status();
     let body = read_body(resp.into_body()).await;
     let html = String::from_utf8_lossy(&body).to_string();
+    assert_eq!(status, StatusCode::OK, "enroll start failed: {html}");
     // Pull the Base32 secret out of the page. The Japanese label
     // ("秘密鍵:") plus the next `<span class="code">` wrap the
     // value; the English "Secret:" is rendered the same shape.
@@ -416,7 +443,7 @@ pub async fn enroll_mfa_for(state: &AppState, session: &str) -> (String, Vec<Str
             .or_else(|| html.find("Secret:"))
             .expect("secret label rendered");
         let rest = &html[label_at..];
-        let span_at = rest.find("<span class=\"code\"").expect("secret span");
+        let span_at = rest.find("<span class=\"code ml-1\"").expect("secret span");
         let after_open = &rest[span_at..];
         let gt = after_open.find('>').expect("span open close");
         let inner = &after_open[gt + 1..];
@@ -424,9 +451,25 @@ pub async fn enroll_mfa_for(state: &AppState, session: &str) -> (String, Vec<Str
         inner[..end].to_owned()
     };
     let secret = decode_b32(&secret_b32);
+    assert_eq!(secret.len(), 20, "decoded TOTP secret length");
+    let session_id: SessionId = session.parse().expect("session id");
+    let session_row = sui_id_store::repos::sessions::get(&state.db, session_id)
+        .await
+        .expect("session row");
+    let pending = sui_id_store::repos::user_totp::get(&state.db, session_row.user_id)
+        .await
+        .expect("pending totp lookup")
+        .expect("pending totp row");
+    let db_secret = sui_id_store::repos::user_totp::decrypt_secret(&state.db, &pending)
+        .await
+        .expect("decrypt pending totp secret");
+    assert_eq!(
+        secret, db_secret,
+        "rendered TOTP secret must match stored pending secret"
+    );
     let now = chrono::Utc::now().timestamp();
     let step = now / 30;
-    let code = totp::code_for_step(&secret, step).await;
+    let code = totp::code_for_step(&db_secret, step).await;
 
     // Confirm.
     let csrf = fetch_csrf(state, session).await;
@@ -442,9 +485,10 @@ pub async fn enroll_mfa_for(state: &AppState, session: &str) -> (String, Vec<Str
         .body(Body::from(format!("code={code:06}&_csrf={csrf}")))
         .expect("req");
     let resp = router.oneshot(req).await.expect("enroll confirm");
-    assert_eq!(resp.status(), StatusCode::OK, "enroll confirm failed");
+    let status = resp.status();
     let body = read_body(resp.into_body()).await;
     let html = String::from_utf8_lossy(&body).to_string();
+    assert_eq!(status, StatusCode::OK, "enroll confirm failed: {html}");
     // Pull the recovery codes out of the rendered page (each in <span class="code">).
     let mut codes = Vec::new();
     let mut rest = html.as_str();

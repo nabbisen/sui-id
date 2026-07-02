@@ -16,7 +16,7 @@
 use sui_id_store::models::Role;
 
 use crate::authz::{Action, Decision, authorize};
-use Decision::{Deny, Permit};
+use Decision::Permit;
 use Role::{Admin, Auditor, User};
 
 // ── Action enumeration (test-only) ───────────────────────────────────────────

@@ -30,7 +30,7 @@ async fn authorize_rejects_scope_outside_client_policy() {
     let created = sui_id_core::admin::create_client(
         &state.db,
         &state.clock,
-        admin_id,
+        &admin_actor_for(admin_id),
         CreateClientSpec {
             name: "scoped-rp",
             redirect_uris: &["https://rp.test/cb".into()],
@@ -118,7 +118,7 @@ async fn authorize_with_empty_policy_permits_any_scope() {
     let created = sui_id_core::admin::create_client(
         &state.db,
         &state.clock,
-        admin_id,
+        &admin_actor_for(admin_id),
         CreateClientSpec {
             name: "legacy-rp",
             redirect_uris: &["https://rp.test/cb".into()],
@@ -173,7 +173,7 @@ async fn logout_uses_post_logout_redirect_uris_when_registered() {
     let created = sui_id_core::admin::create_client(
         &state.db,
         &state.clock,
-        admin_id,
+        &admin_actor_for(admin_id),
         CreateClientSpec {
             name: "logout-rp",
             redirect_uris: &["https://rp.test/cb".into()],
@@ -247,7 +247,7 @@ async fn logout_falls_back_to_redirect_uris_when_post_logout_list_empty() {
     let created = sui_id_core::admin::create_client(
         &state.db,
         &state.clock,
-        admin_id,
+        &admin_actor_for(admin_id),
         CreateClientSpec {
             name: "legacy-rp",
             redirect_uris: &["https://rp.test/cb".into()],

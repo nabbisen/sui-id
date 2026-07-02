@@ -189,8 +189,7 @@ pub async fn list_published(db: &Database) -> StoreResult<Vec<SigningKeyRow>> {
     }).await
 }
 
-/// Active signing keys only (is_active = 1). Used by the JWKS cache
-/// to populate the verification cache on startup and after key rotation.
+/// Active signing keys only (is_active = 1).
 pub async fn list_active(db: &Database) -> StoreResult<Vec<SigningKeyRow>> {
     db.with_conn(move |conn| {
         let mut stmt = conn.prepare(

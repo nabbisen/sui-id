@@ -314,7 +314,7 @@ async fn me_password_change_with_revoke_others_sweeps_other_sessions_and_refresh
         .oneshot(
             Request::builder()
                 .method(Method::GET)
-                .uri("/me/security")
+                .uri("/me/security/overview")
                 .header(header::COOKIE, format!("sui_id_session={s1}"))
                 .body(Body::empty())
                 .expect("req"),

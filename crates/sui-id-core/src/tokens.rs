@@ -197,15 +197,11 @@ pub async fn issue_token_set(
 }
 
 /// Cryptographically random URL-safe token string.
+#[allow(clippy::expect_used)]
 pub fn random_token(byte_len: usize) -> String {
     let mut buf = vec![0u8; byte_len];
     getrandom::fill(&mut buf).expect("system RNG unavailable");
-    let mut out = vec![0u8; byte_len * 2 + 4];
-    let n = Base64UrlUnpadded::encode(&buf, &mut out)
-        .map(str::len)
-        .unwrap_or(0);
-    out.truncate(n);
-    String::from_utf8(out).expect("base64url is ascii")
+    Base64UrlUnpadded::encode_string(&buf)
 }
 
 /// SHA-256 of the bytes, hex-lowercase. Used to index authorization codes
@@ -264,19 +260,6 @@ pub fn verify_pkce(method: &str, verifier: &str, expected_challenge: &str) -> Co
         })
     }
 }
-
-/// Verify a sui-id ID token against the active and recently-rotated
-/// signing keys. Returns the validated claims.
-///
-/// `accept_expired` allows passing tokens that have aged out — used by
-/// RP-initiated logout, where the spec encourages accepting expired hints
-/// so the user can still sign out after their token has aged.
-
-/// Verify a sui-id access token against the active and recently-rotated
-/// signing keys. Returns the validated claims.
-///
-/// This wraps the `jwt::verify` + JWKS lookup + expiry check so that the
-/// HTTP layer does not have to know about Ed25519 specifics.
 
 // ── JWT verification helpers (RFC 014) ───────────────────────────────────────
 

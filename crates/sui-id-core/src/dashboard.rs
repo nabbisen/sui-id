@@ -22,11 +22,12 @@ use sui_id_store::repos::audit;
 /// answer. The range and bucket sizes are paired in the type so
 /// that handlers can't accidentally render a 30-day window with
 /// 1-hour buckets and produce 720 SVG line segments.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SparklineRange {
     /// Last 24 hours, 1-hour buckets, 24 points.
     Last24Hours,
     /// Last 7 days, 1-day buckets, 7 points.
+    #[default]
     Last7Days,
     /// Last 30 days, 1-day buckets, 30 points.
     Last30Days,
@@ -79,12 +80,6 @@ impl SparklineRange {
 
     pub fn all() -> &'static [Self] {
         &[Self::Last24Hours, Self::Last7Days, Self::Last30Days]
-    }
-}
-
-impl Default for SparklineRange {
-    fn default() -> Self {
-        Self::Last7Days
     }
 }
 

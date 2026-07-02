@@ -90,6 +90,12 @@ impl RedirectOriginsCache {
     pub async fn len(&self) -> usize {
         self.inner.read().await.len()
     }
+
+    /// Whether the current snapshot has no origins.
+    #[cfg(test)]
+    pub async fn is_empty(&self) -> bool {
+        self.inner.read().await.is_empty()
+    }
 }
 
 // ── JWKS signing-key cache ────────────────────────────────────────────────────
@@ -105,7 +111,7 @@ pub struct CachedSigningKey {
 /// Cached list of currently-published signing keys.
 ///
 /// Re-built whenever a key is rotated or retired. The cache covers all
-/// keys whose `is_active` flag is true at the time of the last rebuild.
+/// active and recently retired keys at the time of the last rebuild.
 #[derive(Debug, Default)]
 pub struct JwksCache {
     inner: RwLock<Vec<CachedSigningKey>>,
@@ -118,7 +124,7 @@ impl JwksCache {
 
     /// Re-build from the current signing-key list.
     pub async fn rebuild(&self, db: &Database) -> Result<(), sui_id_store::StoreError> {
-        let keys = sui_id_store::repos::signing_keys::list_active(db).await?;
+        let keys = sui_id_store::repos::signing_keys::list_published(db).await?;
         let cached: Vec<CachedSigningKey> = keys
             .into_iter()
             .map(|k| CachedSigningKey {

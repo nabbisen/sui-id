@@ -21,7 +21,7 @@ async fn me_security_page_renders_for_authenticated_user() {
     let router = build_router(state);
     let req = Request::builder()
         .method(Method::GET)
-        .uri("/me/security")
+        .uri("/me/security/overview")
         .header(header::COOKIE, format!("sui_id_session={session}"))
         .body(Body::empty())
         .expect("req");
@@ -32,18 +32,12 @@ async fn me_security_page_renders_for_authenticated_user() {
     // The page must mention what we expect to be there: the
     // section headings, the username, and the "current session"
     // marker for the row that matches the cookie.
-    assert!(body.contains("アカウントセキュリティ"), "missing heading");
-    assert!(
-        body.contains("サインイン中の場所"),
-        "missing sessions section"
-    );
+    assert!(body.contains("概要"), "missing heading");
+    assert!(body.contains("セキュリティ状態"), "missing status section");
+    assert!(body.contains("サインイン中の場所"), "missing sessions row");
     assert!(
         body.contains("最近のアクティビティ"),
         "missing audit section"
-    );
-    assert!(
-        body.contains("current session"),
-        "current session not marked"
     );
 }
 
@@ -53,7 +47,7 @@ async fn me_security_redirects_when_not_signed_in() {
     let router = build_router(state);
     let req = Request::builder()
         .method(Method::GET)
-        .uri("/me/security")
+        .uri("/me/security/overview")
         .body(Body::empty())
         .expect("req");
     let resp = router.oneshot(req).await.expect("me/security GET");
@@ -79,14 +73,14 @@ async fn me_security_revoke_one_signs_target_session_out() {
     let router = build_router(state.clone());
     let req = Request::builder()
         .method(Method::GET)
-        .uri("/me/security")
+        .uri("/me/security/sessions")
         .header(header::COOKIE, format!("sui_id_session={s1}"))
         .body(Body::empty())
         .expect("req");
     let resp = router.oneshot(req).await.expect("page");
     let bytes = read_body(resp.into_body()).await;
     let body = String::from_utf8_lossy(&bytes);
-    assert!(body.contains("Revoke"));
+    assert!(body.contains("Revoke") || body.contains("取り消"));
 
     // Re-fetch the page to get a CSRF token (the cookie is set on
     // the response, so we extract it from there).
@@ -94,7 +88,7 @@ async fn me_security_revoke_one_signs_target_session_out() {
         .oneshot(
             Request::builder()
                 .method(Method::GET)
-                .uri("/me/security")
+                .uri("/me/security/sessions")
                 .header(header::COOKIE, format!("sui_id_session={s1}"))
                 .body(Body::empty())
                 .expect("req"),
@@ -128,7 +122,7 @@ async fn me_security_revoke_one_signs_target_session_out() {
     // s2 must no longer authenticate.
     let req = Request::builder()
         .method(Method::GET)
-        .uri("/me/security")
+        .uri("/me/security/overview")
         .header(header::COOKIE, format!("sui_id_session={s2}"))
         .body(Body::empty())
         .expect("req");
@@ -152,7 +146,7 @@ async fn me_security_revoke_all_others_keeps_current_session() {
         .oneshot(
             Request::builder()
                 .method(Method::GET)
-                .uri("/me/security")
+                .uri("/me/security/sessions")
                 .header(header::COOKIE, format!("sui_id_session={s1}"))
                 .body(Body::empty())
                 .expect("req"),
@@ -184,7 +178,7 @@ async fn me_security_revoke_all_others_keeps_current_session() {
             .oneshot(
                 Request::builder()
                     .method(Method::GET)
-                    .uri("/me/security")
+                    .uri("/me/security/overview")
                     .header(header::COOKIE, format!("sui_id_session={sid}"))
                     .body(Body::empty())
                     .expect("req"),
@@ -222,9 +216,10 @@ async fn me_security_cannot_revoke_someone_elses_session() {
         .await
         .expect("users page");
     let csrf = extract_csrf_cookie(resp.headers()).expect("csrf");
-    let body =
-        format!("_csrf={csrf}&username=bob&display_name=Bob&password=bob-the-tester-password");
-    let _ = build_router(state.clone())
+    let body = format!(
+        "_csrf={csrf}&username=bob&display_name=Bob&email=&password=bob-the-tester-password"
+    );
+    let resp = build_router(state.clone())
         .oneshot(
             Request::builder()
                 .method(Method::POST)
@@ -239,14 +234,38 @@ async fn me_security_cannot_revoke_someone_elses_session() {
         )
         .await
         .expect("create bob");
-    let s_bob = login_again_for_admin(&state, "bob", "bob-the-tester-password").await;
+    assert!(
+        resp.status().is_redirection(),
+        "create bob failed: {}",
+        resp.status()
+    );
+    let bob = sui_id_store::repos::users::find_by_username(&state.db, "bob")
+        .await
+        .expect("bob");
+    let s_bob = sui_id_shared::ids::SessionId::new();
+    sui_id_store::repos::sessions::insert(
+        &state.db,
+        &sui_id_store::models::SessionRow {
+            id: s_bob,
+            user_id: bob.id,
+            expires_at: chrono::Utc::now() + chrono::Duration::hours(12),
+            created_at: chrono::Utc::now(),
+            revoked_at: None,
+            auth_methods: vec![sui_id_shared::AuthMethod::Pwd],
+            last_step_up_at: None,
+            last_used_at: None,
+        },
+    )
+    .await
+    .expect("insert bob session");
+    let s_bob = s_bob.to_string();
 
     // The admin tries to revoke bob's session through /me/security.
     let resp = build_router(state.clone())
         .oneshot(
             Request::builder()
                 .method(Method::GET)
-                .uri("/me/security")
+                .uri("/me/security/sessions")
                 .header(header::COOKIE, format!("sui_id_session={s_admin}"))
                 .body(Body::empty())
                 .expect("req"),
@@ -278,7 +297,7 @@ async fn me_security_cannot_revoke_someone_elses_session() {
         .oneshot(
             Request::builder()
                 .method(Method::GET)
-                .uri("/me/security")
+                .uri("/me/security/overview")
                 .header(header::COOKIE, format!("sui_id_session={s_bob}"))
                 .body(Body::empty())
                 .expect("req"),

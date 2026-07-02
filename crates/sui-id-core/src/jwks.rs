@@ -24,12 +24,7 @@ pub struct Jwk {
 }
 
 fn b64u(b: &[u8]) -> String {
-    let mut out = vec![0u8; b.len() * 2 + 4];
-    let n = Base64UrlUnpadded::encode(b, &mut out)
-        .map(str::len)
-        .unwrap_or(0);
-    out.truncate(n);
-    String::from_utf8(out).expect("base64url is ascii")
+    Base64UrlUnpadded::encode_string(b)
 }
 
 fn to_jwk(row: &SigningKeyRow) -> Jwk {

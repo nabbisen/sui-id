@@ -176,7 +176,7 @@ async fn signing_key_rotation_publishes_both_keys_in_jwks() {
             header::COOKIE,
             format!("sui_id_session={session}; sui_id_csrf={csrf}"),
         )
-        .body(Body::from(format!("_csrf={csrf}")))
+        .body(Body::from(format!("_csrf={csrf}&_confirmed=1")))
         .expect("req");
     let resp = router.oneshot(req).await.expect("rotate");
     assert!(
@@ -281,7 +281,7 @@ async fn rotation_does_not_break_existing_authorization_flow() {
             header::COOKIE,
             format!("sui_id_session={session}; sui_id_csrf={csrf}"),
         )
-        .body(Body::from(format!("_csrf={csrf}")))
+        .body(Body::from(format!("_csrf={csrf}&_confirmed=1")))
         .expect("req");
     let resp = router.oneshot(req).await.expect("rotate");
     assert!(resp.status().is_redirection());
@@ -322,7 +322,7 @@ async fn cannot_delete_active_signing_key() {
             header::COOKIE,
             format!("sui_id_session={session}; sui_id_csrf={csrf}"),
         )
-        .body(Body::from(format!("_csrf={csrf}")))
+        .body(Body::from(format!("_csrf={csrf}&_confirmed=1")))
         .expect("req");
     let resp = router.oneshot(req).await.expect("delete attempt");
     assert_eq!(resp.status(), StatusCode::CONFLICT);
@@ -355,7 +355,7 @@ async fn delete_retired_signing_key_drops_it_from_jwks() {
             header::COOKIE,
             format!("sui_id_session={session}; sui_id_csrf={csrf}"),
         )
-        .body(Body::from(format!("_csrf={csrf}")))
+        .body(Body::from(format!("_csrf={csrf}&_confirmed=1")))
         .expect("req");
     let resp = router.oneshot(req).await.expect("rotate");
     assert!(resp.status().is_redirection());
@@ -370,7 +370,7 @@ async fn delete_retired_signing_key_drops_it_from_jwks() {
             header::COOKIE,
             format!("sui_id_session={session}; sui_id_csrf={csrf}"),
         )
-        .body(Body::from(format!("_csrf={csrf}")))
+        .body(Body::from(format!("_csrf={csrf}&_confirmed=1")))
         .expect("req");
     let resp = router.oneshot(req).await.expect("delete");
     assert!(resp.status().is_redirection() || resp.status().is_success());

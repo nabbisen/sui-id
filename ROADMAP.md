@@ -6,7 +6,7 @@ Completed work is tracked in [CHANGELOG.md](CHANGELOG.md) and the
 
 ---
 
-## Active proposals (proposed RFCs)
+## Current status
 
 **Security-assurance arc — RFCs 078–086 (v0.63.2).** Created by
 the architect audit
@@ -18,11 +18,11 @@ sequencing — each step independently shippable:
 | ✅ 1 | [078](rfcs/done/078-security-type-modeling-baseline.md) | Type modeling baseline (newtypes, secret redaction) | v0.64.0 |
 | ✅ 2 | [080](rfcs/done/080-refresh-rotation-atomicity.md) | Refresh rotation atomicity + reuse detection | v0.66.0 |
 | ✅ 3 | [079](rfcs/done/079-authorization-code-lifecycle-assurance.md) | Auth-code single-use by statement | v0.66.0 |
-| 4 | [081](rfcs/proposed/081-actor-scope-boundary.md) | Actor scope boundary | v0.66.0 |
-| 5 | [082](rfcs/proposed/082-authorization-decision-core.md) | Pure authorization core | v0.66.0 |
-| 6 | [083](rfcs/proposed/083-security-state-machine-testing.md) | State-machine proptest harness | v0.67.0 |
+| ✅ 4 | [081](rfcs/done/081-actor-scope-boundary.md) | Actor scope boundary | v0.67.0 |
+| ✅ 5 | [082](rfcs/done/082-authorization-decision-core.md) | Pure authorization core | v0.67.0 |
+| ✅ 6 | [083](rfcs/done/083-security-state-machine-testing.md) | State-machine proptest harness | v0.68.0 |
 | ✅ 7 | [085](rfcs/done/085-audit-event-completeness.md) | Audit completeness + atomicity | v0.68.0 |
-| 8 | [084](rfcs/proposed/084-fuzzing-untrusted-input-boundaries.md) | Fuzzing harness | v0.68.0 |
+| ✅ 8 | [084](rfcs/done/084-fuzzing-untrusted-input-boundaries.md) | Fuzzing harness | v0.69.0 |
 | ✅ 9 | [086](rfcs/done/086-formal-model-checking-pilot.md) | Kani / TLA+ / Flux pilots (time-boxed) | evaluation only |
 
 **Auth-core assurance arc (RFCs 078–086): COMPLETE as of v0.69.0.**
@@ -35,23 +35,14 @@ v0.67.0, 083 / 085 → v0.68.0, 084 → v0.69.0); 086 stays evaluation-only.
 Targets remain indicative, not commitments.
 
 **UI-security contract — handoff units 1–6. ✅ COMPLETE as of v0.74.0.** The approved v2.3 UI/UX
-contract defines six units. Unit 1 (design tokens) is done (v0.65.0).
-Units 2–6 are `[NEW CONTRACT]` items and will each be filed as an RFC
-**behind the existing auth-core set** — RFC 087 onward, sequenced after
-079–086 — because they build on those primitives: the actor-scope
-boundary (081) underpins the auditor authorization matrix; the
-authorization-decision core (082) underpins 403-before-step-up and
-final-POST revalidation; audit completeness (085) underpins pending-change
-audit events. RFC numbers are assigned at file creation, not pre-reserved.
-Before drafting 087+, the v2.3 contract is reconciled against the
-as-built 081 / 082 shapes.
+contract defines six units. Unit 1 shipped in v0.65.0; Units 2–6 shipped
+as RFCs 088–092 through v0.74.0. They build on the completed auth-core
+primitives: the actor-scope boundary (081), authorization-decision core
+(082), and audit completeness work (085).
 
-_Known deferred prerequisite (→ unit 6)._ The `ThemeToggle` contract
-(blocking theme-init in `<head>`, `no-js` / `js` root-class swap,
-`<noscript>` fallback, `localStorage` try/catch) is held whole for unit 6
-rather than split across releases. The current `defer`-loaded init can
-flash an unthemed frame on first paint — a visual-only issue with no
-security impact, lowest in the priority order.
+The `ThemeToggle` contract landed in RFC 092 (v0.74.0): blocking
+`theme-init.js`, `no-js` / `js` root-class swap, and a `<noscript>`
+fallback.
 
 **Mockup Integration epic — sixteen RFCs, Phase 0 → Phase 8.**
 Introduced in v0.49.0. The full epic table and reading order live
@@ -61,22 +52,21 @@ Integration epic"); see also
 
 | RFC | Title | Priority | Notes |
 |---|---|---|---|
-| [RFC 004](rfcs/proposed/004-federation.md) | OIDC/SAML federation (upstream IdP) | Low | Identity provider chaining |
-| [RFC 005](rfcs/proposed/005-pluggable-user-backends.md) | Pluggable user backends | Low | LDAP/AD directory integration |
-| [RFC 006](rfcs/proposed/006-metrics.md) | Metrics and observability | Low | Prometheus / OpenTelemetry |
-| [RFC 008](rfcs/proposed/008-third-party-posture.md) | Third-party posture / consent screen | Low-Medium | Explicit consent for external RPs |
+| [RFC 004](rfcs/done/004-federation.md) | OIDC federation (upstream IdP) | Shipped | Upstream OIDC relying-party federation |
+| [RFC 005](rfcs/done/005-pluggable-user-backends.md) | Pluggable user backends | Shipped | LDAP directory integration |
+| [RFC 006](rfcs/done/006-metrics.md) | Metrics and observability | Shipped | Prometheus endpoint |
+| [RFC 008](rfcs/done/008-third-party-posture.md) | Third-party posture / consent screen | Shipped | Dynamic registration and explicit consent for external RPs |
 | [RFC 009](rfcs/proposed/009-sql-backends.md) | Alternative SQL backends | Low | PostgreSQL / MySQL support |
 | [RFC 025](rfcs/proposed/025-multi-tenant-expansion.md) | Multi-tenant expansion | Low | Per-tenant namespaces (post-1.0) |
 
 ---
 
-## Near-term (next 5–6 releases)
+## Historical UI/UX hardening plan
 
-**The v0.42 → v1.0-rc UI/UX hardening plan** is the main near-term
-direction. Six phases (A–F), each shipping in one release. The plan
-addresses correctness gaps surfaced during a v0.41.0 implementation
+The v0.42 → v0.48 UI/UX hardening plan is complete. Six phases (A–F)
+addressed correctness gaps surfaced during a v0.41.0 implementation
 review: the rendered UI was not matching the design contract the v0.40
-HANDOFF claimed had been met.
+handoff claimed had been met.
 
 | Phase | Version  | Theme                                              | RFCs (planned)       |
 |-------|----------|----------------------------------------------------|----------------------|
@@ -88,11 +78,9 @@ HANDOFF claimed had been met.
 | **F** | v0.47.0  | Code structure (split `pages.rs` and admin.rs)     | 065, 066, 067        |
 | —     | v0.48.0  | Buffer + RFC index / docs reconciliation           | 068, 069             |
 
-v1.0-rc follows once Phases A–F are clean.
-
-The plan is intentionally correctness-first: visible polish (Phase E)
-lands fifth, only after the underlying i18n, navigation, and
-dangerous-operation contracts are honest. See
+The plan was intentionally correctness-first: visible polish (Phase E)
+landed fifth, only after the underlying i18n, navigation, and
+dangerous-operation contracts were honest. See
 [`docs/src/contributing/`](docs/src/contributing/) and the individual
 proposed RFCs once they enter the repository at each phase start.
 

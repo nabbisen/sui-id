@@ -98,10 +98,13 @@ pub struct HttpHibpClient {
 impl HttpHibpClient {
     pub fn new() -> Self {
         let timeout = Duration::from_secs(5);
-        let client = reqwest::Client::builder()
-            .timeout(timeout)
-            .build()
-            .expect("failed to build reqwest client for HIBP");
+        let client = match reqwest::Client::builder().timeout(timeout).build() {
+            Ok(client) => client,
+            Err(error) => {
+                tracing::warn!(%error, "failed to build timeout-aware HIBP HTTP client");
+                reqwest::Client::new()
+            }
+        };
         Self {
             client,
             endpoint: "https://api.pwnedpasswords.com/range".to_owned(),
@@ -118,10 +121,13 @@ impl HttpHibpClient {
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
         // Rebuild client with new timeout
-        self.client = reqwest::Client::builder()
-            .timeout(timeout)
-            .build()
-            .expect("failed to build reqwest client for HIBP");
+        self.client = match reqwest::Client::builder().timeout(timeout).build() {
+            Ok(client) => client,
+            Err(error) => {
+                tracing::warn!(%error, "failed to build timeout-aware HIBP HTTP client");
+                reqwest::Client::new()
+            }
+        };
         self
     }
 }
@@ -310,28 +316,30 @@ pub mod test_support {
         }
         /// Register `password` as breached with the given count.
         pub fn set_breached(&self, password: impl Into<String>, count: u64) {
-            self.plan
-                .lock()
-                .expect("hibp plan mutex")
-                .insert(password.into(), BreachCount::Count(count));
+            if let Ok(mut plan) = self.plan.lock() {
+                plan.insert(password.into(), BreachCount::Count(count));
+            }
         }
         /// Register `password` as triggering an Unavailable
         /// response. Useful for testing the fail-open path.
         pub fn set_unavailable(&self, password: impl Into<String>) {
-            self.plan
-                .lock()
-                .expect("hibp plan mutex")
-                .insert(password.into(), BreachCount::Unavailable);
+            if let Ok(mut plan) = self.plan.lock() {
+                plan.insert(password.into(), BreachCount::Unavailable);
+            }
         }
     }
 
     #[async_trait::async_trait]
     impl HibpClient for InMemoryHibpClient {
         async fn check(&self, password: &str) -> HibpCheckOutcome {
-            match self.plan.lock().expect("hibp plan mutex").get(password) {
-                Some(BreachCount::Count(c)) => HibpCheckOutcome::Breached { count: *c },
-                Some(BreachCount::Unavailable) => HibpCheckOutcome::Unavailable,
-                None => HibpCheckOutcome::NotBreached,
+            if let Ok(plan) = self.plan.lock() {
+                match plan.get(password) {
+                    Some(BreachCount::Count(c)) => HibpCheckOutcome::Breached { count: *c },
+                    Some(BreachCount::Unavailable) => HibpCheckOutcome::Unavailable,
+                    None => HibpCheckOutcome::NotBreached,
+                }
+            } else {
+                HibpCheckOutcome::Unavailable
             }
         }
     }

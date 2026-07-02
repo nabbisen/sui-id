@@ -72,15 +72,15 @@ pub async fn start_enrollment(
     user_id: UserId,
     username: &str,
 ) -> CoreResult<EnrollmentTicket> {
-    if let Some(existing) = user_totp::get(db, user_id).await? {
-        if existing.enabled {
-            return Err(CoreError::Conflict(
-                "MFA is already enabled; disable it before re-enrolling".into(),
-            ));
-        }
+    if let Some(existing) = user_totp::get(db, user_id).await?
+        && existing.enabled
+    {
+        return Err(CoreError::Conflict(
+            "MFA is already enabled; disable it before re-enrolling".into(),
+        ));
     }
     let mut secret = vec![0u8; TOTP_SECRET_LEN];
-    getrandom::fill(&mut secret).expect("system RNG unavailable");
+    getrandom::fill(&mut secret).map_err(|_| CoreError::Internal)?;
     user_totp::upsert_pending(db, user_id, &secret).await?;
     let uri = totp::otpauth_uri(issuer, username, &secret).await;
     Ok(EnrollmentTicket {
@@ -114,9 +114,10 @@ pub async fn confirm_enrollment(
     let step =
         step.ok_or_else(|| CoreError::BadRequest("verification code is incorrect".into()))?;
 
-    let plain_codes: Vec<String> = (0..RECOVERY_CODE_COUNT)
-        .map(|_| generate_recovery_code())
-        .collect();
+    let mut plain_codes: Vec<String> = Vec::with_capacity(RECOVERY_CODE_COUNT);
+    for _ in 0..RECOVERY_CODE_COUNT {
+        plain_codes.push(generate_recovery_code()?);
+    }
     let mut hashed: Vec<String> = Vec::with_capacity(plain_codes.len());
     for c in &plain_codes {
         hashed.push(hash_password(c)?);
@@ -147,9 +148,10 @@ pub async fn regenerate_recovery_codes(db: &Database, user_id: UserId) -> CoreRe
     if !row.enabled {
         return Err(CoreError::BadRequest("MFA is not enabled".into()));
     }
-    let plain: Vec<String> = (0..RECOVERY_CODE_COUNT)
-        .map(|_| generate_recovery_code())
-        .collect();
+    let mut plain: Vec<String> = Vec::with_capacity(RECOVERY_CODE_COUNT);
+    for _ in 0..RECOVERY_CODE_COUNT {
+        plain.push(generate_recovery_code()?);
+    }
     let mut hashed: Vec<String> = Vec::with_capacity(plain.len());
     for c in &plain {
         hashed.push(hash_password(c)?);
@@ -360,15 +362,11 @@ pub(crate) async fn consume_recovery_code(
 
 /// Generate a single recovery code. Format: `xxxxx-xxxxx-xxxxx` where
 /// each chunk is 5 base64url chars. Easy to type, hard to predict.
-fn generate_recovery_code() -> String {
+fn generate_recovery_code() -> CoreResult<String> {
     let _ = random_token; // signal we considered the existing helper.
     let mut bytes = [0u8; RECOVERY_CODE_BYTES];
-    getrandom::fill(&mut bytes).expect("system RNG unavailable");
-    let mut buf = [0u8; 32];
-    let n = Base64UrlUnpadded::encode(&bytes, &mut buf)
-        .map(str::len)
-        .unwrap_or(0);
-    let s = std::str::from_utf8(&buf[..n]).unwrap_or("");
+    getrandom::fill(&mut bytes).map_err(|_| CoreError::Internal)?;
+    let s = Base64UrlUnpadded::encode_string(&bytes);
     // 12 raw bytes → 16 base64url chars. Group as 5-5-6 separated by '-'.
     let s: String = s.chars().take(15).collect();
     let mut out = String::with_capacity(17);
@@ -378,7 +376,7 @@ fn generate_recovery_code() -> String {
         }
         out.push(c);
     }
-    out
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -387,7 +385,7 @@ mod tests {
 
     #[tokio::test]
     async fn recovery_code_format() {
-        let c = generate_recovery_code();
+        let c = generate_recovery_code().expect("recovery code");
         assert_eq!(c.len(), 17);
         assert_eq!(c.as_bytes()[5], b'-');
         assert_eq!(c.as_bytes()[11], b'-');
@@ -427,6 +425,8 @@ mod integration_tests {
                 updated_at: chrono::Utc::now(),
                 failed_login_count: 0,
                 locked_until: None,
+                source: sui_id_store::models::UserSource::Local,
+                external_stable_id: None,
                 email: None,
                 preferred_lang: None,
                 email_normalized: None,

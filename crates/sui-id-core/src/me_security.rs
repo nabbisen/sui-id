@@ -59,6 +59,7 @@ pub struct PasswordChangeReport {
 ///   password policy (length, etc.).
 /// - storage / hashing failures bubble up as [`CoreError::Internal`]
 ///   or [`CoreError::Password`].
+#[allow(clippy::too_many_arguments)]
 pub async fn change_password_self(
     db: &Database,
     clock: &SharedClock,
@@ -194,6 +195,8 @@ mod tests {
                 updated_at: now,
                 failed_login_count: 0,
                 locked_until: None,
+                source: sui_id_store::models::UserSource::Local,
+                external_stable_id: None,
                 email: None,
                 preferred_lang: None,
                 email_normalized: None,
@@ -217,17 +220,27 @@ mod tests {
         id
     }
 
+    fn self_actor_for(user_id: UserId) -> crate::actor::SelfActor {
+        crate::actor::Actor::from_session(
+            user_id,
+            sui_id_store::models::Role::User,
+            sui_id_shared::ids::SessionId::new(),
+        )
+        .into_self()
+    }
+
     #[tokio::test]
     async fn happy_path_replaces_hash_and_returns_zero_sweep_when_box_unchecked() {
         let db = fresh_db();
         let clock = crate::time::system_clock();
         let uid = create_user_with_password(&db, "the-old-tester-password").await;
+        let actor = self_actor_for(uid);
         let r = change_password_self(
             &db,
             &clock,
             None,
             sui_id_store::models::HibpMode::Off,
-            uid,
+            &actor,
             "the-old-tester-password",
             "the-new-tester-password",
             None,
@@ -252,12 +265,13 @@ mod tests {
         let db = fresh_db();
         let clock = crate::time::system_clock();
         let uid = create_user_with_password(&db, "the-old-tester-password").await;
+        let actor = self_actor_for(uid);
         let r = change_password_self(
             &db,
             &clock,
             None,
             sui_id_store::models::HibpMode::Off,
-            uid,
+            &actor,
             "wrong-current-tester-password",
             "the-new-tester-password",
             None,
@@ -279,12 +293,13 @@ mod tests {
         let db = fresh_db();
         let clock = crate::time::system_clock();
         let uid = create_user_with_password(&db, "the-old-tester-password").await;
+        let actor = self_actor_for(uid);
         let r = change_password_self(
             &db,
             &clock,
             None,
             sui_id_store::models::HibpMode::Off,
-            uid,
+            &actor,
             "the-old-tester-password",
             "short",
             None,
@@ -306,6 +321,7 @@ mod tests {
         let db = fresh_db();
         let clock = crate::time::system_clock();
         let uid = create_user_with_password(&db, "the-old-tester-password").await;
+        let actor = self_actor_for(uid);
         // Set must_change=true via direct upsert, simulating a
         // pending admin reset.
         let phc = password::hash_password("the-old-tester-password").expect("hash");
@@ -325,7 +341,7 @@ mod tests {
             &clock,
             None,
             sui_id_store::models::HibpMode::Off,
-            uid,
+            &actor,
             "the-old-tester-password",
             "the-new-tester-password",
             None,
@@ -343,12 +359,13 @@ mod tests {
         let db = fresh_db();
         let clock = crate::time::system_clock();
         let uid = create_user_with_password(&db, "the-old-tester-password").await;
+        let actor = self_actor_for(uid);
         change_password_self(
             &db,
             &clock,
             None,
             sui_id_store::models::HibpMode::Off,
-            uid,
+            &actor,
             "the-old-tester-password",
             "the-new-tester-password",
             None,

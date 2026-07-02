@@ -319,7 +319,7 @@ async fn gc_purges_expired_auth_codes() {
 
     // Insert a code that already expired one minute ago.
     let row = AuthorizationCodeRow {
-        code_hash: "deadbeef".repeat(8),
+        code_hash: sui_id_shared::CodeHash::from_stored("deadbeef".repeat(8)),
         client_id,
         user_id: user.id,
         redirect_uri: "https://rp.test/cb".into(),

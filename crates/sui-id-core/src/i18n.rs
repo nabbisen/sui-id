@@ -52,29 +52,24 @@ pub struct LocaleInputs<'a> {
 /// an earlier tier already matched.
 pub async fn resolve(db: &Database, inputs: &LocaleInputs<'_>) -> CoreResult<Locale> {
     // 1. user preference
-    if let Some(uid) = inputs.user_id {
-        if let Some(row) = users::find_by_id_opt(db, uid).await? {
-            if let Some(tag) = row.preferred_lang.as_deref() {
-                if let Some(loc) = Locale::parse(tag) {
-                    return Ok(loc);
-                }
-                // Tag in DB doesn't match a locale we know — could
-                // be stale after a downgrade. Fall through to the
-                // next tier rather than erroring.
-            }
-        }
+    if let Some(uid) = inputs.user_id
+        && let Some(row) = users::find_by_id_opt(db, uid).await?
+        && let Some(tag) = row.preferred_lang.as_deref()
+        && let Some(loc) = Locale::parse(tag)
+    {
+        return Ok(loc);
     }
     // 2. cookie
-    if let Some(c) = inputs.cookie {
-        if let Some(loc) = Locale::parse(c) {
-            return Ok(loc);
-        }
+    if let Some(c) = inputs.cookie
+        && let Some(loc) = Locale::parse(c)
+    {
+        return Ok(loc);
     }
     // 3. Accept-Language
-    if let Some(h) = inputs.accept_language {
-        if let Some(loc) = negotiate_from_accept_language(h) {
-            return Ok(loc);
-        }
+    if let Some(h) = inputs.accept_language
+        && let Some(loc) = negotiate_from_accept_language(h)
+    {
+        return Ok(loc);
     }
     // 4. server default
     let row = server_settings::get(db).await?;
@@ -124,6 +119,8 @@ mod tests {
                 updated_at: now,
                 failed_login_count: 0,
                 locked_until: None,
+                source: sui_id_store::models::UserSource::Local,
+                external_stable_id: None,
                 email: None,
                 preferred_lang: preferred_lang.map(str::to_owned),
                 email_normalized: None,

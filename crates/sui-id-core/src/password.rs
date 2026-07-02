@@ -19,7 +19,7 @@ pub fn hash_password(password: &str) -> CoreResult<String> {
     // for argon2/password-hash). Replaces SaltString::generate(&mut OsRng) which
     // required rand_core 0.6's CryptoRng trait, incompatible with rand_core 0.10.
     let mut salt_bytes = [0u8; 16];
-    getrandom::fill(&mut salt_bytes).expect("system RNG unavailable");
+    getrandom::fill(&mut salt_bytes).map_err(|_| CoreError::Internal)?;
     let salt = SaltString::encode_b64(&salt_bytes).map_err(|_| CoreError::Password)?;
     let phc = argon2()
         .hash_password(password.as_bytes(), &salt)

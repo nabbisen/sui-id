@@ -94,9 +94,7 @@ async fn mfa_setup_renders_in_en() {
         .await
         .expect("profile GET");
     let csrf = extract_set_cookie(prof_resp.headers(), "sui_id_csrf").expect("csrf cookie");
-    let body_bytes = read_body(prof_resp.into_body()).await;
-    let body = String::from_utf8_lossy(&body_bytes);
-    let csrf_token = extract_csrf_token(&body);
+    let _ = read_body(prof_resp.into_body()).await;
 
     // POST /me/security/mfa/enroll/start.
     let router = build_router(state);
@@ -111,7 +109,7 @@ async fn mfa_setup_renders_in_en() {
                 )
                 .header(header::ACCEPT_LANGUAGE, "en")
                 .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-                .body(Body::from(format!("_csrf={csrf_token}")))
+                .body(Body::from(format!("_csrf={csrf}")))
                 .expect("req"),
         )
         .await
