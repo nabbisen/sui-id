@@ -6,6 +6,97 @@ Completed work is tracked in [CHANGELOG.md](CHANGELOG.md) and the
 
 ---
 
+## Active plan — security and release-assurance remediation
+
+**Planning baseline:** v0.76.12, reviewed 2026-07-16.
+
+The current tree is **not approved for a production release, a
+"security-reviewed" claim, or a v1/rc/beta designation**. Continued
+development is approved only for the remediation programme below. New feature
+expansion, multi-tenancy (RFC 025), and alternative SQL backends (RFC 009)
+remain frozen until every milestone in this programme has passed its exit
+gate.
+
+The dates are planning targets, not release promises. They assume one primary
+implementer working sequentially, an owner/architecture review at each RFC and
+milestone boundary, and reviewer feedback within two working days. A failed
+gate moves the affected milestone; it is never waived to preserve a date.
+
+### Programme outcomes
+
+The programme is complete only when:
+
+1. the declared MSRV, current-stable, default-feature, and all-feature build
+   contracts are explicit and enforced by CI;
+2. Class-A mutations and their audit events share one transaction, and the
+   coverage gate verifies structure rather than string presence;
+3. dynamic client registration validates before use consumption and commits
+   token consumption, client creation, and audit atomically;
+4. upstream OIDC federation verifies discovery, transport, signatures, and
+   required ID-token claims, including a mandatory nonce;
+5. the threat model covers every shipped external trust boundary and current
+   failure/rollback behaviour;
+6. public documentation, RFC state, source layout, and release claims agree;
+7. fuzz, packaging, integration, and soak evidence is current and reviewable.
+
+### Milestone schedule
+
+| Milestone | Target window | Theme | Planned RFCs | Exit gate |
+|---|---|---|---|---|
+| **M0 — Plan and design freeze** | 2026-07-16 → 2026-07-22 | Approve this roadmap, assign permanent RFC numbers, record dependencies and review ownership | RFCs 093–099 (design only) | Owner approves milestone order, scope, and RFC boundaries; no implementation starts from an unapproved RFC |
+| **M1 — Trustworthy build baseline** | 2026-07-23 → 2026-07-31 | Repair LDAP all-feature compilation; define MSRV versus latest-stable policy; make format, clippy, tests, all-features, mdBook, RFC integrity, and audit coverage visible blocking gates | **RFC 093** | CI passes on the declared MSRV and current stable under the approved matrix; LDAP feature smoke test passes; mdBook and RFC integrity gates pass |
+| **M2 — Transactional security records** | 2026-08-03 → 2026-08-14 | Make Class-A mutation + audit atomic; introduce a typed event registry/structural coverage gate; correct event-name drift; narrow audit-chain claims | **RFC 094** | Injected audit failures roll back every Class-A mutation; typed registry and matrix agree; no production Class-A best-effort append remains |
+| **M3 — Atomic dynamic registration** | 2026-08-17 → 2026-08-21 | Validate all metadata before consuming authorization; atomically consume registration use, create the disabled client, and append audit | **RFC 095** | Invalid or failed requests do not consume uses; supported grants/auth methods and all redirect/logout URIs are validated; concurrency and rollback tests pass |
+| **M4 — Federation trust completion** | 2026-08-24 → 2026-09-11 | Verify discovery issuer and HTTPS endpoints; implement JWKS/signature verification; validate `iss`, `aud`, `azp`, `exp`, `iat`, and mandatory nonce; test hostile providers | **RFC 096** | Token substitution, missing/mismatched nonce, bad issuer/audience/time, unsupported algorithm, and bad/unknown key are rejected; live or representative upstream integration passes |
+| **M5 — Threat-model and documentation reconciliation** | 2026-09-14 → 2026-09-25 | Rewrite the security model for federation, LDAP, dynamic registration, metrics, SSRF, secrets, and rollback; establish authoritative docs; repair README/RFC/link/source-layout drift | **RFCs 097–098** | Threat model and security assurance review are current; mdBook builds; RFC folder/status/index/link checks pass; public feature and limitation claims match code |
+| **M6 — Release-assurance closure and soak entry** | 2026-09-28 → 2026-10-09 | Enforce restrictive runtime file permissions; run all fuzz targets; automate and inspect release packaging; exercise live LDAP/upstream integration; assemble final evidence | **RFC 099** | Full approved gate matrix passes from a clean tree; package contents are inspected; live integrations pass; no open blocker remains; independent review approves entry into real-environment soak |
+| **M7 — Real-environment soak** | Minimum 4 weeks after M6 | Operate the hardened build under realistic traffic, backup/restore, key rotation, dependency monitoring, and incident drills | Operational evidence, not a feature RFC | Owner and independent reviewer accept the soak record; only then may a production-release or v1/rc/beta discussion begin |
+
+Logical review checkpoints may produce internal, versioned source archives,
+but no checkpoint before M7 carries a production-ready or security-reviewed
+designation. Version numbers for implementation checkpoints are assigned only
+after the RFC set is approved; the roadmap does not reserve semantic versions
+in advance.
+
+### Planned RFC set and boundaries
+
+| RFC | Working title | Owns | Explicitly does not own | Handoff expectation |
+|---|---|---|---|---|
+| **093** | Build, Toolchain, and Release-Gate Contract | LDAP crypto provider; MSRV/latest-stable matrix; all-feature CI; mdBook/RFC/audit gate wiring | Domain behaviour changes beyond build compatibility | Optional short gate matrix; no large handoff |
+| **094** | Transactional Audit Completeness and Typed Event Registry | Class-A transaction design; event vocabulary; structural coverage; injected-failure tests; audit-chain claim correction | External anchoring service implementation | **Required** multi-file developer handoff and migration checklist |
+| **095** | Dynamic Client Registration Transaction and Validation | Validate-first flow; registration-use/client/audit transaction; metadata parity; race tests | Broad RFC 7591 management API expansion | Recommended focused implementation/QA handoff |
+| **096** | Upstream OIDC Federation Validation | Discovery/JWKS/signature/claim/nonce validation; caching and rotation; hostile-provider tests | New providers, account-link UX expansion, trusting upstream MFA as local MFA | **Required** security invariants, attack cases, and staged developer handoff |
+| **097** | Current Threat Model and Security-Assurance Baseline | All shipped trust boundaries, STRIDE, SSRF, secret boundaries, rollback/failure analysis, residual risks | Implementation changes owned by RFCs 093–096 | Recommended security-review checklist |
+| **098** | Documentation Authority and RFC Integrity | Authoritative doc set; README/roadmap/RFC/path/link reconciliation; automated integrity gate | Rewriting historical RFC decisions | Optional mechanical task checklist |
+| **099** | Operational Hardening and Soak Readiness | Runtime file modes; all fuzz targets; package automation/inspection; live integration evidence; soak entry criteria | Declaring production readiness or a v1 date | **Required** operator/tester handoff and evidence manifest |
+
+### Dependencies and change control
+
+```text
+RFC 093
+  ├──> RFC 094 ──> RFC 095
+  ├──> RFC 096
+  └──> RFC 098
+
+RFC 094 + RFC 095 + RFC 096 ──> RFC 097
+RFC 093 + RFC 097 + RFC 098 ──> RFC 099 ──> M7 soak
+```
+
+- RFC 093 lands first because later evidence is not trustworthy until the
+  build and gate contract is reliable.
+- RFC 095 depends on RFC 094 so dynamic registration uses the new atomic audit
+  mechanism instead of introducing a second transaction pattern.
+- RFC 097 follows implementation RFCs so it documents verified current
+  behaviour, while threat-model deltas are still updated within each security
+  RFC during implementation.
+- Any newly discovered authentication bypass, privilege escalation, token
+  forgery, secret exposure, or irreversible migration risk pauses the schedule
+  and receives an explicit roadmap/RFC decision before work resumes.
+- Milestone completion requires observed command output and review evidence;
+  historical handoff logs do not satisfy a current gate.
+
+---
+
 ## Current status
 
 **Security-assurance arc — RFCs 078–086 (v0.63.2).** Created by
