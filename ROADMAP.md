@@ -25,8 +25,9 @@ A failed gate moves the affected milestone; scope or evidence is never cut to
 preserve a date.
 
 Before any remediation implementation begins, M0 adopts RFC 018's five-folder
-variant: `rfcs/accepted/` is the repository-native implementation-ready state,
-its files carry `Status: Accepted`, and the RFC index and integrity checks
+variant: `rfcs/accepted/` is the repository-native design-approved and
+implementation-eligible state, its files carry `Status: Accepted`, and the RFC
+index and integrity checks
 recognize it. `proposed/` continues to mean under review and not ready for
 implementation. Chat, external boards, and roadmap wording are not approval
 records. The identifiers 093–099 remain provisional until their proposal files
@@ -65,8 +66,8 @@ The programme is complete only when:
 Logical review checkpoints may produce internal, versioned source archives,
 but no checkpoint before M7 carries a production-ready or security-reviewed
 designation. Version numbers for implementation checkpoints are assigned only
-after the RFC set is approved; the roadmap does not reserve semantic versions
-in advance.
+after every RFC governing that checkpoint is Accepted; the roadmap does not
+reserve semantic versions in advance.
 
 Urgent security fixes, remediation-enabling refactors, dependency/security
 maintenance, and repairs required to keep approved gates executable are

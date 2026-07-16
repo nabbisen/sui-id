@@ -981,7 +981,8 @@ To stay valid on crates.io (where relative paths 404):
 ## 20. RFC lifecycle
 
 The codebase has accumulated **60+ implemented RFCs** by v0.48.4.
-The lifecycle policy lives in `rfcs/000-rfc-lifecycle-policy.md`.
+The lifecycle policy lives in
+`rfcs/done/018-rfc-lifecycle-policy.md`.
 
 ### 20.1 When to write one
 
@@ -1000,16 +1001,47 @@ do not.
 ### 20.2 States
 
 - **Proposed** — under review; lives in `rfcs/proposed/`.
+- **Accepted** — design review is complete and repository-visible approval
+  metadata is recorded; lives in `rfcs/accepted/`. This is the only
+  implementation-eligible state, but coding remains prohibited until every
+  declared implementation prerequisite has repository-visible passing
+  evidence.
 - **Implemented** — shipped in a tagged release; moves to
   `rfcs/done/` with a `**Status.** Implemented (vX.Y.Z)` line.
-- **Withdrawn / Superseded** — kept in `rfcs/done/` with status
+- **Withdrawn / Superseded** — kept in `rfcs/archive/` with status
   noted; never deleted.
+
+Every new RFC declares whether security review is Required or Not required. A
+Not-required classification includes a reason and named approver. Acceptance
+records the date, approver, implementation owner, and independent design
+reviewer where required. When security review is Required, shipment also
+records the closure-review date, independent closure approver, and durable
+evidence reference. The implementer cannot be the sole approver of a
+security-sensitive design or its closure evidence.
+
+The closure record uses `**Closure reviewed on.**`,
+`**Closure approved by.**`, and `**Closure evidence.**`. The evidence is a
+resolvable repository-relative durable artifact or review reference; a release
+version alone is insufficient.
+
+A material change to an Accepted RFC's security invariants, public behavior,
+scope, or prerequisites moves it back to Proposed for review in one change:
+Status, folder, active acceptance metadata, index, and inbound links are all
+updated together. The prior decision remains in version-control history or an
+explicit superseded-review note.
+
+Each RFC distinguishes design-acceptance prerequisites, implementation-start
+prerequisites, and closure prerequisites. Dependency edges therefore do not
+silently block design review when they are intended only to sequence coding or
+milestone closure.
 
 ### 20.3 Versioning
 
 Each release that ships an RFC documents it in both `CHANGELOG.md`
 (full prose) and `ROADMAP.md` (one-line row). The RFC file
-references the shipping version.
+references the shipping version. The roadmap does not reserve versions;
+a checkpoint version may be assigned only after every RFC governing that
+checkpoint is Accepted.
 
 ### 20.4 Numbering
 

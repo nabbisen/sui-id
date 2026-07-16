@@ -10,13 +10,11 @@ RFC, and any cross-references between RFCs.
 ## Summary
 
 This RFC defines a lifecycle for RFCs themselves: where they live,
-how they move between states, and what each state means. It is
-written to be portable — any project starting an `rfcs/` (or
-similarly-named) directory can adopt this policy verbatim. The
-recommendations are deliberately conservative: the smallest set of
-folders that gives implementers a clear answer to "what should I
-look at next?" without imposing process overhead that small teams
-will route around.
+how they move between states, what each state means, and which state
+authorizes implementation. sui-id originally used the four-folder
+variant. On 2026-07-16 it adopted the five-folder variant because
+design approval, implementation, and independent security review are
+now meaningfully separate responsibilities.
 
 The policy's central claim is that **completed RFCs are not
 deleted**. They move to a fixed location and stay there as a
@@ -74,29 +72,25 @@ An RFC is in exactly one of the following states at any time:
 |---|---|
 | **Draft** | The author is still writing. Not ready for review by anyone but the author and immediate collaborators. |
 | **Proposed** | Open for review and discussion. Implementer should *not* yet start work — the design may change. |
+| **Accepted** | Design review is complete and approval is recorded. This is the only implementation-eligible state, but coding remains prohibited until every implementation prerequisite has repository-visible passing evidence. |
 | **Implemented** | The work has shipped (in a release, on `main`, or wherever the project's stability marker lives). The RFC is now a historical record. |
 | **Withdrawn** | The author or maintainer decided not to pursue this RFC. The work will not happen. |
 | **Superseded** | A later RFC replaces this one. The replacement RFC's identifier is recorded in this RFC's Status field. |
 
-The states are deliberately few. Some projects add **Accepted**
-between Proposed and Implemented (meaning "design is settled,
-implementer may start, but work has not yet shipped"). For most
-projects this state is formalisation overhead — proposed and
-accepted collapse in practice because the same person both
-proposes and implements. Larger organisations with separated
-roles may want it; the variant is described in
-[§ Folder layout: 5-folder variant](#folder-layout-5-folder-variant)
-below.
+The Accepted state is a security and authorization boundary, not a progress
+label. Chat approval, an external project board, or roadmap wording cannot
+substitute for the file's location and approval record.
 
 ## Folder layout
 
-The recommended structure is **four folders**, three of which
-hold RFCs:
+The project structure is **five folders**, four of which hold RFCs:
 
 ```
 rfcs/
   README.md           ← index; lists all RFCs by state
   proposed/           ← Proposed RFCs (open for review)
+    NNN-slug.md
+  accepted/           ← Accepted RFCs (design-approved; implementation-eligible)
     NNN-slug.md
   done/               ← Implemented RFCs
     NNN-slug.md
@@ -104,7 +98,7 @@ rfcs/
     NNN-slug.md
 ```
 
-A fourth, optional folder holds Drafts:
+An optional folder holds Drafts:
 
 ```
   draft/              ← (optional) Draft RFCs not yet in review
@@ -123,35 +117,28 @@ inside the file (the file's Status field must be kept consistent
 with the folder, but if the two ever disagree, the folder wins).
 
 Movement between folders is the operation that changes an RFC's
-state. To accept an RFC for implementation, you move it from
-`proposed/` to `accepted/` (in the 5-folder variant) or leave
-it in `proposed/` until it ships (in the 4-folder variant). To
-mark it Implemented, you move it to `done/`. To withdraw or
-supersede it, you move it to `archive/`.
+state. To accept an RFC for implementation, record its approval
+metadata and move it from `proposed/` to `accepted/` in the same
+change. To mark it Implemented, move it from `accepted/` to
+`done/`. To withdraw or supersede it, move it to `archive/`.
 
-### Folder layout: 5-folder variant
+### Why sui-id uses the 5-folder variant
 
-For organisations where the design and implementation roles
-are clearly separated, a fifth folder makes the boundary
-explicit:
+The explicit Accepted boundary is required because sui-id now separates
+project ownership, architecture/security approval, implementation, and
+closure-evidence review:
 
 ```
 rfcs/
   proposed/    ← under review
-  accepted/    ← review complete; implementer may start
+  accepted/    ← design approved; implementation eligible after prerequisites
   done/        ← shipped
   archive/     ← withdrawn or superseded
   draft/       ← (optional)
 ```
 
-Use this variant if "the maintainer signed off" is a meaningful
-event distinct from "the implementer finished." Skip it
-otherwise — `accepted/` will sit empty in projects where the
-two events collapse, and an empty folder is a maintenance
-burden with no payoff.
-
-This RFC is written for the 4-folder variant. The 5-folder
-variant works identically with one extra transition.
+`accepted/` may legitimately be empty. Its value is the unambiguous rule that
+no Proposed design authorizes code work.
 
 ## Status field inside each RFC
 
@@ -163,6 +150,10 @@ shape:
 # RFC NNN — Title
 
 **Status.** Proposed
+**Security review.** Required | Not required — reason approved by NAME
+**Design prerequisites.** None
+**Implementation prerequisites.** None
+**Closure prerequisites.** None
 **Tracks.** What this addresses.
 **Touches.** Where the work lands.
 ```
@@ -175,6 +166,57 @@ release tag in which the work shipped:
 ```markdown
 **Status.** Implemented (v1.4.0)
 ```
+
+For Accepted RFCs, the file also carries the repository-visible approval
+record:
+
+```markdown
+**Status.** Accepted
+**Security review.** Required
+**Accepted on.** 2026-07-16
+**Approved by.** Project owner or delegated RFC approver
+**Independent design review.** Reviewer identity and durable review reference
+**Implementation owner.** Named person
+```
+
+Every new RFC classifies security review as `Required` or `Not required`. A
+Not-required classification includes a concrete reason and the name of the
+approver who accepted that classification. RFCs that change authentication,
+authorization, secrets, tokens, sessions, audit guarantees, external trust
+boundaries, security-relevant storage/transactions, or assurance controls are
+Required. All security-remediation RFCs 093–099 are Required unless an
+independent reviewer approves a narrower classification with a recorded
+reason.
+
+When security review is Required, `Independent design review` must name the
+reviewer and durable review reference; `N/A` is prohibited. The implementer may
+contribute to design and evidence, but cannot be the sole approver of the
+security invariants or closure evidence. If one person holds several project
+roles, another named person must perform those independent reviews.
+
+The three prerequisite fields have distinct meanings:
+
+- **Design prerequisites** must be resolved before the RFC can become Accepted.
+- **Implementation prerequisites** may permit design acceptance but must be
+  complete before coding begins.
+- **Closure prerequisites** must be complete before the RFC moves to `done/`.
+
+This distinction is mandatory for new RFCs. A dependency edge must not be
+treated as blocking all three stages unless the RFC says so explicitly.
+
+For a security-sensitive RFC to move from Accepted to Implemented, the RFC
+must add this repository-visible closure record:
+
+```markdown
+**Closure reviewed on.** 2026-08-28
+**Closure approved by.** Named independent reviewer
+**Closure evidence.** ../path/to/durable-evidence-or-review.md
+```
+
+The closure approver cannot be the sole implementer. The evidence reference
+must resolve to a durable, repository-relative artifact or review record and
+must identify the observed results used for closure. A release version alone
+is not closure evidence.
 
 For Superseded RFCs, the field names the replacement:
 
@@ -258,17 +300,17 @@ preview, which gives a second line of defence.
 The transitions between states are:
 
 ```
-                    ┌─────────────────────┐
-                    ▼                     │
-[author writes]──▶ Draft? ──▶ Proposed ──▶ Implemented
-                                │             │
-                                ▼             ▼
-                          Withdrawn      (lives in done/)
-                          Superseded     forever
-                                │
-                                ▼
-                          (lives in archive/)
-                          forever
+[author writes]──▶ Draft? ──▶ Proposed ──▶ Accepted ──▶ Implemented
+                                ▲          │                │
+                                └── material ─┘                ▼
+                                    change                 (lives in done/)
+                                │          │                forever
+                                └────┬─────┘
+                                     ▼
+                               Withdrawn /
+                               Superseded
+                                     ▼
+                            (lives in archive/)
 ```
 
 State transitions are operations performed by the maintainer
@@ -278,13 +320,27 @@ operations:
 - **Open.** New file in `proposed/` (or `draft/` if used).
   Triggered by an author opening a pull request adding the
   file.
-- **Accept and ship.** RFC is implemented; the implementer or
-  maintainer moves the file from `proposed/` to `done/` and
-  updates the Status field with the release tag. Done in the
-  same commit (or commit series) that ships the implementation.
+- **Accept.** Review is complete. Record the acceptance date, approver,
+  security classification, independent design review where required, and
+  implementation owner; update Status to Accepted; move from `proposed/` to
+  `accepted/`; update the index and inbound links in the same change. Accepted
+  is necessary but not sufficient for coding: implementation may start only
+  after every implementation prerequisite has repository-visible passing
+  evidence.
+- **Return for review.** If an Accepted RFC changes materially in security
+  invariants, public behavior, scope, or prerequisites, update Status to
+  Proposed, remove active-looking acceptance metadata, move it back to
+  `proposed/`, update the index, and repair inbound links in the same change
+  before further implementation. Preserve the prior decision in version-control
+  history or an explicit superseded-review note.
+- **Ship.** RFC is implemented and every closure prerequisite has passed;
+  for security-sensitive work, record the closure-review date, independent
+  closure approver, and durable closure evidence; then move it from
+  `accepted/` to `done/` and update Status with the release tag in the same
+  change that records the shipped implementation.
 - **Withdraw.** The author or maintainer decides not to pursue
-  the RFC. Move to `archive/` with Status updated and a brief
-  reason added in the file.
+  a Proposed or Accepted RFC. Move it to `archive/` with Status updated and a
+  brief reason added in the file.
 - **Supersede.** A new RFC takes over the design space of an
   older one. Move the older RFC to `archive/`, update its
   Status to `Superseded by RFC NNN`, and add a reciprocal note
@@ -303,10 +359,10 @@ the partial work captures the RFC's main design decision; any
 deferred work either gets a follow-up RFC or is logged in the
 RFC's Status section as an explicit "deferred" note.
 
-This is a judgement call. The principle: **don't keep an RFC
-in `proposed/` indefinitely just because one open question
-remains**. Move it to `done/` when the design has shipped, and
-record what didn't make it.
+This is a judgement call. The principle: do not mark a partially implemented
+RFC done if an unfulfilled closure prerequisite or security invariant remains.
+Move it to `done/` only when the core design has shipped and record any
+explicitly non-blocking deferred work or follow-up RFC.
 
 ## README integrity
 
@@ -328,6 +384,11 @@ A typical structure:
 |----|-------|----------|
 | 042 | [Feature flags](./proposed/042-feature-flags.md) | High |
 | 047 | [Caching layer](./proposed/047-caching.md) | Medium |
+
+## Accepted
+| ID | Title | Implementation owner |
+|----|-------|----------------------|
+| 050 | [Session hardening](./accepted/050-session-hardening.md) | Alice |
 
 ## Implemented
 | ID | Title | Shipped in |
@@ -360,6 +421,13 @@ invariants are worth checking:
   path; every RFC under `rfcs/` is listed in `README.md`.
 - Filenames match the `NNN-slug.md` pattern and the slug
   matches the title (loosely).
+- Every Accepted RFC records its acceptance date, approver,
+  implementation owner, security-review classification, and required
+  independent design review.
+- Accepted RFCs use distinct design, implementation, and closure
+  prerequisite fields.
+- Every Implemented security-sensitive RFC records its closure-review date,
+  independent closure approver, and resolvable durable evidence reference.
 
 A simple script in `scripts/check-rfcs.sh` or
 `xtask check-rfcs` can run these checks. None of them need
@@ -375,14 +443,16 @@ build elaborate tooling before the project's scale demands it.
 If you're starting an `rfcs/` directory from scratch, the
 minimum viable adoption of this policy is:
 
-1. Create `rfcs/proposed/`, `rfcs/done/`, `rfcs/archive/`.
+1. Create `rfcs/proposed/`, `rfcs/accepted/`, `rfcs/done/`,
+   `rfcs/archive/`.
 2. Add `rfcs/README.md` with a state-grouped index.
 3. Adopt the `NNN-slug.md` naming and start at `001`.
 4. Write the first RFC. Put it in `proposed/`.
-5. When the work ships, move it to `done/` with a Status
-   field carrying the release tag.
+5. When review approves it, record approval and move it to `accepted/`.
+6. When the work ships, move it to `done/` with a Status field carrying the
+   release tag.
 
-That's the entire policy in five steps. The other sections of
+That's the entire policy in six steps. The other sections of
 this RFC exist to handle edge cases as the directory grows;
 ignore them until you hit the relevant case.
 
@@ -393,6 +463,8 @@ If you're adopting this policy for an *existing* RFC directory:
 3. Add or update the Status field in each file.
 4. Rewrite cross-references with the new paths.
 5. Rebuild `rfcs/README.md` to reflect the new structure.
+6. For Accepted RFCs, add the approval and prerequisite metadata required by
+   this policy.
 
 The migration is mechanical but tedious. Schedule it as a
 single dedicated change rather than spreading it across
@@ -431,19 +503,13 @@ every one of those references silently.
 
 The numbering is permanent. Withdrawn numbers stay withdrawn.
 
-### Formalising `accepted/` in small projects
+### Treating `accepted/` as an informal label
 
-The 5-folder variant is appealing because it makes the
-"maintainer approved" event explicit. In small projects this
-event collapses with "implementation complete" — the same
-person makes both decisions, often in the same commit. The
-`accepted/` folder ends up perpetually empty (because RFCs
-go straight from `proposed/` to `done/`) or perpetually full
-(because nothing ever ships and they all sit there).
-
-Adopt the 5-folder variant only if the design and
-implementation roles are genuinely separate. Otherwise the
-4-folder variant is right-sized.
+Moving a file to `accepted/` without approval metadata, named ownership, and
+prerequisite review recreates the parallel-status ambiguity this policy is
+meant to remove. The fix is to perform the folder move and metadata/index/link
+updates atomically. If a material design change follows, return the RFC to
+`proposed/`; do not leave an obsolete approval attached to a changed design.
 
 ### Letting cross-references rot
 
@@ -480,17 +546,14 @@ priorities shifted" is enough. Silence is worse.
 
 ## Self-application
 
-This RFC describes its own placement: it is itself an RFC
-governed by the policy it defines, and it lives in
-`rfcs/done/` because it is implemented (the policy is now in
-effect for this project's RFC directory).
+This RFC describes its own placement: it is itself an RFC governed by the
+policy it defines, and it lives in `rfcs/done/` because the policy is in effect
+for this project.
 
-The transition that landed this RFC is the simultaneous
-adoption of the policy and the migration of every existing
-RFC into the new folder structure. Both happened in the same
-release. This is the recommended adoption pattern for
-existing directories: combine the policy's introduction with
-the migration into a single, atomic change.
+The original v0.29.5 transition introduced the four-folder policy and migrated
+the existing RFC set in one release. The 2026-07-16 amendment adds an empty
+`accepted/` state and the approval/closure rules above; it does not reclassify
+or move any existing Proposed, Implemented, Withdrawn, or Superseded RFC.
 
 ## Open questions
 

@@ -83,7 +83,7 @@ crates/
 ├── sui-id-web      # Leptos SSR pages and components
 └── sui-id          # Binary: Axum router, config, startup, asset serving
 docs/               # mdbook source
-rfcs/               # RFC documents (proposed/, done/)
+rfcs/               # RFC documents (proposed/, accepted/, done/, archive/)
 static/             # Embedded static assets (favicon, JS for WebAuthn)
 ```
 
@@ -101,8 +101,18 @@ static/             # Embedded static assets (favicon, JS for WebAuthn)
 Significant changes follow the RFC workflow:
 
 1. Create `rfcs/proposed/<number>-<slug>.md` describing the problem, approach,
-   and test plan.
-2. Implement.
-3. Move the file to `rfcs/done/` when the code lands.
+   test plan, staged prerequisites, and `Security review: Required` or a
+   named-approved reason why it is not required.
+2. Review the design. Record approval metadata and move it to
+   `rfcs/accepted/` only when it is design-approved. Accepted is necessary but
+   not sufficient to begin coding.
+3. Implement only from `accepted/`, after every implementation prerequisite
+   has repository-visible passing evidence.
+4. Move the file to `rfcs/done/` with its shipped version when the code lands;
+   security-sensitive RFCs also record independent closure approval and its
+   durable evidence reference in `Closure reviewed on`, `Closure approved by`,
+   and `Closure evidence` metadata.
 
 RFC numbers are sequential. Browse `rfcs/done/` for examples of the format.
+The full lifecycle, approval-independence rule, and dependency semantics are
+defined by [RFC 018](../../../rfcs/done/018-rfc-lifecycle-policy.md).

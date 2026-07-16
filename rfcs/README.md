@@ -1,13 +1,15 @@
 # sui-id RFCs
 
 Design notes for sui-id features and policies. Each RFC scopes
-one piece of work in enough detail that an implementer can start
-without a second design pass — but no more than that.
+one piece of work in enough detail that it can be reviewed without a
+second design pass — but no more than that.
 
 These are not blanket commitments. The [ROADMAP](../ROADMAP.md)
-sets which of these will actually ship and in what order. An RFC
-landing here means the design is settled enough to write code
-from; not landing here means the design is still soft.
+sets which of these will actually ship and in what order. An RFC in
+`proposed/` is still under review and must not be implemented. Only an
+RFC in `accepted/`, with repository-visible approval metadata, is eligible
+for implementation, but coding remains prohibited until every declared
+implementation prerequisite has repository-visible passing evidence.
 
 ## How this directory works
 
@@ -17,6 +19,10 @@ Briefly:
 
 - **`proposed/`** — open for review and discussion. Implementer
   should not yet start work; the design may change.
+- **`accepted/`** — design review is complete and approval is recorded
+  in the RFC. This is the only implementation-eligible state, but it is not
+  sufficient by itself: coding remains prohibited until its declared
+  implementation prerequisites have repository-visible passing evidence.
 - **`done/`** — implemented and shipped. The RFC is now a
   historical record of the design decisions.
 - **`archive/`** — withdrawn or superseded. Preserved as
@@ -54,6 +60,11 @@ slot is `093`). One **parallel namespace** also exists:
   RFC 018.
 
 ## Index
+
+### Accepted — design-approved and implementation-eligible
+
+None. An RFC appears here only after its approval metadata is recorded and the
+file moves from `proposed/` to `accepted/`.
 
 ### Implemented — Mockup Integration epic (Phase 0 → Phase 8)
 
@@ -268,9 +279,24 @@ The standard shape is light:
 ```markdown
 # RFC NNN — Title
 
-**Status.** Proposed | Implemented (vX.Y.Z) | Withdrawn | Superseded by RFC NNN
+**Status.** Proposed | Accepted | Implemented (vX.Y.Z) | Withdrawn | Superseded by RFC NNN
+**Security review.** Required | Not required — reason approved by NAME
+**Design prerequisites.** RFCs or decisions required before acceptance, or None.
+**Implementation prerequisites.** RFCs or gates required before coding, or None.
+**Closure prerequisites.** Evidence or dependent work required before completion, or None.
 **Tracks.** ROADMAP item or other context this addresses.
 **Touches.** crates / modules the work lands in.
+
+<!-- Add when moving to accepted/: -->
+**Accepted on.** YYYY-MM-DD
+**Approved by.** NAME
+**Independent design review.** NAME and durable review reference
+**Implementation owner.** NAME
+
+<!-- Required when a security-sensitive RFC moves to done/: -->
+**Closure reviewed on.** YYYY-MM-DD
+**Closure approved by.** NAME
+**Closure evidence.** Repository-relative durable evidence/review reference
 
 ## Summary
 
@@ -322,7 +348,7 @@ the heavier sections:
 - **Security considerations** — first-class section, not a footnote.
 
 Each RFC declares which sections it carries by the headings it
-uses. There's no separate metadata.
+uses. There's no separate section-profile metadata.
 
 ## Process
 
@@ -333,12 +359,32 @@ The full lifecycle is described in
    Status `Proposed`. The number is the next unused integer,
    zero-padded to three digits, and never reused.
 2. Iterate in review until the design is settled.
-3. When the work ships, move the file to `rfcs/done/`, update
-   Status to `Implemented (vX.Y.Z)`, and update inbound
+3. Accept the design by recording the acceptance date, approver,
+   independent reviewer where required, and implementation owner in
+   the RFC; then move it to `rfcs/accepted/` with Status `Accepted`.
+   Only this state makes the RFC eligible for implementation; coding still
+   waits for repository-visible passing evidence for every implementation
+   prerequisite.
+4. When the work ships, move the file to `rfcs/done/`, update
+   Status to `Implemented (vX.Y.Z)`, record the required independent closure
+   review and evidence for security-sensitive work, and update inbound
    references in this README and other RFCs.
-4. RFCs that don't pan out move to `rfcs/archive/` with Status
+5. RFCs that don't pan out move to `rfcs/archive/` with Status
    `Withdrawn` (and a one-line reason) or `Superseded by RFC NNN`.
    They stay there as a record.
+
+An Accepted RFC whose security invariants, public behavior, scope, or
+implementation prerequisites change materially moves back to `proposed/` for
+review. Status, active acceptance metadata, folder, index, and inbound links
+change together; the earlier decision remains only in version-control history
+or an explicit superseded-review note. The RFC author or implementer cannot be
+the sole approver of a security-sensitive RFC or its closure evidence. See RFC
+018 for the approval, independence, dependency, and transition rules.
+
+Every new RFC declares `Security review: Required` or `Not required — reason
+approved by NAME`. Authentication, authorization, secrets, tokens, sessions,
+audit guarantees, external trust boundaries, security-relevant
+storage/transactions, and assurance controls require independent review.
 
 Files are never deleted. The full reasoning is in RFC 018.
 
@@ -351,7 +397,7 @@ dependency.
 | RFC | Title | Status |
 |---|---|---|
 | 088 | [Auditor authorization matrix and static read-only rendering](./done/088-auditor-matrix-read-only-rendering.md) | ✅ Shipped v0.70.0 |
-| 089 | [Step-up authentication contract](./proposed/089-step-up-contract.md) | Proposed |
+| 089 | [Step-up authentication contract](./done/089-step-up-contract.md) | ✅ Shipped v0.71.0 |
 | 090 | [Signing-key rotation confirm + settings pending-change](./done/090-signing-key-confirm-pending-change.md) | ✅ Shipped v0.72.0 |
 | 091 | [LoginContext rendering and SelfServiceShell navigation](./done/091-login-context-self-service-shell.md) | ✅ Shipped v0.73.0 |
 | 092 | [UI components: ThemeToggle, EmptyState, CopyField, Error summary](./done/092-ui-components.md) | ✅ Shipped v0.74.0 |
