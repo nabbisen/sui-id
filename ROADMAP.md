@@ -17,10 +17,20 @@ expansion, multi-tenancy (RFC 025), and alternative SQL backends (RFC 009)
 remain frozen until every milestone in this programme has passed its exit
 gate.
 
-The dates are planning targets, not release promises. They assume one primary
-implementer working sequentially, an owner/architecture review at each RFC and
-milestone boundary, and reviewer feedback within two working days. A failed
-gate moves the affected milestone; it is never waived to preserve a date.
+The dates are a conservative one-implementer planning baseline, not release
+promises. They include design, review, correction, implementation, and evidence
+time. Work remains sequential unless a genuinely independent second
+implementer and sufficient security-review capacity are explicitly assigned.
+A failed gate moves the affected milestone; scope or evidence is never cut to
+preserve a date.
+
+Before any remediation implementation begins, M0 adopts RFC 018's five-folder
+variant: `rfcs/accepted/` is the repository-native implementation-ready state,
+its files carry `Status: Accepted`, and the RFC index and integrity checks
+recognize it. `proposed/` continues to mean under review and not ready for
+implementation. Chat, external boards, and roadmap wording are not approval
+records. The identifiers 093–099 remain provisional until their proposal files
+are created; creation permanently assigns each number.
 
 ### Programme outcomes
 
@@ -43,14 +53,14 @@ The programme is complete only when:
 
 | Milestone | Target window | Theme | Planned RFCs | Exit gate |
 |---|---|---|---|---|
-| **M0 — Plan and design freeze** | 2026-07-16 → 2026-07-22 | Approve this roadmap, assign permanent RFC numbers, record dependencies and review ownership | RFCs 093–099 (design only) | Owner approves milestone order, scope, and RFC boundaries; no implementation starts from an unapproved RFC |
-| **M1 — Trustworthy build baseline** | 2026-07-23 → 2026-07-31 | Repair LDAP all-feature compilation; define MSRV versus latest-stable policy; make format, clippy, tests, all-features, mdBook, RFC integrity, and audit coverage visible blocking gates | **RFC 093** | CI passes on the declared MSRV and current stable under the approved matrix; LDAP feature smoke test passes; mdBook and RFC integrity gates pass |
-| **M2 — Transactional security records** | 2026-08-03 → 2026-08-14 | Make Class-A mutation + audit atomic; introduce a typed event registry/structural coverage gate; correct event-name drift; narrow audit-chain claims | **RFC 094** | Injected audit failures roll back every Class-A mutation; typed registry and matrix agree; no production Class-A best-effort append remains |
-| **M3 — Atomic dynamic registration** | 2026-08-17 → 2026-08-21 | Validate all metadata before consuming authorization; atomically consume registration use, create the disabled client, and append audit | **RFC 095** | Invalid or failed requests do not consume uses; supported grants/auth methods and all redirect/logout URIs are validated; concurrency and rollback tests pass |
-| **M4 — Federation trust completion** | 2026-08-24 → 2026-09-11 | Verify discovery issuer and HTTPS endpoints; implement JWKS/signature verification; validate `iss`, `aud`, `azp`, `exp`, `iat`, and mandatory nonce; test hostile providers | **RFC 096** | Token substitution, missing/mismatched nonce, bad issuer/audience/time, unsupported algorithm, and bad/unknown key are rejected; live or representative upstream integration passes |
-| **M5 — Threat-model and documentation reconciliation** | 2026-09-14 → 2026-09-25 | Rewrite the security model for federation, LDAP, dynamic registration, metrics, SSRF, secrets, and rollback; establish authoritative docs; repair README/RFC/link/source-layout drift | **RFCs 097–098** | Threat model and security assurance review are current; mdBook builds; RFC folder/status/index/link checks pass; public feature and limitation claims match code |
-| **M6 — Release-assurance closure and soak entry** | 2026-09-28 → 2026-10-09 | Enforce restrictive runtime file permissions; run all fuzz targets; automate and inspect release packaging; exercise live LDAP/upstream integration; assemble final evidence | **RFC 099** | Full approved gate matrix passes from a clean tree; package contents are inspected; live integrations pass; no open blocker remains; independent review approves entry into real-environment soak |
-| **M7 — Real-environment soak** | Minimum 4 weeks after M6 | Operate the hardened build under realistic traffic, backup/restore, key rotation, dependency monitoring, and incident drills | Operational evidence, not a feature RFC | Owner and independent reviewer accept the soak record; only then may a production-release or v1/rc/beta discussion begin |
+| **M0 — Plan, governance, and design freeze** | 2026-07-16 → 2026-07-22 | Approve the amended roadmap; adopt `accepted/`; create proposal files when assigning 093–099; name owner, implementer, approver, and security/soak reviewers; fully draft only the first RFC review package | RFCs 093–099 (design only) | Five-folder lifecycle and integrity rules are repository-visible; roles and RFC ownership are named; owner approves milestone order and boundaries; no implementation starts outside `accepted/` |
+| **M1 — Trustworthy build baseline** | 2026-07-23 → 2026-08-07 | Repair LDAP all-feature compilation; define MSRV/latest-stable policy; make format, build, test, clippy, feature/toolchain matrix, LDAP smoke, mdBook, and narrow mechanical RFC integrity honestly blocking | **RFC 093** | CI passes on the declared MSRV and current stable under the approved versioned gate matrix; LDAP smoke passes; mdBook builds; folder/status/index/link integrity has no known debt |
+| **M2 — Transactional security records** | 2026-08-10 → 2026-08-28 | Freeze the Class-A inventory; make mutation + audit atomic; introduce typed event/class registry; convert production paths; correct vocabulary drift and audit-chain claims; activate structural/failure-injection gates | **RFC 094** | Injected audit failures roll back every Class-A mutation; typed registry and matrix agree structurally; no production Class-A best-effort append remains; independent closure review accepts adversarial evidence |
+| **M3 — Atomic dynamic registration** | 2026-08-31 → 2026-09-11 | Validate all metadata before consuming authorization; atomically consume registration use, create the disabled client, and append audit; cover races and retry semantics | **RFC 095** | Invalid or failed requests do not consume uses; supported metadata and all redirect/logout URIs are validated; exactly one concurrent limited use wins; rollback/adversarial evidence passes independent review |
+| **M4 — Federation trust completion** | 2026-09-14 → 2026-10-09 | Define discovery/egress/SSRF rules; verify issuer, HTTPS endpoints, JWKS and signatures; validate required claims and nonce; define cache/rotation behavior; test hostile providers | **RFC 096** | Substitution, missing/mismatched nonce, issuer/audience/time errors, algorithm confusion, hostile endpoints, oversized responses, and bad/rotating keys are handled as designed; representative integration and independent security review pass |
+| **M5 — Threat-model and documentation reconciliation** | 2026-10-12 → 2026-10-23 | First settle authoritative-document structure; then synthesize the current threat model; finally reconcile README/spec/operator/integrator/public claims and source paths | **RFCs 097–098** | Threat model and security assurance review cover all shipped boundaries; authoritative docs are identified; mdBook and integrity gates pass; public claims match code |
+| **M6 — Release-assurance closure and soak entry** | 2026-10-26 → 2026-11-06 | Enforce runtime file modes; run all fuzz targets; automate/inspect packaging; exercise live LDAP/upstream integration; produce an immutable build/configuration/evidence manifest | **RFC 099** | Full approved clean-tree matrix passes; artifact digest and sanitized configuration class are recorded; package and live integrations pass; no blocker/high defect remains; independent review approves only entry into soak |
+| **M7 — Real-environment soak** | Earliest 2026-11-09 → 2026-12-04, subject to workload and reset rules | Exercise the exact M6 artifact under representative auth traffic, failure modes, operational cycles, and incident drills | Operational evidence, not a feature RFC | At least four meaningfully exercised weeks and every workload criterion pass; owner and independent reviewer accept evidence; earliest readiness discussion is 2026-12-07 and never automatic approval/tagging |
 
 Logical review checkpoints may produce internal, versioned source archives,
 but no checkpoint before M7 carries a production-ready or security-reviewed
@@ -58,42 +68,93 @@ designation. Version numbers for implementation checkpoints are assigned only
 after the RFC set is approved; the roadmap does not reserve semantic versions
 in advance.
 
+Urgent security fixes, remediation-enabling refactors, dependency/security
+maintenance, and repairs required to keep approved gates executable are
+controlled exceptions to the feature freeze. A narrowly scoped corrective
+v0.x release may be considered when operationally necessary, but it requires
+independent gates for the affected surface, accurate limited claims, and does
+not inherit M7 confidence. Internal archives and evidence identify the exact
+Git tree and artifact digest, not only a human-friendly version label.
+
+### M7 soak workload and reset rules
+
+RFC 099 must turn the following minimum contract into exact event counts,
+traffic volumes, thresholds, commands, and evidence formats before M6 closes:
+
+- The soak baseline is one immutable M6 artifact digest plus a sanitized
+  configuration/environment manifest. Changing that baseline requires review.
+- The environment must sustain representative successful and rejected login,
+  MFA, authorization-code, refresh-rotation/reuse, session, registration, and
+  federation traffic. Quiet or unavailable periods pause elapsed soak time.
+- At least one successful backup/restore, signing-key rotation, master-key
+  rotation, restart/upgrade, LDAP outage/recovery, upstream JWKS
+  rotation/failure, registration-concurrency exercise, dependency-alert
+  handling drill, incident-response drill, and rollback drill is required
+  where applicable.
+- Exit requires zero unresolved blocker or high-severity defect and
+  authentication/security error rates within the thresholds fixed by RFC 099.
+- A security-sensitive behaviour change, data migration, authn/authz change,
+  or fix for a blocker/high-severity defect restarts the relevant soak window.
+  The owner and independent reviewer decide whether a narrower change resets a
+  targeted exercise or the complete four-week window.
+- Calendar completion never passes M7. The earliest post-soak event is a
+  release-readiness discussion, not production approval or a version tag.
+
 ### Planned RFC set and boundaries
 
 | RFC | Working title | Owns | Explicitly does not own | Handoff expectation |
 |---|---|---|---|---|
-| **093** | Build, Toolchain, and Release-Gate Contract | LDAP crypto provider; MSRV/latest-stable matrix; all-feature CI; mdBook/RFC/audit gate wiring | Domain behaviour changes beyond build compatibility | Optional short gate matrix; no large handoff |
+| **093** | Build, Toolchain, and Release-Gate Contract | LDAP crypto provider; MSRV/latest-stable matrix and lint-drift policy; all-feature CI; mdBook; narrow folder/status/index/link repair and gate; legacy audit diagnostic wiring with explicit limitation | Audit completeness/atomicity or broader documentation reconciliation | Versioned gate matrix is mandatory in the RFC; no separate large handoff |
 | **094** | Transactional Audit Completeness and Typed Event Registry | Class-A transaction design; event vocabulary; structural coverage; injected-failure tests; audit-chain claim correction | External anchoring service implementation | **Required** multi-file developer handoff and migration checklist |
-| **095** | Dynamic Client Registration Transaction and Validation | Validate-first flow; registration-use/client/audit transaction; metadata parity; race tests | Broad RFC 7591 management API expansion | Recommended focused implementation/QA handoff |
-| **096** | Upstream OIDC Federation Validation | Discovery/JWKS/signature/claim/nonce validation; caching and rotation; hostile-provider tests | New providers, account-link UX expansion, trusting upstream MFA as local MFA | **Required** security invariants, attack cases, and staged developer handoff |
-| **097** | Current Threat Model and Security-Assurance Baseline | All shipped trust boundaries, STRIDE, SSRF, secret boundaries, rollback/failure analysis, residual risks | Implementation changes owned by RFCs 093–096 | Recommended security-review checklist |
-| **098** | Documentation Authority and RFC Integrity | Authoritative doc set; README/roadmap/RFC/path/link reconciliation; automated integrity gate | Rewriting historical RFC decisions | Optional mechanical task checklist |
+| **095** | Dynamic Client Registration Transaction and Validation | Validate-first flow; registration-use/client/audit transaction; metadata parity; concurrency/retry tests | Broad RFC 7591 management API expansion | **Required** focused implementation and QA handoff |
+| **096** | Upstream OIDC Federation Validation | Discovery/egress/SSRF policy; JOSE/JWKS/signature/claim/nonce validation; cache/rotation; hostile-provider tests | New providers, account-link UX expansion, trusting upstream MFA as local MFA | **Required** security invariants, attack cases, and staged developer handoff |
+| **097** | Current Threat Model and Security-Assurance Baseline | All shipped trust boundaries, STRIDE, cross-boundary attacks, SSRF, secret boundaries, rollback/failure analysis, residual risks | Implementation changes owned by RFCs 093–096 | Recommended security-review checklist |
+| **098** | Documentation Authority and Reconciliation | Authoritative doc set; README/roadmap/spec/operator/integrator/public-claim and current-path reconciliation; lifecycle metadata/link corrections not completed mechanically in M1 | Rewriting historical RFC decisions | Optional mechanical task checklist |
 | **099** | Operational Hardening and Soak Readiness | Runtime file modes; all fuzz targets; package automation/inspection; live integration evidence; soak entry criteria | Declaring production readiness or a v1 date | **Required** operator/tester handoff and evidence manifest |
 
 ### Dependencies and change control
 
 ```text
-RFC 093
-  ├──> RFC 094 ──> RFC 095
-  ├──> RFC 096
-  └──> RFC 098
+M0 approval mechanism + RFC files/ownership
+  └──> RFC 093
+         ├──> RFC 094 ──> RFC 095
+         ├──> RFC 096
+         └──> RFC 098 authority/integrity stage
 
-RFC 094 + RFC 095 + RFC 096 ──> RFC 097
-RFC 093 + RFC 097 + RFC 098 ──> RFC 099 ──> M7 soak
+RFC 093 + RFC 094 + RFC 095 + RFC 096
+  + RFC 098 authority decision ──> RFC 097 final baseline
+
+RFC 097 + RFC 098 reconciliation ──> RFC 099 ──> M7 soak
 ```
 
 - RFC 093 lands first because later evidence is not trustworthy until the
   build and gate contract is reliable.
+- The existing literal-presence audit script is diagnostic-only in M1 and
+  carries an explicit statement that it proves neither completeness nor
+  atomicity. RFC 094 owns and activates the authoritative structural gate.
+- RFC 093 owns narrow mechanical RFC folder/status/index/link repair and gate
+  activation. RFC 098 owns document authority, content reconciliation, public
+  claims, and broader current-path cleanup; no indefinite baseline allowlist
+  hides known lifecycle debt.
 - RFC 095 depends on RFC 094 so dynamic registration uses the new atomic audit
   mechanism instead of introducing a second transaction pattern.
-- RFC 097 follows implementation RFCs so it documents verified current
-  behaviour, while threat-model deltas are still updated within each security
-  RFC during implementation.
+- RFC 097 requires RFCs 093–096 plus RFC 098's authority decision, then
+  synthesizes verified current behaviour. Threat-model deltas remain acceptance
+  criteria inside RFCs 093–096 and land with their behaviour changes.
+- RFCs 094–096 require independent review of their security invariants before
+  implementation and observed adversarial/rollback evidence before closure.
 - Any newly discovered authentication bypass, privilege escalation, token
   forgery, secret exposure, or irreversible migration risk pauses the schedule
   and receives an explicit roadmap/RFC decision before work resumes.
 - Milestone completion requires observed command output and review evidence;
   historical handoff logs do not satisfy a current gate.
+- The existing source-size finding is deferred rather than expanded into a
+  global refactor. RFCs 094–096 split touched oversized security modules only
+  when that materially improves reviewability without unrelated churn.
+- With a second independent implementer, RFC 096 may overlap RFCs 094–095 only
+  after both designs and threat deltas are Accepted, shared-file ownership is
+  named, and reviewer capacity is confirmed. RFC 095 never precedes RFC 094;
+  RFCs 097–099 wait for both lanes.
 
 ---
 
