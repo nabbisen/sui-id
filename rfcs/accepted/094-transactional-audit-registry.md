@@ -1,7 +1,11 @@
 # RFC 094 — Transactional Audit Completeness and Typed Event Registry
 
-**Status.** Proposed
+**Status.** Accepted
 **Security review.** Required
+**Accepted on.** 2026-07-17
+**Approved by.** `@nabbisen`
+**Independent design review.** `codex-independent-architecture-security-reviewer` (OpenAI Codex), [Accept with notes](../reviews/094-design-review-2026-07-17.md)
+**Implementation owner.** `codex-developer` (OpenAI Codex), confirmed by `@nabbisen`
 **Design prerequisites.** RFC 093 may be reviewed jointly; its gate contract must be Accepted before this RFC is accepted; the attached durable-write inventory, threat delta, and key-recovery state machine require independent design approval.
 **Implementation prerequisites.** RFC 093 is Implemented and its clean-tree matrix passes; this RFC is Accepted; the Class-A inventory and threat delta have independent approval.
 **Closure prerequisites.** Every Class-A production path uses the approved transaction seam; injected append failures roll back mutation for every inventory row; structural coverage passes; independent adversarial closure review accepts durable evidence.
@@ -11,7 +15,6 @@
 **Command inventory.** [`../handoffs/094-transactional-audit/command-inventory.md`](../handoffs/094-transactional-audit/command-inventory.md)
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** `codex-project-architect` (OpenAI Codex).
-**Implementation owner.** `codex-developer` (OpenAI Codex), after acceptance and prerequisites.
 **Independent security and closure reviewer.** `codex-independent-architecture-security-reviewer` (OpenAI Codex).
 
 ## Summary

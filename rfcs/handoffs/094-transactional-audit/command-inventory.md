@@ -1,8 +1,8 @@
 # RFC 094 Stage-0 durable-write command inventory
 
 **Snapshot:** v0.76.12 working tree, inspected 2026-07-17
-**Governing RFC:** [RFC 094](../../proposed/094-transactional-audit-registry.md)
-**Review state:** Proposed; must receive independent approval before RFC 094 acceptance
+**Governing RFC:** [RFC 094](../../accepted/094-transactional-audit-registry.md)
+**Review state:** Independently design-approved on 2026-07-17; implementation reconciliation and entry gates remain pending
 
 This is the closed Stage-0 classification of production durable-write entry
 points. The implementation converts it to `ci/write-commands.toml` without

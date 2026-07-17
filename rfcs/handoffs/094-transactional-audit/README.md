@@ -1,8 +1,8 @@
 # RFC 094 developer handoff
 
-**Governing RFC:** [RFC 094](../../proposed/094-transactional-audit-registry.md)
+**Governing RFC:** [RFC 094](../../accepted/094-transactional-audit-registry.md)
 **Audience:** `codex-developer` after RFC acceptance and prerequisite evidence
-**Status:** Planning companion; inherits the governing RFC's Proposed status
+**Status:** Planning companion; inherits the governing RFC's Accepted status, with implementation still blocked on the entry gate below
 
 This handoff translates RFC 094 into bounded implementation stages. It does
 not approve design, authorize coding, or override the RFC. If implementation
