@@ -63,8 +63,13 @@ slot is `093`). One **parallel namespace** also exists:
 
 ### Accepted — design-approved and implementation-eligible
 
-None. An RFC appears here only after its approval metadata is recorded and the
-file moves from `proposed/` to `accepted/`.
+| RFC | Title | Milestone | Implementation owner |
+|---|---|---|---|
+| 093 | [Build, Toolchain, and Release-Gate Contract](./accepted/093-build-toolchain-release-gates.md) | M1 | `codex-developer` |
+
+Acceptance makes an RFC implementation-eligible, but coding remains prohibited
+until its declared implementation prerequisites have repository-visible
+passing evidence.
 
 ### Proposed — security and release-assurance remediation
 
@@ -74,7 +79,6 @@ and permits design review only; it does not authorize implementation.
 
 | RFC | Title | Milestone |
 |---|---|---|
-| 093 | [Build, Toolchain, and Release-Gate Contract](./proposed/093-build-toolchain-release-gates.md) | M1 |
 | 094 | [Transactional Audit Completeness and Typed Event Registry](./proposed/094-transactional-audit-registry.md) | M2 |
 | 095 | [Dynamic Client Registration Transaction and Validation](./proposed/095-dynamic-client-registration-transaction.md) | M3 |
 | 096 | [Upstream OIDC Federation Validation](./proposed/096-upstream-oidc-federation-validation.md) | M4 |

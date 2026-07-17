@@ -1,15 +1,18 @@
 # RFC 093 — Build, Toolchain, and Release-Gate Contract
 
-**Status.** Proposed
+**Status.** Accepted
 **Security review.** Required
+**Accepted on.** 2026-07-17
+**Approved by.** `@nabbisen`
+**Independent design review.** `codex-independent-architecture-security-reviewer` (OpenAI Codex), [Accept with notes](../reviews/093-design-review-2026-07-17.md)
+**Implementation owner.** `codex-developer` (OpenAI Codex), confirmed by `@nabbisen`
 **Design prerequisites.** M0 lifecycle governance and remediation roadmap approved.
-**Implementation prerequisites.** This RFC is Accepted; the project owner confirms `@nabbisen` as gate owner and `codex-developer` as implementation owner.
+**Implementation prerequisites.** After this Accepted transition is committed, `@nabbisen` separately records implementation-start authorization in `rfcs/handoffs/093-build-toolchain-release-gates/implementation-start-authorization.md`; that record must name `codex-developer`, bind one clean baseline commit, and confirm that no competing change owns the files in this RFC's `Touches` scope. The record does not yet exist, so implementation remains prohibited.
 **Closure prerequisites.** Every mandatory lane in Gate Matrix v1 passes on one clean commit; LDAP smoke and mdBook pass; RFC integrity reports no known debt; independent closure review confirms that the legacy audit diagnostic is not represented as structural assurance.
 **Tracks.** ROADMAP M1 — Trustworthy build baseline.
 **Touches.** `Cargo.toml`, crate manifests, `Cargo.lock`, `.github/workflows/`, `scripts/`, `docs/book.toml`, `rfcs/README.md`, RFC metadata and links.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** `codex-project-architect` (OpenAI Codex).
-**Implementation owner.** `codex-developer` (OpenAI Codex), after acceptance and prerequisites.
 **Independent security and closure reviewer.** `codex-independent-architecture-security-reviewer` (OpenAI Codex).
 
 ## Summary
