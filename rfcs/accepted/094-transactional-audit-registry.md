@@ -1,10 +1,12 @@
 # RFC 094 — Transactional Audit Completeness and Typed Event Registry
 
-**Status.** Proposed
+**Status.** Accepted
 **Security review.** Required
-**Lifecycle history.** Base design accepted 2026-07-17 by `@nabbisen` after [independent review](../reviews/094-design-review-2026-07-17.md); returned to Proposed on 2026-07-21 under RFC 000 because the RFC 096 federation amendment materially changes security invariants and prerequisites.
-**Amendment decision history.** C17/C18/C23/F01–F06 independently reviewed Accept with notes and approved by `@nabbisen` on 2026-07-21; durable record: [`094-federation-command-amendment-review-2026-07-21.md`](../reviews/094-federation-command-amendment-review-2026-07-21.md). This history is not active acceptance metadata.
-**Implementation owner.** `codex-developer` (OpenAI Codex), previously confirmed by `@nabbisen`; implementation is prohibited until the complete amended RFC is reaccepted and all entry gates pass
+**Accepted on.** 2026-07-21
+**Approved by.** `@nabbisen`
+**Independent design review.** `codex-independent-architecture-security-reviewer` (OpenAI Codex), [Accept with notes](../reviews/094-federation-command-amendment-review-2026-07-21.md)
+**Lifecycle history.** Base design accepted 2026-07-17 after [independent review](../reviews/094-design-review-2026-07-17.md); material amendment returned to Proposed in commit `43085e38219e5eb1bfe11cc698b18f1fa5f5e4d7`; complete amended RFC explicitly accepted by `@nabbisen` on 2026-07-21.
+**Implementation owner.** `codex-developer` (OpenAI Codex), confirmed by `@nabbisen`; implementation remains gated below
 **Design prerequisites.** RFC 093 may be reviewed jointly; its gate contract must be Accepted before this RFC is accepted; the attached durable-write inventory, threat delta, and key-recovery state machine require independent design approval.
 **Implementation prerequisites.** RFC 093 is Implemented and its clean-tree matrix passes; this RFC is Accepted; the Class-A inventory and threat delta have independent approval.
 **Closure prerequisites.** Every Class-A production path uses the approved transaction seam; injected append failures roll back mutation for every inventory row; structural coverage passes; independent adversarial closure review accepts durable evidence.
@@ -16,11 +18,11 @@
 **RFC author / architect.** `codex-project-architect` (OpenAI Codex).
 **Independent security and closure reviewer.** `codex-independent-architecture-security-reviewer` (OpenAI Codex).
 
-> **Lifecycle return to Proposed.** The C17/C18/C23/F01–F06 federation command
-> additions below and in the command inventory were independently reviewed and
-> explicitly approved by `@nabbisen` on 2026-07-21. Because they materially
-> amend this RFC, RFC 000 requires the complete RFC to be reaccepted before any
-> part of it is implementation authority.
+> **Complete amended RFC accepted.** The C17/C18/C23/F01–F06 federation command
+> additions below and in the command inventory were independently reviewed,
+> durably returned to Proposed under RFC 000, and accepted as part of the
+> complete amended RFC by `@nabbisen` on 2026-07-21. Implementation still
+> requires every entry gate below.
 
 ## Summary
 
@@ -349,7 +351,7 @@ that remain one intent (user creation with/without HIBP warning, federation
 provider enable/disable, federation-link upsert create/update) register every
 closed event branch and one rollback test per branch in the inventory.
 
-### Reviewed RFC 096 federation command amendment pending complete-RFC reacceptance
+### Accepted RFC 096 federation command amendment
 
 RFC 096 adds one new Class-A operator intent and a closed family of federation
 login commands. It does not overload C17 or compose nested Class-A commands.
@@ -432,7 +434,8 @@ inventory:
 - F05 is the Protocol-class terminal attempt failure/denial transition; and
 - F06 is the Protocol-class federated WebAuthn ceremony creation/replacement.
 
-F01–F03/F05/F06 keep RFC 094's accepted U30/U32/U33/U24 protocol classification and
+F01–F03/F05/F06 keep the previously reviewed base-design U30/U32/U33/U24
+protocol classification and
 Class-B login-result policy. They nevertheless use one `WriteTx<Protocol>` per
 listed compound transition so a consumed attempt or pending ceremony cannot be
 separated from the corresponding session. Their post-commit
@@ -767,8 +770,8 @@ including dynamic registration, is converted with no best-effort exception.
   authority fields, wrong command/event binding, arbitrary kind, unmapped or
   duplicate variant mapping, and unauthorized system principal.
 - Per-command parameterized rollback tests for every Class-A inventory row.
-- Closed-branch tests cover every U01/U22/T04/C17/C19 and, after reacceptance of the reviewed
-  amendment, C17-preflight/C18/C23/F03–F06 result/event variant and prove
+- Closed-branch tests cover every U01/U22/T04/C17/C19 and, under the accepted
+  amended design, C17-preflight/C18/C23/F03–F06 result/event variant and prove
   no committed outcome can omit an event.
 - Secret-lifecycle tests exercise every T04 non-returning branch through the
   zeroizing wrapper without logging, formatting, or comparing the raw token.

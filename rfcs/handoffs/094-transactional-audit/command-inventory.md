@@ -1,12 +1,12 @@
 # RFC 094 Stage-0 durable-write command inventory
 
 **Snapshot:** v0.76.12 working tree, inspected 2026-07-17
-**Governing RFC:** [RFC 094](../../proposed/094-transactional-audit-registry.md)
+**Governing RFC:** [RFC 094](../../accepted/094-transactional-audit-registry.md)
 **Review state:** Base inventory independently design-approved on 2026-07-17;
 the C17/C18/C23/F01–F06 RFC 096 amendment was independently reviewed and
-approved by `@nabbisen` on 2026-07-21, but the complete material amendment is
-Proposed pending reacceptance; implementation reconciliation and entry gates
-remain pending
+approved by `@nabbisen` on 2026-07-21, durably returned to Proposed in commit
+`43085e38219e5eb1bfe11cc698b18f1fa5f5e4d7`, and accepted as part of the
+complete amended RFC; implementation reconciliation and entry gates remain pending
 
 This is the closed Stage-0 classification of production durable-write entry
 points. The implementation converts it to `ci/write-commands.toml` without
@@ -121,10 +121,10 @@ though each pair shares one current repository function family.
 | C22 | Revoke registration authorization | A | `client.registration_token.revoked` | `client_registration_token::revoke` | `a_c22_registration_revoke` |
 | C23 | Replace federation-provider trust policy / RFC 096 startup configuration | A | `federation.provider.policy_updated`; sealed `StartupConfiguration` actor, provider-ID target, old/new version and activation generation + changed-field enums + invalidated counts | guarded full policy replace on exact non-deleted old version/generation, checked-increment both, force disabled/review-required, clear evidence, invalidate old flows; cache eviction post-commit | `a_c23_provider_policy_update`, `a_c23_generation_overflow` |
 
-## RFC 096 federation login commands (reviewed amendment pending reacceptance)
+## RFC 096 federation login commands (accepted amendment)
 
 These rows freeze the compound ownership boundary. F01–F03/F05/F06 are explicit
-Protocol exclusions under the already accepted U24/U30/U32 and Class-B
+Protocol exclusions under the previously reviewed base-design U24/U30/U32 and Class-B
 login-result policy; “P” does not mean separate best-effort writes. Each uses
 one protocol transaction and the private subordinate primitives listed here.
 F04 creates identity authority and is Class A.

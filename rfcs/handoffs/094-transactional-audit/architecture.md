@@ -40,9 +40,9 @@ receipt used by `Audited<T>`.
 
 Names may change, boundaries may not.
 
-## Reviewed RFC 096 federation command architecture pending reacceptance
+## Accepted RFC 096 federation command architecture
 
-If the complete amended RFC is reaccepted, C23 uses the independently reviewed
+Under the accepted complete amended RFC, C23 uses the independently reviewed
 Class-A algorithm below
 with sealed `StartupConfiguration` authority. Cache eviction is never passed
 into or awaited by the SQLite closure:

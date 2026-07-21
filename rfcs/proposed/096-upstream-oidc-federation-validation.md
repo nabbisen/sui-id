@@ -2,7 +2,7 @@
 
 **Status.** Proposed
 **Security review.** Required
-**Design prerequisites.** RFC 093 Accepted; the complete materially amended RFC 094 reaccepted including reviewed C17/C18/C23/F01–F06 federation commands; the federation threat delta, discovery/egress policy, and hostile-provider plan require independent design approval.
+**Design prerequisites.** RFC 093 Accepted; complete materially amended RFC 094 Accepted including C17/C18/C23/F01–F06 federation commands; the federation threat delta, discovery/egress policy, and hostile-provider plan require independent design approval.
 **Implementation prerequisites.** RFC 093 Implemented with passing all-feature gates; this RFC Accepted; the hostile-provider harness approved. Pure validation/transport work may begin before RFC 094 implementation, but no federation mutation/session integration may begin until RFC 094 is Implemented and C17/C18/C23/F01–F06 pass their applicable gates.
 **Closure prerequisites.** Discovery, transport, JOSE, claims, state/nonce, cache/rotation, migration, hostile-provider, and representative live-integration evidence pass independent closure review.
 **Tracks.** ROADMAP M4 — Federation trust completion.
@@ -614,10 +614,11 @@ method proof, counter value, email, subject, and endpoints do not.
 inside F01/F03/F04, not C19 link-authority updates. F01–F03/F05/F06 deliberately retain
 RFC 094's accepted session/login Protocol/Class-B classification; the design
 does not mislabel their login event as atomically audited. F04 and C23 are the
-only new Class-A commands. The amendment was independently design-reviewed and
-approved by `@nabbisen` on 2026-07-21, but RFC 000 returned the materially
-amended complete RFC 094 to Proposed. RFC 094 reacceptance and then this RFC's
-own explicit acceptance transition remain required.
+only new Class-A commands. The amendment was independently design-reviewed,
+the materially amended RFC was durably returned to Proposed in commit
+`43085e38219e5eb1bfe11cc698b18f1fa5f5e4d7`, and `@nabbisen` explicitly
+accepted the complete amended RFC on 2026-07-21. This RFC's own explicit
+acceptance transition remains required.
 
 ## Cache and rotation algorithm
 

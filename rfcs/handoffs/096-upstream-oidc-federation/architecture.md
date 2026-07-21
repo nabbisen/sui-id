@@ -249,8 +249,7 @@ Evidence columns are nullable and writable only inside C17 enable; they are
 cleared by disable/C23/C18 and never queried as re-enable authority. No
 `pending_preflight` or independently writable `preflight_ok` state exists.
 
-Exact RFC 094 integration is frozen as reviewed design, pending reacceptance of
-the materially amended complete RFC:
+Exact RFC 094 integration is frozen by the accepted complete amended design:
 
 - C17 enable consumes a private exact-policy/version/generation preflight
   younger than 600 seconds and atomically increments generation + stores
@@ -267,11 +266,11 @@ the materially amended complete RFC:
 - last-seen/email observation is a private primitive only beneath F01/F03/F04.
 
 F01/F03 use post-commit must-attempt Class-B sign-in success under RFC 094's
-accepted U24/U30 policy; they do not claim atomic audit. F04 commits one
+previously reviewed base-design U24/U30 policy; they do not claim atomic audit. F04 commits one
 `auth.federation.provisioned` event with attempt/user/link/session. No command
 nests U01/C19/U30 or exposes their subordinate writers. Implementing stage 5
-is forbidden until the complete amended RFC is reaccepted, represented in the
-implemented manifest, and its gates pass.
+is forbidden until the complete amended RFC is represented in the implemented
+manifest and its gates pass.
 
 ## MFA context
 

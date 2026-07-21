@@ -18,11 +18,10 @@ a repository snapshot for the historical working-copy bytes. This durable
 record therefore does not claim that author-calculated historical digests are
 independent evidence.
 
-The table below instead binds the exact policy-compliant return-to-Proposed
-candidate now offered for focused lifecycle/evidence review. These digests are
-author-observed and reproducible directly from the named workspace files; the
-focused reviewer must independently recalculate them before accepting this
-record.
+The return-to-Proposed table below was author-observed, independently matched
+12/12 in focused review, and is now durably retrievable as commit
+`43085e38219e5eb1bfe11cc698b18f1fa5f5e4d7`. It is the exact input identity for
+the later Accepted transition.
 
 | Return-to-Proposed candidate path | SHA-256 |
 |---|---|
@@ -39,9 +38,30 @@ record.
 | `rfcs/handoffs/096-upstream-oidc-federation/verification.md` | `d31e0879238447c4b8dcf22adcb976af76e3e0b27c72cb367bc5c95dca0934c4` |
 | `rfcs/README.md` | `d93c8afde6e6050c3695cb5494d0b48c863ab5279ae952c381c5edf62f7b9060` |
 
-The candidate changes lifecycle wording and incorporates only the four accepted
-implementation notes below. It does not accept RFC 094 or RFC 096, claim
-implementation evidence, or authorize implementation.
+The Accepted-transition table binds the exact output candidate. Its digests are
+author-observed and reproducible from the named workspace files; the focused
+reviewer must independently recalculate them.
+
+| Accepted-transition candidate path | SHA-256 |
+|---|---|
+| `rfcs/accepted/094-transactional-audit-registry.md` | `2c3e36e89f2d45f6aca8fec804f61abc793957dc6bc03fe7d020672469be1aa7` |
+| `rfcs/handoffs/094-transactional-audit/README.md` | `b0a9ad6706c819883fecf9a497aabc29c40c6e8359fbb3bfd9bc014eb172c8cd` |
+| `rfcs/handoffs/094-transactional-audit/architecture.md` | `5cd5e0a7baaf9356fd1c37b58af6fc004cb5c2b125c0863633581020a3f98fe2` |
+| `rfcs/handoffs/094-transactional-audit/command-inventory.md` | `b4d505f0d591ac7e6ec45ec7b5cde4b173fdc4a58b7275a39cb3c84ddb50e718` |
+| `rfcs/handoffs/094-transactional-audit/migration-checklist.md` | `0df6c2f71a6eeaa307795c0ed60d1a8b9b9f7e0889b2436e4a19732c6deb9b16` |
+| `rfcs/handoffs/094-transactional-audit/verification.md` | `4855b331d49e86aef955bc13d4729ec9addab06c4cb5191a3f16bccb53b001b2` |
+| `rfcs/proposed/096-upstream-oidc-federation-validation.md` | `bdcf3fbe1e395c0d904339c39a790735f94a41eea26739e38b729fc19274abda` |
+| `rfcs/handoffs/096-upstream-oidc-federation/README.md` | `5c88f98403837934a672b94f653184237055b59dada9f1faebe55e8c535412f2` |
+| `rfcs/handoffs/096-upstream-oidc-federation/architecture.md` | `d68d3c8d4e7fb15efc2ab81c33833307e4f95c9f9563858212f1a3507bbfa9a8` |
+| `rfcs/handoffs/096-upstream-oidc-federation/validation-matrix.md` | `a05dc97f36559d66ce3e7b1eb0918c4dfda34e2644ae96d85bd826028d38b8c0` |
+| `rfcs/handoffs/096-upstream-oidc-federation/verification.md` | `d31e0879238447c4b8dcf22adcb976af76e3e0b27c72cb367bc5c95dca0934c4` |
+| `rfcs/README.md` | `3551fea75f9ff8c69c39d8fe908693b1bfe45010c8b4e36ca628731317f2f1be` |
+
+Relative to the durable input commit, the output changes only RFC 094 lifecycle
+path/status/metadata/history, index and handoff links/status, accepted-amendment
+labels, RFC 096 prerequisite wording, this output identity, and the two
+editorial corrections accepted by the return review. It does not accept RFC
+096, claim implementation evidence, or authorize implementation before gates.
 
 ## Review chain and decision
 
@@ -62,9 +82,10 @@ The final independent verdict was **Accept with notes** and explicitly found:
 - implementation remained NO-GO pending lifecycle and implementation gates.
 
 `@nabbisen` then explicitly approved this RFC 094 amendment. That decision is
-preserved as decision history, but RFC 000 requires reacceptance of the complete
-materially amended RFC before it becomes implementation authority. It does not
-accept RFC 096.
+preserved as decision history. RFC 000 then required and received the durable
+return-to-Proposed commit identified above; focused review accepted it with all
+12 hashes matching. `@nabbisen` subsequently explicitly accepted the complete
+materially amended RFC 094. None of those decisions accepts RFC 096.
 
 ## Accepted implementation notes
 
@@ -87,10 +108,8 @@ lifecycle invariants.
 
 ## Lifecycle and implementation boundary
 
-RFC 094 and RFC 096 both remain Proposed. RFC 094 preserves its 2026-07-17 base
-acceptance and 2026-07-21 amendment decisions as history, but neither is active
-acceptance metadata. The complete amended RFC 094 must receive owner-authorized
-Proposed-to-Accepted metadata/path/index/link transition and focused review
-before RFC 096 may be separately accepted. Implementation remains prohibited
+RFC 094 is Accepted with complete current metadata and durable Proposed input
+provenance. RFC 096 remains Proposed until `@nabbisen` separately accepts it and
+its own transition passes focused review. Implementation remains prohibited
 until each RFC 093/094/096 implementation prerequisite and ownership gate has
 repository-visible passing evidence.

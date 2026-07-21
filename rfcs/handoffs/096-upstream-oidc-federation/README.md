@@ -22,9 +22,10 @@ Pure stages 1–3 may start only when RFC 096 is Accepted, its design review has
 no blocker/high finding, RFC 093 is Implemented with the clean-tree matrix, a
 clean baseline commit is recorded, and file ownership is non-overlapping.
 
-RFC 096's RFC 094 design was independently reviewed and C17/C18/C23/F01–F06
-were approved by `@nabbisen` on 2026-07-21, but RFC 000 requires the materially
-amended complete RFC 094 to be reaccepted before this prerequisite is satisfied.
+RFC 096's RFC 094 design was independently reviewed, the complete material RFC
+was durably returned to Proposed in commit
+`43085e38219e5eb1bfe11cc698b18f1fa5f5e4d7`, and `@nabbisen` explicitly
+accepted the complete amended RFC on 2026-07-21. This prerequisite is satisfied.
 Handler/mapping/session stage 5 requires amended RFC 094 to be Implemented with
 all C17/C18/C19/C23/F01–F06 and applicable user/session fixtures passing. If RFC 095
 implementation is active, its owner must release any shared OIDC/session/

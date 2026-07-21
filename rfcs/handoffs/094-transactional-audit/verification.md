@@ -78,7 +78,7 @@ acceptance. It must include:
 - concurrency result rows for sensitive guarded commands;
 - one observed branch result for every closed multi-event Class-A enum, with no
   successful no-event variant;
-- after complete-RFC reacceptance, C17 preflight capability age/race/replay and
+- under the accepted amended design, C17 preflight capability age/race/replay and
   P1/P2-enable-disable-P2 rejection, every activation-generation transition/
   overflow/rollback, plus C18/C23 rollback/version/attempt invalidation and
   post-commit cache-eviction failure;

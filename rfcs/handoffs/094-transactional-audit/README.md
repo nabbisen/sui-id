@@ -1,8 +1,8 @@
 # RFC 094 developer handoff
 
-**Governing RFC:** [RFC 094](../../proposed/094-transactional-audit-registry.md)
+**Governing RFC:** [RFC 094](../../accepted/094-transactional-audit-registry.md)
 **Audience:** `codex-developer` after RFC acceptance and prerequisite evidence
-**Status:** Planning companion; inherits the governing RFC's Proposed status and authorizes no implementation
+**Status:** Planning companion; inherits the governing RFC's Accepted status, with implementation still blocked on the entry gate below
 
 This handoff translates RFC 094 into bounded implementation stages. It does
 not approve design, authorize coding, or override the RFC. If implementation
@@ -46,17 +46,18 @@ Stop and return to architecture/security review if:
 - failure injection cannot prove rollback for an inventory row;
 - a change materially alters RFC security invariants or prerequisites.
 
-## Reviewed RFC 096 inventory amendment pending complete-RFC reacceptance
+## Accepted RFC 096 inventory amendment
 
 C17/C18 activation handling, C23, and F01–F06 in `command-inventory.md` are an
-reviewed amendment made after the original RFC 094 acceptance. The independent
+accepted amendment made after the original RFC 094 acceptance. The independent
 review and `@nabbisen` approval are recorded in
 `rfcs/reviews/094-federation-command-amendment-review-2026-07-21.md`. The
-owner decision are preserved as history, but RFC 000 returned the complete RFC
-to Proposed because the amendment is material. The generated manifest,
+owner decision is preserved in the durable review record. RFC 000 returned the
+complete material RFC to Proposed in commit
+`43085e38219e5eb1bfe11cc698b18f1fa5f5e4d7`, and `@nabbisen` explicitly
+accepted the complete amended RFC on 2026-07-21. The generated manifest,
 registry, migration checklist, verification harness, and documentation must
-include them only after complete-RFC reacceptance; the 2026-07-17 base review
-alone cannot authorize them.
+include the amendment; the 2026-07-17 base review alone cannot authorize it.
 
 An already-disabled C17 disable is a non-committing no-op and does not cancel
 an in-progress preflight/enable operation. An operator needing cancellation

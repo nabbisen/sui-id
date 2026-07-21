@@ -88,11 +88,11 @@ at a time; the workspace and structural gate must remain green between waves.
   preflight, checked-increments generation, and stores evidence atomically;
   disable increments generation and clears evidence; C23 increments version +
   generation; C18 increments generation before delete; no standalone writer.
-- [ ] after complete-RFC reacceptance, C23 provider trust-policy replacement with
+- [ ] C23 provider trust-policy replacement under the accepted amended design, with
   guarded version/generation increment, forced disable, attempt invalidation, audit
   rollback, and post-commit cache eviction.
-- [ ] after complete-RFC reacceptance, F01–F06 exact federation
-  attempt/link/user boundaries, including
+- [ ] F01–F06 exact federation attempt/link/user boundaries under the accepted
+  amended design, including
   pending-MFA/method-ceremony/session/bookkeeping/event boundaries, five-failure
   state machine, and cross-command guards.
 - [ ] verify denial/detection observations remain correctly Class B.
