@@ -67,6 +67,7 @@ slot is `093`). One **parallel namespace** also exists:
 |---|---|---|---|
 | 093 | [Build, Toolchain, and Release-Gate Contract](./accepted/093-build-toolchain-release-gates.md) | M1 | `codex-developer` |
 | 094 | [Transactional Audit Completeness and Typed Event Registry](./accepted/094-transactional-audit-registry.md) | M2 | `codex-developer` |
+| 095 | [Dynamic Client Registration Transaction and Validation](./accepted/095-dynamic-client-registration-transaction.md) | M3 | `codex-developer` |
 
 Acceptance makes an RFC implementation-eligible, but coding remains prohibited
 until its declared implementation prerequisites have repository-visible
@@ -80,7 +81,6 @@ and permits design review only; it does not authorize implementation.
 
 | RFC | Title | Milestone |
 |---|---|---|
-| 095 | [Dynamic Client Registration Transaction and Validation](./proposed/095-dynamic-client-registration-transaction.md) | M3 |
 | 096 | [Upstream OIDC Federation Validation](./proposed/096-upstream-oidc-federation-validation.md) | M4 |
 | 097 | [Current Threat Model and Security-Assurance Baseline](./proposed/097-current-threat-model.md) | M5 |
 | 098 | [Documentation Authority and Reconciliation](./proposed/098-documentation-authority-reconciliation.md) | M5 |
