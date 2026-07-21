@@ -1,7 +1,10 @@
 # RFC 096 — Upstream OIDC Federation Validation
 
-**Status.** Proposed
+**Status.** Accepted
 **Security review.** Required
+**Accepted on.** 2026-07-21
+**Approved by.** `@nabbisen`
+**Independent design review.** `codex-independent-architecture-security-reviewer` (OpenAI Codex), [Accept with notes](../reviews/096-design-review-2026-07-21.md)
 **Design prerequisites.** RFC 093 Accepted; complete materially amended RFC 094 Accepted including C17/C18/C23/F01–F06 federation commands; the federation threat delta, discovery/egress policy, and hostile-provider plan require independent design approval.
 **Implementation prerequisites.** RFC 093 Implemented with passing all-feature gates; this RFC Accepted; the hostile-provider harness approved. Pure validation/transport work may begin before RFC 094 implementation, but no federation mutation/session integration may begin until RFC 094 is Implemented and C17/C18/C23/F01–F06 pass their applicable gates.
 **Closure prerequisites.** Discovery, transport, JOSE, claims, state/nonce, cache/rotation, migration, hostile-provider, and representative live-integration evidence pass independent closure review.
@@ -11,7 +14,7 @@
 **Validation matrix.** [`../handoffs/096-upstream-oidc-federation/validation-matrix.md`](../handoffs/096-upstream-oidc-federation/validation-matrix.md)
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** `codex-project-architect` (OpenAI Codex).
-**Implementation owner.** `codex-developer` (OpenAI Codex), only after acceptance and the applicable entry gate.
+**Implementation owner.** `codex-developer` (OpenAI Codex); implementation start remains gated below.
 **Independent security and closure reviewer.** `codex-independent-architecture-security-reviewer` (OpenAI Codex).
 
 ## Summary
