@@ -1,8 +1,8 @@
 # RFC 094 developer handoff
 
-**Governing RFC:** [RFC 094](../../accepted/094-transactional-audit-registry.md)
+**Governing RFC:** [RFC 094](../../proposed/094-transactional-audit-registry.md)
 **Audience:** `codex-developer` after RFC acceptance and prerequisite evidence
-**Status:** Planning companion; inherits the governing RFC's Accepted status, with implementation still blocked on the entry gate below
+**Status:** Planning companion; inherits the governing RFC's Proposed status and authorizes no implementation
 
 This handoff translates RFC 094 into bounded implementation stages. It does
 not approve design, authorize coding, or override the RFC. If implementation
@@ -45,3 +45,27 @@ Stop and return to architecture/security review if:
   a newly discovered crash point;
 - failure injection cannot prove rollback for an inventory row;
 - a change materially alters RFC security invariants or prerequisites.
+
+## Reviewed RFC 096 inventory amendment pending complete-RFC reacceptance
+
+C17/C18 activation handling, C23, and F01–F06 in `command-inventory.md` are an
+reviewed amendment made after the original RFC 094 acceptance. The independent
+review and `@nabbisen` approval are recorded in
+`rfcs/reviews/094-federation-command-amendment-review-2026-07-21.md`. The
+owner decision are preserved as history, but RFC 000 returned the complete RFC
+to Proposed because the amendment is material. The generated manifest,
+registry, migration checklist, verification harness, and documentation must
+include them only after complete-RFC reacceptance; the 2026-07-17 base review
+alone cannot authorize them.
+
+An already-disabled C17 disable is a non-committing no-op and does not cancel
+an in-progress preflight/enable operation. An operator needing cancellation
+must cancel that operation or use an explicit generation-advancing command;
+the UI/docs must not describe repeated disable as revocation.
+
+RFC 096 implementation must stop if it would persist preflight outside C17,
+omit the checked activation-generation guard/increment from C17/C18/C23,
+overload C17 for trust-policy replacement, compose U01/C19/U30 as nested Class-A calls, split one F01–F04
+compound mutation across transactions, or treat a Class-B login observation as
+atomically audited. Cache eviction for C23 is post-commit and never part of the
+SQLite transaction.

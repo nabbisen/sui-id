@@ -1,11 +1,10 @@
 # RFC 094 — Transactional Audit Completeness and Typed Event Registry
 
-**Status.** Accepted
+**Status.** Proposed
 **Security review.** Required
-**Accepted on.** 2026-07-17
-**Approved by.** `@nabbisen`
-**Independent design review.** `codex-independent-architecture-security-reviewer` (OpenAI Codex), [Accept with notes](../reviews/094-design-review-2026-07-17.md)
-**Implementation owner.** `codex-developer` (OpenAI Codex), confirmed by `@nabbisen`
+**Lifecycle history.** Base design accepted 2026-07-17 by `@nabbisen` after [independent review](../reviews/094-design-review-2026-07-17.md); returned to Proposed on 2026-07-21 under RFC 000 because the RFC 096 federation amendment materially changes security invariants and prerequisites.
+**Amendment decision history.** C17/C18/C23/F01–F06 independently reviewed Accept with notes and approved by `@nabbisen` on 2026-07-21; durable record: [`094-federation-command-amendment-review-2026-07-21.md`](../reviews/094-federation-command-amendment-review-2026-07-21.md). This history is not active acceptance metadata.
+**Implementation owner.** `codex-developer` (OpenAI Codex), previously confirmed by `@nabbisen`; implementation is prohibited until the complete amended RFC is reaccepted and all entry gates pass
 **Design prerequisites.** RFC 093 may be reviewed jointly; its gate contract must be Accepted before this RFC is accepted; the attached durable-write inventory, threat delta, and key-recovery state machine require independent design approval.
 **Implementation prerequisites.** RFC 093 is Implemented and its clean-tree matrix passes; this RFC is Accepted; the Class-A inventory and threat delta have independent approval.
 **Closure prerequisites.** Every Class-A production path uses the approved transaction seam; injected append failures roll back mutation for every inventory row; structural coverage passes; independent adversarial closure review accepts durable evidence.
@@ -16,6 +15,12 @@
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** `codex-project-architect` (OpenAI Codex).
 **Independent security and closure reviewer.** `codex-independent-architecture-security-reviewer` (OpenAI Codex).
+
+> **Lifecycle return to Proposed.** The C17/C18/C23/F01–F06 federation command
+> additions below and in the command inventory were independently reviewed and
+> explicitly approved by `@nabbisen` on 2026-07-21. Because they materially
+> amend this RFC, RFC 000 requires the complete RFC to be reaccepted before any
+> part of it is implementation authority.
 
 ## Summary
 
@@ -344,6 +349,165 @@ that remain one intent (user creation with/without HIBP warning, federation
 provider enable/disable, federation-link upsert create/update) register every
 closed event branch and one rollback test per branch in the inventory.
 
+### Reviewed RFC 096 federation command amendment pending complete-RFC reacceptance
+
+RFC 096 adds one new Class-A operator intent and a closed family of federation
+login commands. It does not overload C17 or compose nested Class-A commands.
+
+**C17 enable amendment** eliminates a standalone durable preflight writer.
+Production preflight returns a private non-cloneable/non-debuggable/
+non-serializable `ValidatedProviderPreflight` only after complete RFC 096
+transport, discovery, and JWKS validation. It binds provider ID/version, exact
+disabled-state activation generation, complete durable-policy digest, trusted
+observation time, and bounded metadata/
+key-set fingerprints. Failure, cancellation, or restart creates/preserves no
+authorization evidence.
+
+The C17 enable Class-A transaction consumes the capability and, after
+`BEGIN IMMEDIATE`, captures `guard_at`; requires
+`0 <= guard_at - observed_at < 600s`; rechecks exact disabled/non-deleted
+provider/version/policy digest/activation generation; checked-increments that
+generation; stores evidence bound to the new generation; enables; and appends
+`federation.provider.enabled`. Exactly 600 seconds is stale. Disable requires a
+currently enabled row and, in one C17 transaction, checked-increments the same
+generation, clears evidence, disables, invalidates login attempts,
+federated-MFA continuations, and ceremonies, and appends its event. An
+already-disabled request does not commit or consume a generation.
+
+`activation_generation` is a durable canonical-decimal checked `u64` separate
+from policy `config_version`; new/migrated rows start at zero. Malformed,
+noncanonical, missing, or maximum state fails closed. Distinct concurrent
+preflights may exist, but the exact generation guard and enable increment
+permit one winner and invalidate all sibling capabilities. Stale, replayed,
+wrong-provider/policy/generation, deleted, or already-enabled input rolls back
+without an event. C23 increments both version and generation. C18 increments
+generation and invalidates evidence/flows before delete; a deleted/missing row
+cannot match. Every increment, state/evidence/flow change, event, and audit
+append shares the owning transaction, so overflow/failure/cancellation rolls
+back all effects.
+
+C17 retains its authorized administrator actor and internal provider target.
+The enable event adds version, old/new activation generation, and bounded
+fingerprint identifiers from the
+sealed capability, never metadata/JWKS bodies or endpoints. The disable event
+adds old/new activation generation and bounded invalidated
+login-attempt/MFA/ceremony counts. C18 records old/new generation. Observation
+time is
+stored as typed evidence but arbitrary caller time cannot enter the event.
+
+**C23 federation-provider trust-policy replacement** atomically validates the
+expected current version and generation, checked-increments both
+`config_version` and `activation_generation`, replaces the
+complete typed trust policy, sets the provider disabled/review-required,
+invalidates every pending/exchanging login attempt, federated-MFA continuation,
+and bound ceremony for the old version, and
+appends `federation.provider.policy_updated`. Missing/malformed/overflowed
+counter, predicate loss, attempt invalidation failure, event failure, or audit
+failure rolls back all database effects. Cache eviction occurs only after
+commit. Old cache entries remain non-authoritative because every lookup binds
+the durable provider version, activation generation, and enabled state;
+eviction failure may deny but
+cannot re-authorize the old version.
+
+C23 runs after migrations and audit-chain readiness but before the affected
+provider can be routed or preflighted. Its sealed system actor is
+`StartupConfiguration`; the target is internal provider ID. Event attributes
+are old/new version and activation generation, sorted changed-field enum names,
+bounded invalidated
+login-attempt/MFA/ceremony counts,
+and resulting `disabled/requires_review` state. They exclude issuer/origin/
+client identifiers, secret material, and configuration values. Its guarded
+predicate requires exact provider ID, exact old version and activation
+generation, non-deleted row, and the fully validated proposed policy; exactly
+one provider row must change.
+
+Federated authentication then uses exact commands F01–F06 from the attached
+inventory:
+
+- F01 is the Protocol-class existing-link/no-MFA promotion transaction;
+- F02 is the Protocol-class existing-link/local-MFA-pending transaction;
+- F03 is the Protocol-class local-MFA completion transaction;
+- F04 is the Class-A first-provision transaction and emits exactly
+  `auth.federation.provisioned`; and
+- F05 is the Protocol-class terminal attempt failure/denial transition; and
+- F06 is the Protocol-class federated WebAuthn ceremony creation/replacement.
+
+F01–F03/F05/F06 keep RFC 094's accepted U30/U32/U33/U24 protocol classification and
+Class-B login-result policy. They nevertheless use one `WriteTx<Protocol>` per
+listed compound transition so a consumed attempt or pending ceremony cannot be
+separated from the corresponding session. Their post-commit
+`auth.federation.signin.success` or fixed failure/denial event is must-attempt,
+not represented as atomically audited. F04 is different: it creates durable
+identity authority and therefore uses one Class-A transaction and one event.
+It calls private mutation primitives rather than nesting U01, C19, or U30.
+
+Newly provisioned users have no pre-existing local MFA factor, so F04 has no
+MFA-pending branch. An upstream identity never auto-merges into a local user;
+only an already existing `(provider_id, sub)` link can enter F02/F03.
+
+`federation_link.last_seen_at` and last-seen upstream email become internal
+observation primitives callable only inside F01, F03, or F04. They are not C19
+link-policy updates and cannot create/reassign a link. Failure rolls back the
+owning compound transaction. Invalid MFA and non-mutating denials produce no
+login success; F05 owns only the guarded attempt transition and a separate
+must-attempt observation. F06 owns only method-ceremony protocol state bound to
+F02/F03.
+
+The generated manifest must register the new command IDs, every subordinate
+write site, closed event bindings, and cross-command negative fixtures.
+F01/F02/F04 accept only an RFC 096 verified-identity/claimed-attempt capability;
+F03 accepts only the corresponding one-time federated-MFA capability. Type and
+runtime predicates reject using an F02 continuation with password MFA, nesting
+C19/U01/U30 beneath F04, or completing/creating a session from a failed,
+wrong-provider, wrong-user, expired, or already-consumed row.
+
+F01/F02/F04 recheck that the provider is enabled at the attempt's exact
+version and activation generation. F01/F02 additionally require the same active link and active user;
+F04 rechecks absence of the provider/sub link, verified unique email, username
+uniqueness, and non-admin result inside its transaction. F03 rechecks an
+unexpired continuation, enabled exact-version-and-activation-generation provider, unchanged active link,
+active user, and applicable enabled local factor. The row has a five-minute
+exclusive expiry, durable `failure_count` constrained 0–5, and terminal status.
+Its closed results are `Promoted`, `RejectedStillPending`,
+`AttemptsExhausted`, and `Invalidated`. Each bound wrong method proof atomically
+increments once; counts 1–4 remain pending and exactly 5 exhausts/destroys the
+continuation plus bound ceremonies. A correct proof promotes only at counts
+0–4. Authority drift/expiry invalidates. F03 never turns a denial branch into
+password login. Terminal rows are unusable and purged after 24 hours; restart
+does not reset count.
+
+TOTP promotion updates a strictly newer durable step with the session.
+Recovery promotion removes exactly the matched hash with the session. F06
+creates/replaces one WebAuthn `FederatedLogin` ceremony bound to the F02 row,
+provider/version/activation-generation/link/user/RP/origin/challenge and no-later expiry. F03 consumes
+that exact ceremony and passkey counter only with session promotion. Wrong
+WebAuthn consumes the failed ceremony and increments the shared F03 count;
+wrong TOTP/recovery consumes no anti-replay authority. Method proof types are
+sealed and non-substitutable.
+
+A private bounded `FederatedMfaVerifier` is the sole producer of those proof
+types. Only after browser/CSRF/pending/provider-version-generation/user binding
+does it produce a sealed method-specific valid candidate or a sealed
+`BoundRejected` with its own closed reason. Binding failure produces neither.
+Handlers cannot construct either candidate or choose a row-touching rejection
+reason; F03 accepts only the verifier output and rechecks authoritative state.
+
+F03 post-commit Class-B variants are exactly
+`auth.federation.signin.success`, `auth.federation.mfa_rejected`,
+`auth.federation.mfa_exhausted`, and `auth.federation.mfa_invalidated`, with the
+closed RFC 096 reason enums. F05 selects exactly
+`auth.federation.signin.upstream_failure`,
+`auth.federation.takeover_blocked`, `auth.federation.link_required`, or
+`auth.federation.signin.denied` with those closed reason enums. No arbitrary
+upstream/identity/proof value enters the payload.
+
+F04's event actor is the newly created user through the sealed verified
+federated principal and its target is that user. Bounded attributes contain
+internal provider/link IDs and the fixed `provision_on_first_login` mode; they
+exclude subject, email, username, issuer, token, and upstream text. No separate
+`user.create`, `auth.federation.link.created`, or login-success event is
+emitted for the same F04 intent.
+
 ### Refresh issuance and rotation boundary
 
 Initial root-family refresh-token issuance is T09, a Protocol-class command
@@ -603,7 +767,8 @@ including dynamic registration, is converted with no best-effort exception.
   authority fields, wrong command/event binding, arbitrary kind, unmapped or
   duplicate variant mapping, and unauthorized system principal.
 - Per-command parameterized rollback tests for every Class-A inventory row.
-- Closed-branch tests cover every U01/U22/T04/C17/C19 event variant and prove
+- Closed-branch tests cover every U01/U22/T04/C17/C19 and, after reacceptance of the reviewed
+  amendment, C17-preflight/C18/C23/F03–F06 result/event variant and prove
   no committed outcome can omit an event.
 - Secret-lifecycle tests exercise every T04 non-returning branch through the
   zeroizing wrapper without logging, formatting, or comparing the raw token.

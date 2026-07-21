@@ -1,8 +1,12 @@
 # RFC 094 Stage-0 durable-write command inventory
 
 **Snapshot:** v0.76.12 working tree, inspected 2026-07-17
-**Governing RFC:** [RFC 094](../../accepted/094-transactional-audit-registry.md)
-**Review state:** Independently design-approved on 2026-07-17; implementation reconciliation and entry gates remain pending
+**Governing RFC:** [RFC 094](../../proposed/094-transactional-audit-registry.md)
+**Review state:** Base inventory independently design-approved on 2026-07-17;
+the C17/C18/C23/F01–F06 RFC 096 amendment was independently reviewed and
+approved by `@nabbisen` on 2026-07-21, but the complete material amendment is
+Proposed pending reacceptance; implementation reconciliation and entry gates
+remain pending
 
 This is the closed Stage-0 classification of production durable-write entry
 points. The implementation converts it to `ci/write-commands.toml` without
@@ -36,8 +40,14 @@ corresponding typed payload. There is no successful variant without a payload.
 - T04 branches on a normal refresh-rotation winner versus reuse-triggered
   family revocation; both outcomes are Class A.
 - C17 branches on the requested provider enabled state; both branches have
-  separate payload/test bindings.
+  separate payload/test bindings. Its enable branch consumes a fresh sealed
+  exact-policy/version/generation preflight capability, increments generation,
+  and stores its evidence atomically; disable increments generation, clears
+  evidence, and invalidates attempts.
 - C19 branches on the transaction's authoritative insert-versus-update result.
+- C23 has one provider-policy-replacement outcome; the old/new version/generation
+  predicate and attempt invalidation are part of that outcome, not C17.
+- F04 has one first-provision outcome. It is not a nested U01+C19+U30 command.
 
 Client enable/disable and registration-authorization issue/revoke are distinct
 operator intents and therefore use separate IDs (C05/C21 and C14/C22), even
@@ -102,13 +112,74 @@ though each pair shares one current repository function family.
 | C13 | Delete authorization-scope definition | A | `scope_definition.deleted` | `scope_definition::delete` | `a_c13_scope_delete` |
 | C14 | Issue registration authorization | A | `client.registration_token.created` | `client_registration_token::create` | `a_c14_registration_issue` |
 | C15 | Dynamic client registration baseline | A | `client.dynamic_register` | guarded `client_registration_token::consume`, `clients::create`, `set_registered_via` in one RFC 094 transaction | `a_c15_dynamic_register` |
-| C16 | Federation-provider create | A | `federation.provider.created` | `federation_provider::create` | `a_c16_provider_create` |
-| C17 | Federation-provider enable/disable | A | closed requested-state branches: `federation.provider.enabled` / `federation.provider.disabled` | `federation_provider::set_enabled` | `a_c17_provider_enable`, `a_c17_provider_disable` |
-| C18 | Federation-provider delete | A | `federation.provider.deleted` | `federation_provider::delete` | `a_c18_provider_delete` |
+| C16 | Federation-provider create | A | `federation.provider.created` | create globally fresh never-reused provider ID, disabled/review-required, with canonical `activation_generation=0` | `a_c16_provider_create` |
+| C17 | Federation-provider enable/disable | A | closed branches `federation.provider.enabled` / `federation.provider.disabled`; both record old/new activation generation; enable consumes sealed preflight (<600s), disable clears evidence | exact provider/version/policy/generation/enabled guard; both checked-increment generation; enable stores evidence bound to new generation, disable invalidates login/MFA/ceremony state; no standalone writer | `a_c17_provider_enable`, `a_c17_provider_disable`, `a_c17_preflight_race`, `a_c17_generation_overflow` |
+| C18 | Federation-provider delete | A | `federation.provider.deleted`; old/new activation generation + bounded invalidated counts | exact non-deleted generation guard; checked-increment generation, clear evidence, invalidate login/MFA/ceremony state, then mark/remove provider in one transaction | `a_c18_provider_delete`, `a_c18_generation_overflow` |
 | C19 | Federation-link upsert | A | closed persistence-result branches: `auth.federation.link.created` / `auth.federation.link.updated` | `federation_link::upsert` | `a_c19_link_create`, `a_c19_link_update` |
 | C20 | Federation-link delete | A | `auth.federation.link.deleted` | `federation_link::delete` | `a_c20_link_delete` |
 | C21 | Enable client | A | `client.enable` | `clients::set_disabled(false)` | `a_c21_enable` |
 | C22 | Revoke registration authorization | A | `client.registration_token.revoked` | `client_registration_token::revoke` | `a_c22_registration_revoke` |
+| C23 | Replace federation-provider trust policy / RFC 096 startup configuration | A | `federation.provider.policy_updated`; sealed `StartupConfiguration` actor, provider-ID target, old/new version and activation generation + changed-field enums + invalidated counts | guarded full policy replace on exact non-deleted old version/generation, checked-increment both, force disabled/review-required, clear evidence, invalidate old flows; cache eviction post-commit | `a_c23_provider_policy_update`, `a_c23_generation_overflow` |
+
+## RFC 096 federation login commands (reviewed amendment pending reacceptance)
+
+These rows freeze the compound ownership boundary. F01–F03/F05/F06 are explicit
+Protocol exclusions under the already accepted U24/U30/U32 and Class-B
+login-result policy; “P” does not mean separate best-effort writes. Each uses
+one protocol transaction and the private subordinate primitives listed here.
+F04 creates identity authority and is Class A.
+
+| ID | Logical command / owner | Class | Typed event or rationale | Atomic mutation surface | Required test ID |
+|---|---|---|---|---|---|
+| F01 | Existing federation link, no local MFA / RFC 096 federation login | P | one authentication protocol promotion; post-commit `auth.federation.signin.success` is Class B under U24/U30 policy | require enabled exact-version/generation provider + same active link/user; guarded `federation_login_attempt exchanging -> completed`; observe existing link last-seen/bounded verified email; login bookkeeping; insert session with `[Fed]`; enforce session cap | `p_f01_linked_direct` |
+| F02 | Existing federation link, local MFA required / RFC 096 federation login | P | short-lived continuation under U32; no login-success event before MFA | require enabled exact-version/generation provider + same active link/user; guarded attempt `exchanging -> completed`; insert one pending MFA row sealed as `Fed` primary and bound to provider/version/generation/link/user/continuation | `p_f02_linked_mfa_begin` |
+| F03 | Submit/complete federated local MFA / RFC 096 MFA login | P | closed `Promoted`, `RejectedStillPending`, `AttemptsExhausted`, `Invalidated`; exact Class-B success/rejected/exhausted/invalidated event after commit | guard pending, unexpired, count 0–4, exact provider/link/user/factor/method; wrong proof increments once (1–4 pending, 5 exhausted); Promoted consumes method anti-replay + pending, observes link, bookkeeps, inserts `[Fed, local_method]` session/cap; Invalidated terminalizes only | `p_f03_promoted`, `p_f03_rejected`, `p_f03_exhausted`, `p_f03_invalidated` |
+| F04 | First federated provisioning and direct login / RFC 096 federation login | A | `auth.federation.provisioned`; new-user sealed-federated actor/target, internal provider/link IDs, fixed mode | require enabled exact-version/generation provider; guard attempt `exchanging -> completed`; recheck absent link + verified unique email + username uniqueness; create passwordless non-admin user; create exactly one provider/sub link; insert `[Fed]` session; enforce cap; append sole intent event | `a_f04_provision` |
+| F05 | Terminal federation attempt failure/denial / RFC 096 federation login | P | one-time terminalization; exact Class-B sum: `auth.federation.signin.upstream_failure`, `takeover_blocked`, `link_required`, or `signin.denied` with closed reason enum | guarded pending/exchanging attempt to failed; no link/user/session/last-seen mutation | `p_f05_upstream`, `p_f05_takeover`, `p_f05_link_required`, `p_f05_denied` |
+| F06 | Begin/replace federated WebAuthn method ceremony / RFC 096 MFA login | P | method ceremony under U33; no authentication-success event/authority | require pending F02 row count 0–4 and exact unexpired provider/version/generation/link/user; atomically replace at most one `FederatedLogin` ceremony bound to parent/RP/origin/challenge and capped expiry | `p_f06_webauthn_begin`, `p_f06_webauthn_replace` |
+
+F01/F03/F04 update link observation only for a successful session-producing
+transaction. Observation cannot create, reassign, or delete a link and is an
+internal primitive beneath those commands, not C19. Any observation/session/
+cap/bookkeeping failure rolls back that protocol or Class-A transaction.
+
+F02 creates no session, changes no link observation, and emits no success.
+F03 starts from count zero and allows five wrong bound submissions total across
+methods. Counts 1–4 commit `RejectedStillPending`; equality at 5 commits
+`AttemptsExhausted`; no sixth transition exists. Correct promotion is allowed
+only at 0–4. Invalid browser/CSRF binding touches no row. TOTP step, recovery
+hash, or passkey counter cannot commit without the session. Wrong recovery/TOTP
+consumes no anti-replay authority; wrong WebAuthn consumes only its failed F06
+ceremony while incrementing the shared count. F04 has no MFA branch because its new passwordless user
+cannot already own a local factor. Collision/disabled-user/link-only and all
+post-claim validation failures go through F05 and never call F01–F04/F06.
+
+F03 Class-B observations are exactly `auth.federation.signin.success` or:
+
+- `auth.federation.mfa_rejected` with
+  `totp|recovery|webauthn|malformed|method_mismatch`;
+- `auth.federation.mfa_exhausted` with `attempt_limit`; or
+- `auth.federation.mfa_invalidated` with
+  `expired|provider_changed|provider_disabled|link_changed|user_inactive|factor_changed|ceremony_invalid`.
+
+F05 Class-B observations are exactly:
+
+- `auth.federation.signin.upstream_failure` with
+  `upstream_error|transport|discovery|token_response|jose|claims|timeout|cancelled`;
+- `auth.federation.takeover_blocked` with `email_collision`;
+- `auth.federation.link_required` with `link_only`; or
+- `auth.federation.signin.denied` with
+  `attempt_expired|provider_changed|provider_disabled|user_inactive|link_changed|provision_policy|internal_failure`.
+
+These are registry enums, not strings supplied by handlers. Payloads contain
+internal IDs only and reject proof/counter/email/subject/endpoint/upstream text.
+
+Compile-negative fixtures reject nested Class-A invocation; direct use of the
+link-observation/user/link/session primitives; construction or substitution of
+verified-attempt and federated-MFA capabilities; and event/session completion
+from the wrong command. Fault tests inject every write/event/commit point and
+reconcile attempt, pending-MFA, anti-replay, user, link, session, bookkeeping,
+session-cap, event, and chain state.
 
 ## Tokens and protocol grants
 

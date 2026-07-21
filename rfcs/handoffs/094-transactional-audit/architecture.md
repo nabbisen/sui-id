@@ -40,6 +40,70 @@ receipt used by `Audited<T>`.
 
 Names may change, boundaries may not.
 
+## Reviewed RFC 096 federation command architecture pending reacceptance
+
+If the complete amended RFC is reaccepted, C23 uses the independently reviewed
+Class-A algorithm below
+with sealed `StartupConfiguration` authority. Cache eviction is never passed
+into or awaited by the SQLite closure:
+
+```text
+validated complete policy + expected provider/version/generation
+  -> BEGIN IMMEDIATE
+  -> require exact non-deleted provider/version/generation; checked increment both
+  -> replace complete policy; force disabled/requires_review
+  -> invalidate pending/exchanging old-version attempts
+  -> append federation.provider.policy_updated
+  -> COMMIT
+  -> best-effort immediate cache eviction
+```
+
+Old cache state remains denied even if eviction fails because every cache use
+requires the durable enabled exact version and activation generation. Preflight/routing begins only after
+C23 returns its audited commit.
+
+Preflight itself performs no write. Its private result is consumed by C17:
+
+```text
+ValidatedProviderPreflight(provider, version, activation_generation, policy_digest, observed_at, fingerprints)
+  -> BEGIN IMMEDIATE; capture guard_at
+  -> require age >= 0 and < 600s
+  -> require exact disabled/non-deleted provider/version/generation/policy digest
+  -> checked increment generation; store evidence bound to new generation; set enabled
+  -> append federation.provider.enabled
+  -> COMMIT
+```
+
+C17 disable requires enabled and checked-increments generation while clearing
+evidence and invalidating attempts atomically. C23 increments version and
+generation; C18 increments generation before delete. Any overflow fails closed.
+A failed/cancelled/restarted preflight produces no capability/write;
+preflight is unavailable while enabled, and concurrent same-generation
+capabilities race on the generation guard so one wins. The
+stored evidence cannot be extracted back into a capability or reused for
+re-enable.
+
+F01–F03/F05/F06 use the same sealed-executor shape with
+`WriteTx<Protocol>` and no `Audited<T>` receipt; their compound rows are still
+one transaction. F04 uses `WriteTx<AtomicAudit>` and returns `Audited<T>` only
+after its one provisioning event commits. F01/F02/F04 consume a private
+verified-identity plus claimed-attempt capability. F03 consumes the private
+Fed-bound pending-MFA capability including activation generation; F06 creates only its method-bound WebAuthn
+ceremony. These capability families are disjoint from ordinary password MFA
+and cannot call each other's writers.
+
+F03 has four committing Protocol results. Promotion atomically consumes local
+anti-replay/pending state and creates the session. Rejection guarded-increments
+the shared durable count to 1–4. Exhaustion increments to exactly 5 and
+terminalizes the continuation/ceremonies. Invalidation terminalizes after
+authority drift/expiry. A private verifier alone creates sealed valid or
+`BoundRejected` candidates after browser/CSRF/pending binding; the handler
+cannot construct a reason. Invalid binding does not reach F03 and no sixth
+increment exists. F05 can terminalize pending/exchanging login attempts
+but cannot receive user/link/session mutation capability. The exact predicates,
+subordinate writes, and event classifications are frozen in
+`command-inventory.md`.
+
 ## Transaction algorithm
 
 1. Validate and authorize before acquiring the database writer when those

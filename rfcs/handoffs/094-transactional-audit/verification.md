@@ -41,7 +41,24 @@ CI self-tests must demonstrate failure for:
   or payload used with the wrong command type;
 - unmapped command-event variant, duplicate descriptor mapping, or event
   descriptor outside the command's closed allowed set;
-- generated audit reference drift.
+- generated audit reference drift;
+- C23 invoked through C17, cache eviction placed inside its transaction, or an
+  old provider version authorizing after committed policy replacement;
+- preflight evidence written outside C17, capability cloning/serialization/
+  substitution, age exactly 600 accepted, stale-version/policy/generation enable,
+  duplicate concurrent enable, generation overflow/coercion, preflight while
+  enabled, or stored/pre-disable capability reused after disable/restart;
+- F04 nesting U01/C19/U30 or any F01–F04 subordinate primitive callable as a
+  production entry point;
+- verified-attempt/federated-MFA capability construction, cloning, cross-user/
+  provider/command substitution, handler-built `BoundRejected`/reason, invalid
+  binding that touches a row, or password-primary use of an F02 row; and
+- F01/F03/F04 session or success construction from an uncompleted, failed,
+  expired, already-consumed, wrong-user, or wrong-provider protocol row; and
+- a sixth MFA failure transition; count reset on restart/method switch; correct
+  promotion at count 5; wrong proof consuming TOTP/recovery/passkey authority;
+  WebAuthn ceremony unbound to F02 or completed outside F03; and F03/F05 event
+  name or reason outside the frozen enum.
 
 ## Class-B verification
 
@@ -61,6 +78,15 @@ acceptance. It must include:
 - concurrency result rows for sensitive guarded commands;
 - one observed branch result for every closed multi-event Class-A enum, with no
   successful no-event variant;
+- after complete-RFC reacceptance, C17 preflight capability age/race/replay and
+  P1/P2-enable-disable-P2 rejection, every activation-generation transition/
+  overflow/rollback, plus C18/C23 rollback/version/attempt invalidation and
+  post-commit cache-eviction failure;
+  and F01–F06 fault/concurrency
+  reconciliation across attempt, pending-MFA, anti-replay, user, link, session,
+  bookkeeping, cap, event, and chain state;
+- 2/8/64-way wrong/correct MFA races for every method, final-attempt equality,
+  restart, expiry, method substitution, F06 replacement, and post-limit replay;
 - T04 rollback/contention rows for guarded revoke, successor insert, family
   revoke, each event append, and commit; initial issuance reconciles separately
   to T09/P;
