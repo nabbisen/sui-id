@@ -1,0 +1,22 @@
+version = 1
+blocking_checks = ["text-leaks", "css-tokens-resolve", "semantic-palette-parity", "inline-style-bound"]
+
+[text-leaks]
+source_root = "crates"
+
+[css-tokens-resolve]
+declaration_files = ["crates/sui-id-web/src/tokens.rs", "crates/sui-id-web/src/components.rs"]
+usage_root = "crates"
+
+[semantic-palette-parity]
+token_file = "crates/sui-id-web/src/tokens.rs"
+families = ["danger", "warning", "success", "info"]
+slots = ["default", "subtle", "fg-on"]
+required_mode_roots = 3
+
+[inline-style-bound]
+pages_root = "crates/sui-id-web/src/pages"
+maximum = 20
+
+[advisory_checks]
+checks = ["standalone-translations", "unused-css-tokens"]
