@@ -84,9 +84,9 @@ pub async fn login_get(
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
     // Already logged in? Forward to `next` if present, otherwise /admin.
-    if let Some(cookie) = jar.get(SESSION_COOKIE) {
-        if let Ok(sid) = SessionId::from_str(cookie.value()) {
-            if session::resolve(&app.db, &app.clock, sid).await.is_ok() {
+    if let Some(cookie) = jar.get(SESSION_COOKIE)
+        && let Ok(sid) = SessionId::from_str(cookie.value())
+            && session::resolve(&app.db, &app.clock, sid).await.is_ok() {
                 let dest = if q.next.starts_with('/') {
                     q.next.clone()
                 } else {
@@ -94,8 +94,6 @@ pub async fn login_get(
                 };
                 return Ok(Redirect::to(&dest).into_response());
             }
-        }
-    }
     // Thread `next` into the form so login_post can redirect to it.
     let next = if q.next.is_empty() {
         None
@@ -140,7 +138,7 @@ pub async fn try_login_with_cascade(
 
     match local_result {
         // Local success or MFA-required: return directly.
-        Ok(outcome) => return Ok(outcome),
+        Ok(outcome) => Ok(outcome),
         Err(CoreError::InvalidCredentials) => {
             // Could be wrong password OR unknown user.  Check whether the
             // username exists locally to decide whether to try the cascade.
@@ -549,11 +547,10 @@ pub async fn logout(
     if crate::handlers::enforce_csrf(&jar, Some(&form.csrf)).is_err() {
         return Ok(Redirect::to("/admin/login").into_response());
     }
-    if let Some(c) = jar.get(SESSION_COOKIE) {
-        if let Ok(sid) = SessionId::from_str(c.value()) {
+    if let Some(c) = jar.get(SESSION_COOKIE)
+        && let Ok(sid) = SessionId::from_str(c.value()) {
             let _ = session::logout(&app.db, sid).await;
         }
-    }
     let jar = jar.add(clear_session_cookie(app.config.server.cookie_secure));
     // Render the login page with a "Signed out" confirmation.
     let flash = Flash {

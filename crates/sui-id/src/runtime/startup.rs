@@ -124,11 +124,10 @@ pub async fn prepare(cfg: Config) -> Result<Startup> {
     }
 
     // 2. Open the database (runs migrations).
-    if let Some(parent) = cfg.storage.db_path.parent() {
-        if !parent.as_os_str().is_empty() {
+    if let Some(parent) = cfg.storage.db_path.parent()
+        && !parent.as_os_str().is_empty() {
             std::fs::create_dir_all(parent).ok();
         }
-    }
     let db = Database::open(&cfg.storage.db_path, resolved.key).context("opening database")?;
 
     // Verify the tail of the audit-log hash chain. A mismatch here
@@ -324,6 +323,10 @@ pub async fn prepare(cfg: Config) -> Result<Startup> {
 
 fn generate_setup_token() -> String {
     let mut buf = [0u8; 24];
+    // A broken OS CSPRNG means we cannot mint a setup token safe to use as
+    // a one-time credential; continuing with non-random output would be a
+    // real vulnerability, so this must panic rather than degrade.
+    #[allow(clippy::expect_used)]
     getrandom::fill(&mut buf).expect("system RNG unavailable");
     let mut out = vec![0u8; 64];
     let n = Base64::encode(&buf, &mut out).map(str::len).unwrap_or(0);

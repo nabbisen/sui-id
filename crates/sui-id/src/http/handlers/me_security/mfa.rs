@@ -63,8 +63,7 @@ pub async fn mfa_get(
     Ok(with_csrf_cookie(resp, &app, &csrf_tok))
 }
 
-/// GET /me/security/sessions — Sessions tab
-
+/// POST /me/security/mfa/enroll/start — begin TOTP enrollment
 pub async fn mfa_enroll_start(
     state_ext: AppStateExt,
     CurrentUser(user_id): CurrentUser,
@@ -102,7 +101,6 @@ pub async fn mfa_enroll_start(
 /// POST /me/security/mfa/enroll/confirm — confirm 6-digit TOTP code,
 /// enable MFA, and surface the fresh recovery codes inline on the
 /// MFA tab.
-
 pub async fn mfa_enroll_confirm(
     state_ext: AppStateExt,
     CurrentUser(user_id): CurrentUser,
@@ -147,7 +145,6 @@ pub async fn mfa_enroll_confirm(
 }
 
 /// POST /me/security/mfa/disable
-
 pub async fn mfa_disable(
     state_ext: AppStateExt,
     CurrentUser(user_id): CurrentUser,
@@ -184,7 +181,6 @@ pub async fn mfa_disable(
 }
 
 /// POST /me/security/mfa/recovery-codes/regenerate
-
 pub async fn mfa_regenerate_recovery(
     state_ext: AppStateExt,
     CurrentUser(user_id): CurrentUser,
@@ -225,7 +221,6 @@ pub async fn mfa_regenerate_recovery(
 
 /// Helper: render the MFA tab page with fresh recovery codes
 /// embedded inline (one-time display) and a flash banner.
-
 async fn render_mfa_tab_with_fresh_codes(
     app: &crate::state::AppState,
     jar: &CookieJar,

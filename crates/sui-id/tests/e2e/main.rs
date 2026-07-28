@@ -18,6 +18,11 @@
 //!   2. Add a `mod <your_theme>;` line below.
 //!   3. Use helpers from `super::common::*` rather than duplicating them.
 
+// This whole binary is integration-test code: unwrap()/expect()/panic!() on
+// setup and assertion steps is normal here and a failure is exactly the
+// panic we want (`cargo test` reports it as a test failure).
+#![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
+
 mod common;
 
 mod acr_amr;

@@ -230,18 +230,20 @@ async fn serve_dev(args: &[String]) -> Result<()> {
     // master key that this process generates. Keep storage paths
     // unset by pointing them at /dev/null-style placeholders that
     // the dev-mode flow does not read from.
-    cfg.storage.db_path = std::path::PathBuf::from(
-        dev_db
+    cfg.storage.db_path = dev_db
             .as_deref()
             .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| std::path::PathBuf::from(":memory:")),
-    );
+            .unwrap_or_else(|| std::path::PathBuf::from(":memory:"));
 
     // Open DB and seed.
     let db = dev_mode::open_dev_db(dev_db.as_deref())?;
     let setup_token = {
         use base64ct::Encoding;
         let mut buf = [0u8; 24];
+        // A broken OS CSPRNG means we cannot mint a setup token safe to use
+        // as a one-time credential; continuing with non-random output would
+        // be a real vulnerability, so this must panic rather than degrade.
+        #[allow(clippy::expect_used)]
         getrandom::fill(&mut buf).expect("system RNG unavailable");
         base64ct::Base64::encode_string(&buf)
     };

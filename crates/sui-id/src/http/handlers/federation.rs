@@ -82,6 +82,9 @@ fn hmac_state(app: &AppState, data: &[u8]) -> String {
     let mut key_material = Vec::with_capacity(32 + HMAC_KEY_SUFFIX.len());
     key_material.extend_from_slice(raw_key.as_bytes());
     key_material.extend_from_slice(HMAC_KEY_SUFFIX);
+    // HMAC-SHA256 has no fixed key-size requirement (RFC 2104); new_from_slice
+    // only fails for algorithms that do, so this cannot fail here.
+    #[allow(clippy::expect_used)]
     let mut mac =
         Hmac::<Sha256>::new_from_slice(&key_material).expect("HMAC accepts any key length");
     mac.update(data);
@@ -315,7 +318,9 @@ pub async fn federated_callback(
         .await
         .map_err(|e| {
             tracing::warn!(slug = %provider.slug, error = %e, "federation token exchange: discovery failed");
-            // Audit upstream failure
+            // Audit upstream failure. emit_audit_soon already tokio::spawn()s
+            // before returning; the JoinHandle is fire-and-forget by design.
+            #[allow(clippy::let_underscore_future)]
             let _ = emit_audit_soon(
                 app.db.clone(), app.clock.now(),
                 sui_id_store::repos::federation_provider::AUDIT_SIGNIN_UPSTREAM_FAILURE,
@@ -357,6 +362,9 @@ pub async fn federated_callback(
         Ok(r) => r,
         Err(e) => {
             tracing::warn!(error = %e, slug = %provider.slug, "token exchange failed");
+            // emit_audit_soon already tokio::spawn()s before returning; the
+            // JoinHandle is fire-and-forget by design.
+            #[allow(clippy::let_underscore_future)]
             let _ = emit_audit_soon(
                 app.db.clone(),
                 app.clock.now(),
@@ -403,12 +411,11 @@ pub async fn federated_callback(
     };
 
     // Nonce check (P5 replay protection).
-    if let Some(ref token_nonce) = id_claims.nonce {
-        if token_nonce != &fed_state.nonce {
+    if let Some(ref token_nonce) = id_claims.nonce
+        && token_nonce != &fed_state.nonce {
             tracing::warn!(slug = %provider.slug, "federation nonce mismatch");
             return Ok(Redirect::to("/admin/login?fed_error=nonce_mismatch").into_response());
         }
-    }
 
     if id_claims.sub.is_empty() {
         return Ok(Redirect::to("/admin/login?fed_error=no_sub").into_response());
@@ -446,8 +453,8 @@ pub async fn federated_callback(
         None => {
             // P2: check for email collision with an existing user that has a
             // different provider link (attempted account takeover).
-            if let Some(ref email) = id_claims.email {
-                if let Ok(Some(_collision)) = sui_id_store::repos::users::find_by_email_normalized(
+            if let Some(ref email) = id_claims.email
+                && let Ok(Some(_collision)) = sui_id_store::repos::users::find_by_email_normalized(
                     &app.db,
                     &sui_id_shared::normalize_email(email),
                 )
@@ -478,7 +485,6 @@ pub async fn federated_callback(
                         Redirect::to("/admin/login?fed_error=email_collision").into_response()
                     );
                 }
-            }
 
             match provider.provision_mode {
                 ProvisionMode::ProvisionOnFirstLogin => {
@@ -602,7 +608,7 @@ async fn complete_federated_signin(
     if mfa_enabled {
         let pending = sui_id_core::mfa::issue_pending_mfa(&app.db, &app.clock, user_id)
             .await
-            .map_err(|e| HttpError::html(e))?;
+            .map_err(HttpError::html)?;
         let cookie = crate::handlers::pending_mfa_cookie(
             pending.id.to_string(),
             app.config.server.cookie_secure,
@@ -675,8 +681,8 @@ fn derive_username(claims: &IdTokenClaims) -> String {
             return clean;
         }
     }
-    if let Some(ref email) = claims.email {
-        if let Some(local) = email.split('@').next() {
+    if let Some(ref email) = claims.email
+        && let Some(local) = email.split('@').next() {
             let clean: String = local
                 .chars()
                 .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
@@ -686,7 +692,6 @@ fn derive_username(claims: &IdTokenClaims) -> String {
                 return clean;
             }
         }
-    }
     // Final fallback: first 16 chars of sub
     claims.sub.chars().take(16).collect()
 }
@@ -759,6 +764,7 @@ fn emit_audit_soon(
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used, clippy::unwrap_used)]
 mod tests {
     use super::decode_id_token_claims;
     use base64ct::{Base64UrlUnpadded, Encoding};

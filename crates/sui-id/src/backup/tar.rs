@@ -93,7 +93,7 @@ pub(crate) fn read_tar(bytes: &[u8]) -> Result<Vec<(String, Vec<u8>)>> {
         let body = bytes[idx..idx + size as usize].to_vec();
         out.push((name, body));
         // Advance past the rounded-up data area.
-        let padded = ((size as usize) + BLOCK - 1) / BLOCK * BLOCK;
+        let padded = (size as usize).div_ceil(BLOCK) * BLOCK;
         idx += padded;
     }
     if out.is_empty() {

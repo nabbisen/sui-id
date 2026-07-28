@@ -69,11 +69,10 @@ fn write_key_file(path: &Path, body: &str) -> Result<()> {
     use std::io::Write;
     use std::os::unix::fs::OpenOptionsExt;
 
-    if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() {
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty() {
             std::fs::create_dir_all(parent).ok();
         }
-    }
     let mut f = OpenOptions::new()
         .create_new(true)
         .write(true)

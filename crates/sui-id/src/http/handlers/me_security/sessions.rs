@@ -73,7 +73,6 @@ pub async fn revoke_one(
 /// issuing the request. The "keep" id comes from the cookie, not
 /// the form field — the form field is decorative; if it disagrees
 /// we honour the cookie.
-
 pub async fn revoke_all_others(
     state_ext: AppStateExt,
     ctx: crate::handlers::SessionContext,
@@ -124,6 +123,8 @@ pub async fn revoke_all_others(
     };
     let mut resp = Response::default();
     *resp.status_mut() = axum::http::StatusCode::SEE_OTHER;
+    // `target` is always one of the two hardcoded ASCII literals above.
+    #[allow(clippy::expect_used)]
     resp.headers_mut()
         .insert(LOCATION, target.parse().expect("static header value"));
     Ok(resp)

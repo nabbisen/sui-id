@@ -2,16 +2,10 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Magic bytes at the head of an encrypted envelope. Lets `restore`
-/// distinguish encrypted from plain at a single read of the first 8
-/// bytes, without the operator having to remember which kind they
-/// supplied.
-
-/// Argon2id parameters for passphrase → AEAD key derivation.
-/// 64 MiB / 3 iterations / 1 thread is well above the 19 MiB minimum
-/// recommended by OWASP for password storage and well below anything
-/// that would push backup creation past a couple of seconds on
-/// reasonable hardware.
+// The encrypted-envelope magic bytes and the Argon2id key-derivation
+// parameters these paragraphs used to document now live with their actual
+// declarations in `ops.rs` (`ENCRYPTED_MAGIC` and the module-level format
+// doc); nothing here declared them, so this text was dangling.
 
 /// Provenance metadata written into every backup. `restore` consults
 /// `format_version` and `schema_version` before doing anything

@@ -37,6 +37,9 @@ pub async fn jwks(state_ext: AppStateExt) -> Result<Response, HttpError> {
         .await
         .map_err(|e| HttpError::api(CoreError::from(e)))?;
     let mut resp = Json(body).into_response();
+    // Both are hardcoded ASCII literals, valid HeaderValue bytes by
+    // construction; parsing a static string literal cannot fail here.
+    #[allow(clippy::expect_used)]
     resp.headers_mut().insert(
         header::CACHE_CONTROL,
         "public, max-age=300"
@@ -162,14 +165,11 @@ pub async fn authorize(
             )
             .await
             .unwrap_or(None);
-            match stored {
+            !matches!(
+                stored,
                 Some(row)
-                    if sui_id_store::repos::user_consent::covers(&row.granted_scopes, &scope) =>
-                {
-                    false
-                }
-                _ => true,
-            }
+                    if sui_id_store::repos::user_consent::covers(&row.granted_scopes, &scope)
+            )
         }
     };
 
@@ -494,14 +494,18 @@ pub async fn token(
         .await;
     }
     let mut out = Json(resp).into_response();
-    out.headers_mut().insert(
-        header::CACHE_CONTROL,
-        "no-store".parse().expect("static header value"),
-    );
-    out.headers_mut().insert(
-        header::PRAGMA,
-        "no-cache".parse().expect("static header value"),
-    );
+    // Hardcoded ASCII literals, valid HeaderValue bytes by construction.
+    #[allow(clippy::expect_used)]
+    {
+        out.headers_mut().insert(
+            header::CACHE_CONTROL,
+            "no-store".parse().expect("static header value"),
+        );
+        out.headers_mut().insert(
+            header::PRAGMA,
+            "no-cache".parse().expect("static header value"),
+        );
+    }
     Ok(out)
 }
 
@@ -604,6 +608,8 @@ pub async fn userinfo(state_ext: AppStateExt, headers: HeaderMap) -> Result<Resp
         email_verified: email_verified_claim,
     })
     .into_response();
+    // Hardcoded ASCII literal, valid HeaderValue bytes by construction.
+    #[allow(clippy::expect_used)]
     resp.headers_mut().insert(
         header::CACHE_CONTROL,
         "no-store".parse().expect("static header value"),
@@ -657,22 +663,19 @@ pub async fn logout(
     }
 
     // Fall back to the session cookie for the user identification.
-    if user_id.is_none() {
-        if let Some(cookie) = headers.get(header::COOKIE).and_then(|v| v.to_str().ok()) {
+    if user_id.is_none()
+        && let Some(cookie) = headers.get(header::COOKIE).and_then(|v| v.to_str().ok()) {
             for part in cookie.split(';') {
                 let part = part.trim();
-                if let Some(value) = part.strip_prefix("sui_id_session=") {
-                    if let Ok(sid) = value.parse() {
-                        if let Ok(uid) =
+                if let Some(value) = part.strip_prefix("sui_id_session=")
+                    && let Ok(sid) = value.parse()
+                        && let Ok(uid) =
                             sui_id_core::session::resolve(&app.db, &app.clock, sid).await
                         {
                             user_id = Some(uid);
                         }
-                    }
-                }
             }
         }
-    }
 
     if let Some(uid) = user_id {
         sui_id_core::session::logout_user(&app.db, &app.clock, uid)

@@ -233,7 +233,6 @@ pub async fn users_delete(
 
 /// Forcibly remove every MFA factor for a target user. Recovery path
 /// for users who lost their second factor entirely.
-
 pub async fn users_mfa_reset(
     state_ext: AppStateExt,
     CurrentAdmin(_, ref admin_actor): CurrentAdmin,
@@ -476,7 +475,7 @@ pub async fn users_set_role(
     {
         let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
         return Err(HttpError::html(CoreError::BadRequest(
-            lang.strings().user_detail_role_last_admin.to_owned().into(),
+            lang.strings().user_detail_role_last_admin.to_owned(),
         )));
     }
 

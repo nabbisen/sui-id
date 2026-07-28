@@ -64,9 +64,7 @@ async fn admin_post_with_mismatched_csrf_is_forbidden() {
     // Real csrf cookie, but the form's _csrf field is something else.
     let real = fetch_csrf(&state, &session).await;
     let router = build_router(state.clone());
-    let body = format!(
-        "name=test-rp&redirect_uris=https%3A%2F%2Frp.test%2Fcb&confidential=true&_csrf=tampered-value-not-the-real-one"
-    );
+    let body = "name=test-rp&redirect_uris=https%3A%2F%2Frp.test%2Fcb&confidential=true&_csrf=tampered-value-not-the-real-one".to_string();
     let req = Request::builder()
         .method(Method::POST)
         .uri("/admin/clients")

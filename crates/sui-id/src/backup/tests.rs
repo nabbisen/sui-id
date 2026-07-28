@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used, clippy::unwrap_used)]
+
 use super::*;
 
 // (moved from backup.rs by RFC 075)

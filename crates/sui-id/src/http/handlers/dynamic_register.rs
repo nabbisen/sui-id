@@ -148,7 +148,7 @@ pub async fn dynamic_register(
         ));
     }
     for uri in &body.redirect_uris {
-        sui_id_core::admin::clients::validate_redirect_uri(uri).map_err(|e| HttpError::api(e))?;
+        sui_id_core::admin::clients::validate_redirect_uri(uri).map_err(HttpError::api)?;
     }
 
     let client_name = match body.client_name.as_deref().filter(|s| !s.is_empty()) {
@@ -183,7 +183,7 @@ pub async fn dynamic_register(
         None
     };
     let secret_hash = match secret_plain.as_deref() {
-        Some(s) => Some(sui_id_core::password::hash_password(s).map_err(|e| HttpError::api(e))?),
+        Some(s) => Some(sui_id_core::password::hash_password(s).map_err(HttpError::api)?),
         None => None,
     };
 

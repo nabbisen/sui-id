@@ -39,10 +39,10 @@ async fn delete_user_without_confirmed_is_rejected() {
         sui_id_store::models::HibpMode::Off,
         &admin_actor_for(admin_id),
         sui_id_core::admin::CreateUserSpec {
-            username: "target-for-delete-test".into(),
+            username: "target-for-delete-test",
             display_name: None,
             email: None,
-            password: "target-password-12345".into(),
+            password: "target-password-12345",
             min_password_len: 12,
             is_admin: false,
         },
@@ -104,10 +104,10 @@ async fn mfa_reset_without_confirmed_is_rejected() {
         sui_id_store::models::HibpMode::Off,
         &admin_actor_for(admin_id),
         sui_id_core::admin::CreateUserSpec {
-            username: "target-mfa-test".into(),
+            username: "target-mfa-test",
             display_name: None,
             email: None,
-            password: "target-pw-mfa-123456".into(),
+            password: "target-pw-mfa-123456",
             min_password_len: 12,
             is_admin: false,
         },
@@ -160,10 +160,10 @@ async fn delete_confirm_page_renders() {
         sui_id_store::models::HibpMode::Off,
         &admin_actor_for(admin_id),
         sui_id_core::admin::CreateUserSpec {
-            username: "confirm-page-target".into(),
+            username: "confirm-page-target",
             display_name: None,
             email: None,
-            password: "confirm-pw-12345678".into(),
+            password: "confirm-pw-12345678",
             min_password_len: 12,
             is_admin: false,
         },
@@ -229,7 +229,7 @@ async fn audit_csv_export_returns_csv() {
     assert!(
         body.starts_with("when,actor,action,target,result,note"),
         "CSV header row missing: first 80 chars: {:?}",
-        &body.chars().take(80).collect::<String>()
+        body.chars().take(80).collect::<String>()
     );
 }
 
@@ -312,10 +312,10 @@ async fn user_detail_page_renders() {
         sui_id_store::models::HibpMode::Off,
         &admin_actor_for(admin_id),
         sui_id_core::admin::CreateUserSpec {
-            username: "detail-page-user".into(),
-            display_name: Some("Detail Page User".into()),
+            username: "detail-page-user",
+            display_name: Some("Detail Page User"),
             email: None,
-            password: "detail-pw-12345678".into(),
+            password: "detail-pw-12345678",
             min_password_len: 12,
             is_admin: false,
         },

@@ -138,8 +138,8 @@ pub async fn password_change_post(
     // (single-digit seconds in production), which is
     // operationally fine for a self-service action that already
     // holds a database write.
-    if let Ok(Some(user_row)) = sui_id_store::repos::users::find_by_id_opt(&app.db, user_id).await {
-        if let Some(email) = user_row.email.as_deref() {
+    if let Ok(Some(user_row)) = sui_id_store::repos::users::find_by_id_opt(&app.db, user_id).await
+        && let Some(email) = user_row.email.as_deref() {
             // Recipient's preferred locale, falling through to
             // the server default if unset. Resolved here rather
             // than inside `notify_password_changed` so that
@@ -163,7 +163,6 @@ pub async fn password_change_post(
                 );
             }
         }
-    }
     Ok(Redirect::to("/me/security?msg=password_changed").into_response())
 }
 

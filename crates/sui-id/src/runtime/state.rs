@@ -85,6 +85,12 @@ impl AppState {
             is_dev_mode: false,
             metrics: None,
             user_sources: Vec::new(),
+            // AppState::new() is a startup-time constructor with no Result
+            // return; a TLS-backend init failure here means the process
+            // cannot serve federation at all, so failing fast here (rather
+            // than threading a Result through every call site) is the
+            // intended behavior, not a routine failure mode.
+            #[allow(clippy::expect_used)]
             http_client: Arc::new(
                 reqwest::Client::builder()
                     .timeout(std::time::Duration::from_secs(10))

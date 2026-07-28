@@ -82,6 +82,7 @@ pub fn any_contains(cidrs: &[Cidr], ip: &IpAddr) -> bool {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used, clippy::unwrap_used)]
 mod tests {
     use super::*;
 

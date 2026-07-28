@@ -103,8 +103,8 @@ pub async fn welcome_get(
     // pattern). The redirect carries the cookie via Set-Cookie
     // and from there RequestLocale picks it up for every
     // subsequent setup step.
-    if let Some(raw) = query.lang.as_deref().map(str::trim) {
-        if let Some(loc) = sui_id_i18n::Locale::parse(raw) {
+    if let Some(raw) = query.lang.as_deref().map(str::trim)
+        && let Some(loc) = sui_id_i18n::Locale::parse(raw) {
             let secure = app.config.server.cookie_secure;
             let mut c = axum_extra::extract::cookie::Cookie::new(
                 crate::handlers::LANG_COOKIE,
@@ -123,7 +123,6 @@ pub async fn welcome_get(
             };
             return Ok((jar, Redirect::to(&redirect)).into_response());
         }
-    }
 
     let token = query.token.clone().unwrap_or_default();
     Ok(Html(render_setup_welcome(None, lang, &token)).into_response())

@@ -148,11 +148,10 @@ pub fn run_backup(cfg: &Config, dest: &Path, opts: &BackupOptions) -> Result<()>
     write_tar_terminator(&mut tar_buf)?;
 
     // Step 4: write to dest, encrypted or plain.
-    if let Some(parent) = dest.parent() {
-        if !parent.as_os_str().is_empty() {
+    if let Some(parent) = dest.parent()
+        && !parent.as_os_str().is_empty() {
             std::fs::create_dir_all(parent).ok();
         }
-    }
     let mut out = OpenOptions::new()
         .create_new(true)
         .write(true)
@@ -201,16 +200,14 @@ pub fn run_restore(cfg: &Config, src: &Path, opts: &RestoreOptions) -> Result<()
         }
     }
 
-    if let Some(parent) = cfg.storage.db_path.parent() {
-        if !parent.as_os_str().is_empty() {
+    if let Some(parent) = cfg.storage.db_path.parent()
+        && !parent.as_os_str().is_empty() {
             std::fs::create_dir_all(parent).ok();
         }
-    }
-    if let Some(parent) = cfg.storage.key_file.parent() {
-        if !parent.as_os_str().is_empty() {
+    if let Some(parent) = cfg.storage.key_file.parent()
+        && !parent.as_os_str().is_empty() {
             std::fs::create_dir_all(parent).ok();
         }
-    }
 
     write_atomic(&cfg.storage.db_path, &db_bytes, 0o600)?;
     write_atomic(&cfg.storage.key_file, &key_bytes, 0o600)?;
@@ -337,9 +334,14 @@ fn check_manifest_compatibility(m: &Manifest) -> Result<()> {
 }
 
 fn encrypt_envelope(passphrase: &str, plaintext: &[u8]) -> Result<Vec<u8>> {
+    // A broken OS CSPRNG means we cannot mint a salt/nonce safe to use for
+    // encryption; continuing with non-random output would be a real
+    // vulnerability, so this must panic rather than degrade.
     let mut salt = [0u8; 16];
+    #[allow(clippy::expect_used)]
     getrandom::fill(&mut salt).expect("system RNG unavailable");
     let mut nonce = [0u8; 24];
+    #[allow(clippy::expect_used)]
     getrandom::fill(&mut nonce).expect("system RNG unavailable");
     let key = derive_key(passphrase, &salt)?;
     let cipher = XChaCha20Poly1305::new((&key).into());
@@ -367,6 +369,8 @@ fn decrypt_envelope(passphrase: &str, bytes: &[u8]) -> Result<Vec<u8>> {
         bail!("encrypted backup magic mismatch");
     }
     let (version_bytes, rest) = rest.split_at(4);
+    // split_at(4) guarantees version_bytes.len() == 4, so this cannot fail.
+    #[allow(clippy::unwrap_used)]
     let version = u32::from_be_bytes(version_bytes.try_into().unwrap());
     if version != FORMAT_VERSION {
         bail!(
@@ -448,6 +452,10 @@ fn tempfile_dir() -> Result<PathBuf> {
         .map(|d| d.as_nanos())
         .unwrap_or(0);
     let mut rand_byte = [0u8; 4];
+    // A broken OS CSPRNG here is a symptom of a broken system; this suffix
+    // only needs to avoid collisions, but there is nothing safe to fall
+    // back to, so this must panic rather than silently degrade.
+    #[allow(clippy::expect_used)]
     getrandom::fill(&mut rand_byte).expect("system RNG unavailable");
     let suffix = u32::from_le_bytes(rand_byte);
     let unique = format!(

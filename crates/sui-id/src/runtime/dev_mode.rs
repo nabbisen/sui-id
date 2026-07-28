@@ -264,11 +264,10 @@ impl DevSeed {
         if let Some(pw) = ovr.admin_password {
             self.admin.password = pw;
         }
-        if let Some(cs) = ovr.client_secret {
-            if let Some(c) = self.clients.first_mut() {
+        if let Some(cs) = ovr.client_secret
+            && let Some(c) = self.clients.first_mut() {
                 c.client_secret = Some(cs);
             }
-        }
     }
 }
 
@@ -545,6 +544,7 @@ pub fn resolve_seed(
 fn _seed_path_must_be_path(_: PathBuf) {}
 
 #[cfg(test)]
+#[allow(clippy::expect_used, clippy::unwrap_used)]
 mod tests {
     use super::*;
 

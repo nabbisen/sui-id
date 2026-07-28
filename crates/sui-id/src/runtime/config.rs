@@ -137,6 +137,7 @@ impl Default for LogConfig {
 /// thresholds, …) will land here too.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[derive(Default)]
 pub struct SecurityConfig {
     /// Cap on the auto-unlock interval used at the top of the
     /// progressive-backoff curve. After enough consecutive failures,
@@ -151,13 +152,6 @@ pub struct SecurityConfig {
     pub max_lockout: MaxLockoutDuration,
 }
 
-impl Default for SecurityConfig {
-    fn default() -> Self {
-        Self {
-            max_lockout: MaxLockoutDuration::default(),
-        }
-    }
-}
 
 /// Allowed maximum-lockout settings. A small, hand-picked set rather
 /// than an arbitrary integer: each value is operationally meaningful
@@ -167,6 +161,7 @@ impl Default for SecurityConfig {
 /// (post-vacation, post-weekend) than to deter an attacker, who has
 /// long given up by then.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Default)]
 pub enum MaxLockoutDuration {
     #[serde(rename = "15min")]
     FifteenMinutes,
@@ -177,19 +172,12 @@ pub enum MaxLockoutDuration {
     #[serde(rename = "12h")]
     TwelveHours,
     #[serde(rename = "24h")]
+    #[default]
     TwentyFourHours,
     #[serde(rename = "48h")]
     FortyEightHours,
 }
 
-impl Default for MaxLockoutDuration {
-    fn default() -> Self {
-        // 24h matches the default in the canonical operator examples
-        // (NIST SP 800-63B suggests "rate limit … for at least one
-        // day" for the higher AAL tiers, which is exactly this).
-        Self::TwentyFourHours
-    }
-}
 
 impl MaxLockoutDuration {
     /// The duration as a count of seconds. Used both to compute
@@ -276,6 +264,7 @@ impl Config {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used, clippy::unwrap_used)]
 mod tests {
     use super::*;
 

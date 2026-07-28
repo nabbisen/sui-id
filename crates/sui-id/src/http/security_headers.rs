@@ -117,11 +117,10 @@ pub async fn middleware(
     let h = resp.headers_mut();
 
     // Don't overwrite headers a handler already set deliberately.
-    if !h.contains_key(header::CONTENT_SECURITY_POLICY) {
-        if let Ok(v) = HeaderValue::from_str(CSP) {
+    if !h.contains_key(header::CONTENT_SECURITY_POLICY)
+        && let Ok(v) = HeaderValue::from_str(CSP) {
             h.insert(header::CONTENT_SECURITY_POLICY, v);
         }
-    }
     if !h.contains_key(&X_FRAME_OPTIONS) {
         h.insert(X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
     }
@@ -134,21 +133,20 @@ pub async fn middleware(
             HeaderValue::from_static("strict-origin-when-cross-origin"),
         );
     }
-    if !h.contains_key(&PERMISSIONS_POLICY_HDR) {
-        if let Ok(v) = HeaderValue::from_str(PERMISSIONS_POLICY) {
+    if !h.contains_key(&PERMISSIONS_POLICY_HDR)
+        && let Ok(v) = HeaderValue::from_str(PERMISSIONS_POLICY) {
             h.insert(PERMISSIONS_POLICY_HDR, v);
         }
-    }
-    if cfg.enable_hsts && !h.contains_key(header::STRICT_TRANSPORT_SECURITY) {
-        if let Ok(v) = HeaderValue::from_str(HSTS) {
+    if cfg.enable_hsts && !h.contains_key(header::STRICT_TRANSPORT_SECURITY)
+        && let Ok(v) = HeaderValue::from_str(HSTS) {
             h.insert(header::STRICT_TRANSPORT_SECURITY, v);
         }
-    }
 
     resp
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used, clippy::unwrap_used)]
 mod tests {
     use super::*;
     use axum::Router;

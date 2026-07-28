@@ -107,7 +107,6 @@ pub async fn page_get(
 /// user. We don't tell the caller which check failed — both refuse
 /// with the same 404-shaped redirect, so there's no oracle for
 /// guessing other people's session ids.
-
 pub async fn overview_get(
     state_ext: AppStateExt,
     CurrentUser(user_id): CurrentUser,

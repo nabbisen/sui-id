@@ -264,7 +264,7 @@ async fn reset_password_full_flow_changes_password_and_sends_notification() {
         .oneshot(
             Request::builder()
                 .method(Method::GET)
-                .uri(&format!("/reset-password?token={token}"))
+                .uri(format!("/reset-password?token={token}"))
                 .body(Body::empty())
                 .expect("req"),
         )
@@ -442,7 +442,7 @@ async fn redeem_reset_token(state: &AppState, token: &str, new_password: &str) {
         .oneshot(
             Request::builder()
                 .method(Method::GET)
-                .uri(&format!("/reset-password?token={token}"))
+                .uri(format!("/reset-password?token={token}"))
                 .body(Body::empty())
                 .expect("req"),
         )

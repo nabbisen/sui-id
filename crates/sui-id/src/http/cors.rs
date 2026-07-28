@@ -68,15 +68,14 @@ pub async fn token_endpoint(
         // origin. We could be permissive for OPTIONS (it carries no
         // credentials), but echoing an origin we won't honour on the
         // POST is misleading; align with the actual policy.
-        if let Some(o) = &origin {
-            if origin_matches_any_redirect_uri(&state, o).await {
+        if let Some(o) = &origin
+            && origin_matches_any_redirect_uri(&state, o).await {
                 return preflight_response_with_origin(
                     "POST, OPTIONS",
                     "Authorization, Content-Type",
                     o,
                 );
             }
-        }
         // No matching origin: respond 204 with no CORS headers. The
         // browser will refuse the upcoming POST. A non-browser caller
         // (e.g. curl) won't have sent OPTIONS in the first place.
@@ -84,16 +83,14 @@ pub async fn token_endpoint(
     }
 
     let mut resp = next.run(req).await;
-    if let Some(o) = origin {
-        if origin_matches_any_redirect_uri(&state, &o).await {
-            if let Ok(v) = HeaderValue::from_str(&o) {
+    if let Some(o) = origin
+        && origin_matches_any_redirect_uri(&state, &o).await
+            && let Ok(v) = HeaderValue::from_str(&o) {
                 resp.headers_mut().insert(ACAO, v);
                 // Caches must vary on Origin since the response is
                 // origin-specific.
                 append_vary(resp.headers_mut(), "Origin");
             }
-        }
-    }
     resp
 }
 

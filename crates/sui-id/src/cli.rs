@@ -462,11 +462,10 @@ async fn run_setup(args: &[String]) -> Result<()> {
 /// scripted use). When `confirm` is true and we're on a TTY, the
 /// passphrase is asked twice and rejected on mismatch.
 pub(crate) fn read_passphrase(prompt: &str, confirm: bool) -> Result<String> {
-    if let Ok(env) = std::env::var("SUI_ID_BACKUP_PASSPHRASE") {
-        if !env.is_empty() {
+    if let Ok(env) = std::env::var("SUI_ID_BACKUP_PASSPHRASE")
+        && !env.is_empty() {
             return Ok(env);
         }
-    }
     use std::io::{BufRead, Write};
     let stdin = std::io::stdin();
     let mut stderr = std::io::stderr();

@@ -20,7 +20,6 @@ pub struct WebauthnAuthStartForm {
 /// Starts a passkey-authentication ceremony for the user identified by
 /// the active `sui_id_pending_mfa` cookie. Returns the
 /// `RequestChallengeResponse` JSON for `navigator.credentials.get()`.
-
 pub async fn webauthn_auth_start(
     state_ext: AppStateExt,
     jar: CookieJar,

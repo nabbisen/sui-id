@@ -46,12 +46,18 @@ pub const CSRF_FIELD: &str = "_csrf";
 /// Generate a fresh 32-byte URL-safe token.
 pub fn new_token() -> String {
     let mut buf = [0u8; 32];
+    // A broken OS CSPRNG means we cannot mint a token that is safe to use
+    // as a security token at all; continuing with non-random output would
+    // be a real vulnerability, so this must panic rather than degrade.
+    #[allow(clippy::expect_used)]
     getrandom::fill(&mut buf).expect("system RNG unavailable");
     let mut out = vec![0u8; 64];
     let n = Base64UrlUnpadded::encode(&buf, &mut out)
         .map(str::len)
         .unwrap_or(0);
     out.truncate(n);
+    // Base64url output is ASCII by construction; UTF-8 decoding cannot fail.
+    #[allow(clippy::expect_used)]
     String::from_utf8(out).expect("base64url is ascii")
 }
 
@@ -126,6 +132,7 @@ pub fn verify_with_headers(headers: &HeaderMap, form_token: Option<&str>) -> Opt
 pub fn _ensure_state_arg(_: &AppStateExt) {}
 
 #[cfg(test)]
+#[allow(clippy::expect_used, clippy::unwrap_used)]
 mod tests {
     use super::*;
     use axum::http::HeaderValue;
