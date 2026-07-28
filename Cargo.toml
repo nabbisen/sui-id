@@ -116,11 +116,18 @@ async-trait                 = "0.1"
 reqwest                     = { version = "0.13", default-features = false, features = ["rustls", "json", "form"] }
 # Direct dependency (not just transitive via reqwest/ldap3) so startup can
 # call CryptoProvider::install_default() exactly once, process-wide, before
-# any TLS-capable code (LDAPS, federation) runs. reqwest builds its own
-# provider instance internally and doesn't need the global default, but
-# rustls::ClientConfig::builder() as used by ldap3's tls-rustls-ring feature
-# panics without it (RFC 093 G09's "provider panic").
-rustls                       = { version = "0.23", default-features = false, features = ["ring"] }
+# any TLS-capable code runs (LDAPS via ldap3, implicit-TLS SMTP via
+# wasm-smtp-tokio, and reqwest's federation/HIBP client). Both provider
+# backends are already compiled into the binary transitively — `ring` via
+# ldap3's tls-rustls-ring, `aws_lc_rs` via reqwest's rustls integration,
+# which prefers an installed global default and only falls back to its own
+# aws_lc_rs default when none exists — so this is ambiguous without an
+# explicit install (RFC 093 G09's "provider panic"). Both features are
+# listed explicitly here rather than left to transitive unification, since
+# which one startup actually installs (aws_lc_rs, matching reqwest's
+# default — see runtime::startup::install_rustls_crypto_provider) is a
+# deliberate choice, not an accident of dependency resolution.
+rustls                       = { version = "0.23", default-features = false, features = ["ring", "aws_lc_rs"] }
 
 # UI (Leptos used in SSR-only mode for the admin panel; no WASM/JS bundle is shipped
 #  in line with the project's minimal-runtime philosophy).

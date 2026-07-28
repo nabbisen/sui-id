@@ -17,6 +17,13 @@ mod cli;
 #[tokio::main]
 
 async fn main() -> Result<()> {
+    // Must run before any subcommand or code path that could open a TLS
+    // connection (LDAPS via ldap3, implicit-TLS SMTP via wasm-smtp-tokio,
+    // or reqwest for federation/HIBP) — see the doc comment on this
+    // function for why the choice of provider matters, not just that one
+    // is installed.
+    sui_id::startup::install_rustls_crypto_provider();
+
     let args: Vec<String> = std::env::args().collect();
 
     if args.iter().any(|a| a == "--version" || a == "-V") {
@@ -231,9 +238,9 @@ async fn serve_dev(args: &[String]) -> Result<()> {
     // unset by pointing them at /dev/null-style placeholders that
     // the dev-mode flow does not read from.
     cfg.storage.db_path = dev_db
-            .as_deref()
-            .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| std::path::PathBuf::from(":memory:"));
+        .as_deref()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::path::PathBuf::from(":memory:"));
 
     // Open DB and seed.
     let db = dev_mode::open_dev_db(dev_db.as_deref())?;

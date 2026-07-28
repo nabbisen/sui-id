@@ -8,10 +8,15 @@
 //! ldap3's `tls-rustls-ring` pulls in `ring`) — so it panics unless a
 //! process-level `CryptoProvider` was explicitly installed first. That is
 //! the "provider panic" RFC 093 names as the reason this gate exists.
-//! Production installs the provider exactly once at startup
-//! (`crates/sui-id/src/runtime/startup.rs::install_rustls_crypto_provider`),
-//! before any LDAPS or federation connection can occur. These two tests
-//! prove both directions of that precondition against a local loopback
+//! Production installs `aws_lc_rs` exactly once at startup, before any
+//! LDAPS, SMTP, or federation connection can occur
+//! (`crates/sui-id/src/runtime/startup.rs::install_rustls_crypto_provider`)
+//! — `aws_lc_rs`, not `ring`, because reqwest prefers an installed global
+//! default over its own, so this choice governs reqwest's backend too; see
+//! that function's doc comment for the full reasoning. The positive test
+//! below installs the same backend so this gate exercises the production
+//! configuration, not a different one. These two tests prove both
+//! directions of the install precondition against a local loopback
 //! fixture. No public LDAP service is contacted, and no real directory
 //! credentials are used.
 //!
@@ -69,7 +74,10 @@ async fn spawn_dummy_listener() -> (String, tokio::task::JoinHandle<()>) {
 /// a panic, or any sign of a plaintext downgrade, is not.
 #[tokio::test]
 async fn rustls_provider_and_tls_connector_reach_fixture() {
-    let _ = rustls::crypto::ring::default_provider().install_default();
+    // Matches production's choice (see the module doc comment): aws_lc_rs,
+    // not ring, so this gate exercises the same backend reqwest actually
+    // ends up using in the real binary.
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
     let (url, _listener) = spawn_dummy_listener().await;
     let settings = LdapConnSettings::new().set_conn_timeout(Duration::from_secs(3));

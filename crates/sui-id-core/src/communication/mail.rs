@@ -36,6 +36,9 @@
 
 #[path = "mail/outbox.rs"]
 pub mod outbox;
+#[cfg(test)]
+#[path = "mail/tests.rs"]
+mod tests;
 
 use crate::errors::{CoreError, CoreResult};
 use crate::time::SharedClock;

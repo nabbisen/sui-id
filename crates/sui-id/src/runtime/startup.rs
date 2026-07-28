@@ -105,22 +105,37 @@ pub fn init_tracing(
 /// Install the process-wide rustls crypto provider exactly once.
 ///
 /// `rustls::ClientConfig::builder()` — used by `ldap3`'s `tls-rustls-ring`
-/// TLS path — panics if no default provider has been installed yet.
-/// reqwest builds its own provider instance internally and does not need
-/// this, but nothing else in the process currently installs the global
-/// default, so an LDAPS connection attempt would be the first thing to
-/// discover that (RFC 093 G09's "provider panic"). Idempotent: a second
-/// installation attempt returns `Err` harmlessly, which we ignore.
-fn install_rustls_crypto_provider() {
+/// TLS path and by `wasm-smtp-tokio`'s implicit-TLS SMTP transport — panics
+/// if no default provider has been installed and more than one backend is
+/// compiled in, which is the case here (`ring` via `ldap3`, `aws_lc_rs` via
+/// reqwest). This is RFC 093 G09's "provider panic".
+///
+/// reqwest does *not* build an isolated provider instance that ignores the
+/// global default — it prefers an installed default and only falls back to
+/// its own `aws_lc_rs` default when none exists
+/// (`reqwest::async_impl::client::default_rustls_crypto_provider`, used via
+/// `CryptoProvider::get_default().unwrap_or_else(..)`). So this choice of
+/// provider governs reqwest's backend too, not just LDAP/SMTP. We install
+/// `aws_lc_rs` specifically to match reqwest's own default and leave
+/// outbound HTTPS (federation discovery, JWKS, HIBP) on the same backend it
+/// already used, rather than silently migrating it to `ring` as a side
+/// effect of fixing the LDAP/SMTP panic.
+///
+/// Called once, before subcommand dispatch, in `main()` — not from
+/// `serve`/`prepare()` alone — because `serve_dev` builds its own
+/// `AppState` without going through `prepare()` and still constructs a
+/// real SMTP sender that hits the same panic if implicit TLS is
+/// configured. Idempotent: a second installation attempt returns `Err`
+/// harmlessly, which we ignore.
+pub fn install_rustls_crypto_provider() {
     static INIT_CRYPTO_PROVIDER: Once = Once::new();
     INIT_CRYPTO_PROVIDER.call_once(|| {
-        let _ = rustls::crypto::ring::default_provider().install_default();
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
     });
 }
 
 pub async fn prepare(cfg: Config) -> Result<Startup> {
     let log_guard = init_tracing(&cfg.log);
-    install_rustls_crypto_provider();
 
     // 1. Resolve master key.
     let resolved = keyring::resolve(&cfg.storage.key_file).context("resolving master key")?;
@@ -142,9 +157,10 @@ pub async fn prepare(cfg: Config) -> Result<Startup> {
 
     // 2. Open the database (runs migrations).
     if let Some(parent) = cfg.storage.db_path.parent()
-        && !parent.as_os_str().is_empty() {
-            std::fs::create_dir_all(parent).ok();
-        }
+        && !parent.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(parent).ok();
+    }
     let db = Database::open(&cfg.storage.db_path, resolved.key).context("opening database")?;
 
     // Verify the tail of the audit-log hash chain. A mismatch here

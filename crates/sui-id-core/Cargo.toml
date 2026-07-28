@@ -59,6 +59,8 @@ tokio                       = { workspace = true }
 [dev-dependencies]
 proptest                    = { workspace = true }
 tempfile                    = { workspace = true }
+tokio                       = { workspace = true, features = ["net"] }
+rustls                      = { workspace = true, features = ["aws_lc_rs"] }
 
 [lints]
 workspace = true
