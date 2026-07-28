@@ -1,14 +1,13 @@
 # RFC 096 — Upstream OIDC Federation Validation
 
-**Status.** Accepted
+**Status.** Proposed
 **Security review.** Required
-**Accepted on.** 2026-07-21
-**Approved by.** `@nabbisen`
-**Independent design review.** `codex-independent-architecture-security-reviewer` (OpenAI Codex), [Accept with notes](../reviews/096-design-review-2026-07-21.md)
-**Design prerequisites.** RFC 093 Accepted; complete materially amended RFC 094 Accepted including C17/C18/C23/F01–F06 federation commands; the federation threat delta, discovery/egress policy, and hostile-provider plan require independent design approval.
-**Implementation prerequisites.** RFC 093 Implemented with passing all-feature gates; this RFC Accepted; the hostile-provider harness approved. Pure validation/transport work may begin before RFC 094 implementation, but no federation mutation/session integration may begin until RFC 094 is Implemented and C17/C18/C23/F01–F06 pass their applicable gates.
-**Closure prerequisites.** Discovery, transport, JOSE, claims, state/nonce, cache/rotation, migration, hostile-provider, and representative live-integration evidence pass independent closure review.
-**Tracks.** ROADMAP M4 — Federation trust completion.
+**Lifecycle history.** Accepted 2026-07-21 after [independent review](../reviews/096-design-review-2026-07-21.md); **returned to Proposed on 2026-07-28** for the prerequisite and staging amendment below, per RFC 000's return-for-review rule for material prerequisite changes. The 2026-07-21 acceptance is preserved in history and is superseded, not withdrawn. No validation, transport, JOSE, or claim-handling design is reopened.
+**Amendment summary (2026-07-28).** Implementation prerequisite re-pointed from full RFC 093 to M1a; the previously inline validation-versus-mutation caveat promoted into two normative stages, 096-A and 096-B; preparatory `federation.rs` split added as a prerequisite; file ownership against RFC 094 named. Requested by `@nabbisen` on 2026-07-28 on the recommendation of the requirements architect, to allow federation work to run as an independent lane.
+**Design prerequisites.** RFC 093 Accepted; amended RFC 094 Accepted including C17/C18/C23/F01–F06 federation commands; the federation threat delta, discovery/egress policy, and hostile-provider plan require independent design approval.
+**Implementation prerequisites.** M1a complete — RFC 093's Rust gate lanes G01–G09 pass on one clean commit under the amended Gate Matrix; this RFC Accepted in its amended form; the hostile-provider harness approved; the preparatory `federation.rs` split committed and independently reviewed. Stage 096-A may then begin. Stage 096-B additionally requires RFC 094 **M2a** Implemented with the C17/C18/C23 seam proven. **M1b is not a prerequisite for either stage** — no part of this RFC depends on the documentation or RFC-integrity gates.
+**Closure prerequisites.** Per stage. **096-A:** discovery, transport, JOSE, claims, state/nonce, and cache/rotation evidence, including the hostile-provider corpus, pass independent review. **096-B:** federation mutation commands on the Class-A seam with rollback evidence, session integration, migration, and representative live-integration evidence pass independent closure review.
+**Tracks.** ROADMAP M4-A — Federation validation and transport; M4-B — Federation mutation and session integration.
 **Touches.** Federation provider configuration and handlers; dedicated outbound HTTP; discovery/JWKS cache; JOSE/ID-token validation; login attempts and MFA context; provider/link repositories; RFC 094 C19 and amended C17/C18/C23/F01–F06 seams; migrations; threat model; integration tests.
 **Handoff.** [`../handoffs/096-upstream-oidc-federation/README.md`](../handoffs/096-upstream-oidc-federation/README.md)
 **Validation matrix.** [`../handoffs/096-upstream-oidc-federation/validation-matrix.md`](../handoffs/096-upstream-oidc-federation/validation-matrix.md)
@@ -34,6 +33,48 @@ fallback is removed. An unknown `link_only` identity receives a generic denial
 until a separate RFC supplies a complete local-authentication, CSRF, and
 approval flow. No private-network issuer exception, upstream-MFA trust, group
 sync, or new provider protocol is introduced.
+
+## Implementation stages
+
+Added by the 2026-07-28 amendment. The staging is not new policy: the previous
+prerequisite line already permitted validation and transport work to precede
+RFC 094 implementation. This makes the boundary normative and reviewable rather
+than an inline caveat, so federation can run as an independent lane.
+
+### 096-A — validation and transport
+
+Discovery and egress/SSRF policy; HTTPS enforcement and exact issuer binding;
+JWKS retrieval, key selection, algorithm constraint and signature verification;
+required ID-token claim validation; the mandatory one-time nonce; bounded cache
+and key-rotation behaviour; and the hostile-provider and token-substitution
+corpus.
+
+**096-A performs no durable mutation.** It may not create, enable, disable or
+delete a federation provider or link, and it may not establish a session. If a
+change appears to require one, it is 096-B work and waits for the RFC 094 seam.
+
+This stage carries essentially all of the security value of this RFC: it closes
+the current defect in which the callback accepts an ID token whose signature was
+never verified and whose nonce may be absent. It needs no part of the audit
+transaction seam, which is why it is separable.
+
+### 096-B — mutation and session integration
+
+Federation provider and link commands (C17/C18/C23) implemented on the RFC 094
+Class-A transaction seam, and session establishment from a verified assertion.
+Requires RFC 094 M2a Implemented.
+
+### File ownership
+
+`crates/sui-id/src/http/handlers/federation.rs` currently contains both callback
+validation and provider/link mutation logic. In its combined form it is owned by
+neither this RFC nor RFC 094, and concurrent editing by both lanes risks a merge
+that silently drops a security check. It is split by a preparatory change owned
+by neither lane, with zero behaviour change, before either lane begins.
+
+After the split, this RFC owns the discovery, JOSE/JWKS, claim-validation and
+callback modules; RFC 094 owns the federation mutation commands. The split is a
+prerequisite recorded in the implementation prerequisites above.
 
 ## Standards and local policy
 

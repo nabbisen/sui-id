@@ -4,12 +4,13 @@
 **Security review.** Required
 **Accepted on.** 2026-07-17
 **Approved by.** `@nabbisen`
+**Amended on.** 2026-07-28 — MSRV raised from 1.91 to 1.95 under this RFC's own change-control clause (Requirements item 2), and M1 split into M1a (build baseline) and M1b (documentation and lifecycle gates). Approved by `@nabbisen`, who ruled that amendment in place is correct here because this RFC self-provides for an MSRV change and returning it to `proposed/` would invalidate the committed implementation-start authorization.
 **Independent design review.** `codex-independent-architecture-security-reviewer` (OpenAI Codex), [Accept with notes](../reviews/093-design-review-2026-07-17.md)
 **Implementation owner.** `codex-developer` (OpenAI Codex), confirmed by `@nabbisen`
 **Design prerequisites.** M0 lifecycle governance and remediation roadmap approved.
 **Implementation prerequisites.** `@nabbisen` authorized `codex-developer` against clean baseline `959f089983ce51e53ca403a422a1fe308c276036` with no competing owner for this RFC's `Touches` scope; the repository record is [`implementation-start-authorization.md`](../handoffs/093-build-toolchain-release-gates/implementation-start-authorization.md). Implementation remains prohibited until that record is committed; closure still requires the complete matrix below on one later clean commit.
-**Closure prerequisites.** Every mandatory lane in Gate Matrix v1 passes on one clean commit; LDAP smoke and mdBook pass; RFC integrity reports no known debt; independent closure review confirms that the legacy audit diagnostic is not represented as structural assurance.
-**Tracks.** ROADMAP M1 — Trustworthy build baseline.
+**Closure prerequisites.** M1a closes when G01–G09 pass on one clean commit; M1b closes when G10–G12 pass on one clean commit. Every mandatory lane in Gate Matrix v1 passes; LDAP smoke and mdBook pass; RFC integrity reports no known debt; independent closure review confirms that the legacy audit diagnostic is not represented as structural assurance.
+**Tracks.** ROADMAP M1a — Trustworthy build baseline; M1b — Documentation and lifecycle gates.
 **Touches.** `Cargo.toml`, crate manifests, `Cargo.lock`, `.github/workflows/`, `scripts/`, `docs/book.toml`, `rfcs/README.md`, RFC metadata and links.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** `codex-project-architect` (OpenAI Codex).
@@ -18,7 +19,7 @@
 ## Summary
 
 Replace the current single moving-stable CI baseline with an explicit,
-versioned release-gate contract. The contract tests the declared Rust 1.91
+versioned release-gate contract. The contract tests the declared Rust 1.95
 MSRV and the current stable channel, covers default and all features, exercises
 the LDAP path, builds the mdBook, and adds a narrow RFC lifecycle-integrity
 gate. It also keeps the existing literal audit-matrix script only as a
@@ -29,9 +30,13 @@ later remediation evidence has a trustworthy and repeatable foundation.
 
 ## Background
 
-The workspace declares `rust-version = "1.91"`, but CI installs only the
-moving stable channel. On 2026-07-17 the local stable toolchain resolves to
-Rust 1.97.0, so current CI cannot demonstrate MSRV compatibility. CI also
+The workspace originally declared `rust-version = "1.91"`, but CI installs only
+the moving stable channel, so current CI cannot demonstrate MSRV compatibility.
+Implementing this gate contract established that the declared MSRV was not
+merely untested but unachievable: `libsqlite3-sys 0.38.1` uses `cfg_select!`,
+unstable until 1.95, so 1.91 through 1.94 cannot build the workspace at all.
+The MSRV was corrected to 1.95 by the 2026-07-28 amendment; this is a
+representative example of why an unexercised gate is not assurance. CI also
 builds only default features; the optional `ldap` feature is therefore outside
 the blocking build contract. The mdBook and RFC lifecycle invariants are not
 blocking.
@@ -45,8 +50,18 @@ script as a visible diagnostic, but RFC 094 owns the authoritative replacement.
 
 1. A checked-in Gate Matrix v1 defines every mandatory lane, exact command,
    toolchain policy, feature set, trigger, and failure semantics.
-2. Rust 1.91 is the MSRV lane. Raising it requires an RFC or an amendment to
-   this RFC, manifest updates, release notes, and owner approval.
+2. Rust 1.95 is the MSRV lane. It was raised from 1.91 on 2026-07-28 because
+   `libsqlite3-sys 0.38.1`, reached through `rusqlite 0.40` on the `bundled`
+   path this project uses, calls `cfg_select!` in its build script. That macro
+   is an unstable library feature (E0658, rust-lang#115585) until 1.95, so no
+   release in 1.91–1.94 could build this workspace and the previously declared
+   MSRV was unachievable rather than merely optimistic. Measured on this
+   workspace, 1.91, 1.92, 1.93 and 1.94 all fail and 1.95 builds. Raising it
+   again requires an RFC or an amendment to this RFC, manifest updates, release
+   notes, and owner approval. The MSRV is a public claim in `README.md` and
+   must be changed there in the same commit. Because 1.95 is newer than most
+   distribution-packaged toolchains, `README.md` must also state that building
+   from source expects a `rustup`-managed toolchain.
 3. The latest-stable lane resolves the stable channel at run time and records
    the exact `rustc -Vv` and `cargo -V` output in evidence. Stable-only lint
    drift may be fixed without raising MSRV; it may not be silenced globally or
@@ -76,15 +91,15 @@ parsed repository file under `ci/`, and keeps this RFC as its normative design.
 
 | ID | Toolchain | Features | Blocking command / assertion |
 |---|---|---|---|
-| G01 | 1.91 | default | `cargo +1.91 build --workspace --all-targets --locked` |
-| G02 | 1.91 | default | `cargo +1.91 test --workspace --locked` |
-| G03 | 1.91 | all | `cargo +1.91 build --workspace --all-targets --all-features --locked` |
-| G04 | 1.91 | all | `cargo +1.91 test --workspace --all-features --locked` |
+| G01 | 1.95 | default | `cargo +1.95 build --workspace --all-targets --locked` |
+| G02 | 1.95 | default | `cargo +1.95 test --workspace --locked` |
+| G03 | 1.95 | all | `cargo +1.95 build --workspace --all-targets --all-features --locked` |
+| G04 | 1.95 | all | `cargo +1.95 test --workspace --all-features --locked` |
 | G05 | stable | default | `cargo +stable build --workspace --all-targets --locked` and `cargo +stable test --workspace --locked` |
 | G06 | stable | all | `cargo +stable build --workspace --all-targets --all-features --locked` and `cargo +stable test --workspace --all-features --locked` |
 | G07 | stable | all | `cargo +stable clippy --workspace --all-targets --all-features --locked -- -D warnings` |
 | G08 | stable | n/a | `cargo +stable fmt --all -- --check` |
-| G09a | 1.91 | LDAP | `cargo +1.91 test -p sui-id-store --features ldap --test ldap_smoke --locked -- --exact rustls_provider_and_tls_connector_reach_fixture` |
+| G09a | 1.95 | LDAP | `cargo +1.95 test -p sui-id-store --features ldap --test ldap_smoke --locked -- --exact rustls_provider_and_tls_connector_reach_fixture` |
 | G09b | stable | LDAP | `cargo +stable test -p sui-id-store --features ldap --test ldap_smoke --locked -- --exact rustls_provider_and_tls_connector_reach_fixture` |
 | G10a | stable / mdBook 0.5.4 | n/a | `mdbook build docs --dest-dir ../target/mdbook-gate` |
 | G10b | Python 3.14 | n/a | `python3.14 scripts/check-markdown-links.py --root . README.md ROADMAP.md docs` |
@@ -105,7 +120,7 @@ self-tests are also blocking:
 
 | Gate | Fixture command | Required failure |
 |---|---|---|
-| G09a | `cargo +1.91 test -p sui-id-store --features ldap --test ldap_smoke --locked -- --exact rejects_missing_crypto_provider` | fixture catches provider absence before any network assertion; the positive test reaches the local TLS fixture |
+| G09a | `cargo +1.95 test -p sui-id-store --features ldap --test ldap_smoke --locked -- --exact rejects_missing_crypto_provider` | fixture catches provider absence before any network assertion; the positive test reaches the local TLS fixture |
 | G09b | `cargo +stable test -p sui-id-store --features ldap --test ldap_smoke --locked -- --exact rejects_missing_crypto_provider` | same assertion under the resolved stable toolchain |
 | G10b | `python3.14 -m unittest scripts.tests.test_markdown_links` | missing file, bad anchor, absolute local path, and case-mismatched path fixtures are rejected |
 | G11 | `python3.14 -m unittest scripts.tests.test_rfc_integrity` | each RFC invariant listed below has one invalid fixture and one boundary-valid fixture |
@@ -136,7 +151,7 @@ its version, and requires owner review; CI does not inherit unnamed jobs.
 
 ### Toolchain resolution and evidence
 
-CI installs an exact `1.91` toolchain for the MSRV lanes and `stable` for the
+CI installs an exact `1.95` toolchain for the MSRV lanes and `stable` for the
 compatibility lanes. The runner is `ubuntu-24.04`, not `ubuntu-latest`.
 `ci/gate-inputs.toml` records Gate Matrix version 1, mdBook `0.5.4`, Python
 `3.14`, `/usr/bin/bash >=5.2,<6`, the Rust components per lane, and every
@@ -282,7 +297,7 @@ contract is restored or amended.
 
 - Gate Matrix v1 is represented exactly in tracked CI/configuration.
 - G01–G12 pass on one clean commit with recorded tool versions.
-- Rust 1.91 and resolved stable both cover default and all features.
+- Rust 1.95 and resolved stable both cover default and all features.
 - LDAP smoke and mdBook pass as blocking jobs.
 - RFC integrity has no known debt or permanent allowlist.
 - Audit string parity is visibly diagnostic-only.

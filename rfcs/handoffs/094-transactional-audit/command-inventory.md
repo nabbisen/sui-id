@@ -1,7 +1,7 @@
 # RFC 094 Stage-0 durable-write command inventory
 
 **Snapshot:** v0.76.12 working tree, inspected 2026-07-17
-**Governing RFC:** [RFC 094](../../accepted/094-transactional-audit-registry.md)
+**Governing RFC:** [RFC 094](../../proposed/094-transactional-audit-registry.md)
 **Review state:** Base inventory independently design-approved on 2026-07-17;
 the C17/C18/C23/F01–F06 RFC 096 amendment was independently reviewed and
 approved by `@nabbisen` on 2026-07-21, durably returned to Proposed in commit
@@ -211,15 +211,22 @@ session-cap, event, and chain state.
 | K01 | Rotate signing key | A | `signing_key.rotate` | `signing_keys::rotate_atomic` | `a_k01_signing_rotate` |
 | K02 | Retire signing key | A | `signing_key.retire` | `signing_keys::retire` | `a_k02_signing_retire` |
 | K03 | Delete signing key | A | `signing_key.delete` | `signing_keys::delete` | `a_k03_signing_delete` |
-| K04 | Master-key DB reseal phase | A | `admin.master_key.database_resealed` | all `reseal_all` helpers plus rotation-state row | `a_k04_master_db` |
-| K05 | Master-key activation completion | A | `admin.master_key.activated` | rotation-state completion after atomic file replacement | `a_k05_master_activate` |
-| K06 | Sealed-key insert/reseal primitives | I | subordinate to S10, K01, or K04 only | `signing_keys::insert_with_plaintext`, `insert_sealed_on_conn`, all `reseal_all` functions | `i_k06_key_primitives` |
+| K06 | Sealed-key insert/reseal primitives | I | subordinate to S10 or K01 only | `signing_keys::insert_with_plaintext`, `insert_sealed_on_conn`, all `reseal_all` functions | `i_k06_key_primitives` |
 | O01 | Enqueue email | O | delivery queue state; originating security command owns its event | `email_outbox::enqueue` | `o_o01_enqueue` |
 | O02 | Claim/update/requeue email work | O | worker lifecycle with structured operational telemetry | `claim_one_eligible`, `mark_sent`, `record_failure`, `mark_permanently_failed`, `requeue_stuck_sending` | `o_o02_outbox_worker` |
 | O03 | Purge expired protocol rows | O | retention housekeeping; count/error telemetry | purge functions in auth codes, sessions, pending MFA/WebAuthn, reset tokens, pending changes, refresh/access tokens | `o_o03_purge` |
 | O04 | Create SQLite backup snapshot | O | operator-invoked backup evidence owns outcome; no domain mutation in the live database | `backup::ops` `VACUUM INTO` destination | `o_o04_backup_snapshot` |
 | X01 | Schema migrations | X | ordered migration identity/result in upgrade evidence | `Database` migration runner and migration SQL only | `x_x01_migrations` |
 | X02 | Development seed/reset | X | dev-only, unreachable in production mode; dev warning/summary | `runtime::dev_mode` writes | `x_x02_dev_seed` |
+
+**Removed 2026-07-28 — master-key rotation.** `K04` (master-key database
+reseal phase) and `K05` (master-key activation completion) were removed from
+this inventory by the RFC 094 scope amendment and are owned by
+[RFC 100](../../proposed/100-master-key-rotation-recovery.md). Their database
+phases consume the Class-A seam established by RFC 094, which is why RFC 100
+depends on M2a. `K06` was reworded accordingly: it is subordinate to `S10` or
+`K01` only, and RFC 100 re-establishes its own subordination when its commands
+land. No other row changed.
 
 ## Completeness reconciliation
 

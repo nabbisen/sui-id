@@ -116,33 +116,21 @@ Repeat for every inventory row:
 - [ ] command is present in the generated write-site universe and no raw writer
   survives outside the reviewed executor/migration modules.
 
-## Stage 3 — key/file recovery
+## Stage 3 — signing-key rotation
 
-- [ ] Add master-key fingerprint/sentinel and singleton rotation-state schema.
-- [ ] Atomically create/fsync the exclusive 0700/current-owner rotation
-  workspace before publishing any journal or artifact.
-- [ ] Write-all/fsync/readback/tag-verify `intent.write`, publish no-replace as
-  `intent.json`, and fsync the workspace; a partial unpublished Intent must be
-  safely removable under the reserved-path contract.
-- [ ] Advance Intent → NextTempVerified → NextPublished → BackupTempVerified →
-  BackupPublished → Prepared using checked temporary writes, readback,
-  no-replace publication, atomic journal replacement, and directory fsync.
-- [ ] Prepare next key and backup with create-new, 0600/current owner,
-  no-symlink, canonical-path and fingerprint/sentinel validation.
-- [ ] K04 reseals all encrypted columns, records pending state, and appends only
-  the database-phase event in one transaction.
-- [ ] Atomically replace the active key without a missing-path window and fsync
-  the directory; refuse unsupported platforms.
-- [ ] K05 records completion and appends activation event after reopening with
-  the active new key.
-- [ ] Startup recovery handles every RFC state/fingerprint combination before
-  service readiness and fails closed on ambiguity.
-- [ ] Bind explicit `RetainUntil` custody/review or verified-removal disposition
-  for the old key; K05 cannot complete without recording it.
-- [ ] Inject short writes/termination during every workspace, initial/update
-  journal, next/backup temporary write, file fsync, verification, publication,
-  directory fsync, K04, active replacement, and K05 boundary; observe
-  resume/OldReady before K04 and Complete after K04.
+- [ ] Convert `K01` signing-key rotation to the Class-A runner: retire old,
+  insert/activate new, and append `signing_key.rotate` in one transaction.
+- [ ] Inject failure before append and before commit; assert the prior active
+  key is unchanged and no event committed.
+- [ ] Assert exactly one active signing key after a successful rotation, backed
+  by the unique-active constraint.
+
+**Master-key rotation is not part of RFC 094.** The 2026-07-28 scope amendment
+moved `K04`, `K05`, the rotation journal, atomic key-file publication, startup
+crash recovery, and old-key custody to
+[RFC 100](../../proposed/100-master-key-rotation-recovery.md). Do not implement
+them in this milestone; RFC 100 carries its own checklist and crash-injection
+matrix.
 
 ## Stage 4 — authority switch and closure
 

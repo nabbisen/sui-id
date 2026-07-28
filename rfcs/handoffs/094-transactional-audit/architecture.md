@@ -173,16 +173,19 @@ the inventory with an expiry in the same wave. It cannot survive M2 closure.
 
 ## External key state
 
-Signing-key rotation is database-only and uses one Class-A transaction.
-Master-key rotation follows RFC 094's two-command state machine: atomically
-create an exclusive private workspace; write/fsync/readback and no-replace
-publish the authenticated Intent from a temporary; publish verified next/backup
-artifacts from workspace temporaries; K04 database reseal/pending audit; atomic
-active-file replacement and directory fsync; then K05 completion audit. Startup recovery
-runs before service readiness and validates key fingerprints, sentinel
-decryption, canonical paths, ownership, permissions, symlink absence, and the
-database state. A workspace containing only a partial unpublished Intent is
-safe to clean by its exact reserved-path contract; every authenticated prefix
-resumes or cleans back to OldReady. K05 also
-records an explicit finite-review retention/custody or verified-removal
-disposition for the old-key backup.
+Signing-key rotation is database-only and uses one Class-A transaction. `K01`
+retires the old key, inserts and activates the new key, and appends
+`signing_key.rotate` in one transaction; the unique-active constraint proves
+exactly one active key after success.
+
+**Master-key rotation is out of scope for RFC 094.** The 2026-07-28 scope
+amendment moved it, together with `K04` and `K05`, to
+[RFC 100](../../proposed/100-master-key-rotation-recovery.md): the rotation
+journal, atomic key-file publication, startup crash recovery, and old-key
+custody are a filesystem-atomicity problem with their own threat model, and are
+reviewed there. RFC 100's database phases consume the Class-A seam this RFC
+establishes, which is why it depends on M2a.
+
+Do not implement any master-key rotation, journal, workspace, or recovery
+behaviour under RFC 094. Until RFC 100 is Implemented, master-key rotation
+remains a manual operator procedure documented as **not yet crash-safe**.

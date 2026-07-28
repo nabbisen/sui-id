@@ -1,8 +1,8 @@
 # RFC 094 developer handoff
 
-**Governing RFC:** [RFC 094](../../accepted/094-transactional-audit-registry.md)
-**Audience:** `codex-developer` after RFC acceptance and prerequisite evidence
-**Status:** Planning companion; inherits the governing RFC's Accepted status, with implementation still blocked on the entry gate below
+**Governing RFC:** [RFC 094](../../proposed/094-transactional-audit-registry.md)
+**Audience:** `codex-developer` after RFC re-acceptance and prerequisite evidence
+**Status:** Planning companion; inherits the governing RFC's current status — returned to `proposed/` on 2026-07-28 for a material scope amendment and pending fresh independent design review and re-acceptance — with implementation still blocked on the entry gate below
 
 This handoff translates RFC 094 into bounded implementation stages. It does
 not approve design, authorize coding, or override the RFC. If implementation
@@ -41,8 +41,6 @@ Stop and return to architecture/security review if:
 - a Class-A command is missing from the approved inventory;
 - a secret-bearing value appears necessary in an audit payload;
 - a legacy public API must remain capable of bypassing the transaction runner;
-- master-key recovery cannot deterministically reach OldReady or Complete from
-  a newly discovered crash point;
 - failure injection cannot prove rollback for an inventory row;
 - a change materially alters RFC security invariants or prerequisites.
 

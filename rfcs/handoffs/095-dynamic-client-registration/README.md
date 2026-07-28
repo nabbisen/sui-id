@@ -1,8 +1,8 @@
 # RFC 095 developer handoff
 
-**Governing RFC:** [RFC 095](../../accepted/095-dynamic-client-registration-transaction.md)
-**Audience:** `codex-developer` only after RFC acceptance and prerequisite evidence
-**Status:** Planning companion; inherits the governing RFC's Accepted status, with implementation still blocked on the entry gate below
+**Governing RFC:** [RFC 095](../../proposed/095-dynamic-client-registration-transaction.md)
+**Audience:** `codex-developer` only after RFC re-acceptance and prerequisite evidence
+**Status:** Planning companion; inherits the governing RFC's current status — returned to `proposed/` on 2026-07-28 for a material prerequisite amendment and pending fresh independent design review and re-acceptance — with implementation still blocked on the entry gate below
 
 This handoff decomposes RFC 095 without authorizing coding or weakening RFC
 094's C15 Class-A boundary.

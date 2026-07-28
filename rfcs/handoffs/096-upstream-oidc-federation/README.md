@@ -1,8 +1,8 @@
 # RFC 096 developer handoff
 
-**Governing RFC:** [RFC 096](../../accepted/096-upstream-oidc-federation-validation.md)
+**Governing RFC:** [RFC 096](../../proposed/096-upstream-oidc-federation-validation.md)
 **Audience:** `codex-developer` only after the applicable entry gate
-**Status:** Planning companion; inherits the governing RFC's Accepted status, with implementation still blocked on the entry gates below
+**Status:** Planning companion; inherits the governing RFC's current status — returned to `proposed/` on 2026-07-28 for a material prerequisite and staging amendment and pending fresh independent design review and re-acceptance — with implementation still blocked on the entry gates below
 
 This package decomposes the federation trust completion without reopening RFC
 004's stable mapping policy or RFC 094's atomic-audit architecture.

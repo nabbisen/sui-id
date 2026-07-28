@@ -1,13 +1,12 @@
 # RFC 095 — Dynamic Client Registration Transaction and Validation
 
-**Status.** Accepted
+**Status.** Proposed
 **Security review.** Required
-**Accepted on.** 2026-07-18
-**Approved by.** `@nabbisen`
-**Independent design review.** `codex-independent-architecture-security-reviewer` (OpenAI Codex), [Accept with notes](../reviews/095-design-review-2026-07-18.md)
+**Lifecycle history.** Accepted 2026-07-18 after [independent review](../reviews/095-design-review-2026-07-18.md); **returned to Proposed on 2026-07-28** for the prerequisite amendment below, per RFC 000's return-for-review rule for material prerequisite changes. The 2026-07-18 acceptance is preserved in history and is superseded, not withdrawn. No metadata contract, URI policy, or transaction design is reopened.
+**Amendment summary (2026-07-28).** Implementation prerequisite re-pointed from "RFC 094 Implemented" to "RFC 094 M2a Implemented". RFC 094 was phased into M2a and M2b on 2026-07-28; because C15 is pinned to M2a, the unamended wording would have made this RFC wait for M2b work it does not depend on, delaying M3 rather than enabling it.
 **Implementation owner.** `codex-developer` (OpenAI Codex), confirmed by `@nabbisen`; implementation start remains gated below
-**Design prerequisites.** RFC 094 Accepted with baseline dynamic registration assigned to its Class-A transaction seam; RFC 7591 metadata scope and redirect/logout URI policy independently reviewed.
-**Implementation prerequisites.** RFC 094 Implemented and its baseline dynamic-registration mutation/audit transaction passes; this RFC Accepted; adversarial test plan approved.
+**Design prerequisites.** Amended RFC 094 Accepted with baseline dynamic registration assigned to its Class-A transaction seam and pinned to M2a; RFC 7591 metadata scope and redirect/logout URI policy independently reviewed.
+**Implementation prerequisites.** RFC 094 **M2a** Implemented and its C15 baseline dynamic-registration mutation/audit transaction passes with observed rollback evidence; this RFC Accepted in its amended form; adversarial test plan approved. Full RFC 094 M2b completion is **not** required, because this RFC depends only on the C15 seam.
 **Closure prerequisites.** Validate-first, single-transaction behavior passes invalid-input, rollback, retry, and concurrency tests; independent closure review accepts evidence.
 **Tracks.** ROADMAP M3 — Atomic dynamic registration.
 **Touches.** `crates/sui-id/src/http/handlers/dynamic_register.rs`, token-endpoint credential extraction, OIDC authorization redirect matching, client core/store models, `repos/client_registration_token.rs`, the RFC 094 C15 transaction/event seam, schema migration 0039 or its next available equivalent, discovery/registration documentation, and adversarial tests.
