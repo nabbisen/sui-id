@@ -141,7 +141,8 @@ async fn rejects_missing_crypto_provider() {
     );
     assert!(
         stderr.contains("no process-level CryptoProvider")
-            || stderr.contains("Could not automatically determine the process-level CryptoProvider"),
+            || stderr
+                .contains("Could not automatically determine the process-level CryptoProvider"),
         "subprocess passed, but stderr does not show the expected missing-\
          provider panic — it may have passed for the wrong reason:\n{stderr}",
     );
