@@ -102,8 +102,25 @@ pub fn init_tracing(
     guard
 }
 
+/// Install the process-wide rustls crypto provider exactly once.
+///
+/// `rustls::ClientConfig::builder()` — used by `ldap3`'s `tls-rustls-ring`
+/// TLS path — panics if no default provider has been installed yet.
+/// reqwest builds its own provider instance internally and does not need
+/// this, but nothing else in the process currently installs the global
+/// default, so an LDAPS connection attempt would be the first thing to
+/// discover that (RFC 093 G09's "provider panic"). Idempotent: a second
+/// installation attempt returns `Err` harmlessly, which we ignore.
+fn install_rustls_crypto_provider() {
+    static INIT_CRYPTO_PROVIDER: Once = Once::new();
+    INIT_CRYPTO_PROVIDER.call_once(|| {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    });
+}
+
 pub async fn prepare(cfg: Config) -> Result<Startup> {
     let log_guard = init_tracing(&cfg.log);
+    install_rustls_crypto_provider();
 
     // 1. Resolve master key.
     let resolved = keyring::resolve(&cfg.storage.key_file).context("resolving master key")?;

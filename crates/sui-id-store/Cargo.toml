@@ -41,7 +41,15 @@ ldap3                       = { workspace = true, optional = true }
 [dev-dependencies]
 proptest                    = { workspace = true }
 tempfile                    = { workspace = true }
-tokio                       = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio                       = { workspace = true, features = ["macros", "rt-multi-thread", "net", "time"] }
+# Enable both crypto-provider backends here, not just `ring` (which is all
+# ldap3's tls-rustls-ring pulls in for this crate alone). In the real
+# sui-id binary, reqwest's rustls integration also compiles in aws-lc-rs,
+# which makes the two backends ambiguous and requires an explicit
+# CryptoProvider::install_default() call — rustls's single-provider
+# auto-fallback does not apply. Without this, the ldap_smoke fixture below
+# would not reproduce the panic it exists to catch.
+rustls                      = { workspace = true, features = ["aws_lc_rs"] }
 
 [lints]
 workspace   = true

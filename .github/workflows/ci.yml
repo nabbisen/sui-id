@@ -15,10 +15,11 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  # Reproducible builds: pin RUSTFLAGS to deny warnings the same way
-  # `cargo build --warnings-as-errors` would, but only in CI — local
-  # dev still gets to see warnings without failing.
-  RUSTFLAGS: "-D warnings"
+  # RFC 093 Gate Matrix v1 (A3.5): a global RUSTFLAGS="-D warnings" made
+  # every build/test lane (G01-G06) fail on ordinary lint drift, which is
+  # G07's job, and conflicted with RFC 093's rule that stable-only lint
+  # drift may be fixed without touching MSRV. G07's own clippy invocation
+  # already carries -D warnings explicitly.
 
 jobs:
   build-test:
