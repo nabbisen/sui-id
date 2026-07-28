@@ -272,6 +272,18 @@ mv "$escaped_tokens.new" "$escaped_tokens"
 expect_failure semantic-palette-escaped-semicolon \
   "G12 semantic-palette-parity:"
 
+empty_value="$tmp/semantic-palette-empty-value"
+cp -R "$valid" "$empty_value"
+sed -i 's/^  --danger-default: #000;$/  --danger-default:;/' \
+  "$empty_value/crates/sui-id-web/src/tokens.rs"
+expect_failure semantic-palette-empty-value "G12 semantic-palette-parity:"
+
+blank_value="$tmp/semantic-palette-blank-value"
+cp -R "$valid" "$blank_value"
+sed -i 's/^  --danger-default: #000;$/  --danger-default: ;/' \
+  "$blank_value/crates/sui-id-web/src/tokens.rs"
+expect_failure semantic-palette-blank-value "G12 semantic-palette-parity:"
+
 inline="$tmp/inline-style-bound"
 cp -R "$valid" "$inline"
 for index in $(seq 1 21); do

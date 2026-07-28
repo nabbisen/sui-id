@@ -189,7 +189,7 @@ awk -v outdir="$tmp" '
     active_parent_depth = parent_depth
     active_declaration_depth = parent_depth + 1
   }
-  function inspect_statement(theme, statement, property, separator) {
+  function inspect_statement(theme, statement, property, separator, value) {
     statement = trimmed(statement)
     if (statement == "") {
       return
@@ -203,6 +203,11 @@ awk -v outdir="$tmp" '
     property = trimmed(property)
     if (property !~ /^--[a-z0-9-]+$/ &&
         property !~ /^-?[a-zA-Z][-_a-zA-Z0-9]*$/) {
+      parse_errors++
+      return
+    }
+    value = trimmed(substr(statement, separator + 1))
+    if (property ~ /^--[a-z0-9-]+$/ && value == "") {
       parse_errors++
       return
     }
