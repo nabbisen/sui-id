@@ -8,6 +8,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -19,9 +23,9 @@ env:
 jobs:
   build-test:
     name: build + test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Install system deps
         # libssl-dev is required because webauthn-rs pulls in openssl
         # transitively. pkg-config so cargo finds it.
@@ -29,15 +33,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libssl-dev pkg-config
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          toolchain: stable
       - name: Cache cargo registry and target
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-gate-input-v1-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
       - name: cargo build
@@ -50,16 +56,17 @@ jobs:
 
   fmt-clippy:
     name: fmt + clippy
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Install system deps
         run: |
           sudo apt-get update
           sudo apt-get install -y libssl-dev pkg-config
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
         with:
+          toolchain: stable
           components: rustfmt, clippy
       - name: cargo fmt
         run: cargo fmt --all -- --check
@@ -75,9 +82,9 @@ jobs:
     # leaked through the initial RFC 048 grep and were caught only at
     # v0.43.0. The widened pattern below catches both.
     name: text-leak invariants
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: No bare i18n expressions in view! children
         run: |
           set -e
@@ -116,9 +123,9 @@ jobs:
     # token name breaks visual styling without any compile error.
     # v0.41.0 had seven such typos.
     name: CSS tokens resolve
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: All var(--…) references resolve
         run: |
           set -e
@@ -167,9 +174,9 @@ jobs:
     # used-but-undeclared case; this job catches the structural
     # incompleteness that produced it.
     name: Semantic palette light/dark parity
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Semantic triples are paired light + dark
         run: |
           set -e
@@ -204,9 +211,9 @@ jobs:
     # of 20 leaves a small headroom for genuinely-one-off styles
     # (truly dynamic content, page tweaks like opacity:0.85).
     name: Inline style attribute count in pages/
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Count inline style attributes in pages/
         run: |
           set -e
@@ -220,3 +227,53 @@ jobs:
             echo "why the inline style is necessary."
             exit 1
           fi
+
+  ui-invariants-v1:
+    # RFC 093 G12 consolidated entry point. Keep the four legacy jobs above
+    # until this integration receives independent review and hosted evidence.
+    name: G12 UI invariants v1
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Record gate environment
+        run: |
+          set -euo pipefail
+          checked_out_sha=$(git rev-parse HEAD)
+          echo "event_commit=$GITHUB_SHA"
+          echo "checked_out_commit=$checked_out_sha"
+          if [[ "$checked_out_sha" != "$GITHUB_SHA" ]]; then
+            echo "::error::Checked-out HEAD does not match GITHUB_SHA"
+            exit 1
+          fi
+          test -z "$(git status --porcelain)"
+          echo "runner_image=${ImageOS:-unknown} ${ImageVersion:-unknown}"
+          bash_path=$(command -v bash)
+          echo "bash_path=$bash_path"
+          test "$bash_path" = /usr/bin/bash
+          /usr/bin/bash --version | head -n 1
+          bash_major=${BASH_VERSINFO[0]}
+          bash_minor=${BASH_VERSINFO[1]}
+          if ((bash_major != 5 || bash_minor < 2)); then
+            echo "::error::G12 requires Bash >=5.2,<6"
+            exit 1
+          fi
+      - name: G12 negative self-tests
+        run: |
+          set +e
+          echo "command=bash scripts/tests/check-ui-invariants-fixtures.sh"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          bash scripts/tests/check-ui-invariants-fixtures.sh
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
+      - name: G12 blocking gate
+        run: |
+          set +e
+          echo "command=bash scripts/check-ui-invariants.sh --all --policy ci/ui-invariants.toml"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          bash scripts/check-ui-invariants.sh --all --policy ci/ui-invariants.toml
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
