@@ -152,7 +152,6 @@ pub struct SecurityConfig {
     pub max_lockout: MaxLockoutDuration,
 }
 
-
 /// Allowed maximum-lockout settings. A small, hand-picked set rather
 /// than an arbitrary integer: each value is operationally meaningful
 /// (an over-business-hours cooldown, a one-business-day cooldown, a
@@ -160,8 +159,7 @@ pub struct SecurityConfig {
 /// past two days is more likely to lock out a real user
 /// (post-vacation, post-weekend) than to deter an attacker, who has
 /// long given up by then.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum MaxLockoutDuration {
     #[serde(rename = "15min")]
     FifteenMinutes,
@@ -177,7 +175,6 @@ pub enum MaxLockoutDuration {
     #[serde(rename = "48h")]
     FortyEightHours,
 }
-
 
 impl MaxLockoutDuration {
     /// The duration as a count of seconds. Used both to compute

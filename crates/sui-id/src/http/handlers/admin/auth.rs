@@ -86,14 +86,15 @@ pub async fn login_get(
     // Already logged in? Forward to `next` if present, otherwise /admin.
     if let Some(cookie) = jar.get(SESSION_COOKIE)
         && let Ok(sid) = SessionId::from_str(cookie.value())
-            && session::resolve(&app.db, &app.clock, sid).await.is_ok() {
-                let dest = if q.next.starts_with('/') {
-                    q.next.clone()
-                } else {
-                    "/admin".into()
-                };
-                return Ok(Redirect::to(&dest).into_response());
-            }
+        && session::resolve(&app.db, &app.clock, sid).await.is_ok()
+    {
+        let dest = if q.next.starts_with('/') {
+            q.next.clone()
+        } else {
+            "/admin".into()
+        };
+        return Ok(Redirect::to(&dest).into_response());
+    }
     // Thread `next` into the form so login_post can redirect to it.
     let next = if q.next.is_empty() {
         None
@@ -548,9 +549,10 @@ pub async fn logout(
         return Ok(Redirect::to("/admin/login").into_response());
     }
     if let Some(c) = jar.get(SESSION_COOKIE)
-        && let Ok(sid) = SessionId::from_str(c.value()) {
-            let _ = session::logout(&app.db, sid).await;
-        }
+        && let Ok(sid) = SessionId::from_str(c.value())
+    {
+        let _ = session::logout(&app.db, sid).await;
+    }
     let jar = jar.add(clear_session_cookie(app.config.server.cookie_secure));
     // Render the login page with a "Signed out" confirmation.
     let flash = Flash {

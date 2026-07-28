@@ -379,9 +379,10 @@ where
         // trusted proxy is the client.
         for candidate in xff.iter().rev() {
             if let Ok(ip) = candidate.parse::<std::net::IpAddr>()
-                && !crate::ipnet::any_contains(&app.trusted_proxies, &ip) {
-                    return Ok(Self(ip));
-                }
+                && !crate::ipnet::any_contains(&app.trusted_proxies, &ip)
+            {
+                return Ok(Self(ip));
+            }
         }
         // The whole chain was trusted (unusual but legal); fall back to peer.
         Ok(Self(peer))
@@ -691,15 +692,17 @@ pub async fn resolve_admin_locale(
     // 1. Admin user's own preference
     if let Ok(user) = sui_id_store::repos::users::get(&app.db, admin_id).await
         && let Some(ref tag) = user.preferred_lang
-            && let Some(loc) = sui_id_i18n::Locale::parse(tag) {
-                return loc;
-            }
+        && let Some(loc) = sui_id_i18n::Locale::parse(tag)
+    {
+        return loc;
+    }
 
     // 2. Server-configured default language
     if let Ok(settings) = sui_id_store::repos::server_settings::get(&app.db).await
-        && let Some(loc) = sui_id_i18n::Locale::parse(&settings.default_lang) {
-            return loc;
-        }
+        && let Some(loc) = sui_id_i18n::Locale::parse(&settings.default_lang)
+    {
+        return loc;
+    }
 
     // 3. Hardcoded fallback
     sui_id_i18n::Locale::Ja

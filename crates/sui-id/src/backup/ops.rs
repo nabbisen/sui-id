@@ -149,9 +149,10 @@ pub fn run_backup(cfg: &Config, dest: &Path, opts: &BackupOptions) -> Result<()>
 
     // Step 4: write to dest, encrypted or plain.
     if let Some(parent) = dest.parent()
-        && !parent.as_os_str().is_empty() {
-            std::fs::create_dir_all(parent).ok();
-        }
+        && !parent.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(parent).ok();
+    }
     let mut out = OpenOptions::new()
         .create_new(true)
         .write(true)
@@ -201,13 +202,15 @@ pub fn run_restore(cfg: &Config, src: &Path, opts: &RestoreOptions) -> Result<()
     }
 
     if let Some(parent) = cfg.storage.db_path.parent()
-        && !parent.as_os_str().is_empty() {
-            std::fs::create_dir_all(parent).ok();
-        }
+        && !parent.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(parent).ok();
+    }
     if let Some(parent) = cfg.storage.key_file.parent()
-        && !parent.as_os_str().is_empty() {
-            std::fs::create_dir_all(parent).ok();
-        }
+        && !parent.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(parent).ok();
+    }
 
     write_atomic(&cfg.storage.db_path, &db_bytes, 0o600)?;
     write_atomic(&cfg.storage.key_file, &key_bytes, 0o600)?;

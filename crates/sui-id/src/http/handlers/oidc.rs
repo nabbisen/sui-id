@@ -664,18 +664,18 @@ pub async fn logout(
 
     // Fall back to the session cookie for the user identification.
     if user_id.is_none()
-        && let Some(cookie) = headers.get(header::COOKIE).and_then(|v| v.to_str().ok()) {
-            for part in cookie.split(';') {
-                let part = part.trim();
-                if let Some(value) = part.strip_prefix("sui_id_session=")
-                    && let Ok(sid) = value.parse()
-                        && let Ok(uid) =
-                            sui_id_core::session::resolve(&app.db, &app.clock, sid).await
-                        {
-                            user_id = Some(uid);
-                        }
+        && let Some(cookie) = headers.get(header::COOKIE).and_then(|v| v.to_str().ok())
+    {
+        for part in cookie.split(';') {
+            let part = part.trim();
+            if let Some(value) = part.strip_prefix("sui_id_session=")
+                && let Ok(sid) = value.parse()
+                && let Ok(uid) = sui_id_core::session::resolve(&app.db, &app.clock, sid).await
+            {
+                user_id = Some(uid);
             }
         }
+    }
 
     if let Some(uid) = user_id {
         sui_id_core::session::logout_user(&app.db, &app.clock, uid)

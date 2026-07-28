@@ -412,10 +412,11 @@ pub async fn federated_callback(
 
     // Nonce check (P5 replay protection).
     if let Some(ref token_nonce) = id_claims.nonce
-        && token_nonce != &fed_state.nonce {
-            tracing::warn!(slug = %provider.slug, "federation nonce mismatch");
-            return Ok(Redirect::to("/admin/login?fed_error=nonce_mismatch").into_response());
-        }
+        && token_nonce != &fed_state.nonce
+    {
+        tracing::warn!(slug = %provider.slug, "federation nonce mismatch");
+        return Ok(Redirect::to("/admin/login?fed_error=nonce_mismatch").into_response());
+    }
 
     if id_claims.sub.is_empty() {
         return Ok(Redirect::to("/admin/login?fed_error=no_sub").into_response());
@@ -459,32 +460,29 @@ pub async fn federated_callback(
                     &sui_id_shared::normalize_email(email),
                 )
                 .await
-                {
-                    // An existing local user has this email but is NOT linked
-                    // to this provider. Treat as attempted takeover.
-                    tracing::warn!(
-                        provider = %provider.slug,
-                        email = %email,
-                        "federation: email collision — potential takeover attempt blocked (P2)"
-                    );
-                    let _ = sui_id_store::repos::audit::append(
-                        &app.db,
-                        &AuditLogRow {
-                            at: now,
-                            actor: None,
-                            action:
-                                sui_id_store::repos::federation_provider::AUDIT_TAKEOVER_BLOCKED
-                                    .into(),
-                            target: None,
-                            result: "denied".into(),
-                            note: Some(format!("provider={} email={email}", provider.slug)),
-                        },
-                    )
-                    .await;
-                    return Ok(
-                        Redirect::to("/admin/login?fed_error=email_collision").into_response()
-                    );
-                }
+            {
+                // An existing local user has this email but is NOT linked
+                // to this provider. Treat as attempted takeover.
+                tracing::warn!(
+                    provider = %provider.slug,
+                    email = %email,
+                    "federation: email collision — potential takeover attempt blocked (P2)"
+                );
+                let _ = sui_id_store::repos::audit::append(
+                    &app.db,
+                    &AuditLogRow {
+                        at: now,
+                        actor: None,
+                        action: sui_id_store::repos::federation_provider::AUDIT_TAKEOVER_BLOCKED
+                            .into(),
+                        target: None,
+                        result: "denied".into(),
+                        note: Some(format!("provider={} email={email}", provider.slug)),
+                    },
+                )
+                .await;
+                return Ok(Redirect::to("/admin/login?fed_error=email_collision").into_response());
+            }
 
             match provider.provision_mode {
                 ProvisionMode::ProvisionOnFirstLogin => {
@@ -682,16 +680,17 @@ fn derive_username(claims: &IdTokenClaims) -> String {
         }
     }
     if let Some(ref email) = claims.email
-        && let Some(local) = email.split('@').next() {
-            let clean: String = local
-                .chars()
-                .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
-                .take(32)
-                .collect();
-            if !clean.is_empty() {
-                return clean;
-            }
+        && let Some(local) = email.split('@').next()
+    {
+        let clean: String = local
+            .chars()
+            .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
+            .take(32)
+            .collect();
+        if !clean.is_empty() {
+            return clean;
         }
+    }
     // Final fallback: first 16 chars of sub
     claims.sub.chars().take(16).collect()
 }

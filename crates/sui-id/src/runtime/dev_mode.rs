@@ -265,9 +265,10 @@ impl DevSeed {
             self.admin.password = pw;
         }
         if let Some(cs) = ovr.client_secret
-            && let Some(c) = self.clients.first_mut() {
-                c.client_secret = Some(cs);
-            }
+            && let Some(c) = self.clients.first_mut()
+        {
+            c.client_secret = Some(cs);
+        }
     }
 }
 

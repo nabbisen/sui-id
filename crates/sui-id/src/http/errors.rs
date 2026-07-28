@@ -219,10 +219,11 @@ fn oauth_error_response(e: HttpError) -> Response {
     }
     // Add Retry-After for rate-limit (429) responses.
     if let Some(secs) = e.retry_after_secs
-        && let Ok(val) = axum::http::HeaderValue::from_str(&secs.to_string()) {
-            resp.headers_mut()
-                .insert(axum::http::header::RETRY_AFTER, val);
-        }
+        && let Ok(val) = axum::http::HeaderValue::from_str(&secs.to_string())
+    {
+        resp.headers_mut()
+            .insert(axum::http::header::RETRY_AFTER, val);
+    }
     resp
 }
 
@@ -233,10 +234,11 @@ fn json_error_response(e: HttpError, code: ApiErrorCode) -> Response {
     let payload = build_api_error(&e.inner, &e.request_id, code);
     let mut resp = (status, Json(payload)).into_response();
     if let Some(secs) = e.retry_after_secs
-        && let Ok(value) = axum::http::HeaderValue::from_str(&secs.to_string()) {
-            resp.headers_mut()
-                .insert(axum::http::header::RETRY_AFTER, value);
-        }
+        && let Ok(value) = axum::http::HeaderValue::from_str(&secs.to_string())
+    {
+        resp.headers_mut()
+            .insert(axum::http::header::RETRY_AFTER, value);
+    }
     resp
 }
 
@@ -279,10 +281,11 @@ fn html_error_response(e: HttpError, code: ApiErrorCode) -> Response {
     let body = sui_id_web::render_error(status_u16, &e.request_id, e.lang);
     let mut resp = (status, Html(body)).into_response();
     if let Some(secs) = e.retry_after_secs
-        && let Ok(value) = axum::http::HeaderValue::from_str(&secs.to_string()) {
-            resp.headers_mut()
-                .insert(axum::http::header::RETRY_AFTER, value);
-        }
+        && let Ok(value) = axum::http::HeaderValue::from_str(&secs.to_string())
+    {
+        resp.headers_mut()
+            .insert(axum::http::header::RETRY_AFTER, value);
+    }
     resp
 }
 

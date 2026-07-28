@@ -104,25 +104,26 @@ pub async fn welcome_get(
     // and from there RequestLocale picks it up for every
     // subsequent setup step.
     if let Some(raw) = query.lang.as_deref().map(str::trim)
-        && let Some(loc) = sui_id_i18n::Locale::parse(raw) {
-            let secure = app.config.server.cookie_secure;
-            let mut c = axum_extra::extract::cookie::Cookie::new(
-                crate::handlers::LANG_COOKIE,
-                loc.tag().to_string(),
-            );
-            c.set_path("/");
-            c.set_http_only(false);
-            c.set_same_site(axum_extra::extract::cookie::SameSite::Lax);
-            c.set_secure(secure);
-            c.set_max_age(time::Duration::days(365));
-            let jar = jar.add(c);
-            // v0.48.4: preserve ?token= through the lang PRG redirect.
-            let redirect = match query.token.as_deref().filter(|t| !t.is_empty()) {
-                Some(tok) => format!("/setup?token={tok}"),
-                None => "/setup".to_owned(),
-            };
-            return Ok((jar, Redirect::to(&redirect)).into_response());
-        }
+        && let Some(loc) = sui_id_i18n::Locale::parse(raw)
+    {
+        let secure = app.config.server.cookie_secure;
+        let mut c = axum_extra::extract::cookie::Cookie::new(
+            crate::handlers::LANG_COOKIE,
+            loc.tag().to_string(),
+        );
+        c.set_path("/");
+        c.set_http_only(false);
+        c.set_same_site(axum_extra::extract::cookie::SameSite::Lax);
+        c.set_secure(secure);
+        c.set_max_age(time::Duration::days(365));
+        let jar = jar.add(c);
+        // v0.48.4: preserve ?token= through the lang PRG redirect.
+        let redirect = match query.token.as_deref().filter(|t| !t.is_empty()) {
+            Some(tok) => format!("/setup?token={tok}"),
+            None => "/setup".to_owned(),
+        };
+        return Ok((jar, Redirect::to(&redirect)).into_response());
+    }
 
     let token = query.token.clone().unwrap_or_default();
     Ok(Html(render_setup_welcome(None, lang, &token)).into_response())
