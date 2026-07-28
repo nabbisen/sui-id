@@ -71,7 +71,7 @@ proptest                    = "1.5"
 hmac                        = "0.13"
 subtle                      = "2.6"
 prometheus                  = { version = "0.14", default-features = false }
-ldap3                       = { version = "0.12", default-features = false, features = ["tls-rustls"] }
+ldap3                       = { version = "0.12", default-features = false, features = ["tls-rustls-ring"] }
 zeroize                     = { version = "1.8", features = ["derive"] }
 secrecy                     = { version = "0.10", features = ["serde"] }
 base64ct                    = { version = "1.6", features = ["alloc"] }

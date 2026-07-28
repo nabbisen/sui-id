@@ -10,7 +10,7 @@ build-dir = "book"
 
 [output.html]
 git-repository-url       = "https://github.com/nabbisen/sui-id"
-git-repository-icon      = "fa-github"
+git-repository-icon      = "fab-github"
 edit-url-template        = "https://github.com/nabbisen/sui-id/edit/main/docs/src/{path}"
 site-url                 = "/docs/"
 additional-css           = []
