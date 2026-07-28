@@ -21,9 +21,28 @@ G04 = []
 G05 = []
 G06 = []
 G07 = ["clippy"]
+G07b = ["clippy"]
 G08 = ["rustfmt"]
 G09a = []
 G09b = []
+
+# RFC 093 Gate Matrix v1 (rfcs/accepted/093-build-toolchain-release-gates.md),
+# machine-readable expansion. scripts/ci-gate.sh executes these commands
+# verbatim; scripts/check-gate-inputs.sh (A3.4) verifies this table matches
+# the RFC's table exactly. Do not paraphrase, wrap, or reorder a command here
+# without amending the RFC first.
+[gates]
+G01 = "cargo +1.95 build --workspace --all-targets --locked"
+G02 = "cargo +1.95 test --workspace --locked"
+G03 = "cargo +1.95 build --workspace --all-targets --all-features --locked"
+G04 = "cargo +1.95 test --workspace --all-features --locked"
+G05 = "cargo +stable build --workspace --all-targets --locked && cargo +stable test --workspace --locked"
+G06 = "cargo +stable build --workspace --all-targets --all-features --locked && cargo +stable test --workspace --all-features --locked"
+G07 = "cargo +stable clippy --workspace --all-targets --all-features --locked -- -D warnings"
+G07b = "cargo +stable clippy --workspace --all-targets --locked -- -D warnings"
+G08 = "cargo +stable fmt --all -- --check"
+G09a = "cargo +1.95 test -p sui-id-store --features ldap --test ldap_smoke --locked -- --exact rustls_provider_and_tls_connector_reach_fixture"
+G09b = "cargo +stable test -p sui-id-store --features ldap --test ldap_smoke --locked -- --exact rustls_provider_and_tls_connector_reach_fixture"
 
 [actions]
 checkout_v6 = "d23441a48e516b6c34aea4fa41551a30e30af803"
