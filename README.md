@@ -96,7 +96,9 @@ sui-id --print-sample-config > sui-id.toml
 sui-id --config sui-id.toml
 ```
 
-If you'd rather build from source:
+If you'd rather build from source, note that the MSRV (1.95) is newer than
+most distribution-packaged Rust toolchains, so you will generally need
+[`rustup`](https://rustup.rs/) rather than your distro's `rustc`:
 
 ```bash
 git clone https://github.com/nabbisen/sui-id && cd sui-id
@@ -148,7 +150,8 @@ After setup, point your relying party at:
 - Setup wizard with one-time token, no default credentials
 - TOML configuration; master key resolved from env or file
 - Single-process, single-binary, single-file deployment
-- Built on Rust 1.91 with `unsafe_code = "forbid"` enforced workspace-wide
+- Built on Rust 1.95 (MSRV; install via `rustup` if your distro's Rust is
+  older) with `unsafe_code = "forbid"` enforced workspace-wide
 - **Three operator roles:** admin (full control), auditor (read-only across
   all admin surfaces), user (self-service only); role-change UI with
   last-admin safeguard

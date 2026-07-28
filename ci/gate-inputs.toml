@@ -8,7 +8,7 @@ bash_maximum_exclusive = "6"
 system_packages = ["libssl-dev", "pkg-config"]
 
 [tools]
-rust_msrv = "1.91"
+rust_msrv = "1.95"
 rust_stable = "stable"
 mdbook = "0.5.4"
 python = "3.14"

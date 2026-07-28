@@ -5,6 +5,26 @@ All notable changes to sui-id will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **MSRV raised from 1.91 to 1.95 (RFC 093 M1a, Amendment 1).** The declared
+  1.91 floor was not merely untested but unbuildable: `libsqlite3-sys 0.38.1`,
+  reached through `rusqlite 0.40` on the `bundled` path this project uses,
+  calls the `cfg_select!` macro in its build script, which is unstable before
+  Rust 1.95 (E0658). Measured directly on this workspace: 1.91, 1.92, 1.93 and
+  1.94 all fail to build; 1.95 builds cleanly. Because 1.95 is newer than most
+  distribution-packaged toolchains, building from source generally requires
+  `rustup` rather than a distro `rustc`.
+- Fixed `ldap3`'s `tls-rustls` feature set, which selected no Rustls crypto
+  provider and failed to compile under `--all-features`. Now uses
+  `tls-rustls-ring`, since the workspace already resolves `ring` through its
+  existing rustls stack.
+- Fixed the mdBook GitHub icon: `docs/book.toml` declared the Font Awesome
+  *regular* form (`fa-github`); mdBook 0.5.4 requires the prefixed *brands*
+  form (`fab-github`).
+
 ## [0.76.12] — 2026-07-02
 
 **Dependency-security refresh after the 0.76.11 release. No behavior changes
