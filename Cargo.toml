@@ -8,6 +8,13 @@ members = [
     "crates/sui-id-shared",
     "crates/sui-id-i18n",
 ]
+# RFC 093 A3.2: Gate Matrix negative fixtures are deliberately broken
+# standalone packages (scripts/tests/fixtures/gate-matrix/). Excluding the
+# directory keeps them out of this workspace so `cargo ... --workspace`,
+# which scripts/ci-gate.sh runs verbatim per fixture, resolves to the single
+# fixture it is invoked in rather than pulling in its siblings or this
+# workspace.
+exclude = ["scripts/tests/fixtures"]
 
 [workspace.package]
 version = "0.76.12"

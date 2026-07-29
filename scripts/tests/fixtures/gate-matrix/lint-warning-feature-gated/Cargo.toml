@@ -2,12 +2,6 @@
 name = "gate-matrix-fixture-lint-warning-feature-gated"
 version = "0.0.0"
 edition = "2024"
-publish = false
 
 [features]
 ldap = []
-
-[lib]
-path = "src/lib.rs"
-
-[workspace]
