@@ -510,3 +510,47 @@ jobs:
           echo "exit_status=$status"
           echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           exit "$status"
+
+  gate-inputs:
+    # RFC 093 A3.4: ci/gate-inputs.toml enforcement. Verifies the manifest
+    # scripts/ci-gate.sh reads is itself correct — action pinning, the
+    # [rust_components]/[gates] tables, version fields, runner labels, and
+    # (condition 7) that [gates] matches RFC 093's Gate Matrix v1 table
+    # exactly — so the dispatcher's "runs the matrix command" property is a
+    # checked invariant, not a convention.
+    name: A3.4 gate-inputs.toml enforcement
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Record gate environment
+        run: |
+          set -euo pipefail
+          checked_out_sha=$(git rev-parse HEAD)
+          echo "event_commit=$GITHUB_SHA"
+          echo "checked_out_commit=$checked_out_sha"
+          if [[ "$checked_out_sha" != "$GITHUB_SHA" ]]; then
+            echo "::error::Checked-out HEAD does not match GITHUB_SHA"
+            exit 1
+          fi
+          test -z "$(git status --porcelain)"
+          echo "runner_image=${ImageOS:-unknown} ${ImageVersion:-unknown}"
+      - name: gate-inputs negative self-tests
+        run: |
+          set +e
+          echo "command=bash scripts/tests/check-gate-inputs-fixtures.sh"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          bash scripts/tests/check-gate-inputs-fixtures.sh
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
+      - name: gate-inputs blocking check
+        run: |
+          set +e
+          echo "command=bash scripts/check-gate-inputs.sh --all --policy ci/gate-inputs.toml"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          bash scripts/check-gate-inputs.sh --all --policy ci/gate-inputs.toml
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
