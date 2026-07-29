@@ -554,3 +554,85 @@ jobs:
           echo "exit_status=$status"
           echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           exit "$status"
+
+  gate-matrix-fixtures:
+    # RFC 093 A3.2: negative self-tests for the Gate Matrix v1 lane commands
+    # themselves (scripts/tests/fixtures/gate-matrix/) and for
+    # scripts/ci-gate.sh's own evidence-contract preconditions. Unlike
+    # ui-invariants-v1/gate-inputs above, there is no separate "blocking
+    # check against the real repository" step here: the G01-G09b jobs
+    # already are that check against the real repository. This job only
+    # proves the fixtures fail (or pass) exactly as each lane's command
+    # requires.
+    name: A3.2 gate-matrix negative self-tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Record gate environment
+        run: |
+          set -euo pipefail
+          checked_out_sha=$(git rev-parse HEAD)
+          echo "event_commit=$GITHUB_SHA"
+          echo "checked_out_commit=$checked_out_sha"
+          if [[ "$checked_out_sha" != "$GITHUB_SHA" ]]; then
+            echo "::error::Checked-out HEAD does not match GITHUB_SHA"
+            exit 1
+          fi
+          test -z "$(git status --porcelain)"
+          echo "runner_image=${ImageOS:-unknown} ${ImageVersion:-unknown}"
+      - name: Install Rust 1.95
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          toolchain: "1.95"
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          toolchain: stable
+          components: clippy, rustfmt
+      - name: Cache cargo registry
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-gate-input-v1-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      - name: Install mdBook 0.5.4
+        # ci/gate-inputs.toml's [tools] table already pins this version for
+        # G10a; installing it from crates.io needs no new SHA-pinned action.
+        run: cargo install mdbook --version 0.5.4 --locked
+      - name: gate-matrix negative self-tests (G01-G08, G07b)
+        run: |
+          set +e
+          echo "command=bash scripts/tests/check-gate-matrix-fixtures.sh"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          bash scripts/tests/check-gate-matrix-fixtures.sh
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
+      - name: ci-gate evidence-contract self-tests
+        run: |
+          set +e
+          echo "command=bash scripts/tests/check-ci-gate-fixtures.sh"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          bash scripts/tests/check-ci-gate-fixtures.sh
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
+      - name: G10a self-test (mdbook-missing-chapter must fail)
+        run: |
+          set +e
+          echo "command=mdbook build scripts/tests/fixtures/mdbook-missing-chapter"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          mdbook build scripts/tests/fixtures/mdbook-missing-chapter
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          if [[ "$status" -eq 0 ]]; then
+            echo "::error::G10a self-test: mdbook-missing-chapter fixture unexpectedly succeeded"
+            exit 1
+          fi
+          echo "G10a self-test: expected failure observed"

@@ -1,0 +1,7 @@
+[book]
+title = "gate-matrix fixture: mdbook-missing-chapter"
+src   = "src"
+
+[build]
+build-dir      = "book"
+create-missing = false
