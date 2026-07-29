@@ -12,7 +12,8 @@ crash-injection harness approved.
 resumes idempotently or returns cleanly to `OldReady`; no prefix yields mixed
 ciphertext, a missing active key, or an overstated audit record; independent
 adversarial closure review accepts the durable evidence.
-**Tracks.** ROADMAP — master-key rotation recovery (sequence at owner discretion).
+**Tracks.** ROADMAP M2c — Master-key rotation recovery. Begins after RFC 094 M2a (it consumes that Class-A seam) and runs in parallel with M2b/M3/M4. **Required before M6 entry**, because the M7 workload contract requires a master-key rotation exercise and RFC 099 requires zero blocker-severity defects; rotating a key that is not crash-safe against the immutable soak artifact is not an acceptable exercise.
+**Handoff.** [`../handoffs/100-master-key-rotation/README.md`](../handoffs/100-master-key-rotation/README.md)
 **Touches.** Master-key loading and rotation CLI, key-file handling, startup
 recovery, `master_key_rotation` schema, `sui-id-store` encrypted-column reseal,
 audit registry entries `admin.master_key.database_resealed` and

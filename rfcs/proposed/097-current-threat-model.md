@@ -2,15 +2,17 @@
 
 **Status.** Proposed
 **Security review.** Required
-**Design prerequisites.** RFCs 093–096 Implemented; RFC 098 authority decision Accepted.
-**Implementation prerequisites.** This RFC Accepted; verified behavior/evidence for RFCs 093–096 available.
+**Design prerequisites.** RFC 093 (M1a **and** M1b), RFC 094 (M2a **and** M2b), RFC 095, and RFC 096 (096-A **and** 096-B) Implemented; RFC 098 authority decision Accepted. Stage names are load-bearing after the 2026-07-28 restructure: a partially converted M2a or a validation-only 096-A does not satisfy this prerequisite, because the threat model must describe finished behaviour.
+**Implementation prerequisites.** This RFC Accepted; verified behaviour and evidence available for every stage named above.
+**Master-key boundary.** Offline master-key rotation is designed in [RFC 100](./100-master-key-rotation-recovery.md), not RFC 094. If RFC 100 is not Implemented when this baseline is drafted, the threat model must record master-key rotation as a **manual, not-crash-safe operator procedure** with its interruption modes as explicit residual risk, rather than omitting the boundary or implying it is covered.
 **Closure prerequisites.** Every shipped external trust boundary and material cross-boundary attack has an owner, control/evidence link, failure/rollback analysis, and independently accepted residual risk.
 **Tracks.** ROADMAP M5 — Threat-model reconciliation.
+**Handoff.** [`../handoffs/097-threat-model/README.md`](../handoffs/097-threat-model/README.md)
 **Touches.** `docs/threat-model.md`, security assurance documentation, boundary diagrams and evidence references.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** `codex-project-architect` (OpenAI Codex).
 **Implementation owner.** `codex-developer` (OpenAI Codex), after acceptance and prerequisites.
-**Independent security and closure reviewer.** `codex-independent-architecture-security-reviewer` (OpenAI Codex).
+**Independent security and closure reviewer.** **Vendor independence required** by the owner's 2026-07-28 S1 ruling: the reviewer of record must be outside the vendor that authored and implemented this RFC. `codex-independent-architecture-security-reviewer` (OpenAI Codex) may review, but cannot alone satisfy this RFC's independence requirement.
 
 ## Summary
 

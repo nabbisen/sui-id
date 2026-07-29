@@ -14,7 +14,7 @@
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** `codex-project-architect` (OpenAI Codex).
 **Implementation owner.** `codex-developer` (OpenAI Codex); implementation start remains gated below.
-**Independent security and closure reviewer.** `codex-independent-architecture-security-reviewer` (OpenAI Codex).
+**Independent security and closure reviewer.** **Vendor independence required** by the owner's 2026-07-28 S1 ruling: the reviewer of record must be outside the vendor that authored and implemented this RFC. `codex-independent-architecture-security-reviewer` (OpenAI Codex) may review, but cannot alone satisfy this RFC's independence requirement.
 
 ## Summary
 

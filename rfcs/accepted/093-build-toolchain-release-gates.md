@@ -4,6 +4,7 @@
 **Security review.** Required
 **Accepted on.** 2026-07-17
 **Approved by.** `@nabbisen`
+**Amended on.** 2026-07-28 (second) — added Gate Matrix lane **G07b** (stable, default features, clippy). G07 runs `--all-features` only, so code behind `#[cfg(not(feature = "…"))]` is never linted by it; the workspace has one such site (`crates/sui-id/src/runtime/startup.rs`, the LDAP-absent branch). Without G07b, retiring the legacy `fmt-clippy` job in A3.1 would lose lint coverage on that code. This amendment is purely additive — it adds a lane and weakens nothing — and is applied in place under the same owner ruling that governed the MSRV amendment, because returning this RFC to `proposed/` mid-implementation would halt M1a. Flagged for owner confirmation.
 **Amended on.** 2026-07-28 — MSRV raised from 1.91 to 1.95 under this RFC's own change-control clause (Requirements item 2), and M1 split into M1a (build baseline) and M1b (documentation and lifecycle gates). Approved by `@nabbisen`, who ruled that amendment in place is correct here because this RFC self-provides for an MSRV change and returning it to `proposed/` would invalidate the committed implementation-start authorization.
 **Independent design review.** `codex-independent-architecture-security-reviewer` (OpenAI Codex), [Accept with notes](../reviews/093-design-review-2026-07-17.md)
 **Implementation owner.** `codex-developer` (OpenAI Codex), confirmed by `@nabbisen`
@@ -11,6 +12,7 @@
 **Implementation prerequisites.** `@nabbisen` authorized `codex-developer` against clean baseline `959f089983ce51e53ca403a422a1fe308c276036` with no competing owner for this RFC's `Touches` scope; the repository record is [`implementation-start-authorization.md`](../handoffs/093-build-toolchain-release-gates/implementation-start-authorization.md). Implementation remains prohibited until that record is committed; closure still requires the complete matrix below on one later clean commit.
 **Closure prerequisites.** M1a closes when G01–G09 pass on one clean commit; M1b closes when G10–G12 pass on one clean commit. Every mandatory lane in Gate Matrix v1 passes; LDAP smoke and mdBook pass; RFC integrity reports no known debt; independent closure review confirms that the legacy audit diagnostic is not represented as structural assurance.
 **Tracks.** ROADMAP M1a — Trustworthy build baseline; M1b — Documentation and lifecycle gates.
+**Handoff.** [`../handoffs/093-build-toolchain-release-gates/README.md`](../handoffs/093-build-toolchain-release-gates/README.md)
 **Touches.** `Cargo.toml`, crate manifests, `Cargo.lock`, `.github/workflows/`, `scripts/`, `docs/book.toml`, `rfcs/README.md`, RFC metadata and links.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** `codex-project-architect` (OpenAI Codex).
@@ -98,6 +100,7 @@ parsed repository file under `ci/`, and keeps this RFC as its normative design.
 | G05 | stable | default | `cargo +stable build --workspace --all-targets --locked` and `cargo +stable test --workspace --locked` |
 | G06 | stable | all | `cargo +stable build --workspace --all-targets --all-features --locked` and `cargo +stable test --workspace --all-features --locked` |
 | G07 | stable | all | `cargo +stable clippy --workspace --all-targets --all-features --locked -- -D warnings` |
+| G07b | stable | default | `cargo +stable clippy --workspace --all-targets --locked -- -D warnings` |
 | G08 | stable | n/a | `cargo +stable fmt --all -- --check` |
 | G09a | 1.95 | LDAP | `cargo +1.95 test -p sui-id-store --features ldap --test ldap_smoke --locked -- --exact rustls_provider_and_tls_connector_reach_fixture` |
 | G09b | stable | LDAP | `cargo +stable test -p sui-id-store --features ldap --test ldap_smoke --locked -- --exact rustls_provider_and_tls_connector_reach_fixture` |
@@ -113,9 +116,14 @@ No path filter may omit a mandatory row.
 
 ### Gate entry points and negative self-tests
 
-The commands in the matrix are the public contract. CI may use
-`scripts/ci-gate.sh GNN` as a dispatcher only if the dispatcher executes the
-literal command and policy version recorded above. The following negative
+The commands in the matrix are the public contract. CI uses
+`scripts/ci-gate.sh GNN` as the dispatcher. The literal command for each lane
+is stored as data in `ci/gate-inputs.toml` under `[gates]`, which is the
+machine-readable expansion of the table above; the dispatcher executes that
+recorded command verbatim and may not paraphrase, wrap, or reorder it.
+`scripts/check-gate-inputs.sh` verifies that the manifest's command set matches
+this RFC's table exactly, so the indirection a dispatcher introduces is a
+checked invariant rather than a convention. The following negative
 self-tests are also blocking:
 
 | Gate | Fixture command | Required failure |
@@ -129,7 +137,12 @@ self-tests are also blocking:
 G10a is self-tested by building a minimal invalid mdBook fixture whose SUMMARY
 references a missing chapter:
 `mdbook build scripts/tests/fixtures/mdbook-missing-chapter`. The command must
-exit non-zero. G01–G08 use compile-error, failing-test, lint-warning, and
+exit non-zero. **The fixture's own `book.toml` must set
+`[build] create-missing = false`.** Verified against mdBook 0.5.4: with the
+default `create-missing = true`, a missing chapter is not an error — mdBook
+silently writes an empty stub for the referenced path and exits 0, so the
+fixture would assert nothing. This applies to the fixture only; `docs/book.toml`
+keeps the default so contributors retain the auto-create convenience. G01–G08 use compile-error, failing-test, lint-warning, and
 format-drift fixtures maintained under `scripts/tests/fixtures/gate-matrix/`;
 `bash scripts/tests/check-gate-matrix-fixtures.sh G01 G02 G03 G04 G05 G06 G07 G08`
 must observe the intended lane fail and must itself exit zero only after every
@@ -184,7 +197,10 @@ an exception never changes the MSRV.
 ### Feature and target policy
 
 “Default” means no explicit feature flags. “All” means
-`--all-features` over the workspace. `--all-targets` covers libraries,
+`--all-features` over the workspace. **Both feature sets are linted:** an
+`--all-features` clippy run never sees code behind `#[cfg(not(feature = "…"))]`,
+so G07 (all) and G07b (default) are both mandatory and neither subsumes the
+other. `--all-targets` covers libraries,
 binaries, examples, benches, and test targets at compile time. Tests use UTC.
 No package may opt out without an RFC amendment explaining why its omission
 does not weaken the release claim.

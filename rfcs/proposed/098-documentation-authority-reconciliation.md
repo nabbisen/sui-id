@@ -3,9 +3,10 @@
 **Status.** Proposed
 **Security review.** Required
 **Design prerequisites.** RFC 093 Accepted for mechanical integrity ownership; authoritative-document hierarchy approved before RFC 097 final drafting.
-**Implementation prerequisites.** RFC 093 Implemented; this RFC Accepted.
+**Implementation prerequisites.** RFC 093 **M1b** Implemented — the mdBook, markdown-link, and RFC-integrity gates M1b owns are the mechanical foundation this RFC builds on, and reconciling claims before those gates exist would leave the result unenforced; this RFC Accepted. M1a is implied by M1b but is not independently sufficient.
 **Closure prerequisites.** Authoritative documents, README, roadmap, development specification, operator/integrator guidance, public claims, source paths, and lifecycle metadata agree; mdBook and integrity gates pass.
 **Tracks.** ROADMAP M5 — Documentation authority and reconciliation.
+**Handoff.** [`../handoffs/098-documentation-authority/README.md`](../handoffs/098-documentation-authority/README.md)
 **Touches.** `README.md`, `ROADMAP.md`, `docs/`, RFC links/metadata not mechanically closed by RFC 093, public package metadata and source-path references.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** `codex-project-architect` (OpenAI Codex).

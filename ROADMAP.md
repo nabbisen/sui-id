@@ -67,7 +67,8 @@ The programme is complete only when:
 | **prep — federation module split** | *owner to set* | Split `handlers/federation.rs` into validation and mutation modules; zero behaviour change | none (preparatory) | Reviewed and committed; test count unchanged; diff is moves, not rewrites |
 | **M2a — Transactional security records (foundation)** | *owner to set* | Typed registry; Class-A transaction seam; typed `ReadConn` with static denial; Class-B `emit_must_attempt`; failure injector; convert user administration, credential/consent/session, token/registration **including C15**, and signing keys | **RFC 094** | Every converted Class-A row has injected-failure rollback and exactly-once evidence; C15 atomic; structural gate passes over converted commands; the coverage matrix states conversion status per command and claims no unconverted command is atomic |
 | **M2b — Remaining conversion and authority switch** | *owner to set* | Convert settings, pending settings, federation configuration, client metadata; land the `syn` AST boundary gate; make the structural gate blocking; correct audit-chain claims | **RFC 094** | No production Class-A best-effort append remains anywhere; AST negative fixture rejects an unregistered write; independent adversarial closure review accepts the evidence |
-| **M3 — Atomic dynamic registration** | *owner to set* | Validate all metadata before consuming authorization; atomic use/client/audit transaction; race and retry semantics | **RFC 095** | Invalid or failed requests consume no use; exactly one concurrent limited use wins; rollback and adversarial evidence pass independent review |
+| **M2c — Master-key rotation recovery** | *owner to set* | Rotation journal, atomic key-file publication, startup crash recovery across every transition prefix, old-key custody and disposition | **RFC 100** | Every recovery-table prefix idempotently resumes or cleanly returns to `OldReady`; no prefix yields mixed ciphertext, a missing active key, or an overstated audit record; independent adversarial closure review accepts the crash-injection evidence |
+| **M3 — Atomic dynamic registration** | *owner to set* | Validate all metadata before consuming authorization; atomic use/client/audit transaction; race and retry semantics; owner disposition of legacy unstamped registrations | **RFC 095** | Invalid or failed requests consume no use; exactly one concurrent limited use wins; rollback and adversarial evidence pass independent review; **every `legacy_unstamped_dynamic_candidate` has a durably recorded owner disposition** — a "zero candidates" claim is not accepted, because the historical best-effort audit cannot prove completeness |
 | **M4-A — Federation validation and transport** | *owner to set* | Discovery and egress/SSRF policy; HTTPS and exact issuer binding; JWKS signature verification; required claim validation; mandatory one-time nonce; cache and key rotation. **No durable mutation.** | **RFC 096** | Substitution, missing/mismatched nonce, issuer/audience/time errors, algorithm confusion, hostile endpoints, oversized responses, and rotating keys all handled as designed |
 | **M4-B — Federation mutation and session integration** | *owner to set* | Federation provider/link commands on the Class-A seam; session establishment from a verified assertion | **RFC 096** | Federation mutations carry rollback evidence; representative live integration and independent security review pass |
 | **M5 — Threat-model and documentation reconciliation** | *owner to set* | Settle authoritative-document structure; synthesize the current threat model; reconcile README/spec/operator/integrator claims and source paths | **RFCs 097–098** | Threat model covers all shipped boundaries; authoritative docs identified; mdBook and integrity gates pass; public claims match code |
@@ -112,6 +113,38 @@ traffic volumes, thresholds, commands, and evidence formats before M6 closes:
 - Calendar completion never passes M7. The earliest post-soak event is a
   release-readiness discussion, not production approval or a version tag.
 
+### Execution order
+
+Numbered work items in dependency order. Each is one reviewable unit with its
+own hash-pinned package. Items at the same number may run concurrently.
+
+| # | Work item | Lane | Gate | Handoff |
+|---|---|---|---|---|
+| 1 | Corrective fixes: `ldap3` rustls provider, mdBook icon | A | none — owner-authorized | [093 M1a](rfcs/handoffs/093-build-toolchain-release-gates/m1a-implementation.md) |
+| 1 | clippy cleanup to zero on stable | A | none | 093 M1a |
+| 1 | M1b tooling: G10b/G11 scripts, `ci/rfc-policy.toml`, fixtures | B | none | [093 M1b](rfcs/handoffs/093-build-toolchain-release-gates/m1b-implementation.md) |
+| 2 | MSRV raise to 1.95 | A | item 1 corrective fixes | 093 M1a |
+| 3 | Gate lanes G01–G09 + negative fixtures + `ci-gate.sh` + manifest enforcement | A | items 1–2 | 093 M1a |
+| 3 | M1b debt repair: RFC status, 29 broken links, legacy UI job retirement | B | item 1 tooling | 093 M1b |
+| 4 | **M1a closes** — G01–G09 hosted green on one clean commit | A | item 3 | — |
+| 4 | **M1b closes** — G10–G12 hosted green, integrity debt zero | B | item 3 | — |
+| 5 | `handlers/federation.rs` split, zero behaviour change | prep | M1a; clippy landed | 093 M1a §Theme B |
+| 6 | RFC 094 M2a: registry, seam, `ReadConn`, Class-B emitter, priority conversion incl. C15 | A | M1a; RFC 094 re-accepted | [094](rfcs/handoffs/094-transactional-audit/README.md) |
+| 6 | RFC 096-A: discovery, JWKS, claims, mandatory nonce — no durable mutation | B | M1a; item 5; RFC 096 re-accepted | [096](rfcs/handoffs/096-upstream-oidc-federation/README.md) |
+| 7 | RFC 095 (M3): validate-first dynamic registration | A | M2a incl. C15; RFC 095 re-accepted | [095](rfcs/handoffs/095-dynamic-client-registration/README.md) |
+| 7 | RFC 094 M2b: remaining conversion, AST gate, authority switch | A | M2a | 094 |
+| 7 | RFC 100 (M2c): master-key rotation recovery | A/C | M2a; RFC 100 Accepted | [100](rfcs/handoffs/100-master-key-rotation/README.md) |
+| 7 | RFC 096-B: federation mutation and session integration | B | M2a seam; 096-A | 096 |
+| 8 | RFC 098: documentation authority and reconciliation | — | M1b | [098](rfcs/handoffs/098-documentation-authority/README.md) |
+| 9 | RFC 097: current threat model baseline | — | items 6–8 complete; 098 authority decision | [097](rfcs/handoffs/097-threat-model/README.md) |
+| 10 | RFC 099 (M6): runtime modes, fuzz, packaging, live integration, evidence manifest | — | 097, 098, and **RFC 100 Implemented** | [099](rfcs/handoffs/099-operational-hardening/m6-implementation.md) |
+| 11 | M7 soak against the immutable M6 artifact | — | M6 closure | [099 soak](rfcs/handoffs/099-operational-hardening/m7-soak-operations.md) |
+
+Items 1 and 3 are the only places where Lane A and Lane B both have work with no
+dependency between them; everything else in a lane is strictly ordered. Item 5
+is deliberately sequenced after the clippy cleanup so a large file move does not
+collide with workspace-wide lint churn.
+
 ### Planned RFC set and boundaries
 
 | RFC | Working title | Owns | Explicitly does not own | Handoff expectation |
@@ -136,16 +169,18 @@ M0 approval mechanism + RFC files/ownership
   └──> RFC 093
          ├── M1a build baseline ──> prep: federation.rs split
          │     ├──> Lane A: RFC 094 M2a ──> RFC 095 (M3)
-         │     │                        └──> RFC 094 M2b
+         │     │                        ├──> RFC 094 M2b
+         │     │                        └──> RFC 100 (M2c)
          │     └──> Lane B: RFC 096-A ──> RFC 096-B (needs M2a)
          └── M1b documentation and lifecycle gates   (parallel; no code dependency)
 
 RFC 094 M2b + RFC 095 + RFC 096-B + M1b
   + RFC 098 authority decision ──> RFC 097 final baseline
 
-RFC 097 + RFC 098 reconciliation ──> RFC 099 ──> M7 soak
+RFC 097 + RFC 098 reconciliation ──> RFC 099 ──> M6 ──> M7 soak
 
-RFC 100 master-key rotation recovery — needs RFC 094 M2a; otherwise independent
+RFC 100 (M2c) is required before M6 entry: the M7 workload contract includes a
+master-key rotation exercise, and RFC 099 requires zero blocker defects.
 ```
 
 Two lanes run concurrently after M1a. Lane B is authorized by the overlap rule
@@ -188,6 +223,133 @@ split first because it currently contains both Lane A and Lane B territory.
   RFCs 097–099 wait for both lanes.
 
 ---
+
+### Traceability
+
+Required by the multi-agent framework (roadmap item → RFC → Handoff →
+implementation → evidence). Status column is **verified fact** as of 2026-07-29.
+
+| Milestone | RFC | Handoff | Implementation | Evidence |
+|---|---|---|---|---|
+| M1a | 093 (Accepted) | `handoffs/093-…/m1a-implementation.md` | A0, A1, A2, A3.3, A3.5 landed (`73b5baf`…`ee8e70e`); A3.1 reviewed, uncommitted; A3.2/A3.4 not started | Local only — **no hosted run exists** |
+| M1b | 093 (Accepted) | `handoffs/093-…/m1b-implementation.md` | Not started | — |
+| prep | none (preparatory) | `m1a-implementation.md` §Theme B | Not started | — |
+| M2a / M2b | 094 (Proposed) | `handoffs/094-transactional-audit/` | Blocked on re-acceptance | — |
+| M2c | 100 (Proposed) | `handoffs/100-master-key-rotation/` | Blocked on 094 M2a | — |
+| M3 | 095 (Proposed) | `handoffs/095-dynamic-client-registration/` | Blocked on 094 M2a | — |
+| M4-A / M4-B | 096 (Proposed) | `handoffs/096-upstream-oidc-federation/` | Blocked on re-acceptance | — |
+| M5 | 097, 098 (Proposed) | `handoffs/097-threat-model/`, `handoffs/098-documentation-authority/` | Blocked | — |
+| M6 / M7 | 099 (Proposed) | `handoffs/099-operational-hardening/` | Blocked | — |
+
+Every remediation RFC has a Handoff. No implementation task exists without a
+governing RFC and Handoff.
+
+### Risk register
+
+Required format: description, likelihood, impact, detection, mitigation,
+residual risk, decision owner. **Decision owner `@nabbisen` means the risk
+cannot be closed by the architect alone.**
+
+| ID | Risk | Likelihood | Impact | Detection | Mitigation | Residual | Owner |
+|---|---|---|---|---|---|---|---|
+| R1 | Review independence: authoring, implementation and review share one vendor | Certain (structural) | High — the readiness claim rests on it | Role metadata inspection | Two-tier ruling of 2026-07-28: vendor independence required for RFC 094, 096, 097 and M6 closure; role independence elsewhere | Role-independence-only reviews outside the named set; RFC 100 not in the set although its failure mode is severe | `@nabbisen` |
+| R2 | Audit hash chain is unkeyed and unanchored — tamper-evident only within its trust boundary | Certain (by design) | High if misrepresented; low if stated | Documentation review | RFC 094 corrects the claims; no external anchor is introduced | Accepted permanently for this programme; revisit on a non-repudiation requirement or an untrusted-DB-writer deployment | `@nabbisen` |
+| R3 | Source-size debt: 26 files over 500 lines, incl. load-bearing security modules | Certain (measured) | Medium — raises review cost and change-collision risk | `find`/`wc` sweep | No new file over 500 ELOC; split-when-touched-if-it-helps; **M5 revisit** | Residue unresolved until the M5 decision | `@nabbisen` at M5 |
+| R4 | MSRV 1.95 leaves ~2 releases of headroom below current stable | Certain (measured) | Medium — operators need `rustup`, not distro Rust | Toolchain bisect (done) | README states the `rustup` expectation | Narrow support window accepted when the floor was approved | `@nabbisen` |
+| R5 | **No hosted CI run has ever occurred.** All gate evidence to date is local | Certain | High — M1a/M1b cannot close on local evidence | Absence of any Actions run | First hosted run scheduled as part of A3.1 landing | Blocks both M1 exit gates | architect (tracked) |
+| R6 | `[gates]` ↔ RFC 093 matrix correspondence is unenforced until A3.4 lands | Likely while A3.4 is outstanding | Medium — dispatcher could drift from the RFC undetected | Manual comparison only (done once, 2026-07-28) | A3.4 `check-gate-inputs.sh` condition 7 | Unguarded until A3.4 | architect (tracked) |
+| R7 | Pre-RFC-094 dynamic registrations are indistinguishable from admin-created clients | Certain (historical) | Medium — provenance cannot be proven | RFC 095 migration report | Owner disposition of every candidate before M3 closure; "zero candidates" is not an accepted claim | Permanent data scar; requires manual adjudication | `@nabbisen` at M3 |
+| R8 | Two-lane execution raises review load on a single reviewer | Likely once Lane B starts | Medium — review becomes the bottleneck, not implementation | Review turnaround time | Owner confirmed increased review capacity 2026-07-28 | Unproven until both lanes run concurrently | `@nabbisen` |
+
+### Standing programme risks — detail for R1–R3
+
+The register above is the index. This section holds the reasoning, the owner
+rulings, and the revisit triggers for the three risks that are **not owned by
+any RFC** and would otherwise be lost. `S1`/`S2`/`S3` below correspond to
+`R1`/`R2`/`R3`. None blocks M1a.
+
+#### S1 — Review independence is undefined, and the roles share one vendor
+
+`codex-project-architect`, `codex-developer`, and
+`codex-independent-architecture-security-reviewer` are all agent identities from
+one vendor, with `@nabbisen` as sole human owner and approver. RFC metadata
+labels reviews "independent", and RFC 093's integrity contract requires "an
+identifiable independent reviewer" for Accepted security-sensitive RFCs — but
+**no document defines what independence means**, and no rule prevents the same
+lineage authoring, implementing, and approving the same change.
+
+For a product whose entire value is trust, this is load-bearing: the eventual
+readiness discussion after M7 rests on it.
+
+**Owner ruling, 2026-07-28 — decided.** Two tiers of independence apply:
+
+- **Role independence** (minimum, in force for every artifact): the reviewer of
+  an artifact did not author it, implement it, or previously approve it. Where
+  this is violated the review must say so plainly and substitute adversarial
+  testing for the independence it cannot claim.
+- **Vendor independence** (required for the set below): at least one reviewer of
+  record outside the vendor that authored and implemented the change.
+
+Vendor independence is **required** for:
+
+| Artifact | Why |
+|---|---|
+| RFC 094 — transactional audit seam | 62 Class-A commands; the whole audit guarantee rests on it |
+| RFC 096 — federation validation | Fixes ID tokens currently accepted without signature verification |
+| RFC 097 — threat model baseline | The document every security claim is read against |
+| M6 closure (RFC 099) | The gate that authorizes soak entry |
+
+Role independence alone is sufficient elsewhere, including RFC 095, whose
+2026-07-28 amendment is a single prerequisite re-point rather than a design
+change.
+
+Consequence for the current critical path: RFCs 094 and 096 cannot be
+re-accepted on a same-vendor review alone, and their re-review is what currently
+blocks M2a and 096-A. Arranging that reviewer is the immediate next action.
+
+**RFC 100 is a candidate the owner may wish to add.** It was not in the ruled
+set, and role independence therefore applies — its author must not review it.
+Flagged because its failure mode, an unrecoverable key/database divergence, is
+as severe as anything in the ruled set; the architect under-weighted it when
+proposing the set. Adding it is an owner call, not an assumption.
+
+#### S2 — The audit hash chain has no external anchor, permanently for this programme
+
+RFC 094 corrects the *claims* about the chain but explicitly introduces no
+external anchoring or notarization service. The chain is therefore
+tamper-evident **within its trust boundary only**: a writer with database access
+who knows the public algorithm can edit rows and recompute the affected suffix,
+and a tail-only verifier cannot detect an altered old row outside its window.
+
+This is a deliberate scope decision, not an oversight. It becomes a defect only
+if documentation implies otherwise — which RFC 098 must check and RFC 097 must
+carry as residual risk with a named accepter.
+
+**Revisit if** a compliance requirement demands non-repudiation, or a deployment
+model appears in which the database writer is not already fully trusted. Either
+would need its own RFC; neither is in this programme.
+
+#### S3 — Source-size debt is deferred without a trigger
+
+**26 files exceed 500 physical lines**, unchanged since 2026-07-16. The project
+rule strongly recommends splitting above 500 ELOC. Several are legitimately large
+translation tables (`sui-id-i18n` locale and string files, 890–910 lines), but the
+rest are load-bearing security and handler modules: `handlers/oidc.rs` (886),
+`oidc/authorize.rs` (817), `cli.rs` (787), `handlers/federation.rs` (790),
+`authn/step_up.rs` (769), `handlers/settings.rs` (760), `repos/users.rs` (724),
+`handlers.rs` (718), `authn/session.rs` (717), `store/models.rs` (708).
+
+Large security modules raise review cost and change-collision risk — exactly the
+risk that made the `federation.rs` split a prerequisite for two-lane work.
+
+Standing rules, effective now:
+
+1. **No new file over 500 ELOC** is introduced by any programme RFC.
+2. RFCs 094–096 split an oversized module they touch **when that materially
+   improves reviewability**, and not otherwise — no unrelated churn.
+3. **Revisit point: M5.** At M5, review the remaining list and decide whether the
+   residue needs its own RFC or is accepted with translation tables excluded.
+   Deferral without a decision point is how this became debt in the first place.
 
 ## Current status
 

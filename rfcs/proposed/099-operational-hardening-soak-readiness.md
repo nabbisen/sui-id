@@ -4,13 +4,15 @@
 **Security review.** Required
 **Design prerequisites.** RFCs 097 and 098 Accepted; M7 minimum workload/reset contract approved in ROADMAP.
 **Implementation prerequisites.** RFCs 097 and 098 Implemented; this RFC Accepted; operator/tester handoff and evidence schema independently approved.
+**Master-key rotation prerequisite.** The M7 workload contract requires a successful master-key rotation exercise. [RFC 100](./100-master-key-rotation-recovery.md) must therefore be **Implemented before M6 entry**. Exercising an offline rotation that is not crash-safe against the immutable soak artifact risks an unrecoverable database/key divergence, which conflicts with this RFC's zero-blocker closure criterion. If the owner instead elects to defer RFC 100 past M6, the master-key rotation exercise must be struck from the M7 workload by an explicit recorded decision and the residual risk carried into RFC 097 — it may not be silently skipped as "not applicable".
 **Closure prerequisites.** Full clean-tree matrix, runtime mode checks, every fuzz target, package inspection, representative live LDAP/federation integration, immutable artifact/configuration manifest, zero blocker/high defects, and independent approval for soak entry. M7 workload and reset rules then pass separately.
 **Tracks.** ROADMAP M6–M7 — Release-assurance closure and real-environment soak.
+**Handoff.** [`../handoffs/099-operational-hardening/README.md`](../handoffs/099-operational-hardening/README.md)
 **Touches.** Runtime file creation, fuzz harnesses, package/release automation, integration fixtures, operational procedures, evidence manifests and soak records.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** `codex-project-architect` (OpenAI Codex).
 **Implementation owner.** `codex-developer` (OpenAI Codex), after acceptance and prerequisites.
-**Independent security and soak/closure reviewer.** `codex-independent-architecture-security-reviewer` (OpenAI Codex).
+**Independent security and soak/closure reviewer.** **Vendor independence required** for M6 closure by the owner's 2026-07-28 S1 ruling: the reviewer of record must be outside the vendor that authored and implemented the work. `codex-independent-architecture-security-reviewer` (OpenAI Codex) may review, but cannot alone satisfy the M6 closure independence requirement.
 
 ## Summary
 
