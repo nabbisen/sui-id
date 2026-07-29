@@ -141,6 +141,21 @@ awk '
 mv "$wrong_runner/.github/workflows/ci.yml.new" "$wrong_runner/.github/workflows/ci.yml"
 expect_failure wrong-runner "condition 6: gate-lane job(s) not using [runner] label"
 
+# --- Condition 6b: a gate-lane job has no runs-on line at all (C1) -------
+# GitHub Actions itself rejects a job with no runs-on, so this cannot slip
+# a lane past the gate in practice — but the check must still assert
+# *presence*, not only compare a value that might not exist. Regression
+# fixture for review finding C1 (dead seen_runs_on scaffolding).
+missing_runs_on="$tmp/missing-runs-on"
+make_valid_fixture "$missing_runs_on"
+awk '
+  /^  G03:$/ { print; in_g03 = 1; next }
+  in_g03 && /^    runs-on: ubuntu-24.04$/ { in_g03 = 0; next }
+  { print }
+' "$missing_runs_on/.github/workflows/ci.yml" >"$missing_runs_on/.github/workflows/ci.yml.new"
+mv "$missing_runs_on/.github/workflows/ci.yml.new" "$missing_runs_on/.github/workflows/ci.yml"
+expect_failure missing-runs-on "gate-lane job G03 has no runs-on line"
+
 # --- Condition 7a: [gates] command diverges from the RFC table -----------
 diverged_command="$tmp/gates-diverged-command"
 make_valid_fixture "$diverged_command"

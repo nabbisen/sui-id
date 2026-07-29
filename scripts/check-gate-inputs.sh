@@ -200,7 +200,16 @@ else
   # the free-text "name:" field, so a renamed display name can't hide a
   # missing runner-label check.
   awk -v want="$runner_label" '
+    function check_previous_job() {
+      # Condition 6 must catch a gate-lane job with no runs-on line at all,
+      # not only one whose value is wrong — a job-key transition (or EOF)
+      # is where the previous job'"'"'s runs-on line, if any, is now known.
+      if (is_gate && !seen_runs_on) {
+        print "gate-lane job " job " has no runs-on line"
+      }
+    }
     /^  [A-Za-z0-9_-]+:[[:space:]]*$/ {
+      check_previous_job()
       key = $1
       sub(/:$/, "", key)
       job = key
@@ -216,6 +225,7 @@ else
         print "gate-lane job " job " runs-on " line ", expected " want
       }
     }
+    END { check_previous_job() }
   ' "$root/$workflows_dir/ci.yml" >"$tmp/condition6-violations"
   if [[ -s "$tmp/condition6-violations" ]]; then
     fail "condition 6: gate-lane job(s) not using [runner] label ($runner_label):"
