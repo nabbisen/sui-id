@@ -43,6 +43,7 @@ G07b = "cargo +stable clippy --workspace --all-targets --locked -- -D warnings"
 G08 = "cargo +stable fmt --all -- --check"
 G09a = "cargo +1.95 test -p sui-id-store --features ldap --test ldap_smoke --locked -- --exact rustls_provider_and_tls_connector_reach_fixture"
 G09b = "cargo +stable test -p sui-id-store --features ldap --test ldap_smoke --locked -- --exact rustls_provider_and_tls_connector_reach_fixture"
+G10a = "mdbook build docs --dest-dir target/mdbook-gate"
 
 [actions]
 checkout_v6 = "d23441a48e516b6c34aea4fa41551a30e30af803"

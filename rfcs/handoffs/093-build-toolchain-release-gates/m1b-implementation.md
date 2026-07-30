@@ -23,26 +23,49 @@ so `mdbook build docs` succeeds, and A3.2 built its negative fixture, yet nothin
 wired the lane itself. Surfaced by the A3.2 implementer's scope question, which
 was correctly declined as out of A3.2's scope.
 
+**The command was corrected on 2026-07-30.** RFC 093 originally specified
+`--dest-dir ../target/mdbook-gate`; mdBook 0.5.4 resolves `--dest-dir` against
+the current working directory, not the book root, so that wrote the book one
+level *above* the repository. Raised by the C0 implementer, verified, and
+amended in the RFC. Use the path below.
+
 Wire G10a as a blocking job running the Gate Matrix command verbatim:
 
 ```
-mdbook build docs --dest-dir ../target/mdbook-gate
+mdbook build docs --dest-dir target/mdbook-gate
 ```
 
-Use the dispatcher like every other lane. **`[gates]` does not currently carry a
-G10a entry** — it holds G01–G09b only, because those are the `cargo` lanes the
-dispatcher was built for. Adding G10a to `[gates]` also requires extending
-A3.4's condition 7 lane filter (`^G0[1-9][a-z]?$`), which would otherwise reject
-it. Decide one of:
+**Design question resolved 2026-07-30 — option (a).** G10a goes through the
+dispatcher and into `[gates]`, and A3.4's lane filter widens to admit it.
 
-- **(a)** add G10a to `[gates]`, widen A3.4's filter, and dispatch it like the
-  others — uniform, but touches a checker that is already reviewed and landed; or
-- **(b)** run G10a as a direct step in its job, outside the dispatcher, on the
-  grounds that it is not a `cargo` lane and the manifest's `[gates]` is
-  documented as the dispatcher's command table.
+Why not the simpler option of running `mdbook` as a direct step: it would lose the
+dispatcher's evidence block — the HEAD/`GITHUB_SHA` binding, the clean-tree
+assertion, and the recorded tool versions. That block is the entire reason D1
+chose a dispatcher, and running a blocking lane without it recreates review
+finding B2 (evidence not bound to the commit it describes). The dispatcher is not
+cargo-specific; it executes a recorded command string, and
+`mdbook build docs --dest-dir target/mdbook-gate` is one.
 
-**Raise this as a design question before implementing** — it changes A3.4's
-contract either way, and that is not the implementer's call.
+Two changes are therefore required together:
+
+1. **Add G10a to `[gates]`** with the command exactly as RFC 093's table records
+   it, and dispatch the job as `bash scripts/ci-gate.sh G10a`.
+2. **Extend A3.4's condition 7 lane filter by exact enumeration.** It is currently
+   `^G0[1-9][a-z]?$`, which rejects `G10a`. Change it to
+   `^(G0[1-9][a-z]?|G10a)$`.
+
+   **Enumerate; do not widen to a range.** A range such as
+   `^G(0[1-9]|1[0-2])[a-z]?$` would also admit G10b, G11 and G12 — none of which
+   is in `[gates]` yet — and the set comparison would fail on C0's own commit.
+   C1 adds `|G10b`, C2 adds `|G11`, and C2.1 deletes the enumeration entirely.
+
+   Also correct the comment above that line. It currently reads "Only G01-G09b
+   are expected in `[gates]`; G10a-G12 use separate mechanisms … intentionally
+   not part of the ci-gate.sh dispatcher's command table." That is no longer
+   true of G10a, G10b or G11 — it remains true only of G12.
+
+**The completeness rule is not part of C0** — see C2.1. My start authorization
+attached it here, which was wrong; the reason is recorded there.
 
 **Installation is already specified** by RFC 093: exactly
 `cargo +stable install mdbook --version 0.5.4 --locked`, with the version
@@ -51,6 +74,8 @@ pinned in `ci/gate-inputs.toml` `[tools]`. No new SHA-pinned action is needed.
 The negative self-test for this lane already exists from A3.2 — see that
 package's `mdbook-missing-chapter` fixture and note the
 `create-missing = false` requirement recorded in RFC 093.
+
+---
 
 ## C1 — G10b markdown link checker
 
@@ -105,6 +130,52 @@ Two things look like debt and are not. Do not "fix" them:
   `accepted/09{4,6}-*`.** They are dated historical evidence tables citing files
   as they existed at that review, not live navigation. RFC 000 directs against
   rewriting historical decisions to match current state.
+
+---
+
+## C2.1 — the lane completeness rule
+
+**Lands after C2, not with C0.** By this point `[gates]` holds G01–G09b, G10a,
+G10b and G11 — every dispatched lane — and the rule can be stated in its final
+form with no transitional exemptions.
+
+Delete condition 7's enumerated lane filter and replace it with:
+
+> Every lane in RFC 093's Gate Matrix v1 table must be either present in
+> `[gates]` or listed on an explicit, commented exception list in the manifest.
+> Nothing may be absent from both.
+
+**G12 is the sole exception**, and permanently: it predates the dispatcher and has
+a working entry point (`ui-invariants-v1`). Record it with that reason. Do not
+migrate it — churning a green gate for symmetry is not worth the risk, and C5
+depends on it staying stable.
+
+### Why this rule exists
+
+The C1 review noted that A3.4 only ever checked one direction: every `[gates]`
+entry matches its RFC row, but nothing verified that every RFC lane is
+*accounted for*. A lane could be absent from the manifest and no check would
+object. This is the same class as R9 — a check that passes because it never
+looked.
+
+### Fixtures
+
+- A lane present in the RFC table but in neither `[gates]` nor the exception
+  list must **fail**.
+- A lane on the exception list must **pass**.
+- A lane present in **both** `[gates]` and the exception list must **fail** —
+  the two lists are disjoint by construction, and an entry in both means one of
+  them is stale.
+
+### One extraction hazard, verified
+
+The lane set must come from the **`## Gate Matrix v1` section only**. RFC 093 has
+a second table under `### Gate entry points and negative self-tests` whose rows
+are keyed by G09a, G09b, G10b, G11 and G12 — the same IDs, with *fixture*
+commands in a different column. The existing extraction is correctly bounded
+heading-to-heading and yields exactly 15 lanes; a whole-file scan yields 20 and
+would produce a confusing command-mismatch failure. **Do not re-implement the
+extraction** — reuse the existing `rfc-matrix-section` step.
 
 ---
 

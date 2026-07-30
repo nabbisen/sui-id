@@ -306,6 +306,34 @@ jobs:
       - name: G09b
         run: bash scripts/ci-gate.sh G09b
 
+  G10a:
+    # RFC 093 M1b C0: mdBook builds the versioned docs tree. Routed through
+    # the dispatcher rather than a direct `mdbook build` step so it carries
+    # the same evidence block as every other lane (decision, C0 handoff).
+    name: "G10a — mdBook build (stable / mdBook 0.5.4)"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          toolchain: stable
+      - name: Cache cargo registry
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-gate-input-v1-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      - name: Install mdBook 0.5.4
+        # ci/gate-inputs.toml's [tools] table pins this version; installing
+        # it from crates.io needs no new SHA-pinned action (RFC 093 C0).
+        run: cargo install mdbook --version 0.5.4 --locked
+      - name: G10a
+        run: bash scripts/ci-gate.sh G10a
+
   text-leaks:
     # RFC 048 (+ RFC 051 widening): Bare `t.field` identifiers as
     # `view!` macro children render as literal text in the HTML output
