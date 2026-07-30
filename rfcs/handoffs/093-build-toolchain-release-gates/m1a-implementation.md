@@ -255,6 +255,69 @@ about adversarial fixture completeness, so build fixtures alongside each lane
 rather than afterwards. Include count-preserving mutations wherever a check
 counts anything.
 
+#### A3.2 harness — hosted-run defect and required fix (2026-07-29)
+
+**The first hosted run failed here, and the design fault is the architect's.**
+Two things I specified are incompatible in CI:
+
+1. `ci-gate.sh` asserts `git rev-parse HEAD == $GITHUB_SHA` — added deliberately
+   to bind gate evidence to a commit (review findings B2, then hardened by C1).
+2. The A3.2 harness stages each fixture into a throwaway git repo with its own
+   one-commit history, so fixtures run through the **real** dispatcher.
+
+In CI, `GITHUB_SHA` is the real repository's commit while the fixture's `HEAD` is
+the throwaway commit. The assertion fires and the dispatcher exits 1 **before
+running the gate command at all**. Observed:
+
+```
+G01..G07b against compile-error: expected failure observed   <- vacuous
+G08 against compile-error unexpectedly failed                <- caught here
+  event_commit=1e59e3d…      checked_out_commit=a5ada8ce…
+  ::error::ci-gate G08: checked-out HEAD does not match GITHUB_SHA
+```
+
+Locally this never appeared because `GITHUB_SHA` is unset, so the assertion was
+skipped — the blind spot flagged twice in review as "this branch has never
+executed."
+
+**The serious part is not the failure, it is that eight assertions passed for the
+wrong reason.** Every `expect_gate_fails` case was satisfied by the precondition
+error rather than by the fixture's deliberate defect. The harness only noticed at
+the first `expect_gate_passes`. A harness whose purpose is proving other checks
+do not pass for the wrong reason did exactly that.
+
+**Two fixes are required, not one.**
+
+**Fix 1 — make the assertion true rather than skipped.** Before invoking the
+dispatcher for a staged fixture, set `GITHUB_SHA` to that fixture repo's own
+`HEAD`:
+
+```bash
+GITHUB_SHA=$(git -C "$fixture_dir" rev-parse HEAD)   bash "$ci_gate" "$gate" --root "$fixture_dir"
+```
+
+Do **not** unset `GITHUB_SHA` and do **not** add a `--skip-sha-check` flag to the
+dispatcher. Unsetting reproduces the local blind spot that hid this; a bypass flag
+puts a hole in the evidence contract that a real lane could one day use. Setting
+it to the fixture's actual HEAD keeps the assertion executing and asserting
+something true — the tree being gated is the commit claimed.
+
+**Fix 2 — `expect_gate_fails` must verify *why* it failed.** A non-zero exit is
+not sufficient; the failure must come from the gate command, not from the
+dispatcher's preconditions. Assert that the output contains `exit_status=` (the
+dispatcher reached and ran the command) and does **not** contain
+`::error::ci-gate`. Without this, the harness stays blind to any future
+precondition failure in exactly the same way.
+
+Fix 2 is what would have caught this in CI even with Fix 1 absent, and it is the
+same discipline as the count-preserving mutation requirement above: prove the
+assertion fails for the intended reason, not merely that it fails.
+
+**Verification required:** re-run hosted. All 38 assertions must pass *and* the
+job must be green with Fix 2 in place — because with Fix 2 and without Fix 1,
+the eight previously vacuous assertions will now fail loudly, which is the
+correct behaviour and the proof that Fix 2 works.
+
 #### Fixture manifest shape — settled 2026-07-29
 
 Owner-confirmed: one declaration in the root manifest rather than five repeated

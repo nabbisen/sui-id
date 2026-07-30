@@ -48,7 +48,16 @@ run_gate() {
   # ci-gate.sh cd's into --root before resolving --manifest, so the real
   # manifest (the fixture has none of its own) must be passed as an
   # absolute path.
-  bash "$ci_gate" "$gate" --root "$fixture_dir" \
+  #
+  # GITHUB_SHA must be bound to the staged fixture's own HEAD, not the real
+  # repository's (R9): ci-gate.sh asserts HEAD == GITHUB_SHA as an
+  # evidence-binding precondition, and on a hosted runner GITHUB_SHA is
+  # always set to the checked-out repository's commit, which is never the
+  # fixture's throwaway one-commit history. Locally GITHUB_SHA is normally
+  # unset, which skips the assertion entirely and hid this until the first
+  # hosted run.
+  GITHUB_SHA=$(git -C "$fixture_dir" rev-parse HEAD) \
+    bash "$ci_gate" "$gate" --root "$fixture_dir" \
     --manifest "$repo_root/ci/gate-inputs.toml"
 }
 
@@ -60,6 +69,21 @@ expect_gate_fails() {
   local output="$tmp/$gate-$name.output"
   if run_gate "$gate" "$fixture_dir" >"$output" 2>&1; then
     echo "$gate against $name unexpectedly passed" >&2
+    cat "$output" >&2
+    exit 1
+  fi
+  # A non-zero exit is not on its own evidence that the fixture's deliberate
+  # defect was what failed (R9): ci-gate.sh's own preconditions can also
+  # exit non-zero, before the gate command ever ran. Require proof the
+  # command was actually reached and ran, and that no precondition error
+  # fired.
+  if ! grep -q '^exit_status=' "$output"; then
+    echo "$gate against $name failed before the gate command ran (no exit_status= recorded)" >&2
+    cat "$output" >&2
+    exit 1
+  fi
+  if grep -q '::error::ci-gate' "$output"; then
+    echo "$gate against $name failed on a ci-gate precondition, not the fixture's defect" >&2
     cat "$output" >&2
     exit 1
   fi
