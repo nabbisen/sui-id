@@ -1,0 +1,34 @@
+version = 1
+
+# RFC 093 RFC-integrity contract, invariant 7: RFC-MI-* identifiers that
+# predate the current metadata regime. Any MI identifier not listed here
+# is prospective and requires the full current metadata field set
+# (scripts/check-rfc-integrity.py's "required_metadata_fields", below)
+# regardless of folder. This list is closed: a new MI RFC never gets
+# added here, it gets the full metadata fields instead.
+[historical_rfc_mi]
+ids = [
+  "RFC-MI-000",
+  "RFC-MI-010",
+  "RFC-MI-011",
+  "RFC-MI-012",
+  "RFC-MI-020",
+  "RFC-MI-021",
+  "RFC-MI-022",
+  "RFC-MI-030",
+  "RFC-MI-031",
+  "RFC-MI-040",
+  "RFC-MI-041",
+  "RFC-MI-050",
+  "RFC-MI-051",
+  "RFC-MI-060",
+  "RFC-MI-070",
+  "RFC-MI-080",
+]
+
+# Standard numeric RFCs at or above this identifier require the full
+# current metadata field set regardless of folder or git history
+# (invariant 6). Below it, only structural checks (numbering, folder/
+# status agreement, index, links) apply (invariant 11).
+[metadata_required_from]
+min_number = 93

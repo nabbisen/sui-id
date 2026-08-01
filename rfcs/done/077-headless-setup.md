@@ -1,8 +1,8 @@
 # RFC 077 — Headless setup (`sui-id setup` subcommand)
 
-- Status: accepted
-- Target version: v0.63.0
-- Author: Claude (product owner: nuix)
+**Status.** accepted
+**Target version.** v0.63.0
+**Author.** Claude (product owner: nuix)
 
 ## Problem
 
