@@ -1,6 +1,6 @@
 # RFC 022 — Single-realm scope statement
 
-**Status.** Proposed
+**Status.** Implemented
 **Priority.** Medium. The defect this RFC fixes is documentary,
 not technical: sui-id's scope (single realm, single
 organisation, first-party clients) is well understood internally

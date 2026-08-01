@@ -1,6 +1,6 @@
 # RFC 043 — Dashboard "Recent important events" card
 
-**Status.** Proposed
+**Status.** Implemented (v0.40.0)
 **Priority.** P1
 **Tracks.** v0.40.0
 **Touches.** `crates/sui-id-web/src/pages.rs` (DashboardData + render),

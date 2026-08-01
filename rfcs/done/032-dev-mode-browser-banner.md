@@ -1,6 +1,6 @@
 # RFC 032 — Dev mode browser banner
 
-**Status.** Proposed  
+**Status.** Implemented (v0.35.0)
 **Priority.** High. A dev-mode instance running at a non-loopback address
 is currently indistinguishable from production in the browser. The design
 document mandates a persistent visual separator.  

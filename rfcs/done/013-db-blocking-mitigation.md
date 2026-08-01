@@ -1,6 +1,6 @@
 # RFC 013 — Reduce blocking impact of synchronous SQLite on async handlers
 
-**Status.** Exploratory
+**Status.** Implemented (v0.30.0)
 **Priority.** Medium. Performance / scalability ceiling fix. No
 correctness gap today; the cost is concurrency under load.
 **Tracks.** v0.29.3 codebase review — medium-priority finding #5.

@@ -1,6 +1,6 @@
 # RFC 021 — Schema invariant CHECKs and migration safety
 
-**Status.** Proposed
+**Status.** Implemented
 **Priority.** Medium. No live correctness defects today; this RFC
 strengthens DB-layer guarantees so the application can rely on
 data shape without re-validating in every repo function. Also

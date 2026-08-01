@@ -1,6 +1,6 @@
 # RFC 039 — Settings UI i18n completion
 
-**Status.** Proposed  
+**Status.** Implemented (v0.39.0)
 **Priority.** Medium. 102 hardcoded Japanese strings remain in the six
 settings tabs. All are either form labels, descriptions, or help text.
 Completing this allows operators using English or Chinese to read all

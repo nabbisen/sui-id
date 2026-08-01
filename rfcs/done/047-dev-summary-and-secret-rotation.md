@@ -1,6 +1,6 @@
 # RFC 047 — Dev mode summary copy-friendliness + client secret rotation audit
 
-**Status.** Proposed (P2 — candidate for v0.40.1 or v0.41)
+**Status.** Implemented (v0.41.0)
 **Priority.** Low
 
 This RFC bundles two small, related polish items that both surface

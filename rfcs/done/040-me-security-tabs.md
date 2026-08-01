@@ -1,6 +1,6 @@
 # RFC 040 — /me/security tabbed structure
 
-**Status.** Proposed
+**Status.** Implemented
 **Priority.** P0 (highest). The single largest PDF-spec compliance gap.
 **Tracks.** v0.40.0 (planned release).
 **Touches.** New routes, new render functions, new struct hierarchy in

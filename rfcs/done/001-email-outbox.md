@@ -1,6 +1,6 @@
 # RFC 001 — Persistent email outbox + retry worker
 
-**Status.** Proposed
+**Status.** Implemented (v0.33.0)
 **Tracks.** ROADMAP / Medium term — "Persistent email outbox + retry worker".
 **Touches.** `sui-id-store` (new `email_outbox` table + repo), `sui-id-core`
 (`mail` module gains an outbox-backed sender), `sui-id` (background worker

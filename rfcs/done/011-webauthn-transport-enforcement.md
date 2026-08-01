@@ -1,6 +1,6 @@
 # RFC 011 — Enforce WebAuthn transport (HTTPS or localhost-http) at the server
 
-**Status.** Proposed
+**Status.** Implemented (v0.29.4)
 **Priority.** High. Spec compliance gap with security implication.
 **Tracks.** v0.29.3 codebase review — high-priority finding #2.
 **Touches.** `sui-id-core::webauthn` (the `build()` constructor),

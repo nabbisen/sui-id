@@ -1,6 +1,6 @@
 # RFC 035 — Admin user detail page
 
-**Status.** Proposed  
+**Status.** Implemented (v0.37.0)
 **Priority.** Medium. Operators currently cannot inspect a specific user's
 sessions, MFA state, or recent audit history from the admin panel.
 The design document (P.9) shows a detail view as a separate screen.  

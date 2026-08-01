@@ -1,6 +1,6 @@
 # RFC 038 — OIDC consent screen
 
-**Status.** Proposed  
+**Status.** Implemented (v0.39.0)
 **Priority.** Medium. The UI/UX design document (P.10 / overview screen 15)
 explicitly shows a consent step in the OIDC flow. The current authorize
 handler has a comment: "sui-id deliberately does not show a separate

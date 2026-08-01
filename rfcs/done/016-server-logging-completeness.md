@@ -1,6 +1,6 @@
 # RFC 016 — Server logging completeness: request tracing, file output, dev defaults
 
-**Status.** Proposed
+**Status.** Implemented (v0.29.4)
 **Priority.** High. Sequenced after RFCs 010 / 011 / 012; ahead of
 RFC 003 if the implementer prefers, since this work makes
 debugging the others easier.

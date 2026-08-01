@@ -1,6 +1,6 @@
 # RFC 033 — Audit log enhancements
 
-**Status.** Proposed  
+**Status.** Implemented (v0.36.0)
 **Priority.** Medium. The audit log is described as a "forensic surface"
 in the design document. Hash-chain verification status must appear on the
 audit screen itself, not only in Settings → Logs.  

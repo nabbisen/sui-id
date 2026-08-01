@@ -1,6 +1,6 @@
 # RFC 014 — Hot-path caches and benchmark harness
 
-**Status.** Exploratory
+**Status.** Implemented (v0.31.0)
 **Priority.** Medium. Performance work, predicated on benchmarks.
 **Tracks.** v0.29.3 codebase review — medium-priority finding #6.
 **Touches.** `sui-id-core` (cache layer alongside `cors`, `tokens`,

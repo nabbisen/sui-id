@@ -1,6 +1,6 @@
 # RFC 019 — Auth flow data integrity hardening
 
-**Status.** Proposed
+**Status.** Implemented
 **Priority.** High. Three concrete defects in the token-issuance
 path: a window where a disabled user can still receive tokens,
 a refresh-token lookup that performs a full-table decrypt scan,

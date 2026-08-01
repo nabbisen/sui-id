@@ -1,6 +1,6 @@
 # RFC 015 — Documentation and module-comment consistency pass
 
-**Status.** Proposed
+**Status.** Implemented (v0.29.4)
 **Priority.** Medium. Maintainability / onboarding correctness.
 No security or functional impact.
 **Tracks.** v0.29.3 codebase review — medium-priority finding #7.

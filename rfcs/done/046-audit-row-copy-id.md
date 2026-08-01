@@ -1,6 +1,6 @@
 # RFC 046 — Audit log per-row copy ID button
 
-**Status.** Proposed (P2 — candidate for v0.40.1 or v0.41)
+**Status.** Implemented (v0.41.0)
 **Priority.** Low
 **Touches.** Audit log render, CSS, no schema change.
 

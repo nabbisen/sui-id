@@ -1,6 +1,6 @@
 # RFC 044 — State word contract documentation
 
-**Status.** Proposed
+**Status.** Implemented (v0.40.0)
 **Priority.** P1 (process / consistency, no runtime code change)
 **Tracks.** v0.40.0
 **Touches.** `docs/src/contributing/state-contract.md` (new),

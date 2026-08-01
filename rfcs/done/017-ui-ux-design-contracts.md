@@ -1,6 +1,6 @@
 # RFC 017 — UI/UX design contracts: screen responsibilities, danger patterns, state copy
 
-**Status.** Proposed
+**Status.** Implemented (v0.32.0)
 **Priority.** Medium. Recommended ahead of any new admin-UI
 implementation work — specifically RFC 002 (i18n expansion into
 admin domain) and any further admin-domain UI work — so those

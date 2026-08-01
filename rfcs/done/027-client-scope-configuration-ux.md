@@ -1,6 +1,6 @@
 # RFC 027 — OAuth client: scope configuration UX and operator guidance
 
-**Status.** Proposed
+**Status.** Implemented (v0.29.13)
 **Priority.** High. The current state leaves operators blocked at first
 integration: a new client has no permitted scopes, so every authorization
 request fails with a confusing protocol error before the operator knows

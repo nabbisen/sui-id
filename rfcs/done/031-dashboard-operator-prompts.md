@@ -1,6 +1,6 @@
 # RFC 031 — Dashboard operator prompts and active session count
 
-**Status.** Proposed  
+**Status.** Implemented (v0.36.0)
 **Priority.** Medium-High. Operators cannot see at a glance whether SMTP,
 HIBP, or `cookie_secure` are properly configured. This is the "next operator
 action" visibility that the dashboard information policy (RFC 017 § 5) mandates.  

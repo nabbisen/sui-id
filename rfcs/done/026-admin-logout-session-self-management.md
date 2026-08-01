@@ -1,6 +1,6 @@
 # RFC 026 — Admin panel: logout and session self-management
 
-**Status.** Proposed
+**Status.** Implemented (v0.29.13)
 **Priority.** High. The absence of a logout button is a security gap: an
 operator sitting at a shared machine has no in-UI way to end their session.
 **Tracks.** Operator UX observation — v0.29.x.

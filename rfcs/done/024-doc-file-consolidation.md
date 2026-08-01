@@ -1,6 +1,6 @@
 # RFC 024 — Documentation file consolidation
 
-**Status.** Proposed
+**Status.** Implemented (v0.32.0)
 **Priority.** Low-medium. Internal-improvement only; no security
 or functional impact. Triggered by file-size pressure at the
 project root that is starting to obscure structure for new

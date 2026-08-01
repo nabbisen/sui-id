@@ -1,6 +1,6 @@
 # RFC 020 — User identity invariants and OIDC claim consistency
 
-**Status.** Proposed
+**Status.** Implemented
 **Priority.** High. The defects here have user-visible
 consequences (forgot-password silently failing for capitalised
 emails) and an OIDC-conformance gap (advertising the `email`

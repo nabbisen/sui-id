@@ -1,6 +1,6 @@
 # RFC 041 — HIBP enforcement consistency across all password entrypoints
 
-**Status.** Proposed
+**Status.** Implemented (v0.40.0)
 **Priority.** P0 (security correctness)
 **Tracks.** v0.40.0
 **Touches.** `crates/sui-id-core/src/admin.rs` (signature change to

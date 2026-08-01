@@ -1,6 +1,6 @@
 # RFC 028 — Copy-to-clipboard assistance for credential values
 
-**Status.** Proposed
+**Status.** Implemented (v0.31.0)
 **Priority.** Low-Medium. Quality-of-life improvement; no correctness gap.
 **Tracks.** Operator UX observation — v0.29.x.
 **Touches.** `crates/sui-id-web/` (admin UI templates), `docs/`.

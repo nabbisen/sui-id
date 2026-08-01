@@ -1,6 +1,6 @@
 # RFC 045 — User disable reason input
 
-**Status.** Proposed (P2 — deferred from v0.40.0, candidate for v0.40.1 or v0.41)
+**Status.** Implemented (v0.41.0)
 **Priority.** Medium
 **Touches.** Disable confirm screen, `admin::disable_user`, audit
 event note field.

@@ -1,6 +1,6 @@
 # RFC 042 — Error and rate-limited page i18n completion
 
-**Status.** Proposed
+**Status.** Implemented (v0.40.0)
 **Priority.** P0 (i18n completeness, last remaining gap)
 **Tracks.** v0.40.0
 **Touches.** `crates/sui-id-web/src/pages.rs` (render_error), the

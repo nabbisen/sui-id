@@ -209,6 +209,7 @@ real-environment soak of the current core before any implementation.
 | MI-011 | [Mockup Token Mapping and Visual Primitive Adoption](./done/RFC-MI-011-token-mapping-visual-primitives.md) | v0.50.1 |
 | MI-010 | [Component CSS Sharding and Export Discipline](./done/RFC-MI-010-component-css-sharding.md) | v0.50.0 |
 | MI-000 | [Baseline Delta Inventory and Integration Mapping Contract](./done/RFC-MI-000-baseline-delta-inventory.md) | v0.49.1 |
+| 077 | [Headless setup (`sui-id setup` subcommand)](./done/077-headless-setup.md) | v0.63.0 |
 | 068 | [`handlers/me_security.rs` split per tab domain](./done/068-me-security-handlers-split.md) | v0.48.0 |
 | 067 | [Inline-style discipline + CI bound](./done/067-inline-style-discipline.md) | v0.48.0 |
 | 066 | [`handlers/admin.rs` split per screen domain](./done/066-admin-handlers-split.md) | v0.47.1 |
@@ -269,6 +270,7 @@ real-environment soak of the current core before any implementation.
 | 003 | [HIBP scope expansion](./done/003-hibp-expansion.md) | v0.29.4 |
 | 002 | [i18n scope expansion: zh, formatters, audit labels](./done/002-i18n-expansion.md) | v0.34.0 |
 | 001 | [Persistent email outbox + retry worker](./done/001-email-outbox.md) | v0.33.0 |
+| 000 | [RFC lifecycle policy](./done/000-rfc-lifecycle-policy.md) | — |
 
 ### Archive
 

@@ -37,7 +37,7 @@ No code changes. `cargo check --workspace` clean before and after.
 
 > # Configuration reference
 >
-> See [`docs/operators.md`](./operators.md) for the full configuration reference.
+> See [`docs/operators.md`](../../docs/src/guides/operators.md) for the full configuration reference.
 >
 > This page will be expanded in a future release to provide a structured
 > field-by-field reference with defaults and valid value ranges.
@@ -110,7 +110,7 @@ Controls the listening address and the public OIDC identity.
 | `listen_addr` | string | **yes** | — | `host:port` for the HTTP listener. Example: `"0.0.0.0:8801"`. No TLS at this layer — deploy behind a TLS-terminating reverse proxy in production. |
 | `issuer` | string | **yes** | — | The external HTTPS URL used as the OIDC `issuer` claim and JWKS base URL. Must be an absolute `http://` or `https://` URL. Must match the URL your relying parties discover at `/.well-known/openid-configuration`. |
 | `cookie_secure` | bool | no | `false` | Set the `Secure` flag on session cookies. Must be `true` in production behind HTTPS; leave `false` only for local development. When `false`, the admin dashboard shows a "cookie insecure" warning. |
-| `trusted_proxies` | array of strings | no | `[]` | CIDR ranges of reverse proxies whose `X-Forwarded-For` header should be trusted for rate-limiting. Empty = always use the socket peer IP. See [deployment.md](../guides/deployment.md) for guidance on setting this correctly — an over-broad value lets clients spoof their IP and bypass rate limits. Example: `["10.0.0.0/8", "172.16.0.0/12"]`. |
+| `trusted_proxies` | array of strings | no | `[]` | CIDR ranges of reverse proxies whose `X-Forwarded-For` header should be trusted for rate-limiting. Empty = always use the socket peer IP. See [deployment.md](../../docs/src/guides/deployment.md) for guidance on setting this correctly — an over-broad value lets clients spoof their IP and bypass rate limits. Example: `["10.0.0.0/8", "172.16.0.0/12"]`. |
 
 **Startup validation:** `issuer` must be an absolute `http(s)://` URL.
 Each entry in `trusted_proxies` must be a valid CIDR block; startup
@@ -129,7 +129,7 @@ File paths for the database and the master key.
 
 > **Backup note.** A complete backup is two files: `db_path` + `key_file`.
 > The built-in `sui-id backup` command creates an encrypted archive
-> containing both. See [operators.md](../guides/operators.md#backups).
+> containing both. See [operators.md](../../docs/src/guides/operators.md#backup-and-restore).
 
 ---
 
@@ -251,11 +251,11 @@ max_lockout = "24h"              # Default; suits most deployments.
 
 ## Cross-references
 
-- [Deployment guide](../guides/deployment.md) — step-by-step server setup,
+- [Deployment guide](../../docs/src/guides/deployment.md) — step-by-step server setup,
   including reverse-proxy configuration and `trusted_proxies` guidance.
-- [Operators reference](../guides/operators.md) — backup procedures, session
+- [Operators reference](../../docs/src/guides/operators.md) — backup procedures, session
   policy, key rotation, HIBP setup, and routine operational tasks.
-- [Upgrade guide](../guides/upgrade.md) — version-specific migration notes.
+- [Upgrade guide](../../docs/src/guides/upgrade.md) — version-specific migration notes.
 ```
 
 ---

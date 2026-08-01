@@ -1,6 +1,6 @@
 # RFC 036 — Phase 5: Distribution readiness
 
-**Status.** Proposed  
+**Status.** Implemented (v0.37.0)
 **Priority.** High — this is the release-gate work before v1.0.  
 **Tracks.** ROADMAP Phase 5 "配布".  
 **Touches.** `README.md`, `docs/`, `.github/workflows/`, `crates/sui-id/src/main.rs`

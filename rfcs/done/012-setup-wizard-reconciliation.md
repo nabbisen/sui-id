@@ -1,6 +1,6 @@
 # RFC 012 — Setup wizard scope: spec ↔ implementation reconciliation
 
-**Status.** Proposed
+**Status.** Implemented (v0.29.4)
 **Priority.** High. Spec compliance gap that requires a maintainer
 decision before implementation.
 **Tracks.** v0.29.3 codebase review — high-priority finding #4.

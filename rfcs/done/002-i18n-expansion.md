@@ -1,6 +1,6 @@
 # RFC 002 — i18n scope expansion (post-v0.23.0)
 
-**Status.** Proposed
+**Status.** Implemented (v0.34.0)
 **Tracks.** ROADMAP / Medium term — "i18n scope expansion (post-v0.23.0)".
 **Touches.** `sui-id-i18n` (new locales, formatting helpers),
 `sui-id-web` (RTL CSS pass), `sui-id-core` (per-recipient locale

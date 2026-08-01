@@ -1,6 +1,6 @@
 # RFC 003 — HIBP scope expansion (post-v0.24.0)
 
-**Status.** Proposed — **priority elevated by v0.29.3 codebase
+**Status.** Implemented (v0.29.4)
 review**. Originally framed as a "medium-term, ship-when-ready"
 expansion; the review confirmed that the gap is not just feature
 breadth but a *consistency bug*: with `hibp_mode = block` the

@@ -1,6 +1,6 @@
 # RFC 030 — Dangerous operations: step-up + confirmation screens
 
-**Status.** Proposed  
+**Status.** Implemented (v0.36.0)
 **Priority.** High. Six dangerous operations currently use JavaScript
 `confirm()` dialogs — a browser-native pattern that offers no step-up
 authentication, no reversibility information, no impact summary, and

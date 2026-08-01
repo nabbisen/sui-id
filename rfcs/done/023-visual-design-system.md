@@ -1,6 +1,6 @@
 # RFC 023 — Visual design system: tokens, components, and motion
 
-**Status.** Proposed
+**Status.** Implemented (v0.32.0)
 **Priority.** Medium. RFC 017 freezes the *behavioural*
 contract for screens (responsibilities, dangerous-operation
 pattern, state copy). This RFC freezes the *visual* contract

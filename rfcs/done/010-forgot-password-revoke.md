@@ -1,6 +1,6 @@
 # RFC 010 — Revoke sessions and refresh tokens on forgot-password completion
 
-**Status.** Proposed
+**Status.** Implemented (v0.29.4)
 **Priority.** Highest. Security-critical bug fix.
 **Tracks.** v0.29.3 codebase review — high-priority finding #1.
 **Touches.** `sui-id-core::forgot_password`, plus a regression test in

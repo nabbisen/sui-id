@@ -1,6 +1,6 @@
 # RFC 029 — Admin panel i18n completion
 
-**Status.** Proposed  
+**Status.** Implemented
 **Priority.** Medium-High. Every admin operator who uses En or Zh currently
 sees Japanese hardcoded strings throughout the admin panel. This is the
 broadest i18n gap remaining after RFC 002.  

@@ -1,6 +1,6 @@
 # RFC 034 — Login passkey primary button + admin UI empty states
 
-**Status.** Proposed  
+**Status.** Implemented (v0.36.0)
 **Priority.** Medium. Two small but visible gaps from the design document.  
 **Source.** UI/UX design document P.6 (passkey login), P.17 (empty/state copy).  
 **Touches.** `crates/sui-id-web/src/pages.rs` (login form, list empty states),
