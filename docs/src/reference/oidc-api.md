@@ -2,8 +2,8 @@
 
 This guide is for someone integrating an application against a sui-id
 instance that someone else is running. If you are operating sui-id itself,
-see [operators.md](operators.md) for the reference and
-[deployment.md](deployment.md) for the first-time install walkthrough.
+see [operators.md](../guides/operators.md) for the reference and
+[deployment.md](../guides/deployment.md) for the first-time install walkthrough.
 
 ## Discovering the provider
 
@@ -479,14 +479,14 @@ exposing the underlying cause to the caller.
   `token_endpoint`; JWKS validation is a planned hardening step).
 
 If you need any of those today, you may need a different IdP. Several are on
-the [roadmap](../ROADMAP.md).
+the [roadmap](../../../ROADMAP.md).
 
 ## Further reading
 
-- [`docs/deployment.md`](deployment.md) — chronological install
+- [`docs/deployment.md`](../guides/deployment.md) — chronological install
   walkthrough for an operator deploying sui-id from scratch.
-- [`docs/operators.md`](operators.md) — operational reference for
+- [`docs/operators.md`](../guides/operators.md) — operational reference for
   someone running sui-id day to day.
-- [`docs/threat-model.md`](threat-model.md) describes the threats the
+- [`docs/threat-model.md`](../../threat-model.md) describes the threats the
   protocol surface defends against and what assumptions you may safely
   make about a properly-configured sui-id deployment.

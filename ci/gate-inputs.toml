@@ -44,6 +44,7 @@ G08 = "cargo +stable fmt --all -- --check"
 G09a = "cargo +1.95 test -p sui-id-store --features ldap --test ldap_smoke --locked -- --exact rustls_provider_and_tls_connector_reach_fixture"
 G09b = "cargo +stable test -p sui-id-store --features ldap --test ldap_smoke --locked -- --exact rustls_provider_and_tls_connector_reach_fixture"
 G10a = "mdbook build docs --dest-dir target/mdbook-gate"
+G10b = "python3.14 scripts/check-markdown-links.py --root . README.md ROADMAP.md docs"
 
 [actions]
 checkout_v6 = "d23441a48e516b6c34aea4fa41551a30e30af803"
@@ -53,3 +54,4 @@ upload_artifact_v4 = "ea165f8d65b6e75b540449e92b4886f43607fa02"
 rust_toolchain_stable = "4cda84d5c5c54efe2404f9d843567869ab1699d4"
 rust_toolchain_nightly = "4fd1da8b0805d2d2e936788875a7d65dbd677dc2"
 rustsec_audit_check_v2_0_0 = "69366f33c96575abad1ee0dba8212993eecbe998"
+setup_python_v7 = "5fda3b95a4ea91299a34e894583c3862153e4b97"

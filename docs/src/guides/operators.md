@@ -3,7 +3,7 @@
 > **Scope.** sui-id is a single-realm, first-party IdP. One flat
 > namespace of users, one of clients, three human roles. For
 > multi-tenant requirements see RFC 025. For the project's design
-> philosophy see the Scope section in [README.md](../README.md).
+> philosophy see the Scope section in [README.md](../../../README.md).
 
 ## Roles
 
@@ -38,7 +38,7 @@ chronological "what do I run, in what order" path from a fresh
 server to a working production install.
 
 If you are looking for how to point an application at sui-id, see
-[integrators.md](integrators.md).
+[integrators.md](../../integrators.md).
 
 ## User–client relationship and the single-realm model
 
@@ -390,7 +390,7 @@ left for a UI to do — surfacing one would invite operations that
 the architecture doesn't support (mid-process key rotation
 without restart) or actively undermine the security model
 (advertising a key-manipulation interface from a process that
-holds the key in memory). See [Threat model](./threat-model.md)
+holds the key in memory). See [Threat model](../../threat-model.md)
 for the reasoning.
 
 If you need to rotate the master key, that's a planned future
@@ -1604,8 +1604,8 @@ for in-flight OIDC flows).
 - [`docs/deployment.md`](deployment.md) is a chronological install
   walkthrough — useful when setting sui-id up for the first time on
   a new host.
-- [`docs/threat-model.md`](threat-model.md) describes what sui-id defends
+- [`docs/threat-model.md`](../../threat-model.md) describes what sui-id defends
   against, what it does not, and what assumptions an operator must
   uphold for the design to work.
-- [`docs/integrators.md`](integrators.md) is the corresponding guide for
+- [`docs/integrators.md`](../../integrators.md) is the corresponding guide for
   developers integrating an application against a sui-id instance.

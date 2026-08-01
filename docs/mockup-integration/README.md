@@ -32,7 +32,7 @@ phase-by-phase table.
 3. [`mockup-handoff/HANDOFF.md`](./mockup-handoff/HANDOFF.md) §1–§3 —
    what the mockup is and what it preserves; §14 conflict resolution
    priority.
-4. [`rfcs/proposed/RFC-MI-000-baseline-delta-inventory.md`](../../rfcs/proposed/RFC-MI-000-baseline-delta-inventory.md) —
+4. [`rfcs/done/RFC-MI-000-baseline-delta-inventory.md`](../../rfcs/done/RFC-MI-000-baseline-delta-inventory.md) —
    the first RFC to implement: produces the six inventory files
    (screen map, dangerous-action map, tab-routing delta, token
    delta, i18n delta, route-render-handler map).

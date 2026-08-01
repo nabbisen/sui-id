@@ -27,5 +27,5 @@ registration open to the internet, see the [scope statement](./getting-started/o
 | Deploy and harden for production | [Deployment guide](./guides/deployment.md) |
 | Configure running instance | [Operators reference](./guides/operators.md) |
 | Point your application at sui-id | [OIDC API](./reference/oidc-api.md) |
-| Understand the security model | [Deployment guide § Security hardening](./guides/deployment.md#security-hardening) |
+| Understand the security model | [Threat model](../threat-model.md) |
 | Contribute code or translations | [Contributing](./contributing/architecture.md) |

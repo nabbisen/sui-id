@@ -169,7 +169,7 @@ After setup, point your relying party at:
 - **Crypto:** XChaCha20-Poly1305 for column encryption; Ed25519 for JWT
   signing; Argon2id for passwords. Implementations are pulled from the
   RustCrypto ecosystem.
-- **HTTP:** Axum 0.8 over Tokio. The router is one file: `crates/sui-id/src/router.rs`.
+- **HTTP:** Axum 0.8 over Tokio. The router is one file: `crates/sui-id/src/http/router.rs`.
 - **UI:** Leptos 0.8 in SSR-only mode. No WASM is shipped; pages are rendered
   server-side and HTML POSTs handle state changes. JavaScript is reserved for
   WebAuthn credential ceremonies only; all other interactions are pure HTML forms.
@@ -205,5 +205,6 @@ docs/               Operator and integrator documentation
 - [`docs/threat-model.md`](https://github.com/nabbisen/sui-id/blob/main/docs/threat-model.md) — what sui-id defends
   against, what it does not, and what assumptions the operator must
   uphold for the design to work.
+- [`PUBLISHING.md`](https://github.com/nabbisen/sui-id/blob/main/PUBLISHING.md) — how the maintainers publish to
   crates.io. Not relevant to end users.
 

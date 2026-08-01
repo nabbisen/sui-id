@@ -530,8 +530,8 @@ In the browser:
 - [`operators.md`](operators.md) — full reference of configuration
   fields, the master key handling, GC behaviour, the audit log
   schema, and routine tasks.
-- [`integrators.md`](integrators.md) — how a relying party hooks
+- [`integrators.md`](../../integrators.md) — how a relying party hooks
   itself into sui-id once you've registered it as a client.
-- [`threat-model.md`](threat-model.md) — what sui-id defends against
+- [`threat-model.md`](../../threat-model.md) — what sui-id defends against
   (and what it does not). Worth reading before you deploy somewhere
   visible to the internet.

@@ -118,5 +118,5 @@ New write operation → always add a _flash key for success
 New error condition → add to render_error or a _failed_flash key
 ```
 
-See also: [`crates/sui-id-i18n/STATE_WORDS.md`](../../crates/sui-id-i18n/STATE_WORDS.md)
+See also: [`crates/sui-id-i18n/STATE_WORDS.md`](../../../crates/sui-id-i18n/STATE_WORDS.md)
 for the canonical key naming conventions.

@@ -537,45 +537,45 @@ the case-A vs case-B framing from review-2, the UI/UX
 deliverables, and growing-pains in the documentation file
 layout:
 
-- **[RFC 019](./rfcs/proposed/019-auth-flow-data-integrity.md)
+- **[RFC 019](../../rfcs/done/019-auth-flow-data-integrity.md)
   — Auth flow data integrity hardening.** High priority. Closes
   three real correctness gaps in the token-issuance path: a
   user disabled mid-flow can still receive tokens, the
   refresh-token lookup is a full-table decrypt scan, and the
   refresh-token GC contradicts the family-id theft-detection
   design from migration `0008`.
-- **[RFC 020](./rfcs/proposed/020-user-identity-invariants.md)
+- **[RFC 020](../../rfcs/done/020-user-identity-invariants.md)
   — User identity invariants and OIDC claim consistency.** High
   priority. Adds `email_normalized` so forgot-password works
   for capitalised emails, makes `user_uuid` actually unique,
   adds `email_verified_at`, and aligns userinfo with discovery
   by returning `email` / `email_verified` when scope=email is
   granted.
-- **[RFC 021](./rfcs/proposed/021-schema-invariant-checks.md)
+- **[RFC 021](../../rfcs/done/021-schema-invariant-checks.md)
   — Schema invariant CHECKs and migration safety.** Medium
   priority. Boolean-shape CHECKs across the data model,
   `clients` confidential ↔ `secret_hash` consistency CHECK, the
   `signing_keys` single-active partial unique index, the
   `consents` redesign with proper FKs, application-level JSON
   validation, and transactional migration runs.
-- **[RFC 022](./rfcs/proposed/022-single-realm-scope-statement.md)
+- **[RFC 022](../../rfcs/done/022-single-realm-scope-statement.md)
   — Single-realm scope statement.** Medium priority,
   documentation-only. Declares sui-id as a single-realm IdP and
   points at RFC 025 as the documented expansion path.
-- **[RFC 023](./rfcs/proposed/023-visual-design-system.md)
+- **[RFC 023](../../rfcs/done/023-visual-design-system.md)
   — Visual design system: tokens, components, motion.** Medium
   priority. Translates the UI/UX deliverables' visual
   specification into CSS variable tokens (light + dark),
   component primitives (button, field, badge, banner, modal,
   tabs), focus-ring contract, and motion guidelines. Pairs
   with RFC 017's behavioural contract.
-- **[RFC 024](./rfcs/proposed/024-doc-file-consolidation.md)
+- **[RFC 024](../../rfcs/done/024-doc-file-consolidation.md)
   — Documentation file consolidation.** Low-medium priority,
   internal-only. Splits CHANGELOG per minor under
   `docs/changelog/`, compresses ROADMAP, relocates
   PUBLISHING.md to `docs/contributors/release-process.md`. The
   project root stops growing.
-- **[RFC 025](./rfcs/proposed/025-multi-tenant-expansion.md)
+- **[RFC 025](../../rfcs/proposed/025-multi-tenant-expansion.md)
   — Multi-tenant expansion path: detailed design.** Low
   priority, longer-term, no scheduled delivery. Detailed-design
   RFC for multi-tenancy: a `tenants` table, `tenant_id`
