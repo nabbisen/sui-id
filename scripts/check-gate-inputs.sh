@@ -268,20 +268,18 @@ awk -F'|' '
   }
 ' "$tmp/rfc-matrix-section" >"$tmp/rfc-gates-all"
 
-# G01-G09b, G10a and G10b are expected in [gates]. G11 joins as RFC 093
-# M1b's C2 lands; G12 alone uses a separate mechanism (ui-invariants-v1)
-# and is never part of this table.
+# G01-G09b, G10a, G10b and G11 are expected in [gates]. G12 alone uses a
+# separate mechanism (ui-invariants-v1) and is never part of this table.
 #
 # Enumerated one lane at a time rather than as a range: a range such as
-# ^G(0[1-9]|1[0-2])[a-z]?$ would also admit G11 and G12 and fail on this
-# commit, since neither is in [gates] yet.
+# ^G(0[1-9]|1[0-2])[a-z]?$ would also admit G12 and fail on this commit,
+# since it is not in [gates].
 #
 # This set comparison holds both directions over the lanes listed above --
 # nothing may appear in [gates] unadmitted, and nothing admitted may be
 # dropped. It deliberately says nothing about RFC lanes absent from both
-# lists; C2.1 replaces this enumeration with a completeness rule that does,
-# once G11 exists too.
-awk -F'\t' '$1 ~ /^(G0[1-9][a-z]?|G10a|G10b)$/' "$tmp/rfc-gates-all" | sort >"$tmp/rfc-gates"
+# lists; C2.1 replaces this enumeration with a completeness rule that does.
+awk -F'\t' '$1 ~ /^(G0[1-9][a-z]?|G10a|G10b|G11)$/' "$tmp/rfc-gates-all" | sort >"$tmp/rfc-gates"
 
 # Extract [gates] from the manifest as `GNN<TAB>command`, detecting
 # duplicate keys within the table (first occurrence is not silently kept —

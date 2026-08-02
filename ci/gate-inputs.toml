@@ -45,6 +45,7 @@ G09a = "cargo +1.95 test -p sui-id-store --features ldap --test ldap_smoke --loc
 G09b = "cargo +stable test -p sui-id-store --features ldap --test ldap_smoke --locked -- --exact rustls_provider_and_tls_connector_reach_fixture"
 G10a = "mdbook build docs --dest-dir target/mdbook-gate"
 G10b = "python3.14 scripts/check-markdown-links.py --root . README.md ROADMAP.md docs"
+G11 = "python3.14 scripts/check-rfc-integrity.py --root . --policy ci/rfc-policy.toml"
 
 [actions]
 checkout_v6 = "d23441a48e516b6c34aea4fa41551a30e30af803"

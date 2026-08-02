@@ -348,6 +348,20 @@ jobs:
       - name: G10b
         run: bash scripts/ci-gate.sh G10b
 
+  G11:
+    # RFC 093 M1b C2: the RFC integrity checker. Routed through the
+    # dispatcher like every other lane, same reasoning as G10a/G10b.
+    name: "G11 — RFC integrity (Python 3.14)"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Install Python 3.14
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14"
+      - name: G11
+        run: bash scripts/ci-gate.sh G11
+
   text-leaks:
     # RFC 048 (+ RFC 051 widening): Bare `t.field` identifiers as
     # `view!` macro children render as literal text in the HTML output
@@ -688,6 +702,16 @@ jobs:
           echo "command=python3.14 -m unittest scripts.tests.test_markdown_links"
           echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           python3.14 -m unittest scripts.tests.test_markdown_links
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
+      - name: G11 self-tests (RFC integrity checker)
+        run: |
+          set +e
+          echo "command=python3.14 -m unittest scripts.tests.test_rfc_integrity"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3.14 -m unittest scripts.tests.test_rfc_integrity
           status=$?
           echo "exit_status=$status"
           echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
