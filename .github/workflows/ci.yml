@@ -362,164 +362,20 @@ jobs:
       - name: G11
         run: bash scripts/ci-gate.sh G11
 
-  text-leaks:
-    # RFC 048 (+ RFC 051 widening): Bare `t.field` identifiers as
-    # `view!` macro children render as literal text in the HTML output
-    # (Leptos treats anything outside `{…}` as a string literal).
-    # Forty-eight such sites leaked through to production at v0.41.0;
-    # an additional 15 in tags-without-attributes (e.g. `<h2>t.foo</h2>`)
-    # leaked through the initial RFC 048 grep and were caught only at
-    # v0.43.0. The widened pattern below catches both.
-    name: text-leak invariants
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-      - name: No bare i18n expressions in view! children
-        run: |
-          set -e
-          # Match `>t.foo<` regardless of what's before the opening `>`:
-          # both `<h2>t.foo</h2>` (no-attr open tag) and
-          # `<span class="x">t.foo</span>` (with-attr open tag) leak.
-          # Identifiers may include digits (e.g. `settings_logs_recent_24h`).
-          inline=$(grep -rEn '>t\.[a-z_0-9]+<' crates/ \
-                     --include='*.rs' || true)
-          if [ -n "$inline" ]; then
-            echo "::error::Bare 't.field' identifier as view! macro child."
-            echo "These render as literal text — wrap in {…}:"
-            echo "$inline"
-            exit 1
-          fi
-      - name: Advisory — standalone `t.foo` lines may also be view! leaks
-        run: |
-          # Standalone `    t.foo` on its own line MAY be a view! leak
-          # (Leptos treats macro children outside `{}` as literal text)
-          # OR may be a legitimate Rust expression — for example the
-          # body of `if cond { t.foo } else { t.bar }`. We can't
-          # distinguish statically without a Leptos-aware parser, so
-          # this check is advisory: it surfaces candidates without
-          # failing the build. Reviewers eyeball the output.
-          standalone=$(grep -rEn '^\s+t\.[a-z_0-9]+\s*$' crates/ \
-                         --include='*.rs' || true)
-          if [ -n "$standalone" ]; then
-            echo "::warning::Standalone 't.field' lines — verify whether each is inside view! macro:"
-            echo "$standalone"
-          fi
-
-  css-tokens:
-    # RFC 049: Every `var(--…)` reference must resolve against a
-    # token declared in tokens.rs or components.rs. Browsers silently
-    # drop declarations referencing undefined variables, so a typoed
-    # token name breaks visual styling without any compile error.
-    # v0.41.0 had seven such typos.
-    name: CSS tokens resolve
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-      - name: All var(--…) references resolve
-        run: |
-          set -e
-          # 1. Declared variables: lines like  `  --name: value;`
-          declared=$(grep -hoE '^\s+--[a-z0-9-]+\s*:' \
-                       crates/sui-id-web/src/tokens.rs \
-                       crates/sui-id-web/src/components.rs \
-                     | sed 's/^[[:space:]]*//; s/[[:space:]]*:.*$//' \
-                     | sort -u)
-          # 2. Used variables: any var(--name) anywhere in the crates.
-          used=$(grep -rhoE 'var\(--[a-z0-9-]+' crates/ \
-                   --include='*.rs' --include='*.css' \
-                 | sed 's/^var(//' \
-                 | sort -u)
-          # 3. Used minus declared.
-          unresolved=$(comm -23 <(echo "$used") <(echo "$declared"))
-          if [ -n "$unresolved" ]; then
-            echo "::error::CSS variable used but not declared:"
-            echo "$unresolved"
-            exit 1
-          fi
-      - name: Report unused tokens (advisory)
-        run: |
-          declared=$(grep -hoE '^\s+--[a-z0-9-]+\s*:' \
-                       crates/sui-id-web/src/tokens.rs \
-                       crates/sui-id-web/src/components.rs \
-                     | sed 's/^[[:space:]]*//; s/[[:space:]]*:.*$//' \
-                     | sort -u)
-          used=$(grep -rhoE 'var\(--[a-z0-9-]+' crates/ \
-                   --include='*.rs' --include='*.css' \
-                 | sed 's/^var(//' \
-                 | sort -u)
-          unused=$(comm -13 <(echo "$used") <(echo "$declared") || true)
-          if [ -n "$unused" ]; then
-            echo "::warning::Declared tokens with no references:"
-            echo "$unused"
-          fi
-
-  semantic-palette-parity:
-    # RFC 061: every semantic colour (danger / warning / success / info)
-    # has a triple {-default, -subtle, fg-on-} declared in BOTH the
-    # light :root and the dark [data-theme="dark"] root of tokens.rs.
-    # A v0.44.0 regression shipped because `--success-subtle` was used
-    # by `.banner--success` in components.rs but never declared in
-    # tokens.rs. The existing css-tokens job catches the
-    # used-but-undeclared case; this job catches the structural
-    # incompleteness that produced it.
-    name: Semantic palette light/dark parity
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-      - name: Semantic triples are paired light + dark
-        run: |
-          set -e
-          tokens=crates/sui-id-web/src/tokens.rs
-          # The four semantic families.
-          for semantic in danger warning success info; do
-            for slot in default subtle fg-on; do
-              # fg-on takes the form "fg-on-{semantic}", others take
-              # the form "{semantic}-{slot}". Build the canonical name.
-              if [ "$slot" = "fg-on" ]; then
-                name="fg-on-$semantic"
-              else
-                name="$semantic-$slot"
-              fi
-              # Count declarations across the file.
-              count=$(grep -cE "^\s+--${name}\s*:" "$tokens" || true)
-              # Expect declarations in: light :root + dark
-              # [data-theme="dark"] + dark @media auto. = 3.
-              # If less, the token is missing in at least one mode.
-              if [ "$count" -lt 3 ]; then
-                echo "::error::--${name} declared only ${count} time(s); expected 3 (light :root + [data-theme=\"dark\"] + @media auto)"
-                exit 1
-              fi
-            done
-          done
-          echo "All 12 semantic tokens (4 families × 3 slots) declared in all 3 mode roots."
-
-  inline-style-bound:
-    # RFC 067 (v0.48.0): bound the inline `style=""` attribute count
-    # in `pages/`. Encourages adding a utility class in
-    # components.rs over reaching for an inline style. The threshold
-    # of 20 leaves a small headroom for genuinely-one-off styles
-    # (truly dynamic content, page tweaks like opacity:0.85).
-    name: Inline style attribute count in pages/
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-      - name: Count inline style attributes in pages/
-        run: |
-          set -e
-          count=$(grep -rEohn 'style="[^"]*"' \
-                    crates/sui-id-web/src/pages/ \
-                    --include='*.rs' | wc -l)
-          echo "Inline style count in pages/: $count"
-          if [ "$count" -gt 20 ]; then
-            echo "::error::Inline 'style=' count ($count) exceeds bound (20)."
-            echo "Suggest a utility class in components.rs or document"
-            echo "why the inline style is necessary."
-            exit 1
-          fi
-
   ui-invariants-v1:
-    # RFC 093 G12 consolidated entry point. Keep the four legacy jobs above
-    # until this integration receives independent review and hosted evidence.
+    # RFC 093 G12 consolidated entry point. Retired the four legacy inline
+    # jobs (text-leaks, css-tokens, semantic-palette-parity,
+    # inline-style-bound) in M1b C5, once a hosted run showed this job and
+    # all four passing on the same commit. Their four blocking checks are
+    # fully subsumed here and are negative-self-tested
+    # (scripts/tests/check-ui-invariants-fixtures.sh).
+    #
+    # The GitHub ::warning:: annotations those jobs produced are gone by
+    # design: the jobs echoed them inline; check-ui-invariants.sh has never
+    # emitted annotation syntax. The advisory reports themselves survive as
+    # plain log output from this job -- standalone `t.field` lines and
+    # unused CSS tokens -- and are deliberately not fixture-covered, being
+    # advisory rather than blocking.
     name: G12 UI invariants v1
     runs-on: ubuntu-24.04
     steps:
