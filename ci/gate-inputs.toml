@@ -47,6 +47,15 @@ G10a = "mdbook build docs --dest-dir target/mdbook-gate"
 G10b = "python3.14 scripts/check-markdown-links.py --root . README.md ROADMAP.md docs"
 G11 = "python3.14 scripts/check-rfc-integrity.py --root . --policy ci/rfc-policy.toml"
 
+# RFC 093 M1b C2.1: the lane-completeness rule (scripts/check-gate-inputs.sh
+# condition 7) requires every lane in the Gate Matrix v1 table above to be
+# either a [gates] key or listed here, never both, never neither. This list
+# is meant to stay this short: a lane belongs here only when it predates the
+# dispatcher and already has its own working, independently reviewed entry
+# point -- not as a place to defer wiring a new lane.
+[gate_matrix_exceptions]
+G12 = "Predates ci-gate.sh and has its own working entry point (ui-invariants-v1, RFC 093 M1a). Not migrated: churning a green gate for symmetry is not worth the risk. Currently also a dependency of M1b C5 -- a reason not to touch it right now, not a claim that this exception can never be revisited."
+
 [actions]
 checkout_v6 = "d23441a48e516b6c34aea4fa41551a30e30af803"
 checkout_v4 = "11d5960a326750d5838078e36cf38b85af677262"

@@ -167,7 +167,7 @@ expect_failure gates-diverged-command "condition 7: [gates] does not match RFC 0
 missing_gate="$tmp/gates-missing-lane"
 make_valid_fixture "$missing_gate"
 sed -i '/^G09b = /d' "$missing_gate/ci/gate-inputs.toml"
-expect_failure gates-missing-lane "condition 7: [gates] does not match RFC 093's Gate Matrix v1 table"
+expect_failure gates-missing-lane "condition 7: Gate Matrix v1 lane(s) absent from both [gates] and [gate_matrix_exceptions]"
 
 # --- Condition 7c: [gates] has an extra lane not in the RFC table --------
 extra_gate="$tmp/gates-extra-lane"
@@ -192,5 +192,71 @@ expect_failure gates-duplicate-key "condition 7: [gates] has duplicate key"
 and_form="$tmp/gates-and-form-accepted"
 make_valid_fixture "$and_form"
 expect_success gates-and-form-accepted
+
+# --- Condition 7f: a lane on [gate_matrix_exceptions] passes (RFC 093 --
+# --- M1b C2.1) -------------------------------------------------------------
+# Move a real lane (G09b) from [gates] to the exception list with a
+# reason. It remains fully accounted for -- the completeness rule does
+# not care *which* of the two lists a lane is in, only that it is in
+# exactly one. This is deliberately not just "the real fixture already
+# has G12 excepted": it isolates the property by moving a lane that
+# normally is *not* excepted, so the pass is not coincidental to G12
+# specifically.
+exception_pass="$tmp/gate-matrix-exception-accepted"
+make_valid_fixture "$exception_pass"
+sed -i '/^G09b = "cargo/d' "$exception_pass/ci/gate-inputs.toml"
+sed -i '/^\[gate_matrix_exceptions\]/a G09b = "fixture: moved to exceptions to test the accept path"' \
+  "$exception_pass/ci/gate-inputs.toml"
+expect_success gate-matrix-exception-accepted
+
+# --- Condition 7g: a lane in both [gates] and [gate_matrix_exceptions] --
+# --- fails (RFC 093 M1b C2.1) -----------------------------------------------
+# G12 stays in [gate_matrix_exceptions] (as it must) *and* also gains a
+# [gates] entry with its real RFC command -- the two lists are supposed
+# to be disjoint by construction, so this must fail even though the
+# added command is not itself wrong.
+both_lists="$tmp/gate-matrix-exception-and-gates-fails"
+make_valid_fixture "$both_lists"
+sed -i '/^\[gate_matrix_exceptions\]/i G12 = "bash scripts/check-ui-invariants.sh --all --policy ci/ui-invariants.toml"\n' \
+  "$both_lists/ci/gate-inputs.toml"
+expect_failure gate-matrix-exception-and-gates-fails \
+  "condition 7: lane(s) present in both [gates] and [gate_matrix_exceptions]"
+
+# --- Condition 8a: [tools] version drifted from what ci.yml installs -----
+# (RFC 093 M1b C2.1 -- mdBook specifically had no enforcement at all
+# before this: ci.yml could install any version and every prior check
+# would still pass.)
+tool_drift="$tmp/tools-mdbook-drift"
+make_valid_fixture "$tool_drift"
+sed -i 's/^mdbook = "0.5.4"$/mdbook = "0.6.0"/' "$tool_drift/ci/gate-inputs.toml"
+expect_failure tools-mdbook-drift \
+  'condition 8: [tools] mdbook = "0.6.0", but .github/workflows/ci.yml installs/invokes: 0.5.4'
+
+# --- Condition 8b: [tools] entry with nothing in ci.yml to check it -----
+# --- against (declared but unused) --------------------------------------
+# Delete every line the checker's own grep pattern would match, so
+# python-version is not merely wrong but entirely absent -- proving the
+# "not found anywhere" branch, distinct from 8a's "found, but drifted".
+tool_unused="$tmp/tools-python-unused"
+make_valid_fixture "$tool_unused"
+sed -i '/python-version: "3\.14"/d' "$tool_unused/.github/workflows/ci.yml"
+expect_failure tools-python-unused \
+  'condition 8: [tools] python = "3.14" not found anywhere'
+
+# --- Condition 8c: [tools] drifted in one job but not the others --------
+# Neither 8a (all wrong) nor 8b (none found) exercises "some right, some
+# wrong" -- the actual failure mode condition 8 exists to prevent: a
+# version moving under a pin that nothing reads, in one job, while every
+# other job (and the manifest) still says the old value. Change only the
+# first of ci.yml's three python-version occurrences.
+tool_partial_drift="$tmp/tools-python-partial-drift"
+make_valid_fixture "$tool_partial_drift"
+awk '
+  !done && /python-version: "3\.14"/ { sub(/3\.14/, "3.13"); done = 1 }
+  { print }
+' "$tool_partial_drift/.github/workflows/ci.yml" >"$tool_partial_drift/.github/workflows/ci.yml.new"
+mv "$tool_partial_drift/.github/workflows/ci.yml.new" "$tool_partial_drift/.github/workflows/ci.yml"
+expect_failure tools-python-partial-drift \
+  'condition 8: [tools] python = "3.14", but .github/workflows/ci.yml installs/invokes: 3.13 3.14'
 
 echo "gate-inputs negative fixtures passed"

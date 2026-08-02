@@ -234,10 +234,13 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Condition 7: [gates] matches RFC 093's Gate Matrix v1 table exactly.
-# One normalisation is permitted: the RFC renders G05/G06 as two backticked
-# commands joined by the word "and"; the manifest joins them with "&&". No
-# other normalisation is applied — every other lane compares byte-for-byte.
+# Condition 7: every lane in RFC 093's Gate Matrix v1 table is accounted
+# for by exactly one of [gates] or [gate_matrix_exceptions] (RFC 093 M1b
+# C2.1's completeness rule), and every lane dispatched via [gates] matches
+# the RFC's command exactly. One normalisation is permitted on the command
+# comparison: the RFC renders G05/G06 as two backticked commands joined by
+# the word "and"; the manifest joins them with "&&". No other
+# normalisation is applied — every other lane compares byte-for-byte.
 # ---------------------------------------------------------------------------
 
 # Extract the Gate Matrix v1 table body: from the "## Gate Matrix v1"
@@ -268,18 +271,13 @@ awk -F'|' '
   }
 ' "$tmp/rfc-matrix-section" >"$tmp/rfc-gates-all"
 
-# G01-G09b, G10a, G10b and G11 are expected in [gates]. G12 alone uses a
-# separate mechanism (ui-invariants-v1) and is never part of this table.
-#
-# Enumerated one lane at a time rather than as a range: a range such as
-# ^G(0[1-9]|1[0-2])[a-z]?$ would also admit G12 and fail on this commit,
-# since it is not in [gates].
-#
-# This set comparison holds both directions over the lanes listed above --
-# nothing may appear in [gates] unadmitted, and nothing admitted may be
-# dropped. It deliberately says nothing about RFC lanes absent from both
-# lists; C2.1 replaces this enumeration with a completeness rule that does.
-awk -F'\t' '$1 ~ /^(G0[1-9][a-z]?|G10a|G10b|G11)$/' "$tmp/rfc-gates-all" | sort >"$tmp/rfc-gates"
+# RFC 093 M1b C2.1: the lane-completeness rule. Every lane in the Gate
+# Matrix v1 table (rfc-gates-all, 15 rows, already correctly bounded to
+# the "## Gate Matrix v1" section above -- see the extraction-hazard
+# note there) must be either a [gates] key or a [gate_matrix_exceptions]
+# key, never both, never neither.
+sort "$tmp/rfc-gates-all" >"$tmp/rfc-gates-all-sorted"
+cut -f1 "$tmp/rfc-gates-all-sorted" | sort -u >"$tmp/rfc-lane-ids"
 
 # Extract [gates] from the manifest as `GNN<TAB>command`, detecting
 # duplicate keys within the table (first occurrence is not silently kept —
@@ -306,11 +304,141 @@ if [[ -s "$tmp/manifest-gates-dupes" ]]; then
 fi
 
 sort -u "$tmp/manifest-gates-raw" >"$tmp/manifest-gates"
+cut -f1 "$tmp/manifest-gates" | sort -u >"$tmp/manifest-gate-ids"
+
+# Extract [gate_matrix_exceptions] the same way.
+awk '
+  /^\[gate_matrix_exceptions\]/ { in_table = 1; next }
+  /^\[/ { in_table = 0 }
+  in_table {
+    eq = index($0, " = ")
+    if (eq > 0) {
+      key = substr($0, 1, eq - 1)
+      val = substr($0, eq + 3)
+      sub(/^"/, "", val)
+      sub(/"$/, "", val)
+      print key "\t" val
+    }
+  }
+' "$policy_path" >"$tmp/manifest-exceptions-raw"
+
+cut -f1 "$tmp/manifest-exceptions-raw" | sort | uniq -d >"$tmp/manifest-exceptions-dupes"
+if [[ -s "$tmp/manifest-exceptions-dupes" ]]; then
+  fail "condition 7: [gate_matrix_exceptions] has duplicate key(s):"
+  cat "$tmp/manifest-exceptions-dupes" >&2
+fi
+
+sort -u "$tmp/manifest-exceptions-raw" >"$tmp/manifest-exceptions"
+cut -f1 "$tmp/manifest-exceptions" | sort -u >"$tmp/manifest-exception-ids"
+
+awk -F'\t' '$2 == "" { print $1 }' "$tmp/manifest-exceptions" >"$tmp/exceptions-empty-reason"
+if [[ -s "$tmp/exceptions-empty-reason" ]]; then
+  fail "condition 7: [gate_matrix_exceptions] entry(ies) with no reason recorded:"
+  cat "$tmp/exceptions-empty-reason" >&2
+fi
+
+# A lane not in RFC 093's table has no business being an exception for it.
+comm -13 "$tmp/rfc-lane-ids" "$tmp/manifest-exception-ids" >"$tmp/stale-exceptions"
+if [[ -s "$tmp/stale-exceptions" ]]; then
+  fail "condition 7: [gate_matrix_exceptions] lane(s) not in RFC 093's Gate Matrix v1 table:"
+  cat "$tmp/stale-exceptions" >&2
+fi
+
+# Disjointness: a lane in both [gates] and [gate_matrix_exceptions] means
+# one of the two lists is stale, and the dispatcher and the exemption
+# cannot both be true for the same lane.
+comm -12 "$tmp/manifest-gate-ids" "$tmp/manifest-exception-ids" >"$tmp/gates-and-exceptions-overlap"
+if [[ -s "$tmp/gates-and-exceptions-overlap" ]]; then
+  fail "condition 7: lane(s) present in both [gates] and [gate_matrix_exceptions]:"
+  cat "$tmp/gates-and-exceptions-overlap" >&2
+fi
+
+# Completeness: every RFC lane must be accounted for by one of the two
+# lists. This is the inverse direction the enumerated filter never
+# checked (M1a C1 review finding; RFC 093 M1b C2.1).
+comm -23 "$tmp/rfc-lane-ids" <(sort -u "$tmp/manifest-gate-ids" "$tmp/manifest-exception-ids") >"$tmp/unaccounted-lanes"
+if [[ -s "$tmp/unaccounted-lanes" ]]; then
+  fail "condition 7: Gate Matrix v1 lane(s) absent from both [gates] and [gate_matrix_exceptions]:"
+  cat "$tmp/unaccounted-lanes" >&2
+fi
+
+# Command correctness: for every lane actually dispatched via [gates] (by
+# now guaranteed disjoint from the exception list and a real RFC lane),
+# the recorded command must match the RFC's table byte-for-byte, one
+# normalisation permitted (see the extraction comment above).
+awk -F'\t' 'NR==FNR { ids[$1] = 1; next } $1 in ids' "$tmp/manifest-gate-ids" "$tmp/rfc-gates-all-sorted" \
+  | sort >"$tmp/rfc-gates"
 
 if ! diff -u "$tmp/rfc-gates" "$tmp/manifest-gates" >"$tmp/gates-diff"; then
   fail "condition 7: [gates] does not match RFC 093's Gate Matrix v1 table:"
   cat "$tmp/gates-diff" >&2
 fi
+
+# ---------------------------------------------------------------------------
+# Condition 8: every [tools] entry corresponds to what .github/workflows/
+# ci.yml actually installs or invokes for that tool (RFC 093 M1b C2.1 --
+# an M1a-era gap: mdBook's pinned version specifically was enforced by
+# nothing, while ci.yml carried a comment claiming otherwise). rust_msrv
+# and python happen to also be checked transitively, since the gate
+# commands embed them and condition 7 compares those; mdbook has no such
+# transitive coverage, since its version never appears in a [gates]
+# command. All four are checked the same way here regardless, so none of
+# them depends on a coincidence of some other condition's coverage.
+# ---------------------------------------------------------------------------
+
+get_toml_value() {
+  local key=$1 table=$2
+  awk -v key="$key" -v table="$table" '
+    $0 ~ ("^\\[" table "\\]") { in_table = 1; next }
+    /^\[/ { in_table = 0 }
+    in_table {
+      eq = index($0, " = ")
+      if (eq > 0 && substr($0, 1, eq - 1) == key) {
+        val = substr($0, eq + 3)
+        sub(/^"/, "", val)
+        sub(/"$/, "", val)
+        print val
+        exit
+      }
+    }
+  ' "$policy_path"
+}
+
+check_tool_pin() {
+  local tool=$1 expected=$2 grep_pattern=$3 extract_pattern=$4
+  local found
+  # Every occurrence must equal the pin, not merely include it among
+  # several -- "the pin is one of the values found" would accept a
+  # version drifted in one job but not another, which is exactly the
+  # "moves under a pin nothing reads" failure this condition exists to
+  # catch. Comment lines are excluded first so a stray commented-out
+  # example (or a future one) cannot false-positive under this stricter
+  # all-must-match rule.
+  found=$(grep -vE '^[[:space:]]*#' "$root/$workflows_dir/ci.yml" \
+    | grep -oE "$grep_pattern" \
+    | sed -E "$extract_pattern" | sort -u)
+  if [[ -z "$found" ]]; then
+    fail "condition 8: [tools] $tool = \"$expected\" not found anywhere in $workflows_dir/ci.yml (declared but unused, or not mechanically locatable)"
+    return
+  fi
+  if [[ "$found" != "$expected" ]]; then
+    fail "condition 8: [tools] $tool = \"$expected\", but $workflows_dir/ci.yml installs/invokes: $(echo "$found" | tr '\n' ' ')"
+  fi
+}
+
+tools_rust_msrv=$(get_toml_value "rust_msrv" "tools")
+tools_rust_stable=$(get_toml_value "rust_stable" "tools")
+tools_mdbook=$(get_toml_value "mdbook" "tools")
+tools_python=$(get_toml_value "python" "tools")
+
+check_tool_pin "rust_msrv" "$tools_rust_msrv" \
+  'toolchain: "[0-9]+\.[0-9]+"' 's/toolchain: "([0-9.]+)"/\1/'
+check_tool_pin "rust_stable" "$tools_rust_stable" \
+  'toolchain: [a-z]+' 's/toolchain: //'
+check_tool_pin "mdbook" "$tools_mdbook" \
+  'mdbook --version [0-9]+\.[0-9]+\.[0-9]+' 's/mdbook --version //'
+check_tool_pin "python" "$tools_python" \
+  'python-version: "[0-9]+\.[0-9]+"' 's/python-version: "([0-9.]+)"/\1/'
 
 # ---------------------------------------------------------------------------
 
