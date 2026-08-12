@@ -3,6 +3,7 @@
 **Status.** Proposed
 **Security review.** Required
 **Lifecycle history.** Base design accepted 2026-07-17 after [independent review](../reviews/094-design-review-2026-07-17.md); material amendment returned to Proposed in commit `43085e38219e5eb1bfe11cc698b18f1fa5f5e4d7`; complete amended RFC accepted by `@nabbisen` on 2026-07-21 after [independent review](../reviews/094-federation-command-amendment-review-2026-07-21.md); **returned to Proposed on 2026-07-28** for the scope amendment described below, per RFC 000's return-for-review rule for material changes to scope, prerequisites, and acceptance criteria. The 2026-07-21 acceptance is preserved in history and is superseded, not withdrawn.
+**Amendment summary (2026-08-12).** `ReadConn`'s per-statement `sqlite3_stmt_readonly` interrogation restored as a **required** M2a control after independent review finding B-094-1 established that static denial alone admits `UPDATE … RETURNING` and the other DML `RETURNING` forms; only the versioned read-only PRAGMA allowlist remains deferred. M2a acceptance criteria gained the corresponding negative fixtures. The 2026-07-28 deferral's stated grounds — a "different property", and invasiveness "touching every read path" — were both incorrect.
 **Amendment summary (2026-07-28).** Master-key rotation crash recovery removed to RFC 100; `ReadConn` narrowed to the typed wrapper plus static denial, deferring per-statement runtime interrogation; the `syn` AST boundary gate sequenced into the M2b authority switch; conversion phased into M2a and M2b with C15 pinned to M2a; acceptance criteria split per stage; interim documentation honesty made normative. Requested by `@nabbisen` on 2026-07-28 on the recommendation of the requirements architect.
 **Implementation owner.** `codex-developer` (OpenAI Codex), confirmed by `@nabbisen`; implementation remains gated below
 **Design prerequisites.** RFC 093 Accepted (its gate contract must be Accepted before this RFC is accepted); the attached durable-write inventory and threat delta require independent design approval. The key-recovery state machine is no longer part of this RFC and is reviewed under RFC 100.
@@ -301,14 +302,42 @@ same bare write. RFC 094 therefore makes raw database write authority private:
    serialize/deserialize replacement, transaction control, and FFI/raw-handle
    access before preparation.
 
-   Per-statement runtime interrogation via `sqlite3_stmt_readonly`, and the
-   versioned read-only PRAGMA allowlist, are **deferred to a successor
-   hardening RFC** by the 2026-07-28 amendment. They guard a different property
-   — a read path that executes a write — from the mutation/audit atomicity this
-   RFC establishes, and they are the invasive half of the change, touching every
-   read path in the workspace. The static denial above is the interim control,
-   and the type-level wrapper is retained in full because it is what makes "raw
-   write authority is private" true rather than decorative.
+   **Static denial is not sufficient on its own and never was.** It rejects
+   categories of statement, not data-modifying SQL: `INSERT`, `UPDATE`, `DELETE`
+   and `REPLACE` are absent from the list above, and their `… RETURNING` forms
+   are row-returning, so `query_row("UPDATE … RETURNING …")` is accepted by every
+   check named above while changing durable state outside `WriteTx`, the command
+   manifest, the transaction runner and typed event construction. That is not a
+   different property from this RFC's subject — it is precisely the mutation/audit
+   gap this RFC exists to close.
+
+   **Therefore, per-statement runtime interrogation is required, not deferred.**
+   Every statement prepared by `ReadConn` is interrogated with
+   `sqlite3_stmt_readonly` after preparation and before any step, and a
+   non-read-only statement is rejected without executing. rusqlite exposes this
+   as `Statement::readonly()` (verified present in `rusqlite 0.40.1`, the pinned
+   workspace version, delegating directly to `ffi::sqlite3_stmt_readonly`). The
+   check lives inside `ReadConn`'s own entry points; it does not touch call
+   sites.
+
+   The two controls are complementary and both are mandatory: static denial
+   rejects whole categories before preparation, and the runtime interrogation
+   rejects data-modifying statements that no category test can recognise from the
+   SQL string alone.
+
+   Only the **versioned read-only PRAGMA allowlist** remains deferred to a
+   successor hardening RFC. `PRAGMA` is already statically denied, so deferring
+   the allowlist narrows nothing that the two controls above do not already
+   cover.
+
+   **Amendment history.** The 2026-07-28 amendment deferred the runtime
+   interrogation on the stated grounds that it guarded "a different property" and
+   was "the invasive half of the change, touching every read path in the
+   workspace." Both grounds were wrong: the property is the same one, and the
+   check is confined to `ReadConn`'s implementation. Corrected 2026-08-12
+   following independent review finding B-094-1. The type-level wrapper is what
+   makes "raw write authority is private" true rather than decorative, and that
+   sentence is only true with the runtime check in place.
 7. A `syn`-based repository check parses all production Rust modules and rejects
    raw `rusqlite::Connection`/`Transaction`/`Statement`, statement execution,
    `with_conn`/`with_tx`, execute/batch/transaction calls, writable PRAGMA,
@@ -777,6 +806,12 @@ intention; it must be observed on one clean commit before M2a closes.
   exhaustively yields one typed event; distinct operator intents have distinct
   inventory IDs.
 - Raw database writes are compiler-capability-gated.
+- **`ReadConn` rejects every data-modifying statement at runtime.** Negative
+  fixtures must observe rejection of `INSERT … RETURNING`, `UPDATE … RETURNING`,
+  `DELETE … RETURNING` and `REPLACE … RETURNING`, in addition to the existing
+  PRAGMA, ATTACH/DETACH, multi-statement, batch, backup/restore, raw-handle and
+  indirect-helper cases. An ordinary `SELECT` is the control fixture and must
+  pass. Rejection must be observed to occur **before** the statement is stepped.
 - The structural gate passes over converted commands and agrees with the
   registry and generated documentation for those commands.
 - The audit coverage matrix states conversion status per command and carries a

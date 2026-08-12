@@ -21,8 +21,14 @@ This handoff decomposes RFC 095 without authorizing coding or weakening RFC
 Implementation may start only when all are true:
 
 - RFC 095 is under `rfcs/accepted/` with complete approval metadata;
-- RFC 094 is Implemented and the baseline C15 transaction/typed-event evidence
-  passes on the implementation baseline;
+- **RFC 094 M2a** is Implemented on the recorded clean baseline — **not** the
+  whole of RFC 094 — and C15's guarded consume / client-create / typed-event
+  transaction has observed rollback and exactly-once evidence there.
+  C15 is pinned to M2a and may not be deferred to M2b (RFC 094 §M2a), so M2b's
+  remaining conversion waves are **not** a prerequisite for this RFC.
+  *Corrected 2026-08-12 after independent review finding B-095-1: this gate said
+  "RFC 094 is Implemented", which contradicted the RFC's amended prerequisite and
+  would have made this work wait for M2b unnecessarily.*
 - RFC 093's current clean-tree matrix passes;
 - the owner records `codex-developer`, the full clean baseline commit, and
   non-overlapping ownership of the files below;

@@ -30,8 +30,18 @@ at a time; the workspace and structural gate must remain green between waves.
 - [ ] Ensure `ReadConn` returns only owned mapped rows, requires SQLite
   read-only statements, and denies statements/batches, writable PRAGMA,
   ATTACH/DETACH, backup/restore, extension, raw-handle, and FFI access.
-- [ ] Observe compile/AST failure for a new bare write absent from inventory and
-  registry.
+- [ ] **M2b only — not an M2a gate.** Observe compile/AST failure for a new bare
+  write absent from inventory and registry. The `syn` AST boundary gate lands
+  with M2b's authority switch (RFC 094 §M2b).
+
+  **M2a's interim boundary control**, which *is* blocking: the sealed
+  `declare_write_command!` capability is the only production constructor for
+  `WriteTx`, raw SQL is confined to the private command-executor module, and
+  `ReadConn` rejects every data-modifying statement at runtime via
+  `sqlite3_stmt_readonly`. A new bare write in M2a therefore cannot compile
+  outside the reviewed module list, and cannot reach the database through a read
+  path. What the AST gate adds in M2b is detection of a *newly added* authority
+  path inside the allowed modules — it does not backfill a control M2a lacks.
 - [ ] Observe compile/runtime rejection for prepared UPDATE, writable PRAGMA,
   ATTACH, backup API, returned raw statement, and indirect raw-helper attempts.
 
