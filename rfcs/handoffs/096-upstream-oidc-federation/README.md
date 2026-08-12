@@ -18,16 +18,24 @@ This package decomposes the federation trust completion without reopening RFC
 
 ## Entry gates
 
-Pure stages 1–3 may start only when RFC 096 is Accepted, its design review has
-no blocker/high finding, RFC 093 is Implemented with the clean-tree matrix, a
-clean baseline commit is recorded, and file ownership is non-overlapping.
+**096-A** may start only when RFC 096 is Accepted, its design review has no
+blocker/high finding, **RFC 093's M1a lanes pass on a clean commit** (M1b is not
+a prerequisite), a clean baseline commit is recorded, the preparatory
+`federation.rs` split has landed with its observational-equivalence record
+independently reviewed, and file ownership is non-overlapping.
+
+*Corrected 2026-08-12 after independent review finding B-096-1. This gate
+previously named "pure stages 1–3", but stage 3 was schema migration and provider
+preflight — durable mutation, which 096-A prohibits. See RFC 096's work map.*
 
 RFC 096's RFC 094 design was independently reviewed, the complete material RFC
 was durably returned to Proposed in commit
 `43085e38219e5eb1bfe11cc698b18f1fa5f5e4d7`, and `@nabbisen` explicitly
 accepted the complete amended RFC on 2026-07-21. This prerequisite is satisfied.
-Handler/mapping/session stage 5 requires amended RFC 094 to be Implemented with
-all C17/C18/C19/C23/F01–F06 and applicable user/session fixtures passing. If RFC 095
+**096-B1** (attempt state, nonce consumption, session establishment) requires
+amended RFC 094 **M2a** Implemented with the applicable user/session fixtures
+passing. **096-B2** (provider and link commands C17/C18/C23, preflight, audited
+enablement) requires RFC 094 **M2b**, with C17/C18/C19/C23/F01–F06 passing. If RFC 095
 implementation is active, its owner must release any shared OIDC/session/
 migration file explicitly. The roadmap's second implementer and independent
 reviewer requirement applies to any approved overlap.
@@ -74,18 +82,33 @@ if another owner holds one of them.
 
 ## Ordered delivery
 
+**096-A** — no durable state is created in this stage.
+
 1. Pure types, configuration validation, canonical URL rules, bounded JSON,
    JOSE header/key/claim validators.
 2. Resolver policy, pinned transport, discovery/JWKS cache, injected hostile
-   fixture.
-3. Migration, typed repositories, version/generation invalidation, preflight and audited
-   enable integration.
-4. Attempt creation/claim, provider callback, token exchange, ID-token
-   verification.
-5. Verified identity mapping, provisioning, local MFA/session preservation,
-   insecure legacy-path removal.
+   fixture, ID-token verification and nonce validation rule.
+
+**096-B1** — requires RFC 094 M2a.
+
+3. Migration for attempt state, typed repositories, attempt creation/claim,
+   provider callback, token exchange.
+4. Verified identity mapping, provisioning, local MFA/session preservation,
+   session establishment, insecure legacy-path removal.
+
+**096-B2** — requires RFC 094 M2b.
+
+5. Provider/link commands on the Class-A seam, version/generation invalidation,
+   preflight and audited enable integration.
+
+**096-C**
+
 6. Full adversarial/fault/migration evidence, live canary, docs, handoff, and
    independent closure request.
+
+*Re-cut 2026-08-12 to match RFC 096's work map. The previous ordering placed
+migration and audited enablement in the "pure" prefix and bundled M2a- and
+M2b-dependent work into one stage.*
 
 Every stage must compile independently. A provider cannot be enabled until all
 runtime enforcement for its stored configuration is present. Test-only network

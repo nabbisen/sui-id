@@ -3,10 +3,12 @@
 **Status.** Proposed
 **Security review.** Required
 **Lifecycle history.** Accepted 2026-07-21 after [independent review](../reviews/096-design-review-2026-07-21.md); **returned to Proposed on 2026-07-28** for the prerequisite and staging amendment below, per RFC 000's return-for-review rule for material prerequisite changes. The 2026-07-21 acceptance is preserved in history and is superseded, not withdrawn. No validation, transport, JOSE, or claim-handling design is reopened.
+**Amendment summary (2026-08-12).** Independent review findings B-096-1, B-096-2 and B-096-3. The retained numbered stages 1–6 are deleted and replaced by an explicit 096-A / 096-B1 / 096-B2 / 096-C work map, resolving their contradiction with the A/B split. 096-B is split: **096-B1** (login-path completion — attempt state, one-time nonce consumption, session establishment) requires RFC 094 **M2a**; **096-B2** (provider and link commands C17/C18/C23) requires RFC 094 **M2b**, where RFC 094 already schedules federation configuration. 096-A no longer claims to close the shipped defect — it builds the verification, and 096-B1 routes live traffic through it. The preparatory `federation.rs` split gains an accountable owner (the ROADMAP `prep` item) and a required observational-equivalence record. **The B1/B2 boundary is proposed and unconfirmed**: it assumes federated session establishment falls inside RFC 094 M2a's session-security wave.
 **Amendment summary (2026-07-28).** Implementation prerequisite re-pointed from full RFC 093 to M1a; the previously inline validation-versus-mutation caveat promoted into two normative stages, 096-A and 096-B; preparatory `federation.rs` split added as a prerequisite; file ownership against RFC 094 named. Requested by `@nabbisen` on 2026-07-28 on the recommendation of the requirements architect, to allow federation work to run as an independent lane.
 **Design prerequisites.** RFC 093 Accepted; amended RFC 094 Accepted including C17/C18/C23/F01–F06 federation commands; the federation threat delta, discovery/egress policy, and hostile-provider plan require independent design approval.
-**Implementation prerequisites.** M1a complete — RFC 093's Rust gate lanes G01–G09 pass on one clean commit under the amended Gate Matrix; this RFC Accepted in its amended form; the hostile-provider harness approved; the preparatory `federation.rs` split committed and independently reviewed. Stage 096-A may then begin. Stage 096-B additionally requires RFC 094 **M2a** Implemented with the C17/C18/C23 seam proven. **M1b is not a prerequisite for either stage** — no part of this RFC depends on the documentation or RFC-integrity gates.
-**Closure prerequisites.** Per stage. **096-A:** discovery, transport, JOSE, claims, state/nonce, and cache/rotation evidence, including the hostile-provider corpus, pass independent review. **096-B:** federation mutation commands on the Class-A seam with rollback evidence, session integration, migration, and representative live-integration evidence pass independent closure review.
+**Implementation prerequisites.** M1a complete — RFC 093's Rust gate lanes G01–G09 pass on one clean commit under the amended Gate Matrix; this RFC Accepted in its amended form; the hostile-provider harness approved; the preparatory `federation.rs` split committed and independently reviewed. Stage
+096-A may then begin. **096-B1** additionally requires RFC 094 **M2a** Implemented; **096-B2** additionally requires RFC 094 **M2b** Implemented. **M1b is not a prerequisite for any stage** — no part of this RFC depends on the documentation or RFC-integrity gates.
+**Closure prerequisites.** Per stage. **096-A:** discovery, transport, JOSE, claims, state/nonce, and cache/rotation evidence, including the hostile-provider corpus, pass independent review. **096-B1:** durable attempt state, one-time nonce consumption, session establishment, removal of the trust-on-TLS and cookie-replay paths, migration evidence, and representative live-integration evidence pass independent closure review. **096-B2:** federation provider and link commands on the Class-A seam with rollback evidence pass independent closure review.
 **Tracks.** ROADMAP M4-A — Federation validation and transport; M4-B — Federation mutation and session integration.
 **Touches.** Federation provider configuration and handlers; dedicated outbound HTTP; discovery/JWKS cache; JOSE/ID-token validation; login attempts and MFA context; provider/link repositories; RFC 094 C19 and amended C17/C18/C23/F01–F06 seams; migrations; threat model; integration tests.
 **Handoff.** [`../handoffs/096-upstream-oidc-federation/README.md`](../handoffs/096-upstream-oidc-federation/README.md)
@@ -50,27 +52,82 @@ and key-rotation behaviour; and the hostile-provider and token-substitution
 corpus.
 
 **096-A performs no durable mutation.** It may not create, enable, disable or
-delete a federation provider or link, and it may not establish a session. If a
-change appears to require one, it is 096-B work and waits for the RFC 094 seam.
+delete a federation provider or link, and it may not establish a session. It
+delivers the *nonce validation rule*; the durable attempt state that makes a
+nonce genuinely one-time is 096-B1, because it is a mutation.
 
-This stage carries essentially all of the security value of this RFC: it closes
-the current defect in which the callback accepts an ID token whose signature was
-never verified and whose nonce may be absent. It needs no part of the audit
-transaction seam, which is why it is separable.
+**096-A does not, on its own, close the shipped defect**, and must not be
+described as doing so. It builds the verification: signature checking, issuer
+binding, algorithm constraint, claim validation, hostile-provider corpus. The
+defect is closed when the live callback is routed through that verification, and
+routing requires durable attempt state and session establishment — 096-B1. Until
+then 096-A is a reviewed library that no production request reaches.
 
-### 096-B — mutation and session integration
+*Corrected 2026-08-12 after independent review finding B-096-1: this stage
+previously claimed to carry "essentially all of the security value" and to close
+the defect, while also forbidding the mutation that closing it requires.*
+
+### 096-B1 — login-path completion
+
+Durable login-attempt state, one-time nonce consumption bound to that state, code
+exchange, verified-identity mapping, and session establishment from a verified
+assertion. Removal of the shipped trust-on-TLS decode and cookie-replay path.
+
+**This is the stage that closes the defect.**
+
+Requires RFC 094 **M2a** Implemented. Session establishment is covered by M2a's
+"credential, consent and session security" conversion wave.
+
+### 096-B2 — federation administration
 
 Federation provider and link commands (C17/C18/C23) implemented on the RFC 094
-Class-A transaction seam, and session establishment from a verified assertion.
-Requires RFC 094 M2a Implemented.
+Class-A transaction seam: provider enable/disable, link create/delete, and
+configuration generation increments.
+
+Requires RFC 094 **M2b** Implemented. RFC 094 schedules federation configuration
+in its M2b remaining-conversion wave, and these are administrative commands, not
+part of the user login path.
+
+*Added 2026-08-12 after independent review finding B-096-2. The single 096-B
+stage named RFC 094 M2a as its prerequisite while bundling work from two
+different RFC 094 conversion waves — session security (M2a) and federation
+configuration (M2b). Splitting along the boundary RFC 094 already draws lets the
+security fix land after M2a without expanding M2a's scope. **This split is
+proposed, not settled**: it rests on the inference that federated session
+establishment falls inside M2a's session-security wave, which the correction
+round must confirm against RFC 094's command inventory.*
 
 ### File ownership
 
 `crates/sui-id/src/http/handlers/federation.rs` currently contains both callback
 validation and provider/link mutation logic. In its combined form it is owned by
 neither this RFC nor RFC 094, and concurrent editing by both lanes risks a merge
-that silently drops a security check. It is split by a preparatory change owned
-by neither lane, with zero behaviour change, before either lane begins.
+that silently drops a security check.
+
+**Accountable owner: the ROADMAP `prep — federation module split` item**, not this
+RFC and not RFC 094. It is a standalone preparatory change that must land, and be
+independently reviewed, before **either** 096-A or any RFC 094 federation work
+begins.
+
+*Corrected 2026-08-12 after independent review finding B-096-3. The previous
+wording said the change was "owned by neither lane", which left no one
+accountable for its scope, review, or proof.*
+
+**The preparatory change record must contain:**
+
+- the exact list of files created, and every item moved into each, with nothing
+  renamed, reordered or reformatted beyond the move itself;
+- **observational-equivalence evidence** covering routing, every existing provider
+  operation, and **every currently reachable callback outcome** — including the
+  failure and denial paths, which are the ones a silent drop would remove;
+- confirmation that no `use`, feature gate, error type or audit call site changed
+  meaning as a result of the move;
+- a reviewer other than its implementer.
+
+"Zero behaviour change" is the claim; the equivalence evidence is what makes it
+checkable. A split reviewed only by reading the diff is not sufficient here,
+because the risk being managed is precisely a security check disappearing in a
+move that reads as mechanical.
 
 After the split, this RFC owns the discovery, JOSE/JWKS, claim-validation and
 callback modules; RFC 094 owns the federation mutation commands. The split is a
@@ -817,20 +874,26 @@ restore insecure validation.
 
 ## Implementation stages and ownership
 
-1. Pure configuration/URL/JSON/JOSE claim validators and adversarial corpus.
-2. Injectable resolver/transport plus discovery/JWKS cache.
-3. Schema migration, repository types, provider preflight/versioning.
-4. Durable attempt start/callback claim and token exchange.
-5. Verified-identity mapping, RFC 094 mutation integration, MFA/session method
-   preservation, and removal of insecure legacy paths.
-6. Hostile-provider matrix, migration/rollback tests, representative live
-   canary, documentation, and independent closure review.
+*Replaced 2026-08-12 after independent review finding B-096-1. The previous
+numbered stages 1–6 contradicted the 096-A/096-B split: stage 3 put schema
+migration and provider preflight before RFC 094, while 096-A prohibits durable
+mutation. The work map below is the single authority; the old numbering is
+deleted rather than reconciled.*
 
-Stages 1–3 may be prepared in files not owned by an active RFC 094/095
-implementer. Stage 5 is blocked until RFC 094 is Implemented. Any overlap in a
-shared handler, state, repository, migration sequence, audit registry, or OIDC
-session code requires explicit file ownership plus a second independent
-implementer/reviewer as required by the roadmap.
+| Stage | Work | Prerequisite |
+|---|---|---|
+| **096-A** | Configuration/URL/JSON/JOSE validators; injectable resolver/transport; discovery and JWKS cache; algorithm constraint and signature verification; claim validation; nonce validation rule; hostile-provider and token-substitution corpus | M1a; preparatory split committed and reviewed |
+| **096-B1** | Schema migration for attempt state; durable attempt start; one-time nonce consumption; callback claim and code exchange; verified-identity mapping; session establishment; removal of the trust-on-TLS and cookie-replay paths | **RFC 094 M2a** |
+| **096-B2** | Provider and link commands C17/C18/C23 on the Class-A seam; provider preflight/versioning; audited enablement | **RFC 094 M2b** |
+| **096-C** | Hostile-provider matrix, migration/rollback tests, representative live canary, documentation, independent closure review | 096-B1 and 096-B2 |
+
+**096-A creates no durable state.** Any change that appears to need one belongs to
+096-B1 or 096-B2. In particular, schema migration and provider preflight — stage 3
+in the deleted numbering — are **not** 096-A work.
+
+Any overlap in a shared handler, state, repository, migration sequence, audit
+registry, or OIDC session code requires explicit file ownership plus a second
+independent implementer/reviewer as required by the roadmap.
 
 ## Verification and closure evidence
 
