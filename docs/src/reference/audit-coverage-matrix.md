@@ -1,9 +1,20 @@
 # Audit Coverage Matrix (RFC 085)
 
-This document is the **normative reference** for sui-id's audit event coverage.
-Every privileged operation that mutates state has a row here specifying its
-event name, required fields, and atomicity class. The CI gate
-`scripts/check-audit-matrix.sh` keeps this document and the code in sync.
+This document is the **normative requirement** for sui-id's audit event coverage:
+every privileged operation that mutates state **must** have a row here specifying
+its event name, required fields, and atomicity class.
+
+**That requirement is not mechanically enforced today.** The CI gate
+`scripts/check-audit-matrix.sh` compares *event-name strings* between this
+document and the code. It does not, and cannot, establish that a privileged
+operation emits an event at all, that the event is correctly typed, or that the
+mutation and its audit append share a transaction.
+
+> **Diagnostic only: string parity proves neither emission completeness nor
+> mutation/audit atomicity. RFC 094 owns the authoritative structural gate.**
+
+Until RFC 094 is implemented, treat the rows below as the coverage this project
+*requires*, verified by review rather than by CI.
 
 ## Atomicity classes
 
@@ -139,10 +150,31 @@ funnel; they do not guard state mutations.
 
 ## CI gate
 
-`scripts/check-audit-matrix.sh` verifies bidirectional coverage:
+`scripts/check-audit-matrix.sh` compares two sets of **event-name strings**:
 
 1. Every event name in this matrix exists as a string literal in the codebase.
 2. Every audit-namespaced string literal in the codebase has a row in this matrix.
 
-Discrepancies fail the gate. Adding a new privileged operation without updating
-the matrix is a CI failure.
+A mismatch between those two sets fails the gate. That is the whole of what it
+checks.
+
+**What it therefore catches:** a newly introduced audit-namespaced event-name
+literal with no matrix row, or a matrix row naming an event no longer present in
+the code.
+
+**What it does not catch**, and must not be described as catching:
+
+- a privileged operation that emits **no** audit event — there is no literal to
+  compare, so the gate passes;
+- an operation emitting a literal that does not match the audit namespace;
+- an event whose name matches but whose payload, fields or atomicity class are
+  wrong;
+- an audit append that happens **outside** its mutation's transaction.
+
+A live example of the limits of name-based comparison: the known
+`user.reset_mfa` / `mfa.admin_reset` mismatch.
+
+**Adding a new privileged operation without updating the matrix is therefore not
+necessarily a CI failure.** It is a violation of the requirement stated at the top
+of this document, caught by review. RFC 094 replaces this diagnostic with a
+structural gate that can enforce it.
