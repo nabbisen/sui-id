@@ -63,7 +63,7 @@ The programme is complete only when:
 |---|---|---|---|---|
 | **M0 — Plan, governance, and design freeze** | complete | Approve the roadmap; adopt `accepted/`; assign RFC numbers and ownership | RFCs 093–099 (design only) | Met 2026-07-22 |
 | **M1a — Trustworthy build baseline** | **closed 2026-07-30** | Raise MSRV to the verified 1.95 floor; repair `ldap3` rustls provider and mdBook icon; clippy cleanup; wire G01–G09 with negative self-tests; `ci-gate.sh`; complete and mechanically enforce `ci/gate-inputs.toml` | **RFC 093** | G01–G09 pass on one clean commit, hosted, with recorded tool versions; the gate-input manifest is enforced by a tracked check rather than an ad-hoc scan |
-| **M1b — Documentation and lifecycle gates** | **started 2026-07-30** | G10a/G10b/G11 with unittest fixtures; `ci/rfc-policy.toml`; repair RFC folder/status/index/link debt; retire the four legacy inline UI jobs | **RFC 093** | G10–G12 pass hosted; RFC integrity reports no known debt and no permanent allowlist |
+| **M1b — Documentation and lifecycle gates** | **exit gate met 2026-08-03** | G10a/G10b/G11 with unittest fixtures; `ci/rfc-policy.toml`; repair RFC folder/status/index/link debt; retire the four legacy inline UI jobs | **RFC 093** | G10–G12 pass hosted; RFC integrity reports no known debt and no permanent allowlist |
 | **prep — federation module split** | *owner to set* | Split `handlers/federation.rs` into validation and mutation modules; zero behaviour change | none (preparatory) | Reviewed and committed; test count unchanged; diff is moves, not rewrites |
 | **M2a — Transactional security records (foundation)** | *owner to set* | Typed registry; Class-A transaction seam; typed `ReadConn` with static denial; Class-B `emit_must_attempt`; failure injector; convert user administration, credential/consent/session, token/registration **including C15**, and signing keys | **RFC 094** | Every converted Class-A row has injected-failure rollback and exactly-once evidence; C15 atomic; structural gate passes over converted commands; the coverage matrix states conversion status per command and claims no unconverted command is atomic |
 | **M2b — Remaining conversion and authority switch** | *owner to set* | Convert settings, pending settings, federation configuration, client metadata; land the `syn` AST boundary gate; make the structural gate blocking; correct audit-chain claims | **RFC 094** | No production Class-A best-effort append remains anywhere; AST negative fixture rejects an unregistered write; independent adversarial closure review accepts the evidence |
@@ -125,7 +125,7 @@ own hash-pinned package. Items at the same number may run concurrently.
 | 1 | M1b tooling: G10a lane, G10b/G11 scripts, `ci/rfc-policy.toml`, fixtures, then the A3.4 lane-completeness rule (C2.1) | B | none | [093 M1b](rfcs/handoffs/093-build-toolchain-release-gates/m1b-implementation.md) |
 | 2 | MSRV raise to 1.95 | A | item 1 corrective fixes | 093 M1a |
 | 3 | Gate lanes G01–G09 + negative fixtures + `ci-gate.sh` + manifest enforcement | A | items 1–2 | 093 M1a |
-| 3 | M1b debt repair: RFC status, 29 broken links, legacy UI job retirement | B | item 1 tooling | 093 M1b |
+| 3 | M1b debt repair: RFC status and `rfcs/` broken links — **re-measured by G11, not by the 2026-07-28 counts** | B | item 1 tooling (G11 must exist first) | 093 M1b |
 | 4 | **M1a closes** — G01–G09 hosted green on one clean commit | A | item 3 | — |
 | 4 | **M1b closes** — G10–G12 hosted green, integrity debt zero | B | item 3 | — |
 | 5 | `handlers/federation.rs` split, zero behaviour change | prep | M1a; clippy landed | 093 M1a §Theme B |
@@ -232,7 +232,7 @@ implementation → evidence). Status column is **verified fact** as of 2026-07-2
 | Milestone | RFC | Handoff | Implementation | Evidence |
 |---|---|---|---|---|
 | **M1a — CLOSED 2026-07-30** | 093 (Accepted) | `handoffs/093-…/m1a-implementation.md` | A0, A1, A2, A3.1–A3.5 and the C1/R9 corrections all landed | **Hosted run `30546346612` on commit `474d0f2`: 18/18 jobs success, zero skipped** |
-| M1b | 093 (Accepted) | `handoffs/093-…/m1b-implementation.md` | **In progress — owner-approved start 2026-07-30; C0 design question resolved as option (a)** | — |
+| **M1b — EXIT GATE MET 2026-08-03** | 093 (Accepted) | `handoffs/093-…/m1b-implementation.md` | C0, C1, C2, C2.1, C3, C4, C5 all closed | **Run 30754447964 on `1d58da2`: 17/17 jobs success, four legacy UI jobs retired, G12 advisory counts unchanged (3 / 18), RFC integrity debt zero with no allowlist.** **RFC 093 remains Accepted** — closure needs independent closure review + closure metadata |
 | prep | none (preparatory) | `m1a-implementation.md` §Theme B | Not started | — |
 | M2a / M2b | 094 (Proposed) | `handoffs/094-transactional-audit/` | Blocked on re-acceptance | — |
 | M2c | 100 (Proposed) | `handoffs/100-master-key-rotation/` | Blocked on 094 M2a | — |

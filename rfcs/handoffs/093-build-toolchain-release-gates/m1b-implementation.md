@@ -118,6 +118,64 @@ duplicate numbers, status mismatch, missing index row, broken link, missing
 prospective metadata, an invalid evidence path, and a valid historical RFC that
 correctly carries no invented review metadata.
 
+### Header-format decision, 2026-08-01
+
+Three header conventions coexist in the 117-file corpus: bold-label (100 files),
+YAML-ish bullets (1 file, `done/077-headless-setup.md`), and TOML front-matter in a
+fenced block (16 files, all `RFC-MI-*`). Raised by the C2 implementer with the
+corpus measured rather than assumed.
+
+**Decision: read TOML front-matter, but only for identifiers on the closed
+historical MI list in `ci/rfc-policy.toml`. Convert RFC 077's header to
+bold-label.**
+
+Rejected alternatives and why:
+
+- **Read TOML generally** — a new RFC could then use that format and pass. RFC 093's
+  parser constraint names the bold-label form; two accepted conventions means none
+  is enforced. The narrowing preserves prospective single-convention enforcement.
+- **Exempt the MI files from invariant 2 as well as 6/7** — the status is present
+  and already correct in all sixteen (`done/` + `Implemented (v0.49.1…v0.57.0)`).
+  Declining to read a field that exists and would pass makes the gate assert less
+  than it can.
+- **Convert all seventeen headers** — sixteen of them are frozen historical files
+  that would be rewritten to state what they already state, with transcription risk
+  and no gain.
+
+The closed list is the right hook because `ci/rfc-policy.toml` already declares its
+own semantics: *"This list is closed: a new MI RFC never gets added here."* The TOML
+path therefore can never apply to a file added later.
+
+**Implementation note.** The TOML block sits inside a ```` ```toml ```` fence, which
+`iter_unfenced_lines` correctly strips. The narrowed reader must operate on the raw
+header text before fence-stripping, and only when the identifier is on the closed
+list.
+
+**RFC 077** is a single standard-numbered file, not part of any closed set. Convert
+its bullets to bold-label preserving every value verbatim, including the author
+attribution. Its `Status: accepted` in `done/` is a separate genuine defect — let
+the gate report it and fix it in C4; do not correct the value while changing the
+format.
+
+**Falsifiable prediction:** after the parser change alone the count should fall from
+63 to **47** (38 folder/status + 1 for 077 + 2 unindexed + 6 links). If it is not
+47, report the number rather than reconciling to it.
+
+### Known latent defect in G10b — do not fix in M1b
+
+`check-markdown-links.py` (G10b) uses a naive "any fence line toggles" parser.
+`check-rfc-integrity.py` (G11) uses correct CommonMark fence-closing semantics after
+`rfcs/done/076` exposed the difference.
+
+**Verified unreachable in G10b's scope today**: both algorithms were run over all 51
+files G10b scans and produced identical link sets, with `rfcs/` as a positive control
+where they differ in exactly one file. Do not churn a green, hosted-verified lane for
+symmetry.
+
+**Trigger condition:** if `docs/` ever gains a fenced block containing a nested
+fence, G10b silently stops scanning the rest of that file. The remedy is a shared
+helper rather than two divergent implementations — cleanup for M5.
+
 ### Current state the gate must accept as correct
 
 Two things look like debt and are not. Do not "fix" them:
@@ -145,14 +203,22 @@ Delete condition 7's enumerated lane filter and replace it with:
 > `[gates]` or listed on an explicit, commented exception list in the manifest.
 > Nothing may be absent from both.
 
-**G12 is the sole exception**, and permanently: it predates the dispatcher and has
-a working entry point (`ui-invariants-v1`). Record it with that reason. Do not
-migrate it — churning a green gate for symmetry is not worth the risk, and C5
-depends on it staying stable.
+**G12 is the sole exception.** It predates the dispatcher and has a working entry
+point (`ui-invariants-v1`). Record it with that reason. Do not migrate it —
+churning a green gate for symmetry is not worth the risk.
+
+**Corrected 2026-08-02:** an earlier version of this section called the exception
+"permanent." That was wrong. There is no principled reason G12 must stay outside
+the dispatcher forever — only that migrating it costs something and buys nothing
+today. The exception is **provisional but unscheduled**. Write the reason so the
+durable part (predates the dispatcher, has its own entry point) stands on its own,
+and keep any time-bound clause such as "C5 depends on it" clearly subordinate — it
+expires when C5 lands.
 
 ### Why this rule exists
 
-The C1 review noted that A3.4 only ever checked one direction: every `[gates]`
+The M1a C1-correction review noted that A3.4 only ever checked one direction (that
+"C1" is the M1a gate-inputs correction, not M1b's C1 item): every `[gates]`
 entry matches its RFC row, but nothing verified that every RFC lane is
 *accounted for*. A lane could be absent from the manifest and no check would
 object. This is the same class as R9 — a check that passes because it never
@@ -166,6 +232,57 @@ looked.
 - A lane present in **both** `[gates]` and the exception list must **fail** —
   the two lists are disjoint by construction, and an entry in both means one of
   them is stale.
+
+### Also fold in: `[tools]` is currently unenforced
+
+Found during the C1 review, recorded here because C2.1 is already rewriting this
+checker and it is the same defect class.
+
+`ci/gate-inputs.toml` declares `[tools]`:
+
+```toml
+rust_msrv = "1.95"
+rust_stable = "stable"
+mdbook = "0.5.4"
+python = "3.14"
+```
+
+**A3.4's seven conditions never read this table.** Nothing compares it to the
+workflow. `ci.yml` even carries a comment asserting "ci/gate-inputs.toml's
+`[tools]` table pins this version" next to `cargo install mdbook --version 0.5.4`
+— true as a declaration, false as an enforcement.
+
+Coverage today is uneven and accidental:
+
+- **`rust_msrv`, `python`** — transitively enforced, because the gate commands
+  themselves embed `+1.95` and `python3.14`, and condition 7 compares those against
+  RFC 093's table.
+- **`mdbook`** — **not enforced at all.** `0.5.4` appears only in `ci.yml`'s install
+  step and in `[tools]`, with nothing tying them together. `ci.yml` could install
+  0.6.0 and every check would still pass while the manifest and the RFC both claim
+  0.5.4.
+
+That last one is a live risk rather than a theoretical one: mdBook 0.5.4's specific
+behaviour has already caused two defects in this milestone (auto-creating missing
+chapters, and CWD-relative `--dest-dir`). An unenforced version pin on a tool whose
+version-specific behaviour keeps mattering is worth closing.
+
+**Add a condition** asserting that every `[tools]` entry corresponds to what the
+workflow actually installs or invokes, with fixtures for a drifted version and a
+declared-but-unused tool. If a tool's version cannot be mechanically located in the
+workflow, that is itself the finding — say so rather than skipping it.
+
+This is an M1a-era gap in A3.4, not a C1 or C2 defect.
+
+**Correction from the C2.1 review, 2026-08-02.** The first implementation asserted
+that the declared pin appeared *somewhere* in `ci.yml`, which lets **partial drift**
+pass: one job moved to Python 3.13 while others stayed at 3.14 was reported as
+`all conditions satisfied`. The rule must be that **every** occurrence equals the
+pin, with pure-comment lines excluded so a commented-out stale version cannot
+false-positive. Verified: baseline and all fixtures still pass, partial drift is
+caught naming both values, and a commented `python-version: "3.9"` is ignored.
+Requires a third fixture for the some-right-some-wrong case; the original two cover
+only all-wrong and none-found.
 
 ### One extraction hazard, verified
 
@@ -216,8 +333,43 @@ is wrong the same way. The correct form is `../proposed/X` — and several targe
 have since moved to `done/`, so check each target's current folder rather than
 only fixing the prefix.
 
-In `076`, `../guides/deployment.md` and `./operators.md` should be
-`../../docs/deployment.md` and `../../docs/operators.md`.
+**RFC 076's six links — corrected instruction, 2026-08-01.** An earlier version of
+this handoff said to repoint them at `../../docs/deployment.md` and
+`../../docs/operators.md`. **That was wrong**, and following it would have looked
+mechanical while making a meaning change.
+
+`docs/deployment.md` and `docs/operators.md` both exist *and* so do
+`docs/src/guides/deployment.md` and `docs/src/guides/operators.md` — divergent
+duplicates, differing by 37 and 177 lines respectively. Picking between them is a
+documentation-authority decision, not a path repair.
+
+Three facts settle which the RFC meant:
+
+1. **`docs/src/guides` is the only `guides` directory in the repository.** The root
+   layout is flat (`docs/operators.md`), with no `guides/` component at all — so
+   `../guides/X` can only denote the book layout.
+2. **RFC 076 was added 2026-06-17**, twelve days *after* the mdBook structure
+   (`983693e`, 2026-06-05). The author was writing against a tree where
+   `docs/src/guides/` already existed.
+3. All three targets exist there, and `#backups` resolves in
+   `docs/src/guides/operators.md`.
+
+So repoint all six at the **book** copies, from `rfcs/done/`:
+
+| Current | Correct |
+|---|---|
+| `../guides/deployment.md` (×2) | `../../docs/src/guides/deployment.md` |
+| `../guides/operators.md#backups` | `../../docs/src/guides/operators.md#backups` |
+| `../guides/operators.md` | `../../docs/src/guides/operators.md` |
+| `../guides/upgrade.md` | `../../docs/src/guides/upgrade.md` |
+| `./operators.md` | `../../docs/src/guides/operators.md` |
+
+All verified to resolve. `upgrade.md` has **no** root duplicate, which independently
+confirms the book layout is the intended referent.
+
+**Do not treat the root/book duplication itself as C3's problem.** Two divergent
+copies of the same document is RFC 098/M5 work; C3 only picks the referent the RFC
+already meant.
 
 Re-run the sweep after repair. The count must reach zero with no allowlist entry.
 
@@ -246,6 +398,54 @@ integration is committed (done, `7055894`); and **one hosted run has been
 observed green with both `ui-invariants-v1` and the four legacy jobs passing on
 the same commit**.
 
+**Precondition satisfied 2026-08-02**: run `30735008212` on `bfbb2e4` had
+`ui-invariants-v1` and all four legacy jobs green on the same commit, and every
+run since has repeated it.
+
 Then remove `text-leaks`, `css-tokens`, `semantic-palette-parity` and
 `inline-style-bound` from `ci.yml` in a separate reviewed change. Do not combine
-removal with any other edit.
+removal with any other edit — if a regression appears, the cause must be
+unambiguous.
+
+Expected result: **21 jobs → 17.**
+
+### Two things to check rather than assume
+
+1. **A3.4 condition 6** requires every gate-lane job in `ci.yml` to use the
+   `[runner]` label, and it reads job keys. Removing four jobs should not affect
+   it, but run `bash scripts/check-gate-inputs.sh --all --policy ci/gate-inputs.toml`
+   and confirm rather than assuming. Condition 8 also reads `ci.yml`, so confirm
+   the `[tools]` pins are still located after the removal.
+
+2. **The two GitHub annotations will disappear, and that is correct.**
+   *This item said the opposite until 2026-08-02; the correction is recorded in
+   the C5 annotation-visibility decision.*
+
+   `::warning::Standalone 't.field' lines` and `::warning::Declared tokens with
+   no references` were echoed by the **legacy jobs themselves** — `text-leaks`
+   and `css-tokens` — not by `ui-invariants-v1`. `check-ui-invariants.sh`
+   contains **zero** annotation syntax. Removing those jobs removes the
+   annotations by construction.
+
+   **What must survive is the detection, and it does.** Verify by running the
+   consolidated script and checking the counts are unchanged:
+
+   ```
+   bash scripts/check-ui-invariants.sh --all --policy ci/ui-invariants.toml
+   ```
+
+   Expect `G12 advisory standalone-translations` with **3** entries and
+   `G12 advisory unused-css-tokens` with **18**, matching what the legacy jobs
+   reported. Those lines land in `ui-invariants-v1`'s job log. If the *counts*
+   change, stop and raise it — that would be a real coverage change. The
+   annotations vanishing is not.
+
+   Do **not** add `::warning::` formatting to `check-ui-invariants.sh`. RFC 093
+   consolidated four inline CI implementations into one reviewed entry point;
+   embedding GitHub Actions rendering syntax in it would re-couple that script to
+   one CI platform, and it is run locally too. Two permanent warnings on every run
+   also erode the signal value of annotations generally.
+
+G12 stays in `[gate_matrix_exceptions]` throughout; C2.1's exception reason cites
+this item, and that citation is a current-state note rather than a permanent
+justification.
