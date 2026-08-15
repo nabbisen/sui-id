@@ -128,7 +128,7 @@ own hash-pinned package. Items at the same number may run concurrently.
 | 3 | M1b debt repair: RFC status and `rfcs/` broken links — **re-measured by G11, not by the 2026-07-28 counts** | B | item 1 tooling (G11 must exist first) | 093 M1b |
 | 4 | **M1a closes** — G01–G09 hosted green on one clean commit | A | item 3 | — |
 | 4 | **M1b closes** — G10–G12 hosted green, integrity debt zero | B | item 3 | — |
-| 5 | `handlers/federation.rs` split, zero behaviour change | prep | M1a; clippy landed | 093 M1a §Theme B |
+| 5 | `handlers/federation.rs` split, zero behaviour change | prep | M1a; clippy landed (both met at `0fcb423`); **module boundary confirmed by RFC 096's correction review — not yet** | [prep split](rfcs/handoffs/prep-federation-module-split/README.md) |
 | 6 | RFC 094 M2a: registry, seam, `ReadConn`, Class-B emitter, priority conversion incl. C15 | A | M1a; RFC 094 re-accepted | [094](rfcs/handoffs/094-transactional-audit/README.md) |
 | 6 | RFC 096-A: discovery, JWKS, claims, mandatory nonce — no durable mutation | B | M1a; item 5; RFC 096 re-accepted | [096](rfcs/handoffs/096-upstream-oidc-federation/README.md) |
 | 7 | RFC 095 (M3): validate-first dynamic registration | A | M2a incl. C15; RFC 095 re-accepted | [095](rfcs/handoffs/095-dynamic-client-registration/README.md) |

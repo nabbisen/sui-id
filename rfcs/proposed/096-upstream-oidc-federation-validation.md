@@ -105,9 +105,17 @@ neither this RFC nor RFC 094, and concurrent editing by both lanes risks a merge
 that silently drops a security check.
 
 **Accountable owner: the ROADMAP `prep — federation module split` item**, not this
-RFC and not RFC 094. It is a standalone preparatory change that must land, and be
+RFC and not RFC 094. Its handoff is
+[`../handoffs/prep-federation-module-split/README.md`](../handoffs/prep-federation-module-split/README.md). It is a standalone preparatory change that must land, and be
 independently reviewed, before **either** 096-A or any RFC 094 federation work
 begins.
+
+**The split itself has a prerequisite: the module boundary below must be confirmed
+by the correction review first.** The split is mechanical in execution but not in
+design — where the line falls *is* the ownership question this RFC and RFC 094 are
+being reviewed on. Executing it against an unconfirmed boundary risks re-cutting
+the module later, which means disturbing the file containing the unfixed
+signature-verification defect twice. **Do not begin the split before then.**
 
 *Corrected 2026-08-12 after independent review finding B-096-3. The previous
 wording said the change was "owned by neither lane", which left no one
@@ -129,9 +137,32 @@ checkable. A split reviewed only by reading the diff is not sufficient here,
 because the risk being managed is precisely a security check disappearing in a
 move that reads as mechanical.
 
-After the split, this RFC owns the discovery, JOSE/JWKS, claim-validation and
-callback modules; RFC 094 owns the federation mutation commands. The split is a
-prerequisite recorded in the implementation prerequisites above.
+### Module boundary — three concerns, not two, and not yet confirmed
+
+*Rewritten 2026-08-12. The previous sentence — "this RFC owns the discovery,
+JOSE/JWKS, claim-validation and callback modules; RFC 094 owns the federation
+mutation commands" — predated the 096-B1 / 096-B2 split and became wrong when that
+landed. It was written when "mutation and session" was a single bucket. Session
+establishment is now 096-B1, which **this RFC** owns, not RFC 094. The first draft
+of the prep handoff inherited the error and assigned `complete_federated_signin` to
+RFC 094's side.*
+
+After the split there are **three** concerns, not two:
+
+| Concern | Stage | Owner |
+|---|---|---|
+| Discovery, transport, JOSE/JWKS, claim validation, nonce rule | 096-A | **this RFC** |
+| Durable attempt state, nonce consumption, code exchange, identity mapping, session establishment | 096-B1 | **this RFC** |
+| Provider and link commands C17/C18/C23 | defined by RFC 094, implemented on its seam by 096-B2 | **RFC 094** defines; this RFC implements |
+
+Whether that maps to two modules or three, and where the login path's boundary with
+provider administration falls, **follows from the A / B1 / B2 map — which is itself
+unconfirmed** (see the 096-B2 note above). The correction review must settle the
+map before the module boundary can be fixed, and the module boundary must be fixed
+before the split is executed.
+
+The split remains a prerequisite recorded in the implementation prerequisites
+above; it now has one of its own.
 
 ## Standards and local policy
 
