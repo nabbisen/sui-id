@@ -40,8 +40,10 @@ neither lane's schedule can pressure it.
 
 **Zero behaviour change. Nothing is fixed, improved, or tidied.**
 
-This will feel wrong, because the file contains a live security defect you will
-read while working:
+This will feel wrong, because the file contains a real security defect you will
+read while working. It has **no known exposed users** — sui-id is not in
+production use (confirmed 2026-08-18) — but it is a genuine bypass in published
+code:
 
 ```rust
 fn decode_id_token_claims(jwt: &str) -> Option<IdTokenClaims> {

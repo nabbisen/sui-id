@@ -250,6 +250,22 @@ Required format: description, likelihood, impact, detection, mitigation,
 residual risk, decision owner. **Decision owner `@nabbisen` means the risk
 cannot be closed by the architect alone.**
 
+**Deployment status, confirmed by `@nabbisen` on 2026-08-18: sui-id is not in
+production use, and no deployment by any third party is known.** This is a
+material input to every impact rating below and to how the open security defects
+should be described.
+
+It means the unfixed defects — the federation ID-token signature bypass above all —
+have **no known exposed users**. They are real defects in published code, not an
+active compromise. The correct phrasing is "no known deployment", not "no
+consequence": the repository is public and carries 127 signed release tags, so it
+is distributed even though the owner runs nothing.
+
+The practical effect is that **waiting for a properly independent reviewer costs
+little**. Schedule pressure must not be used as an argument for accepting a
+weaker review. If the deployment status changes, this paragraph must change with
+it, and the impact ratings below should be re-read.
+
 | ID | Risk | Likelihood | Impact | Detection | Mitigation | Residual | Owner |
 |---|---|---|---|---|---|---|---|
 | R1 | Review independence: authoring, implementation and review share one vendor | Certain (structural) | High — the readiness claim rests on it | Role metadata inspection | Two-tier ruling of 2026-07-28: vendor independence required for RFC 094, 096, 097 and M6 closure; role independence elsewhere | Role-independence-only reviews outside the named set; RFC 100 not in the set although its failure mode is severe | `@nabbisen` |
