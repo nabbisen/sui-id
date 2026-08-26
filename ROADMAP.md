@@ -22,12 +22,16 @@ release promises. They must include design, review, correction, implementation,
 and evidence time. A failed gate moves the affected milestone; scope or evidence
 is never cut to preserve a date.
 
-As of 2026-07-28 the programme runs **two lanes**: a second implementer is
-assigned and the owner has confirmed increased security-review capacity, so
-RFC 096 no longer waits behind RFCs 094–095. The overlap conditions are in
-*Dependencies and change control* below and remain binding — in particular,
-Lane B starts only once its governing RFC is Accepted in its amended form and
-the preparatory `handlers/federation.rs` split has landed.
+On 2026-07-28 the owner authorized the programme to run **two lanes**: a
+second implementer was assigned and increased security-review capacity was
+confirmed, so RFC 096 no longer has to wait behind RFCs 094–095. **That
+authorization has not been exercised** (situation-fit audit, 2026-08-26): RFC
+093's own M1a and M1b ran strictly sequentially, by one implementer, and Lane
+B (RFC 096) has not started. The overlap conditions are in *Dependencies and
+change control* below and remain binding — in particular, Lane B starts only
+once its governing RFC is Accepted in its amended form and the preparatory
+`handlers/federation.rs` split has landed; that split is itself withdrawn as
+of 2026-08-12, pending RFC 096's correction review.
 
 Before any remediation implementation begins, M0 adopts RFC 018's five-folder
 variant: `rfcs/accepted/` is the repository-native design-approved and
@@ -183,11 +187,14 @@ RFC 100 (M2c) is required before M6 entry: the M7 workload contract includes a
 master-key rotation exercise, and RFC 099 requires zero blocker defects.
 ```
 
-Two lanes run concurrently after M1a. Lane B is authorized by the overlap rule
-below: all designs are Accepted or in re-review after owner-approved amendment,
-a second implementer is assigned, file ownership is named, and the owner
-confirmed increased review capacity on 2026-07-28. `handlers/federation.rs` is
-split first because it currently contains both Lane A and Lane B territory.
+Lane B is authorized to run concurrently with Lane A once the overlap rule's
+conditions are met: all designs are Accepted or in re-review after
+owner-approved amendment, a second implementer is assigned, file ownership is
+named, and the owner confirmed increased review capacity on 2026-07-28. As of
+2026-08-26 that has not happened — Lane B has not started. `handlers/federation.rs`
+would be split first, since it currently contains both Lane A and Lane B
+territory, but that split is itself withdrawn pending RFC 096's correction
+review (`handoffs/prep-federation-module-split/`).
 
 - RFC 093 lands first because later evidence is not trustworthy until the
   build and gate contract is reliable.

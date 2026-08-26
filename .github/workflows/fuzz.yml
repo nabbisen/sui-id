@@ -1,13 +1,9 @@
-name: Fuzz (scheduled)
+name: Fuzz
 
-# Runs weekly; never on the PR critical path (fuzzing is time-unbounded).
-# On PRs that touch fuzz/ only a build check runs (cargo fuzz build),
-# not an execution, so PRs stay fast.
+# Manual only: a weekly schedule failed eight consecutive weeks unnoticed
+# (situation-fit audit, 2026-08-26) -- a cron in a solo repo has no
+# subscriber for a red run. Run before a release instead.
 on:
-  schedule:
-    # Every Monday at 02:00 UTC
-    - cron: "0 2 * * 1"
-  # Allow manual trigger for ad-hoc runs (e.g. before a release).
   workflow_dispatch:
     inputs:
       runs:
@@ -16,25 +12,10 @@ on:
         default: "100000"
 
 jobs:
-  fuzz-build:
-    name: cargo fuzz build (PR gate)
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: dtolnay/rust-toolchain@4fd1da8b0805d2d2e936788875a7d65dbd677dc2
-        with:
-          toolchain: nightly
-      - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz --locked
-      - name: Build fuzz targets (openssl-free)
-        working-directory: fuzz
-        run: cargo fuzz build accept_language ids_fromstr
-
   fuzz-run:
-    name: Fuzz run (scheduled)
+    name: Fuzz run (manual)
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:

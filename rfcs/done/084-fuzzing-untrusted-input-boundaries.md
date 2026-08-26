@@ -1,6 +1,29 @@
 # RFC 084 — Fuzzing Strategy for Untrusted Input Boundaries
 
 **Status.** Implemented (v0.69.0)
+**Delivery mechanism changed on.** 2026-08-26 — **the original text below is left
+unaltered as the record of what was decided; this note records what changed
+afterwards.** Two of this RFC's stated mechanisms no longer exist:
+
+- *"Thereafter: weekly scheduled runs, findings triaged as hotfixes"* — the weekly
+  `schedule:` trigger was removed. It ran eight times, failed eight times, and was
+  noticed by nobody: a cron in a single-maintainer repository has no subscriber for
+  a red run. Fuzzing is now `workflow_dispatch` only, run deliberately before a
+  release, so a human is waiting for the result.
+- *"Mitigation: `cargo fuzz build` in PR CI keeps targets compiling"* — the
+  `fuzz-build` job was removed. **It could never have run:** this workflow has
+  never subscribed to `pull_request`, from its creation in `4d4835d` onward, and
+  the repository has no pull requests at all. The bit-rot risk this RFC correctly
+  predicted therefore had no mitigation, and it materialised on 2026-07-02 when
+  `901e651` deleted `fuzz/Cargo.toml`'s `[workspace]` table; the harness did not
+  build again until 2026-08-26.
+
+**Residual, accepted:** nothing verifies the harness compiles between manual runs.
+That is the trade for a mechanism with a receiver, and it is honest — the previous
+arrangement verified nothing either while appearing to.
+
+Analysis: `.git-exclude/reviewed/fuzz-workspace-root-cause-2026-08-26.md` and
+`.git-exclude/reviewed/situation-fit-audit-2026-08-26.md`.
 **Tracks.** Strategy theme 7 (audit gap G7). Category B
 (infrastructure) / C (target growth).
 **Touches.** New top-level `fuzz/` cargo-fuzz workspace
