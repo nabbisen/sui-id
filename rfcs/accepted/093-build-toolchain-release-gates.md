@@ -122,6 +122,17 @@ The commands in the matrix are the public contract. CI uses
 is stored as data in `ci/gate-inputs.toml` under `[gates]`, which is the
 machine-readable expansion of the table above; the dispatcher executes that
 recorded command verbatim and may not paraphrase, wrap, or reorder it.
+
+> **Non-normative note — the lane registry is single-source today.** `[gates]` is
+> validated against *this RFC's* table alone: `scripts/check-gate-inputs.sh`
+> reads one lane source (`--rfc`, defaulting to this file), so a lane belonging
+> to another RFC cannot be registered without amending the table above. That is a
+> limitation of the checking mechanism, not an invitation for Gate Matrix v1 to
+> grow — this RFC's lanes are G01–G12 and that set is closed. RFC 094 is the
+> first RFC to need a lane of its own, and delivers multi-source lane ownership,
+> after which each lane is validated against the RFC that owns it and every lane
+> must have exactly one owner. This note changes no lane, command, or rule above.
+> Tracked as **R10** in `ROADMAP.md`.
 `scripts/check-gate-inputs.sh` verifies that the manifest's command set matches
 this RFC's table exactly, so the indirection a dispatcher introduces is a
 checked invariant rather than a convention. The following negative

@@ -715,6 +715,32 @@ the reviewed inventory set. Grep is not authoritative.
 The M1 string script may remain for vocabulary drift diagnosis, but the M2 job
 and documentation identify this structural gate as authoritative.
 
+**This gate is a registered Gate Matrix lane, not an out-of-band step.** It
+decides whether an unapproved raw-write module exists, so it *is* the authority
+this RFC's write boundary rests on; running it outside the registry that governs
+authority checks would be the same unregistered-authority pattern this RFC exists
+to eliminate, turned on itself. As a lane it inherits tool pinning (`[tools]`,
+`[rust_components]`), evidence binding to one clean commit
+(`event_commit == checked_out_commit`), and the mandatory negative self-test —
+and a structural gate without negative fixtures reports success on a codebase it
+never inspected.
+
+Registering it requires a mechanism that does not exist yet.
+`scripts/check-gate-inputs.sh` validates every lane against RFC 093's table
+alone, so no other RFC can own a lane. **This RFC therefore delivers
+multi-source lane ownership** as part of its structural-gate work:
+
+- each lane in `[gates]` is validated against the table of the RFC that **owns**
+  it, not against RFC 093's table unconditionally;
+- every lane must have exactly one owning RFC — an unowned lane still fails, so
+  nothing is relaxed relative to today's check;
+- RFC 093 keeps ownership of G01–G12 and its completeness rule remains true of
+  its own lanes, unchanged, so RFC 093 does not reopen.
+
+Until this lands there is no registered way to add a lane — tracked as **R10** in
+`ROADMAP.md`. The lane must be registered before this gate is relied on as M2a
+exit evidence.
+
 ## Failure injection
 
 `repos::audit` receives a test-only/injected fault seam at these points:
