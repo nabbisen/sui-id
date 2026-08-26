@@ -36,12 +36,38 @@ at a time; the workspace and structural gate must remain green between waves.
 
   **M2a's interim boundary control**, which *is* blocking: the sealed
   `declare_write_command!` capability is the only production constructor for
-  `WriteTx`, raw SQL is confined to the private command-executor module, and
-  `ReadConn` rejects every data-modifying statement at runtime via
-  `sqlite3_stmt_readonly`. A new bare write in M2a therefore cannot compile
-  outside the reviewed module list, and cannot reach the database through a read
-  path. What the AST gate adds in M2b is detection of a *newly added* authority
-  path inside the allowed modules — it does not backfill a control M2a lacks.
+  `WriteTx`, and `ReadConn` rejects every data-modifying statement at runtime via
+  `sqlite3_stmt_readonly` — measured 2026-08-26, see the Part A review §A1 for
+  the per-statement table and for the forms (`ATTACH`, `DETACH`, transaction
+  control) that only the static denial list catches.
+
+  **What it does not do — stated plainly, because the previous wording claimed
+  otherwise.** This paragraph read "a new bare write in M2a therefore cannot
+  compile outside the reviewed module list." That was false on two counts, both
+  established against the code on 2026-08-26:
+
+  1. `Database::with_conn`/`with_tx`/`with_conn_sync`/`with_tx_sync` are `pub`,
+     not `pub(crate)`. Three production call sites outside `sui-id-store` use
+     them today: `sui-id/src/http/handlers/index.rs` (health probe),
+     `sui-id-core/src/oidc/key_rotation.rs`, and
+     `sui-id-core/src/account/forgot_password.rs`.
+  2. Sealing those four would still not close it. `lib.rs` exports
+     `pub mod backend`, which exposes
+     `SqliteBackend::new(rusqlite::Connection, MasterKey)` and public
+     `with_conn_sync`/`with_tx_sync`; `MasterKey::from_base64` is public; and
+     `rusqlite` is a `[dependencies]` entry — not dev — in both `sui-id-core`
+     and `sui-id`. Any production module in either crate can therefore build its
+     own backend over the same database file and write freely, using public API
+     only, with no `unsafe` and no test feature.
+
+  Rust's privacy is per-module, not per-caller, so the strongest boundary this
+  control can express is the **crate** boundary — never "only the converted
+  functions." Inside `sui-id-store`, unconverted repository modules retain raw
+  access throughout M2a by construction, since the application cannot stop
+  serving settings changes while M2b is pending, and **nothing structural
+  prevents a new bare write in those modules during M2a**. That is what M2b's
+  AST gate supplies. It does not sharpen a control M2a has; it provides one M2a
+  lacks.
 - [ ] Observe compile/runtime rejection for prepared UPDATE, writable PRAGMA,
   ATTACH, backup API, returned raw statement, and indirect raw-helper attempts.
 

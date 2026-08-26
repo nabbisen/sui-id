@@ -819,6 +819,18 @@ protects exists; building it before conversion is premature. Until it lands, the
 manifest↔registry agreement check is the interim control and the compiler
 capability remains the primary one.
 
+**The bound on that compiler capability during M2a, corrected 2026-08-26.** It
+reaches the **crate** boundary at most: Rust privacy is per-module, not
+per-caller, so it can never restrict raw access to the individually converted
+functions. Inside `sui-id-store`, unconverted repository modules keep raw access
+for all of M2a and no structural control prevents a new bare write there — only
+review does. Reaching even the crate boundary additionally requires sealing
+`Database`'s four raw closures **and** `backend::SqliteBackend::new`, which is
+public and accepts a raw `rusqlite::Connection`; neither is sealed today. See
+the Part A review §A2. The residual M2a carries is therefore precise: a new bare
+write inside `sui-id-store`'s unconverted repository modules, caught by review
+until the AST gate lands.
+
 Stages 1–2 may be reviewed before conversion. No partial wave may claim Class-A
 atomicity until its failure tests pass.
 
