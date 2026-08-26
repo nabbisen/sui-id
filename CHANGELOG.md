@@ -7,7 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.77.0] — 2026-08-26
+
+**Raises the MSRV to 1.95 and fixes a startup-time crash on every TLS path
+that goes through rustls. Minor rather than patch because the MSRV is a public
+build requirement.**
+
+### Fixed
+
+- **A process-killing panic on any LDAPS or implicit-TLS SMTP connection.**
+  Two rustls crypto providers are compiled into the binary — `ring` via
+  `ldap3`'s `tls-rustls-ring` and the reqwest rustls stack, and `aws-lc-rs` via
+  reqwest's own integration. With two present the choice is ambiguous, rustls
+  declines to guess, and `ClientConfig::builder()` panics unless a process-wide
+  default has been installed explicitly. Nothing installed one. (With a single
+  provider rustls auto-selects, which is why this never surfaced in a smaller
+  dependency graph.) `ldap3`'s TLS path and the implicit-TLS SMTP transport both
+  reach that builder, so the first such connection aborted the process — with
+  `panic = "abort"` in release, without unwinding.
+
+  `aws-lc-rs` is now installed once at startup, idempotently, and `serve_dev`
+  no longer bypasses the code path that does it. `aws-lc-rs` rather than `ring`
+  deliberately: reqwest prefers an installed global default, so installing
+  `ring` would have silently moved every outbound HTTPS connection off the
+  provider it uses today.
+
+  Found by building RFC 093's G09 LDAP smoke test, not by a report.
+
 ### Changed
+
 
 - **MSRV raised from 1.91 to 1.95 (RFC 093 M1a, Amendment 1).** The declared
   1.91 floor was not merely untested but unbuildable: `libsqlite3-sys 0.38.1`,
