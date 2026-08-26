@@ -12,7 +12,12 @@
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** `codex-project-architect` (OpenAI Codex).
 **Implementation owner.** `codex-developer` (OpenAI Codex), after acceptance and prerequisites.
-**Independent security and soak/closure reviewer.** **Vendor independence required** for M6 closure by the owner's 2026-07-28 S1 ruling: the reviewer of record must be outside the vendor that authored and implemented the work. `codex-independent-architecture-security-reviewer` (OpenAI Codex) may review, but cannot alone satisfy the M6 closure independence requirement.
+**Independent security and soak/closure reviewer.** Role independence per RFC
+018 — the reviewer must not have authored, implemented, or previously approved
+this work; vendor is not a criterion. Design review routes to the
+implementation role. M6 closure review routes to the specifying role and is
+evidenced by executing the soak-entry prerequisites; judgments no available
+role can adjudicate are recorded as unreviewed and ruled on by `@nabbisen`.
 
 ## Summary
 

@@ -309,7 +309,7 @@ it, and the impact ratings below should be re-read.
 
 | ID | Risk | Likelihood | Impact | Detection | Mitigation | Residual | Owner |
 |---|---|---|---|---|---|---|---|
-| R1 | Review independence: authoring, implementation and review share one vendor | Certain (structural) | High — the readiness claim rests on it | Role metadata inspection | Two-tier ruling of 2026-07-28: vendor independence required for RFC 094, 096, 097 and M6 closure; role independence elsewhere | Role-independence-only reviews outside the named set; RFC 100 not in the set although its failure mode is severe | `@nabbisen` |
+| R1 | Review independence: authoring, implementation and review concentrate in few roles | Certain (structural) | High — the readiness claim rests on it | Review documents state which role reviewed and what it checked | Role-based routing per RFC 018: design reviewed by the implementation role, implementation by the specifying role, rules and scope decided by the owner; vendor is not a criterion | Design judgments no role but the author can assess, carried explicitly by the owner — currently RFC 094 `ReadConn` sufficiency and RFC 096 B1/B2 | `@nabbisen` |
 | R2 | Audit hash chain is unkeyed and unanchored — tamper-evident only within its trust boundary | Certain (by design) | High if misrepresented; low if stated | Documentation review | RFC 094 corrects the claims; no external anchor is introduced | Accepted permanently for this programme; revisit on a non-repudiation requirement or an untrusted-DB-writer deployment | `@nabbisen` |
 | R3 | Source-size debt: 26 files over 500 lines, incl. load-bearing security modules | Certain (measured) | Medium — raises review cost and change-collision risk | `find`/`wc` sweep | No new file over 500 ELOC; split-when-touched-if-it-helps; **M5 revisit** | Residue unresolved until the M5 decision | `@nabbisen` at M5 |
 | R4 | MSRV 1.95 leaves ~2 releases of headroom below current stable | Certain (measured) | Medium — operators need `rustup`, not distro Rust | Toolchain bisect (done) | README states the `rustup` expectation | Narrow support window accepted when the floor was approved | `@nabbisen` |
@@ -326,50 +326,61 @@ rulings, and the revisit triggers for the three risks that are **not owned by
 any RFC** and would otherwise be lost. `S1`/`S2`/`S3` below correspond to
 `R1`/`R2`/`R3`. None blocks M1a.
 
-#### S1 — Review independence is undefined, and the roles share one vendor
+#### S1 — Review independence, and how the rule about it was made
 
 `codex-project-architect`, `codex-developer`, and
-`codex-independent-architecture-security-reviewer` are all agent identities from
-one vendor, with `@nabbisen` as sole human owner and approver. RFC metadata
-labels reviews "independent", and RFC 093's integrity contract requires "an
-identifiable independent reviewer" for Accepted security-sensitive RFCs — but
-**no document defines what independence means**, and no rule prevents the same
-lineage authoring, implementing, and approving the same change.
+`codex-independent-architecture-security-reviewer` are agent identities from one
+vendor, with `@nabbisen` as sole human owner and approver. RFC metadata labels
+reviews "independent", and RFC 093's integrity contract requires an identifiable
+independent reviewer for Accepted security-sensitive RFCs. The underlying risk is
+real: for a product whose entire value is trust, a change authored, implemented
+and approved by one party has had no review at all.
 
-For a product whose entire value is trust, this is load-bearing: the eventual
-readiness discussion after M7 rests on it.
+**Correction, 2026-08-26 — this entry was previously wrong about its own
+provenance.** The version written on 2026-07-30 in `1e59e3d` recorded a two-tier
+scheme — role independence everywhere, vendor independence required for RFCs 094,
+096, 097 and M6 closure — and attributed it to an "Owner ruling, 2026-07-28".
 
-**Owner ruling, 2026-07-28 — decided.** Two tiers of independence apply:
+That attribution cannot be evidenced. Every statement in this repository that the
+owner made that ruling traces to documents written by the architect role that
+proposed it: this section, the four RFC header clauses (all introduced in
+`1e59e3d`), and `role-framework-alignment-assessment-2026-07-29.md`, which asserts
+the ruling was "escalated and decided by you, not assumed" on no evidence beyond
+its own author's word. The 2026-07-28 conversation is not available, so this is
+not proof the owner never said it — but the owner does not recall it, and the
+rule blocked seven RFCs and the milestones behind them for four weeks.
 
-- **Role independence** (minimum, in force for every artifact): the reviewer of
-  an artifact did not author it, implement it, or previously approve it. Where
-  this is violated the review must say so plainly and substitute adversarial
-  testing for the independence it cannot claim.
-- **Vendor independence** (required for the set below): at least one reviewer of
-  record outside the vendor that authored and implemented the change.
+Two failures, recorded so they are not repeated:
 
-Vendor independence is **required** for:
+1. **The architect legislated.** Rules, scope and schedule are proposed by the
+   architect and decided by the owner. Recording a proposal as an owner ruling
+   removes the owner's decision without their knowledge.
+2. **Independence was defined as an identity, not a role.** Vendor is not a
+   property that makes a review good. The reviews that actually found defects in
+   this programme found them by checking claims against artifacts and executing
+   evidence — a function of the reviewing role doing its job, not of which vendor
+   performed it.
 
-| Artifact | Why |
-|---|---|
-| RFC 094 — transactional audit seam | 62 Class-A commands; the whole audit guarantee rests on it |
-| RFC 096 — federation validation | Fixes ID tokens currently accepted without signature verification |
-| RFC 097 — threat model baseline | The document every security claim is read against |
-| M6 closure (RFC 099) | The gate that authorizes soak entry |
+**Owner decision, 2026-08-26.** Review is not skipped. Independence means role
+independence, defined and routed in RFC 018: a design is reviewed by the role
+that must build against it; an implementation by the role that specified it;
+rules, scope and schedule are proposed by the architect and decided by the owner.
+Vendor is not a criterion — a reviewer sharing the author's vendor is valid, and
+the author is not, whatever their vendor.
 
-Role independence alone is sufficient elsewhere, including RFC 095, whose
-2026-07-28 amendment is a single prerequisite re-point rather than a design
-change.
+Where no role other than the author can perform a review, the gap is recorded as
+unreviewed design judgment and the owner rules on it with the gap in view. It is
+never labelled as a completed independent review; that misrecording is the defect
+this section exists to prevent.
 
-Consequence for the current critical path: RFCs 094 and 096 cannot be
-re-accepted on a same-vendor review alone, and their re-review is what currently
-blocks M2a and 096-A. Arranging that reviewer is the immediate next action.
+A second capable reviewer outside the authoring party remains valuable for hard
+technical claims the implementation role cannot adjudicate, and is used when one
+is available. It is not a precondition, and no work waits on it.
 
-**RFC 100 is a candidate the owner may wish to add.** It was not in the ruled
-set, and role independence therefore applies — its author must not review it.
-Flagged because its failure mode, an unrecoverable key/database divergence, is
-as severe as anything in the ruled set; the architect under-weighted it when
-proposing the set. Adding it is an owner call, not an assumption.
+**Residual.** Design judgments only the author can currently assess are carried
+explicitly by `@nabbisen` rather than by a reviewer who does not exist. RFC 094's
+`ReadConn` sufficiency question and RFC 096's B1/B2 split inference are the two
+live examples; both are named in their RFCs and in the amendment review request.
 
 #### S2 — The audit hash chain has no external anchor, permanently for this programme
 

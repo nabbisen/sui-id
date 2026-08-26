@@ -175,7 +175,8 @@ record:
 **Security review.** Required
 **Accepted on.** 2026-07-16
 **Approved by.** Project owner or delegated RFC approver
-**Independent design review.** Reviewer identity and durable review reference
+**Independent design review.** Reviewing role, what it checked, and durable
+review reference
 **Implementation owner.** Named person
 ```
 
@@ -184,15 +185,40 @@ Not-required classification includes a concrete reason and the name of the
 approver who accepted that classification. RFCs that change authentication,
 authorization, secrets, tokens, sessions, audit guarantees, external trust
 boundaries, security-relevant storage/transactions, or assurance controls are
-Required. All security-remediation RFCs 093–099 are Required unless an
-independent reviewer approves a narrower classification with a recorded
-reason.
+Required. All security-remediation RFCs 093–099 are Required; a narrower
+classification is an owner decision with a recorded reason. It is not a
+reviewer's decision — a rule about who may review cannot be relaxed by the
+reviewer it governs.
 
-When security review is Required, `Independent design review` must name the
-reviewer and durable review reference; `N/A` is prohibited. The implementer may
-contribute to design and evidence, but cannot be the sole approver of the
-security invariants or closure evidence. If one person holds several project
-roles, another named person must perform those independent reviews.
+When security review is Required, `Independent design review` must record the
+reviewing role, what that role checked, and a durable review reference; `N/A`
+is prohibited.
+
+Independence here means **role independence**: the reviewer did not author the
+artifact, implement it, or previously approve it. It is a property of which
+role performed the review — not of which vendor, model, or organization the
+reviewer belongs to. A review by a party sharing the author's vendor is a valid
+review. A review by the author is not, whatever their vendor.
+
+Review routes by role:
+
+- a **design** is reviewed by the role that must build against it, for
+  implementability and for gaps it would hit;
+- an **implementation** is reviewed by the role that specified it, against the
+  specification and by executing its evidence;
+- **rules, scope and schedule** are proposed by the architect and decided by
+  the owner. The architect does not record its own proposal as an owner
+  decision.
+
+The implementer may contribute to design and evidence, but cannot be the sole
+approver of the security invariants or closure evidence.
+
+Where no role other than the author can perform a given review, the review is
+neither waived nor fabricated. The field records what was verified by
+execution, and states plainly what remains an unreviewed design judgment; the
+owner accepts or rejects with that gap in view. A field that reads as a
+completed independent review when none occurred is a defect of the same class
+this policy exists to prevent.
 
 The three prerequisite fields have distinct meanings:
 
@@ -209,7 +235,7 @@ must add this repository-visible closure record:
 
 ```markdown
 **Closure reviewed on.** 2026-08-28
-**Closure approved by.** Named independent reviewer
+**Closure approved by.** Reviewing role, or the owner where no other role qualified
 **Closure evidence.** ../path/to/durable-evidence-or-review.md
 ```
 
@@ -554,6 +580,16 @@ The original v0.29.5 transition introduced the four-folder policy and migrated
 the existing RFC set in one release. The 2026-07-16 amendment adds an empty
 `accepted/` state and the approval/closure rules above; it does not reclassify
 or move any existing Proposed, Implemented, Withdrawn, or Superseded RFC.
+
+The 2026-08-26 amendment redefines what `Independent design review` must record
+and how reviews route between roles. It does not change any folder, state
+transition, or existing classification, and no RFC is reclassified or moved by
+it. Its cause is recorded in `ROADMAP.md` §S1: the previous rule defined
+independence by vendor, was written by the architect role and attributed to an
+owner ruling that cannot be evidenced, and blocked seven RFCs for four weeks.
+The replacement defines independence as a property of the reviewing role and
+requires that an unreviewable judgment be recorded as such rather than labelled
+as a completed independent review.
 
 ## Open questions
 

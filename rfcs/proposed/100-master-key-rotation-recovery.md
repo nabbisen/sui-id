@@ -22,8 +22,11 @@ audit registry entries `admin.master_key.database_resealed` and
 **RFC author / architect.** Independent architecture reviewer acting as
 requirements architect, 2026-07-28.
 **Implementation owner.** To be named after acceptance.
-**Independent security and closure reviewer.** To be named — see Note on
-independence below.
+**Independent security and closure reviewer.** Not the requirements-architect
+role, which authored this RFC — see the note below. Role independence per RFC
+018; vendor is not a criterion. Routes to the implementation role for
+implementability, with the crash-recovery design judgments named in the review
+request and ruled on by `@nabbisen` where no other role can adjudicate them.
 
 > **Note on independence.** I authored this RFC in my requirements-architect
 > role. Under the role separation recorded for this project, I should not also

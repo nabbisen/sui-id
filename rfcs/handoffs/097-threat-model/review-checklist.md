@@ -65,12 +65,16 @@ carry them here with a named accepter rather than restating them as open:
 - **S2** — the audit hash chain is unkeyed and unanchored: tamper-evident within
   its trust boundary only, and **not** evidence against a malicious database
   writer. RFC 094 corrects the claims; it introduces no external anchor.
-- **S1** — review independence. **Decided 2026-07-28:** vendor independence is
-  required for the RFC 094 seam, RFC 096 federation, this threat model, and M6
-  closure; role independence applies everywhere else. Record here whether that
-  requirement was actually met for each — a ruling that was not honoured is a
-  finding, not a control. Note also that this RFC is itself in the ruled set, so
-  its own reviewer must be outside the authoring vendor.
+- **S1** — review independence. **Decided 2026-08-26:** independence means role
+  independence, routed per RFC 018 — a design is reviewed by the role that must
+  build against it, an implementation by the role that specified it, and rules
+  and scope are decided by the owner. Vendor is not a criterion. Record here,
+  for each artifact this threat model rests on, which role reviewed it and what
+  that role checked; where only the author could assess something, record it as
+  an unreviewed design judgment carried by `@nabbisen`, not as a control. A
+  review recorded as independent when the author performed it is a finding.
+  The superseded 2026-07-28 vendor scheme and why it was withdrawn are in
+  `ROADMAP.md` §S1.
 - master-key rotation, if RFC 100 is not yet Implemented — see RFC 100 and the
   M2c entry gate.
 

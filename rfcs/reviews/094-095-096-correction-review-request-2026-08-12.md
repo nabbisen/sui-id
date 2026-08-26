@@ -1,5 +1,11 @@
 # RFCs 094, 095, 096 — correction-round review request
 
+> **Superseded 2026-08-26.** This request routed the round to a reviewer defined
+> by vendor. That definition was withdrawn — see `ROADMAP.md` §S1 and
+> `094-095-096-correction-review-request-2026-08-26.md`, which re-cuts the same
+> findings by role. Retained as evidence, not as instructions.
+
+
 **Date:** 2026-08-12 (Asia/Tokyo)
 **Requested by:** `@nabbisen` (accountable owner and approver)
 **Requested of:** a reviewer satisfying §1 — **not yet assigned**

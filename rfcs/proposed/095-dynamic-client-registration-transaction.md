@@ -14,7 +14,12 @@
 **Validation matrix.** [`../handoffs/095-dynamic-client-registration/metadata-validation.md`](../handoffs/095-dynamic-client-registration/metadata-validation.md)
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** `codex-project-architect` (OpenAI Codex).
-**Independent security and closure reviewer.** `codex-independent-architecture-security-reviewer` (OpenAI Codex). **Role independence** is sufficient here per the owner's 2026-07-28 S1 ruling — the reviewer must not have authored, implemented, or previously approved the artifact — because the 2026-07-28 amendment is a single prerequisite re-point, not a design change.
+**Independent security and closure reviewer.** Role independence per RFC 018 —
+the reviewer must not have authored, implemented, or previously approved the
+artifact; vendor is not a criterion. Sufficient here because the 2026-07-28
+amendment is a single prerequisite re-point, not a design change. Routes to the
+implementation role, with judgments that role cannot adjudicate recorded for
+`@nabbisen`.
 
 ## Summary
 

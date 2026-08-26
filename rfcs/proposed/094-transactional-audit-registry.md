@@ -16,7 +16,15 @@
 **Command inventory.** [`../handoffs/094-transactional-audit/command-inventory.md`](../handoffs/094-transactional-audit/command-inventory.md)
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** `codex-project-architect` (OpenAI Codex).
-**Independent security and closure reviewer.** **Vendor independence required** by the owner's 2026-07-28 S1 ruling: the reviewer of record must be outside the vendor that authored and implemented this RFC. `codex-independent-architecture-security-reviewer` (OpenAI Codex) may review, but cannot alone satisfy this RFC's independence requirement.
+**Independent security and closure reviewer.** Role independence per RFC 018 —
+the reviewer must not have authored, implemented, or previously approved this
+RFC; vendor is not a criterion. Design review routes to the implementation
+role, for implementability and for specification gaps it would hit while
+building. Judgments that role cannot adjudicate are named explicitly in the
+review request and route to a second capable reviewer when one is available,
+otherwise to `@nabbisen`, recorded as unreviewed design judgment. Closure
+review routes to the specifying role and is evidenced by executing the closure
+prerequisites.
 
 > **Returned to Proposed on 2026-07-28.** This RFC was Accepted on 2026-07-21
 > including the C17/C18/C23/F01–F06 federation command additions, which remain

@@ -12,7 +12,12 @@
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** `codex-project-architect` (OpenAI Codex).
 **Implementation owner.** `codex-developer` (OpenAI Codex), after acceptance and prerequisites.
-**Independent security and closure reviewer.** **Vendor independence required** by the owner's 2026-07-28 S1 ruling: the reviewer of record must be outside the vendor that authored and implemented this RFC. `codex-independent-architecture-security-reviewer` (OpenAI Codex) may review, but cannot alone satisfy this RFC's independence requirement.
+**Independent security and closure reviewer.** Role independence per RFC 018 —
+the reviewer must not have authored, implemented, or previously approved this
+RFC; vendor is not a criterion. Routes to the implementation role for
+implementability; because this document is the baseline every other security
+claim is read against, threat-model judgments no available role can adjudicate
+are recorded as unreviewed and ruled on by `@nabbisen`.
 
 ## Summary
 
