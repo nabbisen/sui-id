@@ -1,5 +1,10 @@
 # Make fuzzing accumulate — seed corpus and CI persistence
 
+> **Complete — landed as `8d446b0`** (feat(fuzz): curated seed corpus and CI corpus persistence).
+> Two hosted dispatches proved the cache accumulates: every target's INITED coverage rose on the second run, `jwt_parse` 726 -> 1148.
+> Marked closed 2026-08-27. Retained as the record of what was asked and why;
+> **no action remains.**
+
 **Tracks.** RFC 084's stated corpus design, which was never implemented.
 **Owner.** Implementation.
 **Baseline.** `d5e5402`.

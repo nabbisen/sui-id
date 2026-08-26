@@ -1,5 +1,10 @@
 # Widen the fuzz matrix to all six targets
 
+> **Complete — landed as `d5e5402`** (fix(fuzz): repair pkce_verify and widen the matrix to all six targets).
+> All six targets build and run; `pkce_verify` compiles for the first time.
+> Marked closed 2026-08-27. Retained as the record of what was asked and why;
+> **no action remains.**
+
 **Tracks.** RFC 084's stated target set. Not an RFC — repair plus coverage.
 **Owner.** Implementation.
 **Blocks.** Nothing. This is the only unblocked path to substantive product

@@ -1,5 +1,10 @@
 # Stable clippy drift — rustc 1.98.0
 
+> **Complete — landed as `b343a06`** (fix(web/http): clear stable clippy drift on rustc 1.98.0).
+> G07/G07b green on stable; 13 unused imports and a `result_large_err` cleared.
+> Marked closed 2026-08-27. Retained as the record of what was asked and why;
+> **no action remains.**
+
 **Tracks.** Unblocking `main`. Not an RFC — a toolchain-drift repair.
 **Owner.** Implementation.
 **Blocks.** Everything. G07 and G07b are blocking lanes; `main` is red.
