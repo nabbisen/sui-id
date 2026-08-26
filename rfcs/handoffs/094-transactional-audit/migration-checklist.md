@@ -68,6 +68,41 @@ at a time; the workspace and structural gate must remain green between waves.
   prevents a new bare write in those modules during M2a**. That is what M2b's
   AST gate supplies. It does not sharpen a control M2a has; it provides one M2a
   lacks.
+
+- [ ] **M2a exit condition — confine raw database access by the dependency
+  graph, not by visibility** (owner decision, 2026-08-26; see RFC 094's M2a exit
+  criteria). This is an **exit** condition, not an entry one: two of its three
+  blockers dissolve as conversion proceeds, so it costs little if sequenced last.
+  - [ ] Convert `audit_guard.rs`'s `audit_and_tx` to take the sealed capability
+        instead of `&rusqlite::Transaction<'_>`. This is `sui-id-core`'s **only**
+        mention of `rusqlite`, so its dependency drops when this lands — and the
+        conversion is already required by RFC 094 §5.
+  - [ ] `sui-id-core/src/account/forgot_password.rs` and
+        `oidc/key_rotation.rs` stop calling `with_tx`/`with_tx_sync`. Both are
+        already inside M2a's own waves (credential/session security, and signing
+        keys), so no extra conversion work is created.
+  - [ ] Replace `sui-id/src/http/handlers/index.rs`'s `SELECT 1` health probe
+        with a `ReadConn` probe or a `Database::health_check()`.
+  - [ ] **Owner decision required:** where `crates/sui-id/src/backup/` belongs.
+        It opens database *files* for snapshot and integrity checking rather than
+        serving application writes — a genuinely different category. Either it
+        moves into `sui-id-store` (which already owns database files) or it is
+        declared a reviewed raw-access module with recorded justification. If it
+        moves, it carries an **observational-equivalence record**: the same
+        hazard as the RFC 096 federation split, where relocating code can
+        silently drop a check.
+  - [ ] Give the 11 e2e call sites in `crates/sui-id/tests/` a `ReadConn`-based
+        assertion path. **No `test-support`-style feature may re-export raw
+        access** — a feature enabled in a production build would silently undo
+        the whole control, and `--all-features` has already concealed one gap in
+        this workspace (RFC 093 G07b).
+  - [ ] `Database::with_conn`/`with_tx`/`with_conn_sync`/`with_tx_sync` and
+        `backend::SqliteBackend::new` become `pub(crate)`. The `Backend` trait
+        may stay public: `Database`'s backend field is private with no accessor.
+  - [ ] Add the gate check that **fails if `rusqlite` appears in any
+        `[dependencies]` or `[dev-dependencies]` table outside `sui-id-store`**.
+        This is the control that makes the rest durable; without it the boundary
+        is a convention again.
 - [ ] Observe compile/runtime rejection for prepared UPDATE, writable PRAGMA,
   ATTACH, backup API, returned raw statement, and indirect raw-helper attempts.
 

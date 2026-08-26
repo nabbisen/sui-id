@@ -9,7 +9,7 @@
 **Implementation owner.** `codex-developer` (OpenAI Codex), confirmed by `@nabbisen`; implementation remains gated below
 **Design prerequisites.** RFC 093 Accepted (its gate contract must be Accepted before this RFC is accepted); the attached durable-write inventory and threat delta require independent design approval. The key-recovery state machine is no longer part of this RFC and is reviewed under RFC 100.
 **Implementation prerequisites.** M1a complete — RFC 093's Rust gate lanes G01–G09 pass on one clean commit; this RFC Accepted in its amended form; the Class-A inventory and threat delta have independent approval. M1b is not a prerequisite.
-**Closure prerequisites.** Per-stage. **M2a:** every converted Class-A path uses the approved transaction seam, injected append failures roll back mutation for every converted row, C15 is atomic, and the structural gate passes over converted commands. **M2b:** every remaining Class-A row converted, no production Class-A best-effort append anywhere, AST boundary gate landed, and independent adversarial closure review accepts durable evidence.
+**Closure prerequisites.** Per-stage. **M2a:** every converted Class-A path uses the approved transaction seam, injected append failures roll back mutation for every converted row, C15 is atomic, the structural gate passes over converted commands, and raw database access is confined to `sui-id-store` by the dependency graph — `rusqlite` depended on by no other crate, gate-asserted (owner decision, 2026-08-26). **M2b:** every remaining Class-A row converted, no production Class-A best-effort append anywhere, AST boundary gate landed, and independent adversarial closure review accepts durable evidence.
 **Tracks.** ROADMAP M2a — Transactional security records (foundation and priority conversion); M2b — remaining conversion and authority switch.
 **Touches.** `crates/sui-id-core/src/audit_guard.rs`, `events.rs`, privileged domain services, `crates/sui-id-store/src/db.rs`, `repos/audit.rs`, mutation repositories, audit documentation and CI.
 **Handoff.** [`../handoffs/094-transactional-audit/README.md`](../handoffs/094-transactional-audit/README.md)
@@ -924,7 +924,47 @@ intention; it must be observed on one clean commit before M2a closes.
 - Every conditional committed outcome among converted commands is Class A and
   exhaustively yields one typed event; distinct operator intents have distinct
   inventory IDs.
-- Raw database writes are compiler-capability-gated.
+- **Raw database access is confined to `sui-id-store` by the dependency graph,
+  not by visibility alone.** Owner decision, 2026-08-26. Three conditions:
+  1. **`rusqlite` appears in no `[dependencies]` or `[dev-dependencies]` table
+     outside `sui-id-store`**, asserted by a gate check that fails if it does.
+     This is the primary control: a crate that does not depend on `rusqlite`
+     cannot name `Connection`, `Transaction` or `Statement`, so no visibility
+     change, feature flag, or later-added accessor can reopen the path, and
+     undoing it requires a `Cargo.toml` edit that is visible in review.
+  2. `Database::with_conn`, `with_tx`, `with_conn_sync`, `with_tx_sync` and
+     `backend::SqliteBackend::new` are `pub(crate)`. The `Backend` trait may stay
+     public as the pluggable-backend extension point: `Database`'s backend field
+     is private with no accessor, so a published trait grants nothing without an
+     instance.
+  3. Tests outside `sui-id-store` assert through `ReadConn` or the command seam.
+     **No `test-support`-style feature may re-export raw access** — a feature
+     enabled in a production build would silently undo condition 2, and this
+     workspace has already been bitten once by `--all-features` concealing a gap
+     (RFC 093 G07b).
+
+  *This replaces "raw database writes are compiler-capability-gated", which
+  claimed a control that did not exist. Measured 2026-08-26: the four raw
+  closures were `pub`, `backend::SqliteBackend::new` accepted a raw
+  `Connection`, `MasterKey::from_base64` was public, and `rusqlite` was a
+  production dependency of both `sui-id-core` and `sui-id` — so any production
+  module in either crate could build its own backend over the same database file
+  and write freely through public API alone. See the Part A review §A2.*
+
+  *Known work, both small: `sui-id-core` names `rusqlite` in exactly one place,
+  `audit_guard.rs`'s `audit_and_tx(tx: &rusqlite::Transaction<'_>, …)`, which is
+  already this RFC's own conversion target — mutation primitives receive the
+  sealed capability, not a raw `Transaction`, so the dependency dissolves as
+  planned work. `sui-id` names it only in `backup/`, which opens database files
+  for snapshot and integrity checking rather than serving application writes;
+  where that module belongs is a separate owner decision and is tracked in the
+  handoff.*
+
+  *Bound on what this closes, so M2a is not read as more than it is: it makes
+  raw access impossible **outside** `sui-id-store`. Inside that crate,
+  unconverted repository modules keep raw access until their wave converts, and
+  only M2b's AST gate detects a new bare write there. The residual is bounded to
+  one crate whose declared purpose is database access.*
 - **`ReadConn` rejects every data-modifying statement at runtime.** Negative
   fixtures must observe rejection of `INSERT … RETURNING`, `UPDATE … RETURNING`,
   `DELETE … RETURNING` and `REPLACE … RETURNING`, in addition to the existing
