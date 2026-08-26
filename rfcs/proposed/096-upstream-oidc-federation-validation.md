@@ -3,6 +3,7 @@
 **Status.** Proposed
 **Security review.** Required
 **Lifecycle history.** Accepted 2026-07-21 after [independent review](../reviews/096-design-review-2026-07-21.md); **returned to Proposed on 2026-07-28** for the prerequisite and staging amendment below, per RFC 000's return-for-review rule for material prerequisite changes. The 2026-07-21 acceptance is preserved in history and is superseded, not withdrawn. No validation, transport, JOSE, or claim-handling design is reopened.
+**Amendment summary (2026-08-26).** 096-B1's prerequisite re-pointed from M2a's session-security conversion wave to M2a's **runner foundation** plus the F01–F06 federation login commands this stage implements. The external correction review found RFC 094 assigns F01–F06 to no wave, so the previous justification was unsupported; the inference was the amendment author's and had been flagged as unconfirmed. Whether the Protocol runner is complete at M2a foundation remains unconfirmed.
 **Amendment summary (2026-08-12).** Independent review findings B-096-1, B-096-2 and B-096-3. The retained numbered stages 1–6 are deleted and replaced by an explicit 096-A / 096-B1 / 096-B2 / 096-C work map, resolving their contradiction with the A/B split. 096-B is split: **096-B1** (login-path completion — attempt state, one-time nonce consumption, session establishment) requires RFC 094 **M2a**; **096-B2** (provider and link commands C17/C18/C23) requires RFC 094 **M2b**, where RFC 094 already schedules federation configuration. 096-A no longer claims to close the shipped defect — it builds the verification, and 096-B1 routes live traffic through it. The preparatory `federation.rs` split gains an accountable owner (the ROADMAP `prep` item) and a required observational-equivalence record. **The B1/B2 boundary is proposed and unconfirmed**: it assumes federated session establishment falls inside RFC 094 M2a's session-security wave.
 **Amendment summary (2026-07-28).** Implementation prerequisite re-pointed from full RFC 093 to M1a; the previously inline validation-versus-mutation caveat promoted into two normative stages, 096-A and 096-B; preparatory `federation.rs` split added as a prerequisite; file ownership against RFC 094 named. Requested by `@nabbisen` on 2026-07-28 on the recommendation of the requirements architect, to allow federation work to run as an independent lane.
 **Design prerequisites.** RFC 093 Accepted; amended RFC 094 Accepted including C17/C18/C23/F01–F06 federation commands; the federation threat delta, discovery/egress policy, and hostile-provider plan require independent design approval.
@@ -75,8 +76,23 @@ assertion. Removal of the shipped trust-on-TLS decode and cookie-replay path.
 
 **This is the stage that closes the defect.**
 
-Requires RFC 094 **M2a** Implemented. Session establishment is covered by M2a's
-"credential, consent and session security" conversion wave.
+Requires RFC 094 **M2a foundation** — specifically the sealed
+`declare_write_command!` capability, `ReadConn`, the command manifest, and both
+the `WriteTx<Protocol>` and `WriteTx<AtomicAudit>` runners — plus the F01–F06
+federation login commands, which **this stage implements** against that seam
+(F04 on the Class-A runner; F01, F02, F03, F05, F06 on the Protocol runner).
+
+*Corrected 2026-08-12. This previously read "Session establishment is covered by
+M2a's credential, consent and session security conversion wave." The external
+correction review found that RFC 094 assigns F01–F06 to no wave at all, so that
+justification was not established by the source material — the inference was
+mine, and it was flagged as unconfirmed when made. The dependency is on M2a's
+**runner foundation**, which precedes the conversion waves, not on membership of
+a wave. RFC 094 now states this; see its "Phase assignment for F01–F06".*
+
+**Still unconfirmed:** whether the `WriteTx<Protocol>` runner is complete at M2a
+foundation or partly lands with M2b's authority switch. If the latter, this stage
+moves to M2b.
 
 ### 096-B2 — federation administration
 

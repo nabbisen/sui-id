@@ -3,6 +3,7 @@
 **Status.** Proposed
 **Security review.** Required
 **Lifecycle history.** Base design accepted 2026-07-17 after [independent review](../reviews/094-design-review-2026-07-17.md); material amendment returned to Proposed in commit `43085e38219e5eb1bfe11cc698b18f1fa5f5e4d7`; complete amended RFC accepted by `@nabbisen` on 2026-07-21 after [independent review](../reviews/094-federation-command-amendment-review-2026-07-21.md); **returned to Proposed on 2026-07-28** for the scope amendment described below, per RFC 000's return-for-review rule for material changes to scope, prerequisites, and acceptance criteria. The 2026-07-21 acceptance is preserved in history and is superseded, not withdrawn.
+**Amendment summary (2026-08-26).** Correction round after the external review: `ReadConn`'s read-only guarantee gains a required M2a assertion that `rusqlite`'s `functions`, `vtab` and `load_extension` features stay disabled, since statement-level read-only status does not constrain side-effecting application functions or virtual tables — that surface is currently not compiled in, and nothing checked it. F01–F06 gain an explicit phase statement: they belong to no conversion wave, are implemented by RFC 096-B1 against the M2a runner foundation, and their prerequisite is that foundation rather than the session-security wave. Both carry an explicit confirmation-required note.
 **Amendment summary (2026-08-12).** `ReadConn`'s per-statement `sqlite3_stmt_readonly` interrogation restored as a **required** M2a control after independent review finding B-094-1 established that static denial alone admits `UPDATE … RETURNING` and the other DML `RETURNING` forms; only the versioned read-only PRAGMA allowlist remains deferred. M2a acceptance criteria gained the corresponding negative fixtures. The 2026-07-28 deferral's stated grounds — a "different property", and invasiveness "touching every read path" — were both incorrect.
 **Amendment summary (2026-07-28).** Master-key rotation crash recovery removed to RFC 100; `ReadConn` narrowed to the typed wrapper plus static denial, deferring per-statement runtime interrogation; the `syn` AST boundary gate sequenced into the M2b authority switch; conversion phased into M2a and M2b with C15 pinned to M2a; acceptance criteria split per stage; interim documentation honesty made normative. Requested by `@nabbisen` on 2026-07-28 on the recommendation of the requirements architect.
 **Implementation owner.** `codex-developer` (OpenAI Codex), confirmed by `@nabbisen`; implementation remains gated below
@@ -330,6 +331,37 @@ same bare write. RFC 094 therefore makes raw database write authority private:
    the allowlist narrows nothing that the two controls above do not already
    cover.
 
+   **The read-only guarantee has a second dependency, which must be asserted.**
+   `sqlite3_stmt_readonly` reports whether a statement makes direct changes to
+   the database. It does **not** constrain a side-effecting application-defined
+   SQL function, nor a virtual table with external or durable side effects,
+   reached from an otherwise read-only statement.
+
+   That surface is currently **not compiled into this workspace**. Verified at
+   `0183fc5`: no `create_scalar_function`, `create_aggregate_function`,
+   `create_module`, `create_collation` or `load_extension` call exists anywhere
+   in `crates/`, and the resolved `rusqlite` feature set across the whole
+   dependency graph is exactly `bundled, cache, chrono, default, hashlink,
+   modern_sqlite`. The `functions`, `vtab`, `load_extension`, `window`, `series`
+   and `array` features are all opt-in and all off, so `create_scalar_function`
+   and its relatives do not exist in the binary.
+
+   **So the boundary holds today by virtue of a Cargo feature line that nothing
+   checks.** One added feature silently removes it. M2a must therefore assert
+   that `rusqlite`'s `functions`, `vtab` and `load_extension` features remain
+   disabled in the resolved graph, and fail if any is enabled.
+
+   An approved-function allowlist was considered and rejected: it would be
+   allowlisting an empty set, and it would imply the surface exists. Asserting
+   the features stay off is both stronger and cheaper. Should a future RFC need
+   one of those features, it must state the requirement and supply the allowlist
+   then — that is the point at which the question becomes real.
+
+   *Added 2026-08-12 correction round, after the external correction review
+   observed that statement-level read-only status is not the complete semantic
+   boundary. The observation is correct; the reachability finding is this
+   project's own.*
+
    **Amendment history.** The 2026-07-28 amendment deferred the runtime
    interrogation on the stated grounds that it guarded "a different property" and
    was "the invasive half of the change, touching every read path in the
@@ -468,6 +500,45 @@ inventory:
   `auth.federation.provisioned`; and
 - F05 is the Protocol-class terminal attempt failure/denial transition; and
 - F06 is the Protocol-class federated WebAuthn ceremony creation/replacement.
+
+### Phase assignment for F01–F06 — stated, not left to inference
+
+*Added 2026-08-12 after the external correction review found that this RFC
+classified F01–F06 but never said when they are built, and that RFC 096-B1's
+"requires RFC 094 M2a" therefore rested on an inference nothing supported.*
+
+**F01–F06 are not part of an RFC 094 conversion wave.** They appear in neither
+M2a's priority waves (user administration; credential, consent and session
+security; token and registration security; signing keys) nor M2b's remaining
+waves (server and security settings; pending sensitive settings; federation
+configuration; client administration metadata). That omission was an oversight,
+not a deliberate silence.
+
+**They are implemented by RFC 096-B1**, against the seam this RFC delivers, and
+RFC 096 owns the federation login path. What this RFC owes them is the seam, not
+the implementation:
+
+| Needed by F01–F06 | Delivered by |
+|---|---|
+| `WriteTx<Protocol>` runner — F01, F02, F03, F05, F06 | **M2a foundation** |
+| `WriteTx<AtomicAudit>` Class-A runner — F04 | **M2a foundation** |
+| Sealed `declare_write_command!`, `ReadConn`, command manifest | **M2a foundation** |
+
+All three are M2a **foundation** items, delivered before the priority conversion
+waves. So RFC 096-B1's prerequisite is satisfiable at M2a — but the reason is the
+runner foundation, **not** membership of the session-security conversion wave,
+which is what RFC 096 previously claimed and what the reviewer correctly
+rejected.
+
+`federation configuration` in M2b remains the **provider administration**
+commands C17/C18/C23, which is a separate concern from federation login and is
+RFC 096-B2's dependency.
+
+**Confirmation still required.** This states the assignment the artifacts imply;
+it has not been independently confirmed. The specific question for review: is the
+`WriteTx<Protocol>` runner genuinely complete at M2a foundation, or does any part
+of it land with the M2b authority switch? If the latter, F01/F02/F03/F05/F06 move
+and RFC 096-B1 with them.
 
 F01–F03/F05/F06 keep the previously reviewed base-design U30/U32/U33/U24
 protocol classification and
@@ -812,6 +883,10 @@ intention; it must be observed on one clean commit before M2a closes.
   PRAGMA, ATTACH/DETACH, multi-statement, batch, backup/restore, raw-handle and
   indirect-helper cases. An ordinary `SELECT` is the control fixture and must
   pass. Rejection must be observed to occur **before** the statement is stepped.
+- **`rusqlite`'s `functions`, `vtab` and `load_extension` features are disabled**
+  in the resolved dependency graph, asserted by a gate check that fails if any is
+  enabled. This is what makes `ReadConn`'s read-only guarantee complete rather
+  than contingent on an unwatched manifest line.
 - The structural gate passes over converted commands and agrees with the
   registry and generated documentation for those commands.
 - The audit coverage matrix states conversion status per command and carries a
