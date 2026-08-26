@@ -692,8 +692,8 @@ revoke, successor insert, family revoke, audit append, and commit.
 
 ## Structural coverage gate
 
-The new gate consumes a checked-in command inventory such as
-`ci/audit-commands.toml` and a registry dump/test API. Each inventory row has:
+The new gate consumes the checked-in command inventory
+`ci/write-commands.toml` and a registry dump/test API. Each inventory row has:
 
 - stable command ID and owning module/function;
 - mutation repository surface;
