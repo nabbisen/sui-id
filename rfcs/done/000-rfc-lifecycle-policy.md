@@ -8,49 +8,17 @@ single feature; applies to the RFC directory itself.
 RFC, any cross-references between RFCs, and optional companion
 handoff documents under `rfcs/handoffs/`.
 
-## sui-id adoption profile (2026-07-16 amendment)
+## sui-id adoption profile — moved to RFC 018
 
-sui-id uses the **five-folder variant** described by this policy. This profile
-is normative for sui-id and records the project-specific approval and
-independence rules used with that layout:
+*Moved 2026-08-27.* This section carried sui-id's project-specific approval and
+independence rules inside the generic policy, and had gone stale: it required "a
+named independent design reviewer", the identity-based rule withdrawn on
+2026-08-26 in favour of role independence (see `ROADMAP.md` §S1).
 
-```text
-rfcs/
-  proposed/   # under review; implementation prohibited
-  accepted/   # design-approved; implementation-eligible after prerequisites
-  done/       # implemented/shipped historical record
-  archive/    # withdrawn or superseded historical record
-  draft/      # optional authoring state
-```
-
-Acceptance is repository-native. In the same change, the RFC moves from
-`proposed/` to `accepted/`, changes to `Status: Accepted`, updates the index and
-inbound links, and records:
-
-- acceptance date;
-- approver;
-- implementation owner;
-- security-review classification;
-- independent design-review identity/reference where required;
-- design-acceptance, implementation-start, and closure prerequisites.
-
-Every new RFC declares `Security review: Required` or `Not required — reason
-approved by NAME`. Security-sensitive RFCs require a named independent design
-reviewer and, at shipment, `Closure reviewed on`, `Closure approved by`, and a
-repository-relative `Closure evidence` reference. The implementer cannot be
-the sole approver of a security-sensitive design or its closure evidence.
-
-A material change to security invariants, public behavior, scope, or
-prerequisites atomically returns an Accepted RFC to `proposed/`, removes
-active-looking acceptance metadata, updates the index and inbound links, and
-preserves the old decision in history or a superseded-review note. Chat,
-roadmap wording, and external boards are not lifecycle state.
-
-Only `accepted/` makes implementation eligible; coding remains prohibited
-until every implementation prerequisite has repository-visible passing
-evidence. A checkpoint version may be assigned only after every RFC governing
-that checkpoint is Accepted. Handoffs remain companions whose state is
-inherited from their RFC; they never create a parallel approval mechanism.
+Project-specific content belongs in the project's profile. It now lives in
+[RFC 018 — sui-id RFC lifecycle profile](./018-rfc-lifecycle-policy.md), with
+its independence language corrected. This RFC remains the general policy; RFC
+018 governs for sui-id where the two differ.
 
 ## Summary
 

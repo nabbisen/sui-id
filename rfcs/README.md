@@ -14,7 +14,9 @@ implementation prerequisite has repository-visible passing evidence.
 ## How this directory works
 
 The lifecycle is governed by
-[RFC 018 — RFC lifecycle policy](./done/018-rfc-lifecycle-policy.md).
+[RFC 018 — sui-id RFC lifecycle profile](./done/018-rfc-lifecycle-policy.md),
+which profiles the general policy in
+[RFC 000](./done/000-rfc-lifecycle-policy.md).
 Briefly:
 
 - **`proposed/`** — open for review and discussion. Implementer
@@ -258,7 +260,7 @@ real-environment soak of the current core before any implementation.
 | 021 | [Schema invariant CHECKs and migration safety](./done/021-schema-invariant-checks.md) | v0.29.10–11 |
 | 020 | [User identity invariants and OIDC claim consistency](./done/020-user-identity-invariants.md) | v0.29.x |
 | 019 | [Auth flow data integrity hardening](./done/019-auth-flow-data-integrity.md) | v0.29.x |
-| 018 | [RFC lifecycle policy](./done/018-rfc-lifecycle-policy.md) | v0.29.5 |
+| 018 | [sui-id RFC lifecycle profile](./done/018-rfc-lifecycle-policy.md) | v0.29.5 |
 | 017 | [UI/UX design contracts](./done/017-ui-ux-design-contracts.md) | v0.32.0 |
 | 016 | [Server logging completeness](./done/016-server-logging-completeness.md) | v0.29.4 |
 | 015 | [Documentation consistency pass](./done/015-doc-consistency-pass.md) | v0.29.4 |

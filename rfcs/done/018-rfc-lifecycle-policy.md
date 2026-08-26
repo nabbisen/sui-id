@@ -1,11 +1,66 @@
-# RFC 018 — RFC lifecycle policy
+# RFC 018 — sui-id RFC lifecycle profile
 
 **Status.** Implemented
+**Precedence.** This RFC is sui-id's project-specific profile of the lifecycle
+policy defined by [RFC 000](./000-rfc-lifecycle-policy.md). Where the two
+differ, **this document governs for sui-id**; where this document is silent,
+RFC 000 applies. *Retitled 2026-08-27: both RFCs previously carried the
+identical title "RFC lifecycle policy", with no way for a reader to tell which
+governed what.*
 **Tracks.** Cross-cutting documentation policy. Not tied to any
 single feature; applies to the RFC directory itself.
 **Touches.** `rfcs/` folder structure, the index file at
 `rfcs/README.md`, the Status field convention used inside each
 RFC, and any cross-references between RFCs.
+
+## sui-id adoption profile (2026-07-16; moved here from RFC 000 on 2026-08-27)
+
+sui-id uses the **five-folder variant** described by this policy. This profile
+is normative for sui-id and records the project-specific approval and
+independence rules used with that layout:
+
+```text
+rfcs/
+  proposed/   # under review; implementation prohibited
+  accepted/   # design-approved; implementation-eligible after prerequisites
+  done/       # implemented/shipped historical record
+  archive/    # withdrawn or superseded historical record
+  draft/      # optional authoring state
+```
+
+Acceptance is repository-native. In the same change, the RFC moves from
+`proposed/` to `accepted/`, changes to `Status: Accepted`, updates the index and
+inbound links, and records:
+
+- acceptance date;
+- approver;
+- implementation owner;
+- security-review classification;
+- design review: the reviewing role, what it checked, and a durable reference;
+- design-acceptance, implementation-start, and closure prerequisites.
+
+Every new RFC declares `Security review: Required` or `Not required — reason
+approved by NAME`. Security-sensitive RFCs require a design review satisfying
+**role independence** — the reviewer did not author, implement, or previously
+approve the artifact; vendor is not a criterion — and, at shipment,
+`Closure reviewed on`, `Closure approved by`, and a repository-relative
+`Closure evidence` reference. The implementer cannot be the sole approver of a
+security-sensitive design or its closure evidence. *Corrected 2026-08-27: this
+paragraph required "a named independent design reviewer", the identity-based
+rule withdrawn on 2026-08-26. See "Review and transitions" below for the full
+role-based rule this defers to.*
+
+A material change to security invariants, public behavior, scope, or
+prerequisites atomically returns an Accepted RFC to `proposed/`, removes
+active-looking acceptance metadata, updates the index and inbound links, and
+preserves the old decision in history or a superseded-review note. Chat,
+roadmap wording, and external boards are not lifecycle state.
+
+Only `accepted/` makes implementation eligible; coding remains prohibited
+until every implementation prerequisite has repository-visible passing
+evidence. A checkpoint version may be assigned only after every RFC governing
+that checkpoint is Accepted. Handoffs remain companions whose state is
+inherited from their RFC; they never create a parallel approval mechanism.
 
 ## Summary
 
