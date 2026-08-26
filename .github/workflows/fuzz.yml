@@ -36,6 +36,16 @@ jobs:
             features: "--features core-targets"
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      # Accumulate pattern: every run restores the newest prior corpus for
+      # this target and saves a fresh entry, so coverage compounds instead
+      # of resetting each dispatch (fuzz-corpus-persistence handoff).
+      - name: Restore fuzz corpus
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+          restore-keys: |
+            fuzz-corpus-${{ matrix.target }}-
       - uses: dtolnay/rust-toolchain@4fd1da8b0805d2d2e936788875a7d65dbd677dc2
         with:
           toolchain: nightly
@@ -43,6 +53,11 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libssl-dev
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
+      - name: Seed corpus with curated starting inputs
+        working-directory: fuzz
+        run: |
+          mkdir -p corpus/${{ matrix.target }}
+          cp -n seeds/${{ matrix.target }}/* corpus/${{ matrix.target }}/ 2>/dev/null || true
       - name: Run fuzz target ${{ matrix.target }}
         working-directory: fuzz
         env:
