@@ -1,6 +1,24 @@
 # RFC 084 — Fuzzing Strategy for Untrusted Input Boundaries
 
 **Status.** Implemented (v0.69.0)
+**Corpus design corrected on.** 2026-08-26 — this RFC specified *"corpus
+committed under `fuzz/corpus/` (small, curated)"*, and `fuzz/.gitignore` ignores
+`corpus`. The two contradict, and the plan does not work as written:
+`fuzz/corpus/<target>/` is cargo-fuzz's **working** directory, where it writes
+generated inputs on every run. A directory cannot be both small-and-curated and
+the fuzzer's output sink. Whoever added the `.gitignore` line was resolving a real
+conflict.
+
+Corrected design, the two separated because their lifecycles differ:
+`fuzz/seeds/<target>/` holds curated, tracked, human-reviewed starting inputs;
+`fuzz/corpus/<target>/` stays generated and ignored. CI restores and saves the
+generated corpus between runs so coverage compounds. Until this lands, every
+hosted run starts from an empty corpus — the first full run
+(`32950029257`, 600,000 iterations across six targets) spent much of its budget
+rediscovering basic input structure rather than probing behind it.
+
+Handoff: `rfcs/handoffs/fuzz-corpus-persistence/README.md`.
+
 **Delivery mechanism changed on.** 2026-08-26 — **the original text below is left
 unaltered as the record of what was decided; this note records what changed
 afterwards.** Two of this RFC's stated mechanisms no longer exist:
