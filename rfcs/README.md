@@ -312,21 +312,30 @@ The standard shape is light:
 
 **Status.** Proposed | Accepted | Implemented (vX.Y.Z) | Withdrawn | Superseded by RFC NNN
 **Security review.** Required | Not required — reason approved by NAME
+
+<!-- Add when returning to proposed/ after Accepted, or on any material amendment: -->
+**Lifecycle history.** Prior acceptances and returns, each dated and reasoned, oldest first.
+**Amended on.** YYYY-MM-DD — what changed and why. Repeatable: one line per amendment, most recent first.
+
 **Design prerequisites.** RFCs or decisions required before acceptance, or None.
 **Implementation prerequisites.** RFCs or gates required before coding, or None.
 **Closure prerequisites.** Evidence or dependent work required before completion, or None.
 **Tracks.** ROADMAP item or other context this addresses.
 **Touches.** crates / modules the work lands in.
+**Handoff.** Link to the implementation handoff (omit for RFCs too small to need one).
+**Accountable owner and approver.** NAME — the human who approves this RFC and its closure.
+**RFC author / architect.** NAME or role that wrote this RFC.
+**Independent security and closure reviewer.** Role independence per RFC 018 — the reviewing role and what it reviews, or None if Security review is not required.
 
 <!-- Add when moving to accepted/: -->
 **Accepted on.** YYYY-MM-DD
 **Approved by.** NAME
-**Independent design review.** NAME and durable review reference
+**Independent design review.** Reviewing role, what it checked, and durable review reference
 **Implementation owner.** NAME
 
 <!-- Required when a security-sensitive RFC moves to done/: -->
 **Closure reviewed on.** YYYY-MM-DD
-**Closure approved by.** NAME
+**Closure approved by.** Reviewing role, or the owner where no other role qualified
 **Closure evidence.** Repository-relative durable evidence/review reference
 
 ## Summary
