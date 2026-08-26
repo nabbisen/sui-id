@@ -87,11 +87,45 @@ reserve semantic versions in advance.
 
 Urgent security fixes, remediation-enabling refactors, dependency/security
 maintenance, and repairs required to keep approved gates executable are
-controlled exceptions to the feature freeze. A narrowly scoped corrective
-v0.x release may be considered when operationally necessary, but it requires
-independent gates for the affected surface, accurate limited claims, and does
-not inherit M7 confidence. Internal archives and evidence identify the exact
-Git tree and artifact digest, not only a human-friendly version label.
+controlled exceptions to the feature freeze.
+
+### Corrective releases during v0 — revised 2026-08-26
+
+This paragraph previously read: *"A narrowly scoped corrective v0.x release may
+be considered when operationally necessary."* **That test cannot be answered by
+this project.** Nothing is *operationally* necessary while sui-id is not in
+production and no third-party deployment is known (recorded under *Risk
+register*), so the rule offered no route to shipping anything. A real
+process-killing panic on every LDAPS and implicit-TLS SMTP path — fixed in the
+tree on 2026-07-28 — consequently sat unreleased for **55 days**, and shipped only
+because a release was raised for unrelated reasons.
+
+The test is replaced with one that can be answered. **The question is surface, not
+urgency:**
+
+| Change | Release treatment |
+|---|---|
+| Fixes, dependency updates, gate repairs, documentation — **no new or changed public surface** | **Routine.** Bar: the full Gate Matrix green on one clean commit, and a `CHANGELOG` entry stating what changed *and what it does not claim*. No further justification. |
+| Anything adding or changing a public surface | **Frozen** until the governing RFC is Accepted and implemented. Unchanged. |
+
+`CONTRIBUTING.md` already carries the compatible rule — *"there is no release
+cadence; we tag when the unreleased section has accumulated enough that an
+operator would want it"* — and that remains the cadence. This paragraph now says
+what the freeze does and does not block, rather than imposing a second,
+unanswerable test on top of it.
+
+**What a corrective release still does not mean**, unchanged: no production-ready
+designation, no security-reviewed claim, and no inheritance of M7 confidence.
+Internal archives and evidence identify the exact Git tree and artifact digest,
+not only a human-friendly version label.
+
+**The version-number rule above applies to implementation checkpoints, not to
+corrective releases.** A corrective v0.x release does not reserve or imply a
+milestone version.
+
+**If the deployment status changes, this section must be re-read.** With real
+operators, "operationally necessary" becomes answerable and a stricter bar may be
+right again.
 
 ### M7 soak workload and reset rules
 

@@ -5,20 +5,27 @@ crates. It exists for the maintainers' benefit; users do not need it.
 
 ## Crate dependency graph
 
+*Corrected 2026-08-26. The previous graph omitted `sui-id-i18n` entirely and
+showed `sui-id-web` depending on `sui-id`, which is backwards. Derived below
+from the `[dependencies]` sections directly.*
+
+| Crate | Internal dependencies |
+|---|---|
+| `sui-id-shared` | *none* |
+| `sui-id-i18n` | *none* |
+| `sui-id-store` | `sui-id-shared` |
+| `sui-id-core` | `sui-id-shared`, `sui-id-store`, `sui-id-i18n` |
+| `sui-id-web` | `sui-id-shared`, `sui-id-store`, `sui-id-i18n` |
+| `sui-id` | all five |
+
 ```
-sui-id-shared   (no internal deps)
-   │
-   ├── sui-id-store
-   │      │
-   │      └── sui-id-core
-   │             │
-   │             └── sui-id ──── sui-id-web
-   │
-   └── sui-id-web
+sui-id-shared ──┬── sui-id-store ──┬── sui-id-core ──┐
+                │                  │                 │
+sui-id-i18n ────┴──────────────────┴── sui-id-web ───┴── sui-id
 ```
 
 `sui-id` (the binary crate) is what users install with `cargo install sui-id`.
-The four `sui-id-*` library crates are implementation detail; they are
+The **five** `sui-id-*` library crates are implementation detail; they are
 published because the binary depends on them, not because they are intended
 as a public library API.
 
@@ -28,21 +35,49 @@ Publish strictly bottom-up. Each `cargo publish` step both uploads the
 crate *and* updates the local crates.io index, so the next step can find
 its dependency.
 
+> **Corrected 2026-08-26.** This list previously had five steps and omitted
+> `sui-id-i18n`, which `sui-id-core` and `sui-id-web` both depend on and which
+> is published on crates.io. Following it literally **would have** published
+> `sui-id-shared`, then failed at `sui-id-core`, leaving a partial release on
+> the registry that can only be yanked, not withdrawn. Caught during the 0.77.0
+> release, before anything was published. It also described `sui-id-web` as
+> depending only on `sui-id-shared`.
+
 ```bash
 # 1. Foundation: shared types (no internal deps)
 cargo publish -p sui-id-shared
 
-# 2. Storage: depends on sui-id-shared
+# 2. Foundation: i18n (no internal deps)
+cargo publish -p sui-id-i18n
+
+# 3. Storage: depends on sui-id-shared
 cargo publish -p sui-id-store
 
-# 3. Domain logic: depends on sui-id-shared, sui-id-store
+# 4. Domain logic: depends on sui-id-shared, sui-id-store, sui-id-i18n
 cargo publish -p sui-id-core
 
-# 4. UI: depends on sui-id-shared
+# 5. UI: depends on sui-id-shared, sui-id-store, sui-id-i18n
 cargo publish -p sui-id-web
 
-# 5. Binary crate: depends on all four
+# 6. Binary crate: depends on all five
 cargo publish -p sui-id
+```
+
+**Dry-run each step before the real one.** `cargo publish --dry-run -p <crate>`
+catches a manifest or dependency-resolution problem while it is still free. A
+publish cannot be undone — `cargo yank` marks a version unusable for new
+dependents but does not remove it.
+
+**Check what the registry actually has before starting.** The published version
+is not necessarily the newest tag: on 2026-08-26 the registry held **0.76.9**
+while the repository carried signed tags through **0.76.12**, so three tagged
+versions had never been published. Verify with an explicit User-Agent, which
+crates.io requires — without one the API returns a policy error for *every*
+crate, which reads as "not published" and is not:
+
+```bash
+curl -s -H "User-Agent: sui-id-release (you@example.com)" \
+  https://crates.io/api/v1/crates/sui-id | jq -r .crate.max_version
 ```
 
 After step 5, `cargo install sui-id` works for end users.
