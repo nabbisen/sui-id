@@ -349,10 +349,14 @@ same bare write. RFC 094 therefore makes raw database write authority private:
    `0183fc5`: no `create_scalar_function`, `create_aggregate_function`,
    `create_module`, `create_collation` or `load_extension` call exists anywhere
    in `crates/`, and the resolved `rusqlite` feature set across the whole
-   dependency graph is exactly `bundled, cache, chrono, default, hashlink,
-   modern_sqlite`. The `functions`, `vtab`, `load_extension`, `window`, `series`
-   and `array` features are all opt-in and all off, so `create_scalar_function`
-   and its relatives do not exist in the binary.
+   dependency graph is exactly `bundled, cache, chrono, default,
+   ffi-sqlite-wasm-rs, hashlink, modern_sqlite`. (`ffi-sqlite-wasm-rs` belongs to
+   rusqlite's own `default` set and gates an optional WASM-target dependency; it
+   enables none of the surfaces below. It was missing from this list until
+   2026-08-26, when the Part A review re-ran the check and found seven features
+   where this RFC claimed six.) The `functions`, `vtab`, `load_extension`,
+   `window`, `series` and `array` features are all opt-in and all off, so
+   `create_scalar_function` and its relatives do not exist in the binary.
 
    **So the boundary holds today by virtue of a Cargo feature line that nothing
    checks.** One added feature silently removes it. M2a must therefore assert
@@ -393,11 +397,35 @@ and detects a newly introduced bare write absent from both inventory and
 registry. Its mandatory negative fixture adds a new repository function that
 calls `Connection::execute("UPDATE ...")` without any declaration; both
 `cargo check` and `cargo xtask audit-structure --negative-fixtures` must reject
-it. Additional fixtures attempt a prepared `UPDATE`, writable PRAGMA, ATTACH,
-backup API, returned raw statement, and an indirect helper accepting a raw
-statement/connection through `ReadConn`; they must fail to compile or be
-rejected as non-read-only before execution. A read-only SELECT control must
-still succeed.
+it. Additional fixtures are grouped by **which control must catch them**. The two
+controls do not overlap, and a fixture asserted against the wrong one passes for
+a reason the specification misattributes.
+
+- **Rejected at runtime by `ReadConn`** — a prepared `UPDATE`; the
+  `INSERT`/`UPDATE`/`DELETE`/`REPLACE` forms and their `RETURNING` variants;
+  writable PRAGMA (`PRAGMA user_version = 1`, `PRAGMA journal_mode = WAL`); and
+  DDL (`CREATE`/`DROP`/`ALTER TABLE`). `sqlite3_stmt_readonly` reports `false`
+  for every one of these, so the runtime interrogation must reject them before
+  execution.
+- **Rejected only by the static category denial list** — `ATTACH`, `DETACH`, and
+  transaction control (`BEGIN`, `COMMIT`, `ROLLBACK`, `SAVEPOINT`). SQLite
+  reports these **`readonly() == true`**. The runtime interrogation *cannot*
+  reject them, so a fixture asserting that it does specifies a test that cannot
+  pass by the route it names. These fixtures must assert rejection by the static
+  list specifically.
+- **Rejected by the compiler** — the backup API, a returned raw statement, and an
+  indirect helper accepting a raw statement/connection through `ReadConn`. These
+  must fail to compile.
+
+A read-only `SELECT` control must still succeed.
+
+*Measured 2026-08-26 across all 21 statement forms and independently reproduced
+on two SQLite builds (rusqlite 0.40.1 bundled, and system 3.53.4) — see
+[`../reviews/094-095-096-correction-review-2026-08-26.md`](../reviews/094-095-096-correction-review-2026-08-26.md)
+§A1. This paragraph previously required `ATTACH` to "fail to compile or be
+rejected as non-read-only before execution"; the second branch is impossible,
+and had the static list caught it the fixture would have gone green while this
+RFC credited a mechanism that played no part.*
 
 ## Conditional Class-A outcomes
 

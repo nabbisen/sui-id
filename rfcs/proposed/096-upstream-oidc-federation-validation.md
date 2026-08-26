@@ -112,14 +112,23 @@ Requires RFC 094 **M2b** Implemented. RFC 094 schedules federation configuration
 in its M2b remaining-conversion wave, and these are administrative commands, not
 part of the user login path.
 
-*Added 2026-08-12 after independent review finding B-096-2. The single 096-B
-stage named RFC 094 M2a as its prerequisite while bundling work from two
-different RFC 094 conversion waves — session security (M2a) and federation
-configuration (M2b). Splitting along the boundary RFC 094 already draws lets the
-security fix land after M2a without expanding M2a's scope. **This split is
-proposed, not settled**: it rests on the inference that federated session
-establishment falls inside M2a's session-security wave, which the correction
-round must confirm against RFC 094's command inventory.*
+*Added 2026-08-12 after independent review finding B-096-2; **settled
+2026-08-26**. The single 096-B stage named RFC 094 M2a as its prerequisite while
+bundling work from two different RFC 094 conversion waves. Splitting along the
+boundary RFC 094 already draws lets the security fix land after M2a without
+expanding M2a's scope.*
+
+*The split was originally justified by the inference that federated session
+establishment falls inside M2a's session-security wave. **That inference was
+wrong**, and the Part A review confirmed it against the command inventory:
+F01–F06 appear in no conversion wave at all, M2a's or M2b's. The split survives
+on a different and correct basis — 096-B1 depends on M2a's **runner foundation**
+(sealed `declare_write_command!`, `ReadConn`, the command manifest, and both the
+`WriteTx<Protocol>` and `WriteTx<AtomicAudit>` runners), which precedes the
+conversion waves. F04 is Class-A, so the Class-A runner is genuinely required by
+this stage, not incidentally. See
+[`../reviews/094-095-096-correction-review-2026-08-26.md`](../reviews/094-095-096-correction-review-2026-08-26.md)
+§A5 and RFC 094's "Phase assignment for F01–F06".*
 
 ### File ownership
 

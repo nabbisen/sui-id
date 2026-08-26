@@ -33,8 +33,12 @@ was durably returned to Proposed in commit
 `43085e38219e5eb1bfe11cc698b18f1fa5f5e4d7`, and `@nabbisen` explicitly
 accepted the complete amended RFC on 2026-07-21. This prerequisite is satisfied.
 **096-B1** (attempt state, nonce consumption, session establishment) requires
-amended RFC 094 **M2a** Implemented with the applicable user/session fixtures
-passing. **096-B2** (provider and link commands C17/C18/C23, preflight, audited
+amended RFC 094 **M2a**'s **runner foundation** — sealed
+`declare_write_command!`, `ReadConn`, the command manifest, and both the
+`WriteTx<Protocol>` and `WriteTx<AtomicAudit>` runners — which M2a delivers
+before its conversion waves. It does **not** require membership of any
+conversion wave: F01–F06 belong to none, and 096-B1 implements them against the
+seam. F04 is Class-A, so the Class-A runner is required, not optional. **096-B2** (provider and link commands C17/C18/C23, preflight, audited
 enablement) requires RFC 094 **M2b**, with C17/C18/C19/C23/F01–F06 passing. If RFC 095
 implementation is active, its owner must release any shared OIDC/session/
 migration file explicitly. The roadmap's second implementer and independent

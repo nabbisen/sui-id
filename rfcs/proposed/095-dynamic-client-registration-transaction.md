@@ -649,9 +649,11 @@ Before this RFC may become Accepted, independent design review confirms the
 metadata subset, URI policy, migration compatibility, C15 context/guard
 sequence, response/error mapping, and retry boundary.
 
-Before implementation starts, RFC 094 is Implemented, its C15 baseline and
-clean-tree evidence pass, the implementation handoff has non-overlapping file
-ownership, and the owner records authorization.
+Before implementation starts, RFC 094 **M2a** is Implemented, its C15 baseline
+and clean-tree evidence pass, the implementation handoff has non-overlapping
+file ownership, and the owner records authorization. Full RFC 094 M2b
+completion is **not** required — this matches the Implementation prerequisites
+field above, which this sentence previously contradicted.
 
 Before movement to `done/`, the exact clean commit, migration evidence,
 validation corpus, failure matrix, contention reconciliation, runtime
