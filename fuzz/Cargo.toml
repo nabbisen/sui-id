@@ -1,3 +1,32 @@
+# ─── DO NOT REMOVE THE [workspace] TABLE BELOW ───────────────────────────────
+#
+# It looks empty. It is load-bearing.
+#
+# This table is what makes fuzz/ a workspace root of its own, separate from the
+# repository root workspace. Without it, cargo refuses to build anything here:
+#
+#     error: current package believes it's in a workspace when it's not
+#
+# and `cargo fuzz` fails before a single target compiles.
+#
+# Why the separation exists (see also fuzz/README.md and
+# fuzz/rust-toolchain.toml): cargo-fuzz needs nightly for -Zsanitizer, while the
+# main workspace is pinned to the stable MSRV. Keeping fuzz/ outside the root
+# workspace is what lets the two coexist. fuzz/Cargo.lock is this workspace's
+# own lock file for the same reason.
+#
+# This table was deleted once, on 2026-07-02 in commit 901e651 ("Workspace
+# dependency consolidation, housekeeping"), as apparent clutter. Nothing in that
+# commit needed it gone -- the dependencies below are still explicit paths and
+# versions, not workspace inheritance. The scheduled Fuzz workflow then failed
+# at build on every run for eight weeks, from 2026-07-06 to 2026-08-24, and was
+# noticed only because an unrelated audit read the run list.
+#
+# If you are tidying this file and this section looks like leftover noise:
+# it is not. Removing it silently disables all fuzzing.
+# ─────────────────────────────────────────────────────────────────────────────
+[workspace]
+
 [package]
 name    = "sui-id-fuzz"
 version = "0.0.0"
