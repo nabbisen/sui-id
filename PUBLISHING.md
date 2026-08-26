@@ -121,3 +121,24 @@ sui-id-shared = { version = "0.1.0", path = "../sui-id-shared" }
 Inside the workspace, cargo prefers `path`; in a published package, cargo
 strips the `path` and falls back to the `version` from the registry. This
 is the canonical way to publish a multi-crate workspace.
+
+**Pin the version to the current release. Do not write `version = "0"`.**
+`^0` means `>=0.0.0, <1.0.0` — every 0.x ever published is a candidate, and
+cargo will backtrack into ancient ones when a constraint conflicts.
+
+Found during the 0.77.0 release: all five internal dependencies carried
+`version = "0"`, and packaging `sui-id-core` resolved `sui-id-store` back to
+**v0.2.0**, which wants `rusqlite ^0.32` → `libsqlite3-sys ^0.30`, while
+`sui-id-core` needs `rusqlite 0.40.1` → `libsqlite3-sys 0.38.1`. Both link the
+native `sqlite3` library and cargo permits only one:
+
+```
+package `libsqlite3-sys` links to the native library `sqlite3`,
+but it conflicts with a previous package which links to `sqlite3`
+```
+
+A `--dry-run` caught it before anything was published. The looseness also lets
+a *consumer* resolve mismatched internal crate versions, so this is not only a
+packaging concern.
+
+Bump these five specs with the workspace version at each release.

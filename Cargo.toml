@@ -30,11 +30,11 @@ keywords                = ["oidc", "oauth2", "idaas", "identity", "authenticatio
 readme                  = "README.md"
 
 [workspace.dependencies]
-sui-id-core                 = { version = "0", path = "crates/sui-id-core" }
-sui-id-i18n                 = { version = "0", path = "crates/sui-id-i18n" }
-sui-id-shared               = { version = "0", path = "crates/sui-id-shared" }
-sui-id-store                = { version = "0", path = "crates/sui-id-store" }
-sui-id-web                  = { version = "0", path = "crates/sui-id-web" }
+sui-id-core                 = { version = "0.77.0", path = "crates/sui-id-core" }
+sui-id-i18n                 = { version = "0.77.0", path = "crates/sui-id-i18n" }
+sui-id-shared               = { version = "0.77.0", path = "crates/sui-id-shared" }
+sui-id-store                = { version = "0.77.0", path = "crates/sui-id-store" }
+sui-id-web                  = { version = "0.77.0", path = "crates/sui-id-web" }
 
 # Async runtime / web
 tokio                       = { version = "1.40", features = ["macros", "rt-multi-thread", "signal", "fs", "sync", "time"] }
