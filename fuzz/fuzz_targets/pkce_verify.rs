@@ -14,13 +14,16 @@
 use libfuzzer_sys::fuzz_target;
 use sui_id_core::tokens::verify_pkce;
 
+fn to_str(p: &[u8]) -> &str {
+    std::str::from_utf8(p).unwrap_or("")
+}
+
 fuzz_target!(|data: &[u8]| {
     // Layout: we split the input into three NUL-separated UTF-8 strings.
     // If fewer than two NULs appear, we use what we have (empty strings
     // for missing segments). This is simpler than structured input for
     // this target.
     let parts: Vec<&[u8]> = data.splitn(3, |&b| b == 0).collect();
-    let to_str = |p: &[u8]| std::str::from_utf8(p).unwrap_or("");
     let method    = to_str(parts.first().copied().unwrap_or(b""));
     let verifier  = to_str(parts.get(1).copied().unwrap_or(b""));
     let challenge = to_str(parts.get(2).copied().unwrap_or(b""));

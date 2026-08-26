@@ -19,14 +19,28 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target:
-          - accept_language
-          - ids_fromstr
+        include:
+          - target: accept_language
+            features: ""
+          - target: ids_fromstr
+            features: ""
+          # core-targets: pull sui-id-core (webauthn-rs -> openssl), hence
+          # libssl-dev below. accept_language/ids_fromstr stay openssl-free.
+          - target: pkce_verify
+            features: "--features core-targets"
+          - target: authorize_params
+            features: "--features core-targets"
+          - target: jwt_parse
+            features: "--features core-targets"
+          - target: logout_params
+            features: "--features core-targets"
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: dtolnay/rust-toolchain@4fd1da8b0805d2d2e936788875a7d65dbd677dc2
         with:
           toolchain: nightly
+      - name: Install libssl-dev (core-dependent fuzz targets)
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
       - name: Run fuzz target ${{ matrix.target }}
@@ -34,7 +48,7 @@ jobs:
         env:
           RUNS: ${{ github.event.inputs.runs || '100000' }}
         run: |
-          cargo fuzz run ${{ matrix.target }} -- \
+          cargo fuzz run ${{ matrix.target }} ${{ matrix.features }} -- \
             -runs=$RUNS \
             -max_len=512 \
             -timeout=10
