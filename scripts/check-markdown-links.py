@@ -19,7 +19,8 @@ Four violation categories, matching RFC 093's negative self-test table:
     plain existence)
 
 External links (any target with a URL scheme, e.g. "https:", "mailto:")
-are not checked. Fenced code blocks are skipped, so example link syntax
+are not checked. Fenced code blocks and inline code spans are skipped, so
+example link syntax and backticked regexes
 in documentation is not treated as a real link. Reference-style links
 ([text]: target) are not supported -- the scanned set (README.md,
 ROADMAP.md, docs/) uses inline links exclusively as of this writing. An
@@ -42,6 +43,11 @@ HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*#*$")
 FENCE_RE = re.compile(r"^(```|~~~)")
 SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
 TITLE_RE = re.compile(r"""\s+(?:"[^"]*"|'[^']*')\s*$""")
+# CommonMark inline code span: a run of backticks, matching run to close.
+# Stripped before link scanning so example syntax and regexes written inside
+# backticks are not read as links -- `^[a-z0-9](-?[a-z0-9])*$` otherwise parses
+# as [a-z0-9](-?[a-z0-9]) and reports a missing target of "-?[a-z0-9]".
+CODE_SPAN_RE = re.compile(r"(?P<ticks>`+)(?P<body>.*?)(?P=ticks)")
 
 
 def slugify(heading_text: str) -> str:
@@ -86,7 +92,13 @@ def extract_links(path: Path) -> list[tuple[int, str]]:
             continue
         if in_fence:
             continue
-        for m in LINK_RE.finditer(line):
+        # Blank out inline code spans, keeping the line's length so any future
+        # column reporting stays accurate. A link whose *text* contains a code
+        # span -- [`ROADMAP.md`](../ROADMAP.md), used widely here -- survives,
+        # because only the span's interior is cleared, never the brackets or
+        # the target.
+        scanned = CODE_SPAN_RE.sub(lambda m: " " * len(m.group(0)), line)
+        for m in LINK_RE.finditer(scanned):
             target = m.group(1).strip()
             target = TITLE_RE.sub("", target)
             links.append((lineno, target))

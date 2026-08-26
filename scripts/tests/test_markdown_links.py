@@ -164,6 +164,48 @@ class MarkdownLinksTest(unittest.TestCase):
                 result.returncode, 0, msg=result.stdout + result.stderr
             )
 
+    def test_regex_in_inline_code_span_is_not_read_as_a_link(self):
+        """`^[a-z0-9](-?[a-z0-9])*$` parses as [a-z0-9](-?[a-z0-9]) unless
+        inline code spans are stripped. Two real occurrences in
+        rfcs/proposed/025-multi-tenant-expansion.md failed the checker until
+        2026-08-27; G10b's scope excluded rfcs/proposed/, which is the only
+        reason CI never saw it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "source.md").write_text(
+                "# Source\n\n"
+                "`slug` matches `^[a-z0-9](-?[a-z0-9])*$`, length 2..64.\n"
+            )
+            result = run_checker(root, "source.md")
+            self.assertEqual(
+                result.returncode, 0, msg=result.stdout + result.stderr
+            )
+
+    def test_link_syntax_inside_a_code_span_is_not_checked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "source.md").write_text(
+                "# Source\n\nWrite `[text](./does-not-exist.md)` like this.\n"
+            )
+            result = run_checker(root, "source.md")
+            self.assertEqual(
+                result.returncode, 0, msg=result.stdout + result.stderr
+            )
+
+    def test_code_span_inside_link_text_still_resolves(self):
+        """The guard must not make the checker blind: [`NAME`](./target.md) is
+        used widely in this repository and its target must still be checked."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "source.md").write_text(
+                "# Source\n\nSee [`ROADMAP.md`](./does-not-exist.md).\n"
+            )
+            result = run_checker(root, "source.md")
+            self.assertEqual(
+                result.returncode, 1, msg=result.stdout + result.stderr
+            )
+            self.assertIn("does-not-exist.md", result.stdout + result.stderr)
+
     def test_missing_target_argument_errors(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
