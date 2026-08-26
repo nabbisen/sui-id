@@ -1,7 +1,6 @@
 //! /me/security passkey (RFC 065).
 
 use super::super::auth::PasskeyDescriptor;
-use super::super::common::*;
 use super::*;
 use crate::layout::Shell;
 

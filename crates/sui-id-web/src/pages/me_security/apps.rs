@@ -1,6 +1,5 @@
 //! `/me/apps` — self-service view of OAuth consent grants (RFC 072, v0.60.0).
 
-use super::super::common::*;
 use super::*;
 use chrono::{DateTime, Utc};
 

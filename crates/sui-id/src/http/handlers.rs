@@ -616,6 +616,11 @@ use cookie::time as cookie_time;
 /// We don't try to use `?` for this because the redirect isn't an
 /// error in the application sense (the handler is doing exactly
 /// what it should); it's just an alternative response.
+// clippy::result_large_err: the Err variant is an axum Response by design --
+// see the doc comment above. Boxing it would add an allocation on the
+// redirect path and churn 18 call sites to satisfy a stack-size lint about
+// a Result that is consumed immediately.
+#[allow(clippy::result_large_err)]
 pub async fn require_fresh_step_up(
     app: &AppState,
     ctx: &SessionContext,

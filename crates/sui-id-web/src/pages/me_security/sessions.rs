@@ -1,6 +1,5 @@
 //! /me/security sessions (RFC 065).
 
-use super::super::common::*;
 use super::*;
 use crate::layout::Shell;
 
