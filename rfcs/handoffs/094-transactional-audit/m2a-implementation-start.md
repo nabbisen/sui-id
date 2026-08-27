@@ -6,23 +6,24 @@
 **Governing RFC:** [RFC 094](../../accepted/094-transactional-audit-registry.md), Accepted 2026-08-27
 **Companion:** [`migration-checklist.md`](migration-checklist.md) — the staged task list
 
-> **This document does not authorize coding.** One entry-gate item is unresolved
-> and is `@nabbisen`'s to settle — see §1. Read everything below, raise anything
-> that looks wrong, and start only when the owner has settled §1.
+> **Entry gate satisfied 2026-08-28.** RFC 093 closed as Implemented on
+> 2026-08-27 (`9610abb`), and every other entry-gate item is met — see §2.
+> Implementation is authorized.
 
-## 1. The one unresolved gate item
+## 1. The gate item that was unresolved, and how it closed
 
-The handoff's entry gate read *"RFC 093 is Implemented"*. RFC 094's own
-`Implementation prerequisites` field, amended 2026-07-28, reads *"M1a complete …
+This document originally withheld authorization over one conflict: the handoff's
+entry gate required *"RFC 093 is Implemented"*, while RFC 094's own
+`Implementation prerequisites` field, amended 2026-07-28, said *"M1a complete …
 **M1b is not a prerequisite**"*.
 
-Those disagree. RFC 093 is Accepted, not Implemented: its M1a closed 2026-07-30,
-its M1b work is done, but its **closure review is not signed**.
-
-The RFC governs and is the newer text, so the strict reading is not obviously
-right — but relaxing a gate on security-critical implementation is not the
-architect's call to make quietly, and closing RFC 093 satisfies both readings.
-**Recorded, not resolved.** Do not start on the strength of this document alone.
+It was recorded rather than resolved, because relaxing a gate on
+security-critical implementation is the owner's call even when the governing RFC
+supports it. RFC 093 then closed, which satisfies the strict reading and the
+loose one alike. **No judgment about which reading governs was ever needed** —
+kept here because the reasoning matters more than the outcome: a handoff may not
+impose a stricter gate than its RFC, and if this recurs where closure is not
+imminent, the discrepancy goes to `@nabbisen`, not to whoever notices it.
 
 ## 2. Prerequisites that *are* satisfied
 

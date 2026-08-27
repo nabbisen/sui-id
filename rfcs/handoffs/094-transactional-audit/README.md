@@ -25,17 +25,14 @@ changing this handoff.
 Implementation may begin only when all are true:
 
 - RFC 094 is under `rfcs/accepted/` with complete approval metadata;
-- RFC 093's M1a is complete with its gate matrix passing on one clean commit
-  (**closed 2026-07-30**). *Flagged 2026-08-27, not silently relaxed: this line
-  previously read "RFC 093 is Implemented", which requires M1b closure. RFC 094's
-  own `Implementation prerequisites` field says "M1a complete … **M1b is not a
-  prerequisite**", amended 2026-07-28 — after the 2026-07-17 design review that
-  also said "093 Implemented". A handoff may not impose a stricter gate than its
-  RFC, and the RFC's text is the newer of the two. **The discrepancy is recorded
-  for `@nabbisen` rather than resolved here**, because relaxing a gate on
-  security-critical implementation is an owner call even when the governing RFC
-  supports it — and closing RFC 093, which is one decision away, satisfies both
-  readings and makes the question moot.*
+- RFC 093 is **Implemented** (closed 2026-08-27, `9610abb`), which satisfies both
+  this gate and RFC 094's own `Implementation prerequisites` field. *Resolved
+  2026-08-28. Between 2026-08-27 and RFC 093's closure this line and the RFC
+  disagreed — the handoff required "093 Implemented" while the RFC, amended
+  2026-07-28, said "M1a complete … M1b is not a prerequisite". The discrepancy was
+  recorded rather than relaxed, on the grounds that loosening a gate on
+  security-critical implementation is the owner's call; closing RFC 093 satisfied
+  both readings and made the question moot.*
 - the exact durable-write command inventory, generated write-site
   reconciliation, and threat delta have durable independent approval;
 - `@nabbisen` confirms `codex-developer` as implementation owner;
