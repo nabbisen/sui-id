@@ -2,7 +2,7 @@
 
 **Governing RFC:** [RFC 094](../../accepted/094-transactional-audit-registry.md)
 **Audience:** `codex-developer` after RFC re-acceptance and prerequisite evidence
-**Status:** Planning companion; inherits the governing RFC's current status — returned to `proposed/` on 2026-07-28 for a material scope amendment and pending fresh independent design review and re-acceptance — with implementation still blocked on the entry gate below
+**Status:** Planning companion; inherits the governing RFC's current status — **Accepted 2026-08-27**, the 2026-07-28 return for review having closed after independent design review by the implementation role. Implementation remains gated on the entry gate below.
 
 This handoff translates RFC 094 into bounded implementation stages. It does
 not approve design, authorize coding, or override the RFC. If implementation
@@ -25,7 +25,17 @@ changing this handoff.
 Implementation may begin only when all are true:
 
 - RFC 094 is under `rfcs/accepted/` with complete approval metadata;
-- RFC 093 is Implemented and its current clean-tree gate matrix passes;
+- RFC 093's M1a is complete with its gate matrix passing on one clean commit
+  (**closed 2026-07-30**). *Flagged 2026-08-27, not silently relaxed: this line
+  previously read "RFC 093 is Implemented", which requires M1b closure. RFC 094's
+  own `Implementation prerequisites` field says "M1a complete … **M1b is not a
+  prerequisite**", amended 2026-07-28 — after the 2026-07-17 design review that
+  also said "093 Implemented". A handoff may not impose a stricter gate than its
+  RFC, and the RFC's text is the newer of the two. **The discrepancy is recorded
+  for `@nabbisen` rather than resolved here**, because relaxing a gate on
+  security-critical implementation is an owner call even when the governing RFC
+  supports it — and closing RFC 093, which is one decision away, satisfies both
+  readings and makes the question moot.*
 - the exact durable-write command inventory, generated write-site
   reconciliation, and threat delta have durable independent approval;
 - `@nabbisen` confirms `codex-developer` as implementation owner;
