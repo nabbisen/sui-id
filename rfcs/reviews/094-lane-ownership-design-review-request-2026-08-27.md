@@ -23,7 +23,7 @@ is written, without making a design decision of your own?** If the answer needs 
 
 ## 2. What to read
 
-`rfcs/proposed/094-transactional-audit-registry.md`, §*Structural coverage gate*,
+`rfcs/accepted/094-transactional-audit-registry.md`, §*Structural coverage gate*,
 the subsections *Manifest shape*, *What condition 7 becomes*, *Why ownership
 conflicts cannot occur*, *Why an owning RFC needs no Gate Matrix table of RFC
 093's shape*, and *Migration*.

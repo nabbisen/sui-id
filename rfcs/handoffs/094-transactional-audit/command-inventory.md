@@ -1,7 +1,7 @@
 # RFC 094 Stage-0 durable-write command inventory
 
 **Snapshot:** v0.76.12 working tree, inspected 2026-07-17
-**Governing RFC:** [RFC 094](../../proposed/094-transactional-audit-registry.md)
+**Governing RFC:** [RFC 094](../../accepted/094-transactional-audit-registry.md)
 **Review state:** Base inventory independently design-approved on 2026-07-17;
 the C17/C18/C23/F01–F06 RFC 096 amendment was independently reviewed and
 approved by `@nabbisen` on 2026-07-21, durably returned to Proposed in commit

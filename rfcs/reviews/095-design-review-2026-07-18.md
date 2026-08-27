@@ -18,7 +18,7 @@ directly by SHA-256:
 
 | Reviewed proposal path | SHA-256 |
 |---|---|
-| `rfcs/proposed/095-dynamic-client-registration-transaction.md` | `feaf4098ed4eecb7b8f083660fc85431327a8372d57dcf8c86bd5866ed8d9e25` |
+| `rfcs/accepted/095-dynamic-client-registration-transaction.md` | `feaf4098ed4eecb7b8f083660fc85431327a8372d57dcf8c86bd5866ed8d9e25` |
 | `rfcs/handoffs/095-dynamic-client-registration/README.md` | `31aa6dce02b8754552509c93da5c57dc261f3d0f6b3ef307412526f4590171d0` |
 | `rfcs/handoffs/095-dynamic-client-registration/architecture.md` | `cd8c8ebac2b7ad47dda743432b2501b1b1d38b21bdea70fe624de4338570174e` |
 | `rfcs/handoffs/095-dynamic-client-registration/metadata-validation.md` | `8dd29e038b5425b41fbcfacc1bba304e08bcd9c32d9881ebb0f465a512d628da` |

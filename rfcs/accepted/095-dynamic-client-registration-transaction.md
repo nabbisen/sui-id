@@ -1,6 +1,13 @@
 # RFC 095 — Dynamic Client Registration Transaction and Validation
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-08-27
+**Approved by.** `@nabbisen`
+**Independent design review.** [Correction review 2026-08-26](../reviews/094-095-096-correction-review-2026-08-26.md), by the implementation role
+(`codex-developer`), which authored neither this RFC nor its corrections — the
+entry-gate contradiction found and corrected. Also
+[A6 implementability sweep 2026-08-27](../reviews/094-095-096-a6-sweep-2026-08-27.md)
+— `Request envelope` through `Alternatives rejected` read in full, no findings.
 **Security review.** Required
 **Lifecycle history.** Accepted 2026-07-18 after [independent review](../reviews/095-design-review-2026-07-18.md); **returned to Proposed on 2026-07-28** for the prerequisite amendment below, per RFC 000's return-for-review rule for material prerequisite changes. The 2026-07-18 acceptance is preserved in history and is superseded, not withdrawn. No metadata contract, URI policy, or transaction design is reopened.
 **Amendment summary (2026-07-28).** Implementation prerequisite re-pointed from "RFC 094 Implemented" to "RFC 094 M2a Implemented". RFC 094 was phased into M2a and M2b on 2026-07-28; because C15 is pinned to M2a, the unamended wording would have made this RFC wait for M2b work it does not depend on, delaying M3 rather than enabling it.

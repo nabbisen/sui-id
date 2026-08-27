@@ -1,6 +1,15 @@
 # RFC 094 — Transactional Audit Completeness and Typed Event Registry
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-08-27
+**Approved by.** `@nabbisen`
+**Independent design review.** [Correction review 2026-08-26](../reviews/094-095-096-correction-review-2026-08-26.md), by the implementation role
+(`codex-developer`), which authored neither this RFC nor its corrections — six
+findings verified, `ReadConn` sufficiency measured rather than argued. Also
+[A6 implementability sweep 2026-08-27](../reviews/094-095-096-a6-sweep-2026-08-27.md)
+— remaining sections read, one requirements gap raised; and
+[lane-ownership design review 2026-08-27](../reviews/094-lane-ownership-design-review-2026-08-27.md)
+— found two checks the resolving design silently dropped, both restored.
 **Security review.** Required
 **Lifecycle history.** Base design accepted 2026-07-17 after [independent review](../reviews/094-design-review-2026-07-17.md); material amendment returned to Proposed in commit `43085e38219e5eb1bfe11cc698b18f1fa5f5e4d7`; complete amended RFC accepted by `@nabbisen` on 2026-07-21 after [independent review](../reviews/094-federation-command-amendment-review-2026-07-21.md); **returned to Proposed on 2026-07-28** for the scope amendment described below, per RFC 000's return-for-review rule for material changes to scope, prerequisites, and acceptance criteria. The 2026-07-21 acceptance is preserved in history and is superseded, not withdrawn.
 **Amendment summary (2026-08-26).** Correction round after the external review: `ReadConn`'s read-only guarantee gains a required M2a assertion that `rusqlite`'s `functions`, `vtab` and `load_extension` features stay disabled, since statement-level read-only status does not constrain side-effecting application functions or virtual tables — that surface is currently not compiled in, and nothing checked it. F01–F06 gain an explicit phase statement: they belong to no conversion wave, are implemented by RFC 096-B1 against the M2a runner foundation, and their prerequisite is that foundation rather than the session-security wave. Both carry an explicit confirmation-required note.
@@ -26,13 +35,14 @@ otherwise to `@nabbisen`, recorded as unreviewed design judgment. Closure
 review routes to the specifying role and is evidenced by executing the closure
 prerequisites.
 
-> **Returned to Proposed on 2026-07-28.** This RFC was Accepted on 2026-07-21
+> **Returned to Proposed on 2026-07-28; re-accepted 2026-08-27.** This RFC was Accepted on 2026-07-21
 > including the C17/C18/C23/F01–F06 federation command additions, which remain
 > unchanged and independently reviewed. The 2026-07-28 scope amendment
 > summarized above is material under RFC 000, so the RFC returns to Proposed and
-> requires fresh independent design review and re-acceptance before any
+> required fresh independent design review and re-acceptance before any
 > implementation. Nothing in the previously reviewed federation-command content
-> is reopened.
+> was reopened. That review is complete and recorded in `Independent design
+> review` above; the return is closed.
 
 ## Summary
 
@@ -891,7 +901,7 @@ constraint and K01 test prove exactly one active key after success.
 Offline master-key rotation, its journal, atomic file publication, old-key
 custody, and startup crash recovery are **not** part of this RFC. They were
 removed by the 2026-07-28 amendment and are owned by
-[RFC 100](./100-master-key-rotation-recovery.md).
+[RFC 100](../proposed/100-master-key-rotation-recovery.md).
 
 The split is by subject matter, not size. Every other part of this RFC answers
 one question: does a mutation and its audit record commit or roll back together?

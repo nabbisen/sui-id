@@ -26,7 +26,7 @@ Its exact RFC 096 input files are:
 
 | Proposed input path | SHA-256 |
 |---|---|
-| `rfcs/proposed/096-upstream-oidc-federation-validation.md` | `bdcf3fbe1e395c0d904339c39a790735f94a41eea26739e38b729fc19274abda` |
+| `rfcs/accepted/096-upstream-oidc-federation-validation.md` | `bdcf3fbe1e395c0d904339c39a790735f94a41eea26739e38b729fc19274abda` |
 | `rfcs/handoffs/096-upstream-oidc-federation/README.md` | `5c88f98403837934a672b94f653184237055b59dada9f1faebe55e8c535412f2` |
 | `rfcs/handoffs/096-upstream-oidc-federation/architecture.md` | `d68d3c8d4e7fb15efc2ab81c33833307e4f95c9f9563858212f1a3507bbfa9a8` |
 | `rfcs/handoffs/096-upstream-oidc-federation/validation-matrix.md` | `a05dc97f36559d66ce3e7b1eb0918c4dfda34e2644ae96d85bd826028d38b8c0` |

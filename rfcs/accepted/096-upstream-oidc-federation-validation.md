@@ -1,6 +1,14 @@
 # RFC 096 — Upstream OIDC Federation Validation
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-08-27
+**Approved by.** `@nabbisen`
+**Independent design review.** [Correction review 2026-08-26](../reviews/094-095-096-correction-review-2026-08-26.md), by the implementation role
+(`codex-developer`), which authored neither this RFC nor its corrections — the
+B1/B2 split inference checked against RFC 094's command inventory and its stale
+justification found. Also
+[A6 implementability sweep 2026-08-27](../reviews/094-095-096-a6-sweep-2026-08-27.md)
+— `validation-matrix.md` read in full, no findings.
 **Security review.** Required
 **Lifecycle history.** Accepted 2026-07-21 after [independent review](../reviews/096-design-review-2026-07-21.md); **returned to Proposed on 2026-07-28** for the prerequisite and staging amendment below, per RFC 000's return-for-review rule for material prerequisite changes. The 2026-07-21 acceptance is preserved in history and is superseded, not withdrawn. No validation, transport, JOSE, or claim-handling design is reopened.
 **Amendment summary (2026-08-26).** 096-B1's prerequisite re-pointed from M2a's session-security conversion wave to M2a's **runner foundation** plus the F01–F06 federation login commands this stage implements. The external correction review found RFC 094 assigns F01–F06 to no wave, so the previous justification was unsupported; the inference was the amendment author's and had been flagged as unconfirmed. Whether the Protocol runner is complete at M2a foundation remains unconfirmed.

@@ -34,9 +34,9 @@ it first would defeat the purpose of asking you.
 
 | Path | What it is |
 |---|---|
-| `rfcs/proposed/094-transactional-audit-registry.md` | Amended RFC |
-| `rfcs/proposed/095-dynamic-client-registration-transaction.md` | Amended RFC |
-| `rfcs/proposed/096-upstream-oidc-federation-validation.md` | Amended RFC |
+| `rfcs/accepted/094-transactional-audit-registry.md` | Amended RFC |
+| `rfcs/accepted/095-dynamic-client-registration-transaction.md` | Amended RFC |
+| `rfcs/accepted/096-upstream-oidc-federation-validation.md` | Amended RFC |
 | `rfcs/reviews/094-design-review-2026-07-17.md` | Original independent review |
 | `rfcs/reviews/094-federation-command-amendment-review-2026-07-21.md` | Prior amendment review |
 | `rfcs/reviews/096-design-review-2026-07-21.md` | Original independent review |

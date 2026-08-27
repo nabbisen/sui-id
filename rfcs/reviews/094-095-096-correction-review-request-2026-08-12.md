@@ -58,9 +58,9 @@ corrections, authored by the same party that wrote the amendments they correct.
 
 | Path | Role |
 |---|---|
-| `rfcs/proposed/094-transactional-audit-registry.md` | Corrected RFC |
-| `rfcs/proposed/095-dynamic-client-registration-transaction.md` | Unchanged; its handoff was corrected |
-| `rfcs/proposed/096-upstream-oidc-federation-validation.md` | Corrected RFC |
+| `rfcs/accepted/094-transactional-audit-registry.md` | Corrected RFC |
+| `rfcs/accepted/095-dynamic-client-registration-transaction.md` | Unchanged; its handoff was corrected |
+| `rfcs/accepted/096-upstream-oidc-federation-validation.md` | Corrected RFC |
 | `rfcs/reviews/094-095-096-amendment-review-2026-08-12.md` | The findings being answered |
 | `rfcs/handoffs/094-transactional-audit/` | Corrected: `migration-checklist.md` |
 | `rfcs/handoffs/095-dynamic-client-registration/README.md` | Corrected entry gate |

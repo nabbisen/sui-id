@@ -1,6 +1,6 @@
 # RFC 094 developer handoff
 
-**Governing RFC:** [RFC 094](../../proposed/094-transactional-audit-registry.md)
+**Governing RFC:** [RFC 094](../../accepted/094-transactional-audit-registry.md)
 **Audience:** `codex-developer` after RFC re-acceptance and prerequisite evidence
 **Status:** Planning companion; inherits the governing RFC's current status — returned to `proposed/` on 2026-07-28 for a material scope amendment and pending fresh independent design review and re-acceptance — with implementation still blocked on the entry gate below
 
