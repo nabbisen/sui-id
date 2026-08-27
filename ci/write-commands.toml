@@ -1,0 +1,1126 @@
+# RFC 094 Stage-0 write-command inventory -- machine-readable expansion
+# of rfcs/handoffs/094-transactional-audit/command-inventory.md.
+#
+# Generated 2026-08-28 by parsing the checked-in inventory table and
+# cross-referencing each `module::function` reference against the actual
+# crates/sui-id-store/src/repos/*.rs and 3 special-cased files outside it.
+# Every reference resolved (0 unlisted, 0 stale) -- see the Stage 0
+# reconciliation report for the verification method.
+#
+# `status` makes the three cases in `files` machine-readable rather than
+# leaving them to a prose comment (Stage 0 review, 2026-08-28):
+#   implemented    -- code exists and implements what the row describes (82)
+#   target-absent  -- no implementation exists yet, `files` is empty (3:
+#                      C23, F03, F06 -- RFC 096-B1/B2 work not yet started)
+#   target-legacy  -- code exists, but it is what this row will replace, not
+#                      an implementation of it (7: C16-C18, F01, F02, F04, F05)
+#
+# `event` and `descriptor` are placeholders: RFC 094 Stage 1 has not yet
+# added the typed event-kind/class enums or the sealed descriptor set
+# this file's schema is designed to eventually carry. They are filled in
+# as Stage 1 lands, not invented here ahead of the registry that defines them.
+
+[[command]]
+id = "U01"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Admin create user / `core::identity::admin::users`"
+rationale = "closed result branches: `user.create` or `user.create_warned_hibp`"
+mutation_surface = "`users::create`, `credentials::upsert`"
+files = ["crates/sui-id-store/src/repos/users.rs", "crates/sui-id-store/src/repos/credentials.rs"]
+test_id = "`a_u01_create_normal`, `a_u01_create_hibp`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U02"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Admin disable user"
+rationale = "`user.disable`"
+mutation_surface = "`users::set_disabled(true)` plus revocations"
+files = ["crates/sui-id-store/src/repos/users.rs"]
+test_id = "`a_u02_disable`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U03"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Admin enable user"
+rationale = "`user.enable`"
+mutation_surface = "`users::set_disabled(false)`"
+files = ["crates/sui-id-store/src/repos/users.rs"]
+test_id = "`a_u03_enable`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U04"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Admin soft-delete user"
+rationale = "`user.delete`"
+mutation_surface = "`users::soft_delete` plus revocations"
+files = ["crates/sui-id-store/src/repos/users.rs"]
+test_id = "`a_u04_delete`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U05"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Admin role change"
+rationale = "`user.role_change`"
+mutation_surface = "`users::set_role`"
+files = ["crates/sui-id-store/src/repos/users.rs"]
+test_id = "`a_u05_role`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U06"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Admin password reset"
+rationale = "`user.reset_password`"
+mutation_surface = "`credentials::upsert`, token/session invalidation"
+files = ["crates/sui-id-store/src/repos/credentials.rs"]
+test_id = "`a_u06_password`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U07"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Admin MFA reset"
+rationale = "`user.reset_mfa`"
+mutation_surface = "`user_totp::delete`, WebAuthn credential deletes"
+files = ["crates/sui-id-store/src/repos/user_totp.rs"]
+test_id = "`a_u07_mfa_reset`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U08"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Admin/CLI unlock"
+rationale = "`admin.user.unlock`"
+mutation_surface = "`users::admin_unlock` / `clear_lockout`"
+files = ["crates/sui-id-store/src/repos/users.rs"]
+test_id = "`a_u08_unlock`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U09"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Self password change"
+rationale = "`auth.password.changed_self`"
+mutation_surface = "`credentials::upsert`, session/token revocation"
+files = ["crates/sui-id-store/src/repos/credentials.rs"]
+test_id = "`a_u09_self_password`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U10"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Forgot-password completion"
+rationale = "`auth.password.reset_completed`"
+mutation_surface = "`password_reset_tokens::mark_consumed`, `credentials::upsert`, revocations"
+files = ["crates/sui-id-store/src/repos/password_reset_tokens.rs", "crates/sui-id-store/src/repos/credentials.rs"]
+test_id = "`a_u10_reset_complete`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U11"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "User email change"
+rationale = "`user.email_change`"
+mutation_surface = "`users::update_email`"
+files = ["crates/sui-id-store/src/repos/users.rs"]
+test_id = "`a_u11_email`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U12"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "TOTP enrollment confirm"
+rationale = "`auth.mfa.totp_enabled`"
+mutation_surface = "`user_totp::confirm_with_recovery`"
+files = ["crates/sui-id-store/src/repos/user_totp.rs"]
+test_id = "`a_u12_totp_enable`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U13"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "TOTP disable"
+rationale = "`auth.mfa.totp_disabled`"
+mutation_surface = "`user_totp::delete`"
+files = ["crates/sui-id-store/src/repos/user_totp.rs"]
+test_id = "`a_u13_totp_disable`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U14"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Recovery-code regeneration"
+rationale = "`auth.mfa.recovery_regenerated`"
+mutation_surface = "`user_totp::set_recovery_codes`"
+files = ["crates/sui-id-store/src/repos/user_totp.rs"]
+test_id = "`a_u14_recovery`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U15"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Passkey register"
+rationale = "`auth.passkey.created`"
+mutation_surface = "`user_webauthn_credentials::create`"
+files = ["crates/sui-id-store/src/repos/user_webauthn_credentials.rs"]
+test_id = "`a_u15_passkey_create`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U16"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Passkey delete"
+rationale = "`auth.passkey.deleted`"
+mutation_surface = "`user_webauthn_credentials::delete`"
+files = ["crates/sui-id-store/src/repos/user_webauthn_credentials.rs"]
+test_id = "`a_u16_passkey_delete`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U17"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Passkey rename"
+rationale = "`auth.passkey.renamed`"
+mutation_surface = "`user_webauthn_credentials::update_nickname`"
+files = ["crates/sui-id-store/src/repos/user_webauthn_credentials.rs"]
+test_id = "`a_u17_passkey_rename`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U18"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Revoke one session"
+rationale = "`auth.session.revoked`"
+mutation_surface = "`sessions::revoke`"
+files = ["crates/sui-id-store/src/repos/sessions.rs"]
+test_id = "`a_u18_session_one`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U19"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Revoke user sessions / force logout"
+rationale = "`auth.sessions.revoked`"
+mutation_surface = "`sessions::revoke_all_for_user`, `revoke_all_for_user_except`"
+files = ["crates/sui-id-store/src/repos/sessions.rs"]
+test_id = "`a_u19_sessions_all`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U20"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Revoke user authorization grants"
+rationale = "`auth.consent.revoked`"
+mutation_surface = "`user_consent::revoke_with_tokens` / `revoke`, refresh/access revocation"
+files = ["crates/sui-id-store/src/repos/user_consent.rs"]
+test_id = "`a_u20_consent_revoke`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U21"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Grant/update consent"
+rationale = "`auth.consent.granted`"
+mutation_surface = "`user_consent::upsert`"
+files = ["crates/sui-id-store/src/repos/user_consent.rs"]
+test_id = "`a_u21_consent_grant`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U22"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Record login failure / optional lockout"
+rationale = "closed result branches: `auth.login.failure` below threshold or `auth.lockout` on threshold crossing"
+mutation_surface = "`users::record_login_failure`"
+files = ["crates/sui-id-store/src/repos/users.rs"]
+test_id = "`a_u22_failure`, `a_u22_lockout`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U24"
+class = "P"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Successful-login bookkeeping"
+rationale = "`auth.login.success` is Class B; timestamp/counter maintenance is not a separate privileged command"
+mutation_surface = "`users::clear_lockout`, `set_last_login`"
+files = ["crates/sui-id-store/src/repos/users.rs"]
+test_id = "`p_u24_login_bookkeeping`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U25"
+class = "P"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Preferred-language change"
+rationale = "non-security user preference; UI confirmation is sufficient"
+mutation_surface = "`users::set_preferred_lang`"
+files = ["crates/sui-id-store/src/repos/users.rs"]
+test_id = "`p_u25_language`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U26"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "LDAP shadow-user upsert"
+rationale = "`auth.user_source.shadow_upserted`"
+mutation_surface = "`users::upsert_ldap_shadow`"
+files = ["crates/sui-id-store/src/repos/users.rs"]
+test_id = "`a_u26_ldap_shadow`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U27"
+class = "P"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "TOTP pending enrollment"
+rationale = "short-lived ceremony state; final enable is U12"
+mutation_surface = "`user_totp::upsert_pending`"
+files = ["crates/sui-id-store/src/repos/user_totp.rs"]
+test_id = "`p_u27_totp_pending`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U28"
+class = "P"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "TOTP anti-replay step"
+rationale = "per-auth anti-replay state; covered by MFA success/failure events"
+mutation_surface = "`user_totp::set_last_used_step`"
+files = ["crates/sui-id-store/src/repos/user_totp.rs"]
+test_id = "`p_u28_totp_step`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U29"
+class = "P"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Passkey signature-counter update"
+rationale = "per-auth authenticator state; covered by login/MFA event"
+mutation_surface = "`user_webauthn_credentials::update_passkey`"
+files = ["crates/sui-id-store/src/repos/user_webauthn_credentials.rs"]
+test_id = "`p_u29_passkey_counter`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U30"
+class = "P"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Session creation"
+rationale = "high-frequency authentication protocol state; `auth.login.success` is Class B"
+mutation_surface = "`sessions::insert`"
+files = ["crates/sui-id-store/src/repos/sessions.rs"]
+test_id = "`p_u30_session_insert`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U31"
+class = "P"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Session activity/step-up touch"
+rationale = "high-frequency expiry/auth-context bookkeeping"
+mutation_surface = "`sessions::touch_last_used`, `touch_step_up`"
+files = ["crates/sui-id-store/src/repos/sessions.rs"]
+test_id = "`p_u31_session_touch`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U32"
+class = "P"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Pending MFA ceremony create/consume"
+rationale = "short-lived one-time protocol state"
+mutation_surface = "`login_pending_mfa::insert`, `delete`"
+files = ["crates/sui-id-store/src/repos/login_pending_mfa.rs"]
+test_id = "`p_u32_pending_mfa`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U33"
+class = "P"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "WebAuthn ceremony create/consume"
+rationale = "short-lived one-time protocol state"
+mutation_surface = "`webauthn_pending::insert`, `delete`"
+files = ["crates/sui-id-store/src/repos/webauthn_pending.rs"]
+test_id = "`p_u33_webauthn_pending`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U34"
+class = "P"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Password-reset token issue"
+rationale = "one-time protocol state; request/email events are Class B"
+mutation_surface = "`password_reset_tokens::insert`"
+files = ["crates/sui-id-store/src/repos/password_reset_tokens.rs"]
+test_id = "`p_u34_reset_issue`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U35"
+class = "I"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Credential primitive"
+rationale = "callable only inside U01/U06/U09/U10"
+mutation_surface = "`credentials::upsert`, `upsert_within_tx`"
+files = ["crates/sui-id-store/src/repos/credentials.rs"]
+test_id = "`i_u35_credentials`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "U36"
+class = "P"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Consent last-used touch"
+rationale = "high-frequency usage bookkeeping; grant/revoke commands are U20/U21"
+mutation_surface = "`user_consent::touch_last_used`"
+files = ["crates/sui-id-store/src/repos/user_consent.rs"]
+test_id = "`p_u36_consent_touch`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "C01"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Admin create client"
+rationale = "`client.create`"
+mutation_surface = "`clients::create`"
+files = ["crates/sui-id-store/src/repos/clients.rs"]
+test_id = "`a_c01_create`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "C02"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Update client basic metadata"
+rationale = "`client.update`"
+mutation_surface = "`clients::update_basic`"
+files = ["crates/sui-id-store/src/repos/clients.rs"]
+test_id = "`a_c02_basic`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "C03"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Replace allowed scopes"
+rationale = "`client.set_allowed_scopes`"
+mutation_surface = "`clients::set_allowed_scopes`"
+files = ["crates/sui-id-store/src/repos/clients.rs"]
+test_id = "`a_c03_scopes`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "C04"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Replace post-logout URIs"
+rationale = "`client.set_post_logout_redirect_uris`"
+mutation_surface = "`clients::set_post_logout_redirect_uris`"
+files = ["crates/sui-id-store/src/repos/clients.rs"]
+test_id = "`a_c04_logout_uris`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "C05"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Disable client"
+rationale = "`client.disable`"
+mutation_surface = "`clients::set_disabled(true)`"
+files = ["crates/sui-id-store/src/repos/clients.rs"]
+test_id = "`a_c05_disable`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "C06"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Soft-delete client"
+rationale = "`client.delete`"
+mutation_surface = "`clients::soft_delete` plus token revocation"
+files = ["crates/sui-id-store/src/repos/clients.rs"]
+test_id = "`a_c06_delete`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "C07"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Rotate/set production client secret"
+rationale = "`client.rotate_secret`"
+mutation_surface = "`clients::set_secret_hash`"
+files = ["crates/sui-id-store/src/repos/clients.rs"]
+test_id = "`a_c07_secret`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "C08"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Set dev client secret"
+rationale = "`client.rotate_secret` with dev-source attribute"
+mutation_surface = "`clients::set_dev_secret_hash`"
+files = ["crates/sui-id-store/src/repos/clients.rs"]
+test_id = "`a_c08_dev_secret`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "C09"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Change consent policy"
+rationale = "`client.consent_policy_changed`"
+mutation_surface = "`clients::update_consent_policy`"
+files = ["crates/sui-id-store/src/repos/clients.rs"]
+test_id = "`a_c09_consent_policy`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "C10"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Change app identity/URIs"
+rationale = "`client.app_identity_changed`"
+mutation_surface = "`clients::update_app_identity`"
+files = ["crates/sui-id-store/src/repos/clients.rs"]
+test_id = "`a_c10_identity`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "C11"
+class = "I"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Stamp registration source"
+rationale = "part of C15; no standalone caller"
+mutation_surface = "`clients::set_registered_via`"
+files = ["crates/sui-id-store/src/repos/clients.rs"]
+test_id = "`i_c11_registered_via`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "C12"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Create authorization-scope definition"
+rationale = "`scope_definition.created`"
+mutation_surface = "`scope_definition::create`"
+files = ["crates/sui-id-store/src/repos/scope_definition.rs"]
+test_id = "`a_c12_scope_create`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "C13"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Delete authorization-scope definition"
+rationale = "`scope_definition.deleted`"
+mutation_surface = "`scope_definition::delete`"
+files = ["crates/sui-id-store/src/repos/scope_definition.rs"]
+test_id = "`a_c13_scope_delete`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "C14"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Issue registration authorization"
+rationale = "`client.registration_token.created`"
+mutation_surface = "`client_registration_token::create`"
+files = ["crates/sui-id-store/src/repos/client_registration_token.rs"]
+test_id = "`a_c14_registration_issue`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "C15"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Dynamic client registration baseline"
+rationale = "`client.dynamic_register`"
+mutation_surface = "guarded `client_registration_token::consume`, `clients::create`, `set_registered_via` in one RFC 094 transaction"
+files = ["crates/sui-id-store/src/repos/client_registration_token.rs", "crates/sui-id-store/src/repos/clients.rs"]
+test_id = "`a_c15_dynamic_register`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "C16"
+class = "A"
+status = "target-legacy"  # implemented | target-absent | target-legacy
+owner = "Federation-provider create"
+rationale = "`federation.provider.created`"
+mutation_surface = "create globally fresh never-reused provider ID, disabled/review-required, with canonical `activation_generation=0`"
+files = ["crates/sui-id-store/src/repos/federation_provider.rs"]  # `create` -- current implementation lacks the activation_generation=0/review-required semantics the row describes; target-state row, see Stage 0 note
+test_id = "`a_c16_provider_create`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "C17"
+class = "A"
+status = "target-legacy"  # implemented | target-absent | target-legacy
+owner = "Federation-provider enable/disable"
+rationale = "closed branches `federation.provider.enabled` / `federation.provider.disabled`; both record old/new activation generation; enable consumes sealed preflight (<600s), disable clears evidence"
+mutation_surface = "exact provider/version/policy/generation/enabled guard; both checked-increment generation; enable stores evidence bound to new generation, disable invalidates login/MFA/ceremony state; no standalone writer"
+files = ["crates/sui-id-store/src/repos/federation_provider.rs"]  # `set_enabled` exists; the preflight capability, generation increment, and evidence storage this row describes do NOT exist yet -- depends on RFC 096-B2 (M2b). Target-state row.
+test_id = "`a_c17_provider_enable`, `a_c17_provider_disable`, `a_c17_preflight_race`, `a_c17_generation_overflow`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "C18"
+class = "A"
+status = "target-legacy"  # implemented | target-absent | target-legacy
+owner = "Federation-provider delete"
+rationale = "`federation.provider.deleted`; old/new activation generation + bounded invalidated counts"
+mutation_surface = "exact non-deleted generation guard; checked-increment generation, clear evidence, invalidate login/MFA/ceremony state, then mark/remove provider in one transaction"
+files = ["crates/sui-id-store/src/repos/federation_provider.rs"]  # `delete` exists; generation/evidence-invalidation semantics do NOT exist yet -- depends on RFC 096-B2 (M2b). Target-state row.
+test_id = "`a_c18_provider_delete`, `a_c18_generation_overflow`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "C19"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Federation-link upsert"
+rationale = "closed persistence-result branches: `auth.federation.link.created` / `auth.federation.link.updated`"
+mutation_surface = "`federation_link::upsert`"
+files = ["crates/sui-id-store/src/repos/federation_link.rs"]
+test_id = "`a_c19_link_create`, `a_c19_link_update`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "C20"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Federation-link delete"
+rationale = "`auth.federation.link.deleted`"
+mutation_surface = "`federation_link::delete`"
+files = ["crates/sui-id-store/src/repos/federation_link.rs"]
+test_id = "`a_c20_link_delete`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "C21"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Enable client"
+rationale = "`client.enable`"
+mutation_surface = "`clients::set_disabled(false)`"
+files = ["crates/sui-id-store/src/repos/clients.rs"]
+test_id = "`a_c21_enable`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "C22"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Revoke registration authorization"
+rationale = "`client.registration_token.revoked`"
+mutation_surface = "`client_registration_token::revoke`"
+files = ["crates/sui-id-store/src/repos/client_registration_token.rs"]
+test_id = "`a_c22_registration_revoke`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "C23"
+class = "A"
+status = "target-absent"  # implemented | target-absent | target-legacy
+owner = "Replace federation-provider trust policy / RFC 096 startup configuration"
+rationale = "`federation.provider.policy_updated`; sealed `StartupConfiguration` actor, provider-ID target, old/new version and activation generation + changed-field enums + invalidated counts"
+mutation_surface = "guarded full policy replace on exact non-deleted old version/generation, checked-increment both, force disabled/review-required, clear evidence, invalidate old flows; cache eviction post-commit"
+files = []  # UNRESOLVED, deliberately: no current function implements provider trust-policy replacement at all. Wholly new, RFC 096-B2 (M2b). Target-state row, not a reconciliation gap.
+test_id = "`a_c23_provider_policy_update`, `a_c23_generation_overflow`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "F01"
+class = "P"
+status = "target-legacy"  # implemented | target-absent | target-legacy
+owner = "Existing federation link, no local MFA / RFC 096 federation login"
+rationale = "one authentication protocol promotion; post-commit `auth.federation.signin.success` is Class B under U24/U30 policy"
+mutation_surface = "require enabled exact-version/generation provider + same active link/user; guarded `federation_login_attempt exchanging -> completed`; observe existing link last-seen/bounded verified email; login bookkeeping; insert session with `[Fed]`; enforce session cap"
+files = ["crates/sui-id/src/http/handlers/federation.rs"]  # `federated_callback` is the CURRENT (pre-RFC-096) legacy implementation this command replaces, not an implementation of F01 itself -- F01 depends on RFC 096-B1 (M2a foundation + F01-F06), not yet started. Target-state row.
+test_id = "`p_f01_linked_direct`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "F02"
+class = "P"
+status = "target-legacy"  # implemented | target-absent | target-legacy
+owner = "Existing federation link, local MFA required / RFC 096 federation login"
+rationale = "short-lived continuation under U32; no login-success event before MFA"
+mutation_surface = "require enabled exact-version/generation provider + same active link/user; guarded attempt `exchanging -> completed`; insert one pending MFA row sealed as `Fed` primary and bound to provider/version/generation/link/user/continuation"
+files = ["crates/sui-id/src/http/handlers/federation.rs"]  # same as F01: legacy `federated_callback` is what F02 replaces, not what implements it. Depends on RFC 096-B1. Target-state row.
+test_id = "`p_f02_linked_mfa_begin`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "F03"
+class = "P"
+status = "target-absent"  # implemented | target-absent | target-legacy
+owner = "Submit/complete federated local MFA / RFC 096 MFA login"
+rationale = "closed `Promoted`, `RejectedStillPending`, `AttemptsExhausted`, `Invalidated`; exact Class-B success/rejected/exhausted/invalidated event after commit"
+mutation_surface = "guard pending, unexpired, count 0–4, exact provider/link/user/factor/method; wrong proof increments once (1–4 pending, 5 exhausted); Promoted consumes method anti-replay + pending, observes link, bookkeeps, inserts `[Fed, local_method]` session/cap; Invalidated terminalizes only"
+files = []  # UNRESOLVED, deliberately: no current MFA-continuation flow for federation exists. Depends on RFC 096-B1. Target-state row.
+test_id = "`p_f03_promoted`, `p_f03_rejected`, `p_f03_exhausted`, `p_f03_invalidated`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "F04"
+class = "A"
+status = "target-legacy"  # implemented | target-absent | target-legacy
+owner = "First federated provisioning and direct login / RFC 096 federation login"
+rationale = "`auth.federation.provisioned`; new-user sealed-federated actor/target, internal provider/link IDs, fixed mode"
+mutation_surface = "require enabled exact-version/generation provider; guard attempt `exchanging -> completed`; recheck absent link + verified unique email + username uniqueness; create passwordless non-admin user; create exactly one provider/sub link; insert `[Fed]` session; enforce cap; append sole intent event"
+files = ["crates/sui-id/src/http/handlers/federation.rs"]  # `federated_callback` currently does first-provision inline, insecurely (the shipped trust-on-TLS defect RFC 096 exists to close); not the F04 this row describes. Depends on RFC 096-B1. Target-state row.
+test_id = "`a_f04_provision`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "F05"
+class = "P"
+status = "target-legacy"  # implemented | target-absent | target-legacy
+owner = "Terminal federation attempt failure/denial / RFC 096 federation login"
+rationale = "one-time terminalization; exact Class-B sum: `auth.federation.signin.upstream_failure`, `takeover_blocked`, `link_required`, or `signin.denied` with closed reason enum"
+mutation_surface = "guarded pending/exchanging attempt to failed; no link/user/session/last-seen mutation"
+files = ["crates/sui-id/src/http/handlers/federation.rs"]  # legacy failure paths inside `federated_callback`; not the closed Class-B reason enum this row describes. Depends on RFC 096-B1. Target-state row.
+test_id = "`p_f05_upstream`, `p_f05_takeover`, `p_f05_link_required`, `p_f05_denied`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "F06"
+class = "P"
+status = "target-absent"  # implemented | target-absent | target-legacy
+owner = "Begin/replace federated WebAuthn method ceremony / RFC 096 MFA login"
+rationale = "method ceremony under U33; no authentication-success event/authority"
+mutation_surface = "require pending F02 row count 0–4 and exact unexpired provider/version/generation/link/user; atomically replace at most one `FederatedLogin` ceremony bound to parent/RP/origin/challenge and capped expiry"
+files = []  # UNRESOLVED, deliberately: no federated WebAuthn ceremony exists today. Depends on RFC 096-B1. Target-state row.
+test_id = "`p_f06_webauthn_begin`, `p_f06_webauthn_replace`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "T01"
+class = "P"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Authorization-code issue"
+rationale = "short-lived protocol grant; authorization decision/consent is audited separately"
+mutation_surface = "`auth_codes::insert`"
+files = ["crates/sui-id-store/src/repos/auth_codes.rs"]
+test_id = "`p_t01_code_issue`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "T02"
+class = "P"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Authorization-code consume"
+rationale = "one-time guarded protocol transition; exchange failure/success telemetry applies"
+mutation_surface = "`auth_codes::consume`"
+files = ["crates/sui-id-store/src/repos/auth_codes.rs"]
+test_id = "`p_t02_code_consume`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "T03"
+class = "I"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Invalidate user authorization codes"
+rationale = "subordinate to U02/U04/U06/U09/U10"
+mutation_surface = "`auth_codes::invalidate_all_for_user`"
+files = ["crates/sui-id-store/src/repos/auth_codes.rs"]
+test_id = "`i_t03_code_invalidate`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "T04"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Refresh-token rotation / reuse revocation"
+rationale = "closed result branches: `auth.refresh.rotated` for normal winner or `auth.refresh.theft_detected` for reuse/family revocation"
+mutation_surface = "guarded old-row revoke plus successor-only `refresh_tokens::insert`, or `revoke_family`, in one T04 transaction"
+files = ["crates/sui-id-store/src/repos/refresh_tokens.rs"]
+test_id = "`a_t04_refresh_normal`, `a_t04_refresh_reuse`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "T06"
+class = "I"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Administrative/user refresh revocation"
+rationale = "subordinate to U02/U04/U06/U09/U10/U19/C06"
+mutation_surface = "`refresh_tokens::revoke`, `revoke_all_for_user`, `revoke_all_for_client`"
+files = ["crates/sui-id-store/src/repos/refresh_tokens.rs"]
+test_id = "`i_t06_refresh_revoke`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "T07"
+class = "I"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Access-token revocation"
+rationale = "subordinate to U20/U19/C06 or another inventoried revoke command"
+mutation_surface = "`revoked_access_tokens::insert`"
+files = ["crates/sui-id-store/src/repos/revoked_access_tokens.rs"]
+test_id = "`i_t07_access_revoke`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "T08"
+class = "O"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Refresh hash backfill"
+rationale = "idempotent startup migration/maintenance with structured telemetry"
+mutation_surface = "`refresh_tokens::backfill_token_hashes`"
+files = ["crates/sui-id-store/src/repos/refresh_tokens.rs"]
+test_id = "`o_t08_hash_backfill`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "T09"
+class = "P"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Initial root-family refresh-token issue"
+rationale = "high-frequency protocol issuance; authorization/login events are separate and this exclusion is not audit-equivalent"
+mutation_surface = "initial-issuance call site of `refresh_tokens::insert`"
+files = ["crates/sui-id-store/src/repos/refresh_tokens.rs"]
+test_id = "`p_t09_refresh_initial_issue`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "S01"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Change default language"
+rationale = "`settings.default_language.changed`"
+mutation_surface = "`server_settings::update_default_lang`"
+files = ["crates/sui-id-store/src/repos/server_settings.rs"]
+test_id = "`a_s01_language`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "S02"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Change HIBP mode"
+rationale = "`settings.hibp_mode.changed`"
+mutation_surface = "`server_settings::update_hibp_mode`"
+files = ["crates/sui-id-store/src/repos/server_settings.rs"]
+test_id = "`a_s02_hibp`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "S03"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Change idle timeout"
+rationale = "`settings.idle_timeout.changed`"
+mutation_surface = "`server_settings::update_idle_session_timeout`"
+files = ["crates/sui-id-store/src/repos/server_settings.rs"]
+test_id = "`a_s03_idle`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "S04"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Change concurrent-session limit"
+rationale = "`settings.max_sessions.changed`"
+mutation_surface = "`server_settings::update_max_concurrent_sessions`"
+files = ["crates/sui-id-store/src/repos/server_settings.rs"]
+test_id = "`a_s04_sessions`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "S05"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Rotate metrics token"
+rationale = "`settings.metrics_token.rotated`"
+mutation_surface = "`server_settings::update_metrics_token_hash`"
+files = ["crates/sui-id-store/src/repos/server_settings.rs"]
+test_id = "`a_s05_metrics_token`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "S06"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Change SMTP configuration"
+rationale = "`auth.smtp_config.changed`"
+mutation_surface = "`smtp_config::upsert`"
+files = ["crates/sui-id-store/src/repos/smtp_config.rs"]
+test_id = "`a_s06_smtp`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "S07"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Create pending sensitive change"
+rationale = "`settings.pending_change.created`"
+mutation_surface = "`pending_settings_change::insert`"
+files = ["crates/sui-id-store/src/repos/pending_settings_change.rs"]
+test_id = "`a_s07_pending_create`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "S08"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Apply pending sensitive change"
+rationale = "`settings.pending_change.applied` with typed intent/changed-field attributes"
+mutation_surface = "`pending_settings_change::consume` and setting mutation"
+files = ["crates/sui-id-store/src/repos/pending_settings_change.rs"]
+test_id = "`a_s08_pending_apply`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "S09"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Cancel pending sensitive change"
+rationale = "`settings.pending_change.cancelled`"
+mutation_surface = "`pending_settings_change::cancel`"
+files = ["crates/sui-id-store/src/repos/pending_settings_change.rs"]
+test_id = "`a_s09_pending_cancel`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "S10"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Complete first setup"
+rationale = "`admin.setup.completed`"
+mutation_surface = "initial admin/client/config writes and `state::mark_initialized`"
+files = ["crates/sui-id-store/src/repos/state.rs"]
+test_id = "`a_s10_setup`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "K01"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Rotate signing key"
+rationale = "`signing_key.rotate`"
+mutation_surface = "`signing_keys::rotate_atomic`"
+files = ["crates/sui-id-store/src/repos/signing_keys.rs"]
+test_id = "`a_k01_signing_rotate`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "K02"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Retire signing key"
+rationale = "`signing_key.retire`"
+mutation_surface = "`signing_keys::retire`"
+files = ["crates/sui-id-store/src/repos/signing_keys.rs"]
+test_id = "`a_k02_signing_retire`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "K03"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Delete signing key"
+rationale = "`signing_key.delete`"
+mutation_surface = "`signing_keys::delete`"
+files = ["crates/sui-id-store/src/repos/signing_keys.rs"]
+test_id = "`a_k03_signing_delete`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "K06"
+class = "I"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Sealed-key insert/reseal primitives"
+rationale = "subordinate to S10 or K01 only"
+mutation_surface = "`signing_keys::insert_with_plaintext`, `insert_sealed_on_conn`, all `reseal_all` functions"
+files = ["crates/sui-id-store/src/repos/signing_keys.rs"]
+test_id = "`i_k06_key_primitives`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "O01"
+class = "O"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Enqueue email"
+rationale = "delivery queue state; originating security command owns its event"
+mutation_surface = "`email_outbox::enqueue`"
+files = ["crates/sui-id-store/src/repos/email_outbox.rs"]
+test_id = "`o_o01_enqueue`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "O02"
+class = "O"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Claim/update/requeue email work"
+rationale = "worker lifecycle with structured operational telemetry"
+mutation_surface = "`claim_one_eligible`, `mark_sent`, `record_failure`, `mark_permanently_failed`, `requeue_stuck_sending`"
+files = ["crates/sui-id-store/src/repos/email_outbox.rs"]  # claim_one_eligible, mark_sent, record_failure, mark_permanently_failed, requeue_stuck_sending -- all in this one file
+test_id = "`o_o02_outbox_worker`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "O03"
+class = "O"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Purge expired protocol rows"
+rationale = "retention housekeeping; count/error telemetry"
+mutation_surface = "purge functions in auth codes, sessions, pending MFA/WebAuthn, reset tokens, pending changes, refresh/access tokens"
+files = ["crates/sui-id-store/src/repos/auth_codes.rs", "crates/sui-id-store/src/repos/sessions.rs", "crates/sui-id-store/src/repos/login_pending_mfa.rs", "crates/sui-id-store/src/repos/webauthn_pending.rs", "crates/sui-id-store/src/repos/password_reset_tokens.rs", "crates/sui-id-store/src/repos/pending_settings_change.rs", "crates/sui-id-store/src/repos/refresh_tokens.rs", "crates/sui-id-store/src/repos/revoked_access_tokens.rs"]  # each file's own purge_expired
+test_id = "`o_o03_purge`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "O04"
+class = "O"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Create SQLite backup snapshot"
+rationale = "operator-invoked backup evidence owns outcome; no domain mutation in the live database"
+mutation_surface = "`backup::ops` `VACUUM INTO` destination"
+files = ["crates/sui-id-store/src/repos/backup.rs"]
+test_id = "`o_o04_backup_snapshot`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "X01"
+class = "X"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Schema migrations"
+rationale = "ordered migration identity/result in upgrade evidence"
+mutation_surface = "`Database` migration runner and migration SQL only"
+files = ["crates/sui-id-store/src/migrations.rs"]
+test_id = "`x_x01_migrations`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "X02"
+class = "X"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Development seed/reset"
+rationale = "dev-only, unreachable in production mode; dev warning/summary"
+mutation_surface = "`runtime::dev_mode` writes"
+files = ["crates/sui-id-store/src/repos/runtime.rs"]
+test_id = "`x_x02_dev_seed`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
