@@ -161,6 +161,17 @@ accountable for its scope, review, or proof.*
 - **observational-equivalence evidence** covering routing, every existing provider
   operation, and **every currently reachable callback outcome** — including the
   failure and denial paths, which are the ones a silent drop would remove;
+- **a triggering case for every security check in the moved code.** Enumerate the
+  checks first, then supply, per check, an input that **only that check** rejects,
+  and show it is still rejected after the move. *Owner decision, 2026-08-27 (Part
+  B, B2), strengthening this bar rather than accepting it as written.* Outcome
+  coverage alone does not close the risk this record exists for: a dropped check
+  changes observable behaviour only if some recorded scenario actually exercises
+  it, and several checks can share the single outcome "denied". Move the code,
+  drop a check no scenario triggers, and the record shows perfect equivalence —
+  measuring that nothing visible broke rather than that nothing invisible was
+  lost. If a check cannot be given an input that isolates it, say so explicitly;
+  an unisolatable check is a finding about the code, not a gap to pass over;
 - confirmation that no `use`, feature gate, error type or audit call site changed
   meaning as a result of the move;
 - a reviewer other than its implementer.

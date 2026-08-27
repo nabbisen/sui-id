@@ -88,9 +88,12 @@ at a time; the workspace and structural gate must remain green between waves.
         serving application writes — a genuinely different category. Either it
         moves into `sui-id-store` (which already owns database files) or it is
         declared a reviewed raw-access module with recorded justification. If it
-        moves, it carries an **observational-equivalence record**: the same
-        hazard as the RFC 096 federation split, where relocating code can
-        silently drop a check.
+        moves, it carries an **observational-equivalence record** meeting RFC
+        096's bar as strengthened on 2026-08-27 — including a triggering case for
+        every security check in the moved code, since outcome coverage alone does
+        not detect a dropped check that no scenario exercises. Same hazard as the
+        RFC 096 federation split, where relocating code can silently drop a
+        check.
   - [ ] Give the 11 e2e call sites in `crates/sui-id/tests/` a `ReadConn`-based
         assertion path. **No `test-support`-style feature may re-export raw
         access** — a feature enabled in a production build would silently undo

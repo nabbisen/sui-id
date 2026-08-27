@@ -972,6 +972,20 @@ the Part A review §A2. The residual M2a carries is therefore precise: a new bar
 write inside `sui-id-store`'s unconverted repository modules, caught by review
 until the AST gate lands.
 
+**Owner decision, 2026-08-27 (Part B, B1): this residual is accepted, and the
+AST gate stays in M2b.** Three reasons recorded so the acceptance can be revisited
+against them rather than re-argued: the exposure is one crate whose declared
+purpose is database access, so a reviewer knows where to look; the residual is
+bounded and named rather than "anywhere in the workspace", which is what it
+amounted to before §A2 measured it; and building the AST gate during M2a would
+build it against a module boundary still being moved, which is this RFC's own
+argument for the deferral.
+
+**Revisit if** conversion stalls such that M2b is not the next milestone after
+M2a, or if a bare write is ever found in an unconverted module during M2a —
+either would mean review is not in fact catching what this acceptance assumes it
+catches.
+
 Stages 1–2 may be reviewed before conversion. No partial wave may claim Class-A
 atomicity until its failure tests pass.
 
