@@ -102,7 +102,11 @@ at a time; the workspace and structural gate must remain green between waves.
   - [ ] Add the gate check that **fails if `rusqlite` appears in any
         `[dependencies]` or `[dev-dependencies]` table outside `sui-id-store`**.
         This is the control that makes the rest durable; without it the boundary
-        is a convention again.
+        is a convention again. **Dispatched as a condition of
+        `cargo xtask audit-structure`**, not as a separate script or lane — see
+        RFC 094's Structural coverage gate section for why. Read every crate
+        manifest in the workspace, not only the three that name `rusqlite`
+        today; the check exists to catch the fourth.
 - [ ] Observe compile/runtime rejection for prepared UPDATE, writable PRAGMA,
   ATTACH, backup API, returned raw statement, and indirect raw-helper attempts.
 

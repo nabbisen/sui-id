@@ -708,9 +708,18 @@ CI runs `cargo +stable xtask audit-structure --locked --policy
 ci/write-authority.toml --commands ci/write-commands.toml`. It fails if a source
 write site lacks a generated command declaration, a manifest row lacks a
 registry descriptor, two commands claim one exclusive binding, a Class-A
-command lacks its failure test, generated documentation differs, or an
-unapproved raw-write module exists. The generated declaration set must equal
-the reviewed inventory set. Grep is not authoritative.
+command lacks its failure test, generated documentation differs, an
+unapproved raw-write module exists, **or `rusqlite` appears in a
+`[dependencies]` or `[dev-dependencies]` table of any crate other than
+`sui-id-store`**. The generated declaration set must equal the reviewed
+inventory set. Grep is not authoritative.
+
+*The dependency condition is dispatched here, by decision rather than by
+inference (A6 sweep, 2026-08-27). It reads Cargo manifests rather than source,
+which is a different input domain — but it enforces this RFC's write-authority
+boundary, and splitting one boundary across two gates means two places to look
+when it fails and two places to forget when it changes. `audit-structure` already
+carries several unrelated conditions for the same reason.*
 
 The M1 string script may remain for vocabulary drift diagnosis, but the M2 job
 and documentation identify this structural gate as authoritative.
@@ -727,15 +736,81 @@ never inspected.
 
 Registering it requires a mechanism that does not exist yet.
 `scripts/check-gate-inputs.sh` validates every lane against RFC 093's table
-alone, so no other RFC can own a lane. **This RFC therefore delivers
-multi-source lane ownership** as part of its structural-gate work:
+alone, so no other RFC can own a lane. **This RFC delivers multi-source lane
+ownership** as part of its structural-gate work, specified below.
 
-- each lane in `[gates]` is validated against the table of the RFC that **owns**
-  it, not against RFC 093's table unconditionally;
-- every lane must have exactly one owning RFC — an unowned lane still fails, so
-  nothing is relaxed relative to today's check;
-- RFC 093 keeps ownership of G01–G12 and its completeness rule remains true of
-  its own lanes, unchanged, so RFC 093 does not reopen.
+*Specified 2026-08-27. The 2026-08-26 version of this passage stated three
+requirements and called them a deliverable; the A6 sweep correctly found no data
+format, discovery method, or conflict rule anywhere, and nothing to infer one
+from. What follows is the mechanism.*
+
+#### Manifest shape
+
+Two tables are added to `ci/gate-inputs.toml`:
+
+```toml
+[gate_lane_sources]
+# RFC number -> the heading of the section holding that RFC's lane table.
+# RFC 093's existing heading is used verbatim, so RFC 093 needs no amendment.
+"093" = "Gate Matrix v1"
+"094" = "Gate Matrix lanes owned by RFC 094"
+
+[gate_owners]
+# lane -> owning RFC number. Exactly one owner per lane.
+G01 = "093"
+# … G02 … G12 …
+G13 = "094"
+```
+
+**Ownership is declared by RFC number, not by path**, because an RFC's folder
+changes over its lifecycle — RFC 093 moves `accepted/` → `done/` at closure — and
+a manifest that has to be edited whenever a document is promoted is a manifest
+that will drift. The checker resolves a number to a file by matching
+`NNN-*.md` across the lifecycle folders only (`proposed`, `accepted`, `done`,
+`archive`), which is the scoping `scripts/check-rfc-integrity.py` already uses as
+`LIFECYCLE_FOLDERS`. Numbers are unique within those folders; `rfcs/reviews/` and
+`rfcs/handoffs/` reuse them and are excluded. Resolution must yield **exactly
+one** file — zero or several is a failure, not a guess.
+
+#### What condition 7 becomes
+
+Four checks, replacing today's single-source parse:
+
+1. Every `[gates]` key has exactly one `[gate_owners]` entry, and every
+   `[gate_owners]` key is a `[gates]` key or a `[gate_matrix_exceptions]` key.
+2. Every `[gate_owners]` value appears in `[gate_lane_sources]`, and resolves to
+   exactly one RFC file.
+3. Every lane in every source RFC's lane table is present in `[gates]` or
+   `[gate_matrix_exceptions]` — today's completeness rule, generalised over all
+   sources instead of over RFC 093 alone.
+4. Every `[gates]` command byte-matches the row for that lane in **its owning
+   RFC's** table, under the same single normalisation permitted today.
+
+#### Why ownership conflicts cannot occur
+
+`[gate_owners]` is a TOML table, so two owners for one lane is a **parse error**,
+not a condition to detect — and condition 7 already fails on duplicate `[gates]`
+keys. The A6 sweep asked what happens when two RFCs both claim a lane; under this
+shape the question cannot arise, which is a better answer than a tie-break rule.
+Ownership is explicit single-writer data rather than something derived by
+scanning several documents and reconciling what they say.
+
+#### Why an owning RFC needs no Gate Matrix table of RFC 093's shape
+
+The sweep asked whether RFC 094 must grow a table shaped like RFC 093's. It must
+not have to: `[gate_lane_sources]` names the heading to parse, so an RFC owning a
+single lane declares a single-row table under a heading of its own choosing. RFC
+093's heading is recorded as-is, so **RFC 093 is not amended by this mechanism**
+and does not reopen.
+
+#### Migration
+
+Every lane today is RFC 093's, so the initial `[gate_owners]` maps G01–G12 to
+`"093"` and `[gate_lane_sources]` holds one entry. **Behaviour is then identical
+to the current check**, which means the mechanism can land, be reviewed, and be
+proven green *before* this RFC's own lane exists. Adding the structural-gate lane
+afterwards is a manifest entry plus a single-row table in this RFC — the smallest
+change that can add a gate, which is the property R10 exists to restore.
 
 Until this lands there is no registered way to add a lane — tracked as **R10** in
 `ROADMAP.md`. The lane must be registered before this gate is relied on as M2a
