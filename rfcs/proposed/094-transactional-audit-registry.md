@@ -774,10 +774,13 @@ one** file — zero or several is a failure, not a guess.
 
 #### What condition 7 becomes
 
-Four checks, replacing today's single-source parse:
+**Six** checks, replacing today's single-source parse. *Corrected 2026-08-27:
+the first version of this list had four and was not behaviour-preserving — it
+silently dropped two checks today's script performs. The implementability review
+found both by running the two algorithms side by side. Checks 5 and 6 restore
+them; they are not new requirements.*
 
-1. Every `[gates]` key has exactly one `[gate_owners]` entry, and every
-   `[gate_owners]` key is a `[gates]` key or a `[gate_matrix_exceptions]` key.
+1. Every `[gates]` key has exactly one `[gate_owners]` entry.
 2. Every `[gate_owners]` value appears in `[gate_lane_sources]`, and resolves to
    exactly one RFC file.
 3. Every lane in every source RFC's lane table is present in `[gates]` or
@@ -785,11 +788,48 @@ Four checks, replacing today's single-source parse:
    sources instead of over RFC 093 alone.
 4. Every `[gates]` command byte-matches the row for that lane in **its owning
    RFC's** table, under the same single normalisation permitted today.
+5. **No lane appears in both `[gates]` and `[gate_matrix_exceptions]`.**
+   Preserves `check-gate-inputs.sh`'s existing disjointness test.
+6. **Every `[gate_matrix_exceptions]` key names a lane present in some source
+   RFC's table.** Preserves the existing groundedness test, generalised from
+   RFC 093 to all sources: an exception for a lane no RFC declares is a stale
+   exception, and must fail rather than sit unnoticed.
+
+**Exceptions do not require a `[gate_owners]` entry.** Ownership feeds only
+check 4, from which exceptions are by definition exempt, so an owner for an
+exception would be bookkeeping with no enforcement behind it; the existing
+requirement that every exception record a *reason* already carries the "why, and
+under whose authority" information. Note this is independent of check 6 — an
+owned-but-ungrounded exception would still be a distinct failure mode, which is
+why check 6 exists regardless of how this is decided.
+
+#### Matching a source RFC's heading
+
+`[gate_lane_sources]` supplies the heading as **data**, where today's extraction
+uses a literal awk pattern written by hand. Three rules follow, and none is
+optional:
+
+- **The heading is never used as a pattern.** Compare the candidate line's text —
+  stripped of leading `#` characters and surrounding whitespace — to the recorded
+  string by **plain equality**. A heading such as `Gate Matrix (v2)` fed to a
+  regex matcher would have its parentheses read as a group, matching something
+  other than intended or nothing at all.
+- **Matching is heading-level-agnostic.** Any level `#` through `######` may
+  carry a lane table, since an owning RFC may reasonably nest it. Today's fixed
+  `^## ` is a property of RFC 093's document, not a constraint on others.
+- **The heading must occur exactly once in the owning RFC.** Zero or several is a
+  failure, not a first-match-wins guess — the same rule already applied to
+  number-to-file resolution, for the same reason.
+
+The section body runs from the matched heading to the next heading line of **any**
+level, which is today's behaviour.
 
 #### Why ownership conflicts cannot occur
 
 `[gate_owners]` is a TOML table, so two owners for one lane is a **parse error**,
-not a condition to detect — and condition 7 already fails on duplicate `[gates]`
+not a condition to detect. The same holds for `[gate_lane_sources]`: two
+different headings for one RFC number is equally a parse error, by the identical
+reasoning — stated rather than left to be re-derived — and condition 7 already fails on duplicate `[gates]`
 keys. The A6 sweep asked what happens when two RFCs both claim a lane; under this
 shape the question cannot arise, which is a better answer than a tie-break rule.
 Ownership is explicit single-writer data rather than something derived by
