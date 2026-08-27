@@ -1,6 +1,6 @@
 # RFC 093 verification and evidence contract
 
-**Governing RFC:** [RFC 093](../../accepted/093-build-toolchain-release-gates.md)
+**Governing RFC:** [RFC 093](../../done/093-build-toolchain-release-gates.md)
 
 This applies to every M1a and M1b package, and is the standard later milestones
 inherit. It exists because RFC 093's stated primary threat is gate weakening:

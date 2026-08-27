@@ -67,7 +67,7 @@ slot is `101`). One **parallel namespace** also exists:
 
 | RFC | Title | Milestone | Implementation owner |
 |---|---|---|---|
-| 093 | [Build, Toolchain, and Release-Gate Contract](./accepted/093-build-toolchain-release-gates.md) | M1a, M1b | `codex-developer` |
+| 093 | [Build, Toolchain, and Release-Gate Contract](./done/093-build-toolchain-release-gates.md) | M1a, M1b | `codex-developer` |
 | 094 | [Transactional Audit Completeness and Typed Event Registry](./accepted/094-transactional-audit-registry.md) | M2a, M2b | `codex-developer` (OpenAI Codex) |
 | 095 | [Dynamic Client Registration Transaction and Validation](./accepted/095-dynamic-client-registration-transaction.md) | M3 | `codex-developer` (OpenAI Codex) |
 | 096 | [Upstream OIDC Federation Validation](./accepted/096-upstream-oidc-federation-validation.md) | M4-A, M4-B | `codex-developer` (OpenAI Codex) |

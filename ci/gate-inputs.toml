@@ -26,7 +26,7 @@ G08 = ["rustfmt"]
 G09a = []
 G09b = []
 
-# RFC 093 Gate Matrix v1 (rfcs/accepted/093-build-toolchain-release-gates.md),
+# RFC 093 Gate Matrix v1 (rfcs/done/093-build-toolchain-release-gates.md),
 # machine-readable expansion. scripts/ci-gate.sh executes these commands
 # verbatim; scripts/check-gate-inputs.sh (A3.4) verifies this table matches
 # the RFC's table exactly. Do not paraphrase, wrap, or reorder a command here

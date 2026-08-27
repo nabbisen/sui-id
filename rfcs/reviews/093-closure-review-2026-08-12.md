@@ -4,7 +4,7 @@
 **Reviewer.** `codex-independent-architecture-security-reviewer` (OpenAI Codex)  
 **Request.** [Closure review request](./093-closure-review-request-2026-08-03.md)  
 **Baseline.** `1d58da2491275409e9012ae0482af62bb86934ba`  
-**Governing RFC.** [RFC 093](../accepted/093-build-toolchain-release-gates.md)
+**Governing RFC.** [RFC 093](../done/093-build-toolchain-release-gates.md)
 
 ## Review result
 
@@ -33,7 +33,7 @@ The C5 diff was also inspected. It removes only the four legacy inline UI jobs a
 
 ### B-093-1 — the legacy literal check is represented as structural audit assurance
 
-RFC 093 is explicit: the legacy script compares event-name strings and cannot prove emission, typing, or shared mutation/audit transactions ([RFC 093](../accepted/093-build-toolchain-release-gates.md) lines 47–49). Its required wording is “Diagnostic only,” and says string parity proves neither emission completeness nor mutation/audit atomicity (lines 261–269). The closure handoff makes independent confirmation of that limitation mandatory ([verification handoff](../handoffs/093-build-toolchain-release-gates/verification.md) lines 74–79).
+RFC 093 is explicit: the legacy script compares event-name strings and cannot prove emission, typing, or shared mutation/audit transactions ([RFC 093](../done/093-build-toolchain-release-gates.md) lines 47–49). Its required wording is “Diagnostic only,” and says string parity proves neither emission completeness nor mutation/audit atomicity (lines 261–269). The closure handoff makes independent confirmation of that limitation mandatory ([verification handoff](../handoffs/093-build-toolchain-release-gates/verification.md) lines 74–79).
 
 The current normative [audit coverage matrix](../../docs/src/reference/audit-coverage-matrix.md) contradicts that boundary in two connected ways:
 

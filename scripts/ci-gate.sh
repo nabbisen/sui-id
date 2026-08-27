@@ -3,7 +3,7 @@
 #
 # Each gate ID below runs the exact command recorded in `ci/gate-inputs.toml`
 # under `[gates]`, which is the machine-readable expansion of RFC 093's Gate
-# Matrix v1 table (rfcs/accepted/093-build-toolchain-release-gates.md). This
+# Matrix v1 table (rfcs/done/093-build-toolchain-release-gates.md). This
 # script owns the environment/evidence block once — resolve HEAD, assert it
 # equals $GITHUB_SHA, assert a clean tree, print tool versions, echo the
 # literal command, then run it capturing exit status and timestamps — so

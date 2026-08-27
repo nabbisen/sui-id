@@ -16,7 +16,7 @@ usage() {
 all=false
 policy=""
 root="."
-rfc="rfcs/accepted/093-build-toolchain-release-gates.md"
+rfc="rfcs/done/093-build-toolchain-release-gates.md"
 workflows_dir=".github/workflows"
 
 while (($#)); do

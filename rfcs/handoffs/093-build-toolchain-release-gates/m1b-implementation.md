@@ -1,6 +1,6 @@
 # RFC 093 M1b — documentation and lifecycle gates
 
-**Governing RFC:** [RFC 093](../../accepted/093-build-toolchain-release-gates.md)
+**Governing RFC:** [RFC 093](../../done/093-build-toolchain-release-gates.md)
 **Lane:** B (second implementer)
 **Exit gate:** G10a, G10b, G11 and G12 pass hosted; RFC integrity reports no
 known debt and carries no permanent allowlist.

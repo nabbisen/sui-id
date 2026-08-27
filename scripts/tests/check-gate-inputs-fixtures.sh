@@ -17,10 +17,10 @@ trap 'rm -rf "$tmp"' EXIT
 
 make_valid_fixture() {
   local target=$1
-  mkdir -p "$target/ci" "$target/rfcs/accepted" "$target/.github/workflows"
+  mkdir -p "$target/ci" "$target/rfcs/done" "$target/.github/workflows"
   cp "$repo_root/ci/gate-inputs.toml" "$target/ci/gate-inputs.toml"
-  cp "$repo_root/rfcs/accepted/093-build-toolchain-release-gates.md" \
-    "$target/rfcs/accepted/093-build-toolchain-release-gates.md"
+  cp "$repo_root/rfcs/done/093-build-toolchain-release-gates.md" \
+    "$target/rfcs/done/093-build-toolchain-release-gates.md"
   cp "$repo_root/.github/workflows/ci.yml" "$target/.github/workflows/ci.yml"
   cp "$repo_root/.github/workflows/audit.yml" "$target/.github/workflows/audit.yml"
   cp "$repo_root/.github/workflows/fuzz.yml" "$target/.github/workflows/fuzz.yml"
@@ -29,7 +29,7 @@ make_valid_fixture() {
 run_checker() {
   local root=$1
   bash "$checker" --all --policy ci/gate-inputs.toml \
-    --rfc rfcs/accepted/093-build-toolchain-release-gates.md \
+    --rfc rfcs/done/093-build-toolchain-release-gates.md \
     --workflows-dir .github/workflows \
     --root "$root"
 }

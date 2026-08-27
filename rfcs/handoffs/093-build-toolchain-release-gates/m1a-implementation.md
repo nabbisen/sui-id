@@ -1,6 +1,6 @@
 # RFC 093 M1a — trustworthy build baseline
 
-**Governing RFC:** [RFC 093](../../accepted/093-build-toolchain-release-gates.md)
+**Governing RFC:** [RFC 093](../../done/093-build-toolchain-release-gates.md)
 **Lane:** A (`codex-developer`)
 **Exit gate:** G01–G09 pass on one clean commit, hosted, with recorded tool
 versions; the gate-input manifest is enforced by a tracked check.

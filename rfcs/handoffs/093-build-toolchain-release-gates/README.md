@@ -1,6 +1,6 @@
 # RFC 093 developer handoff
 
-**Governing RFC:** [RFC 093](../../accepted/093-build-toolchain-release-gates.md) — Accepted, amended 2026-07-28
+**Governing RFC:** [RFC 093](../../done/093-build-toolchain-release-gates.md) — Accepted, amended 2026-07-28
 **Audience:** `codex-developer` (Lane A) and the second implementer (Lane B)
 **Status:** Planning companion. It translates RFC 093 into ordered implementation
 stages. It does not approve design, authorize coding beyond the recorded
