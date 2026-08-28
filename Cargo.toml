@@ -75,6 +75,10 @@ qrcode                      = { version = "0.14", default-features = false, feat
 webauthn-rs                 = { version = "0.5", features = ["danger-allow-state-serialisation"] }
 # Property-based testing. Dev-only — never reaches production builds.
 proptest                    = "1.5"
+# Compile-fail fixtures (RFC 094 registry: proving a sealed type genuinely
+# cannot do the thing it claims not to). Dev-only — never reaches
+# production builds.
+trybuild                    = "1.0"
 hmac                        = "0.13"
 subtle                      = "2.6"
 prometheus                  = { version = "0.14", default-features = false }

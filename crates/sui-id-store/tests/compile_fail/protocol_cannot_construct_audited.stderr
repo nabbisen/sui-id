@@ -1,0 +1,15 @@
+error[E0451]: fields `value` and `receipt` of struct `Audited` are private
+  --> tests/compile_fail/protocol_cannot_construct_audited.rs:16:9
+   |
+15 |     Audited {
+   |     ------- in this type
+16 |         value: (),
+   |         ^^^^^ private field
+17 |         receipt: sui_id_store::registry::AuditReceipt { _private: () },
+   |         ^^^^^^^ private field
+
+error[E0451]: field `_private` of struct `AuditReceipt` is private
+  --> tests/compile_fail/protocol_cannot_construct_audited.rs:17:57
+   |
+17 |         receipt: sui_id_store::registry::AuditReceipt { _private: () },
+   |                                                         ^^^^^^^^ private field

@@ -32,27 +32,32 @@ const SELECT_COLS: &str =
     "id, user_id, expires_at, created_at, revoked_at, auth_methods, last_step_up_at, last_used_at";
 
 pub async fn insert(db: &Database, s: &SessionRow) -> StoreResult<()> {
-    let methods_json = serde_json::to_string(&s.auth_methods)?;
     let s = s.clone();
-    db.with_conn(move |conn| {
-        conn.execute(
-            "INSERT INTO sessions(id, user_id, expires_at, created_at, revoked_at, \
-             auth_methods, last_step_up_at, last_used_at) \
-             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            params![
-                s.id.to_string(),
-                s.user_id.to_string(),
-                s.expires_at,
-                s.created_at,
-                s.revoked_at,
-                methods_json,
-                s.last_step_up_at,
-                s.last_used_at,
-            ],
-        )?;
-        Ok(())
-    })
-    .await
+    db.with_conn(move |conn| insert_within_tx(conn, &s)).await
+}
+
+/// Same as [`insert`], for a caller that already holds a transaction (RFC
+/// 094 U30: the sealed `Protocol` capability). Takes `&rusqlite::Connection`
+/// so it accepts a bare connection or, via deref, a `WriteTx`'s
+/// transaction.
+pub fn insert_within_tx(conn: &rusqlite::Connection, s: &SessionRow) -> StoreResult<()> {
+    let methods_json = serde_json::to_string(&s.auth_methods)?;
+    conn.execute(
+        "INSERT INTO sessions(id, user_id, expires_at, created_at, revoked_at, \
+         auth_methods, last_step_up_at, last_used_at) \
+         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params![
+            s.id.to_string(),
+            s.user_id.to_string(),
+            s.expires_at,
+            s.created_at,
+            s.revoked_at,
+            methods_json,
+            s.last_step_up_at,
+            s.last_used_at,
+        ],
+    )?;
+    Ok(())
 }
 
 pub async fn get(db: &Database, id: SessionId) -> StoreResult<SessionRow> {

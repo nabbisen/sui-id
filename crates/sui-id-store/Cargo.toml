@@ -41,6 +41,7 @@ ldap3                       = { workspace = true, optional = true }
 [dev-dependencies]
 proptest                    = { workspace = true }
 tempfile                    = { workspace = true }
+trybuild                    = { workspace = true }
 tokio                       = { workspace = true, features = ["macros", "rt-multi-thread", "net", "time"] }
 # Enable both crypto-provider backends here, not just `ring` (which is all
 # ldap3's tls-rustls-ring pulls in for this crate alone). In the real

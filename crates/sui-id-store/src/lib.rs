@@ -43,11 +43,13 @@ pub fn global_metrics() -> Option<&'static metrics::Metrics> {
     GLOBAL_METRICS.get().map(|m| m.as_ref())
 }
 
+pub mod commands;
 pub mod db;
 pub mod errors;
 pub mod metrics;
 pub mod migrations;
 pub mod models;
+pub mod registry;
 pub mod repos;
 
 pub use db::Database;

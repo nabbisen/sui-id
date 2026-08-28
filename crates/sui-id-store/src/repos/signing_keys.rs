@@ -256,25 +256,42 @@ pub async fn rotate_atomic(
     let pk_vec_ret = pk_vec.clone();
     let algorithm_owned = algorithm.to_owned();
     let algorithm_ret = algorithm_owned.clone();
-    let now = Utc::now();
-    db.with_tx(move |tx| {
-        // Step 1: retire any currently active key.
-        tx.execute(
-            "UPDATE signing_keys SET is_active = 0, rotated_at = ?1 WHERE is_active = 1",
-            params![now],
-        )?;
-        // Step 2: insert the new active key.
-        insert_sealed_on_conn(tx, new_id, algorithm_owned.as_str(), &sealed, &pk_vec, true)?;
-        Ok(())
-    })
-    .await?;
+    let created_at = db
+        .with_tx(move |tx| {
+            rotate_atomic_within_tx(tx, new_id, algorithm_owned.as_str(), &sealed, &pk_vec)
+        })
+        .await?;
     Ok(SigningKeyRow {
         id: new_id,
         algorithm: algorithm_ret,
         private_key_enc: vec![],
         public_key: pk_vec_ret,
         is_active: true,
-        created_at: now,
+        created_at,
         rotated_at: None,
     })
+}
+
+/// Same as [`rotate_atomic`], for a caller that already holds a
+/// transaction (RFC 094 K01: the sealed `AtomicAudit` capability).
+/// `private_key_sealed` must already be sealed (crypto work stays outside
+/// the transaction, same reasoning as [`rotate_atomic`]). Returns the
+/// `created_at` timestamp actually written, so the caller doesn't
+/// re-derive a slightly different one with a second `Utc::now()` call.
+pub fn rotate_atomic_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    new_id: SigningKeyId,
+    algorithm: &str,
+    private_key_sealed: &[u8],
+    public_key: &[u8],
+) -> StoreResult<DateTime<Utc>> {
+    let now = Utc::now();
+    // Step 1: retire any currently active key.
+    tx.execute(
+        "UPDATE signing_keys SET is_active = 0, rotated_at = ?1 WHERE is_active = 1",
+        params![now],
+    )?;
+    // Step 2: insert the new active key.
+    insert_sealed_on_conn(tx, new_id, algorithm, private_key_sealed, public_key, true)?;
+    Ok(now)
 }

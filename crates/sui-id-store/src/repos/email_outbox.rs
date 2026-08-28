@@ -52,30 +52,38 @@ pub async fn enqueue(db: &Database, row: EmailOutboxRow) -> StoreResult<EmailOut
         m.email_outbox_enqueued();
     }
     let id = row.id;
-    db.with_conn(move |conn| {
-        conn.execute(
-            "INSERT INTO email_outbox \
-             (id, state, template, recipient_enc, payload_enc, attempt_count, \
-              next_attempt_at, last_error, locale, created_at, updated_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
-            rusqlite::params![
-                row.id.to_string(),
-                EmailOutboxState::Queued.as_str(),
-                row.template,
-                row.recipient_enc,
-                row.payload_enc,
-                0_i64,
-                row.next_attempt_at,
-                Option::<String>::None,
-                row.locale,
-                row.created_at,
-                row.updated_at,
-            ],
-        )?;
-        Ok(())
-    })
-    .await?;
+    db.with_conn(move |conn| enqueue_within_tx(conn, &row))
+        .await?;
     Ok(id)
+}
+
+/// Same as [`enqueue`], for a caller that already holds a transaction (RFC
+/// 094 O01: the sealed `Operational` capability). Takes
+/// `&rusqlite::Connection` so it accepts a bare connection or, via deref, a
+/// `WriteTx`'s transaction. Does not touch the metrics counter — callers
+/// inside a larger transaction increment it themselves if they want it, to
+/// avoid double-counting on rollback/retry.
+pub fn enqueue_within_tx(conn: &rusqlite::Connection, row: &EmailOutboxRow) -> StoreResult<()> {
+    conn.execute(
+        "INSERT INTO email_outbox \
+         (id, state, template, recipient_enc, payload_enc, attempt_count, \
+          next_attempt_at, last_error, locale, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        rusqlite::params![
+            row.id.to_string(),
+            EmailOutboxState::Queued.as_str(),
+            row.template,
+            row.recipient_enc,
+            row.payload_enc,
+            0_i64,
+            row.next_attempt_at,
+            Option::<String>::None,
+            row.locale,
+            row.created_at,
+            row.updated_at,
+        ],
+    )?;
+    Ok(())
 }
 
 /// Claim one eligible queued row (next_attempt_at ≤ now) and mark it

@@ -83,43 +83,51 @@ const SELECT_USER: &str = "SELECT id, username, display_name, is_admin, is_disab
                            FROM users";
 
 pub async fn create(db: &Database, user: &UserRow) -> StoreResult<()> {
-    let email_normalized = user.email.as_deref().map(sui_id_shared::normalize_email);
     let user = user.clone();
-    db.with_conn(move |conn| {
-        conn.execute(
-            "INSERT INTO users(id, username, display_name, is_admin, role, is_disabled, is_deleted, \
-                                created_at, updated_at, user_uuid, \
-                                failed_login_count, locked_until, email, preferred_lang, \
-                                email_normalized) \
-             VALUES(?1, ?2, ?3, ?4, ?15, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
-            params![
-                user.id.to_string(),
-                user.username,
-                user.display_name,
-                user.is_admin as i64,
-                user.is_disabled as i64,
-                user.is_deleted as i64,
-                user.created_at,
-                user.updated_at,
-                user.user_uuid.to_string(),
-                user.failed_login_count,
-                user.locked_until,
-                user.email,
-                user.preferred_lang,
-                email_normalized,
-                user.role.as_str(),
-            ],
-        )
-        .map_err(|e| match e {
-            rusqlite::Error::SqliteFailure(err, _)
-                if err.code == rusqlite::ErrorCode::ConstraintViolation =>
-            {
-                StoreError::Conflict
-            }
-            other => StoreError::from(other),
-        })?;
-        Ok(())
-    }).await
+    db.with_conn(move |conn| create_within_tx(conn, &user))
+        .await
+}
+
+/// Same as [`create`], for a caller that already holds a transaction (RFC
+/// 094 U01: the sealed Class-A capability). Takes `&rusqlite::Connection`
+/// rather than `&Transaction` so it accepts either a bare connection
+/// (`create`'s own use, via deref) or a `WriteTx`'s transaction —
+/// `rusqlite::Transaction` derefs to `Connection`.
+pub fn create_within_tx(conn: &rusqlite::Connection, user: &UserRow) -> StoreResult<()> {
+    let email_normalized = user.email.as_deref().map(sui_id_shared::normalize_email);
+    conn.execute(
+        "INSERT INTO users(id, username, display_name, is_admin, role, is_disabled, is_deleted, \
+                            created_at, updated_at, user_uuid, \
+                            failed_login_count, locked_until, email, preferred_lang, \
+                            email_normalized) \
+         VALUES(?1, ?2, ?3, ?4, ?15, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+        params![
+            user.id.to_string(),
+            user.username,
+            user.display_name,
+            user.is_admin as i64,
+            user.is_disabled as i64,
+            user.is_deleted as i64,
+            user.created_at,
+            user.updated_at,
+            user.user_uuid.to_string(),
+            user.failed_login_count,
+            user.locked_until,
+            user.email,
+            user.preferred_lang,
+            email_normalized,
+            user.role.as_str(),
+        ],
+    )
+    .map_err(|e| match e {
+        rusqlite::Error::SqliteFailure(err, _)
+            if err.code == rusqlite::ErrorCode::ConstraintViolation =>
+        {
+            StoreError::Conflict
+        }
+        other => StoreError::from(other),
+    })?;
+    Ok(())
 }
 
 /// Update a user's preferred UI language. `lang` is a BCP-47 tag
@@ -283,24 +291,37 @@ pub async fn record_login_failure(
 ) -> StoreResult<i64> {
     db.with_conn(move |conn| {
         let tx = conn.unchecked_transaction()?;
-        let count: i64 = tx
-            .query_row(
-                "SELECT failed_login_count FROM users WHERE id = ?1",
-                [id.to_string()],
-                |r| r.get(0),
-            )
-            .map_err(|e| match e {
-                rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
-                other => StoreError::from(other),
-            })?;
-        let new_count = count + 1;
-        tx.execute(
-            "UPDATE users SET failed_login_count = ?1, locked_until = ?2, updated_at = ?3 WHERE id = ?4",
-            params![new_count, lock_until, Utc::now(), id.to_string()],
-        )?;
+        let new_count = record_login_failure_within_tx(&tx, id, lock_until)?;
         tx.commit()?;
         Ok(new_count)
-    }).await
+    })
+    .await
+}
+
+/// Same as [`record_login_failure`], for a caller that already holds a
+/// transaction (RFC 094 U22: the sealed Class-A capability, not a bare
+/// `with_conn`-opened one). Commit is the caller's responsibility.
+pub fn record_login_failure_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    id: UserId,
+    lock_until: Option<DateTime<Utc>>,
+) -> StoreResult<i64> {
+    let count: i64 = tx
+        .query_row(
+            "SELECT failed_login_count FROM users WHERE id = ?1",
+            [id.to_string()],
+            |r| r.get(0),
+        )
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
+            other => StoreError::from(other),
+        })?;
+    let new_count = count + 1;
+    tx.execute(
+        "UPDATE users SET failed_login_count = ?1, locked_until = ?2, updated_at = ?3 WHERE id = ?4",
+        params![new_count, lock_until, Utc::now(), id.to_string()],
+    )?;
+    Ok(new_count)
 }
 
 /// Reset the user's failure counter and clear any active lock.
