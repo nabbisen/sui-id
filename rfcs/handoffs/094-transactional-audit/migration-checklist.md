@@ -20,7 +20,15 @@ at a time; the workspace and structural gate must remain green between waves.
 
 - [ ] Add event kind and class enums plus deterministic descriptors.
 - [ ] Add typed payloads with actor/target requirements and bounded attributes.
-- [ ] Prove secret types cannot be formatted/coerced into payload attributes.
+- [ ] Prove secret types cannot be **implicitly** coerced into payload attributes:
+      a secret-bearing type must not satisfy the attribute API's bound, proven by
+      a compile-fail fixture. *Narrowed 2026-08-28. This read "cannot be
+      formatted/coerced", which claims more than any test can discharge —
+      `expose_secret()` exists precisely so a caller can deliberately produce a
+      `String`, and no type-level control can prevent that. The realistic mistake
+      is passing the secret directly, and that is what must be blocked. Do not
+      write a fixture asserting the stronger claim; it would pass while proving
+      something narrower than it says.*
 - [ ] Generate or mechanically verify audit reference documentation.
 - [ ] Add duplicate-name, class-mismatch, missing-field, and stable-serialization
   tests.
@@ -195,6 +203,17 @@ Repeat for every inventory row:
   survives outside the reviewed executor/migration modules.
 
 ## Stage 3 — signing-key rotation
+
+> **Known live defect, found 2026-08-28 while building the Stage 1 slice.**
+> `authn::session::verify_password_login` records a login failure in **two
+> separate non-atomic calls** — bump the counter, then a second best-effort call
+> to stamp `locked_until` if the threshold was crossed. A failure between them
+> leaves an account whose count crossed the threshold but which is not locked.
+> `U22`'s conversion closes this; the wave that owns `U22` must show the lock and
+> the counter committing in one transaction, and must not treat the existing
+> two-call shape as the behaviour to preserve. Recorded here so it is not
+> rediscovered, and because it is a real instance of what RFC 094 exists to fix
+> rather than an argument from the RFC.
 
 - [ ] Convert `K01` signing-key rotation to the Class-A runner: retire old,
   insert/activate new, and append `signing_key.rotate` in one transaction.
