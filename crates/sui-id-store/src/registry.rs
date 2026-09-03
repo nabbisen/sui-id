@@ -233,14 +233,46 @@ impl AuditResult {
 }
 
 /// A resolved, bounded set of attribute values for one event. Built only
-/// through [`AuditAttributes::builder`]; every value is a plain `String` —
-/// nothing implementing a secret-wrapper type can be inserted, because
-/// insertion takes `impl Into<String>` and this crate's secret types
-/// deliberately do not implement `Into<String>`/`Display` (proved by a
-/// compile-fail fixture, not this comment — see `tests/compile_fail/`).
+/// through [`AuditAttributes::builder`]; every value is a plain `String`,
+/// produced from a closed set of source types via the sealed
+/// [`AttributeValue`] trait — nothing outside this crate can widen that
+/// set, so a secret wrapper type (or any other third-party type) cannot
+/// become an attribute regardless of what `From`/`Into` impls that type's
+/// own crate happens to carry (proved by a compile-fail fixture, not this
+/// comment — see `tests/compile_fail/`).
 #[derive(Debug, Clone, Default)]
 pub struct AuditAttributes {
     entries: Vec<(&'static str, String)>,
+}
+
+/// The closed set of types that may become an audit attribute value.
+/// Sealed via [`sealed::Sealed`]: only this module can add an implementor.
+///
+/// This used to be `impl Into<String>`, which defined the accepted set as
+/// "whatever implements `Into<String>` in scope" — a set owned by other
+/// crates, not this one. That meant the guarantee "secrets cannot become
+/// attributes" rested on `secrecy` continuing not to implement
+/// `Into<String>`, and enabling unrelated Cargo features could silently
+/// widen what the API accepted (observed: `url::Url` gained a path into
+/// `Into<String>` under `--all-features`, changing the compile-fail
+/// fixture's diagnostic without any change to this crate). Sealing closes
+/// the set to types this crate has explicitly reviewed and added.
+pub trait AttributeValue: sealed::Sealed {
+    fn into_attribute(self) -> String;
+}
+
+impl sealed::Sealed for String {}
+impl AttributeValue for String {
+    fn into_attribute(self) -> String {
+        self
+    }
+}
+
+impl sealed::Sealed for &str {}
+impl AttributeValue for &str {
+    fn into_attribute(self) -> String {
+        self.to_string()
+    }
 }
 
 /// Maximum attribute entries per event and maximum bytes per value. Small,
@@ -277,10 +309,11 @@ impl AuditAttributes {
 }
 
 impl AuditAttributesBuilder {
-    /// Add one attribute. `value` must be a plain `String`-convertible
-    /// type — secret wrapper types do not implement `Into<String>`, so
-    /// attempting to pass one is a compile error, not a runtime rejection.
-    pub fn attribute(mut self, name: &'static str, value: impl Into<String>) -> Self {
+    /// Add one attribute. `value` must be one of the closed
+    /// [`AttributeValue`] implementors — secret wrapper types (and any
+    /// other type this crate has not explicitly admitted) are rejected at
+    /// compile time, not by a runtime check.
+    pub fn attribute(mut self, name: &'static str, value: impl AttributeValue) -> Self {
         if self.error.is_some() {
             return self;
         }
@@ -292,7 +325,7 @@ impl AuditAttributesBuilder {
             self.error = Some(AuditBuildError::TooManyAttributes);
             return self;
         }
-        let value = value.into();
+        let value = value.into_attribute();
         if value.len() > MAX_ATTRIBUTE_VALUE_BYTES {
             self.error = Some(AuditBuildError::AttributeTooLong(name));
             return self;
