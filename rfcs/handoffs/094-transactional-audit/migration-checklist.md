@@ -33,6 +33,22 @@ at a time; the workspace and structural gate must remain green between waves.
 - [ ] Add duplicate-name, class-mismatch, missing-field, and stable-serialization
   tests.
 - [ ] Add the checked-in command inventory and structural comparison tool.
+
+      **One declared command has no inventory row, by design.**
+      `ProofOnlyForbiddenSystemPrincipalCommand`
+      (`PROOFONLY-NOT-AN-INVENTORY-ROW`) exists solely so the
+      `system_principal: forbidden` compile-fail fixture has a type to name from
+      outside the crate; it cannot be declared inside the fixture because
+      `declare_write_command!` expands `impl sealed::Sealed` and `sealed` is
+      `pub(crate)`. It will fail this tool's "declared command with no inventory
+      row" check the day the check works.
+
+      Exempt it **by exact command ID, as a single-entry allow list, with the
+      reason recorded, and fail if the list grows**. Do not pattern-match
+      `PROOFONLY*` — a prefix rule would silently admit a second one, and the
+      whole point of this tool is that nothing reaches the database without an
+      inventory row. *Recorded 2026-09-03, before the gate exists, so it is not
+      met later as a puzzling failure and worked around.*
 - [ ] Add `ReadConn`, sealed `declare_write_command!`, A/P/O/X runners, and the
   exact reviewed raw-write module policy.
 - [ ] Ensure `ReadConn` returns only owned mapped rows, requires SQLite
@@ -237,6 +253,17 @@ Repeat for every inventory row:
 > two-call shape as the behaviour to preserve. Recorded here so it is not
 > rediscovered, and because it is a real instance of what RFC 094 exists to fix
 > rather than an argument from the RFC.
+
+> **Provisional marking to resolve in this wave (recorded 2026-09-03).** Stage 2
+> declares `U01` (admin create user) `system_principal: permitted;`, which is
+> almost certainly wrong for the real call site — an admin-create path should
+> consume an authenticated admin's authorization decision, making it
+> `forbidden`. It was marked `permitted` only because Stage 2 has no
+> decision-consuming constructor, so `forbidden` would break an already-approved
+> test to buy a property that cannot yet be delivered. **This wave must either
+> flip `U01` to `forbidden` or record why an authenticated admin path does not
+> need it.** Tracked here rather than left in a `commands.rs` comment, because a
+> provisional `permitted` on an admin command is exactly what becomes permanent.
 
 - [ ] Convert `K01` signing-key rotation to the Class-A runner: retire old,
   insert/activate new, and append `signing_key.rotate` in one transaction.
