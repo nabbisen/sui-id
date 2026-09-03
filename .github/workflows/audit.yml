@@ -12,9 +12,26 @@ name: Security audit
 #   updates continually).
 # - Manually via the Actions tab if a release is being prepared.
 #
-# This workflow uses rustsec/audit-check, the official action
-# maintained by the same project as cargo-audit. It surfaces results
-# as PR review comments, which is the pattern operators expect.
+# cargo-audit is installed explicitly with a pinned version and
+# `--locked`, rather than via rustsec/audit-check.
+#
+# Why: the action installs cargo-audit *without* `--locked`, so it
+# re-resolves cargo-audit's own dependency tree on every run. On
+# 2026-09-03 that resolution drifted into a `tinyvec` version that no
+# longer compiles, and the job failed while building the tool -- before
+# it ever read Cargo.lock. The workflow was red for a reason unrelated
+# to this project's dependencies, and, worse, no advisory scanning had
+# happened since 2026-09-02 while the lane looked merely "broken".
+#
+# `--locked` makes cargo-audit build against the lockfile it was
+# published with, so an unrelated upstream release cannot break this
+# lane again.
+#
+# Trade recorded: the action filed a GitHub issue when a fresh advisory
+# hit a previously-clean tree. Direct invocation does not, which is why
+# `issues: write` is no longer requested. If that behaviour is wanted
+# back, it should be a step that runs on failure, not a reason to keep
+# an installer that breaks.
 
 on:
   push:
@@ -37,17 +54,43 @@ on:
 jobs:
   audit:
     name: cargo audit
-    runs-on: ubuntu-latest
+    # Pinned rather than ubuntu-latest, matching the [runner] label the
+    # Gate Matrix pins in ci/gate-inputs.toml. A security lane should not
+    # be the one place the runner is allowed to drift.
+    runs-on: ubuntu-24.04
     permissions:
-      # rustsec/audit-check@v2 needs `issues: write` to file an issue
-      # if a fresh advisory hits a previously-clean tree, and
-      # `contents: read` to read the lockfile.
       contents: read
-      issues: write
-      checks: write
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-      - name: cargo-audit
-        uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install cargo-audit (pinned, --locked)
+        run: cargo install cargo-audit --version 0.22.2 --locked
+
+      - name: Run cargo audit
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo audit 2>&1 | tee audit-output.txt
+
+      - name: Prove the scan actually happened
+        # A green audit lane must mean "the advisory database was read and
+        # this project's lockfile was scanned", not "the command exited 0".
+        # cargo audit exits 0 both when it scanned a clean tree and, in
+        # principle, when it scanned nothing -- so assert the scan line and
+        # a plausible dependency count rather than trusting the exit status.
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! grep -qE 'Scanning Cargo\.lock for vulnerabilities \([0-9]+ crate dependencies\)' audit-output.txt; then
+            echo "::error::cargo audit produced no scan line -- it did not read Cargo.lock" >&2
+            exit 1
+          fi
+          n=$(grep -oE 'vulnerabilities \([0-9]+ crate' audit-output.txt | grep -oE '[0-9]+')
+          echo "cargo audit scanned $n crate dependencies"
+          if [ "$n" -lt 100 ]; then
+            echo "::error::only $n crates scanned; this workspace has far more -- wrong directory or truncated lockfile" >&2
+            exit 1
+          fi
+          w=$(grep -cE '^Warning:' audit-output.txt || true)
+          echo "### cargo audit: $n crates scanned, $w advisory warning(s)" >> "$GITHUB_STEP_SUMMARY"
+          grep -E '^(Crate|Warning|Title|ID):' audit-output.txt >> "$GITHUB_STEP_SUMMARY" || true
