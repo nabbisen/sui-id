@@ -125,6 +125,29 @@ at a time; the workspace and structural gate must remain green between waves.
 
 - [ ] Add private `WriteTx<AtomicAudit>` capability and `Database::class_a`
   runner taking private-field `AuthorizedCommandContext<C>` explicitly.
+- [ ] **Gate `AuthorizedCommandContext` construction per command.** RFC 094 §
+      *Class-A transaction seam* requires it to be created "only by consuming a
+      successful authorization decision for command type `C`, or by a sealed
+      CLI/system authority adapter for commands whose **descriptor permits that
+      principal**". The Stage 1 slice ships `for_system_actor` as the only
+      constructor, ungated — so the descriptor does not yet decide anything, and
+      the property is *unrepresentable* rather than merely unenforced.
+
+      Add the principal to the descriptor and make the system-authority
+      constructor reject a command whose descriptor does not permit it. **Do this
+      before converting commands beyond the Stage 1 slice**: every command
+      converted against the ungated shape is a call site written against a
+      signature that is about to change.
+
+      Needs a negative proof, not just a positive one: a command whose descriptor
+      forbids the system principal must **fail to compile or fail at
+      construction** — say which, and prove it. A runtime-only check on a
+      type-level claim is not the claim.
+
+      *Added 2026-09-03. Raised by the implementation role in the Stage 1
+      submission and answered in review three rounds running, but tracked
+      nowhere — so it survived on someone remembering a review document. That is
+      the gap this item closes, and it was mine.*
 - [ ] Generate sealed `C::Event` sums and exhaustive descriptor matches; event
   variants cannot carry actor, command ID, correlation ID, or timestamp.
 - [ ] Add arbitrary-kind, unmapped/duplicate variant, and wrong-context/event
