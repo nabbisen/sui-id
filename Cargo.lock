@@ -3425,6 +3425,7 @@ dependencies = [
  "rand 0.10.1",
  "rusqlite",
  "rustls",
+ "rustversion",
  "secrecy",
  "serde",
  "serde_json",

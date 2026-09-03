@@ -23,9 +23,11 @@
 //! - [`Audited`] / [`AuditReceipt`] — no public constructor. The only path
 //!   to one is [`Database::class_a`], and only after commit.
 //! - [`AuthorizedCommandContext`] — no public constructor. The only path is
-//!   [`AuthorizedCommandContext::for_system_actor`], itself sealed to
-//!   commands whose descriptor's actor requirement permits a system
-//!   principal.
+//!   [`AuthorizedCommandContext::for_system_actor`], gated to commands
+//!   implementing [`SystemPrincipalPermitted`] — a compile-time bound, not
+//!   a runtime check, so a command declared `system_principal: forbidden;`
+//!   makes `for_system_actor` uncallable for it rather than merely
+//!   unenforced.
 //! - [`WriteTx`] — wraps the raw `rusqlite::Transaction` behind a
 //!   `pub(crate)` accessor. Only `sui-id-store::repos::*_within_tx`
 //!   functions (same crate) can reach the connection; everything above this
@@ -33,6 +35,9 @@
 //! - `CommandSpec`/`SealedCommandEvent` — sealed via the private
 //!   [`sealed::Sealed`] supertrait, so only [`declare_write_command!`] can
 //!   produce an implementor.
+//! - [`SystemPrincipalPermitted`] — sealed transitively through
+//!   `CommandSpec`; see its own doc comment for why no separate seal is
+//!   needed.
 
 use std::marker::PhantomData;
 
@@ -150,6 +155,10 @@ pub enum AuditEventKind {
     UserCreate,
     /// `user.create_warned_hibp` — U01, HIBP-flagged branch.
     UserCreateWarnedHibp,
+    /// Proof-only — see [`ProofOnlyForbiddenSystemPrincipalCommand`]. Never
+    /// emitted; no command can construct this event because no command can
+    /// construct a context for that command in the first place.
+    ProofOnlySystemPrincipalForbidden,
 }
 
 /// The registry entry for one [`AuditEventKind`]. `descriptor()` on a
@@ -379,15 +388,35 @@ pub trait SealedCommandEvent<C: CommandSpec>: sealed::Sealed {
     fn attributes(&self) -> Result<AuditAttributes, AuditBuildError>;
 }
 
+/// Marker: a sealed CLI/system authority adapter
+/// ([`AuthorizedCommandContext::for_system_actor`]) may construct a
+/// context for this command. RFC 094 §"Class-A transaction seam":
+/// `AuthorizedCommandContext<C>` is created "only by consuming a
+/// successful authorization decision for command type `C`, or by a sealed
+/// CLI/system authority adapter for commands whose descriptor permits
+/// that principal."
+///
+/// Sealed transitively, not via its own [`sealed::Sealed`] bound: to
+/// implement this trait a type must first implement [`CommandSpec`],
+/// which requires `sealed::Sealed`, `pub(crate)` to this crate — so only
+/// [`declare_write_command!`]'s `system_principal: permitted;` clause can
+/// produce an implementor.
+///
+/// A command declared `system_principal: forbidden;` does not implement
+/// this trait, so `for_system_actor::<ThatCommand>()` fails to compile —
+/// proved by `tests/compile_fail/system_principal_forbidden_cannot_use_
+/// system_actor.rs`, matching the RFC's own compile-negative fixture list
+/// ("invoke a system-principal adapter for a user-only command").
+pub trait SystemPrincipalPermitted: CommandSpec {}
+
 // ── Authorization context ───────────────────────────────────────────────
 
 /// Proof that command `C` was authorized. Private fields, no public
 /// constructor — the only ways to obtain one are
-/// [`AuthorizedCommandContext::for_system_actor`] (sealed to commands whose
-/// descriptor's actor requirement is not `Required`-by-a-human, i.e. a
-/// system/CLI principal is permitted) or, once handler-side authorization
-/// decisions are converted, a future decision-consuming constructor not
-/// added in this Stage-1 slice.
+/// [`AuthorizedCommandContext::for_system_actor`] (gated to commands
+/// implementing [`SystemPrincipalPermitted`]) or, once handler-side
+/// authorization decisions are converted, a future decision-consuming
+/// constructor not added in this Stage-2 slice.
 pub struct AuthorizedCommandContext<C: CommandSpec> {
     actor: Option<sui_id_shared::ids::UserId>,
     request_id: Option<String>,
@@ -395,25 +424,27 @@ pub struct AuthorizedCommandContext<C: CommandSpec> {
 }
 
 impl<C: CommandSpec> AuthorizedCommandContext<C> {
-    /// Construct a context for a sealed system/CLI actor. Not gated per-command
-    /// in this slice (every Stage-1 slice command that uses this is a
-    /// system-triggered operation); a future stage narrows this to commands
-    /// whose descriptor explicitly permits a system principal, per RFC 094
-    /// §"Class-A transaction seam".
-    pub fn for_system_actor(request_id: Option<String>) -> Self {
-        Self {
-            actor: None,
-            request_id,
-            _command: PhantomData,
-        }
-    }
-
     pub fn actor(&self) -> Option<sui_id_shared::ids::UserId> {
         self.actor
     }
 
     pub fn request_id(&self) -> Option<&str> {
         self.request_id.as_deref()
+    }
+}
+
+impl<C: SystemPrincipalPermitted> AuthorizedCommandContext<C> {
+    /// Construct a context for a sealed system/CLI actor. Only callable
+    /// for a command whose declaration says `system_principal: permitted;`
+    /// — `C: SystemPrincipalPermitted` is a compile-time bound, not a
+    /// runtime check, so calling this for a `forbidden` command is a
+    /// compile error naming the missing bound, not a panic or an `Err`.
+    pub fn for_system_actor(request_id: Option<String>) -> Self {
+        Self {
+            actor: None,
+            request_id,
+            _command: PhantomData,
+        }
     }
 }
 
@@ -611,10 +642,19 @@ impl Database {
 /// `descriptor()` match, all in one place so a command's ID, class, and
 /// event bindings cannot drift apart.
 ///
+/// `system_principal:` is required, not defaulted — whether a sealed
+/// CLI/system authority adapter may invoke this command
+/// ([`AuthorizedCommandContext::for_system_actor`]) is a reviewable
+/// property of the command, per RFC 094 §"Class-A transaction seam", not
+/// something safe to leave implicit. `permitted` generates an
+/// [`SystemPrincipalPermitted`] impl; `forbidden` generates nothing, which
+/// is what makes `for_system_actor` uncallable for that command.
+///
 /// ```ignore
 /// declare_write_command! {
 ///     /// K01 — signing-key rotation.
 ///     command SigningKeyRotate = "K01" {
+///         system_principal: permitted;
 ///         enum Event {
 ///             Rotated { new_key: SigningKeyId } => AuditEventKind::SigningKeyRotate,
 ///         }
@@ -626,6 +666,7 @@ macro_rules! declare_write_command {
     (
         $(#[$command_meta:meta])*
         command $command_ty:ident = $id:literal {
+            system_principal: $system_principal:ident;
             enum $event_ty:ident {
                 $(
                     $(#[$variant_meta:meta])*
@@ -665,7 +706,65 @@ macro_rules! declare_write_command {
                 }
             }
         }
+
+        $crate::declare_write_command!(@system_principal $system_principal, $command_ty);
     };
+
+    (@system_principal permitted, $command_ty:ident) => {
+        impl $crate::registry::SystemPrincipalPermitted for $command_ty {}
+    };
+
+    (@system_principal forbidden, $command_ty:ident) => {};
+}
+
+// ── Compile-fail proof scaffolding ──────────────────────────────────────
+
+static PROOF_ONLY_FORBIDDEN_DESCRIPTOR: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::ProofOnlySystemPrincipalForbidden,
+    name: "proof_only.system_principal_forbidden",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::None,
+    attributes: &[],
+};
+
+declare_write_command! {
+    /// Exists solely to give
+    /// `tests/compile_fail/system_principal_forbidden_cannot_use_system_actor.rs`
+    /// a `system_principal: forbidden;` command to name from outside this
+    /// crate. Not a real inventory row: `ID` is deliberately not a
+    /// `command-inventory.md` code and deliberately avoids every real
+    /// category prefix (`K`/`U`/`T`/`P`/`O`/`C`/`F`/`X`/`I` — `X` is
+    /// bootstrap/migrations, reserved, not this), so it can never collide
+    /// with one. This event is never emitted — nothing in this crate can
+    /// construct
+    /// `AuthorizedCommandContext<ProofOnlyForbiddenSystemPrincipalCommand>`,
+    /// since `for_system_actor` is the only constructor Stage 2 adds and
+    /// this command doesn't implement `SystemPrincipalPermitted`. The
+    /// future decision-consuming constructor (RFC 094, not added in this
+    /// slice) is what would make a real `forbidden` command usable.
+    command ProofOnlyForbiddenSystemPrincipalCommand = "PROOFONLY-NOT-AN-INVENTORY-ROW" {
+        system_principal: forbidden;
+        enum ProofOnlyForbiddenSystemPrincipalEvent {
+            Occurred => &PROOF_ONLY_FORBIDDEN_DESCRIPTOR,
+        }
+    }
+}
+
+impl SealedCommandEvent<ProofOnlyForbiddenSystemPrincipalCommand>
+    for ProofOnlyForbiddenSystemPrincipalEvent
+{
+    fn target(&self) -> Option<AuditTarget> {
+        None
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        AuditAttributes::builder().build()
+    }
 }
 
 #[cfg(test)]
@@ -728,5 +827,26 @@ mod tests {
         // SIEM queries and audit-log alerts pivot on these strings.
         assert_eq!(AuditResult::Ok.as_str(), "ok");
         assert_eq!(AuditResult::Failure.as_str(), "failure");
+    }
+
+    // ── Stage 2 item 1: AuthorizedCommandContext gating ─────────────────
+    // The negative property (a `forbidden` command cannot use
+    // `for_system_actor`) is a compile-time fact, proved by
+    // `tests/compile_fail/system_principal_forbidden_cannot_use_system_
+    // actor.rs`, not by anything runnable here. This test only checks that
+    // the proof-only command's own macro-generated wiring is correct —
+    // that `declare_write_command!`'s `system_principal: forbidden;` arm
+    // didn't silently produce a mismatched or unreachable descriptor.
+
+    #[test]
+    fn proof_only_forbidden_command_descriptor_matches() {
+        let descriptor = ProofOnlyForbiddenSystemPrincipalCommand::descriptor(
+            &ProofOnlyForbiddenSystemPrincipalEvent::Occurred,
+        );
+        assert_eq!(
+            descriptor.kind,
+            AuditEventKind::ProofOnlySystemPrincipalForbidden
+        );
+        assert_eq!(descriptor.name, "proof_only.system_principal_forbidden");
     }
 }

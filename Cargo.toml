@@ -79,6 +79,12 @@ proptest                    = "1.5"
 # cannot do the thing it claims not to). Dev-only — never reaches
 # production builds.
 trybuild                    = "1.0"
+# Gates one trybuild fixture's exact-stderr comparison to a rustc range —
+# E0599's wording changed between 1.95 and 1.96 ("the associated function
+# or constant ... exists" vs "the function or associated item ... exists"),
+# confirmed by testing both versions directly rather than assumed. Dev-only
+# — never reaches production builds.
+rustversion                 = "1.0"
 hmac                        = "0.13"
 subtle                      = "2.6"
 prometheus                  = { version = "0.14", default-features = false }

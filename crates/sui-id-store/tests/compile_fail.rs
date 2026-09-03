@@ -37,3 +37,25 @@ fn compile_fail_secret_cannot_become_attribute() {
     let t = trybuild::TestCases::new();
     t.compile_fail("tests/compile_fail/secret_cannot_become_attribute.rs");
 }
+
+/// RFC 094 Stage 2: `AuthorizedCommandContext` gating per command. See
+/// `registry.rs`'s `SystemPrincipalPermitted`.
+///
+/// Unlike the two fixtures above, this one *is* gated — checked directly,
+/// not assumed: E0599's wording changed between rustc 1.95 and 1.96 (`` the
+/// associated function or constant `for_system_actor` exists `` vs `` the
+/// function or associated item `for_system_actor` exists ``, and similarly
+/// in the "cannot be called" clause). 1.96 already carries the new
+/// wording, and every later toolchain tested (1.97.1, 1.98.0) matches it,
+/// so `since(1.96)` isn't chasing a moving target — it's the one real
+/// boundary. Below it, this test is `#[ignore]`d entirely (trybuild has no
+/// "check failure, skip the message" mode), so the MSRV lanes don't
+/// re-verify this specific gate — but the gate itself is an ordinary
+/// trait-bound restriction on an `impl` block, whose *existence* doesn't
+/// depend on rustc version, only the wording of the error naming it does.
+#[rustversion::attr(before(1.96), ignore)]
+#[test]
+fn compile_fail_system_principal_forbidden_cannot_use_system_actor() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compile_fail/system_principal_forbidden_cannot_use_system_actor.rs");
+}

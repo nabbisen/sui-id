@@ -45,6 +45,11 @@ static K01_ROTATED: EventDescriptor = EventDescriptor {
 crate::declare_write_command! {
     /// K01 — signing-key rotation.
     command K01 = "K01" {
+        // Key rotation is an ops/CLI/scheduled trigger, not an action a
+        // logged-in user takes on their own session — no human actor is
+        // ever the authority for it (K01_ROTATED's `actor: None` already
+        // says the same thing about the event payload).
+        system_principal: permitted;
         enum K01Event {
             Rotated { new_key: SigningKeyId, algorithm: String } => &K01_ROTATED,
         }
@@ -130,6 +135,12 @@ static U22_LOCKOUT: EventDescriptor = EventDescriptor {
 crate::declare_write_command! {
     /// U22 — record login failure, with the threshold-crossing branch.
     command U22 = "U22" {
+        // Recording a login failure runs in response to an unauthenticated
+        // request; there is no authorizing human actor to consume a
+        // decision from (U22_FAILURE/U22_LOCKOUT's `actor: None` says the
+        // same thing about the event payload — the target user is not the
+        // authority for their own failure being recorded).
+        system_principal: permitted;
         enum U22Event {
             Failure { user_id: UserId, count: i64 } => &U22_FAILURE,
             Lockout { user_id: UserId, count: i64 } => &U22_LOCKOUT,
@@ -231,6 +242,16 @@ crate::declare_write_command! {
     /// slice member is distinct from U22's closed branch over observed
     /// state.
     command U01 = "U01" {
+        // Provisional, not a domain claim: this is "admin create user"
+        // (see the command doc comment below), which in the real,
+        // eventually-wired call site plausibly *should* require an
+        // authenticated admin actor and therefore be `forbidden` here.
+        // Marked `permitted` only because Stage 2 doesn't yet add the
+        // decision-consuming constructor this command would need instead
+        // — `for_system_actor` is still the only way `create_user` below
+        // can obtain a context. Revisit when U01 is wired to its real
+        // admin-facing call site (Wave A).
+        system_principal: permitted;
         enum U01Event {
             Created { user_id: UserId } => &U01_CREATE,
             CreatedWarnedHibp { user_id: UserId } => &U01_CREATE_WARNED_HIBP,
@@ -313,7 +334,19 @@ pub async fn enqueue_email(
 #[allow(clippy::expect_used, clippy::unwrap_used)]
 mod tests {
     use super::*;
-    use crate::registry::CommandSpec;
+    use crate::registry::{CommandSpec, SystemPrincipalPermitted};
+
+    // ── Stage 2 item 1: every slice command is a deliberate declaration,
+    //    not a silent default. A compile-time fact, not a runtime check —
+    //    this only fails to *compile* if a `system_principal:` clause is
+    //    ever removed or the macro's `permitted` arm stops emitting the
+    //    impl; it can't regress at runtime.
+    const _: fn() = || {
+        fn assert_system_principal_permitted<C: SystemPrincipalPermitted>() {}
+        assert_system_principal_permitted::<K01>();
+        assert_system_principal_permitted::<U22>();
+        assert_system_principal_permitted::<U01>();
+    };
 
     // ── Stage 1 item 5: duplicate-name / class-mismatch / missing-field /
     //    stable-serialization tests, against this slice's real table ──────

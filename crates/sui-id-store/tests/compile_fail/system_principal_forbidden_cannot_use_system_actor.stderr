@@ -1,0 +1,13 @@
+error[E0599]: the associated function or constant `for_system_actor` exists for struct `AuthorizedCommandContext<ProofOnlyForbiddenSystemPrincipalCommand>`, but its trait bounds were not satisfied
+  --> tests/compile_fail/system_principal_forbidden_cannot_use_system_actor.rs:20:83
+   |
+20 |     let _ = AuthorizedCommandContext::<ProofOnlyForbiddenSystemPrincipalCommand>::for_system_actor(
+   |                                                                                   ^^^^^^^^^^^^^^^^ associated function or constant cannot be called due to unsatisfied trait bounds
+   |
+  ::: src/registry.rs
+   |
+   |         pub struct $command_ty;
+   |         ----------------------- doesn't satisfy `_: SystemPrincipalPermitted`
+   |
+   = note: the following trait bounds were not satisfied:
+           `ProofOnlyForbiddenSystemPrincipalCommand: SystemPrincipalPermitted`
