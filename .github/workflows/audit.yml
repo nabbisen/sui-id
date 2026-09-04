@@ -67,10 +67,32 @@ jobs:
         run: cargo install cargo-audit --version 0.22.2 --locked
 
       - name: Run cargo audit
+        # --deny unsound --deny yanked, but NOT unmaintained. Owner decision,
+        # 2026-09-05. unsound is a defect and yanked is nearly always a
+        # one-line patch bump away, so both should block. unmaintained is
+        # neither: it fires on transitive build-time crates nobody here can
+        # remove -- today paste and proc-macro-error2, both reached through
+        # proc-macro chains -- and a lane that is permanently red for reasons
+        # no one can act on is the same as no lane at all.
+        #
+        # The policy was verified satisfiable before being adopted: it exits 0
+        # on this tree as of d7959e9. A policy adopted while already violated
+        # gets an allow list on day one, and allow lists grow.
+        #
+        # Per-advisory escape hatch is --ignore RUSTSEC-YYYY-NNNN with the
+        # reason recorded here -- a deliberate, visible, single decision rather
+        # than exempting a whole category.
+        #
+        # The exit code is captured rather than failing the step, so the
+        # proof-of-scan check below still runs and still writes the summary
+        # when an advisory is denied. The job fails at the last step instead.
         shell: bash
         run: |
           set -o pipefail
-          cargo audit 2>&1 | tee audit-output.txt
+          rc=0
+          cargo audit --deny unsound --deny yanked 2>&1 | tee audit-output.txt || rc=$?
+          echo "$rc" > audit-exit-code.txt
+          echo "cargo audit exited $rc"
 
       - name: Prove the scan actually happened
         # A green audit lane must mean "the advisory database was read and
@@ -94,3 +116,16 @@ jobs:
           w=$(grep -cE '^Warning:' audit-output.txt || true)
           echo "### cargo audit: $n crates scanned, $w advisory warning(s)" >> "$GITHUB_STEP_SUMMARY"
           grep -E '^(Crate|Warning|Title|ID):' audit-output.txt >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Fail if cargo audit denied an advisory
+        # Deliberately last: by now the scan is proven to have happened and the
+        # summary is written, so a red job always says which advisory and on
+        # how many crates -- never just "the tool exited non-zero".
+        shell: bash
+        run: |
+          set -euo pipefail
+          rc=$(cat audit-exit-code.txt)
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::cargo audit denied an advisory (exit $rc); see the job summary" >&2
+            exit "$rc"
+          fi
