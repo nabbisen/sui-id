@@ -637,10 +637,77 @@ impl Database {
 
 // ── declare_write_command! ──────────────────────────────────────────────
 
+/// Rejects the field names RFC 094 §"Class-A transaction seam" reserves to
+/// [`AuthorizedCommandContext`]/the runner: *"`C::Event` contains only
+/// command-specific target, result variant, and bounded attributes; it has
+/// no actor, command-ID, timestamp, or correlation fields."* Not something
+/// [`CommandSpec::Event`]'s bound can express — nothing about the
+/// associated-type relationship stops a variant from having a field named
+/// `actor`, only a name-level check at declaration time can. Matched
+/// per-field by [`declare_write_command!`]; the catch-all arm accepts
+/// every other identifier.
+///
+/// This cannot be exercised by an external `compile_fail` fixture or
+/// doctest — both compile as a separate crate depending on this one, and
+/// `declare_write_command!`'s own expansion needs `$crate::registry::
+/// sealed::Sealed`, `pub(crate)` to this crate, so the macro itself
+/// cannot be invoked from outside it (checked directly for the Stage 2
+/// item 1 gate, same reasoning applies here). Verified instead by
+/// temporarily adding a reserved field to a real command declaration,
+/// confirming `cargo check` fails with this message, and reverting — see
+/// the Stage 2 item 2/3 review request for the transcript. Not a standing
+/// automated regression test: none can exist for a property only this
+/// crate's own source can attempt to violate.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __declare_write_command_reject_reserved_field {
+    (actor) => {
+        compile_error!(
+            "event variant fields cannot be named `actor` -- actor authority comes only from \
+             `AuthorizedCommandContext::actor()`, never the event payload (RFC 094 \
+             §\"Class-A transaction seam\")"
+        );
+    };
+    (command_id) => {
+        compile_error!(
+            "event variant fields cannot be named `command_id` -- command identity comes only \
+             from `CommandSpec::ID`/the type parameter, never the event payload (RFC 094 \
+             §\"Class-A transaction seam\")"
+        );
+    };
+    (correlation_id) => {
+        compile_error!(
+            "event variant fields cannot be named `correlation_id` -- use \
+             `AuthorizedCommandContext::request_id()`, never the event payload (RFC 094 \
+             §\"Class-A transaction seam\")"
+        );
+    };
+    (request_id) => {
+        compile_error!(
+            "event variant fields cannot be named `request_id` -- it comes only from \
+             `AuthorizedCommandContext::request_id()`, never the event payload (RFC 094 \
+             §\"Class-A transaction seam\")"
+        );
+    };
+    (timestamp) => {
+        compile_error!(
+            "event variant fields cannot be named `timestamp` -- the audit row's `at` comes \
+             only from the runner's own clock read, never the event payload (RFC 094 \
+             §\"Class-A transaction seam\")"
+        );
+    };
+    ($other:ident) => {};
+}
+
 /// The sealed constructor for a Class-A [`CommandSpec`]. Declares a
 /// zero-sized marker type, its closed event enum, and the exhaustive
 /// `descriptor()` match, all in one place so a command's ID, class, and
 /// event bindings cannot drift apart.
+///
+/// Every field of every variant is checked against a reserved-name list
+/// (see [`__declare_write_command_reject_reserved_field`]) — `actor`,
+/// `command_id`, `correlation_id`, `request_id`, `timestamp` fail to
+/// compile with a message naming the real accessor to use instead.
 ///
 /// `system_principal:` is required, not defaulted — whether a sealed
 /// CLI/system authority adapter may invoke this command
@@ -692,6 +759,10 @@ macro_rules! declare_write_command {
         }
 
         impl $crate::registry::sealed::Sealed for $event_ty {}
+
+        $(
+            $( $( $crate::__declare_write_command_reject_reserved_field!($field); )* )?
+        )+
 
         impl $crate::registry::CommandSpec for $command_ty {
             type Event = $event_ty;

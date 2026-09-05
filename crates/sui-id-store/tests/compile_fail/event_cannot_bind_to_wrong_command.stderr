@@ -1,0 +1,12 @@
+error[E0117]: only traits defined in the current crate can be implemented for types defined outside of the crate
+  --> tests/compile_fail/event_cannot_bind_to_wrong_command.rs:19:1
+   |
+19 | impl SealedCommandEvent<U22> for K01Event {
+   | ^^^^^-----------------------^^^^^--------
+   |      |                           |
+   |      |                           `K01Event` is not defined in the current crate
+   |      `U22` is not defined in the current crate
+   |
+   = note: impl doesn't have any local type before any uncovered type parameters
+   = note: for more information see https://doc.rust-lang.org/reference/items/implementations.html#orphan-rules
+   = note: define and implement a trait or new type instead

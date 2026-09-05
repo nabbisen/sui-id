@@ -59,3 +59,27 @@ fn compile_fail_system_principal_forbidden_cannot_use_system_actor() {
     let t = trybuild::TestCases::new();
     t.compile_fail("tests/compile_fail/system_principal_forbidden_cannot_use_system_actor.rs");
 }
+
+/// RFC 094 Stage 2 item 3: "use an event enum for the wrong `C`". Ungated
+/// — E0117 (orphan rules) is the same across every toolchain tested
+/// (1.95.0, 1.96.1, 1.97.1, 1.98.0), unlike either E0599 fixture below.
+#[test]
+fn compile_fail_event_cannot_bind_to_wrong_command() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compile_fail/event_cannot_bind_to_wrong_command.rs");
+}
+
+/// RFC 094 Stage 2 item 3: "provide an arbitrary event kind".
+///
+/// Gated the same way and for the same reason as the `for_system_actor`
+/// fixture above: E0599's wording for a missing enum variant also changed
+/// between rustc 1.95 and 1.96 (`` no variant or associated item named ``
+/// vs `` no variant, associated function, or constant named ``) — checked
+/// directly on 1.95/1.96/1.97.1/1.98.0, not assumed from the other E0599
+/// fixture's drift.
+#[rustversion::attr(before(1.96), ignore)]
+#[test]
+fn compile_fail_arbitrary_event_kind_does_not_exist() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compile_fail/arbitrary_event_kind_does_not_exist.rs");
+}
