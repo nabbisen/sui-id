@@ -5,22 +5,32 @@ at a time; the workspace and structural gate must remain green between waves.
 
 ## Stage 0 — inventory freeze
 
-- [ ] Enumerate every production durable write entry point across core, store,
+> **Completion marking, added 2026-09-05.** Items carry `**Done <sha>**` when
+> landed. Until today none did — Stage 0, most of Stage 1 and Stage 2 item 1 were
+> complete while every box stayed empty, because the implementation role
+> correctly left ticking to the architect and the architect never did it. Anyone
+> reading this file would have had to reconstruct completion state from review
+> documents. `*(proving slice)*` means the item is satisfied against the
+> five-command Stage 1 slice and scales during the conversion waves — it is not a
+> claim about all 92 commands.
+
+
+- [x] Enumerate every production durable write entry point across core, store,  **Done `d70ead3`.**
   web handlers, CLI/setup, background tasks, and federation/registration.
-- [ ] Reconcile every row in `command-inventory.md` to exact Rust function and
+- [x] Reconcile every row in `command-inventory.md` to exact Rust function and  **Done `d70ead3`.**
   SQL write-site IDs in `ci/write-commands.toml`.
-- [ ] Reclassify any current Class-B row that performs a durable security
+- [x] Reclassify any current Class-B row that performs a durable security  **Done `d70ead3`.** *(swept; no row required reclassification, stated rather than manufactured)*
   mutation, or split mutation and observation into Class A and B.
-- [ ] Confirm `client.dynamic_register` is Class A in M2; RFC 095 owns later
+- [x] Confirm `client.dynamic_register` is Class A in M2; RFC 095 owns later  **Done `d70ead3`.**
   metadata/concurrency completion, not an audit-atomicity exception.
-- [ ] Independently review the inventory against code and approve the threat
+- [x] Independently review the inventory against code and approve the threat  **Done `d70ead3`.**
   delta before Stage 1.
 
 ## Stage 1 — registry foundation
 
-- [ ] Add event kind and class enums plus deterministic descriptors.
-- [ ] Add typed payloads with actor/target requirements and bounded attributes.
-- [ ] Prove secret types cannot be **implicitly** coerced into payload attributes:
+- [x] Add event kind and class enums plus deterministic descriptors.  **Done `5b986c9`.** *(proving slice)*
+- [x] Add typed payloads with actor/target requirements and bounded attributes.  **Done `5b986c9`.** *(proving slice)*
+- [x] Prove secret types cannot be **implicitly** coerced into payload attributes:  **Done `52eae0f`.** *(sealed `AttributeValue`)*
       a secret-bearing type must not satisfy the attribute API's bound, proven by
       a compile-fail fixture. *Narrowed 2026-08-28. This read "cannot be
       formatted/coerced", which claims more than any test can discharge —
@@ -29,8 +39,8 @@ at a time; the workspace and structural gate must remain green between waves.
       is passing the secret directly, and that is what must be blocked. Do not
       write a fixture asserting the stronger claim; it would pass while proving
       something narrower than it says.*
-- [ ] Generate or mechanically verify audit reference documentation.
-- [ ] Add duplicate-name, class-mismatch, missing-field, and stable-serialization
+- [x] Generate or mechanically verify audit reference documentation.  **Done `5b986c9`.** *(generator built and tested; deliberately not wired to a tracked file until the registry is worth documenting)*
+- [x] Add duplicate-name, class-mismatch, missing-field, and stable-serialization  **Done `5b986c9`.** *(proving slice)*
   tests.
 - [ ] Add the checked-in command inventory and structural comparison tool.
 
@@ -49,9 +59,9 @@ at a time; the workspace and structural gate must remain green between waves.
       whole point of this tool is that nothing reaches the database without an
       inventory row. *Recorded 2026-09-03, before the gate exists, so it is not
       met later as a puzzling failure and worked around.*
-- [ ] Add `ReadConn`, sealed `declare_write_command!`, A/P/O/X runners, and the
+- [x] Add `ReadConn`, sealed `declare_write_command!`, A/P/O/X runners, and the  **Done `5b986c9`.** *(proving slice)*
   exact reviewed raw-write module policy.
-- [ ] Ensure `ReadConn` returns only owned mapped rows, requires SQLite
+- [x] Ensure `ReadConn` returns only owned mapped rows, requires SQLite  **Done `5b986c9`.**
   read-only statements, and denies statements/batches, writable PRAGMA,
   ATTACH/DETACH, backup/restore, extension, raw-handle, and FFI access.
 - [ ] **M2b only — not an M2a gate.** Observe compile/AST failure for a new bare
@@ -134,14 +144,14 @@ at a time; the workspace and structural gate must remain green between waves.
         RFC 094's Structural coverage gate section for why. Read every crate
         manifest in the workspace, not only the three that name `rusqlite`
         today; the check exists to catch the fourth.
-- [ ] Observe compile/runtime rejection for prepared UPDATE, writable PRAGMA,
+- [x] Observe compile/runtime rejection for prepared UPDATE, writable PRAGMA,  **Done `5b986c9`.** *(fixtures grouped by controlling mechanism, per the 2026-08-28 measurement)*
   ATTACH, backup API, returned raw statement, and indirect raw-helper attempts.
 
 ## Stage 2 — transaction foundation
 
-- [ ] Add private `WriteTx<AtomicAudit>` capability and `Database::class_a`
+- [x] Add private `WriteTx<AtomicAudit>` capability and `Database::class_a`  **Done `5b986c9`.** *(proving slice)*
   runner taking private-field `AuthorizedCommandContext<C>` explicitly.
-- [ ] **Gate `AuthorizedCommandContext` construction per command.** RFC 094 §
+- [x] **Gate `AuthorizedCommandContext` construction per command.** RFC 094 §  **Done `d3003db`.**
       *Class-A transaction seam* requires it to be created "only by consuming a
       successful authorization decision for command type `C`, or by a sealed
       CLI/system authority adapter for commands whose **descriptor permits that
