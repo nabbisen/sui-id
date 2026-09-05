@@ -122,10 +122,16 @@ at a time; the workspace and structural gate must remain green between waves.
   graph, not by visibility** (owner decision, 2026-08-26; see RFC 094's M2a exit
   criteria). This is an **exit** condition, not an entry one: two of its three
   blockers dissolve as conversion proceeds, so it costs little if sequenced last.
-  - [ ] Convert `audit_guard.rs`'s `audit_and_tx` to take the sealed capability
-        instead of `&rusqlite::Transaction<'_>`. This is `sui-id-core`'s **only**
-        mention of `rusqlite`, so its dependency drops when this lands — and the
-        conversion is already required by RFC 094 §5.
+  - [x] ~~Convert `audit_guard.rs`'s `audit_and_tx` to take the sealed
+        capability instead of `&rusqlite::Transaction<'_>`.~~ **Achieved by
+        deletion, not conversion — done in Stage 2 item 3.** `audit_guard.rs` had
+        zero callers, so it was removed rather than converted, and
+        `sui-id-core`'s `rusqlite` dependency dropped as this item predicted.
+        `grep -rc rusqlite crates/sui-id-core/` is now 0 and the manifest line is
+        gone. **This is the first piece of the crate-confinement exit condition to
+        land, and it cost nothing** — which is the property that made option E
+        affordable: its blockers dissolve as conversion proceeds rather than
+        needing separate work.
   - [ ] `sui-id-core/src/account/forgot_password.rs` and
         `oidc/key_rotation.rs` stop calling `with_tx`/`with_tx_sync`. Both are
         already inside M2a's own waves (credential/session security, and signing
