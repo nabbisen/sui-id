@@ -44,6 +44,21 @@ at a time; the workspace and structural gate must remain green between waves.
   tests.
 - [ ] Add the checked-in command inventory and structural comparison tool.
 
+      **Also check reserved event-variant field names here.** RFC 094 requires
+      `C::Event` to carry no `actor`, `command_id`, `correlation_id`,
+      `request_id` or `timestamp` field. `declare_write_command!` rejects those
+      at expansion (verified 2026-09-05 by injecting `actor` into K01 and
+      observing the error), but that check **can never have a standing
+      compile-fail fixture**: the macro's expansion needs `pub(crate)` items, so
+      no external harness — trybuild or doctest, both separate crates — can
+      invoke it. Its only proof to date is a one-time manual injection.
+
+      A source-scanning tool has no such wall. Hand this gate a fixture file
+      containing a variant with a reserved field and assert it rejects. Until
+      that lands, this guarantee has strictly weaker regression protection than
+      every other sealed property in the module — bounded and tracked here
+      rather than accepted as permanent.
+
       **One declared command has no inventory row, by design.**
       `ProofOnlyForbiddenSystemPrincipalCommand`
       (`PROOFONLY-NOT-AN-INVENTORY-ROW`) exists solely so the
