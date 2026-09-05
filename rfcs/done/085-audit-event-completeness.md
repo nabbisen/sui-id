@@ -77,6 +77,21 @@ vocabulary is governed by `docs/ui-ux-contracts.md`.
 
    Handlers unwrap via `into_inner()`; the type makes "mutated
    but never audited" unrepresentable for converted functions.
+
+   > **Correction, 2026-09-05: no function was ever converted.** Measured while
+   > scoping RFC 094 Stage 2: `audit_and_tx` has **zero call sites**, `Audited<T>`
+   > is referenced nowhere outside `audit_guard.rs`, and `into_inner()` appears
+   > only in that file's own doc comments and unit test. The sentence above is
+   > correctly qualified — "for converted functions" — and therefore true over
+   > the empty set, which is the problem: a reader takes it as describing an
+   > active control. It describes a mechanism that was built, exported, and never
+   > wired in.
+   >
+   > The guarantee is not weakened by this note; it never held anything up. RFC
+   > 094 replaces this layer, and its Stage 2 removal of `audit_and` is
+   > consequently a deletion of dead code rather than a change to a live path.
+   > Recorded here so the history does not read as though a working control was
+   > removed.
 4. **CI:** `scripts/check-audit-matrix.sh` greps event-name
    constants and asserts (a) every matrix row's event name exists
    in code, (b) every `audit.` / `admin.` / `auth.` constant in
