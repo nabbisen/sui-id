@@ -2,14 +2,20 @@
 //!
 //! **Stage 1 (registry foundation).** This module adds the sealed type
 //! system RFC 094 specifies; it does not yet convert any production call
-//! site. `crates/sui-id-core/src/audit_guard.rs` and `events.rs` remain in
-//! place and in use — they are replaced during the conversion waves, not
-//! here (RFC 094 §"Multiple implementation steps").
+//! site. `events.rs` (`sui-id-core`) remains in place and in use, replaced
+//! during the conversion waves, not here (RFC 094 §"Multiple implementation
+//! steps"). `audit_guard.rs` (`sui-id-core`) is gone as of Stage 2 item 3 —
+//! it was never wired to a production call site (zero callers of
+//! `audit_and`/`audit_and_tx`/`Audited<T>` outside its own file, confirmed
+//! by grep across the workspace before deletion), so removing it converted
+//! nothing and broke nothing. Deleted rather than replaced with a
+//! must-attempt Class-B API in `sui-id-core`; that API belongs in this
+//! registry alongside the Class-A runner, when a real caller needs it.
 //!
 //! ## Why this lives in `sui-id-store`, not `sui-id-core`
 //!
-//! The legacy best-effort audit layer (`audit_guard.rs`, `events.rs`) lives
-//! in `sui-id-core`, which depends on `sui-id-store`. RFC 094's own sketch
+//! The legacy best-effort audit layer (`events.rs`) lives in `sui-id-core`,
+//! which depends on `sui-id-store`. RFC 094's own sketch
 //! puts the Class-A runner on `Database` itself
 //! (`impl Database { pub async fn class_a<C: CommandSpec, ...> }`), and
 //! `Database` is defined in this crate. `sui-id-store` cannot depend on

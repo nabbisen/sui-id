@@ -48,8 +48,6 @@ async-trait                 = { workspace = true }
 base64ct                    = { workspace = true }
 reqwest                     = { workspace = true }
 
-rusqlite                    = { workspace = true }
-
 # Email — see workspace dependency notes for rationale.
 wasm-smtp                   = { workspace = true }
 wasm-smtp-tokio             = { workspace = true }
