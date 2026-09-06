@@ -876,6 +876,33 @@ exit evidence.
 - after audit insert but before commit;
 - commit failure where the database harness can deterministically induce it.
 
+**These points are not belt-and-braces. Building them found the defect they
+exist to find.** Recorded 2026-09-06, from RFC 094's own M2a Stage 2.
+
+`Database::class_a` — the Class-A runner, whose entire purpose is that a mutation
+and its audit row commit together or neither does — **committed the mutation on a
+domain error while returning `Err` to the caller.** Its closure returned
+`StoreResult<Result<T, E>>`, so a domain failure produced `Ok(Err(e))`; `with_tx`
+inspects only the outer result, saw `Ok`, and committed whatever the mutation had
+already written.
+
+It had been present since the runner was first written and survived five reviews,
+including by the architect who specified it. Nothing caught it because nothing
+exercised the path: every existing test took the happy path, and the one rollback
+test that existed passed for an unrelated reason — it used a duplicate-key
+conflict, which SQLite's default `ABORT` resolution fails at the statement level,
+so "nothing new persisted" held whether or not the transaction rolled back.
+
+Two lessons this RFC should carry rather than a review document:
+
+1. **A rollback test whose scenario writes nothing else proves nothing about
+   rollback.** Assert the observed state before and after an *injected* failure,
+   on a command that has genuinely mutated, and never on a function merely
+   returning `Err`.
+2. **An injection seam is not optional hardening.** It is the only thing that
+   exercises these paths at all, and the runner was wrong for as long as it was
+   missing.
+
 For every Class-A inventory row, a parameterized test snapshots the relevant
 domain rows and audit tail, injects each applicable fault, invokes the real
 domain command, and asserts:
