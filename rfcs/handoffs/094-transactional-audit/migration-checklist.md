@@ -201,12 +201,31 @@ at a time; the workspace and structural gate must remain green between waves.
 - [x] Add arbitrary-kind, unmapped/duplicate variant, and wrong-context/event
   **Done `a8a66ca`.** *Two new compile-fail fixtures; duplicate mapping was already covered by Stage 1's global uniqueness tests, and unmapped variants are structurally unexpressible in the macro grammar — both verified rather than assumed, so neither needed a fixture.*
   compile/structural fixtures.
-- [ ] Make receipt construction private and post-commit.
-- [ ] Add test-only failure points before/within append and at commit.
+- [x] Make receipt construction private and post-commit.  **Done `d1ba6f4`.**
+      *Privacy was Stage 1's shape and post-commit ordering was already correct
+      by construction; what this added is a test that would catch a regression —
+      the same injected-failure tests prove both properties at once.*
+- [x] Add test-only failure points before/within append and at commit.
+      **Done `d1ba6f4`.** *`#[cfg(test)]`-gated, not a Cargo feature, so they
+      cannot reach a downstream build. Commit failure is a real SQLite
+      `commit_hook` rejection, not a simulation. "Within append" is read as
+      "after append succeeds" — `append_within_tx` has no distinguishable
+      mid-point — and that reading is disclosed rather than silently narrowed.*
+      **Building these found the defect they exist to find:** `class_a` returned
+      `Ok(Err(e))` on a post-mutation domain error, so `with_tx` committed the
+      mutation while the caller got `Err`. Present since `5b986c9`, through five
+      reviews. See RFC 094 §Failure injection.
 - [x] Replace misleading `audit_and` best-effort semantics; make Class-B API
   **Removal done `216be46`+`c7410ca`; the Class-B API is deliberately not built yet.** *`audit_guard.rs` had zero callers and its `audit_and` overclaimed atomicity while calling the best-effort append, so it was deleted rather than adapted. The must-attempt Class-B API belongs in the registry beside the Class-A runner and lands when a real caller exists — not in `sui-id-core`. This item is therefore half-open by design; the open half is the API, not the removal.*
   explicitly must-attempt and observable on append failure.
-- [ ] Prove the audit chain is read and written on the caller transaction.
+- [x] Prove the audit chain is read and written on the caller transaction.
+      **Done `b59d205`.** *20 concurrent U22 commands through the real `class_a`
+      path; `verify_chain_tail` must report 20 rows checked and no break. U22
+      rather than K01 so nothing but the chain serializes them, and the SQL
+      genuinely races across `spawn_blocking` threads rather than interleaving
+      on one. The assertion is load-bearing: a reviewer probe confirmed
+      `verify_chain_tail` detects a fork — two rows claiming one predecessor,
+      content intact — not only the content tamper its existing test covers.*
 - [ ] Convert login failure and refresh rotation as always-Class-A commands with
   exhaustive typed event variants for every committed outcome.
 - [ ] Register initial root-family refresh issuance separately as T09/P and
