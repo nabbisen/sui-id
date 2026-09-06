@@ -195,13 +195,16 @@ at a time; the workspace and structural gate must remain green between waves.
       submission and answered in review three rounds running, but tracked
       nowhere — so it survived on someone remembering a review document. That is
       the gap this item closes, and it was mine.*
-- [ ] Generate sealed `C::Event` sums and exhaustive descriptor matches; event
+- [x] Generate sealed `C::Event` sums and exhaustive descriptor matches; event
+  **Done `a8a66ca`.** *The sums/matches came with Stage 1; `a8a66ca` added the reserved-field rejection (`actor`, `command_id`, `correlation_id`, `request_id`, `timestamp`) that makes "cannot carry" enforced rather than stated. That guard has no standing regression test — see Stage 1 item 6.*
   variants cannot carry actor, command ID, correlation ID, or timestamp.
-- [ ] Add arbitrary-kind, unmapped/duplicate variant, and wrong-context/event
+- [x] Add arbitrary-kind, unmapped/duplicate variant, and wrong-context/event
+  **Done `a8a66ca`.** *Two new compile-fail fixtures; duplicate mapping was already covered by Stage 1's global uniqueness tests, and unmapped variants are structurally unexpressible in the macro grammar — both verified rather than assumed, so neither needed a fixture.*
   compile/structural fixtures.
 - [ ] Make receipt construction private and post-commit.
 - [ ] Add test-only failure points before/within append and at commit.
-- [ ] Replace misleading `audit_and` best-effort semantics; make Class-B API
+- [x] Replace misleading `audit_and` best-effort semantics; make Class-B API
+  **Removal done `216be46`+`c7410ca`; the Class-B API is deliberately not built yet.** *`audit_guard.rs` had zero callers and its `audit_and` overclaimed atomicity while calling the best-effort append, so it was deleted rather than adapted. The must-attempt Class-B API belongs in the registry beside the Class-A runner and lands when a real caller exists — not in `sui-id-core`. This item is therefore half-open by design; the open half is the API, not the removal.*
   explicitly must-attempt and observable on append failure.
 - [ ] Prove the audit chain is read and written on the caller transaction.
 - [ ] Convert login failure and refresh rotation as always-Class-A commands with
