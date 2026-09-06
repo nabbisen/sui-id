@@ -127,6 +127,22 @@ impl Database {
         self.backend.driver_name()
     }
 
+    // ── Test-only fault injection (RFC 094 Stage 2 item 2) ─────────────────────
+    //
+    // `#[cfg(test)]`: compiles only into `sui-id-store`'s own test binary.
+    // See `backend::FaultInjector`'s doc comment for why this is safe
+    // against the M2a exit condition's raw-access concern.
+
+    #[cfg(test)]
+    pub(crate) fn fault_injector(&self) -> std::sync::Arc<crate::backend::FaultInjector> {
+        self.sqlite_backend().fault_injector.clone()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn fail_next_commit_for_test(&self) {
+        self.sqlite_backend().fail_next_commit_for_test();
+    }
+
     // ── Internal ──────────────────────────────────────────────────────────────
 
     /// Downcast to `SqliteBackend` for the sync interface.

@@ -81,6 +81,8 @@ pub trait Backend: Send + Sync {
 pub struct SqliteBackend {
     conn: Arc<Mutex<Connection>>,
     key: Arc<MasterKey>,
+    #[cfg(test)]
+    pub(crate) fault_injector: Arc<FaultInjector>,
 }
 
 impl SqliteBackend {
@@ -88,7 +90,28 @@ impl SqliteBackend {
         Self {
             conn: Arc::new(Mutex::new(conn)),
             key: Arc::new(key),
+            #[cfg(test)]
+            fault_injector: Arc::new(FaultInjector::default()),
         }
+    }
+
+    /// Test-only: install a commit hook that aborts (rolls back) exactly
+    /// the next commit on this connection, real SQLite rejection rather
+    /// than a simulated one — `commit_hook` returning `true` is SQLite's
+    /// own "abort this commit" signal (rusqlite, `hooks` feature, dev-only).
+    /// Self-disarms after firing once, so later commits on the same
+    /// connection are unaffected.
+    #[cfg(test)]
+    pub(crate) fn fail_next_commit_for_test(&self) {
+        #[allow(clippy::expect_used)]
+        let guard = self.conn.lock().expect("database mutex poisoned");
+        let fired = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        #[allow(clippy::expect_used)]
+        guard
+            .commit_hook(Some(move || {
+                !fired.swap(true, std::sync::atomic::Ordering::SeqCst)
+            }))
+            .expect("commit_hook");
     }
 
     pub fn with_conn_sync<R: 'static>(
@@ -156,6 +179,56 @@ impl Backend for SqliteBackend {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+}
+
+// ── Fault injection (test-only) ────────────────────────────────────────────
+
+/// Test-only failure points for RFC 094 Stage 2 item 2: "before append"
+/// and "within append" (interpreted here as *after* `append_within_tx`
+/// succeeds but before the transaction closure returns — `append_within_tx`
+/// is a single read-then-insert with no naturally distinguishable
+/// mid-point to interrupt, so both injection points bracket the call
+/// rather than one landing inside it; disclosed as an interpretation, not
+/// assumed). "At commit" doesn't need this type at all — see
+/// [`SqliteBackend::fail_next_commit_for_test`], a real SQLite commit
+/// rejection via `commit_hook`.
+///
+/// `#[cfg(test)]`-gated, not a Cargo feature: this compiles only into
+/// `sui-id-store`'s own test binary, never into a normal build a
+/// downstream crate could see or enable — the same reasoning the M2a
+/// exit condition already applies to raw-access re-exports.
+#[cfg(test)]
+#[derive(Default)]
+pub(crate) struct FaultInjector {
+    before_append: std::sync::atomic::AtomicBool,
+    after_append: std::sync::atomic::AtomicBool,
+}
+
+#[cfg(test)]
+impl FaultInjector {
+    pub(crate) fn fail_before_next_append(&self) {
+        self.before_append
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    pub(crate) fn fail_after_next_append(&self) {
+        self.after_append
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// Consume the "before append" flag: `true` at most once per call to
+    /// [`Self::fail_before_next_append`].
+    pub(crate) fn take_before_append(&self) -> bool {
+        self.before_append
+            .swap(false, std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Consume the "after append" flag: `true` at most once per call to
+    /// [`Self::fail_after_next_append`].
+    pub(crate) fn take_after_append(&self) -> bool {
+        self.after_append
+            .swap(false, std::sync::atomic::Ordering::SeqCst)
     }
 }
 

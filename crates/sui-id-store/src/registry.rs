@@ -508,6 +508,36 @@ impl Database {
     /// `*_within_tx` functions using the private capability and returns the
     /// typed event); append and hash the event in the same transaction;
     /// commit; only then construct `Audited<T>`.
+    ///
+    /// **Stage 2 items 1-3 (receipt privacy/post-commit ordering, failure
+    /// injection points, the atomic-rollback proof).** `Audited`/
+    /// `AuditReceipt` privacy was already established in Stage 1; the
+    /// post-commit ordering was already correct by construction (there is
+    /// exactly one construction site in this file, reached only from
+    /// `with_tx`'s `Ok` arm below) but was unverified against anything
+    /// other than the happy path.
+    ///
+    /// Building the verification (Stage 2 item 2's injected failure
+    /// points) found a real defect in this function as it stood before
+    /// this change: on a domain error (`build` failing, event-attribute
+    /// build failing), the closure returned `Ok(Err(e))` — a
+    /// `StoreResult::Ok` as far as `with_tx`/`with_tx_erased` are
+    /// concerned, wrapping a domain `Err` only *inside* that `Ok`. Neither
+    /// `?` nor anything else in the commit path inspects what's inside an
+    /// `Ok`, so `tx.commit()` ran regardless, persisting whatever the
+    /// mutation had already done before `build` (or the event/attribute
+    /// step) failed. The existing rollback test for U01 didn't catch
+    /// this: it uses a duplicate-primary-key conflict, which fails at the
+    /// SQL statement level under SQLite's default `ABORT` conflict
+    /// resolution — the one failed statement writes nothing, so "nothing
+    /// new persisted" held despite the commit still running, for a
+    /// reason unrelated to `class_a` actually rolling back anything.
+    ///
+    /// Fixed by making the closure return `StoreResult<T>` — a genuine
+    /// outer `Err` on every failure path, so `with_tx`'s own `?` rolls
+    /// back for real — and carrying the original `E` back through a
+    /// stashed side-channel rather than re-deriving one from the generic
+    /// `StoreError` used to force the rollback.
     pub async fn class_a<C, T, E, F>(
         &self,
         context: AuthorizedCommandContext<C>,
@@ -521,18 +551,48 @@ impl Database {
     {
         let context = std::sync::Arc::new(context);
         let context_for_closure = context.clone();
+        // RFC 094 Stage 2 item 2: test-only failure points bracketing
+        // `append_within_tx`. `#[cfg(test)]`-gated end to end — zero cost
+        // and zero behavior change in a normal build (see
+        // `backend::FaultInjector`'s doc comment).
+        #[cfg(test)]
+        let fault_injector = self.fault_injector();
+
+        // A domain error (`E`) can't cross `with_tx`'s `StoreResult<R>`
+        // boundary directly — this closure used to return `Ok(Err(e))` on
+        // a domain failure, which is a `StoreResult::Ok` as far as
+        // `with_tx`/`with_tx_erased` are concerned, so `?` never fired and
+        // `tx.commit()` ran regardless of `e`. Fixed here (RFC 094 Stage 2
+        // items 2-3, found by the injected-failure tests these items
+        // asked for): stash the real `E` and return a genuine
+        // `StoreResult::Err` instead, so `with_tx`'s own `?` rolls back,
+        // then recover the stashed `E` below rather than re-deriving one
+        // from the generic `StoreError` that forced the rollback.
+        let domain_error: std::sync::Arc<std::sync::Mutex<Option<E>>> =
+            std::sync::Arc::new(std::sync::Mutex::new(None));
+        let domain_error_for_closure = domain_error.clone();
+
         // The event type is computed and consumed entirely inside the
         // closure (it feeds `append_within_tx` here, not the caller), so it
         // never has to cross the `with_tx` boundary and never needs `Send`.
         let result = self
-            .with_tx(move |tx| -> StoreResult<Result<T, E>> {
+            .with_tx(move |tx| -> StoreResult<T> {
                 let mut class_a_tx = ClassATx {
                     write: WriteTx::new(tx),
                     context: &context_for_closure,
                 };
                 let (value, event) = match build(&mut class_a_tx) {
                     Ok(pair) => pair,
-                    Err(e) => return Ok(Err(e)),
+                    Err(e) => {
+                        #[allow(clippy::expect_used)]
+                        domain_error_for_closure
+                            .lock()
+                            .expect("domain_error mutex poisoned")
+                            .replace(e);
+                        return Err(StoreError::Integrity(
+                            "class_a: build failed, rolling back".into(),
+                        ));
+                    }
                 };
                 let descriptor = C::descriptor(&event);
                 let target = event.target();
@@ -540,22 +600,43 @@ impl Database {
                 let attributes = match event.attributes() {
                     Ok(a) => a,
                     Err(build_err) => {
-                        return Ok(Err(E::from(StoreError::Integrity(build_err.to_string()))));
+                        #[allow(clippy::expect_used)]
+                        domain_error_for_closure
+                            .lock()
+                            .expect("domain_error mutex poisoned")
+                            .replace(E::from(StoreError::Integrity(build_err.to_string())));
+                        return Err(StoreError::Integrity(
+                            "class_a: event-attribute build failed, rolling back".into(),
+                        ));
                     }
                 };
                 let row = build_audit_row(descriptor, &context, target, audit_result, &attributes);
+                #[cfg(test)]
+                if fault_injector.take_before_append() {
+                    return Err(StoreError::Integrity("injected: before append".into()));
+                }
                 crate::repos::audit::append_within_tx(tx, &row)?;
-                Ok(Ok(value))
+                #[cfg(test)]
+                if fault_injector.take_after_append() {
+                    return Err(StoreError::Integrity("injected: after append".into()));
+                }
+                Ok(value)
             })
             .await;
 
         match result {
-            Ok(Ok(value)) => Ok(Audited {
+            Ok(value) => Ok(Audited {
                 value,
                 receipt: AuditReceipt { _private: () },
             }),
-            Ok(Err(e)) => Err(e),
-            Err(store_err) => Err(E::from(store_err)),
+            Err(store_err) => {
+                #[allow(clippy::expect_used)]
+                let stashed = domain_error
+                    .lock()
+                    .expect("domain_error mutex poisoned")
+                    .take();
+                Err(stashed.unwrap_or_else(|| E::from(store_err)))
+            }
         }
     }
 }
