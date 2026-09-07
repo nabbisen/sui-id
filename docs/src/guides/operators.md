@@ -797,6 +797,7 @@ expect them to be renamed without a deprecation cycle):
 | `auth.session.revoked` | Session torn down by logout, admin disable, or expiry. |
 | `auth.logout` | RP-initiated logout completed. |
 | `auth.lockout` | A failed sign-in that just triggered or extended an account lockout. **Alert on bursts of this.** |
+| `auth.refresh.rotated` | A refresh token was successfully rotated (the normal, routine case). |
 | `auth.refresh.theft_detected` | A revoked refresh token was replayed at the token endpoint. The whole rotation family was revoked. **Alert on this.** |
 | `auth.sessions.bulk_revoke_self` | A user used "Sign out everywhere else" on `/me/security`. Note records how many sessions were swept. |
 | `auth.password.changed_self` | A user changed their own password via `/me/security/password`. Note records how many sessions and refresh tokens were swept (zero if the user unchecked the box). |

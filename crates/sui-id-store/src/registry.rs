@@ -161,6 +161,10 @@ pub enum AuditEventKind {
     UserCreate,
     /// `user.create_warned_hibp` — U01, HIBP-flagged branch.
     UserCreateWarnedHibp,
+    /// `auth.refresh.rotated` — T04, normal-winner branch.
+    RefreshRotated,
+    /// `auth.refresh.theft_detected` — T04, reuse/family-revocation branch.
+    RefreshTheftDetected,
     /// Proof-only — see [`ProofOnlyForbiddenSystemPrincipalCommand`]. Never
     /// emitted; no command can construct this event because no command can
     /// construct a context for that command in the first place.

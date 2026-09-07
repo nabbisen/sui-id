@@ -24,6 +24,7 @@ Use **Admin panel → Audit log** to filter by event prefix or export to CSV.
 | `auth.password.reset_email_failed` | Reset email failed | The password-reset email could not be delivered. |
 | `auth.password.reset_throttled` | Reset throttled | The forgot-password rate limit was reached for this address. |
 | `auth.password.reset_completed` | Password reset | Password was successfully changed via the reset link. |
+| `auth.refresh.rotated` | Refresh token rotated | A refresh token was exchanged for a fresh access/refresh token pair (the normal, routine case). |
 | `auth.refresh.theft_detected` | Token theft detected | A refresh token was presented that had already been rotated, indicating a possible token theft. The entire token family is revoked. |
 | `auth.session.revoked` | Session revoked | A single session was explicitly revoked (by user or admin). |
 | `auth.sessions.bulk_revoke_self` | All other sessions revoked | User revoked all sessions except the current one. |

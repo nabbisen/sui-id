@@ -31,7 +31,11 @@ use crate::registry::{
     AuditResult, AuditTarget, AuthorizedCommandContext, ClassATx, EventDescriptor,
     SealedCommandEvent, TargetRequirement,
 };
-use sui_id_shared::ids::{SigningKeyId, UserId};
+use chrono::{DateTime, Utc};
+use sui_id_shared::{
+    FamilyId, RefreshTokenHash,
+    ids::{ClientId, SigningKeyId, UserId},
+};
 
 // ── K01 — signing-key rotation ──────────────────────────────────────────
 
@@ -324,6 +328,190 @@ pub async fn create_user(
     .await
 }
 
+// ── T04 — refresh-token rotation / reuse revocation (closed branches) ───
+
+static T04_ROTATED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::RefreshRotated,
+    name: "auth.refresh.rotated",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::None,
+    target: TargetRequirement::Required,
+    attributes: &[AttributeSpec {
+        name: "family_id",
+        description: "the rotation family the presented token belonged to",
+    }],
+};
+
+static T04_THEFT_DETECTED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::RefreshTheftDetected,
+    name: "auth.refresh.theft_detected",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::None,
+    target: TargetRequirement::Required,
+    attributes: &[
+        AttributeSpec {
+            name: "family_id",
+            description: "the rotation family that was revoked",
+        },
+        AttributeSpec {
+            name: "family_revoked_count",
+            description: "how many still-active family members were revoked in this sweep",
+        },
+    ],
+};
+
+crate::declare_write_command! {
+    /// T04 — refresh-token rotation, with the reuse/theft branch.
+    command T04 = "T04" {
+        // A refresh-token presenter is not an authorizing human actor for
+        // this command any more than a login attempt is for U22 — the
+        // token's own validity is the authority, checked inside the
+        // transaction (T04_ROTATED/T04_THEFT_DETECTED's `actor: None`
+        // says the same thing about the event payload).
+        system_principal: permitted;
+        enum T04Event {
+            Rotated { user_id: UserId, family_id: FamilyId } => &T04_ROTATED,
+            TheftDetected { user_id: UserId, family_id: FamilyId, family_revoked: i64 } => &T04_THEFT_DETECTED,
+        }
+    }
+}
+
+impl SealedCommandEvent<T04> for T04Event {
+    fn target(&self) -> Option<AuditTarget> {
+        match self {
+            Self::Rotated { user_id, .. } | Self::TheftDetected { user_id, .. } => {
+                Some(AuditTarget(user_id.to_string()))
+            }
+        }
+    }
+
+    fn result(&self) -> AuditResult {
+        // Theft detection is this command *succeeding at its job*
+        // (recording and closing the family) — see U22's identical
+        // reasoning for why this isn't `AuditResult::Failure`.
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        match self {
+            Self::Rotated { family_id, .. } => AuditAttributes::builder()
+                .attribute("family_id", family_id.as_str().to_string())
+                .build(),
+            Self::TheftDetected {
+                family_id,
+                family_revoked,
+                ..
+            } => AuditAttributes::builder()
+                .attribute("family_id", family_id.as_str().to_string())
+                .attribute("family_revoked_count", family_revoked.to_string())
+                .build(),
+        }
+    }
+}
+
+/// What T04 committed, for the caller to act on. Both variants are a
+/// *successful* command execution (both commit); which one occurred is
+/// the caller's business, not an error — matching how `begin_rotation`'s
+/// `RotationLookup` already drew this line before RFC 094.
+pub enum T04Outcome {
+    /// The presented token was the family's active one; it is now
+    /// revoked and `successor` (already inserted, in the same family) is
+    /// this call's replacement. `raw_token` is the successor's plaintext
+    /// — safe to expose to the caller now, and only now, because this
+    /// variant is only ever constructed after commit.
+    Rotated {
+        successor: crate::models::RefreshTokenRow,
+        raw_token: sui_id_shared::RawRefreshToken,
+    },
+    /// The presented token was already revoked (a prior rotation, or a
+    /// concurrent winner). The whole family is now revoked, including
+    /// `prepared`'s never-used successor (dropped here, zeroizing its raw
+    /// token — see `PreparedRefreshToken`'s doc comment).
+    TheftDetected { family_revoked: i64 },
+}
+
+/// Run T04 (refresh-token rotation, closed branch on reuse) through the
+/// Class-A runner.
+///
+/// `prepared` must already hold the successor to use on the `Rotated`
+/// branch — RFC 094 requires the raw token, its hash, and its sealed
+/// ciphertext to be computed *before* this transaction opens (`repos::
+/// refresh_tokens::prepare_refresh_token`), so the only fallible work
+/// inside the transaction is database work. On the `TheftDetected`
+/// branch, `prepared` is dropped whole without ever being inserted —
+/// its raw token zeroizes via `RawRefreshToken`'s own `Drop`.
+pub async fn rotate_refresh_token(
+    db: &crate::Database,
+    presented_hash: RefreshTokenHash,
+    expected_client: ClientId,
+    now: DateTime<Utc>,
+    prepared: crate::repos::refresh_tokens::PreparedRefreshToken,
+) -> StoreResult<crate::registry::Audited<T04Outcome>> {
+    let context = AuthorizedCommandContext::<T04>::for_system_actor(None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, T04>| {
+        let rotation = crate::repos::refresh_tokens::begin_rotation_within_tx(
+            tx.tx(),
+            &presented_hash,
+            &expected_client,
+            now,
+        )?;
+        match rotation {
+            crate::repos::refresh_tokens::RotationLookup::RotatedHere(row) => {
+                crate::repos::refresh_tokens::insert_prepared_within_tx(tx.tx(), &prepared)?;
+                let event = T04Event::Rotated {
+                    user_id: row.user_id,
+                    family_id: row.family_id,
+                };
+                Ok((
+                    T04Outcome::Rotated {
+                        successor: prepared.row,
+                        raw_token: prepared.raw_token,
+                    },
+                    event,
+                ))
+            }
+            crate::repos::refresh_tokens::RotationLookup::ReuseDetected {
+                row,
+                family_revoked,
+            } => {
+                // `prepared` is dropped here, unused — its raw token
+                // zeroizes via `Drop`, not returned to any caller.
+                let family_revoked = family_revoked as i64;
+                let event = T04Event::TheftDetected {
+                    user_id: row.user_id,
+                    family_id: row.family_id,
+                    family_revoked,
+                };
+                Ok((T04Outcome::TheftDetected { family_revoked }, event))
+            }
+            crate::repos::refresh_tokens::RotationLookup::Expired(_)
+            | crate::repos::refresh_tokens::RotationLookup::Unknown => {
+                Err(crate::StoreError::NotFound)
+            }
+        }
+    })
+    .await
+}
+
+// ── T09 — initial root-family refresh-token issuance (Protocol) ────────
+
+/// Run T09 (initial refresh-token issuance) through the `Protocol`
+/// runner. No event, no audit row is possible here by construction —
+/// same reasoning as U30/O01: initial issuance is high-frequency protocol
+/// state, and `T04` (this module) is the only path to `Audited<T>` for
+/// refresh tokens. See `tests/compile_fail/` for the crate-wide version
+/// of this claim; this command's own share of it is that nothing in this
+/// function's body can reach `Database::class_a`.
+pub async fn insert_initial_refresh_token(
+    db: &crate::Database,
+    prepared: crate::repos::refresh_tokens::PreparedRefreshToken,
+) -> StoreResult<()> {
+    db.protocol(move |write| {
+        crate::repos::refresh_tokens::insert_prepared_within_tx(write.tx(), &prepared)
+    })
+    .await
+}
+
 // ── U30 — session creation (Protocol; proves no Audited<T> path) ───────
 
 /// Run U30 (session creation) through the `Protocol` runner. No event, no
@@ -515,7 +703,7 @@ mod tests {
     // Real `Database`, real SQLite. Proves the runners actually work, not
     // just that the descriptor tables are internally consistent.
 
-    #[allow(clippy::expect_used, clippy::unwrap_used)]
+    #[allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
     mod runner {
         use super::*;
         use crate::crypto::MasterKey;
@@ -549,6 +737,28 @@ mod tests {
                 locked_until: None,
                 source: crate::models::UserSource::Local,
                 external_stable_id: None,
+            }
+        }
+
+        fn a_client() -> crate::models::ClientRow {
+            crate::models::ClientRow {
+                id: ClientId::new(),
+                name: format!("client-{}", uuid::Uuid::new_v4()),
+                confidential: false,
+                secret_hash: None,
+                redirect_uris: vec!["https://example.com/cb".into()],
+                allowed_scopes: String::new(),
+                post_logout_redirect_uris: vec![],
+                is_disabled: false,
+                is_deleted: false,
+                consent_policy: crate::models::ConsentPolicy::default(),
+                registered_via: crate::models::RegistrationSource::default(),
+                logo_uri: None,
+                homepage_uri: None,
+                privacy_policy_uri: None,
+                tos_uri: None,
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
             }
         }
 
@@ -941,6 +1151,220 @@ mod tests {
             assert!(
                 repos::users::get(&db, user.id).await.is_err(),
                 "no user row: the insert rolled back with the audit row"
+            );
+            assert_eq!(latest_audit_action(&db).await, before_audit);
+        }
+
+        // ── T04/T09 — refresh-token rotation and initial issuance ───────
+
+        async fn seed_family(
+            db: &Database,
+        ) -> (UserId, ClientId, FamilyId, sui_id_shared::RefreshTokenHash) {
+            let user = a_user();
+            repos::users::create(db, &user).await.expect("create user");
+            let client = a_client();
+            repos::clients::create(db, &client)
+                .await
+                .expect("create client");
+
+            let root_id = sui_id_shared::RefreshTokenId::generate();
+            let family = FamilyId::root_of(&root_id);
+            let row = crate::models::RefreshTokenRow {
+                id: root_id,
+                user_id: user.id,
+                client_id: client.id,
+                scope: "openid".into(),
+                expires_at: Utc::now() + TimeDelta::hours(1),
+                revoked_at: None,
+                created_at: Utc::now(),
+                auth_methods: vec![],
+                family_id: family.clone(),
+            };
+            let prepared = repos::refresh_tokens::prepare_refresh_token(db.key(), row)
+                .expect("prepare root token");
+            let hash = sui_id_shared::RefreshTokenHash::of(&prepared.raw_token);
+            insert_initial_refresh_token(db, prepared)
+                .await
+                .expect("t09 initial issue");
+            (user.id, client.id, family, hash)
+        }
+
+        fn a_successor(
+            user_id: UserId,
+            client_id: ClientId,
+            family: FamilyId,
+        ) -> crate::models::RefreshTokenRow {
+            crate::models::RefreshTokenRow {
+                id: sui_id_shared::RefreshTokenId::generate(),
+                user_id,
+                client_id,
+                scope: "openid".into(),
+                expires_at: Utc::now() + TimeDelta::hours(1),
+                revoked_at: None,
+                created_at: Utc::now(),
+                auth_methods: vec![],
+                family_id: family,
+            }
+        }
+
+        #[tokio::test]
+        async fn t09_protocol_issues_initial_token_with_no_audit_row() {
+            let db = fresh_db();
+            let before = latest_audit_action(&db).await;
+            let (_, _, _, hash) = seed_family(&db).await;
+
+            // The row genuinely exists (T09 really wrote it) ...
+            assert!(
+                repos::refresh_tokens::begin_rotation(&db, &hash, &ClientId::new(), Utc::now())
+                    .await
+                    .is_err(),
+                "sanity: wrong client must reject without revoking"
+            );
+            // ... but no audit row exists for it -- T09 has no path to
+            // Audited<T>, by construction (Database::protocol).
+            assert_eq!(latest_audit_action(&db).await, before);
+        }
+
+        #[tokio::test]
+        async fn t04_normal_rotation_revokes_old_inserts_successor_and_appends_rotated() {
+            let db = fresh_db();
+            let (user_id, client_id, family, hash) = seed_family(&db).await;
+
+            let successor = a_successor(user_id, client_id, family.clone());
+            let successor_id = successor.id.clone();
+            let prepared =
+                repos::refresh_tokens::prepare_refresh_token(db.key(), successor).unwrap();
+
+            let audited = rotate_refresh_token(&db, hash, client_id, Utc::now(), prepared)
+                .await
+                .expect("rotate");
+            match audited.into_inner() {
+                T04Outcome::Rotated { successor, .. } => {
+                    assert_eq!(successor.id, successor_id);
+                }
+                T04Outcome::TheftDetected { .. } => panic!("expected Rotated"),
+            }
+
+            assert_eq!(
+                latest_audit_action(&db).await.as_deref(),
+                Some("auth.refresh.rotated")
+            );
+        }
+
+        #[tokio::test]
+        async fn t04_reuse_revokes_family_and_appends_theft_detected() {
+            let db = fresh_db();
+            let (user_id, client_id, family, hash) = seed_family(&db).await;
+
+            // First rotation: legitimate, wins.
+            let s1 = a_successor(user_id, client_id, family.clone());
+            let p1 = repos::refresh_tokens::prepare_refresh_token(db.key(), s1).unwrap();
+            rotate_refresh_token(&db, hash.clone(), client_id, Utc::now(), p1)
+                .await
+                .expect("first rotation");
+
+            // Replay of the now-revoked root token: reuse.
+            let s2 = a_successor(user_id, client_id, family.clone());
+            let p2 = repos::refresh_tokens::prepare_refresh_token(db.key(), s2).unwrap();
+            let audited = rotate_refresh_token(&db, hash, client_id, Utc::now(), p2)
+                .await
+                .expect("replay");
+            match audited.into_inner() {
+                T04Outcome::TheftDetected { family_revoked } => {
+                    assert!(family_revoked >= 1, "at least the winner's successor");
+                }
+                T04Outcome::Rotated { .. } => panic!("expected TheftDetected"),
+            }
+
+            assert_eq!(
+                latest_audit_action(&db).await.as_deref(),
+                Some("auth.refresh.theft_detected")
+            );
+
+            let active: i64 = db
+                .with_conn_sync(|conn| {
+                    Ok(conn
+                        .query_row(
+                            "SELECT COUNT(*) FROM refresh_tokens \
+                             WHERE family_id = ?1 AND revoked_at IS NULL",
+                            [family.as_str()],
+                            |r| r.get(0),
+                        )
+                        .expect("count"))
+                })
+                .expect("query");
+            assert_eq!(active, 0, "reuse must close the whole family");
+        }
+
+        #[tokio::test]
+        async fn t04_injected_failure_before_append_rolls_back_revoke_and_successor_insert() {
+            let db = fresh_db();
+            let (user_id, client_id, family, hash) = seed_family(&db).await;
+            let before_audit = latest_audit_action(&db).await;
+
+            let successor = a_successor(user_id, client_id, family);
+            let successor_id = successor.id.clone();
+            let prepared =
+                repos::refresh_tokens::prepare_refresh_token(db.key(), successor).unwrap();
+
+            db.fault_injector().fail_before_next_append();
+            let result =
+                rotate_refresh_token(&db, hash.clone(), client_id, Utc::now(), prepared).await;
+            assert!(result.is_err(), "injected failure must surface as Err");
+
+            // The old row must still be active -- the guarded revoke rolled
+            // back with everything else in this transaction.
+            assert!(
+                matches!(
+                    repos::refresh_tokens::begin_rotation(&db, &hash, &client_id, Utc::now())
+                        .await
+                        .expect("old token must still be rotatable"),
+                    repos::refresh_tokens::RotationLookup::RotatedHere(_)
+                ),
+                "old row must still be active: the revoke rolled back"
+            );
+            assert!(
+                db.with_conn_sync(|conn| {
+                    Ok(conn
+                        .query_row(
+                            "SELECT 1 FROM refresh_tokens WHERE id = ?1",
+                            [successor_id.as_str()],
+                            |r| r.get::<_, i64>(0),
+                        )
+                        .is_err())
+                })
+                .unwrap(),
+                "successor must not have been inserted"
+            );
+            assert_eq!(latest_audit_action(&db).await, before_audit);
+        }
+
+        #[tokio::test]
+        async fn t04_injected_commit_failure_rolls_back_everything() {
+            let db = fresh_db();
+            let (user_id, client_id, family, hash) = seed_family(&db).await;
+            let before_audit = latest_audit_action(&db).await;
+
+            let successor = a_successor(user_id, client_id, family);
+            let prepared =
+                repos::refresh_tokens::prepare_refresh_token(db.key(), successor).unwrap();
+
+            db.fail_next_commit_for_test();
+            let result =
+                rotate_refresh_token(&db, hash.clone(), client_id, Utc::now(), prepared).await;
+            assert!(
+                result.is_err(),
+                "a rejected commit must surface as Err, not a silently-empty Ok"
+            );
+
+            assert!(
+                matches!(
+                    repos::refresh_tokens::begin_rotation(&db, &hash, &client_id, Utc::now())
+                        .await
+                        .expect("old token must still be rotatable"),
+                    repos::refresh_tokens::RotationLookup::RotatedHere(_)
+                ),
+                "old row must still be active after a rejected commit"
             );
             assert_eq!(latest_audit_action(&db).await, before_audit);
         }

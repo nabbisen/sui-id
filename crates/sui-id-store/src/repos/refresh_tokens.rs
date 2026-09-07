@@ -364,67 +364,160 @@ pub async fn begin_rotation(
     expected_client: &sui_id_shared::ids::ClientId,
     now: DateTime<Utc>,
 ) -> StoreResult<RotationLookup> {
-    let hash_bytes = token_hash.as_bytes().to_vec();
+    let token_hash = token_hash.clone();
+    let expected_client = *expected_client;
+    db.with_tx(move |tx| begin_rotation_within_tx(tx, &token_hash, &expected_client, now))
+        .await
+}
+
+/// Same guarded arbitration as [`begin_rotation`], on a caller-supplied
+/// transaction (RFC 094 T04: the guarded revoke, and the family-revoke it
+/// falls into on reuse, must share the transaction that inserts T04's
+/// precomputed successor and appends its event).
+///
+/// 1. SELECT the row by hash (no filters) inside the transaction.
+/// 2. If absent → `Unknown`.
+/// 3. If `expires_at ≤ now` and `revoked_at IS NULL` → `Expired`.
+/// 4. `UPDATE SET revoked_at = now WHERE id = ? AND revoked_at IS NULL`:
+///    - rows_affected = 1 → this call won; return `RotatedHere`.
+///    - rows_affected = 0 → already revoked (concurrent winner or prior
+///      rotation); immediately `UPDATE … WHERE family_id = ? AND revoked_at
+///      IS NULL` to revoke all remaining family members, then return
+///      `ReuseDetected`.
+pub fn begin_rotation_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    token_hash: &RefreshTokenHash,
+    expected_client: &sui_id_shared::ids::ClientId,
+    now: DateTime<Utc>,
+) -> StoreResult<RotationLookup> {
+    let hash_bytes = token_hash.as_bytes();
     let expected_client_str = expected_client.to_string();
 
-    db.with_tx(move |tx| {
-        // Step 1: fetch the row by hash (including revoked / expired rows so
-        // we can distinguish every outcome).
-        let row: Option<RefreshTokenRow> = match tx.query_row(
-            "SELECT id, token_enc, user_id, client_id, scope, expires_at, revoked_at,              created_at, auth_methods, family_id              FROM refresh_tokens WHERE token_hash = ?1",
-            [hash_bytes.as_slice()],
-            map,
-        ) {
-            Ok(r) => Some(r),
-            Err(rusqlite::Error::QueryReturnedNoRows) => None,
-            Err(e) => return Err(StoreError::from(e)),
-        };
+    // Step 1: fetch the row by hash (including revoked / expired rows so
+    // we can distinguish every outcome).
+    let row: Option<RefreshTokenRow> = match tx.query_row(
+        "SELECT id, token_enc, user_id, client_id, scope, expires_at, revoked_at,          created_at, auth_methods, family_id          FROM refresh_tokens WHERE token_hash = ?1",
+        [hash_bytes],
+        map,
+    ) {
+        Ok(r) => Some(r),
+        Err(rusqlite::Error::QueryReturnedNoRows) => None,
+        Err(e) => return Err(StoreError::from(e)),
+    };
 
-        // Step 2: unknown token.
-        let row = match row {
-            None => return Ok(RotationLookup::Unknown),
-            Some(r) => r,
-        };
+    // Step 2: unknown token.
+    let row = match row {
+        None => return Ok(RotationLookup::Unknown),
+        Some(r) => r,
+    };
 
-        // Client-binding check: reject without mutating if the token belongs
-        // to a different client than the one presenting it.  Matches pre-RFC
-        // behaviour where mismatch is rejected before any state change.
-        if row.client_id.to_string() != expected_client_str {
-            return Err(StoreError::Conflict);
-        }
+    // Client-binding check: reject without mutating if the token belongs
+    // to a different client than the one presenting it.  Matches pre-RFC
+    // behaviour where mismatch is rejected before any state change.
+    if row.client_id.to_string() != expected_client_str {
+        return Err(StoreError::Conflict);
+    }
 
-        // Step 3: expired-but-not-yet-revoked.
-        if row.expires_at <= now && row.revoked_at.is_none() {
-            return Ok(RotationLookup::Expired(row));
-        }
+    // Step 3: expired-but-not-yet-revoked.
+    if row.expires_at <= now && row.revoked_at.is_none() {
+        return Ok(RotationLookup::Expired(row));
+    }
 
-        // Step 4: atomic arbitration via rows-affected guard.
-        let id_str = row.id.as_str().to_owned();
-        let family_str = row.family_id.as_str().to_owned();
+    // Step 4: atomic arbitration via rows-affected guard.
+    let id_str = row.id.as_str().to_owned();
+    let family_str = row.family_id.as_str().to_owned();
 
-        let affected = tx.execute(
-            "UPDATE refresh_tokens SET revoked_at = ?1              WHERE id = ?2 AND revoked_at IS NULL",
-            params![now, id_str],
+    let affected = tx.execute(
+        "UPDATE refresh_tokens SET revoked_at = ?1          WHERE id = ?2 AND revoked_at IS NULL",
+        params![now, id_str],
+    )?;
+
+    if affected == 1 {
+        // This caller won the race.
+        Ok(RotationLookup::RotatedHere(row))
+    } else {
+        // Already revoked (row.revoked_at was Some, or a concurrent winner
+        // just beat us).  Revoke all remaining family members in the same
+        // transaction so the family is fully closed before we return.
+        let family_revoked = tx.execute(
+            "UPDATE refresh_tokens SET revoked_at = ?1              WHERE family_id = ?2 AND revoked_at IS NULL",
+            params![now, family_str],
         )?;
+        Ok(RotationLookup::ReuseDetected {
+            row,
+            family_revoked,
+        })
+    }
+}
 
-        if affected == 1 {
-            // This caller won the race.
-            Ok(RotationLookup::RotatedHere(row))
-        } else {
-            // Already revoked (row.revoked_at was Some, or a concurrent winner
-            // just beat us).  Revoke all remaining family members in the same
-            // transaction so the family is fully closed before we return.
-            let family_revoked = tx.execute(
-                "UPDATE refresh_tokens SET revoked_at = ?1                  WHERE family_id = ?2 AND revoked_at IS NULL",
-                params![now, family_str],
-            )?;
-            Ok(RotationLookup::ReuseDetected {
-                row,
-                family_revoked,
-            })
-        }
+// ── RFC 094 T04/T09: precomputed successor, prepared outside the tx ─────
+
+/// A refresh-token row and its raw plaintext value, prepared *before*
+/// entering a write transaction: the raw token is generated, hashed, and
+/// sealed here, so the transaction that inserts it does no fallible
+/// non-database work.
+///
+/// The raw token is a `RawRefreshToken` — already zeroized on drop
+/// (`sui_id_shared::secrets`) — so a `PreparedRefreshToken` dropped
+/// without ever calling [`insert_prepared_within_tx`] on it (every
+/// reuse/error path in T04) zeroizes it the same way a committed one's
+/// caller-exposed copy eventually does. No separate wrapper needed: this
+/// crate did not invent secret-zeroizing for this, it reused the type
+/// that already does it.
+pub struct PreparedRefreshToken {
+    pub row: RefreshTokenRow,
+    pub raw_token: RawRefreshToken,
+    sealed: Vec<u8>,
+    hash: Vec<u8>,
+}
+
+/// Prepare a refresh-token row for insertion: generate its plaintext
+/// value, compute its lookup hash, and seal it under `key`. Call this
+/// before opening the transaction that will (or will not) insert the
+/// result — see [`insert_prepared_within_tx`].
+pub fn prepare_refresh_token(
+    key: &crate::crypto::MasterKey,
+    row: RefreshTokenRow,
+) -> StoreResult<PreparedRefreshToken> {
+    let raw_token = RawRefreshToken::generate();
+    let hash = RefreshTokenHash::of(&raw_token).as_bytes().to_vec();
+    let sealed = seal(key, raw_token.expose().as_bytes(), AAD)?;
+    Ok(PreparedRefreshToken {
+        row,
+        raw_token,
+        sealed,
+        hash,
     })
-    .await
+}
+
+/// Insert a [`PreparedRefreshToken`] on the caller's transaction. Pure SQL
+/// — everything fallible about the value was already computed by
+/// [`prepare_refresh_token`], so this cannot fail for a secret-handling
+/// reason, only a database one.
+pub fn insert_prepared_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    prepared: &PreparedRefreshToken,
+) -> StoreResult<()> {
+    let methods_json = serde_json::to_string(&prepared.row.auth_methods)?;
+    tx.execute(
+        "INSERT INTO refresh_tokens(id, token_enc, token_hash, user_id, client_id, scope, \
+         expires_at, revoked_at, created_at, auth_methods, family_id) \
+         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        params![
+            prepared.row.id.as_str(),
+            prepared.sealed,
+            prepared.hash,
+            prepared.row.user_id.to_string(),
+            prepared.row.client_id.to_string(),
+            prepared.row.scope,
+            prepared.row.expires_at,
+            prepared.row.revoked_at,
+            prepared.row.created_at,
+            methods_json,
+            prepared.row.family_id.as_str(),
+        ],
+    )?;
+    Ok(())
 }
 
 /// Re-seal every `token_enc` row under `new_key`. Used by

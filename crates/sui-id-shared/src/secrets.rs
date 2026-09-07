@@ -79,7 +79,11 @@ impl fmt::Display for RawRefreshToken {
 /// Stored as the indexed `token_hash` column so DB lookups are
 /// O(log n) without ever persisting the plaintext.
 ///
-/// Only constructible via [`RefreshTokenHash::of`].
+/// Only constructible via [`RefreshTokenHash::of`]. `Clone` because RFC
+/// 094's T04 moves an owned copy into a `'static` transaction closure —
+/// not a secret (it's a lookup key, not the plaintext), so cloning it
+/// carries none of `RawRefreshToken`'s concerns.
+#[derive(Clone)]
 pub struct RefreshTokenHash(Vec<u8>);
 
 impl RefreshTokenHash {

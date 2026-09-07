@@ -476,6 +476,28 @@ async fn resolve_user(
 /// exchanges of the same token.  The outcome enum makes the four cases
 /// explicit and ensures the theft-detection path runs inside the same
 /// transaction as the revoke.
+fn invalid_grant() -> CoreError {
+    CoreError::Protocol {
+        code: ProtocolError::InvalidGrant,
+        description: "refresh token is unknown or revoked".into(),
+    }
+}
+
+/// Exchange a presented refresh token for a fresh token set, rotating it.
+///
+/// RFC 094 T04: the guarded old-row revoke (or the family-revoke it falls
+/// into on reuse), the precomputed successor's insertion, and the
+/// `auth.refresh.rotated`/`auth.refresh.theft_detected` event share one
+/// transaction — see `sui_id_store::commands::rotate_refresh_token`'s own
+/// doc comment for why that wasn't true before this conversion.
+///
+/// Sequence, per RFC 094's "Refresh issuance and rotation boundary": a
+/// query-only preliminary read (immutable fields only — `user_id`/
+/// `client_id`/`scope`/`auth_methods`/`family_id` never change after a
+/// row is inserted, so reading them before the transaction is safe;
+/// `revoked_at`/expiry are re-checked authoritatively inside T04), then
+/// every fallible non-database step — JWT issuance, successor generation/
+/// hash/seal — prepared before T04's transaction opens.
 pub async fn exchange_refresh(
     db: &Database,
     clock: &SharedClock,
@@ -498,72 +520,25 @@ pub async fn exchange_refresh(
     }
     authenticate_client(&client, req.client_secret.as_deref()).await?;
 
-    // ── Atomic rotation arbitration (RFC 080) ────────────────────────────
-    // `begin_rotation` holds the revoke + optional family-revoke inside one
-    // transaction, so exactly one concurrent caller receives `RotatedHere`
-    // and every loser receives `ReuseDetected` with the family already closed.
-    let now = clock.now();
-    let token_hash = RefreshTokenHash::of(&req.refresh_token);
-    let rotation = refresh_tokens::begin_rotation(db, &token_hash, &req.client_id, now)
-        .await
-        .map_err(|e| match e {
-            // Client-mismatch is rejected without mutating state.
-            sui_id_store::StoreError::Conflict => CoreError::Protocol {
-                code: ProtocolError::InvalidGrant,
-                description: "refresh token was issued to a different client".into(),
-            },
-            other => CoreError::from(other),
-        })?;
-
-    let row = match rotation {
-        // ── Won the race: proceed to issuance ───────────────────────────
-        refresh_tokens::RotationLookup::RotatedHere(row) => row,
-
-        // ── Reuse signal: family already revoked, emit audit, deny ──────
-        // The family revocation happened atomically inside `begin_rotation`,
-        // so this is already a closed outcome by the time we reach here.
-        // We do not distinguish the "concurrent winner" case from a
-        // "token-already-rotated replay" case — both look identical to the
-        // caller (RFC 080 P5).
-        refresh_tokens::RotationLookup::ReuseDetected {
-            row,
-            family_revoked,
-        } => {
-            let _ = audit::append(
-                db,
-                &AuditLogRow {
-                    at: now,
-                    actor: Some(row.user_id),
-                    action: "auth.refresh.theft_detected".into(),
-                    target: Some(row.user_id.to_string()),
-                    result: "denied".into(),
-                    note: Some(format!(
-                        "revoked refresh-token family={} client_id={} family_revoked={}",
-                        row.family_id, row.client_id, family_revoked
-                    )),
-                },
-            )
-            .await;
-            return Err(CoreError::Protocol {
-                code: ProtocolError::InvalidGrant,
-                description: "refresh token is unknown or revoked".into(),
-            });
-        }
-
-        // ── Expired or unknown: opaque denial ────────────────────────────
-        refresh_tokens::RotationLookup::Expired(_) | refresh_tokens::RotationLookup::Unknown => {
-            return Err(CoreError::Protocol {
-                code: ProtocolError::InvalidGrant,
-                description: "refresh token is unknown or revoked".into(),
-            });
-        }
+    // ── Preliminary, read-only lookup (RFC 094 T04 step 0) ───────────────
+    let preliminary = match refresh_tokens::find_any(db, &req.refresh_token).await {
+        Ok(row) => row,
+        Err(sui_id_store::StoreError::NotFound) => return Err(invalid_grant()),
+        Err(e) => return Err(e.into()),
     };
+    // Fast-fail before any JWT/crypto work for an obviously wrong client;
+    // T04 re-checks this authoritatively regardless (guards against a
+    // race between this read and the transaction, not relied on for
+    // correctness by itself).
+    if preliminary.client_id != req.client_id {
+        return Err(invalid_grant());
+    }
 
     // ── Fetch user email for ID token claims (scope "email") ─────────────
     // Refresh token exchanges may include an ID token (OIDC Core §12.2).
     let email_for_token: Option<(String, bool)> =
-        if row.scope.split_whitespace().any(|s| s == "email") {
-            match users::get(db, row.user_id).await {
+        if preliminary.scope.split_whitespace().any(|s| s == "email") {
+            match users::get(db, preliminary.user_id).await {
                 Ok(u) if !u.is_disabled && !u.is_deleted => {
                     u.email.map(|addr| (addr, u.email_verified_at.is_some()))
                 }
@@ -576,19 +551,64 @@ pub async fn exchange_refresh(
         .as_ref()
         .map(|(addr, v)| (addr.as_str(), *v));
 
-    issue_for_with_family(
+    // ── Prepare every fallible non-database input ────────────────────────
+    let (access_token, id_token, access_expires_in) = issue_jwt_pair(
         db,
         clock,
         ctx,
-        row.user_id,
-        row.client_id,
-        &row.scope,
+        preliminary.user_id,
+        preliminary.client_id,
+        &preliminary.scope,
         None,
-        &row.auth_methods,
-        Some(row.family_id.clone()),
+        &preliminary.auth_methods,
         email_arg,
     )
-    .await
+    .await?;
+
+    let now = clock.now();
+    let successor_row = RefreshTokenRow {
+        id: RefreshTokenId::generate(),
+        user_id: preliminary.user_id,
+        client_id: preliminary.client_id,
+        scope: preliminary.scope.clone(),
+        expires_at: now + Duration::seconds(ctx.lifetimes.refresh_secs),
+        revoked_at: None,
+        created_at: now,
+        auth_methods: preliminary.auth_methods.clone(),
+        family_id: preliminary.family_id.clone(),
+    };
+    let prepared = refresh_tokens::prepare_refresh_token(db.key(), successor_row)?;
+
+    // ── T04: guarded revoke, successor insert, event — one transaction ───
+    let token_hash = RefreshTokenHash::of(&req.refresh_token);
+    let audited =
+        sui_id_store::commands::rotate_refresh_token(db, token_hash, req.client_id, now, prepared)
+            .await
+            .map_err(|e| match e {
+                // Client-mismatch (a race against the preliminary check above) or
+                // the row turning out expired/unknown by the time T04 re-checks —
+                // both are the same opaque denial to the caller as before.
+                sui_id_store::StoreError::Conflict | sui_id_store::StoreError::NotFound => {
+                    invalid_grant()
+                }
+                other => other.into(),
+            })?;
+
+    match audited.into_inner() {
+        // The family revocation and its audit row already committed
+        // atomically inside T04 — nothing left to do here but deny. We do
+        // not distinguish the "concurrent winner" case from a
+        // "token-already-rotated replay" case — both look identical to
+        // the caller (RFC 080 P5).
+        sui_id_store::commands::T04Outcome::TheftDetected { .. } => Err(invalid_grant()),
+        sui_id_store::commands::T04Outcome::Rotated { raw_token, .. } => Ok(TokenSet {
+            access_token,
+            id_token,
+            refresh_token: raw_token,
+            access_expires_in,
+            user_id: Some(preliminary.user_id),
+        }),
+    }
 }
 
 async fn authenticate_client(
@@ -612,8 +632,13 @@ async fn authenticate_client(
     })
 }
 
+/// Sign the access/ID-token pair. Shared by initial issuance (T09) and
+/// rotation (T04) — both need identically-computed JWTs; only what
+/// happens to the refresh-token row differs between them. Touches no
+/// database write, so unlike the refresh-token side there is nothing
+/// here for RFC 094 to make atomic with anything else.
 #[allow(clippy::too_many_arguments)]
-async fn issue_for(
+async fn issue_jwt_pair(
     db: &Database,
     clock: &SharedClock,
     ctx: IssuanceContext<'_>,
@@ -623,42 +648,7 @@ async fn issue_for(
     nonce: Option<&str>,
     auth_methods: &[sui_id_shared::AuthMethod],
     user_email: Option<(&str, bool)>,
-) -> CoreResult<TokenSet> {
-    // Initial issuance (authorization-code grant): no parent family,
-    // so we let `issue_for_with_family` create a new family rooted
-    // at the new refresh-token id.
-    issue_for_with_family(
-        db,
-        clock,
-        ctx,
-        user_id,
-        client_id,
-        scope,
-        nonce,
-        auth_methods,
-        None,
-        user_email,
-    )
-    .await
-}
-
-/// The actual issuance routine. `family_id` is `None` for initial
-/// issuance (a new family is created, rooted at the new
-/// refresh-token id) and `Some(parent_family_id)` for rotations
-/// (the new row inherits the family).
-#[allow(clippy::too_many_arguments)]
-async fn issue_for_with_family(
-    db: &Database,
-    clock: &SharedClock,
-    ctx: IssuanceContext<'_>,
-    user_id: UserId,
-    client_id: ClientId,
-    scope: &str,
-    nonce: Option<&str>,
-    auth_methods: &[sui_id_shared::AuthMethod],
-    family_id: Option<FamilyId>,
-    user_email: Option<(&str, bool)>,
-) -> CoreResult<TokenSet> {
+) -> CoreResult<(String, Option<String>, i64)> {
     let key_row = signing_keys::active(db).await.map_err(|e| match e {
         sui_id_store::StoreError::NotFound => CoreError::Internal,
         other => CoreError::from(other),
@@ -686,13 +676,47 @@ async fn issue_for_with_family(
         user_email,
     )
     .await?;
+    // `set.refresh_token` is `issue_token_set`'s own throwaway generation
+    // (RFC 072-era shape) — neither caller here uses it: initial issuance
+    // and rotation each generate and persist their own, under T09/T04
+    // respectively. Dropped here; it zeroizes like any other
+    // `RawRefreshToken`, never having been exposed or persisted.
+    Ok((set.access_token, set.id_token, set.access_expires_in))
+}
+
+/// Initial issuance (authorization-code grant): a new refresh-token row,
+/// rooting a new rotation family at its own id, through T09 — RFC 094's
+/// Protocol-class command for this (`sui_id_store::commands::
+/// insert_initial_refresh_token`). Never touches T04 or `Audited<T>`.
+#[allow(clippy::too_many_arguments)]
+async fn issue_for(
+    db: &Database,
+    clock: &SharedClock,
+    ctx: IssuanceContext<'_>,
+    user_id: UserId,
+    client_id: ClientId,
+    scope: &str,
+    nonce: Option<&str>,
+    auth_methods: &[sui_id_shared::AuthMethod],
+    user_email: Option<(&str, bool)>,
+) -> CoreResult<TokenSet> {
+    let (access_token, id_token, access_expires_in) = issue_jwt_pair(
+        db,
+        clock,
+        ctx,
+        user_id,
+        client_id,
+        scope,
+        nonce,
+        auth_methods,
+        user_email,
+    )
+    .await?;
 
     let now = clock.now();
     let new_id = RefreshTokenId::generate();
-    // First issuance roots a new family at this new row's id; a
-    // rotation copies the parent's family forward unchanged.
-    let family = family_id.unwrap_or_else(|| FamilyId::root_of(&new_id));
-    let rt_row = RefreshTokenRow {
+    let family = FamilyId::root_of(&new_id);
+    let row = RefreshTokenRow {
         id: new_id,
         user_id,
         client_id,
@@ -703,9 +727,17 @@ async fn issue_for_with_family(
         auth_methods: auth_methods.to_vec(),
         family_id: family,
     };
-    // Pass the plaintext token separately — RefreshTokenRow carries no plaintext.
-    refresh_tokens::insert(db, &rt_row, &set.refresh_token).await?;
-    Ok(set)
+    let prepared = refresh_tokens::prepare_refresh_token(db.key(), row)?;
+    let raw_token = prepared.raw_token.clone();
+    sui_id_store::commands::insert_initial_refresh_token(db, prepared).await?;
+
+    Ok(TokenSet {
+        access_token,
+        id_token,
+        refresh_token: raw_token,
+        access_expires_in,
+        user_id: Some(user_id),
+    })
 }
 
 #[cfg(test)]
