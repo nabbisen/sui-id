@@ -16,9 +16,14 @@
 //! `I` (internal primitives) — different lifecycle and not a top-level
 //! capability, respectively.
 //!
-//! Nothing here is wired into a production call site. RFC 094 §"Multiple
-//! implementation steps" separates the registry foundation from the
-//! conversion waves; this module is foundation only.
+//! None of this was wired into a production call site as of Stage 1. RFC
+//! 094 §"Multiple implementation steps" separates the registry foundation
+//! from the conversion waves; this module was foundation-only through
+//! Stage 2. **U22 is the first exception**: the conversion waves' first
+//! item wires `record_login_failure` into `authn::session::
+//! login_with_mfa`'s wrong-password branch (`sui-id-core`), replacing the
+//! two-call, non-atomic pattern that command exists to fix. K01, U01, and
+//! the Protocol/Operational proofs remain unwired.
 
 use crate::StoreResult;
 use crate::registry::{
@@ -126,10 +131,17 @@ static U22_LOCKOUT: EventDescriptor = EventDescriptor {
     class: AuditClass::Atomic,
     actor: ActorRequirement::None,
     target: TargetRequirement::Required,
-    attributes: &[AttributeSpec {
-        name: "count",
-        description: "failed-login counter value that crossed the threshold",
-    }],
+    attributes: &[
+        AttributeSpec {
+            name: "count",
+            description: "failed-login counter value that crossed the threshold",
+        },
+        AttributeSpec {
+            name: "locked_for_secs",
+            description: "the lock window's length in seconds, as computed by the caller's \
+                backoff policy",
+        },
+    ],
 };
 
 crate::declare_write_command! {
@@ -143,7 +155,7 @@ crate::declare_write_command! {
         system_principal: permitted;
         enum U22Event {
             Failure { user_id: UserId, count: i64 } => &U22_FAILURE,
-            Lockout { user_id: UserId, count: i64 } => &U22_LOCKOUT,
+            Lockout { user_id: UserId, count: i64, locked_for_secs: i64 } => &U22_LOCKOUT,
         }
     }
 }
@@ -166,8 +178,16 @@ impl SealedCommandEvent<U22> for U22Event {
 
     fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
         match self {
-            Self::Failure { count, .. } | Self::Lockout { count, .. } => AuditAttributes::builder()
+            Self::Failure { count, .. } => AuditAttributes::builder()
                 .attribute("count", count.to_string())
+                .build(),
+            Self::Lockout {
+                count,
+                locked_for_secs,
+                ..
+            } => AuditAttributes::builder()
+                .attribute("count", count.to_string())
+                .attribute("locked_for_secs", locked_for_secs.to_string())
                 .build(),
         }
     }
@@ -203,6 +223,7 @@ pub async fn record_login_failure(
                 U22Event::Lockout {
                     user_id,
                     count: new_count,
+                    locked_for_secs: window.num_seconds(),
                 }
             }
             None => U22Event::Failure {
@@ -412,6 +433,7 @@ mod tests {
         let lockout = U22Event::Lockout {
             user_id: uid,
             count: 5,
+            locked_for_secs: 30,
         };
         assert_eq!(U22::descriptor(&failure).name, "auth.login.failure");
         assert_eq!(U22::descriptor(&lockout).name, "auth.lockout");
@@ -713,9 +735,21 @@ mod tests {
             .await
             .expect("record failure");
             assert_eq!(audited.into_inner(), 1);
-            assert_eq!(
-                latest_audit_action(&db).await.as_deref(),
-                Some("auth.lockout")
+            let latest = repos::audit::recent(&db, 1)
+                .await
+                .expect("audit tail")
+                .into_iter()
+                .next()
+                .expect("one row");
+            assert_eq!(latest.action, "auth.lockout");
+            // The lock window's length must survive into the audit note —
+            // this is the detail the two-call, non-atomic predecessor put
+            // in a second, separately-appended row; U22 carries it as an
+            // attribute on the one row it appends instead.
+            let note = latest.note.expect("lockout row must carry a note");
+            assert!(
+                note.contains("locked_for_secs=30"),
+                "note must record the lock window length: {note:?}"
             );
 
             let row = repos::users::get(&db, user.id).await.expect("get");

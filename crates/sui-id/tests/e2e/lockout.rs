@@ -67,17 +67,16 @@ async fn three_consecutive_wrong_passwords_lock_the_account() {
         "locked account must refuse even the correct password"
     );
 
-    // Confirm the audit log records `auth.login.locked`.
+    // Confirm the audit log records `auth.lockout` — RFC 094 U22's
+    // reviewed name (`command-inventory.md`), not the pre-conversion
+    // production name `auth.login.locked` this test asserted before.
     let recent = sui_id_store::repos::audit::recent(&state.db, 50)
         .await
         .expect("audit list");
-    let count = recent
-        .iter()
-        .filter(|r| r.action == "auth.login.locked")
-        .count();
+    let count = recent.iter().filter(|r| r.action == "auth.lockout").count();
     assert!(
         count >= 1,
-        "expected at least one auth.login.locked audit row; got {count}"
+        "expected at least one auth.lockout audit row; got {count}"
     );
 }
 

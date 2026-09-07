@@ -13,7 +13,7 @@ Use **Admin panel → Audit log** to filter by event prefix or export to CSV.
 |---|---|---|
 | `auth.login.success` | Login | User authenticated successfully with password (and MFA if enrolled). |
 | `auth.login.failure` | Login failed | Credential check failed (wrong password or unknown username). |
-| `auth.login.locked` | Account locked | Login refused because the account's progressive lockout has not expired. |
+| `auth.lockout` | Account locked | A wrong-password attempt just crossed the progressive-lockout failure threshold. |
 | `auth.login.password_ok_mfa_required` | MFA required | Password was correct but MFA challenge is pending. |
 | `auth.logout` | Logout | User explicitly signed out. |
 | `auth.mfa.success` | MFA verified | TOTP code or passkey assertion verified successfully. |

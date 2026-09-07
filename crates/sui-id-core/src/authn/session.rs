@@ -170,37 +170,24 @@ pub async fn login_with_mfa(
     })?;
 
     if let Err(e) = verify_password(password, &cred.password_hash) {
-        // Wrong password: bump the counter, possibly stamp a lock,
-        // and audit. The lock window is computed from the new count
-        // — so the third failure stamps the first 30-second lock,
-        // the fourth stamps a one-minute lock, and so on.
-        let next_count = users::record_login_failure(db, user.id, None)
-            .await
-            .unwrap_or(0);
-        if let Some(window) = lockout_backoff(next_count, max_lockout_secs) {
-            let until = clock.now() + window;
-            let _ = users::record_login_failure(db, user.id, Some(until)).await;
-            // Re-emit the audit row with the lock-applied note so
-            // the same /admin/login submission yields one informative
-            // event in the log, not two.
-            let _ = audit::append(
-                db,
-                &AuditLogRow {
-                    at: clock.now(),
-                    actor: Some(user.id),
-                    action: "auth.login.locked".into(),
-                    target: Some(user.id.to_string()),
-                    result: "denied".into(),
-                    note: Some(format!(
-                        "consecutive failures = {next_count}, locked for {} s",
-                        window.num_seconds()
-                    )),
-                },
-            )
-            .await;
-        } else {
-            record_login_failure(db, clock, username, "wrong password").await;
-        }
+        // Wrong password: bump the counter and, if it crosses the
+        // threshold, stamp the lock — atomically, as RFC 094's U22.
+        // `lock_window_for_count` runs *inside* the transaction against
+        // the freshly-incremented count, so the branch is decided from
+        // the same guarded read the counter update used; there is no
+        // window where the counter is bumped but an owed lock is not
+        // yet set, and no window where the counter bumps without its
+        // audit row (both previously separate, best-effort calls — see
+        // `sui_id_store::commands::record_login_failure`'s own doc
+        // comment). A failure to record this — the DB write itself
+        // failing — now surfaces as an error from this call rather
+        // than being silently swallowed: RFC 094/085 both treat an
+        // audit-subsystem failure as an operation failure, not a
+        // silent gap, and that now holds here for the first time.
+        sui_id_store::commands::record_login_failure(db, user.id, move |count| {
+            lockout_backoff(count, max_lockout_secs)
+        })
+        .await?;
         return Err(e);
     }
 

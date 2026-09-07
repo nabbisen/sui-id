@@ -71,7 +71,7 @@ redirect URIs).
 | Route | Method | Auth | CSRF | Handler | Render | Audit emit |
 |---|---|---|---|---|---|---|
 | `/admin/login` | GET | none | n/a | `admin::login_get` | `render_login` | — |
-| `/admin/login` | POST | none | ✓ | `admin::login_post` | `render_login` (on failure) | `auth.login.success`, `auth.login.failure`, `auth.login.locked_out` |
+| `/admin/login` | POST | none | ✓ | `admin::login_post` | `render_login` (on failure) | `auth.login.success`, `auth.login.failure`, `auth.lockout` |
 | `/admin/login/mfa` | GET | pre-auth ticket | n/a | `admin::mfa_challenge_get` | `render_mfa_challenge` | — |
 | `/admin/login/mfa` | POST | pre-auth ticket | ✓ | `admin::mfa_challenge_post` | `render_mfa_challenge` (on failure) | `auth.mfa.success`, `auth.mfa.failure` |
 | `/admin/login/webauthn/start` | POST | pre-auth ticket | ✓ | `admin::webauthn_auth_start` | — (JSON challenge) | — |

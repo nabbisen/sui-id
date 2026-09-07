@@ -275,7 +275,7 @@ pub async fn logs_get(
     }
     let login_success = count_action(&app.db, "auth.login.success", since_24h, now).await?;
     let login_failure = count_action(&app.db, "auth.login.failure", since_24h, now).await?;
-    let login_locked = count_action(&app.db, "auth.login.locked", since_24h, now).await?;
+    let login_locked = count_action(&app.db, "auth.lockout", since_24h, now).await?;
     let password_changed =
         count_action(&app.db, "auth.password.changed_self", since_24h, now).await?;
     let data = sui_id_web::SettingsLogsData {

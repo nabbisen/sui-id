@@ -82,7 +82,7 @@ pub fn render_settings_logs(
                             <tbody>
                                 {kv_text("auth.login.success", login_success_24h.to_string())}
                                 {kv_text("auth.login.failure", login_failure_24h.to_string())}
-                                {kv_text("auth.login.locked", login_locked_24h.to_string())}
+                                {kv_text("auth.lockout", login_locked_24h.to_string())}
                                 {kv_text("auth.password.changed_self", password_changed_self_24h.to_string())}
                             </tbody>
                         </table>

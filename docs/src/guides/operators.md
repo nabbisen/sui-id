@@ -796,7 +796,7 @@ expect them to be renamed without a deprecation cycle):
 | `auth.mfa.failure` | TOTP code or recovery code rejected. |
 | `auth.session.revoked` | Session torn down by logout, admin disable, or expiry. |
 | `auth.logout` | RP-initiated logout completed. |
-| `auth.login.locked` | A failed sign-in that just triggered or extended an account lockout. **Alert on bursts of this.** |
+| `auth.lockout` | A failed sign-in that just triggered or extended an account lockout. **Alert on bursts of this.** |
 | `auth.refresh.theft_detected` | A revoked refresh token was replayed at the token endpoint. The whole rotation family was revoked. **Alert on this.** |
 | `auth.sessions.bulk_revoke_self` | A user used "Sign out everywhere else" on `/me/security`. Note records how many sessions were swept. |
 | `auth.password.changed_self` | A user changed their own password via `/me/security/password`. Note records how many sessions and refresh tokens were swept (zero if the user unchecked the box). |
@@ -1108,14 +1108,14 @@ The two relevant events:
 | Event                  | Meaning                                           |
 | ---------------------- | ------------------------------------------------- |
 | `auth.login.failure`   | Wrong password (or unknown user, or disabled). The audit row's `note` says which. |
-| `auth.login.locked`    | A failed attempt that *just* triggered or extended a lock. Includes the consecutive-failure count and the new window length in the note. |
+| `auth.lockout`    | A failed attempt that *just* triggered or extended a lock. Includes the consecutive-failure count and the new window length in the note. |
 | `admin.user.unlock`    | An admin cleared the lock via the CLI.            |
 
-A SIEM rule on `auth.login.locked` is a useful signal that
+A SIEM rule on `auth.lockout` is a useful signal that
 something is hammering an account. From the JSON log:
 
 ```bash
-jq -c 'select(.fields.event == "auth.login.locked") |
+jq -c 'select(.fields.event == "auth.lockout") |
        {at: .timestamp, target: .fields.target, note: .fields.note}' \
    < sui-id.log
 ```
@@ -1161,7 +1161,7 @@ The page shows three sections:
   except the current one.
 - **Recent activity.** Up to 30 most recent audit events that
   either name this user as the actor (e.g. `auth.login.success`)
-  or as the target (e.g. `mfa.admin_reset`, `auth.login.locked`,
+  or as the target (e.g. `mfa.admin_reset`, `auth.lockout`,
   `auth.refresh.theft_detected`). The user is told plainly: if
   you see something here you didn't do, change your password
   and sign out other sessions immediately.
