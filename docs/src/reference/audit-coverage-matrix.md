@@ -105,8 +105,17 @@ Until RFC 094 is implemented, treat the rows below as the coverage this project
 
 ### Authentication flow (`auth.*`)
 
-These are informational trace events (Class B) recording the authentication
-funnel; they do not guard state mutations.
+Most of these are informational trace events (Class B) recording the
+authentication funnel, and do not guard state mutations.
+
+**`auth.lockout` is the exception and is Class A.** It commits atomically with
+the `locked_until` mutation it records, through RFC 094's Class-A runner (command
+`U22`). *Corrected 2026-09-08: this section previously classified it `B` and
+stated without qualification that these events guard no state mutation, while
+`command-inventory.md` and `ci/write-commands.toml` both classified `U22` as `A`.
+Two normative documents disagreed about the same event and this one was wrong —
+by understating, which is the same defect as overstating: the document not
+matching the code.*
 
 | Event name | Trigger | Actor | Class |
 |---|---|---|---|
@@ -114,12 +123,11 @@ funnel; they do not guard state mutations.
 | `auth.login.password_ok_mfa_required` | Password correct; MFA challenge pending | user id | B |
 | `auth.login.success` | Login succeeded | user id | B |
 | `auth.login.failure` | Wrong password | — | B |
-| `auth.login.locked` | Account locked at login | — | B |
 | `auth.login.password_ok_mfa_required` | Password correct; MFA challenge pending | user id | B |
 | `auth.mfa.success` | MFA challenge passed | user id | B |
 | `auth.mfa.failure` | MFA challenge failed | user id | B |
 | `auth.logout` | Session logout | user id | B |
-| `auth.lockout` | Account auto-locked after failures | — | B |
+| `auth.lockout` | Account locked after crossing the failure threshold | — | **A** |
 | `auth.session.revoked` | Single session revocation | user id | B |
 | `auth.sessions.bulk_revoke_self` | Bulk session revocation (self) | user id | B |
 | `auth.password.changed_self` | Self-service password change | user id | B |

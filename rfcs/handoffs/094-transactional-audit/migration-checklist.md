@@ -226,6 +226,18 @@ at a time; the workspace and structural gate must remain green between waves.
       on one. The assertion is load-bearing: a reviewer probe confirmed
       `verify_chain_tail` detects a fork — two rows claiming one predecessor,
       content intact — not only the content tamper its existing test covers.*
+> **Registry clock source — found 2026-09-08 during the U22 conversion, open.**
+> `Database::class_a` timestamps the audit row with `chrono::Utc::now()` directly,
+> ignoring whatever clock the caller injected. `authn::session` threads a
+> `SharedClock` for `MockClock`-based testability, so the first real caller is
+> already a caller that cares. Nothing breaks today — the e2e lockout tests assert
+> `locked_until.is_some()`, not an exact timestamp — so this is pre-existing
+> Stage 1 behaviour rather than a conversion defect. **It will be found by
+> whoever first writes a time-dependent assertion against an audit row.** Decide
+> during the waves whether the runner should take the clock from the
+> `AuthorizedCommandContext` (which already binds a clock instant) rather than
+> reading the wall clock. Tracked here rather than left in a review document.
+
 - [ ] Convert login failure and refresh rotation as always-Class-A commands with
   exhaustive typed event variants for every committed outcome.
 - [ ] Register initial root-family refresh issuance separately as T09/P and
