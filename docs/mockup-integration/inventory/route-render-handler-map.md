@@ -35,7 +35,7 @@ codebase.
 | `/.well-known/openid-configuration` | GET | oidc-public | n/a | `oidc::discovery` | — (JSON) | — |
 | `/.well-known/jwks.json` | GET | oidc-public | n/a | `oidc::jwks` | — (JWKS JSON) | — |
 | `/oauth2/userinfo` | GET, POST | oidc-bearer | n/a | `oidc::userinfo` | — (JSON) | — |
-| `/oauth2/token` | POST | client-cred | n/a | `oidc::token` | — (JSON) | `auth.token.issued`, `auth.refresh.rotated`, `auth.refresh.family_revoked` |
+| `/oauth2/token` | POST | client-cred | n/a | `oidc::token` | — (JSON) | `oauth.token.issued`, `auth.refresh.rotated`, `auth.refresh.theft_detected` |
 | `/oauth2/authorize` | GET | user (redirects to login if absent) | n/a (state in PKCE) | `oidc::authorize` | `render_login` (anon) · `render_consent` (auth) · redirect (consent already granted) | `auth.authorize.code_issued` |
 | `/oauth2/logout` | GET | (optional `id_token_hint`) | n/a | `oidc::logout` | redirect | `auth.session.terminated` |
 | `/oauth2/introspect` | POST | client-cred | n/a | `oauth_token::introspect` | — (JSON, RFC 7662) | — |

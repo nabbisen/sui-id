@@ -108,9 +108,16 @@ Until RFC 094 is implemented, treat the rows below as the coverage this project
 Most of these are informational trace events (Class B) recording the
 authentication funnel, and do not guard state mutations.
 
-**`auth.lockout` is the exception and is Class A.** It commits atomically with
-the `locked_until` mutation it records, through RFC 094's Class-A runner (command
-`U22`). *Corrected 2026-09-08: this section previously classified it `B` and
+**Three exceptions are Class A**, each committing atomically with the mutation it
+records through RFC 094's Class-A runner: `auth.lockout` (command `U22`, with the
+`locked_until` mutation) and both branches of command `T04`,
+`auth.refresh.rotated` and `auth.refresh.theft_detected` (with the guarded
+old-row revoke and successor insert, or the family revoke). **A row in this
+section is Class B only until its command is converted** — check
+`command-inventory.md` before assuming the section header applies.
+
+*Corrected 2026-09-08: this section previously classified `auth.lockout` as `B`,
+and `auth.refresh.theft_detected` likewise, and
 stated without qualification that these events guard no state mutation, while
 `command-inventory.md` and `ci/write-commands.toml` both classified `U22` as `A`.
 Two normative documents disagreed about the same event and this one was wrong —
@@ -136,7 +143,8 @@ matching the code.*
 | `auth.password.reset_email_failed` | Reset email failed to send | — | B |
 | `auth.password.reset_throttled` | Reset request throttled | — | B |
 | `auth.password.reset_completed` | Password reset completed | user id | B |
-| `auth.refresh.theft_detected` | Replay of a rotated refresh token (family revoked) | user id | B |
+| `auth.refresh.rotated` | Refresh token rotated (the normal, routine case) | — | **A** |
+| `auth.refresh.theft_detected` | Replay of a rotated refresh token (family revoked) | user id | **A** |
 
 ### OAuth2 / OIDC (`oauth2.*`)
 
