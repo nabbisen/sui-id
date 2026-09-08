@@ -238,6 +238,40 @@ at a time; the workspace and structural gate must remain green between waves.
 > `AuthorizedCommandContext` (which already binds a clock instant) rather than
 > reading the wall clock. Tracked here rather than left in a review document.
 
+> **STAGE 2 FOUNDATION REOPENED, 2026-09-08. The user-administration wave
+> (U01–U05) is blocked until these land.** Found while scoping that wave, not by
+> a failing test.
+>
+> - [ ] **Build the decision-consuming `AuthorizedCommandContext` constructor.**
+>       RFC 094 line 257 specifies two construction paths — from a successful
+>       authorization decision for command `C`, *or* the sealed system-authority
+>       adapter. Only the second exists (`registry.rs:452`). The first was never
+>       built.
+> - [ ] **Enforce `ActorRequirement` instead of rendering it.** It is declared at
+>       `registry.rs:124`, carried on every descriptor at `:182`, and turned into
+>       a documentation string at `:208–211`. **Nothing compares it against a
+>       context's actor.** The only descriptor that declares `Required` is the
+>       proof-only command. Reject at construction rather than at commit — a
+>       half-built row should not be reachable.
+> - [ ] **Then** set the admin descriptors to `Required`, mark U01–U05
+>       `system_principal: forbidden`, and prove each with a negative case: an
+>       admin command with no actor must fail, demonstrated rather than asserted.
+>
+> **Why this blocks rather than merely being untidy.** `for_system_actor` sets
+> `actor: None` (`registry.rs:446–456`), and it is the only constructor. The
+> coverage matrix requires `admin user id` for `user.create`, `create_warned_hibp`,
+> `disable`, `enable` and `delete` (lines 32–36). Converting them now writes
+> **no actor** for the five most attribution-sensitive operations in the product,
+> and nothing rejects it — U01's own descriptor already says
+> `ActorRequirement::Optional`, a requirement weakened to fit the available
+> machinery rather than machinery built to meet the requirement.
+>
+> **Correcting my own record:** I marked Stage 2's foundation complete in
+> `559b82e`. It was not. The runner cannot attribute an admin action, and the
+> 2026-09-03 note calling U01's `permitted` marking a sequencing convenience was
+> wrong — it was the symptom of this gap. Full analysis in
+> `.git-exclude/reviewed/094-user-admin-wave-blocked-2026-09-08.md`.
+
 - [ ] Convert login failure and refresh rotation as always-Class-A commands with
   exhaustive typed event variants for every committed outcome.
 - [ ] Register initial root-family refresh issuance separately as T09/P and
