@@ -9,5 +9,13 @@ error[E0599]: the associated function or constant `for_system_actor` exists for 
    |         pub struct $command_ty;
    |         ----------------------- doesn't satisfy `_: SystemPrincipalPermitted`
    |
+note: if you're trying to build a new `AuthorizedCommandContext<ProofOnlyForbiddenSystemPrincipalCommand>`, consider using `AuthorizedCommandContext::<C>::for_authorized_actor` which returns `AuthorizedCommandContext<_>`
+  --> src/registry.rs
+   |
+   | /     pub fn for_authorized_actor(
+   | |         actor: sui_id_shared::ids::UserId,
+   | |         request_id: Option<String>,
+   | |     ) -> Self {
+   | |_____________^
    = note: the following trait bounds were not satisfied:
            `ProofOnlyForbiddenSystemPrincipalCommand: SystemPrincipalPermitted`

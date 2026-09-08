@@ -83,3 +83,16 @@ fn compile_fail_arbitrary_event_kind_does_not_exist() {
     let t = trybuild::TestCases::new();
     t.compile_fail("tests/compile_fail/arbitrary_event_kind_does_not_exist.rs");
 }
+
+/// The finding that blocked the user-administration wave (2026-09-08):
+/// U01's `system_principal: forbidden;` is load-bearing now, not
+/// provisional. Same mechanism as `compile_fail_system_principal_
+/// forbidden_cannot_use_system_actor` above, against a real admin
+/// command rather than a proof-only stub — gated the same way, for the
+/// same reason (E0599 wording).
+#[rustversion::attr(before(1.96), ignore)]
+#[test]
+fn compile_fail_admin_command_forbidden_cannot_use_system_actor() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compile_fail/admin_command_forbidden_cannot_use_system_actor.rs");
+}

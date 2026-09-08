@@ -28,12 +28,17 @@
 //!
 //! - [`Audited`] / [`AuditReceipt`] — no public constructor. The only path
 //!   to one is [`Database::class_a`], and only after commit.
-//! - [`AuthorizedCommandContext`] — no public constructor. The only path is
-//!   [`AuthorizedCommandContext::for_system_actor`], gated to commands
-//!   implementing [`SystemPrincipalPermitted`] — a compile-time bound, not
-//!   a runtime check, so a command declared `system_principal: forbidden;`
-//!   makes `for_system_actor` uncallable for it rather than merely
-//!   unenforced.
+//! - [`AuthorizedCommandContext`] — no public constructor. Two paths: RFC
+//!   094's own line 257-259 — [`AuthorizedCommandContext::for_system_actor`],
+//!   gated to commands implementing [`SystemPrincipalPermitted`] (a
+//!   compile-time bound, not a runtime check, so `system_principal:
+//!   forbidden;` makes it uncallable rather than merely unenforced), and
+//!   [`AuthorizedCommandContext::for_authorized_actor`], which structurally
+//!   cannot omit the actor. A `Required`-actor command declared
+//!   `forbidden` therefore has exactly one usable constructor and that
+//!   constructor cannot produce a missing actor — enforced by which
+//!   constructors exist, not by a check against the descriptor at
+//!   commit time.
 //! - [`WriteTx`] — wraps the raw `rusqlite::Transaction` behind a
 //!   `pub(crate)` accessor. Only `sui-id-store::repos::*_within_tx`
 //!   functions (same crate) can reach the connection; everything above this
@@ -424,9 +429,11 @@ pub trait SystemPrincipalPermitted: CommandSpec {}
 /// Proof that command `C` was authorized. Private fields, no public
 /// constructor — the only ways to obtain one are
 /// [`AuthorizedCommandContext::for_system_actor`] (gated to commands
-/// implementing [`SystemPrincipalPermitted`]) or, once handler-side
-/// authorization decisions are converted, a future decision-consuming
-/// constructor not added in this Stage-2 slice.
+/// implementing [`SystemPrincipalPermitted`]) or
+/// [`AuthorizedCommandContext::for_authorized_actor`] (RFC 094's other
+/// path: "consuming a successful authorization decision for command type
+/// `C`" — the two constructors together are what the RFC's line 257-259
+/// describes as the only two ways in).
 pub struct AuthorizedCommandContext<C: CommandSpec> {
     actor: Option<sui_id_shared::ids::UserId>,
     request_id: Option<String>,
@@ -440,6 +447,40 @@ impl<C: CommandSpec> AuthorizedCommandContext<C> {
 
     pub fn request_id(&self) -> Option<&str> {
         self.request_id.as_deref()
+    }
+
+    /// Construct a context from a successful authorization decision.
+    /// Unlike [`for_system_actor`](Self::for_system_actor), this is not
+    /// gated to specific commands — any command may be attributed to a
+    /// real actor — but it structurally cannot produce `actor: None`
+    /// the way `for_system_actor` structurally cannot produce anything
+    /// else. A command declared `system_principal: forbidden;` (its
+    /// descriptor's actor requirement is `Required`) therefore has
+    /// exactly one usable constructor, and that constructor cannot omit
+    /// the actor: "a descriptor declaring `Required` must make an absent
+    /// actor a failure" holds by construction, not by a runtime check.
+    ///
+    /// `actor` is a bare `UserId`, not a capability type like
+    /// `sui-id-core`'s `AdminActor` — `sui-id-store` cannot depend on
+    /// `sui-id-core` (the dependency graph runs the other way; this is
+    /// the same constraint that put this whole registry here rather
+    /// than alongside the legacy audit layer). **Callers are
+    /// responsible for supplying a `UserId` that genuinely comes from a
+    /// verified authorization decision** — the same caller-discipline
+    /// contract `sui-id-core`'s own `Actor::from_session` already
+    /// relies on for the equivalent boundary one layer up (it is
+    /// `pub(crate)`-documented as trusting its caller to have verified a
+    /// non-expired session; this constructor is `pub`-documented the
+    /// same way, one layer further from where the verification happens).
+    pub fn for_authorized_actor(
+        actor: sui_id_shared::ids::UserId,
+        request_id: Option<String>,
+    ) -> Self {
+        Self {
+            actor: Some(actor),
+            request_id,
+            _command: PhantomData,
+        }
     }
 }
 

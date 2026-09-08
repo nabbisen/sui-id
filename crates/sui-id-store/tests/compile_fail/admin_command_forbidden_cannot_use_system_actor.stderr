@@ -1,0 +1,21 @@
+error[E0599]: the associated function or constant `for_system_actor` exists for struct `AuthorizedCommandContext<U01>`, but its trait bounds were not satisfied
+  --> tests/compile_fail/admin_command_forbidden_cannot_use_system_actor.rs:23:46
+   |
+23 |     let _ = AuthorizedCommandContext::<U01>::for_system_actor(None);
+   |                                              ^^^^^^^^^^^^^^^^ associated function or constant cannot be called on `AuthorizedCommandContext<U01>` due to unsatisfied trait bounds
+   |
+  ::: src/registry.rs
+   |
+   |         pub struct $command_ty;
+   |         ----------------------- doesn't satisfy `U01: SystemPrincipalPermitted`
+   |
+note: if you're trying to build a new `AuthorizedCommandContext<U01>`, consider using `AuthorizedCommandContext::<C>::for_authorized_actor` which returns `AuthorizedCommandContext<_>`
+  --> src/registry.rs
+   |
+   | /     pub fn for_authorized_actor(
+   | |         actor: sui_id_shared::ids::UserId,
+   | |         request_id: Option<String>,
+   | |     ) -> Self {
+   | |_____________^
+   = note: the following trait bounds were not satisfied:
+           `U01: SystemPrincipalPermitted`

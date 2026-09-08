@@ -246,7 +246,7 @@ static U01_CREATE: EventDescriptor = EventDescriptor {
     kind: AuditEventKind::UserCreate,
     name: "user.create",
     class: AuditClass::Atomic,
-    actor: ActorRequirement::Optional,
+    actor: ActorRequirement::Required,
     target: TargetRequirement::Required,
     attributes: &[],
 };
@@ -255,7 +255,7 @@ static U01_CREATE_WARNED_HIBP: EventDescriptor = EventDescriptor {
     kind: AuditEventKind::UserCreateWarnedHibp,
     name: "user.create_warned_hibp",
     class: AuditClass::Atomic,
-    actor: ActorRequirement::Optional,
+    actor: ActorRequirement::Required,
     target: TargetRequirement::Required,
     attributes: &[],
 };
@@ -267,16 +267,16 @@ crate::declare_write_command! {
     /// slice member is distinct from U22's closed branch over observed
     /// state.
     command U01 = "U01" {
-        // Provisional, not a domain claim: this is "admin create user"
-        // (see the command doc comment below), which in the real,
-        // eventually-wired call site plausibly *should* require an
-        // authenticated admin actor and therefore be `forbidden` here.
-        // Marked `permitted` only because Stage 2 doesn't yet add the
-        // decision-consuming constructor this command would need instead
-        // — `for_system_actor` is still the only way `create_user` below
-        // can obtain a context. Revisit when U01 is wired to its real
-        // admin-facing call site (Wave A).
-        system_principal: permitted;
+        // Settled 2026-09-08, not provisional: this is "admin create
+        // user", the coverage matrix requires `admin user id` as its
+        // actor, and the descriptors above say `Required`. Forbidding
+        // the system-principal adapter is what makes an admin-attributed
+        // audit row for this command enforced rather than merely
+        // documented — `for_system_actor::<U01>()` is now a compile
+        // error (see `tests/compile_fail/
+        // admin_command_forbidden_cannot_use_system_actor.rs`), and
+        // `create_user` below uses `for_authorized_actor` instead.
+        system_principal: forbidden;
         enum U01Event {
             Created { user_id: UserId } => &U01_CREATE,
             CreatedWarnedHibp { user_id: UserId } => &U01_CREATE_WARNED_HIBP,
@@ -305,13 +305,19 @@ impl SealedCommandEvent<U01> for U01Event {
 /// Run U01 (admin create user) through the Class-A runner. `hibp_warned`
 /// is the caller's already-decided branch (RFC 094: the branch is closed
 /// over input, not re-derived here).
+/// `admin` is the authorizing actor's `UserId` — the caller is
+/// responsible for it genuinely coming from a verified authorization
+/// decision (RFC 094 §"Class-A transaction seam"; see
+/// `AuthorizedCommandContext::for_authorized_actor`'s own doc comment
+/// for the full caller-discipline contract).
 pub async fn create_user(
     db: &crate::Database,
+    admin: UserId,
     user: crate::models::UserRow,
     credential: Option<crate::models::CredentialRow>,
     hibp_warned: bool,
 ) -> StoreResult<crate::registry::Audited<()>> {
-    let context = AuthorizedCommandContext::<U01>::for_system_actor(None);
+    let context = AuthorizedCommandContext::<U01>::for_authorized_actor(admin, None);
     let user_id = user.id;
     db.class_a(context, move |tx: &mut ClassATx<'_, U01>| {
         crate::repos::users::create_within_tx(tx.tx(), &user)?;
@@ -554,7 +560,12 @@ mod tests {
         fn assert_system_principal_permitted<C: SystemPrincipalPermitted>() {}
         assert_system_principal_permitted::<K01>();
         assert_system_principal_permitted::<U22>();
-        assert_system_principal_permitted::<U01>();
+        // U01 is deliberately absent: it is `system_principal: forbidden`
+        // (an admin-attributed command, `ActorRequirement::Required`).
+        // Its own compile-negative proof is `tests/compile_fail/
+        // admin_command_forbidden_cannot_use_system_actor.rs` — there is
+        // no positive equivalent to assert here, since "does not
+        // implement a trait" isn't expressible as a bound.
     };
 
     // ── Stage 1 item 5: duplicate-name / class-mismatch / missing-field /
@@ -567,6 +578,8 @@ mod tests {
             &U22_LOCKOUT,
             &U01_CREATE,
             &U01_CREATE_WARNED_HIBP,
+            &T04_ROTATED,
+            &T04_THEFT_DETECTED,
         ]
     }
 
@@ -590,6 +603,64 @@ mod tests {
         sorted.sort_by_key(|k| format!("{k:?}"));
         sorted.dedup();
         assert_eq!(kinds.len(), sorted.len(), "duplicate AuditEventKind");
+    }
+
+    /// The correction requested against the 2026-09-08 blocking finding
+    /// (`.git-exclude/reviewed/094-stage2-addendum-decision-consuming-
+    /// constructor-2026-09-08.md` §3): the compile-time mechanism
+    /// (`for_system_actor` gated to `SystemPrincipalPermitted`,
+    /// `for_authorized_actor` structurally unable to omit the actor)
+    /// only closes two of three possible `(system_principal,
+    /// ActorRequirement)` pairings. It does not stop a command declaring
+    /// `system_principal: permitted;` *and* an `ActorRequirement::Required`
+    /// descriptor — that command's only-gated constructor still produces
+    /// `actor: None` for a descriptor that says the actor is mandatory,
+    /// and nothing rejects it. Measured, not assumed, before writing this
+    /// test: setting one of U22's descriptors to `Required` while leaving
+    /// U22 `permitted` compiled and every other test still passed.
+    ///
+    /// General over both directions (§5 of the same review, requested
+    /// explicitly): `None` also requires `forbidden` — a command whose
+    /// only constructor is `for_authorized_actor` cannot honour a
+    /// descriptor that says the actor must never be present either.
+    /// `Optional` is compatible with both, so it isn't asserted against.
+    ///
+    /// Hand-maintained per command, the same way `all_descriptors()`
+    /// already is: whether a command implements `SystemPrincipalPermitted`
+    /// isn't queryable as runtime data, so this can't be generated from
+    /// the descriptor table the way `no_duplicate_event_names` is.
+    #[test]
+    fn actor_requirement_agrees_with_system_principal_for_every_command() {
+        fn check(
+            command: &str,
+            system_principal_permitted: bool,
+            descriptors: &[&'static EventDescriptor],
+        ) {
+            for d in descriptors {
+                match d.actor {
+                    ActorRequirement::Required => assert!(
+                        !system_principal_permitted,
+                        "{command} ({}): ActorRequirement::Required but \
+                         system_principal: permitted -- for_system_actor \
+                         can still construct a context with no actor",
+                        d.name
+                    ),
+                    ActorRequirement::None => assert!(
+                        system_principal_permitted,
+                        "{command} ({}): ActorRequirement::None but \
+                         system_principal: forbidden -- for_authorized_actor \
+                         is the only constructor and it always supplies an actor",
+                        d.name
+                    ),
+                    ActorRequirement::Optional => {}
+                }
+            }
+        }
+
+        check("K01", true, &[&K01_ROTATED]);
+        check("U22", true, &[&U22_FAILURE, &U22_LOCKOUT]);
+        check("U01", false, &[&U01_CREATE, &U01_CREATE_WARNED_HIBP]);
+        check("T04", true, &[&T04_ROTATED, &T04_THEFT_DETECTED]);
     }
 
     #[test]
@@ -681,7 +752,7 @@ mod tests {
 
     #[test]
     fn event_names_match_command_inventory() {
-        // These five strings are the audit-log `action` column's contract
+        // These strings are the audit-log `action` column's contract
         // with every existing consumer (SIEM queries, `rfcs/handoffs/
         // 094-transactional-audit/command-inventory.md`). Pinned literally,
         // not derived, so a rename shows up as a diff here.
@@ -691,6 +762,8 @@ mod tests {
             "auth.lockout",
             "user.create",
             "user.create_warned_hibp",
+            "auth.refresh.rotated",
+            "auth.refresh.theft_detected",
         ];
         let mut actual: Vec<&str> = all_descriptors().iter().map(|d| d.name).collect();
         actual.sort_unstable();
@@ -714,6 +787,14 @@ mod tests {
 
         fn fresh_db() -> Database {
             Database::open_in_memory(MasterKey::generate()).expect("db")
+        }
+
+        /// A stand-in for the authorizing admin's `UserId` in tests that
+        /// call `create_user` — not a real `AdminActor` (this crate
+        /// can't name that type), just the `UserId` its caller-discipline
+        /// contract asks for.
+        fn an_admin() -> UserId {
+            UserId::new()
         }
 
         fn a_user() -> UserRow {
@@ -1063,7 +1144,7 @@ mod tests {
                 updated_at: Utc::now(),
             };
 
-            let audited = create_user(&db, user.clone(), Some(cred), false)
+            let audited = create_user(&db, an_admin(), user.clone(), Some(cred), false)
                 .await
                 .expect("create");
             audited.into_inner();
@@ -1081,7 +1162,7 @@ mod tests {
             let db = fresh_db();
             let user = a_user();
 
-            create_user(&db, user.clone(), None, true)
+            create_user(&db, an_admin(), user.clone(), None, true)
                 .await
                 .expect("create");
 
@@ -1111,7 +1192,7 @@ mod tests {
 
             let mut dup = a_user();
             dup.id = user.id; // force the conflict
-            let result = create_user(&db, dup, None, false).await;
+            let result = create_user(&db, an_admin(), dup, None, false).await;
             assert!(matches!(result, Err(StoreError::Conflict)));
 
             // No new audit row from the failed attempt.
@@ -1125,7 +1206,7 @@ mod tests {
             let before_audit = latest_audit_action(&db).await;
 
             db.fault_injector().fail_before_next_append();
-            let result = create_user(&db, user.clone(), None, false).await;
+            let result = create_user(&db, an_admin(), user.clone(), None, false).await;
             assert!(result.is_err(), "injected failure must surface as Err");
 
             // The user insert really ran (it's before this injection
@@ -1145,7 +1226,7 @@ mod tests {
             let before_audit = latest_audit_action(&db).await;
 
             db.fault_injector().fail_after_next_append();
-            let result = create_user(&db, user.clone(), None, false).await;
+            let result = create_user(&db, an_admin(), user.clone(), None, false).await;
             assert!(result.is_err(), "injected failure must surface as Err");
 
             assert!(
