@@ -7,12 +7,8 @@ use crate::time::SharedClock;
 use sui_id_shared::ids::UserId;
 use sui_id_store::Database;
 use sui_id_store::models::{CredentialRow, HibpMode, UserRow};
-use sui_id_store::repos::{
-    audit, auth_codes, credentials, refresh_tokens, sessions, user_totp, user_webauthn_credentials,
-    users,
-};
+use sui_id_store::repos::{audit, user_totp, user_webauthn_credentials, users};
 // Shared audit helpers from parent module.
-use super::audit_ok;
 pub struct CreateUserSpec<'a> {
     pub username: &'a str,
     pub password: &'a str,
@@ -308,26 +304,23 @@ pub async fn reset_user_password(
 
     let hash = hash_password(new_password)?;
     let now = clock.now();
-    credentials::upsert(
-        db,
-        &CredentialRow {
-            user_id: target,
-            password_hash: hash,
-            must_change: false,
-            updated_at: now,
-        },
-    )
-    .await?;
-    sessions::revoke_all_for_user(db, target).await?;
-    refresh_tokens::revoke_all_for_user(db, target).await?;
-    auth_codes::invalidate_all_for_user(db, target).await?;
-    audit_ok(
-        db,
-        actor_id,
-        "user.reset_password",
-        Some(target.to_string()),
-    )
-    .await;
+    let credential = CredentialRow {
+        user_id: target,
+        password_hash: hash,
+        must_change: false,
+        updated_at: now,
+    };
+    // RFC 094 U06: same atomicity shift as U02/U04 — the credential swap,
+    // the target's session/refresh-token/auth-code revocations, and the
+    // audit event now commit in one Class-A transaction, replacing the
+    // previous unguarded `credentials::upsert` followed by three separate
+    // best-effort revoke calls and a fire-and-forget `audit_ok`.
+    sui_id_store::commands::reset_user_password(db, actor_id, target, credential)
+        .await
+        .map_err(|e| match e {
+            sui_id_store::StoreError::NotFound => CoreError::NotFound,
+            other => CoreError::from(other),
+        })?;
     Ok(())
 }
 

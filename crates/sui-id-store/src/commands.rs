@@ -651,6 +651,74 @@ pub async fn change_user_role(
     .await
 }
 
+// ── U06 — admin password reset ───────────────────────────────────────
+
+static U06_RESET_PASSWORD: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::UserResetPassword,
+    name: "user.reset_password",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[],
+};
+
+crate::declare_write_command! {
+    /// U06 — admin password reset. Same `forbidden` reasoning as U01-U05:
+    /// the coverage matrix requires `admin user id` as the actor.
+    command U06 = "U06" {
+        system_principal: forbidden;
+        enum U06Event {
+            Reset { user_id: UserId } => &U06_RESET_PASSWORD,
+        }
+    }
+}
+
+impl SealedCommandEvent<U06> for U06Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Reset { user_id } = self;
+        Some(AuditTarget(user_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        AuditAttributes::builder().build()
+    }
+}
+
+/// Run U06 (admin password reset) through the Class-A runner. `credential`
+/// is the already-hashed replacement row — password hashing and the HIBP
+/// breach check are network/CPU-bound work that stays outside the
+/// transaction, same contract as U01's HIBP branch and K01's sealed key
+/// material. Revokes the target's sessions, refresh tokens, and in-flight
+/// auth codes in the same transaction as the credential swap and the
+/// audit append, same reasoning as U02/U04: a password reset is exactly
+/// the kind of operation where "credential changed but old sessions
+/// survived the crash between the two calls" is the failure this RFC
+/// exists to close.
+pub async fn reset_user_password(
+    db: &crate::Database,
+    admin: UserId,
+    target: UserId,
+    credential: crate::models::CredentialRow,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<U06>::for_authorized_actor(admin, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, U06>| {
+        crate::repos::credentials::upsert_within_tx(tx.tx(), &credential)?;
+        crate::repos::sessions::revoke_all_for_user_within_tx(tx.tx(), target, chrono::Utc::now())?;
+        crate::repos::refresh_tokens::revoke_all_for_user_within_tx(
+            tx.tx(),
+            target,
+            chrono::Utc::now(),
+        )?;
+        crate::repos::auth_codes::invalidate_all_for_user_within_tx(tx.tx(), target)?;
+        Ok(((), U06Event::Reset { user_id: target }))
+    })
+    .await
+}
+
 // ── T04 — refresh-token rotation / reuse revocation (closed branches) ───
 
 static T04_ROTATED: EventDescriptor = EventDescriptor {
@@ -877,7 +945,7 @@ mod tests {
         fn assert_system_principal_permitted<C: SystemPrincipalPermitted>() {}
         assert_system_principal_permitted::<K01>();
         assert_system_principal_permitted::<U22>();
-        // U01-U05 are deliberately absent: all five are `system_principal:
+        // U01-U06 are deliberately absent: all six are `system_principal:
         // forbidden` (admin-attributed commands, `ActorRequirement::
         // Required`). U01's compile-negative proof is `tests/compile_fail/
         // admin_command_forbidden_cannot_use_system_actor.rs` — there is
@@ -899,6 +967,7 @@ mod tests {
             &U03_ENABLE,
             &U04_DELETE,
             &U05_ROLE_CHANGE,
+            &U06_RESET_PASSWORD,
             &T04_ROTATED,
             &T04_THEFT_DETECTED,
         ]
@@ -985,6 +1054,7 @@ mod tests {
         check("U03", false, &[&U03_ENABLE]);
         check("U04", false, &[&U04_DELETE]);
         check("U05", false, &[&U05_ROLE_CHANGE]);
+        check("U06", false, &[&U06_RESET_PASSWORD]);
         check("T04", true, &[&T04_ROTATED, &T04_THEFT_DETECTED]);
     }
 
@@ -1091,6 +1161,7 @@ mod tests {
             "user.enable",
             "user.delete",
             "user.role_change",
+            "user.reset_password",
             "auth.refresh.rotated",
             "auth.refresh.theft_detected",
         ];
@@ -1903,6 +1974,105 @@ mod tests {
                 1,
                 "the last admin must never be reachable via a race the pre-check missed"
             );
+        }
+
+        // ── U06 — admin password reset ───────────────────────────────────
+
+        #[tokio::test]
+        async fn u06_reset_swaps_credential_revokes_session_and_appends_event() {
+            let db = fresh_db();
+            let user = a_user();
+            repos::users::create(&db, &user).await.expect("create user");
+            repos::credentials::upsert(
+                &db,
+                &crate::models::CredentialRow {
+                    user_id: user.id,
+                    password_hash: "old-hash-placeholder".into(),
+                    must_change: false,
+                    updated_at: Utc::now(),
+                },
+            )
+            .await
+            .expect("seed old credential");
+            let session_id = seed_active_session(&db, user.id).await;
+
+            let new_credential = crate::models::CredentialRow {
+                user_id: user.id,
+                password_hash: "new-hash-placeholder".into(),
+                must_change: false,
+                updated_at: Utc::now(),
+            };
+            let audited = reset_user_password(&db, an_admin(), user.id, new_credential)
+                .await
+                .expect("reset");
+            audited.into_inner();
+
+            let cred = repos::credentials::get(&db, user.id)
+                .await
+                .expect("get credential");
+            assert_eq!(cred.password_hash, "new-hash-placeholder");
+
+            let session = repos::sessions::get(&db, session_id)
+                .await
+                .expect("get session");
+            assert!(
+                session.revoked_at.is_some(),
+                "the target's session must be revoked in the same transaction as the reset"
+            );
+
+            let tail = repos::audit::recent(&db, 1)
+                .await
+                .expect("audit tail")
+                .into_iter()
+                .next()
+                .expect("row");
+            assert_eq!(tail.action, "user.reset_password");
+        }
+
+        #[tokio::test]
+        async fn u06_injected_failure_before_append_rolls_back_credential_and_session_revoke() {
+            let db = fresh_db();
+            let user = a_user();
+            repos::users::create(&db, &user).await.expect("create user");
+            repos::credentials::upsert(
+                &db,
+                &crate::models::CredentialRow {
+                    user_id: user.id,
+                    password_hash: "old-hash-placeholder".into(),
+                    must_change: false,
+                    updated_at: Utc::now(),
+                },
+            )
+            .await
+            .expect("seed old credential");
+            let session_id = seed_active_session(&db, user.id).await;
+            let before_audit = latest_audit_action(&db).await;
+
+            let new_credential = crate::models::CredentialRow {
+                user_id: user.id,
+                password_hash: "new-hash-placeholder".into(),
+                must_change: false,
+                updated_at: Utc::now(),
+            };
+            db.fault_injector().fail_before_next_append();
+            let result = reset_user_password(&db, an_admin(), user.id, new_credential).await;
+            assert!(result.is_err(), "injected failure must surface as Err");
+
+            let cred = repos::credentials::get(&db, user.id)
+                .await
+                .expect("get credential");
+            assert_eq!(
+                cred.password_hash, "old-hash-placeholder",
+                "the credential swap rolled back"
+            );
+            let session = repos::sessions::get(&db, session_id)
+                .await
+                .expect("get session");
+            assert!(
+                session.revoked_at.is_none(),
+                "the session revoke rolled back too"
+            );
+            assert_eq!(latest_audit_action(&db).await, before_audit);
         }
 
         // ── T04/T09 — refresh-token rotation and initial issuance ───────

@@ -174,6 +174,8 @@ pub enum AuditEventKind {
     UserDelete,
     /// `user.role_change` — U05.
     UserRoleChange,
+    /// `user.reset_password` — U06.
+    UserResetPassword,
     /// `auth.refresh.rotated` — T04, normal-winner branch.
     RefreshRotated,
     /// `auth.refresh.theft_detected` — T04, reuse/family-revocation branch.
