@@ -238,24 +238,39 @@ at a time; the workspace and structural gate must remain green between waves.
 > `AuthorizedCommandContext` (which already binds a clock instant) rather than
 > reading the wall clock. Tracked here rather than left in a review document.
 
-> **STAGE 2 FOUNDATION REOPENED, 2026-09-08. The user-administration wave
-> (U01–U05) is blocked until these land.** Found while scoping that wave, not by
+> **STAGE 2 FOUNDATION REOPENED 2026-09-08, CLOSED 2026-09-08 (`a597565`).**
+> The user-administration wave is **unblocked**. Found while scoping that wave, not by
 > a failing test.
 >
-> - [ ] **Build the decision-consuming `AuthorizedCommandContext` constructor.**
+> - [x] **Build the decision-consuming `AuthorizedCommandContext` constructor.**
+>       **Done `a597565`** — `for_authorized_actor(UserId)`, structurally unable
+>       to produce `actor: None`. Takes a bare `UserId` rather than `AdminActor`
+>       because `sui-id-store` cannot depend on `sui-id-core`; its doc states what
+>       that does *not* buy — it cannot verify the `UserId` was honestly obtained,
+>       the same boundary `Actor::from_session` already draws one layer down.
 >       RFC 094 line 257 specifies two construction paths — from a successful
 >       authorization decision for command `C`, *or* the sealed system-authority
 >       adapter. Only the second exists (`registry.rs:452`). The first was never
 >       built.
-> - [ ] **Enforce `ActorRequirement` instead of rendering it.** It is declared at
+> - [x] **Enforce `ActorRequirement` instead of rendering it.** **Done `a597565`,**
+>       primarily by which constructors exist — a `forbidden` command has only
+>       `for_authorized_actor`, which always sets an actor — plus
+>       `actor_requirement_agrees_with_system_principal_for_every_command`, which
+>       catches the one case the type system cannot: a `permitted` command
+>       declaring `Required`, still able to call `for_system_actor`. Reviewer
+>       mutation-tested both directions; each fails with a message naming the
+>       command, the event, both declarations and why. It is declared at
 >       `registry.rs:124`, carried on every descriptor at `:182`, and turned into
 >       a documentation string at `:208–211`. **Nothing compares it against a
 >       context's actor.** The only descriptor that declares `Required` is the
 >       proof-only command. Reject at construction rather than at commit — a
 >       half-built row should not be reachable.
-> - [ ] **Then** set the admin descriptors to `Required`, mark U01–U05
+> - [x] **Then** set the admin descriptors to `Required`, mark U01–U05
 >       `system_principal: forbidden`, and prove each with a negative case: an
 >       admin command with no actor must fail, demonstrated rather than asserted.
+>       **U01 done `a597565`**, with the compile-fail fixture written against U01
+>       itself rather than the proof-only stub. U02–U05 do not exist yet and are
+>       the wave's own work.
 >
 > **Why this blocks rather than merely being untidy.** `for_system_actor` sets
 > `actor: None` (`registry.rs:446–456`), and it is the only constructor. The
