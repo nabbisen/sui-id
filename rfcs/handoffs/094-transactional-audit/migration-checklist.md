@@ -44,6 +44,19 @@ at a time; the workspace and structural gate must remain green between waves.
   tests.
 - [ ] Add the checked-in command inventory and structural comparison tool.
 
+      **Also check every consumer of an audit event name, not only the coverage
+      matrix.** `check-audit-matrix.sh` compares the matrix against source
+      literals and nothing else, so every other consumer drifts silently. That has
+      now produced three defects: `auth.login.locked` (U22 round),
+      `auth.token.issued`/`auth.refresh.family_revoked` in the route map (T04
+      round), and `user.reset_mfa` in `DASHBOARD_IMPORTANT_PREFIXES` (U07,
+      2026-09-09) — two of which silently broke a live consumer, the admin
+      dashboard's important-events filter, for two separate events. This gate must
+      check `DASHBOARD_IMPORTANT_PREFIXES`, the operator-guide SQL queries, and
+      any other name-matching consumer against the emitted set. *Recorded
+      2026-09-09; I noted this gap in the T04 review and did not open it, which
+      was wrong by two subsequent defects.*
+
       **Also check reserved event-variant field names here.** RFC 094 requires
       `C::Event` to carry no `actor`, `command_id`, `correlation_id`,
       `request_id` or `timestamp` field. `declare_write_command!` rejects those

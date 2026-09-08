@@ -35,7 +35,7 @@ Until RFC 094 is implemented, treat the rows below as the coverage this project
 | `user.enable` | Re-enable user account | admin user id | target user id | — | A |
 | `user.delete` | Soft-delete user | admin user id | target user id | reason (optional) | A |
 | `user.reset_password` | Admin password reset | admin user id | target user id | — | A |
-| `user.reset_mfa` | Admin MFA reset | admin user id | target user id | `totp=… passkeys=N reason=…` | A |
+| `mfa.admin_reset` | Admin MFA reset | admin user id | target user id | `totp=… passkeys=N reason=…` | A |
 | `user.role_change` | Admin role change | admin user id | target user id | `old_role=… new_role=…` | A |
 
 > **`user.role_change` row added 2026-09-08, reviewed and settled.** RFC
@@ -198,8 +198,18 @@ the code.
   wrong;
 - an audit append that happens **outside** its mutation's transaction.
 
-A live example of the limits of name-based comparison: the known
-`user.reset_mfa` / `mfa.admin_reset` mismatch.
+A live example of the limits of name-based comparison: the admin-MFA-reset
+naming mismatch, known and undecided from RFC 060 until 2026-09-09. The code
+emitted one name; the planning documents specified another.
+
+*Resolved in favour of the code.* `mfa.admin_reset` is what has shipped since RFC
+060 and what four operator-facing alerting queries match on, one under an explicit
+"Alert on this" callout. The documents' name existed only in planning material and
+in `DASHBOARD_IMPORTANT_PREFIXES`, where it meant **the admin dashboard never
+surfaced an MFA admin reset** — the same defect this constant carried for
+`auth.lockout` until the U22 conversion. The example above stays because it
+remains the clearest illustration of what a name-comparison gate cannot catch: a
+consumer looking for a name nothing emits is invisible to it.
 
 **Adding a new privileged operation without updating the matrix is therefore not
 necessarily a CI failure.** It is a violation of the requirement stated at the top

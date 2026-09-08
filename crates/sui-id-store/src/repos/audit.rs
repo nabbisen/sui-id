@@ -572,7 +572,7 @@ pub const DASHBOARD_IMPORTANT_PREFIXES: &[&str] = &[
     "user.disable",
     "user.delete",
     "user.reset_password",
-    "user.reset_mfa",
+    "mfa.admin_reset",
     "client.create",
     "client.delete",
     "client.rotate_secret",

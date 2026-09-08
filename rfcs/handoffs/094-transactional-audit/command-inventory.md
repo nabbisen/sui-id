@@ -63,7 +63,7 @@ though each pair shares one current repository function family.
 | U04 | Admin soft-delete user | A | `user.delete` | `users::soft_delete` plus revocations | `a_u04_delete` |
 | U05 | Admin role change | A | `user.role_change` | `users::set_role` | `a_u05_role` |
 | U06 | Admin password reset | A | `user.reset_password` | `credentials::upsert`, token/session invalidation | `a_u06_password` |
-| U07 | Admin MFA reset | A | `user.reset_mfa` | `user_totp::delete`, WebAuthn credential deletes | `a_u07_mfa_reset` |
+| U07 | Admin MFA reset | A | `mfa.admin_reset` | `user_totp::delete`, WebAuthn credential deletes | `a_u07_mfa_reset` |
 | U08 | Admin/CLI unlock | A | `admin.user.unlock` | `users::admin_unlock` / `clear_lockout` | `a_u08_unlock` |
 | U09 | Self password change | A | `auth.password.changed_self` | `credentials::upsert`, session/token revocation | `a_u09_self_password` |
 | U10 | Forgot-password completion | A | `auth.password.reset_completed` | `password_reset_tokens::mark_consumed`, `credentials::upsert`, revocations | `a_u10_reset_complete` |
