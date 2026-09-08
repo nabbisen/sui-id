@@ -259,6 +259,23 @@ pub async fn set_disabled(db: &Database, id: UserId, disabled: bool) -> StoreRes
     .await
 }
 
+/// Same as [`set_disabled`] but runs inside a caller-owned transaction
+/// (RFC 094 U02/U03: the sealed Class-A capability).
+pub fn set_disabled_within_tx(
+    conn: &rusqlite::Connection,
+    id: UserId,
+    disabled: bool,
+) -> StoreResult<()> {
+    let n = conn.execute(
+        "UPDATE users SET is_disabled = ?1, updated_at = ?2 WHERE id = ?3",
+        params![disabled as i64, Utc::now(), id.to_string()],
+    )?;
+    if n == 0 {
+        return Err(StoreError::NotFound);
+    }
+    Ok(())
+}
+
 /// Soft-delete a user. Hard delete is intentionally not exposed at this
 /// layer: it would orphan audit-log references.
 pub async fn soft_delete(db: &Database, id: UserId) -> StoreResult<()> {
@@ -273,6 +290,19 @@ pub async fn soft_delete(db: &Database, id: UserId) -> StoreResult<()> {
         Ok(())
     })
     .await
+}
+
+/// Same as [`soft_delete`] but runs inside a caller-owned transaction
+/// (RFC 094 U04: the sealed Class-A capability).
+pub fn soft_delete_within_tx(conn: &rusqlite::Connection, id: UserId) -> StoreResult<()> {
+    let n = conn.execute(
+        "UPDATE users SET is_deleted = 1, is_disabled = 1, updated_at = ?1 WHERE id = ?2",
+        params![Utc::now(), id.to_string()],
+    )?;
+    if n == 0 {
+        return Err(StoreError::NotFound);
+    }
+    Ok(())
 }
 
 /// Increment the user's consecutive-failure counter and (when the
@@ -486,6 +516,59 @@ pub async fn set_role(
     .await
 }
 
+/// Same as [`set_role`] but runs inside a caller-owned transaction (RFC
+/// 094 U05: the sealed Class-A capability).
+pub fn set_role_within_tx(
+    conn: &rusqlite::Connection,
+    user_id: UserId,
+    role: crate::models::Role,
+) -> StoreResult<()> {
+    let rows = conn.execute(
+        "UPDATE users SET role = ?2, is_admin = ?3, updated_at = datetime('now') \
+         WHERE id = ?1 AND is_deleted = 0",
+        params![
+            user_id.to_string(),
+            role.as_str().to_owned(),
+            role.is_admin() as i64
+        ],
+    )?;
+    if rows == 0 {
+        return Err(StoreError::NotFound);
+    }
+    Ok(())
+}
+
+/// Read a user's current role inside a caller-owned transaction. Used by
+/// U05's guarded recheck: the role a command branches on must be read
+/// from the same transaction that performs the change, not from a value
+/// the caller resolved before acquiring the writer (RFC 094 "racy state
+/// is rechecked inside the transaction").
+pub fn get_role_within_tx(
+    conn: &rusqlite::Connection,
+    user_id: UserId,
+) -> StoreResult<crate::models::Role> {
+    conn.query_row(
+        "SELECT role, is_admin FROM users WHERE id = ?1 AND is_deleted = 0",
+        [user_id.to_string()],
+        |row| {
+            let role_str: Option<String> = row.get(0)?;
+            let is_admin: i64 = row.get(1)?;
+            Ok(role_str
+                .as_deref()
+                .and_then(crate::models::Role::from_db_str)
+                .unwrap_or(if is_admin != 0 {
+                    crate::models::Role::Admin
+                } else {
+                    crate::models::Role::User
+                }))
+        },
+    )
+    .map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
+        other => StoreError::from(other),
+    })
+}
+
 /// RFC 071: Count non-deleted users whose role = 'admin'.
 /// Used by the last-admin safeguard before a demotion is permitted.
 pub async fn count_admins(db: &Database) -> StoreResult<usize> {
@@ -498,6 +581,19 @@ pub async fn count_admins(db: &Database) -> StoreResult<usize> {
         Ok(n as usize)
     })
     .await
+}
+
+/// Same as [`count_admins`] but runs inside a caller-owned transaction
+/// (RFC 094 U05: the racy last-admin count must be read from the same
+/// transaction that performs the demotion, not from a pre-transaction
+/// snapshot — see [`get_role_within_tx`]'s doc comment).
+pub fn count_admins_within_tx(conn: &rusqlite::Connection) -> StoreResult<usize> {
+    let n: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM users WHERE role = 'admin' AND is_deleted = 0",
+        [],
+        |row| row.get(0),
+    )?;
+    Ok(n as usize)
 }
 
 /// RFC 074: record a successful login timestamp.

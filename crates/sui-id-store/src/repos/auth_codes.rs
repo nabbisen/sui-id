@@ -123,6 +123,19 @@ pub async fn invalidate_all_for_user(db: &Database, user_id: UserId) -> StoreRes
     .await
 }
 
+/// Same as [`invalidate_all_for_user`] but runs inside a caller-owned
+/// transaction, so it participates in the caller's atomicity boundary.
+pub fn invalidate_all_for_user_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    user_id: UserId,
+) -> StoreResult<usize> {
+    let n = tx.execute(
+        "UPDATE auth_codes SET consumed = 1 WHERE user_id = ?1 AND consumed = 0",
+        [user_id.to_string()],
+    )?;
+    Ok(n)
+}
+
 /// Periodic cleanup of expired entries. Called from a background task or on
 /// admin demand; never required for correctness, just hygiene.
 pub async fn purge_expired(db: &Database) -> StoreResult<usize> {

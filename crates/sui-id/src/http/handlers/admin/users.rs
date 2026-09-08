@@ -479,7 +479,16 @@ pub async fn users_set_role(
         )));
     }
 
-    sui_id_store::repos::users::set_role(&app.db, &target, new_role)
+    // RFC 094 U05: the mutation and the `user.role_change` audit event
+    // commit in one Class-A transaction. The last-admin decision above
+    // stays here (non-racy: it decides whether *this actor* may attempt
+    // the change and produces the localized rejection message); the guard
+    // inside `change_user_role` re-reads the admin count from the same
+    // transaction that performs the demotion and is what actually closes
+    // the race a pre-transaction count can't — see its own doc comment.
+    // A `StoreError::Conflict` here means that guard fired: the rare case
+    // where a concurrent change made this request's own pre-check stale.
+    sui_id_store::commands::change_user_role(&app.db, admin_id, target, new_role)
         .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
 

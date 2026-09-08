@@ -12,7 +12,7 @@ use sui_id_store::repos::{
     users,
 };
 // Shared audit helpers from parent module.
-use super::{audit_ok, audit_with_note};
+use super::audit_ok;
 pub struct CreateUserSpec<'a> {
     pub username: &'a str,
     pub password: &'a str,
@@ -80,27 +80,25 @@ pub async fn create_user(
         failed_login_count: 0,
         locked_until: None,
     };
-    users::create(db, &row).await.map_err(|e| match e {
-        sui_id_store::StoreError::Conflict => CoreError::Conflict("username already in use".into()),
-        other => CoreError::from(other),
-    })?;
     let hash = hash_password(spec.password)?;
-    credentials::upsert(
-        db,
-        &CredentialRow {
-            user_id: row.id,
-            password_hash: hash,
-            must_change: false,
-            updated_at: now,
-        },
-    )
-    .await?;
-    let action = if hibp_warned {
-        "user.create_warned_hibp"
-    } else {
-        "user.create"
+    let credential = CredentialRow {
+        user_id: row.id,
+        password_hash: hash,
+        must_change: false,
+        updated_at: now,
     };
-    audit_ok(db, actor_id, action, Some(row.id.to_string())).await;
+    // RFC 094 U01: mutation, credential insert, and the closed-branch
+    // `user.create` / `user.create_warned_hibp` audit event commit in one
+    // Class-A transaction — replacing the previous unguarded `users::create`
+    // + `credentials::upsert` + fire-and-forget `audit_ok` sequence.
+    sui_id_store::commands::create_user(db, actor_id, row.clone(), Some(credential), hibp_warned)
+        .await
+        .map_err(|e| match e {
+            sui_id_store::StoreError::Conflict => {
+                CoreError::Conflict("username already in use".into())
+            }
+            other => CoreError::from(other),
+        })?;
     Ok(row)
 }
 
@@ -122,29 +120,20 @@ pub async fn set_user_disabled(
             "cannot disable your own account; have another administrator do it".into(),
         ));
     }
-    users::set_disabled(db, target, disabled)
-        .await
-        .map_err(|e| match e {
-            sui_id_store::StoreError::NotFound => CoreError::NotFound,
-            other => CoreError::from(other),
-        })?;
-    if disabled {
-        sessions::revoke_all_for_user(db, target).await?;
-        refresh_tokens::revoke_all_for_user(db, target).await?;
-        auth_codes::invalidate_all_for_user(db, target).await?;
-    }
-    audit_with_note(
-        db,
-        actor_id,
-        if disabled {
-            "user.disable"
-        } else {
-            "user.enable"
-        },
-        Some(target.to_string()),
-        if disabled { reason } else { None },
-    )
-    .await;
+    // RFC 094 U02/U03: the flag flip, the target's session/refresh-token/
+    // auth-code revocations (disable only), and the audit event commit in
+    // one Class-A transaction — replacing the previous unguarded
+    // `users::set_disabled` followed by three separate best-effort revoke
+    // calls and a fire-and-forget `audit_with_note`.
+    let result = if disabled {
+        sui_id_store::commands::disable_user(db, actor_id, target, reason).await
+    } else {
+        sui_id_store::commands::enable_user(db, actor_id, target).await
+    };
+    result.map_err(|e| match e {
+        sui_id_store::StoreError::NotFound => CoreError::NotFound,
+        other => CoreError::from(other),
+    })?;
     Ok(())
 }
 
@@ -160,21 +149,13 @@ pub async fn delete_user(
             "cannot delete your own account".into(),
         ));
     }
-    users::soft_delete(db, target).await.map_err(|e| match e {
-        sui_id_store::StoreError::NotFound => CoreError::NotFound,
-        other => CoreError::from(other),
-    })?;
-    sessions::revoke_all_for_user(db, target).await?;
-    refresh_tokens::revoke_all_for_user(db, target).await?;
-    auth_codes::invalidate_all_for_user(db, target).await?;
-    audit_with_note(
-        db,
-        actor_id,
-        "user.delete",
-        Some(target.to_string()),
-        reason,
-    )
-    .await;
+    // RFC 094 U04: same atomicity shift as U02/U03 above.
+    sui_id_store::commands::delete_user(db, actor_id, target, reason)
+        .await
+        .map_err(|e| match e {
+            sui_id_store::StoreError::NotFound => CoreError::NotFound,
+            other => CoreError::from(other),
+        })?;
     Ok(())
 }
 

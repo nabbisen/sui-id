@@ -36,8 +36,19 @@ Until RFC 094 is implemented, treat the rows below as the coverage this project
 | `user.delete` | Soft-delete user | admin user id | target user id | reason (optional) | A |
 | `user.reset_password` | Admin password reset | admin user id | target user id | — | A |
 | `user.reset_mfa` | Admin MFA reset | admin user id | target user id | `totp=… passkeys=N reason=…` | A |
+| `user.role_change` | Admin role change | admin user id | target user id | `old_role=… new_role=…` | A |
 
-> **Conversion pending (RFC 085):** user.role_change will be added when the role-change handler is converted to Class A atomicity.
+> **`user.role_change` row added 2026-09-08, reviewed and settled.** RFC
+> 094's U05 conversion (`sui-id-store::commands::change_user_role`) is the
+> first code to emit this event; no production code emitted it before, and
+> this document previously carried no row for it at all ("will be added
+> when the role-change handler is converted"). The event name and actor/
+> target shape come from `rfcs/handoffs/094-transactional-audit/
+> command-inventory.md:64`; the `old_role`/`new_role` note fields were this
+> implementation's own proposal — a role-change record naming neither role
+> is not reconstructable from the rest of the audit log — approved
+> 2026-09-08 (`.git-exclude/reviewed/
+> 094-wave-a-user-admin-u01-u05-2026-09-08.md` §3).
 
 ### Client management (`client.*`)
 

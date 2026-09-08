@@ -166,6 +166,14 @@ pub enum AuditEventKind {
     UserCreate,
     /// `user.create_warned_hibp` — U01, HIBP-flagged branch.
     UserCreateWarnedHibp,
+    /// `user.disable` — U02.
+    UserDisable,
+    /// `user.enable` — U03.
+    UserEnable,
+    /// `user.delete` — U04.
+    UserDelete,
+    /// `user.role_change` — U05.
+    UserRoleChange,
     /// `auth.refresh.rotated` — T04, normal-winner branch.
     RefreshRotated,
     /// `auth.refresh.theft_detected` — T04, reuse/family-revocation branch.

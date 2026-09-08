@@ -334,6 +334,323 @@ pub async fn create_user(
     .await
 }
 
+// ── U02 — disable user ───────────────────────────────────────────────
+
+static U02_DISABLE: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::UserDisable,
+    name: "user.disable",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[AttributeSpec {
+        name: "reason",
+        description: "operator-supplied reason for the disable, if given",
+    }],
+};
+
+crate::declare_write_command! {
+    /// U02 — admin disable user. Same `forbidden` reasoning as U01: the
+    /// coverage matrix requires `admin user id` as the actor.
+    command U02 = "U02" {
+        system_principal: forbidden;
+        enum U02Event {
+            Disabled { user_id: UserId, reason: Option<String> } => &U02_DISABLE,
+        }
+    }
+}
+
+impl SealedCommandEvent<U02> for U02Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Disabled { user_id, .. } = self;
+        Some(AuditTarget(user_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Disabled { reason, .. } = self;
+        let mut builder = AuditAttributes::builder();
+        if let Some(r) = reason {
+            builder = builder.attribute("reason", r.clone());
+        }
+        builder.build()
+    }
+}
+
+/// Run U02 (admin disable user) through the Class-A runner. Revokes the
+/// target's sessions, refresh tokens, and in-flight auth codes in the
+/// same transaction as the `is_disabled` flip and the audit append —
+/// previously three separate best-effort calls after an unguarded
+/// mutation (RFC 094's motivating pattern).
+pub async fn disable_user(
+    db: &crate::Database,
+    admin: UserId,
+    target: UserId,
+    reason: Option<String>,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<U02>::for_authorized_actor(admin, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, U02>| {
+        crate::repos::users::set_disabled_within_tx(tx.tx(), target, true)?;
+        crate::repos::sessions::revoke_all_for_user_within_tx(tx.tx(), target, chrono::Utc::now())?;
+        crate::repos::refresh_tokens::revoke_all_for_user_within_tx(
+            tx.tx(),
+            target,
+            chrono::Utc::now(),
+        )?;
+        crate::repos::auth_codes::invalidate_all_for_user_within_tx(tx.tx(), target)?;
+        Ok((
+            (),
+            U02Event::Disabled {
+                user_id: target,
+                reason,
+            },
+        ))
+    })
+    .await
+}
+
+// ── U03 — enable user ────────────────────────────────────────────────
+
+static U03_ENABLE: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::UserEnable,
+    name: "user.enable",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[],
+};
+
+crate::declare_write_command! {
+    /// U03 — admin re-enable user.
+    command U03 = "U03" {
+        system_principal: forbidden;
+        enum U03Event {
+            Enabled { user_id: UserId } => &U03_ENABLE,
+        }
+    }
+}
+
+impl SealedCommandEvent<U03> for U03Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Enabled { user_id } = self;
+        Some(AuditTarget(user_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        AuditAttributes::builder().build()
+    }
+}
+
+/// Run U03 (admin re-enable user) through the Class-A runner. Unlike
+/// U02, re-enabling does not revoke anything — the coverage matrix
+/// carries no note field for this row, matching the pre-conversion
+/// behavior of `set_user_disabled(disabled: false)`.
+pub async fn enable_user(
+    db: &crate::Database,
+    admin: UserId,
+    target: UserId,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<U03>::for_authorized_actor(admin, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, U03>| {
+        crate::repos::users::set_disabled_within_tx(tx.tx(), target, false)?;
+        Ok(((), U03Event::Enabled { user_id: target }))
+    })
+    .await
+}
+
+// ── U04 — soft-delete user ───────────────────────────────────────────
+
+static U04_DELETE: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::UserDelete,
+    name: "user.delete",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[AttributeSpec {
+        name: "reason",
+        description: "operator-supplied reason for the deletion, if given",
+    }],
+};
+
+crate::declare_write_command! {
+    /// U04 — admin soft-delete user.
+    command U04 = "U04" {
+        system_principal: forbidden;
+        enum U04Event {
+            Deleted { user_id: UserId, reason: Option<String> } => &U04_DELETE,
+        }
+    }
+}
+
+impl SealedCommandEvent<U04> for U04Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Deleted { user_id, .. } = self;
+        Some(AuditTarget(user_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Deleted { reason, .. } = self;
+        let mut builder = AuditAttributes::builder();
+        if let Some(r) = reason {
+            builder = builder.attribute("reason", r.clone());
+        }
+        builder.build()
+    }
+}
+
+/// Run U04 (admin soft-delete user) through the Class-A runner. Same
+/// revocation-bundling reasoning as U02.
+pub async fn delete_user(
+    db: &crate::Database,
+    admin: UserId,
+    target: UserId,
+    reason: Option<String>,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<U04>::for_authorized_actor(admin, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, U04>| {
+        crate::repos::users::soft_delete_within_tx(tx.tx(), target)?;
+        crate::repos::sessions::revoke_all_for_user_within_tx(tx.tx(), target, chrono::Utc::now())?;
+        crate::repos::refresh_tokens::revoke_all_for_user_within_tx(
+            tx.tx(),
+            target,
+            chrono::Utc::now(),
+        )?;
+        crate::repos::auth_codes::invalidate_all_for_user_within_tx(tx.tx(), target)?;
+        Ok((
+            (),
+            U04Event::Deleted {
+                user_id: target,
+                reason,
+            },
+        ))
+    })
+    .await
+}
+
+// ── U05 — admin role change ──────────────────────────────────────────
+//
+// **Schema not previously specified — flagged for review.** Unlike
+// U01-U04, `docs/src/reference/audit-coverage-matrix.md` carries no row
+// for `user.role_change`; it says only "will be added when the
+// role-change handler is converted to Class A atomicity" (RFC 085). No
+// production code emits this event today either — `users_set_role`
+// (`sui-id/src/http/handlers/admin/users.rs`) calls
+// `sui_id_store::repos::users::set_role` directly, with no audit call at
+// all. The event name (`user.role_change`) and actor/target shape (admin
+// user id / target user id) come from `command-inventory.md:64`; the
+// `old_role`/`new_role` attribute pair is this implementation's own
+// proposal, chosen because a role-change record with neither value is
+// not reconstructable from the rest of the audit log. Treat this
+// descriptor as provisional until confirmed.
+static U05_ROLE_CHANGE: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::UserRoleChange,
+    name: "user.role_change",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[
+        AttributeSpec {
+            name: "old_role",
+            description: "the user's role before the change",
+        },
+        AttributeSpec {
+            name: "new_role",
+            description: "the user's role after the change",
+        },
+    ],
+};
+
+crate::declare_write_command! {
+    /// U05 — admin role change.
+    command U05 = "U05" {
+        system_principal: forbidden;
+        enum U05Event {
+            RoleChanged {
+                user_id: UserId,
+                old_role: crate::models::Role,
+                new_role: crate::models::Role,
+            } => &U05_ROLE_CHANGE,
+        }
+    }
+}
+
+impl SealedCommandEvent<U05> for U05Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::RoleChanged { user_id, .. } = self;
+        Some(AuditTarget(user_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::RoleChanged {
+            old_role, new_role, ..
+        } = self;
+        AuditAttributes::builder()
+            .attribute("old_role", old_role.as_str())
+            .attribute("new_role", new_role.as_str())
+            .build()
+    }
+}
+
+/// Run U05 (admin role change) through the Class-A runner.
+///
+/// The last-admin guard is split per RFC 094's own vocabulary
+/// (`migration-checklist.md`'s per-command checklist): the *authorization*
+/// check ("is the caller allowed to change roles at all") is non-racy and
+/// stays in `sui-id-core`, before this is called. The *last-admin count*
+/// is racy state — concurrent role changes can both observe "2 admins
+/// left" and both demote — so it is re-read and re-checked here, inside
+/// the same transaction that performs the demotion, using `old_role` read
+/// from this transaction rather than a value the caller resolved earlier.
+/// This function does not call `sui-id-core`'s `authz` module directly:
+/// `sui-id-store` cannot depend on `sui-id-core` (RFC 094's standing
+/// constraint), so the specific invariant ("would this demotion leave
+/// zero admins") is inlined here rather than routed through the general
+/// decision table. `StoreError::Conflict` on the guard failing is
+/// intentionally generic — the friendly, localized error message is
+/// still produced by the pre-check in `sui-id-core`; this is the rare
+/// race the pre-check cannot close.
+pub async fn change_user_role(
+    db: &crate::Database,
+    admin: UserId,
+    target: UserId,
+    new_role: crate::models::Role,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<U05>::for_authorized_actor(admin, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, U05>| {
+        let old_role = crate::repos::users::get_role_within_tx(tx.tx(), target)?;
+        if old_role.is_admin() && !new_role.is_admin() {
+            let admins = crate::repos::users::count_admins_within_tx(tx.tx())?;
+            if admins <= 1 {
+                return Err(crate::StoreError::Conflict);
+            }
+        }
+        crate::repos::users::set_role_within_tx(tx.tx(), target, new_role)?;
+        Ok((
+            (),
+            U05Event::RoleChanged {
+                user_id: target,
+                old_role,
+                new_role,
+            },
+        ))
+    })
+    .await
+}
+
 // ── T04 — refresh-token rotation / reuse revocation (closed branches) ───
 
 static T04_ROTATED: EventDescriptor = EventDescriptor {
@@ -560,9 +877,9 @@ mod tests {
         fn assert_system_principal_permitted<C: SystemPrincipalPermitted>() {}
         assert_system_principal_permitted::<K01>();
         assert_system_principal_permitted::<U22>();
-        // U01 is deliberately absent: it is `system_principal: forbidden`
-        // (an admin-attributed command, `ActorRequirement::Required`).
-        // Its own compile-negative proof is `tests/compile_fail/
+        // U01-U05 are deliberately absent: all five are `system_principal:
+        // forbidden` (admin-attributed commands, `ActorRequirement::
+        // Required`). U01's compile-negative proof is `tests/compile_fail/
         // admin_command_forbidden_cannot_use_system_actor.rs` — there is
         // no positive equivalent to assert here, since "does not
         // implement a trait" isn't expressible as a bound.
@@ -578,6 +895,10 @@ mod tests {
             &U22_LOCKOUT,
             &U01_CREATE,
             &U01_CREATE_WARNED_HIBP,
+            &U02_DISABLE,
+            &U03_ENABLE,
+            &U04_DELETE,
+            &U05_ROLE_CHANGE,
             &T04_ROTATED,
             &T04_THEFT_DETECTED,
         ]
@@ -660,6 +981,10 @@ mod tests {
         check("K01", true, &[&K01_ROTATED]);
         check("U22", true, &[&U22_FAILURE, &U22_LOCKOUT]);
         check("U01", false, &[&U01_CREATE, &U01_CREATE_WARNED_HIBP]);
+        check("U02", false, &[&U02_DISABLE]);
+        check("U03", false, &[&U03_ENABLE]);
+        check("U04", false, &[&U04_DELETE]);
+        check("U05", false, &[&U05_ROLE_CHANGE]);
         check("T04", true, &[&T04_ROTATED, &T04_THEFT_DETECTED]);
     }
 
@@ -762,6 +1087,10 @@ mod tests {
             "auth.lockout",
             "user.create",
             "user.create_warned_hibp",
+            "user.disable",
+            "user.enable",
+            "user.delete",
+            "user.role_change",
             "auth.refresh.rotated",
             "auth.refresh.theft_detected",
         ];
@@ -1234,6 +1563,346 @@ mod tests {
                 "no user row: the insert rolled back with the audit row"
             );
             assert_eq!(latest_audit_action(&db).await, before_audit);
+        }
+
+        // ── U02-U05 — user administration wave (disable/enable/delete/role) ─
+
+        async fn seed_active_session(
+            db: &Database,
+            user_id: UserId,
+        ) -> sui_id_shared::ids::SessionId {
+            let id = sui_id_shared::ids::SessionId::new();
+            repos::sessions::insert(
+                db,
+                &SessionRow {
+                    id,
+                    user_id,
+                    expires_at: Utc::now() + TimeDelta::hours(1),
+                    created_at: Utc::now(),
+                    revoked_at: None,
+                    auth_methods: vec![],
+                    last_step_up_at: None,
+                    last_used_at: None,
+                },
+            )
+            .await
+            .expect("seed session");
+            id
+        }
+
+        #[tokio::test]
+        async fn u02_disable_flips_flag_revokes_session_and_records_reason() {
+            let db = fresh_db();
+            let user = a_user();
+            repos::users::create(&db, &user).await.expect("create user");
+            let session_id = seed_active_session(&db, user.id).await;
+
+            let audited = disable_user(
+                &db,
+                an_admin(),
+                user.id,
+                Some("policy violation".to_string()),
+            )
+            .await
+            .expect("disable");
+            audited.into_inner();
+
+            let row = repos::users::get(&db, user.id).await.expect("get");
+            assert!(row.is_disabled);
+
+            let session = repos::sessions::get(&db, session_id)
+                .await
+                .expect("get session");
+            assert!(
+                session.revoked_at.is_some(),
+                "the target's session must be revoked in the same transaction as the disable"
+            );
+
+            let tail = repos::audit::recent(&db, 1)
+                .await
+                .expect("audit tail")
+                .into_iter()
+                .next()
+                .expect("row");
+            assert_eq!(tail.action, "user.disable");
+            assert_eq!(tail.note.as_deref(), Some("reason=policy violation"));
+        }
+
+        #[tokio::test]
+        async fn u02_disable_without_reason_records_no_note() {
+            let db = fresh_db();
+            let user = a_user();
+            repos::users::create(&db, &user).await.expect("create user");
+
+            disable_user(&db, an_admin(), user.id, None)
+                .await
+                .expect("disable");
+
+            let tail = repos::audit::recent(&db, 1)
+                .await
+                .expect("audit tail")
+                .into_iter()
+                .next()
+                .expect("row");
+            assert_eq!(tail.note, None);
+        }
+
+        #[tokio::test]
+        async fn u02_injected_failure_before_append_rolls_back_disable_and_session_revoke() {
+            let db = fresh_db();
+            let user = a_user();
+            repos::users::create(&db, &user).await.expect("create user");
+            let session_id = seed_active_session(&db, user.id).await;
+            let before_audit = latest_audit_action(&db).await;
+
+            db.fault_injector().fail_before_next_append();
+            let result = disable_user(&db, an_admin(), user.id, None).await;
+            assert!(result.is_err(), "injected failure must surface as Err");
+
+            let row = repos::users::get(&db, user.id).await.expect("get");
+            assert!(!row.is_disabled, "the flag flip rolled back");
+            let session = repos::sessions::get(&db, session_id)
+                .await
+                .expect("get session");
+            assert!(
+                session.revoked_at.is_none(),
+                "the session revoke rolled back too"
+            );
+            assert_eq!(latest_audit_action(&db).await, before_audit);
+        }
+
+        #[tokio::test]
+        async fn u03_enable_clears_disabled_flag_and_appends_event() {
+            let db = fresh_db();
+            let mut user = a_user();
+            user.is_disabled = true;
+            repos::users::create(&db, &user).await.expect("create user");
+
+            let audited = enable_user(&db, an_admin(), user.id).await.expect("enable");
+            audited.into_inner();
+
+            let row = repos::users::get(&db, user.id).await.expect("get");
+            assert!(!row.is_disabled);
+
+            let tail = repos::audit::recent(&db, 1)
+                .await
+                .expect("audit tail")
+                .into_iter()
+                .next()
+                .expect("row");
+            assert_eq!(tail.action, "user.enable");
+            assert_eq!(tail.note, None);
+        }
+
+        #[tokio::test]
+        async fn u04_delete_soft_deletes_revokes_session_and_records_reason() {
+            let db = fresh_db();
+            let user = a_user();
+            repos::users::create(&db, &user).await.expect("create user");
+            let session_id = seed_active_session(&db, user.id).await;
+
+            let audited = delete_user(&db, an_admin(), user.id, Some("gdpr request".to_string()))
+                .await
+                .expect("delete");
+            audited.into_inner();
+
+            let row = repos::users::get(&db, user.id).await.expect("get");
+            assert!(row.is_deleted);
+            assert!(row.is_disabled);
+
+            let session = repos::sessions::get(&db, session_id)
+                .await
+                .expect("get session");
+            assert!(session.revoked_at.is_some());
+
+            let tail = repos::audit::recent(&db, 1)
+                .await
+                .expect("audit tail")
+                .into_iter()
+                .next()
+                .expect("row");
+            assert_eq!(tail.action, "user.delete");
+            assert_eq!(tail.note.as_deref(), Some("reason=gdpr request"));
+        }
+
+        #[tokio::test]
+        async fn u04_injected_failure_before_append_rolls_back_delete_and_session_revoke() {
+            let db = fresh_db();
+            let user = a_user();
+            repos::users::create(&db, &user).await.expect("create user");
+            let session_id = seed_active_session(&db, user.id).await;
+            let before_audit = latest_audit_action(&db).await;
+
+            db.fault_injector().fail_before_next_append();
+            let result = delete_user(&db, an_admin(), user.id, None).await;
+            assert!(result.is_err(), "injected failure must surface as Err");
+
+            let row = repos::users::get(&db, user.id).await.expect("get");
+            assert!(!row.is_deleted, "the soft-delete rolled back");
+            let session = repos::sessions::get(&db, session_id)
+                .await
+                .expect("get session");
+            assert!(
+                session.revoked_at.is_none(),
+                "the session revoke rolled back too"
+            );
+            assert_eq!(latest_audit_action(&db).await, before_audit);
+        }
+
+        #[tokio::test]
+        async fn u05_role_change_updates_role_and_records_old_and_new_role() {
+            let db = fresh_db();
+            let mut admin_a = a_user();
+            admin_a.role = crate::models::Role::Admin;
+            admin_a.is_admin = true;
+            let mut admin_b = a_user();
+            admin_b.role = crate::models::Role::Admin;
+            admin_b.is_admin = true;
+            repos::users::create(&db, &admin_a).await.expect("create a");
+            repos::users::create(&db, &admin_b).await.expect("create b");
+
+            // Two admins exist, so demoting one leaves one behind — the
+            // guard must not fire.
+            let audited = change_user_role(&db, an_admin(), admin_a.id, crate::models::Role::User)
+                .await
+                .expect("role change");
+            audited.into_inner();
+
+            let row = repos::users::get(&db, admin_a.id).await.expect("get");
+            assert_eq!(row.role, crate::models::Role::User);
+
+            let tail = repos::audit::recent(&db, 1)
+                .await
+                .expect("audit tail")
+                .into_iter()
+                .next()
+                .expect("row");
+            assert_eq!(tail.action, "user.role_change");
+            assert_eq!(tail.note.as_deref(), Some("old_role=admin new_role=user"));
+        }
+
+        #[tokio::test]
+        async fn u05_last_admin_guard_blocks_demotion_and_makes_no_change() {
+            let db = fresh_db();
+            let mut only_admin = a_user();
+            only_admin.role = crate::models::Role::Admin;
+            only_admin.is_admin = true;
+            repos::users::create(&db, &only_admin)
+                .await
+                .expect("create admin");
+            let before_audit = latest_audit_action(&db).await;
+
+            let result =
+                change_user_role(&db, an_admin(), only_admin.id, crate::models::Role::User).await;
+            assert!(
+                matches!(result, Err(StoreError::Conflict)),
+                "demoting the last admin must be rejected"
+            );
+
+            let row = repos::users::get(&db, only_admin.id).await.expect("get");
+            assert_eq!(
+                row.role,
+                crate::models::Role::Admin,
+                "the guard fired before the mutation, not after"
+            );
+            assert_eq!(
+                latest_audit_action(&db).await,
+                before_audit,
+                "a rejected guard must not emit an audit row"
+            );
+        }
+
+        #[tokio::test]
+        async fn u05_promoting_a_user_is_never_blocked_by_the_last_admin_guard() {
+            let db = fresh_db();
+            let mut only_admin = a_user();
+            only_admin.role = crate::models::Role::Admin;
+            only_admin.is_admin = true;
+            let candidate = a_user();
+            repos::users::create(&db, &only_admin)
+                .await
+                .expect("create admin");
+            repos::users::create(&db, &candidate)
+                .await
+                .expect("create candidate");
+
+            // Promotion never reduces the admin count, so the guard (which
+            // only fires when `old_role.is_admin() && !new_role.is_admin()`)
+            // must not apply here even though only one admin exists.
+            change_user_role(&db, an_admin(), candidate.id, crate::models::Role::Admin)
+                .await
+                .expect("promotion must not be blocked");
+
+            let row = repos::users::get(&db, candidate.id).await.expect("get");
+            assert_eq!(row.role, crate::models::Role::Admin);
+        }
+
+        /// The property `u05_last_admin_guard_blocks_demotion_and_makes_no_
+        /// change` does not cover: that test demotes the *only* admin, which
+        /// the HTTP handler's pre-transaction `count_admins` check already
+        /// catches on its own — it never exercises the guard's actual reason
+        /// for existing inside the transaction, the race between two
+        /// concurrent demotions that both observe "2 admins left" before
+        /// either commits. Reviewer finding, 2026-09-08 (`.git-exclude/
+        /// reviewed/094-wave-a-user-admin-u01-u05-2026-09-08.md` §2):
+        /// mutating away the guard's `if` block still failed the
+        /// single-admin test, so that test could not distinguish "the guard
+        /// works" from "the guard is needed." Measured directly (temporary
+        /// probe, since reverted) before writing this: two admins, two
+        /// concurrent demotions, `successes=1 admins_remaining=1` — the race
+        /// really is closed by `count_admins_within_tx`/`get_role_within_tx`
+        /// reading from the same transaction that performs the demotion.
+        /// Same shape as `concurrent_class_a_commands_maintain_one_unbroken_
+        /// chain` above: real `tokio::spawn` concurrency through the real
+        /// `class_a` path, not an argument about mutex serialization.
+        #[tokio::test]
+        async fn u05_concurrent_demotions_of_the_last_two_admins_leave_exactly_one() {
+            let db = fresh_db();
+            let mut admin_a = a_user();
+            admin_a.role = crate::models::Role::Admin;
+            admin_a.is_admin = true;
+            let mut admin_b = a_user();
+            admin_b.role = crate::models::Role::Admin;
+            admin_b.is_admin = true;
+            repos::users::create(&db, &admin_a).await.expect("create a");
+            repos::users::create(&db, &admin_b).await.expect("create b");
+
+            let handles: Vec<_> = [admin_a.id, admin_b.id]
+                .into_iter()
+                .map(|target| {
+                    let db = db.clone();
+                    tokio::spawn(async move {
+                        change_user_role(&db, an_admin(), target, crate::models::Role::User).await
+                    })
+                })
+                .collect();
+
+            let mut successes = 0;
+            let mut conflicts = 0;
+            for handle in handles {
+                match handle.await.expect("task join") {
+                    Ok(audited) => {
+                        audited.into_inner();
+                        successes += 1;
+                    }
+                    Err(StoreError::Conflict) => conflicts += 1,
+                    Err(e) => panic!("unexpected error: {e}"),
+                }
+            }
+
+            assert_eq!(
+                successes, 1,
+                "exactly one demotion must win the race, not zero and not both"
+            );
+            assert_eq!(
+                conflicts, 1,
+                "the loser must see the guard, not a silent success"
+            );
+            assert_eq!(
+                repos::users::count_admins(&db).await.expect("count"),
+                1,
+                "the last admin must never be reachable via a race the pre-check missed"
+            );
         }
 
         // ── T04/T09 — refresh-token rotation and initial issuance ───────
