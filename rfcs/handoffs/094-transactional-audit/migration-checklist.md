@@ -304,6 +304,19 @@ at a time; the workspace and structural gate must remain green between waves.
 
 - [ ] user create / warned create / disable / enable / delete / role change.
 - [ ] admin password reset, MFA reset, unlock.
+      **U06/U07 dispatchable. U08 BLOCKED pending two owner decisions
+      (2026-09-09).** (a) `audit-coverage-matrix.md:78` requires `admin user id`
+      for `admin.user.unlock`, but there is no HTTP admin unlock path — the only
+      caller is `cli.rs:123`, which has no operator identity at all; its authority
+      is the master key and filesystem access. The requirement names a caller that
+      was never built. (b) The inventory row's two mutation surfaces,
+      `users::admin_unlock` and `clear_lockout`, are **byte-identical SQL** with
+      opposite meanings — a deliberate operator override versus the automatic
+      clear on every successful post-failure login (`session.rs:195`). Converting
+      as written either emits `admin.user.unlock` per successful login or leaves
+      `clear_lockout` unconverted while the row shows done. Analysis and
+      recommendations in
+      `.git-exclude/reviewed/094-wave-b-scoping-u08-blocked-2026-09-09.md`.
 - [ ] self password change and password-reset consumption.
 - [ ] MFA enrollment/disable/recovery regeneration mutations.
 - [ ] force logout and self/admin session revocation commands.
