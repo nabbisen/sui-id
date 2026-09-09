@@ -94,6 +94,7 @@ and permits design review only; it does not authorize implementation.
 | 097 | [Current Threat Model and Security-Assurance Baseline](./proposed/097-current-threat-model.md) | M5 |
 | 098 | [Documentation Authority and Reconciliation](./proposed/098-documentation-authority-reconciliation.md) | M5 |
 | 099 | [Operational Hardening and Soak Readiness](./proposed/099-operational-hardening-soak-readiness.md) | M6–M7 |
+| 101 | [Email lifecycle: verification and change](./proposed/101-email-lifecycle-verification-and-change.md) | sequenced at owner discretion |
 | 100 | [Master-Key Rotation Crash Recovery](./proposed/100-master-key-rotation-recovery.md) | sequenced at owner discretion |
 
 ### Implemented — Mockup Integration epic (Phase 0 → Phase 8)
