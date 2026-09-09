@@ -188,6 +188,10 @@ pub enum AuditEventKind {
     /// 094-wave-b-scoping-u08-blocked-2026-09-09.md`, applied in
     /// `migration-checklist.md`).
     AdminUserUnlock,
+    /// `auth.password.changed_self` — U09.
+    AuthPasswordChangedSelf,
+    /// `auth.password.reset_completed` — U10.
+    AuthPasswordResetCompleted,
     /// `auth.refresh.rotated` — T04, normal-winner branch.
     RefreshRotated,
     /// `auth.refresh.theft_detected` — T04, reuse/family-revocation branch.

@@ -13,8 +13,8 @@ use crate::password;
 use crate::time::SharedClock;
 use chrono::Utc;
 use sui_id_store::Database;
-use sui_id_store::models::{AuditLogRow, CredentialRow, HibpMode};
-use sui_id_store::repos::{audit, credentials, refresh_tokens, sessions};
+use sui_id_store::models::{CredentialRow, HibpMode};
+use sui_id_store::repos::credentials;
 
 /// Result of a successful self-service password change. The numbers
 /// let the caller decide what to put in a flash message
@@ -62,7 +62,14 @@ pub struct PasswordChangeReport {
 #[allow(clippy::too_many_arguments)]
 pub async fn change_password_self(
     db: &Database,
-    clock: &SharedClock,
+    // Unused since the RFC 094 U09 conversion: the audit timestamp is
+    // now `Database::class_a`'s own `chrono::Utc::now()` call, not this
+    // caller-injected clock — the tracked, open "registry clock source"
+    // gap (`migration-checklist.md`, Stage 2) applies here too and isn't
+    // this conversion's to fix. Kept in the signature rather than
+    // removed, to avoid an unrelated public-API change and because a
+    // future runner-level fix for that gap would need it back.
+    _clock: &SharedClock,
     hibp_client: Option<&dyn HibpClient>,
     hibp_mode: HibpMode,
     actor: &SelfActor,
@@ -106,58 +113,36 @@ pub async fn change_password_self(
         _ => false,
     };
 
-    // 4. Hash and store. `must_change` is reset — the user has
-    //    just demonstrated agency.
+    // 4-6. Hash, store, optionally sweep other live state, and append
+    // the audit event — all in one Class-A transaction (RFC 094 U09).
+    // Previously: an unguarded `credentials::upsert`, two more
+    // best-effort revoke calls only reached when `revoke_others` was
+    // set, and a fire-and-forget `audit::append` after all of it. A
+    // failure between any of these steps used to leave the password
+    // changed with some, none, or all of the requested sweep applied,
+    // and no audit row recording what actually happened.
     let new_phc = password::hash_password(new_password)?;
-    credentials::upsert(
+    let credential = CredentialRow {
+        user_id,
+        password_hash: new_phc,
+        must_change: false,
+        updated_at: Utc::now(),
+    };
+    let audited = sui_id_store::commands::change_password_self(
         db,
-        &CredentialRow {
-            user_id,
-            password_hash: new_phc,
-            must_change: false,
-            updated_at: Utc::now(),
-        },
+        user_id,
+        credential,
+        keep_current_session,
+        revoke_others,
     )
     .await?;
+    let (sessions_revoked, refresh_tokens_revoked) = audited.into_inner();
 
-    // 5. Optionally sweep other live state. The caller asked for
-    //    this when the box was checked; we revoke every other
-    //    session and every active refresh token. The current
-    //    session stays alive so the user isn't booted out of the
-    //    page they're using.
-    let mut report = PasswordChangeReport {
-        sessions_revoked: 0,
-        refresh_tokens_revoked: 0,
+    Ok(PasswordChangeReport {
+        sessions_revoked,
+        refresh_tokens_revoked,
         hibp_warned,
-    };
-    if revoke_others {
-        report.sessions_revoked = match keep_current_session {
-            Some(keep) => sessions::revoke_all_for_user_except(db, user_id, keep).await?,
-            None => sessions::revoke_all_for_user(db, user_id).await?,
-        };
-        report.refresh_tokens_revoked = refresh_tokens::revoke_all_for_user(db, user_id).await?;
-    }
-
-    // 6. Audit. The note carries the sweep counts so an operator
-    //    looking at the log later can see at a glance whether the
-    //    user opted to sign out other sessions.
-    let _ = audit::append(
-        db,
-        &AuditLogRow {
-            at: clock.now(),
-            actor: Some(user_id),
-            action: "auth.password.changed_self".into(),
-            target: Some(user_id.to_string()),
-            result: "ok".into(),
-            note: Some(format!(
-                "sessions_revoked={} refresh_tokens_revoked={}",
-                report.sessions_revoked, report.refresh_tokens_revoked
-            )),
-        },
-    )
-    .await;
-
-    Ok(report)
+    })
 }
 
 #[cfg(test)]
@@ -166,7 +151,7 @@ mod tests {
     use sui_id_shared::ids::UserId;
     use sui_id_store::crypto::MasterKey;
     use sui_id_store::models::UserRow;
-    use sui_id_store::repos::users;
+    use sui_id_store::repos::{audit, users};
 
     fn fresh_db() -> Database {
         Database::open_in_memory(MasterKey::generate()).expect("db")

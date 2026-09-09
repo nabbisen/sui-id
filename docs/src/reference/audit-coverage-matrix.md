@@ -146,10 +146,13 @@ today all three are fire-and-forget `let _ = audit::append(...)` in
 Most of these are informational trace events (Class B) recording the
 authentication funnel, and do not guard state mutations.
 
-**Three exceptions are Class A**, each committing atomically with the mutation it
+**Five exceptions are Class A**, each committing atomically with the mutation it
 records through RFC 094's Class-A runner: `auth.lockout` (command `U22`, with the
-`locked_until` mutation) and both branches of command `T04`,
-`auth.refresh.rotated` and `auth.refresh.theft_detected` (with the guarded
+`locked_until` mutation), `auth.password.changed_self` (command `U09`, with the
+credential swap and optional session/refresh-token sweep), `auth.password.
+reset_completed` (command `U10`, with the credential swap, token consume, and
+unconditional session/refresh-token revocation), and both branches of command
+`T04`, `auth.refresh.rotated` and `auth.refresh.theft_detected` (with the guarded
 old-row revoke and successor insert, or the family revoke). **A row in this
 section is Class B only until its command is converted** — check
 `command-inventory.md` before assuming the section header applies.
@@ -161,6 +164,12 @@ stated without qualification that these events guard no state mutation, while
 Two normative documents disagreed about the same event and this one was wrong —
 by understating, which is the same defect as overstating: the document not
 matching the code.*
+
+*Corrected 2026-09-09 (U09/U10 conversion): `auth.password.reset_completed`'s
+actor was `user id`; the only caller is a one-time reset-token presenter, not an
+authenticated session, so no `UserId` a verified authorization decision could
+name exists — the same `ActorRequirement::None` shape as `auth.refresh.rotated`
+above it, not `auth.password.changed_self`'s authenticated-actor shape below.*
 
 | Event name | Trigger | Actor | Class |
 |---|---|---|---|
@@ -175,12 +184,12 @@ matching the code.*
 | `auth.lockout` | Account locked after crossing the failure threshold | — | **A** |
 | `auth.session.revoked` | Single session revocation | user id | B |
 | `auth.sessions.bulk_revoke_self` | Bulk session revocation (self) | user id | B |
-| `auth.password.changed_self` | Self-service password change | user id | B |
+| `auth.password.changed_self` | Self-service password change | user id | **A** |
 | `auth.password.reset_requested` | Forgot-password flow started | — | B |
 | `auth.password.reset_email_sent` | Reset email dispatched | — | B |
 | `auth.password.reset_email_failed` | Reset email failed to send | — | B |
 | `auth.password.reset_throttled` | Reset request throttled | — | B |
-| `auth.password.reset_completed` | Password reset completed | user id | B |
+| `auth.password.reset_completed` | Password reset completed | — | **A** |
 | `auth.refresh.rotated` | Refresh token rotated (the normal, routine case) | — | **A** |
 | `auth.refresh.theft_detected` | Replay of a rotated refresh token (family revoked) | user id | **A** |
 

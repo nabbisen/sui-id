@@ -937,6 +937,186 @@ pub async fn admin_unlock_user(
     .await
 }
 
+// ── U09 — self password change ───────────────────────────────────────
+
+static U09_CHANGED_SELF: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::AuthPasswordChangedSelf,
+    name: "auth.password.changed_self",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[
+        AttributeSpec {
+            name: "sessions_revoked",
+            description: "count of other sessions revoked by this change",
+        },
+        AttributeSpec {
+            name: "refresh_tokens_revoked",
+            description: "count of refresh tokens revoked by this change",
+        },
+    ],
+};
+
+crate::declare_write_command! {
+    /// U09 — self-service password change. `forbidden`: this is always a
+    /// specific authenticated user acting on their own account, never a
+    /// system/CLI caller — same reasoning as U01-U08, just a self-service
+    /// actor rather than an admin one. `for_authorized_actor` doesn't
+    /// distinguish the two; both are "a verified authorization decision
+    /// for this `UserId`" (see its own doc comment).
+    command U09 = "U09" {
+        system_principal: forbidden;
+        enum U09Event {
+            Changed {
+                user_id: UserId,
+                sessions_revoked: usize,
+                refresh_tokens_revoked: usize,
+            } => &U09_CHANGED_SELF,
+        }
+    }
+}
+
+impl SealedCommandEvent<U09> for U09Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Changed { user_id, .. } = self;
+        Some(AuditTarget(user_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Changed {
+            sessions_revoked,
+            refresh_tokens_revoked,
+            ..
+        } = self;
+        AuditAttributes::builder()
+            .attribute("sessions_revoked", sessions_revoked.to_string())
+            .attribute("refresh_tokens_revoked", refresh_tokens_revoked.to_string())
+            .build()
+    }
+}
+
+/// Run U09 (self-service password change) through the Class-A runner.
+/// `credential` is the already-hashed replacement row — same
+/// outside-the-transaction contract as U01/U06. When `revoke_others` is
+/// false, the sweep counts are always `(0, 0)`: this mirrors the
+/// pre-conversion behavior exactly rather than emitting a zero-effort
+/// audit note that implies a sweep was attempted and found nothing.
+pub async fn change_password_self(
+    db: &crate::Database,
+    user_id: UserId,
+    credential: crate::models::CredentialRow,
+    keep_current_session: Option<sui_id_shared::ids::SessionId>,
+    revoke_others: bool,
+) -> StoreResult<crate::registry::Audited<(usize, usize)>> {
+    let context = AuthorizedCommandContext::<U09>::for_authorized_actor(user_id, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, U09>| {
+        crate::repos::credentials::upsert_within_tx(tx.tx(), &credential)?;
+        let (sessions_revoked, refresh_tokens_revoked) = if revoke_others {
+            let now = chrono::Utc::now();
+            let sessions_revoked = match keep_current_session {
+                Some(keep) => crate::repos::sessions::revoke_all_for_user_except_within_tx(
+                    tx.tx(),
+                    user_id,
+                    keep,
+                    now,
+                )?,
+                None => {
+                    crate::repos::sessions::revoke_all_for_user_within_tx(tx.tx(), user_id, now)?
+                }
+            };
+            let refresh_tokens_revoked =
+                crate::repos::refresh_tokens::revoke_all_for_user_within_tx(tx.tx(), user_id, now)?;
+            (sessions_revoked, refresh_tokens_revoked)
+        } else {
+            (0, 0)
+        };
+        Ok((
+            (sessions_revoked, refresh_tokens_revoked),
+            U09Event::Changed {
+                user_id,
+                sessions_revoked,
+                refresh_tokens_revoked,
+            },
+        ))
+    })
+    .await
+}
+
+// ── U10 — forgot-password completion ─────────────────────────────────
+
+static U10_RESET_COMPLETED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::AuthPasswordResetCompleted,
+    name: "auth.password.reset_completed",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::None,
+    target: TargetRequirement::Required,
+    attributes: &[],
+};
+
+crate::declare_write_command! {
+    /// U10 — forgot-password (token-based) completion. `permitted`,
+    /// `ActorRequirement::None`: the presenter is authorized by
+    /// possession of the one-time reset token, not by an authenticated
+    /// session — there is no `UserId` a verified authorization decision
+    /// could name, the same shape as T04's refresh-token presenter, not
+    /// U01-U09's authenticated actor.
+    command U10 = "U10" {
+        system_principal: permitted;
+        enum U10Event {
+            Completed { user_id: UserId } => &U10_RESET_COMPLETED,
+        }
+    }
+}
+
+impl SealedCommandEvent<U10> for U10Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Completed { user_id } = self;
+        Some(AuditTarget(user_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        AuditAttributes::builder().build()
+    }
+}
+
+/// Run U10 (forgot-password completion) through the Class-A runner:
+/// credential swap, token consume, and session/refresh-token revocation
+/// were already atomic before this candidate (a raw `db.with_tx` block
+/// in `forgot_password.rs`) — RFC 094's actual gap here was the audit
+/// event, appended separately and afterward via `events::emit`, whose
+/// own doc comment says failure "does not propagate." This folds that
+/// append into the same transaction as everything else, using the
+/// registry's sealed capability instead of a raw `with_tx` closure.
+pub async fn consume_and_reset_password(
+    db: &crate::Database,
+    user_id: UserId,
+    token_id: sui_id_shared::ids::PasswordResetTokenId,
+    credential: crate::models::CredentialRow,
+    consumed_at: chrono::DateTime<chrono::Utc>,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<U10>::for_system_actor(None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, U10>| {
+        crate::repos::credentials::upsert_within_tx(tx.tx(), &credential)?;
+        crate::repos::password_reset_tokens::mark_consumed_within_tx(
+            tx.tx(),
+            token_id,
+            consumed_at,
+        )?;
+        crate::repos::sessions::revoke_all_for_user_within_tx(tx.tx(), user_id, consumed_at)?;
+        crate::repos::refresh_tokens::revoke_all_for_user_within_tx(tx.tx(), user_id, consumed_at)?;
+        Ok(((), U10Event::Completed { user_id }))
+    })
+    .await
+}
+
 // ── T04 — refresh-token rotation / reuse revocation (closed branches) ───
 
 static T04_ROTATED: EventDescriptor = EventDescriptor {
@@ -1164,9 +1344,13 @@ mod tests {
         assert_system_principal_permitted::<K01>();
         assert_system_principal_permitted::<U22>();
         assert_system_principal_permitted::<U08>();
-        // U01-U07 are deliberately absent: all seven are `system_principal:
-        // forbidden` (admin-attributed commands, `ActorRequirement::
-        // Required`). U01's compile-negative proof is `tests/compile_fail/
+        assert_system_principal_permitted::<U10>();
+        // U01-U07 and U09 are deliberately absent: all eight are
+        // `system_principal: forbidden` (an authenticated actor —
+        // admin or self-service — is required; U09's self-service actor
+        // is still an "authorized actor" in `for_authorized_actor`'s
+        // sense, just not an admin one). U01's compile-negative proof is
+        // `tests/compile_fail/
         // admin_command_forbidden_cannot_use_system_actor.rs` — there is
         // no positive equivalent to assert here, since "does not
         // implement a trait" isn't expressible as a bound.
@@ -1189,6 +1373,8 @@ mod tests {
             &U06_RESET_PASSWORD,
             &U07_ADMIN_RESET,
             &U08_UNLOCK,
+            &U09_CHANGED_SELF,
+            &U10_RESET_COMPLETED,
             &T04_ROTATED,
             &T04_THEFT_DETECTED,
         ]
@@ -1278,6 +1464,8 @@ mod tests {
         check("U06", false, &[&U06_RESET_PASSWORD]);
         check("U07", false, &[&U07_ADMIN_RESET]);
         check("U08", true, &[&U08_UNLOCK]);
+        check("U09", false, &[&U09_CHANGED_SELF]);
+        check("U10", true, &[&U10_RESET_COMPLETED]);
         check("T04", true, &[&T04_ROTATED, &T04_THEFT_DETECTED]);
     }
 
@@ -1387,6 +1575,8 @@ mod tests {
             "user.reset_password",
             "mfa.admin_reset",
             "admin.user.unlock",
+            "auth.password.changed_self",
+            "auth.password.reset_completed",
             "auth.refresh.rotated",
             "auth.refresh.theft_detected",
         ];
@@ -2537,6 +2727,298 @@ mod tests {
             let row = repos::users::get(&db, user.id).await.expect("get");
             assert_eq!(row.failed_login_count, 5, "the counter reset rolled back");
             assert!(row.locked_until.is_some(), "the lock clear rolled back too");
+            assert_eq!(latest_audit_action(&db).await, before_audit);
+        }
+
+        // ── U09 — self password change ─────────────────────────────────
+
+        #[tokio::test]
+        async fn u09_change_with_sweep_revokes_others_keeps_current_and_appends_counts() {
+            let db = fresh_db();
+            let user = a_user();
+            repos::users::create(&db, &user).await.expect("create user");
+            repos::credentials::upsert(
+                &db,
+                &crate::models::CredentialRow {
+                    user_id: user.id,
+                    password_hash: "old-hash-placeholder".into(),
+                    must_change: false,
+                    updated_at: Utc::now(),
+                },
+            )
+            .await
+            .expect("seed old credential");
+
+            let keep_id = seed_active_session(&db, user.id).await;
+            let other_id = seed_active_session(&db, user.id).await;
+
+            let new_credential = crate::models::CredentialRow {
+                user_id: user.id,
+                password_hash: "new-hash-placeholder".into(),
+                must_change: false,
+                updated_at: Utc::now(),
+            };
+            let audited = change_password_self(&db, user.id, new_credential, Some(keep_id), true)
+                .await
+                .expect("change password");
+            let (sessions_revoked, refresh_tokens_revoked) = audited.into_inner();
+            assert_eq!(sessions_revoked, 1);
+            assert_eq!(refresh_tokens_revoked, 0);
+
+            let kept = repos::sessions::get(&db, keep_id).await.expect("get kept");
+            assert!(
+                kept.revoked_at.is_none(),
+                "the current session must survive"
+            );
+            let other = repos::sessions::get(&db, other_id)
+                .await
+                .expect("get other");
+            assert!(
+                other.revoked_at.is_some(),
+                "every other session must be revoked"
+            );
+
+            let cred = repos::credentials::get(&db, user.id)
+                .await
+                .expect("get credential");
+            assert_eq!(cred.password_hash, "new-hash-placeholder");
+
+            let tail = repos::audit::recent(&db, 1)
+                .await
+                .expect("audit tail")
+                .into_iter()
+                .next()
+                .expect("row");
+            assert_eq!(tail.action, "auth.password.changed_self");
+            assert_eq!(
+                tail.note.as_deref(),
+                Some("sessions_revoked=1 refresh_tokens_revoked=0")
+            );
+        }
+
+        #[tokio::test]
+        async fn u09_change_without_sweep_revokes_nothing_and_reports_zero() {
+            let db = fresh_db();
+            let user = a_user();
+            repos::users::create(&db, &user).await.expect("create user");
+            let session_id = seed_active_session(&db, user.id).await;
+
+            let new_credential = crate::models::CredentialRow {
+                user_id: user.id,
+                password_hash: "new-hash-placeholder".into(),
+                must_change: false,
+                updated_at: Utc::now(),
+            };
+            let audited = change_password_self(&db, user.id, new_credential, None, false)
+                .await
+                .expect("change password");
+            let (sessions_revoked, refresh_tokens_revoked) = audited.into_inner();
+            assert_eq!(sessions_revoked, 0);
+            assert_eq!(refresh_tokens_revoked, 0);
+
+            let session = repos::sessions::get(&db, session_id)
+                .await
+                .expect("get session");
+            assert!(
+                session.revoked_at.is_none(),
+                "no sweep was requested; nothing should be revoked"
+            );
+
+            let tail = repos::audit::recent(&db, 1)
+                .await
+                .expect("audit tail")
+                .into_iter()
+                .next()
+                .expect("row");
+            assert_eq!(
+                tail.note.as_deref(),
+                Some("sessions_revoked=0 refresh_tokens_revoked=0")
+            );
+        }
+
+        #[tokio::test]
+        async fn u09_injected_failure_before_append_rolls_back_credential_and_revocations() {
+            let db = fresh_db();
+            let user = a_user();
+            repos::users::create(&db, &user).await.expect("create user");
+            repos::credentials::upsert(
+                &db,
+                &crate::models::CredentialRow {
+                    user_id: user.id,
+                    password_hash: "old-hash-placeholder".into(),
+                    must_change: false,
+                    updated_at: Utc::now(),
+                },
+            )
+            .await
+            .expect("seed old credential");
+            let session_id = seed_active_session(&db, user.id).await;
+            let before_audit = latest_audit_action(&db).await;
+
+            let new_credential = crate::models::CredentialRow {
+                user_id: user.id,
+                password_hash: "new-hash-placeholder".into(),
+                must_change: false,
+                updated_at: Utc::now(),
+            };
+            db.fault_injector().fail_before_next_append();
+            let result = change_password_self(&db, user.id, new_credential, None, true).await;
+            assert!(result.is_err(), "injected failure must surface as Err");
+
+            let cred = repos::credentials::get(&db, user.id)
+                .await
+                .expect("get credential");
+            assert_eq!(
+                cred.password_hash, "old-hash-placeholder",
+                "the credential swap rolled back"
+            );
+            let session = repos::sessions::get(&db, session_id)
+                .await
+                .expect("get session");
+            assert!(session.revoked_at.is_none(), "the sweep rolled back too");
+            assert_eq!(latest_audit_action(&db).await, before_audit);
+        }
+
+        // ── U10 — forgot-password completion ───────────────────────────
+
+        async fn seed_reset_token(
+            db: &Database,
+            user_id: UserId,
+        ) -> sui_id_shared::ids::PasswordResetTokenId {
+            let id = sui_id_shared::ids::PasswordResetTokenId::new();
+            repos::password_reset_tokens::insert(
+                db,
+                &crate::models::PasswordResetTokenRow {
+                    id,
+                    user_id,
+                    token_hash: b"token-hash-placeholder".to_vec(),
+                    issued_at: Utc::now(),
+                    expires_at: Utc::now() + TimeDelta::hours(1),
+                    consumed_at: None,
+                    requester_ip: None,
+                },
+            )
+            .await
+            .expect("seed reset token");
+            id
+        }
+
+        #[tokio::test]
+        async fn u10_completion_swaps_credential_consumes_token_and_revokes_everything() {
+            let db = fresh_db();
+            let user = a_user();
+            repos::users::create(&db, &user).await.expect("create user");
+            repos::credentials::upsert(
+                &db,
+                &crate::models::CredentialRow {
+                    user_id: user.id,
+                    password_hash: "old-hash-placeholder".into(),
+                    must_change: false,
+                    updated_at: Utc::now(),
+                },
+            )
+            .await
+            .expect("seed old credential");
+            let token_id = seed_reset_token(&db, user.id).await;
+            let session_id = seed_active_session(&db, user.id).await;
+
+            let new_credential = crate::models::CredentialRow {
+                user_id: user.id,
+                password_hash: "new-hash-placeholder".into(),
+                must_change: false,
+                updated_at: Utc::now(),
+            };
+            let consumed_at = Utc::now();
+            let audited =
+                consume_and_reset_password(&db, user.id, token_id, new_credential, consumed_at)
+                    .await
+                    .expect("complete reset");
+            audited.into_inner();
+
+            let cred = repos::credentials::get(&db, user.id)
+                .await
+                .expect("get credential");
+            assert_eq!(cred.password_hash, "new-hash-placeholder");
+
+            let token = repos::password_reset_tokens::find_by_hash(&db, b"token-hash-placeholder")
+                .await
+                .expect("find token")
+                .expect("token still exists");
+            assert!(token.consumed_at.is_some(), "the token must be consumed");
+
+            let session = repos::sessions::get(&db, session_id)
+                .await
+                .expect("get session");
+            assert!(
+                session.revoked_at.is_some(),
+                "forgot-password completion revokes every session, unlike self-change"
+            );
+
+            let tail = repos::audit::recent(&db, 1)
+                .await
+                .expect("audit tail")
+                .into_iter()
+                .next()
+                .expect("row");
+            assert_eq!(tail.action, "auth.password.reset_completed");
+            assert_eq!(
+                tail.actor, None,
+                "the token presenter is not an authenticated actor"
+            );
+            assert_eq!(tail.target.as_deref(), Some(user.id.to_string().as_str()));
+        }
+
+        #[tokio::test]
+        async fn u10_injected_failure_before_append_rolls_back_everything() {
+            let db = fresh_db();
+            let user = a_user();
+            repos::users::create(&db, &user).await.expect("create user");
+            repos::credentials::upsert(
+                &db,
+                &crate::models::CredentialRow {
+                    user_id: user.id,
+                    password_hash: "old-hash-placeholder".into(),
+                    must_change: false,
+                    updated_at: Utc::now(),
+                },
+            )
+            .await
+            .expect("seed old credential");
+            let token_id = seed_reset_token(&db, user.id).await;
+            let session_id = seed_active_session(&db, user.id).await;
+            let before_audit = latest_audit_action(&db).await;
+
+            let new_credential = crate::models::CredentialRow {
+                user_id: user.id,
+                password_hash: "new-hash-placeholder".into(),
+                must_change: false,
+                updated_at: Utc::now(),
+            };
+            db.fault_injector().fail_before_next_append();
+            let result =
+                consume_and_reset_password(&db, user.id, token_id, new_credential, Utc::now())
+                    .await;
+            assert!(result.is_err(), "injected failure must surface as Err");
+
+            let cred = repos::credentials::get(&db, user.id)
+                .await
+                .expect("get credential");
+            assert_eq!(
+                cred.password_hash, "old-hash-placeholder",
+                "the credential swap rolled back"
+            );
+            let token = repos::password_reset_tokens::find_by_hash(&db, b"token-hash-placeholder")
+                .await
+                .expect("find token")
+                .expect("token still exists");
+            assert!(token.consumed_at.is_none(), "the token consume rolled back");
+            let session = repos::sessions::get(&db, session_id)
+                .await
+                .expect("get session");
+            assert!(
+                session.revoked_at.is_none(),
+                "the revocation rolled back too"
+            );
             assert_eq!(latest_audit_action(&db).await, before_audit);
         }
 

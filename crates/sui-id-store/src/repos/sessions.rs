@@ -155,6 +155,22 @@ pub async fn revoke_all_for_user_except(
     .await
 }
 
+/// Same as [`revoke_all_for_user_except`] but runs inside a caller-owned
+/// transaction, so it participates in the caller's atomicity boundary.
+pub fn revoke_all_for_user_except_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    user_id: UserId,
+    keep: SessionId,
+    now: chrono::DateTime<chrono::Utc>,
+) -> StoreResult<usize> {
+    let n = tx.execute(
+        "UPDATE sessions SET revoked_at = ?1 \
+         WHERE user_id = ?2 AND id != ?3 AND revoked_at IS NULL",
+        params![now, user_id.to_string(), keep.to_string()],
+    )?;
+    Ok(n)
+}
+
 /// Update a session's `last_step_up_at` timestamp to `at`. Used after a
 /// successful step-up challenge to mark the session as freshly
 /// MFA-elevated. Idempotent: writing the same value twice is harmless.

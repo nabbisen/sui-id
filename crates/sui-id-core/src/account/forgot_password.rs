@@ -49,9 +49,7 @@ use sha2::{Digest, Sha256};
 use sui_id_shared::ids::{PasswordResetTokenId, UserId};
 use sui_id_store::Database;
 use sui_id_store::models::{CredentialRow, HibpMode, PasswordResetTokenRow};
-use sui_id_store::repos::{
-    credentials, password_reset_tokens, refresh_tokens, sessions, smtp_config, users,
-};
+use sui_id_store::repos::{password_reset_tokens, smtp_config, users};
 
 /// 30 minutes — a balance between user-friendly delivery delays
 /// and a reasonably tight attack window.
@@ -312,7 +310,12 @@ pub async fn consume_and_reset_password(
     hibp_mode: HibpMode,
     plaintext_token: &str,
     new_password: &str,
-    requester_ip: Option<&str>,
+    // Unused since the RFC 094 U10 conversion: this only ever fed the
+    // removed `events::emit` call's tracing-line enrichment
+    // (`ctx.with_client_ip`), never an audit-row field — see the comment
+    // above the conversion call below. Kept in the signature to avoid an
+    // unrelated public-API change.
+    _requester_ip: Option<&str>,
     min_password_len: usize,
 ) -> CoreResult<()> {
     password::check_password_policy(new_password, min_password_len)?;
@@ -340,42 +343,29 @@ pub async fn consume_and_reset_password(
     // Argon2id derivation doesn't hold the DB mutex longer than necessary.
     let new_hash = password::hash_password(new_password)?;
 
-    // Atomically: update credential, consume token, revoke all sessions and
-    // refresh tokens. Either everything commits or nothing does — the user
-    // is never left in a half-recovered state.
-    let row_user_id = row.user_id;
-    let row_id = row.id;
-    let new_hash_owned = new_hash.clone();
-    db.with_tx(move |tx| {
-        credentials::upsert_within_tx(
-            tx,
-            &CredentialRow {
-                user_id: row_user_id,
-                password_hash: new_hash_owned,
-                must_change: false,
-                updated_at: now,
-            },
-        )?;
-        password_reset_tokens::mark_consumed_within_tx(tx, row_id, now)?;
-        sessions::revoke_all_for_user_within_tx(tx, row_user_id, now)?;
-        refresh_tokens::revoke_all_for_user_within_tx(tx, row_user_id, now)?;
-        Ok(())
-    })
-    .await?;
-
-    let mut ctx = Context::default().with_actor(row.user_id);
-    if let Some(ip) = requester_ip {
-        ctx = ctx.with_client_ip(ip);
-    }
-    events::emit(
-        db,
-        clock,
-        &ctx,
-        SecurityEvent::PasswordResetCompleted {
-            user_id: row.user_id,
-        },
-    )
-    .await;
+    // RFC 094 U10: credential swap, token consume, session/refresh-token
+    // revocation, and the `auth.password.reset_completed` audit append
+    // now commit in one Class-A transaction via the registry, replacing
+    // the raw `db.with_tx` block this function used to build directly
+    // (already atomic for the mutation) plus a separate, non-transactional
+    // `events::emit` call afterward for the audit event — whose own doc
+    // comment says a failure there "does not propagate." Dropped that
+    // `events::emit` call entirely rather than keep it alongside the new
+    // atomic append: `SecurityEvent::PasswordResetCompleted`'s event name
+    // is the same `auth.password.reset_completed` string, so keeping both
+    // would double-append one audit row per completed reset. Its
+    // structured tracing line is lost with it — no other converted
+    // command in this wave has preserved a parallel tracing emission for
+    // its Class-A event, so this doesn't introduce a new inconsistency,
+    // but it's a real, disclosed behavior change.
+    let credential = CredentialRow {
+        user_id: row.user_id,
+        password_hash: new_hash,
+        must_change: false,
+        updated_at: now,
+    };
+    sui_id_store::commands::consume_and_reset_password(db, row.user_id, row.id, credential, now)
+        .await?;
 
     // Best-effort post-reset notification mail. Failures here do
     // not affect the password change itself. The recipient's
