@@ -94,17 +94,38 @@ to an address they control. Confirmation at the new address raises the bar to
 "also controls the target address", and the old-address notice gives the owner a
 window to react.
 
-**Settled 2026-09-10 (owner).** An email change is an **RFC 058 dangerous
-self-service action** and takes that category's existing gate:
-`require_fresh_step_up`, a step-up performed within `STEP_UP_FRESHNESS_SECS`
-(300s). No new mechanism — the same gate already guarding MFA disable and passkey
-removal, whose own comment gives the reason verbatim: *"post-compromise attacker
-moves. Step-up is required."*
+**Settled 2026-09-10 (owner).** An email change is a **dangerous action under
+RFC 058**, which defines the category as *"actions that meaningfully reduce the
+security or availability of a principal"*. Moving the recovery address does
+exactly that — and arguably more than anything in RFC 058's enumerated list:
+disabling MFA weakens a control, while moving the recovery address converts
+temporary session access into permanent account control.
 
-Changing the recovery address is precisely such a move, and arguably the most
-consequential one in the category: disabling MFA weakens a control, while moving
-the recovery address converts temporary session access into permanent account
-control. If anything in RFC 058's category warrants the gate, this does.
+**RFC 058 attaches three obligations to that category, not one.** All three apply
+here:
+
+1. **A confirm screen** explaining what happens and what is reversible
+   (RFC 030 / RFC 040). For this action the screen must say which address the
+   confirmation will be sent to and that the current address remains in effect
+   until it is confirmed — the reversibility fact a user needs to judge the
+   change.
+2. **Step-up immediately before the action** (RFC 020 / RFC 021):
+   `require_fresh_step_up`, within `STEP_UP_FRESHNESS_SECS` (300s). The same gate
+   already guarding MFA disable and passkey removal, whose call site gives the
+   reason verbatim: *"post-compromise attacker moves. Step-up is required."*
+3. **An audit row with `note` populated** (RFC 045 pattern, RFC 060 rollout). This
+   constrains §6.2 below: the events this RFC defines are not free to carry an
+   empty note, and the note must be designed rather than left to the
+   implementation.
+
+*Correction, 2026-09-10.* The first version of this settlement specified only
+obligation 2. It was reached by reading the code — the `require_fresh_step_up`
+call sites and their `// RFC 058:` comments — rather than RFC 058 itself, so it
+inherited exactly what the code makes visible at a call site and missed the two
+obligations that are not visible there. The owner caught the method before the
+gap. Answering a design question from the code ratifies whatever the code happens
+to implement; the specification is what says whether that is the whole
+requirement.
 
 ### D5 — Every mutation here is Class-A under RFC 094
 
@@ -147,7 +168,9 @@ responding identically regardless.
 step-up factor, versus a live session being sufficient. Security against usability;
 `@nabbisen`'s call.
 
-**§6.2 — Exact event names.** Proposed: `user.email_change_requested`,
+**§6.2 — Exact event names and their note content.** Now constrained by RFC 058's
+third obligation: each event here must carry a populated `note`, so the note's
+content is part of this question rather than an implementation detail. Proposed: `user.email_change_requested`,
 `user.email_changed`, `auth.email.verified`. The first two are administrative-shape
 events on a user; the third is an authentication-flow proof. Wants a second reader
 against the namespace split recorded in `audit-coverage-matrix.md`.
