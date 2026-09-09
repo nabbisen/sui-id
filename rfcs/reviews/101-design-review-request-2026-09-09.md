@@ -19,6 +19,13 @@ designs — the lane-ownership mechanism, the addendum constructor, the wave
 scopings — each found something real, twice things I had argued for confidently.
 Read it that way.
 
+> **Amended 2026-09-10, after this request went out.** The owner settled §6.1 and
+> §6.3, and answering them raised a fifth question (§6.5). **Review the current
+> text, not the version at `b238d94`** — record the commit you actually verify
+> against. §6.1's answer in particular changes what to attack in check B below:
+> the gate is now `require_fresh_step_up`, so the question is whether *that* gate
+> is sufficient here, not whether some gate should exist.
+
 ## 2. What to check, in the order that matters
 
 **A — is the threat model right?** §2 claims three consequences, and the third is

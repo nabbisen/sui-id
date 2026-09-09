@@ -94,9 +94,17 @@ to an address they control. Confirmation at the new address raises the bar to
 "also controls the target address", and the old-address notice gives the owner a
 window to react.
 
-**Open question, §6.1:** whether a change should additionally require re-entering
-the password or a step-up factor. That is a real trade against usability and it is
-the owner's, not mine.
+**Settled 2026-09-10 (owner).** An email change is an **RFC 058 dangerous
+self-service action** and takes that category's existing gate:
+`require_fresh_step_up`, a step-up performed within `STEP_UP_FRESHNESS_SECS`
+(300s). No new mechanism — the same gate already guarding MFA disable and passkey
+removal, whose own comment gives the reason verbatim: *"post-compromise attacker
+moves. Step-up is required."*
+
+Changing the recovery address is precisely such a move, and arguably the most
+consequential one in the category: disabling MFA weakens a control, while moving
+the recovery address converts temporary session access into permanent account
+control. If anything in RFC 058's category warrants the gate, this does.
 
 ### D5 — Every mutation here is Class-A under RFC 094
 
@@ -144,10 +152,35 @@ step-up factor, versus a live session being sufficient. Security against usabili
 events on a user; the third is an authentication-flow proof. Wants a second reader
 against the namespace split recorded in `audit-coverage-matrix.md`.
 
-**§6.3 — Admin-initiated change.** Whether an admin may initiate a change (with
-confirmation still required at the new address), or whether change is self-service
-only. Bears on account recovery for a user who has already lost access to their
-address — the case that motivates this RFC.
+**§6.3 — Admin-initiated change. Settled 2026-09-10 (owner).** Permitted, and it
+grants an admin no capability they lack.
+
+An admin can already set any user's password directly —
+`reset_user_password(…, new_password: &str)` takes the value — so full account
+takeover by an admin is available today in one step. "Admin redirects recovery,
+then resets the password" is strictly weaker than that. Refusing admin-initiated
+change would therefore protect nothing.
+
+**But it is not the recovery mechanism, and should not be described as one.** The
+scenario that motivates this RFC — a user who has lost *both* password and email
+access — is already solved by admin password reset, which involves no email at
+all. An admin-set address is **unverified** (D1, without exception), so it does
+not restore a recovery channel; it records a corrected address that the user then
+proves.
+
+**A support path is structurally guaranteed to exist.** RFC 094's `U05` last-admin
+guard rejects any demotion that would leave zero admins, in-transaction and proven
+under concurrency. So "no one to manage users" is not a reachable state, and the
+recovery-of-last-resort question does not arise.
+
+**§6.5 — Must password reset require a *verified* address?** Raised 2026-09-10 by
+the §6.1/§6.3 answers, not present in the original draft. §2's third consequence —
+address reuse transferring recovery — is only fully closed if recovery requires a
+proven address. Requiring it strands every existing user, since none is verified;
+not requiring it leaves the motivating threat open for anyone who never verifies.
+This is §6.4's question and this one meeting: whatever is decided for the existing
+population determines whether this can be required, and when. **Coupled, and both
+are the owner's.**
 
 **§6.4 — Existing users.** Every current address is unverified. Whether existing
 users are prompted, required, or left alone until they change something.
