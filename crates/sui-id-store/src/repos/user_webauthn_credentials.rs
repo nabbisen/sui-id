@@ -55,6 +55,21 @@ pub async fn list_for_user(
     .await
 }
 
+/// Same as [`list_for_user`], for a caller that already holds a
+/// transaction (RFC 094 U07: the sealed Class-A capability).
+pub fn list_for_user_within_tx(
+    conn: &rusqlite::Connection,
+    user_id: UserId,
+) -> StoreResult<Vec<UserWebauthnCredentialRow>> {
+    let mut stmt = conn.prepare(&format!(
+        "{SELECT} WHERE user_id = ?1 ORDER BY created_at ASC"
+    ))?;
+    let rows = stmt
+        .query_map([user_id.to_string()], map)?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
 pub async fn count_for_user(db: &Database, user_id: UserId) -> StoreResult<usize> {
     db.with_conn(move |conn| {
         let n: i64 = conn.query_row(
@@ -160,6 +175,28 @@ pub async fn delete(db: &Database, id: WebauthnCredentialId, user_id: UserId) ->
         Ok(())
     })
     .await
+}
+
+/// Same as [`delete`], for a caller that already holds a transaction
+/// (RFC 094 U07: the sealed Class-A capability). Unlike
+/// [`user_totp::delete_within_tx`](super::user_totp::delete_within_tx),
+/// `NotFound` here stays an error: every id this is called with comes
+/// from [`list_for_user_within_tx`] read inside the same transaction, so
+/// its absence would mean a genuine race, not a routine "nothing to
+/// remove."
+pub fn delete_within_tx(
+    conn: &rusqlite::Connection,
+    id: WebauthnCredentialId,
+    user_id: UserId,
+) -> StoreResult<()> {
+    let n = conn.execute(
+        "DELETE FROM user_webauthn_credentials WHERE id = ?1 AND user_id = ?2",
+        params![id.to_string(), user_id.to_string()],
+    )?;
+    if n == 0 {
+        return Err(StoreError::NotFound);
+    }
+    Ok(())
 }
 
 /// Re-seal every `passkey_enc` row under `new_key`. Used by

@@ -176,6 +176,12 @@ pub enum AuditEventKind {
     UserRoleChange,
     /// `user.reset_password` — U06.
     UserResetPassword,
+    /// `mfa.admin_reset` — U07. Named `mfa.admin_reset`, not
+    /// `user.reset_mfa`, per the 2026-09-09 review resolving the
+    /// RFC 060 naming mismatch in favor of the shipped, documented,
+    /// alerted-on production name (`.git-exclude/reviewed/
+    /// 094-wave-b-u06-dispatch-u07-blocked-2026-09-09.md` §2).
+    MfaAdminReset,
     /// `auth.refresh.rotated` — T04, normal-winner branch.
     RefreshRotated,
     /// `auth.refresh.theft_detected` — T04, reuse/family-revocation branch.

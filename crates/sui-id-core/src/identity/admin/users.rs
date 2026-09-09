@@ -7,7 +7,7 @@ use crate::time::SharedClock;
 use sui_id_shared::ids::UserId;
 use sui_id_store::Database;
 use sui_id_store::models::{CredentialRow, HibpMode, UserRow};
-use sui_id_store::repos::{audit, user_totp, user_webauthn_credentials, users};
+use sui_id_store::repos::users;
 // Shared audit helpers from parent module.
 pub struct CreateUserSpec<'a> {
     pub username: &'a str,
@@ -187,65 +187,23 @@ pub async fn admin_reset_mfa(
     reason: Option<String>,
 ) -> CoreResult<MfaResetReport> {
     let actor_id = actor.user_id();
-    // Check the target exists and is not soft-deleted, to give a
-    // clear error rather than a silently-no-op outcome.
-    let _user = users::get(db, target).await.map_err(|e| match e {
-        sui_id_store::StoreError::NotFound => CoreError::NotFound,
-        other => CoreError::from(other),
-    })?;
-
-    // Remove TOTP if present. user_totp::delete returns NotFound when
-    // the user has no row at all; we treat that as "nothing to do".
-    let totp_removed = match user_totp::delete(db, target).await {
-        Ok(()) => true,
-        Err(sui_id_store::StoreError::NotFound) => false,
-        Err(e) => return Err(CoreError::from(e)),
-    };
-
-    // Remove every passkey. We iterate the stored list and delete one
-    // at a time so the per-row scoping in user_webauthn_credentials::delete
-    // (which double-checks user_id) still applies — a defensive choice;
-    // a bulk delete by user_id would be equivalent at the SQL level but
-    // bypasses that safety net.
-    let creds = user_webauthn_credentials::list_for_user(db, target).await?;
-    let mut passkeys_removed = 0;
-    for c in creds {
-        user_webauthn_credentials::delete(db, c.id, target).await?;
-        passkeys_removed += 1;
-    }
-
-    // RFC 060: the audit note combines a system-generated summary
-    // (what was actually removed) with the operator-supplied reason
-    // (why). Both are useful for forensics.
-    let sys_note = format!(
-        "totp={} passkeys={}",
-        if totp_removed { "removed" } else { "absent" },
-        passkeys_removed
-    );
-    let note = match reason {
-        Some(r) => format!("{sys_note} reason={r}"),
-        None => sys_note,
-    };
-    let _ = audit::append(
-        db,
-        &sui_id_store::models::AuditLogRow {
-            at: chrono::Utc::now(),
-            actor: Some(actor_id),
-            action: "mfa.admin_reset".into(),
-            target: Some(target.to_string()),
-            result: "ok".into(),
-            note: Some(note),
-        },
-    )
-    .await;
-
-    // After resetting, we leave any active sessions for the target
-    // alone. The reset is intended to restore login capability, not
-    // to log the user out — they may already be in the middle of a
-    // session via some other path (e.g. they reset the MFA on their
-    // own profile and we still want their browser to keep working).
-    // Operators who want a hard logout as well can run the existing
-    // user.disable / user.enable flow, which already revokes sessions.
+    // RFC 094 U07: the existence check, the TOTP/passkey removal, and the
+    // mfa.admin_reset audit event now commit in one Class-A transaction —
+    // replacing the previous unguarded delete-then-delete-then-fire-and-
+    // forget-append sequence, which also appended via a raw `AuditLogRow`
+    // that bypassed this crate's own `AuthorizedCommandContext` entirely.
+    //
+    // Sessions are still deliberately left alone (unchanged from before
+    // this conversion): the reset restores login capability rather than
+    // forcing a logout. Operators who want both run `user.disable` /
+    // `user.enable` as well.
+    let audited = sui_id_store::commands::admin_reset_mfa(db, actor_id, target, reason)
+        .await
+        .map_err(|e| match e {
+            sui_id_store::StoreError::NotFound => CoreError::NotFound,
+            other => CoreError::from(other),
+        })?;
+    let (totp_removed, passkeys_removed) = audited.into_inner();
 
     Ok(MfaResetReport {
         totp_removed,

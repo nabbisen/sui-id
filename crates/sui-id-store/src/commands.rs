@@ -719,6 +719,146 @@ pub async fn reset_user_password(
     .await
 }
 
+// ── U07 — admin MFA reset ────────────────────────────────────────────
+//
+// Event name settled 2026-09-09 (`.git-exclude/reviewed/
+// 094-wave-b-u06-dispatch-u07-blocked-2026-09-09.md` §2): keep
+// `mfa.admin_reset`, the name production has emitted since RFC 060, over
+// `command-inventory.md`'s original `user.reset_mfa` — four deployed
+// operator alerting queries (one under an explicit "Alert on this"
+// callout) depend on the shipped name; nothing depended on the other one,
+// because nothing ever emitted it.
+
+static U07_ADMIN_RESET: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::MfaAdminReset,
+    name: "mfa.admin_reset",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[
+        AttributeSpec {
+            name: "totp",
+            description: "whether a TOTP enrollment was removed (\"removed\" or \"absent\")",
+        },
+        AttributeSpec {
+            name: "passkeys",
+            description: "number of WebAuthn credentials removed",
+        },
+        AttributeSpec {
+            name: "reason",
+            description: "operator-supplied reason for the reset, if given",
+        },
+    ],
+};
+
+crate::declare_write_command! {
+    /// U07 — admin MFA reset. Same `forbidden` reasoning as U01-U06: the
+    /// coverage matrix requires `admin user id` as the actor.
+    command U07 = "U07" {
+        system_principal: forbidden;
+        enum U07Event {
+            Reset {
+                user_id: UserId,
+                totp_removed: bool,
+                passkeys_removed: usize,
+                reason: Option<String>,
+            } => &U07_ADMIN_RESET,
+        }
+    }
+}
+
+impl SealedCommandEvent<U07> for U07Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Reset { user_id, .. } = self;
+        Some(AuditTarget(user_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Reset {
+            totp_removed,
+            passkeys_removed,
+            reason,
+            ..
+        } = self;
+        let mut builder = AuditAttributes::builder()
+            .attribute("totp", if *totp_removed { "removed" } else { "absent" })
+            .attribute("passkeys", passkeys_removed.to_string());
+        if let Some(r) = reason {
+            builder = builder.attribute("reason", r.clone());
+        }
+        builder.build()
+    }
+}
+
+/// Run U07 (admin MFA reset) through the Class-A runner: reads the
+/// target's current MFA factors, removes all of them, and appends
+/// `mfa.admin_reset` in one transaction — replacing the previous
+/// unguarded delete-then-delete-then-fire-and-forget-append sequence
+/// (which also bypassed this crate's own `AuthorizedCommandContext`
+/// entirely, appending via a raw `AuditLogRow` with no descriptor
+/// backing it at all).
+///
+/// The existence check the caller used to do outside any transaction
+/// (`users::get(db, target)`, discarding the row, purely to distinguish
+/// "no such user" from "user with nothing to reset") is folded into the
+/// transaction via `get_role_within_tx` — reused here only as a cheap
+/// existence probe, its returned role is not otherwise used.
+///
+/// **Behavior change, deliberate, not inherited from the helper's other
+/// caller.** `users::get` (the pre-conversion check) does not filter on
+/// `is_deleted`, so a reset against a soft-deleted user used to succeed.
+/// `get_role_within_tx` (U05's helper, reused here) does filter on
+/// `is_deleted = 0`, so the same call now returns `NotFound`. Found in
+/// review (2026-09-09) — the query shapes are not equivalent, and this
+/// candidate had described them as if they were. Keeping the stricter
+/// behavior: resetting MFA on a deleted account is meaningless, and
+/// rejecting it is more defensible than silently proceeding. See
+/// `u07_reset_of_soft_deleted_user_returns_not_found` for the proof.
+///
+/// Sessions are deliberately **not** revoked (matches the pre-conversion
+/// behavior): an MFA reset restores login capability rather than forcing
+/// a logout, so an operator who wants both runs `user.disable` /
+/// `user.enable` as well, same as before this conversion.
+pub async fn admin_reset_mfa(
+    db: &crate::Database,
+    admin: UserId,
+    target: UserId,
+    reason: Option<String>,
+) -> StoreResult<crate::registry::Audited<(bool, usize)>> {
+    let context = AuthorizedCommandContext::<U07>::for_authorized_actor(admin, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, U07>| {
+        // Existence probe only -- the role itself is unused here. Also
+        // deliberately excludes soft-deleted users (`is_deleted = 0` in
+        // get_role_within_tx's WHERE clause): resetting MFA on a deleted
+        // account is meaningless, so a soft-deleted target now returns
+        // NotFound where the pre-conversion `users::get`-based check
+        // would have let it through. See this function's own doc comment.
+        crate::repos::users::get_role_within_tx(tx.tx(), target)?;
+
+        let totp_removed = crate::repos::user_totp::delete_within_tx(tx.tx(), target)?;
+
+        let creds =
+            crate::repos::user_webauthn_credentials::list_for_user_within_tx(tx.tx(), target)?;
+        let passkeys_removed = creds.len();
+        for c in &creds {
+            crate::repos::user_webauthn_credentials::delete_within_tx(tx.tx(), c.id, target)?;
+        }
+
+        let event = U07Event::Reset {
+            user_id: target,
+            totp_removed,
+            passkeys_removed,
+            reason,
+        };
+        Ok(((totp_removed, passkeys_removed), event))
+    })
+    .await
+}
+
 // ── T04 — refresh-token rotation / reuse revocation (closed branches) ───
 
 static T04_ROTATED: EventDescriptor = EventDescriptor {
@@ -945,7 +1085,7 @@ mod tests {
         fn assert_system_principal_permitted<C: SystemPrincipalPermitted>() {}
         assert_system_principal_permitted::<K01>();
         assert_system_principal_permitted::<U22>();
-        // U01-U06 are deliberately absent: all six are `system_principal:
+        // U01-U07 are deliberately absent: all seven are `system_principal:
         // forbidden` (admin-attributed commands, `ActorRequirement::
         // Required`). U01's compile-negative proof is `tests/compile_fail/
         // admin_command_forbidden_cannot_use_system_actor.rs` — there is
@@ -968,6 +1108,7 @@ mod tests {
             &U04_DELETE,
             &U05_ROLE_CHANGE,
             &U06_RESET_PASSWORD,
+            &U07_ADMIN_RESET,
             &T04_ROTATED,
             &T04_THEFT_DETECTED,
         ]
@@ -1055,6 +1196,7 @@ mod tests {
         check("U04", false, &[&U04_DELETE]);
         check("U05", false, &[&U05_ROLE_CHANGE]);
         check("U06", false, &[&U06_RESET_PASSWORD]);
+        check("U07", false, &[&U07_ADMIN_RESET]);
         check("T04", true, &[&T04_ROTATED, &T04_THEFT_DETECTED]);
     }
 
@@ -1162,6 +1304,7 @@ mod tests {
             "user.delete",
             "user.role_change",
             "user.reset_password",
+            "mfa.admin_reset",
             "auth.refresh.rotated",
             "auth.refresh.theft_detected",
         ];
@@ -2071,6 +2214,186 @@ mod tests {
             assert!(
                 session.revoked_at.is_none(),
                 "the session revoke rolled back too"
+            );
+            assert_eq!(latest_audit_action(&db).await, before_audit);
+        }
+
+        // ── U07 — admin MFA reset ──────────────────────────────────────
+
+        async fn seed_passkey(db: &Database, user_id: UserId) {
+            repos::user_webauthn_credentials::create(
+                db,
+                &crate::models::UserWebauthnCredentialRow {
+                    id: sui_id_shared::ids::WebauthnCredentialId::new(),
+                    user_id,
+                    credential_id: format!("cred-{}", uuid::Uuid::new_v4()).into_bytes(),
+                    passkey_enc: vec![],
+                    nickname: "test passkey".into(),
+                    created_at: Utc::now(),
+                    last_used_at: None,
+                },
+                b"passkey-json-placeholder",
+            )
+            .await
+            .expect("seed passkey");
+        }
+
+        #[tokio::test]
+        async fn u07_reset_removes_totp_and_passkeys_and_appends_event() {
+            let db = fresh_db();
+            let user = a_user();
+            repos::users::create(&db, &user).await.expect("create user");
+            repos::user_totp::upsert_pending(&db, user.id, b"totp-secret-placeholder")
+                .await
+                .expect("seed totp");
+            seed_passkey(&db, user.id).await;
+            seed_passkey(&db, user.id).await;
+
+            let audited = admin_reset_mfa(
+                &db,
+                an_admin(),
+                user.id,
+                Some("lost authenticator".to_string()),
+            )
+            .await
+            .expect("reset");
+            let (totp_removed, passkeys_removed) = audited.into_inner();
+            assert!(totp_removed);
+            assert_eq!(passkeys_removed, 2);
+
+            assert!(
+                repos::user_totp::get(&db, user.id)
+                    .await
+                    .expect("get totp")
+                    .is_none(),
+                "TOTP enrollment must be gone"
+            );
+            assert!(
+                repos::user_webauthn_credentials::list_for_user(&db, user.id)
+                    .await
+                    .expect("list passkeys")
+                    .is_empty(),
+                "every passkey must be gone"
+            );
+
+            let tail = repos::audit::recent(&db, 1)
+                .await
+                .expect("audit tail")
+                .into_iter()
+                .next()
+                .expect("row");
+            assert_eq!(tail.action, "mfa.admin_reset");
+            assert_eq!(
+                tail.note.as_deref(),
+                Some("totp=removed passkeys=2 reason=lost authenticator")
+            );
+        }
+
+        #[tokio::test]
+        async fn u07_reset_with_no_factors_reports_absent_and_zero() {
+            let db = fresh_db();
+            let user = a_user();
+            repos::users::create(&db, &user).await.expect("create user");
+
+            let audited = admin_reset_mfa(&db, an_admin(), user.id, None)
+                .await
+                .expect("reset");
+            let (totp_removed, passkeys_removed) = audited.into_inner();
+            assert!(!totp_removed);
+            assert_eq!(passkeys_removed, 0);
+
+            let tail = repos::audit::recent(&db, 1)
+                .await
+                .expect("audit tail")
+                .into_iter()
+                .next()
+                .expect("row");
+            assert_eq!(tail.note.as_deref(), Some("totp=absent passkeys=0"));
+        }
+
+        #[tokio::test]
+        async fn u07_reset_of_nonexistent_user_returns_not_found_and_appends_nothing() {
+            let db = fresh_db();
+            let before_audit = latest_audit_action(&db).await;
+
+            let result = admin_reset_mfa(&db, an_admin(), UserId::new(), None).await;
+            assert!(
+                matches!(result, Err(StoreError::NotFound)),
+                "the existence probe (get_role_within_tx) must reject a target that \
+                 was never created, not silently succeed with nothing to remove"
+            );
+            assert_eq!(latest_audit_action(&db).await, before_audit);
+        }
+
+        #[tokio::test]
+        async fn u07_reset_of_soft_deleted_user_returns_not_found() {
+            // Reviewer finding, 2026-09-09 (`.git-exclude/reviewed/
+            // 094-wave-b-u07-2026-09-09.md` §2): `get_role_within_tx`
+            // (reused here as an existence probe) filters `is_deleted = 0`;
+            // `users::get`, the pre-conversion check it replaced, did not.
+            // A reset against a soft-deleted user used to succeed; it must
+            // now be rejected, deliberately, not as an unstated side effect
+            // of borrowing a helper for its query shape.
+            let db = fresh_db();
+            let user = a_user();
+            repos::users::create(&db, &user).await.expect("create user");
+            repos::user_totp::upsert_pending(&db, user.id, b"totp-secret-placeholder")
+                .await
+                .expect("seed totp");
+            repos::users::soft_delete(&db, user.id)
+                .await
+                .expect("soft delete");
+            let before_audit = latest_audit_action(&db).await;
+
+            let result = admin_reset_mfa(&db, an_admin(), user.id, None).await;
+            assert!(
+                matches!(result, Err(StoreError::NotFound)),
+                "a soft-deleted target must be rejected, not silently reset"
+            );
+
+            assert!(
+                repos::user_totp::get(&db, user.id)
+                    .await
+                    .expect("get totp")
+                    .is_some(),
+                "the TOTP row must be untouched -- rejection happens before any mutation"
+            );
+            assert_eq!(
+                latest_audit_action(&db).await,
+                before_audit,
+                "a rejected reset must not emit an audit row"
+            );
+        }
+
+        #[tokio::test]
+        async fn u07_injected_failure_before_append_rolls_back_totp_and_passkey_removal() {
+            let db = fresh_db();
+            let user = a_user();
+            repos::users::create(&db, &user).await.expect("create user");
+            repos::user_totp::upsert_pending(&db, user.id, b"totp-secret-placeholder")
+                .await
+                .expect("seed totp");
+            seed_passkey(&db, user.id).await;
+            let before_audit = latest_audit_action(&db).await;
+
+            db.fault_injector().fail_before_next_append();
+            let result = admin_reset_mfa(&db, an_admin(), user.id, None).await;
+            assert!(result.is_err(), "injected failure must surface as Err");
+
+            assert!(
+                repos::user_totp::get(&db, user.id)
+                    .await
+                    .expect("get totp")
+                    .is_some(),
+                "the TOTP delete rolled back"
+            );
+            assert_eq!(
+                repos::user_webauthn_credentials::list_for_user(&db, user.id)
+                    .await
+                    .expect("list passkeys")
+                    .len(),
+                1,
+                "the passkey delete rolled back too"
             );
             assert_eq!(latest_audit_action(&db).await, before_audit);
         }

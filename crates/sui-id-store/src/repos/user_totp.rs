@@ -157,6 +157,20 @@ pub async fn delete(db: &Database, user_id: UserId) -> StoreResult<()> {
     .await
 }
 
+/// Same mutation as [`delete`], for a caller that already holds a
+/// transaction (RFC 094 U07: the sealed Class-A capability). Returns
+/// `true` if a row was removed, `false` if the user had none — unlike
+/// [`delete`], absence is not an error here: "no TOTP enrollment to
+/// remove" is a routine, expected outcome of an MFA reset, not a failure
+/// that should abort the surrounding transaction.
+pub fn delete_within_tx(conn: &rusqlite::Connection, user_id: UserId) -> StoreResult<bool> {
+    let n = conn.execute(
+        "DELETE FROM user_totp WHERE user_id = ?1",
+        [user_id.to_string()],
+    )?;
+    Ok(n > 0)
+}
+
 /// Re-seal both `secret_enc` and `recovery_codes_enc` columns
 /// under `new_key`. Returns `(secrets, recovery)` counts. Used
 /// by master-key rotation; does not commit.
