@@ -182,6 +182,12 @@ pub enum AuditEventKind {
     /// alerted-on production name (`.git-exclude/reviewed/
     /// 094-wave-b-u06-dispatch-u07-blocked-2026-09-09.md` §2).
     MfaAdminReset,
+    /// `admin.user.unlock` — U08. `users::admin_unlock` only —
+    /// `clear_lockout` is a separate command (U24, Class P), not this
+    /// one; decided 2026-09-09 (`.git-exclude/reviewed/
+    /// 094-wave-b-scoping-u08-blocked-2026-09-09.md`, applied in
+    /// `migration-checklist.md`).
+    AdminUserUnlock,
     /// `auth.refresh.rotated` — T04, normal-winner branch.
     RefreshRotated,
     /// `auth.refresh.theft_detected` — T04, reuse/family-revocation branch.

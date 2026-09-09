@@ -140,23 +140,13 @@ pub(crate) async fn run_admin_unlock_user(args: &[String]) -> Result<()> {
     let user = sui_id_store::repos::users::find_by_username(&db, username)
         .await
         .with_context(|| format!("looking up user {username:?}"))?;
-    sui_id_store::repos::users::admin_unlock(&db, user.id)
+    // RFC 094 U08: the counter/lock reset and the admin.user.unlock audit
+    // append now commit in one Class-A transaction, replacing the
+    // previous unguarded `admin_unlock` followed by a fire-and-forget raw
+    // `audit::append` call that bypassed the registry entirely.
+    sui_id_store::commands::admin_unlock_user(&db, user.id)
         .await
         .context("clearing lockout")?;
-    // Mirror the operator-facing audit-log entry the live admin UI
-    // would write for this action.
-    let _ = sui_id_store::repos::audit::append(
-        &db,
-        &sui_id_store::models::AuditLogRow {
-            at: chrono::Utc::now(),
-            actor: None, // command-line operator; not a sui-id user
-            action: "admin.user.unlock".into(),
-            target: Some(user.id.to_string()),
-            result: "ok".into(),
-            note: Some(format!("unlocked via command line for username={username}")),
-        },
-    )
-    .await;
     eprintln!("unlocked {username} (id={})", user.id);
     Ok(())
 }

@@ -104,7 +104,10 @@ async fn admin_unlock_clears_an_active_lock() {
     assert!(alice.locked_until.is_some(), "expected locked");
     assert!(alice.failed_login_count >= 3);
 
-    // Direct admin_unlock — same call the CLI subcommand makes.
+    // Direct admin_unlock — the raw mutation `commands::admin_unlock_user`
+    // (RFC 094 U08, what the CLI subcommand actually calls) wraps in a
+    // Class-A transaction with the admin.user.unlock audit event. This
+    // test exercises the mutation only, not the atomicity or the event.
     users::admin_unlock(&state.db, alice.id)
         .await
         .expect("unlock");

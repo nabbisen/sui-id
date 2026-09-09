@@ -381,6 +381,19 @@ pub async fn admin_unlock(db: &Database, id: UserId) -> StoreResult<()> {
     }).await
 }
 
+/// Same as [`admin_unlock`], for a caller that already holds a
+/// transaction (RFC 094 U08: the sealed Class-A capability).
+pub fn admin_unlock_within_tx(conn: &rusqlite::Connection, id: UserId) -> StoreResult<()> {
+    let n = conn.execute(
+        "UPDATE users SET failed_login_count = 0, locked_until = NULL, updated_at = ?1 WHERE id = ?2",
+        params![Utc::now(), id.to_string()],
+    )?;
+    if n == 0 {
+        return Err(StoreError::NotFound);
+    }
+    Ok(())
+}
+
 /// Update a user's email address. Writes both `email` (original case)
 /// and `email_normalized` (via `sui_id_shared::normalize_email`) in
 /// the same statement so the two columns stay in sync.

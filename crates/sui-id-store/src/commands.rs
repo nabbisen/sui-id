@@ -859,6 +859,84 @@ pub async fn admin_reset_mfa(
     .await
 }
 
+// ── U08 — CLI operator unlock ────────────────────────────────────────
+//
+// `system_principal: permitted`, `ActorRequirement::None` — decided
+// 2026-09-09 (`.git-exclude/reviewed/
+// 094-wave-b-scoping-u08-blocked-2026-09-09.md` §4(a), applied in
+// `migration-checklist.md`). The only caller is `sui-id admin
+// unlock-user` (`cli.rs::run_admin_unlock_user`), whose authority is
+// possession of the master key and filesystem access, not an
+// authenticated user — it cannot supply an actor, so unlike U01-U07 this
+// command uses the sealed system-authority adapter (`for_system_actor`),
+// the same mechanism K01 and T04 use for their own non-human callers.
+//
+// U08 covers `users::admin_unlock` only. `clear_lockout` — the automatic
+// counter reset on a successful post-failure login — is a distinct
+// command (U24, Class P, no audit event), not an alternate branch of
+// this one; the two share byte-identical SQL but opposite security
+// meanings, and conflating them was the second half of the blocking
+// finding. Nothing here touches `clear_lockout`.
+
+static U08_UNLOCK: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::AdminUserUnlock,
+    name: "admin.user.unlock",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::None,
+    target: TargetRequirement::Required,
+    attributes: &[],
+};
+
+crate::declare_write_command! {
+    /// U08 — CLI operator unlock.
+    command U08 = "U08" {
+        system_principal: permitted;
+        enum U08Event {
+            Unlocked { user_id: UserId } => &U08_UNLOCK,
+        }
+    }
+}
+
+impl SealedCommandEvent<U08> for U08Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Unlocked { user_id } = self;
+        Some(AuditTarget(user_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        AuditAttributes::builder().build()
+    }
+}
+
+/// Run U08 (CLI operator unlock) through the Class-A runner: the failure
+/// counter and lock timestamp reset, and the `admin.user.unlock` audit
+/// append, now commit in one transaction — replacing the previous
+/// unguarded `users::admin_unlock` followed by a fire-and-forget raw
+/// `audit::append` call in `cli.rs` that bypassed this crate's registry
+/// entirely (no descriptor, no `AuthorizedCommandContext`).
+///
+/// The coverage matrix's declared note fields for this row are empty —
+/// the pre-conversion CLI code embedded the looked-up username in a
+/// free-text note (`"unlocked via command line for username={username}"`),
+/// which this drops: the target column already records the unlocked
+/// user's id, and the matrix specifies no note field for this event.
+/// Disclosed rather than silently kept or silently dropped.
+pub async fn admin_unlock_user(
+    db: &crate::Database,
+    target: UserId,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<U08>::for_system_actor(None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, U08>| {
+        crate::repos::users::admin_unlock_within_tx(tx.tx(), target)?;
+        Ok(((), U08Event::Unlocked { user_id: target }))
+    })
+    .await
+}
+
 // ── T04 — refresh-token rotation / reuse revocation (closed branches) ───
 
 static T04_ROTATED: EventDescriptor = EventDescriptor {
@@ -1085,6 +1163,7 @@ mod tests {
         fn assert_system_principal_permitted<C: SystemPrincipalPermitted>() {}
         assert_system_principal_permitted::<K01>();
         assert_system_principal_permitted::<U22>();
+        assert_system_principal_permitted::<U08>();
         // U01-U07 are deliberately absent: all seven are `system_principal:
         // forbidden` (admin-attributed commands, `ActorRequirement::
         // Required`). U01's compile-negative proof is `tests/compile_fail/
@@ -1109,6 +1188,7 @@ mod tests {
             &U05_ROLE_CHANGE,
             &U06_RESET_PASSWORD,
             &U07_ADMIN_RESET,
+            &U08_UNLOCK,
             &T04_ROTATED,
             &T04_THEFT_DETECTED,
         ]
@@ -1197,6 +1277,7 @@ mod tests {
         check("U05", false, &[&U05_ROLE_CHANGE]);
         check("U06", false, &[&U06_RESET_PASSWORD]);
         check("U07", false, &[&U07_ADMIN_RESET]);
+        check("U08", true, &[&U08_UNLOCK]);
         check("T04", true, &[&T04_ROTATED, &T04_THEFT_DETECTED]);
     }
 
@@ -1305,6 +1386,7 @@ mod tests {
             "user.role_change",
             "user.reset_password",
             "mfa.admin_reset",
+            "admin.user.unlock",
             "auth.refresh.rotated",
             "auth.refresh.theft_detected",
         ];
@@ -2395,6 +2477,66 @@ mod tests {
                 1,
                 "the passkey delete rolled back too"
             );
+            assert_eq!(latest_audit_action(&db).await, before_audit);
+        }
+
+        // ── U08 — CLI operator unlock ──────────────────────────────────
+
+        #[tokio::test]
+        async fn u08_unlock_clears_lockout_and_appends_actorless_event() {
+            let db = fresh_db();
+            let mut user = a_user();
+            user.failed_login_count = 5;
+            user.locked_until = Some(Utc::now() + TimeDelta::hours(1));
+            repos::users::create(&db, &user).await.expect("create user");
+
+            let audited = admin_unlock_user(&db, user.id).await.expect("unlock");
+            audited.into_inner();
+
+            let row = repos::users::get(&db, user.id).await.expect("get");
+            assert_eq!(row.failed_login_count, 0);
+            assert!(row.locked_until.is_none());
+
+            let tail = repos::audit::recent(&db, 1)
+                .await
+                .expect("audit tail")
+                .into_iter()
+                .next()
+                .expect("row");
+            assert_eq!(tail.action, "admin.user.unlock");
+            assert_eq!(
+                tail.actor, None,
+                "the CLI operator authenticates no user; the row must carry no actor"
+            );
+            assert_eq!(tail.target.as_deref(), Some(user.id.to_string().as_str()));
+        }
+
+        #[tokio::test]
+        async fn u08_unlock_of_nonexistent_user_returns_not_found() {
+            let db = fresh_db();
+            let before_audit = latest_audit_action(&db).await;
+
+            let result = admin_unlock_user(&db, UserId::new()).await;
+            assert!(matches!(result, Err(StoreError::NotFound)));
+            assert_eq!(latest_audit_action(&db).await, before_audit);
+        }
+
+        #[tokio::test]
+        async fn u08_injected_failure_before_append_rolls_back_the_unlock() {
+            let db = fresh_db();
+            let mut user = a_user();
+            user.failed_login_count = 5;
+            user.locked_until = Some(Utc::now() + TimeDelta::hours(1));
+            repos::users::create(&db, &user).await.expect("create user");
+            let before_audit = latest_audit_action(&db).await;
+
+            db.fault_injector().fail_before_next_append();
+            let result = admin_unlock_user(&db, user.id).await;
+            assert!(result.is_err(), "injected failure must surface as Err");
+
+            let row = repos::users::get(&db, user.id).await.expect("get");
+            assert_eq!(row.failed_login_count, 5, "the counter reset rolled back");
+            assert!(row.locked_until.is_some(), "the lock clear rolled back too");
             assert_eq!(latest_audit_action(&db).await, before_audit);
         }
 
