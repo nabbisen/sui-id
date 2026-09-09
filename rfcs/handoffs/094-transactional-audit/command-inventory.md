@@ -68,7 +68,7 @@ though each pair shares one current repository function family.
 | U09 | Self password change | A | `auth.password.changed_self` | `credentials::upsert`, session/token revocation | `a_u09_self_password` |
 | U10 | Forgot-password completion | A | `auth.password.reset_completed` | `password_reset_tokens::mark_consumed`, `credentials::upsert`, revocations | `a_u10_reset_complete` |
 | U11 | User email change | A | `user.email_change` | `users::update_email` | `a_u11_email` |
-| U12 | TOTP enrollment confirm | A | `auth.mfa.totp_enabled` | `user_totp::confirm_with_recovery` | `a_u12_totp_enable` |
+| U12 | TOTP enrollment confirm | A | `mfa.enable` — *corrected 2026-09-09; `auth.mfa.totp_enabled` appeared in no code, matrix, or doc* | `user_totp::confirm_with_recovery` | `a_u12_totp_enable` |
 | U13 | TOTP disable | A | `auth.mfa.totp_disabled` | `user_totp::delete` | `a_u13_totp_disable` |
 | U14 | Recovery-code regeneration | A | `auth.mfa.recovery_regenerated` | `user_totp::set_recovery_codes` | `a_u14_recovery` |
 | U15 | Passkey register | A | `auth.passkey.created` | `user_webauthn_credentials::create` | `a_u15_passkey_create` |
