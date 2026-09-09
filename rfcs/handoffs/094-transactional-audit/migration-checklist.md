@@ -145,6 +145,13 @@ at a time; the workspace and structural gate must remain green between waves.
         land, and it cost nothing** — which is the property that made option E
         affordable: its blockers dissolve as conversion proceeds rather than
         needing separate work.
+  - [ ] **`forgot_password.rs` done (U09/U10 wave, 2026-09-09)** — it no longer
+        calls `with_tx`/`with_tx_sync` at all; the only remaining occurrence is a
+        comment describing what it used to do. `key_rotation.rs` still outstanding.
+        Second exit-condition sub-item to fall out of unrelated conversion work,
+        after `audit_guard.rs`'s deletion dropped `sui-id-core`'s `rusqlite`
+        dependency — the argument for option E, that its blockers dissolve as
+        conversion proceeds, is two for two.
   - [ ] `sui-id-core/src/account/forgot_password.rs` and
         `oidc/key_rotation.rs` stop calling `with_tx`/`with_tx_sync`. Both are
         already inside M2a's own waves (credential/session security, and signing
