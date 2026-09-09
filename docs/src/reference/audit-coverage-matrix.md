@@ -75,7 +75,18 @@ Until RFC 094 is implemented, treat the rows below as the coverage this project
 | Event name | Operation | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
 | `admin.master_key.rotated` | Master key rotation | CLI principal | — | `keys_resealed=N` | A |
-| `admin.user.unlock` | Clear account lockout | admin user id | target user id | — | A |
+| `admin.user.unlock` | Clear account lockout (CLI operator) | — *(see note)* | target user id | — | A |
+
+> **`admin.user.unlock` has no user actor, and that is correct.** Decided
+> 2026-09-09. This row previously required `admin user id`. There is no HTTP admin
+> unlock path — the only caller is `cli.rs`'s `run_admin_unlock_user`, which parses
+> `--username`, loads the master key from disk and opens the database directly. Its
+> authority is possession of the master key and filesystem access, which is a
+> legitimate principal and exactly what RFC 094's sealed CLI/system authority
+> adapter exists for — but it authenticates no user, so it cannot supply one. The
+> requirement named an invocation path that was never built. If an HTTP admin
+> unlock is added later, it needs its own command with `ActorRequirement::Required`,
+> not a widening of this one.
 
 ### Pending settings changes (`settings.pending_change.*`)
 

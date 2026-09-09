@@ -317,8 +317,21 @@ at a time; the workspace and structural gate must remain green between waves.
 
 - [ ] user create / warned create / disable / enable / delete / role change.
 - [ ] admin password reset, MFA reset, unlock.
-      **U06/U07 dispatchable. U08 BLOCKED pending two owner decisions
-      (2026-09-09).** (a) `audit-coverage-matrix.md:78` requires `admin user id`
+      **U06/U07 done. U08 UNBLOCKED — both decisions taken 2026-09-09.**
+      **(a)** U08 is `system_principal: permitted` with
+      `ActorRequirement::None`, and the matrix's actor is corrected from
+      `admin user id` to none: the only caller is `cli.rs`'s
+      `run_admin_unlock_user`, whose authority is the master key and filesystem
+      access, and which authenticates no user. The requirement named an HTTP
+      admin path that was never built. If one is added later it needs its own
+      command with `Required`, not a widening of this one.
+      **(b)** U08 covers `users::admin_unlock` **only**. `clear_lockout` is
+      already **U24** ("successful-login bookkeeping", Protocol) — the inventory
+      had this right all along; U08's row merely double-listed it. No new
+      classification was needed, only the removal of the overlap.
+      *Original analysis:*
+      `.git-exclude/reviewed/094-wave-b-scoping-u08-blocked-2026-09-09.md`.
+      *Superseded blocking note:* (a) `audit-coverage-matrix.md:78` requires `admin user id`
       for `admin.user.unlock`, but there is no HTTP admin unlock path — the only
       caller is `cli.rs:123`, which has no operator identity at all; its authority
       is the master key and filesystem access. The requirement names a caller that
