@@ -119,6 +119,22 @@ Until RFC 094 is implemented, treat the rows below as the coverage this project
 | `auth.user_source.matched` | External source authenticated a user | shadow user id | shadow user id | `source=… stable_id=…` | B |
 | `auth.user_source.transport_failure` | Directory unreachable during cascade | — | — | `source=… error=…` | B |
 
+### Self-service MFA (`mfa.*`)
+
+Added 2026-09-09. These three have shipped and are referenced in the operator
+guides, but had **no row here** — the gate's prefix filter did not include `mfa.`,
+so neither direction of `check-audit-matrix.sh` could see them. The filter is
+widened; these rows are the backlog it immediately found. Class B until RFC 094
+converts them (U12 and the MFA enrolment/disable/regeneration item after it);
+today all three are fire-and-forget `let _ = audit::append(...)` in
+`http/handlers/me_security/mfa.rs`.
+
+| Event name | Trigger | Actor | Target | Note fields | Class |
+|---|---|---|---|---|---|
+| `mfa.enable` | User confirms TOTP enrolment | user id | — | — | B |
+| `mfa.disable` | User disables MFA (RFC 058 dangerous self-service action) | user id | — | — | B |
+| `mfa.recovery_codes_regenerate` | User regenerates recovery codes | user id | — | — | B |
+
 ### Self-service settings (`auth.smtp_config.*`)
 
 | Event name | Operation | Actor | Target | Note fields | Class |

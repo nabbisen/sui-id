@@ -27,7 +27,7 @@ FAILURES=0
 # 1. Matrix names: backtick-quoted strings matching audit namespace prefixes
 MATRIX_NAMES=$(grep -oE '`[a-z0-9_]+\.[a-z0-9_.]+`' "$MATRIX" \
   | tr -d '`' \
-  | grep -E '^(user|client|signing_key|settings|me|auth|admin|oauth2)\.' \
+  | grep -E '^(user|client|signing_key|settings|me|auth|admin|oauth2|mfa)\.' \
   | sort -u)
 
 if [ -z "$MATRIX_NAMES" ]; then
@@ -40,7 +40,7 @@ fi
 #    "act.before" etc. that begin with test-specific prefixes or are in cfg(test) blocks)
 SRC_LITERALS=$(grep -rh \
   --include="*.rs" \
-  -oE '"(user|client|signing_key|settings|me|auth|admin|oauth2)\.[a-z_.A-Z]+"' \
+  -oE '"(user|client|signing_key|settings|me|auth|admin|oauth2|mfa)\.[a-z_.A-Z]+"' \
   "$SRC_DIRS" \
   | tr -d '"' \
   | grep -Ev '\.(test_|should_not_appear|before|after|within|format\()' \
