@@ -476,5 +476,47 @@ class RfcIntegrityTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
 
 
+    def test_handoff_without_an_rfc_rejected(self):
+        # Invariant 13: RFC 000 defines a handoff as a companion *to an RFC*
+        # and requires every rfcs/handoffs/NNN-slug/ to correspond to an
+        # existing RFC number. Work no RFC governs inherits a lifecycle status
+        # that is not its own -- live work filed under a closed RFC reads as
+        # historical. Six such directories accumulated unseen before
+        # 2026-09-10; they now live in roadmap/, authorised by ROADMAP.md.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_baseline(root)
+            write(root / "rfcs" / "handoffs" / "tidy-up-the-tests" / "README.md", "# Package\n")
+            git_commit(root)
+            result = run_checker(root)
+            self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+            self.assertIn("handoff directory does not name an RFC", result.stderr)
+            self.assertIn("tidy-up-the-tests", result.stderr)
+
+    def test_handoff_naming_an_absent_rfc_rejected(self):
+        # The rule is correspondence, not spelling: a directory can be shaped
+        # NNN-slug and still name an RFC that does not exist. Renaming a stray
+        # package to look numbered must not buy it a pass.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_baseline(root)
+            write(root / "rfcs" / "handoffs" / "742-invented" / "README.md", "# Package\n")
+            git_commit(root)
+            result = run_checker(root)
+            self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+            self.assertIn("resolves to 0 RFCs", result.stderr)
+
+    def test_handoff_matching_an_existing_rfc_accepted(self):
+        # And it must not fire on the case RFC 000 sanctions, or it would pass
+        # by forbidding everything -- the baseline already carries RFC 100.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_baseline(root)
+            write(root / "rfcs" / "handoffs" / "100-example" / "README.md", "# Handoff\n")
+            git_commit(root)
+            result = run_checker(root)
+            self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

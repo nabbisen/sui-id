@@ -147,7 +147,7 @@ that silently drops a security check.
 
 **Accountable owner: the ROADMAP `prep — federation module split` item**, not this
 RFC and not RFC 094. Its handoff is
-[`../handoffs/prep-federation-module-split/README.md`](../handoffs/prep-federation-module-split/README.md). It is a standalone preparatory change that must land, and be
+[`../../roadmap/prep-federation-module-split/README.md`](../../roadmap/prep-federation-module-split/README.md). It is a standalone preparatory change that must land, and be
 independently reviewed, before **either** 096-A or any RFC 094 federation work
 begins.
 

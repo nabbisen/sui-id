@@ -27,14 +27,18 @@ rfcs/README.md against RFC 093's RFC-integrity contract:
       retrospective reviewer is invented for them;
   12. rfcs/ contains nothing but RFC 000's declared layout -- the four
       lifecycle folders, optional draft/, the non-lifecycle handoffs/
-      companion folder, and README.md.
+      companion folder, and README.md;
+  13. every rfcs/handoffs/NNN-slug/ directory resolves to exactly one
+      existing RFC -- a handoff is a companion to an RFC, and work no RFC
+      governs belongs in roadmap/ instead.
 
 (Numbering 1-11 matches RFC 093's own list; item 8 is not an
 independently-checkable invariant -- it is subsumed by (9), which is what
 actually fires once a Proposed RFC moves to Accepted. Item 12 is not RFC
-093's: it enforces RFC 000's folder layout, which had no gate at all
-before 2026-09-10. G11 hosts it because this is the RFC-structure gate;
-RFC 000 remains its source.)
+093's, and neither is 13: they enforce RFC 000's folder layout and
+handoff-correspondence rules, which had no gate at all before 2026-09-10.
+G11 hosts them because this is the RFC-structure gate; RFC 000 remains
+their source.)
 
 Metadata is recognized only from bold, period-terminated labels
 (`**Label.** value`) in the RFC header -- from the title line up to but
@@ -78,6 +82,7 @@ ALLOWED_RFCS_ENTRIES = frozenset(
 
 STANDARD_RE = re.compile(r"^(\d{3})-.+\.md$")
 MI_RE = re.compile(r"^RFC-MI-(\d{3})-.+\.md$")
+HANDOFF_DIR_RE = re.compile(r"^(\d{3})-.+$")
 
 LABEL_RE = re.compile(r"^\*\*([A-Za-z][A-Za-z0-9 /'-]*)\.\*\*[ \t]*(.*)$")
 
@@ -322,6 +327,55 @@ def check_folder_layout(root: Path, failures: list[str]) -> None:
         else:
             failures.append(
                 f"unsanctioned file under rfcs/: {entry.relative_to(root)}"
+            )
+
+
+def check_handoff_correspondence(root: Path, failures: list[str]) -> None:
+    """Invariant 13: every rfcs/handoffs/ directory belongs to a real RFC.
+
+    RFC 000 defines a handoff as an optional implementation companion *to an
+    RFC*, and requires that "every `rfcs/handoffs/NNN-slug/` directory, if
+    handoffs are used, corresponds to an existing RFC number". This is a
+    correspondence rule, not a naming rule: the failure it catches is work
+    filed under rfcs/ that no RFC authorises, which then inherits a lifecycle
+    status that is not its own.
+
+    Six such directories accumulated before 2026-09-10. Nothing could see
+    them -- discover_rfcs ignores handoffs/ by design, and invariant 12 checks
+    only the top level of rfcs/. Non-RFC work packages now live in roadmap/,
+    authorised by a ROADMAP.md entry.
+    """
+    handoffs = root / "rfcs" / "handoffs"
+    if not handoffs.is_dir():
+        return
+    for entry in sorted(handoffs.iterdir()):
+        if not entry.is_dir():
+            failures.append(
+                f"stray file directly under rfcs/handoffs/: "
+                f"{entry.relative_to(root)} -- a handoff belongs inside its "
+                f"RFC's NNN-slug/ directory"
+            )
+            continue
+        m = HANDOFF_DIR_RE.match(entry.name)
+        if not m:
+            failures.append(
+                f"handoff directory does not name an RFC: "
+                f"rfcs/handoffs/{entry.name}/ -- RFC 000 requires "
+                f"NNN-slug/ corresponding to an existing RFC. Work no RFC "
+                f"governs belongs in roadmap/, authorised by ROADMAP.md"
+            )
+            continue
+        number = m.group(1)
+        matches = [
+            md
+            for folder in LIFECYCLE_FOLDERS
+            for md in sorted((root / "rfcs" / folder).glob(f"{number}-*.md"))
+        ]
+        if len(matches) != 1:
+            found = ", ".join(str(x.relative_to(root)) for x in matches) or "none"
+            failures.append(
+                f"rfcs/handoffs/{entry.name}/ resolves to {len(matches)} RFCs "
+                f"(expected exactly 1): {found}"
             )
 
 
@@ -570,6 +624,7 @@ def main(argv: list[str]) -> int:
 
     failures: list[str] = []
     check_folder_layout(root, failures)
+    check_handoff_correspondence(root, failures)
     rfcs = discover_rfcs(root, policy, failures)
     check_folder_status_agreement(rfcs, failures)
     check_index(root, rfcs, failures)

@@ -166,7 +166,7 @@ own hash-pinned package. Items at the same number may run concurrently.
 | 3 | M1b debt repair: RFC status and `rfcs/` broken links — **re-measured by G11, not by the 2026-07-28 counts** | B | item 1 tooling (G11 must exist first) | 093 M1b |
 | 4 | **M1a closes** — G01–G09 hosted green on one clean commit | A | item 3 | — |
 | 4 | **M1b closes** — G10–G12 hosted green, integrity debt zero | B | item 3 | — |
-| 5 | `handlers/federation.rs` split, zero behaviour change | prep | M1a; clippy landed (both met at `0fcb423`); **module boundary confirmed by RFC 096's correction review — not yet** | [prep split](rfcs/handoffs/prep-federation-module-split/README.md) |
+| 5 | `handlers/federation.rs` split, zero behaviour change | prep | M1a; clippy landed (both met at `0fcb423`); **module boundary confirmed by RFC 096's correction review — not yet** | [prep split](roadmap/prep-federation-module-split/README.md) |
 | 6 | RFC 094 M2a: registry, seam, `ReadConn`, Class-B emitter, priority conversion incl. C15 | A | M1a; RFC 094 re-accepted | [094](rfcs/handoffs/094-transactional-audit/README.md) |
 | 6 | RFC 096-A: discovery, JWKS, claims, mandatory nonce — no durable mutation | B | M1a; item 5; RFC 096 re-accepted | [096](rfcs/handoffs/096-upstream-oidc-federation/README.md) |
 | 7 | RFC 095 (M3): validate-first dynamic registration | A | M2a incl. C15; RFC 095 re-accepted | [095](rfcs/handoffs/095-dynamic-client-registration/README.md) |
@@ -421,6 +421,46 @@ Standing rules, effective now:
 3. **Revisit point: M5.** At M5, review the remaining list and decide whether the
    residue needs its own RFC or is accepted with translation tables excluded.
    Deferral without a decision point is how this became debt in the first place.
+
+## Non-RFC work packages
+
+Not every piece of project work needs a design RFC. Toolchain repairs, test
+organisation, fuzz infrastructure and gate-template defects change the codebase
+but decide nothing about the product's design or security posture.
+
+**This roadmap is the decision record for that work** (owner ruling,
+2026-09-10). A non-RFC work package is authorized by an entry in this section
+or in *Execution order* above, and its execution package lives in
+[`roadmap/<slug>/`](roadmap/README.md). A package with no entry here is not
+authorized work.
+
+`rfcs/handoffs/NNN-slug/` is reserved for companions to an existing RFC and
+holds nothing else — RFC 000's rule that "every `rfcs/handoffs/NNN-slug/`
+directory ... corresponds to an existing RFC number", enforced by G11's
+invariant 13. Before 2026-09-10 six non-RFC packages sat there, which is how
+work with no decision record became invisible.
+
+### Open
+
+| Work item | Why | Package |
+|---|---|---|
+| `rfcs/README.md` template vs. what G11 enforces | The normative RFC template is missing ten labels, one of them gate-enforced. A defect in a gate RFC 093 owns, exposed by that gate. | [rfc-template-reconciliation](roadmap/rfc-template-reconciliation/README.md) |
+| Test-file organization | `project-instructions-rust.md` requires test modules in their own files; 42 files still carry inline `#[cfg(test)] mod tests`. `commands.rs` and its runner split are done; `registry.rs` is next. | [test-file-organization](roadmap/test-file-organization/README.md) |
+
+The `handlers/federation.rs` split is tracked as item 5 of *Execution order*
+above, not here — it is a prerequisite of the remediation programme rather than
+standalone maintenance.
+
+### Completed
+
+Retained as the record of what was asked and why. No action remains on any of
+them.
+
+| Work item | Landed | Package |
+|---|---|---|
+| Fuzz matrix widened to all six targets | `d5e5402` | [fuzz-widen-matrix](roadmap/fuzz-widen-matrix/README.md) |
+| Fuzz seed corpus and CI corpus persistence | `8d446b0` | [fuzz-corpus-persistence](roadmap/fuzz-corpus-persistence/README.md) |
+| Stable clippy drift, rustc 1.98.0 | `b343a06` | [stable-clippy-drift-1.98](roadmap/stable-clippy-drift-1.98/README.md) |
 
 ## Current status
 

@@ -17,7 +17,7 @@ hosted run starts from an empty corpus — the first full run
 (`32950029257`, 600,000 iterations across six targets) spent much of its budget
 rediscovering basic input structure rather than probing behind it.
 
-Handoff: `rfcs/handoffs/fuzz-corpus-persistence/README.md`.
+Handoff: `roadmap/fuzz-corpus-persistence/README.md`.
 
 **Delivery mechanism changed on.** 2026-08-26 — **the original text below is left
 unaltered as the record of what was decided; this note records what changed

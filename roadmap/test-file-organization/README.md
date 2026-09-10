@@ -8,14 +8,11 @@
 too large, submodules under `src/some_mod/tests/`. A `#[test]` module
 placed inside `src/some_mod.rs` is the named anti-pattern.
 
-**Not an RFC companion.** This directory follows the existing local
-practice for non-RFC handoffs (`fuzz-corpus-persistence`,
-`stable-clippy-drift-1.98`, `prep-federation-module-split`,
-`rfc-template-reconciliation`). That practice is itself a deviation from
-RFC 000's `NNN-slug/` convention, recorded in
-`.git-exclude/reviewed/project-manners-recap-2026-09-10.md` §5.5 and
-awaiting `@nabbisen`'s ruling. If the ruling goes the other way, this
-directory moves with the rest.
+**Authorized by.** [`ROADMAP.md`](../../ROADMAP.md) §Non-RFC work
+packages — owner ruling, 2026-09-10. No RFC governs this work: the rule it
+enforces is a project instruction, not a design decision. It lived under
+`rfcs/handoffs/` until 2026-09-10, which RFC 000 does not permit — a
+handoff is a companion to an RFC and inherits that RFC's status.
 
 ## Status
 
