@@ -22,7 +22,8 @@ directory moves with the rest.
 | Item | State |
 |---|---|
 | A. `commands.rs` split (3,295 → 1,332 + 264 + 1,687) | **Done**, approved 2026-09-10 |
-| B. `commands/tests/runner.rs` sub-split | **Ready to start** |
+| B. `commands/tests/runner.rs` sub-split | **Done**, approved 2026-09-10 (`520ee79`) |
+| B-2. Correct two misfiled tests in `runner/refresh.rs` | **Ready to start** |
 | C. The remaining 42 inline-test files | Queued; see §C |
 
 ## A. Completed
@@ -34,7 +35,12 @@ directory moves with the rest.
 Verified as a content-preserving move, not merely a green test run —
 see `.git-exclude/reviewed/project-manners-recap-2026-09-10.md` §2.
 
-## B. Split `commands/tests/runner.rs` — do this before Wave C's remainder
+## B. Split `commands/tests/runner.rs` — delivered `520ee79`
+
+Delivered as specified. Two errors in this section's own tables were
+found during the split and are corrected in place below, both marked
+**[corrected 2026-09-10]**. Neither changed a destination except the
+one that §B-2 now fixes.
 
 **Why now.** U12, `mfa.disable` and `mfa.recovery_codes_regenerate` will
 add roughly 300 lines to this file. Splitting first means those tests are
@@ -49,9 +55,10 @@ written into their final home; splitting after means moving more code.
 | `runner/lockout.rs` | U22 (217–304) and U08 (1074–1133) | 150 |
 | `runner/chain_integrity.rs` | `concurrent_class_a_commands_maintain_one_unbroken_chain` (305–356) | 55 |
 | `runner/user_admin.rs` | U01–U05 (357–794) | 440 |
-| `runner/passwords.rs` | U06 (795–893), U09 (1134–1240), U10 (1283–1423) | 350 |
+| `runner/passwords.rs` | U06 (795–893), U09 (1134–1282), U10 (1283–1423) | 350 |
 | `runner/mfa.rs` | U07 (894–1073) | 180 |
-| `runner/refresh.rs` | T04/T09 (1424–end) | 265 |
+| `runner/refresh.rs` | T04/T09 (1424–1633) | 210 |
+| `runner/policy_markers.rs` | U30, O01 (1634–end) — see §B-2 | 55 |
 
 **Grouping rationale — domain, not wave.** RFC 094's waves are a delivery
 artifact and will not survive the project; command domains will. Grouping
@@ -80,6 +87,22 @@ and submodules reach them with `use super::*;` — the same shape
 looks group-local from its position in the file but is not; it has call
 sites in U06, U09 and U10. It stays in `runner.rs`.
 
+**[corrected 2026-09-10] Two errors in the tables above.** Found by the
+implementation role during the split and corrected here rather than left
+to be rediscovered:
+
+1. U09's range read 1134–1240, leaving 1241–1282 unaccounted for. That
+   gap is `u09_injected_failure_before_append_rolls_back_credential_and_revocations`,
+   a real U09 test. The destination was unaffected — all of U09 belongs in
+   `passwords.rs` — but the range was wrong.
+2. `refresh.rs` read "T04/T09 (1424–end)", which swept in two tests that
+   are not refresh-token tests. See §B-2.
+
+**A handoff table is an instruction, not a fact.** Where one contradicts
+the code, the code wins: prefer the `// ──` section banners over any line
+range given here, and report the discrepancy rather than absorbing it.
+That is how both errors above surfaced.
+
 **Constraints.**
 
 1. **Move only.** No test renamed, reordered, added, removed, or edited.
@@ -95,18 +118,69 @@ sites in U06, U09 and U10. It stays in `runner.rs`.
    top of each new file is the equivalent form.
 
 **Evidence required in the review request.** A green test run is not
-sufficient evidence for a move-only change — a silently dropped test
-still leaves the suite green. Prove content identity:
+sufficient evidence for a move-only change — a silently dropped test still
+leaves the suite green. Prove content identity three ways; each closes a
+different silent failure.
 
-```
-# strip all whitespace from old and new, normalise rustfmt's trailing
-# commas, compare hashes
-tr -d '[:space:]' < old | sed -e 's/,)/)/g; s/,]/]/g; s/,}/}/g' | sha256sum
-```
+**[corrected 2026-09-10]** This section previously specified a
+whole-stream hash after whitespace and trailing-comma normalisation. That
+works only for a 1:1 or 1:2 move: any regrouping adds `use super::*;` and
+`mod` lines and reorders items, so the hashes cannot match for reasons
+unrelated to content. A sorted-character multiset is **not** the fix — it
+is invariant under every permutation, so `assert_eq!(expected, actual)`
+and `assert_eq!(actual, expected)` compare equal. Compare per item
+instead, so reordering is irrelevant by construction rather than by
+invariance:
 
-Report the two hashes and that they match, alongside the usual gates
-(`fmt --check`, both clippy scopes, `cargo test` default and
-`--all-features` with the 160/164 counts, MSRV 1.95).
+1. **Per-item bodies.** Parse both sides into `fn name -> brace-matched
+   body`, normalise whitespace and rustfmt's trailing commas, compare the
+   maps. Report the function count, the names missing/added (expect none),
+   and the bodies differing (expect none).
+2. **Per-item attributes.** Compare the contiguous attribute lines
+   preceding each `fn`. A dropped `#[tokio::test]` removes a test from the
+   run while leaving every character of its body in place — the suite
+   stays green because the test is no longer a test. Report the
+   `#[tokio::test]` count on both sides.
+3. **Module declarations.** Every new `.rs` file must be named by a `mod`
+   declaration, and every declaration must have a file. An undeclared file
+   is not compiled and raises no error. Report the exact set match.
+
+Alongside the usual gates: `fmt --check`, both clippy scopes, `cargo test`
+default and `--all-features` with the 160/164 counts, and MSRV 1.95 —
+which is what actually exercises the deep glob chain on the floor
+toolchain.
+
+## B-2. Correct two misfiled tests in `runner/refresh.rs`
+
+`runner/refresh.rs` currently holds, besides T04/T09:
+
+- `u30_protocol_inserts_session_with_no_audit_row`
+- `o01_operational_enqueues_email_with_no_audit_row`
+
+Neither is a refresh-token test. They are the `WriteTx<Protocol>` and
+`WriteTx<Operational>` policy-marker proofs — "a command of this class
+mutates without an audit row" — which use a session insert and an outbox
+enqueue only as vehicles. They landed in `refresh.rs` because §B's table
+said "T04/T09 (1424–end)" and the pre-split file has no section banner
+between the T04/T09 block and these two. The handoff was wrong; the
+execution followed it correctly.
+
+**Move both into a new `crates/sui-id-store/src/commands/tests/runner/policy_markers.rs`**,
+declared from `runner.rs` alongside the other seven.
+
+`t09_protocol_issues_initial_token_with_no_audit_row` **stays** in
+`refresh.rs`. It is Protocol-classed, but it is genuinely a refresh-token
+command, and the domain is the grouping axis — not the policy marker.
+
+**Why this is worth a commit of its own.** The argument for grouping by
+domain rather than by wave was that a domain grouping keeps answering
+where new tests go. A file named `refresh.rs` holding two policy-marker
+proofs stops answering it, and the next `WriteTx<Operational>` or
+`WriteTx<Bootstrap>` proof has nowhere obvious to land. `policy_markers.rs`
+is that home.
+
+**Same constraints and same evidence as §B**, including the per-item and
+attribute checks — two functions is not a reason to relax either.
 
 ## C. The remaining 42 files
 
