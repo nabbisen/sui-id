@@ -23,7 +23,7 @@ directory moves with the rest.
 |---|---|
 | A. `commands.rs` split (3,295 → 1,332 + 264 + 1,687) | **Done**, approved 2026-09-10 |
 | B. `commands/tests/runner.rs` sub-split | **Done**, approved 2026-09-10 (`520ee79`) |
-| B-2. Correct two misfiled tests in `runner/refresh.rs` | **Ready to start** |
+| B-2. Correct two misfiled tests in `runner/refresh.rs` | **Done**, approved 2026-09-10 (`74ef5c2`) |
 | C. The remaining 42 inline-test files | Queued; see §C |
 
 ## A. Completed
@@ -150,7 +150,7 @@ default and `--all-features` with the 160/164 counts, and MSRV 1.95 —
 which is what actually exercises the deep glob chain on the floor
 toolchain.
 
-## B-2. Correct two misfiled tests in `runner/refresh.rs`
+## B-2. Correct two misfiled tests in `runner/refresh.rs` — delivered `74ef5c2`
 
 `runner/refresh.rs` currently holds, besides T04/T09:
 
@@ -181,6 +181,34 @@ is that home.
 
 **Same constraints and same evidence as §B**, including the per-item and
 attribute checks — two functions is not a reason to relax either.
+
+### Final layout of `commands/tests/runner/`
+
+`runner.rs` holds the shared fixtures and eight `mod` declarations.
+
+| File | Commands | Lines |
+|---|---|---|
+| `key_rotation.rs` | K01 | 142 |
+| `lockout.rs` | U22, U08 | 149 |
+| `chain_integrity.rs` | Class-A chain invariant | 53 |
+| `user_admin.rs` | U01–U05 | 420 |
+| `passwords.rs` | U06, U09, U10 | 390 |
+| `mfa.rs` | U07 | 181 |
+| `refresh.rs` | T04, T09 | 210 |
+| `policy_markers.rs` | U30, O01 | 57 |
+
+Where the commands still to come belong: U12, `mfa.disable` and
+`mfa.recovery_codes_regenerate` to `mfa.rs`; the next
+`WriteTx<Operational>` or `WriteTx<Bootstrap>` proof to
+`policy_markers.rs`; U11 to `passwords.rs`, or to a new `email.rs` if
+RFC 101 gives email its own command family.
+
+**Compare the whole module subtree, not the touched files.** A per-file
+identity comparison passes even when a function moves between two files
+that both changed, or is dropped from one and duplicated into another.
+Collect every `.rs` in the subtree on both sides, abort on a duplicate
+function name, and compare the union. That is what §B-2's review ran, and
+it is what §C should run for `registry.rs`.
 
 ## C. The remaining 42 files
 
