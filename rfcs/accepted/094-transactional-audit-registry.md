@@ -3,15 +3,15 @@
 **Status.** Accepted
 **Accepted on.** 2026-08-27
 **Approved by.** `@nabbisen`
-**Independent design review.** [Correction review 2026-08-26](../reviews/094-095-096-correction-review-2026-08-26.md), by the implementation role
+**Independent design review.** [Correction review 2026-08-26](../handoffs/094-transactional-audit/094-095-096-correction-review-2026-08-26.md), by the implementation role
 (`codex-developer`), which authored neither this RFC nor its corrections — six
 findings verified, `ReadConn` sufficiency measured rather than argued. Also
-[A6 implementability sweep 2026-08-27](../reviews/094-095-096-a6-sweep-2026-08-27.md)
+[A6 implementability sweep 2026-08-27](../handoffs/094-transactional-audit/094-095-096-a6-sweep-2026-08-27.md)
 — remaining sections read, one requirements gap raised; and
-[lane-ownership design review 2026-08-27](../reviews/094-lane-ownership-design-review-2026-08-27.md)
+[lane-ownership design review 2026-08-27](../handoffs/094-transactional-audit/094-lane-ownership-design-review-2026-08-27.md)
 — found two checks the resolving design silently dropped, both restored.
 **Security review.** Required
-**Lifecycle history.** Base design accepted 2026-07-17 after [independent review](../reviews/094-design-review-2026-07-17.md); material amendment returned to Proposed in commit `43085e38219e5eb1bfe11cc698b18f1fa5f5e4d7`; complete amended RFC accepted by `@nabbisen` on 2026-07-21 after [independent review](../reviews/094-federation-command-amendment-review-2026-07-21.md); **returned to Proposed on 2026-07-28** for the scope amendment described below, per RFC 000's return-for-review rule for material changes to scope, prerequisites, and acceptance criteria. The 2026-07-21 acceptance is preserved in history and is superseded, not withdrawn.
+**Lifecycle history.** Base design accepted 2026-07-17 after [independent review](../handoffs/094-transactional-audit/094-design-review-2026-07-17.md); material amendment returned to Proposed in commit `43085e38219e5eb1bfe11cc698b18f1fa5f5e4d7`; complete amended RFC accepted by `@nabbisen` on 2026-07-21 after [independent review](../handoffs/094-transactional-audit/094-federation-command-amendment-review-2026-07-21.md); **returned to Proposed on 2026-07-28** for the scope amendment described below, per RFC 000's return-for-review rule for material changes to scope, prerequisites, and acceptance criteria. The 2026-07-21 acceptance is preserved in history and is superseded, not withdrawn.
 **Amendment summary (2026-08-26).** Correction round after the external review: `ReadConn`'s read-only guarantee gains a required M2a assertion that `rusqlite`'s `functions`, `vtab` and `load_extension` features stay disabled, since statement-level read-only status does not constrain side-effecting application functions or virtual tables — that surface is currently not compiled in, and nothing checked it. F01–F06 gain an explicit phase statement: they belong to no conversion wave, are implemented by RFC 096-B1 against the M2a runner foundation, and their prerequisite is that foundation rather than the session-security wave. Both carry an explicit confirmation-required note.
 **Amendment summary (2026-08-12).** `ReadConn`'s per-statement `sqlite3_stmt_readonly` interrogation restored as a **required** M2a control after independent review finding B-094-1 established that static denial alone admits `UPDATE … RETURNING` and the other DML `RETURNING` forms; only the versioned read-only PRAGMA allowlist remains deferred. M2a acceptance criteria gained the corresponding negative fixtures. The 2026-07-28 deferral's stated grounds — a "different property", and invasiveness "touching every read path" — were both incorrect.
 **Amendment summary (2026-07-28).** Master-key rotation crash recovery removed to RFC 100; `ReadConn` narrowed to the typed wrapper plus static denial, deferring per-statement runtime interrogation; the `syn` AST boundary gate sequenced into the M2b authority switch; conversion phased into M2a and M2b with C15 pinned to M2a; acceptance criteria split per stage; interim documentation honesty made normative. Requested by `@nabbisen` on 2026-07-28 on the recommendation of the requirements architect.
@@ -431,7 +431,7 @@ A read-only `SELECT` control must still succeed.
 
 *Measured 2026-08-26 across all 21 statement forms and independently reproduced
 on two SQLite builds (rusqlite 0.40.1 bundled, and system 3.53.4) — see
-[`../reviews/094-095-096-correction-review-2026-08-26.md`](../reviews/094-095-096-correction-review-2026-08-26.md)
+[`../handoffs/094-transactional-audit/094-095-096-correction-review-2026-08-26.md`](../handoffs/094-transactional-audit/094-095-096-correction-review-2026-08-26.md)
 §A1. This paragraph previously required `ATTACH` to "fail to compile or be
 rejected as non-read-only before execution"; the second branch is impossible,
 and had the static list caught it the fixture would have gone green while this
@@ -778,9 +778,9 @@ a manifest that has to be edited whenever a document is promoted is a manifest
 that will drift. The checker resolves a number to a file by matching
 `NNN-*.md` across the lifecycle folders only (`proposed`, `accepted`, `done`,
 `archive`), which is the scoping `scripts/check-rfc-integrity.py` already uses as
-`LIFECYCLE_FOLDERS`. Numbers are unique within those folders; `rfcs/reviews/` and
-`rfcs/handoffs/` reuse them and are excluded. Resolution must yield **exactly
-one** file — zero or several is a failure, not a guess.
+`LIFECYCLE_FOLDERS`. Numbers are unique within those folders; `rfcs/handoffs/`
+reuses them and is excluded. Resolution must yield **exactly one** file — zero
+or several is a failure, not a guess.
 
 #### What condition 7 becomes
 

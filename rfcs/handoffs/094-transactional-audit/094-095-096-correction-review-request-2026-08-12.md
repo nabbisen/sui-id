@@ -61,7 +61,7 @@ corrections, authored by the same party that wrote the amendments they correct.
 | `rfcs/accepted/094-transactional-audit-registry.md` | Corrected RFC |
 | `rfcs/accepted/095-dynamic-client-registration-transaction.md` | Unchanged; its handoff was corrected |
 | `rfcs/accepted/096-upstream-oidc-federation-validation.md` | Corrected RFC |
-| `rfcs/reviews/094-095-096-amendment-review-2026-08-12.md` | The findings being answered |
+| `rfcs/handoffs/094-transactional-audit/094-095-096-amendment-review-2026-08-12.md` | The findings being answered |
 | `rfcs/handoffs/094-transactional-audit/` | Corrected: `migration-checklist.md` |
 | `rfcs/handoffs/095-dynamic-client-registration/README.md` | Corrected entry gate |
 | `rfcs/handoffs/096-upstream-oidc-federation/README.md` | Re-cut delivery map |
@@ -121,7 +121,7 @@ a silently dropped security check, which is the stated risk?
 
 ## 6. Required output
 
-**Path:** `rfcs/reviews/094-095-096-correction-review-2026-08-<DD>.md`, committed
+**Path:** `rfcs/handoffs/094-transactional-audit/094-095-096-correction-review-2026-08-<DD>.md`, committed
 and tracked. G11 requires evidence targets to resolve, be tracked, and not be
 gitignored; `.git-exclude/` fails.
 
@@ -143,4 +143,4 @@ above was written by the author of the work under review.
 
 ---
 
-`rfcs/reviews/094-095-096-correction-review-request-2026-08-12.md`
+`rfcs/handoffs/094-transactional-audit/094-095-096-correction-review-request-2026-08-12.md`

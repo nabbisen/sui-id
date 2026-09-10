@@ -24,17 +24,23 @@ rfcs/README.md against RFC 093's RFC-integrity contract:
       Required have dated Closure metadata and a durable repository-
       relative Closure evidence reference;
   11. RFCs below the threshold are checked for (1)-(5) only -- no
-      retrospective reviewer is invented for them.
+      retrospective reviewer is invented for them;
+  12. rfcs/ contains nothing but RFC 000's declared layout -- the four
+      lifecycle folders, optional draft/, the non-lifecycle handoffs/
+      companion folder, and README.md.
 
-(Numbering above matches RFC 093's own list; item 8 is not an
+(Numbering 1-11 matches RFC 093's own list; item 8 is not an
 independently-checkable invariant -- it is subsumed by (9), which is what
-actually fires once a Proposed RFC moves to Accepted.)
+actually fires once a Proposed RFC moves to Accepted. Item 12 is not RFC
+093's: it enforces RFC 000's folder layout, which had no gate at all
+before 2026-09-10. G11 hosts it because this is the RFC-structure gate;
+RFC 000 remains its source.)
 
 Metadata is recognized only from bold, period-terminated labels
 (`**Label.** value`) in the RFC header -- from the title line up to but
 excluding the first level-2 (`## `) heading. This deliberately excludes
 illustrative template examples inside RFC bodies (rfcs/done/000 and
-rfcs/done/018 both embed example metadata blocks as prose, not real
+rfcs/archive/018 both embed example metadata blocks as prose, not real
 headers) and any content inside fenced code blocks.
 
 One narrowed exception: for an RFC-MI-* identifier already on --policy's
@@ -61,6 +67,14 @@ import tomllib
 from pathlib import Path
 
 LIFECYCLE_FOLDERS = ("proposed", "accepted", "done", "archive")
+
+# RFC 000's folder layout: five folders, four of which hold RFCs, plus the
+# optional `draft/` and the optional non-lifecycle `handoffs/` companion
+# folder. Nothing else belongs directly under rfcs/. Enforced by
+# check_folder_layout (invariant 12).
+ALLOWED_RFCS_ENTRIES = frozenset(
+    LIFECYCLE_FOLDERS + ("draft", "handoffs", "README.md")
+)
 
 STANDARD_RE = re.compile(r"^(\d{3})-.+\.md$")
 MI_RE = re.compile(r"^RFC-MI-(\d{3})-.+\.md$")
@@ -277,6 +291,38 @@ def discover_rfcs(root: Path, policy: dict, failures: list[str]) -> list[Rfc]:
             )
 
     return rfcs
+
+
+def check_folder_layout(root: Path, failures: list[str]) -> None:
+    """Invariant 12: rfcs/ holds nothing but RFC 000's declared layout.
+
+    discover_rfcs iterates LIFECYCLE_FOLDERS and is blind to anything
+    else, so before this check an entire unsanctioned folder under rfcs/
+    could exist without any gate noticing -- which is how `rfcs/reviews/`
+    survived months of green G11 runs. The rule enforced here is RFC 000's,
+    not a new one: five folders, four holding RFCs, plus optional `draft/`
+    and the non-lifecycle `handoffs/` companion folder.
+    """
+    rfcs_dir = root / "rfcs"
+    if not rfcs_dir.is_dir():
+        return
+    for entry in sorted(rfcs_dir.iterdir()):
+        if entry.name in ALLOWED_RFCS_ENTRIES:
+            continue
+        if entry.is_dir():
+            failures.append(
+                f"unsanctioned folder under rfcs/: {entry.relative_to(root)}/ "
+                f"-- RFC 000's layout allows only "
+                f"{', '.join(sorted(ALLOWED_RFCS_ENTRIES))}"
+            )
+        elif entry.suffix == ".md":
+            # Already reported by discover_rfcs as a stray RFC file; do not
+            # double-count it here.
+            continue
+        else:
+            failures.append(
+                f"unsanctioned file under rfcs/: {entry.relative_to(root)}"
+            )
 
 
 def check_folder_status_agreement(rfcs: list[Rfc], failures: list[str]) -> None:
@@ -523,6 +569,7 @@ def main(argv: list[str]) -> int:
         policy = tomllib.load(f)
 
     failures: list[str] = []
+    check_folder_layout(root, failures)
     rfcs = discover_rfcs(root, policy, failures)
     check_folder_status_agreement(rfcs, failures)
     check_index(root, rfcs, failures)

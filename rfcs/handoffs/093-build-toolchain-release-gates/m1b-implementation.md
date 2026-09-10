@@ -183,8 +183,8 @@ Two things look like debt and are not. Do not "fix" them:
 - **RFCs 094, 095 and 096 are legitimately in `proposed/`** with
   `Status: Proposed`, returned there on 2026-07-28 for owner-approved material
   amendments. Their `Lifecycle history` fields record the prior acceptances.
-- **`rfcs/reviews/094-federation-command-amendment-review-2026-07-21.md` and
-  `rfcs/reviews/096-design-review-2026-07-21.md` intentionally still reference
+- **`rfcs/handoffs/094-transactional-audit/094-federation-command-amendment-review-2026-07-21.md` and
+  `rfcs/handoffs/096-upstream-oidc-federation/096-design-review-2026-07-21.md` intentionally still reference
   `accepted/09{4,6}-*`.** They are dated historical evidence tables citing files
   as they existed at that review, not live navigation. RFC 000 directs against
   rewriting historical decisions to match current state.

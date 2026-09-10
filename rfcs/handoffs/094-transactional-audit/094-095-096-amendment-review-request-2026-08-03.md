@@ -37,9 +37,9 @@ it first would defeat the purpose of asking you.
 | `rfcs/accepted/094-transactional-audit-registry.md` | Amended RFC |
 | `rfcs/accepted/095-dynamic-client-registration-transaction.md` | Amended RFC |
 | `rfcs/accepted/096-upstream-oidc-federation-validation.md` | Amended RFC |
-| `rfcs/reviews/094-design-review-2026-07-17.md` | Original independent review |
-| `rfcs/reviews/094-federation-command-amendment-review-2026-07-21.md` | Prior amendment review |
-| `rfcs/reviews/096-design-review-2026-07-21.md` | Original independent review |
+| `rfcs/handoffs/094-transactional-audit/094-design-review-2026-07-17.md` | Original independent review |
+| `rfcs/handoffs/094-transactional-audit/094-federation-command-amendment-review-2026-07-21.md` | Prior amendment review |
+| `rfcs/handoffs/096-upstream-oidc-federation/096-design-review-2026-07-21.md` | Original independent review |
 | `rfcs/archive/018-rfc-lifecycle-policy.md` | Governs the security-review classification |
 | `ROADMAP.md` | Milestone structure, risk register, execution order |
 
@@ -91,7 +91,7 @@ caveat promoted into two normative stages, 096-A and 096-B. Preparatory
 
 ## Required output
 
-**Path:** `rfcs/reviews/094-095-096-amendment-review-2026-08-<DD>.md` — one document
+**Path:** `rfcs/handoffs/094-transactional-audit/094-095-096-amendment-review-2026-08-<DD>.md` — one document
 covering all three, or three documents named per RFC, at your discretion.
 
 **It must be committed and tracked.** G11 verifies the `Independent design review`

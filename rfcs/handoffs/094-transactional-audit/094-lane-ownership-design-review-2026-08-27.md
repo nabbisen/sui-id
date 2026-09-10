@@ -255,4 +255,4 @@ standing instruction described.
 
 ---
 
-`rfcs/reviews/094-lane-ownership-design-review-2026-08-27.md`
+`rfcs/handoffs/094-transactional-audit/094-lane-ownership-design-review-2026-08-27.md`

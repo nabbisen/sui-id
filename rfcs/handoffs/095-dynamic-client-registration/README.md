@@ -113,3 +113,18 @@ browser-network evidence, legacy-unstamped candidate report and owner
 disposition, sanitized log/metric samples, response headers, remaining risks,
 and an independent closure-review request. A checklist without observed output
 is not evidence.
+
+## Review records
+
+Relocated here on 2026-09-10 when `rfcs/reviews/` was retired — RFC 000
+sanctions four lifecycle folders plus the optional `draft/` and this
+non-lifecycle `handoffs/` companion folder, and per-RFC review records are
+companion documents, not a sixth lifecycle.
+
+| Record | What it is |
+|---|---|
+| [`095-design-review-2026-07-18.md`](095-design-review-2026-07-18.md) | Original independent design review, cited in RFC 095's lifecycle history |
+
+RFC 095's current **Independent design review** and A6 sweep evidence are
+the shared three-RFC records, held under
+[`../094-transactional-audit/`](../094-transactional-audit/README.md#review-records).

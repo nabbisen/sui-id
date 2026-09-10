@@ -87,7 +87,7 @@ not independently checked?** Its records are in `.git-exclude/reviewed/`, notabl
 
 ## Required output
 
-**Path:** `rfcs/reviews/093-closure-review-2026-08-<DD>.md`
+**Path:** `rfcs/handoffs/093-build-toolchain-release-gates/093-closure-review-2026-08-<DD>.md`
 
 **It must be committed and tracked.** G11 verifies the `Closure evidence` target
 resolves, is tracked, and is **not** gitignored — so a `.git-exclude/` path will

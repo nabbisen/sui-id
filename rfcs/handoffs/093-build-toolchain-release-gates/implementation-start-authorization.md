@@ -16,8 +16,8 @@ This record does not state that implementation or any RFC 093 gate has passed.
 The authorized design and evidence contract is:
 
 - governing design: [`RFC 093`](../../done/093-build-toolchain-release-gates.md);
-- independent design review: [`093-design-review-2026-07-17.md`](../../reviews/093-design-review-2026-07-17.md);
-- implementation-start review: [`093-implementation-start-authorization-review-2026-07-21.md`](../../reviews/093-implementation-start-authorization-review-2026-07-21.md);
+- independent design review: [`093-design-review-2026-07-17.md`](093-design-review-2026-07-17.md);
+- implementation-start review: [`093-implementation-start-authorization-review-2026-07-21.md`](093-implementation-start-authorization-review-2026-07-21.md);
 - roadmap milestone: M1 — Trustworthy build baseline in [`ROADMAP.md`](../../../ROADMAP.md); and
 - implementation owner: `codex-developer` (OpenAI Codex).
 
@@ -53,7 +53,7 @@ This authorization package changes only:
 
 - `rfcs/done/093-build-toolchain-release-gates.md`; and
 - `rfcs/handoffs/093-build-toolchain-release-gates/implementation-start-authorization.md`; and
-- `rfcs/reviews/093-implementation-start-authorization-review-2026-07-21.md`.
+- `rfcs/handoffs/093-build-toolchain-release-gates/093-implementation-start-authorization-review-2026-07-21.md`.
 
 No implementation source, workflow, manifest, lockfile, test, or generated
 gate artifact is changed by this authorization record.

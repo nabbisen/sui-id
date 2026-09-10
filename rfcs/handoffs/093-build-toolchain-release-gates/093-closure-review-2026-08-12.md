@@ -4,7 +4,7 @@
 **Reviewer.** `codex-independent-architecture-security-reviewer` (OpenAI Codex)  
 **Request.** [Closure review request](./093-closure-review-request-2026-08-03.md)  
 **Baseline.** `1d58da2491275409e9012ae0482af62bb86934ba`  
-**Governing RFC.** [RFC 093](../done/093-build-toolchain-release-gates.md)
+**Governing RFC.** [RFC 093](../../done/093-build-toolchain-release-gates.md)
 
 ## Review result
 
@@ -25,22 +25,22 @@ I independently queried the hosted CI run metadata and job outcomes rather than 
 | C2/C3/C4 run `30735008212` | `push`, commit `bfbb2e42e6acd735e8f5d872a00f261b64589c70`, conclusion `success`, 21/21 jobs successful. |
 | C2.1 run `30744684897` | `push`, commit `afc999e75c20ede290bb01ea6c3b43c803575b3c`, conclusion `success`, 21/21 jobs successful. |
 
-The CI definition also makes the per-lane evidence shape an executable condition: the dispatcher records and compares `event_commit` and `checked_out_commit`, requires a clean tree, records the command, and reports its exit status ([`scripts/ci-gate.sh`](../../scripts/ci-gate.sh) lines 79–113). G12 and A3.4 carry equivalent explicit checkout checks ([`ci.yml`](../../.github/workflows/ci.yml) lines 383–424 and 437–468).
+The CI definition also makes the per-lane evidence shape an executable condition: the dispatcher records and compares `event_commit` and `checked_out_commit`, requires a clean tree, records the command, and reports its exit status ([`scripts/ci-gate.sh`](../../../scripts/ci-gate.sh) lines 79–113). G12 and A3.4 carry equivalent explicit checkout checks ([`ci.yml`](../../../.github/workflows/ci.yml) lines 383–424 and 437–468).
 
-The C5 diff was also inspected. It removes only the four legacy inline UI jobs and retains `ui-invariants-v1`; the retained job documents its four blocking checks and negative self-tests ([`ci.yml`](../../.github/workflows/ci.yml) lines 365–424). The absence of negative fixtures for G12's two advisory reports does not invalidate those blocking checks.
+The C5 diff was also inspected. It removes only the four legacy inline UI jobs and retains `ui-invariants-v1`; the retained job documents its four blocking checks and negative self-tests ([`ci.yml`](../../../.github/workflows/ci.yml) lines 365–424). The absence of negative fixtures for G12's two advisory reports does not invalidate those blocking checks.
 
 ## Blocking finding
 
 ### B-093-1 — the legacy literal check is represented as structural audit assurance
 
-RFC 093 is explicit: the legacy script compares event-name strings and cannot prove emission, typing, or shared mutation/audit transactions ([RFC 093](../done/093-build-toolchain-release-gates.md) lines 47–49). Its required wording is “Diagnostic only,” and says string parity proves neither emission completeness nor mutation/audit atomicity (lines 261–269). The closure handoff makes independent confirmation of that limitation mandatory ([verification handoff](../handoffs/093-build-toolchain-release-gates/verification.md) lines 74–79).
+RFC 093 is explicit: the legacy script compares event-name strings and cannot prove emission, typing, or shared mutation/audit transactions ([RFC 093](../../done/093-build-toolchain-release-gates.md) lines 47–49). Its required wording is “Diagnostic only,” and says string parity proves neither emission completeness nor mutation/audit atomicity (lines 261–269). The closure handoff makes independent confirmation of that limitation mandatory ([verification handoff](verification.md) lines 74–79).
 
-The current normative [audit coverage matrix](../../docs/src/reference/audit-coverage-matrix.md) contradicts that boundary in two connected ways:
+The current normative [audit coverage matrix](../../../docs/src/reference/audit-coverage-matrix.md) contradicts that boundary in two connected ways:
 
 - it says every privileged state mutation has a row and that `check-audit-matrix.sh` keeps the document and code in sync (lines 3–6); and
 - it says that adding a privileged operation without updating the matrix is a CI failure (lines 140–148).
 
-The script cannot establish either proposition. It extracts backtick-quoted event names from Markdown and audit-namespaced string literals from Rust, then compares the two sets ([`check-audit-matrix.sh`](../../scripts/check-audit-matrix.sh) lines 27–69). A mutation can omit an event literal, use a misleading literal, or append outside its transaction and still pass. The known `user.reset_mfa` / `mfa.admin_reset` mismatch further demonstrates that a name-based relation is not a structural proof.
+The script cannot establish either proposition. It extracts backtick-quoted event names from Markdown and audit-namespaced string literals from Rust, then compares the two sets ([`check-audit-matrix.sh`](../../../scripts/check-audit-matrix.sh) lines 27–69). A mutation can omit an event literal, use a misleading literal, or append outside its transaction and still pass. The known `user.reset_mfa` / `mfa.admin_reset` mismatch further demonstrates that a name-based relation is not a structural proof.
 
 **Required correction.** Before a new closure review, amend the matrix and every derived active assurance claim so the script is described only as vocabulary/string parity. In particular, replace the claim that a new privileged operation is caught with the narrower claim that a newly introduced matching event-name literal without a matrix row is caught. Place the required diagnostic-only limitation next to the script description and state that RFC 094 owns the structural completeness and atomicity authority. Do not represent the matrix's desired policy as something the legacy script has mechanically established.
 
@@ -50,7 +50,7 @@ The script cannot establish either proposition. It extracts backtick-quoted even
 |---|---|---|
 | README's 26 external links are outside G10b's local-target check. | A documented coverage boundary, not an assertion that external reachability was tested. The link check's output must be described as local-link integrity only. | Non-blocking; track external-link policy under RFC 098/M5 if desired. |
 | Eight mdBook links resolve in the repository but not in rendered book output. | A real documentation defect, but `mdbook build` does not claim rendered outbound-link validation. | Non-blocking for RFC 093's stated G10a contract; repair under the documentation-authority work. |
-| The RFC README template omits `Accountable owner and approver`, although G11 requires it for prospective RFCs. | A live usability/process defect: the documented template can produce an RFC G11 rejects. The actual checker correctly enforces the field ([`check-rfc-integrity.py`](../../scripts/check-rfc-integrity.py) lines 75–83 and 399–408). | Non-blocking for this closure, but should be repaired as the small standalone M1b-owned documentation correction identified in the recorded analysis. |
+| The RFC README template omits `Accountable owner and approver`, although G11 requires it for prospective RFCs. | A live usability/process defect: the documented template can produce an RFC G11 rejects. The actual checker correctly enforces the field ([`check-rfc-integrity.py`](../../../scripts/check-rfc-integrity.py) lines 75–83 and 399–408). | Non-blocking for this closure, but should be repaired as the small standalone M1b-owned documentation correction identified in the recorded analysis. |
 | RFC 000 and RFC 018 share a lifecycle-policy title without a supersession marker. | The recorded analysis shows that they contain distinct, live normative material, so neither can safely be archived as a duplicate. The ambiguity is a documentation-authority issue, not a false G11 result. | Non-blocking; require an explicit authority/consolidation decision under RFC 098/M5. |
 | G12's advisory reports have no negative fixtures. | Deliberate and accurately labeled: the advisory reports do not control the G12 result, while the four blocking invariants have negative self-tests. | Non-blocking. |
 
@@ -70,4 +70,4 @@ This review does not find the prior reviewer’s defects to invalidate the obser
 
 ---
 
-`rfcs/reviews/093-closure-review-2026-08-12.md`
+`rfcs/handoffs/093-build-toolchain-release-gates/093-closure-review-2026-08-12.md`

@@ -75,7 +75,7 @@ expected and welcome — remove it afterward and say so, as you did for the
 
 ## 5. Required output
 
-**Path:** `rfcs/reviews/094-lane-ownership-design-review-2026-08-<DD>.md`,
+**Path:** `rfcs/handoffs/094-transactional-audit/094-lane-ownership-design-review-2026-08-<DD>.md`,
 committed and tracked.
 
 **Outcome:** Approved / Conditionally Approved / Corrections Required / Design
@@ -93,4 +93,4 @@ registers a CI lane costs considerably more.
 
 ---
 
-`rfcs/reviews/094-lane-ownership-design-review-request-2026-08-27.md`
+`rfcs/handoffs/094-transactional-audit/094-lane-ownership-design-review-request-2026-08-27.md`

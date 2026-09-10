@@ -75,7 +75,7 @@ Seven tracked files mention `check-audit-matrix`. Each was read, not counted:
 | `rfcs/done/085` | "greps event-name constants and asserts (a)…(b)" — accurate |
 | `CHANGELOG.md` | Historical release records, describing string parity accurately |
 | `rfcs/accepted/093` | This RFC mandating the diagnostic wording — the fix itself |
-| `rfcs/reviews/093-closure-review-request-2026-08-03`, `093-closure-review-2026-08-12` | Dated review records |
+| `rfcs/handoffs/093-build-toolchain-release-gates/093-closure-review-request-2026-08-03`, `093-closure-review-2026-08-12` | Dated review records |
 
 **This is the check whose completeness I cannot vouch for** — see §1.
 
@@ -122,4 +122,4 @@ register.
 
 ---
 
-`rfcs/reviews/093-closure-review-2026-08-27.md`
+`rfcs/handoffs/093-build-toolchain-release-gates/093-closure-review-2026-08-27.md`

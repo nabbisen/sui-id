@@ -163,3 +163,18 @@ migration fixtures/report, IANA registry snapshot, transport construction
 proof, hostile-provider corpus, concurrency/fault reconciliation, cache/clock
 evidence, sanitized telemetry, live-canary procedure/result, remaining risks,
 and the independent closure-review path. Do not claim a gate from a checklist.
+
+## Review records
+
+Relocated here on 2026-09-10 when `rfcs/reviews/` was retired — RFC 000
+sanctions four lifecycle folders plus the optional `draft/` and this
+non-lifecycle `handoffs/` companion folder, and per-RFC review records are
+companion documents, not a sixth lifecycle.
+
+| Record | What it is |
+|---|---|
+| [`096-design-review-2026-07-21.md`](096-design-review-2026-07-21.md) | Original independent design review, cited in RFC 096's lifecycle history |
+
+RFC 096's current **Independent design review** and A6 sweep evidence are
+the shared three-RFC records, held under
+[`../094-transactional-audit/`](../094-transactional-audit/README.md#review-records).

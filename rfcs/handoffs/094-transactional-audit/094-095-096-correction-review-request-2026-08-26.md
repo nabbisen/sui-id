@@ -135,7 +135,7 @@ recorded scenario, the bar does not catch the risk it was written for.
 
 ## 4. Required output
 
-**Part A →** `rfcs/reviews/094-095-096-correction-review-2026-08-<DD>.md`,
+**Part A →** `rfcs/handoffs/094-transactional-audit/094-095-096-correction-review-2026-08-<DD>.md`,
 committed and tracked. G11 requires evidence targets to resolve, be tracked, and
 not be gitignored; `.git-exclude/` fails.
 
@@ -157,4 +157,4 @@ was right.
 
 ---
 
-`rfcs/reviews/094-095-096-correction-review-request-2026-08-26.md`
+`rfcs/handoffs/094-transactional-audit/094-095-096-correction-review-request-2026-08-26.md`

@@ -42,7 +42,7 @@ VALID_RFC = """\
 **Touches.** nothing.
 **Accepted on.** 2026-01-01
 **Approved by.** `@owner`
-**Independent design review.** `reviewer`, [Review](../reviews/100-review.md)
+**Independent design review.** `reviewer`, [Review](../handoffs/100-example/100-review.md)
 **Accountable owner and approver.** `@owner`.
 
 ## Summary
@@ -76,7 +76,7 @@ def make_baseline(root: Path) -> None:
     write(root / "ci" / "rfc-policy.toml", POLICY)
     write(root / "rfcs" / "README.md", VALID_README)
     write(root / "rfcs" / "accepted" / "100-example.md", VALID_RFC)
-    write(root / "rfcs" / "reviews" / "100-review.md", VALID_REVIEW)
+    write(root / "rfcs" / "handoffs" / "100-example" / "100-review.md", VALID_REVIEW)
 
 
 def git_commit(root: Path) -> None:
@@ -324,7 +324,7 @@ class RfcIntegrityTest(unittest.TestCase):
             root = Path(tmp)
             make_baseline(root)
             bad = VALID_RFC.replace(
-                "**Independent design review.** `reviewer`, [Review](../reviews/100-review.md)\n",
+                "**Independent design review.** `reviewer`, [Review](../handoffs/100-example/100-review.md)\n",
                 "",
             )
             write(root / "rfcs" / "accepted" / "100-example.md", bad)
@@ -338,7 +338,7 @@ class RfcIntegrityTest(unittest.TestCase):
             root = Path(tmp)
             make_baseline(root)
             bad = VALID_RFC.replace(
-                "[Review](../reviews/100-review.md)", "[Review](../reviews/does-not-exist.md)"
+                "[Review](../handoffs/100-example/100-review.md)", "[Review](../handoffs/100-example/does-not-exist.md)"
             )
             write(root / "rfcs" / "accepted" / "100-example.md", bad)
             git_commit(root)
@@ -351,7 +351,7 @@ class RfcIntegrityTest(unittest.TestCase):
             root = Path(tmp)
             make_baseline(root)
             bad = VALID_RFC.replace(
-                "[Review](../reviews/100-review.md)", "[Review](/etc/passwd)"
+                "[Review](../handoffs/100-example/100-review.md)", "[Review](/etc/passwd)"
             )
             write(root / "rfcs" / "accepted" / "100-example.md", bad)
             git_commit(root)
@@ -366,9 +366,9 @@ class RfcIntegrityTest(unittest.TestCase):
             # The review file must never have been added/committed at all
             # -- rewriting a path that *was* committed doesn't untrack it,
             # since `git ls-files` reads the index, not file mtimes.
-            (root / "rfcs" / "reviews" / "100-review.md").unlink()
+            (root / "rfcs" / "handoffs" / "100-example" / "100-review.md").unlink()
             git_commit(root)
-            write(root / "rfcs" / "reviews" / "100-review.md", VALID_REVIEW)
+            write(root / "rfcs" / "handoffs" / "100-example" / "100-review.md", VALID_REVIEW)
             result = run_checker(root)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("not tracked by git", result.stderr)
@@ -386,7 +386,7 @@ class RfcIntegrityTest(unittest.TestCase):
             root = Path(tmp)
             make_baseline(root)
             bad = VALID_RFC.replace(
-                "[Review](../reviews/100-review.md)",
+                "[Review](../handoffs/100-example/100-review.md)",
                 "[Review](../../.git-exclude/100-review.md)",
             )
             write(root / "rfcs" / "accepted" / "100-example.md", bad)
@@ -402,7 +402,7 @@ class RfcIntegrityTest(unittest.TestCase):
             root = Path(tmp)
             make_baseline(root)
             bad = VALID_RFC.replace(
-                "[Review](../reviews/100-review.md)",
+                "[Review](../handoffs/100-example/100-review.md)",
                 "[Review](https://example.invalid/review)",
             )
             write(root / "rfcs" / "accepted" / "100-example.md", bad)
@@ -440,6 +440,37 @@ class RfcIntegrityTest(unittest.TestCase):
             )
             readme = VALID_README + "| 001 | [Old](./done/001-old.md) |\n"
             write(root / "rfcs" / "README.md", readme)
+            git_commit(root)
+            result = run_checker(root)
+            self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+
+
+    def test_unsanctioned_folder_under_rfcs_rejected(self):
+        # Invariant 12: RFC 000's layout is five folders, four holding RFCs,
+        # plus optional draft/ and the handoffs/ companion folder. A sixth
+        # top-level folder is a second place for lifecycle-looking documents
+        # to accumulate. Before this check nothing noticed one -- discover_rfcs
+        # iterates LIFECYCLE_FOLDERS and is blind to everything else, which is
+        # how rfcs/reviews/ survived months of green runs.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_baseline(root)
+            write(root / "rfcs" / "reviews" / "100-review.md", VALID_REVIEW)
+            git_commit(root)
+            result = run_checker(root)
+            self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+            self.assertIn("unsanctioned folder under rfcs/: rfcs/reviews/", result.stderr)
+
+    def test_sanctioned_optional_folders_accepted(self):
+        # The same invariant must not fire on the layout RFC 000 does allow:
+        # draft/ and handoffs/ are both optional and both legitimate. Without
+        # this the check would pass for the wrong reason -- by forbidding
+        # everything, including what the policy permits.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_baseline(root)
+            write(root / "rfcs" / "draft" / "101-wip.md", VALID_RFC)
+            write(root / "rfcs" / "handoffs" / "100-example" / "README.md", "# Handoff\n")
             git_commit(root)
             result = run_checker(root)
             self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)

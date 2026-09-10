@@ -56,7 +56,7 @@ Stop and return to architecture/security review if:
 C17/C18 activation handling, C23, and F01–F06 in `command-inventory.md` are an
 accepted amendment made after the original RFC 094 acceptance. The independent
 review and `@nabbisen` approval are recorded in
-`rfcs/reviews/094-federation-command-amendment-review-2026-07-21.md`. The
+`rfcs/handoffs/094-transactional-audit/094-federation-command-amendment-review-2026-07-21.md`. The
 owner decision is preserved in the durable review record. RFC 000 returned the
 complete material RFC to Proposed in commit
 `43085e38219e5eb1bfe11cc698b18f1fa5f5e4d7`, and `@nabbisen` explicitly
@@ -75,3 +75,32 @@ overload C17 for trust-policy replacement, compose U01/C19/U30 as nested Class-A
 compound mutation across transactions, or treat a Class-B login observation as
 atomically audited. Cache eviction for C23 is post-commit and never part of the
 SQLite transaction.
+
+## Review records
+
+Dated review records for RFC 094 — and for the shared 094/095/096 reviews,
+which live here as the lowest number they cover — relocated on 2026-09-10
+when `rfcs/reviews/` was retired: RFC 000 sanctions four lifecycle folders
+plus the optional `draft/` and this non-lifecycle `handoffs/` companion
+folder, and per-RFC review records are companion documents, not a sixth
+lifecycle.
+
+| Record | What it is |
+|---|---|
+| [`094-design-review-2026-07-17.md`](094-design-review-2026-07-17.md) | Original independent design review of the base design |
+| [`094-federation-command-amendment-review-2026-07-21.md`](094-federation-command-amendment-review-2026-07-21.md) | Review of the federation-command amendment |
+| [`094-095-096-amendment-review-request-2026-08-03.md`](094-095-096-amendment-review-request-2026-08-03.md) | Request for the three-RFC amendment review |
+| [`094-095-096-amendment-review-2026-08-12.md`](094-095-096-amendment-review-2026-08-12.md) | Three-RFC amendment review |
+| [`094-095-096-correction-review-request-2026-08-12.md`](094-095-096-correction-review-request-2026-08-12.md) | First correction-review request |
+| [`094-095-096-correction-review-request-2026-08-26.md`](094-095-096-correction-review-request-2026-08-26.md) | Second correction-review request |
+| [`094-095-096-correction-review-2026-08-26.md`](094-095-096-correction-review-2026-08-26.md) | Correction review — the **Independent design review** evidence for RFCs 094, 095 and 096 |
+| [`094-095-096-a6-sweep-request-2026-08-26.md`](094-095-096-a6-sweep-request-2026-08-26.md) | A6 implementability sweep request |
+| [`094-095-096-a6-sweep-2026-08-27.md`](094-095-096-a6-sweep-2026-08-27.md) | A6 implementability sweep — cited by RFCs 094, 095 and 096 |
+| [`094-lane-ownership-design-review-request-2026-08-27.md`](094-lane-ownership-design-review-request-2026-08-27.md) | Lane-ownership design review request |
+| [`094-lane-ownership-design-review-2026-08-27.md`](094-lane-ownership-design-review-2026-08-27.md) | Lane-ownership design review — cited by RFC 094 |
+
+These are historical records. They are not edited to reflect later
+decisions; only their link paths were rewritten by the relocation. One
+consequence: `094-lane-ownership-design-review-request-2026-08-27.md` §C
+still describes `rfcs/reviews/` in the present tense. That sentence was
+true on its date and is preserved as written.
