@@ -1,6 +1,6 @@
 # RFC 098 reconciliation checklist
 
-**Governing RFC:** [RFC 098](../../proposed/098-documentation-authority-reconciliation.md)
+**Governing RFC:** [RFC 098](../../accepted/098-documentation-authority-reconciliation.md)
 
 ## 1 — Publish the authority map first
 

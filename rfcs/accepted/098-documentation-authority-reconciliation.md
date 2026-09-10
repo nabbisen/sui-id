@@ -1,6 +1,11 @@
 # RFC 098 — Documentation Authority and Reconciliation
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-09-10
+**Approved by.** `@nabbisen`
+**Independent design review.** `@nabbisen`, [Design review 2026-09-10](../handoffs/098-documentation-authority/098-design-review-2026-09-10.md)
+— design authored by the architect and reviewed by the accountable owner, who
+authored neither this RFC nor its design and is not the implementer.
 **Security review.** Required
 **Design prerequisites.** RFC 093 Accepted for mechanical integrity ownership; authoritative-document hierarchy approved before RFC 097 final drafting.
 **Implementation prerequisites.** RFC 093 **M1b** Implemented — the mdBook, markdown-link, and RFC-integrity gates M1b owns are the mechanical foundation this RFC builds on, and reconciling claims before those gates exist would leave the result unenforced; this RFC Accepted. M1a is implied by M1b but is not independently sufficient.
@@ -13,8 +18,11 @@
 **Implementation owner.** `codex-developer` (OpenAI Codex), after acceptance and prerequisites.
 **Independent security and closure reviewer.** Role independence per RFC 000 —
 the reviewer must not have authored, implemented, or previously approved this
-RFC; vendor is not a criterion. Routes to the implementation role, with
-judgments that role cannot adjudicate recorded for `@nabbisen`.
+RFC, and the implementer cannot be the sole approver; vendor is not a
+criterion. *Corrected at acceptance, 2026-09-10: this clause previously routed
+independent review to the implementation role, which is how RFCs 094–096 were
+reviewed. `@nabbisen` ruled on 2026-09-09 that the implementation role is not
+a reviewer. Those earlier reviews stand as performed and are not reopened.*
 
 ## Summary
 

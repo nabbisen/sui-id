@@ -1,10 +1,12 @@
 # RFC 098 handoff — documentation authority and reconciliation
 
-**Governing RFC:** [RFC 098](../../proposed/098-documentation-authority-reconciliation.md) — Proposed
+**Governing RFC:** [RFC 098](../../accepted/098-documentation-authority-reconciliation.md) — Accepted 2026-09-10
 **Milestone:** M5
 **Audience:** documentation owner
 **Status:** Planning companion; inherits the governing RFC's current status —
-Proposed.
+**Accepted 2026-09-10**. Implementation-eligible: RFC 093 M1b Implemented
+(closed 2026-08-27) satisfies the entry gate below. The reconciliation plan is
+RFC 098 §Design 5, ordered by severity; step 1 is the F1 staleness banner.
 
 ## Entry gate
 
