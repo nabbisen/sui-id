@@ -2,6 +2,28 @@
 
 **Governing RFC:** [RFC 098](../../accepted/098-documentation-authority-reconciliation.md)
 
+## 0 — Order of work, added at acceptance 2026-09-10
+
+**The authoritative order is RFC 098 §Design 5**, a seven-step plan ordered by
+severity and measured against `ee48257`. Work it in that order; this checklist
+is the wider content sweep that follows, and its §4 contradictions merge into
+step 6.
+
+Steps 1–3 close every public-facing falsehood and come first:
+
+1. Staleness banner on `docs/threat-model.md` — it declares itself current as
+   of v0.26.0 at a v0.77.0 workspace, and `README.md` presents it publicly.
+2. Delete `docs/deployment.md`, `docs/operators.md`, `docs/integrators.md` —
+   stale forks of the book pages, holding no unique content and one false
+   claim — and repoint `README.md` at the book pages with **repo-relative**
+   links, not `https://github.com/...` URLs, which G10b cannot see.
+3. Repoint `crates/sui-id/src/cli.rs` and
+   `crates/sui-id/src/http/handlers/setup.rs`, which cite a deleted path.
+
+Step 3 is the only one that touches `crates/`. Do not start step 4 or later
+without a dispatch; steps 5 and 7 depend on open question 1, which acceptance
+did **not** decide.
+
 ## 1 — Publish the authority map first
 
 Before changing any document, publish a map naming, per topic, **one**
