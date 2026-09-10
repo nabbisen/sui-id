@@ -6,7 +6,7 @@
 performed by the requirements-architect role on the owner's explicit direction;
 that role authored the correction examined by checks 1–3 and is **not**
 independent of them. Recorded as an unreviewed judgment carried by the owner,
-per RFC 018, rather than as a completed independent review.
+per RFC 000, rather than as a completed independent review.
 **Closure evidence.** [Closure review 2026-08-27](../reviews/093-closure-review-2026-08-27.md)
 **Security review.** Required
 **Accepted on.** 2026-07-17
@@ -24,7 +24,7 @@ per RFC 018, rather than as a completed independent review.
 **Touches.** `Cargo.toml`, crate manifests, `Cargo.lock`, `.github/workflows/`, `scripts/`, `docs/book.toml`, `rfcs/README.md`, RFC metadata and links.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** `codex-project-architect` (OpenAI Codex).
-**Independent security and closure reviewer.** Role independence per RFC 018 —
+**Independent security and closure reviewer.** Role independence per RFC 000 —
 the reviewer must not have authored, implemented, or previously approved this
 RFC; vendor is not a criterion. *Corrected 2026-08-27: this field previously
 designated `codex-independent-architecture-security-reviewer` (OpenAI Codex)

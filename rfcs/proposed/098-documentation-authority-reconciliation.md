@@ -11,7 +11,7 @@
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** `codex-project-architect` (OpenAI Codex).
 **Implementation owner.** `codex-developer` (OpenAI Codex), after acceptance and prerequisites.
-**Independent security and closure reviewer.** Role independence per RFC 018 —
+**Independent security and closure reviewer.** Role independence per RFC 000 —
 the reviewer must not have authored, implemented, or previously approved this
 RFC; vendor is not a criterion. Routes to the implementation role, with
 judgments that role cannot adjudicate recorded for `@nabbisen`.

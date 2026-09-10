@@ -19,7 +19,7 @@ repo, `crates/sui-id-core/src/account/`, `crates/sui-id/src/http/handlers/`,
 `crates/sui-id-core/src/oidc/authorize.rs`.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** High-capability model, requirements-architect role.
-**Independent security and closure reviewer.** Role independence per RFC 018 — the
+**Independent security and closure reviewer.** Role independence per RFC 000 — the
 reviewer must not have authored, implemented, or previously approved this RFC;
 vendor is not a criterion. Design review routes to the implementation role for
 implementability; the threat judgments in §6 route to `@nabbisen` where no other

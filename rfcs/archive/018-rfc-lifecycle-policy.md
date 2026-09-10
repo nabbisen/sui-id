@@ -1,12 +1,29 @@
-# RFC 018 — sui-id RFC lifecycle profile
+# RFC 018 — RFC lifecycle policy
 
-**Status.** Implemented
-**Precedence.** This RFC is sui-id's project-specific profile of the lifecycle
-policy defined by [RFC 000](./000-rfc-lifecycle-policy.md). Where the two
-differ, **this document governs for sui-id**; where this document is silent,
-RFC 000 applies. *Retitled 2026-08-27: both RFCs previously carried the
-identical title "RFC lifecycle policy", with no way for a reader to tell which
-governed what.*
+**Status.** Superseded by RFC 000
+**Superseded on.** 2026-09-10
+**Reason.** Two documents defined one lifecycle policy, and the duplication
+caused repeated harm rather than once: an identical title with no way to tell
+which governed, 344 lines of independent drift, a project copy edited out of step
+with its shared source, and finally two competing precedence claims. RFC 000 —
+the policy shared across projects, whose source is
+`.git-exclude/rules/000-rfc-lifecycle-policy.md` — carries everything this RFC
+required, including the acceptance metadata, the independent design-review
+requirement, the closure record, and the constraint that *the implementer cannot
+be the sole approver* of a security-sensitive design or its closure evidence.
+Owner decision, 2026-09-10.
+
+*Retitled back on retirement.* This file was renamed "sui-id RFC lifecycle
+profile" and given a `Precedence.` field on 2026-08-27 in an attempt to separate
+the two documents by role. That attempt is part of what is being retired, so it is
+archived under the title it actually held.
+
+*No reciprocal note was added to RFC 000*, which the supersede procedure would
+normally require. RFC 000 is a copy of a source shared across projects and the
+owner directed it remain byte-identical to that source; editing it here would
+recreate the divergence this retirement exists to end. The supersession is
+recorded in `rfcs/README.md`'s Archive table instead.
+
 **Tracks.** Cross-cutting documentation policy. Not tied to any
 single feature; applies to the RFC directory itself.
 **Touches.** `rfcs/` folder structure, the index file at

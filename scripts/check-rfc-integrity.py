@@ -308,7 +308,7 @@ def check_index(root: Path, rfcs: list[Rfc], failures: list[str]) -> None:
     # first cell names its identifier -- a bare number ("025") for
     # standard RFCs, "MI-NNN" for RFC-MI-* ones. This is stricter than
     # "any link to the file anywhere in the document": prose
-    # cross-references (e.g. "governed by [RFC 018](...)" outside any
+    # cross-references (e.g. "governed by [RFC 000](...)" outside any
     # table) and another RFC's own row incidentally linking to this one
     # (e.g. archive/007's "Superseded by [RFC 025](...)" cell) are not
     # index entries and must not be counted as one.

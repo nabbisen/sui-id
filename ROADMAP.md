@@ -33,7 +33,7 @@ once its governing RFC is Accepted in its amended form and the preparatory
 `handlers/federation.rs` split has landed; that split is itself withdrawn as
 of 2026-08-12, pending RFC 096's correction review.
 
-Before any remediation implementation begins, M0 adopts RFC 018's five-folder
+Before any remediation implementation begins, M0 adopts RFC 000's five-folder
 variant: `rfcs/accepted/` is the repository-native design-approved and
 implementation-eligible state, its files carry `Status: Accepted`, and the RFC
 index and integrity checks
@@ -309,7 +309,7 @@ it, and the impact ratings below should be re-read.
 
 | ID | Risk | Likelihood | Impact | Detection | Mitigation | Residual | Owner |
 |---|---|---|---|---|---|---|---|
-| R1 | Review independence: authoring, implementation and review concentrate in few roles | Certain (structural) | High — the readiness claim rests on it | Review documents state which role reviewed and what it checked | Role-based routing per RFC 018: design reviewed by the implementation role, implementation by the specifying role, rules and scope decided by the owner; vendor is not a criterion | Design judgments no role but the author can assess, carried explicitly by the owner — currently RFC 094 `ReadConn` sufficiency and RFC 096 B1/B2 | `@nabbisen` |
+| R1 | Review independence: authoring, implementation and review concentrate in few roles | Certain (structural) | High — the readiness claim rests on it | Review documents state which role reviewed and what it checked | Role-based routing per RFC 000: design reviewed by the implementation role, implementation by the specifying role, rules and scope decided by the owner; vendor is not a criterion | Design judgments no role but the author can assess, carried explicitly by the owner — currently RFC 094 `ReadConn` sufficiency and RFC 096 B1/B2 | `@nabbisen` |
 | R2 | Audit hash chain is unkeyed and unanchored — tamper-evident only within its trust boundary | Certain (by design) | High if misrepresented; low if stated | Documentation review | RFC 094 corrects the claims; no external anchor is introduced | Accepted permanently for this programme; revisit on a non-repudiation requirement or an untrusted-DB-writer deployment | `@nabbisen` |
 | R3 | Source-size debt: 26 files over 500 lines, incl. load-bearing security modules | Certain (measured) | Medium — raises review cost and change-collision risk | `find`/`wc` sweep | No new file over 500 ELOC; split-when-touched-if-it-helps; **M5 revisit** | Residue unresolved until the M5 decision | `@nabbisen` at M5 |
 | R4 | MSRV 1.95 leaves ~2 releases of headroom below current stable | Certain (measured) | Medium — operators need `rustup`, not distro Rust | Toolchain bisect (done) | README states the `rustup` expectation | Narrow support window accepted when the floor was approved | `@nabbisen` |
@@ -364,7 +364,7 @@ Two failures, recorded so they are not repeated:
    performed it.
 
 **Owner decision, 2026-08-26.** Review is not skipped. Independence means role
-independence, defined and routed in RFC 018: a design is reviewed by the role
+independence, defined and routed in RFC 000: a design is reviewed by the role
 that must build against it; an implementation by the role that specified it;
 rules, scope and schedule are proposed by the architect and decided by the owner.
 Vendor is not a criterion — a reviewer sharing the author's vendor is valid, and

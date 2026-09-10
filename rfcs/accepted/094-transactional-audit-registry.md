@@ -25,7 +25,7 @@ findings verified, `ReadConn` sufficiency measured rather than argued. Also
 **Command inventory.** [`../handoffs/094-transactional-audit/command-inventory.md`](../handoffs/094-transactional-audit/command-inventory.md)
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** `codex-project-architect` (OpenAI Codex).
-**Independent security and closure reviewer.** Role independence per RFC 018 —
+**Independent security and closure reviewer.** Role independence per RFC 000 —
 the reviewer must not have authored, implemented, or previously approved this
 RFC; vendor is not a criterion. Design review routes to the implementation
 role, for implementability and for specification gaps it would hit while

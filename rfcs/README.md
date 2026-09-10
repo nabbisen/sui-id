@@ -14,9 +14,7 @@ implementation prerequisite has repository-visible passing evidence.
 ## How this directory works
 
 The lifecycle is governed by
-[RFC 018 — sui-id RFC lifecycle profile](./done/018-rfc-lifecycle-policy.md),
-which profiles the general policy in
-[RFC 000](./done/000-rfc-lifecycle-policy.md).
+[RFC 000 — RFC lifecycle policy](./done/000-rfc-lifecycle-policy.md).
 Briefly:
 
 - **`proposed/`** — open for review and discussion. Implementer
@@ -59,7 +57,7 @@ slot is `101`). One **parallel namespace** also exists:
   (`069`, then `070`, …).
 
   Numbers in either namespace are permanent and never re-used, per
-  RFC 018.
+  RFC 000.
 
 ## Index
 
@@ -262,7 +260,6 @@ real-environment soak of the current core before any implementation.
 | 021 | [Schema invariant CHECKs and migration safety](./done/021-schema-invariant-checks.md) | v0.29.10–11 |
 | 020 | [User identity invariants and OIDC claim consistency](./done/020-user-identity-invariants.md) | v0.29.x |
 | 019 | [Auth flow data integrity hardening](./done/019-auth-flow-data-integrity.md) | v0.29.x |
-| 018 | [sui-id RFC lifecycle profile](./done/018-rfc-lifecycle-policy.md) | v0.29.5 |
 | 017 | [UI/UX design contracts](./done/017-ui-ux-design-contracts.md) | v0.32.0 |
 | 016 | [Server logging completeness](./done/016-server-logging-completeness.md) | v0.29.4 |
 | 015 | [Documentation consistency pass](./done/015-doc-consistency-pass.md) | v0.29.4 |
@@ -281,6 +278,7 @@ real-environment soak of the current core before any implementation.
 | ID  | Title          | Disposition                                                |
 |-----|----------------|------------------------------------------------------------|
 | 007 | [Multi-tenancy](./archive/007-multi-tenancy.md) | Superseded by [RFC 025](./proposed/025-multi-tenant-expansion.md) |
+| 018 | [RFC lifecycle policy](./archive/018-rfc-lifecycle-policy.md) | Superseded by [RFC 000](./done/000-rfc-lifecycle-policy.md), 2026-09-10 — two documents defined one policy; RFC 000 is the shared source and carries everything 018 required |
 
 ## Historical implementation order
 
@@ -327,7 +325,7 @@ The standard shape is light:
 **Handoff.** Link to the implementation handoff (omit for RFCs too small to need one).
 **Accountable owner and approver.** NAME — the human who approves this RFC and its closure.
 **RFC author / architect.** NAME or role that wrote this RFC.
-**Independent security and closure reviewer.** Role independence per RFC 018 — the reviewing role and what it reviews, or None if Security review is not required.
+**Independent security and closure reviewer.** Role independence per RFC 000 — the reviewing role and what it reviews, or None if Security review is not required.
 
 <!-- Add when moving to accepted/: -->
 **Accepted on.** YYYY-MM-DD
@@ -395,7 +393,7 @@ uses. There's no separate section-profile metadata.
 ## Process
 
 The full lifecycle is described in
-[RFC 018](./done/018-rfc-lifecycle-policy.md). The short version:
+[RFC 000](./done/000-rfc-lifecycle-policy.md). The short version:
 
 1. New RFC: open a draft as `rfcs/proposed/NNN-slug.md` with
    Status `Proposed`. The number is the next unused integer,
@@ -421,14 +419,14 @@ review. Status, active acceptance metadata, folder, index, and inbound links
 change together; the earlier decision remains only in version-control history
 or an explicit superseded-review note. The RFC author or implementer cannot be
 the sole approver of a security-sensitive RFC or its closure evidence. See RFC
-018 for the approval, independence, dependency, and transition rules.
+000 for the approval, independence, dependency, and transition rules.
 
 Every new RFC declares `Security review: Required` or `Not required — reason
 approved by NAME`. Authentication, authorization, secrets, tokens, sessions,
 audit guarantees, external trust boundaries, security-relevant
 storage/transactions, and assurance controls require independent review.
 
-Files are never deleted. The full reasoning is in RFC 018.
+Files are never deleted. The full reasoning is in RFC 000.
 
 
 ## UI-Security Contract (RFCs 088–092, v0.70.x–v0.74.x)

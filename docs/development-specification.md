@@ -982,7 +982,7 @@ To stay valid on crates.io (where relative paths 404):
 
 The codebase has accumulated **60+ implemented RFCs** by v0.48.4.
 The lifecycle policy lives in
-`rfcs/done/018-rfc-lifecycle-policy.md`.
+`rfcs/done/000-rfc-lifecycle-policy.md`.
 
 ### 20.1 When to write one
 

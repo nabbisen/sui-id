@@ -66,7 +66,7 @@ carry them here with a named accepter rather than restating them as open:
   its trust boundary only, and **not** evidence against a malicious database
   writer. RFC 094 corrects the claims; it introduces no external anchor.
 - **S1** — review independence. **Decided 2026-08-26:** independence means role
-  independence, routed per RFC 018 — a design is reviewed by the role that must
+  independence, routed per RFC 000 — a design is reviewed by the role that must
   build against it, an implementation by the role that specified it, and rules
   and scope are decided by the owner. Vendor is not a criterion. Record here,
   for each artifact this threat model rests on, which role reviewed it and what

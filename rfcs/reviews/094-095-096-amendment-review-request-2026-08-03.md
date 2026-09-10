@@ -40,7 +40,7 @@ it first would defeat the purpose of asking you.
 | `rfcs/reviews/094-design-review-2026-07-17.md` | Original independent review |
 | `rfcs/reviews/094-federation-command-amendment-review-2026-07-21.md` | Prior amendment review |
 | `rfcs/reviews/096-design-review-2026-07-21.md` | Original independent review |
-| `rfcs/done/018-rfc-lifecycle-policy.md` | Governs the security-review classification |
+| `rfcs/archive/018-rfc-lifecycle-policy.md` | Governs the security-review classification |
 | `ROADMAP.md` | Milestone structure, risk register, execution order |
 
 Each RFC's `Lifecycle history` and `Amendment summary` fields state what changed.

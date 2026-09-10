@@ -105,7 +105,7 @@ identically-titled rows side by side.
 | 000 | RFC lifecycle policy | Implemented | `done/` | 654 | 2026-07-17 |
 | 018 | RFC lifecycle policy | Implemented | `done/` | 563 | 2026-05-06 |
 
-**Neither references the other.** RFC 000 is the newer, so RFC 018 is very likely
+**Neither references the other.** RFC 000 is the newer, so RFC 000 is very likely
 superseded — but nothing says so, and both present as live policy.
 
 Under RFC 000's own rules a superseded RFC carries `Status: Superseded by RFC NNN`

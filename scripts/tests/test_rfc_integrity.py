@@ -170,7 +170,7 @@ class RfcIntegrityTest(unittest.TestCase):
         # table row (e.g. a "superseded by" cell) must not count as
         # RFC 100's index entry, and prose links outside any table row
         # must not either -- both are real patterns in the live
-        # rfcs/README.md (RFC 018/025 cross-references).
+        # rfcs/README.md (RFC 000/025 cross-references).
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             make_baseline(root)
