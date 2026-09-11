@@ -10,6 +10,8 @@ and 6. Read it before the RFC section: it explains why six, not four.
 **Authorized.** `@nabbisen`, 2026-09-12. Tracked as **R10** in `ROADMAP.md`.
 **Implementer.** Mid-capability model.
 **Baseline.** `aa93c9a` or later on `main`.
+**Landed.** `153db49`, 2026-09-12 — reviewed at
+`.git-exclude/reviewed/r10-lane-registry-2026-09-12.md`. R10-b below is open.
 
 ## Why now
 
@@ -155,3 +157,38 @@ in RFC 094 under the heading its design names, `[gate_owners]` and `[gates]`
 entries, the A3.2 negative self-test the lane inherits (which is the desync
 fixture RFC 085 promised in v0.68.0 and never delivered), and the `ci.yml`
 job. Not this dispatch.
+
+## R10-b — make the parse-error premise true
+
+**Dispatched 2026-09-12**, after R10 landed as `153db49`. Small; one commit.
+
+RFC 094 says, and this handoff repeated as an instruction, that ownership
+conflicts are TOML parse errors and need no detector. **That holds only if
+something parses the file as TOML, and nothing in this pipeline does** — every
+reader is awk. Measured at review: a duplicate `[gate_owners]` key is caught by
+check 1; a duplicate `[gate_lane_sources]` key whose second heading resolves
+cleanly (`"093" = "Summary"`) passes with exit 0, while `tomllib` rejects the
+same file. The premise was mine to get right; you followed it correctly.
+
+**The fix is to realise the premise, not to write the detector RFC 094 forbids:**
+
+1. At the top of `scripts/check-gate-inputs.sh`, before any condition, a
+   TOML-validity precheck of the manifest via Python 3.14's `tomllib`. On
+   failure: `gate-inputs: manifest is not valid TOML: <tomllib's message>`,
+   exit 1, and no further conditions run — a malformed manifest has nothing
+   meaningful to check. Python 3.14 is already pinned in `[tools]` and invoked
+   by G10b and G11; this adds no dependency. Prefer a tiny inline
+   `python3.14 -c` over a new script file.
+2. Two fixtures: `registry-duplicate-source-key` — `[gate_lane_sources]` with
+   `"093"` twice, the second heading one that occurs exactly once in RFC 093 —
+   must fail on the precheck, pinned by `not valid TOML` and `line`; and
+   `registry-duplicate-owner-key` — `G02 = "093"` twice — must now fail on the
+   precheck *before* check 1 reaches it, pinned the same way. Keep check 1's
+   "exactly one" logic unchanged; it is still the right check for an
+   `[gates]` lane with no owner.
+3. Evidence: the real tree still byte-identical to R10's output; both suites
+   green; fixture count 36 → 38.
+
+Two files: `scripts/check-gate-inputs.sh`, `scripts/tests/check-gate-inputs-fixtures.sh`.
+A third is a stop condition. RFC 094's dated note that its guarantee is
+realised by this precheck is the architect's, added when this lands.
