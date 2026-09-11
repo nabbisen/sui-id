@@ -16,40 +16,80 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
 make_valid_fixture() {
-  local target=$1
-  mkdir -p "$target/ci" "$target/rfcs/done" "$target/.github/workflows"
+  local target=$1 dir
+  mkdir -p "$target/ci" "$target/.github/workflows"
   cp "$repo_root/ci/gate-inputs.toml" "$target/ci/gate-inputs.toml"
-  cp "$repo_root/rfcs/done/093-build-toolchain-release-gates.md" \
-    "$target/rfcs/done/093-build-toolchain-release-gates.md"
+  # All four lifecycle folders, because R10 resolves an RFC number to a file
+  # by searching them — a fixture holding only RFC 093 could not tell
+  # "resolves to exactly one" from "happens to be the only file present".
+  for dir in proposed accepted "done" archive; do
+    mkdir -p "$target/rfcs/$dir"
+    if [[ -d "$repo_root/rfcs/$dir" ]]; then
+      cp "$repo_root/rfcs/$dir"/*.md "$target/rfcs/$dir/" 2>/dev/null || true
+    fi
+  done
   cp "$repo_root/.github/workflows/ci.yml" "$target/.github/workflows/ci.yml"
   cp "$repo_root/.github/workflows/audit.yml" "$target/.github/workflows/audit.yml"
   cp "$repo_root/.github/workflows/fuzz.yml" "$target/.github/workflows/fuzz.yml"
 }
 
+# A fixture with a second lane source. RFC 094's real accepted copy is
+# replaced by a synthetic single-row table so "094" still resolves to exactly
+# one file: leaving both in place would resolve to two, which is a different
+# fixture's job. The heading is level `###` so every case built on this also
+# exercises heading-level-agnostic matching.
+make_multi_source_fixture() {
+  local target=$1
+  make_valid_fixture "$target"
+  find "$target/rfcs/accepted" -maxdepth 1 -name '094-*.md' -delete
+  cat >"$target/rfcs/accepted/094-fixture.md" <<'FIXTURE_RFC'
+# RFC 094 — fixture stand-in
+
+Fixture-only stand-in used by scripts/tests/check-gate-inputs-fixtures.sh.
+It exists to give the lane registry a second source to resolve.
+
+### Gate Matrix lanes owned by RFC 094
+
+| Lane | Toolchain | Features | Command |
+|---|---|---|---|
+| G13 | stable | n/a | `bash scripts/fixture-lane.sh` |
+FIXTURE_RFC
+  sed -i 's|^"093" = "Gate Matrix v1"$|&\n"094" = "Gate Matrix lanes owned by RFC 094"|' \
+    "$target/ci/gate-inputs.toml"
+  sed -i 's|^G11 = "093"$|&\nG13 = "094"|' "$target/ci/gate-inputs.toml"
+  sed -i 's|^G11 = "python3.14 scripts/check-rfc-integrity.py --root . --policy ci/rfc-policy.toml"$|&\nG13 = "bash scripts/fixture-lane.sh"|' \
+    "$target/ci/gate-inputs.toml"
+}
+
 run_checker() {
   local root=$1
   bash "$checker" --all --policy ci/gate-inputs.toml \
-    --rfc rfcs/done/093-build-toolchain-release-gates.md \
     --workflows-dir .github/workflows \
     --root "$root"
 }
 
 expect_failure() {
   local name=$1
-  local expected=$2
+  shift
   local fixture="$tmp/$name"
   local output="$tmp/$name.output"
+  local expected
 
   if run_checker "$fixture" >"$output" 2>&1; then
     echo "fixture $name unexpectedly passed" >&2
     cat "$output" >&2
     exit 1
   fi
-  if ! grep -Fq "$expected" "$output"; then
-    echo "fixture $name failed for the wrong reason; expected: $expected" >&2
-    cat "$output" >&2
-    exit 1
-  fi
+  # Every expected substring must appear: a registry failure is pinned by
+  # both its check number and the lane or count that identifies it, so a
+  # case cannot pass by failing the right check about the wrong thing.
+  for expected in "$@"; do
+    if ! grep -Fq "$expected" "$output"; then
+      echo "fixture $name failed for the wrong reason; expected: $expected" >&2
+      cat "$output" >&2
+      exit 1
+    fi
+  done
   echo "fixture $name: expected failure observed"
 }
 
@@ -161,24 +201,28 @@ diverged_command="$tmp/gates-diverged-command"
 make_valid_fixture "$diverged_command"
 sed -i 's|^G02 = "cargo +1.95 test --workspace --locked"$|G02 = "cargo +1.95 test --workspace"|' \
   "$diverged_command/ci/gate-inputs.toml"
-expect_failure gates-diverged-command "condition 7: [gates] does not match RFC 093's Gate Matrix v1 table"
+expect_failure gates-diverged-command \
+  "condition 7 (check 4):" "G02 (owner 093)"
 
 # --- Condition 7b: [gates] missing a lane the RFC table has ---------------
 missing_gate="$tmp/gates-missing-lane"
 make_valid_fixture "$missing_gate"
-sed -i '/^G09b = /d' "$missing_gate/ci/gate-inputs.toml"
-expect_failure gates-missing-lane "condition 7: Gate Matrix v1 lane(s) absent from both [gates] and [gate_matrix_exceptions]"
+sed -i '/^G09b = "cargo +stable test -p sui-id-store/d' "$missing_gate/ci/gate-inputs.toml"
+expect_failure gates-missing-lane \
+  "condition 7 (check 3):" "G09b"
 
 # --- Condition 7c: [gates] has an extra lane not in the RFC table --------
 extra_gate="$tmp/gates-extra-lane"
 make_valid_fixture "$extra_gate"
-sed -i '/^G09b = /a G10 = "echo not-a-real-lane"' "$extra_gate/ci/gate-inputs.toml"
-expect_failure gates-extra-lane "condition 7: [gates] does not match RFC 093's Gate Matrix v1 table"
+sed -i '/^G09b = "cargo +stable test -p sui-id-store/a G10 = "echo not-a-real-lane"' \
+  "$extra_gate/ci/gate-inputs.toml"
+expect_failure gates-extra-lane \
+  "condition 7 (check 1):" "G10 (0 [gate_owners] entries"
 
 # --- Condition 7d: [gates] duplicate key -----------------------------------
 dup_gate="$tmp/gates-duplicate-key"
 make_valid_fixture "$dup_gate"
-sed -i '/^G01 = /a G01 = "cargo +1.95 build --workspace --all-targets --locked"' \
+sed -i '/^G01 = "cargo +1.95 build --workspace --all-targets --locked"$/a G01 = "cargo +1.95 build --workspace --all-targets --locked"' \
   "$dup_gate/ci/gate-inputs.toml"
 expect_failure gates-duplicate-key "condition 7: [gates] has duplicate key"
 
@@ -220,7 +264,7 @@ make_valid_fixture "$both_lists"
 sed -i '/^\[gate_matrix_exceptions\]/i G12 = "bash scripts/check-ui-invariants.sh --all --policy ci/ui-invariants.toml"\n' \
   "$both_lists/ci/gate-inputs.toml"
 expect_failure gate-matrix-exception-and-gates-fails \
-  "condition 7: lane(s) present in both [gates] and [gate_matrix_exceptions]"
+  "condition 7 (check 5):" "G12"
 
 # --- Condition 8a: [tools] version drifted from what ci.yml installs -----
 # (RFC 093 M1b C2.1 -- mdBook specifically had no enforcement at all
@@ -258,5 +302,142 @@ awk '
 mv "$tool_partial_drift/.github/workflows/ci.yml.new" "$tool_partial_drift/.github/workflows/ci.yml"
 expect_failure tools-python-partial-drift \
   'condition 8: [tools] python = "3.14", but .github/workflows/ci.yml installs/invokes: 3.13 3.14'
+
+# ==========================================================================
+# RFC 094 R10: the multi-source lane registry.
+#
+# Every case below mutates the *multi-source* fixture, not the single-source
+# one, so a failure is attributable to the check under test rather than to
+# the migration. The positive case comes first: without it, a green
+# single-source run would prove nothing about the mechanism the registry
+# exists to add.
+# ==========================================================================
+
+# --- Positive: a second owning RFC is accepted ----------------------------
+multi_source="$tmp/registry-multi-source-valid"
+make_multi_source_fixture "$multi_source"
+expect_success registry-multi-source-valid
+
+# --- Check 1: a [gates] lane with no [gate_owners] entry ------------------
+check1="$tmp/registry-check1-unowned-lane"
+make_multi_source_fixture "$check1"
+sed -i '/^G13 = "094"$/d' "$check1/ci/gate-inputs.toml"
+expect_failure registry-check1-unowned-lane \
+  "condition 7 (check 1):" "G13 (0 [gate_owners] entries"
+
+# --- Check 2: an owner that is not a declared source ----------------------
+check2_unsourced="$tmp/registry-check2-owner-not-a-source"
+make_multi_source_fixture "$check2_unsourced"
+sed -i '/^"094" = "Gate Matrix lanes owned by RFC 094"$/d' \
+  "$check2_unsourced/ci/gate-inputs.toml"
+expect_failure registry-check2-owner-not-a-source \
+  "condition 7 (check 2):" 'not declared in [gate_lane_sources]'
+
+# --- Check 2: a source whose number resolves to no file ------------------
+check2_zero="$tmp/registry-check2-resolves-to-zero"
+make_multi_source_fixture "$check2_zero"
+find "$check2_zero/rfcs/accepted" -maxdepth 1 -name '094-*.md' -delete
+expect_failure registry-check2-resolves-to-zero \
+  "condition 7 (check 2):" "resolves to 0 files"
+
+# --- Check 2: a source whose number resolves to two files ----------------
+# Zero and several are both failures, never a first-match guess: a number
+# resolving to two files is the case a "first match wins" reading would
+# silently accept.
+check2_two="$tmp/registry-check2-resolves-to-two"
+make_multi_source_fixture "$check2_two"
+cp "$check2_two/rfcs/accepted/094-fixture.md" \
+  "$check2_two/rfcs/archive/094-duplicate.md"
+expect_failure registry-check2-resolves-to-two \
+  "condition 7 (check 2):" "resolves to 2 files"
+
+# --- Check 3: a source declares a lane the manifest accounts for nowhere --
+check3="$tmp/registry-check3-source-lane-unaccounted"
+make_multi_source_fixture "$check3"
+sed -i '/^G13 = "bash scripts\/fixture-lane.sh"$/d' "$check3/ci/gate-inputs.toml"
+expect_failure registry-check3-source-lane-unaccounted \
+  "condition 7 (check 3):" "G13"
+
+# --- Check 4: the command drifts in the owning RFC's own table ------------
+# Drift is introduced in RFC 094's table, so a checker still comparing every
+# lane against RFC 093 would not see it.
+check4_drift="$tmp/registry-check4-command-drift-in-owner-table"
+make_multi_source_fixture "$check4_drift"
+sed -i 's|`bash scripts/fixture-lane.sh`|`bash scripts/fixture-lane.sh --extra`|' \
+  "$check4_drift/rfcs/accepted/094-fixture.md"
+expect_failure registry-check4-command-drift-in-owner-table \
+  "condition 7 (check 4):" "G13 (owner 094)"
+
+# --- Check 4: the one permitted normalisation is not widened -------------
+# The permitted normalisation is one-directional: a source RFC may join two
+# backticked commands with the word "and" where the manifest joins them with
+# "&&". The reverse — a manifest joining with "and" — is not normalised and
+# must fail. A bidirectional (widened) implementation would accept it.
+#
+# The dispatched fixture specified mutating RFC 093's G05 row instead,
+# replacing "` and `" with "` && `". Measured: that passes, and cannot fail,
+# because backticks are stripped after the substitution, so both spellings
+# converge on the same string. Mutating the manifest side is the construction
+# that actually discriminates. See the review request.
+check4_norm="$tmp/registry-check4-normalisation-not-widened"
+make_multi_source_fixture "$check4_norm"
+sed -i 's|^G05 = "cargo +stable build --workspace --all-targets --locked && cargo +stable test --workspace --locked"$|G05 = "cargo +stable build --workspace --all-targets --locked and cargo +stable test --workspace --locked"|' \
+  "$check4_norm/ci/gate-inputs.toml"
+expect_failure registry-check4-normalisation-not-widened \
+  "condition 7 (check 4):" "G05 (owner 093)"
+
+# --- Check 5: a lane in both [gates] and [gate_matrix_exceptions] --------
+check5="$tmp/registry-check5-both-gates-and-exception"
+make_multi_source_fixture "$check5"
+sed -i '/^\[gate_matrix_exceptions\]/a G13 = "fixture: excepted while still dispatched, which must fail"' \
+  "$check5/ci/gate-inputs.toml"
+expect_failure registry-check5-both-gates-and-exception \
+  "condition 7 (check 5):" "G13"
+
+# --- Check 6: an exception for a lane no source declares -----------------
+check6="$tmp/registry-check6-ungrounded-exception"
+make_multi_source_fixture "$check6"
+sed -i '/^\[gate_matrix_exceptions\]/a G99 = "fixture: exception naming a lane no source RFC declares"' \
+  "$check6/ci/gate-inputs.toml"
+expect_failure registry-check6-ungrounded-exception \
+  "condition 7 (check 6):" "G99"
+
+# --- Heading: recorded heading absent from the owning RFC ----------------
+heading_absent="$tmp/registry-heading-absent"
+make_multi_source_fixture "$heading_absent"
+sed -i 's|^### Gate Matrix lanes owned by RFC 094$|### A differently named section|' \
+  "$heading_absent/rfcs/accepted/094-fixture.md"
+expect_failure registry-heading-absent "heading" "occurs 0 times"
+
+# --- Heading: recorded heading occurring twice --------------------------
+# Several is a failure, not a first-match-wins guess.
+heading_twice="$tmp/registry-heading-twice"
+make_multi_source_fixture "$heading_twice"
+printf '\n### Gate Matrix lanes owned by RFC 094\n' \
+  >>"$heading_twice/rfcs/accepted/094-fixture.md"
+expect_failure registry-heading-twice "heading" "occurs 2 times"
+
+# --- Heading: compared by equality, never as a pattern -------------------
+# A heading recorded as `Gate Matrix (v2)` matches a document heading of
+# exactly that text...
+heading_literal="$tmp/registry-heading-parens-literal-pass"
+make_multi_source_fixture "$heading_literal"
+sed -i 's|^### Gate Matrix lanes owned by RFC 094$|### Gate Matrix (v2)|' \
+  "$heading_literal/rfcs/accepted/094-fixture.md"
+sed -i 's|^"094" = "Gate Matrix lanes owned by RFC 094"$|"094" = "Gate Matrix (v2)"|' \
+  "$heading_literal/ci/gate-inputs.toml"
+expect_success registry-heading-parens-literal-pass
+
+# ...and must *not* match `Gate Matrix v2`. This is the discriminating case:
+# read as an ERE, `Gate Matrix (v2)` takes the parentheses as a group and so
+# matches the text `Gate Matrix v2`. A regex-based matcher passes here; an
+# equality-based one finds zero occurrences and fails.
+heading_regex="$tmp/registry-heading-parens-not-regex"
+make_multi_source_fixture "$heading_regex"
+sed -i 's|^### Gate Matrix lanes owned by RFC 094$|### Gate Matrix v2|' \
+  "$heading_regex/rfcs/accepted/094-fixture.md"
+sed -i 's|^"094" = "Gate Matrix lanes owned by RFC 094"$|"094" = "Gate Matrix (v2)"|' \
+  "$heading_regex/ci/gate-inputs.toml"
+expect_failure registry-heading-parens-not-regex "heading" "occurs 0 times"
 
 echo "gate-inputs negative fixtures passed"

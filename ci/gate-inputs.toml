@@ -26,11 +26,40 @@ G08 = ["rustfmt"]
 G09a = []
 G09b = []
 
+# RFC 094 R10: the lane registry. An RFC number maps to the heading of the
+# section in that RFC holding its lane table. Ownership is declared by number,
+# not by path, because an RFC's folder changes over its lifecycle; the checker
+# resolves a number to exactly one `NNN-*.md` across rfcs/{proposed,accepted,
+# done,archive}. RFC 093's heading is recorded verbatim, so RFC 093 is not
+# amended by this mechanism and does not reopen.
+[gate_lane_sources]
+"093" = "Gate Matrix v1"
+
+# RFC 094 R10: lane -> owning RFC number. Exactly one owner per lane; two
+# owners for one lane is a TOML parse error rather than a condition to detect.
+# [gate_matrix_exceptions] entries deliberately have no entry here: ownership
+# feeds only the command-match check, from which exceptions are exempt.
+[gate_owners]
+G01 = "093"
+G02 = "093"
+G03 = "093"
+G04 = "093"
+G05 = "093"
+G06 = "093"
+G07 = "093"
+G07b = "093"
+G08 = "093"
+G09a = "093"
+G09b = "093"
+G10a = "093"
+G10b = "093"
+G11 = "093"
+
 # RFC 093 Gate Matrix v1 (rfcs/done/093-build-toolchain-release-gates.md),
 # machine-readable expansion. scripts/ci-gate.sh executes these commands
 # verbatim; scripts/check-gate-inputs.sh (A3.4) verifies this table matches
-# the RFC's table exactly. Do not paraphrase, wrap, or reorder a command here
-# without amending the RFC first.
+# the table in each lane's owning RFC ([gate_owners] above) exactly. Do not
+# paraphrase, wrap, or reorder a command here without amending that RFC first.
 [gates]
 G01 = "cargo +1.95 build --workspace --all-targets --locked"
 G02 = "cargo +1.95 test --workspace --locked"

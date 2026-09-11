@@ -10,13 +10,12 @@
 set -uo pipefail
 
 usage() {
-  echo "usage: $0 --all --policy <path> [--root <path>] [--rfc <path>] [--workflows-dir <path>]" >&2
+  echo "usage: $0 --all --policy <path> [--root <path>] [--workflows-dir <path>]" >&2
 }
 
 all=false
 policy=""
 root="."
-rfc="rfcs/done/093-build-toolchain-release-gates.md"
 workflows_dir=".github/workflows"
 
 while (($#)); do
@@ -35,11 +34,6 @@ while (($#)); do
       root=$2
       shift 2
       ;;
-    --rfc)
-      [[ $# -ge 2 ]] || { usage; exit 2; }
-      rfc=$2
-      shift 2
-      ;;
     --workflows-dir)
       [[ $# -ge 2 ]] || { usage; exit 2; }
       workflows_dir=$2
@@ -54,11 +48,9 @@ done
 
 [[ "$all" == true && -n "$policy" ]] || { usage; exit 2; }
 [[ -f "$root/$policy" ]] || { echo "gate-inputs: manifest not found: $root/$policy" >&2; exit 2; }
-[[ -f "$root/$rfc" ]] || { echo "gate-inputs: RFC not found: $root/$rfc" >&2; exit 2; }
 [[ -d "$root/$workflows_dir" ]] || { echo "gate-inputs: workflows dir not found: $root/$workflows_dir" >&2; exit 2; }
 
 policy_path="$root/$policy"
-rfc_path="$root/$rfc"
 
 failures=0
 fail() {
@@ -234,50 +226,123 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Condition 7: every lane in RFC 093's Gate Matrix v1 table is accounted
-# for by exactly one of [gates] or [gate_matrix_exceptions] (RFC 093 M1b
-# C2.1's completeness rule), and every lane dispatched via [gates] matches
-# the RFC's command exactly. One normalisation is permitted on the command
-# comparison: the RFC renders G05/G06 as two backticked commands joined by
-# the word "and"; the manifest joins them with "&&". No other
+# Condition 7 (RFC 094 R10): the multi-source lane registry.
+#
+# Until R10 this condition compared the manifest against RFC 093's table
+# alone, so no RFC other than 093 could own a lane. It now resolves each lane
+# to its owning RFC through [gate_owners] / [gate_lane_sources] and compares
+# against that RFC's own table. Six checks:
+#
+#   1. every [gates] key has exactly one [gate_owners] entry;
+#   2. every [gate_owners] value is a declared source that resolves to
+#      exactly one RFC file;
+#   3. every lane in every source's table is in [gates] or
+#      [gate_matrix_exceptions];
+#   4. every [gates] command byte-matches the row in *its owning* RFC's
+#      table, under the one permitted normalisation;
+#   5. no lane is in both [gates] and [gate_matrix_exceptions];
+#   6. every [gate_matrix_exceptions] key names a lane some source declares.
+#
+# Checks 5 and 6 are not new requirements: they are the disjointness and
+# groundedness tests the single-source version already performed, restated
+# over all sources. The [gates] / [gate_matrix_exceptions] duplicate-key
+# rules and the exception-reason rule below are likewise unchanged.
+#
+# One normalisation is permitted on the command comparison: a source RFC may
+# render a two-part lane as two backticked commands joined by the word "and"
+# (RFC 093 does this for G05/G06); the manifest joins them with "&&". No other
 # normalisation is applied — every other lane compares byte-for-byte.
+#
+# The section holding a source's table is named by [gate_lane_sources] as
+# data. It is matched by plain equality against the heading text with leading
+# `#` characters and surrounding whitespace stripped — never as a pattern,
+# since a heading such as `Gate Matrix (v2)` read as a regex would have its
+# parentheses taken as a group. Any heading level may carry a table, and the
+# heading must occur exactly once in its RFC. The section body runs to the
+# next heading line of any level, which is what bounds RFC 093's matrix away
+# from its later negative-self-tests table, whose rows reuse G09a/G09b with
+# different (fixture) commands.
 # ---------------------------------------------------------------------------
 
-# Extract the Gate Matrix v1 table body: from the "## Gate Matrix v1"
-# heading to the next heading line. This deliberately excludes the later
-# "negative self-tests" table, which also has rows keyed by G09a/G09b but
-# with different (fixture) commands in a different column.
-awk '
-  /^## Gate Matrix v1/ { in_section = 1; next }
-  in_section && /^#/ { in_section = 0 }
-  in_section { print }
-' "$rfc_path" >"$tmp/rfc-matrix-section"
+# [gate_lane_sources] and [gate_owners]. Keys in the former are quoted RFC
+# numbers, so keys are unquoted here as well as values.
+extract_registry_table() {
+  awk -v table="$1" '
+    $0 ~ ("^\\[" table "\\]") { in_table = 1; next }
+    /^\[/ { in_table = 0 }
+    in_table {
+      eq = index($0, " = ")
+      if (eq > 0) {
+        key = substr($0, 1, eq - 1)
+        val = substr($0, eq + 3)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+        sub(/^"/, "", key); sub(/"$/, "", key)
+        sub(/^"/, "", val); sub(/"$/, "", val)
+        print key "\t" val
+      }
+    }
+  ' "$policy_path"
+}
+
+# A source RFC number resolves across the four lifecycle folders only.
+# rfcs/handoffs/ reuses RFC numbers for companion directories and is
+# deliberately excluded — the same scoping check-rfc-integrity.py applies.
+resolve_rfc_file() {
+  local num=$1 dir
+  for dir in proposed accepted "done" archive; do
+    [[ -d "$root/rfcs/$dir" ]] || continue
+    find "$root/rfcs/$dir" -maxdepth 1 -type f -name "$num-*.md"
+  done | sort
+}
+
+# How many headings in $1 equal $2 by plain equality, at any level.
+heading_occurrences() {
+  awk -v want="$2" '
+    /^#/ {
+      line = $0; depth = 0
+      while (substr(line, 1, 1) == "#") { line = substr(line, 2); depth++ }
+      if (depth <= 6) {
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+        if (line == want) count++
+      }
+    }
+    END { print count + 0 }
+  ' "$1"
+}
+
+# The matched section's body: heading to the next heading of any level.
+extract_heading_section() {
+  awk -v want="$2" '
+    /^#/ {
+      line = $0; depth = 0
+      while (substr(line, 1, 1) == "#") { line = substr(line, 2); depth++ }
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+      in_section = (depth <= 6 && line == want)
+      next
+    }
+    in_section { print }
+  ' "$1"
+}
 
 # Parse each `| GNN | toolchain | features | command(s) |` row into
 # `GNN<TAB>normalised-command`.
-awk -F'|' '
-  /^\| G[0-9A-Za-z]+ / {
-    id = $2; gsub(/^[[:space:]]+|[[:space:]]+$/, "", id)
-    cell = $5; gsub(/^[[:space:]]+|[[:space:]]+$/, "", cell)
-    # Strip backticks and, if present, the literal " and " join between two
-    # backtick-wrapped commands, replacing it with " && " (the one allowed
-    # normalisation).
-    # `&` is special in gsub'"'"'s replacement (inserts the matched text),
-    # so a literal `&&` must be written as the escaped form below or the
-    # match gets duplicated instead of replaced.
-    gsub(/` and `/, "` \\&\\& `", cell)
-    gsub(/`/, "", cell)
-    print id "\t" cell
-  }
-' "$tmp/rfc-matrix-section" >"$tmp/rfc-gates-all"
-
-# RFC 093 M1b C2.1: the lane-completeness rule. Every lane in the Gate
-# Matrix v1 table (rfc-gates-all, 15 rows, already correctly bounded to
-# the "## Gate Matrix v1" section above -- see the extraction-hazard
-# note there) must be either a [gates] key or a [gate_matrix_exceptions]
-# key, never both, never neither.
-sort "$tmp/rfc-gates-all" >"$tmp/rfc-gates-all-sorted"
-cut -f1 "$tmp/rfc-gates-all-sorted" | sort -u >"$tmp/rfc-lane-ids"
+parse_lane_rows() {
+  awk -F'|' '
+    /^\| G[0-9A-Za-z]+ / {
+      id = $2; gsub(/^[[:space:]]+|[[:space:]]+$/, "", id)
+      cell = $5; gsub(/^[[:space:]]+|[[:space:]]+$/, "", cell)
+      # Strip backticks and, if present, the literal " and " join between two
+      # backtick-wrapped commands, replacing it with " && " (the one allowed
+      # normalisation).
+      # `&` is special in gsub'"'"'s replacement (inserts the matched text),
+      # so a literal `&&` must be written as the escaped form below or the
+      # match gets duplicated instead of replaced.
+      gsub(/` and `/, "` \\&\\& `", cell)
+      gsub(/`/, "", cell)
+      print id "\t" cell
+    }
+  ' "$1"
+}
 
 # Extract [gates] from the manifest as `GNN<TAB>command`, detecting
 # duplicate keys within the table (first occurrence is not silently kept —
@@ -337,41 +402,118 @@ if [[ -s "$tmp/exceptions-empty-reason" ]]; then
   cat "$tmp/exceptions-empty-reason" >&2
 fi
 
-# A lane not in RFC 093's table has no business being an exception for it.
-comm -13 "$tmp/rfc-lane-ids" "$tmp/manifest-exception-ids" >"$tmp/stale-exceptions"
-if [[ -s "$tmp/stale-exceptions" ]]; then
-  fail "condition 7: [gate_matrix_exceptions] lane(s) not in RFC 093's Gate Matrix v1 table:"
-  cat "$tmp/stale-exceptions" >&2
+extract_registry_table "gate_owners" >"$tmp/lane-owners"
+extract_registry_table "gate_lane_sources" >"$tmp/lane-sources"
+
+# --- check 1: every [gates] key has exactly one [gate_owners] entry --------
+# "Exactly one" also covers the duplicate-owner case, which is why RFC 094
+# specifies no separate ownership-conflict detector.
+: >"$tmp/check1-violations"
+while IFS= read -r lane; do
+  [[ -n "$lane" ]] || continue
+  owner_count=$(awk -F'\t' -v l="$lane" '$1 == l { c++ } END { print c + 0 }' "$tmp/lane-owners")
+  if [[ "$owner_count" -ne 1 ]]; then
+    echo "$lane ($owner_count [gate_owners] entries, expected exactly 1)" >>"$tmp/check1-violations"
+  fi
+done <"$tmp/manifest-gate-ids"
+if [[ -s "$tmp/check1-violations" ]]; then
+  fail "condition 7 (check 1): [gates] lane(s) without exactly one [gate_owners] entry:"
+  cat "$tmp/check1-violations" >&2
 fi
 
-# Disjointness: a lane in both [gates] and [gate_matrix_exceptions] means
-# one of the two lists is stale, and the dispatcher and the exemption
-# cannot both be true for the same lane.
-comm -12 "$tmp/manifest-gate-ids" "$tmp/manifest-exception-ids" >"$tmp/gates-and-exceptions-overlap"
-if [[ -s "$tmp/gates-and-exceptions-overlap" ]]; then
-  fail "condition 7: lane(s) present in both [gates] and [gate_matrix_exceptions]:"
-  cat "$tmp/gates-and-exceptions-overlap" >&2
+# --- check 2: every owner is a declared source resolving to one RFC file ---
+: >"$tmp/check2-violations"
+cut -f2 "$tmp/lane-owners" | sort -u >"$tmp/owner-values"
+while IFS= read -r owner; do
+  [[ -n "$owner" ]] || continue
+  if ! awk -F'\t' -v o="$owner" '$1 == o { found = 1 } END { exit !found }' "$tmp/lane-sources"; then
+    echo "\"$owner\" is named in [gate_owners] but not declared in [gate_lane_sources]" \
+      >>"$tmp/check2-violations"
+  fi
+done <"$tmp/owner-values"
+
+# Resolve every declared source, whether or not a lane currently names it:
+# check 3 needs each source's table, and an unresolvable source is a failure
+# regardless of who points at it. Resolution must yield exactly one file —
+# zero or several is a failure, never a first-match guess.
+: >"$tmp/source-lanes"
+: >"$tmp/resolved-sources"
+while IFS=$'\t' read -r source_num source_heading; do
+  [[ -n "$source_num" ]] || continue
+  mapfile -t source_files < <(resolve_rfc_file "$source_num")
+  if [[ "${#source_files[@]}" -ne 1 ]]; then
+    echo "\"$source_num\" resolves to ${#source_files[@]} files under rfcs/{proposed,accepted,done,archive} (exactly one required)" \
+      >>"$tmp/check2-violations"
+    continue
+  fi
+  source_file="${source_files[0]}"
+  occurrences=$(heading_occurrences "$source_file" "$source_heading")
+  if [[ "$occurrences" -ne 1 ]]; then
+    fail "condition 7: source RFC \"$source_num\" heading \"$source_heading\" occurs $occurrences times in $source_file (exactly once required)"
+    continue
+  fi
+  extract_heading_section "$source_file" "$source_heading" >"$tmp/section-$source_num"
+  parse_lane_rows "$tmp/section-$source_num" \
+    | awk -F'\t' -v o="$source_num" '{ print $0 "\t" o }' >>"$tmp/source-lanes"
+  echo "$source_num" >>"$tmp/resolved-sources"
+done <"$tmp/lane-sources"
+
+if [[ -s "$tmp/check2-violations" ]]; then
+  fail "condition 7 (check 2): [gate_owners] value(s) not resolvable to exactly one source RFC:"
+  cat "$tmp/check2-violations" >&2
 fi
 
-# Completeness: every RFC lane must be accounted for by one of the two
-# lists. This is the inverse direction the enumerated filter never
-# checked (M1a C1 review finding; RFC 093 M1b C2.1).
-comm -23 "$tmp/rfc-lane-ids" <(sort -u "$tmp/manifest-gate-ids" "$tmp/manifest-exception-ids") >"$tmp/unaccounted-lanes"
+# --- check 3: every lane a source declares is accounted for ---------------
+# The completeness rule RFC 093 M1b C2.1 introduced, generalised from RFC
+# 093's table to every source's table.
+cut -f1 "$tmp/source-lanes" | sort -u >"$tmp/source-lane-ids"
+comm -23 "$tmp/source-lane-ids" <(sort -u "$tmp/manifest-gate-ids" "$tmp/manifest-exception-ids") >"$tmp/unaccounted-lanes"
 if [[ -s "$tmp/unaccounted-lanes" ]]; then
-  fail "condition 7: Gate Matrix v1 lane(s) absent from both [gates] and [gate_matrix_exceptions]:"
+  fail "condition 7 (check 3): lane(s) declared by a source RFC but absent from both [gates] and [gate_matrix_exceptions]:"
   cat "$tmp/unaccounted-lanes" >&2
 fi
 
-# Command correctness: for every lane actually dispatched via [gates] (by
-# now guaranteed disjoint from the exception list and a real RFC lane),
-# the recorded command must match the RFC's table byte-for-byte, one
-# normalisation permitted (see the extraction comment above).
-awk -F'\t' 'NR==FNR { ids[$1] = 1; next } $1 in ids' "$tmp/manifest-gate-ids" "$tmp/rfc-gates-all-sorted" \
-  | sort >"$tmp/rfc-gates"
+# --- check 4: every [gates] command matches its owning RFC's row ----------
+# A lane with no owner, or with an owner that did not resolve, is skipped
+# here: check 1 or check 2 has already named the cause, and reporting it
+# again under check 4 would name a symptom.
+: >"$tmp/check4-violations"
+while IFS=$'\t' read -r lane manifest_cmd; do
+  [[ -n "$lane" ]] || continue
+  owner=$(awk -F'\t' -v l="$lane" '$1 == l { print $2; exit }' "$tmp/lane-owners")
+  [[ -n "$owner" ]] || continue
+  grep -qxF "$owner" "$tmp/resolved-sources" || continue
+  if ! awk -F'\t' -v l="$lane" -v o="$owner" '$1 == l && $3 == o { found = 1 } END { exit !found }' "$tmp/source-lanes"; then
+    echo "$lane (owner $owner): no row for this lane in the owning RFC's table" >>"$tmp/check4-violations"
+    continue
+  fi
+  rfc_cmd=$(awk -F'\t' -v l="$lane" -v o="$owner" '$1 == l && $3 == o { print $2; exit }' "$tmp/source-lanes")
+  if [[ "$rfc_cmd" != "$manifest_cmd" ]]; then
+    echo "$lane (owner $owner): manifest [$manifest_cmd] != RFC [$rfc_cmd]" >>"$tmp/check4-violations"
+  fi
+done <"$tmp/manifest-gates"
+if [[ -s "$tmp/check4-violations" ]]; then
+  fail "condition 7 (check 4): [gates] command(s) do not match the owning RFC's lane table:"
+  cat "$tmp/check4-violations" >&2
+fi
 
-if ! diff -u "$tmp/rfc-gates" "$tmp/manifest-gates" >"$tmp/gates-diff"; then
-  fail "condition 7: [gates] does not match RFC 093's Gate Matrix v1 table:"
-  cat "$tmp/gates-diff" >&2
+# --- check 5: disjointness ------------------------------------------------
+# A lane in both [gates] and [gate_matrix_exceptions] means one of the two
+# lists is stale, and the dispatcher and the exemption cannot both be true
+# for the same lane.
+comm -12 "$tmp/manifest-gate-ids" "$tmp/manifest-exception-ids" >"$tmp/gates-and-exceptions-overlap"
+if [[ -s "$tmp/gates-and-exceptions-overlap" ]]; then
+  fail "condition 7 (check 5): lane(s) present in both [gates] and [gate_matrix_exceptions]:"
+  cat "$tmp/gates-and-exceptions-overlap" >&2
+fi
+
+# --- check 6: every exception names a lane some source declares -----------
+# An exception for a lane no RFC declares is a stale exception, and must
+# fail rather than sit unnoticed.
+comm -13 "$tmp/source-lane-ids" "$tmp/manifest-exception-ids" >"$tmp/stale-exceptions"
+if [[ -s "$tmp/stale-exceptions" ]]; then
+  fail "condition 7 (check 6): [gate_matrix_exceptions] lane(s) not declared by any source RFC:"
+  cat "$tmp/stale-exceptions" >&2
 fi
 
 # ---------------------------------------------------------------------------
