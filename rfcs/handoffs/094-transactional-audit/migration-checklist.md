@@ -42,6 +42,14 @@ at a time; the workspace and structural gate must remain green between waves.
 - [x] Generate or mechanically verify audit reference documentation.  **Done `5b986c9`.** *(generator built and tested; deliberately not wired to a tracked file until the registry is worth documenting)*
 - [x] Add duplicate-name, class-mismatch, missing-field, and stable-serialization  **Done `5b986c9`.** *(proving slice)*
   tests.
+- [ ] **Multi-source lane registry (R10)** — `[gate_lane_sources]` and
+      `[gate_owners]` in `ci/gate-inputs.toml`, condition 7 becoming six checks,
+      behaviour-preserving migration. RFC 094 §Structural coverage gate,
+      "Registering it requires a mechanism that does not exist yet" through
+      §Migration. **Dispatched 2026-09-12**, authorized by `@nabbisen`:
+      [`r10-lane-registry.md`](r10-lane-registry.md). Must land before any
+      lane of this RFC's is relied on as M2a exit evidence, and before the
+      interim audit-matrix lane (see that handoff §5) is registered.
 - [ ] Add the checked-in command inventory and structural comparison tool.
 
       **Also check every consumer of an audit event name, not only the coverage
