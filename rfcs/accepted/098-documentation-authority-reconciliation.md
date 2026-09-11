@@ -100,12 +100,22 @@ Four defects, all live at `ee48257`.
 
 **F1 — The threat model is 51 releases stale, and README presents it
 publicly.** `docs/threat-model.md` states "It is current as of **v0.26.0**";
-the workspace is at **v0.77.0**. Everything shipped since — LDAP user
-sources, upstream OIDC federation, dynamic client registration, the metrics
-endpoint, step-up, master-key rotation — is absent from the document
-`README.md` links to as "what sui-id defends against". This is a **security
+the workspace is at **v0.77.0**. Security-relevant capability shipped since
+is absent from the document `README.md` links to as "what sui-id defends
+against": upstream OIDC federation (RFC 004, v0.76.4) and dynamic client
+registration (RFC 008, v0.76.3) with zero mentions in the body, the
+Prometheus metrics endpoint (RFC 006, v0.76.0) — an auth-gated network
+surface with its own bearer token — with zero mentions, and LDAP user sources
+(RFC 005, v0.76.1) named only in the out-of-scope list. This is a **security
 claim**, not a documentation gap, and it is the highest-severity item in
 this RFC.
+
+*Corrected 2026-09-12 at step 1's review: the first version of this list
+also named step-up and master-key rotation as absent. Both are analysed in
+the document — 13 and 4 mentions respectively — because both predate
+v0.26.0. The list was asserted from the feature history rather than grepped
+against the body; the implementer grepped, and the correction is the
+architect's.*
 
 **F2 — Three user-facing guides exist twice, and the public front page
 links to the stale copy of each.**

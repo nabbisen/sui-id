@@ -64,6 +64,12 @@ The design is accepted with these recorded as its work, not as objections:
 | **F3** | Eight pages under `docs/src/` are absent from `SUMMARY.md`; mdBook never builds them, and G10a cannot see an orphan page. | Medium |
 | **F4** | `docs/src/reference/audit-coverage-matrix.md` is the gate input `scripts/check-audit-matrix.sh` reads — a machine-consumed contract filed in the published-book tree, and one of F3's orphans. | Medium |
 
+*Correction, 2026-09-12.* F1's row above lists step-up and master-key
+rotation among the absent capabilities. Both are analysed in the document —
+they predate v0.26.0. The Prometheus metrics endpoint (RFC 006, v0.76.0) is
+absent and was not listed. RFC 098's F1 is corrected; this row is left as
+reviewed, per the RFC's own rule that dated records are not rewritten.
+
 ## Resolution of the RFC's original open question
 
 > Whether duplicated root/docs pages are generated or manually synchronized is

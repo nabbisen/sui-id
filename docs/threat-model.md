@@ -12,6 +12,10 @@
 > - **Dynamic client registration** (RFC 008, shipped v0.76.3) — third
 >   parties can self-register OAuth clients under a consent boundary.
 >   Not mentioned anywhere below.
+> - **Prometheus metrics endpoint** (RFC 006, shipped v0.76.0) — an
+>   auth-gated `/metrics` route with its own bearer token
+>   (`metrics_token_hash`), disabled by default. A network surface with a
+>   credential. Not mentioned anywhere below.
 > - **Read-only LDAP as a pluggable user-source backend** (RFC 005,
 >   shipped v0.76.1) — named in §5.3's out-of-scope list below, but not
 >   analyzed as a threat surface in its own right.
