@@ -232,8 +232,8 @@ inline (not in a tooltip; not in linked documentation):
   `redirect_uris`. Same exact-match rule.
 - **`allowed_scopes` is a separate field** with the catalog of known
   scopes (`openid`, `profile`, `email`, `offline_access`) displayed as
-  helper text. See also [`docs/operators.md`](operators.md) §
-  "User–client relationship".
+  helper text. See also [the operator guide](src/guides/operators.md),
+  "User–client relationship and the single-realm model".
 
 The **consent screen** (RFC 008) inherits these contracts: scope text and
 client name must be readable by screen readers; consent buttons say

@@ -483,9 +483,9 @@ the [roadmap](../../../ROADMAP.md).
 
 ## Further reading
 
-- [`docs/deployment.md`](../guides/deployment.md) — chronological install
+- [the deployment guide](../guides/deployment.md) — chronological install
   walkthrough for an operator deploying sui-id from scratch.
-- [`docs/operators.md`](../guides/operators.md) — operational reference for
+- [the operator guide](../guides/operators.md) — operational reference for
   someone running sui-id day to day.
 - [`docs/threat-model.md`](../../threat-model.md) describes the threats the
   protocol surface defends against and what assumptions you may safely

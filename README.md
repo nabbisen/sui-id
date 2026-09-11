@@ -193,15 +193,15 @@ docs/               Operator and integrator documentation
 
 ## Documentation
 
-- [`docs/deployment.md`](https://github.com/nabbisen/sui-id/blob/main/docs/deployment.md) — chronological,
+- [the deployment guide](docs/src/guides/deployment.md) — chronological,
   opinionated walkthrough from a fresh Linux server to a hardened
   production install. Start here for a first-time deployment.
-- [`docs/operators.md`](https://github.com/nabbisen/sui-id/blob/main/docs/operators.md) — reference for
+- [the operator guide](docs/src/guides/operators.md) — reference for
   configuration fields, the master key, GC, the audit log schema,
   and routine operational tasks.
-- [`docs/integrators.md`](https://github.com/nabbisen/sui-id/blob/main/docs/integrators.md) — pointing an application
-  at a sui-id instance: discovery, registration, the OIDC flow, and the
-  shape of the tokens.
+- [the OIDC API reference](docs/src/reference/oidc-api.md) — pointing an
+  application at a sui-id instance: discovery, registration, the OIDC
+  flow, and the shape of the tokens.
 - [`docs/threat-model.md`](https://github.com/nabbisen/sui-id/blob/main/docs/threat-model.md) — what sui-id defends
   against, what it does not, and what assumptions the operator must
   uphold for the design to work.

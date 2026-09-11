@@ -707,8 +707,8 @@ review, and integration verification have occurred.**
 ## Constraints and non-goals (pre-1.0)
 
 - **Single realm.** All users share one namespace. Per-tenant isolation is
-  RFC 025, post-1.0. See [docs/operators.md](docs/operators.md) §
-  "User–client relationship".
+  RFC 025, post-1.0. See [the operator guide](docs/src/guides/operators.md),
+  "User–client relationship and the single-realm model".
 - **SQLite only.** Alternative backends are RFC 009, low priority. The
   current SQLite implementation is production-grade for small deployments.
 - **No user-facing theming API.** CSS tokens are for the maintainer, not

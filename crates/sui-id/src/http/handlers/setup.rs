@@ -37,7 +37,8 @@
 //! Surfacing a UI for it would be confusing at best and dangerous
 //! at worst (a process that owns its own master key shouldn't
 //! advertise an interface to manipulate it). See
-//! `docs/operators.md` and the v0.20.4 CHANGELOG entry for details.
+//! `docs/src/guides/operators.md` and the v0.20.4 CHANGELOG entry for
+//! details.
 //!
 //! ## Step guards
 //!

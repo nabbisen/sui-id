@@ -1,5 +1,26 @@
 # Threat model
 
+> **Stale as of 2026-09-10.** This document is accurate as of
+> **v0.26.0**; the workspace is now **v0.77.0**. Security-relevant
+> capability has shipped since v0.26.0 that this document does not
+> analyze as a threat surface, including:
+>
+> - **Federation as an upstream OIDC relying party** (RFC 004, shipped
+>   v0.76.4) — sui-id can authenticate users against an external IdP
+>   (Google, Entra, Keycloak) and provision a local user from the
+>   federated identity. Not mentioned anywhere below.
+> - **Dynamic client registration** (RFC 008, shipped v0.76.3) — third
+>   parties can self-register OAuth clients under a consent boundary.
+>   Not mentioned anywhere below.
+> - **Read-only LDAP as a pluggable user-source backend** (RFC 005,
+>   shipped v0.76.1) — named in §5.3's out-of-scope list below, but not
+>   analyzed as a threat surface in its own right.
+>
+> Treat every claim below as a lower bound on what sui-id defends
+> against, not a complete picture of the current attack surface. This
+> document's reconciliation is tracked by RFC 098; see
+> `rfcs/handoffs/098-documentation-authority/task-checklist.md`.
+
 This document describes how sui-id thinks about the threats it
 faces, what defences are in place, and where the boundaries of
 those defences sit. It is current as of **v0.26.0** and reflects
@@ -995,7 +1016,7 @@ advice and does not create any warranty.
 ## 4.4 What auditors typically ask
 
 A short FAQ. Source-level evidence is in
-`docs/operators.md` and the per-feature CHANGELOG entries.
+`docs/src/guides/operators.md` and the per-feature CHANGELOG entries.
 
 > *Q: What random-number source does sui-id use?*
 >

@@ -38,7 +38,7 @@ chronological "what do I run, in what order" path from a fresh
 server to a working production install.
 
 If you are looking for how to point an application at sui-id, see
-[integrators.md](../../integrators.md).
+[the OIDC API reference](../reference/oidc-api.md).
 
 ## User–client relationship and the single-realm model
 
@@ -1602,11 +1602,12 @@ for in-flight OIDC flows).
 
 ## Further reading
 
-- [`docs/deployment.md`](deployment.md) is a chronological install
+- [the deployment guide](deployment.md) is a chronological install
   walkthrough — useful when setting sui-id up for the first time on
   a new host.
 - [`docs/threat-model.md`](../../threat-model.md) describes what sui-id defends
   against, what it does not, and what assumptions an operator must
   uphold for the design to work.
-- [`docs/integrators.md`](../../integrators.md) is the corresponding guide for
-  developers integrating an application against a sui-id instance.
+- [the OIDC API reference](../reference/oidc-api.md) is the corresponding
+  guide for developers integrating an application against a sui-id
+  instance.

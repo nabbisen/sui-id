@@ -617,7 +617,7 @@ ENVIRONMENT:
                              a random password is generated and printed.
 
 DOCUMENTATION:
-    See README.md and docs/operators.md for the operator's guide.
+    See README.md and docs/src/guides/operators.md for the operator's guide.
 ",
         ver = env!("CARGO_PKG_VERSION")
     );
