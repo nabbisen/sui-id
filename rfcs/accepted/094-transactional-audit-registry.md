@@ -845,6 +845,15 @@ shape the question cannot arise, which is a better answer than a tie-break rule.
 Ownership is explicit single-writer data rather than something derived by
 scanning several documents and reconciling what they say.
 
+*Realised 2026-09-12 (R10-b, `73df7ee`).* The argument above holds in TOML;
+it did not hold in the pipeline, where every reader of `ci/gate-inputs.toml`
+was awk and a duplicate key was read leniently. Measured at R10's review: a
+second `"093"` source entry whose heading resolved cleanly passed every
+condition. `scripts/check-gate-inputs.sh` now parses the manifest with
+`tomllib` before any condition runs, so a duplicate key is the parse error
+this section says it is. A guarantee argued from a format is only real once
+something in the pipeline enforces that format.
+
 #### Why an owning RFC needs no Gate Matrix table of RFC 093's shape
 
 The sweep asked whether RFC 094 must grow a table shaped like RFC 093's. It must

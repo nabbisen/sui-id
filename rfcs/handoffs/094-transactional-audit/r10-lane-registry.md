@@ -161,6 +161,11 @@ job. Not this dispatch.
 ## R10-b — make the parse-error premise true
 
 **Dispatched 2026-09-12**, after R10 landed as `153db49`. Small; one commit.
+**Landed.** `73df7ee`, 2026-09-12, with the A3.4 `setup-python` step the job
+lacked — reviewed at `.git-exclude/reviewed/r10-b-toml-precheck-2026-09-12.md`.
+**Queued, not dispatched — R10-c:** retire the three duplicate-key detectors the
+precheck made unreachable (conditions 4 and 7) and correct the header's
+"seven conditions". After the interim audit-matrix lane.
 
 RFC 094 says, and this handoff repeated as an instruction, that ownership
 conflicts are TOML parse errors and need no detector. **That holds only if
