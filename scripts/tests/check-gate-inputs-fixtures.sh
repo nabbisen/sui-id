@@ -127,11 +127,12 @@ expect_failure unrecorded-sha "condition 2: workflow action SHA(s) not recorded 
 # --- Condition 3: stale [actions] row (SHA no longer used anywhere) ------
 stale="$tmp/stale-action"
 make_valid_fixture "$stale"
-{
-  echo ""
-  echo "[actions]"
-  echo 'stale_entry = "222222222222222222222222222222222222222f"'
-} >>"$stale/ci/gate-inputs.toml"
+# Appended inside the existing [actions] table, anchored on a key unique to
+# it. Re-declaring [actions] instead would be a second violation now that the
+# manifest is parsed as TOML first, and this fixture would stop reaching
+# condition 3 at all.
+sed -i '/^setup_python_v7 = /a stale_entry = "222222222222222222222222222222222222222f"' \
+  "$stale/ci/gate-inputs.toml"
 expect_failure stale-action "condition 3: [actions] SHA(s) not used by any workflow"
 
 # --- Condition 4a: [rust_components] missing a required lane -------------
@@ -147,10 +148,13 @@ sed -i 's/^G08 = \["rustfmt"\]$/G08 = ["clippy"]/' "$wrong_components/ci/gate-in
 expect_failure rust-components-wrong-value "condition 4: [rust_components] G08 ="
 
 # --- Condition 4c: [rust_components] duplicate lane -----------------------
+# Since R10-b this is caught by the TOML precheck, which reaches the file
+# before condition 4 does. Condition 4's own duplicate detector is kept and
+# unchanged, but no manifest that survives the precheck can now reach it.
 dup_lane="$tmp/rust-components-duplicate"
 make_valid_fixture "$dup_lane"
 sed -i '/^G01 = \[\]$/a G01 = []' "$dup_lane/ci/gate-inputs.toml"
-expect_failure rust-components-duplicate "condition 4: [rust_components] declares G01 more than once"
+expect_failure rust-components-duplicate "not valid TOML" "line"
 
 # --- Condition 4d: [rust_components] unexpected extra key ----------------
 extra_lane="$tmp/rust-components-extra-key"
@@ -224,7 +228,10 @@ dup_gate="$tmp/gates-duplicate-key"
 make_valid_fixture "$dup_gate"
 sed -i '/^G01 = "cargo +1.95 build --workspace --all-targets --locked"$/a G01 = "cargo +1.95 build --workspace --all-targets --locked"' \
   "$dup_gate/ci/gate-inputs.toml"
-expect_failure gates-duplicate-key "condition 7: [gates] has duplicate key"
+# Caught by the TOML precheck since R10-b, for the same reason as
+# rust-components-duplicate above: condition 7's duplicate detector is intact
+# but no longer reachable through a manifest.
+expect_failure gates-duplicate-key "not valid TOML" "line"
 
 # --- Condition 7e: the one permitted normalisation is honoured -----------
 # G05/G06's RFC form uses "`cmd1` and `cmd2`"; the manifest's "&&" form
@@ -439,5 +446,26 @@ sed -i 's|^### Gate Matrix lanes owned by RFC 094$|### Gate Matrix v2|' \
 sed -i 's|^"094" = "Gate Matrix lanes owned by RFC 094"$|"094" = "Gate Matrix (v2)"|' \
   "$heading_regex/ci/gate-inputs.toml"
 expect_failure registry-heading-parens-not-regex "heading" "occurs 0 times"
+
+# --- R10-b: the manifest must be valid TOML ------------------------------
+# RFC 094 reasons that one RFC number cannot carry two headings because TOML
+# forbids the duplicate key. Nothing parsed the manifest as TOML, so it could:
+# `Summary` occurs exactly once in RFC 093, so the second entry resolved
+# cleanly and every condition passed with exit 0. The precheck is what makes
+# the RFC's premise true.
+dup_source="$tmp/registry-duplicate-source-key"
+make_valid_fixture "$dup_source"
+sed -i 's|^"093" = "Gate Matrix v1"$|&\n"093" = "Summary"|' \
+  "$dup_source/ci/gate-inputs.toml"
+expect_failure registry-duplicate-source-key "not valid TOML" "line"
+
+# One lane with two owners. Check 1's "exactly one" caught this before the
+# precheck existed and its logic is unchanged -- it is still the right check
+# for a [gates] lane with no owner at all -- but the precheck now reaches the
+# file first and names the cause as what it is.
+dup_owner="$tmp/registry-duplicate-owner-key"
+make_valid_fixture "$dup_owner"
+sed -i 's|^G02 = "093"$|&\nG02 = "093"|' "$dup_owner/ci/gate-inputs.toml"
+expect_failure registry-duplicate-owner-key "not valid TOML" "line"
 
 echo "gate-inputs negative fixtures passed"

@@ -52,6 +52,43 @@ done
 
 policy_path="$root/$policy"
 
+# ---------------------------------------------------------------------------
+# Precheck: the manifest is valid TOML.
+#
+# RFC 094 R10 reasons that ownership conflicts -- one lane with two owners,
+# one RFC number with two headings -- are TOML parse errors and so need no
+# condition of their own. That holds only while something parses the manifest
+# as TOML, and every reader in this pipeline (this script, ci-gate.sh, both
+# fixture harnesses) is awk, which reads a duplicate key leniently and keeps
+# whichever value came last. Measured: `"093" = "Summary"` added below the
+# real source entry passed every condition with exit 0 while tomllib rejected
+# the same file. This precheck makes the RFC's premise true rather than
+# writing the detector the RFC forbids. It runs before any condition because
+# a manifest that is not TOML has nothing meaningful to check. Python 3.14 is
+# pinned in [tools] and already required by G10b and G11.
+# ---------------------------------------------------------------------------
+
+command -v python3.14 >/dev/null 2>&1 || {
+  echo "gate-inputs: python3.14 not found; it is pinned in [tools] and required for the TOML validity precheck" >&2
+  exit 2
+}
+
+if ! toml_error=$(python3.14 - "$policy_path" <<'PRECHECK' 2>&1
+import sys
+import tomllib
+
+try:
+    with open(sys.argv[1], "rb") as handle:
+        tomllib.load(handle)
+except (OSError, tomllib.TOMLDecodeError) as exc:
+    print(exc)
+    raise SystemExit(1)
+PRECHECK
+); then
+  echo "gate-inputs: manifest is not valid TOML: $toml_error" >&2
+  exit 1
+fi
+
 failures=0
 fail() {
   echo "gate-inputs: $1" >&2
