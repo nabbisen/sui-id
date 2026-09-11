@@ -12,6 +12,13 @@ findings verified, `ReadConn` sufficiency measured rather than argued. Also
 — found two checks the resolving design silently dropped, both restored.
 **Security review.** Required
 **Lifecycle history.** Base design accepted 2026-07-17 after [independent review](../handoffs/094-transactional-audit/094-design-review-2026-07-17.md); material amendment returned to Proposed in commit `43085e38219e5eb1bfe11cc698b18f1fa5f5e4d7`; complete amended RFC accepted by `@nabbisen` on 2026-07-21 after [independent review](../handoffs/094-transactional-audit/094-federation-command-amendment-review-2026-07-21.md); **returned to Proposed on 2026-07-28** for the scope amendment described below, per RFC 000's return-for-review rule for material changes to scope, prerequisites, and acceptance criteria. The 2026-07-21 acceptance is preserved in history and is superseded, not withdrawn.
+**Amendment summary (2026-09-12).** Added §Gate Matrix lanes owned by RFC 094 with
+one row: **G13**, an interim lane running the M1 string script
+`scripts/check-audit-matrix.sh`, which had never run in CI despite RFC 085 closing
+on the claim that it was live. Owner-authorized 2026-09-12 as step 2 of the R10
+resolution. It changes no scope, prerequisite or acceptance criterion: the
+structural gate remains authoritative at M2b and supersedes G13's script as the
+coverage control, exactly as §Structural coverage gate already states.
 **Amendment summary (2026-08-26).** Correction round after the external review: `ReadConn`'s read-only guarantee gains a required M2a assertion that `rusqlite`'s `functions`, `vtab` and `load_extension` features stay disabled, since statement-level read-only status does not constrain side-effecting application functions or virtual tables — that surface is currently not compiled in, and nothing checked it. F01–F06 gain an explicit phase statement: they belong to no conversion wave, are implemented by RFC 096-B1 against the M2a runner foundation, and their prerequisite is that foundation rather than the session-security wave. Both carry an explicit confirmation-required note.
 **Amendment summary (2026-08-12).** `ReadConn`'s per-statement `sqlite3_stmt_readonly` interrogation restored as a **required** M2a control after independent review finding B-094-1 established that static denial alone admits `UPDATE … RETURNING` and the other DML `RETURNING` forms; only the versioned read-only PRAGMA allowlist remains deferred. M2a acceptance criteria gained the corresponding negative fixtures. The 2026-07-28 deferral's stated grounds — a "different property", and invasiveness "touching every read path" — were both incorrect.
 **Amendment summary (2026-07-28).** Master-key rotation crash recovery removed to RFC 100; `ReadConn` narrowed to the typed wrapper plus static denial, deferring per-statement runtime interrogation; the `syn` AST boundary gate sequenced into the M2b authority switch; conversion phased into M2a and M2b with C15 pinned to M2a; acceptance criteria split per stage; interim documentation honesty made normative. Requested by `@nabbisen` on 2026-07-28 on the recommendation of the requirements architect.
@@ -874,6 +881,38 @@ change that can add a gate, which is the property R10 exists to restore.
 Until this lands there is no registered way to add a lane — tracked as **R10** in
 `ROADMAP.md`. The lane must be registered before this gate is relied on as M2a
 exit evidence.
+
+### Gate Matrix lanes owned by RFC 094
+
+Registered through the multi-source lane registry (R10, `153db49`), validated by
+A3.4 against this table under `[gate_lane_sources] "094"`. The heading above is
+the recorded source heading and is matched by plain equality; do not rename it
+without changing the manifest in the same commit. Column layout mirrors RFC 093's
+table so one parser reads both.
+
+| ID | Toolchain | Features | Blocking command / assertion |
+|---|---|---|---|
+| G13 | n/a | n/a | `bash scripts/check-audit-matrix.sh` |
+
+**G13 is interim.** It runs the M1 string script — the bidirectional check that
+every audit event literal in `crates/` has a row in the coverage matrix and every
+row has a literal. It compares the matrix against source literals and nothing
+else, which is why three event-name consumers drifted past it (migration
+checklist, Wave B). It is registered now because it is the only coverage control
+that exists during M2a's conversion waves, when event vocabulary churns most, and
+because it had never run in CI: RFC 085 closed at v0.68.0 on "CI gate live and
+bidirectional", and no workflow in the repository's history ever invoked it. When
+`audit-structure` lands at M2b it becomes the authoritative coverage gate; G13
+then remains for vocabulary-drift diagnosis or is retired, by amendment.
+
+**Negative self-test.** As for every lane, G13 carries a fixture the gate must
+fail on — a deliberately desynchronised matrix, one literal in source with no row
+and one row with no literal — driven through `scripts/ci-gate.sh G13` like the
+A3.2 set. This is the desync fixture RFC 085 promised and did not deliver.
+
+*The `[gate_owners]` example in §Manifest shape uses `G13 = "094"` illustratively
+for the structural gate; the number was allocated to this interim lane first, and
+the structural gate takes the next free number when it registers.*
 
 ## Failure injection
 
