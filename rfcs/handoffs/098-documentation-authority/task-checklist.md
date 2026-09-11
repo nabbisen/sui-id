@@ -24,6 +24,76 @@ Step 3 is the only one that touches `crates/`. Do not start step 4 or later
 without a dispatch; steps 5 and 7 depend on open question 1, which acceptance
 did **not** decide.
 
+### Dispatch 2 — 2026-09-12: the last absolute self-URLs, then step 4
+
+Steps 1–3 landed as `2671822` (reviewed:
+`.git-exclude/reviewed/rfc-098-steps-1-3-2026-09-10.md`). Two small items,
+both fully specified; do them as **two commits**, in this order.
+
+**2a — Replace the remaining absolute self-URLs.** The count of twenty-six
+in `README.md` §Findings above was measured before steps 1–3 and is stale.
+Re-measured at `c97027c`, excluding `rfcs/done/`, `docs/changelog/` and
+`CHANGELOG.md` (historical, rule 4), and excluding RFC 098's own text that
+*describes* the pattern with `…` placeholders, **three** remain:
+
+| File | Line | Target | Replace with |
+|---|---|---|---|
+| `README.md` | 205 | `…/blob/main/docs/threat-model.md` | `docs/threat-model.md` |
+| `README.md` | 208 | `…/blob/main/PUBLISHING.md` | `PUBLISHING.md` |
+| `docs/src/getting-started/overview.md` | 37 | `…/blob/main/ROADMAP.md` | `../../../ROADMAP.md` |
+
+Why: an absolute URL to the project's own file is a repo-relative link
+written wrongly. G10b skips external links, so it cannot see whether the
+target exists — the README's link to F1's own document was invisible to the
+gate for that reason. The third one is a book page: mdBook renders a
+relative link to a file outside `docs/src/` as a broken page link on the
+published site, so check the rendered output, not only the link checker.
+If the rendered link is broken, say so and stop; do not substitute a
+different target on your own.
+
+Verify by re-running the measurement above: it must return zero. Report the
+command and the count.
+
+**2b — Step 4: evict the audit-coverage matrix to `ci/`.** Measured blast
+radius at `c97027c`; smaller than RFC 098 §5 step 4 says — **RFC 093 does
+not reference the path**, so there is no closed-RFC edit. That sentence in
+step 4 was wrong.
+
+```
+git mv docs/src/reference/audit-coverage-matrix.md ci/audit-coverage-matrix.md
+```
+
+then repoint exactly these:
+
+| File | What |
+|---|---|
+| `scripts/check-audit-matrix.sh` | line 4 (comment) and line 14 (`MATRIX=`) |
+| `crates/sui-id-store/src/commands.rs` | line 543, a code comment naming the path |
+
+Leave as written: the three dated RFC 093 review records under
+`rfcs/handoffs/093-…/`, the superseded note at
+`rfcs/handoffs/094-transactional-audit/migration-checklist.md:341`, and
+RFC 101 §6.2 — those name the bare filename or are historical prose, and
+stay true or stay dated after the move. RFC 098 §2 already names
+`ci/audit-coverage-matrix.md` as the authoritative location; its F4 and
+step 4 text are the record of why and stay.
+
+The file has no outward links and nothing under `docs/` links to it, so
+mdBook is unaffected; it was never in `SUMMARY.md`. `ci/` holds only
+`.toml` today — a `.md` there is new, and correct: it is D3, a
+machine-consumed contract, and the gate that reads it is the only thing
+that makes it true.
+
+Evidence: `bash scripts/check-audit-matrix.sh` must still report
+**54 matrix entries, 54 source literals** — the same numbers as before the
+move, which is the proof the script found the file at its new path rather
+than passing on an empty read. Plus G10a, G10b, G11, fmt, both clippy
+scopes (the `commands.rs` comment edit touches a crate).
+
+**Not in this dispatch:** step 5 (the seven MI matrices) and step 7 wait on
+open question 1; step 6 (`development-specification.md`) is a separate
+dispatch. One further item is with the owner, not with you.
+
 ## 1 — Publish the authority map first
 
 Before changing any document, publish a map naming, per topic, **one**
