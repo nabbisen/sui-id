@@ -251,48 +251,10 @@ Vocabulary is fixed across implementation and documentation:
 
 ## 7. Threat model
 
-The detailed model lives in `docs/threat-model.md` (12 scenarios + 8
-defensive properties + detailed concerns + known limits). The spec
-gives only the summary.
-
-### 7.1 Twelve assumed threats
-
-1. Token leakage (access / refresh)
-2. Unauthorised access to the admin UI
-3. Admin UI exposure via misconfiguration
-4. CSRF
-5. XSS
-6. Session fixation
-7. Open-redirect / redirect-URI abuse
-8. Secret leakage through logs
-9. Exfiltration of the DB or config file
-10. Password brute-force / credential-stuffing
-11. Misuse of the email-based password reset
-12. Misuse of the passkey-registration path
-
-This list predates RFCs 004 and 005, so it models neither an upstream-IdP
-compromise nor a compromised directory. Threats are `docs/threat-model.md`'s
-to define, and its own staleness banner records the same gap; this section
-does not add them.
-
-### 7.2 Eight defensive properties
-
-- Least-privilege defaults
-- Strict authn/authz on admin APIs
-- Setup mode is first-run only
-- Failure paths land on the safe side
-- The attack surface stays narrow
-- Errors don't over-disclose
-- Audit log exists and is tamper-evident
-- Lockout / MFA paths are timing-equivalent
-
-### 7.3 Known limits
-
-- Single-instance deployment is assumed; HA configurations are out
-  of scope.
-- Local-machine physical access is out of scope.
-- An attacker who holds the master key can read the entire DB
-  (key custody is the operator's responsibility).
+The threat model is `docs/threat-model.md`, and it is the only place
+threats, defensive properties and known limits are stated (RFC 098 §4
+rule 7). This specification does not summarise it; a summary is a copy,
+and the one this section carried through v3 had drifted.
 
 ---
 
