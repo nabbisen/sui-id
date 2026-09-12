@@ -119,6 +119,9 @@ from the matrix, and would not have seen the six `oauth.*` names in
 
 ### Steps 3 and 4, restated 2026-09-13 (ruling: option 1)
 
+**Landed** `7917fa7`, 2026-09-13 — 59/59, derived set printed, fixture discriminating.
+G13-b closed. Review: `.git-exclude/reviewed/g13-b-steps-3-4-and-dispatch-11-2026-09-13.md`.
+
 **3. Derive the allowlist from the three places the code writes an audit
 action.** Computed at run time inside `scripts/check-audit-matrix.sh`, replacing
 the literal group at both grep sites:
@@ -163,3 +166,17 @@ there). The derived namespace set printed. A3.2 green with the new fixture,
 and the fixture shown failing against `1ec5dad`'s script. `cargo check`,
 clippy both scopes, `cargo test` (the events enum is exercised by tests;
 report the count).
+
+## G13-c — eight more dead `SecurityEvent` variants
+
+**Dispatched 2026-09-13.** Same method and evidence as G13-b step 2. RFC 098
+dispatch 11 found eight `SecurityEvent` variants constructed nowhere in the
+workspace: `LoginPasswordSuccess`, `LoginPasswordFailure`,
+`LoginPasswordOkMfaRequired`, `MfaSuccess`, `MfaFailure`, `SessionRevoked`,
+`AdminMfaReset`, `Logout`. Delete each with its `name()`/`target()`/
+`outcome()`/`note()` arms. A clean `cargo check` is the proof of zero
+constructions; report the test count before and after (605 today). G13 must
+still read 59/59 — none of these names is a literal the gate counts. One
+commit, one file. Stop if any variant *is* constructed: that would mean
+dispatch 11's count was wrong, and the finding needs re-measuring, not
+partial deletion.

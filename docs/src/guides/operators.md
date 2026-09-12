@@ -1214,7 +1214,6 @@ periodically alongside the audit log.
 
 ### What `/me/security` deliberately does **not** do
 
-- HIBP breach check on password reuse.
 - Long-form session metadata (browser fingerprint, IP, user
   agent). The session table does not record IP or User-Agent
   today; we'd add it deliberately rather than as a side effect

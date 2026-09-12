@@ -363,6 +363,10 @@ like. `docs/threat-model.md` — RFC 097's, rule 7.
 
 ### Dispatch 11 — 2026-09-13: the guides' behavioural drift, and the field reference
 
+**Landed 2026-09-13** — 11a `a0e7196`, 11b `29536ce`, 11c `71d7597`; the HIBP bullet
+(finding 1.2) removed at merge. Findings 1.1 and 1.3 ruled → dispatch 12; the
+eight dead variants → G13-c. Review: `.git-exclude/reviewed/g13-b-steps-3-4-and-dispatch-11-2026-09-13.md`.
+
 Dispatch 10's tables found five behavioural claims the code contradicts and
 stopped on them correctly. Ruled — RFC 098 rule 1 throughout: the page says
 what the code does. Three commits.
@@ -396,6 +400,43 @@ scope (`oidc/authorize.rs:465`). Add `fed` to the `amr` token table
 
 **Evidence.** G15, G10a, G10b, G11, G14, G13 green. For 11a, a before/after of
 each rewritten passage in the request. For 11b, the loader run per example.
+
+### Dispatch 12 — 2026-09-13: what dispatch 11 found and could not fix
+
+Three commits. Two are code — small, tested, and each makes a documented
+contract true.
+
+**12a — `TokensConfig` per-field defaults** (`crates/sui-id/src/runtime/config.rs:74–78`).
+`Config.tokens` is `#[serde(default)]` but its three fields are not, so any
+`[tokens]` table that omits a key fails to parse — including the configuration
+reference's own *Production-ready annotated configuration*, which omits
+`id_token_lifetime_secs` under a comment saying it defaults to 900. Add
+`#[serde(default = "…")]` to each field with the values the reference
+documents (900, 900, 1209600), keep `deny_unknown_fields`, and add a unit test
+that a `[tokens]` table with one key loads with the other two at their
+defaults. Then prove the reference's production example loads unchanged, the
+way 11b proved the others. Do not edit the reference's table: it stated the
+intended contract; the code did not honour it.
+
+**12b — two doc comments.** `outbox.rs:19` names `Config::email_outbox_*`
+fields that do not exist (`max_attempts` is hardcoded at `main.rs:111`; the
+backoff is `BACKOFF_SECS`) — say what is true. `auth_method.rs`'s doc comment
+on `Fed` says "RFC 005: LDAP bind"; it is constructed by both LDAP sign-in
+(`admin/auth.rs:200`) and federated sign-in (`federation.rs:637`) — say both.
+Comments only.
+
+**12c — `operators.md` §Security events describes the audit table only**
+(ruling 1 of the review). Only `events::emit` writes a tracing line with an
+`event` field, and none of the sixteen events in the table goes through it.
+Remove the sentence promising a log line "in addition to the audit-log row",
+the "filter on `event = …`" instruction, the three `jq` recipes and
+§Account lockout's fourth; keep the table and the SQL recipe, which are true.
+Say in one sentence that the audit table is the record and the log is not.
+Re-run the page's claim table for the section.
+
+**Evidence.** For 12a: the new test; `cargo test` count; the production
+example loading. For all: G10a, G10b, G11, G14, G15, G13 (59/59), fmt, clippy
+both scopes.
 
 ### Step 6a — landed 2026-09-12
 

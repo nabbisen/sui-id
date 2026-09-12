@@ -909,6 +909,18 @@ bidirectional", and no workflow in the repository's history ever invoked it. Whe
 `audit-structure` lands at M2b it becomes the authoritative coverage gate; G13
 then remains for vocabulary-drift diagnosis or is retired, by amendment.
 
+*Amended 2026-09-13 (G13-b, `7917fa7`).* The string script recognised an audit
+event by a hand-written namespace list, and that list lagged the code three
+times — `mfa.`, then `webauthn.`, `setup.` and `token.` — each miss hiding real
+events from both directions of the check. The list is now derived on every run
+from the three places the code writes an audit action. That closes the lag; it
+does not close the class. A string gate can only see literals in namespaces the
+code already declares, which is one more reason `audit-structure` is the
+authoritative coverage control at M2b. Fourteen dead `SecurityEvent` variants
+(six `oauth.*`, eight more) were found by the same work; the emitter path's
+log-line behaviour is a design item for the runner, recorded in the migration
+checklist.
+
 **Negative self-test.** As for every lane, G13 carries a fixture the gate must
 fail on — a deliberately desynchronised matrix, one literal in source with no row
 and one row with no literal — driven through `scripts/ci-gate.sh G13` like the

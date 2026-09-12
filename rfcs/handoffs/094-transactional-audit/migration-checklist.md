@@ -57,6 +57,18 @@ at a time; the workspace and structural gate must remain green between waves.
       coverage control by `audit-structure` at M2b.
 - [ ] Add the checked-in command inventory and structural comparison tool.
 
+      **Two findings from G13-b and RFC 098 dispatch 11 (2026-09-13), for the
+      inventory and the runner design, not yet decided:**
+      (a) Inventory **S10** says first setup is Class A under `admin.setup.completed`;
+      the code emits `setup.create_initial_admin` through a non-atomic `append`
+      after the state change (`sui-id-core/src/setup.rs:233`). Name and class
+      both disagree; the conversion wave that takes S10 must reconcile them.
+      (b) Only `events::emit` writes a tracing line with an `event` field, and it
+      is called for six `auth.password.reset_*` events; every Class-A commit and
+      every raw `append` logs nothing. Whether the runner should emit a
+      structured line per committed audit row is a design question for M2b.
+      The operator guide no longer promises the line (RFC 098 rule 1).
+
       **Also check every consumer of an audit event name, not only the coverage
       matrix.** `check-audit-matrix.sh` compares the matrix against source
       literals and nothing else, so every other consumer drifts silently. That has
