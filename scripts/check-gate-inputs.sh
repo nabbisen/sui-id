@@ -4,8 +4,25 @@
 # The manifest records action pins, toolchain components, and (since A3.1)
 # the literal per-lane commands the scripts/ci-gate.sh dispatcher executes.
 # Until this script existed, nothing read it: it recorded a contract it
-# could not defend. This checks all seven conditions A3.4 requires and
-# fails closed on the first violation.
+# could not defend.
+#
+# Nine things, in the order they run; all but the first accumulate and are
+# reported together:
+#
+#   0. precheck: the manifest parses as TOML (R10-b);
+#   1. every `uses:` in the workflows is pinned to a 40-hex commit SHA;
+#   2. every workflow action SHA is recorded in [actions];
+#   3. every [actions] SHA is used by some workflow -- no stale rows;
+#   4. [rust_components] declares each toolchain lane with the components
+#      it expects, and carries no key that is not a lane;
+#   5. version and gate_matrix_version are both 1;
+#   6. every gate-lane job in ci.yml runs on the [runner] label;
+#   7. the multi-source lane registry (RFC 094 R10) -- six checks, plus the
+#      rule that every [gate_matrix_exceptions] entry records a reason;
+#   8. every [tools] version is the one ci.yml installs or invokes.
+#
+# The count was wrong from A3.4 until 2026-09-12: this comment claimed
+# "all seven conditions" while the script ran eight, and then a precheck.
 
 set -uo pipefail
 
@@ -63,7 +80,12 @@ policy_path="$root/$policy"
 # whichever value came last. Measured: `"093" = "Summary"` added below the
 # real source entry passed every condition with exit 0 while tomllib rejected
 # the same file. This precheck makes the RFC's premise true rather than
-# writing the detector the RFC forbids. It runs before any condition because
+# writing the detector the RFC forbids. A duplicate key is itself a failure
+# here, independent of value equality: two identical rows are as malformed as
+# two conflicting ones, and the first occurrence is never silently kept. That
+# guarantee used to be re-derived by three per-table detectors inside the
+# conditions; since it holds for the whole file, they were unreachable and
+# were removed in R10-c. It runs before any condition because
 # a manifest that is not TOML has nothing meaningful to check. Python 3.14 is
 # pinned in [tools] and already required by G10b and G11.
 # ---------------------------------------------------------------------------
@@ -142,9 +164,10 @@ declare -A expected_components=(
 )
 
 extract_table_value() {
-  # Prints the value of `KEY = ...` inside table $2, or nothing if absent.
-  # Exits with a nonzero rc via the `count` echo when the key occurs more
-  # than once, so callers can detect duplicates.
+  # Prints the value of `KEY = ...` inside table $2, or nothing if absent,
+  # followed by COUNT= so callers can tell absent from present. The count
+  # can no longer exceed 1: the TOML precheck rejects a duplicate key before
+  # any condition runs.
   local key=$1 table=$2
   awk -v key="$key" -v table="$table" '
     $0 ~ ("^\\[" table "\\]") { in_table = 1; next }
@@ -166,10 +189,6 @@ for gate in "${!expected_components[@]}"; do
   value=$(printf '%s\n' "$raw" | grep -v '^COUNT=' || true)
   if [[ "$count" -eq 0 ]]; then
     fail "condition 4: [rust_components] is missing $gate"
-    continue
-  fi
-  if [[ "$count" -gt 1 ]]; then
-    fail "condition 4: [rust_components] declares $gate more than once ($count times)"
     continue
   fi
   # value looks like: ["clippy"]  or  []
@@ -282,8 +301,9 @@ fi
 #
 # Checks 5 and 6 are not new requirements: they are the disjointness and
 # groundedness tests the single-source version already performed, restated
-# over all sources. The [gates] / [gate_matrix_exceptions] duplicate-key
-# rules and the exception-reason rule below are likewise unchanged.
+# over all sources. The exception-reason rule below is likewise unchanged.
+# The two duplicate-key rules that used to sit alongside it were removed in
+# R10-c: the TOML precheck subsumes them for the whole manifest.
 #
 # One normalisation is permitted on the command comparison: a source RFC may
 # render a two-part lane as two backticked commands joined by the word "and"
@@ -381,9 +401,7 @@ parse_lane_rows() {
   ' "$1"
 }
 
-# Extract [gates] from the manifest as `GNN<TAB>command`, detecting
-# duplicate keys within the table (first occurrence is not silently kept —
-# a duplicate is itself a failure here, independent of value equality).
+# Extract [gates] from the manifest as `GNN<TAB>command`.
 awk '
   /^\[gates\]/ { in_table = 1; next }
   /^\[/ { in_table = 0 }
@@ -398,12 +416,6 @@ awk '
     }
   }
 ' "$policy_path" >"$tmp/manifest-gates-raw"
-
-cut -f1 "$tmp/manifest-gates-raw" | sort | uniq -d >"$tmp/manifest-gates-dupes"
-if [[ -s "$tmp/manifest-gates-dupes" ]]; then
-  fail "condition 7: [gates] has duplicate key(s):"
-  cat "$tmp/manifest-gates-dupes" >&2
-fi
 
 sort -u "$tmp/manifest-gates-raw" >"$tmp/manifest-gates"
 cut -f1 "$tmp/manifest-gates" | sort -u >"$tmp/manifest-gate-ids"
@@ -423,12 +435,6 @@ awk '
     }
   }
 ' "$policy_path" >"$tmp/manifest-exceptions-raw"
-
-cut -f1 "$tmp/manifest-exceptions-raw" | sort | uniq -d >"$tmp/manifest-exceptions-dupes"
-if [[ -s "$tmp/manifest-exceptions-dupes" ]]; then
-  fail "condition 7: [gate_matrix_exceptions] has duplicate key(s):"
-  cat "$tmp/manifest-exceptions-dupes" >&2
-fi
 
 sort -u "$tmp/manifest-exceptions-raw" >"$tmp/manifest-exceptions"
 cut -f1 "$tmp/manifest-exceptions" | sort -u >"$tmp/manifest-exception-ids"
