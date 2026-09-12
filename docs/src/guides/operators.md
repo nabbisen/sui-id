@@ -95,27 +95,8 @@ sui-id reads a single TOML file. Generate a starter:
 sui-id --print-sample-config > /etc/sui-id/sui-id.toml
 ```
 
-The fields:
-
-```toml
-[server]
-listen_addr = "127.0.0.1:8801"   # bind address
-issuer = "https://idp.example.com" # external URL clients see (no trailing slash)
-cookie_secure = true             # set true behind HTTPS
-
-[storage]
-db_path = "/var/lib/sui-id/sui-id.sqlite"
-key_file = "/var/lib/sui-id/sui-id.key"
-
-[tokens]
-access_lifetime_secs = 900        # 15 minutes
-id_token_lifetime_secs = 900
-refresh_lifetime_secs = 1209600   # 14 days
-
-[log]
-format = "json"                   # "fmt" for human-readable
-filter = "info,sui_id_bin=info"   # tracing-subscriber filter expression
-```
+Every field, with its type and default, is in
+[the configuration reference](../reference/configuration.md).
 
 ## The master key
 
@@ -393,9 +374,9 @@ without restart) or actively undermine the security model
 holds the key in memory). See [Threat model](https://github.com/nabbisen/sui-id/blob/main/docs/threat-model.md)
 for the reasoning.
 
-If you need to rotate the master key, that's a planned future
-operation, performed offline against the database file with the
-`sui-id admin` CLI.
+To rotate the master key, see
+[Rotating the master key](#rotating-the-master-key) above: it runs
+offline with `sui-id admin rotate-key`.
 
 ## Email features
 
@@ -453,23 +434,25 @@ saves a lot of time vs poring over logs.
 
 ### Operational model
 
-Sends are **inline**. When a user submits `/forgot-password`,
-the handler awaits the SMTP exchange, logs the outcome, and
-returns the same neutral 200 response regardless of success or
-failure. Reasons:
+Sends go through a **persistent outbox** (RFC 001, v0.33.0). When a
+user submits `/forgot-password`, or a password change triggers a
+notification, the handler writes the message to the `email_outbox`
+table and returns at once — the same neutral 200 response whether or
+not delivery later succeeds, so the endpoint reveals nothing about
+the account. A background worker started with the server delivers
+queued mail over SMTP.
 
-- Volume is tiny (one mail per forgot-password / password-change
-  event).
-- A persistent outbox + retry worker would be more code to
-  maintain than the savings justify at this scale.
-- The user-enumeration neutralisation works equally well with
-  inline as with queued sends, since the outer response is
-  always the same.
+A failed delivery is retried after 30 seconds, 2 minutes, 10
+minutes, 1 hour and 6 hours. After the fifth failed attempt the
+message is marked `failed` and is not retried again.
 
-If you need at-least-once delivery semantics — e.g. you're
-deploying to a flaky network where SMTP attempts routinely
-transient-fail — that's the future "persistent email outbox"
-work in the ROADMAP. We don't believe it's needed at v1.0.
+To watch delivery, [Prometheus metrics](#prometheus-metrics) below
+exports `sui_id_email_outbox_enqueued_total` and
+`sui_id_email_outbox_failed_total`, the latter labelled by `reason`.
+There is no queue-depth gauge: a rising failed count is the signal.
+
+Dev mode (`--dev`) does not use the outbox; it sends directly and
+does not retry.
 
 ### Token model
 
@@ -674,10 +657,11 @@ will *not* overwrite anything the inner handler already set, but a
 proxy that overwrites the response from sui-id wins. That's fine
 provided the proxy's policy is at least as strict.
 
-### CSP and the WebAuthn JS bundle
+### CSP and the static scripts
 
-The CSP allows `script-src 'self'` so the bundled `/static/webauthn.js`
-loads. There are no inline scripts and no remote scripts. If you
+The CSP allows `script-src 'self'` so the four hand-written scripts under
+`/static/` load: `theme-init.js`, `copy.js`, `webauthn.js` and
+`step-up-webauthn.js`. There are no inline scripts and no remote scripts. If you
 deploy a custom admin theme that injects external scripts, you'll
 need to relax the policy in your proxy — sui-id itself does not
 support this.
@@ -803,12 +787,6 @@ expect them to be renamed without a deprecation cycle):
 | `auth.password.changed_self` | A user changed their own password via `/me/security/password`. Note records how many sessions and refresh tokens were swept (zero if the user unchecked the box). |
 | `mfa.admin_reset` | An administrator forcibly removed every MFA factor for a user. **Alert on this.** |
 | `admin.user.unlock` | An admin cleared an account lockout via `sui-id admin unlock-user`. |
-| `oauth.authorize.issued` | `/oauth2/authorize` issued an authorization code. |
-| `oauth.authorize.rejected` | `/oauth2/authorize` refused (bad redirect_uri, scope outside policy, etc). |
-| `oauth.token.issued` | `/oauth2/token` minted an access + ID token. |
-| `oauth.token.refreshed` | A refresh token was rotated for a new access token. |
-| `oauth.token.introspected` | A confidential client called `/oauth2/introspect`. |
-| `oauth.token.revoked` | A confidential client called `/oauth2/revoke`. |
 | `webauthn.credential.register` | A user enrolled a passkey. |
 | `webauthn.credential.delete` | A user deleted one of their passkeys. |
 
@@ -1198,7 +1176,10 @@ The flow is:
 4. Verify the supplied current password against the stored hash.
    On mismatch the change is refused with `InvalidCredentials` —
    the same error the regular login path raises.
-5. Apply the new-password policy (length, etc.).
+5. Apply the new-password policy: at least 12 characters, at most
+   256. The current password is verified *before* the policy check,
+   so the endpoint cannot be used to test whether a string would be an
+   acceptable password through differing error messages.
 6. Hash and persist.
 7. If the "sign out other sessions" box is checked, revoke every
    other session for this user and revoke every active refresh
@@ -1207,6 +1188,10 @@ The flow is:
    the form, which feels broken.
 8. Append a `auth.password.changed_self` audit event recording
    how many sessions and refresh tokens were swept.
+9. If the user has an email address on record, send a password-change
+   notification to it (through the outbox; see
+   [Operational model](#operational-model)). This is best-effort: a
+   failure is logged and does not roll the change back.
 
 The wrong-current-password branch deliberately **does not**
 trigger the account lockout that the public sign-in form does.
@@ -1238,56 +1223,15 @@ periodically alongside the audit log.
   see only their own sessions, like everyone else. The `/admin/`
   pages are the place for cross-account work.
 
-### Self-service password change (`/me/security/password`)
-
-The "Change password" button on `/me/security` opens a form
-asking for the current password, the new one (twice), and a
-checkbox — checked by default — that says "sign out my other
-browsers and apps after changing the password." On submit:
-
-1. The CSRF token is verified.
-2. The request is rate-limited against the same IP-keyed bucket
-   the login form uses. A user already holding a valid session
-   shouldn't be able to grind the current-password field at
-   unbounded rate even with a stolen cookie.
-3. The new password and the confirmation field must match.
-4. The current password is verified against the stored Argon2id
-   hash. A wrong current password is reported as
-   `InvalidCredentials` — same error variant as a failed login,
-   so client error mapping stays simple. **No account lockout
-   is applied on this path**: the user is already authenticated
-   by their session, and locking yourself out by mistyping a
-   confirmation field would be unhelpful.
-5. The new password is checked against the policy (minimum 12
-   characters, maximum 256). The order — verify-current then
-   policy-check-new — is deliberate: it stops the endpoint from
-   becoming an oracle for "is X actually a password?" via
-   differentiated error messages.
-6. The credential row is upserted with the new hash, and the
-   `must_change` flag is cleared if it was set.
-7. If "sign out everywhere else" was checked, every session
-   *except* the current one is revoked, and **every** active
-   refresh token belonging to the user is revoked. The current
-   session stays alive so the user isn't booted out of the form
-   they just submitted.
-8. An `auth.password.changed_self` audit event is appended,
-   noting in its `note` field how many sessions and refresh
-   tokens were swept.
-
 ### Things `/me/security/password` deliberately does **not** do
 
-- Send a confirmation email. We don't have email integration
-  today; that lands in a later release. When it does, this
-  flow gains a "we emailed your previous address that this
-  happened" notification.
-- Require re-MFA. The session is already MFA-elevated if the
-  user's account requires MFA at sign-in time; re-prompting on
-  every sensitive action is a separate (good!) feature we'll
-  add as part of a step-up-auth pass.
-- Block re-using the same password. The check would be cheap to
-  add (verify-against-old-hash before upsert), but reuse policy
-  more broadly belongs in a dedicated v0.20+ pass alongside
-  HIBP and password-history.
+- Require re-MFA. Step-up authentication shipped in RFCs 058–060 and
+  gates irreversible and system-wide actions; password change is
+  deliberately exempt from it. The session is already MFA-elevated if
+  the account requires MFA at sign-in.
+- Block re-using the same password. The check would be cheap to add
+  (verify-against-old-hash before upsert), but a reuse policy belongs
+  with password history, which sui-id does not keep.
 
 ## Per-client scope policy
 
@@ -1379,9 +1323,13 @@ The endpoint `GET /metrics` accepts either an admin session cookie or
 `Authorization: Bearer <token>`. No credential → 401. The token is stored
 hashed; if you lose it, rotate a new one.
 
-**What is exposed:** counters and histograms for sign-in outcomes, token
-issuance, email outbox depth, and HTTP latency. No user IDs, email addresses,
-or client IDs appear in metric labels.
+**What is exposed:** counters for sign-in attempts, passkey sign-ins, token
+issuance and revocation, MFA enrolment, recovery-code use, forgot-password
+requests, audit appends, and email outbox enqueues and failures; gauges for
+active sessions and active and retired signing keys; histograms for HTTP
+latency and Argon2id verification time. The catalogue is fixed in
+`crates/sui-id-store/src/metrics.rs`. No user IDs, email addresses, client
+IDs or IP addresses appear in metric labels.
 
 ---
 
