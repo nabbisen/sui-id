@@ -25,7 +25,8 @@ pub enum AuthMethod {
     RecoveryCode,
     /// WebAuthn assertion (passkey / hardware key).
     Webauthn,
-    /// External user-source authentication (RFC 005: LDAP bind).
+    /// Authentication by an external party: an LDAP user source (RFC 005)
+    /// or an upstream OIDC provider (RFC 004). Both sign-in paths set it.
     Fed,
 }
 

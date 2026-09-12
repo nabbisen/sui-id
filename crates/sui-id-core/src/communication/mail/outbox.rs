@@ -16,8 +16,10 @@
 //! | 5 | 6 hours |
 //! | (final) | → `failed`, no further retries |
 //!
-//! These defaults are configurable via `Config::email_outbox_*`. Dev mode
-//! sets `max_attempts = 0` (no retry) and uses the direct `SmtpMailSender`.
+//! The schedule is not configurable: the delays are `BACKOFF_SECS` below, and
+//! `max_attempts` is fixed at 5 where the worker is constructed
+//! (`crates/sui-id/src/main.rs`). Dev mode starts no `OutboxWorker` at all; it
+//! sends through the direct `SmtpMailSender`, with no retry.
 
 use std::sync::Arc;
 use std::time::Duration;
