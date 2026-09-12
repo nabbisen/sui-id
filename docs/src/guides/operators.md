@@ -1151,10 +1151,11 @@ The page shows three sections:
 
 - **Two-factor authentication summary.** Whether TOTP is on, how
   many passkeys are registered. Has a "Manage authenticators"
-  button that goes to `/admin/profile`, where the actual
-  enrollment / removal lives. (`/admin/profile` doesn't require
-  admin privilege; a non-admin user reaches the same page from
-  here.)
+  button that goes to `/me/security/mfa` and
+  `/me/security/passkeys`, where the actual enrollment / removal
+  lives. (RFC 055 consolidated these onto `/me/security/*`;
+  `/admin/profile` survives only as a GET redirect for old
+  bookmarks and needs no admin privilege.)
 - **Where you're signed in.** Every active session for this user,
   newest first, with the session that issued the request marked
   as "current". Every other row gets a "Revoke" button. Below
@@ -1293,9 +1294,9 @@ browsers and apps after changing the password." On submit:
 Every client registered on or after v0.6.0 declares an
 `allowed_scopes` policy. Requests at `/oauth2/authorize` for scopes
 outside the policy are rejected with `invalid_scope`. The default
-for new clients is `openid profile`. Empty means "permit any" for
-backwards compatibility with clients registered before the feature
-existed.
+for new clients is `openid profile email`. Empty means "permit any"
+for backwards compatibility with clients registered before the
+feature existed.
 
 The policy is editable from `/admin/clients/{id}/edit`. Tightening
 takes effect immediately; loosening too. There is no token-issuance
@@ -1305,7 +1306,7 @@ forbidden scope.
 
 ## External user sources — LDAP / Active Directory
 
-Configure one or more `[[user_source]]` blocks in `sui-id.toml` to authenticate
+Configure one or more `[[user_sources]]` blocks in `sui-id.toml` to authenticate
 users against an LDAP directory. See [configuration reference](../reference/configuration.md)
 for the full field list.
 
@@ -1329,7 +1330,7 @@ local-only accounts.
 
 ## Federated sign-in (upstream OIDC)
 
-Configure `[[federation_provider]]` blocks to enable "Sign in with Google/Microsoft/…"
+Configure `[[federation_providers]]` blocks to enable "Sign in with Google/Microsoft/…"
 buttons on the login page. See [configuration reference](../reference/configuration.md).
 
 **Provision modes:**
@@ -1360,12 +1361,12 @@ Then enable it in the admin panel under **Admin → Federation**.
 
 ## Prometheus metrics
 
-Enable the metrics endpoint in `[metrics]`:
+Enable the metrics endpoint in `[server]`:
 
 ```toml
-[metrics]
-enabled     = true
-listen_addr = "127.0.0.1:9091"   # Restrict to internal interface.
+[server]
+metrics_enabled     = true
+metrics_listen_addr = "127.0.0.1:9091"   # Restrict to internal interface.
 ```
 
 Issue or rotate the bearer token:
