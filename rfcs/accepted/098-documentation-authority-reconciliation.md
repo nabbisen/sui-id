@@ -228,9 +228,9 @@ Ordered by severity. Each step is separately reviewable and reversible.
 | 2 | Delete the three stale forks; repoint `README.md` at the book pages with repo-relative links *(the book-page self-URL in `overview.md` is correct under rule 6 and stays)* | `docs/deployment.md`, `docs/operators.md`, `docs/integrators.md`, `README.md` | Removes the false dynamic-registration claim and puts the front page on maintained pages; repo-relative makes them visible to G10b |
 | 3 | Repoint the two source-code citations | `crates/sui-id/src/cli.rs`, `crates/sui-id/src/http/handlers/setup.rs` | The binary must not direct operators to a deleted path |
 | 4 | Move the gate input to `ci/audit-coverage-matrix.md`; update `scripts/check-audit-matrix.sh` and RFC 093's reference | `docs/src/reference/audit-coverage-matrix.md` | Resolves F4 and removes one of F3's orphans |
-| 5 | Decide each remaining orphan: publish it in `SUMMARY.md`, or move it out of `docs/src/` | seven `docs/src/mockup-integration/` matrices | They are RFC-MI-080 verification records of a completed arc — D4/D5 material, not D1 |
+| 5 | Decide each remaining orphan: publish it in `SUMMARY.md`, or move it out of `docs/src/` | seven `docs/src/mockup-integration/` matrices | They are RFC-MI-080 verification records of a completed arc — D4/D5 material, not D1  **Landed 2026-09-13**, `5002a89`: retired to history per open question 1's ruling. |
 | 6 | Correct the version claim and reconcile against accepted RFCs — *decided 2026-09-12 from the drift audit: **cut, do not reconcile.** 25 of 40 sections hold and every one of them states principle or policy; every section that drifted is an inventory — a second copy of something the repository holds authoritatively — which rule 3 says should not exist. Principles stay; each inventory becomes a pointer to its source; re-pinned as v4 at v0.77.0. **Landed 2026-09-12.*** | `docs/development-specification.md` | Synthesis document; lower blast radius |
-| 7 | Decide the disposition of the 16-file MI planning package | `docs/mockup-integration/` | Records of a completed arc; see §6 |
+| 7 | Decide the disposition of the 16-file MI planning package | `docs/mockup-integration/` | Records of a completed arc; see §6  **Landed 2026-09-13**, `5002a89`, with step 5. |
 
 Steps 1–3 close every public-facing falsehood. Steps 4–7 are structural.
 

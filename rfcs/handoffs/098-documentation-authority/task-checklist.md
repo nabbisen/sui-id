@@ -229,6 +229,9 @@ target does not exist — both are findings, not edits.
 
 ### Dispatch 7 — 2026-09-12: step 6d, the specification's §7 under rule 7
 
+**Landed 2026-09-13** — `0fc6a81`. Three headings removed, one body changed, 87
+sections byte-identical. Review: `.git-exclude/reviewed/rfc-098-dispatch-7-and-8-2026-09-13.md`.
+
 Owner ruling: security and the threat model have a single source of truth in
 documentation — RFC 098 §4 rule 7. `docs/development-specification.md` §7
 opens by deferring to `docs/threat-model.md` and then restates it: §7.1 twelve
@@ -247,6 +250,63 @@ known limits. A summary is a copy. One commit, one file.
 **Evidence.** G15: 7 (A), 0 (B), 0 (C) — (C) stays zero, the v4 claim is
 untouched. G10b, G11, G14 green. Section-split byte-identity for everything
 outside §7.
+
+### Dispatch 9 — 2026-09-13: the public surface — README, architecture, PUBLISHING
+
+RFC 098's mechanical half is done: steps 1–7 landed, G14 and G15 enforce. What
+remains before closure is the semantic half of its closure prerequisites —
+README, contributor guidance and public claims agreeing with the code. The
+checklist's §3 and §4 below scoped this in July; **re-measured 2026-09-13
+against `5002a89`**, this is what is still live. Three commits, in this order.
+
+**9a — `README.md`.** Three defects, all on the public front page:
+
+| Lines | Now | Fix |
+|---|---|---|
+| 82–84 | "If you want SAML, LDAP federation, dynamic client registration over the internet, or twenty IdP integrations out of the box: sui-id is not for you" | LDAP user sources (RFC 005), upstream OIDC federation (RFC 004) and dynamic client registration (RFC 008) all shipped. Rewrite the paragraph to disclaim only what is true today: SAML, multi-tenancy (RFC 025), a plugin system, a catalogue of pre-built IdP integrations. Keep its voice. |
+| §Features (129–164) | Names none of LDAP, federation, dynamic registration, or the metrics endpoint | Add one bullet each, in the section's existing style, pointing at the book page that documents it (`oidc-api.md` for federation and registration; `operators.md` for LDAP and metrics). The front page must not disclaim two shipped subsystems while listing none of the four. |
+| §Project layout (181–193) | Five crates | Six: add `sui-id-i18n` in the tree, one line, matching the others. |
+
+**Deliverable with 9a, in the review request: a claim/evidence table for
+`README.md`** — every factual claim the file makes (scope, features, MSRV,
+layout, links), one row each, with the code path, RFC, or gate that makes it
+true. RFC 098 §Requirements calls for this; it is how the review checks the
+public front page against the tree rather than against taste.
+
+**9b — `docs/src/contributing/architecture.md`.** Three contradictions, each
+verified live:
+
+| Line | Now | Truth |
+|---|---|---|
+| 25 | `crates/sui-id/src/handlers/` | `crates/sui-id/src/http/handlers/` |
+| 37 | `Database` is "an `Arc<Mutex<Connection>>`" | RFC 009 step 1: `Database` wraps `Arc<dyn Backend>`; `SqliteBackend` owns the connection (`crates/sui-id-store/src/backend.rs`). Say that, and that the backend is pluggable by design. |
+| 75–79 | "Every mutation goes through `events::emit(...)`" | False since RFC 094. Class-A mutations go through the sealed seam — `declare_write_command!` and `WriteTx<AtomicAudit>` — which commits the mutation and its audit row in one transaction; `events::emit` remains for Class-B events (six call sites). Rewrite the paragraph to say that, in this page's register, and point at RFC 094 and `ci/audit-coverage-matrix.md`. Do not restate the threat model (rule 7). |
+
+Re-read the whole page while there: it is 104 lines, and the three above are
+what a grep finds, not what a read finds. Report anything else as a finding
+with its line, and fix only what the dispatch names unless it is a path.
+
+**9c — `PUBLISHING.md`.** RFC 024 (done) decided it "does not earn a root
+slot" and moved it to `docs/contributors/release-process.md`. That never
+happened — the file is still at the root — and `docs/contributors/` predates
+the book. Under RFC 098's domains it is D1 contributor documentation:
+`git mv PUBLISHING.md docs/src/contributing/release-process.md`, add it to
+`SUMMARY.md` under Contributing, repoint `README.md`'s link (repo-relative —
+README is not a book page), and add a dated note to RFC 024 recording where it
+landed and why the path differs. Check whether anything else links to it
+(`git grep PUBLISHING`); the crate manifests' `readme` fields do not.
+
+**Also check, report, do not fix:** `Cargo.toml` sets
+`documentation = "https://docs.rs/sui-id"`. Confirm that URL renders something
+for a binary crate. If it is empty or a stub, say so — where it should point is
+a decision, not an edit.
+
+**Evidence.** G10a, G10b, G11, G14, G15 green; the README claim/evidence
+table; `python3.14 scripts/check-doc-authority.py` unchanged at all-satisfied.
+Each commit's `git diff --stat` in the request.
+
+**Stop if** a README claim has no evidence in the tree — that is a public
+claim that is not true, and the fix is not editorial.
 
 ### Step 6a — landed 2026-09-12
 
@@ -267,6 +327,9 @@ reconciled section by section, or superseded by the authority table plus the
 book and retired — that is a design decision the table informs.
 
 ### Dispatch 8 — 2026-09-12: step 5, retire the MI records; register G15
+
+**Landed 2026-09-13** — `5002a89`. 23 files retired against `600d184`; five
+references converted; **G15 registered — first green run.** Step 7 closes with it.
 
 **Authorized by `@nabbisen`, 2026-09-12** — deletion of the 23 files included.
 Open question 1 is ruled: no new folder, no gate change.
