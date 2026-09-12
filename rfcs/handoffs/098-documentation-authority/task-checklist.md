@@ -162,6 +162,10 @@ tests counted.
 
 ### Dispatch 6 — 2026-09-12: step 6c, cut the specification to what holds
 
+**Landed 2026-09-12** — one commit, one file; 59 kept sections byte-identical, G15
+7/0/0 with no banner. Review: `.git-exclude/reviewed/rfc-098-dispatch-6-2026-09-12.md`.
+Step 6 is complete. Every remaining G15 violation is step 5.
+
 Dispatch 5's audit (review: `.git-exclude/reviewed/r10-c-and-spec-drift-audit-2026-09-12.md`)
 decided the disposition: **cut, do not reconcile.** Every principle section
 holds; every enumeration drifted because it is a second copy of an
