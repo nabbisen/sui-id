@@ -29,7 +29,7 @@ under `/admin/clients`. The administrator gives:
   loopback (`http://localhost:...`) which is permitted for development.
 - Whether the client is **confidential** (server-side, gets a client
   secret) or **public** (browser-only or native, no secret).
-- An **allowed scopes** list (default `openid profile`). Any scope your
+- An **allowed scopes** list (default `openid profile email`). Any scope your
   application asks for at `/authorize` must appear in this list; a
   request that exceeds the policy is rejected with `invalid_scope`.
   An empty list means "permit any scope" — that's the legacy fallback
@@ -87,7 +87,7 @@ Response (`201 Created`):
 
 ```json
 {
-  "client_id": "01JXXXXXXXXXXXXXXXXXX",
+  "client_id": "3f1b9c4e-0a7d-4f8e-9b21-6c5d8e7a2f40",
   "client_secret": "<shown once>",
   "client_name": "My Application",
   "redirect_uris": ["https://app.example.com/callback"],
@@ -131,7 +131,7 @@ The flow is fully server-side from the RP perspective:
    local MFA if enrolled, and issues a sui-id session.
 
 The upstream access token is used only during step 4 and is never persisted.
-See `[[federation_provider]]` in the configuration reference for setup.
+See `[[federation_providers]]` in the configuration reference for setup.
 
 ---
 
