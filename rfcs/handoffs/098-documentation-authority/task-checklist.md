@@ -160,6 +160,69 @@ tests counted.
 **Not in scope.** Registering G15 (still waits on steps 5 and 6); any change to
 `check-markdown-links.py`; the MI matrices (open question 1).
 
+### Dispatch 6 — 2026-09-12: step 6c, cut the specification to what holds
+
+Dispatch 5's audit (review: `.git-exclude/reviewed/r10-c-and-spec-drift-audit-2026-09-12.md`)
+decided the disposition: **cut, do not reconcile.** Every principle section
+holds; every enumeration drifted because it is a second copy of an
+authoritative artifact. One commit, one file, plus `ci/doc-authority.toml` only
+if the claim regex needs the new header form (it should not — keep the phrase
+"reflecting the v0.77.0 codebase").
+
+**Header.** `*v4 — reflecting the v0.77.0 codebase (2026-09-12). Supersedes v3
+(v0.48.4). Under RFC 098 this document is a synthesis of policy and principle,
+not a source: inventories were removed in v4 and each section that held one
+now names where the authoritative copy lives.*` Remove the v3 paragraph and
+the step-6a staleness banner — within tolerance again, and check (C) will
+force the banner back if it lags.
+
+**Keep verbatim** — the sections dispatch 5 marked *holds*: §0, §1, §2, §5.1,
+§6.2, §6.3, §7 (intro), §7.2, §7.3, §8.3, §10, §11.3, §11.4, §11.5, §11.7–11.14,
+§12, §14, §15.1, §16, §17.1–17.3, §18, §19.1–19.3, §19.5, §19.7, §20, §22.1,
+§22.2, §24, §25. Do not "improve" them.
+
+**Amend briefly** — one to four sentences each, from the audit's findings,
+citing the RFC:
+| § | Change |
+|---|---|
+| 3 | Remove "Social login" and "External IdP federation" (RFC 004, 005 shipped). State today's out-of-scope from `ROADMAP.md` §Constraints and non-goals: multi-tenancy (RFC 025), alternative SQL backends beyond RFC 009 step 1, user-facing theming API. |
+| 4 | Add: federation provider, user source (LDAP), client registration token, metrics token — one line each, wording from the RFC that introduced it. |
+| 5.2 | Add OAuth 2.0 Dynamic Client Registration (RFC 7591) — RFC 008. |
+| 5.3 | "OP" → "OP and, since RFC 004, relying party to upstream OIDC providers". |
+| 6.1 | Add the four secrets: federation client secrets, LDAP bind credential, metrics bearer token, registration tokens. |
+| 7.1 | Do **not** add threats here — that is `docs/threat-model.md`'s and RFC 097's. Add one sentence: the list predates RFCs 004/005 and the threat model's banner records the gap. |
+| 11.1, 11.2, 11.6 | One sentence each naming the shipped subsystem and its page: federation and dynamic registration → `docs/src/reference/oidc-api.md`; LDAP user sources and the metrics endpoint → `docs/src/guides/operators.md`. |
+| 13.2 | Delete "Consent retention is reserved for future expansion"; consent shipped (migration 0025). |
+
+**Replace with a pointer** — delete the inventory, keep the section heading and
+one or two sentences of principle if the section has any, then one line naming
+the authoritative source:
+| § | Pointer |
+|---|---|
+| 8.1 | Rust 2024 edition stays; toolchain floor and matrix → RFC 093 §Gate Matrix v1 and `rust-version` in `Cargo.toml`. |
+| 8.2 | Delete the table → `Cargo.toml` `[workspace.dependencies]`. |
+| 9, 9.1 | Delete the tree and the CLI list; keep the crate-responsibility sentences with the two paths corrected (`src/http/handlers/`, `src/runtime/dev_mode.rs`) → RFC 000 for `rfcs/`, `README.md` §Project layout, `sui-id --help`. |
+| 13.1 | Delete the entity list → `crates/sui-id-store/src/migrations/`. |
+| 15.2 | Delete the event list (and with it `auth.refresh.family_revoked`, which does not exist) → `ci/audit-coverage-matrix.md` and `docs/src/reference/audit-events.md`. |
+| 17.4 | Keep the design-system principles; delete the JS-file table and the two named gates → `crates/sui-id/static/` and `ci/ui-invariants.toml` (G12). |
+| 19.4 | Delete the list → the tree, RFC 000, §19.7. |
+| 19.6 | Replace the body → RFC 098 §4 rule 6, one sentence stating it. |
+| 21 | Delete the table and the "228/228" floor → RFC 093 §Gate Matrix v1, the lane tables in RFCs 094 and 098, `ci/gate-inputs.toml`. |
+| 22.3 | Delete the `/mnt/user-data/outputs/` mechanism → `PUBLISHING.md` and RFC 093. |
+| 23 | Delete the checklist → `ROADMAP.md` §Programme outcomes. |
+| App. A | Delete → `CHANGELOG.md`. |
+| App. B | Delete outright. |
+
+**Evidence.** G15 on the tree: 7 (A), 0 (B), 0 (C) — (C) must stay zero with
+the banner *removed*, which proves the re-pin is within tolerance. Every
+pointer's target exists (G10b covers `docs`; run it). Line count before and
+after. A section-by-section diff summary in the request, in the table's order,
+so the review can check each disposition against this list. Nothing outside
+the one file.
+
+**Stop if** a *holds* section turns out to need a change, or a pointer's
+target does not exist — both are findings, not edits.
+
 ### Step 6a — landed 2026-09-12
 
 Staleness banner on `docs/development-specification.md`, the rule-5 sanctioned

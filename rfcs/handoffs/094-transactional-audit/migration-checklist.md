@@ -42,7 +42,7 @@ at a time; the workspace and structural gate must remain green between waves.
 - [x] Generate or mechanically verify audit reference documentation.  **Done `5b986c9`.** *(generator built and tested; deliberately not wired to a tracked file until the registry is worth documenting)*
 - [x] Add duplicate-name, class-mismatch, missing-field, and stable-serialization  **Done `5b986c9`.** *(proving slice)*
   tests.
-- [x] **Multi-source lane registry (R10)** — landed `153db49` 2026-09-12; R10-b landed `73df7ee`; R10-c (retire dead detectors) **dispatched 2026-09-12**, see the handoff §R10-c. Was: — `[gate_lane_sources]` and
+- [x] **Multi-source lane registry (R10)** — landed `153db49` 2026-09-12; R10-b landed `73df7ee`; R10-c landed 2026-09-12; R10 closed in full. Was: — `[gate_lane_sources]` and
       `[gate_owners]` in `ci/gate-inputs.toml`, condition 7 becoming six checks,
       behaviour-preserving migration. RFC 094 §Structural coverage gate,
       "Registering it requires a mechanism that does not exist yet" through

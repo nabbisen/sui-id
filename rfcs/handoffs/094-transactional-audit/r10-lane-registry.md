@@ -202,6 +202,8 @@ realised by this precheck is the architect's, added when this lands.
 
 **Dispatched 2026-09-12**, after G13 landed as `1ec5dad`. Small; one commit;
 two files. Pure tidy: no behaviour change is possible, which is the point.
+**Landed.** One file, not two, 2026-09-12 — reviewed at
+`.git-exclude/reviewed/r10-c-and-spec-drift-audit-2026-09-12.md`. R10 is closed in full.
 
 Since R10-b every manifest reaching the conditions is valid TOML, so three
 duplicate-key detectors inside the conditions can no longer fire on any input:
