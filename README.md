@@ -4,26 +4,6 @@
 > Quiet, careful, and small enough to read end to end.
 
 [![License](https://img.shields.io/github/license/nabbisen/sui-id)](LICENSE)
-[![crates.io](https://img.shields.io/crates/v/sui-id?label=sui-id)](https://crates.io/crates/sui-id)
-[![Rust Documentation](https://docs.rs/sui-id/badge.svg?version=latest)](https://docs.rs/sui-id)
-[![Dependency Status](https://deps.rs/crate/sui-id/latest/status.svg)](https://deps.rs/crate/sui-id)
-
-[![crates.io](https://img.shields.io/crates/v/sui-id-core?label=core)](https://crates.io/crates/sui-id-core)
-[![Rust Documentation](https://docs.rs/sui-id-core/badge.svg?version=latest)](https://docs.rs/sui-id-core)
-[![Dependency Status](https://deps.rs/crate/sui-id-core/latest/status.svg)](https://deps.rs/crate/sui-id-core)
-[![crates.io](https://img.shields.io/crates/v/sui-id-i18n?label=i18n)](https://crates.io/crates/sui-id-i18n)
-[![Rust Documentation](https://docs.rs/sui-id-i18n/badge.svg?version=latest)](https://docs.rs/sui-id-i18n)
-[![Dependency Status](https://deps.rs/crate/sui-id-i18n/latest/status.svg)](https://deps.rs/crate/sui-id-i18n)
-[![crates.io](https://img.shields.io/crates/v/sui-id-shared?label=shared)](https://crates.io/crates/sui-id-shared)
-[![Rust Documentation](https://docs.rs/sui-id-shared/badge.svg?version=latest)](https://docs.rs/sui-id-shared)
-[![Dependency Status](https://deps.rs/crate/sui-id-shared/latest/status.svg)](https://deps.rs/crate/sui-id-shared)
-[![crates.io](https://img.shields.io/crates/v/sui-id-store?label=store)](https://crates.io/crates/sui-id-store)
-[![Rust Documentation](https://docs.rs/sui-id-store/badge.svg?version=latest)](https://docs.rs/sui-id-store)
-[![Dependency Status](https://deps.rs/crate/sui-id-store/latest/status.svg)](https://deps.rs/crate/sui-id-store)
-[![crates.io](https://img.shields.io/crates/v/sui-id-web?label=web)](https://crates.io/crates/sui-id-web)
-[![Rust Documentation](https://docs.rs/sui-id-web/badge.svg?version=latest)](https://docs.rs/sui-id-web)
-[![Dependency Status](https://deps.rs/crate/sui-id-web/latest/status.svg)](https://deps.rs/crate/sui-id-web)
-
 
 ![logo](https://raw.githubusercontent.com/nabbisen/sui-id/main/docs/assets/logo.png)
 
@@ -36,10 +16,11 @@ on the front end, stores its data in a single encrypted SQLite file, and ships
 as one statically linked binary. There is no separate database service, no
 embedded JavaScript runtime, and no ambient cloud dependency.
 
-The name "sui" comes from Latin *sui generis* — "of its own kind." sui-id is
-not aiming to replace large IDaaS products. It is built for the case where you
-want an OIDC provider that one person can hold in their head and one operator
-can keep healthy on a single VM.
+The name "sui" comes from "翠" (sui) in Japanese which means a kingfisher,
+their blue green color, and also jadestone with various color such as purple.
+sui-id is not aiming to replace large IDaaS products. It is built for the case
+where you want an OIDC provider that one person can hold in their head and
+one operator can keep healthy on a single VM.
 
 ## Scope
 
@@ -196,17 +177,16 @@ After setup, point your relying party at:
 
 ## Project layout
 
-```
-crates/
-├── sui-id-shared   DTOs, typed ids, public error type
-├── sui-id-store    SQLite, migrations, column encryption, repositories
-├── sui-id-core     Domain logic: passwords, JWT, OIDC, setup, sessions
-├── sui-id-i18n     Locale tables and Accept-Language negotiation
-├── sui-id-web      Leptos SSR pages (login, setup, admin panel)
-└── sui-id          Axum router, config loader, master-key resolution,
-                    embedded static assets, the `sui-id` binary
-docs/               Operator and integrator documentation
-```
+### Crates
+
+| Crate | Purpose | Version | Docs | Dependencies |
+|---|---|---|---|---|
+| sui-id | Axum router, config loader, master-key resolution, embedded static assets, the `sui-id` binary | [![crates.io](https://img.shields.io/crates/v/sui-id?label=sui-id)](https://crates.io/crates/sui-id) | [![Rust Documentation](https://docs.rs/sui-id/badge.svg?version=latest)](https://docs.rs/sui-id) | [![Dependency Status](https://deps.rs/crate/sui-id/latest/status.svg)](https://deps.rs/crate/sui-id) |
+| sui-id-core | Domain logic: passwords, JWT, OIDC, setup, sessions | [![crates.io](https://img.shields.io/crates/v/sui-id-core?label=core)](https://crates.io/crates/sui-id-core) | [![Rust Documentation](https://docs.rs/sui-id-core/badge.svg?version=latest)](https://docs.rs/sui-id-core) | [![Dependency Status](https://deps.rs/crate/sui-id-core/latest/status.svg)](https://deps.rs/crate/sui-id-core) |
+| sui-id-i18n | Locale tables and Accept-Language negotiation | [![crates.io](https://img.shields.io/crates/v/sui-id-i18n?label=i18n)](https://crates.io/crates/sui-id-i18n) | [![Rust Documentation](https://docs.rs/sui-id-i18n/badge.svg?version=latest)](https://docs.rs/sui-id-i18n) | [![Dependency Status](https://deps.rs/crate/sui-id-i18n/latest/status.svg)](https://deps.rs/crate/sui-id-i18n) |
+| sui-id-shared | DTOs, typed ids, public error type | [![crates.io](https://img.shields.io/crates/v/sui-id-shared?label=shared)](https://crates.io/crates/sui-id-shared) | [![Rust Documentation](https://docs.rs/sui-id-shared/badge.svg?version=latest)](https://docs.rs/sui-id-shared) | [![Dependency Status](https://deps.rs/crate/sui-id-shared/latest/status.svg)](https://deps.rs/crate/sui-id-shared) |
+| sui-id-store | SQLite, migrations, column encryption, repositories | [![crates.io](https://img.shields.io/crates/v/sui-id-store?label=store)](https://crates.io/crates/sui-id-store) | [![Rust Documentation](https://docs.rs/sui-id-store/badge.svg?version=latest)](https://docs.rs/sui-id-store) | [![Dependency Status](https://deps.rs/crate/sui-id-store/latest/status.svg)](https://deps.rs/crate/sui-id-store) |
+| sui-id-web | Leptos SSR pages (login, setup, admin panel) | [![crates.io](https://img.shields.io/crates/v/sui-id-web?label=web)](https://crates.io/crates/sui-id-web) | [![Rust Documentation](https://docs.rs/sui-id-web/badge.svg?version=latest)](https://docs.rs/sui-id-web) | [![Dependency Status](https://deps.rs/crate/sui-id-web/latest/status.svg)](https://deps.rs/crate/sui-id-web) |
 
 ## Documentation
 
