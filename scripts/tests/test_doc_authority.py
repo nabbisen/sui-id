@@ -217,6 +217,87 @@ class DocAuthorityTest(unittest.TestCase):
             result = run_checker(root)
             self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
 
+    # --- (B) rule 6: the two directions a link may take ------------------
+
+    def test_book_page_absolute_outside_book_passes(self):
+        """Rule 6's sanctioned form: no relative spelling works in both
+        mdBook and GitHub, so a book page reaches outside by absolute URL."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_baseline(root)
+            write(
+                root / "docs" / "src" / "introduction.md",
+                "# Introduction\n\nSee [the roadmap]"
+                "(https://github.com/nabbisen/sui-id/blob/main/ROADMAP.md).\n",
+            )
+            git_commit(root)
+            result = run_checker(root)
+            self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+
+    def test_book_page_absolute_to_missing_file_rejected(self):
+        """The sanctioned form is not gate-blind: the prefix is stripped and
+        the remaining path must be tracked."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_baseline(root)
+            write(
+                root / "docs" / "src" / "introduction.md",
+                "# Introduction\n\nSee [the plan]"
+                "(https://github.com/nabbisen/sui-id/blob/main/PLAN.md).\n",
+            )
+            git_commit(root)
+            result = run_checker(root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("(B) docs/src/introduction.md:3", result.stderr)
+            self.assertIn("not tracked", result.stderr)
+
+    def test_book_page_absolute_to_book_page_rejected(self):
+        """Inside the book the relative form works in both renderings, so the
+        absolute one is a link that stops following a page when it moves."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_baseline(root)
+            write(
+                root / "docs" / "src" / "introduction.md",
+                "# Introduction\n\nSee [the overview]"
+                "(https://github.com/nabbisen/sui-id/blob/main/docs/src/"
+                "getting-started/overview.md).\n",
+            )
+            git_commit(root)
+            result = run_checker(root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("(B) docs/src/introduction.md:3", result.stderr)
+            self.assertIn("book page by relative path", result.stderr)
+
+    def test_book_page_relative_outside_book_rejected(self):
+        """The other half of rule 6. mdBook renders this as
+        `../ROADMAP.html`, which the build never produces."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_baseline(root)
+            write(
+                root / "docs" / "src" / "introduction.md",
+                "# Introduction\n\nSee [the roadmap](../../ROADMAP.md).\n",
+            )
+            git_commit(root)
+            result = run_checker(root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("(B) docs/src/introduction.md:3", result.stderr)
+            self.assertIn("rule 6", result.stderr)
+            self.assertIn("never produces", result.stderr)
+
+    def test_book_page_relative_inside_book_passes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_baseline(root)
+            write(
+                root / "docs" / "src" / "introduction.md",
+                "# Introduction\n\nSee [the overview](./getting-started/overview.md).\n",
+            )
+            git_commit(root)
+            result = run_checker(root)
+            self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+
     # --- (C) version-claim freshness -------------------------------------
 
     def test_stale_claim_without_banner_rejected(self):

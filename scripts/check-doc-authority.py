@@ -9,12 +9,20 @@ Three checks, in one script so one failure names one cause:
       unreachable page is not published, so it drifts unread; an entry
       with no file breaks the build's navigation.
 
-  (B) No tracked document links to this repository through an absolute
-      https://github.com/nabbisen/sui-id/blob/ URL. Such a link is a
-      repository-relative link written wrongly: G10b and G14 skip
+  (B) Every link takes the form RFC 098 rule 6 requires, in both
+      directions. Outside docs/src/, an absolute
+      https://github.com/nabbisen/sui-id/blob/ URL to this repository is
+      a repository-relative link written wrongly: G10b and G14 skip
       external targets, so they cannot see whether it resolves, and the
       README's link to its own threat model was invisible to the gate
-      for exactly that reason.
+      for exactly that reason. Inside docs/src/ the rule inverts for
+      targets outside the book, because no relative form works in both
+      renderings -- mdBook rewrites `.md` to `.html` and emits
+      `../../../ROADMAP.html`, which the build never produces. So a book
+      page reaches an outside-book file by absolute URL and a book page
+      by relative path, and never the other way round. The sanctioned
+      absolute form is not gate-blind: its prefix is stripped and the
+      remaining path must be a tracked file.
 
   (C) A document that declares the version it is current as of is either
       within the tolerance ci/doc-authority.toml sets, or carries a
@@ -43,6 +51,11 @@ from pathlib import Path
 # it runs over all of them at once.
 SELF_URL_SCOPE = ("README.md", "ROADMAP.md", "docs", "rfcs", "roadmap")
 SELF_URL_PREFIX = "https://github.com/nabbisen/sui-id/blob/"
+# The same URL with its `blob/<ref>/` head removed, leaving a repository
+# path -- what makes the sanctioned form checkable rather than skipped.
+SELF_URL_RE = re.compile(
+    r"^https://github\.com/nabbisen/sui-id/blob/[^/]+/(.+)$"
+)
 
 BOOK_SRC = Path("docs/src")
 SUMMARY = BOOK_SRC / "SUMMARY.md"
@@ -161,15 +174,74 @@ def check_summary_completeness(root: Path, failures: list[str]) -> None:
             )
 
 
-def check_no_self_urls(root: Path, failures: list[str]) -> None:
+def tracked_files(root: Path) -> set[str]:
+    """Every tracked path in the repository, as posix strings relative to
+    root. The sanctioned absolute form is checked against this, so a book
+    page cannot link to a repository file that does not exist."""
+    result = subprocess.run(
+        ["git", "ls-files", "-z"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return {name for name in result.stdout.split("\0") if name}
+
+
+def check_link_forms(root: Path, failures: list[str]) -> None:
+    tracked = tracked_files(root)
+
     for relative in tracked_markdown(root, SELF_URL_SCOPE):
+        in_book = relative.is_relative_to(BOOK_SRC)
         text = (root / relative).read_text(encoding="utf-8")
+
         for lineno, target in extract_links(text):
             if target.startswith(SELF_URL_PREFIX):
-                failures.append(
-                    f"(B) {relative}:{lineno}: absolute link to this repository; "
-                    f"use a repository-relative path: {target}"
-                )
+                if not in_book:
+                    failures.append(
+                        f"(B) {relative}:{lineno}: absolute link to this repository; "
+                        f"use a repository-relative path: {target}"
+                    )
+                    continue
+                # Rule 6's sanctioned form, and the reason it is not
+                # gate-blind: strip `blob/<ref>/` and check what is left.
+                m = SELF_URL_RE.match(target)
+                if m is None:
+                    failures.append(
+                        f"(B) {relative}:{lineno}: absolute repository link with no "
+                        f"file path after blob/<ref>/: {target}"
+                    )
+                    continue
+                path = m.group(1).split("#", 1)[0].split("?", 1)[0]
+                if Path(path).is_relative_to(BOOK_SRC):
+                    failures.append(
+                        f"(B) {relative}:{lineno}: rule 6 -- a book page links to a "
+                        f"book page by relative path, not by absolute URL: {target}"
+                    )
+                elif path not in tracked:
+                    failures.append(
+                        f"(B) {relative}:{lineno}: absolute repository link names a "
+                        f"path that is not tracked: {path}"
+                    )
+                continue
+
+            if not in_book:
+                continue
+
+            # The other half of rule 6: a book page may not reach outside
+            # the book relatively, because mdBook rewrites the target to a
+            # page the build never produces.
+            local = local_target(target)
+            if local is None:
+                continue
+            resolved = ((root / relative).parent / local).resolve()
+            if resolved.is_relative_to((root / BOOK_SRC).resolve()):
+                continue
+            failures.append(
+                f"(B) {relative}:{lineno}: rule 6 -- a book page reaches an "
+                f"outside-book file by absolute repository URL, not relatively; "
+                f"mdBook rewrites this to a page the build never produces: {target}"
+            )
 
 
 def parse_version(text: str) -> tuple[int, int, int] | None:
@@ -271,7 +343,7 @@ def main(argv: list[str]) -> int:
 
     failures: list[str] = []
     check_summary_completeness(root, failures)
-    check_no_self_urls(root, failures)
+    check_link_forms(root, failures)
     check_version_freshness(root, policy, failures)
 
     if failures:
