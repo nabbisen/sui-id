@@ -135,6 +135,21 @@ today all three are fire-and-forget `let _ = audit::append(...)` in
 | `mfa.disable` | User disables MFA (RFC 058 dangerous self-service action) | user id | — | — | B |
 | `mfa.recovery_codes_regenerate` | User regenerates recovery codes | user id | — | — | B |
 
+### Self-service passkeys (`webauthn.*`)
+
+Registered 2026-09-13 under G13-b. Both events have been emitted since the
+passkey self-service pages shipped, but the gate's namespace allowlist did not
+include `webauthn.`, so neither direction of `check-audit-matrix.sh` could see
+them — the blindness `mfa.` had until 2026-09-09. Class B: both are
+fire-and-forget `let _ = audit::append(...)` in
+`http/handlers/me_security/passkey.rs`, appended after the credential change
+has already committed.
+
+| Event name | Trigger | Actor | Target | Note fields | Class |
+|---|---|---|---|---|---|
+| `webauthn.credential.register` | User completes passkey registration | user id | user id | — | B |
+| `webauthn.credential.delete` | User deletes one of their passkeys (RFC 058 step-up gated) | user id | user id | `self` | B |
+
 ### Self-service settings (`auth.smtp_config.*`)
 
 | Event name | Operation | Actor | Target | Note fields | Class |

@@ -102,33 +102,6 @@ pub enum SecurityEvent {
         totp_removed: bool,
         passkeys_removed: usize,
     },
-    AuthorizeIssued {
-        user_id: UserId,
-        client_id: String,
-        scope: String,
-    },
-    AuthorizeRejected {
-        client_id: Option<String>,
-        reason: &'static str,
-    },
-    TokenIssued {
-        user_id: UserId,
-        client_id: String,
-        grant_type: &'static str,
-    },
-    TokenRefreshed {
-        user_id: UserId,
-        client_id: String,
-    },
-    TokenIntrospected {
-        client_id: String,
-        outcome: Outcome,
-        kind: Option<&'static str>,
-    },
-    TokenRevoked {
-        client_id: String,
-        kind: Option<&'static str>,
-    },
     Logout {
         user_id: UserId,
     },
@@ -181,12 +154,6 @@ impl SecurityEvent {
             Self::MfaFailure { .. } => "auth.mfa.failure",
             Self::SessionRevoked { .. } => "auth.session.revoked",
             Self::AdminMfaReset { .. } => "mfa.admin_reset",
-            Self::AuthorizeIssued { .. } => "oauth.authorize.issued",
-            Self::AuthorizeRejected { .. } => "oauth.authorize.rejected",
-            Self::TokenIssued { .. } => "oauth.token.issued",
-            Self::TokenRefreshed { .. } => "oauth.token.refreshed",
-            Self::TokenIntrospected { .. } => "oauth.token.introspected",
-            Self::TokenRevoked { .. } => "oauth.token.revoked",
             Self::Logout { .. } => "auth.logout",
             Self::PasswordResetRequested { .. } => "auth.password.reset_requested",
             Self::PasswordResetThrottled { .. } => "auth.password.reset_throttled",
@@ -208,17 +175,6 @@ impl SecurityEvent {
             | Self::Logout { user_id } => Some(user_id.to_string()),
             Self::LoginPasswordFailure { username, .. } => Some(username.clone()),
             Self::AdminMfaReset { target_user, .. } => Some(target_user.to_string()),
-            Self::AuthorizeIssued {
-                user_id, client_id, ..
-            }
-            | Self::TokenIssued {
-                user_id, client_id, ..
-            }
-            | Self::TokenRefreshed { user_id, client_id } => Some(format!("{user_id}:{client_id}")),
-            Self::AuthorizeRejected { client_id, .. } => client_id.clone(),
-            Self::TokenIntrospected { client_id, .. } | Self::TokenRevoked { client_id, .. } => {
-                Some(client_id.clone())
-            }
             Self::PasswordResetRequested { user_id } => user_id.map(|u| u.to_string()),
             Self::PasswordResetThrottled { user_id, .. }
             | Self::PasswordResetEmailSent { user_id }
@@ -234,20 +190,14 @@ impl SecurityEvent {
             | Self::MfaSuccess { .. }
             | Self::SessionRevoked { .. }
             | Self::AdminMfaReset { .. }
-            | Self::AuthorizeIssued { .. }
-            | Self::TokenIssued { .. }
-            | Self::TokenRefreshed { .. }
-            | Self::TokenRevoked { .. }
             | Self::Logout { .. }
             | Self::PasswordResetRequested { .. }
             | Self::PasswordResetEmailSent { .. }
             | Self::PasswordResetCompleted { .. } => Outcome::Ok,
             Self::LoginPasswordFailure { .. }
             | Self::MfaFailure { .. }
-            | Self::AuthorizeRejected { .. }
             | Self::PasswordResetThrottled { .. }
             | Self::PasswordResetEmailFailed { .. } => Outcome::Failure,
-            Self::TokenIntrospected { outcome, .. } => *outcome,
         }
     }
 
@@ -261,12 +211,6 @@ impl SecurityEvent {
             }
             Self::SessionRevoked { reason, .. } => Some((*reason).into()),
             Self::MfaSuccess { method, .. } => Some((*method).into()),
-            Self::AuthorizeIssued { scope, .. } => Some(scope.clone()),
-            Self::AuthorizeRejected { reason, .. } => Some((*reason).into()),
-            Self::TokenIssued { grant_type, .. } => Some((*grant_type).into()),
-            Self::TokenIntrospected { kind, .. } | Self::TokenRevoked { kind, .. } => {
-                kind.map(|k| k.into())
-            }
             Self::AdminMfaReset {
                 totp_removed,
                 passkeys_removed,
