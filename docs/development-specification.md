@@ -1,27 +1,9 @@
 # sui-id — Development Specification
 
-> **Stale as of 2026-09-12.** This is **v3 of the specification, written against
-> the v0.48.4 codebase**; the workspace is at **v0.77.0**. Twenty-nine minor
-> releases have shipped since, including LDAP user sources (RFC 005), upstream
-> OIDC federation (RFC 004), dynamic client registration (RFC 008), the
-> Prometheus metrics endpoint (RFC 006), the pluggable `Backend` trait (RFC 009
-> step 1), the security-assurance arc (RFCs 078–086), the UI-security arc
-> (RFCs 087–092), and RFC 093's build and release-gate contract. None of it is
-> reflected below, and the remediation programme now in progress (RFCs 094–100)
-> will widen the gap further until this document is reconciled.
->
-> Under RFC 098 this document is a **synthesis, not a source**: where it and an
-> accepted RFC or the code disagree, the RFC or the code wins. Treat every
-> technical claim below as true of v0.48.4 and unverified for anything later.
-> Reconciliation is RFC 098 §Design 5 step 6, tracked in
-> `rfcs/handoffs/098-documentation-authority/task-checklist.md`.
-
-*v3 — reflecting the v0.48.4 codebase. Supersedes the v2 spec
-(`sui-id-開発指示書_v2-0_29_1時点.md`, snapshot at v0.29.1). This
-document carries forward the original philosophy and direction
-unchanged; the technical sections are rewritten against the current
-implementation, and several sections are new (RFC lifecycle, CI
-invariants, design system, verification phase).*
+*v4 — reflecting the v0.77.0 codebase (2026-09-12). Supersedes v3
+(v0.48.4). Under RFC 098 this document is a synthesis of policy and
+principle, not a source: inventories were removed in v4 and each section
+that held one now names where the authoritative copy lives.*
 
 ---
 
@@ -95,10 +77,9 @@ The following are explicitly outside this specification's
 responsibility (future expansion is not denied, but the spec does
 not assume it):
 
-- Social login
-- External IdP federation
 - Distributed / clustered operation
-- Large-scale multi-tenant operation
+- Large-scale multi-tenant operation — the single-realm model is a
+  constraint, not an oversight; per-tenant isolation is RFC 025, post-1.0
 - Advanced organisational hierarchies
 - Mail-server infrastructure itself (SMTP **send** is included; an
   outbound mail server is not)
@@ -109,6 +90,17 @@ not assume it):
 - Complex workflow engines
 - All-in-one IAM-product breadth
 - SAML
+- Alternative SQL backends beyond the `Backend` trait (RFC 009 step 1);
+  the SQLite implementation is the supported one
+- A user-facing theming API — CSS tokens are the maintainer's vocabulary,
+  not an operator interface
+- A plugin system — sketched in RFC 005, not scheduled
+
+*Amended in v4:* "Social login" and "External IdP federation" were listed
+here through v3. Both shipped — upstream OIDC federation is RFC 004 and
+read-only LDAP user sources are RFC 005 — so the boundary they described
+no longer exists. The current non-goals are `ROADMAP.md` §Constraints and
+non-goals (pre-1.0), which is authoritative where this list and it differ.
 
 ---
 
@@ -147,6 +139,15 @@ Vocabulary is fixed across implementation and documentation:
   during which actual environments surface latent issues that
   pre-tagging review missed. v1.0 tags are deferred until this
   phase produces sufficient confidence (see §22).
+- **Federation provider** — a configured upstream OIDC provider that
+  sui-id authenticates users against as a relying party (RFC 004).
+- **User source** — the origin of a user record: the local store, or a
+  read-only external directory reached over LDAP (RFC 005).
+- **Client registration token** — a single-use credential that authorises
+  a third party to register an OIDC client without an administrator
+  (RFC 008).
+- **Metrics token** — the bearer credential guarding the Prometheus
+  metrics endpoint; stored hashed and rotated from the CLI (RFC 006).
 
 ---
 
@@ -172,6 +173,7 @@ Vocabulary is fixed across implementation and documentation:
 - RFC 7009 Token Revocation
 - OIDC `acr` / `amr` claims
 - WebAuthn (Level 2)
+- OAuth 2.0 Dynamic Client Registration (RFC 7591) — RFC 008
 - CSRF protection and redirect-URI handling
 
 ### 5.3 Adoption rules
@@ -184,7 +186,9 @@ Vocabulary is fixed across implementation and documentation:
 - Device Flow is not implemented
 - `redirect_uri` is matched **exactly** (no prefix matches, no
   wildcards)
-- Prefer the minimal OIDC subset needed for federation
+- Prefer the minimal OIDC subset needed for federation. sui-id is an OP
+  and, since RFC 004, a relying party to upstream OIDC providers; the
+  same preference governs both roles
 
 ---
 
@@ -204,6 +208,10 @@ Vocabulary is fixed across implementation and documentation:
 - Session state
 - SMTP credentials
 - Recovery codes
+- Federation client secrets (RFC 004)
+- LDAP bind credentials (RFC 005)
+- The metrics bearer token (RFC 006)
+- Client registration tokens (RFC 008)
 
 ### 6.2 Prohibited
 
@@ -262,6 +270,11 @@ gives only the summary.
 11. Misuse of the email-based password reset
 12. Misuse of the passkey-registration path
 
+This list predates RFCs 004 and 005, so it models neither an upstream-IdP
+compromise nor a compromised directory. Threats are `docs/threat-model.md`'s
+to define, and its own staleness banner records the same gap; this section
+does not add them.
+
 ### 7.2 Eight defensive properties
 
 - Least-privilege defaults
@@ -288,29 +301,22 @@ gives only the summary.
 ### 8.1 Required
 
 - **Rust 2024 Edition**
-- **Axum 0.8**
-- **Leptos 0.8 (SSR only)**
-- **SQLite** via `rusqlite`
 - **TOML configuration**
 - **Cargo workspace structure**
 
+The toolchain floor and the build matrix it is verified against are RFC 093
+§Gate Matrix v1 and `rust-version` in the workspace `Cargo.toml`. Pinning
+them here would be a second copy of a version two lanes already enforce.
+
 ### 8.2 Principal libraries
 
-| Concern | Library |
-|---|---|
-| HTTP framework | Axum 0.8 + tower-http 0.6 |
-| Admin UI | Leptos 0.8 (server-rendered; minimal hand-written JS) |
-| Persistence | SQLite + column-level encryption (XChaCha20-Poly1305 + AAD binding) |
-| Crypto | `chacha20poly1305`, `argon2`, `ed25519-dalek`, `webauthn-rs` |
-| TOTP | Hand-written (RFC 6238) |
-| Mail | `wasm-smtp` (vendored; SMTP/STARTTLS) |
-| HIBP | `ureq` + `Add-Padding` k-anonymity |
-| Error type | `thiserror` |
-| Logging | `tracing` |
-| Random | `rand` + `OsRng` |
-| Password hash | Argon2id |
-| Serialisation | `serde`, `serde_json` |
-| Testing | unit + integration kept separate |
+Dependencies are chosen for thinness and reviewed before adoption (§8.3),
+and the crates that carry the security-relevant work — password hashing,
+column encryption, signing, WebAuthn — are deliberately few and boring.
+
+The authoritative list is `[workspace.dependencies]` in `Cargo.toml`. The
+table this section carried through v3 had drifted: it named `ureq` for the
+HIBP client, which this workspace does not depend on.
 
 ### 8.3 Constraints
 
@@ -339,49 +345,25 @@ gives only the summary.
 
 ## 9. Project structure
 
-```text
-.
-├── Cargo.toml                    # virtual workspace
-├── crates/
-│   ├── sui-id/                   # binary + router + handlers + CLI
-│   ├── sui-id-core/              # use-case layer (auth, OIDC, state)
-│   ├── sui-id-store/             # SQLite + migrations + crypto
-│   ├── sui-id-web/               # Leptos SSR + design system
-│   ├── sui-id-i18n/              # three locale tables
-│   └── sui-id-shared/            # DTOs + typed IDs + AuthMethod
-├── docs/
-│   ├── src/                      # mdbook-compatible content
-│   │   ├── SUMMARY.md
-│   │   ├── introduction.md
-│   │   ├── getting-started/{quick-start,overview,faq}.md
-│   │   ├── guides/{operators,deployment,upgrade,dangerous-operations}.md
-│   │   ├── reference/{configuration,oidc-api,audit-events}.md
-│   │   └── contributing/{architecture,local-dev,state-contract,translators}.md
-│   ├── ui-ux-contracts.md        # cross-cutting UI/UX rulebook
-│   ├── threat-model.md
-│   └── assets/logo.{png,svg}
-├── rfcs/
-│   ├── README.md
-│   ├── 000-rfc-lifecycle-policy.md
-│   ├── done/                      # 60+ implemented RFCs
-│   └── proposed/                  # open candidates
-├── samples/dev-seed.toml
-├── .github/                       # CI / SECURITY / templates
-├── .vscode/
-├── README.md / LICENSE / NOTICE
-├── CHANGELOG.md / ROADMAP.md
-└── sui-id.example.toml
-```
+A Cargo workspace of six crates (§9.1), with documentation under `docs/`,
+governance under `rfcs/`, and the machine-consumed gate inputs under `ci/`.
+The principle is that a reader should be able to guess where something
+lives from what it does.
+
+The tree itself is authoritative and is not transcribed here: `rfcs/`'s
+layout is RFC 000, the repository layout is `README.md` §Project layout,
+and the CLI surface is `sui-id --help`. The v3 transcript of this tree had
+drifted in every one of those three directions.
 
 ### 9.1 Crate responsibilities
 
 | Crate | Responsibility |
 |---|---|
-| **`sui-id`** | Executable. `main.rs`, axum bootstrap, router, asset embedding, config load, CLI subcommands (`backup`, `restore`, `verify-backup`, `admin unlock-user`, `admin rotate-key`), `--dev` mode (`src/dev_mode.rs`), HTTP handlers (`src/handlers/`). Static JS lives in `crates/sui-id/static/`. |
+| **`sui-id`** | Executable. `main.rs`, axum bootstrap, router, asset embedding, config load, the CLI subcommands (`sui-id --help`), `--dev` mode (`src/runtime/dev_mode.rs`), HTTP handlers (`src/http/handlers/`). Static JS lives in `crates/sui-id/static/`. |
 | **`sui-id-core`** | Use-case layer free of handler/HTTP concerns. Authn/authz, OIDC code/token/discovery/JWKS/introspection/revocation, password hashing, JWT signing, MFA (TOTP + WebAuthn + recovery codes), session lifecycle (idle timeout, concurrent-session cap), lockout, step-up, mail dispatch, HIBP client, master-key rotation, domain error types. |
 | **`sui-id-store`** | SQLite persistence, migrations, column-level encryption, repository implementations, audit-log persistence (SHA-256 hash chain). |
 | **`sui-id-web`** | Leptos SSR. Admin / setup / settings / self-service UIs, design tokens (`tokens.rs`), component CSS (`components.rs`), layout shells (`layout.rs`), per-screen render functions (`pages/`). |
-| **`sui-id-i18n`** | `Locale` enum + `Strings` struct, per-locale files under `locale/` (`en.rs`, `ja.rs`, `zh_hans.rs`, `zh_hant.rs` stub), Accept-Language negotiation. |
+| **`sui-id-i18n`** | `Locale` enum + `Strings` struct, per-locale files under `locale/`, Accept-Language negotiation. Which locales are selectable is `Locale::ALL`; §11.10 states the promotion rule. |
 | **`sui-id-shared`** | Cross-crate DTOs, typed UUID IDs (`UserId`, `ClientId`, `SessionId`, …), `AuthMethod` enum. |
 
 ---
@@ -441,6 +423,12 @@ gives only the summary.
   methods.
 - Per-client settings: `redirect_uris`, `post_logout_redirect_uris`,
   allowed scopes, etc.
+- Since RFC 004 sui-id is also a **relying party** to upstream OIDC
+  providers, and since RFC 008 it accepts **dynamic client registration**
+  under a single-use token. Both are documented in
+  `docs/src/reference/oidc-api.md`.
+- The Prometheus metrics endpoint (RFC 006) is guarded by a bearer token;
+  see `docs/src/guides/operators.md`.
 
 ### 11.2 User management
 
@@ -449,6 +437,9 @@ gives only the summary.
 - Force-logout (single user or all).
 - Logical delete is used where appropriate.
 - HIBP check on password set (off / warn / block).
+- A user may originate from the local store or from a read-only LDAP
+  directory (RFC 005); `docs/src/guides/operators.md` covers configuring a
+  user source and what remains local when one is in use.
 
 ### 11.3 MFA
 
@@ -500,6 +491,10 @@ history.
 - Register PKCE-only public clients.
 - Disable / delete clients.
 - View client details.
+- Administrator registration is not the only path since RFC 008: a third
+  party holding a single-use registration token can register a client
+  itself. `docs/src/reference/oidc-api.md` documents the endpoint and the
+  token's issuance.
 
 ### 11.7 Admin panel
 
@@ -656,22 +651,16 @@ arm.
 
 ### 13.1 Principal entities
 
-| Entity | Notes |
-|---|---|
-| **User** | `username` unique; `email` nullable with a partial-unique constraint |
-| **Credential** | Password hash and TOTP secret in separate tables |
-| **Client** | OIDC client |
-| **AuthorizationCode** | Short-lived; deleted on consume |
-| **Session** | Carries `last_used_at` |
-| **RefreshToken** | Family ID + parent-token pointer |
-| **SigningKey** | Generations: `active` / `retired` (both published in JWKS) |
-| **Consent** | Reserved for future expansion |
-| **WebauthnCredential** | Multi-passkey per user |
-| **WebauthnPending** | `kind` column discriminates step-up / register / login |
-| **AuditLog** | SHA-256 hash chain |
-| **PasswordResetToken** | Hashed token, TTL, single-use |
-| **SmtpConfig** | Singleton; credentials encrypted |
-| **ServerSettings** | Singleton: `default_lang`, `hibp_mode`, `idle_session_timeout_secs`, `max_concurrent_sessions` |
+Users, credentials, clients, authorization codes, sessions, refresh-token
+families, signing-key generations, WebAuthn credentials, the audit chain,
+and the singleton settings rows. Identity is separated from credentials;
+short-lived artifacts carry expiry; nothing security-relevant is stored
+without a reason it can be read back.
+
+The schema is authoritative and is not transcribed here:
+`crates/sui-id-store/src/migrations/`. The v3 list had fallen seven tables
+behind, and described consent as reserved for future expansion when it had
+already shipped.
 
 ### 13.2 Treatment principles
 
@@ -685,7 +674,6 @@ arm.
   `smtp_password_enc`, etc.
 - Every encrypted column carries a column-specific AAD to prevent
   cross-column ciphertext substitution.
-- Consent retention is reserved for future expansion.
 
 ---
 
@@ -726,18 +714,17 @@ arm.
 
 ### 15.2 Audit
 
-The audit log captures: who, when, what, outcome. Coverage:
+The audit log captures: who, when, what, outcome. Every administrative
+action is covered, and a SHA-256 hash chain (each row hashes the canonical
+bytes of the prior hash plus the current event) provides tamper evidence
+within the trust boundary `docs/threat-model.md` states.
 
-- Admin actions on users (create / disable / delete / MFA reset).
-- Admin actions on clients (create / update / delete / secret
-  rotate).
-- Signing-key operations.
-- MFA enable / disable / failure.
-- Master-key rotation (`admin.master_key.rotated`).
-- Refresh-token theft detection (`auth.refresh.family_revoked`).
-
-A SHA-256 hash chain (each row hashes the canonical bytes of the
-prior hash + the current event) provides tamper evidence.
+The event vocabulary is authoritative and is not transcribed here:
+`ci/audit-coverage-matrix.md` is the gate input that G13 checks against the
+source literals in both directions, and `docs/src/reference/audit-events.md`
+is the reader-facing reference. The v3 list named six events against
+fifty-four registered, and one of the six — `auth.refresh.family_revoked` —
+was a name that never existed in the code.
 
 ---
 
@@ -815,7 +802,7 @@ The design system is concrete and bounded; it lives in
 - Accent: `--accent-default`, `--accent-subtle`
 - Semantic palette: for each of `danger / warning / success / info`,
   the triple `--{name}-default` / `--{name}-subtle` /
-  `--fg-on-{name}` (RFC 061; CI gate `semantic-palette-parity`)
+  `--fg-on-{name}` (RFC 061)
 - Border / radius / state: `--border-muted`, `--border-strong`,
   `--border-width-default`, `--radius-sm`, `--radius-md`,
   `--state-hover`, `--state-active`
@@ -843,7 +830,7 @@ primitives (`.sparkline`, `.recent-event-list`), setup wizard
 (`.setup-lang-picker`, `.setup-step-indicator`), tabs
 (`.me-tabs`).
 
-**Utility classes** (RFC 067, CI gate `inline-style-bound` ≤ 20):
+**Utility classes** (RFC 067; inline `style=` is bounded, see §18):
 
 `.mt-*`, `.mb-*`, `.gap-*`, `.center`, `.items-center`,
 `.justify-between`, `.max-w-card`, `.max-w-narrow`,
@@ -876,16 +863,15 @@ single column, and reduces main padding. Anything narrower than
 `white-space: nowrap` with `.cell-wrap` as the opt-out for
 free-form text columns.
 
-**Client-side JavaScript** is three small hand-written files
-served from `/static/*` to satisfy CSP `script-src 'self'`:
-
-| File | Purpose |
-|---|---|
-| `theme-init.js` | Theme `localStorage` resolution + listener attachment |
-| `copy.js` | Delegated `data-copy="…"` click handler (RFC 028) |
-| `logout-csrf.js` | Populates the sign-out form's hidden CSRF input from cookie |
-
-No Wasm, no build step, no third-party CSS, no fonts.
+**Client-side JavaScript** is a handful of small hand-written files served
+from `/static/*` to satisfy CSP `script-src 'self'`. No Wasm, no build step,
+no third-party CSS, no fonts; behaviour that cannot be server-rendered is
+written by hand rather than imported. The files themselves are
+`crates/sui-id/static/`, and the invariants that bind this section — token
+resolution, semantic-palette parity, the inline-style bound, text leaks —
+are `ci/ui-invariants.toml`, enforced as lane G12. The v3 table listed
+three files, one of which no longer exists, and named two of those checks
+as standalone CI gates that RFC 093 M1b C5 consolidated into G12.
 
 ---
 
@@ -946,24 +932,14 @@ All documentation and code comments are written in **English**.
 
 ### 19.4 File layout
 
-These files are present at the repository root and follow stable
-conventions:
+The repository root carries the files a reader looks for by name —
+`README.md`, `ROADMAP.md`, `CHANGELOG.md`, `LICENSE`, `NOTICE` — with
+community and CI configuration under `.github/`, and depth under `docs/`
+organised per §19.7. `README.md` does not bloat.
 
-- `README.md`
-- `ROADMAP.md`
-- `CHANGELOG.md`
-- `LICENSE` (Apache-2.0)
-- `NOTICE`
-- `.github/SECURITY.md`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`
-- `.github/ISSUE_TEMPLATE/{bug_report,feature_request,question,config}.yml`
-- `.github/workflows/{ci,audit}.yml`
-- `.vscode/{extensions,settings}.json`
-- `docs/threat-model.md`
-- `docs/ui-ux-contracts.md`
-- `docs/src/` (mdbook-compatible content)
-- `samples/dev-seed.toml`
-
-`README.md` does not bloat; depth lives under `docs/`.
+The file set itself is the authority: the tree, RFC 000 for `rfcs/`, and
+§19.7 for `docs/`. The v3 enumeration had drifted; a list of filenames is
+the fastest-rotting thing a specification can hold.
 
 ### 19.5 `README.md` layout
 
@@ -977,14 +953,20 @@ conventions:
 License attribution lives in `LICENSE` / `NOTICE` and as GitHub
 badges; the README does not duplicate licence prose.
 
-### 19.6 `README.md` link strategy
+### 19.6 Link form
 
-To stay valid on crates.io (where relative paths 404):
+RFC 098 §4 rule 6 decides this, in both directions: a page under
+`docs/src/` reaches a file outside the book by absolute repository URL,
+because mdBook rewrites a relative `.md` target to an `.html` page the
+build never produces; every other tracked document links
+repository-relative. G15 check (B) enforces both halves.
 
-- Images: absolute
-  `https://raw.githubusercontent.com/<owner>/<repo>/main/...`
-- Files (LICENSE etc.): absolute
-  `https://github.com/<owner>/<repo>/blob/main/...`
+This reverses the v3 rule, which told authors to write absolute
+`https://github.com/<owner>/<repo>/blob/main/...` URLs for files. Those are
+invisible to the link gates, which is how `README.md`'s link to its own
+threat model went unchecked. Images in `README.md` remain absolute
+`https://raw.githubusercontent.com/...` URLs so the crates.io rendering
+shows them.
 
 ### 19.7 `docs/` organisation
 
@@ -1068,22 +1050,21 @@ available slot in `rfcs/`.
 
 ## 21. CI invariants
 
-Every PR runs the following gates (`.github/workflows/ci.yml`).
-None of them is optional and none may be regressed:
+Every push runs a fixed set of blocking lanes. None is optional and none
+may be regressed: a change that would breach one either fixes itself before
+merge or motivates the breach with a new RFC. The lanes are not a
+convention — the manifest they run from is itself gated, so a lane cannot
+be quietly renamed, removed, or pointed at a different command.
 
-| Job | Origin | Check |
-|---|---|---|
-| **build + test** | always | `cargo build`, `cargo test`. Warnings → error. **228/228 tests** is the current floor. |
-| **fmt + clippy** | always | `cargo fmt --check`, `cargo clippy -D warnings`. |
-| **text-leak invariants** | RFC 048, widened RFC 051 | `grep -rEn '>t\.[a-z_0-9]+<' crates/` must return empty. (Leptos `view!` macros render bare identifiers outside `{}` as literal text. Forty-eight sites leaked at v0.41.0; the gate has held 0 since v0.42.0.) |
-| **css-tokens** | RFC 049 | Every `var(--name)` referenced anywhere in `crates/` resolves to a `--name:` declaration in `tokens.rs` or `components.rs`. |
-| **semantic-palette-parity** | RFC 061 | The 12 semantic-palette token names (`danger / warning / success / info` × `default / subtle / fg-on`) each appear three times in `tokens.rs` (light, dark, auto-dark). |
-| **inline-style-bound** | RFC 067 | `grep -rEohn 'style="[^"]*"' crates/sui-id-web/src/pages/ --include='*.rs' \| wc -l` ≤ 20. |
+The lane set is authoritative and is not transcribed here. RFC 093 §Gate
+Matrix v1 owns G01–G12; RFC 094 and RFC 098 own their own lanes through
+the multi-source registry; `ci/gate-inputs.toml` is the machine-readable
+manifest that `scripts/ci-gate.sh` dispatches and that lane A3.4 verifies
+against each owning RFC's table, byte for byte.
 
-A PR that increases any of these counters must either decrease
-them again before merge or motivate the change with a new RFC.
-
----
+The v3 table listed six jobs and a floor of "228/228 tests". Both were
+second copies: the lane set has more than doubled, and the test count is a
+measurement, not a contract.
 
 ## 22. Verification phase
 
@@ -1125,59 +1106,33 @@ sequential numbering.
 
 ### 22.3 Release mechanics
 
-Each release ships as `sui-id-vX.Y.Z.tar.gz` from
-`/mnt/user-data/outputs/`. The archive is built with
-`tar --exclude='target' --exclude='.git' --exclude='sui-id-v*'`
-to keep stray nested release directories out of the archive
-(a contamination pattern that polluted v0.43–v0.48.0 archives
-before being noticed at v0.48.1; corrected from v0.48.2 onward).
+Releases are cut from `main` with the gates green; the procedure, including
+what is published to crates.io and in what order, is `PUBLISHING.md`, and
+the build and release-gate contract is RFC 093.
+
+The v3 text described an archive assembled from a path in the authoring
+environment. That was never a repository mechanism and could not be
+followed by anyone else.
 
 ---
 
 ## 23. Acceptance criteria
 
-The system is functionally complete when:
+Functional completeness is judged against the programme's own record, not
+against a list kept here: `ROADMAP.md` §Programme outcomes states what each
+milestone must deliver, and an RFC's closure prerequisites state what its
+feature must satisfy before it ships.
 
-- Uninitialised state directs the operator to setup.
-- The first administrator can be created (12-char minimum password).
-- Initialised state transitions cleanly to normal operation.
-- OIDC Discovery serves correct values.
-- JWKS returns multiple key generations.
-- Authorization Code + PKCE (S256) authenticates.
-- `redirect_uri` is enforced exactly.
-- Access and refresh tokens issue, rotate, revoke correctly.
-- Refresh-token theft revokes the whole family.
-- RP-Initiated Logout works.
-- Token Introspection / Revocation work.
-- Admins can suspend / delete users.
-- Admins can manage clients (register / update / delete /
-  rotate secret).
-- MFA (TOTP / passkey) registers, authenticates, deregisters.
-- Recovery codes issue, consume, regenerate.
-- Step-up authentication gates the operations it should.
-- Session idle-timeout and concurrent-cap behave as configured.
-- i18n follows the resolution chain (ja / en).
-- The setup wizard supports an explicit language picker.
-- The setup token is supplied via URL parameter, not a text field.
-- ID tokens carry `email` / `email_verified` when scope includes
-  `email`.
-- Mail features work only when SMTP is configured.
-- HIBP enforces correctly in each of off / warn / block.
-- Master-key rotation completes offline with no partial state.
-- The audit-log hash chain is unbroken.
-- No secrets appear in any log.
-- Login / MFA / lockout response times are equal.
-- Restart preserves all state.
-- Backup and restore round-trip.
-- The runtime file set stays small.
-- No dangerous defaults exist.
-- No `unsafe` Rust is present.
-- `--dev` startup is immediately usable.
-- CSP enforcement does not break any user-facing feature.
-- All HTML 401 responses redirect, not render a page that
-  loops back.
-- The UI degrades sensibly on mobile (single breakpoint at 768 px).
-- Workspace compiles with **0 warnings**.
+The v3 checklist was a snapshot of v0.48.4's surface. It had no criterion
+for federated sign-in, LDAP-sourced authentication, dynamic registration or
+the metrics endpoint — four shipped subsystems — which is what a
+completeness list looks like once it stops being maintained.
+
+The standing criteria that are *policy* rather than inventory still hold
+and are stated where they belong: no `unsafe` Rust and a zero-warning
+workspace (§18, lanes G07/G07b/G08), timing equivalence on the
+authentication paths (§6.3, §16.4), an unbroken audit chain (§15.2), no
+secrets in any log (§6.2), and no dangerous defaults (§2.1).
 
 ---
 
@@ -1214,32 +1169,12 @@ verification phase and beyond.
 
 ---
 
-## Appendix A — Release history overview
+## Appendix A — Release history
 
-| Range | Phase | Outcome |
-|---|---|---|
-| v0.1 – v0.29 | Initial implementation | Core OIDC, admin panel, MFA, audit, dev mode |
-| v0.30 – v0.41 | UI/UX hardening preparation | Audit log, dashboard, settings tabs, dangerous-op pattern, i18n, self-service tabs, consent screen |
-| v0.42 (Phase A) | Text-leak + token-freeze + admin-chrome i18n | RFCs 048 / 049 / 050 |
-| v0.43 (Phase B) | i18n completeness + status badge | RFCs 051 / 052 / 053 |
-| v0.44 (Phase C) | Self-service unification + recovery-codes count | RFCs 054 / 055 / 056 / 057 |
-| v0.45 (Phase D) | Step-up enforcement + confirm screen + audit notes | RFCs 058 / 059 / 060 |
-| v0.46 (Phase E) | Semantic palette + card variants + dashboard signal/noise | RFCs 061 / 062 / 063 / 064 |
-| v0.47 – v0.48.0 (Phase F) | Module split + inline-style discipline | RFCs 065 / 066 / 067 / 068 |
-| **v0.48.1 onward** | **Verification phase** | Real-environment bug fixes; UX improvements; no v1 tag scheduled |
-
-## Appendix B — Reference index
-
-- `docs/ui-ux-contracts.md` — cross-cutting UI/UX rulebook
-- `docs/threat-model.md` — 12 + 8 + 3 model
-- `rfcs/000-rfc-lifecycle-policy.md` — RFC operations
-- `rfcs/done/049-css-token-vocabulary-freeze.md` — token freeze
-- `rfcs/done/061-semantic-palette-extension.md` — semantic palette
-- `rfcs/done/067-inline-style-discipline.md` — utility-class bound
-- `.github/workflows/ci.yml` — the four named CI gates
-- `crates/sui-id-web/src/layout.rs` — `Shell` / `AuthShell`
-- `crates/sui-id-web/src/tokens.rs` — design tokens
-- `crates/sui-id-web/src/components.rs` — component CSS + utility classes
-- `crates/sui-id/static/` — three hand-written client JS files
+`CHANGELOG.md` is the release history, in full prose, and `ROADMAP.md`
+carries the one-line row per shipped RFC (§20.3). The v3 appendix
+summarised releases up to v0.48.1 and stopped; twenty-nine minor releases
+and the whole security-assurance, UI-security and remediation arcs had
+accumulated behind it.
 
 *End of specification.*
