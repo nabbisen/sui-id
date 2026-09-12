@@ -88,6 +88,23 @@ Until RFC 094 is implemented, treat the rows below as the coverage this project
 > unlock is added later, it needs its own command with `ActorRequirement::Required`,
 > not a widening of this one.
 
+### First-run setup (`setup.*`)
+
+Registered 2026-09-13 under G13-b: the first run of the derived namespace
+allowlist found it. Written since the setup wizard shipped, invisible until
+then because `setup.` was not in the hand-written list.
+
+| Event name | Operation | Actor | Target | Note fields | Class |
+|---|---|---|---|---|---|
+| `setup.create_initial_admin` | Create the initial administrator (browser wizard or headless `sui-id setup`) | the new admin's user id | the new admin's user id | `headless` on the CLI path; none for the wizard | B |
+
+> **Class B, with a caveat.** `sui-id-core/src/setup.rs` appends with
+> `audit::append(...)` and propagates its error with `?`, but only after the
+> admin row is written and the system is marked initialised, in a separate
+> write. A failed append therefore fails the call *after* the state change has
+> committed: not atomic, so not Class A, and not silent either. RFC 094 decides
+> whether it becomes a Class-A command.
+
 ### Pending settings changes (`settings.pending_change.*`)
 
 | Event name | Operation | Actor | Target | Note fields | Class |
@@ -207,6 +224,18 @@ above it, not `auth.password.changed_self`'s authenticated-actor shape below.*
 | `auth.password.reset_completed` | Password reset completed | — | **A** |
 | `auth.refresh.rotated` | Refresh token rotated (the normal, routine case) | — | **A** |
 | `auth.refresh.theft_detected` | Replay of a rotated refresh token (family revoked) | user id | **A** |
+
+### Token introspection and revocation (`token.*`, RFC 7662 / RFC 7009)
+
+Registered 2026-09-13 under G13-b, found by the same first run. Both are
+client-authenticated endpoints with no user principal, and both are
+fire-and-forget `let _ = audit::append(...)` in
+`http/handlers/oauth_token.rs`, after the response has been decided.
+
+| Event name | Trigger | Actor | Target | Note fields | Class |
+|---|---|---|---|---|---|
+| `token.introspect` | Confidential client calls `/oauth2/introspect` (`result` is `active` or `inactive`) | — | client id | token kind, when known | B |
+| `token.revoke` | Confidential client calls `/oauth2/revoke` | — | client id | the client's `token_type_hint`, if sent | B |
 
 ### OAuth2 / OIDC (`oauth2.*`)
 

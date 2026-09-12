@@ -6,6 +6,9 @@
 #   Forward:  every event name in the matrix must exist in source.
 #   Backward: every source literal must have a matrix row.
 #
+# Which strings count as audit events is derived from the code on every run
+# (G13-b, step 0 below) — there is no hand-maintained namespace list.
+#
 # Exit 0 = pass. Exit 1 = any discrepancy.
 # Usage: bash scripts/check-audit-matrix.sh  (from repo root)
 
@@ -24,10 +27,46 @@ fail() { printf "${RED}FAIL${RESET}  %s\n" "$1"; FAILURES=$((FAILURES + 1)); }
 
 FAILURES=0
 
-# 1. Matrix names: backtick-quoted strings matching audit namespace prefixes
+# 0. Audit namespaces, derived from the three places the code writes an audit
+#    action (G13-b). The allowlist is the set of first segments found there.
+#    A namespace declared in none of them is, by definition, not an audit
+#    event — the honest limit of a string gate. The literal group this
+#    replaced had to be widened by hand after each miss: `mfa.` on 2026-09-09,
+#    then `webauthn.`, `setup.` and `token.` on 2026-09-13.
+#      - crates/sui-id-core/src/events.rs    the strings in `name()`'s arms
+#      - crates/sui-id-store/src/commands.rs `name: "…"` in the command
+#        descriptors (not registry.rs: its proof_only descriptor is a test
+#        artefact, not an event)
+#      - every non-test .rs under crates/     `action: "…"` in an AuditLogRow
+#    Test files (tests/, tests.rs, tests_*.rs) are excluded by name. No inline
+#    #[cfg(test)] module writes an `action:` literal today, and the
+#    repository's rule is that tests live in sibling files. Missing source
+#    files are tolerated so the A3.2 fixture repos derive from their own crate;
+#    an empty result fails closed.
+EVENTS_RS="$SRC_DIRS/sui-id-core/src/events.rs"
+COMMANDS_RS="$SRC_DIRS/sui-id-store/src/commands.rs"
+NAMESPACES=$( {
+  if [ -f "$EVENTS_RS" ]; then
+    sed -n '/pub fn name(/,/^    }/p' "$EVENTS_RS" | grep -oE '=> "[a-z0-9_]+\.' || true
+  fi
+  if [ -f "$COMMANDS_RS" ]; then
+    grep -oE '^[[:space:]]*name:[[:space:]]*"[a-z0-9_]+\.' "$COMMANDS_RS" || true
+  fi
+  grep -rhoE --include='*.rs' --exclude='tests.rs' --exclude='tests_*.rs' \
+    --exclude-dir='tests' 'action:[[:space:]]*"[a-z0-9_]+\.' "$SRC_DIRS" || true
+} | sed -E 's/^.*"//; s/\.$//' | sort -u | paste -sd'|' -)
+
+if [ -z "$NAMESPACES" ]; then
+  echo "ERROR: no audit namespaces derived from $SRC_DIRS"
+  exit 1
+fi
+echo "Derived audit namespaces: $NAMESPACES"
+echo ""
+
+# 1. Matrix names: backtick-quoted strings in a derived audit namespace
 MATRIX_NAMES=$(grep -oE '`[a-z0-9_]+\.[a-z0-9_.]+`' "$MATRIX" \
   | tr -d '`' \
-  | grep -E '^(user|client|signing_key|settings|me|auth|admin|oauth2|mfa)\.' \
+  | grep -E "^($NAMESPACES)\." \
   | sort -u)
 
 if [ -z "$MATRIX_NAMES" ]; then
@@ -40,7 +79,7 @@ fi
 #    "act.before" etc. that begin with test-specific prefixes or are in cfg(test) blocks)
 SRC_LITERALS=$(grep -rh \
   --include="*.rs" \
-  -oE '"(user|client|signing_key|settings|me|auth|admin|oauth2|mfa)\.[a-z_.A-Z]+"' \
+  -oE "\"($NAMESPACES)\\.[a-z_.A-Z]+\"" \
   "$SRC_DIRS" \
   | tr -d '"' \
   | grep -Ev '\.(test_|should_not_appear|before|after|within|format\()' \

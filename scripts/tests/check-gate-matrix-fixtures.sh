@@ -122,7 +122,7 @@ expect_gate_output() {
       exit 1
     fi
   done
-  echo "$gate against $name: both directions reported"
+  echo "$gate against $name: every expected discrepancy reported"
 }
 
 expect_gate_passes() {
@@ -182,11 +182,15 @@ done
 # in each direction, and both must be named: a fixture proving only the
 # forward direction would make "bidirectional" -- RFC 085's closure claim --
 # a vacuous self-test, which is the defect that let this script go five
-# releases without ever running in CI.
+# releases without ever running in CI. The third violation is a literal in a
+# namespace the pre-G13-b hand-written allowlist did not contain; only the
+# derived allowlist reports it, so this assertion fails against 1ec5dad's
+# script and passes against the current one.
 expect_gate_fails G13 audit-desync
 expect_gate_output G13 audit-desync \
   "user.in_matrix_only  (in matrix but NOT found in crates/**/*.rs)" \
-  "client.in_source_only  (in source but NOT in matrix ci/audit-coverage-matrix.md)"
+  "client.in_source_only  (in source but NOT in matrix ci/audit-coverage-matrix.md)" \
+  "webauthn.fixture_only  (in source but NOT in matrix ci/audit-coverage-matrix.md)"
 # The clean case is a minimal in-sync fixture rather than a copy of the real
 # tree: staging the whole repository for one grep would dominate the harness's
 # runtime, and the real tree is already checked by the lane itself in CI.
