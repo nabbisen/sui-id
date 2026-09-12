@@ -98,16 +98,14 @@ previous row. The audit page verifies the chain's tail on load.
 
 ## i18n
 
-All user-visible strings pass through the `Strings` struct in `sui-id-i18n`.
-The struct is fully populated at compile time for each supported locale;
-missing fields are compile errors. The locale resolution chain for admin pages:
-
-1. Admin user's `preferred_lang` (from `users` table).
-2. `server_settings.default_lang` (operator-configured).
-3. `Locale::Ja` fallback.
-
-For end-user pages (login, MFA, etc.), the chain additionally considers
-the `sui_id_lang` cookie and the `Accept-Language` header.
+Locale resolution is one chain, the same for every page, in
+`crates/sui-id-core/src/i18n.rs` (`resolve()`): the user's saved preference,
+then the `sui_id_lang` cookie, then the browser's `Accept-Language` header,
+then the server-wide default from `server_settings.default_lang`, then
+`Locale::default()`. The selectable locales — offered in the UI and as the
+server default — are `Locale::ALL` in `crates/sui-id-i18n`; a locale can be
+served from `Accept-Language` without being selectable, which is Simplified
+Chinese's state today.
 
 ## Security invariants
 

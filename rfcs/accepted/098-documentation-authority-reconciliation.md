@@ -98,7 +98,7 @@ hand-synchronised.
 | Release history | `CHANGELOG.md`, archived at `docs/changelog/` | Append-only; never rewritten |
 | Direction and non-RFC authorization | `ROADMAP.md` | Not an approval record for design; RFCs are |
 | Project overview and public claims | `README.md` | Every claim traceable to shipped code |
-| Publishing procedure | `PUBLISHING.md` | The release workflow files win |
+| Publishing procedure | `docs/src/contributing/release-process.md` (was `PUBLISHING.md` at the root until 2026-09-13, per RFC 024) | The release workflow files win |
 
 ### 3. What the measurement found
 

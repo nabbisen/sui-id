@@ -141,7 +141,9 @@ After setup, point your relying party at:
 - Step-up authentication for sensitive admin operations
 - Server-rendered confirmation screens for all destructive operations
 - Session idle timeout and concurrent session cap (both opt-in, per server settings)
-- Per-user and server-wide language preference (Japanese, English, Chinese)
+- Per-user and server-wide language preference (Japanese, English);
+  Simplified Chinese is served to browsers that request it but is not yet
+  a selectable option
 - Dev mode: one-flag startup with seed data, no setup wizard
 - Per-IP rate limiting on login, token, and setup endpoints
 - Background garbage collection of expired authorization codes, sessions,
@@ -183,8 +185,10 @@ After setup, point your relying party at:
   RustCrypto ecosystem.
 - **HTTP:** Axum 0.8 over Tokio. The router is one file: `crates/sui-id/src/http/router.rs`.
 - **UI:** Leptos 0.8 in SSR-only mode. No WASM is shipped; pages are rendered
-  server-side and HTML POSTs handle state changes. JavaScript is reserved for
-  WebAuthn credential ceremonies only; all other interactions are pure HTML forms.
+  server-side and HTML POSTs handle state changes. JavaScript is confined to four
+  small hand-written files — theme initialisation, copy-to-clipboard, and the
+  WebAuthn ceremonies — with no bundle and no framework; all other
+  interactions are pure HTML forms.
   Destructive operations route through server-rendered confirmation screens with
   step-up authentication (RFC 030).
 - **Observability:** `tracing` + `tracing-subscriber`. Choose `fmt` or `json`
