@@ -35,7 +35,7 @@ The C5 diff was also inspected. It removes only the four legacy inline UI jobs a
 
 RFC 093 is explicit: the legacy script compares event-name strings and cannot prove emission, typing, or shared mutation/audit transactions ([RFC 093](../../done/093-build-toolchain-release-gates.md) lines 47–49). Its required wording is “Diagnostic only,” and says string parity proves neither emission completeness nor mutation/audit atomicity (lines 261–269). The closure handoff makes independent confirmation of that limitation mandatory ([verification handoff](verification.md) lines 74–79).
 
-The current normative [audit coverage matrix](../../../docs/src/reference/audit-coverage-matrix.md) contradicts that boundary in two connected ways:
+The current normative [audit coverage matrix](../../../ci/audit-coverage-matrix.md) contradicts that boundary in two connected ways:
 
 - it says every privileged state mutation has a row and that `check-audit-matrix.sh` keeps the document and code in sync (lines 3–6); and
 - it says that adding a privileged operation without updating the matrix is a CI failure (lines 140–148).

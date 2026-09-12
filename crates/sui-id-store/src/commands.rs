@@ -540,7 +540,7 @@ pub async fn delete_user(
 // ── U05 — admin role change ──────────────────────────────────────────
 //
 // **Schema not previously specified — flagged for review.** Unlike
-// U01-U04, `docs/src/reference/audit-coverage-matrix.md` carries no row
+// U01-U04, `ci/audit-coverage-matrix.md` carries no row
 // for `user.role_change`; it says only "will be added when the
 // role-change handler is converted to Class A atomicity" (RFC 085). No
 // production code emits this event today either — `users_set_role`

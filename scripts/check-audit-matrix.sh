@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # check-audit-matrix.sh — RFC 085 audit coverage CI gate.
 #
-# Bidirectional check between docs/src/reference/audit-coverage-matrix.md
+# Bidirectional check between ci/audit-coverage-matrix.md
 # and the Rust source:
 #   Forward:  every event name in the matrix must exist in source.
 #   Backward: every source literal must have a matrix row.
@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-MATRIX="docs/src/reference/audit-coverage-matrix.md"
+MATRIX="ci/audit-coverage-matrix.md"
 SRC_DIRS="crates"
 
 if [ -t 1 ]; then
