@@ -894,6 +894,10 @@ table so one parser reads both.
 |---|---|---|---|
 | G13 | n/a | n/a | `bash scripts/check-audit-matrix.sh` |
 
+*Registered `1ec5dad`, 2026-09-12 — the first time this script ran in CI. The
+desync fixture RFC 085 promised is in the A3.2 set, both directions pinned by
+message.*
+
 **G13 is interim.** It runs the M1 string script — the bidirectional check that
 every audit event literal in `crates/` has a row in the coverage matrix and every
 row has a literal. It compares the matrix against source literals and nothing

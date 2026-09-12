@@ -1,6 +1,18 @@
 # RFC 085 — Audit Event Completeness for Privileged Operations
 
 **Status.** Implemented (v0.68.0)
+**Closure correction (2026-09-12).** Two acceptance claims below were not met at
+closure. "Matrix published; **CI gate live** and bidirectional": the script
+`scripts/check-audit-matrix.sh` was never invoked by any workflow — `git log --all -S`
+over every non-markdown file finds only the commit that added it — and every
+"54×54" recorded since was a local run. "Matrix CI script with deliberate desync
+fixture test": no such fixture existed. Both were met on 2026-09-12 by `1ec5dad`:
+the script runs as lane **G13**, owned by RFC 094 as an interim coverage control
+until its structural gate lands at M2b, registered through RFC 094's multi-source
+lane registry; the A3.2 fixture `audit-desync` carries one violation in each
+direction, both pinned by message. Found while measuring RFC 098 step 4
+(`.git-exclude/reviewed/audit-matrix-gate-never-wired-2026-09-12.md`). The record
+below is not rewritten; this note is the correction.
 **Tracks.** Strategy theme 8 (audit gap G8). Category B.
 **Touches.** New `docs/src/reference/audit-coverage-matrix.md`
 (or extension of the existing audit-events reference), new

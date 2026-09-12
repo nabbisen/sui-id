@@ -42,7 +42,7 @@ at a time; the workspace and structural gate must remain green between waves.
 - [x] Generate or mechanically verify audit reference documentation.  **Done `5b986c9`.** *(generator built and tested; deliberately not wired to a tracked file until the registry is worth documenting)*
 - [x] Add duplicate-name, class-mismatch, missing-field, and stable-serialization  **Done `5b986c9`.** *(proving slice)*
   tests.
-- [x] **Multi-source lane registry (R10)** — landed `153db49` 2026-09-12; R10-b landed `73df7ee`; R10-c (retire dead detectors) queued. Was: — `[gate_lane_sources]` and
+- [x] **Multi-source lane registry (R10)** — landed `153db49` 2026-09-12; R10-b landed `73df7ee`; R10-c (retire dead detectors) **dispatched 2026-09-12**, see the handoff §R10-c. Was: — `[gate_lane_sources]` and
       `[gate_owners]` in `ci/gate-inputs.toml`, condition 7 becoming six checks,
       behaviour-preserving migration. RFC 094 §Structural coverage gate,
       "Registering it requires a mechanism that does not exist yet" through
@@ -50,7 +50,7 @@ at a time; the workspace and structural gate must remain green between waves.
       [`r10-lane-registry.md`](r10-lane-registry.md). Must land before any
       lane of this RFC's is relied on as M2a exit evidence, and before the
       interim audit-matrix lane (see that handoff §5) is registered.
-- [ ] **G13 — interim audit-coverage lane (RFC 094-owned).** The M1 string
+- [x] **G13 — interim audit-coverage lane (RFC 094-owned).** Landed `1ec5dad` 2026-09-12. The M1 string
       script registered through R10 as this RFC's first lane; it had never run
       in CI. **Dispatched 2026-09-12**, unblocked the same day (dispatch 2 landed `c451c52`):
       [`g13-audit-matrix-lane.md`](g13-audit-matrix-lane.md). Superseded as the

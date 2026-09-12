@@ -111,6 +111,10 @@ G14 registers now (zero new code, green today). G15 is built now and held in
 
 ### Dispatch 4 — 2026-09-12: the outside-book link class, and check (B) under rule 6
 
+**Landed 2026-09-12** — 4a `9bfaecf` (nine links, not the stated ten: five
+threat-model links, not six), 4b `30f16a6`. G15 on the tree: 7 (A), 0 (B), 1 (C).
+Review: `.git-exclude/reviewed/rfc-098-dispatch-4-and-g13-2026-09-12.md`.
+
 Dispatches 2 and 3 landed (review:
 `.git-exclude/reviewed/rfc-098-dispatch-2-and-g14-g15-2026-09-12.md`). The §1
 stop condition produced a rule — RFC 098 §4 rule 6 — and this dispatch applies

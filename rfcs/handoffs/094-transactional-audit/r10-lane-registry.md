@@ -197,3 +197,50 @@ same file. The premise was mine to get right; you followed it correctly.
 Two files: `scripts/check-gate-inputs.sh`, `scripts/tests/check-gate-inputs-fixtures.sh`.
 A third is a stop condition. RFC 094's dated note that its guarantee is
 realised by this precheck is the architect's, added when this lands.
+
+## R10-c — retire the detectors the precheck made unreachable
+
+**Dispatched 2026-09-12**, after G13 landed as `1ec5dad`. Small; one commit;
+two files. Pure tidy: no behaviour change is possible, which is the point.
+
+Since R10-b every manifest reaching the conditions is valid TOML, so three
+duplicate-key detectors inside the conditions can no longer fire on any input:
+
+| Where | Message it can no longer emit |
+|---|---|
+| condition 4 | `[rust_components] declares G01 more than once` (the per-lane duplicate test) |
+| condition 7 | `condition 7: [gates] has duplicate key(s):` |
+| condition 7 | `condition 7: [gate_matrix_exceptions] has duplicate key(s):` |
+
+They are correct, dead, and documented as such in comments and in the two
+fixtures R10-b re-pinned (`rust-components-duplicate`, `gates-duplicate-key`,
+both now expecting `not valid TOML`). Dead detectors in the script that decides
+lane authority are exactly the maintenance smell this project has been
+clearing: the next reader has to work out that they are unreachable, and the
+comment saying so is the only thing stopping someone from "fixing" them.
+
+**Do:**
+
+1. Remove the three detectors and their scratch files/`comm` steps. Keep every
+   other line of conditions 4 and 7 byte-identical — the duplicate detection
+   was interleaved with live checks, so diff carefully and say in the request
+   that you did.
+2. Keep both re-pinned fixtures exactly as they are. They now prove the
+   precheck subsumes the removed detectors; deleting them would delete the
+   proof.
+3. Fix the header comment: it says the script "checks all seven conditions
+   A3.4 requires"; there are eight, plus the TOML precheck. State all nine
+   things it does, in the order it does them.
+4. Where the removed `[gates]` duplicate detector's comment explained that a
+   duplicate "is itself a failure here, independent of value equality", move
+   that sentence to the precheck's comment — the guarantee moved, the reason
+   for it should follow.
+
+**Evidence:** the real tree's output byte-identical to `1ec5dad`'s (the
+comparison R10 established); all 38 A3.4 fixtures green with no expectation
+changed; `git diff --stat` exactly two files (`check-gate-inputs.sh` and, if
+step 4 touches a fixture comment, `check-gate-inputs-fixtures.sh`);
+`shellcheck -S warning` clean.
+
+**Stop if** removing a detector changes any fixture's outcome — that would mean
+it was reachable after all, and the R10-b analysis was wrong.

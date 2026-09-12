@@ -14,6 +14,9 @@ history ever invoked it (finding: `.git-exclude/reviewed/audit-matrix-gate-never
 **Baseline.** `c451c52` or later — RFC 098 dispatch 2 has landed: the matrix is
 at `ci/audit-coverage-matrix.md` and the script's `MATRIX=` points there.
 **Unblocked 2026-09-12.** Proceed.
+**Landed.** `1ec5dad`, 2026-09-12 — reviewed at
+`.git-exclude/reviewed/rfc-098-dispatch-4-and-g13-2026-09-12.md`. Stop condition 1
+did not trigger; stop condition 2 did (a fifth file, `68ab6ce`), and was right.
 
 ## The mechanism doing the work
 
