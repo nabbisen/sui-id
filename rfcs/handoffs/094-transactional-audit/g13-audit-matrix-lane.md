@@ -76,3 +76,48 @@ about it changes), and the three unreachable detectors from R10-b (R10-c, later)
 The architect adds RFC 085's dated correction note naming this commit, and RFC
 098's documentation lane follows on the same rail. R10-c retires the three dead
 detectors afterwards.
+
+## G13-b — the allowlist that could not see two real events
+
+**Dispatched 2026-09-13**, from RFC 098 dispatch 10's review. One commit.
+
+`scripts/check-audit-matrix.sh` recognises an audit event literal by a
+namespace allowlist — `(user|client|signing_key|settings|me|auth|admin|oauth2|mfa)\.`
+at lines 30 and 43. Nothing keeps that list in step with the code. `mfa.` was
+added by hand on 2026-09-09 after the gate missed it; today it cannot see
+`webauthn.credential.register` and `webauthn.credential.delete`
+(`handlers/me_security/passkey.rs:167,209`), two real audit actions absent
+from the matrix, and would not have seen the six `oauth.*` names in
+`events.rs:184–189` had they ever been emitted — which they never were.
+
+**Do:**
+
+1. **Register the two `webauthn.*` events** in `ci/audit-coverage-matrix.md`
+   with correct rows (actor, subject, note shape) taken from the emitting code.
+2. **Delete the six dead `oauth.*` variants** from `crates/sui-id-core/src/events.rs`
+   — `AuthorizeIssued`, `AuthorizeRejected`, `TokenIssued`, `TokenRefreshed`,
+   `TokenIntrospected`, `TokenRevoked` — and their `name()`/`outcome()`/`note()`
+   arms. Zero constructions in the workspace; `cargo check` proves it.
+3. **Derive the allowlist from the code.** Replace the literal group with one
+   computed at run time from the declared vocabulary: the first segment of
+   every string in `events.rs`'s `name()` arms, and of every `event:` literal
+   in a `declare_write_command!` invocation. A namespace declared in neither
+   is, by definition, not an audit event — that is the honest limit of a
+   string gate. Print the derived set in the run's output so a reviewer sees
+   what the gate saw.
+4. **Negative fixture** in the A3.2 `audit-desync` set: a literal in a
+   namespace the code declares but the matrix lacks must be reported by the
+   backward check — this is exactly today's `webauthn.` case, and the fixture
+   must fail on the pre-change script and pass on the new one.
+
+**Not in scope:** any change to the lane's command (unchanged, so RFC 094's
+table and the manifest are untouched), or to G13's status as interim — the
+namespace blindness is one more reason `audit-structure` is the authoritative
+control at M2b, and the architect adds that note to RFC 094 at merge.
+
+**Evidence.** 54 + 2 = **56 matrix entries, 56 source literals** (the six dead
+names were never literals the gate counted, so deleting them changes nothing
+there). The derived namespace set printed. A3.2 green with the new fixture,
+and the fixture shown failing against `1ec5dad`'s script. `cargo check`,
+clippy both scopes, `cargo test` (the events enum is exercised by tests;
+report the count).

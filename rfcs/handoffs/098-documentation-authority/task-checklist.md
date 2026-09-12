@@ -315,6 +315,10 @@ claim that is not true, and the fix is not editorial.
 
 ### Dispatch 10 — 2026-09-13: the operator and integrator guides, claim by claim
 
+**Landed 2026-09-13** — 10a `90135ad`, 10b `316b53a`. 58 + 41 evidence rows; five stop-condition
+findings ruled in `.git-exclude/reviewed/rfc-098-dispatch-10-2026-09-13.md`; one gate
+defect dispatched under RFC 094 as G13-b.
+
 The last item before RFC 098's closure prerequisites can be assessed:
 *operator/integrator guidance agrees with the code*. Dispatch 9a walked
 `README.md` with a claim/evidence table and found two false public claims the
@@ -356,6 +360,42 @@ page, so the review can see the shape of the drift before reading the rows.
 `dangerous-operations.md`, `reference/configuration.md`, `audit-events.md`
 — same method, later dispatch, once these two show what the drift looks
 like. `docs/threat-model.md` — RFC 097's, rule 7.
+
+### Dispatch 11 — 2026-09-13: the guides' behavioural drift, and the field reference
+
+Dispatch 10's tables found five behavioural claims the code contradicts and
+stopped on them correctly. Ruled — RFC 098 rule 1 throughout: the page says
+what the code does. Three commits.
+
+**11a — `docs/src/guides/operators.md`, five rewrites.**
+
+| § | Ruling |
+|---|---|
+| Operational model (454–472) | Rewrite to the outbox that shipped: RFC 001, v0.33.0. Sends go to `email_outbox` and a retry worker delivers them; `OutboxMailSender` is the production sender (`startup.rs:243`); the queue depth is exported by §Prometheus metrics on this page. The paragraph arguing an outbox is not worth building goes. |
+| "planned future operation" (396–398) | Delete the sentence; point at §Rotating the master key, line 138. |
+| "does not do" bullets (1278–1281 and the two beside it) | The confirmation email *is* sent — §Email features says so; make the two agree. Step-up shipped (RFCs 058–060) and password change is *deliberately* exempt from it: say that, not "we'll add". HIBP shipped: drop "alongside HIBP". |
+| §Security events table | Remove the six `oauth.*` rows — never emitted, and the section tells operators to alert on them. Add `webauthn.credential.register` and `.delete`, which are emitted (after G13-b registers them in the matrix; if G13-b has not landed, stop and say so — the table must match the matrix). |
+| Configuring — "The fields:" | Rule 3: this list is a second copy of `docs/src/reference/configuration.md`. Replace it with a one-line pointer; keep the prose around it. |
+| §Self-service password change (1181 and 1240) | Keep the first, delete the second, repoint any anchor. |
+| CSP paragraph | "the bundled `/static/webauthn.js`" → the four files, by name. |
+
+**11b — `docs/src/reference/configuration.md` and eight code comments.** The
+authoritative field reference is wrong in nine places: lines 192, 194, 211,
+224, 226, 245, 255 (`[[user_source]]` → `[[user_sources]]`;
+`[[federation_provider]]` → `[[federation_providers]]`) and 267, 287
+(`[metrics]` → the `metrics_*` keys under `[server]`; a whole section retitled
+and its example rewritten). Prove each corrected example loads, the way 10a
+did. The same singular keys sit in eight doc comments — `config.rs:19,23,296,379`,
+`user_source.rs:75`, `ldap_source.rs:29`, `state.rs:48`, `startup.rs:303` —
+fix them; comments only, no code.
+
+**11c — `docs/src/reference/oidc-api.md`, two omissions.** Add `email` and
+`email_verified` to the ID-token claim table, conditional on the `email`
+scope (`oidc/authorize.rs:465`). Add `fed` to the `amr` token table
+(`auth_method.rs:48`); the table's own example already uses it.
+
+**Evidence.** G15, G10a, G10b, G11, G14, G13 green. For 11a, a before/after of
+each rewritten passage in the request. For 11b, the loader run per example.
 
 ### Step 6a — landed 2026-09-12
 
