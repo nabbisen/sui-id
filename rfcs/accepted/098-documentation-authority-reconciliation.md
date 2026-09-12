@@ -7,6 +7,12 @@
 — design authored by the architect and reviewed by the accountable owner, who
 authored neither this RFC nor its design and is not the implementer.
 **Security review.** Required
+**Amendment summary (2026-09-12).** Added §Gate Matrix lanes owned by RFC 098,
+registering this RFC's enforcement through RFC 094's multi-source lane registry
+(R10, `153db49`): **G14** now, **G15** declared and held under
+`[gate_matrix_exceptions]` until the reconciliation it enforces has landed. This
+answers open question 2 and supersedes §7's closed-RFC framing; RFC 093 is not
+amended. No scope, prerequisite or acceptance criterion changes.
 **Design prerequisites.** RFC 093 Accepted for mechanical integrity ownership; authoritative-document hierarchy approved before RFC 097 final drafting.
 **Implementation prerequisites.** RFC 093 **M1b** Implemented — the mdBook, markdown-link, and RFC-integrity gates M1b owns are the mechanical foundation this RFC builds on, and reconciling claims before those gates exist would leave the result unenforced; this RFC Accepted. M1a is implied by M1b but is not independently sufficient.
 **Closure prerequisites.** Authoritative documents, README, roadmap, development specification, operator/integrator guidance, public claims, source paths, and lifecycle metadata agree; mdBook and integrity gates pass.
@@ -240,9 +246,61 @@ requires amending RFC 093's lane table, which is closed** — the same
 constraint as R10. That decision is `@nabbisen`'s and is recorded as an open
 question below rather than assumed here.
 
+*Superseded 2026-09-12.* The paragraph above was written before R10 landed. RFC
+093's lane set is closed by its own text and RFC 093 is in `done/`; amending it
+was never the mechanism. Under R10 this RFC owns its own lanes, validated by
+A3.4 against the table in §Gate Matrix lanes owned by RFC 098 below. Checks 1
+and 2 stay link-*shaped* but are this RFC's — the scope extension beyond what
+G10b covers is "broad current-path cleanup", which §Requirements assigns here.
+
 G10b's scope is also still `README.md ROADMAP.md docs` — it does not cover
 `rfcs/` or the new `roadmap/`. Thirty-one broken links passed unseen during
 the 2026-09-10 `rfcs/reviews/` migration for exactly this reason.
+
+### Gate Matrix lanes owned by RFC 098
+
+Registered through the multi-source lane registry (RFC 094 R10). The heading
+above is the recorded source heading and is matched by plain equality; do not
+rename it without changing the manifest in the same commit. Column layout
+mirrors RFC 093's table so one parser reads both.
+
+| ID | Toolchain | Features | Blocking command / assertion |
+|---|---|---|---|
+| G14 | Python 3.14 | n/a | `python3.14 scripts/check-markdown-links.py --root . rfcs/handoffs roadmap` |
+| G15 | Python 3.14 | n/a | `python3.14 scripts/check-doc-authority.py --root . --policy ci/doc-authority.toml` |
+
+**G14 — the links no gate checked.** G11 link-checks every RFC file and
+`rfcs/README.md`; G10b checks `README.md`, `ROADMAP.md` and `docs/`. Neither
+covers `rfcs/handoffs/` or `roadmap/` — which is how thirty-one broken links
+passed unseen during the `rfcs/reviews/` migration. G14 runs the existing,
+proven link checker over exactly that complement. Zero new code; green on the
+tree at `a33fd7e`; registers immediately.
+
+**G15 — the three checks of §7**, in one script so one failure names one cause:
+(A) `SUMMARY.md` completeness in both directions; (B) no link to
+`https://github.com/nabbisen/sui-id/blob/…` in a tracked document; (C) every
+document declaring a version it is current as of is within the tolerance
+`ci/doc-authority.toml` sets, **or carries a staleness banner** — rule 5 makes
+the banner the sanctioned state for a lagging document, so a bannered document
+passes and an unbannered stale one fails. `ci/doc-authority.toml` is D3: it holds
+the tolerance and the list of version-pinned documents, and nothing else.
+
+**G15 is declared now and registered later.** On the tree at `a33fd7e` it would
+fail on exactly the findings this RFC records — eight orphan pages (F3), three
+absolute self-URLs (F2), and `docs/development-specification.md`'s unbannered
+v0.48.4 claim — and a lane that is red on `main` is not a gate. RFC 093 §Gate
+entry points: *"If a new lane is initially unreliable, the change remains
+Proposed/Accepted until the contract is restored."* So G15 sits in
+`[gate_matrix_exceptions]` with that reason, which the registry's check 6 keeps
+grounded in this table, and moves to `[gates]` in the commit that lands step 6.
+The script and its fixtures are built now; proving it red on today's tree is
+itself the evidence that F1–F3 are real.
+
+**Negative self-tests.** G14 inherits `check-markdown-links.py`'s existing
+Python tests. G15 carries one fixture per check and per direction — an orphan
+page, a `SUMMARY.md` entry with no file, an absolute self-URL, a stale claim
+with no banner — and one positive fixture proving a stale claim *with* a banner
+passes, so check C cannot pass by forbidding every pinned document.
 
 ## Open questions
 
@@ -251,9 +309,11 @@ the 2026-09-10 `rfcs/reviews/` migration for exactly this reason.
    `NNN-slug` handoff shape invariant 13 enforces. Either the handoff rule
    accommodates the MI namespace, or these become a fourth disposition.
    §6 raises it; this RFC does not settle it.
-2. **How do the three enforcement checks reach CI?** Amending RFC 093's
-   closed lane table to widen G10b, or hosting them as new invariants under
-   G11 as invariants 12 and 13 were. Owner's call.
+2. ~~**How do the three enforcement checks reach CI?**~~ *Answered 2026-09-12:*
+   through RFC 094's multi-source lane registry, as this RFC's own lanes G14
+   and G15 (§Gate Matrix lanes owned by RFC 098). Both framings this question
+   offered — amend RFC 093, or host under G11 — were wrong for the reason
+   recorded in §7.
 3. **Does `docs/threat-model.md` survive RFC 097?** If RFC 097 becomes the
    threat model, the file is superseded rather than reconciled, and step 1
    of §5 is the only work it ever receives again.

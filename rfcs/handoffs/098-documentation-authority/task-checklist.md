@@ -94,6 +94,14 @@ scopes (the `commands.rs` comment edit touches a crate).
 open question 1; step 6 (`development-specification.md`) is a separate
 dispatch. One further item is with the owner, not with you.
 
+### Dispatch 3 — 2026-09-12: RFC 098's own lanes, G14 and G15
+
+Independent of dispatch 2. RFC 098 now declares its lanes in §Gate Matrix lanes
+owned by RFC 098, registered through RFC 094's R10 registry; open question 2 is
+answered by that. Handoff: [`g14-g15-doc-lanes.md`](g14-g15-doc-lanes.md).
+G14 registers now (zero new code, green today). G15 is built now and held in
+`[gate_matrix_exceptions]` until steps 4–6 clear the tree.
+
 ## 1 — Publish the authority map first
 
 Before changing any document, publish a map naming, per topic, **one**
