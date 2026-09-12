@@ -45,7 +45,7 @@ pub struct AppState {
     /// browser-side dev-mode banner on every page (RFC 032).
     pub is_dev_mode: bool,
     /// RFC 005: configured external user-sources for the auth cascade.
-    /// Empty when no `[[user_source]]` blocks are in the config.
+    /// Empty when no `[[user_sources]]` blocks are in the config.
     pub user_sources: Vec<Arc<dyn UserSource>>,
     /// RFC 004: shared HTTP client for upstream federation requests
     /// (discovery fetches, token exchanges).

@@ -16,11 +16,11 @@ pub struct Config {
     pub server: ServerConfig,
     pub storage: StorageConfig,
     /// RFC 005: configured external user-sources (LDAP, …).
-    /// Each entry corresponds to one `[[user_source]]` block in the config file.
+    /// Each entry corresponds to one `[[user_sources]]` block in the config file.
     #[serde(default)]
     pub user_sources: Vec<UserSourceConfig>,
     /// RFC 004: upstream OIDC federation providers.
-    /// Each entry corresponds to one `[[federation_provider]]` block.
+    /// Each entry corresponds to one `[[federation_providers]]` block.
     #[serde(default)]
     pub federation_providers: Vec<FederationProviderConfig>,
     #[serde(default)]
@@ -293,7 +293,7 @@ mod tests {
     }
 }
 
-/// Configuration for one `[[user_source]]` block (RFC 005).
+/// Configuration for one `[[user_sources]]` block (RFC 005).
 ///
 /// Only `kind = "ldap"` is currently supported.  The config validator
 /// rejects `url` values that use the cleartext `ldap://` scheme (P2).
@@ -376,7 +376,7 @@ impl UserSourceConfig {
     }
 }
 
-/// Configuration for one `[[federation_provider]]` block (RFC 004).
+/// Configuration for one `[[federation_providers]]` block (RFC 004).
 ///
 /// The client secret is read from the environment variable named in
 /// `client_secret_env` — never stored in the config file as plaintext.

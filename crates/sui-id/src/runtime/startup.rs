@@ -300,7 +300,7 @@ pub async fn prepare(cfg: Config) -> Result<Startup> {
         }
     }
     // RFC 004: sync federation provider config into the DB.
-    // Each [[federation_provider]] block is upserted so operators
+    // Each [[federation_providers]] block is upserted so operators
     // can manage enabled/disabled state via the admin UI.
     for cfg in &state.config.federation_providers {
         use sui_id_shared::ids::FederationProviderId;

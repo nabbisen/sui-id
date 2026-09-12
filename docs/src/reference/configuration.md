@@ -32,6 +32,8 @@ Controls the listening address and the public OIDC identity.
 | `issuer` | string | **yes** | — | External URL used as the OIDC `issuer` claim and JWKS base URL. Must be an absolute `http://` or `https://` URL and must match the URL relying parties discover at `/.well-known/openid-configuration`. Example: `"https://id.example.com"`. |
 | `cookie_secure` | bool | no | `false` | Set the `Secure` attribute on session cookies. Must be `true` in production behind HTTPS. When `false` the dashboard shows a "cookie insecure" warning. |
 | `trusted_proxies` | array of strings | no | `[]` | CIDR ranges of reverse proxies whose `X-Forwarded-For` header is trusted for rate-limiting. Empty = always use the socket peer IP. An over-broad value lets clients spoof their IP and bypass rate limits. Example: `["10.0.0.0/8", "172.16.0.0/12"]`. |
+| `metrics_enabled` | bool | no | `false` | Expose the Prometheus endpoint at `GET /metrics` (RFC 006). When `false` the route is not registered and returns 404, so the endpoint's existence is not revealed. See [Prometheus metrics](#prometheus-metrics-rfc-006). |
+| `metrics_listen_addr` | string | no | `""` | Separate `host:port` for `/metrics`. Empty mounts it on the main listener. A private address such as `"127.0.0.1:9091"` is strongly recommended in production. |
 
 **Startup validation.** `issuer` must be an absolute `http://` or `https://` URL.
 Each entry in `trusted_proxies` must be a valid CIDR block.
@@ -189,9 +191,9 @@ max_lockout = "24h"            # Default; suits most deployments.
 
 ---
 
-## `[[user_source]]` (RFC 005)
+## `[[user_sources]]` (RFC 005)
 
-Zero or more `[[user_source]]` blocks configure external user sources for the
+Zero or more `[[user_sources]]` blocks configure external user sources for the
 authentication cascade. Currently only LDAP is supported.
 
 | Field | Type | Required | Default | Description |
@@ -201,29 +203,32 @@ authentication cascade. Currently only LDAP is supported.
 | `url` | string | **yes** | — | LDAP server URL. Must start with `ldaps://` (TLS required). |
 | `bind_dn` | string | **yes** | — | DN of the service account used to search. Empty bind DN is rejected (no anonymous bind). |
 | `bind_password_env` | string | **yes** | — | Name of the environment variable holding the service-account password. Never put the password inline. |
-| `base_dn` | string | **yes** | — | Base DN for user searches. |
-| `user_filter` | string | no | `"(uid={username})"` | LDAP search filter. `{username}` is substituted with the login username (RFC 4515-escaped). |
-| `email_attribute` | string | no | `"mail"` | LDAP attribute name for the user's email address. |
+| `user_search_base` | string | **yes** | — | Base DN for user searches. |
+| `user_search_filter` | string | **yes** | — | LDAP search filter with a single `{username}` placeholder, substituted with the login username (RFC 4515-escaped). Example: `"(uid={username})"`. |
+| `stable_id_attribute` | string | **yes** | — | Attribute holding the user's stable unique identity, such as `entryUUID` or `objectGUID`. |
+| `display_name_attribute` | string | no | none | Attribute to use as the display name, such as `cn` or `displayName`. |
+| `email_attribute` | string | no | none | Attribute to use as the email address, such as `mail` or `userPrincipalName`. |
 | `connect_timeout_secs` | integer | no | `5` | TCP connect timeout. |
 | `search_timeout_secs` | integer | no | `10` | LDAP search/bind timeout. |
 
 ```toml
-[[user_source]]
-slug               = "corporate-ldap"
-kind               = "ldap"
-url                = "ldaps://ldap.corp.example.com:636"
-bind_dn            = "cn=svc-sui-id,ou=service-accounts,dc=corp,dc=example,dc=com"
-bind_password_env  = "LDAP_BIND_PASSWORD"
-base_dn            = "ou=people,dc=corp,dc=example,dc=com"
-user_filter        = "(uid={username})"
-email_attribute    = "mail"
+[[user_sources]]
+slug                = "corporate-ldap"
+kind                = "ldap"
+url                 = "ldaps://ldap.corp.example.com:636"
+bind_dn             = "cn=svc-sui-id,ou=service-accounts,dc=corp,dc=example,dc=com"
+bind_password_env   = "LDAP_BIND_PASSWORD"
+user_search_base    = "ou=people,dc=corp,dc=example,dc=com"
+user_search_filter  = "(uid={username})"
+stable_id_attribute = "entryUUID"
+email_attribute     = "mail"
 ```
 
 ---
 
-## `[[federation_provider]]` (RFC 004)
+## `[[federation_providers]]` (RFC 004)
 
-Zero or more `[[federation_provider]]` blocks configure upstream OIDC identity
+Zero or more `[[federation_providers]]` blocks configure upstream OIDC identity
 providers for federated sign-in (the "Sign in with X" flow).
 
 | Field | Type | Required | Default | Description |
@@ -242,7 +247,7 @@ providers for federated sign-in (the "Sign in with X" flow).
 > must explicitly enable the provider after verifying the configuration.
 
 ```toml
-[[federation_provider]]
+[[federation_providers]]
 slug               = "google"
 display_name       = "Google"
 issuer             = "https://accounts.google.com"
@@ -252,7 +257,7 @@ scopes             = "openid email profile"
 provision_mode     = "provision_on_first_login"
 enabled            = true
 
-[[federation_provider]]
+[[federation_providers]]
 slug               = "entra"
 display_name       = "Microsoft"
 issuer             = "https://login.microsoftonline.com/{tenant}/v2.0"
@@ -264,17 +269,15 @@ enabled            = false
 
 ---
 
-## `[metrics]` (RFC 006)
+## Prometheus metrics (RFC 006)
 
-Optional Prometheus metrics endpoint.
+The metrics endpoint is configured by two keys in [`[server]`](#server),
+`metrics_enabled` and `metrics_listen_addr`. There is no `[metrics]` section:
+the configuration loader rejects unknown sections, so a `[metrics]` table
+stops sui-id from starting.
 
-| Field | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `enabled` | bool | no | `false` | Expose the metrics endpoint at `GET /metrics`. |
-| `listen_addr` | string | no | same as `[server].listen_addr` | Override the address for the metrics endpoint. Useful to restrict metrics to an internal network interface. |
-
-The metrics endpoint is protected by a bearer token stored (hashed) in the
-database. Issue or rotate the token with:
+The endpoint is protected by a bearer token stored (hashed) in the database.
+Issue or rotate the token with:
 
 ```sh
 sui-id admin rotate-metrics-token --config sui-id.toml
@@ -284,9 +287,11 @@ Present the token as `Authorization: Bearer <token>` or as a session cookie
 (for browser access via the admin panel).
 
 ```toml
-[metrics]
-enabled     = true
-listen_addr = "127.0.0.1:9091"   # Only reachable from localhost / monitoring agent.
+[server]
+listen_addr         = "127.0.0.1:8801"
+issuer              = "https://id.example.com"
+metrics_enabled     = true
+metrics_listen_addr = "127.0.0.1:9091"   # Only reachable from localhost / monitoring agent.
 ```
 
 ## See also

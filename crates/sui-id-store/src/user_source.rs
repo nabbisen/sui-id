@@ -72,7 +72,7 @@ pub struct ExternalUserRecord {
     pub email: Option<String>,
     /// Display name from the upstream, if available (`cn`, `displayName`, …).
     pub display_name: Option<String>,
-    /// Slug of the `[[user_source]]` config block that produced this record.
+    /// Slug of the `[[user_sources]]` config block that produced this record.
     /// Used in audit log notes.
     pub source_slug: String,
 }

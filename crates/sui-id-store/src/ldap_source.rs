@@ -26,7 +26,7 @@ use ldap3::{Ldap, LdapConnAsync, LdapConnSettings, Scope, SearchEntry};
 
 // ── LDAP configuration ────────────────────────────────────────────────────────
 
-/// Configuration for one `[[user_source]]` block of kind `ldap`.
+/// Configuration for one `[[user_sources]]` block of kind `ldap`.
 #[derive(Debug, Clone)]
 pub struct LdapUserSourceConfig {
     /// Human-readable slug (matches the config block key).
