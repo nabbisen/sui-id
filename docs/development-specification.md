@@ -1069,7 +1069,8 @@ sequential numbering.
 ### 22.3 Release mechanics
 
 Releases are cut from `main` with the gates green; the procedure, including
-what is published to crates.io and in what order, is `PUBLISHING.md`, and
+what is published to crates.io and in what order, is
+`docs/src/contributing/release-process.md`, and
 the build and release-gate contract is RFC 093.
 
 The v3 text described an archive assembled from a path in the authoring

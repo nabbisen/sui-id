@@ -1,6 +1,17 @@
 # RFC 024 — Documentation file consolidation
 
 **Status.** Implemented (v0.32.0)
+**Completion correction (2026-09-13).** One item below never shipped:
+`PUBLISHING.md` stayed at the repository root through v0.77.0, so §3's move
+and the README repoint it specifies were outstanding for forty-five minor
+releases. Completed on 2026-09-13 under RFC 098 dispatch 9c. The destination
+differs from the one recorded below: the file landed at
+`docs/src/contributing/release-process.md`, not
+`docs/contributors/release-process.md`, because `docs/contributors/` predated
+the mdBook tree and RFC 098's domains place contributor documentation inside
+the book. The decision this RFC made — that a maintainer-only operations
+document does not earn a root slot — is unchanged and is what was carried out.
+The record below is not rewritten; this note is the correction.
 **Priority.** Low-medium. Internal-improvement only; no security
 or functional impact. Triggered by file-size pressure at the
 project root that is starting to obscure structure for new
