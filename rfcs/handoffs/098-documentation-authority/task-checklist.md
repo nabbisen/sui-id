@@ -403,6 +403,11 @@ each rewritten passage in the request. For 11b, the loader run per example.
 
 ### Dispatch 12 — 2026-09-13: what dispatch 11 found and could not fix
 
+**Landed 2026-09-13** — 12a `aaa89f1`, 12b `871da56`, 12c `9db88e0`. Review:
+`.git-exclude/reviewed/g13-c-stopped-and-dispatch-12-2026-09-13.md`. Two rows of
+§Security events (`auth.session.revoked`, `auth.logout`) are false — no code
+writes them — and leave with G13-c. After G13-c, closure is assessed.
+
 Three commits. Two are code — small, tested, and each makes a documented
 contract true.
 

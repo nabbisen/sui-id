@@ -1061,7 +1061,7 @@ recorded in the audit log as `admin.user.unlock`.
 
 ### What this looks like in the audit log
 
-The two relevant events:
+The three relevant events:
 
 | Event                  | Meaning                                           |
 | ---------------------- | ------------------------------------------------- |

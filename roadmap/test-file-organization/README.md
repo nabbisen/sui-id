@@ -234,6 +234,10 @@ in-flight branch.
 1. **`registry.rs` next**, after §B. It is RFC 094's own seam, it will
    keep growing through M2a, and it is the largest remaining file. Same
    move-only discipline and same identity evidence.
+   *Converted so far:* `crates/sui-id/src/runtime/config.rs` → `config/tests.rs`
+   (`aaa89f1`, 2026-09-13, RFC 098 dispatch 12a — a new test needed a home and the
+   inline module could not be extended under the rule; four tests moved
+   byte-identical, one added).
 2. **Opportunistically thereafter.** When a wave touches a file in the
    list and adds tests to it, split that file in the same candidate and
    say so in the review request. This retires the debt along the paths

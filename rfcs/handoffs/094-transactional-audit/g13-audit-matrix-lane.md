@@ -169,6 +169,18 @@ report the count).
 
 ## G13-c — eight more dead `SecurityEvent` variants
 
+**Stopped and ruled 2026-09-13** (`.git-exclude/reviewed/g13-c-stopped-and-dispatch-12-2026-09-13.md`):
+two of the eight — `SessionRevoked` and `Logout` — were the *only* spelling of
+`auth.session.revoked` and `auth.logout` in the workspace, so deleting them
+fails the gate on two matrix rows that no code has ever written. **Option 1:**
+delete the eight variants, delete those two rows from
+`ci/audit-coverage-matrix.md`, delete the same two rows from
+`docs/src/guides/operators.md` §Security events, and expect **57 matrix
+entries, 57 source literals** — not 59. The coverage gap is recorded in the
+migration checklist for RFC 094's inventory. Everything below stands with that
+substitution; report the probe's two failures against the pre-change tree as
+the evidence the rows were held green by dead code.
+
 **Dispatched 2026-09-13.** Same method and evidence as G13-b step 2. RFC 098
 dispatch 11 found eight `SecurityEvent` variants constructed nowhere in the
 workspace: `LoginPasswordSuccess`, `LoginPasswordFailure`,

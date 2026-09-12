@@ -68,6 +68,14 @@ at a time; the workspace and structural gate must remain green between waves.
       every raw `append` logs nothing. Whether the runner should emit a
       structured line per committed audit row is a design question for M2b.
       The operator guide no longer promises the line (RFC 098 rule 1).
+      (c) **Coverage gap, found by G13-c (2026-09-13):** `auth.logout` and
+      `auth.session.revoked` have a matrix row and a dead `SecurityEvent` arm and
+      **no writer**. RP-initiated logout (`/oauth2/logout`), admin logout
+      (`/admin/logout`) and single-session revocation are routed and append no
+      audit row; only `auth.sessions.bulk_revoke_self` is written. G13-c removes
+      the two rows so no document claims coverage that does not exist; whether
+      these mutations are Class A or B, and under which names, is this RFC's
+      inventory decision.
 
       **Also check every consumer of an audit event name, not only the coverage
       matrix.** `check-audit-matrix.sh` compares the matrix against source
