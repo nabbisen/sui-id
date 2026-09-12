@@ -1,5 +1,21 @@
 # sui-id — Development Specification
 
+> **Stale as of 2026-09-12.** This is **v3 of the specification, written against
+> the v0.48.4 codebase**; the workspace is at **v0.77.0**. Twenty-nine minor
+> releases have shipped since, including LDAP user sources (RFC 005), upstream
+> OIDC federation (RFC 004), dynamic client registration (RFC 008), the
+> Prometheus metrics endpoint (RFC 006), the pluggable `Backend` trait (RFC 009
+> step 1), the security-assurance arc (RFCs 078–086), the UI-security arc
+> (RFCs 087–092), and RFC 093's build and release-gate contract. None of it is
+> reflected below, and the remediation programme now in progress (RFCs 094–100)
+> will widen the gap further until this document is reconciled.
+>
+> Under RFC 098 this document is a **synthesis, not a source**: where it and an
+> accepted RFC or the code disagree, the RFC or the code wins. Treat every
+> technical claim below as true of v0.48.4 and unverified for anything later.
+> Reconciliation is RFC 098 §Design 5 step 6, tracked in
+> `rfcs/handoffs/098-documentation-authority/task-checklist.md`.
+
 *v3 — reflecting the v0.48.4 codebase. Supersedes the v2 spec
 (`sui-id-開発指示書_v2-0_29_1時点.md`, snapshot at v0.29.1). This
 document carries forward the original philosophy and direction
