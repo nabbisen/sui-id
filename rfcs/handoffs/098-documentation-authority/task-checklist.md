@@ -227,6 +227,27 @@ the one file.
 **Stop if** a *holds* section turns out to need a change, or a pointer's
 target does not exist — both are findings, not edits.
 
+### Dispatch 7 — 2026-09-12: step 6d, the specification's §7 under rule 7
+
+Owner ruling: security and the threat model have a single source of truth in
+documentation — RFC 098 §4 rule 7. `docs/development-specification.md` §7
+opens by deferring to `docs/threat-model.md` and then restates it: §7.1 twelve
+threats (already missing four shipped surfaces), §7.2 eight properties, §7.3
+known limits. A summary is a copy. One commit, one file.
+
+- **Keep** the §7 heading and its first paragraph, amended to: *"The threat
+  model is `docs/threat-model.md`, and it is the only place threats, defensive
+  properties and known limits are stated (RFC 098 §4 rule 7). This
+  specification does not summarise it; a summary is a copy, and the one this
+  section carried through v3 had drifted."*
+- **Delete** §7.1, §7.2 and §7.3 in full, headings included.
+- Nothing else changes. The 56 other kept sections stay byte-identical — prove
+  it the way dispatch 6 did.
+
+**Evidence.** G15: 7 (A), 0 (B), 0 (C) — (C) stays zero, the v4 claim is
+untouched. G10b, G11, G14 green. Section-split byte-identity for everything
+outside §7.
+
 ### Step 6a — landed 2026-09-12
 
 Staleness banner on `docs/development-specification.md`, the rule-5 sanctioned

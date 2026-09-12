@@ -91,7 +91,7 @@ hand-synchronised.
 | Configuration keys | `docs/src/reference/configuration.md` | `crates/sui-id/src/runtime/config.rs` wins |
 | Audit event vocabulary | `docs/src/reference/audit-events.md` | The event literals in `crates/sui-id-store` win; enforced by G-audit-matrix |
 | Audit coverage matrix | `ci/audit-coverage-matrix.md` (**D3**, moves from `docs/src/reference/`) | It *is* the gate input; source literals win, and the gate says so |
-| Threat model | `docs/threat-model.md` — the document is authoritative throughout; **RFC 097 re-baselines it** (RFC 097 `Touches` names this file; its Summary is "replace… with a current baseline"). The step-1 banner is its sanctioned state until then. *Corrected 2026-09-12: this row previously read "RFC 097 once Implemented", as if the RFC would become the threat model — an RFC is the decision, never the document (rule 3).* | A shipped trust boundary absent from the document is a defect in the document |
+| Threat model | `docs/threat-model.md` — the document is authoritative throughout; **RFC 097 re-baselines it** (RFC 097 `Touches` names this file; its Summary is "replace… with a current baseline"). The step-1 banner is its sanctioned state until then. *Corrected 2026-09-12: this row previously read "RFC 097 once Implemented", as if the RFC would become the threat model — an RFC is the decision, never the document (rule 3).* | A shipped trust boundary absent from the document is a defect in the document; any other document restating threat-model content is a defect in *that* document (rule 7) |
 | Security assurance history | `docs/security-assurance-audit-v0.63.1.md` | Historical; never updated, only superseded |
 | Development specification | `docs/development-specification.md` | Accepted RFCs win over it; it is a synthesis, not a source |
 | UI/UX cross-cutting contract | `docs/ui-ux-contracts.md` | RFC 017 and the component code win |
@@ -209,6 +209,14 @@ treated as a defect of the same order.
    requires the path to exist on disk, so the form is no longer gate-blind.
    Where an outside-book file genuinely belongs in the product
    documentation, `{{#include}}` it as a page instead — one source, no copy.
+7. **Security and the threat model have one home.** *Owner ruling,
+   2026-09-12.* `docs/threat-model.md` is the single source of truth for what
+   sui-id defends against, how, and where the limits are. Every other document
+   points to it and none restates it — **not even as a summary**, because a
+   summary is a copy, and a copy drifts: the development specification's
+   twelve-threat summary had already lost four shipped surfaces by the time
+   this rule was written. Dated security audits are historical records under
+   rule 4 and are never updated, only superseded.
 
 ### 5. File-by-file reconciliation plan
 
@@ -359,8 +367,9 @@ passes, so check C cannot pass by forbidding every pinned document.
 3. **Does `docs/threat-model.md` survive RFC 097?** If RFC 097 becomes the
    threat model, the file is superseded rather than reconciled, and step 1
    of §5 is the only work it ever receives again.
-   *Answered 2026-09-12 by RFC 097's own text, awaiting `@nabbisen`'s
-   confirmation.* **It survives.** RFC 097's `Touches` names `docs/threat-model.md`;
+   *Answered 2026-09-12 by RFC 097's own text; confirmed by `@nabbisen` the
+   same day — "on security and threat model, keep single source of truth in
+   documentation" — recorded as rule 7.* **It survives.** RFC 097's `Touches` names `docs/threat-model.md`;
    its Summary is "replace historical or aspirational threat claims with a
    current baseline"; its handoff: "the replacement must be built from verified
    behaviour." The document is RFC 097's deliverable, re-baselined, not its
