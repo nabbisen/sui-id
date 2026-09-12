@@ -11,10 +11,9 @@ v0.68.0 on "CI gate live and bidirectional"; no workflow in the repository's
 history ever invoked it (finding: `.git-exclude/reviewed/audit-matrix-gate-never-wired-2026-09-12.md`).
 **Authorized.** `@nabbisen`, 2026-09-12, as step 2 of the R10 resolution.
 **Implementer.** Mid-capability model.
-**Baseline.** **After RFC 098 dispatch 2 lands** (it moves the matrix to
-`ci/audit-coverage-matrix.md` and repoints the script's `MATRIX=`). Do not start
-this on a tree where step 4 is unmerged: the fixture's matrix path would be
-wrong the moment it lands. If dispatch 2 is not yet on `main`, wait.
+**Baseline.** `c451c52` or later — RFC 098 dispatch 2 has landed: the matrix is
+at `ci/audit-coverage-matrix.md` and the script's `MATRIX=` points there.
+**Unblocked 2026-09-12.** Proceed.
 
 ## The mechanism doing the work
 

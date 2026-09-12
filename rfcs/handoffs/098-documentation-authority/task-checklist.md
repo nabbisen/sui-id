@@ -26,6 +26,10 @@ did **not** decide.
 
 ### Dispatch 2 — 2026-09-12: the last absolute self-URLs, then step 4
 
+**Landed 2026-09-12** — 2a `e06b8b8` (two of three; the third was correct under
+rule 6 and stays), 2b `c451c52`. Review:
+`.git-exclude/reviewed/rfc-098-dispatch-2-and-g14-g15-2026-09-12.md`.
+
 Steps 1–3 landed as `2671822` (reviewed:
 `.git-exclude/reviewed/rfc-098-steps-1-3-2026-09-10.md`). Two small items,
 both fully specified; do them as **two commits**, in this order.
@@ -96,11 +100,61 @@ dispatch. One further item is with the owner, not with you.
 
 ### Dispatch 3 — 2026-09-12: RFC 098's own lanes, G14 and G15
 
+**Landed 2026-09-12** — G14 registered `73e49a2`; G15 built and held `336b9ab`.
+G14 caught a real break on its first run (the matrix link in a dated 093 record).
+
 Independent of dispatch 2. RFC 098 now declares its lanes in §Gate Matrix lanes
 owned by RFC 098, registered through RFC 094's R10 registry; open question 2 is
 answered by that. Handoff: [`g14-g15-doc-lanes.md`](g14-g15-doc-lanes.md).
 G14 registers now (zero new code, green today). G15 is built now and held in
 `[gate_matrix_exceptions]` until steps 4–6 clear the tree.
+
+### Dispatch 4 — 2026-09-12: the outside-book link class, and check (B) under rule 6
+
+Dispatches 2 and 3 landed (review:
+`.git-exclude/reviewed/rfc-098-dispatch-2-and-g14-g15-2026-09-12.md`). The §1
+stop condition produced a rule — RFC 098 §4 rule 6 — and this dispatch applies
+it. Two commits.
+
+**4a — four links, the other direction.** These render to files the book never
+produces (`../../../X.html`). Convert each to the absolute repository URL, the
+form `overview.md:37` already has and which was right all along:
+
+| File | Line | Now | Becomes |
+|---|---|---|---|
+| `docs/src/contributing/local-dev.md` | 118 | `../../../rfcs/done/000-rfc-lifecycle-policy.md` | `https://github.com/nabbisen/sui-id/blob/main/rfcs/done/000-rfc-lifecycle-policy.md` |
+| `docs/src/contributing/state-contract.md` | 121 | `../../../crates/sui-id-i18n/STATE_WORDS.md` | `…/blob/main/crates/sui-id-i18n/STATE_WORDS.md` |
+| `docs/src/guides/operators.md` | 6 | `../../../README.md` | `…/blob/main/README.md` |
+| `docs/src/reference/oidc-api.md` | 482 | `../../../ROADMAP.md` | `…/blob/main/ROADMAP.md` |
+
+The other `../../threat-model.md` links inside `docs/src` — the six the
+steps 1–3 review left for the owner — are the **same class** and are in scope
+here too: `docs/threat-model.md` is outside the book. Convert them the same
+way. Measure the full set with `grep -rnoE '\]\((\.\./)+[^)]*\)' docs/src`
+filtered to targets that resolve outside `docs/src/`, and report the count
+before and after; the after must be zero.
+
+**4b — check (B) enforces rule 6.** In `scripts/check-doc-authority.py`: a link
+whose source is under `docs/src/` and whose target starts with the self-URL
+prefix is **allowed if and only if** the stripped path (after `blob/<ref>/`)
+resolves to a tracked file *outside* `docs/src/`; it fails if the file does not
+exist, or if it is inside `docs/src/` (a book page linking to a book page must
+be relative). Outside `docs/src/`, every self-URL still fails. Also add the
+inverse: a relative link from a `docs/src/` page whose resolved target is
+outside `docs/src/` fails, naming rule 6 — that is the four links above, and
+without this half the rule is enforced in one direction only. Tests: absolute
+outside-book from a book page passes; absolute to a missing file fails;
+absolute to a book page from a book page fails; relative outside-book from a
+book page fails; the existing outside-`docs/src` cases unchanged.
+
+**Evidence.** G15 on the tree after both commits: **7 (A), 0 (B), 1 (C)** —
+the (B) count falls to zero because `overview.md:37` becomes sanctioned and
+the four converted links stop being relative-outside. Report the run verbatim.
+mdBook build clean; G10b, G11, G14 green; Python suite green with the new
+tests counted.
+
+**Not in scope.** Registering G15 (still waits on steps 5 and 6); any change to
+`check-markdown-links.py`; the MI matrices (open question 1).
 
 ## 1 — Publish the authority map first
 

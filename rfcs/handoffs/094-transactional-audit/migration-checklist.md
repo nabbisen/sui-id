@@ -52,7 +52,7 @@ at a time; the workspace and structural gate must remain green between waves.
       interim audit-matrix lane (see that handoff §5) is registered.
 - [ ] **G13 — interim audit-coverage lane (RFC 094-owned).** The M1 string
       script registered through R10 as this RFC's first lane; it had never run
-      in CI. **Dispatched 2026-09-12**, baseline after RFC 098 dispatch 2:
+      in CI. **Dispatched 2026-09-12**, unblocked the same day (dispatch 2 landed `c451c52`):
       [`g13-audit-matrix-lane.md`](g13-audit-matrix-lane.md). Superseded as the
       coverage control by `audit-structure` at M2b.
 - [ ] Add the checked-in command inventory and structural comparison tool.

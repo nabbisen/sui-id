@@ -186,10 +186,29 @@ treated as a defect of the same order.
 4. **Historical documents are never rewritten.** A dated record keeps its
    text; a superseding document is added and the old one marked superseded.
    This is RFC 000's rule for RFCs, applied to documents.
+   *Clarified 2026-09-12.* **Link paths follow moved files.** Rewriting a
+   link's target in a dated record is not rewriting the record: its text, its
+   claims and its findings do not change. The `rfcs/reviews/` migration and
+   the RFC 018 retirement both did this; G14 caught the first case this rule
+   was needed for on the day it existed. A self-referential absolute URL in a
+   historical file is a wrongly written path and is fixed the same way.
 5. **A stale document says so.** Any document whose accuracy is pinned to a
    version carries that version in its first paragraph; where it lags the
    workspace, it carries an explicit staleness banner until reconciled. An
    undated wrong document is worse than a dated one.
+6. **A book page links outside the book by absolute repository URL.**
+   *Added 2026-09-12.* A page under `docs/src/` is rendered by mdBook and by
+   GitHub; a link from it to a repository file outside `docs/src/` has no
+   relative form that works in both — mdBook rewrites `.md` to `.html` and
+   emits `../../../ROADMAP.html`, which the build never produces and which
+   escapes `site-url`. From the book's standpoint the repository is an
+   external site, and `book.toml` already hardcodes it for edit links. So:
+   book page → outside-book file uses the absolute repository URL; every
+   other tracked document links repository-relative. Check (B) enforces both
+   halves, and for the sanctioned absolute form strips the prefix and
+   requires the path to exist on disk, so the form is no longer gate-blind.
+   Where an outside-book file genuinely belongs in the product
+   documentation, `{{#include}}` it as a page instead — one source, no copy.
 
 ### 5. File-by-file reconciliation plan
 
@@ -198,7 +217,7 @@ Ordered by severity. Each step is separately reviewable and reversible.
 | # | Action | Files | Why this order |
 |---|---|---|---|
 | 1 | Add a staleness banner naming v0.26.0 and the shipped-since feature list | `docs/threat-model.md` | F1 is a public security claim; the banner is minutes of work and stops the harm immediately, without waiting for RFC 097 |
-| 2 | Delete the three stale forks; repoint `README.md` at the book pages with repo-relative links | `docs/deployment.md`, `docs/operators.md`, `docs/integrators.md`, `README.md` | Removes the false dynamic-registration claim and puts the front page on maintained pages; repo-relative makes them visible to G10b |
+| 2 | Delete the three stale forks; repoint `README.md` at the book pages with repo-relative links *(the book-page self-URL in `overview.md` is correct under rule 6 and stays)* | `docs/deployment.md`, `docs/operators.md`, `docs/integrators.md`, `README.md` | Removes the false dynamic-registration claim and puts the front page on maintained pages; repo-relative makes them visible to G10b |
 | 3 | Repoint the two source-code citations | `crates/sui-id/src/cli.rs`, `crates/sui-id/src/http/handlers/setup.rs` | The binary must not direct operators to a deleted path |
 | 4 | Move the gate input to `ci/audit-coverage-matrix.md`; update `scripts/check-audit-matrix.sh` and RFC 093's reference | `docs/src/reference/audit-coverage-matrix.md` | Resolves F4 and removes one of F3's orphans |
 | 5 | Decide each remaining orphan: publish it in `SUMMARY.md`, or move it out of `docs/src/` | seven `docs/src/mockup-integration/` matrices | They are RFC-MI-080 verification records of a completed arc — D4/D5 material, not D1 |

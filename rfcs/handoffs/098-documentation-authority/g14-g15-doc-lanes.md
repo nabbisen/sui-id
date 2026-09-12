@@ -10,6 +10,9 @@ heading and requires the manifest to match it byte for byte.
 **Authorized.** `@nabbisen`, 2026-09-12 — "proceed on the next item", the queue
 having named this lane after G13. **Baseline.** `a33fd7e` or later.
 **Implementer.** Mid-capability model.
+**Landed.** G14 `73e49a2`, G15 (held) `336b9ab`, 2026-09-12 — reviewed at
+`.git-exclude/reviewed/rfc-098-dispatch-2-and-g14-g15-2026-09-12.md`. G15 registers
+when steps 5 and 6 land; dispatch 4 in `task-checklist.md` applies rule 6 first.
 **Ordering.** Independent of G13 and of RFC 098 dispatch 2 — nothing here
 touches their files. Do it as **two commits**: G14 first, G15 second.
 
