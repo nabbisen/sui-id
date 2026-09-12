@@ -245,19 +245,36 @@ dispatch. The architect decides from the table whether the document is
 reconciled section by section, or superseded by the authority table plus the
 book and retired — that is a design decision the table informs.
 
-### Step 5 — drafted, **awaiting the owner's ruling on open question 1**
+### Step 5 — drafted, **awaiting the owner's ruling on open question 1** (revised 2026-09-12)
 
-Proposed in RFC 098 §Open questions 1. If ruled as proposed: (i) extend
-invariant 13 to `RFC-MI-NNN-slug/` with two self-tests (an MI directory
-resolving to its RFC passes; one naming an absent MI number fails); (ii)
-`git mv docs/src/mockup-integration` → `rfcs/handoffs/RFC-MI-080-ui-regression-a11y-hardening/`
-and `docs/mockup-integration` → `rfcs/handoffs/RFC-MI-000-baseline-delta-inventory/`;
-(iii) repoint the five link-form references — `ROADMAP.md` ×2, `CHANGELOG.md`
-×1 (a link target, so rule 4 permits it), `rfcs/README.md` ×1, RFC-MI-000 ×1 —
-and re-base relative links inside the moved files against their new depth,
-the way the `rfcs/reviews/` migration had to; (iv) G15 reads 0/0/0 and moves
-from `[gate_matrix_exceptions]` to `[gates]` with its job. Not dispatched
-until ruled.
+The first draft (move both MI packages into `rfcs/handoffs/RFC-MI-…/` and
+extend invariant 13) is withdrawn on self-review — see RFC 098 §Open questions
+1 and `.git-exclude/reviewed/oq1-oq3-self-review-2026-09-12.md`. If ruled as now
+proposed, one commit:
+
+1. `git rm -r docs/src/mockup-integration docs/mockup-integration` — 23 files.
+   Record the pre-deletion commit SHA; it goes in every note below.
+2. Dated notes, the RFC 085 form, in `rfcs/done/RFC-MI-000-baseline-delta-inventory.md`
+   and `rfcs/done/RFC-MI-080-ui-regression-a11y-hardening.md`: the companion
+   artifacts this RFC describes were retired to history on 2026-09-12 under
+   RFC 098 step 5; recover with `git show <sha>:<path>`. The RFCs' own text is
+   not rewritten.
+3. The five link-form references become named paths, each with the same
+   one-line note: `ROADMAP.md` lines 507 and 554, `CHANGELOG.md` line 3504 (a
+   link target in a historical file — rule 4 permits it), `rfcs/README.md`
+   line 106, RFC-MI-000 line 19. G11 link-checks every RFC file including the
+   MI ones, so RFC-MI-000's must not be left as a dead link.
+4. **No change** to `scripts/check-rfc-integrity.py`, `ci/rfc-policy.toml`, or
+   `SUMMARY.md`.
+5. Then, in the same commit: G15 moves from `[gate_matrix_exceptions]` to
+   `[gates]`, with a `G15` job shaped like G14's. A3.4 must pass — check 3
+   requires the lane in exactly one of the two tables.
+
+**Evidence.** `python3.14 scripts/check-doc-authority.py --root . --policy ci/doc-authority.toml`
+→ `all conditions satisfied`, exit 0 — the first green run in the lane's
+life. G10a (mdBook must not miss the deleted pages: they were never in
+`SUMMARY.md`). G10b, G14, G11 green. `bash scripts/ci-gate.sh G15` on a clean
+tree, exit 0. Not dispatched until ruled.
 
 ## 1 — Publish the authority map first
 

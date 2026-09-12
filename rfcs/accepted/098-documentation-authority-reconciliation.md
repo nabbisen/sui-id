@@ -91,7 +91,7 @@ hand-synchronised.
 | Configuration keys | `docs/src/reference/configuration.md` | `crates/sui-id/src/runtime/config.rs` wins |
 | Audit event vocabulary | `docs/src/reference/audit-events.md` | The event literals in `crates/sui-id-store` win; enforced by G-audit-matrix |
 | Audit coverage matrix | `ci/audit-coverage-matrix.md` (**D3**, moves from `docs/src/reference/`) | It *is* the gate input; source literals win, and the gate says so |
-| Threat model | **RFC 097** once Implemented; `docs/threat-model.md` until then, marked stale | A shipped trust boundary absent from the document is a defect in the document |
+| Threat model | `docs/threat-model.md` — the document is authoritative throughout; **RFC 097 re-baselines it** (RFC 097 `Touches` names this file; its Summary is "replace… with a current baseline"). The step-1 banner is its sanctioned state until then. *Corrected 2026-09-12: this row previously read "RFC 097 once Implemented", as if the RFC would become the threat model — an RFC is the decision, never the document (rule 3).* | A shipped trust boundary absent from the document is a defect in the document |
 | Security assurance history | `docs/security-assurance-audit-v0.63.1.md` | Historical; never updated, only superseded |
 | Development specification | `docs/development-specification.md` | Accepted RFCs win over it; it is a synthesis, not a source |
 | UI/UX cross-cutting contract | `docs/ui-ux-contracts.md` | RFC 017 and the component code win |
@@ -328,20 +328,29 @@ passes, so check C cannot pass by forbidding every pinned document.
    `NNN-slug` handoff shape invariant 13 enforces. Either the handoff rule
    accommodates the MI namespace, or these become a fourth disposition.
    §6 raises it; this RFC does not settle it.
-   *Proposed resolution, 2026-09-12 — awaiting `@nabbisen`.* Measured: all
-   sixteen `RFC-MI-NNN` RFCs are in `done/`; the seven `docs/src/mockup-integration/`
-   matrices state they are RFC-MI-080's verification records; the sixteen
-   `docs/mockup-integration/` files are the Phase 0 planning package RFC-MI-000
-   links to eleven times; five link-form references point at them from outside.
-   **Extend invariant 13 to the MI namespace** — a handoff directory named
-   `RFC-MI-NNN-slug/` resolves to exactly one `rfcs/*/RFC-MI-NNN-*.md`, mirroring
-   the `MI_RE` G11 already carries — and file each package as its RFC's companion:
-   the matrices under `rfcs/handoffs/RFC-MI-080-ui-regression-a11y-hardening/`,
-   the planning package under `rfcs/handoffs/RFC-MI-000-baseline-delta-inventory/`.
-   Same disposition the RFC 093/094 review records received on 2026-09-10 — dated
-   records live with their decision and inherit its status. No fourth
-   disposition, no policy change, no edit to any MI RFC's text; link paths
-   follow the files (rule 4). Closes F3 in full; G15 then registers.
+   *Proposed resolution, 2026-09-12 (revised the same day on self-review) —
+   awaiting `@nabbisen`.* The first proposal — extend invariant 13 to the MI
+   namespace and file both packages under `rfcs/handoffs/RFC-MI-…/` — is
+   withdrawn: RFC 000 does not know that namespace, which G11 tolerates only
+   through a *closed* historical list; the review-records precedent rests on
+   RFC metadata citing them as evidence, and no metadata field cites any MI
+   file; and RFC 000 reserves `handoffs/` for *"current, reviewed,
+   implementation-useful"* companions, naming *"obsolete review notes"* and
+   *"every intermediate discussion"* as what to keep out. Both packages are a
+   completed arc's intermediate discussion (5,896 lines, six files an external
+   author's) and seven "all pass at v0.57.0" snapshots that nothing maintains,
+   nothing cites as evidence, and G12 does not enforce.
+   **Retire them to history**, where this project keeps completed work: delete
+   `docs/src/mockup-integration/` and `docs/mockup-integration/`; add a dated note
+   to RFC-MI-000 and RFC-MI-080 naming the commit and path so either RFC's
+   reader recovers the artifacts with one `git show`; convert the five link-form
+   references (`ROADMAP.md` ×2, `CHANGELOG.md` ×1, `rfcs/README.md` ×1,
+   RFC-MI-000 ×1) to named paths with the same note. No gate change; invariant
+   13 and the closed MI list stay as they are. Closes F3 and §5 step 7; G15
+   then registers. The matrices remain a usable template for a future
+   per-screen verification pass — RFC 099's natural scope — which would recover
+   them from the recorded ref, re-verify against the current tree, and publish
+   the result as a pinned book page that check (C) keeps honest.
 2. ~~**How do the three enforcement checks reach CI?**~~ *Answered 2026-09-12:*
    through RFC 094's multi-source lane registry, as this RFC's own lanes G14
    and G15 (§Gate Matrix lanes owned by RFC 098). Both framings this question
@@ -350,3 +359,15 @@ passes, so check C cannot pass by forbidding every pinned document.
 3. **Does `docs/threat-model.md` survive RFC 097?** If RFC 097 becomes the
    threat model, the file is superseded rather than reconciled, and step 1
    of §5 is the only work it ever receives again.
+   *Answered 2026-09-12 by RFC 097's own text, awaiting `@nabbisen`'s
+   confirmation.* **It survives.** RFC 097's `Touches` names `docs/threat-model.md`;
+   its Summary is "replace historical or aspirational threat claims with a
+   current baseline"; its handoff: "the replacement must be built from verified
+   behaviour." The document is RFC 097's deliverable, re-baselined, not its
+   casualty. It stays pinned in `ci/doc-authority.toml`, so check (C) tracks
+   the re-baseline when it lands. **No interim rewrite before then:** RFC 097
+   holds that "copied historical claims are inputs, not evidence" and derives
+   the model only from implemented, observed behaviour after RFCs 093–096 —
+   adding the four absent surfaces now would be the aspirational claim it
+   exists to replace. The banner, which names those surfaces, is the honest
+   state and stays.
