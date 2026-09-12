@@ -253,6 +253,11 @@ outside §7.
 
 ### Dispatch 9 — 2026-09-13: the public surface — README, architecture, PUBLISHING
 
+**Landed 2026-09-13** — 9a `110b96b`, 9b `ba5b3db`, 9c `80a77e1`, plus the review's
+four rulings `85b83c4` (Chinese not selectable; JavaScript is four files, not
+WebAuthn-only; one locale-resolution chain; RFC 098's own table). README has a
+recorded evidence row per claim. Review: `.git-exclude/reviewed/rfc-098-dispatch-9-2026-09-13.md`.
+
 RFC 098's mechanical half is done: steps 1–7 landed, G14 and G15 enforce. What
 remains before closure is the semantic half of its closure prerequisites —
 README, contributor guidance and public claims agreeing with the code. The
@@ -307,6 +312,50 @@ Each commit's `git diff --stat` in the request.
 
 **Stop if** a README claim has no evidence in the tree — that is a public
 claim that is not true, and the fix is not editorial.
+
+### Dispatch 10 — 2026-09-13: the operator and integrator guides, claim by claim
+
+The last item before RFC 098's closure prerequisites can be assessed:
+*operator/integrator guidance agrees with the code*. Dispatch 9a walked
+`README.md` with a claim/evidence table and found two false public claims the
+July list did not have. Do the same for the two guides a reader acts on. Two
+commits, one page each; the table for each page is the deliverable in the
+review request.
+
+**10a — `docs/src/guides/operators.md`** (1,612 lines). For every factual
+claim — a configuration key, a CLI subcommand or flag, a file path, a default
+value, a route, an audit event name, a behaviour ("X happens when Y") — one
+row: the claim, and the code path, migration, or gate that makes it true.
+Fix only what is a path, a name, or a value the code contradicts (rule 1),
+and say so per row. **Stop on any behavioural claim the code contradicts** —
+a guide that tells an operator the system does something it does not is the
+F1 class — report it with the row and do not rewrite it.
+
+**10b — `docs/src/reference/oidc-api.md`** (492 lines). Same method. Every
+endpoint, parameter, claim name, error code, and "what sui-id does not do
+(yet)" entry is a claim; the router, the OIDC handlers, and the token code
+decide them. The "not yet" list is the one to read hardest: it is where
+shipped features go to be denied, and it already had one such entry
+(`docs/integrators.md`, retired in step 2).
+
+**Method notes.** Work from the page to the code, not the reverse: the
+table's job is to catch what the page says that the code does not, so
+every sentence with a checkable fact gets a row, including the ones that
+turn out true. Where a claim is *understated* (the code does more), record
+it as true and note the understatement — that is the right direction to be
+wrong in. Where a claim is about an RFC that is Accepted but not
+Implemented, it is a claim about the future and must say so or go. Audit
+event names are checked against `ci/audit-coverage-matrix.md`, not memory:
+the specification carried a non-existent one for two years.
+
+**Evidence.** The two tables; G15, G10a, G10b, G11, G14 green; each commit's
+`git diff --stat`. The counts of rows *true / corrected / stopped-on* per
+page, so the review can see the shape of the drift before reading the rows.
+
+**Not in scope.** `docs/src/guides/deployment.md`, `upgrade.md`,
+`dangerous-operations.md`, `reference/configuration.md`, `audit-events.md`
+— same method, later dispatch, once these two show what the drift looks
+like. `docs/threat-model.md` — RFC 097's, rule 7.
 
 ### Step 6a — landed 2026-09-12
 
