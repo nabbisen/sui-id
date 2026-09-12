@@ -73,17 +73,33 @@ pub struct StorageConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TokensConfig {
+    #[serde(default = "default_access_lifetime_secs")]
     pub access_lifetime_secs: i64,
+    #[serde(default = "default_id_token_lifetime_secs")]
     pub id_token_lifetime_secs: i64,
+    #[serde(default = "default_refresh_lifetime_secs")]
     pub refresh_lifetime_secs: i64,
+}
+
+// Per-field defaults, so a `[tokens]` table that sets only some lifetimes
+// keeps the documented defaults for the rest. Without them only an absent
+// table defaulted, and any partial table failed with `missing field`.
+fn default_access_lifetime_secs() -> i64 {
+    15 * 60
+}
+fn default_id_token_lifetime_secs() -> i64 {
+    15 * 60
+}
+fn default_refresh_lifetime_secs() -> i64 {
+    14 * 24 * 60 * 60
 }
 
 impl Default for TokensConfig {
     fn default() -> Self {
         Self {
-            access_lifetime_secs: 15 * 60,
-            id_token_lifetime_secs: 15 * 60,
-            refresh_lifetime_secs: 14 * 24 * 60 * 60,
+            access_lifetime_secs: default_access_lifetime_secs(),
+            id_token_lifetime_secs: default_id_token_lifetime_secs(),
+            refresh_lifetime_secs: default_refresh_lifetime_secs(),
         }
     }
 }
@@ -262,36 +278,10 @@ impl Config {
 
 #[cfg(test)]
 #[allow(clippy::expect_used, clippy::unwrap_used)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn sample_validates() {
-        Config::sample().validate().expect("sample is valid");
-    }
-
-    #[test]
-    fn negative_lifetime_is_rejected() {
-        let mut c = Config::sample();
-        c.tokens.access_lifetime_secs = 0;
-        assert!(c.validate().is_err());
-    }
-
-    #[test]
-    fn refresh_must_exceed_access() {
-        let mut c = Config::sample();
-        c.tokens.access_lifetime_secs = 100;
-        c.tokens.refresh_lifetime_secs = 50;
-        assert!(c.validate().is_err());
-    }
-
-    #[test]
-    fn issuer_must_be_absolute() {
-        let mut c = Config::sample();
-        c.server.issuer = "/not-absolute".into();
-        assert!(c.validate().is_err());
-    }
-}
+// lib.rs declares this module with #[path = "runtime/config.rs"], so a nested
+// module resolves against runtime/, not runtime/config/; name the file.
+#[path = "config/tests.rs"]
+mod tests;
 
 /// Configuration for one `[[user_sources]]` block (RFC 005).
 ///
