@@ -16,8 +16,9 @@ on the front end, stores its data in a single encrypted SQLite file, and ships
 as one statically linked binary. There is no separate database service, no
 embedded JavaScript runtime, and no ambient cloud dependency.
 
-The name "sui" comes from "翠" (sui) in Japanese which means a kingfisher,
-their blue green color, and also jadestone with various color such as purple.
+The name "sui" is "翠" in Japanese: the kingfisher,
+their blue-green, and also jade in several colors. Purple among them.
+
 sui-id is not aiming to replace large IDaaS products. It is built for the case
 where you want an OIDC provider that one person can hold in their head and
 one operator can keep healthy on a single VM.
