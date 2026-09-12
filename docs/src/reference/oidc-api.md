@@ -236,6 +236,8 @@ ID tokens carry the standard OIDC claim set:
 | `nonce` | Echoed from your `/authorize` request, if given |
 | `acr`   | Authentication Context Class Reference (see below) |
 | `amr`   | Authentication Methods References (see below)   |
+| `email` | The user's email address. Present only when the granted scope includes `email` and the user has an address on record. |
+| `email_verified` | Whether that address is verified. Present only alongside `email`; currently always `false`, as sui-id has no email-verification flow. |
 
 The userinfo response carries `sub`, `preferred_username`, and `name` (when
 the user has a display name set).
@@ -276,6 +278,7 @@ references describing the actual factors used:
 | `otp`   | One-time code (TOTP authenticator app or recovery code). |
 | `hwk`   | Hardware-bound key proof (WebAuthn).                   |
 | `mfa`   | Umbrella signal: two or more distinct factor types were used. |
+| `fed`   | Authenticated by an external party: an upstream OIDC provider (RFC 004) or an LDAP user source (RFC 005). |
 
 Examples of what your RP will see:
 
