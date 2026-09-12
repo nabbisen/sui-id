@@ -81,6 +81,13 @@ detectors afterwards.
 
 **Dispatched 2026-09-13**, from RFC 098 dispatch 10's review. One commit.
 
+**Steps 1 and 2 landed** `a4a178d`, 2026-09-13. **Step 3 as first written was wrong** — the
+implementer measured it rather than building it: deriving from `events.rs` and
+the command descriptors alone yields `admin|auth|mfa|signing_key|user` and a
+gate that passes at **40/40**, fourteen events fewer than today, still blind to
+`webauthn.`. Ruled in `.git-exclude/reviewed/g13-b-derived-allowlist-2026-09-13.md`;
+steps 3 and 4 are restated below and supersede the originals.
+
 `scripts/check-audit-matrix.sh` recognises an audit event literal by a
 namespace allowlist — `(user|client|signing_key|settings|me|auth|admin|oauth2|mfa)\.`
 at lines 30 and 43. Nothing keeps that list in step with the code. `mfa.` was
@@ -109,6 +116,41 @@ from the matrix, and would not have seen the six `oauth.*` names in
    namespace the code declares but the matrix lacks must be reported by the
    backward check — this is exactly today's `webauthn.` case, and the fixture
    must fail on the pre-change script and pass on the new one.
+
+### Steps 3 and 4, restated 2026-09-13 (ruling: option 1)
+
+**3. Derive the allowlist from the three places the code writes an audit
+action.** Computed at run time inside `scripts/check-audit-matrix.sh`, replacing
+the literal group at both grep sites:
+
+| Source | Extract | Exclude |
+|---|---|---|
+| `crates/sui-id-core/src/events.rs` | the string in every `name()` arm (`=> "ns.…"`) | — |
+| `crates/sui-id-store/src/commands.rs` | every `name: "ns.…"` in a `declare_write_command!` | `registry.rs` — its `proof_only.system_principal_forbidden` is a test descriptor, not an event |
+| every non-test `.rs` under `crates/` | every `action: "ns.…"` literal in an `AuditLogRow` construction | files under `tests/`, `tests.rs`, `#[cfg(test)]` modules |
+
+The derived set on the tree at step 2 is
+`admin|auth|client|mfa|oauth2|settings|setup|signing_key|token|user|webauthn`
+— print it in the run's output so a reviewer sees what the gate saw. The
+literal group is gone; nothing hand-maintained remains.
+
+**Then register the three events the derivation surfaces**, rows from the
+emitting code as step 1 did: `setup.create_initial_admin`
+(`handlers/setup.rs`), `token.introspect` and `token.revoke`
+(`handlers/oauth_token.rs`). Do not add an exclusion list; do not leave them
+unregistered.
+
+**Evidence for step 3:** `audit-matrix gate PASS: 59 matrix entries, 59 source
+literals`, with the derived namespace set printed above it. And the run of the
+*new* script against the tree at step 2 (before the three rows), which must
+fail naming exactly those three — the gate proving it sees what the old one
+could not.
+
+**4. The fixture.** In the A3.2 `audit-desync` set: the fixture crate emits a
+raw `action: "webauthn.fixture_only"` with no matrix row. It must be reported
+by the backward check under the new script and **not** reported under
+`1ec5dad`'s — run both, show both. Add the assertion to `expect_gate_output`
+alongside the two existing directions.
 
 **Not in scope:** any change to the lane's command (unchanged, so RFC 094's
 table and the manifest are untouched), or to G13's status as interim — the
