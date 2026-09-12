@@ -79,9 +79,9 @@ parts). sui-id picks a different point in the design space:
 - **A UI that wants to be quiet.** Server-rendered HTML, no client-side JS
   bundle, dark-mode aware.
 
-If you want SAML, LDAP federation, dynamic client registration over the
-internet, or twenty IdP integrations out of the box: sui-id is not for you,
-and that's a feature.
+If you want SAML, multi-tenant isolation, a plugin system, or a catalogue of
+twenty pre-built IdP integrations out of the box: sui-id is not for you, and
+that's a feature.
 
 ## Quick start
 
@@ -161,6 +161,18 @@ After setup, point your relying party at:
 - **Self-service app-access review:** users can see which OAuth clients hold
   a consent grant, when each was last used, and revoke any grant with
   immediate refresh-token invalidation
+- **Upstream OIDC federation:** authenticate users against an external
+  provider and provision a local account from the federated identity — see
+  [the OIDC API reference](docs/src/reference/oidc-api.md)
+- **Dynamic client registration:** a third party holding a single-use
+  registration token can register its own OIDC client — see
+  [the OIDC API reference](docs/src/reference/oidc-api.md)
+- **Read-only LDAP user sources:** users may originate from an external
+  directory instead of the local store — see
+  [the operator guide](docs/src/guides/operators.md)
+- **Prometheus metrics endpoint:** `/metrics`, guarded by a bearer token that
+  is stored hashed and rotated from the CLI — see
+  [the operator guide](docs/src/guides/operators.md)
 
 ## Design notes
 
@@ -185,6 +197,7 @@ crates/
 ├── sui-id-shared   DTOs, typed ids, public error type
 ├── sui-id-store    SQLite, migrations, column encryption, repositories
 ├── sui-id-core     Domain logic: passwords, JWT, OIDC, setup, sessions
+├── sui-id-i18n     Locale tables and Accept-Language negotiation
 ├── sui-id-web      Leptos SSR pages (login, setup, admin panel)
 └── sui-id          Axum router, config loader, master-key resolution,
                     embedded static assets, the `sui-id` binary
@@ -205,6 +218,6 @@ docs/               Operator and integrator documentation
 - [`docs/threat-model.md`](docs/threat-model.md) — what sui-id defends
   against, what it does not, and what assumptions the operator must
   uphold for the design to work.
-- [`PUBLISHING.md`](PUBLISHING.md) — how the maintainers publish to
-  crates.io. Not relevant to end users.
+- [the release process](docs/src/contributing/release-process.md) — how the
+  maintainers publish to crates.io. Not relevant to end users.
 
