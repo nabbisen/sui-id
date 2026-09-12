@@ -266,7 +266,10 @@ dispatch. The architect decides from the table whether the document is
 reconciled section by section, or superseded by the authority table plus the
 book and retired — that is a design decision the table informs.
 
-### Step 5 — drafted, **awaiting the owner's ruling on open question 1** (revised 2026-09-12)
+### Dispatch 8 — 2026-09-12: step 5, retire the MI records; register G15
+
+**Authorized by `@nabbisen`, 2026-09-12** — deletion of the 23 files included.
+Open question 1 is ruled: no new folder, no gate change.
 
 The first draft (move both MI packages into `rfcs/handoffs/RFC-MI-…/` and
 extend invariant 13) is withdrawn on self-review — see RFC 098 §Open questions
@@ -295,7 +298,9 @@ proposed, one commit:
 → `all conditions satisfied`, exit 0 — the first green run in the lane's
 life. G10a (mdBook must not miss the deleted pages: they were never in
 `SUMMARY.md`). G10b, G14, G11 green. `bash scripts/ci-gate.sh G15` on a clean
-tree, exit 0. Not dispatched until ruled.
+tree, exit 0.
+
+Independent of dispatch 7 (§7 of the specification); either order.
 
 ## 1 — Publish the authority map first
 

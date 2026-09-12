@@ -336,8 +336,9 @@ passes, so check C cannot pass by forbidding every pinned document.
    `NNN-slug` handoff shape invariant 13 enforces. Either the handoff rule
    accommodates the MI namespace, or these become a fourth disposition.
    §6 raises it; this RFC does not settle it.
-   *Proposed resolution, 2026-09-12 (revised the same day on self-review) —
-   awaiting `@nabbisen`.* The first proposal — extend invariant 13 to the MI
+   *Resolution, 2026-09-12 (revised the same day on self-review) — **ruled by
+   `@nabbisen`**, who asked "new folder?" and directed that structure and rules
+   stay as clean and simple as reasonable: no new folder, and deletion authorized.* The first proposal — extend invariant 13 to the MI
    namespace and file both packages under `rfcs/handoffs/RFC-MI-…/` — is
    withdrawn: RFC 000 does not know that namespace, which G11 tolerates only
    through a *closed* historical list; the review-records precedent rests on
