@@ -115,4 +115,4 @@ Significant changes follow the RFC workflow:
 
 RFC numbers are sequential. Browse `rfcs/done/` for examples of the format.
 The full lifecycle, approval-independence rule, and dependency semantics are
-defined by [RFC 000](../../../rfcs/done/000-rfc-lifecycle-policy.md).
+defined by [RFC 000](https://github.com/nabbisen/sui-id/blob/main/rfcs/done/000-rfc-lifecycle-policy.md).

@@ -532,6 +532,6 @@ In the browser:
   schema, and routine tasks.
 - [the OIDC API reference](../reference/oidc-api.md) — how a relying
   party hooks itself into sui-id once you've registered it as a client.
-- [`threat-model.md`](../../threat-model.md) — what sui-id defends against
+- [`threat-model.md`](https://github.com/nabbisen/sui-id/blob/main/docs/threat-model.md) — what sui-id defends against
   (and what it does not). Worth reading before you deploy somewhere
   visible to the internet.

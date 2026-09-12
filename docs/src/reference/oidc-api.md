@@ -479,7 +479,7 @@ exposing the underlying cause to the caller.
   `token_endpoint`; JWKS validation is a planned hardening step).
 
 If you need any of those today, you may need a different IdP. Several are on
-the [roadmap](../../../ROADMAP.md).
+the [roadmap](https://github.com/nabbisen/sui-id/blob/main/ROADMAP.md).
 
 ## Further reading
 
@@ -487,6 +487,6 @@ the [roadmap](../../../ROADMAP.md).
   walkthrough for an operator deploying sui-id from scratch.
 - [the operator guide](../guides/operators.md) — operational reference for
   someone running sui-id day to day.
-- [`docs/threat-model.md`](../../threat-model.md) describes the threats the
+- [`docs/threat-model.md`](https://github.com/nabbisen/sui-id/blob/main/docs/threat-model.md) describes the threats the
   protocol surface defends against and what assumptions you may safely
   make about a properly-configured sui-id deployment.
