@@ -1,0 +1,15 @@
+# RFC 098 G15 policy. D3: a machine-consumed contract, holding the freshness
+# tolerance and the list of version-pinned documents and nothing else. The
+# gate that reads it is the only thing that makes it true.
+version = 1
+
+[freshness]
+# "current as of" may lag the workspace by at most this many minor versions.
+# A starting value for `@nabbisen` to adjust: it is chosen, not derived.
+tolerance_minor = 2
+# RFC 098 rule 5: a banner is the sanctioned state for a lagging document,
+# so a bannered document passes however far behind it is.
+banner_regex = '^> \*\*Stale as of'
+banner_within_lines = 40
+claim_regex = 'current as of \*\*?v(\d+\.\d+\.\d+)|reflecting the v(\d+\.\d+\.\d+) codebase'
+documents = ["docs/threat-model.md", "docs/development-specification.md"]

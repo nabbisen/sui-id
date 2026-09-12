@@ -593,3 +593,17 @@ jobs:
           echo "exit_status=$status"
           echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           exit "$status"
+      - name: G15 self-tests (documentation authority checker)
+        # RFC 098 G15. The lane itself is held in [gate_matrix_exceptions]
+        # until the reconciliation it enforces has landed; its self-tests run
+        # from the day the script exists, so the script cannot rot unnoticed
+        # while it waits for registration.
+        run: |
+          set +e
+          echo "command=python3.14 -m unittest scripts.tests.test_doc_authority"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3.14 -m unittest scripts.tests.test_doc_authority
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
