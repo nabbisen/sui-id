@@ -32,10 +32,11 @@ G09b = []
 # resolves a number to exactly one `NNN-*.md` across rfcs/{proposed,accepted,
 # done,archive}. RFC 093's heading is recorded verbatim, so RFC 093 is not
 # amended by this mechanism and does not reopen. RFC 098 is the second
-# source (2026-09-12): it owns G14 and G15 and declares them in its own
-# table, which is the mechanism R10 was built to provide.
+# source (2026-09-12): RFC 094 owns G13 and RFC 098 owns G14 and G15, each
+# declared in that RFC's own table -- the mechanism R10 was built to provide.
 [gate_lane_sources]
 "093" = "Gate Matrix v1"
+"094" = "Gate Matrix lanes owned by RFC 094"
 "098" = "Gate Matrix lanes owned by RFC 098"
 
 # RFC 094 R10: lane -> owning RFC number. Exactly one owner per lane; two
@@ -57,6 +58,7 @@ G09b = "093"
 G10a = "093"
 G10b = "093"
 G11 = "093"
+G13 = "094"
 G14 = "098"
 G15 = "098"
 
@@ -80,6 +82,7 @@ G09b = "cargo +stable test -p sui-id-store --features ldap --test ldap_smoke --l
 G10a = "mdbook build docs --dest-dir target/mdbook-gate"
 G10b = "python3.14 scripts/check-markdown-links.py --root . README.md ROADMAP.md docs"
 G11 = "python3.14 scripts/check-rfc-integrity.py --root . --policy ci/rfc-policy.toml"
+G13 = "bash scripts/check-audit-matrix.sh"
 G14 = "python3.14 scripts/check-markdown-links.py --root . rfcs/handoffs roadmap"
 
 # RFC 093 M1b C2.1: the lane-completeness rule (scripts/check-gate-inputs.sh

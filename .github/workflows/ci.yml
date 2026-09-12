@@ -423,6 +423,19 @@ jobs:
           echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           exit "$status"
 
+  G13:
+    # RFC 094's interim audit-coverage lane, registered through the R10
+    # multi-source registry. The script is bash and grep only -- no toolchain
+    # and no Python -- so this job is checkout plus the dispatcher. It had
+    # never run in CI: RFC 085 closed at v0.68.0 on "CI gate live and
+    # bidirectional" and no workflow in this repository's history invoked it.
+    name: "G13 — audit coverage matrix (interim, RFC 094)"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: G13
+        run: bash scripts/ci-gate.sh G13
+
   G14:
     # RFC 098's own lane, registered through RFC 094's multi-source lane
     # registry (R10). G10b covers README.md, ROADMAP.md and docs/; G11 covers

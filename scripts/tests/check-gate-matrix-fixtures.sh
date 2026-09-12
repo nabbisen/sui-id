@@ -23,6 +23,17 @@ trap 'rm -rf "$tmp"' EXIT
 # copy of scripts/tests/fixtures/gate-matrix/<name>, committed so ci-gate.sh's
 # clean-tree precondition passes and the gate command itself is what's
 # being observed to fail (or pass).
+# Files copied from the real tree into a fixture at stage time, rather than
+# vendored into the fixture directory. A lane whose command *is* a script in
+# this repository has to run the shipped script: a vendored copy would let
+# the self-test stay green while the real script broke. G13 is the first such
+# lane in this harness -- G01-G08 run cargo, which the fixture does not
+# contain either.
+declare -A FIXTURE_OVERLAY=(
+  [audit-desync]="scripts/check-audit-matrix.sh"
+  [audit-in-sync]="scripts/check-audit-matrix.sh"
+)
+
 stage_fixture() {
   local name=$1
   local dest="$tmp/$name"
@@ -30,6 +41,11 @@ stage_fixture() {
   mkdir -p "$dest"
   cp -r "$fixtures_root/$name"/. "$dest/"
   rm -rf "$dest/target"
+  local overlay
+  for overlay in ${FIXTURE_OVERLAY[$name]:-}; do
+    mkdir -p "$dest/$(dirname "$overlay")"
+    cp "$repo_root/$overlay" "$dest/$overlay"
+  done
   # A fixture is reused across several gates (e.g. compile-error against
   # G01..G07b); cargo leaves target/ behind after the first run, which
   # would otherwise dirty the tree for the next gate's precondition check.
@@ -90,6 +106,25 @@ expect_gate_fails() {
   echo "$gate against $name: expected failure observed"
 }
 
+# A non-zero exit says the lane failed; it does not say *which* violations
+# it found. For a lane whose whole contract is that it checks two directions,
+# the output is the evidence.
+expect_gate_output() {
+  local gate=$1
+  local name=$2
+  shift 2
+  local output="$tmp/$gate-$name.output"
+  local expected
+  for expected in "$@"; do
+    if ! grep -Fq "$expected" "$output"; then
+      echo "$gate against $name did not report: $expected" >&2
+      cat "$output" >&2
+      exit 1
+    fi
+  done
+  echo "$gate against $name: both directions reported"
+}
+
 expect_gate_passes() {
   local gate=$1
   local name=$2
@@ -141,5 +176,20 @@ expect_gate_fails G08 format-drift
 for gate in G01 G02 G03 G04 G05 G06 G07 G07b; do
   expect_gate_passes "$gate" format-drift
 done
+
+# --- G13: the audit-coverage lane, both directions ----------------------
+# RFC 094's interim coverage lane. The desync fixture carries one violation
+# in each direction, and both must be named: a fixture proving only the
+# forward direction would make "bidirectional" -- RFC 085's closure claim --
+# a vacuous self-test, which is the defect that let this script go five
+# releases without ever running in CI.
+expect_gate_fails G13 audit-desync
+expect_gate_output G13 audit-desync \
+  "user.in_matrix_only  (in matrix but NOT found in crates/**/*.rs)" \
+  "client.in_source_only  (in source but NOT in matrix ci/audit-coverage-matrix.md)"
+# The clean case is a minimal in-sync fixture rather than a copy of the real
+# tree: staging the whole repository for one grep would dominate the harness's
+# runtime, and the real tree is already checked by the lane itself in CI.
+expect_gate_passes G13 audit-in-sync
 
 echo "gate-matrix negative fixtures passed"
