@@ -761,15 +761,12 @@ proxy_set_header X-Request-Id $request_id;
 
 ### Security events
 
-A small number of events are *security-relevant* and get a structured
-log line in addition to the audit-log row in the database. The two
-records carry the same fields. Operators monitoring live should
-filter on `event = ...`; operators reconstructing what happened
-yesterday should query the `audit_log` table. Both have the same
-underlying truth.
+A small number of events are *security-relevant*. The `audit_log`
+table is their record: none of them is written to the application log,
+so query the table rather than filtering log output.
 
-Canonical event names (these are the strings you query on; do not
-expect them to be renamed without a deprecation cycle):
+Canonical event names (these are the `action` values you query on; do
+not expect them to be renamed without a deprecation cycle):
 
 | Event | Meaning |
 |---|---|
@@ -790,28 +787,10 @@ expect them to be renamed without a deprecation cycle):
 | `webauthn.credential.register` | A user enrolled a passkey. |
 | `webauthn.credential.delete` | A user deleted one of their passkeys. |
 
-Common queries (jq against a JSON-line log file):
-
-```bash
-# Recent failed logins.
-jq -c 'select(.fields.event == "auth.login.failure")' < sui-id.log | tail
-
-# MFA failures grouped by user.
-jq -r 'select(.fields.event == "auth.mfa.failure") | .fields.target' < sui-id.log | sort | uniq -c
-
-# Every admin-initiated MFA reset, with who reset whom.
-jq -c 'select(.fields.event == "mfa.admin_reset") | {at: .timestamp, actor: .fields.actor, target: .fields.target, note: .fields.note}' < sui-id.log
-
-# Correlate everything that happened during a given request_id.
-jq -c 'select(.spans[]?.request_id == "0c58b960-f963-4427-86f0-d4e16938d8aa")' < sui-id.log
-```
-
-The audit-log table carries the same data and is the right query
-target when investigating something more than a few days old (the
-log file may already have been rotated):
+To query them:
 
 ```sql
--- Same events, from the database.
+-- Every admin-initiated MFA reset, newest first.
 SELECT at, actor, action, target, result, note
 FROM audit_log
 WHERE action = 'mfa.admin_reset'
@@ -1090,14 +1069,8 @@ The two relevant events:
 | `auth.lockout`    | A failed attempt that *just* triggered or extended a lock. Includes the consecutive-failure count and the new window length in the note. |
 | `admin.user.unlock`    | An admin cleared the lock via the CLI.            |
 
-A SIEM rule on `auth.lockout` is a useful signal that
-something is hammering an account. From the JSON log:
-
-```bash
-jq -c 'select(.fields.event == "auth.lockout") |
-       {at: .timestamp, target: .fields.target, note: .fields.note}' \
-   < sui-id.log
-```
+A SIEM rule on `auth.lockout` rows in `audit_log` is a useful signal
+that something is hammering an account.
 
 ### Timing-equivalence behaviour
 
