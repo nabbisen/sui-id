@@ -33,31 +33,34 @@ make_valid_fixture() {
   cp "$repo_root/.github/workflows/fuzz.yml" "$target/.github/workflows/fuzz.yml"
 }
 
-# A fixture with a second lane source. RFC 094's real accepted copy is
-# replaced by a synthetic single-row table so "094" still resolves to exactly
-# one file: leaving both in place would resolve to two, which is a different
-# fixture's job. The heading is level `###` so every case built on this also
+# A fixture with an additional lane source. RFC 900 does not exist and never
+# will: the number is outside the allocated range precisely so this fixture
+# can add a source without colliding with a real one. It used to stand in for
+# RFC 094 by deleting the real file -- which stopped working the moment RFC
+# 094 became a real source with a real lane (G13), because the fixture copies
+# the real manifest and the two "094" keys then made it invalid TOML. A
+# fixture that impersonates a real RFC is a fixture waiting for that RFC to
+# become real. The heading is level `###` so every case built on this also
 # exercises heading-level-agnostic matching.
 make_multi_source_fixture() {
   local target=$1
   make_valid_fixture "$target"
-  find "$target/rfcs/accepted" -maxdepth 1 -name '094-*.md' -delete
-  cat >"$target/rfcs/accepted/094-fixture.md" <<'FIXTURE_RFC'
-# RFC 094 — fixture stand-in
+  cat >"$target/rfcs/accepted/900-fixture.md" <<'FIXTURE_RFC'
+# RFC 900 — fixture stand-in
 
 Fixture-only stand-in used by scripts/tests/check-gate-inputs-fixtures.sh.
 It exists to give the lane registry a second source to resolve.
 
-### Gate Matrix lanes owned by RFC 094
+### Gate Matrix lanes owned by RFC 900
 
 | Lane | Toolchain | Features | Command |
 |---|---|---|---|
-| G13 | stable | n/a | `bash scripts/fixture-lane.sh` |
+| G90 | stable | n/a | `bash scripts/fixture-lane.sh` |
 FIXTURE_RFC
-  sed -i 's|^"093" = "Gate Matrix v1"$|&\n"094" = "Gate Matrix lanes owned by RFC 094"|' \
+  sed -i 's|^"093" = "Gate Matrix v1"$|&\n"900" = "Gate Matrix lanes owned by RFC 900"|' \
     "$target/ci/gate-inputs.toml"
-  sed -i 's|^G11 = "093"$|&\nG13 = "094"|' "$target/ci/gate-inputs.toml"
-  sed -i 's|^G11 = "python3.14 scripts/check-rfc-integrity.py --root . --policy ci/rfc-policy.toml"$|&\nG13 = "bash scripts/fixture-lane.sh"|' \
+  sed -i 's|^G11 = "093"$|&\nG90 = "900"|' "$target/ci/gate-inputs.toml"
+  sed -i 's|^G11 = "python3.14 scripts/check-rfc-integrity.py --root . --policy ci/rfc-policy.toml"$|&\nG90 = "bash scripts/fixture-lane.sh"|' \
     "$target/ci/gate-inputs.toml"
 }
 
@@ -328,14 +331,14 @@ expect_success registry-multi-source-valid
 # --- Check 1: a [gates] lane with no [gate_owners] entry ------------------
 check1="$tmp/registry-check1-unowned-lane"
 make_multi_source_fixture "$check1"
-sed -i '/^G13 = "094"$/d' "$check1/ci/gate-inputs.toml"
+sed -i '/^G90 = "900"$/d' "$check1/ci/gate-inputs.toml"
 expect_failure registry-check1-unowned-lane \
-  "condition 7 (check 1):" "G13 (0 [gate_owners] entries"
+  "condition 7 (check 1):" "G90 (0 [gate_owners] entries"
 
 # --- Check 2: an owner that is not a declared source ----------------------
 check2_unsourced="$tmp/registry-check2-owner-not-a-source"
 make_multi_source_fixture "$check2_unsourced"
-sed -i '/^"094" = "Gate Matrix lanes owned by RFC 094"$/d' \
+sed -i '/^"900" = "Gate Matrix lanes owned by RFC 900"$/d' \
   "$check2_unsourced/ci/gate-inputs.toml"
 expect_failure registry-check2-owner-not-a-source \
   "condition 7 (check 2):" 'not declared in [gate_lane_sources]'
@@ -343,7 +346,7 @@ expect_failure registry-check2-owner-not-a-source \
 # --- Check 2: a source whose number resolves to no file ------------------
 check2_zero="$tmp/registry-check2-resolves-to-zero"
 make_multi_source_fixture "$check2_zero"
-find "$check2_zero/rfcs/accepted" -maxdepth 1 -name '094-*.md' -delete
+find "$check2_zero/rfcs/accepted" -maxdepth 1 -name '900-*.md' -delete
 expect_failure registry-check2-resolves-to-zero \
   "condition 7 (check 2):" "resolves to 0 files"
 
@@ -353,27 +356,27 @@ expect_failure registry-check2-resolves-to-zero \
 # silently accept.
 check2_two="$tmp/registry-check2-resolves-to-two"
 make_multi_source_fixture "$check2_two"
-cp "$check2_two/rfcs/accepted/094-fixture.md" \
-  "$check2_two/rfcs/archive/094-duplicate.md"
+cp "$check2_two/rfcs/accepted/900-fixture.md" \
+  "$check2_two/rfcs/archive/900-duplicate.md"
 expect_failure registry-check2-resolves-to-two \
   "condition 7 (check 2):" "resolves to 2 files"
 
 # --- Check 3: a source declares a lane the manifest accounts for nowhere --
 check3="$tmp/registry-check3-source-lane-unaccounted"
 make_multi_source_fixture "$check3"
-sed -i '/^G13 = "bash scripts\/fixture-lane.sh"$/d' "$check3/ci/gate-inputs.toml"
+sed -i '/^G90 = "bash scripts\/fixture-lane.sh"$/d' "$check3/ci/gate-inputs.toml"
 expect_failure registry-check3-source-lane-unaccounted \
-  "condition 7 (check 3):" "G13"
+  "condition 7 (check 3):" "G90"
 
 # --- Check 4: the command drifts in the owning RFC's own table ------------
-# Drift is introduced in RFC 094's table, so a checker still comparing every
+# Drift is introduced in RFC 900's table, so a checker still comparing every
 # lane against RFC 093 would not see it.
 check4_drift="$tmp/registry-check4-command-drift-in-owner-table"
 make_multi_source_fixture "$check4_drift"
 sed -i 's|`bash scripts/fixture-lane.sh`|`bash scripts/fixture-lane.sh --extra`|' \
-  "$check4_drift/rfcs/accepted/094-fixture.md"
+  "$check4_drift/rfcs/accepted/900-fixture.md"
 expect_failure registry-check4-command-drift-in-owner-table \
-  "condition 7 (check 4):" "G13 (owner 094)"
+  "condition 7 (check 4):" "G90 (owner 900)"
 
 # --- Check 4: the one permitted normalisation is not widened -------------
 # The permitted normalisation is one-directional: a source RFC may join two
@@ -396,10 +399,10 @@ expect_failure registry-check4-normalisation-not-widened \
 # --- Check 5: a lane in both [gates] and [gate_matrix_exceptions] --------
 check5="$tmp/registry-check5-both-gates-and-exception"
 make_multi_source_fixture "$check5"
-sed -i '/^\[gate_matrix_exceptions\]/a G13 = "fixture: excepted while still dispatched, which must fail"' \
+sed -i '/^\[gate_matrix_exceptions\]/a G90 = "fixture: excepted while still dispatched, which must fail"' \
   "$check5/ci/gate-inputs.toml"
 expect_failure registry-check5-both-gates-and-exception \
-  "condition 7 (check 5):" "G13"
+  "condition 7 (check 5):" "G90"
 
 # --- Check 6: an exception for a lane no source declares -----------------
 check6="$tmp/registry-check6-ungrounded-exception"
@@ -412,16 +415,16 @@ expect_failure registry-check6-ungrounded-exception \
 # --- Heading: recorded heading absent from the owning RFC ----------------
 heading_absent="$tmp/registry-heading-absent"
 make_multi_source_fixture "$heading_absent"
-sed -i 's|^### Gate Matrix lanes owned by RFC 094$|### A differently named section|' \
-  "$heading_absent/rfcs/accepted/094-fixture.md"
+sed -i 's|^### Gate Matrix lanes owned by RFC 900$|### A differently named section|' \
+  "$heading_absent/rfcs/accepted/900-fixture.md"
 expect_failure registry-heading-absent "heading" "occurs 0 times"
 
 # --- Heading: recorded heading occurring twice --------------------------
 # Several is a failure, not a first-match-wins guess.
 heading_twice="$tmp/registry-heading-twice"
 make_multi_source_fixture "$heading_twice"
-printf '\n### Gate Matrix lanes owned by RFC 094\n' \
-  >>"$heading_twice/rfcs/accepted/094-fixture.md"
+printf '\n### Gate Matrix lanes owned by RFC 900\n' \
+  >>"$heading_twice/rfcs/accepted/900-fixture.md"
 expect_failure registry-heading-twice "heading" "occurs 2 times"
 
 # --- Heading: compared by equality, never as a pattern -------------------
@@ -429,9 +432,9 @@ expect_failure registry-heading-twice "heading" "occurs 2 times"
 # exactly that text...
 heading_literal="$tmp/registry-heading-parens-literal-pass"
 make_multi_source_fixture "$heading_literal"
-sed -i 's|^### Gate Matrix lanes owned by RFC 094$|### Gate Matrix (v2)|' \
-  "$heading_literal/rfcs/accepted/094-fixture.md"
-sed -i 's|^"094" = "Gate Matrix lanes owned by RFC 094"$|"094" = "Gate Matrix (v2)"|' \
+sed -i 's|^### Gate Matrix lanes owned by RFC 900$|### Gate Matrix (v2)|' \
+  "$heading_literal/rfcs/accepted/900-fixture.md"
+sed -i 's|^"900" = "Gate Matrix lanes owned by RFC 900"$|"900" = "Gate Matrix (v2)"|' \
   "$heading_literal/ci/gate-inputs.toml"
 expect_success registry-heading-parens-literal-pass
 
@@ -441,9 +444,9 @@ expect_success registry-heading-parens-literal-pass
 # equality-based one finds zero occurrences and fails.
 heading_regex="$tmp/registry-heading-parens-not-regex"
 make_multi_source_fixture "$heading_regex"
-sed -i 's|^### Gate Matrix lanes owned by RFC 094$|### Gate Matrix v2|' \
-  "$heading_regex/rfcs/accepted/094-fixture.md"
-sed -i 's|^"094" = "Gate Matrix lanes owned by RFC 094"$|"094" = "Gate Matrix (v2)"|' \
+sed -i 's|^### Gate Matrix lanes owned by RFC 900$|### Gate Matrix v2|' \
+  "$heading_regex/rfcs/accepted/900-fixture.md"
+sed -i 's|^"900" = "Gate Matrix lanes owned by RFC 900"$|"900" = "Gate Matrix (v2)"|' \
   "$heading_regex/ci/gate-inputs.toml"
 expect_failure registry-heading-parens-not-regex "heading" "occurs 0 times"
 
