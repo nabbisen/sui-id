@@ -3500,9 +3500,8 @@ rejected?") is now answered concretely.
 ### Six inventory documents shipped under `docs/mockup-integration/inventory/`
 
 Each is the implementation contract for the screen-level RFCs that
-follow. See the directory
-[README](./docs/mockup-integration/inventory/README.md) for the
-orientation overview.
+follow. The directory index was
+`docs/mockup-integration/inventory/README.md` (retired to history 2026-09-12, RFC 098 step 5; `git show 600d184:<path>`).
 
 | File | Headline finding |
 |------|------------------|

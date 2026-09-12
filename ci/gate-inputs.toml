@@ -84,6 +84,7 @@ G10b = "python3.14 scripts/check-markdown-links.py --root . README.md ROADMAP.md
 G11 = "python3.14 scripts/check-rfc-integrity.py --root . --policy ci/rfc-policy.toml"
 G13 = "bash scripts/check-audit-matrix.sh"
 G14 = "python3.14 scripts/check-markdown-links.py --root . rfcs/handoffs roadmap"
+G15 = "python3.14 scripts/check-doc-authority.py --root . --policy ci/doc-authority.toml"
 
 # RFC 093 M1b C2.1: the lane-completeness rule (scripts/check-gate-inputs.sh
 # condition 7) requires every lane declared by any source RFC to be
@@ -93,7 +94,6 @@ G14 = "python3.14 scripts/check-markdown-links.py --root . rfcs/handoffs roadmap
 # point -- not as a place to defer wiring a new lane.
 [gate_matrix_exceptions]
 G12 = "Predates ci-gate.sh and has its own working entry point (ui-invariants-v1, RFC 093 M1a). Not migrated: churning a green gate for symmetry is not worth the risk. Currently also a dependency of M1b C5 -- a reason not to touch it right now, not a claim that this exception can never be revisited."
-G15 = "Declared by RFC 098 (Gate Matrix lanes owned by RFC 098), not yet registered. The script and its fixtures exist; on today's tree the lane is red on exactly the findings RFC 098 records -- F3's orphan pages, F2's absolute self-URLs, and the unbannered version claim in docs/development-specification.md -- and RFC 093 holds that a lane which is not green on main is not a gate. Moves to [gates] in the commit that lands RFC 098 step 6."
 
 [actions]
 checkout_v6 = "d23441a48e516b6c34aea4fa41551a30e30af803"

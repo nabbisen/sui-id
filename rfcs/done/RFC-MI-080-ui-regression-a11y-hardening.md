@@ -12,6 +12,15 @@ scope = "Mockup integration into sui-id v0.48.4"
 language = "English"
 ```
 
+**Companion artifacts retired (2026-09-12).** The verification matrices
+under `docs/src/mockup-integration/` that this RFC describes were retired
+to version-control history under RFC 098 step 5 (one topic, one document:
+a completed arc's working papers are not product documentation). They are
+not deleted, only unpublished — recover any of them with
+`git show 600d184:<path>`, `600d184` being the last commit that carried
+them. Their paths are named in the text below and are no longer links. The
+RFC's own record is not rewritten; this note is the change.
+
 ## Implementation note (added on transition to `done/`)
 
 Implemented in **v0.57.0** — the final release in the MI arc.

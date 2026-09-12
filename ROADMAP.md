@@ -503,8 +503,8 @@ fallback.
 **Mockup Integration epic — sixteen RFCs, Phase 0 → Phase 8.**
 Introduced in v0.49.0. The full epic table and reading order live
 in [`rfcs/README.md`](rfcs/README.md) ("Proposed — Mockup
-Integration epic"); see also
-[`docs/mockup-integration/`](docs/mockup-integration/).
+Integration epic"); the supporting artifacts were
+`docs/mockup-integration/` (retired to history 2026-09-12, RFC 098 step 5; `git show 600d184:<path>`).
 
 | RFC | Title | Priority | Notes |
 |---|---|---|---|
@@ -550,9 +550,9 @@ Following Phases A–F, the project enters the **Mockup Integration
 phases (0 → 8), each backed by one or more `RFC-MI-NNN` documents
 in `rfcs/proposed/`. v0.49.0 opens the arc with the Phase 0 planning
 artifacts only — **no runtime code changes** — so subsequent
-implementation work has an auditable baseline. See
-[`docs/mockup-integration/`](docs/mockup-integration/) for the
-migration plan, codebase handoff, and mockup handoff package.
+implementation work has an auditable baseline. The migration plan,
+codebase handoff and mockup handoff package were
+`docs/mockup-integration/` (retired to history 2026-09-12, RFC 098 step 5; `git show 600d184:<path>`).
 
 | Phase | Target version | Theme                                                   | RFCs                          |
 |-------|----------------|---------------------------------------------------------|-------------------------------|

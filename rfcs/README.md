@@ -46,8 +46,8 @@ slot is `101`). One **parallel namespace** also exists:
   coherent eight-phase plan and are introduced under their original
   numbering so the cross-reference graph stays intact. The supporting
   planning artifacts (migration plan, codebase handoff, mockup
-  handoff package) live in
-  [`../docs/mockup-integration/`](../docs/mockup-integration/).
+  handoff package) were `docs/mockup-integration/`
+  (retired to history 2026-09-12, RFC 098 step 5; `git show 600d184:<path>`).
 
   When a new MI RFC is created, take the next slot in the MI line
   (the existing set occupies `MI-000`, `010`–`012`, `020`–`022`,
