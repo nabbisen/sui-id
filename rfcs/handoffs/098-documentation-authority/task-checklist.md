@@ -160,6 +160,38 @@ tests counted.
 **Not in scope.** Registering G15 (still waits on steps 5 and 6); any change to
 `check-markdown-links.py`; the MI matrices (open question 1).
 
+### Step 6a — landed 2026-09-12
+
+Staleness banner on `docs/development-specification.md`, the rule-5 sanctioned
+state. G15's (C) is now zero; (A) = 7, all step 5.
+
+### Dispatch 5 — 2026-09-12: step 6b, the specification's drift audit
+
+`docs/development-specification.md` is 1,229 lines written against v0.48.4. Do
+**not** rewrite it. Produce the drift table first, as a review request: for
+each numbered section, one row — *holds / contradicted / superseded / absent*
+— naming the accepted RFC or the code path that decides it, and quoting the
+contradicted sentence. RFC 098 rule 1: code wins over prose; rule 2: an
+accepted RFC wins over any document except code. The §4 contradictions table
+below is the seed; the audit must reach every section. No file changes in this
+dispatch. The architect decides from the table whether the document is
+reconciled section by section, or superseded by the authority table plus the
+book and retired — that is a design decision the table informs.
+
+### Step 5 — drafted, **awaiting the owner's ruling on open question 1**
+
+Proposed in RFC 098 §Open questions 1. If ruled as proposed: (i) extend
+invariant 13 to `RFC-MI-NNN-slug/` with two self-tests (an MI directory
+resolving to its RFC passes; one naming an absent MI number fails); (ii)
+`git mv docs/src/mockup-integration` → `rfcs/handoffs/RFC-MI-080-ui-regression-a11y-hardening/`
+and `docs/mockup-integration` → `rfcs/handoffs/RFC-MI-000-baseline-delta-inventory/`;
+(iii) repoint the five link-form references — `ROADMAP.md` ×2, `CHANGELOG.md`
+×1 (a link target, so rule 4 permits it), `rfcs/README.md` ×1, RFC-MI-000 ×1 —
+and re-base relative links inside the moved files against their new depth,
+the way the `rfcs/reviews/` migration had to; (iv) G15 reads 0/0/0 and moves
+from `[gate_matrix_exceptions]` to `[gates]` with its job. Not dispatched
+until ruled.
+
 ## 1 — Publish the authority map first
 
 Before changing any document, publish a map naming, per topic, **one**

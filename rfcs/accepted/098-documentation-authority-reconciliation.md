@@ -328,6 +328,20 @@ passes, so check C cannot pass by forbidding every pinned document.
    `NNN-slug` handoff shape invariant 13 enforces. Either the handoff rule
    accommodates the MI namespace, or these become a fourth disposition.
    §6 raises it; this RFC does not settle it.
+   *Proposed resolution, 2026-09-12 — awaiting `@nabbisen`.* Measured: all
+   sixteen `RFC-MI-NNN` RFCs are in `done/`; the seven `docs/src/mockup-integration/`
+   matrices state they are RFC-MI-080's verification records; the sixteen
+   `docs/mockup-integration/` files are the Phase 0 planning package RFC-MI-000
+   links to eleven times; five link-form references point at them from outside.
+   **Extend invariant 13 to the MI namespace** — a handoff directory named
+   `RFC-MI-NNN-slug/` resolves to exactly one `rfcs/*/RFC-MI-NNN-*.md`, mirroring
+   the `MI_RE` G11 already carries — and file each package as its RFC's companion:
+   the matrices under `rfcs/handoffs/RFC-MI-080-ui-regression-a11y-hardening/`,
+   the planning package under `rfcs/handoffs/RFC-MI-000-baseline-delta-inventory/`.
+   Same disposition the RFC 093/094 review records received on 2026-09-10 — dated
+   records live with their decision and inherit its status. No fourth
+   disposition, no policy change, no edit to any MI RFC's text; link paths
+   follow the files (rule 4). Closes F3 in full; G15 then registers.
 2. ~~**How do the three enforcement checks reach CI?**~~ *Answered 2026-09-12:*
    through RFC 094's multi-source lane registry, as this RFC's own lanes G14
    and G15 (§Gate Matrix lanes owned by RFC 098). Both framings this question
