@@ -202,9 +202,9 @@ docs/               Operator and integrator documentation
 - [the OIDC API reference](docs/src/reference/oidc-api.md) — pointing an
   application at a sui-id instance: discovery, registration, the OIDC
   flow, and the shape of the tokens.
-- [`docs/threat-model.md`](https://github.com/nabbisen/sui-id/blob/main/docs/threat-model.md) — what sui-id defends
+- [`docs/threat-model.md`](docs/threat-model.md) — what sui-id defends
   against, what it does not, and what assumptions the operator must
   uphold for the design to work.
-- [`PUBLISHING.md`](https://github.com/nabbisen/sui-id/blob/main/PUBLISHING.md) — how the maintainers publish to
+- [`PUBLISHING.md`](PUBLISHING.md) — how the maintainers publish to
   crates.io. Not relevant to end users.
 
