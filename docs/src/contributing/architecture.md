@@ -20,9 +20,9 @@ There are no circular dependencies. `sui-id-shared` sits at the bottom;
 
 ```
 Browser request
- → Axum router (crates/sui-id/src/router.rs)
+ → Axum router (crates/sui-id/src/http/router.rs)
    → middleware (HSTS, request ID, rate limiter, session resolver)
-   → handler (crates/sui-id/src/handlers/)
+   → handler (crates/sui-id/src/http/handlers/)
      → core use-case function (crates/sui-id-core/src/)
        → repository (crates/sui-id-store/src/repos/)
          → SQLite (single connection, WAL mode)
@@ -33,9 +33,14 @@ Browser request
 
 ## Storage model
 
-One SQLite database file, one master key file. The SQLite connection is
-wrapped in `Database` (an `Arc<Mutex<Connection>>`) with all blocking I/O
-dispatched to a dedicated thread pool via `spawn_blocking`.
+One SQLite database file, one master key file. `Database` is a handle over
+an `Arc<dyn Backend>` (`crates/sui-id-store/src/backend.rs`): the storage
+engine sits behind a trait, and `SqliteBackend` is the implementation that
+owns the connection and dispatches blocking I/O to a dedicated thread pool
+via `spawn_blocking`. The seam is deliberate — RFC 009 step 1 introduced it
+so an alternative SQL backend becomes an implementation of `Backend` rather
+than a rewrite of every repository. SQLite is the only implementation today,
+and RFC 009's remaining steps are unscheduled.
 
 ### Column encryption
 
@@ -74,9 +79,22 @@ Logout (POST /admin/logout)
 
 ## Audit log
 
-Every mutation goes through `events::emit(db, clock, ctx, event)`.
-`emit` appends a row to `audit_log` with a SHA-256 hash chained to the
-previous row. The chain is verified on each audit page load.
+A Class-A mutation and its audit row commit in one transaction. The write
+command is declared with `declare_write_command!`, which seals the event's
+name, class, actor requirement and attributes into a typed descriptor, and
+the runner hands the domain function a `WriteTx<AtomicAudit>` — so the
+mutation cannot land without its audit row, and the audit row cannot name an
+event the registry does not declare. RFC 094 is the design; the registered
+event set is `ci/audit-coverage-matrix.md`, which lane G13 checks against the
+source literals in both directions.
+
+`events::emit(db, clock, ctx, event)` remains for Class-B events — the
+best-effort, non-transactional ones, six call sites, all in
+`crates/sui-id-core/src/account/forgot_password.rs`. It is no longer the
+path every mutation takes, as it was before RFC 094.
+
+Either way a row lands in `audit_log` with a SHA-256 hash chained to the
+previous row. The audit page verifies the chain's tail on load.
 
 ## i18n
 
