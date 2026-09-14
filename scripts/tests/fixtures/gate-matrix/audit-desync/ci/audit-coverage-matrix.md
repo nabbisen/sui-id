@@ -16,6 +16,11 @@ The auth.login pair is in sync, so the extraction is demonstrably working
 rather than returning nothing; the user fixture_declared pair is in sync so
 that the user namespace is declared in code.
 
+A fourth desync: the auth row for the written-only-by-tests event has its
+only literal in the fixture crate's src/tests.rs. Before G13-d the literal
+scan counted test files, so a test assertion mentioning a name was taken as
+proof the event is written; now the forward check must report it.
+
 Note for editors: the script extracts *every* backtick-quoted event name in
 this file, prose included, so the desynced names are deliberately written
 without backticks outside the table. Writing them normally here would put a
@@ -26,3 +31,4 @@ missing name back in the matrix and quietly weaken this fixture.
 | `auth.login` | `crates/fixture-audit/src/lib.rs` |
 | `user.fixture_declared` | `crates/fixture-audit/src/lib.rs` |
 | `user.in_matrix_only` | nothing — this row is the forward-direction desync |
+| `auth.written_only_by_tests` | nothing outside `src/tests.rs` — this row is the test-literal desync |

@@ -539,19 +539,13 @@ pub async fn delete_user(
 
 // ── U05 — admin role change ──────────────────────────────────────────
 //
-// **Schema not previously specified — flagged for review.** Unlike
-// U01-U04, `ci/audit-coverage-matrix.md` carries no row
-// for `user.role_change`; it says only "will be added when the
-// role-change handler is converted to Class A atomicity" (RFC 085). No
-// production code emits this event today either — `users_set_role`
-// (`sui-id/src/http/handlers/admin/users.rs`) calls
-// `sui_id_store::repos::users::set_role` directly, with no audit call at
-// all. The event name (`user.role_change`) and actor/target shape (admin
-// user id / target user id) come from `command-inventory.md:64`; the
-// `old_role`/`new_role` attribute pair is this implementation's own
-// proposal, chosen because a role-change record with neither value is
-// not reconstructable from the rest of the audit log. Treat this
-// descriptor as provisional until confirmed.
+// The matrix row for `user.role_change` and this descriptor agree: admin user
+// id as actor, target user id as target, `old_role` and `new_role` as
+// attributes, Class A. `users_set_role` (`sui-id/src/http/handlers/admin/users.rs`)
+// runs this command through `commands::change_user_role`, so the mutation and
+// its audit row commit in one transaction. The attribute pair was this
+// implementation's proposal: a role-change record with neither value is not
+// reconstructable from the rest of the audit log.
 static U05_ROLE_CHANGE: EventDescriptor = EventDescriptor {
     kind: AuditEventKind::UserRoleChange,
     name: "user.role_change",

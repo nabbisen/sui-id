@@ -134,7 +134,6 @@ then because `setup.` was not in the hand-written list.
 | Event name | Operation | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
 | `auth.user_source.matched` | External source authenticated a user | shadow user id | shadow user id | `source=… stable_id=…` | B |
-| `auth.user_source.transport_failure` | Directory unreachable during cascade | — | — | `source=… error=…` | B |
 
 ### Self-service MFA (`mfa.*`)
 
@@ -205,7 +204,6 @@ above it, not `auth.password.changed_self`'s authenticated-actor shape below.*
 
 | Event name | Trigger | Actor | Class |
 |---|---|---|---|
-| `auth.login` | Login attempt initiated | — | B |
 | `auth.login.password_ok_mfa_required` | Password correct; MFA challenge pending | user id | B |
 | `auth.login.success` | Login succeeded | user id | B |
 | `auth.login.failure` | Wrong password | — | B |

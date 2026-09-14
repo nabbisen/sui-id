@@ -185,12 +185,15 @@ done
 # releases without ever running in CI. The third violation is a literal in a
 # namespace the pre-G13-b hand-written allowlist did not contain; only the
 # derived allowlist reports it, so this assertion fails against 1ec5dad's
-# script and passes against the current one.
+# script and passes against the current one. The fourth is a row whose only
+# literal sits in a test file: G13-d stopped counting test files as writers,
+# so it is reported now and was not before (d55590e).
 expect_gate_fails G13 audit-desync
 expect_gate_output G13 audit-desync \
   "user.in_matrix_only  (in matrix but NOT found in crates/**/*.rs)" \
   "client.in_source_only  (in source but NOT in matrix ci/audit-coverage-matrix.md)" \
-  "webauthn.fixture_only  (in source but NOT in matrix ci/audit-coverage-matrix.md)"
+  "webauthn.fixture_only  (in source but NOT in matrix ci/audit-coverage-matrix.md)" \
+  "auth.written_only_by_tests  (in matrix but NOT found in crates/**/*.rs)"
 # The clean case is a minimal in-sync fixture rather than a copy of the real
 # tree: staging the whole repository for one grep would dominate the harness's
 # runtime, and the real tree is already checked by the lane itself in CI.

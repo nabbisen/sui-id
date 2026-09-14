@@ -109,7 +109,6 @@ verifies the chain tail on every load and shows a status banner:
 | Event name | Label | Description |
 |---|---|---|
 | `auth.user_source.matched` | External user source matched | The login cascade resolved the user via an LDAP or other external user source. |
-| `auth.user_source.transport_failure` | User source transport failure | A configured external user source (LDAP) was unreachable or returned a network error during authentication. |
 
 ## Self-service MFA and passkey events
 

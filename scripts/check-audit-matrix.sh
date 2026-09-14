@@ -78,7 +78,7 @@ fi
 #    (test fixtures use names like "admin.test_action", "admin.should_not_appear",
 #    "act.before" etc. that begin with test-specific prefixes or are in cfg(test) blocks)
 SRC_LITERALS=$(grep -rh \
-  --include="*.rs" \
+  --include="*.rs" --exclude='tests.rs' --exclude='tests_*.rs' --exclude-dir='tests' \
   -oE "\"($NAMESPACES)\\.[a-z_.A-Z]+\"" \
   "$SRC_DIRS" \
   | tr -d '"' \

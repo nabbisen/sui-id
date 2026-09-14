@@ -137,12 +137,7 @@ pub async fn cascade_sources(
                 tracing::trace!(source = source.slug(), "user-source cascade miss");
             }
             Err(e) => {
-                // Transport/config failure — log and continue (P4).
-                // The audit event "auth.user_source.transport_failure" is
-                // emitted by the binary-crate caller (try_login_with_cascade)
-                // which has DB access.  The string literal is anchored here
-                // for the CI audit-matrix gate.
-                let _audit_event = "auth.user_source.transport_failure";
+                // Transport or config failure: logged; the cascade continues (P4). No audit row.
                 tracing::warn!(
                     source = source.slug(),
                     error = %e,
