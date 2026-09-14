@@ -505,6 +505,77 @@ after.
 **Not in scope.** The twenty-nine `audit_event_*` i18n labels, which no code
 reads — reserved for the owner (review: `.git-exclude/reviewed/g13-c-2026-09-15.md`).
 
+### Closure assessment — 2026-09-15: not yet met
+
+Measured against RFC 098's closure prerequisites after dispatch 13 and G13-d.
+
+| Prerequisite | State |
+|---|---|
+| Authoritative documents agree | **Met** for D1–D3 as defined; G14 and G15 enforce links, `SUMMARY.md`, link form, version freshness and the event reference |
+| README | **Met** — dispatch 9, every claim with an evidence row |
+| Development specification | **Met, one defect** — §13.2 calls the audit log "tamper-resistant"; the threat model says "tamper-evident, not tamper-proof", and rule 7 makes it the only source |
+| Operator / integrator guidance | **Partly met** — `operators.md`, `oidc-api.md`, `configuration.md`, `audit-events.md`, `architecture.md` walked; **eleven book pages never walked** |
+| Roadmap | **Not met** — never walked; `ROADMAP.md:713` calls the implementation "production-grade" against line 14's "not approved for a production release"; a section titled *Current status* records pre-remediation arcs |
+| Public claims | **Not met** on the unwalked pages, by definition |
+| Source paths | **Two unresolved**, both in `docs/src/contributing/local-dev.md` |
+| Lifecycle metadata; mdBook and integrity gates | **Met** — G11, G10a, G14, G15 green |
+
+Closure also needs, per RFC 000, `Closure reviewed on`, `Closure approved by`
+and a `Closure evidence` reference from a reviewer who is not the implementer.
+That is assembled once dispatch 14 lands.
+
+### Dispatch 14 — 2026-09-15: the surface no dispatch has walked
+
+The same method as dispatches 9a and 10: every sentence with a checkable fact
+gets an evidence row — the code path, migration, RFC or gate that makes it true
+— including the ones that turn out true. Correct only names, paths and values
+the code contradicts (rule 1), saying so per row. **Stop on any behavioural
+claim the code contradicts**, and on any security or readiness claim that is
+not true. Five commits, the table for each as the deliverable.
+
+**14a — the reader's first contact.** `docs/src/introduction.md`,
+`getting-started/overview.md`, `getting-started/quick-start.md`,
+`getting-started/faq.md`. The FAQ's first answer says "The HTTP API (OIDC
+endpoints) is stable" — find what makes that true, or stop on it.
+
+**14b — the operator guides not yet walked.** `guides/deployment.md` (537
+lines, the largest), `guides/upgrade.md`, `guides/dangerous-operations.md`.
+Every command, flag, path, default and file mode is a claim; prove commands
+against `sui-id --help` and config snippets against the loader, as 11b did.
+
+**14c — contributor pages.** `contributing/local-dev.md`,
+`contributing/translators.md`, `contributing/state-contract.md`,
+`contributing/release-process.md`. Seeded, verified live:
+`local-dev.md:5` and its `rustup install 1.91` / `rustup default 1.91` say the
+toolchain is 1.91 — the workspace sets `rust-version = "1.95"`;
+`local-dev.md:95–96` cite `crates/sui-id/src/router.rs` and
+`crates/sui-id/src/handlers/admin.rs`, both moved under `src/http/`.
+`release-process.md` came from the root's `PUBLISHING.md` unwalked — walk it.
+
+**14d — `docs/ui-ux-contracts.md`** (332 lines), against the component code
+and `ci/ui-invariants.toml`. It is the frozen cross-cutting UI contract; a
+contract the code has left is a finding, not an edit.
+
+**14e — `ROADMAP.md`'s statements about the present, and §13.2 of the
+specification.** Walk every statement of *current* state: the milestone
+schedule's status cells against the RFC folders; the execution-order rows
+(item 5's package is withdrawn and not ready, which the row must say); the risk
+register's status cells; *Constraints and non-goals*. Seeded:
+`ROADMAP.md:713` "production-grade for small deployments" contradicts the
+programme's own line 14 — stop on it. The section titled *Current status*
+(line 465) records the v0.63–v0.74 arcs and the MI epic, all complete; it is
+history under a present-tense title, beside a second *Status* section (line
+660). Report the structure; do not retitle or move sections — the ROADMAP is the
+owner's decision record. Do not change any date or milestone window. In the
+specification, §13.2 "The audit log is tamper-resistant" becomes a pointer to
+`docs/threat-model.md`, rule 7.
+
+**Evidence.** The five tables; row counts *true / corrected / stopped-on* per
+file; G10a, G10b, G11, G14, G15 green; each commit's `git diff --stat`.
+
+**Not in scope.** `docs/threat-model.md` (RFC 097's, rule 7). The dated audit
+`docs/security-assurance-audit-v0.63.1.md` and `docs/changelog/` (rule 4).
+
 ### Step 6a — landed 2026-09-12
 
 Staleness banner on `docs/development-specification.md`, the rule-5 sanctioned
