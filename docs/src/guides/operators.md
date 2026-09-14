@@ -775,8 +775,6 @@ not expect them to be renamed without a deprecation cycle):
 | `auth.login.password_ok_mfa_required` | Password accepted; user redirected to MFA challenge. |
 | `auth.mfa.success` | TOTP / recovery code / WebAuthn assertion accepted. |
 | `auth.mfa.failure` | TOTP code or recovery code rejected. |
-| `auth.session.revoked` | Session torn down by logout, admin disable, or expiry. |
-| `auth.logout` | RP-initiated logout completed. |
 | `auth.lockout` | A failed sign-in that just triggered or extended an account lockout. **Alert on bursts of this.** |
 | `auth.refresh.rotated` | A refresh token was successfully rotated (the normal, routine case). |
 | `auth.refresh.theft_detected` | A revoked refresh token was replayed at the token endpoint. The whole rotation family was revoked. **Alert on this.** |

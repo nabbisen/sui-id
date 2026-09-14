@@ -212,9 +212,7 @@ above it, not `auth.password.changed_self`'s authenticated-actor shape below.*
 | `auth.login.password_ok_mfa_required` | Password correct; MFA challenge pending | user id | B |
 | `auth.mfa.success` | MFA challenge passed | user id | B |
 | `auth.mfa.failure` | MFA challenge failed | user id | B |
-| `auth.logout` | Session logout | user id | B |
 | `auth.lockout` | Account locked after crossing the failure threshold | — | **A** |
-| `auth.session.revoked` | Single session revocation | user id | B |
 | `auth.sessions.bulk_revoke_self` | Bulk session revocation (self) | user id | B |
 | `auth.password.changed_self` | Self-service password change | user id | **A** |
 | `auth.password.reset_requested` | Forgot-password flow started | — | B |

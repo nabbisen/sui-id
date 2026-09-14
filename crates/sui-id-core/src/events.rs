@@ -73,38 +73,6 @@ impl Outcome {
 /// wraps around the event.
 #[derive(Debug, Clone)]
 pub enum SecurityEvent {
-    LoginPasswordSuccess {
-        user_id: UserId,
-        username: String,
-    },
-    LoginPasswordFailure {
-        username: String,
-        reason: &'static str,
-    },
-    LoginPasswordOkMfaRequired {
-        user_id: UserId,
-    },
-    MfaSuccess {
-        user_id: UserId,
-        method: &'static str, // "totp" | "recovery_code" | "webauthn"
-    },
-    MfaFailure {
-        user_id: UserId,
-        reason: &'static str,
-    },
-    SessionRevoked {
-        user_id: UserId,
-        reason: &'static str,
-    },
-    AdminMfaReset {
-        actor: UserId,
-        target_user: UserId,
-        totp_removed: bool,
-        passkeys_removed: usize,
-    },
-    Logout {
-        user_id: UserId,
-    },
     /// `POST /forgot-password` was received and processed. Emitted
     /// regardless of whether an account was matched (user-enumeration
     /// neutral); the `note` field carries the internal disposition
@@ -118,27 +86,17 @@ pub enum SecurityEvent {
     /// A reset request landed on a user that already has the
     /// configured ceiling of outstanding tokens. We silently
     /// stop issuing new ones; this event records that.
-    PasswordResetThrottled {
-        user_id: UserId,
-        outstanding: i64,
-    },
+    PasswordResetThrottled { user_id: UserId, outstanding: i64 },
     /// The reset-link mail dispatched successfully (SMTP relay
     /// accepted it). Subsequent delivery is the relay's problem.
-    PasswordResetEmailSent {
-        user_id: UserId,
-    },
+    PasswordResetEmailSent { user_id: UserId },
     /// The reset-link mail could not be dispatched (SMTP
     /// connect / auth / send failed, or SMTP is unconfigured).
     /// `reason` carries a short tag so the audit log distinguishes
     /// `reason=smtp_unconfigured` from `reason=connect_refused`.
-    PasswordResetEmailFailed {
-        user_id: UserId,
-        reason: String,
-    },
+    PasswordResetEmailFailed { user_id: UserId, reason: String },
     /// User redeemed a reset token and a new password is in place.
-    PasswordResetCompleted {
-        user_id: UserId,
-    },
+    PasswordResetCompleted { user_id: UserId },
 }
 
 impl SecurityEvent {
@@ -147,14 +105,6 @@ impl SecurityEvent {
     /// running a deprecation cycle.
     pub fn name(&self) -> &'static str {
         match self {
-            Self::LoginPasswordSuccess { .. } => "auth.login.success",
-            Self::LoginPasswordFailure { .. } => "auth.login.failure",
-            Self::LoginPasswordOkMfaRequired { .. } => "auth.login.password_ok_mfa_required",
-            Self::MfaSuccess { .. } => "auth.mfa.success",
-            Self::MfaFailure { .. } => "auth.mfa.failure",
-            Self::SessionRevoked { .. } => "auth.session.revoked",
-            Self::AdminMfaReset { .. } => "mfa.admin_reset",
-            Self::Logout { .. } => "auth.logout",
             Self::PasswordResetRequested { .. } => "auth.password.reset_requested",
             Self::PasswordResetThrottled { .. } => "auth.password.reset_throttled",
             Self::PasswordResetEmailSent { .. } => "auth.password.reset_email_sent",
@@ -167,14 +117,6 @@ impl SecurityEvent {
     /// `target` column.
     fn target(&self) -> Option<String> {
         match self {
-            Self::LoginPasswordSuccess { user_id, .. }
-            | Self::LoginPasswordOkMfaRequired { user_id }
-            | Self::MfaSuccess { user_id, .. }
-            | Self::MfaFailure { user_id, .. }
-            | Self::SessionRevoked { user_id, .. }
-            | Self::Logout { user_id } => Some(user_id.to_string()),
-            Self::LoginPasswordFailure { username, .. } => Some(username.clone()),
-            Self::AdminMfaReset { target_user, .. } => Some(target_user.to_string()),
             Self::PasswordResetRequested { user_id } => user_id.map(|u| u.to_string()),
             Self::PasswordResetThrottled { user_id, .. }
             | Self::PasswordResetEmailSent { user_id }
@@ -185,19 +127,12 @@ impl SecurityEvent {
 
     fn outcome(&self) -> Outcome {
         match self {
-            Self::LoginPasswordSuccess { .. }
-            | Self::LoginPasswordOkMfaRequired { .. }
-            | Self::MfaSuccess { .. }
-            | Self::SessionRevoked { .. }
-            | Self::AdminMfaReset { .. }
-            | Self::Logout { .. }
-            | Self::PasswordResetRequested { .. }
+            Self::PasswordResetRequested { .. }
             | Self::PasswordResetEmailSent { .. }
             | Self::PasswordResetCompleted { .. } => Outcome::Ok,
-            Self::LoginPasswordFailure { .. }
-            | Self::MfaFailure { .. }
-            | Self::PasswordResetThrottled { .. }
-            | Self::PasswordResetEmailFailed { .. } => Outcome::Failure,
+            Self::PasswordResetThrottled { .. } | Self::PasswordResetEmailFailed { .. } => {
+                Outcome::Failure
+            }
         }
     }
 
@@ -206,20 +141,6 @@ impl SecurityEvent {
     /// it; SIEM queries should pivot on the event `name` instead.
     fn note(&self) -> Option<String> {
         match self {
-            Self::LoginPasswordFailure { reason, .. } | Self::MfaFailure { reason, .. } => {
-                Some((*reason).into())
-            }
-            Self::SessionRevoked { reason, .. } => Some((*reason).into()),
-            Self::MfaSuccess { method, .. } => Some((*method).into()),
-            Self::AdminMfaReset {
-                totp_removed,
-                passkeys_removed,
-                ..
-            } => Some(format!(
-                "totp={} passkeys={}",
-                if *totp_removed { "removed" } else { "absent" },
-                passkeys_removed
-            )),
             Self::PasswordResetRequested { user_id } => {
                 Some(format!("matched={}", user_id.is_some()))
             }
