@@ -27,6 +27,28 @@ banner_regex = '^> \\*\\*Stale as of'
 banner_within_lines = 40
 claim_regex = 'current as of \\*\\*?v(\\d+\\.\\d+\\.\\d+)|reflecting the v(\\d+\\.\\d+\\.\\d+) codebase'
 documents = ["docs/pinned.md"]
+
+[event_reference]
+matrix = "ci/matrix.md"
+reference = "docs/event-reference.md"
+"""
+
+MATRIX = """\
+# Coverage matrix
+
+| Event name | Operation | Class |
+|---|---|---|
+| `user.create` | Create user | A |
+| `auth.login.success` | Sign in | B |
+"""
+
+EVENT_REFERENCE = """\
+# Event reference
+
+| Event name | Label | Description |
+|---|---|---|
+| `auth.login.success` | Login | A user signed in. |
+| `user.create` | User created | An administrator created a user. |
 """
 
 CARGO_TOML = """\
@@ -73,6 +95,8 @@ def make_baseline(root: Path) -> None:
     write(root / "docs" / "src" / "introduction.md", INTRODUCTION)
     write(root / "docs" / "src" / "getting-started" / "overview.md", OVERVIEW)
     write(root / "docs" / "pinned.md", PINNED_FRESH)
+    write(root / "ci" / "matrix.md", MATRIX)
+    write(root / "docs" / "event-reference.md", EVENT_REFERENCE)
 
 
 def git_commit(root: Path) -> None:
@@ -393,6 +417,73 @@ class DocAuthorityTest(unittest.TestCase):
             result = run_checker(root)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("declares v0.26.0", result.stderr)
+
+
+    # --- (D) the event reference follows the matrix -----------------------
+
+    def test_registered_event_missing_from_reference_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_baseline(root)
+            write(
+                root / "docs" / "event-reference.md",
+                EVENT_REFERENCE.replace(
+                    "| `user.create` | User created | An administrator created a user. |\n", ""
+                ),
+            )
+            git_commit(root)
+            result = run_checker(root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("(D) docs/event-reference.md: missing an event", result.stderr)
+            self.assertIn("ci/matrix.md:5: user.create", result.stderr)
+
+    def test_documented_event_missing_from_matrix_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_baseline(root)
+            write(
+                root / "docs" / "event-reference.md",
+                EVENT_REFERENCE + "| `client.create` | Client created | Not in the matrix. |\n",
+            )
+            git_commit(root)
+            result = run_checker(root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("(D) docs/event-reference.md:7: lists an event not registered", result.stderr)
+            self.assertIn("client.create", result.stderr)
+
+    def test_event_named_outside_a_first_column_is_ignored(self):
+        """Prose, later columns and fenced blocks may mention an event
+        without registering or documenting it, on either side."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_baseline(root)
+            write(
+                root / "ci" / "matrix.md",
+                MATRIX
+                + "\nThe `client.create` event is planned but not written yet.\n\n"
+                + "| Operation | Event name |\n|---|---|\n| Rotate | `token.revoke` |\n",
+            )
+            write(
+                root / "docs" / "event-reference.md",
+                EVENT_REFERENCE
+                + "\nSee also `mfa.enable`.\n\n```markdown\n"
+                + "| `webauthn.credential.delete` | Example | inside a fence |\n```\n",
+            )
+            git_commit(root)
+            result = run_checker(root)
+            self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+
+    def test_event_reference_policy_missing_rejected(self):
+        """Fails closed: a policy without the pair must not skip the check."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_baseline(root)
+            policy = (root / "ci" / "doc-authority.toml").read_text()
+            write(root / "ci" / "doc-authority.toml", policy.split("[event_reference]")[0])
+            git_commit(root)
+            result = run_checker(root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("(D) policy: [event_reference]", result.stderr)
 
 
 if __name__ == "__main__":

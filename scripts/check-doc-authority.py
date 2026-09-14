@@ -31,6 +31,15 @@ Three checks, in one script so one failure names one cause:
       document the policy lists that declares no version at all also
       fails: a pin that vanished is a claim that stopped being checkable.
 
+  (D) The reader event reference lists exactly the events the audit
+      coverage matrix registers, in both directions. The matrix is the
+      copy G13 keeps true against the code; the reference is the copy
+      operators read, and nothing kept it in step, so it fell nineteen
+      events behind. A name counts only as the whole first cell of a table
+      row, written as inline code: prose, other columns and fenced blocks
+      may mention an event without registering it. Both paths come from
+      [event_reference] in ci/doc-authority.toml.
+
 Exit 0 = pass. Exit 1 = any violation, each on stderr, prefixed
 `check-doc-authority:` and naming its check and the file (with a line
 number wherever the violation has one).
@@ -65,6 +74,8 @@ INLINE_CODE_RE = re.compile(r"`[^`]*`")
 FENCE_MARKER_RE = re.compile(r"^(`{3,}|~{3,})(.*)$")
 FENCE_CLOSER_RE = re.compile(r"^(`+|~+)\s*$")
 VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)")
+EVENT_NAME_CELL_RE = re.compile(r"^`([a-z0-9_]+\.[a-z0-9_.]+)`$")
+TABLE_SEPARATOR_RE = re.compile(r"^:?-{3,}:?$")
 WORKSPACE_VERSION_RE = re.compile(r'^version\s*=\s*"([^"]+)"', re.M)
 
 
@@ -331,6 +342,59 @@ def check_version_freshness(root: Path, policy: dict, failures: list[str]) -> No
         )
 
 
+def table_event_names(text: str) -> dict[str, int]:
+    """Event names in the first column of every Markdown table, mapped to
+    the line each first appears on. Only a first cell that is exactly one
+    inline-code dotted name counts; header and separator rows, prose, later
+    columns and fenced blocks are ignored."""
+    names: dict[str, int] = {}
+    for lineno, line in iter_unfenced_lines(text):
+        stripped = line.strip()
+        if not stripped.startswith("|"):
+            continue
+        first = stripped[1:].split("|", 1)[0].strip()
+        if TABLE_SEPARATOR_RE.match(first):
+            continue
+        m = EVENT_NAME_CELL_RE.match(first)
+        if m:
+            names.setdefault(m.group(1), lineno)
+    return names
+
+
+def check_event_reference(root: Path, policy: dict, failures: list[str]) -> None:
+    section = policy.get("event_reference")
+    if not isinstance(section, dict) or not {"matrix", "reference"} <= section.keys():
+        failures.append(
+            "(D) policy: [event_reference] must name both `matrix` and `reference`"
+        )
+        return
+    matrix, reference = Path(section["matrix"]), Path(section["reference"])
+    texts: dict[Path, str] = {}
+    for relative in (matrix, reference):
+        path = root / relative
+        if path.is_file():
+            texts[relative] = path.read_text(encoding="utf-8")
+        else:
+            failures.append(
+                f"(D) {relative}: named in [event_reference] but does not exist"
+            )
+    if len(texts) < 2:
+        return
+
+    registered = table_event_names(texts[matrix])
+    documented = table_event_names(texts[reference])
+    for name in sorted(registered.keys() - documented.keys()):
+        failures.append(
+            f"(D) {reference}: missing an event registered at "
+            f"{matrix}:{registered[name]}: {name}"
+        )
+    for name in sorted(documented.keys() - registered.keys()):
+        failures.append(
+            f"(D) {reference}:{documented[name]}: lists an event not "
+            f"registered in {matrix}: {name}"
+        )
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", required=True)
@@ -345,6 +409,7 @@ def main(argv: list[str]) -> int:
     check_summary_completeness(root, failures)
     check_link_forms(root, failures)
     check_version_freshness(root, policy, failures)
+    check_event_reference(root, policy, failures)
 
     if failures:
         for line in failures:

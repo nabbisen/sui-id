@@ -1,6 +1,7 @@
 # RFC 098 G15 policy. D3: a machine-consumed contract, holding the freshness
-# tolerance and the list of version-pinned documents and nothing else. The
-# gate that reads it is the only thing that makes it true.
+# tolerance, the list of version-pinned documents and the event-reference
+# pair, and nothing else. The gate that reads it is the only thing that makes
+# it true.
 version = 1
 
 [freshness]
@@ -13,3 +14,10 @@ banner_regex = '^> \*\*Stale as of'
 banner_within_lines = 40
 claim_regex = 'current as of \*\*?v(\d+\.\d+\.\d+)|reflecting the v(\d+\.\d+\.\d+) codebase'
 documents = ["docs/threat-model.md", "docs/development-specification.md"]
+
+[event_reference]
+# Check (D): the reader reference lists exactly the events the matrix
+# registers. The matrix is the gated copy (G13 checks it against the code);
+# the reference follows it.
+matrix = "ci/audit-coverage-matrix.md"
+reference = "docs/src/reference/audit-events.md"
