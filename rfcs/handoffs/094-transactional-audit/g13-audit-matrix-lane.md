@@ -169,6 +169,9 @@ report the count).
 
 ## G13-c — eight more dead `SecurityEvent` variants
 
+**Landed** `d55590e`, 2026-09-15 — 57/57, 606 tests unchanged, probe reproduced.
+G13-c closed; the G13-b/c series is complete. Review: `.git-exclude/reviewed/g13-c-2026-09-15.md`.
+
 **Stopped and ruled 2026-09-13** (`.git-exclude/reviewed/g13-c-stopped-and-dispatch-12-2026-09-13.md`):
 two of the eight — `SessionRevoked` and `Logout` — were the *only* spelling of
 `auth.session.revoked` and `auth.logout` in the workspace, so deleting them

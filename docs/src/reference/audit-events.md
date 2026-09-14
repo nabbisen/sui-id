@@ -15,7 +15,6 @@ Use **Admin panel → Audit log** to filter by event prefix or export to CSV.
 | `auth.login.failure` | Login failed | Credential check failed (wrong password or unknown username). |
 | `auth.lockout` | Account locked | A wrong-password attempt just crossed the progressive-lockout failure threshold. |
 | `auth.login.password_ok_mfa_required` | MFA required | Password was correct but MFA challenge is pending. |
-| `auth.logout` | Logout | User explicitly signed out. |
 | `auth.mfa.success` | MFA verified | TOTP code or passkey assertion verified successfully. |
 | `auth.mfa.failure` | MFA failed | TOTP code or passkey assertion failed verification. |
 | `auth.password.changed_self` | Password changed | User changed their own password via `/me/security/password`. |
@@ -26,7 +25,6 @@ Use **Admin panel → Audit log** to filter by event prefix or export to CSV.
 | `auth.password.reset_completed` | Password reset | Password was successfully changed via the reset link. |
 | `auth.refresh.rotated` | Refresh token rotated | A refresh token was exchanged for a fresh access/refresh token pair (the normal, routine case). |
 | `auth.refresh.theft_detected` | Token theft detected | A refresh token was presented that had already been rotated, indicating a possible token theft. The entire token family is revoked. |
-| `auth.session.revoked` | Session revoked | A single session was explicitly revoked (by user or admin). |
 | `auth.sessions.bulk_revoke_self` | All other sessions revoked | User revoked all sessions except the current one. |
 | `auth.smtp_config.changed` | SMTP config changed | Administrator saved new SMTP settings. |
 

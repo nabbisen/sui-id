@@ -443,6 +443,58 @@ Re-run the page's claim table for the section.
 example loading. For all: G10a, G10b, G11, G14, G15, G13 (59/59), fmt, clippy
 both scopes.
 
+### Dispatch 13 — 2026-09-15: the reader event reference, bound to the matrix
+
+`docs/src/reference/audit-events.md` calls itself the list of "every action that
+sui-id records". Measured against `ci/audit-coverage-matrix.md` at `d55590e`:
+the matrix registers **57** events; the page lists **38** (two false rows were
+removed at G13-c's merge). **Nineteen registered events are missing.** Two
+lists of one vocabulary, one gated and one not — rule 3's prediction, observed.
+Three commits.
+
+**13a — add the nineteen rows.** `auth.login`, `client.disable`,
+`client.enable`, `client.rotate_secret`, `client.set_post_logout_redirect_uris`,
+`mfa.disable`, `mfa.enable`, `mfa.recovery_codes_regenerate`,
+`oauth2.exchange_code.user_revoked`, `settings.pending_change.applied`,
+`settings.pending_change.binding_failed`, `settings.pending_change.cancelled`,
+`settings.pending_change.created`, `token.introspect`, `token.revoke`,
+`user.create_warned_hibp`, `user.role_change`, `webauthn.credential.delete`,
+`webauthn.credential.register`. Each in the page's existing section for its
+namespace (add a section only where none fits), in the page's three-column
+form. The *Description* is taken from the matrix's trigger column and the
+emitting code, not written fresh. The *Label* column: copy the English
+`audit_event_*` string where one exists; where none exists, leave the cell
+`—` and do **not** invent one — whether those labels are wired into the UI is
+an open owner decision, and the page must not pre-empt it.
+
+**13b — G15 check (D): the reference lists exactly the registered events.** In
+`scripts/check-doc-authority.py`: read the event names from the first column of
+every table in `ci/audit-coverage-matrix.md` and from the first column of every
+table in `docs/src/reference/audit-events.md`; fail naming each name present in
+one and not the other, in both directions. Both paths go in
+`ci/doc-authority.toml` under a new `[event_reference]` table — data, not
+code. Tests in `scripts/tests/test_doc_authority.py`: a matrix event missing from
+the reference fails; a reference event missing from the matrix fails; an event
+name appearing only in prose (not a table's first column) is ignored on both
+sides; a valid pair passes. Mutation-test each direction. G15's command is
+unchanged, so RFC 098's lane table and the manifest are untouched.
+
+**13c — `crates/sui-id-core/src/events.rs` module doc**, comment only. It
+describes a design in which "a login failure should be visible in both" the log
+and the audit table; after G13-b and G13-c the only users of that path are the
+five `PasswordReset*` events. Say what the module is now, in two or three
+lines, and point at RFC 094 for where Class-A events go. Prove comment-only as
+12b did.
+
+**Evidence.** G15 after 13a and before 13b must pass (13a makes the lists
+equal); then after 13b, a scratch copy with one row deleted from each file must
+fail naming it — both directions shown. G13 57/57; G10a, G10b, G11, G14; for
+13c, fmt and the non-comment diff filter empty. Python suite count before and
+after.
+
+**Not in scope.** The twenty-nine `audit_event_*` i18n labels, which no code
+reads — reserved for the owner (review: `.git-exclude/reviewed/g13-c-2026-09-15.md`).
+
 ### Step 6a — landed 2026-09-12
 
 Staleness banner on `docs/development-specification.md`, the rule-5 sanctioned
