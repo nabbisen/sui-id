@@ -33,12 +33,14 @@ Use **Admin panel → Audit log** to filter by event prefix or export to CSV.
 | Event name | Label | Description |
 |---|---|---|
 | `user.create` | User created | Administrator created a new user account. |
+| `user.create_warned_hibp` | — | Administrator created a user account whose password appears in a known breach (Have I Been Pwned), with the breach check in `warn` mode. |
 | `user.disable` | User disabled | Administrator disabled a user account. All active sessions and refresh tokens are immediately revoked. |
 | `user.enable` | User enabled | Administrator re-enabled a previously disabled user account. |
 | `user.delete` | User deleted | Administrator deleted a user account. |
 | `user.reset_password` | Password reset (admin) | Administrator reset a user's password. |
 | `mfa.admin_reset` | MFA reset (admin) | Administrator reset a user's MFA factors (TOTP and all passkeys removed). |
 | `admin.user.unlock` | Account unlocked | Administrator cleared a user's progressive lockout. |
+| `user.role_change` | — | Administrator changed a user's role (admin, auditor or user). The mutation and this row commit in one transaction; the note records the old and new role. |
 
 ## Client management events
 
@@ -48,6 +50,10 @@ Use **Admin panel → Audit log** to filter by event prefix or export to CSV.
 | `client.update` | Client updated | Administrator updated an OIDC client's configuration. |
 | `client.delete` | Client deleted | Administrator deleted an OIDC client. |
 | `client.set_allowed_scopes` | Client scopes updated | Administrator changed the allowed scopes for a client. |
+| `client.set_post_logout_redirect_uris` | — | Administrator changed the URIs a client may pass as `post_logout_redirect_uri` to `/oauth2/logout`. |
+| `client.disable` | — | Administrator disabled an OIDC client. All of its refresh tokens are revoked. The note carries the reason, if one was given. |
+| `client.enable` | — | Administrator re-enabled a previously disabled OIDC client. |
+| `client.rotate_secret` | — | Administrator generated a new secret for a confidential client; the stored secret hash is replaced. Not available for public clients. |
 
 ## Signing key events
 
@@ -104,3 +110,33 @@ verifies the chain tail on every load and shows a status banner:
 |---|---|---|
 | `auth.user_source.matched` | External user source matched | The login cascade resolved the user via an LDAP or other external user source. |
 | `auth.user_source.transport_failure` | User source transport failure | A configured external user source (LDAP) was unreachable or returned a network error during authentication. |
+
+## Self-service MFA and passkey events
+
+| Event name | Label | Description |
+|---|---|---|
+| `mfa.enable` | — | User confirmed TOTP enrolment. |
+| `mfa.disable` | — | User turned off MFA from `/me/security/mfa`, a dangerous self-service action (RFC 058). |
+| `mfa.recovery_codes_regenerate` | — | User regenerated their recovery codes. |
+| `webauthn.credential.register` | — | User registered a passkey. |
+| `webauthn.credential.delete` | — | User deleted one of their passkeys. Step-up authentication is required first (RFC 058). |
+
+## Token endpoint events
+
+| Event name | Label | Description |
+|---|---|---|
+| `oauth2.exchange_code.user_revoked` | — | An authorization code was presented for a user who was disabled or deleted after authorizing; the token exchange was refused. |
+| `token.introspect` | — | A confidential client called `/oauth2/introspect` (RFC 7662). The row's result is `active` or `inactive`. |
+| `token.revoke` | — | A confidential client called `/oauth2/revoke` (RFC 7009). |
+
+## Pending settings change events (RFC 090)
+
+High-risk settings changes that include a secret, such as new SMTP credentials,
+are stored encrypted and applied only after the administrator confirms them.
+
+| Event name | Label | Description |
+|---|---|---|
+| `settings.pending_change.created` | — | Administrator submitted a high-risk settings change; it was stored encrypted, awaiting confirmation. |
+| `settings.pending_change.applied` | — | Administrator confirmed a pending settings change and it was applied. |
+| `settings.pending_change.cancelled` | — | A pending settings change was cancelled before it was applied. |
+| `settings.pending_change.binding_failed` | — | A pending settings change was refused on confirmation because a binding check (session, actor, CSRF or expiry) failed. |
