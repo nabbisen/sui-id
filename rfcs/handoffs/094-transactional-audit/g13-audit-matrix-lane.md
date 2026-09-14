@@ -198,6 +198,11 @@ partial deletion.
 
 ## G13-d — a literal is not a writer: test strings and an anchor
 
+**Landed** `9f7e9a2`, 2026-09-15 — 55/55; dispatch 13b applied after it as `fa2d73f`.
+The evidence-ordering prediction below was wrong (step 1 cannot affect a
+non-test anchor); the implementer showed both halves correctly. The G13
+series is closed.
+
 **Dispatched 2026-09-15**, from RFC 098 dispatch 13's review
 (`.git-exclude/reviewed/rfc-098-dispatch-13-2026-09-15.md`). One commit.
 

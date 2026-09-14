@@ -445,7 +445,10 @@ both scopes.
 
 ### Dispatch 13 — 2026-09-15: the reader event reference, bound to the matrix
 
-**Partly landed 2026-09-15** — 13a `1647220` (eighteen rows; `auth.login` held,
+**Landed in full 2026-09-15** — 13b `fa2d73f` after G13-d `9f7e9a2`. The reader
+reference lists exactly the registered set and G15 check (D) holds it there.
+
+Earlier: 13a `1647220` (eighteen rows; `auth.login` held,
 no code writes it), 13c `78b949e`. **13b approved and held** as
 `.git-exclude/review-requests/rfc-098-dispatch-13b-held.patch`: check (D) fails on
 `auth.login` until its matrix row leaves, and that row can only leave together

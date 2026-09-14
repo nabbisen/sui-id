@@ -238,6 +238,10 @@ in-flight branch.
    (`aaa89f1`, 2026-09-13, RFC 098 dispatch 12a — a new test needed a home and the
    inline module could not be extended under the rule; four tests moved
    byte-identical, one added).
+   *Known, not yet converted:* `crates/sui-id-store/src/repos/audit.rs` has an
+   inline `#[cfg(test)]` module at line 613. It is why G13's literal scan still
+   needs its two test-name filters (G13-d); moving it to a sibling file makes
+   both filters removable.
 2. **Opportunistically thereafter.** When a wave touches a file in the
    list and adds tests to it, split that file in the same candidate and
    say so in the review request. This retires the debt along the paths
