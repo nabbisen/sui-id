@@ -1,36 +1,12 @@
-//! Structured security events.
+//! Structured security events: the password-reset flow's log-and-audit path.
 //!
-//! Two things have always been at risk of drifting apart in sui-id:
-//! the `tracing` log line written when something authentication-
-//! relevant happens, and the `audit_log` row written for the same
-//! event. They were two separate calls in two adjacent places, easy
-//! to keep in sync at first and easy to let drift over time.
-//!
-//! This module makes them a single call. [`emit`] takes a typed
-//! [`SecurityEvent`], writes a structured `tracing::info!` with the
-//! event's fields, *and* appends a row to `audit_log` with the same
-//! shape. Adding a new kind of event is a single match-arm here, not
-//! a hunt through five handlers.
-//!
-//! ## Why one module instead of two?
-//!
-//! Operators consume the audit log (after the fact, for compliance)
-//! and the structured tracing stream (live, in a SIEM) for *almost*
-//! the same information. A login failure should be visible in both,
-//! with the same fields. Routing both through one type ensures that.
-//!
-//! ## Conventions
-//!
-//! - Event names use dotted lowercase, e.g. `auth.login.success`,
-//!   `auth.mfa.failure`. The first segment is always the rough
-//!   subsystem (`auth`, `oauth`, `client`, `user`, `webauthn`,
-//!   `mfa`, `signing_key`).
-//! - Fields stick to a small vocabulary so SIEM queries stay
-//!   uniform: `actor` (UserId), `target` (free-form id),
-//!   `client_ip`, `client_id`, `request_id`. Add new fields only
-//!   if a search will benefit.
-//! - The `result` is one of `ok` / `failure` / `skipped` /
-//!   `inactive` / `active`. Never free text.
+//! [`emit`] writes a structured `tracing` line and a best-effort `audit_log`
+//! row for a typed [`SecurityEvent`]. Its only users are the five
+//! `auth.password.reset_*` events emitted by `account/forgot_password.rs`.
+//! Every other audit event is written directly, and privileged mutations
+//! belong to RFC 094's transactional write commands
+//! (`sui-id-store/src/commands.rs`), which commit the audit row together with
+//! the mutation.
 
 use crate::time::SharedClock;
 use sui_id_shared::ids::UserId;
