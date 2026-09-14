@@ -195,3 +195,68 @@ still read 59/59 — none of these names is a literal the gate counts. One
 commit, one file. Stop if any variant *is* constructed: that would mean
 dispatch 11's count was wrong, and the finding needs re-measuring, not
 partial deletion.
+
+## G13-d — a literal is not a writer: test strings and an anchor
+
+**Dispatched 2026-09-15**, from RFC 098 dispatch 13's review
+(`.git-exclude/reviewed/rfc-098-dispatch-13-2026-09-15.md`). One commit.
+
+G13's forward check treats any string literal of an event name anywhere under
+`crates/` as evidence that the event is written. Dispatch 13 found two rows
+held green that way, the G13-c shape without a dead enum arm:
+
+- **`auth.login`** — the only literal is a test assertion
+  (`crates/sui-id/tests/e2e/rfc030_033_035.rs:260`) checking that the audit
+  page echoes a filter prefix. G13-b's *allowlist* derivation excludes test
+  files; the *literal scan* beneath it (`SRC_LITERALS`, around line 80) does
+  not. **The row cannot be removed on its own:** with the row gone and the
+  scan unchanged, the backward check reports the test string as an
+  unregistered event (measured at review). Row and scan change together, here.
+- **`auth.user_source.transport_failure`** — the only literal is
+  `let _audit_event = "auth.user_source.transport_failure";` at
+  `crates/sui-id-store/src/user_source.rs:145`, an unused binding whose comment
+  says the caller emits the event and that the literal is "anchored here for
+  the CI audit-matrix gate". The caller cannot: `CascadeOutcome` has only
+  `Matched` and `NotFound`, and `try_login_with_cascade` writes only
+  `auth.user_source.matched`. A literal written to satisfy the gate.
+
+**Do:**
+
+0. **Delete the `auth.login` row** from `ci/audit-coverage-matrix.md`. It must
+   land in the same commit as step 1.
+1. **Exclude test files from the literal scan**, with the same exclusions the
+   allowlist derivation already uses (`tests/`, `tests.rs`, `tests_*.rs`), so
+   both halves of the script read the same files. Keep the two existing
+   test-name filters only if they still remove something after the exclusion;
+   say which.
+2. **Delete the transport-failure anchor** — the `let _audit_event` binding and
+   its false comment in `user_source.rs`. Replace the comment with one true
+   line: a transport failure is logged and the cascade continues; no audit row
+   is written. Delete the event's row from `ci/audit-coverage-matrix.md` and
+   from `docs/src/reference/audit-events.md` (G15 check (D) requires both).
+3. **Correct U05's descriptor comment** (`crates/sui-id-store/src/commands.rs`,
+   around 540–555): it says no production code emits `user.role_change` and
+   that the handler calls `set_role` directly. The handler now runs
+   `commands::change_user_role` (`http/handlers/admin/users.rs:491`). Say that;
+   drop "provisional until confirmed" only if the matrix row and the descriptor
+   agree, and say whether they do.
+4. **A3.2 fixture**: in `audit-desync`, add a matrix row whose only literal is
+   inside a `tests.rs` file in the fixture crate. The forward check must report
+   it under the new script and not under `d55590e`'s. Run both, show both.
+
+**Then apply RFC 098 dispatch 13b**, held at review because check (D) fails
+on `auth.login` until step 0 lands: `git apply .git-exclude/review-requests/rfc-098-dispatch-13b-held.patch`
+(the checker, its policy table, and four tests — approved as submitted). A
+second commit, after this one. G15 must then read all conditions satisfied.
+
+**Evidence.** `audit-matrix gate PASS: 55 matrix entries, 55 source literals`.
+The new script with step 0 and step 1 applied but before step 2 must fail on
+exactly `auth.user_source.transport_failure` — proof the scan no longer counts the
+anchor as a writer only once the anchor is gone, and that nothing else was
+held by a test string. `cargo check`, clippy both scopes, test count unchanged.
+G15 green (both lists lose the row together).
+
+**Not in scope.** Whether transport failures *should* be audited — a
+`CascadeOutcome` change and RFC 005/094's decision, recorded in the migration
+checklist. Anchors that are real (`federation_provider.rs`'s four `AUDIT_*`
+constants are each used as an `action:` value) stay.

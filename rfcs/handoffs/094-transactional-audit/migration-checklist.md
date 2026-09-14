@@ -76,6 +76,13 @@ at a time; the workspace and structural gate must remain green between waves.
       the two rows so no document claims coverage that does not exist; whether
       these mutations are Class A or B, and under which names, is this RFC's
       inventory decision.
+      (d) **Coverage gap, found by RFC 098 dispatch 13 (2026-09-15):** an LDAP
+      user-source transport failure is logged and the cascade continues, but no
+      audit row is written — `CascadeOutcome` has no failure variant, so the
+      caller cannot know. The matrix row `auth.user_source.transport_failure`
+      was held green by an unused literal; G13-d removes it. Whether the cascade
+      should report failures so the caller can audit them is RFC 005's and this
+      RFC's decision.
 
       **Also check every consumer of an audit event name, not only the coverage
       matrix.** `check-audit-matrix.sh` compares the matrix against source

@@ -209,7 +209,6 @@ above it, not `auth.password.changed_self`'s authenticated-actor shape below.*
 | `auth.login.password_ok_mfa_required` | Password correct; MFA challenge pending | user id | B |
 | `auth.login.success` | Login succeeded | user id | B |
 | `auth.login.failure` | Wrong password | — | B |
-| `auth.login.password_ok_mfa_required` | Password correct; MFA challenge pending | user id | B |
 | `auth.mfa.success` | MFA challenge passed | user id | B |
 | `auth.mfa.failure` | MFA challenge failed | user id | B |
 | `auth.lockout` | Account locked after crossing the failure threshold | — | **A** |

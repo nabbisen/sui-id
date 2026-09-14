@@ -445,6 +445,13 @@ both scopes.
 
 ### Dispatch 13 — 2026-09-15: the reader event reference, bound to the matrix
 
+**Partly landed 2026-09-15** — 13a `1647220` (eighteen rows; `auth.login` held,
+no code writes it), 13c `78b949e`. **13b approved and held** as
+`.git-exclude/review-requests/rfc-098-dispatch-13b-held.patch`: check (D) fails on
+`auth.login` until its matrix row leaves, and that row can only leave together
+with G13's literal scan excluding test files — both are G13-d, which applies 13b
+after it. Review: `.git-exclude/reviewed/rfc-098-dispatch-13-2026-09-15.md`.
+
 `docs/src/reference/audit-events.md` calls itself the list of "every action that
 sui-id records". Measured against `ci/audit-coverage-matrix.md` at `d55590e`:
 the matrix registers **57** events; the page lists **38** (two false rows were
