@@ -807,6 +807,13 @@ dev mode, and working dev-seed flags. Dispatch 17 closes that.
 **Evidence.** One row per changed sentence; the hit list; G10a, G10b, G14 and G15
 green.
 
+### Dispatch 17 — landed 2026-09-16
+
+`5cf8d62`. The architect checked the diff hash and read the diff. The sweep's only
+other hits are in bannered documents: `threat-model.md:84` "single encrypted
+SQLite", for RFC 097, and `ui-ux-contracts.md` §9, covered by F13. **Condition 1
+of the closure assessment below is met.**
+
 ### Closure assessment — 2026-09-16: met on two conditions
 
 Measured against RFC 098's closure prerequisites, and the exit clause in §6

@@ -452,7 +452,6 @@ work with no decision record became invisible.
 |---|---|---|
 | `rfcs/README.md` template vs. what G11 enforces | The normative RFC template is missing ten labels, one of them gate-enforced. A defect in a gate RFC 093 owns, exposed by that gate. | [rfc-template-reconciliation](roadmap/rfc-template-reconciliation/README.md) |
 | Audit event labels | Twenty-nine translated audit-event labels were never displayed, and drifted: 30 registered events have none, 4 name events that do not exist. Owner ruling 2026-09-16: show the translated label beside the raw action, bound by a test to `ci/audit-coverage-matrix.md`. | [audit-event-labels](roadmap/audit-event-labels/README.md) |
-| **RUSTSEC-2026-0285 (rustls)** | The scheduled `Security audit` workflow failed at `9f6acdb`: rustls 0.23.41 is vulnerable, fixed in 0.23.45. The change is lockfile-only. Takes priority over the other open packages. | [rustls-advisory-2026-0285](roadmap/rustls-advisory-2026-0285/README.md) |
 | Schema version fails closed | An older binary runs against a newer schema without complaint, and a failed read of the stored version re-runs every migration. Found by RFC 098 dispatch 14; owner authorization 2026-09-16. | [schema-version-fail-closed](roadmap/schema-version-fail-closed/README.md) |
 | Client confirm screens; secret out of URLs | Client disable and secret rotation have no confirm screen, although RFCs 030/059 require one, and the rotated secret travels in a redirect URL. Owner authorization 2026-09-16. | [client-confirm-screens](roadmap/client-confirm-screens/README.md) |
 | CLI help completeness | `sui-id --help` omits three dispatched subcommands; three hand-kept lists drifted. Owner authorization 2026-09-16. | [cli-help-completeness](roadmap/cli-help-completeness/README.md) |
@@ -473,6 +472,7 @@ them.
 | Fuzz matrix widened to all six targets | `d5e5402` | [fuzz-widen-matrix](roadmap/fuzz-widen-matrix/README.md) |
 | Fuzz seed corpus and CI corpus persistence | `8d446b0` | [fuzz-corpus-persistence](roadmap/fuzz-corpus-persistence/README.md) |
 | Stable clippy drift, rustc 1.98.0 | `b343a06` | [stable-clippy-drift-1.98](roadmap/stable-clippy-drift-1.98/README.md) |
+| RUSTSEC-2026-0285: rustls 0.23.41 → 0.23.45 | `536ffd5` | [rustls-advisory-2026-0285](roadmap/rustls-advisory-2026-0285/README.md) |
 
 ## Completed arcs before the remediation programme
 

@@ -4,6 +4,7 @@
 Routine security-advisory maintenance, dispatched by the architect on 2026-09-16
 and reported to the owner the same day.
 **Implementer.** Mid-capability model. **Baseline.** `af26ac5` or later.
+**State.** Complete, `536ffd5`, 2026-09-16.
 **Priority.** Ahead of the other open packages. Main fails the scheduled
 `Security audit` workflow until this lands.
 
