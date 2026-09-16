@@ -414,6 +414,17 @@ pub fn decode_b32(s: &str) -> Vec<u8> {
 /// (secret_b32, recovery_codes) pair. The caller can use the
 /// secret to compute valid TOTP codes for subsequent assertions.
 pub async fn enroll_mfa_for(state: &AppState, session: &str) -> (String, Vec<String>) {
+    enroll_mfa_with_password(state, session, PASSWORD).await
+}
+
+/// [`enroll_mfa_for`] for a user whose password is not the bootstrap
+/// admin's. RFC 102 B7: a user with no second factor re-enters the
+/// current password to start enrolment.
+pub async fn enroll_mfa_with_password(
+    state: &AppState,
+    session: &str,
+    password: &str,
+) -> (String, Vec<String>) {
     use sui_id_core::totp;
 
     // Start enrolment.
@@ -427,7 +438,10 @@ pub async fn enroll_mfa_for(state: &AppState, session: &str) -> (String, Vec<Str
             header::COOKIE,
             format!("sui_id_session={session}; sui_id_csrf={csrf}"),
         )
-        .body(Body::from(format!("_csrf={csrf}")))
+        .body(Body::from(format!(
+            "_csrf={csrf}&current_password={}",
+            urlencode(password)
+        )))
         .expect("req");
     let resp = router.oneshot(req).await.expect("enroll start");
     let status = resp.status();

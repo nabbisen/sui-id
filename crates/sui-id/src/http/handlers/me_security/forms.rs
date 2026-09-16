@@ -73,6 +73,19 @@ pub struct PasskeyRegisterStartForm {
     pub nickname: String,
     #[serde(rename = "_csrf", default)]
     pub csrf: String,
+    /// RFC 102 B7: required when the user has no second factor yet.
+    #[serde(default)]
+    pub current_password: Option<String>,
+}
+
+/// `POST /me/security/mfa/enroll/start`: CSRF plus, for a user with no
+/// second factor yet, the current password (RFC 102 B7).
+#[derive(Debug, Deserialize)]
+pub struct MfaEnrollStartForm {
+    #[serde(rename = "_csrf", default)]
+    pub csrf: String,
+    #[serde(default)]
+    pub current_password: Option<String>,
 }
 
 /// POST /me/security/passkeys/register/start

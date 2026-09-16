@@ -114,11 +114,11 @@ verifies the chain tail on every load and shows a status banner:
 
 | Event name | Label | Description |
 |---|---|---|
-| `mfa.enable` | — | User confirmed TOTP enrolment. |
 | `mfa.disable` | — | User turned off MFA from `/me/security/mfa`, a dangerous self-service action (RFC 058). |
-| `mfa.recovery_codes_regenerate` | — | User regenerated their recovery codes. |
-| `webauthn.credential.register` | — | User registered a passkey. |
 | `webauthn.credential.delete` | — | User deleted one of their passkeys. Step-up authentication is required first (RFC 058). |
+| `auth.mfa.factor_added` | — | User added a second factor: TOTP enrolment, fresh recovery codes, or a passkey. The `method` attribute says which. Recorded in the same transaction as the change. |
+| `auth.step_up.failure` | — | A step-up re-authentication failed on a signed-in session (wrong code, failed passkey assertion, or wrong password when adding a first second factor). The `count` attribute is the run of consecutive failures on that session. |
+| `auth.step_up.session_revoked` | — | The fifth consecutive step-up failure on a session; that session was revoked. **Alert on this.** |
 
 ## Token endpoint events
 

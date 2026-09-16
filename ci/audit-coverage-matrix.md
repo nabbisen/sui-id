@@ -147,9 +147,12 @@ today all three are fire-and-forget `let _ = audit::append(...)` in
 
 | Event name | Trigger | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
-| `mfa.enable` | User confirms TOTP enrolment | user id | — | — | B |
 | `mfa.disable` | User disables MFA (RFC 058 dangerous self-service action) | user id | — | — | B |
-| `mfa.recovery_codes_regenerate` | User regenerates recovery codes | user id | — | — | B |
+
+*Changed 2026-09-17 (RFC 102 stage 1): mfa.enable and
+mfa.recovery_codes_regenerate are no longer written. TOTP enrolment (U12) and
+recovery-code regeneration (U14) now commit `auth.mfa.factor_added` atomically
+with the write; see* Step-up and factor additions *below.*
 
 ### Self-service passkeys (`webauthn.*`)
 
@@ -163,8 +166,22 @@ has already committed.
 
 | Event name | Trigger | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
-| `webauthn.credential.register` | User completes passkey registration | user id | user id | — | B |
 | `webauthn.credential.delete` | User deletes one of their passkeys (RFC 058 step-up gated) | user id | user id | `self` | B |
+
+*Changed 2026-09-17 (RFC 102 stage 1): webauthn.credential.register is no
+longer written. Passkey registration (U15) commits `auth.mfa.factor_added`
+atomically with the credential.*
+
+### Step-up and factor additions (RFC 102)
+
+Added 2026-09-17, RFC 102 stage 1. All three are Class A, committed through
+RFC 094's runner with the mutation they record.
+
+| Event name | Trigger | Actor | Target | Note fields | Class |
+|---|---|---|---|---|---|
+| `auth.step_up.failure` | A wrong step-up code, failed WebAuthn step-up assertion, or wrong password when adding a first second factor; counted on the session (command `L06`) | user id | user id | `count` | **A** |
+| `auth.step_up.session_revoked` | The fifth consecutive step-up failure on a session; that session is revoked in the same transaction (`L06`) | user id | user id | `count` | **A** |
+| `auth.mfa.factor_added` | A second factor was added: TOTP enrolment confirmed (`U12`), recovery codes regenerated (`U14`) or a passkey registered (`U15`) | user id | user id | `method` (`totp`, `recovery_codes`, `webauthn`) | **A** |
 
 ### Self-service settings (`auth.smtp_config.*`)
 

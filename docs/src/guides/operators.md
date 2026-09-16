@@ -787,8 +787,9 @@ not expect them to be renamed without a deprecation cycle):
 | `auth.password.changed_self` | A user changed their own password via `/me/security/password`. Note records how many sessions and refresh tokens were swept (zero if the user unchecked the box). |
 | `mfa.admin_reset` | An administrator forcibly removed every MFA factor for a user. **Alert on this.** |
 | `admin.user.unlock` | An admin cleared an account lockout via `sui-id admin unlock-user`. |
-| `webauthn.credential.register` | A user enrolled a passkey. |
+| `auth.mfa.factor_added` | A user added a second factor (`method`: `totp`, `recovery_codes` or `webauthn`). |
 | `webauthn.credential.delete` | A user deleted one of their passkeys. |
+| `auth.step_up.session_revoked` | Five consecutive step-up failures on one session; the session was revoked. **Alert on this.** |
 
 To query them:
 
@@ -949,10 +950,16 @@ Once the first factor is enabled, password-only login is no longer
 sufficient: the user must also pass the second factor. If both are
 enabled, either suffices at the challenge page.
 
-The audit log records every relevant event: `mfa.enable`,
-`mfa.disable`, `mfa.recovery_codes_regenerate`,
-`webauthn.credential.register`, `webauthn.credential.delete`,
-`auth.mfa.success`, `auth.mfa.failure`,
+Adding a second factor needs proof. A user who already has one must pass a
+fresh step-up first. A user with none re-enters their password (a local
+password, or the directory password for an LDAP account). Accounts that sign in
+through an external identity provider cannot add a first factor here yet. A
+wrong password counts as a step-up failure, and five in a row sign that session
+out.
+
+The audit log records every relevant event: `auth.mfa.factor_added`,
+`mfa.disable`, `webauthn.credential.delete`, `auth.step_up.failure`,
+`auth.step_up.session_revoked`, `auth.mfa.success`, `auth.mfa.failure`,
 `auth.login.password_ok_mfa_required`.
 
 ### Admin-initiated MFA reset

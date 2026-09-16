@@ -95,6 +95,57 @@ pub async fn confirm_with_recovery(
     .await
 }
 
+/// Seal a recovery-codes JSON blob for storage. Sealing needs only the key,
+/// so callers do it before opening a transaction.
+pub fn seal_recovery_codes(
+    db: &Database,
+    recovery_codes_json_plain: &[u8],
+) -> StoreResult<Vec<u8>> {
+    seal(db.key(), recovery_codes_json_plain, RECOVERY_AAD)
+}
+
+/// [`confirm_with_recovery`] inside a caller-owned transaction, with the
+/// recovery codes already sealed, and the replay cursor advanced in the
+/// same statement.
+pub fn confirm_with_recovery_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    user_id: UserId,
+    sealed_recovery_codes: &[u8],
+    last_used_step: i64,
+) -> StoreResult<()> {
+    let n = tx.execute(
+        "UPDATE user_totp SET enabled = 1, recovery_codes_enc = ?1, confirmed_at = ?2, \
+         last_used_step = ?3 WHERE user_id = ?4 AND enabled = 0",
+        params![
+            sealed_recovery_codes,
+            Utc::now(),
+            last_used_step,
+            user_id.to_string()
+        ],
+    )?;
+    if n == 0 {
+        return Err(StoreError::NotFound);
+    }
+    Ok(())
+}
+
+/// [`set_recovery_codes`] inside a caller-owned transaction, with the blob
+/// already sealed. Only an enabled enrolment has recovery codes to replace.
+pub fn set_recovery_codes_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    user_id: UserId,
+    sealed_recovery_codes: &[u8],
+) -> StoreResult<()> {
+    let n = tx.execute(
+        "UPDATE user_totp SET recovery_codes_enc = ?1 WHERE user_id = ?2 AND enabled = 1",
+        params![sealed_recovery_codes, user_id.to_string()],
+    )?;
+    if n == 0 {
+        return Err(StoreError::NotFound);
+    }
+    Ok(())
+}
+
 /// Decrypt the recovery codes JSON. Returns `None` when the user has
 /// never confirmed enrolment.
 pub async fn decrypt_recovery_codes(

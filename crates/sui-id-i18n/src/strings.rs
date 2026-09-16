@@ -308,6 +308,17 @@ pub struct Strings {
     pub profile_passkeys_register_section: &'static str,
     pub profile_passkeys_nickname_label: &'static str,
     pub profile_passkeys_nickname_hint: &'static str,
+    /// RFC 102 B7: label of the current-password field shown when a user
+    /// with no second factor adds their first one.
+    pub factor_add_password_label: &'static str,
+    /// Hint under that field.
+    pub factor_add_password_hint: &'static str,
+    /// Uniform failure when the re-authentication for adding a factor fails.
+    pub factor_add_reauth_failed: &'static str,
+    /// The directory could not be reached to confirm the password.
+    pub factor_add_reauth_unavailable: &'static str,
+    /// Federated accounts cannot add a first factor yet.
+    pub factor_add_federated_unavailable: &'static str,
     pub profile_passkeys_register_button: &'static str,
     pub profile_lang_section: &'static str,
     pub profile_lang_lede: &'static str,

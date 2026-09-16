@@ -39,6 +39,7 @@ pub use pages::{
     EmptyStateAction,
     // RFC 064 — empty-state primitives
     EmptyStateData,
+    FactorAddProof,
     Flash,
     FlashKind,
     LoginContext,

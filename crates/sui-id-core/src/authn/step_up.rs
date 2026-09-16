@@ -84,10 +84,14 @@ pub enum StepUpDecision {
 ///
 /// Only TOTP codes and WebAuthn assertions satisfy step-up.
 /// **Recovery codes are explicitly excluded** — they are for account
-/// recovery, not for routine step-up re-authentication. The step-up
-/// challenge handlers (`/me/security/step-up` GET/POST and the
-/// WebAuthn start/finish endpoints) are the only routes that set
-/// `last_step_up_at`; recovery-code verification does not touch it.
+/// recovery, not for routine step-up re-authentication — and
+/// [`verify_totp_code`] refuses them (RFC 102 B3).
+///
+/// Two paths set `last_step_up_at`: the step-up challenge handlers
+/// (`/me/security/step-up` POST and the WebAuthn finish endpoint), and,
+/// today, the sign-in second factor in `mfa::verify_pending` /
+/// `verify_pending_webauthn`, which sets it for every second factor,
+/// recovery codes included. RFC 102 L02 decides that case per method.
 pub async fn policy_for_session(
     db: &Database,
     clock: &SharedClock,
@@ -137,8 +141,8 @@ pub async fn touch_step_up(
     Ok(())
 }
 
-/// Verify a TOTP code (or single-use recovery code) entered into a
-/// step-up form by an already-signed-in user.
+/// Verify a TOTP code entered into a step-up form by an already-signed-in
+/// user.
 ///
 /// Unlike [`crate::mfa::verify_pending`], this does **not** create
 /// a new session — the user already has one. On success it updates
@@ -148,10 +152,13 @@ pub async fn touch_step_up(
 /// configured: a step-up form should look the same to a user with
 /// a typo as to an attacker probing whether MFA is enabled.
 ///
-/// Recovery codes are accepted here for the same reason they're
-/// accepted on the login MFA challenge: a user who has lost their
-/// authenticator app needs *some* path to perform a destructive
-/// action. The code is consumed (single-use) on a hit.
+/// Recovery codes are **not** accepted (RFC 089; RFC 102 B3). Anything
+/// that does not parse as a TOTP code is `InvalidCredentials`, and no
+/// recovery code is looked at or consumed.
+///
+/// Error contract, which the handler relies on for RFC 102 A9:
+/// `InvalidCredentials` means a wrong factor and is counted (L06); any
+/// other error is a storage or internal failure and is not.
 pub async fn verify_totp_code(
     db: &Database,
     clock: &SharedClock,
@@ -159,7 +166,6 @@ pub async fn verify_totp_code(
     session_id: SessionId,
     code_input: &str,
 ) -> CoreResult<()> {
-    use crate::mfa;
     use crate::totp;
     use zeroize::Zeroize;
 
@@ -184,8 +190,8 @@ pub async fn verify_totp_code(
             None => false,
         }
     } else {
-        // Recovery code path — same shape as in `mfa::verify_pending`.
-        mfa::consume_recovery_code(db, user_id, &totp_row, trimmed).await?
+        // Not a TOTP code. Recovery codes are refused for step-up.
+        false
     };
 
     if !accepted {
@@ -198,7 +204,7 @@ pub async fn verify_totp_code(
 
 // ---------- WebAuthn-driven step-up ----------
 //
-// The TOTP / recovery-code path above covers users with an
+// The TOTP path above covers users with an
 // authenticator app. Users whose only second factor is a passkey
 // also need a way to satisfy a step-up gate. The webauthn-rs
 // assertion flow is already split into pure start / finish halves
@@ -356,8 +362,80 @@ pub async fn finish_webauthn(
             touch_step_up(db, clock, session_id).await?;
             Ok(())
         }
+        // A storage or internal failure is not a wrong factor and must not
+        // be counted as one (RFC 102 A9); everything else — a failed
+        // assertion, an expired or mismatched ceremony — is.
+        Err(e @ (CoreError::Store(_) | CoreError::Internal)) => Err(e),
         Err(_) => Err(CoreError::InvalidCredentials),
     }
+}
+
+// ---------- step-up failure accounting (RFC 102 L06) ----------
+
+pub use sui_id_store::commands::{STEP_UP_FAILURE_REVOCATION_THRESHOLD, StepUpFailureOutcome};
+
+/// Count one failed step-up re-authentication on `session_id`, revoking
+/// the session at [`STEP_UP_FAILURE_REVOCATION_THRESHOLD`]. Call it only
+/// for a wrong factor or password (`InvalidCredentials`), never for a
+/// storage failure on the success path (RFC 102 A9).
+pub async fn record_step_up_failure(
+    db: &Database,
+    user_id: UserId,
+    session_id: SessionId,
+) -> CoreResult<StepUpFailureOutcome> {
+    let audited = sui_id_store::commands::record_step_up_failure(db, user_id, session_id).await?;
+    Ok(audited.into_inner())
+}
+
+// ---------- adding a factor (RFC 102 B7) ----------
+
+/// How a user with **no** second factor proves themselves before adding
+/// their first one (RFC 102 B7).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FirstFactorProof {
+    /// A local account: the current password, re-entered.
+    LocalPassword,
+    /// An account from a directory user source: the directory password,
+    /// verified by re-binding.
+    DirectoryPassword,
+    /// A federated account. Upstream re-authentication (`prompt=login`,
+    /// `max_age=0`) is not built yet, so enrolment is refused.
+    Unavailable,
+}
+
+/// Decide which [`FirstFactorProof`] applies to `user_id`. A user with a
+/// federation link is federated, whatever `source` says: federation
+/// provisioning stores its users with `source = ldap`.
+pub async fn first_factor_proof(db: &Database, user_id: UserId) -> CoreResult<FirstFactorProof> {
+    use sui_id_store::models::UserSource;
+    use sui_id_store::repos::{federation_link, users};
+    if !federation_link::list_for_user(db, user_id)
+        .await?
+        .is_empty()
+    {
+        return Ok(FirstFactorProof::Unavailable);
+    }
+    let user = users::get(db, user_id).await?;
+    Ok(match user.source {
+        UserSource::Local => FirstFactorProof::LocalPassword,
+        UserSource::Ldap => FirstFactorProof::DirectoryPassword,
+    })
+}
+
+/// Check a local user's current password for B7. `Ok(false)` for a wrong
+/// password or a user without a local credential.
+pub async fn verify_current_password(
+    db: &Database,
+    user_id: UserId,
+    password: &str,
+) -> CoreResult<bool> {
+    use sui_id_store::repos::credentials;
+    let cred = match credentials::get(db, user_id).await {
+        Ok(c) => c,
+        Err(sui_id_store::StoreError::NotFound) => return Ok(false),
+        Err(e) => return Err(e.into()),
+    };
+    Ok(crate::password::verify_password(password, &cred.password_hash).is_ok())
 }
 
 #[cfg(test)]

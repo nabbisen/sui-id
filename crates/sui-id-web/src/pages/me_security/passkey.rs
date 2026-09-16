@@ -6,6 +6,8 @@ use crate::layout::Shell;
 
 pub struct MePasskeyData {
     pub shell: MeShellData,
+    /// What adding a passkey requires (RFC 102 B7).
+    pub factor_add_proof: FactorAddProof,
     pub passkeys: Vec<PasskeyDescriptor>,
     /// False = origin is plain HTTP on a non-localhost host → show warning.
     pub origin_eligible: bool,
@@ -23,6 +25,7 @@ pub fn render_me_passkey(
         let tabs = me_security_tabs(MeTab::Passkey, lang);
         let MePasskeyData {
             shell: _,
+            factor_add_proof,
             passkeys,
             origin_eligible,
             csrf_token,
@@ -116,6 +119,7 @@ pub fn render_me_passkey(
                                            maxlength="64" />
                                     <span class="field__hint">{t.profile_passkeys_nickname_hint}</span>
                                 </div>
+                                {factor_add_fields(t, factor_add_proof, "pk-current-password")}
                                 <div>
                                     <button type="submit">{t.profile_passkeys_register_button}</button>
                                 </div>

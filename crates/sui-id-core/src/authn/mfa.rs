@@ -123,8 +123,10 @@ pub async fn confirm_enrollment(
         hashed.push(hash_password(c)?);
     }
     let blob = serde_json::to_vec(&hashed).map_err(|_| CoreError::Internal)?;
-    user_totp::confirm_with_recovery(db, user_id, &blob).await?;
-    user_totp::set_last_used_step(db, user_id, step).await?;
+    // U12 (RFC 102 B7): enabling TOTP, storing the codes, advancing the
+    // replay cursor and `auth.mfa.factor_added` commit together.
+    let sealed = user_totp::seal_recovery_codes(db, &blob)?;
+    sui_id_store::commands::confirm_totp_enrollment(db, user_id, sealed, step).await?;
     Ok(plain_codes)
 }
 
@@ -157,7 +159,10 @@ pub async fn regenerate_recovery_codes(db: &Database, user_id: UserId) -> CoreRe
         hashed.push(hash_password(c)?);
     }
     let blob = serde_json::to_vec(&hashed).map_err(|_| CoreError::Internal)?;
-    user_totp::set_recovery_codes(db, user_id, &blob).await?;
+    // U14 (RFC 102 B7): the replacement codes and `auth.mfa.factor_added`
+    // commit together.
+    let sealed = user_totp::seal_recovery_codes(db, &blob)?;
+    sui_id_store::commands::regenerate_recovery_codes(db, user_id, sealed).await?;
     Ok(plain)
 }
 

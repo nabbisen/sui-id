@@ -109,7 +109,11 @@ async fn mfa_setup_renders_in_en() {
                 )
                 .header(header::ACCEPT_LANGUAGE, "en")
                 .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-                .body(Body::from(format!("_csrf={csrf}")))
+                // RFC 102 B7: no factor yet, so the current password.
+                .body(Body::from(format!(
+                    "_csrf={csrf}&current_password={}",
+                    urlencode(PASSWORD)
+                )))
                 .expect("req"),
         )
         .await

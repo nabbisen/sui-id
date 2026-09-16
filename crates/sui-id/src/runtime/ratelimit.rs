@@ -92,6 +92,12 @@ pub struct Limiters {
     /// would-be enumeration scanner before it generates audit-log
     /// noise.
     pub forgot_password: Limiter,
+    /// Per-IP throttle on step-up re-authentication (RFC 102 B2): the
+    /// step-up TOTP form, both WebAuthn step-up endpoints, and every
+    /// password re-entry for adding a first second factor (B7). Separate
+    /// from `login` so a signed-in session's guesses do not spend, or
+    /// borrow from, the sign-in budget.
+    pub step_up: Limiter,
 }
 
 impl Default for Limiters {
@@ -107,6 +113,10 @@ impl Default for Limiters {
             // budget is plenty for a real user mistyping their
             // address a few times.
             forgot_password: Limiter::new(5, 60),
+            // The same budget as sign-in. L06 revokes the session after
+            // five consecutive failures anyway; this bounds a thief who
+            // holds several sessions.
+            step_up: Limiter::new(10, 60),
         }
     }
 }

@@ -196,6 +196,12 @@ pub enum AuditEventKind {
     RefreshRotated,
     /// `auth.refresh.theft_detected` — T04, reuse/family-revocation branch.
     RefreshTheftDetected,
+    /// `auth.step_up.failure` — L06, below-threshold branch (RFC 102).
+    AuthStepUpFailure,
+    /// `auth.step_up.session_revoked` — L06, threshold-crossing branch.
+    AuthStepUpSessionRevoked,
+    /// `auth.mfa.factor_added` — U12, U14 and U15 (RFC 102 B7).
+    AuthMfaFactorAdded,
     /// Proof-only — see [`ProofOnlyForbiddenSystemPrincipalCommand`]. Never
     /// emitted; no command can construct this event because no command can
     /// construct a context for that command in the first place.

@@ -1295,6 +1295,284 @@ pub async fn insert_initial_refresh_token(
     .await
 }
 
+// ── L06 — step-up failure (RFC 102 Part B) ──────────────────────────────
+
+static L06_FAILURE: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::AuthStepUpFailure,
+    name: "auth.step_up.failure",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[AttributeSpec {
+        name: "count",
+        description: "consecutive failed step-up attempts on this session, after this one",
+    }],
+};
+
+static L06_SESSION_REVOKED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::AuthStepUpSessionRevoked,
+    name: "auth.step_up.session_revoked",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[AttributeSpec {
+        name: "count",
+        description: "consecutive failed step-up attempts that reached the revocation threshold",
+    }],
+};
+
+/// Consecutive step-up failures on one session at which the session is
+/// revoked (RFC 102 B2).
+pub const STEP_UP_FAILURE_REVOCATION_THRESHOLD: i64 = 5;
+
+crate::declare_write_command! {
+    /// L06 — a failed step-up re-authentication, counted on the session;
+    /// the threshold-crossing branch revokes that session. The actor is the
+    /// signed-in user whose session made the attempt.
+    command L06 = "L06" {
+        system_principal: forbidden;
+        enum L06Event {
+            Failure { user_id: UserId, count: i64 } => &L06_FAILURE,
+            SessionRevoked { user_id: UserId, count: i64 } => &L06_SESSION_REVOKED,
+        }
+    }
+}
+
+impl SealedCommandEvent<L06> for L06Event {
+    fn target(&self) -> Option<AuditTarget> {
+        match self {
+            Self::Failure { user_id, .. } | Self::SessionRevoked { user_id, .. } => {
+                Some(AuditTarget(user_id.to_string()))
+            }
+        }
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        match self {
+            Self::Failure { count, .. } | Self::SessionRevoked { count, .. } => {
+                AuditAttributes::builder()
+                    .attribute("count", count.to_string())
+                    .build()
+            }
+        }
+    }
+}
+
+/// What L06 did: the new count, and whether the session was revoked.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StepUpFailureOutcome {
+    pub count: i64,
+    pub session_revoked: bool,
+}
+
+/// Run L06: count one failed step-up on `session_id`, and revoke that
+/// session when the count reaches [`STEP_UP_FAILURE_REVOCATION_THRESHOLD`].
+/// The session must be unrevoked and belong to `user_id`; otherwise the
+/// transaction rolls back with `NotFound`.
+pub async fn record_step_up_failure(
+    db: &crate::Database,
+    user_id: UserId,
+    session_id: sui_id_shared::ids::SessionId,
+) -> StoreResult<crate::registry::Audited<StepUpFailureOutcome>> {
+    let context = AuthorizedCommandContext::<L06>::for_authorized_actor(user_id, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, L06>| {
+        let count = crate::repos::sessions::increment_step_up_failure_within_tx(
+            tx.tx(),
+            session_id,
+            user_id,
+        )?;
+        if count >= STEP_UP_FAILURE_REVOCATION_THRESHOLD {
+            crate::repos::sessions::revoke_within_tx(tx.tx(), session_id, chrono::Utc::now())?;
+            Ok((
+                StepUpFailureOutcome {
+                    count,
+                    session_revoked: true,
+                },
+                L06Event::SessionRevoked { user_id, count },
+            ))
+        } else {
+            Ok((
+                StepUpFailureOutcome {
+                    count,
+                    session_revoked: false,
+                },
+                L06Event::Failure { user_id, count },
+            ))
+        }
+    })
+    .await
+}
+
+// ── U12, U14, U15 — adding a second factor (RFC 102 B7) ─────────────────
+
+/// One event for every factor addition; the three commands share it and
+/// the `method` attribute says which factor.
+static MFA_FACTOR_ADDED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::AuthMfaFactorAdded,
+    name: "auth.mfa.factor_added",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[AttributeSpec {
+        name: "method",
+        description: "the factor added: `totp`, `recovery_codes` or `webauthn`",
+    }],
+};
+
+/// The factor an [`MFA_FACTOR_ADDED`] event records. A closed set, so the
+/// attribute is bounded.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AddedFactor {
+    Totp,
+    RecoveryCodes,
+    Webauthn,
+}
+
+impl AddedFactor {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Totp => "totp",
+            Self::RecoveryCodes => "recovery_codes",
+            Self::Webauthn => "webauthn",
+        }
+    }
+}
+
+fn factor_added_attributes(method: AddedFactor) -> Result<AuditAttributes, AuditBuildError> {
+    AuditAttributes::builder()
+        .attribute("method", method.as_str())
+        .build()
+}
+
+crate::declare_write_command! {
+    /// U12 — confirm TOTP enrolment: enable it, store the sealed recovery
+    /// codes and advance the replay cursor, with `auth.mfa.factor_added`.
+    command U12 = "U12" {
+        system_principal: forbidden;
+        enum U12Event {
+            Added { user_id: UserId } => &MFA_FACTOR_ADDED,
+        }
+    }
+}
+
+impl SealedCommandEvent<U12> for U12Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Added { user_id } = self;
+        Some(AuditTarget(user_id.to_string()))
+    }
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        factor_added_attributes(AddedFactor::Totp)
+    }
+}
+
+/// Run U12. `sealed_recovery_codes` comes from
+/// `repos::user_totp::seal_recovery_codes`; `last_used_step` is the step
+/// the confirmation code verified against.
+pub async fn confirm_totp_enrollment(
+    db: &crate::Database,
+    user_id: UserId,
+    sealed_recovery_codes: Vec<u8>,
+    last_used_step: i64,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<U12>::for_authorized_actor(user_id, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, U12>| {
+        crate::repos::user_totp::confirm_with_recovery_within_tx(
+            tx.tx(),
+            user_id,
+            &sealed_recovery_codes,
+            last_used_step,
+        )?;
+        Ok(((), U12Event::Added { user_id }))
+    })
+    .await
+}
+
+crate::declare_write_command! {
+    /// U14 — regenerate recovery codes, with `auth.mfa.factor_added`.
+    command U14 = "U14" {
+        system_principal: forbidden;
+        enum U14Event {
+            Added { user_id: UserId } => &MFA_FACTOR_ADDED,
+        }
+    }
+}
+
+impl SealedCommandEvent<U14> for U14Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Added { user_id } = self;
+        Some(AuditTarget(user_id.to_string()))
+    }
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        factor_added_attributes(AddedFactor::RecoveryCodes)
+    }
+}
+
+/// Run U14 with an already-sealed blob.
+pub async fn regenerate_recovery_codes(
+    db: &crate::Database,
+    user_id: UserId,
+    sealed_recovery_codes: Vec<u8>,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<U14>::for_authorized_actor(user_id, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, U14>| {
+        crate::repos::user_totp::set_recovery_codes_within_tx(
+            tx.tx(),
+            user_id,
+            &sealed_recovery_codes,
+        )?;
+        Ok(((), U14Event::Added { user_id }))
+    })
+    .await
+}
+
+crate::declare_write_command! {
+    /// U15 — register a passkey, with `auth.mfa.factor_added`.
+    command U15 = "U15" {
+        system_principal: forbidden;
+        enum U15Event {
+            Added { user_id: UserId } => &MFA_FACTOR_ADDED,
+        }
+    }
+}
+
+impl SealedCommandEvent<U15> for U15Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Added { user_id } = self;
+        Some(AuditTarget(user_id.to_string()))
+    }
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        factor_added_attributes(AddedFactor::Webauthn)
+    }
+}
+
+/// Run U15. `row.passkey_enc` must already hold the sealed passkey
+/// (`repos::user_webauthn_credentials::seal_passkey`).
+pub async fn register_passkey(
+    db: &crate::Database,
+    row: crate::models::UserWebauthnCredentialRow,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let user_id = row.user_id;
+    let context = AuthorizedCommandContext::<U15>::for_authorized_actor(user_id, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, U15>| {
+        crate::repos::user_webauthn_credentials::create_within_tx(tx.tx(), &row)?;
+        Ok(((), U15Event::Added { user_id }))
+    })
+    .await
+}
+
 // ── U30 — session creation (Protocol; proves no Audited<T> path) ───────
 
 /// Run U30 (session creation) through the `Protocol` runner. No event, no

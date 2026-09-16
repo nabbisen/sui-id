@@ -177,12 +177,14 @@ pub async fn finish_registration(
         id: WebauthnCredentialId::new(),
         user_id,
         credential_id: credential_id_bytes,
-        passkey_enc: Vec::new(), // filled by repo::create after sealing
+        passkey_enc: user_webauthn_credentials::seal_passkey(db, &passkey_json)?,
         nickname,
         created_at: now,
         last_used_at: None,
     };
-    user_webauthn_credentials::create(db, &row, &passkey_json).await?;
+    // U15 (RFC 102 B7): the credential and `auth.mfa.factor_added` commit
+    // together.
+    sui_id_store::commands::register_passkey(db, row.clone()).await?;
     let _ = webauthn_pending::delete(db, pending_id).await;
     Ok(row)
 }

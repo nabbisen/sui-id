@@ -2,9 +2,9 @@
 //
 // Two flows attached to two specific forms:
 //
-//   #passkey-register-form  → POST /admin/profile/webauthn/register/start
+//   #passkey-register-form  → POST /me/security/passkeys/register/start
 //                            → navigator.credentials.create()
-//                            → POST /admin/profile/webauthn/register/complete
+//                            → POST /me/security/passkeys/register/complete
 //
 //   #passkey-auth-form      → POST /admin/login/webauthn/start
 //                            → navigator.credentials.get()
@@ -114,9 +114,30 @@
       var nickname = regForm.querySelector('input[name="nickname"]').value;
       var body = "_csrf=" + encodeURIComponent(csrf) +
                  "&nickname=" + encodeURIComponent(nickname);
-      postForm("/admin/profile/webauthn/register/start", body)
+      // RFC 102 B7: a user with no second factor re-enters the password.
+      var pw = regForm.querySelector('input[name="current_password"]');
+      if (pw) {
+        body += "&current_password=" + encodeURIComponent(pw.value);
+      }
+      postForm("/me/security/passkeys/register/start", body)
         .then(function (r) {
-          if (!r.ok) throw new Error("server rejected start");
+          // A user who already has a factor is redirected to step-up; with
+          // redirect:'manual' that arrives as an opaque redirect.
+          if (r.type === "opaqueredirect") {
+            window.location.href =
+              "/me/security/step-up?return_to=%2Fme%2Fsecurity%2Fpasskeys";
+            throw new Error("step-up required");
+          }
+          if (!r.ok) {
+            return r.json().then(
+              function (j) {
+                throw new Error((j && j.message) || "server rejected start");
+              },
+              function () {
+                throw new Error("server rejected start");
+              }
+            );
+          }
           return r.json();
         })
         .then(function (opts) {
@@ -128,15 +149,16 @@
           var enc = encodeRegistrationCredential(cred);
           var completeBody = "_csrf=" + encodeURIComponent(csrf) +
             "&credential=" + encodeURIComponent(JSON.stringify(enc));
-          return postForm("/admin/profile/webauthn/register/complete", completeBody);
+          return postForm("/me/security/passkeys/register/complete", completeBody);
         })
         .then(function (r) {
           // The server returns a redirect (303). fetch with redirect:'manual'
           // surfaces this as an opaqueredirect; the simplest thing to do
           // is reload the profile page so the user sees the new passkey.
-          window.location.href = "/admin/profile";
+          window.location.href = "/me/security/passkeys";
         })
         .catch(function (err) {
+          if (err && err.message === "step-up required") return;
           console.error("passkey registration failed", err);
           alert("Passkey registration failed: " + (err && err.message ? err.message : err));
         });

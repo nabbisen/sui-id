@@ -504,6 +504,7 @@ pub fn enforce_rate_limit(
         RateLimitKey::Token => &limiters.token,
         RateLimitKey::Setup => &limiters.setup,
         RateLimitKey::ForgotPassword => &limiters.forgot_password,
+        RateLimitKey::StepUp => &limiters.step_up,
     };
     let decision = limiter.check(key.as_str(), ip, clock.now());
     if decision.allowed {
@@ -551,6 +552,7 @@ pub enum RateLimitKey {
     Token,
     Setup,
     ForgotPassword,
+    StepUp,
 }
 
 impl RateLimitKey {
@@ -560,6 +562,7 @@ impl RateLimitKey {
             Self::Token => "token",
             Self::Setup => "setup",
             Self::ForgotPassword => "forgot_password",
+            Self::StepUp => "step_up",
         }
     }
 }
@@ -664,6 +667,185 @@ pub async fn require_fresh_step_up(
             Err(redirect.into_response())
         }
     }
+}
+
+/// What the `/me/security` pages should ask for before a factor is added
+/// (RFC 102 B7). Display only: the handlers enforce the real rule.
+pub async fn factor_add_proof_for_page(
+    app: &AppState,
+    user_id: UserId,
+) -> sui_id_web::FactorAddProof {
+    use sui_id_core::step_up::FirstFactorProof;
+    if sui_id_core::step_up::user_has_mfa(&app.db, user_id)
+        .await
+        .unwrap_or(true)
+    {
+        return sui_id_web::FactorAddProof::StepUp;
+    }
+    match sui_id_core::step_up::first_factor_proof(&app.db, user_id).await {
+        Ok(FirstFactorProof::Unavailable) => sui_id_web::FactorAddProof::Unavailable,
+        _ => sui_id_web::FactorAddProof::Password,
+    }
+}
+
+/// RFC 102 B7: gate an action that adds, or continues adding, a second
+/// factor, for a user who may already have one. With a factor, the session
+/// must be freshly stepped up; without one, nothing is required here,
+/// because the ceremony being continued was started through
+/// [`require_factor_addition_proof`].
+#[allow(clippy::result_large_err)]
+pub async fn require_step_up_if_factor(
+    app: &AppState,
+    ctx: &SessionContext,
+    return_to: &str,
+) -> Result<(), axum::response::Response> {
+    match sui_id_core::step_up::user_has_mfa(&app.db, ctx.user_id).await {
+        Ok(true) => require_fresh_step_up(app, ctx, return_to).await,
+        Ok(false) => Ok(()),
+        // Fail closed: an unreadable factor state never skips the gate.
+        Err(e) => Err(HttpError::html(e).into_response()),
+    }
+}
+
+/// RFC 102 B7: gate the start of adding a second factor.
+///
+/// - The user already has a factor: a fresh step-up is required (redirect).
+/// - No factor, local account: `current_password` must be the password.
+/// - No factor, directory account: `current_password` must re-bind against
+///   a configured user source, for the same stable id.
+/// - No factor, federated account: refused; upstream re-authentication is
+///   not built yet.
+///
+/// A wrong password is a step-up failure: it runs L06 on this session (and
+/// revokes it at the fifth) and uses the step-up rate-limit bucket. Every
+/// wrong-password outcome gets the same response. A directory that cannot
+/// be reached refuses without counting.
+#[allow(clippy::result_large_err, clippy::too_many_arguments)]
+pub async fn require_factor_addition_proof(
+    app: &AppState,
+    ctx: &SessionContext,
+    ip: std::net::IpAddr,
+    lang: sui_id_i18n::Locale,
+    return_to: &str,
+    current_password: Option<&str>,
+    representation: ErrorAs,
+) -> Result<(), axum::response::Response> {
+    use sui_id_core::step_up::FirstFactorProof;
+
+    let respond = |err: CoreError, status: StatusCode| -> axum::response::Response {
+        let mut e = match representation {
+            ErrorAs::Json => HttpError::api(err),
+            _ => HttpError::html(err).with_lang(lang),
+        };
+        e.force_status(status);
+        e.into_response()
+    };
+    let t = lang.strings();
+
+    match sui_id_core::step_up::user_has_mfa(&app.db, ctx.user_id).await {
+        Ok(true) => return require_fresh_step_up(app, ctx, return_to).await,
+        Ok(false) => {}
+        Err(e) => return Err(HttpError::html(e).into_response()),
+    }
+
+    enforce_rate_limit(
+        &app.limiters,
+        &app.clock,
+        RateLimitKey::StepUp,
+        ip,
+        representation,
+    )
+    .map_err(IntoResponse::into_response)?;
+
+    let proof = sui_id_core::step_up::first_factor_proof(&app.db, ctx.user_id)
+        .await
+        .map_err(|e| HttpError::html(e).into_response())?;
+    let password = current_password.unwrap_or("");
+
+    let verified = match proof {
+        FirstFactorProof::Unavailable => {
+            return Err(respond(
+                CoreError::BadRequest(t.factor_add_federated_unavailable.into()),
+                StatusCode::BAD_REQUEST,
+            ));
+        }
+        FirstFactorProof::LocalPassword => {
+            if password.is_empty() {
+                false
+            } else {
+                sui_id_core::step_up::verify_current_password(&app.db, ctx.user_id, password)
+                    .await
+                    .map_err(|e| HttpError::html(e).into_response())?
+            }
+        }
+        FirstFactorProof::DirectoryPassword => {
+            match rebind_directory_user(app, ctx.user_id, password).await {
+                Ok(v) => v,
+                Err(()) => {
+                    return Err(respond(
+                        CoreError::BadRequest(t.factor_add_reauth_unavailable.into()),
+                        StatusCode::SERVICE_UNAVAILABLE,
+                    ));
+                }
+            }
+        }
+    };
+    if verified {
+        return Ok(());
+    }
+
+    match sui_id_core::step_up::record_step_up_failure(&app.db, ctx.user_id, ctx.session_id).await {
+        Ok(outcome) if outcome.session_revoked => tracing::warn!(
+            user_id = %ctx.user_id,
+            count = outcome.count,
+            "step-up failure threshold reached while adding a factor; session revoked"
+        ),
+        Ok(_) => {}
+        Err(e) => tracing::error!(
+            user_id = %ctx.user_id,
+            error = %e,
+            detail = ?e,
+            "could not record a failed re-authentication for adding a factor"
+        ),
+    }
+    Err(respond(
+        CoreError::BadRequest(t.factor_add_reauth_failed.into()),
+        StatusCode::BAD_REQUEST,
+    ))
+}
+
+/// Re-bind a directory user with `password` against every configured user
+/// source. `Ok(true)` when a source authenticates a record with this
+/// user's stable id; `Ok(false)` when every reachable source rejects it;
+/// `Err(())` when no source could answer (none configured, or all failed
+/// to connect), so the password was never checked.
+async fn rebind_directory_user(
+    app: &AppState,
+    user_id: UserId,
+    password: &str,
+) -> Result<bool, ()> {
+    let user = sui_id_store::repos::users::get(&app.db, user_id)
+        .await
+        .map_err(|_| ())?;
+    let Some(stable_id) = user.external_stable_id.as_deref() else {
+        return Err(());
+    };
+    if password.is_empty() {
+        return Ok(false);
+    }
+    let mut answered = false;
+    for source in &app.user_sources {
+        match source.authenticate(&user.username, password).await {
+            Ok(Some(record)) if record.stable_id == stable_id => return Ok(true),
+            Ok(_) => answered = true,
+            Err(e) => tracing::warn!(
+                source = source.slug(),
+                error = ?e,
+                "user source unavailable while re-authenticating a factor addition"
+            ),
+        }
+    }
+    if answered { Ok(false) } else { Err(()) }
 }
 
 /// Require that the request body contained `_confirmed=1` (RFC 030).

@@ -3,8 +3,21 @@
 use super::*;
 use crate::layout::Shell;
 
+/// What a user must present to add a second factor (RFC 102 B7), as the
+/// page shows it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FactorAddProof {
+    /// The user already has a factor: the server redirects to step-up.
+    StepUp,
+    /// No factor yet: the current (local or directory) password.
+    Password,
+    /// No factor yet, and no re-authentication is available (federated).
+    Unavailable,
+}
+
 pub struct MeMfaData {
     pub shell: MeShellData,
+    pub factor_add_proof: FactorAddProof,
     pub totp_enabled: bool,
     pub passkey_count: usize,
     pub recovery_codes_remaining: usize,
@@ -26,6 +39,7 @@ pub fn render_me_mfa(
         let tabs = me_security_tabs(MeTab::Mfa, lang);
         let MeMfaData {
             shell: _,
+            factor_add_proof,
             totp_enabled,
             passkey_count,
             recovery_codes_remaining,
@@ -99,9 +113,12 @@ pub fn render_me_mfa(
                                 }.into_any()
                             } else {
                                 view! {
-                                    <form method="post" action="/me/security/mfa/enroll/start">
+                                    <form method="post" action="/me/security/mfa/enroll/start" class="stack">
                                         <input type="hidden" name="_csrf" value=csrf_for_enroll />
-                                        <button type="submit">{t.profile_mfa_enroll_button}</button>
+                                        {factor_add_fields(t, factor_add_proof, "totp-current-password")}
+                                        <div>
+                                            <button type="submit">{t.profile_mfa_enroll_button}</button>
+                                        </div>
                                     </form>
                                 }.into_any()
                             }}
@@ -119,4 +136,31 @@ pub fn render_me_mfa(
             </Shell>
         }
     })
+}
+
+/// The re-authentication fields for adding a factor (RFC 102 B7): a
+/// current-password field when the user has no factor yet, an explanation
+/// when adding one is unavailable, and nothing when step-up applies.
+pub fn factor_add_fields(
+    t: &'static sui_id_i18n::Strings,
+    proof: FactorAddProof,
+    input_id: &'static str,
+) -> impl IntoView {
+    match proof {
+        FactorAddProof::StepUp => view! { <span/> }.into_any(),
+        FactorAddProof::Password => view! {
+            <div class="field">
+                <label for=input_id class="field__label">{t.factor_add_password_label}</label>
+                <input id=input_id name="current_password" type="password"
+                       autocomplete="current-password" required=true
+                       aria-describedby=format!("{input_id}-hint") />
+                <span id=format!("{input_id}-hint") class="field__hint">{t.factor_add_password_hint}</span>
+            </div>
+        }
+        .into_any(),
+        FactorAddProof::Unavailable => view! {
+            <p class="field__hint">{t.factor_add_federated_unavailable}</p>
+        }
+        .into_any(),
+    }
 }

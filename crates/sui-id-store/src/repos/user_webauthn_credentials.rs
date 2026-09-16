@@ -134,6 +134,42 @@ pub async fn create(
     .await
 }
 
+/// Seal a serialised passkey for storage, before a transaction is opened.
+pub fn seal_passkey(db: &Database, passkey_json_plain: &[u8]) -> StoreResult<Vec<u8>> {
+    seal(db.key(), passkey_json_plain, AAD)
+}
+
+/// [`create`] inside a caller-owned transaction, with the passkey already
+/// sealed into `row.passkey_enc`.
+pub fn create_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    row: &UserWebauthnCredentialRow,
+) -> StoreResult<()> {
+    tx.execute(
+        "INSERT INTO user_webauthn_credentials \
+         (id, user_id, credential_id, passkey_enc, nickname, created_at, last_used_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![
+            row.id.to_string(),
+            row.user_id.to_string(),
+            row.credential_id,
+            row.passkey_enc,
+            row.nickname,
+            row.created_at,
+            row.last_used_at,
+        ],
+    )
+    .map_err(|e| match e {
+        rusqlite::Error::SqliteFailure(err, _)
+            if err.code == rusqlite::ErrorCode::ConstraintViolation =>
+        {
+            StoreError::Conflict
+        }
+        other => StoreError::from(other),
+    })?;
+    Ok(())
+}
+
 pub async fn decrypt_passkey(
     db: &Database,
     row: &UserWebauthnCredentialRow,

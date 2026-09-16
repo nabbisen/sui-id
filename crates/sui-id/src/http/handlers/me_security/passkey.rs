@@ -27,6 +27,7 @@ pub async fn passkeys_get(
         is_admin: user.is_admin,
         active_tab: MeTab::Passkey,
     };
+    let factor_add_proof = crate::handlers::factor_add_proof_for_page(&app, user_id).await;
     let passkeys = sui_id_store::repos::user_webauthn_credentials::list_for_user(&app.db, user_id)
         .await
         .map_err(|e| HttpError::html(CoreError::from(e)).with_lang(lang))?;
@@ -51,6 +52,7 @@ pub async fn passkeys_get(
     let resp = axum::response::Html(sui_id_web::render_me_passkey(
         MePasskeyData {
             shell,
+            factor_add_proof,
             passkeys: descriptors,
             origin_eligible,
             csrf_token: csrf_tok.clone(),
@@ -95,11 +97,30 @@ pub async fn passkey_rename_post(
 pub async fn passkey_register_start(
     state_ext: AppStateExt,
     CurrentUser(user_id): CurrentUser,
+    ctx: crate::handlers::SessionContext,
+    crate::handlers::ClientIp(ip): crate::handlers::ClientIp,
+    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
     Form(form): Form<PasskeyRegisterStartForm>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
     enforce_csrf(&jar, Some(&form.csrf))?;
+    // RFC 102 B7: adding a factor requires a fresh step-up, or the current
+    // password for a user with no factor yet. This endpoint is called by
+    // `static/webauthn.js`, so failures answer in JSON.
+    if let Err(resp) = crate::handlers::require_factor_addition_proof(
+        &app,
+        &ctx,
+        ip,
+        lang,
+        "/me/security/passkeys",
+        form.current_password.as_deref(),
+        crate::handlers::ErrorAs::Json,
+    )
+    .await
+    {
+        return Ok(resp);
+    }
     let started =
         sui_id_core::webauthn::start_registration(&app.db, &app.clock, app.issuer(), user_id)
             .await
@@ -127,11 +148,18 @@ pub async fn passkey_register_start(
 pub async fn passkey_register_complete(
     state_ext: AppStateExt,
     CurrentUser(user_id): CurrentUser,
+    ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Form(form): Form<PasskeyRegisterCompleteForm>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
     enforce_csrf(&jar, Some(&form.csrf))?;
+    // RFC 102 B7: see `passkey_register_start`.
+    if let Err(resp) =
+        crate::handlers::require_step_up_if_factor(&app, &ctx, "/me/security/passkeys").await
+    {
+        return Ok(resp);
+    }
     let pending_value = jar
         .get(crate::handlers::WEBAUTHN_PENDING_COOKIE)
         .ok_or_else(|| HttpError::html(CoreError::BadRequest("no pending ceremony".into())))?
@@ -159,18 +187,7 @@ pub async fn passkey_register_complete(
     )
     .await
     .map_err(HttpError::html)?;
-    let _ = sui_id_store::repos::audit::append(
-        &app.db,
-        &sui_id_store::models::AuditLogRow {
-            at: app.clock.now(),
-            actor: Some(user_id),
-            action: "webauthn.credential.register".into(),
-            target: Some(user_id.to_string()),
-            result: "ok".into(),
-            note: None,
-        },
-    )
-    .await;
+    // U15 recorded `auth.mfa.factor_added` atomically with the credential.
     let jar = jar.add(crate::handlers::clear_webauthn_pending_cookie(
         app.config.server.cookie_secure,
     ));

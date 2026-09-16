@@ -111,6 +111,44 @@ pub fn revoke_all_for_user_within_tx(
     Ok(n)
 }
 
+/// Revoke one session inside a caller-owned transaction. Returns the
+/// number of rows changed: 0 when the session is already revoked.
+pub fn revoke_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    id: SessionId,
+    now: chrono::DateTime<chrono::Utc>,
+) -> StoreResult<usize> {
+    let n = tx.execute(
+        "UPDATE sessions SET revoked_at = ?1 WHERE id = ?2 AND revoked_at IS NULL",
+        params![now, id.to_string()],
+    )?;
+    Ok(n)
+}
+
+/// Add one to the session's consecutive step-up failure count and return
+/// the new value (RFC 102 L06). The session must exist, belong to
+/// `user_id` and be unrevoked; otherwise `NotFound`.
+pub fn increment_step_up_failure_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    id: SessionId,
+    user_id: UserId,
+) -> StoreResult<i64> {
+    let n = tx.execute(
+        "UPDATE sessions SET step_up_failure_count = step_up_failure_count + 1 \
+         WHERE id = ?1 AND user_id = ?2 AND revoked_at IS NULL",
+        params![id.to_string(), user_id.to_string()],
+    )?;
+    if n == 0 {
+        return Err(crate::StoreError::NotFound);
+    }
+    let count: i64 = tx.query_row(
+        "SELECT step_up_failure_count FROM sessions WHERE id = ?1",
+        params![id.to_string()],
+        |r| r.get(0),
+    )?;
+    Ok(count)
+}
+
 /// Delete sessions that are past their expiry. Hygiene only — expired
 /// sessions are already filtered out at lookup time.
 pub async fn purge_expired(db: &Database) -> StoreResult<usize> {
@@ -182,8 +220,10 @@ pub fn revoke_all_for_user_except_within_tx(
 /// regardless of step-up state.
 pub async fn touch_step_up(db: &Database, id: SessionId, at: DateTime<Utc>) -> StoreResult<()> {
     db.with_conn(move |conn| {
+        // A successful step-up ends the run of consecutive failures that
+        // L06 counts (RFC 102 B2).
         conn.execute(
-            "UPDATE sessions SET last_step_up_at = ?1 WHERE id = ?2",
+            "UPDATE sessions SET last_step_up_at = ?1, step_up_failure_count = 0 WHERE id = ?2",
             params![at, id.to_string()],
         )?;
         Ok(())

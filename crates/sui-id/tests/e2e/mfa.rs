@@ -243,12 +243,14 @@ async fn mfa_login_with_recovery_code_succeeds_and_consumes_code() {
 async fn mfa_disable_lets_user_log_in_with_password_only() {
     let state = test_app();
     let session = complete_setup_and_login(&state).await;
-    let (_secret, recovery_codes) = enroll_mfa_for(&state, &session).await;
+    let (secret_b32, _recovery_codes) = enroll_mfa_for(&state, &session).await;
     let csrf = fetch_csrf(&state, &session).await;
-    let step_up_body = format!(
-        "_csrf={csrf}&code={}&return_to=/me/security/mfa",
-        recovery_codes[0]
-    );
+    // RFC 102 B3: recovery codes no longer satisfy step-up, so step up with
+    // a TOTP code. Enrolment consumed the current step; use the next one,
+    // which verification accepts (±1 step).
+    let next_step = chrono::Utc::now().timestamp() / 30 + 1;
+    let code = sui_id_core::totp::code_for_step(&decode_b32(&secret_b32), next_step).await;
+    let step_up_body = format!("_csrf={csrf}&code={code:06}&return_to=/me/security/mfa");
     let resp = build_router(state.clone())
         .oneshot(
             Request::builder()

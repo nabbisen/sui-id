@@ -28,6 +28,7 @@ pub async fn mfa_get(
         is_admin: user.is_admin,
         active_tab: MeTab::Mfa,
     };
+    let factor_add_proof = crate::handlers::factor_add_proof_for_page(&app, user_id).await;
     let totp_enabled = user_totp::get(&app.db, user_id)
         .await
         .ok()
@@ -49,6 +50,7 @@ pub async fn mfa_get(
     let resp = axum::response::Html(sui_id_web::render_me_mfa(
         sui_id_web::MeMfaData {
             shell,
+            factor_add_proof,
             totp_enabled,
             passkey_count,
             recovery_codes_remaining,
@@ -67,12 +69,29 @@ pub async fn mfa_get(
 pub async fn mfa_enroll_start(
     state_ext: AppStateExt,
     CurrentUser(user_id): CurrentUser,
+    ctx: crate::handlers::SessionContext,
+    crate::handlers::ClientIp(ip): crate::handlers::ClientIp,
     crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
-    Form(form): Form<crate::handlers::admin::CsrfOnlyForm>,
+    Form(form): Form<MfaEnrollStartForm>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
     enforce_csrf(&jar, Some(&form.csrf))?;
+    // RFC 102 B7: adding a factor requires a fresh step-up, or the current
+    // password for a user with no factor yet.
+    if let Err(resp) = crate::handlers::require_factor_addition_proof(
+        &app,
+        &ctx,
+        ip,
+        lang,
+        "/me/security/mfa",
+        form.current_password.as_deref(),
+        crate::handlers::ErrorAs::Html,
+    )
+    .await
+    {
+        return Ok(resp);
+    }
     let user = sui_id_store::repos::users::get(&app.db, user_id)
         .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
@@ -104,32 +123,29 @@ pub async fn mfa_enroll_start(
 pub async fn mfa_enroll_confirm(
     state_ext: AppStateExt,
     CurrentUser(user_id): CurrentUser,
+    ctx: crate::handlers::SessionContext,
     crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
     Form(form): Form<MfaConfirmForm>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
     enforce_csrf(&jar, Some(&form.csrf))?;
+    // RFC 102 B7: a user who already has a factor must be freshly stepped
+    // up. A user with none reached this form through the gated start.
+    if let Err(resp) =
+        crate::handlers::require_step_up_if_factor(&app, &ctx, "/me/security/mfa").await
+    {
+        return Ok(resp);
+    }
     let code: u32 = form.code.trim().parse().map_err(|_| {
         HttpError::html(CoreError::BadRequest(
             "verification code must be 6 digits".into(),
         ))
     })?;
+    // U12 records `auth.mfa.factor_added` atomically with the enrolment.
     let codes = sui_id_core::mfa::confirm_enrollment(&app.db, &app.clock, user_id, code)
         .await
         .map_err(HttpError::html)?;
-    let _ = sui_id_store::repos::audit::append(
-        &app.db,
-        &sui_id_store::models::AuditLogRow {
-            at: app.clock.now(),
-            actor: Some(user_id),
-            action: "mfa.enable".into(),
-            target: Some(user_id.to_string()),
-            result: "ok".into(),
-            note: None,
-        },
-    )
-    .await;
     render_mfa_tab_with_fresh_codes(
         &app,
         &jar,
@@ -184,27 +200,24 @@ pub async fn mfa_disable(
 pub async fn mfa_regenerate_recovery(
     state_ext: AppStateExt,
     CurrentUser(user_id): CurrentUser,
+    ctx: crate::handlers::SessionContext,
     crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
     Form(form): Form<crate::handlers::admin::CsrfOnlyForm>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
     enforce_csrf(&jar, Some(&form.csrf))?;
+    // RFC 102 B7: fresh recovery codes are a factor; a user with TOTP
+    // enabled must be freshly stepped up to mint them.
+    if let Err(resp) =
+        crate::handlers::require_step_up_if_factor(&app, &ctx, "/me/security/mfa").await
+    {
+        return Ok(resp);
+    }
+    // U14 records `auth.mfa.factor_added` atomically with the codes.
     let codes = sui_id_core::mfa::regenerate_recovery_codes(&app.db, user_id)
         .await
         .map_err(HttpError::html)?;
-    let _ = sui_id_store::repos::audit::append(
-        &app.db,
-        &sui_id_store::models::AuditLogRow {
-            at: app.clock.now(),
-            actor: Some(user_id),
-            action: "mfa.recovery_codes_regenerate".into(),
-            target: Some(user_id.to_string()),
-            result: "ok".into(),
-            note: None,
-        },
-    )
-    .await;
     render_mfa_tab_with_fresh_codes(
         &app,
         &jar,
@@ -251,10 +264,12 @@ async fn render_mfa_tab_with_fresh_codes(
         is_admin: user.is_admin,
         active_tab: sui_id_web::MeTab::Mfa,
     };
+    let factor_add_proof = crate::handlers::factor_add_proof_for_page(app, user_id).await;
     let token = csrf::ensure_token(jar);
     let resp = Html(sui_id_web::render_me_mfa(
         sui_id_web::MeMfaData {
             shell,
+            factor_add_proof,
             totp_enabled,
             passkey_count,
             recovery_codes_remaining,

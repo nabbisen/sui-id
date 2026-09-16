@@ -142,11 +142,19 @@ pub struct StepUpForm {
 pub async fn post(
     state_ext: AppStateExt,
     ctx: SessionContext,
+    crate::handlers::ClientIp(ip): crate::handlers::ClientIp,
     crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
     axum::Form(form): axum::Form<StepUpForm>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
+    crate::handlers::enforce_rate_limit(
+        &app.limiters,
+        &app.clock,
+        crate::handlers::RateLimitKey::StepUp,
+        ip,
+        crate::handlers::ErrorAs::Html,
+    )?;
     enforce_csrf(&jar, Some(&form.csrf))?;
     let return_to = sanitise_return_to(&form.return_to);
     let t = lang.strings();
@@ -166,7 +174,21 @@ pub async fn post(
             // action that follows will use its own CSRF check.
             Ok(Redirect::to(&return_to).into_response())
         }
-        Err(CoreError::InvalidCredentials) => {
+        Err(err) => {
+            if matches!(err, CoreError::InvalidCredentials) {
+                // A wrong code: count it on this session (L06).
+                record_failure(&app, &ctx).await;
+            } else {
+                // A storage or internal failure on the success path is not a
+                // wrong factor and is not counted (RFC 102 A9). The user sees
+                // the same response as a wrong code; the cause goes to the log.
+                tracing::error!(
+                    user_id = %ctx.user_id,
+                    error = %err,
+                    detail = ?err,
+                    "step-up verification failed for a reason other than a wrong code"
+                );
+            }
             let token = csrf::ensure_token(&jar);
             let has_passkey = sui_id_core::webauthn::has_credentials(&app.db, ctx.user_id)
                 .await
@@ -185,7 +207,25 @@ pub async fn post(
             let resp = (axum::http::StatusCode::BAD_REQUEST, Html(html)).into_response();
             Ok(with_csrf_cookie(resp, &app, &token))
         }
-        Err(other) => Err(HttpError::html(other)),
+    }
+}
+
+/// Run L06 for a wrong factor on this session. A failure to record it is
+/// logged and does not change the response.
+async fn record_failure(app: &crate::state::AppState, ctx: &SessionContext) {
+    match sui_id_core::step_up::record_step_up_failure(&app.db, ctx.user_id, ctx.session_id).await {
+        Ok(outcome) if outcome.session_revoked => tracing::warn!(
+            user_id = %ctx.user_id,
+            count = outcome.count,
+            "step-up failure threshold reached; session revoked"
+        ),
+        Ok(_) => {}
+        Err(e) => tracing::error!(
+            user_id = %ctx.user_id,
+            error = %e,
+            detail = ?e,
+            "could not record a failed step-up"
+        ),
     }
 }
 
@@ -216,10 +256,18 @@ pub struct WebauthnStartResponse {
 pub async fn webauthn_start(
     state_ext: AppStateExt,
     ctx: SessionContext,
+    crate::handlers::ClientIp(ip): crate::handlers::ClientIp,
     jar: CookieJar,
     axum::Form(form): axum::Form<WebauthnStartForm>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
+    crate::handlers::enforce_rate_limit(
+        &app.limiters,
+        &app.clock,
+        crate::handlers::RateLimitKey::StepUp,
+        ip,
+        crate::handlers::ErrorAs::Json,
+    )?;
     enforce_csrf(&jar, Some(&form.csrf))?;
     let _return_to = sanitise_return_to(&form.return_to); // validated for the
     // finish redirect, no
@@ -264,10 +312,18 @@ pub struct WebauthnFinishForm {
 pub async fn webauthn_finish(
     state_ext: AppStateExt,
     ctx: SessionContext,
+    crate::handlers::ClientIp(ip): crate::handlers::ClientIp,
     jar: CookieJar,
     axum::Form(form): axum::Form<WebauthnFinishForm>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
+    crate::handlers::enforce_rate_limit(
+        &app.limiters,
+        &app.clock,
+        crate::handlers::RateLimitKey::StepUp,
+        ip,
+        crate::handlers::ErrorAs::Json,
+    )?;
     enforce_csrf(&jar, Some(&form.csrf))?;
     let return_to = sanitise_return_to(&form.return_to);
 
@@ -308,7 +364,19 @@ pub async fn webauthn_finish(
 
     match result {
         Ok(()) => Ok((jar, Redirect::to(&return_to)).into_response()),
-        Err(_) => {
+        Err(err) => {
+            if matches!(err, CoreError::InvalidCredentials) {
+                // A failed assertion: count it on this session (L06).
+                record_failure(&app, &ctx).await;
+            } else {
+                // Not a wrong factor; not counted (RFC 102 A9).
+                tracing::error!(
+                    user_id = %ctx.user_id,
+                    error = %err,
+                    detail = ?err,
+                    "WebAuthn step-up failed for a reason other than a failed assertion"
+                );
+            }
             // 400 with a JSON error so the client-side script can
             // surface it ("再認証に失敗しました。もう一度お試しください。")
             // without the page navigating away.
