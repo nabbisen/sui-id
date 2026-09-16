@@ -299,6 +299,11 @@ sudo -u sui-id --preserve-env=SUI_ID_ADMIN_PASSWORD sui-id setup \
 unset SUI_ID_ADMIN_PASSWORD
 ```
 
+Preserving the variable needs a sudoers rule that allows it, which an account
+with full `sudo` rights has (`sudoers(5)`: `SETENV` is implied for `ALL`);
+otherwise `sudo` refuses with an error rather than silently dropping the
+variable (`sudo(8)`, `--preserve-env=list`).
+
 ### Option B — browser wizard
 
 The first start logs a one-time setup token to stderr. Capture it
