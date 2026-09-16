@@ -41,8 +41,7 @@ recognize it. `proposed/` continues to mean under review and not ready for
 implementation. Chat, external boards, and roadmap wording are not approval
 records. The identifiers 093–100 are permanently assigned; their proposal files
 exist. RFCs 094, 095 and 096 were returned to `proposed/` on 2026-07-28 for
-owner-approved material amendments and require fresh independent design review
-and re-acceptance before implementation.
+owner-approved material amendments, and were re-accepted on 2026-08-27.
 
 ### Programme outcomes
 
@@ -258,14 +257,17 @@ review (`roadmap/prep-federation-module-split/`).
   implementer. Overlap is authorized once each lane's governing RFC is Accepted
   **in its amended form**, shared-file ownership is named — the preparatory
   `handlers/federation.rs` split — and reviewer capacity is confirmed. Capacity
-  was confirmed by `@nabbisen` on 2026-07-28. RFCs 094, 095 and 096 are
-  presently in re-review following their 2026-07-28 amendments, so **Lane B
-  begins on re-acceptance, not before**. RFC 095 never precedes RFC 094 M2a;
+  was confirmed by `@nabbisen` on 2026-07-28. RFCs 094, 095 and 096 were
+  re-accepted on 2026-08-27 following their 2026-07-28 amendments, which meets
+  the re-acceptance condition; **Lane B still waits on the other conditions
+  above**. RFC 095 never precedes RFC 094 M2a;
   RFCs 097–099 wait for both lanes.
 
 ---
 
 ### Traceability
+
+> **Superseded.** This table is a dated snapshot; the current state is each RFC's folder and metadata.
 
 Required by the multi-agent framework (roadmap item → RFC → Handoff →
 implementation → evidence). Status column is **verified fact** as of 2026-07-29.
@@ -311,11 +313,11 @@ it, and the impact ratings below should be re-read.
 |---|---|---|---|---|---|---|---|
 | R1 | Review independence: authoring, implementation and review concentrate in few roles | Certain (structural) | High — the readiness claim rests on it | Review documents state which role reviewed and what it checked | Role-based routing per RFC 000: design reviewed by the implementation role, implementation by the specifying role, rules and scope decided by the owner; vendor is not a criterion | Design judgments no role but the author can assess, carried explicitly by the owner — currently RFC 094 `ReadConn` sufficiency and RFC 096 B1/B2 | `@nabbisen` |
 | R2 | Audit hash chain is unkeyed and unanchored — tamper-evident only within its trust boundary | Certain (by design) | High if misrepresented; low if stated | Documentation review | RFC 094 corrects the claims; no external anchor is introduced | Accepted permanently for this programme; revisit on a non-repudiation requirement or an untrusted-DB-writer deployment | `@nabbisen` |
-| R3 | Source-size debt: 26 files over 500 lines, incl. load-bearing security modules | Certain (measured) | Medium — raises review cost and change-collision risk | `find`/`wc` sweep | No new file over 500 ELOC; split-when-touched-if-it-helps; **M5 revisit** | Residue unresolved until the M5 decision | `@nabbisen` at M5 |
-| R4 | MSRV 1.95 leaves ~2 releases of headroom below current stable | Certain (measured) | Medium — operators need `rustup`, not distro Rust | Toolchain bisect (done) | README states the `rustup` expectation | Narrow support window accepted when the floor was approved | `@nabbisen` |
+| R3 | Source-size debt: 28 files over 500 lines (measured 2026-09-16: `git ls-files '*.rs' \| xargs wc -l \| awk '$2 != "total" && $1 > 500' \| wc -l`), incl. load-bearing security modules | Certain (measured) | Medium — raises review cost and change-collision risk | `find`/`wc` sweep | No new file over 500 ELOC; split-when-touched-if-it-helps; **M5 revisit** | Residue unresolved until the M5 decision | `@nabbisen` at M5 |
+| R4 | MSRV 1.95 leaves three releases of headroom below current stable (1.98.1, measured 2026-09-16) | Certain (measured) | Medium — operators need `rustup`, not distro Rust | Toolchain bisect (done) | README states the `rustup` expectation | Narrow support window accepted when the floor was approved | `@nabbisen` |
 | R5 | **No hosted CI run has ever occurred.** All gate evidence to date is local | **Retired 2026-07-29** | — | — | First hosted run executed on `1e59e3d` | Superseded by R9 | — |
 | R9 | A3.2's self-test harness passed vacuously in CI: `ci-gate.sh`'s HEAD/`GITHUB_SHA` assertion fired inside staged fixture repos | **Closed 2026-07-30** | — | First hosted run `1e59e3d`; caught at the first `expect_gate_passes` | `GITHUB_SHA` bound per staged fixture, and `expect_gate_fails` now requires `exit_status=` present and no `::error::ci-gate` | None — verified green hosted on `474d0f2`, 38 assertions, 0 precondition errors | closed |
-| R6 | `[gates]` ↔ RFC 093 matrix correspondence is unenforced until A3.4 lands | Likely while A3.4 is outstanding | Medium — dispatcher could drift from the RFC undetected | Manual comparison only (done once, 2026-07-28) | A3.4 `check-gate-inputs.sh` condition 7 | Unguarded until A3.4 | architect (tracked) |
+| R6 | `[gates]` ↔ RFC 093 matrix correspondence is unenforced until A3.4 lands | **A3.4 landed** — `923d682`, 2026-07-29 | Medium — dispatcher could drift from the RFC undetected | Manual comparison only (done once, 2026-07-28) | A3.4 `check-gate-inputs.sh` condition 7 | Guarded by condition 7 since `923d682` | architect (tracked) |
 | R7 | Pre-RFC-094 dynamic registrations are indistinguishable from admin-created clients | Certain (historical) | Medium — provenance cannot be proven | RFC 095 migration report | Owner disposition of every candidate before M3 closure; "zero candidates" is not an accepted claim | Permanent data scar; requires manual adjudication | `@nabbisen` at M3 |
 | R8 | Two-lane execution raises review load on a single reviewer | Likely once Lane B starts | Medium — review becomes the bottleneck, not implementation | Review turnaround time | Owner confirmed increased review capacity 2026-07-28 | Unproven until both lanes run concurrently | `@nabbisen` |
 | R10 | Gate Matrix lane registry is single-source: `check-gate-inputs.sh` validates every lane against RFC 093's table alone, so a lane owned by any other RFC cannot be registered without amending RFC 093 | Certain (structural; reached now by RFC 094) | Medium — the mechanism built to guarantee registration starts discouraging it, and a closed RFC's implementation would change without that RFC being re-reviewed | `check-gate-inputs.sh` condition 7 fails on any `[gates]` key absent from RFC 093's table | RFC 094 delivers multi-source lane ownership: each lane validated against its owning RFC's table, every lane required to have exactly one owner | Between RFC 093 closure and that delivery there is no registered way to add a lane, so out-of-band is the only path. Revisit trigger: the next RFC needing a lane, or RFC 094 Stage 2, whichever is first | `@nabbisen` **Landed `153db49`, 2026-09-12** — [`r10-lane-registry.md`](rfcs/handoffs/094-transactional-audit/r10-lane-registry.md); R10-b landed `73df7ee`. **Closed** — a lane owned by any RFC can now be registered against that RFC's own table. |
@@ -410,6 +412,10 @@ rest are load-bearing security and handler modules: `handlers/oidc.rs` (886),
 `authn/step_up.rs` (769), `handlers/settings.rs` (760), `repos/users.rs` (724),
 `handlers.rs` (718), `authn/session.rs` (717), `store/models.rs` (708).
 
+*Re-measured 2026-09-16: 28 files over 500 physical lines
+(`git ls-files '*.rs' | xargs wc -l | awk '$2 != "total" && $1 > 500' | wc -l`).
+The list above is the 2026-07-16 measurement.*
+
 Large security modules raise review cost and change-collision risk — exactly the
 risk that made the `federation.rs` split a prerequisite for two-lane work.
 
@@ -451,7 +457,7 @@ work with no decision record became invisible.
 | Client confirm screens; secret out of URLs | Client disable and secret rotation have no confirm screen, although RFCs 030/059 require one, and the rotated secret travels in a redirect URL. Owner authorization 2026-09-16. | [client-confirm-screens](roadmap/client-confirm-screens/README.md) |
 | CLI help completeness | `sui-id --help` omits three dispatched subcommands; three hand-kept lists drifted. Owner authorization 2026-09-16. | [cli-help-completeness](roadmap/cli-help-completeness/README.md) |
 | UI contract reconciliation | `docs/ui-ux-contracts.md` is normative, and the code has left it in 15 places. Each is a code defect or a contract amendment; the owner signs the revision. Owner authorization 2026-09-16. | [ui-contract-reconciliation](roadmap/ui-contract-reconciliation/README.md) |
-| Test-file organization | `project-instructions-rust.md` requires test modules in their own files; 42 files still carry inline `#[cfg(test)] mod tests`. `commands.rs` and its runner split are done; `registry.rs` is next. | [test-file-organization](roadmap/test-file-organization/README.md) |
+| Test-file organization | `project-instructions-rust.md` requires test modules in their own files; 41 files under `crates/` still carry an inline `mod tests { … }` (measured 2026-09-16: `git ls-files 'crates/*.rs' \| xargs grep -lE '^\s*mod tests\s*\{' \| wc -l`). `commands.rs` and its runner split are done; `registry.rs` is next. | [test-file-organization](roadmap/test-file-organization/README.md) |
 
 The `handlers/federation.rs` split is tracked as item 5 of *Execution order*
 above, not here — it is a prerequisite of the remediation programme rather than
@@ -468,7 +474,7 @@ them.
 | Fuzz seed corpus and CI corpus persistence | `8d446b0` | [fuzz-corpus-persistence](roadmap/fuzz-corpus-persistence/README.md) |
 | Stable clippy drift, rustc 1.98.0 | `b343a06` | [stable-clippy-drift-1.98](roadmap/stable-clippy-drift-1.98/README.md) |
 
-## Current status
+## Completed arcs before the remediation programme
 
 **Security-assurance arc — RFCs 078–086 (v0.63.2).** Created by
 the architect audit
@@ -665,6 +671,11 @@ Full history: [CHANGELOG.md](CHANGELOG.md)
 
 ## Status
 
+> **Stale as of 2026-09-16.** This section is historical: it predates the
+> remediation programme and describes a phase the project has left. The present
+> state is *Active plan — security and release-assurance remediation* at the top
+> of this file. The text below is kept unedited.
+
 **v0.60.0** completes the UX-rethink arc (RFCs 071, 072, 073) identified
 in the post-MI-arc audit. All three targeted gaps are closed:
 
@@ -715,8 +726,10 @@ review, and integration verification have occurred.**
 - **Single realm.** All users share one namespace. Per-tenant isolation is
   RFC 025, post-1.0. See [the operator guide](docs/src/guides/operators.md),
   "User–client relationship and the single-realm model".
-- **SQLite only.** Alternative backends are RFC 009, low priority. The
-  current SQLite implementation is production-grade for small deployments.
+- **SQLite only.** Alternative backends are RFC 009, low priority. For the
+  readiness of the current implementation, see *Active plan* above: the tree is
+  not approved for a production release.
 - **No user-facing theming API.** CSS tokens are for the maintainer, not
   operators.
-- **No plugin system.** RFC 005 sketches one; it is not scheduled.
+- **No plugin system.** RFC 005 shipped as pluggable user backends (LDAP user
+  sources, v0.76.1); it is not a plugin system, and none is scheduled.
