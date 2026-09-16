@@ -45,6 +45,9 @@ fourth hand-kept list of the same flags.
 - **Docs.** `docs/src/getting-started/quick-start.md` (dispatch 15 states the
   flags are rejected today) and `docs/src/guides/operators.md:225-268` must match
   the fixed behaviour.
+- **`verify-backup`'s help line** says it runs "without writing anything". It
+  stages a temporary copy of the snapshot for the integrity check; say so, as
+  `docs/src/guides/deployment.md` now does (backup move, 2026-09-17).
 - **Coordinate with RFC 103.** It will add `admin issue-recovery-link`. Do not add
   that name here; this package gives RFC 103 the place to add it.
 

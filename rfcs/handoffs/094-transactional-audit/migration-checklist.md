@@ -198,7 +198,9 @@ at a time; the workspace and structural gate must remain green between waves.
         keys), so no extra conversion work is created.
   - [ ] Replace `sui-id/src/http/handlers/index.rs`'s `SELECT 1` health probe
         with a `ReadConn` probe or a `Database::health_check()`.
-  - [ ] **Ruled 2026-09-16 (`@nabbisen`): move it into `sui-id-store`** — dispatched as
+  - [x] **Done `b824246` (2026-09-17)** — equivalence record `f18af38` (before) and
+        the move commit (after); 32 triggers identical, 24 message chains diff-empty.
+        **Ruled 2026-09-16 (`@nabbisen`): move it into `sui-id-store`** — dispatched as
         [`backup-into-store.md`](backup-into-store.md). The move is not mechanical (it
         takes `sui-id`'s `Config`, uses `anyhow`, and needs `argon2`); the handoff decides
         the API split. Was: *Owner decision required:* where `crates/sui-id/src/backup/` belongs.

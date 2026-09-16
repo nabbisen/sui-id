@@ -1215,7 +1215,9 @@ intention; it must be observed on one clean commit before M2a closes.
   for snapshot and integrity checking rather than serving application writes;
   where that module belongs was a separate owner decision, **ruled 2026-09-16:
   it moves into `sui-id-store`**, with an observational-equivalence record to
-  RFC 096's bar (handoff: `backup-into-store.md`).*
+  RFC 096's bar (handoff: `backup-into-store.md`). **Moved `b824246`,
+  2026-09-17.** `crates/sui-id/src` no longer names `rusqlite`; the dependency
+  stays until the e2e raw-access item of the migration checklist lands.*
 
   *Bound on what this closes, so M2a is not read as more than it is: it makes
   raw access impossible **outside** `sui-id-store`. Inside that crate,

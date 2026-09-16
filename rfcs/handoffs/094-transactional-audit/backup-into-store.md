@@ -132,3 +132,19 @@ mutation isolation shown. Rulings:
 
    These three are proposed to the owner as a separate hardening package. F5 (the
    swallowed `create_dir_all` error) and K23 go with it.
+
+## Landed — 2026-09-17
+
+- **Record, before:** `f18af38`. **The move:** `b824246`.
+- **Unchanged by hash:** the adapter keeps `cli.rs`, `tests/e2e/backup.rs` and
+  `tests/e2e/backup_checks.rs` identical.
+- **Equivalence:** all 32 triggers give the same outcome before and after, and
+  the 24 captured message chains are identical.
+- **Beyond the design, accepted:** `sui-id` dropped its unused `argon2` and
+  `chacha20poly1305`.
+- **Follow-ups:**
+  - `crates/sui-id/src/cli.rs` `--help` still says `verify-backup` writes
+    nothing. That goes to `roadmap/cli-help-completeness/`, which rewrites the
+    help text anyway.
+  - F1, F2, F3, F5 and K23 wait for the owner's decision on a restore-hardening
+    package.
