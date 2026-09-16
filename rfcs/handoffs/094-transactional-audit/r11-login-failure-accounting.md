@@ -33,7 +33,12 @@ described is not observable. What *is* true, and was not recorded:
 
 Found by reading the code, not yet measured at runtime — Part 1 measures it.
 
-## Part 1 — dispatched now (independent of the open decision)
+## Part 1 — landed `e39e18b`, 2026-09-16
+
+Measured exactly as described below. The request-id span defect the tests
+surfaced is recorded in RFC 102's findings.
+
+### As dispatched
 
 **1a. Measure.** A test that makes the `audit_log` append fail (for example, a
 trigger or constraint in a test database that rejects inserts into `audit_log` only)

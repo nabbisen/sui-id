@@ -88,3 +88,35 @@ A review-request package under `.git-exclude/review-requests/`, containing:
   RFC;
 - the claim tables for items 2 and 7;
 - the call-site lists for items 1, 8, 11 and 14.
+
+---
+
+## Confirmation review of the resolutions — requested 2026-09-16
+
+The review returned one blocker, six high, eight medium and six low findings.
+`323c90a` resolves them in the RFC text, and each RFC now carries a resolution
+table. RFC 000 accepts a design only after its reviewed form is the accepted
+form, so confirm the resolutions before either RFC goes to the owner.
+
+**Baseline.** `323c90a` or later. **Scope.** Read-only, as before.
+
+17. **For each finding in your review, one row:** does the cited section resolve
+    it, partly resolve it, or leave it open? Quote the resolving sentence. For
+    the three live defects (H3, H4, H5), confirm the RFC records them rather than
+    claiming to fix them now.
+18. **New design introduced by the resolutions.** Check each for implementability
+    and for new gaps:
+    - RFC 102 B7's first-factor rule (password re-entry for local users; session
+      age for users without a local password);
+    - B4's command-side evidence (the session ID as a command input);
+    - L07;
+    - A7;
+    - RFC 103 D10's fragment link, including the no-JavaScript fallback;
+    - D13's in-transaction `source` and state re-read;
+    - D3's invalidations in U02, U04 and U09.
+19. **The failure-response table** in RFC 102: does each row match what the
+    handler can return after the change, without leaking the cause?
+
+**Return.** A short review-request package: the row table, and findings ranked
+by severity. Findings on the new design only; do not re-open what the first
+review settled.
