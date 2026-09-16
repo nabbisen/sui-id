@@ -43,6 +43,7 @@ mod i18n_me_security;
 mod i18n_phase2;
 mod introspection;
 mod key_rotation;
+mod ldap_returning_signin;
 mod lockout;
 mod logout_jwks;
 mod me_security;

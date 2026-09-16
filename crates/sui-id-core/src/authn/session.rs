@@ -56,6 +56,18 @@ pub fn lockout_backoff(failures: i64, max_secs: i64) -> Option<Duration> {
     Some(Duration::seconds(secs.min(max_secs)))
 }
 
+/// The best-effort `auth.login.failure` row for a sign-in refused before
+/// any credential check (unknown, disabled, deleted or locked). Also used
+/// by the directory path in the HTTP layer for the same refusals.
+pub async fn record_refused_login(
+    db: &Database,
+    clock: &SharedClock,
+    username: &str,
+    reason: &str,
+) {
+    record_login_failure(db, clock, username, reason).await;
+}
+
 async fn record_login_failure(db: &Database, clock: &SharedClock, username: &str, reason: &str) {
     let _ = audit::append(
         db,

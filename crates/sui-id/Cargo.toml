@@ -93,6 +93,9 @@ sui-id-core                 = { workspace = true }
 
 proptest                    = { workspace = true }
 tempfile                    = { workspace = true }
+# Test-only `UserSource` implementations (call counting, a source that
+# answers with another identity) in the directory sign-in tests.
+async-trait                 = { workspace = true }
 
 tokio                       = { workspace = true }
 tower                       = { workspace = true }

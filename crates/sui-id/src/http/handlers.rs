@@ -815,7 +815,9 @@ pub async fn require_factor_addition_proof(
 }
 
 /// Re-bind a directory user with `password` against every configured user
-/// source. `Ok(true)` when a source authenticates a record with this
+/// source, by the user's stable id (roadmap `ldap-returning-signin`): the
+/// local username may carry a collision suffix the directory does not
+/// know. `Ok(true)` when a source authenticates a record with this
 /// user's stable id; `Ok(false)` when every reachable source rejects it;
 /// `Err(())` when no source could answer (none configured, or all failed
 /// to connect), so the password was never checked.
@@ -835,7 +837,7 @@ async fn rebind_directory_user(
     }
     let mut answered = false;
     for source in &app.user_sources {
-        match source.authenticate(&user.username, password).await {
+        match source.authenticate_stable_id(stable_id, password).await {
             Ok(Some(record)) if record.stable_id == stable_id => return Ok(true),
             Ok(_) => answered = true,
             Err(e) => tracing::warn!(

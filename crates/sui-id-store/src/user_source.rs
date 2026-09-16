@@ -102,6 +102,21 @@ pub trait UserSource: Send + Sync {
         password: &str,
     ) -> Result<Option<ExternalUserRecord>, UserSourceError>;
 
+    /// Authenticate the entry identified by `stable_id` — the
+    /// `ExternalUserRecord::stable_id` a previous `authenticate` returned
+    /// and a shadow row stores — with `password`. Used for a returning
+    /// directory user, whose local username may differ from the name the
+    /// directory knows (a collision suffix), and for RFC 102 B7's re-bind.
+    ///
+    /// Same result contract as [`authenticate`](Self::authenticate): an
+    /// unknown id and a wrong password are both `Ok(None)` (P3), and a
+    /// source's own restrictions on who may sign in still apply.
+    async fn authenticate_stable_id(
+        &self,
+        stable_id: &str,
+        password: &str,
+    ) -> Result<Option<ExternalUserRecord>, UserSourceError>;
+
     /// Human-readable slug for audit log notes (matches the config block slug).
     fn slug(&self) -> &str;
 }
@@ -179,6 +194,28 @@ impl UserSource for InMemoryUserSource {
         Ok(Some(ExternalUserRecord {
             stable_id: stable_id.clone(),
             display_username: username.to_owned(),
+            email: email.clone(),
+            display_name: display_name.clone(),
+            source_slug: self.slug.clone(),
+        }))
+    }
+
+    async fn authenticate_stable_id(
+        &self,
+        stable_id: &str,
+        password: &str,
+    ) -> Result<Option<ExternalUserRecord>, UserSourceError> {
+        let Some((username, (stored_pw, id, email, display_name))) =
+            self.users.iter().find(|(_, (_, id, _, _))| id == stable_id)
+        else {
+            return Ok(None);
+        };
+        if stored_pw != password {
+            return Ok(None);
+        }
+        Ok(Some(ExternalUserRecord {
+            stable_id: id.clone(),
+            display_username: username.clone(),
             email: email.clone(),
             display_name: display_name.clone(),
             source_slug: self.slug.clone(),
@@ -276,6 +313,13 @@ mod tests {
             async fn authenticate(
                 &self,
                 _u: &str,
+                _p: &str,
+            ) -> Result<Option<ExternalUserRecord>, UserSourceError> {
+                Err(UserSourceError::Transport("connection refused".into()))
+            }
+            async fn authenticate_stable_id(
+                &self,
+                _s: &str,
                 _p: &str,
             ) -> Result<Option<ExternalUserRecord>, UserSourceError> {
                 Err(UserSourceError::Transport("connection refused".into()))

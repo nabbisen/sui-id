@@ -96,29 +96,20 @@ impl LdapUserSource {
     }
 }
 
-#[async_trait::async_trait]
-impl UserSource for LdapUserSource {
-    async fn authenticate(
-        &self,
-        username: &str,
-        password: &str,
-    ) -> Result<Option<ExternalUserRecord>, UserSourceError> {
-        // P2: URL must be ldaps://; the config validator enforces this before
-        // we are constructed, but assert here as defence-in-depth.
+impl LdapUserSource {
+    /// Refuse a cleartext URL (P2), as defence in depth behind the config
+    /// validator.
+    fn require_ldaps(&self) -> Result<(), UserSourceError> {
         if self.cfg.url.starts_with("ldap://") && !self.cfg.url.starts_with("ldaps://") {
             return Err(UserSourceError::Config(
                 "cleartext ldap:// is not permitted; use ldaps://".into(),
             ));
         }
+        Ok(())
+    }
 
-        let mut ldap = self.connect().await?;
-        self.service_bind(&mut ldap).await?;
-
-        // Build the search filter with RFC 4515 escaping of the username (P1).
-        let escaped = escape_filter_value(username);
-        let filter = self.cfg.user_search_filter.replace("{username}", &escaped);
-
-        // Collect attributes to fetch.
+    /// Attributes fetched for a user entry.
+    fn attributes(&self) -> Vec<&str> {
         let mut attrs: Vec<&str> = vec!["dn", &self.cfg.stable_id_attribute];
         if let Some(ref dn_attr) = self.cfg.display_name_attribute {
             attrs.push(dn_attr);
@@ -126,72 +117,182 @@ impl UserSource for LdapUserSource {
         if let Some(ref em_attr) = self.cfg.email_attribute {
             attrs.push(em_attr);
         }
+        attrs
+    }
 
-        let (search_entries, _res) = ldap
-            .search(
-                &self.cfg.user_search_base,
-                Scope::Subtree,
-                &filter,
-                attrs.as_slice(),
-            )
+    /// Run one search and return its first entry, if any.
+    async fn first_entry(
+        &self,
+        ldap: &mut Ldap,
+        base: &str,
+        scope: Scope,
+        filter: &str,
+    ) -> Result<Option<SearchEntry>, UserSourceError> {
+        let attrs = self.attributes();
+        let result = ldap
+            .search(base, scope, filter, attrs.as_slice())
             .await
-            .map_err(|e| UserSourceError::Transport(e.to_string()))?
+            .map_err(|e| UserSourceError::Transport(e.to_string()))?;
+        // A base-object search on a DN that does not exist is rc 32
+        // (noSuchObject): an ordinary miss, not a transport failure.
+        if result.1.rc == 32 {
+            return Ok(None);
+        }
+        let (entries, _res) = result
             .success()
             .map_err(|e| UserSourceError::Transport(e.to_string()))?;
+        Ok(entries.into_iter().next().map(SearchEntry::construct))
+    }
 
-        // P3: even on a search miss, we proceed (and return Ok(None)).
-        // This avoids a timing distinction between "unknown user" and
-        // "wrong password."
-        let entry = match search_entries.into_iter().next() {
-            Some(e) => SearchEntry::construct(e),
-            None => return Ok(None),
-        };
-
-        let user_dn = entry.dn.clone();
-
-        // Extract the stable ID.
+    /// Build the record for an authenticated entry.
+    fn record(&self, entry: &SearchEntry, display_username: String) -> ExternalUserRecord {
         let stable_id = entry
             .attrs
             .get(&self.cfg.stable_id_attribute)
             .and_then(|v| v.first())
             .cloned()
-            .unwrap_or_else(|| user_dn.clone()); // fall back to DN
-
+            .unwrap_or_else(|| entry.dn.clone()); // fall back to DN
         let display_name = self
             .cfg
             .display_name_attribute
             .as_deref()
             .and_then(|a| entry.attrs.get(a)?.first().cloned());
-
         let email = self
             .cfg
             .email_attribute
             .as_deref()
             .and_then(|a| entry.attrs.get(a)?.first().cloned());
-
-        // P3: attempt the user bind to verify the password.
-        // A bind failure is indistinguishable from a search miss — both
-        // return Ok(None).
-        let bind_result = ldap
-            .simple_bind(&user_dn, password)
-            .await
-            .map_err(|e| UserSourceError::Transport(e.to_string()))?;
-
-        if bind_result.rc != 0 {
-            // rc=49 is "invalid credentials"; any non-zero is treated as
-            // authentication failure (P3 — no rc distinction exposed to caller).
-            return Ok(None);
-        }
-
-        let _ = ldap.unbind().await;
-
-        Ok(Some(ExternalUserRecord {
+        ExternalUserRecord {
             stable_id,
-            display_username: username.to_owned(),
+            display_username,
             email,
             display_name,
             source_slug: self.cfg.slug.clone(),
-        }))
+        }
+    }
+
+    /// Bind as `dn` with `password`; `true` only for a successful bind.
+    async fn user_bind(
+        &self,
+        ldap: &mut Ldap,
+        dn: &str,
+        password: &str,
+    ) -> Result<bool, UserSourceError> {
+        let bind_result = ldap
+            .simple_bind(dn, password)
+            .await
+            .map_err(|e| UserSourceError::Transport(e.to_string()))?;
+        // rc=49 is "invalid credentials"; any non-zero is treated as
+        // authentication failure (P3 — no rc distinction exposed to caller).
+        Ok(bind_result.rc == 0)
+    }
+}
+
+#[async_trait::async_trait]
+impl UserSource for LdapUserSource {
+    async fn authenticate(
+        &self,
+        username: &str,
+        password: &str,
+    ) -> Result<Option<ExternalUserRecord>, UserSourceError> {
+        self.require_ldaps()?;
+        let mut ldap = self.connect().await?;
+        self.service_bind(&mut ldap).await?;
+
+        // Build the search filter with RFC 4515 escaping of the username (P1).
+        let escaped = escape_filter_value(username);
+        let filter = self.cfg.user_search_filter.replace("{username}", &escaped);
+
+        // P3: even on a search miss, we proceed (and return Ok(None)).
+        let Some(entry) = self
+            .first_entry(
+                &mut ldap,
+                &self.cfg.user_search_base,
+                Scope::Subtree,
+                &filter,
+            )
+            .await?
+        else {
+            return Ok(None);
+        };
+
+        // P3: attempt the user bind to verify the password. A bind failure
+        // is indistinguishable from a search miss — both return Ok(None).
+        if !self.user_bind(&mut ldap, &entry.dn, password).await? {
+            return Ok(None);
+        }
+        let _ = ldap.unbind().await;
+        Ok(Some(self.record(&entry, username.to_owned())))
+    }
+
+    /// Search by stable id **and** the configured user filter (with
+    /// `{username}` as `*`), so the directory's own restrictions still
+    /// apply (ruling 2); a stored DN is searched as a base object, only
+    /// under `user_search_base` (ruling 3). A miss and a wrong password
+    /// both run a search and a bind attempt, and both are `Ok(None)`
+    /// (ruling 4). Compile-checked only: no live directory in this lane.
+    async fn authenticate_stable_id(
+        &self,
+        stable_id: &str,
+        password: &str,
+    ) -> Result<Option<ExternalUserRecord>, UserSourceError> {
+        self.require_ldaps()?;
+        let mut ldap = self.connect().await?;
+        self.service_bind(&mut ldap).await?;
+        let base = self.cfg.user_search_base.as_str();
+
+        let by_attribute = if self.cfg.stable_id_attribute.eq_ignore_ascii_case("dn") {
+            None
+        } else {
+            let filter = crate::ldap_filter::stable_id_filter(
+                &self.cfg.stable_id_attribute,
+                stable_id,
+                &self.cfg.user_search_filter,
+            );
+            self.first_entry(&mut ldap, base, Scope::Subtree, &filter)
+                .await?
+        };
+        let entry = match by_attribute {
+            Some(entry) => Some(entry),
+            // The stored id is a DN when the attribute was missing or binary
+            // at provisioning: search it as a base object, under the base.
+            None if crate::ldap_filter::dn_is_under_base(stable_id, base) => {
+                let filter = crate::ldap_filter::any_user_filter(&self.cfg.user_search_filter);
+                self.first_entry(&mut ldap, stable_id, Scope::Base, &filter)
+                    .await?
+            }
+            None => {
+                if self.cfg.stable_id_attribute.eq_ignore_ascii_case("dn") {
+                    // P3: no search ran for an id outside the base; run one.
+                    let filter = crate::ldap_filter::any_user_filter(&self.cfg.user_search_filter);
+                    let _ = self
+                        .first_entry(&mut ldap, base, Scope::Base, &filter)
+                        .await?;
+                }
+                None
+            }
+        };
+
+        let Some(entry) = entry else {
+            // P3: a bind attempt on the miss path too, against a name that
+            // does not exist; its result is ignored.
+            let decoy = format!("cn=sui-id-no-such-entry,{base}");
+            let _ = self.user_bind(&mut ldap, &decoy, password).await?;
+            return Ok(None);
+        };
+        if !self.user_bind(&mut ldap, &entry.dn, password).await? {
+            return Ok(None);
+        }
+        let _ = ldap.unbind().await;
+        let mut record = self.record(&entry, entry.dn.clone());
+        // Found by the stored id: report that id, so a DN that differs from
+        // the stored one only in case or spacing still matches the shadow.
+        if record.stable_id == stable_id
+            || crate::ldap_filter::same_dn(&record.stable_id, stable_id)
+        {
+            record.stable_id = stable_id.to_owned();
+        }
+        Ok(Some(record))
     }
 
     fn slug(&self) -> &str {
@@ -201,28 +302,9 @@ impl UserSource for LdapUserSource {
 
 // ── RFC 4515 filter-value escaping (P1) ──────────────────────────────────────
 
-/// Escape a value for safe inclusion in an LDAP search filter (RFC 4515 §3).
-///
-/// The following characters are escaped with a leading backslash and their
-/// two-digit hex representation: `* ( ) \ NUL`.  All other bytes pass
-/// through unchanged.
-///
-/// This is the single substitution point for `{username}` in
-/// `user_search_filter`; no other substitution is supported.
-pub fn escape_filter_value(input: &str) -> String {
-    let mut out = String::with_capacity(input.len());
-    for b in input.bytes() {
-        match b {
-            b'*' => out.push_str("\\2a"),
-            b'(' => out.push_str("\\28"),
-            b')' => out.push_str("\\29"),
-            b'\\' => out.push_str("\\5c"),
-            b'\0' => out.push_str("\\00"),
-            other => out.push(other as char),
-        }
-    }
-    out
-}
+/// The single substitution point for `{username}` in `user_search_filter`;
+/// defined with the other pure filter helpers in [`crate::ldap_filter`].
+pub use crate::ldap_filter::escape_filter_value;
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 

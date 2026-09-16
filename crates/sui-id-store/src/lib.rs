@@ -18,6 +18,7 @@
 pub mod backend;
 pub mod backup;
 pub mod crypto;
+pub mod ldap_filter;
 #[cfg(feature = "ldap")]
 pub mod ldap_source;
 pub mod user_source;

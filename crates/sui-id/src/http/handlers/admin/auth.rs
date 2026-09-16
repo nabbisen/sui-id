@@ -109,19 +109,22 @@ pub async fn login_get(
 /// Attempt to sign in, trying the local credential store first, then any
 /// configured external user-sources (RFC 005 cascade).
 ///
-/// The local path (`session::login_with_mfa`) is tried unconditionally and
-/// covers all local-only invariants (lockout, disabled, MFA).
+/// The username is looked up first. Only `NotFound` means "unknown
+/// locally"; any other lookup error is returned (the uniform 401, logged
+/// by `login_post`), and no directory is asked (roadmap
+/// `ldap-returning-signin`, L4).
 ///
-/// If the local path returns `Err(CoreError::InvalidCredentials)` AND the
-/// username is not found in the local `users` table (meaning it is genuinely
-/// unknown locally, not just a wrong password), the cascade is attempted.
-/// On a cascade hit, a password-less shadow row is upserted and a session is
-/// created via `session::create_session`.
+/// - A local row whose `source` is `ldap` is a returning directory user:
+///   it authenticates against the user sources by its stable id, never
+///   against a local credential ([`directory_sign_in`]).
+/// - Any other known user takes the local path (`session::login_with_mfa`),
+///   which covers lockout, disabled users and MFA.
+/// - An unknown user takes the local path (for its timing-equivalent
+///   refusal) and then the cascade; a cascade hit upserts a password-less
+///   shadow row.
 ///
-/// This function preserves the **local-first** invariant (P4): even if the
-/// cascade would succeed, a local user's locked account still blocks
-/// sign-in through the cascade — the local check runs first and its
-/// lockout decision is final.
+/// This preserves the **local-first** invariant (P4): a local user's
+/// decision is final and never falls through to a directory.
 pub async fn try_login_with_cascade(
     app: &crate::handlers::AppState,
     username: &str,
@@ -133,7 +136,19 @@ pub async fn try_login_with_cascade(
 
     let max_lockout = app.config.security.max_lockout.as_secs();
 
-    // 1. Try local path (always first — P4).
+    let local_user = match sui_id_store::repos::users::find_by_username(&app.db, username).await {
+        Ok(user) => Some(user),
+        Err(sui_id_store::StoreError::NotFound) => None,
+        Err(e) => return Err(e.into()),
+    };
+    if let Some(user) = local_user
+        .as_ref()
+        .filter(|u| u.source == sui_id_store::models::UserSource::Ldap)
+    {
+        return directory_sign_in(app, user, password, audience).await;
+    }
+
+    // 1. Local path (always first — P4).
     let local_result = sui_id_core::session::login_with_mfa(
         &app.db,
         &app.clock,
@@ -148,14 +163,7 @@ pub async fn try_login_with_cascade(
         // Local success or MFA-required: return directly.
         Ok(outcome) => Ok(outcome),
         Err(CoreError::InvalidCredentials) => {
-            // Could be wrong password OR unknown user.  Check whether the
-            // username exists locally to decide whether to try the cascade.
-            let is_unknown_locally =
-                sui_id_store::repos::users::find_by_username(&app.db, username)
-                    .await
-                    .is_err(); // NotFound or any DB error → treat as unknown
-
-            if !is_unknown_locally || app.user_sources.is_empty() {
+            if local_user.is_some() || app.user_sources.is_empty() {
                 // Known locally but wrong password, OR no external sources
                 // configured — return the original error.
                 return Err(CoreError::InvalidCredentials);
@@ -178,46 +186,7 @@ pub async fn try_login_with_cascade(
                     )
                     .await
                     .map_err(CoreError::from)?;
-
-                    // Emit audit event.
-                    let _ = sui_id_store::repos::audit::append(
-                        &app.db,
-                        &sui_id_store::models::AuditLogRow {
-                            at: app.clock.now(),
-                            actor: Some(user_id),
-                            action: "auth.user_source.matched".into(),
-                            target: Some(user_id.to_string()),
-                            result: "ok".into(),
-                            note: Some(format!(
-                                "source={} stable_id={}",
-                                record.source_slug, record.stable_id
-                            )),
-                        },
-                    )
-                    .await;
-
-                    // Create a session for the shadow user (no MFA on first sign-in).
-                    let now = app.clock.now();
-                    let session_row = sui_id_store::models::SessionRow {
-                        id: sui_id_shared::ids::SessionId::new(),
-                        user_id,
-                        expires_at: now + chrono::Duration::hours(24),
-                        created_at: now,
-                        revoked_at: None,
-                        auth_methods: vec![sui_id_shared::AuthMethod::Fed],
-                        last_step_up_at: None,
-                        last_used_at: None,
-                    };
-                    sui_id_store::repos::sessions::insert(&app.db, &session_row)
-                        .await
-                        .map_err(CoreError::from)?;
-                    // Session cap enforcement happens on the next local login;
-                    // omitted here (the cap function is internal to sui-id-core).
-                    let _ =
-                        sui_id_store::repos::users::set_last_login(&app.db, &user_id, now).await;
-                    Ok(sui_id_core::session::LoginOutcome::SessionEstablished(
-                        session_row,
-                    ))
+                    directory_session(app, user_id, &record, audience).await
                 }
                 CascadeOutcome::NotFound => {
                     // All external sources returned None or errored.
@@ -230,6 +199,178 @@ pub async fn try_login_with_cascade(
         }
         Err(other) => Err(other),
     }
+}
+
+/// A returning directory user: a local row with `source = ldap`. Refused
+/// without asking any directory when disabled, deleted, locked or linked to
+/// a federation provider. Otherwise each user source authenticates the
+/// row's stable id; a wrong password is counted on the shadow row (U22),
+/// exactly as a local wrong password is.
+async fn directory_sign_in(
+    app: &crate::handlers::AppState,
+    user: &sui_id_store::models::UserRow,
+    password: &str,
+    audience: sui_id_core::session::SessionAudience,
+) -> sui_id_core::errors::CoreResult<sui_id_core::session::LoginOutcome> {
+    use sui_id_core::errors::CoreError;
+
+    let refused = |reason: &'static str| async move {
+        sui_id_core::session::record_refused_login(&app.db, &app.clock, &user.username, reason)
+            .await;
+        Err(CoreError::InvalidCredentials)
+    };
+    if user.is_disabled || user.is_deleted {
+        return refused("user disabled or deleted").await;
+    }
+    if user
+        .locked_until
+        .is_some_and(|until| until > app.clock.now())
+    {
+        return refused("account locked").await;
+    }
+    // Federation provisioning also writes `source = ldap` shadow rows; a
+    // federated user has no directory password to check.
+    if !sui_id_store::repos::federation_link::list_for_user(&app.db, user.id)
+        .await?
+        .is_empty()
+    {
+        return refused("federated user has no directory password").await;
+    }
+    let Some(stable_id) = user.external_stable_id.as_deref() else {
+        return refused("directory user without a stable id").await;
+    };
+
+    let mut answered = false;
+    for source in &app.user_sources {
+        match source.authenticate_stable_id(stable_id, password).await {
+            Ok(Some(record)) if record.stable_id == stable_id => {
+                // Refresh the display fields through today's upsert; the
+                // existing row keeps its username.
+                sui_id_store::repos::users::upsert_ldap_shadow(
+                    &app.db,
+                    sui_id_store::repos::users::LdapShadowData {
+                        username: user.username.clone(),
+                        display_name: record.display_name.clone(),
+                        email: record.email.clone(),
+                        external_stable_id: record.stable_id.clone(),
+                    },
+                    app.clock.now(),
+                )
+                .await?;
+                return directory_session(app, user.id, &record, audience).await;
+            }
+            Ok(Some(_)) => {
+                // The source authenticated a different identity for this
+                // id. Refuse uniformly, and do not count it: the password
+                // was not wrong for the person who typed it.
+                tracing::warn!(
+                    source = source.slug(),
+                    user_id = %user.id,
+                    "user source returned a different stable id for a returning directory user; \
+                     sign-in refused"
+                );
+                return Err(CoreError::InvalidCredentials);
+            }
+            Ok(None) => answered = true,
+            Err(e) => tracing::warn!(
+                source = source.slug(),
+                error = %e,
+                "user source unavailable for a returning directory user"
+            ),
+        }
+    }
+    if !answered {
+        // No source could check the password: not a wrong password, so not
+        // counted. `login_post` logs this error and returns the uniform 401.
+        return Err(CoreError::BadRequest(
+            "no user source could authenticate a returning directory user".into(),
+        ));
+    }
+    let max_lockout = app.config.security.max_lockout.as_secs();
+    sui_id_store::commands::record_login_failure(&app.db, user.id, move |count| {
+        sui_id_core::session::lockout_backoff(count, max_lockout)
+    })
+    .await?;
+    Err(CoreError::InvalidCredentials)
+}
+
+/// The end of a directory sign-in (first or returning): the audit row, then
+/// the MFA branch exactly as `login_with_mfa` takes it, or today's session
+/// creation. RFC 102 L03 converts this later.
+async fn directory_session(
+    app: &crate::handlers::AppState,
+    user_id: sui_id_shared::ids::UserId,
+    record: &sui_id_store::user_source::ExternalUserRecord,
+    audience: sui_id_core::session::SessionAudience,
+) -> sui_id_core::errors::CoreResult<sui_id_core::session::LoginOutcome> {
+    use sui_id_core::errors::CoreError;
+
+    let _ = sui_id_store::repos::audit::append(
+        &app.db,
+        &sui_id_store::models::AuditLogRow {
+            at: app.clock.now(),
+            actor: Some(user_id),
+            action: "auth.user_source.matched".into(),
+            target: Some(user_id.to_string()),
+            result: "ok".into(),
+            note: Some(format!(
+                "source={} stable_id={}",
+                record.source_slug, record.stable_id
+            )),
+        },
+    )
+    .await;
+
+    // A factor enrolled through RFC 102 B7's re-bind must be asked for here;
+    // skipping it would be an MFA bypass. A7 first: a destination the user
+    // cannot read gets no pending row.
+    if sui_id_core::mfa::is_mfa_enabled(&app.db, user_id).await? {
+        let user = sui_id_store::repos::users::get(&app.db, user_id).await?;
+        if audience == sui_id_core::session::SessionAudience::AdminReaders
+            && !user.role.can_read_admin()
+        {
+            return Ok(sui_id_core::session::LoginOutcome::AudienceRefused);
+        }
+        let pending = sui_id_core::mfa::issue_pending_mfa(&app.db, &app.clock, user_id).await?;
+        let _ = sui_id_store::repos::audit::append(
+            &app.db,
+            &sui_id_store::models::AuditLogRow {
+                at: app.clock.now(),
+                actor: Some(user_id),
+                action: "auth.login.password_ok_mfa_required".into(),
+                target: Some(user_id.to_string()),
+                result: "ok".into(),
+                note: None,
+            },
+        )
+        .await;
+        return Ok(sui_id_core::session::LoginOutcome::MfaRequired { pending });
+    }
+
+    // Create a session for the shadow user.
+    let now = app.clock.now();
+    let session_row = sui_id_store::models::SessionRow {
+        id: sui_id_shared::ids::SessionId::new(),
+        user_id,
+        expires_at: now + chrono::Duration::hours(24),
+        created_at: now,
+        revoked_at: None,
+        auth_methods: vec![sui_id_shared::AuthMethod::Fed],
+        last_step_up_at: None,
+        last_used_at: None,
+    };
+    sui_id_store::repos::sessions::insert(&app.db, &session_row)
+        .await
+        .map_err(CoreError::from)?;
+    // Session cap enforcement happens on the next local login;
+    // omitted here (the cap function is internal to sui-id-core).
+    let _ = sui_id_store::repos::users::set_last_login(&app.db, &user_id, now).await;
+    // A correct directory password ends a run of counted wrong ones, as a
+    // local sign-in does.
+    let _ = sui_id_store::repos::users::clear_lockout(&app.db, user_id).await;
+    Ok(sui_id_core::session::LoginOutcome::SessionEstablished(
+        session_row,
+    ))
 }
 
 /// Resolve a display_username for a new shadow row.

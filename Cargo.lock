@@ -3294,6 +3294,7 @@ name = "sui-id"
 version = "0.77.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum",
  "axum-extra",
  "base64ct",
