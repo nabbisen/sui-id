@@ -257,6 +257,7 @@ pub async fn login_post(
     state_ext: AppStateExt,
     crate::handlers::ClientIp(ip): crate::handlers::ClientIp,
     crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
+    request_id: Option<axum::Extension<crate::request_id::RequestId>>,
     jar: CookieJar,
     Form(form): Form<LoginForm>,
 ) -> Result<Response, HttpError> {
@@ -342,7 +343,23 @@ pub async fn login_post(
             };
             Ok((jar, Redirect::to("/admin/login/mfa")).into_response())
         }
-        Err(_) => {
+        Err(err) => {
+            // R11 1b: every failure gets the same response below, so the
+            // cause of a non-credential failure (a store error from U22,
+            // for instance) would otherwise be lost. Log it; never the
+            // submitted password. The request id is recorded explicitly:
+            // the request span is not reliably entered once the handler
+            // has been resumed after an await.
+            if !matches!(err, CoreError::InvalidCredentials) {
+                let request_id = request_id.as_ref().map(|e| e.0.0.as_str()).unwrap_or("-");
+                tracing::error!(
+                    request_id,
+                    error = %err,
+                    detail = ?err,
+                    "sign-in failed for a reason other than invalid credentials; \
+                     returning the uniform failure response"
+                );
+            }
             // RFC 006: failed sign-in (wrong password, locked, or disabled).
             if let Some(m) = app.metric() {
                 m.signin(sui_id_store::metrics::signin_result::WRONG_PASSWORD);
