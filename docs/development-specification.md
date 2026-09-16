@@ -556,21 +556,26 @@ arm.
 
 - `--dev` skips the setup wizard entirely.
 - Uses an in-memory SQLite database with an ephemeral master key.
-- Hard-coded seed: admin / alice / bob with 12-character
-  human-recognisable passwords; one test OIDC client.
-- Optional hybrid seed: a TOML at `--dev-seed PATH` overrides the
-  hard-coded defaults; CLI flags (e.g. `--dev-admin-password`)
-  override the TOML.
+- Hard-coded seed: admin / alice / bob with human-recognisable
+  passwords; one test OIDC client.
+- Optional hybrid seed: a TOML at `--dev-seed PATH` is meant to override
+  the hard-coded defaults, and CLI flags (e.g. `--dev-admin-password`) the
+  TOML. **Today every value-taking `--dev-*` flag is rejected at startup**,
+  so dev mode runs on the hard-coded seed only.
 - Default bind is `127.0.0.1`; non-loopback binds require typing
-  `yes` on stdin to confirm.
+  `yes` on stdin to confirm (unreachable today, since `--dev-bind` is one of
+  the rejected flags).
 - Startup banner prints "DEV MODE" plus all plaintext credentials
   to stderr.
 - **Cryptographic invariants stay identical to production**: PKCE
   S256 only, Argon2id parameters, AAD binding, exact-match
-  `redirect_uri`, ≥12-char password policy, `unsafe_code = forbid`.
+  `redirect_uri`, `unsafe_code = forbid`.
 - **Operational relaxations are visible**: `cookie_secure = false`,
-  `hibp_mode = off`, lockout disabled. The browser banner makes
-  dev-mode obvious to anyone glancing at the page (RFC 032).
+  `hibp_mode = off`, and a password minimum of 8 characters instead of 12.
+  Account lockout stays active. The browser banner makes dev-mode obvious to
+  anyone glancing at the page (RFC 032).
+- The mechanics — seed file schema, flags, bind prompt — are the operator
+  guide's (`docs/src/guides/operators.md`, *Dev mode for local testing*).
 
 ### 11.14 Backup / restore
 
