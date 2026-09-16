@@ -88,10 +88,9 @@ pub enum StepUpDecision {
 /// [`verify_totp_code`] refuses them (RFC 102 B3).
 ///
 /// Two paths set `last_step_up_at`: the step-up challenge handlers
-/// (`/me/security/step-up` POST and the WebAuthn finish endpoint), and,
-/// today, the sign-in second factor in `mfa::verify_pending` /
-/// `verify_pending_webauthn`, which sets it for every second factor,
-/// recovery codes included. RFC 102 L02 decides that case per method.
+/// (`/me/security/step-up` POST and the WebAuthn finish endpoint), and the
+/// sign-in second factor, where RFC 102 L02 decides by method: a TOTP or
+/// WebAuthn sign-in is fresh, a recovery-code sign-in is not.
 pub async fn policy_for_session(
     db: &Database,
     clock: &SharedClock,

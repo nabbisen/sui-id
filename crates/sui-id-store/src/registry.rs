@@ -204,6 +204,12 @@ pub enum AuditEventKind {
     AuthMfaFactorAdded,
     /// `auth.login.success` — L01, the password sign-in (RFC 102 Part A).
     AuthLoginSuccess,
+    /// `auth.mfa.success` — L02, the second-factor sign-in (RFC 102 Part A).
+    AuthMfaSuccess,
+    /// `auth.mfa.failure` — L07, below-threshold branch.
+    AuthMfaFailure,
+    /// `auth.mfa.lockout` — L07, threshold-crossing branch.
+    AuthMfaLockout,
     /// Proof-only — see [`ProofOnlyForbiddenSystemPrincipalCommand`]. Never
     /// emitted; no command can construct this event because no command can
     /// construct a context for that command in the first place.

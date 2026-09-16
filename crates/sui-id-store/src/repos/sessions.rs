@@ -240,6 +240,20 @@ pub fn revoke_all_for_user_except_within_tx(
 /// check) and a race where the session is revoked between resolve and
 /// touch is benign: a revoked session can't be used for anything
 /// regardless of step-up state.
+/// RFC 102 L02: record which factor made a new session fresh, inside the
+/// caller's transaction.
+pub fn set_step_up_method_within_tx(
+    conn: &rusqlite::Connection,
+    id: SessionId,
+    method: &str,
+) -> StoreResult<()> {
+    conn.execute(
+        "UPDATE sessions SET last_step_up_method = ?1 WHERE id = ?2",
+        params![method, id.to_string()],
+    )?;
+    Ok(())
+}
+
 pub async fn touch_step_up(db: &Database, id: SessionId, at: DateTime<Utc>) -> StoreResult<()> {
     db.with_conn(move |conn| {
         // A successful step-up ends the run of consecutive failures that

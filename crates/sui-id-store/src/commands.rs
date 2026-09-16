@@ -1408,6 +1408,269 @@ pub async fn sign_in_with_password(
     .await
 }
 
+// ── L02 — second-factor sign-in (RFC 102 Part A) ────────────────────────
+
+static L02_SUCCESS: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::AuthMfaSuccess,
+    name: "auth.mfa.success",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[
+        AttributeSpec {
+            name: "method",
+            description: "the second factor: \"totp\", \"recovery_code\" or \"webauthn\"",
+        },
+        AttributeSpec {
+            name: "evicted",
+            description: "older sessions revoked to keep the user within the concurrent-session cap",
+        },
+    ],
+};
+
+crate::declare_write_command! {
+    /// L02 — a completed second-factor sign-in. The actor is the user whose
+    /// password produced the pending row and whose factor `sui-id-core`
+    /// verified outside this transaction.
+    command L02 = "L02" {
+        system_principal: forbidden;
+        enum L02Event {
+            Success { user_id: UserId, method: &'static str, evicted: i64 } => &L02_SUCCESS,
+        }
+    }
+}
+
+impl SealedCommandEvent<L02> for L02Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Success { user_id, .. } = self;
+        Some(AuditTarget(user_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Success {
+            method, evicted, ..
+        } = self;
+        AuditAttributes::builder()
+            .attribute("method", *method)
+            .attribute("evicted", evicted.to_string())
+            .build()
+    }
+}
+
+/// The second factor L02 commits, with what its guard compares.
+pub enum SecondFactorProof {
+    /// A TOTP code matched `step`; the stored step must still be below it.
+    Totp { step: i64 },
+    /// A recovery code matched in the blob `expected_sealed`; the blob is
+    /// replaced by `new_sealed` (the same codes without that one) only if
+    /// it is unchanged.
+    RecoveryCode {
+        expected_sealed: Vec<u8>,
+        new_sealed: Vec<u8>,
+    },
+    /// A WebAuthn assertion was verified (its counter update is U29's).
+    Webauthn,
+}
+
+impl SecondFactorProof {
+    fn method(&self) -> &'static str {
+        match self {
+            Self::Totp { .. } => "totp",
+            Self::RecoveryCode { .. } => "recovery_code",
+            Self::Webauthn => "webauthn",
+        }
+    }
+}
+
+/// Run L02. In one transaction: consume the pending row (it must exist,
+/// belong to the session's user and be unexpired), apply the factor's
+/// guard, re-read the user as active and unlocked, reset the password
+/// counter, stale lock and second-factor failure count, set
+/// `last_login_at`, insert `session` with freshness decided **by method**
+/// (TOTP and WebAuthn are fresh; a recovery code is not, RFC 102 N5), and
+/// evict over-cap sessions. Any guard that loses rolls back with
+/// `NotFound`.
+pub async fn complete_second_factor(
+    db: &crate::Database,
+    pending_id: sui_id_shared::ids::PendingMfaId,
+    mut session: crate::models::SessionRow,
+    proof: SecondFactorProof,
+) -> StoreResult<crate::registry::Audited<crate::models::SessionRow>> {
+    let user_id = session.user_id;
+    let context = AuthorizedCommandContext::<L02>::for_authorized_actor(user_id, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, L02>| {
+        let now = session.created_at;
+        crate::repos::login_pending_mfa::consume_within_tx(tx.tx(), pending_id, user_id, now)?;
+        match &proof {
+            SecondFactorProof::Totp { step } => {
+                crate::repos::user_totp::advance_last_used_step_within_tx(tx.tx(), user_id, *step)?
+            }
+            SecondFactorProof::RecoveryCode {
+                expected_sealed,
+                new_sealed,
+            } => crate::repos::user_totp::swap_recovery_codes_within_tx(
+                tx.tx(),
+                user_id,
+                expected_sealed,
+                new_sealed,
+            )?,
+            SecondFactorProof::Webauthn => {}
+        }
+        crate::repos::users::record_second_factor_login_within_tx(tx.tx(), user_id, now)?;
+        let method = proof.method();
+        let fresh = !matches!(proof, SecondFactorProof::RecoveryCode { .. });
+        session.last_step_up_at = fresh.then_some(now);
+        crate::repos::sessions::insert_within_tx(tx.tx(), &session)?;
+        if fresh {
+            crate::repos::sessions::set_step_up_method_within_tx(tx.tx(), session.id, method)?;
+        }
+        let evicted = evict_over_cap_within_tx(tx.tx(), user_id, now)?;
+        Ok((
+            session,
+            L02Event::Success {
+                user_id,
+                method,
+                evicted,
+            },
+        ))
+    })
+    .await
+}
+
+// ── L07 — second-factor failure (RFC 102 A8) ────────────────────────────
+
+static L07_FAILURE: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::AuthMfaFailure,
+    name: "auth.mfa.failure",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[AttributeSpec {
+        name: "count",
+        description: "consecutive wrong second factors for this user, after this one",
+    }],
+};
+
+static L07_LOCKOUT: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::AuthMfaLockout,
+    name: "auth.mfa.lockout",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[
+        AttributeSpec {
+            name: "count",
+            description: "consecutive wrong second factors that reached the lockout threshold",
+        },
+        AttributeSpec {
+            name: "locked_for_secs",
+            description: "length of the account lock, from U22's backoff",
+        },
+    ],
+};
+
+/// Consecutive wrong second factors at which every pending-MFA row for the
+/// user is deleted and the account is locked (RFC 102 A8).
+pub const MFA_FAILURE_LOCKOUT_THRESHOLD: i64 = 5;
+
+crate::declare_write_command! {
+    /// L07 — a wrong second factor at sign-in, counted on the user. The
+    /// actor is the user whose password produced the pending row.
+    command L07 = "L07" {
+        system_principal: forbidden;
+        enum L07Event {
+            Failure { user_id: UserId, count: i64 } => &L07_FAILURE,
+            Lockout { user_id: UserId, count: i64, locked_for_secs: i64 } => &L07_LOCKOUT,
+        }
+    }
+}
+
+impl SealedCommandEvent<L07> for L07Event {
+    fn target(&self) -> Option<AuditTarget> {
+        match self {
+            Self::Failure { user_id, .. } | Self::Lockout { user_id, .. } => {
+                Some(AuditTarget(user_id.to_string()))
+            }
+        }
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        match self {
+            Self::Failure { count, .. } => AuditAttributes::builder()
+                .attribute("count", count.to_string())
+                .build(),
+            Self::Lockout {
+                count,
+                locked_for_secs,
+                ..
+            } => AuditAttributes::builder()
+                .attribute("count", count.to_string())
+                .attribute("locked_for_secs", locked_for_secs.to_string())
+                .build(),
+        }
+    }
+}
+
+/// What L07 did: the new count, and whether the account was locked.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SecondFactorFailureOutcome {
+    pub count: i64,
+    pub locked: bool,
+}
+
+/// Run L07: count one wrong second factor on `user_id`. From
+/// [`MFA_FAILURE_LOCKOUT_THRESHOLD`] on, delete every pending-MFA row for
+/// the user and lock the account for `lock_window_for_count(count)`
+/// (U22's backoff, supplied by `sui-id-core`).
+pub async fn record_second_factor_failure(
+    db: &crate::Database,
+    user_id: UserId,
+    lock_window_for_count: impl Fn(i64) -> Option<chrono::TimeDelta> + Send + 'static,
+) -> StoreResult<crate::registry::Audited<SecondFactorFailureOutcome>> {
+    let context = AuthorizedCommandContext::<L07>::for_authorized_actor(user_id, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, L07>| {
+        let count = crate::repos::users::increment_mfa_failure_within_tx(tx.tx(), user_id)?;
+        if count >= MFA_FAILURE_LOCKOUT_THRESHOLD {
+            crate::repos::login_pending_mfa::delete_all_for_user_within_tx(tx.tx(), user_id)?;
+            // The threshold always locks, even where the backoff curve
+            // would not yet (it starts at 3 password failures).
+            let window = lock_window_for_count(count).unwrap_or(chrono::TimeDelta::seconds(30));
+            tx.tx().execute(
+                "UPDATE users SET locked_until = ?1 WHERE id = ?2",
+                rusqlite::params![chrono::Utc::now() + window, user_id.to_string()],
+            )?;
+            Ok((
+                SecondFactorFailureOutcome {
+                    count,
+                    locked: true,
+                },
+                L07Event::Lockout {
+                    user_id,
+                    count,
+                    locked_for_secs: window.num_seconds(),
+                },
+            ))
+        } else {
+            Ok((
+                SecondFactorFailureOutcome {
+                    count,
+                    locked: false,
+                },
+                L07Event::Failure { user_id, count },
+            ))
+        }
+    })
+    .await
+}
+
 /// Revoke the user's oldest active sessions until the count is within
 /// `server_settings.max_concurrent_sessions` (0 means no cap). Runs on the
 /// caller's transaction, after the new session is inserted, so a committed

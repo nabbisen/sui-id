@@ -59,6 +59,38 @@ pub async fn get(db: &Database, id: PendingMfaId) -> StoreResult<Option<LoginPen
     .await
 }
 
+/// RFC 102 L02: consume a pending-MFA row inside the caller's transaction.
+/// The row must exist, belong to `user_id` and be unexpired at `now`;
+/// otherwise nothing is deleted and the result is `NotFound`. Two
+/// completions of one row cannot both succeed.
+pub fn consume_within_tx(
+    conn: &rusqlite::Connection,
+    id: PendingMfaId,
+    user_id: sui_id_shared::ids::UserId,
+    now: DateTime<Utc>,
+) -> StoreResult<()> {
+    let n = conn.execute(
+        "DELETE FROM login_pending_mfa WHERE id = ?1 AND user_id = ?2 AND expires_at > ?3",
+        params![id.to_string(), user_id.to_string(), now],
+    )?;
+    if n == 0 {
+        return Err(StoreError::NotFound);
+    }
+    Ok(())
+}
+
+/// RFC 102 L07: delete every pending-MFA row for a user, inside the
+/// caller's transaction. Returns how many were deleted.
+pub fn delete_all_for_user_within_tx(
+    conn: &rusqlite::Connection,
+    user_id: sui_id_shared::ids::UserId,
+) -> StoreResult<usize> {
+    Ok(conn.execute(
+        "DELETE FROM login_pending_mfa WHERE user_id = ?1",
+        [user_id.to_string()],
+    )?)
+}
+
 pub async fn delete(db: &Database, id: PendingMfaId) -> StoreResult<()> {
     db.with_conn(move |conn| {
         let n = conn.execute(

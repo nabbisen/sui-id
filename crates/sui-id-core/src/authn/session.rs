@@ -202,13 +202,17 @@ pub async fn login_with_mfa(
         return Err(e);
     }
 
+    // RFC 102 A7: refuse a session nobody will hold before anything is
+    // written — no pending-MFA row, no session, no event — from the role
+    // read above (outside any transaction).
+    if audience == SessionAudience::AdminReaders && !user.role.can_read_admin() {
+        return Ok(LoginOutcome::AudienceRefused);
+    }
+
     // Branch on MFA enrolment.
     if crate::mfa::is_mfa_enabled(db, user.id).await? {
-        // Password OK: reset counter and clear any stale lock. The MFA
-        // branch keeps this best-effort write until RFC 102 stage 3 moves
-        // the second-factor completion into L02; the no-MFA branch does it
-        // inside L01.
-        let _ = users::clear_lockout(db, user.id).await;
+        // The password counter and stale lock are reset by L02, when the
+        // whole sign-in commits (RFC 102 stage 3 ruling), not here.
         let pending = crate::mfa::issue_pending_mfa(db, clock, user.id).await?;
         // Audit success of the *password* step. The MFA step issues its
         // own audit entry on completion.
@@ -225,12 +229,6 @@ pub async fn login_with_mfa(
         )
         .await;
         return Ok(LoginOutcome::MfaRequired { pending });
-    }
-
-    // RFC 102 A7: refuse a session nobody will hold before L01 writes
-    // anything, from the role read above (outside the transaction).
-    if audience == SessionAudience::AdminReaders && !user.role.can_read_admin() {
-        return Ok(LoginOutcome::AudienceRefused);
     }
 
     let now = clock.now();
@@ -269,50 +267,6 @@ pub async fn login_with_mfa(
             other => other.into(),
         })?;
     Ok(LoginOutcome::SessionEstablished(row))
-}
-
-/// Apply the concurrent-session cap (v0.25.0). When
-/// `server_settings.max_concurrent_sessions` is non-zero and the
-/// user's count of active sessions exceeds it, revoke the
-/// oldest sessions in FIFO order until the count is back at the
-/// cap.
-///
-/// Best-effort: any DB error here only logs at the call site
-/// (we keep this function infallible by absorbing settings/repo
-/// failures). The new session is already inserted by the time
-/// we run, so a failure to evict an old session does not block
-/// the user from signing in — at worst the cap is briefly
-/// exceeded until the next login or until the next idle-timeout
-/// pass cleans things up.
-pub(crate) async fn enforce_concurrent_session_cap(
-    db: &Database,
-    clock: &SharedClock,
-    user_id: UserId,
-) {
-    let settings = match sui_id_store::repos::server_settings::get(db).await {
-        Ok(s) => s,
-        Err(_) => return,
-    };
-    let cap = settings.max_concurrent_sessions;
-    if cap <= 0 {
-        return;
-    }
-    let now = clock.now();
-    let count = match sessions::count_active_for_user(db, user_id, now).await {
-        Ok(c) => c,
-        Err(_) => return,
-    };
-    if count <= cap {
-        return;
-    }
-    let evict = count - cap;
-    let oldest = match sessions::oldest_active_for_user(db, user_id, now, evict).await {
-        Ok(rows) => rows,
-        Err(_) => return,
-    };
-    for old in oldest {
-        let _ = sessions::revoke(db, old.id).await;
-    }
 }
 
 /// Resolve a session id to its user, if the session is still active.
@@ -671,28 +625,48 @@ mod session_limit_tests {
         assert!(updated > stale);
     }
 
-    #[tokio::test]
-    async fn enforce_cap_does_nothing_when_cap_zero() {
-        let db = fresh_db();
-        let clock = system_clock();
-        let uid = make_user(&db).await;
-        // Insert 5 active sessions; cap = 0 = disabled.
-        for i in 0..5 {
-            let _ = insert_session(&db, uid, Utc::now() - ChronoDuration::seconds(i), None).await;
-        }
-        enforce_concurrent_session_cap(&db, &clock, uid).await;
-        let active = sessions::count_active_for_user(&db, uid, Utc::now())
+    /// L01's in-transaction eviction (RFC 102): one password sign-in for
+    /// the user, with a fresh session row.
+    async fn sign_in(db: &Database, uid: UserId) -> SessionId {
+        let now = Utc::now();
+        let row = SessionRow {
+            id: SessionId::new(),
+            user_id: uid,
+            expires_at: now + ChronoDuration::hours(12),
+            created_at: now,
+            revoked_at: None,
+            auth_methods: vec![sui_id_shared::AuthMethod::Pwd],
+            last_step_up_at: None,
+            last_used_at: None,
+        };
+        sui_id_store::commands::sign_in_with_password(db, row.clone())
             .await
-            .expect("count");
-        assert_eq!(active, 5);
+            .expect("L01");
+        row.id
     }
 
     #[tokio::test]
-    async fn enforce_cap_evicts_oldest_in_fifo_order() {
+    async fn sign_in_evicts_nothing_when_cap_zero() {
         let db = fresh_db();
-        let clock = system_clock();
         let uid = make_user(&db).await;
-        // Cap = 2; insert 4 sessions with distinct created_at.
+        // Insert 5 active sessions; cap = 0 = disabled.
+        for i in 0..5 {
+            let _ =
+                insert_session(&db, uid, Utc::now() - ChronoDuration::seconds(i + 1), None).await;
+        }
+        sign_in(&db, uid).await;
+        let active = sessions::count_active_for_user(&db, uid, Utc::now())
+            .await
+            .expect("count");
+        assert_eq!(active, 6);
+    }
+
+    #[tokio::test]
+    async fn sign_in_evicts_oldest_in_fifo_order() {
+        let db = fresh_db();
+        let uid = make_user(&db).await;
+        // Cap = 2; three older sessions with distinct created_at, then a
+        // sign-in: 4 active, so the 2 oldest (s1, s2) are revoked.
         sui_id_store::repos::server_settings::update_max_concurrent_sessions(&db, 2, Utc::now())
             .await
             .expect("set cap");
@@ -700,42 +674,22 @@ mod session_limit_tests {
         let s1 = insert_session(&db, uid, base, None).await;
         let s2 = insert_session(&db, uid, base + ChronoDuration::seconds(1), None).await;
         let s3 = insert_session(&db, uid, base + ChronoDuration::seconds(2), None).await;
-        let s4 = insert_session(&db, uid, base + ChronoDuration::seconds(3), None).await;
-        // Run eviction: 4 active, cap 2 → 2 oldest (s1, s2)
-        // are revoked.
-        enforce_concurrent_session_cap(&db, &clock, uid).await;
-        // Can't use closure with .await; inline checks instead:
-        assert!(
-            sessions::get(&db, s1)
-                .await
-                .expect("get")
-                .revoked_at
-                .is_some(),
-            "s1 should be revoked"
-        );
-        assert!(
-            sessions::get(&db, s2)
-                .await
-                .expect("get")
-                .revoked_at
-                .is_some(),
-            "s2 should be revoked"
-        );
-        assert!(
-            sessions::get(&db, s3)
-                .await
-                .expect("get")
-                .revoked_at
-                .is_none(),
-            "s3 should remain"
-        );
-        assert!(
-            sessions::get(&db, s4)
-                .await
-                .expect("get")
-                .revoked_at
-                .is_none(),
-            "s4 should remain"
-        );
+        let s4 = sign_in(&db, uid).await;
+        for (id, revoked, label) in [
+            (s1, true, "s1 should be revoked"),
+            (s2, true, "s2 should be revoked"),
+            (s3, false, "s3 should remain"),
+            (s4, false, "the new session should remain"),
+        ] {
+            assert_eq!(
+                sessions::get(&db, id)
+                    .await
+                    .expect("get")
+                    .revoked_at
+                    .is_some(),
+                revoked,
+                "{label}"
+            );
+        }
     }
 }

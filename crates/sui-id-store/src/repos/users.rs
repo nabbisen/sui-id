@@ -398,6 +398,42 @@ pub fn record_password_login_within_tx(
     Ok(())
 }
 
+/// RFC 102 L02: the bookkeeping of a completed second-factor sign-in, on
+/// the caller's transaction. The same re-read as
+/// [`record_password_login_within_tx`] (active, not deleted, not locked;
+/// otherwise `NotFound`), then clears the password counter, a stale lock
+/// and the second-factor failure count, and sets `last_login_at`.
+pub fn record_second_factor_login_within_tx(
+    conn: &rusqlite::Connection,
+    id: UserId,
+    now: chrono::DateTime<chrono::Utc>,
+) -> StoreResult<()> {
+    record_password_login_within_tx(conn, id, now)?;
+    conn.execute(
+        "UPDATE users SET mfa_failure_count = 0 WHERE id = ?1",
+        [id.to_string()],
+    )?;
+    Ok(())
+}
+
+/// RFC 102 L07: add one to the user's consecutive second-factor failure
+/// count and return the new value. `NotFound` if the user does not exist.
+pub fn increment_mfa_failure_within_tx(
+    conn: &rusqlite::Connection,
+    id: UserId,
+) -> StoreResult<i64> {
+    conn.query_row(
+        "UPDATE users SET mfa_failure_count = mfa_failure_count + 1 WHERE id = ?1 \
+         RETURNING mfa_failure_count",
+        [id.to_string()],
+        |r| r.get(0),
+    )
+    .map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
+        other => StoreError::from(other),
+    })
+}
+
 /// Admin-initiated unlock: reset both fields without requiring a
 /// successful password check. Used by `sui-id admin unlock-user`.
 pub async fn admin_unlock(db: &Database, id: UserId) -> StoreResult<()> {

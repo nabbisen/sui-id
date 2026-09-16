@@ -449,6 +449,7 @@ pub async fn mfa_challenge_post(
     state_ext: AppStateExt,
     crate::handlers::ClientIp(ip): crate::handlers::ClientIp,
     crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
+    request_id: Option<axum::Extension<crate::request_id::RequestId>>,
     jar: CookieJar,
     Form(form): Form<MfaChallengeForm>,
 ) -> Result<Response, HttpError> {
@@ -473,7 +474,10 @@ pub async fn mfa_challenge_post(
         Ok(id) => id,
         Err(_) => return Ok(Redirect::to("/admin/login").into_response()),
     };
-    match sui_id_core::mfa::verify_pending(&app.db, &app.clock, pending_id, &form.code).await {
+    let max_lockout = app.config.security.max_lockout.as_secs();
+    match sui_id_core::mfa::verify_pending(&app.db, &app.clock, pending_id, &form.code, max_lockout)
+        .await
+    {
         Ok(session) => {
             let cookie = session_cookie(session.id.to_string(), app.config.server.cookie_secure);
             // Compose the redirect target from the optional next cookie.
@@ -482,19 +486,7 @@ pub async fn mfa_challenge_post(
                 .map(|c| c.value().to_owned())
                 .filter(|s| s.starts_with('/'))
                 .unwrap_or_else(|| "/admin".into());
-            // Audit the MFA success.
-            let _ = sui_id_store::repos::audit::append(
-                &app.db,
-                &sui_id_store::models::AuditLogRow {
-                    at: app.clock.now(),
-                    actor: Some(session.user_id),
-                    action: "auth.mfa.success".into(),
-                    target: Some(session.user_id.to_string()),
-                    result: "ok".into(),
-                    note: None,
-                },
-            )
-            .await;
+            // `auth.mfa.success` was committed by L02 with the session.
             // RFC 006: MFA verified → full sign-in success.
             if let Some(m) = app.metric() {
                 m.signin(sui_id_store::metrics::signin_result::SUCCESS);
@@ -507,24 +499,29 @@ pub async fn mfa_challenge_post(
                 ));
             Ok((jar, Redirect::to(&next_target)).into_response())
         }
-        Err(_) => {
+        Err(err) => {
+            // A wrong code was counted by L07 inside `verify_pending`; a
+            // lost guard is `Unauthenticated`. Anything else is a storage
+            // or internal failure: the same response, with the cause
+            // logged (RFC 102 C1, R11 1b).
+            if !matches!(
+                err,
+                CoreError::InvalidCredentials | CoreError::Unauthenticated
+            ) {
+                let request_id = request_id.as_ref().map(|e| e.0.0.as_str()).unwrap_or("-");
+                tracing::error!(
+                    request_id,
+                    error = %err,
+                    detail = ?err,
+                    "second-factor sign-in failed for a reason other than a wrong code; \
+                     returning the uniform failure response"
+                );
+            }
             let t = lang.strings();
             let flash = Flash {
                 kind: FlashKind::Error,
                 text: t.mfa_challenge_failed_flash.into(),
             };
-            let _ = sui_id_store::repos::audit::append(
-                &app.db,
-                &sui_id_store::models::AuditLogRow {
-                    at: app.clock.now(),
-                    actor: None,
-                    action: "auth.mfa.failure".into(),
-                    target: None,
-                    result: "denied".into(),
-                    note: None,
-                },
-            )
-            .await;
             // RFC 006: MFA code rejected.
             if let Some(m) = app.metric() {
                 m.signin(sui_id_store::metrics::signin_result::MFA_FAILED);

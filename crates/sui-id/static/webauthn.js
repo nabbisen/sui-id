@@ -8,7 +8,8 @@
 //
 //   #passkey-auth-form      → POST /admin/login/webauthn/start
 //                            → navigator.credentials.get()
-//                            → POST /admin/login/webauthn/complete
+//                            → form submit to /admin/login/webauthn/complete
+//                              (the browser follows the redirect)
 //
 // Encoding helpers: WebAuthn JSON uses base64url-no-pad for byte fields,
 // but the JS API hands us ArrayBuffers. We do the dance here.
@@ -183,13 +184,24 @@
           });
         })
         .then(function (cred) {
+          // RFC 102 N14: submit the completion as a real form, so the
+          // browser follows the server's redirect — to the pending `next`
+          // on success, back to sign-in on any failure — instead of this
+          // script guessing a destination.
           var enc = encodeAuthenticationCredential(cred);
-          var completeBody = "_csrf=" + encodeURIComponent(csrf) +
-            "&credential=" + encodeURIComponent(JSON.stringify(enc));
-          return postForm("/admin/login/webauthn/complete", completeBody);
-        })
-        .then(function (r) {
-          window.location.href = "/admin";
+          var complete = document.createElement("form");
+          complete.method = "POST";
+          complete.action = "/admin/login/webauthn/complete";
+          complete.hidden = true;
+          [["_csrf", csrf], ["credential", JSON.stringify(enc)]].forEach(function (kv) {
+            var input = document.createElement("input");
+            input.type = "hidden";
+            input.name = kv[0];
+            input.value = kv[1];
+            complete.appendChild(input);
+          });
+          document.body.appendChild(complete);
+          complete.submit();
         })
         .catch(function (err) {
           console.error("passkey login failed", err);

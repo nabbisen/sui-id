@@ -16,7 +16,8 @@ Use **Admin panel → Audit log** to filter by event prefix or export to CSV.
 | `auth.lockout` | Account locked | A wrong-password attempt just crossed the progressive-lockout failure threshold. |
 | `auth.login.password_ok_mfa_required` | MFA required | Password was correct but MFA challenge is pending. |
 | `auth.mfa.success` | MFA verified | TOTP code or passkey assertion verified successfully. |
-| `auth.mfa.failure` | MFA failed | TOTP code or passkey assertion failed verification. |
+| `auth.mfa.failure` | MFA failed | TOTP code, recovery code or passkey assertion failed verification at sign-in; the note carries the consecutive `count` for the user. |
+| `auth.mfa.lockout` | MFA lockout | The fifth consecutive wrong second factor: pending sign-ins removed and the account locked. |
 | `auth.password.changed_self` | Password changed | User changed their own password via `/me/security/password`. |
 | `auth.password.reset_requested` | Password reset requested | User submitted the forgot-password form. |
 | `auth.password.reset_email_sent` | Reset email sent | A password-reset email was queued successfully. |

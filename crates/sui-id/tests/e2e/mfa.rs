@@ -432,13 +432,15 @@ async fn admin_mfa_reset_via_http_redirects_and_disables_mfa_requirement() {
         .expect("confirm");
 
     // Sanity: a fresh password login for carol now goes to MFA challenge.
+    // Carol cannot read the admin panel, so she signs in to `/me/security`;
+    // an admin destination is refused before the MFA step (RFC 102 A7).
     let router = build_router(state.clone());
     let req = Request::builder()
         .method(Method::POST)
         .uri("/admin/login")
         .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
         .body(Body::from(
-            "username=carol&password=carol-very-strong-password",
+            "username=carol&password=carol-very-strong-password&next=/me/security",
         ))
         .expect("req");
     let resp = router.oneshot(req).await.expect("login");

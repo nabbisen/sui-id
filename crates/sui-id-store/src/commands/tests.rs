@@ -50,6 +50,9 @@ fn all_descriptors() -> Vec<&'static EventDescriptor> {
         &L06_SESSION_REVOKED,
         &MFA_FACTOR_ADDED,
         &L01_SUCCESS,
+        &L02_SUCCESS,
+        &L07_FAILURE,
+        &L07_LOCKOUT,
     ]
 }
 
@@ -145,6 +148,8 @@ fn actor_requirement_agrees_with_system_principal_for_every_command() {
     check("U14", false, &[&MFA_FACTOR_ADDED]);
     check("U15", false, &[&MFA_FACTOR_ADDED]);
     check("L01", false, &[&L01_SUCCESS]);
+    check("L02", false, &[&L02_SUCCESS]);
+    check("L07", false, &[&L07_FAILURE, &L07_LOCKOUT]);
 }
 
 #[test]
@@ -261,6 +266,9 @@ fn event_names_match_command_inventory() {
         "auth.step_up.session_revoked",
         "auth.mfa.factor_added",
         "auth.login.success",
+        "auth.mfa.success",
+        "auth.mfa.failure",
+        "auth.mfa.lockout",
     ];
     let mut actual: Vec<&str> = all_descriptors().iter().map(|d| d.name).collect();
     actual.sort_unstable();

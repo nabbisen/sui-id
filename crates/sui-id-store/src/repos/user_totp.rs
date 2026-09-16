@@ -146,6 +146,47 @@ pub fn set_recovery_codes_within_tx(
     Ok(())
 }
 
+/// RFC 102 L02: advance the TOTP replay cursor to `step`, only forwards.
+/// Zero rows (the step was already used, or a later one was stored first,
+/// or TOTP is not enabled) is `NotFound`, so one code cannot complete two
+/// sign-ins and the stored step never moves backwards.
+pub fn advance_last_used_step_within_tx(
+    conn: &rusqlite::Connection,
+    user_id: UserId,
+    step: i64,
+) -> StoreResult<()> {
+    let n = conn.execute(
+        "UPDATE user_totp SET last_used_step = ?1 \
+         WHERE user_id = ?2 AND enabled = 1 AND last_used_step < ?1",
+        params![step, user_id.to_string()],
+    )?;
+    if n == 0 {
+        return Err(StoreError::NotFound);
+    }
+    Ok(())
+}
+
+/// RFC 102 L02: replace the sealed recovery-code blob only if it is still
+/// the one the caller matched against (compare-and-swap on the
+/// ciphertext). Zero rows is `NotFound`, so one recovery code cannot be
+/// spent twice.
+pub fn swap_recovery_codes_within_tx(
+    conn: &rusqlite::Connection,
+    user_id: UserId,
+    expected_sealed: &[u8],
+    new_sealed: &[u8],
+) -> StoreResult<()> {
+    let n = conn.execute(
+        "UPDATE user_totp SET recovery_codes_enc = ?1 \
+         WHERE user_id = ?2 AND enabled = 1 AND recovery_codes_enc = ?3",
+        params![new_sealed, user_id.to_string(), expected_sealed],
+    )?;
+    if n == 0 {
+        return Err(StoreError::NotFound);
+    }
+    Ok(())
+}
+
 /// Decrypt the recovery codes JSON. Returns `None` when the user has
 /// never confirmed enrolment.
 pub async fn decrypt_recovery_codes(

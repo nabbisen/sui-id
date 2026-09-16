@@ -337,7 +337,7 @@ id = "U28"
 class = "P"
 status = "implemented"  # implemented | target-absent | target-legacy
 owner = "TOTP anti-replay step"
-rationale = "per-auth anti-replay state; covered by MFA success/failure events"
+rationale = "per-auth anti-replay state; since RFC 102 stage 3 the sign-in's guarded advance runs inside L02, and `set_last_used_step` remains for the step-up path until L05"
 mutation_surface = "`user_totp::set_last_used_step`"
 files = ["crates/sui-id-store/src/repos/user_totp.rs"]
 test_id = "`p_u28_totp_step`"
@@ -385,7 +385,7 @@ id = "U32"
 class = "P"
 status = "implemented"  # implemented | target-absent | target-legacy
 owner = "Pending MFA ceremony create/consume"
-rationale = "short-lived one-time protocol state"
+rationale = "short-lived one-time protocol state; since RFC 102 stage 3 the consume is L02's guarded delete, and L07 removes every row at lockout"
 mutation_surface = "`login_pending_mfa::insert`, `delete`"
 files = ["crates/sui-id-store/src/repos/login_pending_mfa.rs"]
 test_id = "`p_u32_pending_mfa`"
@@ -437,6 +437,30 @@ rationale = "one `auth.login.success` with the session, counter and stale-lock r
 mutation_surface = "`users::record_password_login_within_tx`, `sessions::insert_within_tx`, `sessions::revoke_within_tx`"
 files = ["crates/sui-id-store/src/repos/users.rs", "crates/sui-id-store/src/repos/sessions.rs"]
 test_id = "`r102_l01_*`, `r102_a7_*` (e2e)"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "L02"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Second-factor sign-in (RFC 102 A1, A2)"
+rationale = "one `auth.mfa.success` with the guarded pending-row consume, the factor guard (TOTP step advance or recovery-code compare-and-swap), the user re-read, counter resets, `last_login_at`, the session with freshness by method, and cap eviction"
+mutation_surface = "`login_pending_mfa::consume_within_tx`, `user_totp::advance_last_used_step_within_tx`, `user_totp::swap_recovery_codes_within_tx`, `users::record_second_factor_login_within_tx`, `sessions::insert_within_tx`, `sessions::set_step_up_method_within_tx`, `sessions::revoke_within_tx`"
+files = ["crates/sui-id-store/src/repos/login_pending_mfa.rs", "crates/sui-id-store/src/repos/user_totp.rs", "crates/sui-id-store/src/repos/users.rs", "crates/sui-id-store/src/repos/sessions.rs"]
+test_id = "`r102_l02_*` (e2e)"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "L07"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Second-factor failure (RFC 102 A8)"
+rationale = "closed result branches: `auth.mfa.failure` below the threshold or `auth.mfa.lockout` at 5, with the per-user count, the removal of every pending-MFA row and the lock"
+mutation_surface = "`users::increment_mfa_failure_within_tx`, `login_pending_mfa::delete_all_for_user_within_tx`, `users.locked_until`"
+files = ["crates/sui-id-store/src/repos/users.rs", "crates/sui-id-store/src/repos/login_pending_mfa.rs"]
+test_id = "`r102_l07_*` (e2e)"
 event = ""    # Stage 1: typed event-kind enum variant, not yet added
 descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
 

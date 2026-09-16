@@ -224,13 +224,19 @@ now Class A for a user with no second factor, committed by command L01. The
 second-factor, directory and federation sign-ins still write their events best
 effort until L02-L04.*
 
+*Changed 2026-09-17 (RFC 102 stage 3): the second-factor sign-in events are
+Class A. `auth.mfa.success` commits with the session through L02; a wrong second
+factor commits `auth.mfa.failure`, or `auth.mfa.lockout` at the fifth
+consecutive one, through L07.*
+
 | Event name | Trigger | Actor | Class |
 |---|---|---|---|
 | `auth.login.password_ok_mfa_required` | Password correct; MFA challenge pending | user id | B |
 | `auth.login.success` | Password sign-in succeeded for a user with no second factor (command `L01`, with the session, counter reset, `last_login_at` and cap eviction; note field `evicted`) | user id | **A** |
 | `auth.login.failure` | Wrong password | — | B |
-| `auth.mfa.success` | MFA challenge passed | user id | B |
-| `auth.mfa.failure` | MFA challenge failed | user id | B |
+| `auth.mfa.success` | Second-factor sign-in completed: TOTP, recovery code or passkey (command `L02`, with the pending-row consume, the factor's guard, counter resets, `last_login_at`, the session and cap eviction; note fields `method`, `evicted`) | user id | **A** |
+| `auth.mfa.failure` | Wrong second factor at sign-in, counted on the user (`L07`; note field `count`) | user id | **A** |
+| `auth.mfa.lockout` | Fifth consecutive wrong second factor: every pending-MFA row removed and the account locked with the password backoff (`L07`; note fields `count`, `locked_for_secs`) | user id | **A** |
 | `auth.lockout` | Account locked after crossing the failure threshold | — | **A** |
 | `auth.sessions.bulk_revoke_self` | Bulk session revocation (self) | user id | B |
 | `auth.password.changed_self` | Self-service password change | user id | **A** |

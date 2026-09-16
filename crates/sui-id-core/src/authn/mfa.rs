@@ -26,8 +26,9 @@ use chrono::Duration;
 use getrandom;
 use sui_id_shared::ids::{PendingMfaId, SessionId, UserId};
 use sui_id_store::Database;
+use sui_id_store::commands::SecondFactorProof;
 use sui_id_store::models::{LoginPendingMfaRow, SessionRow};
-use sui_id_store::repos::{login_pending_mfa, sessions, user_totp};
+use sui_id_store::repos::{login_pending_mfa, user_totp};
 use zeroize::Zeroize;
 
 const TOTP_SECRET_LEN: usize = 20; // RFC 6238: 160 bits.
@@ -191,11 +192,20 @@ pub async fn issue_pending_mfa(
 ///
 /// `code_input` is whatever the user typed. We try to interpret it as
 /// digits first; if that fails, as a recovery code.
+///
+/// RFC 102 L02/L07: the code is checked outside any transaction. A wrong
+/// code runs L07 (counted on the user) and returns `InvalidCredentials`.
+/// A right code runs L02, which commits the session, the factor's guard
+/// and `auth.mfa.success` together; if L02 fails, L07 is not run (A9). A
+/// guard that loses (the pending row already consumed, the TOTP step
+/// already used, the recovery codes already changed, the user no longer
+/// active) is `Unauthenticated`.
 pub async fn verify_pending(
     db: &Database,
     clock: &SharedClock,
     pending_id: PendingMfaId,
     code_input: &str,
+    max_lockout_secs: i64,
 ) -> CoreResult<SessionRow> {
     let pending = login_pending_mfa::get(db, pending_id)
         .await?
@@ -212,53 +222,29 @@ pub async fn verify_pending(
     }
 
     let trimmed = code_input.trim();
-    let (accepted, method_used) = if let Ok(digits) = trimmed.parse::<u32>() {
+    let (proof, method_used) = if let Ok(digits) = trimmed.parse::<u32>() {
         let mut secret = user_totp::decrypt_secret(db, &totp_row).await?;
         let now = clock.now().timestamp();
         let result = totp::verify(&secret, now, digits, totp_row.last_used_step).await;
         secret.zeroize();
-        match result {
-            Some(step) => {
-                user_totp::set_last_used_step(db, pending.user_id, step).await?;
-                (true, sui_id_shared::AuthMethod::Totp)
-            }
-            None => (false, sui_id_shared::AuthMethod::Totp),
-        }
+        (
+            result.map(|step| SecondFactorProof::Totp { step }),
+            sui_id_shared::AuthMethod::Totp,
+        )
     } else {
-        // Recovery-code path. Match against any stored hash; on hit,
-        // remove that hash from the list so the code is single-use.
-        let ok = consume_recovery_code(db, pending.user_id, &totp_row, trimmed).await?;
-        (ok, sui_id_shared::AuthMethod::RecoveryCode)
+        // Recovery-code path. Match against any stored hash; on a hit the
+        // blob without that hash replaces the one matched, in L02.
+        (
+            match_recovery_code(db, &totp_row, trimmed).await?,
+            sui_id_shared::AuthMethod::RecoveryCode,
+        )
     };
 
-    if !accepted {
+    let Some(proof) = proof else {
+        record_second_factor_failure(db, pending.user_id, max_lockout_secs).await?;
         return Err(CoreError::InvalidCredentials);
-    }
-
-    // Promote into a session.
-    let now = clock.now();
-    let session = SessionRow {
-        id: SessionId::new(),
-        user_id: pending.user_id,
-        expires_at: now + Duration::hours(SESSION_LIFETIME_HOURS),
-        created_at: now,
-        revoked_at: None,
-        // Two factors were used: the password (which produced the
-        // pending-MFA row) and whichever second factor the user just
-        // verified. The session's `acr` will be "2" and `amr` will
-        // include `pwd`, `otp`, and `mfa`.
-        auth_methods: vec![sui_id_shared::AuthMethod::Pwd, method_used],
-        // The user just completed a strong-factor challenge as part
-        // of login. Record `now` so step-up-gated actions don't
-        // immediately ask the user to re-prove themselves on a
-        // session that's seconds old.
-        last_step_up_at: Some(now),
-        last_used_at: None,
     };
-    sessions::insert(db, &session).await?;
-    crate::session::enforce_concurrent_session_cap(db, clock, session.user_id).await;
-    let _ = login_pending_mfa::delete(db, pending_id).await;
-    Ok(session)
+    complete(db, clock, pending_id, pending.user_id, method_used, proof).await
 }
 
 /// Promote a pending-MFA record into a real session, treating a successful
@@ -266,49 +252,71 @@ pub async fn verify_pending(
 ///
 /// The caller is responsible for having already invoked
 /// `crate::webauthn::finish_authentication` against this pending row's
-/// user — this function only consumes the pending row and issues the
-/// session. Splitting it like this keeps webauthn-rs out of session.rs
-/// and lets the HTTP layer audit "auth.mfa.success" once at the end of
-/// either branch (TOTP or WebAuthn).
+/// user — this function only runs L02. A failed assertion is the caller's
+/// to count with [`record_second_factor_failure`].
 pub async fn verify_pending_webauthn(
     db: &Database,
     clock: &SharedClock,
     pending_id: sui_id_shared::ids::PendingMfaId,
     expected_user_id: UserId,
 ) -> CoreResult<SessionRow> {
-    let pending = login_pending_mfa::get(db, pending_id)
-        .await?
-        .ok_or(CoreError::Unauthenticated)?;
-    if pending.expires_at < clock.now() {
-        let _ = login_pending_mfa::delete(db, pending_id).await;
-        return Err(CoreError::Unauthenticated);
-    }
-    if pending.user_id != expected_user_id {
-        return Err(CoreError::Unauthenticated);
-    }
+    complete(
+        db,
+        clock,
+        pending_id,
+        expected_user_id,
+        sui_id_shared::AuthMethod::Webauthn,
+        SecondFactorProof::Webauthn,
+    )
+    .await
+}
+
+/// RFC 102 L07: count one wrong second factor on the user. At the
+/// threshold every pending-MFA row for the user is deleted and the account
+/// is locked with the password path's backoff.
+pub async fn record_second_factor_failure(
+    db: &Database,
+    user_id: UserId,
+    max_lockout_secs: i64,
+) -> CoreResult<sui_id_store::commands::SecondFactorFailureOutcome> {
+    let audited = sui_id_store::commands::record_second_factor_failure(db, user_id, move |count| {
+        crate::session::lockout_backoff(count, max_lockout_secs)
+    })
+    .await?;
+    Ok(audited.into_inner())
+}
+
+async fn complete(
+    db: &Database,
+    clock: &SharedClock,
+    pending_id: PendingMfaId,
+    user_id: UserId,
+    method_used: sui_id_shared::AuthMethod,
+    proof: SecondFactorProof,
+) -> CoreResult<SessionRow> {
     let now = clock.now();
     let session = SessionRow {
         id: SessionId::new(),
-        user_id: pending.user_id,
+        user_id,
         expires_at: now + Duration::hours(SESSION_LIFETIME_HOURS),
         created_at: now,
         revoked_at: None,
-        // Password established the pending row; WebAuthn was the
-        // second factor. The session's `acr` will be "3" (phishing-
-        // resistant hardware-bound key) and `amr` will include
-        // `pwd`, `hwk`, and `mfa`.
-        auth_methods: vec![
-            sui_id_shared::AuthMethod::Pwd,
-            sui_id_shared::AuthMethod::Webauthn,
-        ],
-        // Phishing-resistant step-up just succeeded.
-        last_step_up_at: Some(now),
+        // Two factors were used: the password (which produced the
+        // pending-MFA row) and the second factor just verified. The
+        // session's `acr` and `amr` follow from these.
+        auth_methods: vec![sui_id_shared::AuthMethod::Pwd, method_used],
+        // L02 decides freshness by method: TOTP and WebAuthn make the new
+        // session fresh; a recovery code does not (RFC 102 N5).
+        last_step_up_at: None,
         last_used_at: None,
     };
-    sessions::insert(db, &session).await?;
-    crate::session::enforce_concurrent_session_cap(db, clock, session.user_id).await;
-    let _ = login_pending_mfa::delete(db, pending_id).await;
-    Ok(session)
+    let audited = sui_id_store::commands::complete_second_factor(db, pending_id, session, proof)
+        .await
+        .map_err(|e| match e {
+            sui_id_store::StoreError::NotFound => CoreError::Unauthenticated,
+            other => other.into(),
+        })?;
+    Ok(audited.into_inner())
 }
 
 /// Returns the number of unused recovery codes for `user_id` (RFC 056).
@@ -335,32 +343,34 @@ pub async fn count_recovery_codes_remaining(db: &Database, user_id: UserId) -> C
     Ok(hashes.len())
 }
 
-pub(crate) async fn consume_recovery_code(
+/// Find the recovery code `candidate` among the user's stored hashes. On a
+/// hit, returns the L02 proof: the sealed blob matched against, and the
+/// sealed blob without that hash. Nothing is written here.
+async fn match_recovery_code(
     db: &Database,
-    user_id: UserId,
     totp_row: &sui_id_store::models::UserTotpRow,
     candidate: &str,
-) -> CoreResult<bool> {
-    let blob = match user_totp::decrypt_recovery_codes(db, totp_row).await? {
-        Some(b) => b,
-        None => return Ok(false),
+) -> CoreResult<Option<SecondFactorProof>> {
+    let (Some(expected_sealed), Some(blob)) = (
+        totp_row.recovery_codes_enc.clone(),
+        user_totp::decrypt_recovery_codes(db, totp_row).await?,
+    ) else {
+        return Ok(None);
     };
     let mut hashes: Vec<String> = serde_json::from_slice(&blob).map_err(|_| CoreError::Internal)?;
-    let mut hit_idx: Option<usize> = None;
-    for (i, h) in hashes.iter().enumerate() {
-        if verify_password(candidate, h).is_ok() {
-            hit_idx = Some(i);
-            break;
-        }
-    }
-    if let Some(i) = hit_idx {
-        hashes.remove(i);
-        let new_blob = serde_json::to_vec(&hashes).map_err(|_| CoreError::Internal)?;
-        user_totp::set_recovery_codes(db, user_id, &new_blob).await?;
-        Ok(true)
-    } else {
-        Ok(false)
-    }
+    let Some(i) = hashes
+        .iter()
+        .position(|h| verify_password(candidate, h).is_ok())
+    else {
+        return Ok(None);
+    };
+    hashes.remove(i);
+    let new_blob = serde_json::to_vec(&hashes).map_err(|_| CoreError::Internal)?;
+    let new_sealed = user_totp::seal_recovery_codes(db, &new_blob)?;
+    Ok(Some(SecondFactorProof::RecoveryCode {
+        expected_sealed,
+        new_sealed,
+    }))
 }
 
 // ----- helpers ------------------------------------------------------------

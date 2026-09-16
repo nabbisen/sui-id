@@ -72,6 +72,7 @@ pub struct WebauthnAuthCompleteForm {
 pub async fn webauthn_auth_complete(
     state_ext: AppStateExt,
     crate::handlers::ClientIp(ip): crate::handlers::ClientIp,
+    request_id: Option<axum::Extension<crate::request_id::RequestId>>,
     jar: CookieJar,
     Form(form): Form<WebauthnAuthCompleteForm>,
 ) -> Result<Response, HttpError> {
@@ -83,32 +84,63 @@ pub async fn webauthn_auth_complete(
         ip,
         crate::handlers::ErrorAs::Html,
     )?;
-    crate::handlers::enforce_csrf(&jar, Some(&form.csrf))?;
-
-    let pending_mfa_id = jar
+    // RFC 102 N6/N14: every other error on this step is `Unauthenticated`,
+    // a redirect back to sign-in that keeps a pending `next`. The sign-in
+    // script submits this form natively, so the browser follows it.
+    let next = jar
+        .get(PENDING_MFA_NEXT_COOKIE)
+        .map(|c| c.value().to_owned())
+        .filter(|s| s.starts_with('/') && !s.starts_with("//"));
+    let refused = |err: Option<CoreError>| {
+        if let Some(err) = err {
+            let request_id = request_id.as_ref().map(|e| e.0.0.as_str()).unwrap_or("-");
+            tracing::error!(
+                request_id,
+                error = %err,
+                detail = ?err,
+                "passkey sign-in failed for a reason other than a rejected assertion; \
+                 returning the uniform failure response"
+            );
+        }
+        let to = match &next {
+            Some(n) => format!(
+                "/admin/login?next={}",
+                percent_encoding::utf8_percent_encode(n, percent_encoding::NON_ALPHANUMERIC)
+            ),
+            None => "/admin/login".to_owned(),
+        };
+        Ok(Redirect::to(&to).into_response())
+    };
+    if crate::handlers::enforce_csrf(&jar, Some(&form.csrf)).is_err() {
+        return refused(None);
+    }
+    let Some(pending_mfa_id) = jar
         .get(crate::handlers::PENDING_MFA_COOKIE)
         .and_then(|c| c.value().parse::<sui_id_shared::ids::PendingMfaId>().ok())
-        .ok_or_else(|| HttpError::html(CoreError::Unauthenticated))?;
-    let webauthn_pending_id = jar
-        .get(crate::handlers::WEBAUTHN_PENDING_COOKIE)
-        .and_then(|c| {
-            c.value()
-                .parse::<sui_id_shared::ids::WebauthnPendingId>()
-                .ok()
-        })
-        .ok_or_else(|| HttpError::html(CoreError::Unauthenticated))?;
-    let pending = sui_id_store::repos::login_pending_mfa::get(&app.db, pending_mfa_id)
-        .await
-        .map_err(|e| HttpError::html(CoreError::from(e)))?
-        .ok_or_else(|| HttpError::html(CoreError::Unauthenticated))?;
-    if pending.expires_at < app.clock.now() {
-        return Err(HttpError::html(CoreError::Unauthenticated));
-    }
-    let credential: webauthn_rs::prelude::PublicKeyCredential =
-        serde_json::from_str(&form.credential).map_err(|_| {
-            HttpError::html(CoreError::BadRequest("malformed credential JSON".into()))
-        })?;
-    sui_id_core::webauthn::finish_authentication(
+    else {
+        return refused(None);
+    };
+    let Some(webauthn_pending_id) =
+        jar.get(crate::handlers::WEBAUTHN_PENDING_COOKIE)
+            .and_then(|c| {
+                c.value()
+                    .parse::<sui_id_shared::ids::WebauthnPendingId>()
+                    .ok()
+            })
+    else {
+        return refused(None);
+    };
+    let pending = match sui_id_store::repos::login_pending_mfa::get(&app.db, pending_mfa_id).await {
+        Ok(Some(p)) if p.expires_at >= app.clock.now() => p,
+        Ok(_) => return refused(None),
+        Err(e) => return refused(Some(CoreError::from(e))),
+    };
+    let Ok(credential) =
+        serde_json::from_str::<webauthn_rs::prelude::PublicKeyCredential>(&form.credential)
+    else {
+        return refused(None);
+    };
+    match sui_id_core::webauthn::finish_authentication(
         &app.db,
         &app.clock,
         app.issuer(),
@@ -117,32 +149,40 @@ pub async fn webauthn_auth_complete(
         &credential,
     )
     .await
-    .map_err(HttpError::html)?;
-    let session = sui_id_core::mfa::verify_pending_webauthn(
+    {
+        Ok(()) => {}
+        // A storage or internal failure is not a wrong factor (A9).
+        Err(e @ (CoreError::Store(_) | CoreError::Internal)) => return refused(Some(e)),
+        // A rejected assertion or ceremony is counted on the user (L07).
+        Err(_) => {
+            let max_lockout = app.config.security.max_lockout.as_secs();
+            if let Err(e) = sui_id_core::mfa::record_second_factor_failure(
+                &app.db,
+                pending.user_id,
+                max_lockout,
+            )
+            .await
+            {
+                return refused(Some(e));
+            }
+            return refused(None);
+        }
+    }
+    // L02 commits the session with `auth.mfa.success`; if it fails, L07 is
+    // not run (A9). A lost guard is an ordinary refusal.
+    let session = match sui_id_core::mfa::verify_pending_webauthn(
         &app.db,
         &app.clock,
         pending_mfa_id,
         pending.user_id,
     )
     .await
-    .map_err(HttpError::html)?;
-    let _ = sui_id_store::repos::audit::append(
-        &app.db,
-        &sui_id_store::models::AuditLogRow {
-            at: app.clock.now(),
-            actor: Some(session.user_id),
-            action: "auth.mfa.success".into(),
-            target: Some(session.user_id.to_string()),
-            result: "ok".into(),
-            note: Some("webauthn".into()),
-        },
-    )
-    .await;
-    let next = jar
-        .get(PENDING_MFA_NEXT_COOKIE)
-        .map(|c| c.value().to_owned())
-        .filter(|s| s.starts_with('/'))
-        .unwrap_or_else(|| "/admin".into());
+    {
+        Ok(session) => session,
+        Err(CoreError::Unauthenticated) => return refused(None),
+        Err(e) => return refused(Some(e)),
+    };
+    let next = next.unwrap_or_else(|| "/admin".into());
     let cookie = session_cookie(session.id.to_string(), app.config.server.cookie_secure);
     let jar = jar
         .add(cookie)
