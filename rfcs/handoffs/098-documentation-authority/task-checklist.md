@@ -840,6 +840,13 @@ review package, with the quoted lines, and give the manual version read
 
 **Evidence.** The changed sentence; the two quotations; G10a, G10b, G15 green.
 
+### Dispatch 18 — landed 2026-09-17
+
+`95e3b6e`. The architect checked the diff hunk and read it. It is settled from
+the sudo 1.9.17p2 manual pages, as documented, not measured; `sudo` was not run.
+**Both closure conditions below are now met. RFC 098 waits only on the owner's
+approval to close.**
+
 ### Closure assessment — 2026-09-16: met on two conditions
 
 *Condition 2 revised 2026-09-16: it no longer waits on an owner check. It is

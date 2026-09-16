@@ -92,7 +92,13 @@ Completing any password change, disabling the user and deleting the user each
 invalidate outstanding tokens too. **Today none of those three does** (design
 review item 13): U09, U02 and U04 contain no `password_reset_tokens` statement,
 and U10 consumes only its own token. Each gains the invalidation in its own
-transaction. Because issuance invalidates the rest, an admin-issued link never
+transaction, and so do **U10** (completing one token invalidates the user's other
+outstanding tokens) and **U11** (an email change invalidates every token, because
+a link mailed to the old address must not outlive the address) (N8).
+
+**"Invalidate" means** setting a new `revoked_at` column, distinct from
+`consumed_at`. `count_active_for_user` excludes both. D9's issuance-to-completion
+join uses `consumed_at` only, so a revoked token never appears as completed (N13). Because issuance invalidates the rest, an admin-issued link never
 coexists with the email path's `MAX_OUTSTANDING_TOKENS_PER_USER` (3) budget.
 
 **D4 — the link resets the password and nothing else.** Completion is the
@@ -165,8 +171,16 @@ receives:
 - The completion page's script moves the token into a hidden form field and
   removes the fragment with `history.replaceState`. The token is then submitted by
   POST.
+- The script is a static file under `crates/sui-id/static/`, not inline, because
+  the CSP is `script-src 'self'`.
 - Without JavaScript, the page shows a field to paste the token. The CLI and web
-  issuance screens show the token on its own beside the link, for that case.
+  issuance screens, **and the email**, show the token text on its own beside the
+  link for that case (N9).
+- **Residuals, stated:**
+  - The browser records the full URL, fragment included, in its history before
+    `replaceState` runs.
+  - Some mail link-rewriting services drop fragments; the separate token text is
+    the recovery for that (N12).
 - The old `GET /reset-password?token=…` form is refused, with a page telling the
   user to request a new link. It is not silently accepted, because accepting it
   would keep the leak.
