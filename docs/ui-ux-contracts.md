@@ -1,5 +1,27 @@
 # UI/UX Contracts
 
+> **Stale as of 2026-09-16.** The code has left this contract in fifteen
+> places, measured under RFC 098 dispatch 14 (§5 of its review). Each is either a
+> code defect or a contract amendment; deciding which is design work for the
+> architect and the owner, under this document's own update process. See
+> [RFC 098 dispatch 15](../rfcs/handoffs/098-documentation-authority/task-checklist.md).
+>
+> - **F1** — the revision line (v0.31.x, RFC 017) predates RFCs 055, 059, 074 and 088.
+> - **F2** — §1 diagram names `/authorize` and `/token`; the routes are `/oauth2/authorize` and `/oauth2/token`.
+> - **F3** — §1, §2: `/admin/profile` is a 301 redirect to `/me/security/*` since RFC 055.
+> - **F4** — §3 lists six dangerous operations including "Force logout", which has no admin route; the code has eight.
+> - **F5** — §3: `sui-id admin delete-user --hard` does not exist.
+> - **F6** — §3: a regenerated client secret is shown on the client edit page after a redirect, not on a confirmation screen.
+> - **F7** — §4: most screens have no five-state copy in `Strings`.
+> - **F8** — §5: the dashboard has no endpoint-reachability or DB flags, no master-key backup prompt, and no hash-chain status.
+> - **F9** — §6: the tabs are General, Security, Authentication, Logs, Email, Advanced.
+> - **F10** — §7: the consent buttons are "Allow" and "Deny".
+> - **F11** — §8: the chain banner reads "Audit chain verified." with a rows-inspected note, not "verified through row N".
+> - **F12** — §8: the audit filter is one search field, not time range, prefix and actor/target.
+> - **F13** — §9: the browser banner claimed "lockout disabled"; lockout stays active in dev mode and the claim was removed from the banner on 2026-09-16.
+> - **F14** — §9: there is no "BIND: 0.0.0.0" banner.
+> - **F15** — §9: in dev mode `/setup` redirects to `/admin/login`, not `/admin`.
+
 > This document is the frozen cross-cutting UI/UX contract for sui-id's
 > admin domain. It defines screen responsibilities, the dangerous-operation
 > pattern, state copy conventions, and several domain-specific constraints.
