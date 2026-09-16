@@ -41,7 +41,7 @@ or a freshly initialised system has no records.
 SQL errors). Include the request ID when available so operators can
 correlate with server logs.
 
-**CSS classes.** `.banner.banner--danger` (flash), `.field__error` (inline).
+**CSS classes.** `.flash.error` (flash), `.field__error` (inline).
 
 **Rule.** Never add raw error strings to the UI. Always go through an i18n
 key so the message can be translated and reviewed.
@@ -52,7 +52,7 @@ key so the message can be translated and reviewed.
 
 **Tone.** Confirmatory past-tense. State what changed.
 
-**CSS class.** `.banner.banner--ok`
+**CSS class.** `.flash.info`
 
 **Key suffix.** `_flash` (e.g. `t.user_created_flash`,
 `t.password_changed_flash`, `t.language_saved_flash`).

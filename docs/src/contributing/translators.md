@@ -49,7 +49,7 @@ Run `cargo test -p sui-id-i18n` to verify.
    Ko,
    ```
 
-4. **Wire the four match arms** — `tag()`, `native_name()`, `strings()`,
+4. **Wire the six match arms** — `tag()`, `native_name()`, `strings()`,
    `formatters()`, `direction()`, and `parse()`:
 
    ```rust
@@ -87,8 +87,8 @@ Run `cargo test -p sui-id-i18n` to verify.
 - Error messages should be specific but not reveal internal details.
 - Use the locale's standard date conventions; the per-locale `*_fmt_date`
   and `*_fmt_relative` functions in your locale file handle date rendering.
-- For `email_greeting_suffix`: in Japanese this is `""` (greeting suffix
-  follows the name in "Alice さん"); check existing locales for the pattern.
+- For `email_greeting_suffix`: in Japanese this is `"様"` (greeting suffix
+  follows the name in "Alice 様"); check existing locales for the pattern.
 
 ## Running tests
 

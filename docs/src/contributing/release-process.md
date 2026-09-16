@@ -80,7 +80,7 @@ curl -s -H "User-Agent: sui-id-release (you@example.com)" \
   https://crates.io/api/v1/crates/sui-id | jq -r .crate.max_version
 ```
 
-After step 5, `cargo install sui-id` works for end users.
+After step 6, `cargo install sui-id` works for end users.
 
 ## Pre-publish checklist
 
@@ -103,7 +103,7 @@ Before tagging a release and running the steps above:
 If a published version turns out to be broken:
 
 ```bash
-cargo yank --version 0.1.0 -p sui-id
+cargo yank sui-id --version 0.1.0
 ```
 
 Run this for every crate in the affected version, in the *reverse* of the
@@ -115,7 +115,7 @@ crates.io rejects packages whose dependencies use `path` only — the
 registry has no way to resolve a local path. We carry both:
 
 ```toml
-sui-id-shared = { version = "0.1.0", path = "../sui-id-shared" }
+sui-id-shared = { version = "0.77.0", path = "crates/sui-id-shared" }
 ```
 
 Inside the workspace, cargo prefers `path`; in a published package, cargo
