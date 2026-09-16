@@ -306,7 +306,7 @@ The first start logs a one-time setup token to stderr. Capture it
 from the journal:
 
 ```bash
-journalctl -u sui-id --since "1 minute ago" | grep -A2 "Setup token"
+journalctl -u sui-id --since "1 minute ago" | grep -A2 "begin setup"
 ```
 
 Open `https://idp.example.com/setup` in a browser, paste the token,
@@ -319,7 +319,7 @@ token is issued on every startup until setup succeeds:
 
 ```bash
 systemctl restart sui-id
-journalctl -u sui-id --since "1 minute ago" | grep -A2 "Setup token"
+journalctl -u sui-id --since "1 minute ago" | grep -A2 "begin setup"
 ```
 
 ## 8. Enable MFA on the admin account
@@ -328,7 +328,7 @@ You just created the only account that can administrate this
 installation. Lock it down:
 
 1. Sign in.
-2. Go to `Profile`.
+2. Go to `My account`.
 3. Either set up TOTP (with an authenticator app) **and** save the
    recovery codes, or register a passkey, or both.
 4. Sign out and sign back in to confirm the second factor works.
@@ -423,7 +423,7 @@ systemctl start sui-id
 ## 10. Health checks and monitoring
 
 sui-id exposes `/healthz` over HTTP. It returns `200 OK` when the
-process can read the database and `503` otherwise. Wire it into
+process can read the database and `500` otherwise. Wire it into
 whatever you use:
 
 - A systemd watchdog: extend the unit with `WatchdogSec=` and have

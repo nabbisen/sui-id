@@ -56,9 +56,9 @@ add these paths:
 **New configuration sections.** Optional; existing deployments that do not
 add them continue to work without change:
 
-- `[metrics]` — enable Prometheus metrics endpoint
-- `[[user_source]]` — LDAP external user source
-- `[[federation_provider]]` — upstream OIDC provider
+- `metrics_enabled` / `metrics_listen_addr` under `[server]` — enable Prometheus metrics endpoint
+- `[[user_sources]]` — LDAP external user source
+- `[[federation_providers]]` — upstream OIDC provider
 
 **New CLI subcommands:**
 

@@ -1,6 +1,6 @@
 # Dangerous operations
 
-> **Scope.** This guide covers the seven operations sui-id classifies
+> **Scope.** This guide covers the eight operations sui-id classifies
 > as **dangerous** — actions that meaningfully reduce the security or
 > availability of a user, client, or signing key. Each one goes
 > through the same four-step contract: a confirm screen, a step-up
@@ -14,14 +14,14 @@ Every dangerous action is gated by:
    what is about to happen and what is reversible. It carries a
    `_confirmed=1` hidden field; direct POSTs without this field are
    rejected with HTTP 400. The confirm screen is built from a single
-   shared template (`<ConfirmScreen>`) so every dangerous action has
+   shared template (`ConfirmScreenData`) so every dangerous action has
    the same affordances: identity-of-target line, blast-radius
    summary, reversibility badge, optional reason textarea, cancel
    button.
 2. **Step-up.** Immediately before the action runs, the server checks
    that the operator has completed a fresh re-authentication (within
-   the last 5 minutes by default). Stale sessions are redirected to
-   `/admin/login/step-up?return=…` or `/me/security/step-up?return=…`
+   the last 5 minutes, a fixed constant). Stale sessions are redirected to
+   `/me/security/step-up?return_to=…`
    and the action waits.
 3. **The action.** Only after both gates pass does the use case
    function in `sui-id-core` execute.
@@ -34,7 +34,7 @@ Every dangerous action is gated by:
 
 ## Operation catalogue
 
-The table below lists the seven actions and what each gate does in
+The table below lists the eight actions and what each gate does in
 practice.
 
 | Action | HTTP route | Reversible? | Audit action | What gets revoked along with the primary effect |
