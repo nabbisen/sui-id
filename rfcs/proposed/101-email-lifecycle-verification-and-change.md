@@ -199,7 +199,8 @@ guard rejects any demotion that would leave zero admins, in-transaction and prov
 under concurrency. So "no one to manage users" is not a reachable state, and the
 recovery-of-last-resort question does not arise.
 
-**§6.5 — Must password reset require a *verified* address?** Raised 2026-09-10 by
+**§6.5 — Must password reset require a *verified* address? Settled 2026-09-16
+(owner) — see the ruling after §6.4.** Raised 2026-09-10 by
 the §6.1/§6.3 answers, not present in the original draft. §2's third consequence —
 address reuse transferring recovery — is only fully closed if recovery requires a
 proven address. Requiring it strands every existing user, since none is verified;
@@ -208,8 +209,27 @@ This is §6.4's question and this one meeting: whatever is decided for the exist
 population determines whether this can be required, and when. **Coupled, and both
 are the owner's.**
 
-**§6.4 — Existing users.** Every current address is unverified. Whether existing
-users are prompted, required, or left alone until they change something.
+**§6.4 — Existing users. Settled 2026-09-16 (owner) — see the ruling below.** Every
+current address is unverified. Whether existing users are prompted, required, or
+left alone until they change something.
+
+**Ruling on §6.4 and §6.5 together — settled 2026-09-16 (owner).** `@nabbisen`
+accepted the architect's proposal, under the standing principle of a finally clean,
+safe and secure, robust and sophisticated design:
+
+- **§6.5 — yes, from the day verification ships, with no transition period.** Password
+  reset sends a link only to a verified address. A transition period was rejected: it
+  is the motivating threat left open with a deadline someone must remember to end,
+  and ending it would need a second migration and review.
+- **§6.4 — existing users are prompted, never blocked.** Every existing address starts
+  unverified. A signed-in user is asked to verify and can do so at any time; sign-in
+  never depends on it. Blocking sign-in was rejected: a lockout pushes operators
+  toward workarounds that weaken the system.
+- **Nobody is stranded.** A user who cannot sign in and has no verified address
+  recovers through admin password reset (§6.3), and an admin always exists (RFC 094
+  `U05` last-admin guard).
+- **No enumeration.** The forgot-password response is identical whether the account
+  exists, and whether its address is verified.
 
 ## Alternatives rejected
 

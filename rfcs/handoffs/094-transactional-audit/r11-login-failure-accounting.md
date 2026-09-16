@@ -55,9 +55,12 @@ locked, known user with wrong password, and a store failure on that last branch 
 assert the identical status, body and metric. This makes ruling (a) a tested
 contract instead of an accident of one match arm.
 
-## Part 2 — held for `@nabbisen`: should a login that cannot be audited succeed?
+## Part 2 — should a login that cannot be audited succeed? Ruled 2026-09-16
 
-Recommended design, pending the owner's ruling: **fail closed.** If the audit log
+**`@nabbisen` accepted the architect's recommendation: fail closed.** Not dispatched:
+it waits for the RFC 094 amendment described below. Part 1 is unaffected.
+
+The design as recommended: If the audit log
 cannot be written, no login succeeds — the successful-login audit row becomes
 must-succeed like U22's, so an attacker cannot guess freely while accounting is
 down and then sign in. The cost is availability: during an audit-log outage nobody
