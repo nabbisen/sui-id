@@ -9,6 +9,10 @@
 - **Step-up** (same day): the owner's instruction on step-up auditing — "Log is
   important. Consider carefully." It extended this RFC from sign-in to step-up
   re-authentication (Part B).
+- **Independent design review** (implementation role, 2026-09-16,
+  `.git-exclude/review-requests/rfc-102-103-design-review-2026-09-16.md`): one
+  blocker, six high and eight medium findings. Every one is resolved in this text;
+  the table under *Design review resolutions* maps each finding to where.
 
 **Implementation prerequisites.** This RFC Accepted, and RFC 094 M2a's **runner
 foundation** — `declare_write_command!`, `WriteTx<AtomicAudit>` and
@@ -120,6 +124,16 @@ MFA enrolled, and federation with local MFA. Both write
   for sign-in are created only through this RFC's commands, and the command
   manifest and the structural gate say so.
 - **A5 — every path.** Paths 1–5, and RFC 096's F01 and F03 when built.
+- **A7 — no session nobody holds.** A sign-in that will be refused after
+  authentication (today, a non-admin signing in to an admin-only `next`, in
+  `login_post`) is refused **before** L01, from the role read outside the
+  transaction. L01 never commits a session and success event that no cookie
+  carries.
+- **A8 — second-factor failures are counted.** A wrong TOTP code, recovery code
+  or WebAuthn assertion at the sign-in second factor commits a counted failure
+  on its pending-MFA row (L07). After **5**, the pending row is consumed and the
+  sign-in must start again from the password. The second factor is the same
+  guess space as step-up, and gets the same treatment.
 - **A6 — continuations stay Class B.** Issuing a pending-MFA continuation grants
   no session and no authority, so its event stays Class B (`emit_must_attempt`).
   A sign-in cannot complete without passing A1 at its final step.
@@ -134,9 +148,11 @@ inventory already uses `S01`–`S10` for settings.
 | Command | Replaces path | Transaction contents | Event |
 |---|---|---|---|
 | **L01** password sign-in | 1 | Clear the failure counter and stale lock; set `last_login_at`; insert the session; evict over-cap sessions. | `auth.login.success` |
-| **L02** second-factor completion | 2, 3 | Consume the pending-MFA row with a guarded delete (zero rows → roll back, `Unauthenticated`). For TOTP, advance `last_used_step` with a guard (`WHERE last_used_step < step`; zero rows → roll back). For a recovery code, remove the used hash with a guard that it is still present. Set `last_login_at`, insert the session, evict over-cap sessions. | `auth.mfa.success`, with the method as a bounded attribute |
-| **L03** external-source sign-in | 4 | Takes the shadow-user upsert result as input; U26 remains its own command. Set `last_login_at`, insert the session, evict over-cap sessions. | `auth.login.success`, with `source` as a bounded attribute |
-| **L04** federated sign-in (shipped path) | 5 | Set `last_login_at`, insert the session, evict over-cap sessions. | `auth.federation.signin.success` |
+| **L02** second-factor completion | 2, 3 | Consume the pending-MFA row with a guarded delete (zero rows → roll back, `Unauthenticated`). For TOTP, advance `last_used_step` with a guard (`WHERE last_used_step < step`; zero rows → roll back). For a recovery code: the codes are one sealed JSON blob (`user_totp.recovery_codes_enc`), so the guard is a compare-and-swap on the ciphertext, `UPDATE … SET recovery_codes_enc = ?new WHERE user_id = ? AND recovery_codes_enc = ?old` (zero rows → roll back); the Argon2 match runs outside. Set `last_login_at`, insert the session, evict over-cap sessions. | `auth.mfa.success`, with the method as a bounded attribute |
+| **L03** external-source sign-in | 4 | Upsert the shadow user **inside** the transaction. U26 is listed in the manifest as an implemented command, but none exists (`users::upsert_ldap_shadow` is a raw function); L03 subsumes it and the manifest row is corrected. Set `last_login_at`, insert the session, evict over-cap sessions. | `auth.login.success`, with `source` as a bounded attribute |
+| **L04** federated sign-in (shipped path) | 5 | Re-read the user: active, not deleted. **The local-MFA decision comes from a successful read**; a read error refuses the sign-in (today `is_mfa_enabled(..).unwrap_or(false)` skips MFA on error). Set `last_login_at`, insert the session, evict over-cap sessions. | `auth.federation.signin.success` |
+
+| **L07** second-factor failure | 2, 3 | Increment the pending-MFA row's failure count; at 5, delete the row. | `auth.mfa.failure` (count) **or** `auth.mfa.pending_revoked` (count) |
 
 RFC 096's F01 and F03 are built as L04's successors, under the same rule.
 
@@ -158,12 +174,22 @@ event it never wrote.
 
 ### Failure handling
 
-- **The append or any statement fails:** roll back and return the step's normal
-  failure:
-  - password step: 401 with the uniform message;
-  - second-factor step: the MFA failure response.
+- **The append or any statement fails:** roll back and return that step's
+  ordinary failure, as fixed here. No session cookie is set, and the failure is
+  logged (C1).
 
-  No session cookie is set, and the failure is logged (C1).
+  | Step | Ordinary failure, and the response for a failed transaction |
+  |---|---|
+  | Password (paths 1, 4) | 401 login page with the uniform flash (today's `login_post` `Err` arm) |
+  | TOTP or recovery code (path 2) | 401 challenge page with the uniform flash (today's `mfa_challenge_post` `Err` arm) |
+  | WebAuthn second factor (path 3) | 401 `Unauthenticated` error page. **Today a store error maps to 500**; every error on this step maps to `Unauthenticated` |
+  | Federation callback (path 5) | Redirect to `/admin/login?fed_error=signin_failed`. **Today a store error maps to 500** |
+  | Step-up TOTP (L05/L06) | 400 step-up page with the invalid-code flash. **Today a store error maps to 500** |
+  | Step-up WebAuthn | the same 400 step-up page |
+
+  **"Identical" means identical after removing per-response values**: the
+  `request_id` in error pages and the CSRF token in challenge pages. Tests
+  normalise exactly those two and compare the rest byte for byte.
 - **The password is correct but the transaction fails:** the failure counter does
   **not** advance, because no wrong credential was presented. The stale lock is
   not cleared.
@@ -171,8 +197,11 @@ event it never wrote.
   committed before the session is written. It runs after `totp::verify` compared
   the code against a step read earlier. So one code, submitted on two pending rows
   at once, can pass on both. Inside L02 the guarded update makes one of them roll
-  back, which closes that replay race. A code whose sign-in fails to commit stays
-  usable within its window, so the user's retry succeeds (*Open question 2*).
+  back, which closes that replay race. The guard also stops the stored step
+  moving **backwards**: today, if concurrent verifications accept steps N+1 and N
+  and write in that order, the stored step becomes N and the N+1 code verifies
+  once more. A code whose sign-in fails to commit stays usable within its window,
+  so the user's retry succeeds (*Open question 2*, agreed by the review).
 - **A consumed recovery code** also rolls back with a failed L02. Otherwise a
   storage fault would silently burn a single-use code.
 
@@ -222,6 +251,23 @@ Freshness is `sessions.last_step_up_at` within `STEP_UP_FRESHNESS_SECS` (300).
   factor authorized the action, or whether it passed with no challenge because
   the account has no second factor (`StepUpDecision::Allow` for a user without
   MFA).
+- **B-F7: a stolen session can make itself fresh.** Found by the design review.
+  Passkey registration (`passkey_register_start`, `passkey_register_complete`),
+  recovery-code regeneration (`mfa_regenerate_recovery`) and TOTP enrolment
+  (`mfa_enroll_start`, `mfa_enroll_confirm`) need only a session and CSRF. With a
+  stolen cookie, register the attacker's passkey, step up with it, and every gated
+  action is open. Or regenerate recovery codes and step up with one (B-F3).
+  **Without closing this, nothing else in Part B stops a session thief.**
+- **B-F8: most gated actions are not Class-A commands.** Of the 12 gated handlers
+  that write, only four run a sealed command: `users_set_disabled` (U02/U03),
+  `users_delete` (U04), `users_mfa_reset` (U07) and `signing_keys_rotate` (K01).
+  The other eight mutate, then append best-effort, although the manifest marks
+  several as implemented Class A:
+  - client disable, delete and rotate-secret (C05, C06, C07);
+  - signing-key hard delete (no manifest row at all);
+  - self-service MFA disable (U13) and passkey delete (U16);
+  - revoke-all-others (U19);
+  - SMTP pending-change apply (S08 with S06).
 
 ### Requirements
 
@@ -235,13 +281,34 @@ Freshness is `sessions.last_step_up_at` within `STEP_UP_FRESHNESS_SECS` (300).
 - **B3 — only phishing-resistant or time-based factors.** TOTP codes and WebAuthn
   assertions satisfy step-up. Recovery codes do not (RFC 089).
 - **B4 — the action carries its authorization.** The event of every
-  step-up-gated Class-A command carries a required `step_up` attribute, in one of
-  two forms:
+  step-up-gated command carries a required `step_up` attribute, in one of two
+  forms:
   - `fresh`, with the method and the seconds since the step-up;
   - `not_required`, with reason `no_second_factor`.
 
-  The attribute is computed by the gate from the session row it read. The
-  descriptors make it required, so a gated command cannot commit without it.
+  **The command computes it, not the gate.** A gated command takes the session ID
+  as an input, re-reads the session row inside its own transaction, and derives
+  the attribute from `last_step_up_at` and `last_step_up_method`. If the session
+  is no longer fresh at commit, and the user has a second factor, the command
+  rolls back. No value crosses the handler, so nothing can be forged, and the gap
+  between the gate's check and the commit is closed. The session ID is an input
+  only; it never enters the event.
+
+  **B4 applies only to sealed commands.** Each of the eight actions in B-F8 gains
+  the attribute when RFC 094 converts it. Until then its row stays best-effort,
+  and this RFC says so; it does not claim otherwise.
+- **B7 — adding a factor requires proof.** Registering a passkey, regenerating
+  recovery codes and enrolling TOTP are step-up-gated whenever the user already
+  has any second factor. For a user with **no** second factor, the first factor's
+  enrolment requires:
+  - a local user: the current password, re-entered on the enrolment form and
+    verified by the handler;
+  - a user with no local password (LDAP or federated): a session established
+    within the last `STEP_UP_FRESHNESS_SECS`. That is weaker, and the residual is
+    stated under *Security considerations*.
+
+  Enrolment of a first factor, and each later factor addition, is recorded:
+  `auth.mfa.factor_added` (method), Class A with the enrolment write.
 - **B5 — uniform failure.** A correct factor whose transaction fails gets the
   same response as a wrong factor, and its code or ceremony is not consumed.
 - **B6 — no bypass.** The raw step-up touch has no production caller outside L05.
@@ -254,7 +321,11 @@ Freshness is `sessions.last_step_up_at` within `STEP_UP_FRESHNESS_SECS` (300).
 | **L06** step-up failure | Increment the session's step-up failure count. At 5, revoke that session. | `auth.step_up.failure` (count) **or** `auth.step_up.session_revoked` (count) |
 
 The migration adds `last_step_up_method` and `step_up_failure_count` to
-`sessions`.
+`sessions`, and `failure_count` to `login_pending_mfa` (L07).
+
+L05 needs a guarded, single-row session revoke and touch; L06 needs
+`sessions::revoke_within_tx` for one row. The review lists every
+`*_within_tx` variant L01–L07 need (its §2.4); the handoff carries that list.
 
 WebAuthn step-up stops swapping ceremony kinds (B-F5). `finish_authentication`
 takes the expected kind as a parameter, and L05 consumes the row.
@@ -302,8 +373,15 @@ requires:
 - `sessions::insert` and `sessions::touch_step_up` become crate-private to
   `sui-id-store`.
 
-Whether a stronger, type-level proof is wanted is *Open question 1*. The same
-question applies to B4's evidence value.
+A type-level proof is not required (*Open question 1*, resolved): every caller is
+in the workspace, and the manifest plus the structural gate suffice, as for U22.
+B4 avoids the question by computing its evidence inside the command.
+
+`commands::insert_session` (U30, the Protocol runner) has no production caller and
+is retired with A4. The four test callers of `sessions::insert` outside the store
+crate sign in through the commands, or use a store-side test constructor that
+creates a session **through L01's transaction**. A test feature that re-exports
+raw access is not allowed (RFC 094 migration checklist).
 
 ### C1 — operational logs
 
@@ -324,11 +402,13 @@ half of A3 and B5: the response is uniform, and the log is where the cause goes.
 3. **L03** and **L04**.
 4. **A4**: `sessions::insert` crate-private; manifest and structural gate
    updated.
-5. **Migration, L05, L06**, the step-up rate-limit bucket, and B3's
+5. **B7 first**, because nothing else in Part B holds without it: factor
+   enrolment gated, and `auth.mfa.factor_added`.
+6. **Migration, L05, L06, L07**, the step-up rate-limit bucket, and B3's
    recovery-code refusal.
-6. **B4**: the `step_up` attribute on every gated command's descriptor; B6's
-   visibility change.
-7. `ci/audit-coverage-matrix.md` classes and new events; `docs/threat-model.md`
+7. **B4** on the four sealed gated commands; B6's visibility change. Each of the
+   eight B-F8 actions gains B4 in the same commit that RFC 094 converts it.
+8. `ci/audit-coverage-matrix.md` classes and new events; `docs/threat-model.md`
    states the properties (through RFC 097's baseline if that has landed first,
    otherwise directly); the RFC 094 and RFC 096 pointers are added.
 
@@ -344,10 +424,14 @@ For **each** of L01–L05:
   step, recovery code or ceremony consumed; no eviction. The HTTP response is
   byte-identical to that step's ordinary failure, and the C1 log line is emitted.
 
-**Concurrency.**
-- Two completions of one pending row give exactly one session.
+**Concurrency.** Multi-thread runtime, repeated; the design review demonstrated
+the first three failing in every iteration today.
 - One TOTP code on two pending rows gives exactly one session.
+- One recovery code on two pending rows gives exactly one session, and exactly one
+  code is removed.
+- Two completions of one pending row give exactly one session.
 - One TOTP code on two concurrent step-ups gives exactly one freshness change.
+- Steps N+1 then N written concurrently: the stored step stays N+1.
 
 **Revalidation.**
 - A user disabled between verification and commit: rolled back.
@@ -359,6 +443,17 @@ For **each** of L01–L05:
   `auth.step_up.session_revoked` is written.
 - The rate-limit bucket refuses a burst from one address.
 
+**B7.** With a stolen session (a second client holding the cookie):
+- a passkey cannot be registered, recovery codes cannot be regenerated, and TOTP
+  cannot be enrolled while any factor exists without a fresh step-up;
+- a local user with no factor cannot enrol one without the current password.
+
+**L07.** Four wrong codes then a right one: signed in. Five wrong codes: the
+pending row is gone, and the right code is refused.
+
+**A7.** A non-admin signing in to an admin-only `next`: no session row, no success
+event.
+
 **B3.** A valid, unused recovery code on the step-up form: refused, not consumed,
 freshness unchanged.
 
@@ -366,6 +461,7 @@ freshness unchanged.
 - For every gated command, a structural test that its descriptor requires
   `step_up`.
 - An end-to-end case for each form: a fresh TOTP step-up, and a no-MFA account.
+- Freshness expiring between the gate and the commit: the command rolls back.
 
 **No bypass (A4, B6).** Structural fixtures: no production caller of the raw
 session insert or step-up touch outside the commands.
@@ -400,10 +496,18 @@ C1 makes the outage visible to the operator instead of silent.
 **What does not change.**
 - Existing sessions keep working during an audit outage; this RFC governs
   establishing and stepping up a session, not using one.
-- A dangerous action is already a Class-A command and cannot commit unaudited.
+- Dangerous actions: four already run as Class-A commands and cannot commit
+  unaudited. The other eight (B-F8) still append best-effort until RFC 094 converts
+  them. This RFC does not change that, and does not claim to.
 - Accounts with no second factor still pass step-up gates without a challenge
   (the design recorded in `step_up.rs`). B4 now makes every such pass visible in
   the audit log.
+
+**Residual in B7.** A user with no local password and no second factor can enrol a
+first factor from any session younger than five minutes. A thief who steals such a
+session within five minutes of sign-in can enrol a factor. The enrolment is
+recorded (`auth.mfa.factor_added`), and requiring a second factor for all users is
+the remedy; that is outside this RFC.
 
 **Threat model.** `docs/threat-model.md` is the single home for security claims
 (RFC 098 rule 7). This section records the decision; that document states the
@@ -421,16 +525,47 @@ Measured by reading on 2026-09-16. Each needs its own decision, not this RFC's:
 - The settings log summary and the dashboard count only `auth.login.success`.
   Sign-ins completed through a second factor or federation are not counted as
   sign-ins.
+- **Found by the design review, each needing its own fix now:**
+  - **A returning LDAP user cannot sign in** (H3). The shadow row takes the typed
+    username, so the second sign-in finds a local user without a credential and
+    never consults the directory. Path 4 works once per user.
+  - **The shipped federation callback issues sessions to disabled or deleted
+    users** (H4). They are refused at `/admin` and `/oauth2/authorize`, but `/me/*`
+    accepts them. L04 closes this; the live defect needs a fix before L04.
+  - **An LDAP or federated user can get a local password through forgot-password**
+    (H5), bypassing the directory. RFC 103 records the control; the live defect
+    needs a fix now.
+  - Federation provisioning stores federated users with `source = ldap`
+    (`federation.rs:504-511`).
+  - The request-id middleware holds a span guard across `.await`
+    (`crates/sui-id/src/http/request_id.rs`), so handler log lines can lose their
+    `request_id` (found by R11 Part 1).
+
+## Design review resolutions
+
+| Finding | Resolved in |
+|---|---|
+| B1 stolen session enrols a factor | B-F7, **B7**, step 5, tests |
+| H1 most gated actions not Class A | B-F8, B4 scope, step 7, *Security considerations* |
+| H2 replay races; blob CAS; backward step | L02 row, *Failure handling*, concurrency tests |
+| H3 returning LDAP user | *Findings* (live defect, own fix) |
+| H4 federation MFA fail-open; disabled users | L04 row; *Findings* (live defect, own fix) |
+| H5 external users get local passwords | *Findings*; RFC 103 T10 |
+| H6 reset token in URL | RFC 103 D10 |
+| M1 byte-identical; 500s | *Failure handling* table |
+| M2 evidence computed by the command | B4 |
+| M3 session nobody holds | A7 |
+| M4 second-factor failures uncounted | A8, L07 |
+| M5–M8 | RFC 103 |
+| M6 U26 not a command | L03 row |
+| L6 `sessions::insert` test callers; U30 retired | *Authority for the context* |
 
 ## Open questions
 
-1. **Type-level proof of authentication.** Should the commands, and B4's evidence
-   value, require a sealed proof value that only the verification functions can
-   construct, instead of a caller list plus the structural gate? That is
-   stronger, but the proof type would have to live in `sui-id-store` or in a crate
-   both sides depend on. Goes to `@nabbisen` if the design reviewer cannot
-   adjudicate it.
-2. **A rolled-back TOTP step.** Is it acceptable that a code stays usable after a
+1. **Type-level proof of authentication. Resolved (design review).** Not required
+   for L01–L07; B4 computes its evidence inside the command. See *Authority for the
+   context*.
+2. **A rolled-back TOTP step. Agreed by the design review.** Is it acceptable that a code stays usable after a
    failed commit? The alternative is to advance the step in a separate committed
    write even when the operation fails. The recommendation is the former, because
    the latter burns a user's valid code on a server fault.
@@ -444,3 +579,8 @@ Measured by reading on 2026-09-16. Each needs its own decision, not this RFC's:
    the admin MFA reset. The design reviewer should first confirm which self-service
    MFA actions are gated. If a sole administrator could be left with no path, the
    question goes to `@nabbisen` together with RFC 103's CLI recovery.
+
+   **Design review:** agreed, **but only together with B7** — without B7, passkey
+   registration still yields freshness. With B7, lost-authenticator recovery is the
+   administrator's MFA reset, and **a sole administrator who loses every factor has
+   no path**. That goes to `@nabbisen` as RFC 103 D12.

@@ -212,8 +212,15 @@ at a time; the workspace and structural gate must remain green between waves.
         not detect a dropped check that no scenario exercises. Same hazard as the
         RFC 096 federation split, where relocating code can silently drop a
         check.
-  - [ ] Give the 11 e2e call sites in `crates/sui-id/tests/` a `ReadConn`-based
-        assertion path. **No `test-support`-style feature may re-export raw
+  - [ ] Give the e2e call sites in `crates/sui-id/tests/` a `ReadConn`-based
+        assertion path. *Re-counted 2026-09-16:* raw SQL through `with_conn` in
+        `email_pwd_change.rs`, `i18n_basic.rs`, `session_limits.rs` (three sites),
+        and `r11_login_failure.rs`, which needs a **fault-injection** path (an
+        `audit_log` insert failure) as well as fixture writes. RFC 094's
+        failure-injection seam is test-only inside the store; exposing it to e2e
+        tests without a raw-access feature is a design question this item must
+        answer first. `rusqlite` leaves `crates/sui-id/Cargo.toml` when this item
+        lands (backup-into-store ruling 2). **No `test-support`-style feature may re-export raw
         access** — a feature enabled in a production build would silently undo
         the whole control, and `--all-features` has already concealed one gap in
         this workspace (RFC 093 G07b).

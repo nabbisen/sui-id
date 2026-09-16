@@ -87,3 +87,48 @@ B2). Relocating code is exactly where a check gets silently dropped.
 
 The architect ticks the migration checklist item, updates RFC 094's note that
 called this "a separate owner decision", and re-measures the M2a exit condition.
+
+## Rulings on the stop of 2026-09-16 — proceed with the move
+
+The review request stopped before moving any code. The "before" half of the
+equivalence record is committed as `f18af38`: 31 e2e triggers plus K28, with the
+mutation isolation shown. Rulings:
+
+1. **K23, K25, K27 (§1.1): move as they are.** Record them in the equivalence
+   table as *unreachable defensive checks*, with the reason for each. Nothing is
+   deleted in the move: a pure move stays pure, and one review should not have to
+   judge a simplification and a relocation at once. K23's dead guard is noted for
+   the hardening package below.
+2. **`rusqlite` in `crates/sui-id/Cargo.toml` (§1.2): it stays for now.** The move
+   removes `backup/`, the last *production* use in `sui-id`, and that is this
+   handoff's goal. The five e2e files (and `r11_login_failure.rs`) use raw SQL
+   through the public `Database::with_conn`. That is the migration checklist's
+   separate M2a exit item: a `ReadConn` assertion path, `with_conn`/`with_tx` made
+   `pub(crate)`, and the manifest gate. Its rule already excludes the shortcuts:
+   no `test-support` feature re-exporting raw access, and `rusqlite` in no
+   `[dev-dependencies]` outside the store. The dependency is removed when that
+   item lands. **Replace the evidence item "`crates/sui-id/Cargo.toml` no longer
+   names `rusqlite`" with:** `grep -rn rusqlite crates/sui-id/src` returns nothing.
+3. **The new caller `tests/e2e/backup_checks.rs` (§1.3): accepted.** It is the
+   equivalence mechanism, and it goes through the adapter.
+4. **The design in §4: approved as written.**
+   - A dedicated `BackupError` enum, not new `StoreError` variants, because the
+     `CoreError` HTTP mapping must not grow archive refusals no request can
+     produce.
+   - One variant per refusal, with today's messages as `Display`.
+   - Sources kept with `#[source]`.
+   - One `FORMAT_VERSION`.
+   - A thin adapter in `sui-id` with today's signatures, so `cli.rs`,
+     `tests/e2e/backup.rs` and `tests/e2e/backup_checks.rs` stay byte-identical.
+     Show that they are, by hash, before and after.
+5. **F4 (the docs say `verify` "never writes anything") is fixed in this
+   package.** It stages a snapshot in a temporary directory, and
+   `docs/src/guides/deployment.md` says so after the move.
+6. **F1, F2, F3 and F5 are not part of the move.** A move must not change them
+   silently, and it does not change them loudly either.
+   - **F1** — a manifest-less archive bypasses both version refusals.
+   - **F2** — `verify` does not apply the compatibility checks.
+   - **F3** — `restore` validates neither the database nor the key it writes.
+
+   These three are proposed to the owner as a separate hardening package. F5 (the
+   swallowed `create_dir_all` error) and K23 go with it.

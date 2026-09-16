@@ -5,8 +5,10 @@
 **Design prerequisites.** The owner ruling of 2026-09-16 that admin password
 reset is built, as a web operation and as a CLI operation. In the owner's words:
 "I care about security risk on Web version." The risk analysis below answers
-that.
-**Implementation prerequisites.** This RFC Accepted; RFC 094 M2a runner foundation (in the tree); RFC 102 Part B Implemented, because D6 relies on step-up evidence that cannot be forged or skipped.
+that. **Independent design review** (implementation role, 2026-09-16, shared
+with RFC 102): findings H5, H6, M5, M7 and M8 bear on this RFC and are resolved
+below; B1 is resolved in RFC 102 B7, which D6 depends on.
+**Implementation prerequisites.** This RFC Accepted; RFC 094 M2a runner foundation (in the tree); RFC 102 Part B Implemented, including B7, because D6 relies on step-up evidence that a stolen session cannot manufacture.
 **Closure prerequisites.** An administrator can issue a recovery link on the web and through the CLI; the user can set their own password with it; no code path lets anyone other than the account holder choose or learn a password; every threat below has a test that fails when its control is removed; `docs/threat-model.md` states the resulting properties; independent closure review accepts the evidence.
 **Tracks.** `ROADMAP.md` programme. This RFC is a prerequisite of RFC 101: the
 §6.4/§6.5 ruling's "nobody is stranded" is true only once this RFC is
@@ -56,7 +58,10 @@ tree.
 | T7 | A link is replayed or kept for later | D2, D3 |
 | T8 | An attacker phones the helpdesk pretending to be the user | D11 (procedure; not solvable in code) |
 | T9 | The link leaks through logs, browser history, caches or `Referer` | D10 |
-| T10 | An external-source (LDAP) account gets a local password, bypassing the directory | D5 |
+| T10 | An external-source (LDAP or federated) account gets a local password, bypassing the directory | D5, **D13** |
+| T11 | A link issued before a user is disabled, deleted or changed still completes | D3, D13 |
+| T12 | One token completes twice under concurrency | D13 |
+| T13 | A sole administrator who has lost every second factor has no way back in | **D12, owner ruling pending** |
 
 ## Design
 
@@ -73,6 +78,9 @@ caller list loses U06.
 - single use;
 - expiry 30 minutes, the same as `DEFAULT_TOKEN_TTL`.
 
+The link base is `server.issuer` for **every** origin, email included. Today the
+email path uses `smtp_config.base_url`; one completion URL has one origin.
+
 A migration adds two columns:
 - `issued_via`: `TEXT NOT NULL DEFAULT 'email'`, CHECK in `email`, `web`, `cli`.
 - `issued_by`: a nullable administrator user ID. The CHECK requires it to be
@@ -81,7 +89,11 @@ A migration adds two columns:
 **D3 — one live link per user.** Issuing a link invalidates every outstanding
 token for that user, whether email or admin-issued, in the same transaction.
 Completing any password change, disabling the user and deleting the user each
-invalidate outstanding tokens too.
+invalidate outstanding tokens too. **Today none of those three does** (design
+review item 13): U09, U02 and U04 contain no `password_reset_tokens` statement,
+and U10 consumes only its own token. Each gains the invalidation in its own
+transaction. Because issuance invalidates the rest, an admin-issued link never
+coexists with the email path's `MAX_OUTSTANDING_TOKENS_PER_USER` (3) budget.
 
 **D4 — the link resets the password and nothing else.** Completion is the
 existing U10 flow at `/reset-password`: policy check, HIBP, credential swap, and
@@ -120,8 +132,10 @@ what T1 steals.
 - **At issuance:** to the user's **verified** address, once RFC 101 ships;
   before that, none. An unverified address may belong to someone else (RFC 101
   §2).
-- **At completion:** the existing `notify_password_changed` notice, on the same
-  rule.
+- **At completion:** the existing `notify_password_changed` notice, to a verified
+  address, or, for the email origin, to the address that received the link (which
+  that completion has just proved). **Today it goes to any address on file,
+  verified or not** (design review item 12).
 
 The user's own account page shows the most recent recovery event, so a user with
 no address still sees it after signing in.
@@ -142,7 +156,22 @@ U10's `auth.password.reset_completed` gains an `origin` attribute (`email` |
 `admin` | `cli`). An operator can then join each issuance to its completion. The
 audit row never carries the token or its hash.
 
-**D10 — the link never leaks.**
+**D10 — the link never leaks.** The token never appears in a URL the server
+receives:
+- The link is `<issuer>/reset-password#t=<token>`. A URL fragment is not sent in
+  the HTTP request, so it reaches no proxy access log, no `TraceLayer` span and no
+  server log. **The email link uses the same form**, which closes the same leak on
+  the path that exists today (design review H6).
+- The completion page's script moves the token into a hidden form field and
+  removes the fragment with `history.replaceState`. The token is then submitted by
+  POST.
+- Without JavaScript, the page shows a field to paste the token. The CLI and web
+  issuance screens show the token on its own beside the link, for that case.
+- The old `GET /reset-password?token=…` form is refused, with a page telling the
+  user to request a new link. It is not silently accepted, because accepting it
+  would keep the leak.
+
+Further:
 - It is rendered **directly in the POST response**, never placed in a redirect
   URL. This is the opposite of the rotated-client-secret pattern
   `?rotated_secret=`, which RFC 098 dispatch 14 found and which is recorded
@@ -153,6 +182,29 @@ audit row never carries the token or its hash.
 - The completion page is already `/reset-password`, and it must not load
   third-party resources.
 - The CLI prints the link to stdout only, never stderr, and never in a log line.
+
+**D12 — a sole administrator who has lost every second factor. Owner ruling
+pending.** With RFC 102 B7, lost-authenticator recovery goes through an
+administrator's MFA reset (U07). The last administrator has no other
+administrator. The CLI today has no MFA reset, and D4 keeps MFA in force on the
+recovery link. The design review found that such an administrator has **no path**
+(M7). Recommended: a CLI operation, `sui-id admin reset-mfa --username NAME
+--reason TEXT`. It runs U07 as a system principal, with the same filesystem
+authority as `admin unlock-user`, and is recorded with `via = cli`. Without it,
+the only remedy is restoring a backup.
+
+**D13 — completion re-checks everything, and consumes once.** U10 (every origin):
+- consumes the token with a guard: `UPDATE … SET consumed_at = ? WHERE id = ? AND
+  consumed_at IS NULL AND expires_at > ?`; zero rows → roll back. Today the update
+  has no `consumed_at IS NULL` guard, and the token row is read outside the
+  transaction, so two concurrent completions both commit (M5);
+- re-reads the user inside the transaction: active, not deleted, and
+  `source = local`. An LDAP or federated user never receives a local password from
+  any origin. **Today `request_reset` and U10 check neither**, so forgot-password
+  already lets an external user set a local password that `login_with_mfa` then
+  accepts, bypassing the directory (H5);
+- `request_reset` refuses non-local users the same way, with the same neutral
+  response it gives an unknown address.
 
 **D11 — handover.** The operator guide states the procedure:
 - deliver the link through a channel that authenticates the person, such as a
@@ -168,6 +220,8 @@ This is the only control for T8, and the guide says so.
 
 - Runs U37 as a system principal (`for_system_actor(None)`, the precedent is U08)
   against the database named in the configuration.
+- D8's CLI limit is counted from the database (tokens with `issued_via = 'cli'` in
+  the last hour), because the CLI is a separate process.
 - Builds the link from `server.issuer`, prints it once to stdout, and exits 0.
 - Its authority is read access to the database and the master key, the same as
   every other `admin` subcommand.
@@ -183,24 +237,33 @@ This is the only control for T8, and the guide says so.
 
 ## Multiple implementation steps
 
-1. Migration (`issued_by`), U37, and the D3 invalidations. U10 gains `origin`.
-2. The CLI operation.
-3. The web operation: confirm screen, D5/D6 refusals, D8 throttle, D10 response
+1. D13 (guarded consumption, re-checks, `source = local`) and D10's fragment link
+   for the **existing email path**. These fix live defects and do not wait for the
+   rest.
+2. Migration (`issued_via`, `issued_by`), U37, and the D3 invalidations in U02, U04
+   and U09. U10 gains `origin`.
+3. The CLI operation, and D12's CLI MFA reset if the owner rules for it.
+4. The web operation: confirm screen, D5/D6 refusals, D8 throttle, D10 response
    headers, i18n.
-4. D7 notices and the account-page line.
-5. Retire U06. Update the matrix, the manifest, `dangerous-operations.md`, the
-   operator guide's handover procedure (D11), and `docs/threat-model.md`.
+5. D7 notices and the account-page line.
+6. Retire U06. Update the matrix, the manifest, `dangerous-operations.md`, the
+   operator guide's handover procedure (D11), `docs/src/reference/audit-events.md`
+   (which still lists `user.reset_password`), and `docs/threat-model.md`.
 
 ## Test plan
 
 For every threat, a test that **fails when its control is removed**:
 - **T2:** structural. The only production writers of a credential are user creation
   (U01), first setup, self-service change (U09) and token completion (U10). U06 is
-  absent. The design review confirms this list against every
-  `credentials::upsert` call site.
+  absent. The design review confirmed the list. First setup writes outside the seam
+  (`crates/sui-id-core/src/setup.rs:202`) and is allowed by name.
 - **T3/D5:** web issuance targeting an admin, and targeting self, is refused with
   no write.
-- **T10:** a non-local target is refused on web and CLI.
+- **T10:** a non-local target is refused on web and CLI; forgot-password for a
+  non-local user sends nothing and returns the neutral response; completing a
+  token whose user became non-local is rolled back.
+- **T11/T12:** completing after the user is disabled is rolled back; two concurrent
+  completions of one token give exactly one credential change.
 - **T1/D6:**
   - an issuer without a second factor is refused;
   - a stale step-up redirects;
@@ -213,7 +276,10 @@ For every threat, a test that **fails when its control is removed**:
 - **T6/D4:** after completion, an MFA-enrolled user must still pass the second
   factor.
 - **T9/D10:**
-  - the link appears in no log line, at any level (captured subscriber);
+  - the link appears in no log line, at any level (captured subscriber), with
+    `log.access_log = true`;
+  - the token appears in no request URI the server receives;
+  - `GET /reset-password?token=…` is refused;
   - response headers are asserted;
   - no redirect carries it.
 - **D8:** the sixth issuance within an hour is refused.
@@ -233,6 +299,9 @@ For every threat, a test that **fails when its control is removed**:
 - **The handover channel (T8) is procedural.**
 - **Anyone with filesystem access to the key can use the CLI,** as they already
   can with every CLI subcommand and with the database itself.
+
+- **One step-up authorizes up to D8's five issuances** within its five-minute
+  window. Freshness is not bound to a single action; D8 bounds the effect.
 
 **Why not let the administrator set the password.** Any administrator, or any
 thief of an admin session, would learn a working credential for any account. The
@@ -257,4 +326,6 @@ password (T2) and keeps the second factor in force (T6).
    deployment size?
 3. **Refusing admin targets on the web.** Recommended: refuse (T3). The cost is
    that an administrator who forgot their password needs someone with filesystem
-   access. The owner confirms this trade-off.
+   access. The owner confirms this trade-off, together with D12, as the design
+   review advised.
+4. **D12, CLI MFA reset for a sole administrator.** Recommended: yes.
