@@ -57,8 +57,10 @@ contract instead of an accident of one match arm.
 
 ## Part 2 — should a login that cannot be audited succeed? Ruled 2026-09-16
 
-**`@nabbisen` accepted the architect's recommendation: fail closed.** Not dispatched:
-it waits for the RFC 094 amendment described below. Part 1 is unaffected.
+**`@nabbisen` accepted the architect's recommendation: fail closed.** Not dispatched.
+The same day the owner chose to carry it in a new RFC rather than amend RFCs 094
+and 096 in place: [RFC 102](../../proposed/102-sign-in-fails-closed-without-audit.md),
+which supersedes the "RFC 094 amendment" named below. Part 1 is unaffected.
 
 The design as recommended: If the audit log
 cannot be written, no login succeeds — the successful-login audit row becomes

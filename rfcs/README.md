@@ -37,7 +37,7 @@ folders.
 
 Most RFCs in this directory share a single sequential numbering line
 (`001-…`, `002-…`, … `087-…` at the time of writing; the next free
-slot is `101`). One **parallel namespace** also exists:
+slot is `103`). One **parallel namespace** also exists:
 
 - **`RFC-MI-NNN-*`** — the **Mockup Integration epic**, introduced
   in v0.49.0. These RFCs cross-reference each other heavily by their
@@ -82,7 +82,7 @@ by the implementation role, which authored none of them, and re-accepted by
 `@nabbisen`. Each RFC's `Independent design review` field records which role
 reviewed it and what that role checked. Prior acceptances remain in history.
 
-### Proposed — security and release-assurance remediation (097, 099–101)
+### Proposed — security and release-assurance remediation (097, 099–102)
 
 These RFCs implement the active remediation programme in
 [`ROADMAP.md`](../ROADMAP.md). Proposal status assigns their permanent numbers
@@ -94,6 +94,7 @@ and permits design review only; it does not authorize implementation.
 | 099 | [Operational Hardening and Soak Readiness](./proposed/099-operational-hardening-soak-readiness.md) | M6–M7 |
 | 101 | [Email lifecycle: verification and change](./proposed/101-email-lifecycle-verification-and-change.md) | sequenced at owner discretion |
 | 100 | [Master-Key Rotation Crash Recovery](./proposed/100-master-key-rotation-recovery.md) | sequenced at owner discretion |
+| 102 | [A sign-in that cannot be audited does not succeed](./proposed/102-sign-in-fails-closed-without-audit.md) | R11 Part 2; gates RFC 096 F01/F03 |
 
 ### Implemented — Mockup Integration epic (Phase 0 → Phase 8)
 
