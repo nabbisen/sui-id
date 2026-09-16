@@ -28,6 +28,7 @@ mod common;
 mod acr_amr;
 mod auth_flow_integrity;
 mod backup;
+mod backup_checks;
 mod clients_edit;
 mod csrf;
 mod dashboard;

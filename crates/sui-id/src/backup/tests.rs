@@ -30,6 +30,23 @@ mod tests_inner {
         (db, key)
     }
 
+    /// K28 (backup-into-store equivalence record): the writer refuses a
+    /// name that does not fit the 100-byte ustar name field. Every name
+    /// the public path writes is a constant, so this check is reachable
+    /// only here.
+    #[test]
+    fn k28_tar_writer_refuses_name_of_100_bytes_or_more() {
+        let mut buf = Vec::new();
+        let name = "n".repeat(100);
+        let err = write_tar_entry(&mut buf, &name, b"x").unwrap_err();
+        assert!(
+            format!("{err:#}").contains("tar entry name too long"),
+            "{err:#}"
+        );
+        assert!(buf.is_empty(), "nothing written for a refused entry");
+        write_tar_entry(&mut buf, &"n".repeat(99), b"x").expect("99 bytes fits");
+    }
+
     #[test]
     fn tar_round_trip_two_entries() {
         let tmp = TempDir::new().expect("tempdir");
