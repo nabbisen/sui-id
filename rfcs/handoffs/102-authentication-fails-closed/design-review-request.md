@@ -94,8 +94,8 @@ A review-request package under `.git-exclude/review-requests/`, containing:
 ## Confirmation review of the resolutions — requested 2026-09-16
 
 The review returned one blocker, six high, eight medium and six low findings.
-`323c90a` resolves them in the RFC text, and each RFC now carries a resolution
-table. RFC 000 accepts a design only after its reviewed form is the accepted
+`323c90a` resolves them in the RFC text. RFC 102 carries a resolution table;
+RFC 103 names each finding (H5, H6, M5, M7, M8) where it is resolved. RFC 000 accepts a design only after its reviewed form is the accepted
 form, so confirm the resolutions before either RFC goes to the owner.
 
 **Baseline.** `323c90a` or later. **Scope.** Read-only, as before.
