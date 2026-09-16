@@ -219,10 +219,15 @@ authenticated session, so no `UserId` a verified authorization decision could
 name exists — the same `ActorRequirement::None` shape as `auth.refresh.rotated`
 above it, not `auth.password.changed_self`'s authenticated-actor shape below.*
 
+*Changed 2026-09-17 (RFC 102 stage 2): the password-sign-in success event is
+now Class A for a user with no second factor, committed by command L01. The
+second-factor, directory and federation sign-ins still write their events best
+effort until L02-L04.*
+
 | Event name | Trigger | Actor | Class |
 |---|---|---|---|
 | `auth.login.password_ok_mfa_required` | Password correct; MFA challenge pending | user id | B |
-| `auth.login.success` | Login succeeded | user id | B |
+| `auth.login.success` | Password sign-in succeeded for a user with no second factor (command `L01`, with the session, counter reset, `last_login_at` and cap eviction; note field `evicted`) | user id | **A** |
 | `auth.login.failure` | Wrong password | — | B |
 | `auth.mfa.success` | MFA challenge passed | user id | B |
 | `auth.mfa.failure` | MFA challenge failed | user id | B |

@@ -126,6 +126,7 @@ pub async fn try_login_with_cascade(
     app: &crate::handlers::AppState,
     username: &str,
     password: &str,
+    audience: sui_id_core::session::SessionAudience,
 ) -> sui_id_core::errors::CoreResult<sui_id_core::session::LoginOutcome> {
     use sui_id_core::errors::CoreError;
     use sui_id_store::user_source::{CascadeOutcome, cascade_sources};
@@ -133,9 +134,15 @@ pub async fn try_login_with_cascade(
     let max_lockout = app.config.security.max_lockout.as_secs();
 
     // 1. Try local path (always first — P4).
-    let local_result =
-        sui_id_core::session::login_with_mfa(&app.db, &app.clock, username, password, max_lockout)
-            .await;
+    let local_result = sui_id_core::session::login_with_mfa(
+        &app.db,
+        &app.clock,
+        username,
+        password,
+        max_lockout,
+        audience,
+    )
+    .await;
 
     match local_result {
         // Local success or MFA-required: return directly.
@@ -269,19 +276,37 @@ pub async fn login_post(
         ip,
         crate::handlers::ErrorAs::Html,
     )?;
+    let target = if form.next.starts_with('/') {
+        form.next.clone()
+    } else {
+        "/admin".into()
+    };
+    // RFC 102 A7: an admin-panel destination is decided before the sign-in
+    // writes anything, so a refused sign-in commits no session and no
+    // success event.
+    let audience = if target.starts_with("/oauth2/") || target.starts_with("/me/") {
+        session::SessionAudience::Any
+    } else {
+        session::SessionAudience::AdminReaders
+    };
+    let no_admin_access = |next: String| {
+        let t = lang.strings();
+        let flash = Flash {
+            kind: FlashKind::Error,
+            text: t.login_no_admin_access.into(),
+        };
+        let next = if next.is_empty() { None } else { Some(next) };
+        Html(render_login(Some(flash), next, lang, false, None)).into_response()
+    };
     // RFC 005: local-first cascade; falls back to external user-sources
     // when the username is not found locally.
-    match try_login_with_cascade(&app, form.username.trim(), &form.password).await {
+    match try_login_with_cascade(&app, form.username.trim(), &form.password, audience).await {
+        Ok(session::LoginOutcome::AudienceRefused) => Ok(no_admin_access(form.next)),
         Ok(session::LoginOutcome::SessionEstablished(row)) => {
             // RFC 006: record successful sign-in.
             if let Some(m) = app.metric() {
                 m.signin(sui_id_store::metrics::signin_result::SUCCESS);
             }
-            let target = if form.next.starts_with('/') {
-                form.next.clone()
-            } else {
-                "/admin".into()
-            };
 
             // The admin login page also serves as the authentication gate
             // for the OIDC authorize flow (next = "/oauth2/authorize?...").
@@ -290,28 +315,17 @@ pub async fn login_post(
             // role; check here so a non-privileged user gets a clear
             // message rather than a 403 page after being redirected.
             //
-            // The session row is already written at this point; if the
-            // role check fails we simply don't hand out the cookie and the
-            // row expires unused after its normal 24-hour lifetime.
-            let is_oidc_or_me = target.starts_with("/oauth2/") || target.starts_with("/me/");
-            if !is_oidc_or_me {
+            // A local password sign-in already refused this before L01
+            // (`AudienceRefused` above). The directory cascade has not been
+            // converted yet (RFC 102 L03): its session row is already
+            // written here, so if the role check fails we simply don't hand
+            // out the cookie and the row expires unused.
+            if audience == session::SessionAudience::AdminReaders {
                 let user = users::get(&app.db, row.user_id)
                     .await
                     .map_err(|e| HttpError::html(CoreError::from(e)))?;
                 if !user.role.can_read_admin() {
-                    let t = lang.strings();
-                    let flash = Flash {
-                        kind: FlashKind::Error,
-                        text: t.login_no_admin_access.into(),
-                    };
-                    let next = if form.next.is_empty() {
-                        None
-                    } else {
-                        Some(form.next)
-                    };
-                    return Ok(
-                        Html(render_login(Some(flash), next, lang, false, None)).into_response()
-                    );
+                    return Ok(no_admin_access(form.next));
                 }
             }
 

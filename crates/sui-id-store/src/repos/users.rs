@@ -366,6 +366,38 @@ pub async fn clear_lockout(db: &Database, id: UserId) -> StoreResult<()> {
     }).await
 }
 
+/// RFC 102 L01: the bookkeeping of a successful password sign-in, on the
+/// caller's transaction. Re-reads the user first: a user who is no longer
+/// active, or who was locked after the password was verified (a concurrent
+/// failure crossed the threshold), is `NotFound` and nothing is written.
+/// Otherwise clears the failure counter and a stale lock, and sets
+/// `last_login_at`.
+pub fn record_password_login_within_tx(
+    conn: &rusqlite::Connection,
+    id: UserId,
+    now: chrono::DateTime<chrono::Utc>,
+) -> StoreResult<()> {
+    let (disabled, deleted, locked_until): (bool, bool, Option<chrono::DateTime<chrono::Utc>>) =
+        conn.query_row(
+            "SELECT is_disabled, is_deleted, locked_until FROM users WHERE id = ?1",
+            [id.to_string()],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
+            other => StoreError::from(other),
+        })?;
+    if disabled || deleted || locked_until.is_some_and(|until| until > now) {
+        return Err(StoreError::NotFound);
+    }
+    conn.execute(
+        "UPDATE users SET failed_login_count = 0, locked_until = NULL, updated_at = ?1, \
+         last_login_at = ?1 WHERE id = ?2",
+        params![now, id.to_string()],
+    )?;
+    Ok(())
+}
+
 /// Admin-initiated unlock: reset both fields without requiring a
 /// successful password check. Used by `sui-id admin unlock-user`.
 pub async fn admin_unlock(db: &Database, id: UserId) -> StoreResult<()> {

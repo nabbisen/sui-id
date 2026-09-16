@@ -1303,6 +1303,104 @@ pub async fn insert_initial_refresh_token(
     .await
 }
 
+// ── L01 — password sign-in (RFC 102 Part A) ─────────────────────────────
+
+static L01_SUCCESS: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::AuthLoginSuccess,
+    name: "auth.login.success",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[AttributeSpec {
+        name: "evicted",
+        description: "older sessions revoked to keep the user within the concurrent-session cap",
+    }],
+};
+
+crate::declare_write_command! {
+    /// L01 — a successful password sign-in for a user with no second
+    /// factor. The actor is the user whose password was just verified,
+    /// outside this transaction, by `sui-id-core`.
+    command L01 = "L01" {
+        system_principal: forbidden;
+        enum L01Event {
+            Success { user_id: UserId, evicted: i64 } => &L01_SUCCESS,
+        }
+    }
+}
+
+impl SealedCommandEvent<L01> for L01Event {
+    fn target(&self) -> Option<AuditTarget> {
+        match self {
+            Self::Success { user_id, .. } => Some(AuditTarget(user_id.to_string())),
+        }
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        match self {
+            Self::Success { evicted, .. } => AuditAttributes::builder()
+                .attribute("evicted", evicted.to_string())
+                .build(),
+        }
+    }
+}
+
+/// Run L01: in one transaction, re-read the user as active and unlocked,
+/// clear the failure counter and any stale lock, set `last_login_at`,
+/// insert `session`, and revoke the oldest sessions over the
+/// concurrent-session cap. Returns how many sessions were evicted. A user
+/// who is no longer active rolls back with `NotFound`.
+pub async fn sign_in_with_password(
+    db: &crate::Database,
+    session: crate::models::SessionRow,
+) -> StoreResult<crate::registry::Audited<i64>> {
+    let user_id = session.user_id;
+    let context = AuthorizedCommandContext::<L01>::for_authorized_actor(user_id, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, L01>| {
+        let now = session.created_at;
+        crate::repos::users::record_password_login_within_tx(tx.tx(), user_id, now)?;
+        crate::repos::sessions::insert_within_tx(tx.tx(), &session)?;
+        let evicted = evict_over_cap_within_tx(tx.tx(), user_id, now)?;
+        Ok((evicted, L01Event::Success { user_id, evicted }))
+    })
+    .await
+}
+
+/// Revoke the user's oldest active sessions until the count is within
+/// `server_settings.max_concurrent_sessions` (0 means no cap). Runs on the
+/// caller's transaction, after the new session is inserted, so a committed
+/// sign-in never leaves the user over the cap.
+fn evict_over_cap_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    user_id: UserId,
+    now: chrono::DateTime<chrono::Utc>,
+) -> StoreResult<i64> {
+    let cap = match crate::repos::server_settings::get_within_tx(tx) {
+        Ok(settings) => settings.max_concurrent_sessions,
+        // No settings row yet (before setup has written one): no cap.
+        Err(crate::StoreError::NotFound) => 0,
+        Err(other) => return Err(other),
+    };
+    if cap <= 0 {
+        return Ok(0);
+    }
+    let count = crate::repos::sessions::count_active_for_user_within_tx(tx, user_id, now)?;
+    if count <= cap {
+        return Ok(0);
+    }
+    let oldest =
+        crate::repos::sessions::oldest_active_for_user_within_tx(tx, user_id, now, count - cap)?;
+    let mut evicted = 0;
+    for old in oldest {
+        evicted += crate::repos::sessions::revoke_within_tx(tx, old.id, now)? as i64;
+    }
+    Ok(evicted)
+}
+
 // ── L06 — step-up failure (RFC 102 Part B) ──────────────────────────────
 
 static L06_FAILURE: EventDescriptor = EventDescriptor {

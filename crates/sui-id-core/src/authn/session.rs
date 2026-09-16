@@ -71,21 +71,6 @@ async fn record_login_failure(db: &Database, clock: &SharedClock, username: &str
     .await;
 }
 
-async fn record_login_success(db: &Database, clock: &SharedClock, user_id: UserId) {
-    let _ = audit::append(
-        db,
-        &AuditLogRow {
-            at: clock.now(),
-            actor: Some(user_id),
-            action: "auth.login.success".into(),
-            target: Some(user_id.to_string()),
-            result: "ok".into(),
-            note: None,
-        },
-    )
-    .await;
-}
-
 pub async fn login(
     db: &Database,
     clock: &SharedClock,
@@ -93,9 +78,20 @@ pub async fn login(
     password: &str,
     max_lockout_secs: i64,
 ) -> CoreResult<SessionRow> {
-    match login_with_mfa(db, clock, username, password, max_lockout_secs).await? {
+    match login_with_mfa(
+        db,
+        clock,
+        username,
+        password,
+        max_lockout_secs,
+        SessionAudience::Any,
+    )
+    .await?
+    {
         LoginOutcome::SessionEstablished(row) => Ok(row),
-        LoginOutcome::MfaRequired { .. } => Err(CoreError::Unauthenticated),
+        LoginOutcome::MfaRequired { .. } | LoginOutcome::AudienceRefused => {
+            Err(CoreError::Unauthenticated)
+        }
     }
 }
 
@@ -114,6 +110,20 @@ pub enum LoginOutcome {
     MfaRequired {
         pending: sui_id_store::models::LoginPendingMfaRow,
     },
+    /// RFC 102 A7: the password was correct, but the session would be
+    /// refused afterwards (a user without admin read access signing in
+    /// to an admin-only destination). Nothing was written: no session, no
+    /// success event, no bookkeeping.
+    AudienceRefused,
+}
+
+/// Who a session created by this sign-in is for (RFC 102 A7).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionAudience {
+    /// Any active user: the OIDC authorize flow and `/me`.
+    Any,
+    /// The admin panel: only a role that can read it.
+    AdminReaders,
 }
 
 /// Password authentication that respects per-user MFA enrolment.
@@ -123,6 +133,7 @@ pub async fn login_with_mfa(
     username: &str,
     password: &str,
     max_lockout_secs: i64,
+    audience: SessionAudience,
 ) -> CoreResult<LoginOutcome> {
     let user = match users::find_by_username(db, username).await {
         Ok(u) => u,
@@ -191,11 +202,13 @@ pub async fn login_with_mfa(
         return Err(e);
     }
 
-    // Password OK: reset counter and clear any stale lock.
-    let _ = users::clear_lockout(db, user.id).await;
-
     // Branch on MFA enrolment.
     if crate::mfa::is_mfa_enabled(db, user.id).await? {
+        // Password OK: reset counter and clear any stale lock. The MFA
+        // branch keeps this best-effort write until RFC 102 stage 3 moves
+        // the second-factor completion into L02; the no-MFA branch does it
+        // inside L01.
+        let _ = users::clear_lockout(db, user.id).await;
         let pending = crate::mfa::issue_pending_mfa(db, clock, user.id).await?;
         // Audit success of the *password* step. The MFA step issues its
         // own audit entry on completion.
@@ -212,6 +225,12 @@ pub async fn login_with_mfa(
         )
         .await;
         return Ok(LoginOutcome::MfaRequired { pending });
+    }
+
+    // RFC 102 A7: refuse a session nobody will hold before L01 writes
+    // anything, from the role read above (outside the transaction).
+    if audience == SessionAudience::AdminReaders && !user.role.can_read_admin() {
+        return Ok(LoginOutcome::AudienceRefused);
     }
 
     let now = clock.now();
@@ -233,12 +252,22 @@ pub async fn login_with_mfa(
         last_step_up_at: None,
         last_used_at: None,
     };
-    sessions::insert(db, &row).await?;
-    enforce_concurrent_session_cap(db, clock, user.id).await;
-    record_login_success(db, clock, user.id).await;
-    // RFC 074: update last_login_at for the anti-phishing line on /me/overview.
-    // Best-effort — a failed write must never abort login.
-    let _ = sui_id_store::repos::users::set_last_login(db, &user.id, clock.now()).await;
+    // RFC 102 L01: the session, its `auth.login.success` event, the
+    // counter and stale-lock reset, `last_login_at` and cap eviction
+    // commit together or not at all. RFC 074's best-effort
+    // `set_last_login` is superseded: a failing write here means the
+    // database is failing, and the sign-in fails with it. A failure is
+    // never counted as a wrong password (A9); the caller returns the
+    // uniform failure and logs the cause.
+    sui_id_store::commands::sign_in_with_password(db, row.clone())
+        .await
+        .map_err(|e| match e {
+            // The in-transaction re-read lost: the user was disabled,
+            // deleted or locked after the password was verified. That is
+            // an ordinary refused sign-in, not a storage fault.
+            sui_id_store::StoreError::NotFound => CoreError::InvalidCredentials,
+            other => other.into(),
+        })?;
     Ok(LoginOutcome::SessionEstablished(row))
 }
 

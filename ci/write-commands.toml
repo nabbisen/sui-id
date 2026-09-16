@@ -289,7 +289,7 @@ id = "U24"
 class = "P"
 status = "implemented"  # implemented | target-absent | target-legacy
 owner = "Successful-login bookkeeping"
-rationale = "`auth.login.success` is Class B; timestamp/counter maintenance is not a separate privileged command"
+rationale = "timestamp/counter maintenance is not a separate privileged command; since RFC 102 stage 2 the no-MFA password sign-in does it inside L01, and the remaining callers (the MFA branch's `clear_lockout`, the directory and federation paths' `set_last_login`) move into L02-L04"
 mutation_surface = "`users::clear_lockout`, `set_last_login`"
 files = ["crates/sui-id-store/src/repos/users.rs"]
 test_id = "`p_u24_login_bookkeeping`"
@@ -361,7 +361,7 @@ id = "U30"
 class = "P"
 status = "implemented"  # implemented | target-absent | target-legacy
 owner = "Session creation"
-rationale = "high-frequency authentication protocol state; `auth.login.success` is Class B"
+rationale = "high-frequency authentication protocol state; since RFC 102 stage 2 the no-MFA password sign-in inserts its session inside L01, and the remaining raw callers (second factor, directory, federation) move into L02-L04"
 mutation_surface = "`sessions::insert`"
 files = ["crates/sui-id-store/src/repos/sessions.rs"]
 test_id = "`p_u30_session_insert`"
@@ -425,6 +425,18 @@ rationale = "callable only inside U01/U06/U09/U10"
 mutation_surface = "`credentials::upsert`, `upsert_within_tx`"
 files = ["crates/sui-id-store/src/repos/credentials.rs"]
 test_id = "`i_u35_credentials`"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "L01"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Password sign-in (RFC 102 A1, A2)"
+rationale = "one `auth.login.success` with the session, counter and stale-lock reset, `last_login_at`, and concurrent-session-cap eviction; the user is re-read as active and unlocked in the transaction"
+mutation_surface = "`users::record_password_login_within_tx`, `sessions::insert_within_tx`, `sessions::revoke_within_tx`"
+files = ["crates/sui-id-store/src/repos/users.rs", "crates/sui-id-store/src/repos/sessions.rs"]
+test_id = "`r102_l01_*`, `r102_a7_*` (e2e)"
 event = ""    # Stage 1: typed event-kind enum variant, not yet added
 descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
 

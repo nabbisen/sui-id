@@ -202,6 +202,8 @@ pub enum AuditEventKind {
     AuthStepUpSessionRevoked,
     /// `auth.mfa.factor_added` — U12, U14 and U15 (RFC 102 B7).
     AuthMfaFactorAdded,
+    /// `auth.login.success` — L01, the password sign-in (RFC 102 Part A).
+    AuthLoginSuccess,
     /// Proof-only — see [`ProofOnlyForbiddenSystemPrincipalCommand`]. Never
     /// emitted; no command can construct this event because no command can
     /// construct a context for that command in the first place.

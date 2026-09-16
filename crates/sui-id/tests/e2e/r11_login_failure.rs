@@ -2,7 +2,9 @@
 //!
 //! - 1a: with `audit_log` inserts failing, a wrong password for a known
 //!   user gets the same 401 as an unknown user, the failure counter does
-//!   not advance, and a correct password still signs in.
+//!   not advance. Since RFC 102 L01, a correct password no longer signs
+//!   in either: the success event cannot be written, so no session is
+//!   committed, and the response is the same uniform 401.
 //! - 1b: a non-credential failure is logged at error level; an ordinary
 //!   credential failure is not; the password never appears.
 //! - 1c: every failure branch returns an identical status, body and
@@ -166,12 +168,16 @@ async fn r11_1a_audit_outage_known_user_wrong_password() {
         "U22 rolled back: the wrong password was not counted"
     );
 
-    let (ok_status, _, has_session) = post_login(&state, USERNAME, PASSWORD).await;
-    assert_eq!(ok_status, StatusCode::SEE_OTHER);
+    // RFC 102 L01: no unaudited session. A correct password gets the
+    // uniform failure, and is not counted as a wrong one (A9).
+    let (ok_status, ok_body, has_session) = post_login(&state, USERNAME, PASSWORD).await;
+    assert_eq!(ok_status, StatusCode::UNAUTHORIZED);
     assert!(
-        has_session,
-        "the correct password still signs in during the outage"
+        !has_session,
+        "the correct password no longer signs in during the outage"
     );
+    assert_eq!(ok_body, unknown_body, "the uniform failure body");
+    assert_eq!(failed_login_count(&state, USERNAME).await, 0);
 }
 
 // ── 1b ────────────────────────────────────────────────────────────────

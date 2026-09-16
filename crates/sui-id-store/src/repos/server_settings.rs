@@ -50,18 +50,20 @@ const SELECT_COLUMNS: &str = "id, default_lang, hibp_mode, \
 /// Fetch the singleton server-settings row. Migration 0016 inserts
 /// the default row, so post-migration this never returns NotFound.
 pub async fn get(db: &Database) -> StoreResult<ServerSettingsRow> {
-    db.with_conn(move |conn| {
-        conn.query_row(
-            &format!("SELECT {SELECT_COLUMNS} FROM server_settings WHERE id = ?1"),
-            [SINGLETON_ID],
-            map_row,
-        )
-        .map_err(|e| match e {
-            rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
-            other => StoreError::from(other),
-        })
+    db.with_conn(get_within_tx).await
+}
+
+/// Same as [`get`], on a caller-held connection or transaction.
+pub fn get_within_tx(conn: &rusqlite::Connection) -> StoreResult<ServerSettingsRow> {
+    conn.query_row(
+        &format!("SELECT {SELECT_COLUMNS} FROM server_settings WHERE id = ?1"),
+        [SINGLETON_ID],
+        map_row,
+    )
+    .map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
+        other => StoreError::from(other),
     })
-    .await
 }
 
 /// Update the server default UI language. `lang` is a BCP-47 tag

@@ -277,16 +277,24 @@ pub async fn count_active_for_user(
     user_id: UserId,
     now: DateTime<Utc>,
 ) -> StoreResult<i64> {
-    db.with_conn(move |conn| {
-        let n: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM sessions \
-             WHERE user_id = ?1 AND revoked_at IS NULL AND expires_at > ?2",
-            params![user_id.to_string(), now],
-            |row| row.get(0),
-        )?;
-        Ok(n)
-    })
-    .await
+    db.with_conn(move |conn| count_active_for_user_within_tx(conn, user_id, now))
+        .await
+}
+
+/// Same as [`count_active_for_user`], on a caller-held connection or
+/// transaction (RFC 102 L01's in-transaction eviction).
+pub fn count_active_for_user_within_tx(
+    conn: &rusqlite::Connection,
+    user_id: UserId,
+    now: DateTime<Utc>,
+) -> StoreResult<i64> {
+    let n: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM sessions \
+         WHERE user_id = ?1 AND revoked_at IS NULL AND expires_at > ?2",
+        params![user_id.to_string(), now],
+        |row| row.get(0),
+    )?;
+    Ok(n)
 }
 
 /// Return up to `limit` of the oldest active sessions for a user,
@@ -300,18 +308,27 @@ pub async fn oldest_active_for_user(
     now: DateTime<Utc>,
     limit: i64,
 ) -> StoreResult<Vec<SessionRow>> {
-    db.with_conn(move |conn| {
-        let mut stmt = conn.prepare(&format!(
-            "SELECT {SELECT_COLS} FROM sessions \
-             WHERE user_id = ?1 AND revoked_at IS NULL AND expires_at > ?2 \
-             ORDER BY created_at ASC LIMIT ?3"
-        ))?;
-        let rows = stmt
-            .query_map(params![user_id.to_string(), now, limit], map)?
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(rows)
-    })
-    .await
+    db.with_conn(move |conn| oldest_active_for_user_within_tx(conn, user_id, now, limit))
+        .await
+}
+
+/// Same as [`oldest_active_for_user`], on a caller-held connection or
+/// transaction (RFC 102 L01's in-transaction eviction).
+pub fn oldest_active_for_user_within_tx(
+    conn: &rusqlite::Connection,
+    user_id: UserId,
+    now: DateTime<Utc>,
+    limit: i64,
+) -> StoreResult<Vec<SessionRow>> {
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {SELECT_COLS} FROM sessions \
+         WHERE user_id = ?1 AND revoked_at IS NULL AND expires_at > ?2 \
+         ORDER BY created_at ASC LIMIT ?3"
+    ))?;
+    let rows = stmt
+        .query_map(params![user_id.to_string(), now, limit], map)?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
 }
 
 /// Count all non-revoked, non-expired sessions across all users.
