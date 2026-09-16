@@ -210,15 +210,20 @@ seed summary tells you the `client_id` (UUID) and
 `client_secret` to use.
 
 **Dev mode is not a production starting point.** It relaxes
-operational knobs — `cookie_secure` is off, HIBP is off,
-account lockout is disabled, the database is ephemeral. Every
-*cryptographic* invariant (PKCE S256-only, AAD-bound column
-encryption, Argon2id, `redirect_uri` exact match,
-12-character password minimum) holds the same as in
-production; the relaxations are about convenience, not about
-weakening the OIDC implementation.
+operational knobs — `cookie_secure` is off, HIBP is off, the
+password minimum is 8 characters instead of 12, and the database
+is ephemeral. Account lockout stays active. PKCE S256-only,
+AAD-bound column encryption, Argon2id and `redirect_uri` exact
+match hold the same as in production.
 
 ### Customising the seed
+
+> **Not working in this release.** Every `--dev-*` flag that takes a value —
+> `--dev-seed`, `--dev-admin-password`, `--dev-client-secret`, `--dev-db` and
+> `--dev-bind` — is rejected at startup with `Error: unknown subcommand`, so
+> each command in this section and the two below currently fails, and dev
+> mode runs on the hardcoded defaults on `127.0.0.1:8801` only. The rest of
+> this section describes the intended behaviour.
 
 Three sources, in priority order (highest first):
 

@@ -12,7 +12,7 @@
 ## Overview
 
 sui-id is an Identity-as-a-Service you run yourself. It speaks OpenID Connect
-on the front end, stores its data in a single encrypted SQLite file, and ships
+on the front end, stores its data in a single SQLite file, and ships
 as one binary. There is no separate database service, no
 embedded JavaScript runtime, and no ambient cloud dependency.
 
@@ -54,7 +54,8 @@ parts). sui-id picks a different point in the design space:
   no message bus. `sui-id backup` writes the whole state to one tar file.
 - **Encryption that doesn't depend on filesystem trust.** Sensitive columns
   are sealed with XChaCha20-Poly1305 using a master key kept *outside* the
-  database file. A stolen `.sqlite` is not a compromised one.
+  database file. What that does and does not protect is set out in the
+  [threat model](docs/threat-model.md).
 - **A protocol surface narrow enough to audit.** Authorization Code with
   mandatory PKCE, EdDSA-signed tokens, opaque rotating refresh tokens. No
   implicit flow, no hybrid flow, no RS256 by default.
