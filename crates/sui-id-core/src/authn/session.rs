@@ -288,6 +288,9 @@ pub(crate) async fn enforce_concurrent_session_cap(
 
 /// Resolve a session id to its user, if the session is still active.
 ///
+/// A session whose user is disabled or deleted is not active: it is
+/// refused as `Unauthenticated`, from the same read as the session row.
+///
 /// In addition to the obvious revoked / expired_at checks, since
 /// v0.25.0 this also enforces the optional **idle-session-timeout**:
 /// if the server-settings row's `idle_session_timeout_secs` is
@@ -302,12 +305,17 @@ pub(crate) async fn enforce_concurrent_session_cap(
 /// that aligns pre-migration sessions with the same idle policy
 /// as new ones.
 pub async fn resolve(db: &Database, clock: &SharedClock, id: SessionId) -> CoreResult<UserId> {
-    let row = sessions::get(db, id).await.map_err(|e| match e {
-        sui_id_store::StoreError::NotFound => CoreError::Unauthenticated,
-        other => other.into(),
-    })?;
+    // The user's active state comes from the same statement as the session,
+    // so a disabled or deleted user's session is refused without a second
+    // round trip.
+    let (row, user_active) = sessions::get_with_user_active(db, id)
+        .await
+        .map_err(|e| match e {
+            sui_id_store::StoreError::NotFound => CoreError::Unauthenticated,
+            other => other.into(),
+        })?;
     let now = clock.now();
-    if row.revoked_at.is_some() || row.expires_at <= now {
+    if row.revoked_at.is_some() || row.expires_at <= now || !user_active {
         return Err(CoreError::Unauthenticated);
     }
     // Idle-timeout enforcement.

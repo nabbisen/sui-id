@@ -598,10 +598,48 @@ async fn complete_federated_signin(
     upstream_sub: &str,
     now: chrono::DateTime<chrono::Utc>,
 ) -> Result<Response, HttpError> {
-    // P4: check local MFA.
-    let mfa_enabled = sui_id_core::mfa::is_mfa_enabled(&app.db, user_id)
-        .await
-        .unwrap_or(false);
+    // Refuse an inactive user before any pending-MFA or session row. The
+    // user is re-read here: the link may belong to an account disabled or
+    // deleted since it was created.
+    let signin_failed = |jar: CookieJar| {
+        let jar = jar.remove(Cookie::build(STATE_COOKIE));
+        Ok((jar, Redirect::to("/admin/login?fed_error=signin_failed")).into_response())
+    };
+    match sui_id_store::repos::users::get(&app.db, user_id).await {
+        Ok(user) if !user.is_disabled && !user.is_deleted => {}
+        Ok(_) => {
+            tracing::warn!(
+                provider = %provider_slug,
+                user_id = %user_id,
+                "federation: sign-in refused for a disabled or deleted user"
+            );
+            return signin_failed(jar);
+        }
+        Err(e) => {
+            tracing::error!(
+                provider = %provider_slug,
+                user_id = %user_id,
+                error = %e,
+                "federation: user read failed; sign-in refused"
+            );
+            return signin_failed(jar);
+        }
+    }
+
+    // P4: check local MFA. The decision must come from a successful read:
+    // treating a failed read as "no MFA" would skip the second factor.
+    let mfa_enabled = match sui_id_core::mfa::is_mfa_enabled(&app.db, user_id).await {
+        Ok(enabled) => enabled,
+        Err(e) => {
+            tracing::error!(
+                provider = %provider_slug,
+                user_id = %user_id,
+                error = %e,
+                "federation: MFA state read failed; sign-in refused"
+            );
+            return signin_failed(jar);
+        }
+    };
 
     if mfa_enabled {
         let pending = sui_id_core::mfa::issue_pending_mfa(&app.db, &app.clock, user_id)

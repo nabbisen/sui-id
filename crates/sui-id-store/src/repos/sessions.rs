@@ -75,6 +75,28 @@ pub async fn get(db: &Database, id: SessionId) -> StoreResult<SessionRow> {
     .await
 }
 
+/// A session row together with whether its user is active (neither
+/// disabled nor deleted), read in one statement. Session resolution uses
+/// this so refusing an inactive user's session costs no extra round trip.
+/// A session whose user row is missing is `NotFound`.
+pub async fn get_with_user_active(db: &Database, id: SessionId) -> StoreResult<(SessionRow, bool)> {
+    db.with_conn(move |conn| {
+        conn.query_row(
+            "SELECT s.id, s.user_id, s.expires_at, s.created_at, s.revoked_at, \
+             s.auth_methods, s.last_step_up_at, s.last_used_at, \
+             u.is_disabled = 0 AND u.is_deleted = 0 \
+             FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.id = ?1",
+            [id.to_string()],
+            |row| Ok((map(row)?, row.get::<_, bool>(8)?)),
+        )
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
+            other => StoreError::from(other),
+        })
+    })
+    .await
+}
+
 pub async fn revoke(db: &Database, id: SessionId) -> StoreResult<()> {
     db.with_conn(move |conn| {
         conn.execute(

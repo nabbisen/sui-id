@@ -35,6 +35,7 @@ mod dashboard;
 mod dev_mode;
 mod email_forgot;
 mod email_pwd_change;
+mod federation_fail_closed;
 mod hibp;
 mod i18n_auth_flow;
 mod i18n_basic;
