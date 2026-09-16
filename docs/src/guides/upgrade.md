@@ -4,9 +4,10 @@
 
 1. **Back up** before upgrading:
    ```bash
-   cp sui-id.sqlite sui-id.sqlite.bak
-   cp sui-id.key    sui-id.key.bak
+   sui-id backup --config sui-id.toml --to sui-id-pre-upgrade.tar
    ```
+   Do not use `cp`: the database runs in WAL mode, so a copy of the
+   `.sqlite` file can miss committed data.
 
 2. **Stop** the running instance (SIGTERM; sui-id finishes in-flight requests
    before exiting).
@@ -22,11 +23,8 @@
 ## Migration behaviour
 
 sui-id runs database migrations forward-only on startup. There is no
-`down` migration. Each migration is idempotent: running the same migration
-twice is safe.
-
-Migrations that add columns use `ADD COLUMN` with a default value or
-`NULL`, so they run without locking the entire table.
+`down` migration. The schema version is recorded in the database, and each
+migration runs once.
 
 ## Version-specific notes
 
@@ -83,17 +81,17 @@ add them continue to work without change:
 ### v0.33.x
 
 - Migration 0023 adds the `email_outbox` table for async mail delivery.
-  The outbox worker starts automatically; no configuration change is needed
-  unless you want to change retry parameters.
+  The outbox worker starts automatically; no configuration change is needed.
 
 ## Rollback
 
 Rollback is not supported. If a bad release is deployed:
 
 1. Stop the new binary.
-2. Restore the backup SQLite file.
+2. Restore the pre-upgrade backup:
+   `sui-id restore --config sui-id.toml --from sui-id-pre-upgrade.tar --force`.
 3. Start the previous binary.
 
-If the new binary ran migrations, the old binary may refuse to start
-because the schema version is higher than it understands. In that case,
-restoring from the SQLite backup is the only recovery path.
+An older binary **starts without complaint** against a database that a newer
+binary has migrated: it does not check for a newer schema. Running it that way
+is unsupported. The recovery is to restore the pre-upgrade backup, as above.

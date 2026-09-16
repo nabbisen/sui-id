@@ -10,14 +10,20 @@
 
 Every dangerous action is gated by:
 
-1. **Confirm screen.** A separate page is shown first, explaining
-   what is about to happen and what is reversible. It carries a
-   `_confirmed=1` hidden field; direct POSTs without this field are
-   rejected with HTTP 400. The confirm screen is built from a single
-   shared template (`ConfirmScreenData`) so every dangerous action has
-   the same affordances: identity-of-target line, blast-radius
-   summary, reversibility badge, optional reason textarea, cancel
-   button.
+1. **Confirm screen.** Six of the eight operations — disable user,
+   delete user, reset MFA, delete client, rotate signing key and delete
+   signing key — show a separate page first, explaining what is about
+   to happen and what is reversible. Those pages share one template
+   (`ConfirmScreenData`) with the same affordances: identity-of-target
+   line, blast-radius summary, reversibility badge, optional reason
+   textarea, cancel button. Client disable and client secret rotation
+   have no confirm screen.
+
+   All eight POST handlers require a `_confirmed=1` field and reject a
+   request without it with HTTP 400. The Disable / Enable button on the
+   client list does not send that field, so disabling or enabling a
+   client from the admin panel currently fails with HTTP 400. The admin
+   panel has no control for client secret rotation.
 2. **Step-up.** Immediately before the action runs, the server checks
    that the operator has completed a fresh re-authentication (within
    the last 5 minutes, a fixed constant). Stale sessions are redirected to
@@ -26,9 +32,9 @@ Every dangerous action is gated by:
 3. **The action.** Only after both gates pass does the use case
    function in `sui-id-core` execute.
 4. **Audit row with note.** The action writes one row to the audit
-   log with `result="ok"` and `note` populated by either the
-   operator-supplied reason or a canonical short code (`"self"` for
-   self-service routes; `"totp=removed passkeys=N"` for MFA reset).
+   log with `result="ok"` and `note` populated by the
+   operator-supplied reason — for MFA reset too — or, on the
+   self-service routes, by the fixed notes listed below.
    The reason is your forensic signal when triaging "why did this
    happen at 03:00 UTC."
 
@@ -43,7 +49,7 @@ practice.
 | **Delete user** | `POST /admin/users/{id}/delete` | no | `user.delete` | Same as disable, plus the user row is soft-deleted (removed from listings, kept in audit trail). |
 | **Reset another user's MFA** | `POST /admin/users/{id}/mfa-reset` | yes¹ | `mfa.admin_reset` | Both TOTP and every WebAuthn credential. Active sessions are **not** revoked; the operator is restoring login capability, not logging the user out. |
 | **Disable client** | `POST /admin/clients/{id}/disabled` | yes | `client.disable` | All refresh tokens for the client. |
-| **Delete client** | `POST /admin/clients/{id}/delete` | no | `client.delete` | All refresh tokens for the client; the client row is soft-deleted. Dependent applications stop validating tokens. |
+| **Delete client** | `POST /admin/clients/{id}/delete` | no | `client.delete` | All refresh tokens for the client; the client row is soft-deleted. Access and ID tokens already issued are not invalidated: relying parties validate them against JWKS, not the client row. |
 | **Rotate client secret** | `POST /admin/clients/{id}/rotate-secret` | no² | `client.rotate_secret` | The old secret hash is replaced. Any application configured with the previous secret will fail authentication until reconfigured. The new plaintext secret is shown once on the response page. |
 | **Rotate signing key** | `POST /admin/signing-keys/rotate` | yes³ | `signing_key.rotate` | A new active key is generated; the previous key is retired but kept in JWKS so already-issued tokens remain valid until expiry. |
 | **Delete signing key** | `POST /admin/signing-keys/{id}/delete` | no | `signing_key.delete` | The retired key row is permanently removed. **Will refuse** to delete the currently active key (rotate first). |
@@ -87,15 +93,14 @@ why:
    verbatim. If `note: "self"`, the user did this on their own
    account. If empty (`null`), the operator left the reason textarea
    blank — chase them up.
-3. **Cross-reference step-up.** Step-up activity is logged as
-   `auth.step_up.complete` rows. If a dangerous action ran without a
-   recent step-up row from the same actor, something is wrong with
-   the gate (file a bug).
-4. **Look at the surrounding rows.** Dangerous actions usually come
+3. **Look at the surrounding rows.** Dangerous actions usually come
    in clusters during planned maintenance (e.g. one operator
    disabled three users and rotated a key in a 90-second window
    during off-boarding). Isolated single rows at odd hours are the
    signal worth investigating.
+
+Step-up completion is not recorded in the audit log today, so the log
+cannot show whether a step-up preceded a dangerous action.
 
 ## When a confirm screen is bypassed
 
@@ -104,8 +109,7 @@ off. If you find a dangerous action that succeeded without going
 through the confirm screen, it is a bug, not a configuration option:
 
 1. Capture the request log (URL, headers, form body).
-2. Cross-reference with `auth.step_up.complete` for the same actor.
-3. File a security issue with the captured details.
+2. File a security issue with the captured details.
 
 The four-step contract has no escape hatch. Operators who need to
 script bulk operations should use the OIDC management endpoints (if

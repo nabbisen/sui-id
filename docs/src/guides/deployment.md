@@ -142,11 +142,10 @@ format = "json"
 filter = "info,sui_id=info,sui_id_core=info,sui_id_store=info"
 ```
 
-Verify the file parses without starting the daemon:
-
-```bash
-sudo -u sui-id sui-id --config /etc/sui-id/sui-id.toml --version
-```
+There is no separate check command: `sui-id --version` does not read the
+file. The configuration is parsed at startup, and a file that does not parse
+stops the process before it opens the database, with the parse error on
+stderr — under systemd, in the journal (`journalctl -u sui-id`).
 
 ## 5. HTTPS termination
 
@@ -164,12 +163,6 @@ idp.example.com {
         header_up X-Forwarded-For {remote_host}
         header_up X-Forwarded-Proto {scheme}
         header_up X-Forwarded-Host {host}
-    }
-    # Be conservative: sui-id pages should never be framed.
-    header {
-        Strict-Transport-Security "max-age=31536000; includeSubDomains"
-        X-Content-Type-Options "nosniff"
-        Referrer-Policy "same-origin"
     }
 }
 ```
@@ -202,16 +195,19 @@ location / {
     proxy_set_header   X-Forwarded-For   $remote_addr;
     proxy_set_header   X-Forwarded-Proto $scheme;
     proxy_set_header   X-Forwarded-Host  $host;
-
-    add_header         Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header         X-Content-Type-Options "nosniff" always;
-    add_header         Referrer-Policy "same-origin" always;
 }
 ```
 
 ```bash
 systemctl reload nginx
 ```
+
+Neither proxy sets security headers, on purpose. sui-id sends
+`Content-Security-Policy` (including `frame-ancestors 'none'`),
+`X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
+`Referrer-Policy`, `Permissions-Policy` and, with `cookie_secure = true`,
+`Strict-Transport-Security` on every response. A proxy that sets them again
+replaces or duplicates them with weaker values.
 
 ## 6. systemd unit
 
@@ -290,14 +286,17 @@ immediately. Then start (or restart) the service:
 systemctl start sui-id
 ```
 
-For fully unattended provisioning, supply the password via environment
-variable — it will not appear in stdout:
+To choose the password yourself, supply it through `SUI_ID_ADMIN_PASSWORD`;
+it is then not printed. `sudo` drops environment variables by default, so pass
+the variable through explicitly, and read it without echo so it stays out of
+the command line and the shell history:
 
 ```bash
-SUI_ID_ADMIN_PASSWORD="$(systemd-creds cat sui-id-admin-password)" \
-  sudo -u sui-id sui-id setup \
+read -rs SUI_ID_ADMIN_PASSWORD && export SUI_ID_ADMIN_PASSWORD
+sudo -u sui-id --preserve-env=SUI_ID_ADMIN_PASSWORD sui-id setup \
     --config /etc/sui-id/sui-id.toml \
     --admin-username admin
+unset SUI_ID_ADMIN_PASSWORD
 ```
 
 ### Option B — browser wizard
@@ -309,8 +308,9 @@ from the journal:
 journalctl -u sui-id --since "1 minute ago" | grep -A2 "begin setup"
 ```
 
-Open `https://idp.example.com/setup` in a browser, paste the token,
-and create your administrator account. The token is good only until
+Open the printed URL (`https://idp.example.com/setup?token=…`) in a browser;
+the token travels in the URL, so there is nothing to paste. Create your
+administrator account. The token is good only until
 the first successful setup; subsequent visits to `/setup` redirect
 to login.
 
@@ -472,7 +472,8 @@ cargo audit
 sui-id backup --config /etc/sui-id/sui-id.toml \
               --to /var/backups/sui-id/pre-upgrade-$(date +%Y-%m-%d).tar
 
-# Replace the binary.
+# Keep the current binary for a downgrade, then replace it.
+cp -p /usr/local/bin/sui-id /usr/local/bin/sui-id.bak
 install -m 0755 /tmp/new-sui-id /usr/local/bin/sui-id
 
 # Restart. Migrations run automatically on startup.
