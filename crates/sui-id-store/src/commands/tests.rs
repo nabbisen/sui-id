@@ -135,7 +135,7 @@ fn actor_requirement_agrees_with_system_principal_for_every_command() {
     check("U04", false, &[&U04_DELETE]);
     check("U05", false, &[&U05_ROLE_CHANGE]);
     check("U06", false, &[&U06_RESET_PASSWORD]);
-    check("U07", false, &[&U07_ADMIN_RESET]);
+    check("U07", true, &[&U07_ADMIN_RESET]);
     check("U08", true, &[&U08_UNLOCK]);
     check("U09", false, &[&U09_CHANGED_SELF]);
     check("U10", true, &[&U10_RESET_COMPLETED]);

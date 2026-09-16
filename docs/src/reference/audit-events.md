@@ -38,7 +38,7 @@ Use **Admin panel → Audit log** to filter by event prefix or export to CSV.
 | `user.enable` | User enabled | Administrator re-enabled a previously disabled user account. |
 | `user.delete` | User deleted | Administrator deleted a user account. |
 | `user.reset_password` | Password reset (admin) | Administrator reset a user's password. |
-| `mfa.admin_reset` | MFA reset (admin) | Administrator reset a user's MFA factors (TOTP and all passkeys removed). |
+| `mfa.admin_reset` | MFA reset (admin) | An administrator (web), or the operator with `sui-id admin reset-mfa` (no actor, `via=cli`), reset a user's MFA factors (TOTP and all passkeys removed). |
 | `admin.user.unlock` | Account unlocked | Administrator cleared a user's progressive lockout. |
 | `user.role_change` | — | Administrator changed a user's role (admin, auditor or user). The mutation and this row commit in one transaction; the note records the old and new role. |
 

@@ -727,7 +727,9 @@ static U07_ADMIN_RESET: EventDescriptor = EventDescriptor {
     kind: AuditEventKind::MfaAdminReset,
     name: "mfa.admin_reset",
     class: AuditClass::Atomic,
-    actor: ActorRequirement::Required,
+    // Required on the web path; absent when the operator CLI resets a user
+    // who has no administrator left to act (RFC 103 D12).
+    actor: ActorRequirement::Optional,
     target: TargetRequirement::Required,
     attributes: &[
         AttributeSpec {
@@ -742,20 +744,27 @@ static U07_ADMIN_RESET: EventDescriptor = EventDescriptor {
             name: "reason",
             description: "operator-supplied reason for the reset, if given",
         },
+        AttributeSpec {
+            name: "via",
+            description: "\"cli\" when `sui-id admin reset-mfa` issued the reset; absent for the web path",
+        },
     ],
 };
 
 crate::declare_write_command! {
-    /// U07 — admin MFA reset. Same `forbidden` reasoning as U01-U06: the
-    /// coverage matrix requires `admin user id` as the actor.
+    /// U07 — MFA reset. The web path runs as the signed-in administrator
+    /// (`admin_reset_mfa`). RFC 103 D12 adds the operator CLI
+    /// (`operator_reset_mfa`), whose authority is the host's master key,
+    /// not a session: it has no actor, so U07 permits the system principal.
     command U07 = "U07" {
-        system_principal: forbidden;
+        system_principal: permitted;
         enum U07Event {
             Reset {
                 user_id: UserId,
                 totp_removed: bool,
                 passkeys_removed: usize,
                 reason: Option<String>,
+                via_cli: bool,
             } => &U07_ADMIN_RESET,
         }
     }
@@ -776,6 +785,7 @@ impl SealedCommandEvent<U07> for U07Event {
             totp_removed,
             passkeys_removed,
             reason,
+            via_cli,
             ..
         } = self;
         let mut builder = AuditAttributes::builder()
@@ -783,6 +793,9 @@ impl SealedCommandEvent<U07> for U07Event {
             .attribute("passkeys", passkeys_removed.to_string());
         if let Some(r) = reason {
             builder = builder.attribute("reason", r.clone());
+        }
+        if *via_cli {
+            builder = builder.attribute("via", "cli");
         }
         builder.build()
     }
@@ -825,32 +838,57 @@ pub async fn admin_reset_mfa(
 ) -> StoreResult<crate::registry::Audited<(bool, usize)>> {
     let context = AuthorizedCommandContext::<U07>::for_authorized_actor(admin, None);
     db.class_a(context, move |tx: &mut ClassATx<'_, U07>| {
-        // Existence probe only -- the role itself is unused here. Also
-        // deliberately excludes soft-deleted users (`is_deleted = 0` in
-        // get_role_within_tx's WHERE clause): resetting MFA on a deleted
-        // account is meaningless, so a soft-deleted target now returns
-        // NotFound where the pre-conversion `users::get`-based check
-        // would have let it through. See this function's own doc comment.
-        crate::repos::users::get_role_within_tx(tx.tx(), target)?;
-
-        let totp_removed = crate::repos::user_totp::delete_within_tx(tx.tx(), target)?;
-
-        let creds =
-            crate::repos::user_webauthn_credentials::list_for_user_within_tx(tx.tx(), target)?;
-        let passkeys_removed = creds.len();
-        for c in &creds {
-            crate::repos::user_webauthn_credentials::delete_within_tx(tx.tx(), c.id, target)?;
-        }
-
-        let event = U07Event::Reset {
-            user_id: target,
-            totp_removed,
-            passkeys_removed,
-            reason,
-        };
-        Ok(((totp_removed, passkeys_removed), event))
+        reset_mfa_within_tx(tx, target, reason, false)
     })
     .await
+}
+
+/// Run U07 for the operator CLI, `sui-id admin reset-mfa` (RFC 103 D12):
+/// the same removal as [`admin_reset_mfa`], with no actor and `via = cli`.
+/// Only the CLI adapter calls this; the web path must never reach the
+/// system principal.
+pub async fn operator_reset_mfa(
+    db: &crate::Database,
+    target: UserId,
+    reason: String,
+) -> StoreResult<crate::registry::Audited<(bool, usize)>> {
+    let context = AuthorizedCommandContext::<U07>::for_system_actor(None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, U07>| {
+        reset_mfa_within_tx(tx, target, Some(reason), true)
+    })
+    .await
+}
+
+fn reset_mfa_within_tx(
+    tx: &mut ClassATx<'_, U07>,
+    target: UserId,
+    reason: Option<String>,
+    via_cli: bool,
+) -> StoreResult<((bool, usize), U07Event)> {
+    // Existence probe only -- the role itself is unused here. Also
+    // deliberately excludes soft-deleted users (`is_deleted = 0` in
+    // get_role_within_tx's WHERE clause): resetting MFA on a deleted
+    // account is meaningless, so a soft-deleted target now returns
+    // NotFound where the pre-conversion `users::get`-based check
+    // would have let it through. See `admin_reset_mfa`'s doc comment.
+    crate::repos::users::get_role_within_tx(tx.tx(), target)?;
+
+    let totp_removed = crate::repos::user_totp::delete_within_tx(tx.tx(), target)?;
+
+    let creds = crate::repos::user_webauthn_credentials::list_for_user_within_tx(tx.tx(), target)?;
+    let passkeys_removed = creds.len();
+    for c in &creds {
+        crate::repos::user_webauthn_credentials::delete_within_tx(tx.tx(), c.id, target)?;
+    }
+
+    let event = U07Event::Reset {
+        user_id: target,
+        totp_removed,
+        passkeys_removed,
+        reason,
+        via_cli,
+    };
+    Ok(((totp_removed, passkeys_removed), event))
 }
 
 // ── U08 — CLI operator unlock ────────────────────────────────────────

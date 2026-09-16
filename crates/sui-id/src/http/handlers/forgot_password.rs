@@ -221,13 +221,24 @@ pub async fn reset_password_post(
         // RFC 103 D13: every other completion failure — unknown, used or
         // expired token, ineligible user, storage error — gets the same
         // invalid-link response. The cause is logged; the token is not.
+        // An unusable link is an ordinary outcome anyone can trigger and
+        // repeat, so it is logged at info; a storage or internal failure
+        // stays at error.
         Err(err) => {
             let request_id = request_id.as_ref().map(|e| e.0.0.as_str()).unwrap_or("-");
-            tracing::error!(
-                request_id,
-                error = %err,
-                "password reset completion refused"
-            );
+            if matches!(err, CoreError::InvalidCredentials) {
+                tracing::info!(
+                    request_id,
+                    "password reset completion refused: the link is unknown, used or expired"
+                );
+            } else {
+                tracing::error!(
+                    request_id,
+                    error = %err,
+                    detail = ?err,
+                    "password reset completion refused"
+                );
+            }
             let html = sui_id_web::render_reset_password_invalid(lang);
             Ok((axum::http::StatusCode::BAD_REQUEST, Html(html)).into_response())
         }

@@ -13,15 +13,15 @@ use tower::ServiceExt;
 
 const WRONG_PASSWORD: &str = "definitely-not-the-password";
 
-struct Resp {
-    status: StatusCode,
-    location: Option<String>,
-    body: String,
+pub(super) struct Resp {
+    pub(super) status: StatusCode,
+    pub(super) location: Option<String>,
+    pub(super) body: String,
 }
 
 /// A CSRF token from a self-service page, which any signed-in user (not
 /// only an admin) can open.
-async fn me_csrf(state: &AppState, session: &str) -> String {
+pub(super) async fn me_csrf(state: &AppState, session: &str) -> String {
     let resp = build_router(state.clone())
         .oneshot(
             Request::builder()
@@ -36,7 +36,7 @@ async fn me_csrf(state: &AppState, session: &str) -> String {
     extract_set_cookie(resp.headers(), "sui_id_csrf").expect("csrf cookie on /me/security/mfa")
 }
 
-async fn post(state: &AppState, path: &str, session: &str, body: &str) -> Resp {
+pub(super) async fn post(state: &AppState, path: &str, session: &str, body: &str) -> Resp {
     let csrf = me_csrf(state, session).await;
     let body = if body.is_empty() {
         format!("_csrf={csrf}")
@@ -100,7 +100,7 @@ async fn get(state: &AppState, path: &str, session: &str) -> Resp {
 
 /// Sign in through `/admin/login` with a self-service `next`, so a
 /// non-admin also receives a session cookie.
-async fn sign_in(state: &AppState, username: &str, password: &str) -> String {
+pub(super) async fn sign_in(state: &AppState, username: &str, password: &str) -> String {
     let resp = build_router(state.clone())
         .oneshot(
             Request::builder()
@@ -168,7 +168,7 @@ async fn is_revoked(state: &AppState, session: &str) -> bool {
         == 1
 }
 
-fn redirected_to_step_up(r: &Resp) -> bool {
+pub(super) fn redirected_to_step_up(r: &Resp) -> bool {
     r.status.is_redirection()
         && r.location
             .as_deref()
@@ -176,14 +176,14 @@ fn redirected_to_step_up(r: &Resp) -> bool {
 }
 
 /// A signed-in admin with TOTP enabled. Returns (session, secret bytes).
-async fn totp_user(state: &AppState) -> (String, Vec<u8>) {
+pub(super) async fn totp_user(state: &AppState) -> (String, Vec<u8>) {
     let session = complete_setup_and_login(state).await;
     let (secret_b32, _codes) = enroll_mfa_for(state, &session).await;
     (session, decode_b32(&secret_b32))
 }
 
 /// The TOTP code for the step after the one enrolment consumed.
-async fn next_code(secret: &[u8]) -> String {
+pub(super) async fn next_code(secret: &[u8]) -> String {
     let step = chrono::Utc::now().timestamp() / 30 + 1;
     format!(
         "{:06}",
@@ -191,7 +191,7 @@ async fn next_code(secret: &[u8]) -> String {
     )
 }
 
-async fn add_fake_passkey(state: &AppState, user: UserId) {
+pub(super) async fn add_fake_passkey(state: &AppState, user: UserId) {
     exec(
         state,
         format!(

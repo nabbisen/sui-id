@@ -15,14 +15,14 @@ use tower::ServiceExt;
 
 const NEW_PASSWORD: &str = "brand-new-secure-pw-12345";
 
-struct Resp {
-    status: StatusCode,
-    location: Option<String>,
-    headers: axum::http::HeaderMap,
-    body: String,
+pub(super) struct Resp {
+    pub(super) status: StatusCode,
+    pub(super) location: Option<String>,
+    pub(super) headers: axum::http::HeaderMap,
+    pub(super) body: String,
 }
 
-async fn send(state: &AppState, req: Request<Body>) -> Resp {
+pub(super) async fn send(state: &AppState, req: Request<Body>) -> Resp {
     let resp = build_router(state.clone())
         .oneshot(req)
         .await
@@ -42,7 +42,7 @@ async fn send(state: &AppState, req: Request<Body>) -> Resp {
     }
 }
 
-async fn get(state: &AppState, uri: &str) -> Resp {
+pub(super) async fn get(state: &AppState, uri: &str) -> Resp {
     send(
         state,
         Request::builder()
@@ -54,7 +54,7 @@ async fn get(state: &AppState, uri: &str) -> Resp {
     .await
 }
 
-async fn csrf_from(state: &AppState, uri: &str) -> String {
+pub(super) async fn csrf_from(state: &AppState, uri: &str) -> String {
     let r = get(state, uri).await;
     extract_set_cookie(&r.headers, "sui_id_csrf").expect("csrf cookie")
 }
@@ -77,7 +77,7 @@ async fn request_reset(state: &AppState, email: &str) -> Resp {
     .await
 }
 
-fn complete_request(csrf: &str, token: &str) -> Request<Body> {
+pub(super) fn complete_request(csrf: &str, token: &str) -> Request<Body> {
     Request::builder()
         .method(Method::POST)
         .uri("/reset-password")
@@ -90,7 +90,7 @@ fn complete_request(csrf: &str, token: &str) -> Request<Body> {
         .expect("req")
 }
 
-async fn complete(state: &AppState, token: &str) -> Resp {
+pub(super) async fn complete(state: &AppState, token: &str) -> Resp {
     let csrf = csrf_from(state, "/reset-password").await;
     send(state, complete_request(&csrf, token)).await
 }
@@ -113,7 +113,7 @@ async fn scalar(state: &AppState, sql: String) -> i64 {
         .expect("scalar")
 }
 
-async fn exec(state: &AppState, sql: String) {
+pub(super) async fn exec(state: &AppState, sql: String) {
     state
         .db
         .with_conn(move |c| Ok(c.execute_batch(&sql)?))
@@ -121,7 +121,7 @@ async fn exec(state: &AppState, sql: String) {
         .expect("exec");
 }
 
-async fn events(state: &AppState, action: &str) -> i64 {
+pub(super) async fn events(state: &AppState, action: &str) -> i64 {
     scalar(
         state,
         format!("SELECT COUNT(*) FROM audit_log WHERE action = '{action}'"),
@@ -169,7 +169,7 @@ async fn mint_token(state: &AppState, user: UserId, plaintext: &str) -> Password
 }
 
 /// An app with SMTP enabled and the setup admin carrying an address.
-async fn reset_app() -> (AppState, Arc<sui_id_core::mail::InMemoryMailSender>, UserId) {
+pub(super) async fn reset_app() -> (AppState, Arc<sui_id_core::mail::InMemoryMailSender>, UserId) {
     let (state, mailer) = test_app_with_mailer();
     complete_setup_and_login(&state).await;
     enable_smtp(&state).await;
@@ -187,7 +187,7 @@ async fn reset_app() -> (AppState, Arc<sui_id_core::mail::InMemoryMailSender>, U
     (state, mailer, admin.id)
 }
 
-async fn issue_token(
+pub(super) async fn issue_token(
     state: &AppState,
     mailer: &sui_id_core::mail::InMemoryMailSender,
 ) -> (String, PasswordResetTokenId) {
@@ -204,7 +204,7 @@ async fn issue_token(
     (token, row.id)
 }
 
-fn is_invalid_link_page(r: &Resp) -> bool {
+pub(super) fn is_invalid_link_page(r: &Resp) -> bool {
     r.body.contains(r#"href="/forgot-password""#) && !r.body.contains(r#"name="password""#)
 }
 
@@ -416,7 +416,7 @@ async fn r103_the_command_consumes_a_token_only_once() {
 // ── D10: the token stays out of URLs and logs ────────────────────────
 
 #[derive(Clone, Default)]
-struct Captured(Arc<Mutex<Vec<u8>>>);
+pub(super) struct Captured(pub(super) Arc<Mutex<Vec<u8>>>);
 
 impl Write for Captured {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
@@ -454,7 +454,8 @@ async fn r103_token_appears_in_no_log_line_and_no_request_uri() {
     let ok = complete(&state, &token).await;
     assert!(ok.status.is_redirection(), "reset succeeds: {}", ok.status);
     assert_eq!(ok.location.as_deref(), Some("/admin/login?reset=ok"));
-    // A failing completion logs its cause at error level, without the token.
+    // A used link is an ordinary refusal: logged at info (RFC 103 stage
+    // 2), without the token. `r103_stage2` covers the error level.
     tracing::callsite::rebuild_interest_cache();
     let replay = complete(&state, &token).await;
     assert_eq!(replay.status, StatusCode::BAD_REQUEST);
@@ -468,8 +469,12 @@ async fn r103_token_appears_in_no_log_line_and_no_request_uri() {
     let line = logged
         .lines()
         .find(|l| l.contains("password reset completion refused"))
-        .unwrap_or_else(|| panic!("no error line for the refused completion:\n{logged}"));
-    assert!(line.contains("ERROR"), "wrong level: {line}");
+        .unwrap_or_else(|| panic!("no log line for the refused completion:\n{logged}"));
+    assert!(line.contains(" INFO "), "wrong level: {line}");
+    assert!(
+        !logged.contains(" ERROR "),
+        "no error line for a used link:\n{logged}"
+    );
     assert!(line.contains("request_id="), "no request id: {line}");
     assert!(!logged.contains(&token), "the token leaked into the log");
     for uri in logged.split_whitespace().filter(|w| w.starts_with("uri=")) {

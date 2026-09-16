@@ -96,8 +96,8 @@ descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
 id = "U07"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-owner = "Admin MFA reset"
-rationale = "`user.reset_mfa`"
+owner = "Admin MFA reset (web) and operator MFA reset (`sui-id admin reset-mfa`, RFC 103 D12)"
+rationale = "`mfa.admin_reset`; system principal permitted for the CLI adapter only (`operator_reset_mfa`, no actor, `via = cli`); the web path keeps `for_authorized_actor`"
 mutation_surface = "`user_totp::delete`, WebAuthn credential deletes"
 files = ["crates/sui-id-store/src/repos/user_totp.rs"]
 test_id = "`a_u07_mfa_reset`"

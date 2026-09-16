@@ -795,7 +795,7 @@ not expect them to be renamed without a deprecation cycle):
 | `auth.refresh.theft_detected` | A revoked refresh token was replayed at the token endpoint. The whole rotation family was revoked. **Alert on this.** |
 | `auth.sessions.bulk_revoke_self` | A user used "Sign out everywhere else" on `/me/security`. Note records how many sessions were swept. |
 | `auth.password.changed_self` | A user changed their own password via `/me/security/password`. Note records how many sessions and refresh tokens were swept (zero if the user unchecked the box). |
-| `mfa.admin_reset` | An administrator forcibly removed every MFA factor for a user. **Alert on this.** |
+| `mfa.admin_reset` | Every MFA factor was forcibly removed for a user: by an administrator on the web (actor set), or by the operator with `sui-id admin reset-mfa` (no actor, note `via=cli`). **Alert on this.** |
 | `admin.user.unlock` | An admin cleared an account lockout via `sui-id admin unlock-user`. |
 | `auth.mfa.factor_added` | A user added a second factor (`method`: `totp`, `recovery_codes` or `webauthn`). |
 | `webauthn.credential.delete` | A user deleted one of their passkeys. |
@@ -994,6 +994,40 @@ The reset does **not** revoke the user's existing sessions or
 refresh tokens. If you also want to force a re-login, follow up
 with the Disable / Enable cycle from the same page — that revokes
 sessions.
+
+### A sole administrator who lost every factor
+
+The web reset needs an administrator who can still sign in and pass a
+step-up. If the only administrator has lost every second factor, no one
+can use it. Recover from the host instead, with the same access you use
+for backups (the config file and the master key):
+
+1. Confirm who is asking. The command trusts whoever can run it on the
+   host; it does not verify the person behind the account.
+2. Run:
+
+   ```sh
+   sui-id admin reset-mfa --username alice \
+       --reason "lost every factor; ticket OPS-42" \
+       --config /etc/sui-id/sui-id.toml
+   ```
+
+   It removes the user's TOTP enrolment and every passkey, and prints
+   what it removed. The reason is required and is stored in the audit
+   note. It refuses an unknown or deleted user, and changes nothing if
+   the audit record cannot be written.
+3. The administrator signs in with their password and enrols new
+   factors straight away from `/me/security`.
+4. Check the audit log. The event is `mfa.admin_reset` with no actor
+   and `via=cli` in the note:
+
+   ```sql
+   SELECT at, target, note FROM audit_log
+   WHERE action = 'mfa.admin_reset' AND note LIKE '%via=cli%'
+   ORDER BY seq DESC;
+   ```
+
+As with the web reset, existing sessions are not revoked.
 
 ## WebAuthn / passkey requirements
 

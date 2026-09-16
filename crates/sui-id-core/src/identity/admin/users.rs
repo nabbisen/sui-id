@@ -211,6 +211,51 @@ pub async fn admin_reset_mfa(
     })
 }
 
+/// Remove every MFA factor for `username` on the operator's authority:
+/// `sui-id admin reset-mfa` (RFC 103 D12), the recovery for an
+/// administrator who lost every factor and has no other administrator to
+/// act. The caller proved possession of the host's master key by opening
+/// the database; there is no session, so the event has no actor and
+/// carries `via = cli`.
+///
+/// Refuses, writing nothing: an empty reason (`BadRequest`), an unknown
+/// user and a deleted user (`NotFound`).
+pub async fn operator_reset_mfa(
+    db: &Database,
+    username: &str,
+    reason: &str,
+) -> CoreResult<(sui_id_shared::ids::UserId, MfaResetReport)> {
+    let reason = reason.trim();
+    if reason.is_empty() {
+        return Err(CoreError::BadRequest("a reason is required".into()));
+    }
+    let user = sui_id_store::repos::users::find_by_username(db, username)
+        .await
+        .map_err(|e| match e {
+            sui_id_store::StoreError::NotFound => CoreError::NotFound,
+            other => CoreError::from(other),
+        })?;
+    if user.is_deleted {
+        return Err(CoreError::NotFound);
+    }
+    // U07 re-checks the user inside its transaction (a user deleted after
+    // this read is `NotFound` there too).
+    let audited = sui_id_store::commands::operator_reset_mfa(db, user.id, reason.to_owned())
+        .await
+        .map_err(|e| match e {
+            sui_id_store::StoreError::NotFound => CoreError::NotFound,
+            other => CoreError::from(other),
+        })?;
+    let (totp_removed, passkeys_removed) = audited.into_inner();
+    Ok((
+        user.id,
+        MfaResetReport {
+            totp_removed,
+            passkeys_removed,
+        },
+    ))
+}
+
 /// Reset another user's password (admin-initiated).
 ///
 /// Enforces the same HIBP policy as the setup wizard and self-service

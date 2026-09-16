@@ -101,12 +101,13 @@ pub(crate) async fn run_admin_subcommand(args: &[String]) -> Result<()> {
     let action = args.get(2).map(String::as_str);
     match action {
         Some("unlock-user") => run_admin_unlock_user(args).await,
+        Some("reset-mfa") => run_admin_reset_mfa(args).await,
         Some("rotate-key") => run_admin_rotate_key(args).await,
         Some("rotate-metrics-token") => run_admin_rotate_metrics_token(args).await,
         Some("issue-registration-token") => run_admin_issue_registration_token(args).await,
         Some(other) => bail!(
-            "unknown admin subaction `{other}`. Known subactions: unlock-user, rotate-key, \
-             rotate-metrics-token, issue-registration-token"
+            "unknown admin subaction `{other}`. Known subactions: unlock-user, reset-mfa, \
+             rotate-key, rotate-metrics-token, issue-registration-token"
         ),
         None => bail!("admin requires a subaction. Try: sui-id admin unlock-user --username NAME"),
     }
@@ -149,6 +150,51 @@ pub(crate) async fn run_admin_unlock_user(args: &[String]) -> Result<()> {
         .context("clearing lockout")?;
     eprintln!("unlocked {username} (id={})", user.id);
     Ok(())
+}
+
+/// `sui-id admin reset-mfa --username NAME --reason TEXT [--config PATH]`
+///
+/// Removes every MFA factor (TOTP and passkeys) for one user, on the
+/// operator's authority (RFC 103 D12): the recovery for a sole
+/// administrator who lost every factor. The removal and its
+/// `mfa.admin_reset` event (no actor, `via = cli`) commit together.
+/// Sessions are left alone, as on the web path.
+pub(crate) async fn run_admin_reset_mfa(args: &[String]) -> Result<()> {
+    let flag = |name: &str| {
+        args.iter()
+            .position(|a| a == name)
+            .and_then(|i| args.get(i + 1))
+    };
+    let username = flag("--username").context("admin reset-mfa requires --username NAME")?;
+    let reason = flag("--reason").context("admin reset-mfa requires --reason TEXT")?;
+    if reason.trim().is_empty() {
+        bail!("admin reset-mfa requires a non-empty --reason TEXT");
+    }
+    let config_path = parse_config_path(args).unwrap_or_else(|| PathBuf::from("./sui-id.toml"));
+    let cfg = Config::load(&config_path)
+        .with_context(|| format!("loading config from {}", config_path.display()))?;
+    let resolved = sui_id::keyring::resolve(&cfg.storage.key_file).context("loading master key")?;
+    let db = sui_id_store::Database::open(&cfg.storage.db_path, resolved.key)
+        .context("opening database")?;
+
+    match sui_id_core::admin::operator_reset_mfa(&db, username, reason).await {
+        Ok((user_id, report)) => {
+            eprintln!(
+                "reset MFA for {username} (id={user_id}): totp {}, {} passkey(s) removed",
+                if report.totp_removed {
+                    "removed"
+                } else {
+                    "absent"
+                },
+                report.passkeys_removed
+            );
+            Ok(())
+        }
+        Err(sui_id_core::errors::CoreError::NotFound) => {
+            bail!("no active user named {username:?} (unknown or deleted); nothing was changed")
+        }
+        Err(e) => Err(anyhow::anyhow!(e)).context("resetting MFA; nothing was changed"),
+    }
 }
 
 /// `sui-id admin rotate-key [--new-key PATH | --generate-new-key] [--yes]
@@ -517,6 +563,7 @@ USAGE:
     sui-id restore --from PATH [--config PATH] [--force] [--decrypt]
     sui-id verify-backup --from PATH [--decrypt]
     sui-id admin unlock-user --username NAME [--config PATH]
+    sui-id admin reset-mfa --username NAME --reason TEXT [--config PATH]
     sui-id admin rotate-key [--generate-new-key | --new-key PATH] [--yes] [--config PATH]
     sui-id --dev [--dev-bind ADDR] [--dev-db PATH] [--dev-seed PATH]
                  [--dev-admin-password STR] [--dev-client-secret STR]
@@ -549,6 +596,11 @@ SUBCOMMANDS:
                              removes any active lock. Use to recover a real
                              user who's been locked out by a typo storm or
                              whose lockout window hasn't expired yet.
+    admin reset-mfa          Remove every MFA factor (TOTP and passkeys)
+                             for the given user, on the operator's
+                             authority. The recovery for a sole
+                             administrator who lost every factor. The
+                             reason is recorded in the audit log.
     admin rotate-key         Re-seal every encrypted column under a new
                              32-byte master key. Runs OFFLINE: stop the
                              server first, take a fresh backup, then run

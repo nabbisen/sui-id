@@ -35,7 +35,7 @@ Until RFC 094 is implemented, treat the rows below as the coverage this project
 | `user.enable` | Re-enable user account | admin user id | target user id | — | A |
 | `user.delete` | Soft-delete user | admin user id | target user id | reason (optional) | A |
 | `user.reset_password` | Admin password reset | admin user id | target user id | — | A |
-| `mfa.admin_reset` | Admin MFA reset | admin user id | target user id | `totp=… passkeys=N reason=…` | A |
+| `mfa.admin_reset` | Admin MFA reset (web), or operator MFA reset with `sui-id admin reset-mfa` (RFC 103 D12) | admin user id; none for the CLI | target user id | `totp=… passkeys=N reason=…`, plus `via=cli` for the CLI | A |
 | `user.role_change` | Admin role change | admin user id | target user id | `old_role=… new_role=…` | A |
 
 > **`user.role_change` row added 2026-09-08, reviewed and settled.** RFC

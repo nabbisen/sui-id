@@ -86,10 +86,18 @@ pub fn build_router(app: AppState) -> Router {
             get(crate::handlers::forgot_password::forgot_password_get)
                 .post(crate::handlers::forgot_password::forgot_password_post),
         )
+        // RFC 103 stage 2: every response on this route is `no-store`. The
+        // form re-shown after a password-policy refusal holds the reset
+        // token in a field value, and no page here should be kept by a
+        // browser or proxy cache.
         .route(
             "/reset-password",
             get(crate::handlers::forgot_password::reset_password_get)
-                .post(crate::handlers::forgot_password::reset_password_post),
+                .post(crate::handlers::forgot_password::reset_password_post)
+                .layer(tower_http::set_header::SetResponseHeaderLayer::overriding(
+                    axum::http::header::CACHE_CONTROL,
+                    axum::http::HeaderValue::from_static("no-store"),
+                )),
         )
         .route("/admin/logout", post(admin::logout))
         // RFC 055 (v0.44.0): /admin/profile consolidated onto /me/security/*.
