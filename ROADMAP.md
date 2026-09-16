@@ -172,7 +172,7 @@ own hash-pinned package. Items at the same number may run concurrently.
 | 7 | RFC 094 M2b: remaining conversion, AST gate, authority switch | A | M2a | 094 |
 | 7 | RFC 100 (M2c): master-key rotation recovery | A/C | M2a; RFC 100 Accepted | [100](rfcs/handoffs/100-master-key-rotation/README.md) |
 | 7 | RFC 096-B: federation mutation and session integration | B | M2a seam; 096-A; **F01 and F03 additionally RFC 102 Accepted** | 096 |
-| 8 | RFC 098: documentation authority and reconciliation | — | M1b | [098](rfcs/handoffs/098-documentation-authority/README.md) |
+| 8 | RFC 098: documentation authority and reconciliation — **Implemented, closed 2026-09-17** | — | M1b | [098](rfcs/handoffs/098-documentation-authority/README.md) |
 | 9 | RFC 097: current threat model baseline | — | items 6–8 complete; 098 authority decision | [097](rfcs/handoffs/097-threat-model/README.md) |
 | 10 | RFC 099 (M6): runtime modes, fuzz, packaging, live integration, evidence manifest | — | 097, 098, and **RFC 100 Implemented** | [099](rfcs/handoffs/099-operational-hardening/m6-implementation.md) |
 | 11 | M7 soak against the immutable M6 artifact | — | M6 closure | [099 soak](rfcs/handoffs/099-operational-hardening/m7-soak-operations.md) |

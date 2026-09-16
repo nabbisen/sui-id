@@ -1,6 +1,6 @@
 # G14 and G15 — RFC 098's lanes: the uncovered links, and the three authority checks
 
-**Governing RFC.** [RFC 098](../../accepted/098-documentation-authority-reconciliation.md)
+**Governing RFC.** [RFC 098](../../done/098-documentation-authority-reconciliation.md)
 §Gate Matrix lanes owned by RFC 098 (added 2026-09-12) and §Design 7. The table
 is in the RFC; this dispatch is the manifest entries, one job, one new script
 with its policy file and fixtures, and one deferred registration.

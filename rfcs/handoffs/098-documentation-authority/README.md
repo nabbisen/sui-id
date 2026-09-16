@@ -1,6 +1,6 @@
 # RFC 098 handoff — documentation authority and reconciliation
 
-**Governing RFC:** [RFC 098](../../accepted/098-documentation-authority-reconciliation.md) — Accepted 2026-09-10
+**Governing RFC:** [RFC 098](../../done/098-documentation-authority-reconciliation.md) — Accepted 2026-09-10
 **Milestone:** M5
 **Audience:** documentation owner
 **Status:** Planning companion; inherits the governing RFC's current status —

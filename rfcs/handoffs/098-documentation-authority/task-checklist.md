@@ -1,6 +1,6 @@
 # RFC 098 reconciliation checklist
 
-**Governing RFC:** [RFC 098](../../accepted/098-documentation-authority-reconciliation.md)
+**Governing RFC:** [RFC 098](../../done/098-documentation-authority-reconciliation.md)
 
 ## 0 — Order of work, added at acceptance 2026-09-10
 
@@ -839,6 +839,11 @@ review package, with the quoted lines, and give the manual version read
 (`man sudo` header). Do not run `sudo`.
 
 **Evidence.** The changed sentence; the two quotations; G10a, G10b, G15 green.
+
+### Closed — 2026-09-17
+
+`@nabbisen` approved closure on 2026-09-17. RFC 098 moved to `rfcs/done/`, with
+closure metadata pointing to the assessment below.
 
 ### Dispatch 18 — landed 2026-09-17
 

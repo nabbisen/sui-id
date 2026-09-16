@@ -1,7 +1,7 @@
 # RFC 098 — design review and acceptance record
 
 **Date.** 2026-09-10
-**RFC.** [RFC 098 — Documentation Authority and Reconciliation](../../accepted/098-documentation-authority-reconciliation.md)
+**RFC.** [RFC 098 — Documentation Authority and Reconciliation](../../done/098-documentation-authority-reconciliation.md)
 **Design author.** High-capability model (architect), drafted `aae626c`
 **Independent design reviewer.** `@nabbisen`
 **Outcome.** **Accepted** on 2026-09-10, and authorized for the record on the

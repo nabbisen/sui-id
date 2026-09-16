@@ -69,7 +69,7 @@ slot is `104`). One **parallel namespace** also exists:
 | 094 | [Transactional Audit Completeness and Typed Event Registry](./accepted/094-transactional-audit-registry.md) | M2a, M2b | `codex-developer` (OpenAI Codex) |
 | 095 | [Dynamic Client Registration Transaction and Validation](./accepted/095-dynamic-client-registration-transaction.md) | M3 | `codex-developer` (OpenAI Codex) |
 | 096 | [Upstream OIDC Federation Validation](./accepted/096-upstream-oidc-federation-validation.md) | M4-A, M4-B | `codex-developer` (OpenAI Codex) |
-| 098 | [Documentation Authority and Reconciliation](./accepted/098-documentation-authority-reconciliation.md) | M5 | mid-capability model |
+| 098 | [Documentation Authority and Reconciliation](./done/098-documentation-authority-reconciliation.md) | M5 | mid-capability model |
 
 Acceptance makes an RFC implementation-eligible, but coding remains prohibited
 until its declared implementation prerequisites have repository-visible

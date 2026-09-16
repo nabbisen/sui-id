@@ -1,6 +1,17 @@
 # RFC 098 — Documentation Authority and Reconciliation
 
-**Status.** Accepted
+**Status.** Implemented
+**Closure reviewed on.** 2026-09-17
+**Closure approved by.** `@nabbisen` (accountable owner), 2026-09-17. The closure
+review was performed by the architect, which drafted this RFC's design and every
+dispatch, and is **not** independent of it. No independent role existed: the
+implementation role implemented it, and `@nabbisen` reviewed its design. As with
+RFC 093, recorded as an unreviewed judgment carried by the owner under RFC 000,
+not as a completed independent review.
+**Closure evidence.** [Closure assessment 2026-09-16](../handoffs/098-documentation-authority/task-checklist.md)
+(§*Closure assessment — 2026-09-16*, and dispatches 14–18 that meet its conditions);
+G10a, G10b, G11, G14 and G15 green on `aacf2b0`. Known inaccuracies left in place
+are recorded there, each with its owner.
 **Accepted on.** 2026-09-10
 **Approved by.** `@nabbisen`
 **Independent design review.** `@nabbisen`, [Design review 2026-09-10](../handoffs/098-documentation-authority/098-design-review-2026-09-10.md)
