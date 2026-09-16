@@ -1,5 +1,15 @@
 # UI state word contract
 
+> **Stale as of 2026-09-16.** Most i18n keys this page names
+> (`users_empty`, `clients_empty`, `user_created_flash`,
+> `password_changed_flash`, `language_saved_flash`, `loading`,
+> `webauthn_in_progress`, `smtp_test_disabled_hint`,
+> `settings_smtp_saved_flash`, `profile_passkeys_deleted_flash`,
+> `client_created_flash`) do not exist in `crates/sui-id-i18n/src/strings.rs`,
+> `set_flash` does not exist, and no CI check enforces the contract. The page
+> is kept as written; its fate is decided with `docs/ui-ux-contracts.md`
+> ([RFC 098 dispatch 15](https://github.com/nabbisen/sui-id/blob/main/rfcs/handoffs/098-documentation-authority/task-checklist.md)).
+
 Every page in sui-id must handle five states. Define the copy for each
 before you write the render function — that way the translator and the
 designer see a consistent vocabulary, and reviewers can confirm the

@@ -89,12 +89,15 @@ crates/sui-id/static/  # Embedded static assets (favicon, JS for WebAuthn)
 
 ## Adding a new admin page
 
-1. Define a `FooData` struct in a module under `crates/sui-id-web/src/pages/`.
-2. Write `pub fn render_foo(data: FooData, dev_mode: bool, lang: Locale) -> String`.
-3. Export in `crates/sui-id-web/src/lib.rs`.
-4. Add a route in `crates/sui-id/src/http/router.rs`.
-5. Write the handler in `crates/sui-id/src/http/handlers/admin.rs`.
-6. Use `resolve_admin_locale(&app, admin_id).await` for locale resolution.
+1. Add a page module under `crates/sui-id-web/src/pages/` with a
+   `pub fn render_…(…) -> String`. There is no fixed signature; model it on an
+   existing page. `crates/sui-id-web/src/pages/audit.rs` is a compact one:
+   `render_audit` takes the page data, the flash, the CSRF token, `dev_mode`
+   and the locale, and builds its view inside `render(move || …)`.
+2. Export in `crates/sui-id-web/src/lib.rs`.
+3. Add a route in `crates/sui-id/src/http/router.rs`.
+4. Write the handler in `crates/sui-id/src/http/handlers/admin.rs`.
+5. Use `resolve_admin_locale(&app, admin_id).await` for locale resolution.
 
 ## RFC process
 
