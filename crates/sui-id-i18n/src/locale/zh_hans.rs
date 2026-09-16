@@ -72,7 +72,7 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     settings_email_password_placeholder_change: "（仅修改时填写）",
     settings_email_password_placeholder_none: "（无需认证时留空）",
     settings_email_password_hint: "仅在修改保存的密码时填写。留空时保留原有值。",
-    settings_email_base_url_hint: "重置邮件中使用的 URL 基址。可与 Issuer URL 不同。",
+    settings_email_base_url_hint: "已不再用于重置链接：链接由 Issuer URL (server.issuer) 生成。",
     settings_email_save_button: "保存设置",
     settings_email_test_section: "连接测试",
     settings_email_test_lede: "使用当前设置尝试连接并认证 SMTP 服务器。不会发送邮件。",
@@ -304,6 +304,8 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     reset_password_lede: "请输入两次新密码。",
     reset_password_new_label: "新密码",
     reset_password_new_hint: "12 个字符或以上",
+    reset_password_token_label: "重置码",
+    reset_password_token_hint: "如果此栏为空，请粘贴邮件中的重置码。",
     reset_password_confirm_label: "确认密码",
     reset_password_submit: "更改密码",
     reset_password_invalid_title: "此链接已失效",
@@ -401,6 +403,9 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     email_password_reset_intro: "我们收到了您的 sui-id 账户密码重置请求，请在 30 分钟内使用以下链接设置新密码。",
     email_password_reset_link_label: "重置密码",
     email_password_reset_disregard: "如果不是您本人操作，请忽略此邮件。",
+    email_password_reset_token_hint: |page| {
+        format!("如果链接无法打开，请访问 {page} 并输入以下重置码：")
+    },
     email_password_changed_intro: "您的 sui-id 账户密码已被更改。",
     email_password_changed_security_warning: "如果不是您本人操作，请立即撤销其他会话并联系管理员。",
     email_password_changed_link_security: "安全设置",

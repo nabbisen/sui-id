@@ -69,7 +69,7 @@ pub static STRINGS_JA: Strings = Strings {
     settings_email_password_placeholder_change: "（変更する場合のみ入力）",
     settings_email_password_placeholder_none: "（認証不要の場合は空欄）",
     settings_email_password_hint: "保存済みのパスワードを変更する場合のみ入力してください。空欄の場合は既存値を保持します。",
-    settings_email_base_url_hint: "リセットメールに記載する URL のベース。Issuer URL とは別に明示できます。",
+    settings_email_base_url_hint: "リセットリンクには使われなくなりました。リンクは Issuer URL (server.issuer) から作られます。",
     settings_email_save_button: "設定を保存",
     settings_email_test_section: "接続テスト",
     settings_email_test_lede: "現在の設定で SMTP サーバーへの接続と認証を試みます。メールは送信されません。",
@@ -301,6 +301,8 @@ pub static STRINGS_JA: Strings = Strings {
     reset_password_lede: "新しいパスワードを 2 回入力してください。",
     reset_password_new_label: "新しいパスワード",
     reset_password_new_hint: "12 文字以上",
+    reset_password_token_label: "リセットコード",
+    reset_password_token_hint: "この欄が空の場合は、メールに記載されたリセットコードを貼り付けてください。",
     reset_password_confirm_label: "確認のためもう一度",
     reset_password_submit: "パスワードを変更",
     reset_password_invalid_title: "このリンクは無効です",
@@ -398,6 +400,9 @@ pub static STRINGS_JA: Strings = Strings {
     email_password_reset_intro: "sui-id でパスワードリセットの依頼を受け付けました。以下のリンクから 30 分以内に新しいパスワードを設定してください。",
     email_password_reset_link_label: "パスワードを再設定する",
     email_password_reset_disregard: "このメールに心当たりがない場合は無視してください。",
+    email_password_reset_token_hint: |page| {
+        format!("リンクが開けない場合は、{page} を開いて次のリセットコードを入力してください:")
+    },
     email_password_changed_intro: "sui-id のあなたのアカウントのパスワードが変更されました。",
     email_password_changed_security_warning: "心当たりがない場合は、すぐに他のセッションを取り消し、サポートに連絡してください。",
     email_password_changed_link_security: "セキュリティ設定",

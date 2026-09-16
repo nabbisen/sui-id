@@ -7,9 +7,9 @@
 //!   sends the reset link mail, returns. Always returns `Ok(())`
 //!   externally (user-enumeration protection); failures are
 //!   audit-logged.
-//! - [`validate_token`] — issued from `GET /reset-password?token=…`
-//!   to gate rendering the new-password form. Verifies the token
-//!   without consuming it.
+//! - [`validate_token`] — verifies a token without consuming it. Since
+//!   RFC 103 D10 the server no longer calls it: the token reaches the
+//!   server only in the `POST /reset-password` body.
 //! - [`consume_and_reset_password`] — issued from
 //!   `POST /reset-password`. Verifies the token, replaces the user's
 //!   password, marks the token consumed, all in one logical step.
@@ -86,6 +86,7 @@ pub async fn request_reset(
     db: &Database,
     clock: &SharedClock,
     mailer: &dyn MailSender,
+    issuer: &str,
     email: &str,
     requester_ip: Option<&str>,
 ) -> CoreResult<()> {
@@ -99,6 +100,10 @@ pub async fn request_reset(
 
     // Look up by email.
     let user_row = users::find_by_email_normalized(db, &normalized_email).await?;
+    // RFC 103 D13: an account from a directory or an upstream provider never
+    // receives a local password. It gets exactly what an unknown address
+    // gets: the same Class-B event with no user, no token and no mail.
+    let user_row = user_row.filter(|u| u.source == sui_id_store::models::UserSource::Local);
     let Some(user_row) = user_row else {
         events::emit(
             db,
@@ -152,10 +157,10 @@ pub async fn request_reset(
     };
     password_reset_tokens::insert(db, &row).await?;
 
-    // Build the reset link from `smtp_config.base_url` (the
-    // user-facing origin, not necessarily the OIDC issuer URL).
-    let base_url = match smtp_config::get(db).await? {
-        Some(c) if c.enabled => c.base_url,
+    // Mail cannot be sent without SMTP. The link itself is built from the
+    // issuer (RFC 103 D2): one completion URL, one origin.
+    match smtp_config::get(db).await? {
+        Some(c) if c.enabled => {}
         _ => {
             // SMTP disabled / unconfigured. Still return Ok so the
             // exterior shape is constant; record the actual outcome.
@@ -172,11 +177,12 @@ pub async fn request_reset(
             return Ok(());
         }
     };
-    let link = format!(
-        "{}/reset-password?token={}",
-        base_url.trim_end_matches('/'),
-        plaintext
-    );
+    // RFC 103 D10: the token travels in the URL fragment, which the browser
+    // never sends, so it reaches no proxy log, trace span or server log. The
+    // completion page's script moves it into the POSTed form.
+    let base = issuer.trim_end_matches('/');
+    let link = format!("{base}/reset-password#t={plaintext}");
+    let paste_page = format!("{base}/reset-password");
 
     // Compose and dispatch the mail. The recipient's locale is
     // their `preferred_lang` if set, otherwise the server default
@@ -220,22 +226,31 @@ pub async fn request_reset(
              \n\
              {link}\n\
              \n\
+             {token_hint}\n\
+             {token}\n\
+             \n\
              {disregard}\n\
              ",
             greeting = greeting,
             intro = t.email_password_reset_intro,
             link = link,
+            token_hint = (t.email_password_reset_token_hint)(&paste_page),
+            token = plaintext,
             disregard = t.email_password_reset_disregard,
         ),
         html_body: Some(format!(
             "<p>{greeting_esc}</p>\
              <p>{intro}</p>\
              <p><a href=\"{link_esc}\">{link_label}</a></p>\
+             <p>{token_hint}</p>\
+             <p><code>{token_esc}</code></p>\
              <p>{disregard}</p>",
             greeting_esc = html_escape(&greeting),
             intro = t.email_password_reset_intro,
             link_esc = html_escape(&link),
             link_label = t.email_password_reset_link_label,
+            token_hint = html_escape(&(t.email_password_reset_token_hint)(&paste_page)),
+            token_esc = html_escape(&plaintext),
             disregard = t.email_password_reset_disregard,
         )),
         locale: None,
@@ -364,8 +379,15 @@ pub async fn consume_and_reset_password(
         must_change: false,
         updated_at: now,
     };
+    // RFC 103 D13: the command consumes the token once and re-reads the
+    // user inside its transaction; an ineligible token or user rolls back
+    // as `NotFound`, which is the ordinary invalid-link outcome.
     sui_id_store::commands::consume_and_reset_password(db, row.user_id, row.id, credential, now)
-        .await?;
+        .await
+        .map_err(|e| match e {
+            sui_id_store::StoreError::NotFound => CoreError::InvalidCredentials,
+            other => other.into(),
+        })?;
 
     // Best-effort post-reset notification mail. Failures here do
     // not affect the password change itself. The recipient's

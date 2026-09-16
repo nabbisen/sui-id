@@ -123,7 +123,8 @@ async fn forgot_password_renders_in_en() {
     );
 }
 
-/// Reset-password invalid page (token missing) renders in English.
+/// Reset-password invalid page (a token in the query string, RFC 103 D10)
+/// renders in English.
 #[tokio::test]
 async fn reset_password_invalid_renders_in_en() {
     let state = test_app();
@@ -132,7 +133,7 @@ async fn reset_password_invalid_renders_in_en() {
         .oneshot(
             Request::builder()
                 .method(Method::GET)
-                .uri("/reset-password")
+                .uri("/reset-password?token=anything")
                 .header(header::ACCEPT_LANGUAGE, "en")
                 .body(Body::empty())
                 .expect("req"),

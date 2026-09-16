@@ -531,6 +531,23 @@ pub async fn set_role(
 
 /// Same as [`set_role`] but runs inside a caller-owned transaction (RFC
 /// 094 U05: the sealed Class-A capability).
+/// RFC 103 D13: whether the user may receive a local password — active,
+/// not deleted, and `source = local` — read inside the caller's
+/// transaction. A missing user is `NotFound`.
+pub fn is_active_local_within_tx(conn: &rusqlite::Connection, id: UserId) -> StoreResult<bool> {
+    let (disabled, deleted, source): (i64, i64, String) = conn
+        .query_row(
+            "SELECT is_disabled, is_deleted, source FROM users WHERE id = ?1",
+            [id.to_string()],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
+            other => StoreError::from(other),
+        })?;
+    Ok(disabled == 0 && deleted == 0 && source == crate::models::UserSource::Local.as_str())
+}
+
 pub fn set_role_within_tx(
     conn: &rusqlite::Connection,
     user_id: UserId,

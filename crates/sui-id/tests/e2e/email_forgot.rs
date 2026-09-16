@@ -175,7 +175,7 @@ async fn forgot_password_post_sends_mail_for_known_email() {
     let last = mailer.last().await.expect("at least one mail");
     assert_eq!(last.to, "alice@test.invalid");
     assert!(last.subject.contains("パスワードのリセット"));
-    assert!(last.text_body.contains("/reset-password?token="));
+    assert!(last.text_body.contains("/reset-password#t="));
     assert!(last.html_body.is_some());
 }
 
@@ -250,7 +250,7 @@ async fn reset_password_full_flow_changes_password_and_sends_notification() {
 
     // Extract the token from the captured mail.
     let mail = mailer.last().await.expect("reset mail");
-    let prefix = "/reset-password?token=";
+    let prefix = "/reset-password#t=";
     let start = mail.text_body.find(prefix).expect("link in mail") + prefix.len();
     let end = mail.text_body[start..]
         .find(|c: char| c == '\n' || c.is_whitespace())
@@ -259,12 +259,13 @@ async fn reset_password_full_flow_changes_password_and_sends_notification() {
     let token = mail.text_body[start..end].to_owned();
     assert!(!token.is_empty());
 
-    // 2) GET /reset-password?token=... renders the form
+    // 2) GET /reset-password renders the form; the token stays in the
+    //    fragment, which the browser never sends (RFC 103 D10).
     let resp = build_router(state.clone())
         .oneshot(
             Request::builder()
                 .method(Method::GET)
-                .uri(format!("/reset-password?token={token}"))
+                .uri("/reset-password")
                 .body(Body::empty())
                 .expect("req"),
         )
@@ -389,7 +390,7 @@ async fn settings_email_get_requires_admin() {
 /// Helper: extract a password-reset token from a mail captured by the in-memory
 /// mailer. The token is embedded in the reset link inside the mail body.
 fn extract_reset_token_from_mail(mail: &sui_id_core::mail::OutgoingMail) -> String {
-    let prefix = "/reset-password?token=";
+    let prefix = "/reset-password#t=";
     let start = mail.text_body.find(prefix).expect("reset link in mail") + prefix.len();
     let end = mail.text_body[start..]
         .find(|c: char| c == '\n' || c.is_whitespace())
@@ -442,7 +443,7 @@ async fn redeem_reset_token(state: &AppState, token: &str, new_password: &str) {
         .oneshot(
             Request::builder()
                 .method(Method::GET)
-                .uri(format!("/reset-password?token={token}"))
+                .uri("/reset-password")
                 .body(Body::empty())
                 .expect("req"),
         )

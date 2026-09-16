@@ -7,8 +7,14 @@
 //!                                       always 200 + neutral
 //!                                       message (user-enumeration
 //!                                       neutral)
-//!   GET  /reset-password?token=<t>  — validate token, render new-password form
+//!   GET  /reset-password            — render new-password form; the token
+//!                                       arrives in the link's fragment
+//!                                       (`#t=<token>`) or is pasted
 //!   POST /reset-password            — verify token, set new password, redirect
+//!
+//! RFC 103 D10: the token never travels in a URL the server sees. A
+//! `GET /reset-password?token=…` (an old-format link) is not processed; it
+//! renders the "request a new link" page.
 //!
 //! All four are unauthenticated (no session required); the second
 //! pair is gated by token possession.
@@ -92,6 +98,7 @@ pub async fn forgot_password_post(
         &app.db,
         &app.clock,
         app.mailer.as_ref(),
+        app.issuer(),
         &form.email,
         Some(&ip_str),
     )
@@ -120,21 +127,14 @@ pub async fn reset_password_get(
     let State(app) = state_ext;
     smtp_required_or_404(smtp_active(&app.db).await?)?;
     let token = csrf::ensure_token(&jar);
-    if q.token.is_empty() {
+    // RFC 103 D10: a token in the query string has already reached every
+    // access log on the way here. Do not process it; ask for a new link.
+    if !q.token.is_empty() {
         let html = sui_id_web::render_reset_password_invalid(lang);
         return Ok(with_csrf_cookie(Html(html).into_response(), &app, &token));
     }
-    match sui_id_core::forgot_password::validate_token(&app.db, &app.clock, &q.token).await {
-        Ok(_user_id) => {
-            let html =
-                sui_id_web::render_reset_password(q.token.clone(), token.clone(), None, lang);
-            Ok(with_csrf_cookie(Html(html).into_response(), &app, &token))
-        }
-        Err(_) => {
-            let html = sui_id_web::render_reset_password_invalid(lang);
-            Ok(with_csrf_cookie(Html(html).into_response(), &app, &token))
-        }
-    }
+    let html = sui_id_web::render_reset_password(String::new(), token.clone(), None, lang);
+    Ok(with_csrf_cookie(Html(html).into_response(), &app, &token))
 }
 
 // ---------- POST /reset-password ----------
@@ -151,6 +151,7 @@ pub struct ResetPasswordForm {
 pub async fn reset_password_post(
     state_ext: AppStateExt,
     ClientIp(ip): ClientIp,
+    request_id: Option<axum::Extension<crate::request_id::RequestId>>,
     crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
     jar: CookieJar,
     axum::Form(form): axum::Form<ResetPasswordForm>,
@@ -196,11 +197,10 @@ pub async fn reset_password_post(
     .await
     {
         Ok(()) => Ok(Redirect::to("/admin/login?reset=ok").into_response()),
-        Err(CoreError::InvalidCredentials) => {
-            let html = sui_id_web::render_reset_password_invalid(lang);
-            Ok((axum::http::StatusCode::BAD_REQUEST, Html(html)).into_response())
-        }
-        Err(other) => {
+        // Password-policy and breach refusals happen before the token is
+        // looked up, so the link is still good: re-show the form with the
+        // reason and let the user choose another password.
+        Err(other @ CoreError::BadRequest(_)) => {
             let token = csrf::ensure_token(&jar);
             let flash = Flash {
                 kind: FlashKind::Warn,
@@ -217,6 +217,19 @@ pub async fn reset_password_post(
                 &app,
                 &token,
             ))
+        }
+        // RFC 103 D13: every other completion failure — unknown, used or
+        // expired token, ineligible user, storage error — gets the same
+        // invalid-link response. The cause is logged; the token is not.
+        Err(err) => {
+            let request_id = request_id.as_ref().map(|e| e.0.0.as_str()).unwrap_or("-");
+            tracing::error!(
+                request_id,
+                error = %err,
+                "password reset completion refused"
+            );
+            let html = sui_id_web::render_reset_password_invalid(lang);
+            Ok((axum::http::StatusCode::BAD_REQUEST, Html(html)).into_response())
         }
     }
 }

@@ -69,7 +69,7 @@ pub static STRINGS_EN: Strings = Strings {
     settings_email_password_placeholder_change: "(only enter to change)",
     settings_email_password_placeholder_none: "(leave blank if no authentication)",
     settings_email_password_hint: "Enter only to change the stored password. Leave blank to keep the existing value.",
-    settings_email_base_url_hint: "Base URL used in reset emails. May differ from the issuer URL.",
+    settings_email_base_url_hint: "No longer used for reset links: they are built from the issuer URL (server.issuer).",
     settings_email_save_button: "Save settings",
     settings_email_test_section: "Connection test",
     settings_email_test_lede: "Attempts a connection and authentication to the SMTP server using current settings. No email is sent.",
@@ -301,6 +301,8 @@ pub static STRINGS_EN: Strings = Strings {
     reset_password_lede: "Enter your new password twice.",
     reset_password_new_label: "New password",
     reset_password_new_hint: "12 characters or more",
+    reset_password_token_label: "Reset code",
+    reset_password_token_hint: "Paste the reset code from the email if this field is empty.",
     reset_password_confirm_label: "Confirm again",
     reset_password_submit: "Change password",
     reset_password_invalid_title: "This link is no longer valid",
@@ -398,6 +400,9 @@ pub static STRINGS_EN: Strings = Strings {
     email_password_reset_intro: "We received a password-reset request for your sui-id account. Use the link below within 30 minutes to set a new password.",
     email_password_reset_link_label: "Reset your password",
     email_password_reset_disregard: "If you didn't request this, you can ignore this email.",
+    email_password_reset_token_hint: |page| {
+        format!("If the link does not work, open {page} and enter this reset code:")
+    },
     email_password_changed_intro: "The password for your sui-id account was changed.",
     email_password_changed_security_warning: "If you didn't do this, please revoke other sessions immediately and contact support.",
     email_password_changed_link_security: "security settings",

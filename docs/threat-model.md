@@ -489,7 +489,7 @@ of post-incident response, not a sui-id-specific gap.
 
 ## 2.8 Phishing reset-link redemption
 
-**What.** Trick a user into clicking a `/reset-password?token=…`
+**What.** Trick a user into clicking a `/reset-password#t=…`
 link that the attacker controls, then take over the account.
 
 **How.** The attacker either (a) generated the link by
@@ -504,9 +504,19 @@ chat, etc).
 
 - **30-minute TTL** on reset tokens.
 - **Single-use redemption.** A successful reset marks the
-  token consumed; a replay returns the "invalid or expired"
-  page indistinguishably from an unknown token (no
-  enumeration leak).
+  token consumed in the same transaction as the password
+  change, guarded so two concurrent redemptions cannot both
+  commit; a replay returns the "invalid or expired" page
+  indistinguishably from an unknown token (no enumeration
+  leak).
+- **Token kept out of URLs the server sees.** The token is
+  in the link's fragment, which the browser never sends, so
+  it does not reach proxy access logs or sui-id's logs; the
+  form POSTs it. A token in a query string is not processed.
+- **Local accounts only.** A directory or federated account
+  is never issued a token, and redemption re-reads the user
+  in its transaction and refuses anyone no longer active,
+  deleted, or not local.
 - **Hash-only storage.** The token is a 32-byte
   CSPRNG-generated random ID, base64-URL encoded for the
   link, and stored only as `SHA-256(token)` in

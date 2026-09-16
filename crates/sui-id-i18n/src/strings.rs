@@ -356,6 +356,12 @@ pub struct Strings {
     pub reset_password_lede: &'static str,
     pub reset_password_new_label: &'static str,
     pub reset_password_new_hint: &'static str,
+    /// RFC 103 D10: label of the reset-code field on `/reset-password`. The
+    /// page's script fills and hides it from the link's fragment; without
+    /// JavaScript the user pastes the code from the email.
+    pub reset_password_token_label: &'static str,
+    /// Hint under that field.
+    pub reset_password_token_hint: &'static str,
     pub reset_password_confirm_label: &'static str,
     pub reset_password_submit: &'static str,
     pub reset_password_invalid_title: &'static str,
@@ -469,6 +475,10 @@ pub struct Strings {
     pub email_password_reset_intro: &'static str,
     pub email_password_reset_link_label: &'static str,
     pub email_password_reset_disregard: &'static str,
+    /// RFC 103 D10: the line before the reset code in the email, for a
+    /// reader whose browser does not run the page's script. The argument is
+    /// the reset page's URL.
+    pub email_password_reset_token_hint: fn(&str) -> String,
     pub email_password_changed_intro: &'static str,
     pub email_password_changed_security_warning: &'static str,
     pub email_password_changed_link_security: &'static str,

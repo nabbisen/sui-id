@@ -49,6 +49,7 @@ mod mfa;
 mod oidc_flow;
 mod password_change;
 mod r102_stage1;
+mod r103_stage1;
 mod r11_login_failure;
 mod refresh_theft;
 mod request_id;

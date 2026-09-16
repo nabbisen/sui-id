@@ -416,12 +416,22 @@ in as an admin and visit **Settings → メール**
 | `password`     | Optional; sealed with the master key before storing. Empty value keeps the existing.   |
 | `from_address` | The envelope and visible `From:` address.                                              |
 | `from_name`    | Optional display name (e.g. "Acme Corp Identity").                                     |
-| `base_url`     | Public origin sui-id is reachable at. Used to build the reset-link URL.                |
+| `base_url`     | Stored but no longer used for reset links (see below).                                 |
 
-`base_url` is **separate from the OIDC issuer URL** because the
-two are sometimes different (the issuer can be a back-channel
-URL while users browse from a different origin). Always use an
-`https://` URL in production.
+The reset link is built from the OIDC issuer URL (`server.issuer`), so
+the issuer must be the origin users browse to. The link has the form
+`<issuer>/reset-password#t=<token>`: the token is in the URL fragment,
+which browsers never send, so it does not reach reverse-proxy access
+logs or sui-id's own logs. A small same-origin script on
+`/reset-password` moves the token into the form and removes it from the
+address bar. The email also carries the token as text; without
+JavaScript the page shows a field to paste it into. An old-style link
+(`/reset-password?token=…`) is not processed; the page asks the user to
+request a new link.
+
+A reset only ever sets a password on a local account. A directory or
+federated account whose address is submitted gets the same neutral
+response as an unknown address, and no mail is sent.
 
 Why DB-stored, not TOML? We picked the database so:
 

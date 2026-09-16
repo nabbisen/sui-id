@@ -1098,12 +1098,20 @@ pub async fn consume_and_reset_password(
 ) -> StoreResult<crate::registry::Audited<()>> {
     let context = AuthorizedCommandContext::<U10>::for_system_actor(None);
     db.class_a(context, move |tx: &mut ClassATx<'_, U10>| {
-        crate::repos::credentials::upsert_within_tx(tx.tx(), &credential)?;
+        // RFC 103 D13: consume the token once (guarded), and re-read the
+        // user inside this transaction. Anything that made the token
+        // ineligible since it was read — consumed, expired, the user
+        // disabled, deleted or not a local account — rolls back with
+        // `NotFound` and writes no credential.
         crate::repos::password_reset_tokens::mark_consumed_within_tx(
             tx.tx(),
             token_id,
             consumed_at,
         )?;
+        if !crate::repos::users::is_active_local_within_tx(tx.tx(), user_id)? {
+            return Err(crate::StoreError::NotFound);
+        }
+        crate::repos::credentials::upsert_within_tx(tx.tx(), &credential)?;
         crate::repos::sessions::revoke_all_for_user_within_tx(tx.tx(), user_id, consumed_at)?;
         crate::repos::refresh_tokens::revoke_all_for_user_within_tx(tx.tx(), user_id, consumed_at)?;
         Ok(((), U10Event::Completed { user_id }))

@@ -451,7 +451,17 @@ pub fn render_reset_password(
                 {flash_banner(flash)}
                 <form method="post" action="/reset-password" class="stack" autocomplete="off">
                     <input type="hidden" name="_csrf" value=csrf_token />
-                    <input type="hidden" name="token" value=token />
+                    // RFC 103 D10: the reset code arrives in the link's fragment,
+                    // which the server never sees. `reset-password.js` copies it
+                    // into this field and hides the field; without JavaScript the
+                    // user pastes the code from the email.
+                    <div class="field" id="reset-token-field">
+                        <label for="reset-token" class="field__label">{t.reset_password_token_label}</label>
+                        <input id="reset-token" name="token" type="text" required=true
+                               value=token autocomplete="off" spellcheck="false"
+                               aria-describedby="reset-token-hint" />
+                        <span id="reset-token-hint" class="field__hint">{t.reset_password_token_hint}</span>
+                    </div>
                     <div class="field">
                         <label for="password" class="field__label">{t.reset_password_new_label}</label>
                         <input id="password" name="password" type="password"
@@ -467,6 +477,7 @@ pub fn render_reset_password(
                     </div>
                     <button type="submit">{t.reset_password_submit}</button>
                 </form>
+                <script src="/static/reset-password.js"></script>
             </crate::layout::AuthShell>
         }
     })

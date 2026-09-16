@@ -110,8 +110,13 @@ pub fn mark_consumed_within_tx(
     id: PasswordResetTokenId,
     consumed_at: DateTime<Utc>,
 ) -> StoreResult<()> {
+    // RFC 103 D13: consume exactly once. A token already consumed, or
+    // expired by `consumed_at`, changes no row, and the caller's
+    // transaction rolls back. Without the guard two concurrent completions
+    // of one token both commit.
     let n = tx.execute(
-        "UPDATE password_reset_tokens SET consumed_at = ?1 WHERE id = ?2",
+        "UPDATE password_reset_tokens SET consumed_at = ?1 \
+         WHERE id = ?2 AND consumed_at IS NULL AND expires_at > ?1",
         params![consumed_at, id.to_string()],
     )?;
     if n == 0 {
