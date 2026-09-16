@@ -45,7 +45,76 @@ Reviewed, and committed as one commit. Refusing a user who was locked after the
 password check (by a concurrent failure) is accepted: clearing that lock would
 undo U22.
 
-## Stage 3 — dispatched 2026-09-17: L02 and L07, the second factor
+## Stage 3 — landed `b25929e`, 2026-09-17
+
+Reviewed, and committed as one commit. Accepted:
+- **L07 counts rejected ceremonies.** A missing or expired ceremony counts, as
+  well as a bad signature. Only `Store` and `Internal` errors are excluded,
+  which matches the step-up mapping.
+- **The lock count stays after the lock.** A later wrong factor locks again, with
+  a longer window.
+- **A stricter `next` check on the passkey path.**
+- **WebAuthn success is covered by reading only,** because no software
+  authenticator is available. RFC 099's live-integration evidence must include
+  a real passkey sign-in.
+
+## Stage 4 — dispatched 2026-09-17: L03 and L04, the directory and federated sign-ins
+
+**Baseline.** The commit that adds this section, or later. It builds on the LDAP
+returning-sign-in package (`478ec5b`), which moved the directory path's session
+code into `directory_session`.
+
+**Scope** — RFC 102 Part A, paths 4 and 5:
+- **L03** (sealed Class A) replaces `directory_session`'s no-MFA branch. In one
+  transaction:
+  - upsert the shadow user (the manifest's U26 row is corrected: L03 subsumes it);
+  - re-read the user as active and not locked;
+  - reset the password counter and stale lock;
+  - set `last_login_at`;
+  - insert the session and evict over the cap (L01's helper);
+  - write `auth.login.success` with a bounded `source` attribute (the source
+    slug).
+
+  The best-effort `auth.user_source.matched` append, `set_last_login` and
+  `clear_lockout` are removed. Keep `auth.user_source.matched` as a registered
+  event only if something else still writes it; otherwise retire its matrix
+  row and say so.
+- **The shadow upsert on the MFA branch.** It commits before the pending row is
+  issued. Moving it into L02 is not required; state what is written before the
+  second factor.
+- **L04** (sealed Class A) replaces `complete_federated_signin`'s no-MFA branch.
+  In one transaction:
+  - re-read the user as active (the fail-closed checks from `b2ecc5c` stay in
+    front);
+  - set `last_login_at`;
+  - insert the session and evict over the cap;
+  - write `auth.federation.signin.success` with the provider slug.
+
+  The best-effort append after the session is removed.
+- **A7 on both paths**, before any write. Once L03 refuses an admin-only
+  destination, the directory cascade no longer needs `login_post`'s
+  post-session role check; remove that check.
+- **A9 on both paths.** A failed L03 or L04 is never counted, and gets the
+  uniform response: 401 for the directory, the `fed_error=signin_failed`
+  redirect for federation. The cause is logged.
+
+**Out of scope, recorded, not changed.** Both paths keep their 24-hour session
+lifetime, and the directory path keeps `amr: [fed]`. Both are RFC 102 findings
+that need their own decision; do not change them here.
+
+**Evidence.**
+- **Happy path**, for each: one session, one Atomic event with its attribute,
+  bookkeeping applied.
+- **Injected append failure**, for each: no session, no shadow change (L03), no
+  event; the uniform response; the log line.
+- **Cap:** eviction on each path.
+- **A7:** a non-admin through the directory to `/admin` has no session row.
+- **Mutation:** the re-read, the eviction and A7's ordering on each path; each
+  is caught.
+- **Build and gates:** fmt, both clippy scopes, the test count (default and all
+  features), MSRV 1.95, G13.
+
+## Stage 3 — as dispatched
 
 **Baseline.** The commit that adds this section, or later.
 

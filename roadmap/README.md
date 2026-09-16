@@ -58,7 +58,7 @@ harmful.
 | [test-file-organization](test-file-organization/README.md) | Open — §A and §B done, §C queued |
 | [rustls-advisory-2026-0285](rustls-advisory-2026-0285/README.md) | Complete, `536ffd5` |
 | [federation-signin-fail-closed](federation-signin-fail-closed/README.md) | Complete, `b2ecc5c` |
-| [ldap-returning-signin](ldap-returning-signin/README.md) | Open — owner authorization 2026-09-17 |
+| [ldap-returning-signin](ldap-returning-signin/README.md) | Complete, `478ec5b` |
 | [request-id-span](request-id-span/README.md) | Open — owner authorization 2026-09-17 |
 | [backup-restore-hardening](backup-restore-hardening/README.md) | Open — owner authorization 2026-09-17 |
 | [audit-event-labels](audit-event-labels/README.md) | Open — owner ruling 2026-09-16 |

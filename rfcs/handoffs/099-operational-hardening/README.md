@@ -53,3 +53,12 @@ production readiness, and passing it authorizes only entry into M7.
   repository or CI;
 - a fuzz target cannot run to the agreed duration deterministically;
 - soak would have to begin against anything other than the exact M6 artifact.
+
+## Live-integration inputs recorded by other work (2026-09-17)
+
+These code paths could not be exercised in CI and need live evidence under M6:
+- **LDAP stable-id authentication** (`478ec5b`): the attribute search, the
+  base-object DN search, rc 32 handling, the decoy bind on a miss, and a DN
+  whose server form differs in case or spacing from the stored one.
+- **A real passkey sign-in and step-up** (RFC 102 stages 1 and 3): WebAuthn
+  success paths, which have no software authenticator in the test lanes.

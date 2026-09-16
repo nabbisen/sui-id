@@ -452,7 +452,6 @@ work with no decision record became invisible.
 |---|---|---|
 | `rfcs/README.md` template vs. what G11 enforces | The normative RFC template is missing ten labels, one of them gate-enforced. A defect in a gate RFC 093 owns, exposed by that gate. | [rfc-template-reconciliation](roadmap/rfc-template-reconciliation/README.md) |
 | Audit event labels | Twenty-nine translated audit-event labels were never displayed, and drifted: 30 registered events have none, 4 name events that do not exist. Owner ruling 2026-09-16: show the translated label beside the raw action, bound by a test to `ci/audit-coverage-matrix.md`. | [audit-event-labels](roadmap/audit-event-labels/README.md) |
-| Returning LDAP sign-in | A second LDAP sign-in is refused; any lookup error is treated as an unknown user. Owner authorization 2026-09-17. | [ldap-returning-signin](roadmap/ldap-returning-signin/README.md) |
 | Request ID across `.await` | The request-id middleware holds a span guard across `.await`, so handler logs can lose `request_id`. Owner authorization 2026-09-17. | [request-id-span](roadmap/request-id-span/README.md) |
 | Backup restore hardening | A manifest-less archive bypasses both version refusals; `verify` skips them; `restore` validates nothing it writes. Owner authorization 2026-09-17. | [backup-restore-hardening](roadmap/backup-restore-hardening/README.md) |
 | Schema version fails closed | An older binary runs against a newer schema without complaint, and a failed read of the stored version re-runs every migration. Found by RFC 098 dispatch 14; owner authorization 2026-09-16. | [schema-version-fail-closed](roadmap/schema-version-fail-closed/README.md) |
@@ -477,6 +476,7 @@ them.
 | Stable clippy drift, rustc 1.98.0 | `b343a06` | [stable-clippy-drift-1.98](roadmap/stable-clippy-drift-1.98/README.md) |
 | RUSTSEC-2026-0285: rustls 0.23.41 → 0.23.45 | `536ffd5` | [rustls-advisory-2026-0285](roadmap/rustls-advisory-2026-0285/README.md) |
 | Federation sign-in fails closed (live defect) | `b2ecc5c` | [federation-signin-fail-closed](roadmap/federation-signin-fail-closed/README.md) |
+| Returning LDAP sign-in (by stable id) | `478ec5b` | [ldap-returning-signin](roadmap/ldap-returning-signin/README.md) |
 
 ## Completed arcs before the remediation programme
 

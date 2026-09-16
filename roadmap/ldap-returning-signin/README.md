@@ -2,6 +2,7 @@
 
 **Authorized by.** [`ROADMAP.md`](../../ROADMAP.md) §Non-RFC work packages. Owner
 authorization 2026-09-17. **Implementer.** Mid-capability model.
+**State.** Complete, `478ec5b`, 2026-09-17. The LDAP search and bind are compile-checked only; live coverage is recorded for RFC 099.
 **Baseline.** The commit that adds this file, or later.
 **Found by.** RFC 102/103 design review, H3 and L4.
 
