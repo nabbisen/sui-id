@@ -3,7 +3,7 @@
 > A self-hosted, single-binary OpenID Connect provider written in Rust.
 
 sui-id is an Identity-as-a-Service you run yourself. It speaks OpenID Connect
-on the front end, stores its data in a single encrypted SQLite file, and ships
+on the front end, stores its data in a single SQLite file, and ships
 as one binary. There is no separate database service, no
 embedded JavaScript runtime, and no ambient cloud dependency.
 
@@ -16,8 +16,10 @@ sui-id is built for **single-organisation or single-product deployments** where:
 - The deployment team is small — one or two operators.
 - Operational simplicity matters as much as feature count.
 
-If you need multi-tenant isolation, SAML, LDAP federation, or dynamic client
-registration open to the internet, see the [scope statement](./getting-started/overview.md#scope).
+If you need multi-tenant isolation, SAML, a plugin system, or a catalogue of
+pre-built IdP integrations, sui-id does not offer them; see the
+[scope statement](./getting-started/overview.md#scope). LDAP user sources,
+upstream OIDC federation and dynamic client registration are supported.
 
 ## How to read this documentation
 

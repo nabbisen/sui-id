@@ -59,11 +59,15 @@ A random password is printed once to stdout. Then restart the server.
 
 **Option B — browser wizard:**
 
-Open a browser to `http://127.0.0.1:8801/setup` and complete the three-step wizard:
+Open the setup URL printed to stderr at startup
+(`<issuer>/setup?token=…`). The setup token travels in that URL,
+so there is nothing to type. The wizard then runs in this order:
 
-- **Language** — choose the admin UI language.
-- **Security** — configure HIBP breach-password checking.
-- **Admin account** — enter the setup token and create the first administrator.
+1. **Welcome** — a landing page.
+2. **Admin account** — create the first administrator.
+3. **Language** — choose the default UI language.
+4. **Security** — configure HIBP breach-password checking.
+5. **Done** — a link to the admin dashboard.
 
 After setup (either option), the admin panel is available at `/admin`.
 
@@ -78,9 +82,13 @@ sui-id --dev
 
 Dev mode:
 - Binds to `127.0.0.1:8801` by default.
-- Creates a pre-configured admin, user, and OIDC client from hardcoded defaults
-  (or a `dev-seed.toml` if present).
-- Disables `cookie_secure`, HIBP checking, and account lockout.
+- Seeds an admin (`admin`), two users (`alice`, `bob`) and one OIDC client from
+  hardcoded defaults. No seed file is read automatically; `--dev-seed PATH`
+  is the flag for one. In this release every `--dev-*` flag that takes a value
+  (`--dev-seed`, `--dev-bind`, `--dev-db`, `--dev-admin-password`,
+  `--dev-client-secret`) is rejected at startup with "unknown subcommand", so
+  dev mode runs on the hardcoded defaults only.
+- Disables `cookie_secure` and HIBP checking. Account lockout stays active.
 - Shows a **yellow banner** on every admin page as a reminder.
 
 **Never use `--dev` in production.**

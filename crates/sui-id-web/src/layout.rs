@@ -76,7 +76,7 @@ pub fn Shell(
                 {dev_mode.unwrap_or(false).then(|| view! {
                     <div class="dev-banner" role="alert">
                         <strong>"DEV MODE"</strong>
-                        " — not for production. cookie_secure=false, HIBP off, lockout disabled."
+                        " — not for production. cookie_secure=false, HIBP off."
                     </div>
                 })}
                 <header class="app-header" role="banner">

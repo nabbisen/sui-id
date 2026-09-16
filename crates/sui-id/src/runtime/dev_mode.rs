@@ -281,7 +281,7 @@ pub fn print_dev_warnings(bind: &str, seed_source: &str) {
     eprintln!("  WARNING: sui-id is running in DEV MODE");
     eprintln!("  - Pre-seeded credentials are LISTED IN PLAIN TEXT below.");
     eprintln!("  - This mode MUST NOT be used in production.");
-    eprintln!("  - HIBP off, lockout relaxed, cookie_secure off.");
+    eprintln!("  - HIBP off, cookie_secure off.");
     eprintln!("  - Bound to {bind}.");
     eprintln!("  - Seed source: {seed_source}");
     eprintln!("================================================================");

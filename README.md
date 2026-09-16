@@ -13,7 +13,7 @@
 
 sui-id is an Identity-as-a-Service you run yourself. It speaks OpenID Connect
 on the front end, stores its data in a single encrypted SQLite file, and ships
-as one statically linked binary. There is no separate database service, no
+as one binary. There is no separate database service, no
 embedded JavaScript runtime, and no ambient cloud dependency.
 
 The name "sui" is "翠" in Japanese: the kingfisher,
@@ -51,7 +51,7 @@ up Keycloak / Authelia / Authentik (gain control, gain a pile of moving
 parts). sui-id picks a different point in the design space:
 
 - **Single binary, single SQLite file.** No JVM, no separate token database,
-  no message bus. `cp` is a backup.
+  no message bus. `sui-id backup` writes the whole state to one tar file.
 - **Encryption that doesn't depend on filesystem trust.** Sensitive columns
   are sealed with XChaCha20-Poly1305 using a master key kept *outside* the
   database file. A stolen `.sqlite` is not a compromised one.

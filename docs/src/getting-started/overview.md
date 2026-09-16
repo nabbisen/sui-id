@@ -20,7 +20,7 @@ A user flow with sui-id looks like this:
 | Binary count | 1 | 3–10 (app + DB + cache + …) |
 | Runtime deps | system OpenSSL and libc (shared libraries) | JVM / Node / container runtime |
 | Database | SQLite (bundled) | PostgreSQL / MariaDB |
-| Backup | `cp sui-id.sqlite sui-id.key` | dump + restore procedure |
+| Backup | `sui-id backup` (one tar file) | dump + restore procedure |
 | Sensitive-column encryption | XChaCha20-Poly1305 | depends on DB driver |
 | JWT signing | Ed25519 only | RS256 default |
 
@@ -46,8 +46,19 @@ Three human roles exist in sui-id:
   state; all POST/DELETE routes return 403 for this role. Useful for
   compliance reviewers, on-call SREs, or incident-response staff who need
   visibility without mutation capability.
-- **User** — end-user self-service only (`/me/*`). This is the default role
-  for all accounts created through the OIDC consent flow or admin user creation.
+- **User** — end-user self-service only (`/me/*`).
+
+Accounts are created in these ways, each with a fixed starting role:
+
+| Path | Role assigned |
+|---|---|
+| Setup (`sui-id setup` or the `/setup` wizard) | Admin |
+| Admin panel → Users → new user | Admin if "Grant admin privileges" is ticked, otherwise User |
+| First sign-in through an LDAP user source | User |
+| First sign-in through an upstream OIDC provider in `provision_on_first_login` mode | User |
+
+Signing in to a relying party and granting consent creates no account. The
+Auditor role is reached only by an admin changing an existing account's role.
 
 All three roles have access to `/me/security/*` (password, MFA, passkeys,
 sessions) and `/me/apps` (review and revoke OAuth consent grants).
