@@ -814,7 +814,36 @@ other hits are in bannered documents: `threat-model.md:84` "single encrypted
 SQLite", for RFC 097, and `ui-ux-contracts.md` §9, covered by F13. **Condition 1
 of the closure assessment below is met.**
 
+### Dispatch 18 — 2026-09-16: the `sudo` form, settled from sudo's own documentation
+
+**Baseline.** `72fb874` or later. One sentence, one commit.
+
+**Change of method.** Dispatch 15 asked for the `sudo --preserve-env` form in
+`docs/src/guides/deployment.md` to be *run*. The harness denies `sudo`, and the
+architect then asked the owner to run it. That was wrong: evidence gathering must
+not use the owner's host privileges. The request is withdrawn. The form is settled
+from sudo's own manual pages, which can be read without privilege, and recorded
+as *documented, not measured*:
+- `sudo(8)`, `--preserve-env=list`: adds the listed variables to those preserved,
+  and "the security policy may return an error if the user does not have
+  permission to preserve the environment";
+- `sudoers(5)`, *SETENV and NOSETENV*: "If the command matched is ALL, the SETENV
+  tag is implied for that command". So an account with full sudo rights may
+  preserve the variable.
+
+**Required.** After the code block in `deployment.md`, add one sentence. It says
+that preserving the variable needs a sudoers rule that allows it, which is true of
+an account with full `sudo` rights, and that otherwise `sudo` refuses with an
+error rather than silently dropping the variable. Cite both manual pages in the
+review package, with the quoted lines, and give the manual version read
+(`man sudo` header). Do not run `sudo`.
+
+**Evidence.** The changed sentence; the two quotations; G10a, G10b, G15 green.
+
 ### Closure assessment — 2026-09-16: met on two conditions
+
+*Condition 2 revised 2026-09-16: it no longer waits on an owner check. It is
+dispatch 18.*
 
 Measured against RFC 098's closure prerequisites, and the exit clause in §6
 above, after dispatch 16.
@@ -825,7 +854,7 @@ above, after dispatch 16.
 | README | **Met.** Dispatch 9 walked every claim; dispatches 15 and 16 corrected the backup, binary, encrypted-file and stolen-database claims |
 | Roadmap | **Met.** Dispatch 14e walked it and 15e corrected it; historical sections are marked |
 | Development specification | **Met once dispatch 17 lands.** §13.2 was corrected in 14e; §11.13 is dispatch 17 |
-| Operator and integrator guidance | **Met.** Every book page walked (dispatches 10–16). **Condition:** the `sudo --preserve-env` form in `deployment.md` is unmeasured and waits on the owner's check |
+| Operator and integrator guidance | **Met.** Every book page walked (dispatches 10–16). **Condition:** the `sudo --preserve-env` form in `deployment.md` is settled from sudo's documentation in dispatch 18 |
 | Public claims | **Met.** The sweeps in dispatches 16 and 17 |
 | Source paths | **Met.** `local-dev.md` corrected in 14c |
 | Lifecycle metadata; mdBook and integrity gates | **Met.** G10a, G10b, G11, G14 and G15 green |
@@ -857,7 +886,7 @@ As with RFC 093's closure, the review is performed by the architect and recorded
 as an **unreviewed judgment carried by the owner** under RFC 000. It is not
 claimed as independent.
 
-**To close:** dispatch 17 lands, the owner's `sudo` check passes, and the owner
+**To close:** dispatch 17 lands (done), dispatch 18 lands, and the owner
 approves. The architect then moves RFC 098 to `rfcs/done/` with `Closure reviewed
 on`, `Closure approved by` and `Closure evidence` pointing to this section.
 
