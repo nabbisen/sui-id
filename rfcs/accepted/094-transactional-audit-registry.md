@@ -1213,8 +1213,9 @@ intention; it must be observed on one clean commit before M2a closes.
   sealed capability, not a raw `Transaction`, so the dependency dissolves as
   planned work. `sui-id` names it only in `backup/`, which opens database files
   for snapshot and integrity checking rather than serving application writes;
-  where that module belongs is a separate owner decision and is tracked in the
-  handoff.*
+  where that module belongs was a separate owner decision, **ruled 2026-09-16:
+  it moves into `sui-id-store`**, with an observational-equivalence record to
+  RFC 096's bar (handoff: `backup-into-store.md`).*
 
   *Bound on what this closes, so M2a is not read as more than it is: it makes
   raw access impossible **outside** `sui-id-store`. Inside that crate,

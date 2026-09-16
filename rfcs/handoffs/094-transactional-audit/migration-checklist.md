@@ -198,7 +198,10 @@ at a time; the workspace and structural gate must remain green between waves.
         keys), so no extra conversion work is created.
   - [ ] Replace `sui-id/src/http/handlers/index.rs`'s `SELECT 1` health probe
         with a `ReadConn` probe or a `Database::health_check()`.
-  - [ ] **Owner decision required:** where `crates/sui-id/src/backup/` belongs.
+  - [ ] **Ruled 2026-09-16 (`@nabbisen`): move it into `sui-id-store`** — dispatched as
+        [`backup-into-store.md`](backup-into-store.md). The move is not mechanical (it
+        takes `sui-id`'s `Config`, uses `anyhow`, and needs `argon2`); the handoff decides
+        the API split. Was: *Owner decision required:* where `crates/sui-id/src/backup/` belongs.
         It opens database *files* for snapshot and integrity checking rather than
         serving application writes — a genuinely different category. Either it
         moves into `sui-id-store` (which already owns database files) or it is

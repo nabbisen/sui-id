@@ -164,9 +164,12 @@ responding identically regardless.
 
 ## Open questions
 
-**§6.1 — Does an email change require re-authentication?** Password re-entry or a
-step-up factor, versus a live session being sufficient. Security against usability;
-`@nabbisen`'s call.
+**§6.1 — Does an email change require re-authentication? Settled 2026-09-10
+(owner).** Yes: an email change is a dangerous action under RFC 058, carrying all
+three of its obligations — confirm screen, step-up immediately before, and an
+audit row with `note` populated. The ruling and its reasoning are recorded under
+D4 above. *This entry still read "`@nabbisen`'s call" until 2026-09-16; the
+decision had been recorded in D4 but not here.*
 
 **§6.2 — Exact event names and their note content.** Now constrained by RFC 058's
 third obligation: each event here must carry a populated `note`, so the note's
