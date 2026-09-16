@@ -771,6 +771,89 @@ reported as out of scope.
 **Evidence.** One row per changed sentence; the sweep's hit list; G10a, G10b,
 G14 and G15 green. One commit.
 
+### Dispatch 16 — landed 2026-09-16
+
+`da01d73`. The architect checked the diff hash and read the diff. The sweep
+found one extra false claim beside a named one: `operators.md` said dev mode
+keeps the 12-character password minimum, but `SecurityLevel::Development` sets
+it to 8. That claim was corrected, and so was the sentence "not about
+weakening".
+
+The architect's review found that the sweep's scope — the book, `README.md` and
+`ROADMAP.md` — missed `docs/development-specification.md`. That document is
+unbannered and declares itself current for v0.77.0, and its §11.13 repeats the
+same three false claims: lockout disabled, a minimum of 12 characters or more in
+dev mode, and working dev-seed flags. Dispatch 17 closes that.
+
+### Dispatch 17 — 2026-09-16: the specification's dev-mode section, and the top-level sweep
+
+**Baseline.** `da01d73` or later. One commit.
+
+- **`docs/development-specification.md` §11.13**: the same ruling as dispatch 16's
+  `operators.md` row. Lockout stays active; the password minimum is 8 in dev mode;
+  PKCE S256-only, Argon2id parameters, AAD binding, exact-match `redirect_uri` and
+  `unsafe_code = forbid` hold as in production. The value-taking `--dev-*` flags
+  are rejected today. Keep the specification's policy voice. It says what dev mode
+  is for, and the operator guide stays the source for the mechanics (rule 3). A
+  pointer is enough where the guide already says it.
+- **Sweep of the top-level `docs/*.md`**, with the dispatch 16 patterns plus
+  `12-char` and `--dev-`:
+  - `development-specification.md` is live; correct what the sweep finds.
+  - `threat-model.md` and `ui-ux-contracts.md` carry rule-5 banners; report hits,
+    and do not edit.
+  - `security-assurance-audit-v0.63.1.md` is a dated audit under rule 4; report
+    hits, and do not edit.
+
+**Evidence.** One row per changed sentence; the hit list; G10a, G10b, G14 and G15
+green.
+
+### Closure assessment — 2026-09-16: met on two conditions
+
+Measured against RFC 098's closure prerequisites, and the exit clause in §6
+above, after dispatch 16.
+
+| Prerequisite | State |
+|---|---|
+| Authoritative documents agree | **Met.** G14 and G15 enforce links, `SUMMARY.md`, link form, version freshness and the event reference |
+| README | **Met.** Dispatch 9 walked every claim; dispatches 15 and 16 corrected the backup, binary, encrypted-file and stolen-database claims |
+| Roadmap | **Met.** Dispatch 14e walked it and 15e corrected it; historical sections are marked |
+| Development specification | **Met once dispatch 17 lands.** §13.2 was corrected in 14e; §11.13 is dispatch 17 |
+| Operator and integrator guidance | **Met.** Every book page walked (dispatches 10–16). **Condition:** the `sudo --preserve-env` form in `deployment.md` is unmeasured and waits on the owner's check |
+| Public claims | **Met.** The sweeps in dispatches 16 and 17 |
+| Source paths | **Met.** `local-dev.md` corrected in 14c |
+| Lifecycle metadata; mdBook and integrity gates | **Met.** G10a, G10b, G11, G14 and G15 green |
+
+**Known inaccuracies not corrected, each recorded with an owner (the §6 exit
+clause).**
+- **Bannered, not corrected:**
+  - `docs/threat-model.md` — RFC 097.
+  - `docs/ui-ux-contracts.md` and `docs/src/contributing/state-contract.md` —
+    `roadmap/ui-contract-reconciliation/`.
+- **Documents that correctly state a code defect today.** Each owning package
+  reverts the wording when it lands:
+  - value-taking `--dev-*` flags: `roadmap/cli-help-completeness/`;
+  - client disable, enable and rotation from the panel:
+    `roadmap/client-confirm-screens/`;
+  - an older binary on a newer schema: `roadmap/schema-version-fail-closed/`;
+  - step-up not audited: RFC 102;
+  - no admin password reset: RFC 103.
+- **Historical, not edited (rule 4):** migration 0032's "AES-GCM" comment,
+  passed to RFC 097's baseline as input.
+
+**Closure review independence.** RFC 098 requires a closure reviewer who did not
+author, implement or approve it. None exists:
+- the architect drafted the design and every dispatch;
+- the implementation role implemented it;
+- `@nabbisen` reviewed the design and approved acceptance.
+
+As with RFC 093's closure, the review is performed by the architect and recorded
+as an **unreviewed judgment carried by the owner** under RFC 000. It is not
+claimed as independent.
+
+**To close:** dispatch 17 lands, the owner's `sudo` check passes, and the owner
+approves. The architect then moves RFC 098 to `rfcs/done/` with `Closure reviewed
+on`, `Closure approved by` and `Closure evidence` pointing to this section.
+
 ### Step 6a — landed 2026-09-12
 
 Staleness banner on `docs/development-specification.md`, the rule-5 sanctioned
