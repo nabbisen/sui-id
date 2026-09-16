@@ -26,6 +26,12 @@ authorization 2026-09-17. **Implementer.** Mid-capability model.
   local wrong password does (U22), and gets the uniform 401.
 - **Only NotFound means unknown.** Every other lookup error is an error: the
   uniform 401, logged (the R11 1b pattern).
+- **The RFC 102 B7 re-bind uses the same mapping** (added 2026-09-17).
+  `rebind_directory_user` (`crates/sui-id/src/http/handlers.rs`) authenticates with
+  the local `username`. A shadow row whose name was suffixed on collision
+  therefore fails to re-bind, and each attempt counts as a wrong password. Use the
+  directory identity this package establishes, and add a test for a suffixed
+  shadow user.
 - **Keep existing names.** Preserve today's shadow-user upsert and session
   creation. RFC 102's L03 converts them later, so do not pre-empt its design.
 

@@ -23,7 +23,62 @@ dispatched **now**.
 | 7 | **B4** on the four sealed gated commands, including `not_applicable`; **B6** | |
 | 8 | matrix classes and events; threat model; handoff closure | |
 
-## Stage 1 — dispatched 2026-09-17
+## Stage 1 — landed `04a5760`, 2026-09-17
+
+Reviewed, and committed as one commit. Accepted in the review:
+- **Event names.** U12, U14 and U15 now record `auth.mfa.factor_added` instead of
+  the older names. The command inventory is updated.
+- **Passkey registration route.** `webauthn.js` was posting to routes that no
+  longer existed; that is fixed.
+- **Step-up errors.** A store error during step-up now returns 400.
+
+Carried forward:
+- **LDAP re-bind username.** The re-bind uses the local username, which differs
+  from the directory's when the shadow row was suffixed. This goes to
+  `roadmap/ldap-returning-signin/`, which owns username mapping.
+- **Federated users.** First-factor enrolment is refused until upstream
+  re-authentication exists (RFC 096-B1).
+
+## Stage 2 — dispatched 2026-09-17: L01, the password sign-in
+
+**Baseline.** The commit that adds this section, or later.
+
+**Scope** — RFC 102 Part A, applied to path 1 only:
+- **L01** as a sealed Class-A command in `crates/sui-id-store/src/commands.rs`. In
+  one transaction:
+  - clear the failure counter and any stale lock;
+  - set `last_login_at`;
+  - insert the session;
+  - evict over-cap sessions (move `server_settings`, count, oldest and single
+    revoke reads into `*_within_tx`; see review §2.4);
+  - re-read the user as active.
+
+  Event `auth.login.success`, with the evicted count as a bounded attribute. Its
+  registry class becomes Atomic.
+- **`login_with_mfa`'s no-MFA branch** calls L01 instead of `sessions::insert`,
+  `clear_lockout`, `enforce_concurrent_session_cap`, `record_login_success` and
+  `set_last_login`. The MFA branch keeps `clear_lockout` for now; stage 3 owns
+  it. Say whether leaving it there changes any stage 3 assumption.
+- **A7.** The admin-only-`next` refusal in `login_post` runs before L01, from the
+  role, so no session or event is committed for a refused sign-in.
+- **A9.** A correct password whose L01 fails runs no U22 and gets the uniform 401
+  (R11 1c). The cause is logged (R11 1b).
+
+**Evidence.**
+- **Happy path:** one session, one Atomic event, counter cleared, `last_login_at`
+  set.
+- **Injected append failure** (RFC 094's seam, or the R11 audit-trigger harness):
+  no session, no event, counter and lock unchanged, no eviction. The response is
+  byte-identical to the 401 after normalisation, and the log line is present.
+- **Cap:** with the cap at N, the (N+1)th sign-in leaves exactly N sessions,
+  committed with its event.
+- **A7:** a non-admin with an admin-only `next`: no session row, no event.
+- **R11:** extend `r11_login_failure.rs` 1a. With the audit log failing, a
+  correct password no longer signs in.
+- **Mutation:** remove the in-transaction re-read, the eviction, and A7's
+  ordering, one at a time; each is caught.
+- **Build and gates:** fmt, both clippy scopes, test count before and after,
+  MSRV 1.95, G13.
 
 **Baseline.** The commit that adds this file, or later.
 

@@ -4,6 +4,7 @@
 authorization 2026-09-17: a live security defect, fixed ahead of RFC 102's L04 and
 RFC 096-B1.
 **Implementer.** Mid-capability model.
+**State.** Complete, `b2ecc5c`, 2026-09-17.
 **Baseline.** The commit that adds this file, or later.
 **Found by.** RFC 102/103 design review, H4.
 

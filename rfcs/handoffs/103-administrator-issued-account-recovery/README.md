@@ -16,7 +16,54 @@ Accepted 2026-09-17. **Implementer.** Mid-capability model.
 | 5 | Web operation (D5, D6, D8, D10 response headers) | stage 3; RFC 102 B7 and B4 |
 | 6 | D7 notices, account-page line; retire U06; matrix, manifest, docs, threat model | stages 3–5 |
 
-## Stage 1 — dispatched 2026-09-17
+## Stage 1 — landed `0fe9e3a`, 2026-09-17
+
+Reviewed, and committed as one commit. The password-policy refusal re-shows the
+form, which is accepted: the link is still good at that point.
+
+## Stage 2 — dispatched 2026-09-17
+
+**Baseline.** The commit that adds this section, or later.
+
+**2a — two follow-ups from stage 1's review.**
+- **Log levels.** An unknown, used or expired token is an ordinary user outcome,
+  which anyone can trigger and repeat. Do not log it at error level. Log the
+  mapped `InvalidCredentials` at **info**, with `request_id` and no token. Store
+  and internal errors stay at error level. Test both levels, the same way the
+  stage 1 log test captures them.
+- **No caching.** Responses from `GET /reset-password` and `POST /reset-password`
+  carry `Cache-Control: no-store`. The re-rendered form holds the token in a field
+  value. Test the header on both.
+
+**2b — D12, `sui-id admin reset-mfa`.**
+- `sui-id admin reset-mfa --config PATH --username NAME --reason TEXT`.
+- U07's declaration becomes `system_principal: permitted`, and the CLI adapter
+  constructs its context with `for_system_actor`. The web handler path is
+  unchanged.
+- Refuses:
+  - an unknown user;
+  - a deleted user;
+  - an empty reason.
+- **Event.** `mfa.admin_reset` with `via = cli`, and the actor absent. RFC 102 B4's
+  `not_applicable` evidence arrives with stage 7 of RFC 102. Do not pre-empt it;
+  add only what U07's descriptor requires today.
+- **Help text.** Add the subcommand to `--help`, coordinating with
+  `roadmap/cli-help-completeness/` if that package has landed.
+- `docs/src/guides/operators.md`: the lost-every-factor procedure for a sole
+  administrator.
+
+**Evidence.**
+- 2a: tests for both log levels and for the header.
+- 2b tests:
+  - the CLI removes TOTP and passkeys for a named admin, and one event is
+    committed with `via = cli`;
+  - an injected append failure leaves the factors in place;
+  - the web path still requires an admin session and step-up;
+  - each refusal writes nothing.
+- Mutation on the system-principal gate: the web path must not reach the system
+  principal.
+- **Build and gates:** fmt, both clippy scopes, test count before and after,
+  MSRV 1.95, G13.
 
 **Baseline.** The commit that adds this file, or later.
 
