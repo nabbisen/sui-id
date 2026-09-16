@@ -722,6 +722,55 @@ workspace tests for 15a's string change. `git diff --stat` for each commit.
 **Not in scope.** Any behaviour change beyond 15a's two strings.
 `docs/threat-model.md`.
 
+### Dispatch 15 — landed 2026-09-16
+
+The commits are 15a `a82769f`, 15b `5e399b6`, 15c `5ea7705`, 15d `3843013`,
+15e `23cf9c9` and 15f `adf266c`. The architect's review checked all six diff
+hashes against the review package and read every diff.
+
+Measuring the pages turned up two new code defects. Each was added to the
+authorized package that shares its root cause:
+- **Client disable/enable and secret rotation cannot be reached from the admin
+  panel.** Added to `roadmap/client-confirm-screens/`.
+- **Every value-taking `--dev-*` flag is rejected.** Added to
+  `roadmap/cli-help-completeness/`, as the fourth hand-kept flag list.
+
+The package also gave a measured master-key inventory: ten sealed columns, the
+values that are hashed rather than sealed, and a migration 0032 comment that
+says "AES-GCM" although the code uses XChaCha20-Poly1305. That inventory is input
+for RFC 097's baseline. It is kept in the review package, not restated here
+(rule 7).
+
+**One piece of evidence is still open:** 15b's `sudo --preserve-env` form was
+not run, because the harness denied `sudo`. The owner is asked to run the check.
+
+### Dispatch 16 — 2026-09-16: the last disagreements before closure
+
+**Baseline.** `adf266c` or later. It is small, and it closes what dispatch 15
+reported as out of scope.
+
+- **`README.md:15`**: "a single encrypted SQLite file" → "a single SQLite file",
+  the same as `introduction.md`.
+- **`README.md`, the bullet "Encryption that doesn't depend on filesystem
+  trust"**: its last sentence, "A stolen `.sqlite` is not a compromised one", is
+  a security claim, and the README is not its home (rule 7). It also overclaims:
+  password hashes, email addresses, audit rows and every unsealed column are
+  readable from a stolen file. Keep what is simply true (sensitive columns are
+  sealed with a key kept outside the database file), drop the sentence, and link
+  the threat model. Before changing anything, walk that bullet's claims with
+  evidence rows.
+- **`docs/src/guides/operators.md:225-268`**: the dev flags are documented as
+  working. State today's behaviour, the same as `quick-start.md`.
+  `roadmap/cli-help-completeness/` fixes the code and reverts both pages.
+- **Last sweep.** Grep the book, `README.md` and `ROADMAP.md` for
+  `lockout disabled`, `lockout relaxed`, `statically linked`, `encrypted SQLite`,
+  `cp ` used as a backup, `production-grade` and `auth.step_up`. Report every
+  hit, with its file and whether it is inside a rule-4 historical record or a
+  rule-5 bannered section. Correct only the hits that are live claims.
+
+**Evidence.** One row per changed sentence; the sweep's hit list; G10a, G10b,
+G14 and G15 green. One commit.
+
 ### Step 6a — landed 2026-09-12
 
 Staleness banner on `docs/development-specification.md`, the rule-5 sanctioned

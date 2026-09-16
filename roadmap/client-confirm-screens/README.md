@@ -21,6 +21,17 @@ Measured by reading at `9f6acdb`.
    then lands in browser history, in any proxy or server access log that records
    URLs, and in `Referer` if the edit page loads any resource.
 
+3. **Neither operation can be reached from the admin panel** (added 2026-09-16,
+   RFC 098 dispatch 15, measured live):
+   - The client list's Disable / Enable button posts only `_csrf` and `disabled`
+     (`crates/sui-id-web/src/pages/clients.rs:49-52`). The handler requires
+     `_confirmed=1`, so the button always gets 400. A dynamically registered
+     client starts disabled (`dynamic_register.rs:204`) and cannot be enabled
+     from the panel.
+   - The client edit page has no rotate-secret control. Rotation is reachable
+     only by a hand-built POST.
+   - No test exercises either route.
+
 ## Required
 
 - **Confirm screens.** Add `GET /admin/clients/{id}/disable-confirm` and
@@ -30,6 +41,11 @@ Measured by reading at `9f6acdb`.
   - the same step-up placement as `clients_delete_confirm_get`;
   - every existing entry point to the two POSTs now goes through them;
   - i18n in en, ja and zh_hans.
+- **Reachable from the panel.** The client list's Disable / Enable control and a
+  new Rotate secret control on the edit page both lead to their confirm screens.
+  An end-to-end test drives each one from the rendered page's own links and
+  forms (not a hand-built request) through to the committed change and its audit
+  event.
 - **No secret in a URL.** The POST response renders the new secret directly,
   shown once, with `Cache-Control: no-store` and `Referrer-Policy: no-referrer`.
   Remove the `rotated_secret` query parameter from the edit handler entirely, so

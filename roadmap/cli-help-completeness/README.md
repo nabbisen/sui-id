@@ -16,6 +16,14 @@ The last two are dispatched in `run_admin_subcommand`. That dispatcher's own
 error message lists the admin subactions a third time. Three hand-written lists
 drifted apart.
 
+**The same drift breaks dev mode** (added 2026-09-16, RFC 098 dispatch 15,
+measured live). `find_subcommand` (`crates/sui-id/src/main.rs:70-88`) skips a
+flag's value only for `--config`, `--to` and `--from`. So the value after
+`--dev-seed`, `--dev-bind`, `--dev-db`, `--dev-admin-password` or
+`--dev-client-secret` is read as a subcommand, and startup fails with
+`unknown subcommand "<value>"`. No value-taking dev flag works today. This is a
+fourth hand-kept list of the same flags.
+
 ## Required
 
 - **One list per level.** A single `const` names the top-level subcommands, and
@@ -27,6 +35,16 @@ drifted apart.
 - **Binding test.** Every name in each const appears in the help text. Every
   dispatched arm is in its const, so an arm with no entry fails to compile or
   fails the test; choose the mechanism and say why.
+- **Value-taking flags, one list.** Replace `FLAGS_WITH_VALUE` with a single
+  source for every flag that takes a value: the top-level flags, the backup,
+  restore and verify flags, and every `--dev-*` flag. The same source feeds the
+  help text. A test runs `find_subcommand` over each value-taking flag followed
+  by a value, and asserts that no subcommand is found. A second test starts dev
+  mode with each `--dev-*` flag set and asserts it is honoured: `--dev-bind`
+  binds the given address, `--dev-seed` reads the given file.
+- **Docs.** `docs/src/getting-started/quick-start.md` (dispatch 15 states the
+  flags are rejected today) and `docs/src/guides/operators.md:225-268` must match
+  the fixed behaviour.
 - **Coordinate with RFC 103.** It will add `admin issue-recovery-link`. Do not add
   that name here; this package gives RFC 103 the place to add it.
 
