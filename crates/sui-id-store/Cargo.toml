@@ -18,6 +18,7 @@ ldap = ["dep:ldap3"]
 [dependencies]
 sui-id-shared               = { workspace = true }
 
+argon2                      = { workspace = true }
 async-trait                 = { workspace = true }
 prometheus                  = { workspace = true }
 rusqlite                    = { workspace = true }

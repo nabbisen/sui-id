@@ -1,7 +1,9 @@
 //! Minimal hand-rolled ustar tar writer and reader (no runtime dep on tar crate).
 
-use anyhow::{Context, Result, bail};
+use super::types::BackupError;
 use std::io::Write;
+
+type Result<T> = std::result::Result<T, BackupError>;
 
 // ---------- minimal POSIX ustar tar writer / reader ----------------------
 // The `tar` crate is a perfectly good dependency, but for two files we can
@@ -12,7 +14,7 @@ const BLOCK: usize = 512;
 
 pub(crate) fn write_tar_entry<W: Write>(out: &mut W, name: &str, bytes: &[u8]) -> Result<()> {
     if name.len() >= 100 {
-        bail!("tar entry name too long: {name}");
+        return Err(BackupError::TarNameTooLong(name.to_owned()));
     }
     let mut header = [0u8; BLOCK];
     // name (offset 0, 100 bytes)
@@ -83,12 +85,12 @@ pub(crate) fn read_tar(bytes: &[u8]) -> Result<Vec<(String, Vec<u8>)>> {
         }
         let name_end = header[..100].iter().position(|&b| b == 0).unwrap_or(100);
         let name = std::str::from_utf8(&header[..name_end])
-            .context("tar entry name is not UTF-8")?
+            .map_err(BackupError::TarNameNotUtf8)?
             .to_owned();
         let size = read_octal(&header[124..136])?;
         idx += BLOCK;
         if idx + (size as usize) > bytes.len() {
-            bail!("truncated tar entry for {name}");
+            return Err(BackupError::TarTruncatedEntry(name));
         }
         let body = bytes[idx..idx + size as usize].to_vec();
         out.push((name, body));
@@ -97,7 +99,7 @@ pub(crate) fn read_tar(bytes: &[u8]) -> Result<Vec<(String, Vec<u8>)>> {
         idx += padded;
     }
     if out.is_empty() {
-        bail!("tar archive contains no entries");
+        return Err(BackupError::TarEmpty);
     }
     Ok(out)
 }
@@ -109,7 +111,7 @@ pub(crate) fn read_octal(buf: &[u8]) -> Result<u64> {
             break;
         }
         if !(b'0'..=b'7').contains(&b) {
-            bail!("invalid octal digit in tar header");
+            return Err(BackupError::TarInvalidOctal);
         }
         v = v * 8 + (b - b'0') as u64;
     }

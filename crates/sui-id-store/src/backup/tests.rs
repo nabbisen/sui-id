@@ -4,8 +4,6 @@ use super::*;
 
 // (moved from backup.rs by RFC 075)
 mod tests_inner {
-    use crate::config::Config;
-
     use super::tar::{read_tar, write_tar_entry, write_tar_terminator};
     use super::*;
     use std::fs::File;
@@ -18,6 +16,30 @@ mod tests_inner {
     const ENTRY_MANIFEST: &str = "MANIFEST.json";
     const ENTRY_DB: &str = "sui-id.sqlite";
     const ENTRY_KEY: &str = "sui-id.key";
+
+    /// The three values the store API takes, standing in for the binary's
+    /// `Config` that these tests built before the move into this crate.
+    struct Target {
+        db: PathBuf,
+        key: PathBuf,
+        issuer: String,
+    }
+
+    fn target(db: PathBuf, key: PathBuf, issuer: &str) -> Target {
+        Target {
+            db,
+            key,
+            issuer: issuer.to_owned(),
+        }
+    }
+
+    fn backup(t: &Target, dest: &Path, opts: &BackupOptions) -> Result<(), BackupError> {
+        run_backup(&t.db, &t.key, &t.issuer, dest, opts)
+    }
+
+    fn restore(t: &Target, src: &Path, opts: &RestoreOptions) -> Result<(), BackupError> {
+        run_restore(&t.db, &t.key, src, opts)
+    }
 
     fn fake_files(dir: &Path) -> (PathBuf, PathBuf) {
         let db = dir.join("sui-id.sqlite");
@@ -76,25 +98,7 @@ mod tests_inner {
     fn restore_refuses_to_overwrite_without_force() {
         let tmp = TempDir::new().expect("tempdir");
         let (db, key) = fake_files(tmp.path());
-        let cfg = Config {
-            server: crate::config::ServerConfig {
-                listen_addr: "127.0.0.1:0".into(),
-                issuer: "https://x".into(),
-                cookie_secure: false,
-                trusted_proxies: Vec::new(),
-                metrics_enabled: false,
-                metrics_listen_addr: String::new(),
-            },
-            storage: crate::config::StorageConfig {
-                db_path: db.clone(),
-                key_file: key.clone(),
-            },
-            user_sources: Vec::new(),
-            federation_providers: Vec::new(),
-            tokens: crate::config::TokensConfig::default(),
-            log: crate::config::LogConfig::default(),
-            security: crate::config::SecurityConfig::default(),
-        };
+        let cfg = target(db.clone(), key.clone(), "https://x");
         let backup_path = tmp.path().join("backup.tar");
         // Build a backup tar by hand — bypass run_backup since fake_files
         // didn't create a real SQLite file.
@@ -110,7 +114,7 @@ mod tests_inner {
             write_tar_terminator(&mut f).unwrap();
         }
         // db & key already exist, so restore must refuse.
-        let r = run_restore(
+        let r = restore(
             &cfg,
             &backup_path,
             &RestoreOptions {
@@ -120,7 +124,7 @@ mod tests_inner {
         );
         assert!(r.is_err(), "expected refusal to overwrite without --force");
         // With --force, it succeeds.
-        run_restore(
+        restore(
             &cfg,
             &backup_path,
             &RestoreOptions {
@@ -136,25 +140,11 @@ mod tests_inner {
     #[test]
     fn restore_creates_files_when_destinations_dont_exist() {
         let tmp = TempDir::new().expect("tempdir");
-        let cfg = Config {
-            server: crate::config::ServerConfig {
-                listen_addr: "127.0.0.1:0".into(),
-                issuer: "https://x".into(),
-                cookie_secure: false,
-                trusted_proxies: Vec::new(),
-                metrics_enabled: false,
-                metrics_listen_addr: String::new(),
-            },
-            storage: crate::config::StorageConfig {
-                db_path: tmp.path().join("subdir").join("sui-id.sqlite"),
-                key_file: tmp.path().join("subdir").join("sui-id.key"),
-            },
-            user_sources: Vec::new(),
-            federation_providers: Vec::new(),
-            tokens: crate::config::TokensConfig::default(),
-            log: crate::config::LogConfig::default(),
-            security: crate::config::SecurityConfig::default(),
-        };
+        let cfg = target(
+            tmp.path().join("subdir").join("sui-id.sqlite"),
+            tmp.path().join("subdir").join("sui-id.key"),
+            "https://x",
+        );
         let backup_path = tmp.path().join("backup.tar");
         {
             let mut f = OpenOptions::new()
@@ -167,7 +157,7 @@ mod tests_inner {
             write_tar_entry(&mut f, ENTRY_KEY, b"key-bytes").unwrap();
             write_tar_terminator(&mut f).unwrap();
         }
-        run_restore(
+        restore(
             &cfg,
             &backup_path,
             &RestoreOptions {
@@ -176,8 +166,8 @@ mod tests_inner {
             },
         )
         .expect("restore");
-        assert!(cfg.storage.db_path.exists());
-        assert!(cfg.storage.key_file.exists());
+        assert!(cfg.db.exists());
+        assert!(cfg.key.exists());
     }
 
     #[test]
@@ -194,27 +184,9 @@ mod tests_inner {
             .unwrap();
         }
         std::fs::write(&key, b"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=").unwrap();
-        let cfg = Config {
-            server: crate::config::ServerConfig {
-                listen_addr: "127.0.0.1:0".into(),
-                issuer: "https://x".into(),
-                cookie_secure: false,
-                trusted_proxies: Vec::new(),
-                metrics_enabled: false,
-                metrics_listen_addr: String::new(),
-            },
-            storage: crate::config::StorageConfig {
-                db_path: db.clone(),
-                key_file: key.clone(),
-            },
-            user_sources: Vec::new(),
-            federation_providers: Vec::new(),
-            tokens: crate::config::TokensConfig::default(),
-            log: crate::config::LogConfig::default(),
-            security: crate::config::SecurityConfig::default(),
-        };
+        let cfg = target(db.clone(), key.clone(), "https://x");
         let dest = tmp.path().join("backup.tar");
-        run_backup(&cfg, &dest, &BackupOptions::default()).expect("backup");
+        backup(&cfg, &dest, &BackupOptions::default()).expect("backup");
         assert!(dest.exists());
         // Verify mode 0600.
         use std::os::unix::fs::PermissionsExt;
@@ -222,19 +194,12 @@ mod tests_inner {
         assert_eq!(mode, 0o600);
 
         // Restore into a fresh location and check the SQLite file is queryable.
-        let cfg2 = Config {
-            server: cfg.server.clone(),
-            storage: crate::config::StorageConfig {
-                db_path: tmp.path().join("restored.sqlite"),
-                key_file: tmp.path().join("restored.key"),
-            },
-            user_sources: cfg.user_sources.clone(),
-            federation_providers: cfg.federation_providers.clone(),
-            tokens: cfg.tokens.clone(),
-            log: cfg.log.clone(),
-            security: cfg.security.clone(),
-        };
-        run_restore(
+        let cfg2 = target(
+            tmp.path().join("restored.sqlite"),
+            tmp.path().join("restored.key"),
+            &cfg.issuer,
+        );
+        restore(
             &cfg2,
             &dest,
             &RestoreOptions {
@@ -243,13 +208,13 @@ mod tests_inner {
             },
         )
         .expect("restore");
-        let conn = rusqlite::Connection::open(&cfg2.storage.db_path).unwrap();
+        let conn = rusqlite::Connection::open(&cfg2.db).unwrap();
         let v: String = conn
             .query_row("SELECT k FROM t LIMIT 1", [], |r| r.get(0))
             .unwrap();
         assert_eq!(v, "hello");
         // Key file restored byte-for-byte.
-        let restored_key = std::fs::read(&cfg2.storage.key_file).unwrap();
+        let restored_key = std::fs::read(&cfg2.key).unwrap();
         assert_eq!(
             restored_key,
             b"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
@@ -274,26 +239,8 @@ mod tests_inner {
         (db, key)
     }
 
-    fn fake_cfg(_dir: &Path, db: PathBuf, key: PathBuf) -> Config {
-        Config {
-            server: crate::config::ServerConfig {
-                listen_addr: "127.0.0.1:0".into(),
-                issuer: "https://idp.test".into(),
-                cookie_secure: false,
-                trusted_proxies: Vec::new(),
-                metrics_enabled: false,
-                metrics_listen_addr: String::new(),
-            },
-            storage: crate::config::StorageConfig {
-                db_path: db,
-                key_file: key,
-            },
-            user_sources: Vec::new(),
-            federation_providers: Vec::new(),
-            tokens: crate::config::TokensConfig::default(),
-            log: crate::config::LogConfig::default(),
-            security: crate::config::SecurityConfig::default(),
-        }
+    fn fake_cfg(_dir: &Path, db: PathBuf, key: PathBuf) -> Target {
+        target(db, key, "https://idp.test")
     }
 
     #[test]
@@ -302,7 +249,7 @@ mod tests_inner {
         let (db, key) = make_real_sqlite_db(tmp.path());
         let cfg = fake_cfg(tmp.path(), db, key);
         let dest = tmp.path().join("out.tar");
-        run_backup(&cfg, &dest, &BackupOptions::default()).unwrap();
+        backup(&cfg, &dest, &BackupOptions::default()).unwrap();
 
         let bytes = std::fs::read(&dest).unwrap();
         let entries = read_tar(&bytes).unwrap();
@@ -324,7 +271,7 @@ mod tests_inner {
         let (db, key) = make_real_sqlite_db(tmp.path());
         let cfg = fake_cfg(tmp.path(), db, key);
         let dest = tmp.path().join("out.tar.enc");
-        run_backup(
+        backup(
             &cfg,
             &dest,
             &BackupOptions {
@@ -339,7 +286,7 @@ mod tests_inner {
             tmp.path().join("restored.sqlite"),
             tmp.path().join("restored.key"),
         );
-        run_restore(
+        restore(
             &cfg2,
             &dest,
             &RestoreOptions {
@@ -348,7 +295,7 @@ mod tests_inner {
             },
         )
         .unwrap();
-        let conn = rusqlite::Connection::open(&cfg2.storage.db_path).unwrap();
+        let conn = rusqlite::Connection::open(&cfg2.db).unwrap();
         let v: String = conn.query_row("SELECT k FROM t", [], |r| r.get(0)).unwrap();
         assert_eq!(v, "hello");
     }
@@ -359,7 +306,7 @@ mod tests_inner {
         let (db, key) = make_real_sqlite_db(tmp.path());
         let cfg = fake_cfg(tmp.path(), db, key);
         let dest = tmp.path().join("out.tar.enc");
-        run_backup(
+        backup(
             &cfg,
             &dest,
             &BackupOptions {
@@ -373,7 +320,7 @@ mod tests_inner {
             tmp.path().join("restored.sqlite"),
             tmp.path().join("restored.key"),
         );
-        let r = run_restore(
+        let r = restore(
             &cfg2,
             &dest,
             &RestoreOptions {
@@ -383,8 +330,8 @@ mod tests_inner {
         );
         assert!(r.is_err());
         // Failure should not have written the destination files.
-        assert!(!cfg2.storage.db_path.exists());
-        assert!(!cfg2.storage.key_file.exists());
+        assert!(!cfg2.db.exists());
+        assert!(!cfg2.key.exists());
     }
 
     #[test]
@@ -393,7 +340,7 @@ mod tests_inner {
         let (db, key) = make_real_sqlite_db(tmp.path());
         let cfg = fake_cfg(tmp.path(), db, key);
         let dest = tmp.path().join("out.tar.enc");
-        run_backup(
+        backup(
             &cfg,
             &dest,
             &BackupOptions {
@@ -407,7 +354,7 @@ mod tests_inner {
             tmp.path().join("restored.sqlite"),
             tmp.path().join("restored.key"),
         );
-        let r = run_restore(
+        let r = restore(
             &cfg2,
             &dest,
             &RestoreOptions {
@@ -415,7 +362,7 @@ mod tests_inner {
                 passphrase: None,
             },
         );
-        let msg = format!("{}", r.unwrap_err().chain().next().unwrap());
+        let msg = format!("{}", r.unwrap_err());
         assert!(
             msg.contains("encrypted"),
             "error should mention encryption; got: {msg}"
@@ -430,14 +377,14 @@ mod tests_inner {
         let (db, key) = make_real_sqlite_db(tmp.path());
         let cfg = fake_cfg(tmp.path(), db, key);
         let dest = tmp.path().join("out.tar");
-        run_backup(&cfg, &dest, &BackupOptions::default()).unwrap();
+        backup(&cfg, &dest, &BackupOptions::default()).unwrap();
 
         let cfg2 = fake_cfg(
             tmp.path(),
             tmp.path().join("restored.sqlite"),
             tmp.path().join("restored.key"),
         );
-        let r = run_restore(
+        let r = restore(
             &cfg2,
             &dest,
             &RestoreOptions {
@@ -454,7 +401,7 @@ mod tests_inner {
         let (db, key) = make_real_sqlite_db(tmp.path());
         let cfg = fake_cfg(tmp.path(), db, key);
         let dest = tmp.path().join("out.tar");
-        run_backup(&cfg, &dest, &BackupOptions::default()).unwrap();
+        backup(&cfg, &dest, &BackupOptions::default()).unwrap();
         let report = run_verify(&dest, None).expect("verify");
         assert!(!report.encrypted);
         assert_eq!(report.manifest.schema_version, 5);
@@ -469,7 +416,7 @@ mod tests_inner {
         let (db, key) = make_real_sqlite_db(tmp.path());
         let cfg = fake_cfg(tmp.path(), db, key);
         let dest = tmp.path().join("out.tar.enc");
-        run_backup(
+        backup(
             &cfg,
             &dest,
             &BackupOptions {
@@ -515,7 +462,7 @@ mod tests_inner {
             tmp.path().join("restored.sqlite"),
             tmp.path().join("restored.key"),
         );
-        let r = run_restore(
+        let r = restore(
             &cfg,
             &dest,
             &RestoreOptions {
@@ -523,7 +470,7 @@ mod tests_inner {
                 passphrase: None,
             },
         );
-        let msg = format!("{}", r.unwrap_err().chain().next().unwrap());
+        let msg = format!("{}", r.unwrap_err());
         assert!(msg.contains("schema_version"), "got: {msg}");
     }
 }

@@ -16,6 +16,7 @@
 #![forbid(unsafe_code)]
 
 pub mod backend;
+pub mod backup;
 pub mod crypto;
 #[cfg(feature = "ldap")]
 pub mod ldap_source;

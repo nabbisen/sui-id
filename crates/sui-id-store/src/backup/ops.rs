@@ -55,8 +55,7 @@
 //! build can run. Both are reversible operator failures: rebuild
 //! with the right binary version.
 
-use crate::config::Config;
-use anyhow::{Context, Result, bail};
+use super::types::BackupError;
 use chacha20poly1305::aead::Aead;
 use chacha20poly1305::{KeyInit, XChaCha20Poly1305, XNonce};
 use getrandom;
@@ -72,52 +71,55 @@ const ENTRY_KEY: &str = "sui-id.key";
 /// On-disk format version for the MANIFEST and the encrypted
 /// envelope. Bumped when the layout changes in a way that older
 /// restores can't read.
+use super::FORMAT_VERSION;
 use super::tar::{read_tar, write_tar_entry, write_tar_terminator};
 use super::types::{BackupOptions, Manifest, RestoreOptions, VerifyReport};
-const FORMAT_VERSION: u32 = 1; // mirrors backup::FORMAT_VERSION
+
+type Result<T> = std::result::Result<T, BackupError>;
 const ENCRYPTED_MAGIC: &[u8; 8] = b"SUIDIDBK";
 const ARGON2_M_COST_KIB: u32 = 64 * 1024;
 const ARGON2_T_COST: u32 = 3;
 const ARGON2_P_COST: u32 = 1;
 
-pub fn run_backup(cfg: &Config, dest: &Path, opts: &BackupOptions) -> Result<()> {
+/// Back up the database at `db_path` and the master key at `key_file` into
+/// `dest`. `issuer` is recorded in the manifest for the operator.
+pub fn run_backup(
+    db_path: &Path,
+    key_file: &Path,
+    issuer: &str,
+    dest: &Path,
+    opts: &BackupOptions,
+) -> Result<()> {
     if dest.exists() {
-        bail!("refusing to overwrite existing file {}", dest.display());
+        return Err(BackupError::DestinationExists(dest.to_path_buf()));
     }
 
-    if !cfg.storage.db_path.exists() {
-        bail!(
-            "configured database does not exist at {}",
-            cfg.storage.db_path.display()
-        );
+    if !db_path.exists() {
+        return Err(BackupError::DatabaseMissing(db_path.to_path_buf()));
     }
-    if !cfg.storage.key_file.exists() {
-        bail!(
-            "configured key file does not exist at {}",
-            cfg.storage.key_file.display()
-        );
+    if !key_file.exists() {
+        return Err(BackupError::KeyFileMissing(key_file.to_path_buf()));
     }
 
     // Step 1: snapshot via VACUUM INTO.
     let snapshot_dir = tempfile_dir()?;
     let snapshot_path = snapshot_dir.join(ENTRY_DB);
     {
-        let conn = rusqlite::Connection::open(&cfg.storage.db_path)
-            .context("opening source database for snapshot")?;
+        let conn = rusqlite::Connection::open(db_path).map_err(BackupError::OpenSourceDatabase)?;
         let target = snapshot_path
             .to_str()
-            .context("snapshot path must be valid UTF-8")?;
+            .ok_or(BackupError::SnapshotPathNotUtf8)?;
         let quoted = target.replace('\'', "''");
         conn.execute_batch(&format!("VACUUM INTO '{quoted}'"))
-            .context("VACUUM INTO failed")?;
+            .map_err(BackupError::VacuumInto)?;
     }
-    let db_bytes = std::fs::read(&snapshot_path).context("reading database snapshot")?;
-    let key_bytes = std::fs::read(&cfg.storage.key_file).context("reading master key file")?;
+    let db_bytes = std::fs::read(&snapshot_path).map_err(BackupError::ReadSnapshot)?;
+    let key_bytes = std::fs::read(key_file).map_err(BackupError::ReadKeyFile)?;
 
     // Step 2: read schema_version from the snapshot for the manifest.
     let schema_version: i64 = {
-        let conn = rusqlite::Connection::open(&snapshot_path)
-            .context("reopening snapshot to read schema_version")?;
+        let conn =
+            rusqlite::Connection::open(&snapshot_path).map_err(BackupError::ReopenSnapshot)?;
         conn.query_row(
             "SELECT value FROM sui_meta WHERE key = 'schema_version'",
             [],
@@ -135,9 +137,10 @@ pub fn run_backup(cfg: &Config, dest: &Path, opts: &BackupOptions) -> Result<()>
         schema_version,
         created_at: chrono::Utc::now().to_rfc3339(),
         hostname: hostname_or_unknown(),
-        issuer: cfg.server.issuer.clone(),
+        issuer: issuer.to_owned(),
     };
-    let manifest_bytes = serde_json::to_vec_pretty(&manifest).context("serialising MANIFEST")?;
+    let manifest_bytes =
+        serde_json::to_vec_pretty(&manifest).map_err(BackupError::SerializeManifest)?;
 
     // Step 3: build the inner tar in memory so we can optionally
     // encrypt it as one blob.
@@ -158,7 +161,10 @@ pub fn run_backup(cfg: &Config, dest: &Path, opts: &BackupOptions) -> Result<()>
         .write(true)
         .mode(0o600)
         .open(dest)
-        .with_context(|| format!("creating backup file {}", dest.display()))?;
+        .map_err(|source| BackupError::CreateBackupFile {
+            path: dest.to_path_buf(),
+            source,
+        })?;
 
     if let Some(passphrase) = opts.passphrase.as_deref() {
         let envelope = encrypt_envelope(passphrase, &tar_buf)?;
@@ -175,45 +181,44 @@ pub fn run_backup(cfg: &Config, dest: &Path, opts: &BackupOptions) -> Result<()>
     Ok(())
 }
 
-/// Restore a backup tarball into the configured storage paths.
-pub fn run_restore(cfg: &Config, src: &Path, opts: &RestoreOptions) -> Result<()> {
+/// Restore a backup tarball into `db_path` and `key_file`.
+pub fn run_restore(
+    db_path: &Path,
+    key_file: &Path,
+    src: &Path,
+    opts: &RestoreOptions,
+) -> Result<()> {
     if !src.exists() {
-        bail!("backup file {} does not exist", src.display());
+        return Err(BackupError::SourceMissing(src.to_path_buf()));
     }
-    let bytes = std::fs::read(src).with_context(|| format!("reading {}", src.display()))?;
+    let bytes = read_source(src)?;
     let (_, manifest, db_bytes, key_bytes) = parse_backup(&bytes, opts.passphrase.as_deref())?;
 
     // Manifest checks.
     check_manifest_compatibility(&manifest)?;
 
     if !opts.force {
-        if cfg.storage.db_path.exists() {
-            bail!(
-                "refusing to overwrite existing database at {} (pass --force to override)",
-                cfg.storage.db_path.display()
-            );
+        if db_path.exists() {
+            return Err(BackupError::DatabaseExists(db_path.to_path_buf()));
         }
-        if cfg.storage.key_file.exists() {
-            bail!(
-                "refusing to overwrite existing key file at {} (pass --force to override)",
-                cfg.storage.key_file.display()
-            );
+        if key_file.exists() {
+            return Err(BackupError::KeyFileExists(key_file.to_path_buf()));
         }
     }
 
-    if let Some(parent) = cfg.storage.db_path.parent()
+    if let Some(parent) = db_path.parent()
         && !parent.as_os_str().is_empty()
     {
         std::fs::create_dir_all(parent).ok();
     }
-    if let Some(parent) = cfg.storage.key_file.parent()
+    if let Some(parent) = key_file.parent()
         && !parent.as_os_str().is_empty()
     {
         std::fs::create_dir_all(parent).ok();
     }
 
-    write_atomic(&cfg.storage.db_path, &db_bytes, 0o600)?;
-    write_atomic(&cfg.storage.key_file, &key_bytes, 0o600)?;
+    write_atomic(db_path, &db_bytes, 0o600)?;
+    write_atomic(key_file, &key_bytes, 0o600)?;
     Ok(())
 }
 
@@ -221,9 +226,9 @@ pub fn run_restore(cfg: &Config, src: &Path, opts: &RestoreOptions) -> Result<()
 /// anything. Useful before a real restore — see `sui-id verify-backup`.
 pub fn run_verify(src: &Path, passphrase: Option<&str>) -> Result<VerifyReport> {
     if !src.exists() {
-        bail!("backup file {} does not exist", src.display());
+        return Err(BackupError::SourceMissing(src.to_path_buf()));
     }
-    let bytes = std::fs::read(src).with_context(|| format!("reading {}", src.display()))?;
+    let bytes = read_source(src)?;
     let encrypted = is_encrypted(&bytes);
     let (tar_bytes_len, manifest, db_bytes, key_bytes) = parse_backup(&bytes, passphrase)?;
     // Run a SQLite integrity check on the inner database. This catches
@@ -231,16 +236,15 @@ pub fn run_verify(src: &Path, passphrase: Option<&str>) -> Result<VerifyReport> 
     {
         let dir = tempfile_dir()?;
         let temp_db = dir.join("verify.sqlite");
-        std::fs::write(&temp_db, &db_bytes).context("staging snapshot for integrity check")?;
-        let conn =
-            rusqlite::Connection::open(&temp_db).context("opening snapshot for integrity check")?;
+        std::fs::write(&temp_db, &db_bytes).map_err(BackupError::StageSnapshot)?;
+        let conn = rusqlite::Connection::open(&temp_db).map_err(BackupError::OpenStagedSnapshot)?;
         let result: String = conn
             .query_row("PRAGMA integrity_check", [], |r| r.get(0))
-            .context("running integrity_check")?;
+            .map_err(BackupError::RunIntegrityCheck)?;
         let _ = std::fs::remove_file(&temp_db);
         let _ = std::fs::remove_dir(&dir);
         if result != "ok" {
-            bail!("SQLite integrity_check failed: {result}");
+            return Err(BackupError::IntegrityCheckFailed(result));
         }
     }
     Ok(VerifyReport {
@@ -254,6 +258,13 @@ pub fn run_verify(src: &Path, passphrase: Option<&str>) -> Result<VerifyReport> 
 
 // ---------- internals ---------------------------------------------
 
+fn read_source(src: &Path) -> Result<Vec<u8>> {
+    std::fs::read(src).map_err(|source| BackupError::ReadSource {
+        path: src.to_path_buf(),
+        source,
+    })
+}
+
 fn is_encrypted(bytes: &[u8]) -> bool {
     bytes.len() >= 8 && &bytes[..8] == ENCRYPTED_MAGIC
 }
@@ -265,14 +276,13 @@ fn parse_backup(
     passphrase: Option<&str>,
 ) -> Result<(usize, Manifest, Vec<u8>, Vec<u8>)> {
     let tar_bytes: Vec<u8> = if is_encrypted(bytes) {
-        let pass = passphrase
-            .context("this backup is encrypted; supply --decrypt and provide the passphrase")?;
+        let pass = passphrase.ok_or(BackupError::PassphraseRequired)?;
         decrypt_envelope(pass, bytes)?
     } else {
         if passphrase.is_some() {
             // Operator passed --decrypt but the file is plain. Almost
             // certainly a misuse — refuse rather than silently ignore.
-            bail!("backup file is not encrypted, but a passphrase was provided");
+            return Err(BackupError::PassphraseForPlainBackup);
         }
         bytes.to_vec()
     };
@@ -282,7 +292,7 @@ fn parse_backup(
         .find(|(name, _)| name == ENTRY_MANIFEST)
         .map(|(_, b)| b.as_slice());
     let manifest = match manifest_bytes {
-        Some(b) => serde_json::from_slice::<Manifest>(b).context("parsing MANIFEST.json")?,
+        Some(b) => serde_json::from_slice::<Manifest>(b).map_err(BackupError::ParseManifest)?,
         None => {
             // Backups created before v0.13.0 don't have a manifest.
             // Fabricate a permissive one so they still restore. The
@@ -302,12 +312,12 @@ fn parse_backup(
         .iter()
         .find(|(name, _)| name == ENTRY_DB)
         .map(|(_, b)| b.clone())
-        .with_context(|| format!("backup is missing {ENTRY_DB} entry"))?;
+        .ok_or(BackupError::MissingDatabaseEntry)?;
     let key_bytes = entries
         .iter()
         .find(|(name, _)| name == ENTRY_KEY)
         .map(|(_, b)| b.clone())
-        .with_context(|| format!("backup is missing {ENTRY_KEY} entry"))?;
+        .ok_or(BackupError::MissingKeyEntry)?;
     Ok((tar_bytes.len(), manifest, db_bytes, key_bytes))
 }
 
@@ -315,23 +325,19 @@ fn check_manifest_compatibility(m: &Manifest) -> Result<()> {
     // Future format versions: refuse — we wouldn't know how to read
     // the inner data even if everything else looked fine.
     if m.format_version > FORMAT_VERSION {
-        bail!(
-            "backup format_version {} is newer than this build supports ({}). \
-             Restore on a newer sui-id or downgrade the backup.",
-            m.format_version,
-            FORMAT_VERSION
-        );
+        return Err(BackupError::FormatVersionTooNew {
+            found: m.format_version,
+            supported: FORMAT_VERSION,
+        });
     }
     // Future schema versions: refuse — migrations only go forward, so
     // a backup from a newer build cannot be opened by this one.
-    let our_max_schema = sui_id_store::migrations::MAX_SCHEMA_VERSION as i64;
+    let our_max_schema = crate::migrations::MAX_SCHEMA_VERSION as i64;
     if m.schema_version > our_max_schema {
-        bail!(
-            "backup schema_version {} is newer than this build supports (max {}). \
-             Use a newer sui-id binary to restore this backup.",
-            m.schema_version,
-            our_max_schema
-        );
+        return Err(BackupError::SchemaVersionTooNew {
+            found: m.schema_version,
+            max: our_max_schema,
+        });
     }
     Ok(())
 }
@@ -351,7 +357,7 @@ fn encrypt_envelope(passphrase: &str, plaintext: &[u8]) -> Result<Vec<u8>> {
     let xnonce = <&XNonce>::from(&nonce);
     let ciphertext = cipher
         .encrypt(xnonce, plaintext)
-        .map_err(|_| anyhow::anyhow!("encryption failed"))?;
+        .map_err(|_| BackupError::Encrypt)?;
 
     let mut out = Vec::with_capacity(8 + 4 + 16 + 24 + ciphertext.len());
     out.extend_from_slice(ENCRYPTED_MAGIC);
@@ -365,45 +371,42 @@ fn encrypt_envelope(passphrase: &str, plaintext: &[u8]) -> Result<Vec<u8>> {
 fn decrypt_envelope(passphrase: &str, bytes: &[u8]) -> Result<Vec<u8>> {
     const HEADER_LEN: usize = 8 + 4 + 16 + 24;
     if bytes.len() < HEADER_LEN + 16 {
-        bail!("encrypted backup truncated (header missing)");
+        return Err(BackupError::EnvelopeTruncated);
     }
     let (magic, rest) = bytes.split_at(8);
     if magic != ENCRYPTED_MAGIC {
-        bail!("encrypted backup magic mismatch");
+        return Err(BackupError::EnvelopeMagicMismatch);
     }
     let (version_bytes, rest) = rest.split_at(4);
     // split_at(4) guarantees version_bytes.len() == 4, so this cannot fail.
     #[allow(clippy::unwrap_used)]
     let version = u32::from_be_bytes(version_bytes.try_into().unwrap());
     if version != FORMAT_VERSION {
-        bail!(
-            "encrypted backup envelope version {} is not supported (this build supports {})",
-            version,
-            FORMAT_VERSION
-        );
+        return Err(BackupError::EnvelopeVersionUnsupported {
+            found: version,
+            supported: FORMAT_VERSION,
+        });
     }
     let (salt, rest) = rest.split_at(16);
     let (nonce, ciphertext) = rest.split_at(24);
     let key = derive_key(passphrase, salt)?;
     let cipher = XChaCha20Poly1305::new((&key).into());
-    let xnonce = <&XNonce>::try_from(nonce).context("encrypted backup nonce has invalid length")?;
-    let plaintext = cipher.decrypt(xnonce, ciphertext).map_err(|_| {
-        anyhow::anyhow!(
-            "could not decrypt backup — wrong passphrase, or the file has been tampered with"
-        )
-    })?;
+    let xnonce = <&XNonce>::try_from(nonce).map_err(|_| BackupError::EnvelopeNonceLength)?;
+    let plaintext = cipher
+        .decrypt(xnonce, ciphertext)
+        .map_err(|_| BackupError::Decrypt)?;
     Ok(plaintext)
 }
 
 fn derive_key(passphrase: &str, salt: &[u8]) -> Result<[u8; 32]> {
     use argon2::{Algorithm, Argon2, Params, Version};
     let params = Params::new(ARGON2_M_COST_KIB, ARGON2_T_COST, ARGON2_P_COST, Some(32))
-        .map_err(|e| anyhow::anyhow!("argon2 params: {e}"))?;
+        .map_err(|e| BackupError::Argon2Params(e.to_string()))?;
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
     let mut out = [0u8; 32];
     argon2
         .hash_password_into(passphrase.as_bytes(), salt, &mut out)
-        .map_err(|e| anyhow::anyhow!("argon2 derive: {e}"))?;
+        .map_err(|e| BackupError::Argon2Derive(e.to_string()))?;
     Ok(out)
 }
 
@@ -432,12 +435,17 @@ fn write_atomic(target: &Path, bytes: &[u8], mode: u32) -> Result<()> {
             .write(true)
             .mode(mode)
             .open(&tmp)
-            .with_context(|| format!("creating temp file {}", tmp.display()))?;
+            .map_err(|source| BackupError::CreateTempFile {
+                path: tmp.clone(),
+                source,
+            })?;
         f.write_all(bytes)?;
         f.sync_all().ok();
     }
-    std::fs::rename(&tmp, target)
-        .with_context(|| format!("renaming temp file into {}", target.display()))?;
+    std::fs::rename(&tmp, target).map_err(|source| BackupError::RenameTempFile {
+        path: target.to_path_buf(),
+        source,
+    })?;
     Ok(())
 }
 
@@ -468,6 +476,6 @@ fn tempfile_dir() -> Result<PathBuf> {
         suffix
     );
     let dir = base.join(unique);
-    std::fs::create_dir_all(&dir).context("creating temp dir for snapshot")?;
+    std::fs::create_dir_all(&dir).map_err(BackupError::CreateTempDir)?;
     Ok(dir)
 }

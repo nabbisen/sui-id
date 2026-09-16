@@ -405,8 +405,11 @@ Before relying on a backup, verify it. A daily smoke test:
 ```
 
 `verify-backup` reads the file, runs a SQLite integrity check on
-the inner snapshot, and prints the manifest. It never writes
-anything. If this command fails, alert.
+the inner snapshot, and prints the manifest. It writes nothing to
+the backup or to the configured storage paths; the only file it
+creates is a temporary copy of the snapshot, under the system
+temporary directory, for the integrity check. It removes that copy
+once the check has run. If this command fails, alert.
 
 To restore, copy a tar to the new host and:
 
