@@ -526,6 +526,14 @@ That is assembled once dispatch 14 lands.
 
 ### Dispatch 14 — 2026-09-15: the surface no dispatch has walked
 
+**Baseline.** `2e16d20` or later — not the commit this dispatch was written at.
+`2e16d20` changed two rows 14e walks: the risk register's **R11** row (ruled and
+corrected on 2026-09-16) and a new *Audit event labels* row under *Non-RFC work
+packages*. Walk them as they now read. **Runs in parallel** with the backup move,
+the audit-label package and R11 Part 1: none of those touches a file in this
+dispatch's scope, and none changes a CLI command or flag the operator guides
+document.
+
 The same method as dispatches 9a and 10: every sentence with a checkable fact
 gets an evidence row — the code path, migration, RFC or gate that makes it true
 — including the ones that turn out true. Correct only names, paths and values
