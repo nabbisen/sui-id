@@ -194,6 +194,17 @@ all. An admin-set address is **unverified** (D1, without exception), so it does
 not restore a recovery channel; it records a corrected address that the user then
 proves.
 
+> **Correction, 2026-09-16 (architect).** The premise above is false in
+> production. `reset_user_password` exists in `sui-id-core` and as a Class-A store
+> command, but **no route and no CLI subcommand reaches it** (RFC 098 dispatch 14).
+> An admin cannot set another user's password today. The §6.3 conclusion still
+> holds, for a different reason: an admin-set address is unverified, and the
+> §6.4/§6.5 ruling lets only a verified address receive a reset. The ruling's
+> "nobody is stranded" rests on admin password reset **being reachable**. Until
+> it is, a user with no verified address and a forgotten password has no way back
+> in. Whether to build it is put to `@nabbisen`; this RFC cannot be accepted
+> until that is decided.
+
 **A support path is structurally guaranteed to exist.** RFC 094's `U05` last-admin
 guard rejects any demotion that would leave zero admins, in-transaction and proven
 under concurrency. So "no one to manage users" is not a reachable state, and the

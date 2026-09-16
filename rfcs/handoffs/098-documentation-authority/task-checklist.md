@@ -584,6 +584,144 @@ file; G10a, G10b, G11, G14, G15 green; each commit's `git diff --stat`.
 **Not in scope.** `docs/threat-model.md` (RFC 097's, rule 7). The dated audit
 `docs/security-assurance-audit-v0.63.1.md` and `docs/changelog/` (rule 4).
 
+### Dispatch 14 — landed 2026-09-16
+
+14a `48b1610`, 14b `0b2177f`, 14c `8c6630f`, 14e `e61e507`; 14d changed no file
+by design. The architect's review checked every diff hash against the review
+package and re-checked these stops independently: the dev-mode lockout (no
+dev-mode branch on the lockout path), admin password reset (no route and no CLI
+reaches `identity::admin::users::reset_user_password`), the migration runner
+(skips versions at or below the stored one and returns `Ok`, and a failed read of
+the stored version becomes `0`), `auth.step_up.*` (written nowhere, registered
+nowhere), and `/healthz` (`CoreError::Store` → 500).
+
+The package found 49 stopped claims and 15 findings against
+`docs/ui-ux-contracts.md`. Dispatch 15 carries the rulings.
+
+### Dispatch 15 — 2026-09-16: dispatch 14's stops, ruled
+
+**Baseline.** `e61e507` or later. **Runs in parallel** with the backup move: the
+CLI names `backup`, `verify-backup` and `restore` do not change in that move.
+
+**The rule for every item below.** The document states what the code does
+**today**. Where the code is wrong rather than the prose, the document still
+states today's behaviour, without euphemism; the code change is a separate
+package awaiting the owner. Nothing here changes behaviour, except the two
+dev-mode banner strings in 15a.
+
+**15a — reader pages and the dev-mode claim.**
+- `introduction.md:6`: "a single encrypted SQLite file" becomes "a single SQLite
+  file". Encryption is column-level, and what it covers belongs to the threat
+  model (rule 7).
+- `introduction.md:19-20`: LDAP user sources and dynamic client registration are
+  shipped. Word it the way dispatch 9a worded the README.
+- `overview.md:49-50`: state which account-creation paths exist and what role
+  each assigns, with evidence. Consent creates no account.
+- `quick-start.md:62-66`: give the wizard order as the code runs it. The token
+  arrives in the printed URL.
+- `quick-start.md:81-82`: the seed is admin, alice, bob and one client. A seed
+  file is read only via `--dev-seed PATH`.
+- **Dev-mode lockout (`quick-start.md:83`).** Lockout stays active in dev mode.
+  That is the safe behaviour, and it stays. Remove the lockout claim from
+  `quick-start.md:83`, from the browser banner string
+  (`crates/sui-id-web/src/layout.rs:79`) and from the stderr banner
+  (`crates/sui-id/src/runtime/dev_mode.rs:284`). Run G12 and any test that
+  asserts the banner text.
+- `faq.md` "HTTP API is stable": replace it with the truth. sui-id is pre-1.0, no
+  interface carries a compatibility guarantee, and the OIDC endpoints implement
+  the standards listed in `reference/oidc-api.md`.
+- `faq.md:43-52`, what the master key seals: replace the list with a pointer to
+  `docs/threat-model.md` (rule 7). Put your measured inventory in the review
+  package, so the architect can hand it to RFC 097's baseline. Include
+  `passkey_enc` as a sealed, serialised `Passkey` record, which holds no
+  private key, plus recovery codes, the email outbox, pending settings changes
+  and the federation client secret.
+- `faq.md:61-62`: SQLite is the only backend, and alternative backends are frozen
+  (`ROADMAP.md` programme). Drop "wait for RFC 009".
+- `faq.md:88`: remove "another admin can reset the password". Today no admin can
+  reset another user's password; say so. The owner is deciding whether to build
+  it.
+- **`cp` as backup** (`overview.md:23`, `faq.md:12-22`, `upgrade.md:6-9`, and
+  `README.md`): `sui-id backup`. The database is in WAL mode, so copying the file
+  can miss committed data. The README's "statically linked" goes the same way as
+  14a's.
+
+**15b — operator guides.**
+- `deployment.md:145-149`: `--version` checks nothing. Replace the step with the
+  truth: the configuration is parsed at startup, and a parse error stops the
+  service and is logged. Prove it with a broken file.
+- `deployment.md:312`: there is no paste step. Open the printed URL.
+- `deployment.md:489`: add the step that creates `sui-id.bak` before `install`, so
+  the downgrade procedure can run as written.
+- `deployment.md:293-301`: the command as written loses `SUI_ID_ADMIN_PASSWORD`
+  to sudo's `env_reset`. Replace it with a form you have **run**. The password
+  must stay out of argv and shell history. Report which form, and the evidence.
+- Caddy and nginx snippets: a proxy must not set a security header that sui-id
+  already sends (`crates/sui-id/src/http/security_headers.rs`), because a weaker
+  duplicate is worse than none. Remove those headers from the snippets and say
+  sui-id sets them. List what you removed.
+- `upgrade.md:25-26` (idempotent migrations), `:28-29` (no table lock) and `:82-84`
+  (retry parameters): remove each claim.
+- `upgrade.md:97-99`: an older binary **starts without complaint** against a newer
+  schema. Running one is unsupported, and the recovery is to restore the
+  pre-upgrade backup. State it that plainly.
+- `dangerous-operations.md:90-93, 107`: no `auth.step_up.*` event is written.
+  Remove the cross-check steps. Say that step-up completion is not recorded in
+  the audit log today.
+- `dangerous-operations.md:30-31`: the MFA-reset note is the operator's reason.
+- `dangerous-operations.md:16-20`: say which six of the eight operations have a
+  confirm screen, and that client disable and client secret rotation do not.
+- `dangerous-operations.md:46`: deleting a client revokes its refresh tokens.
+  Relying parties validate against JWKS, not the client row.
+
+**15c — contributor pages.**
+- `local-dev.md:93`: describe the render-function pattern by pointing at a real
+  page module, not an invented signature.
+- `state-contract.md`: add a rule-5 staleness banner. Most i18n keys it names do
+  not exist, and it cites no CI check that exists. Do not rewrite it; its fate
+  goes with `ui-ux-contracts.md`.
+
+**15d — `docs/ui-ux-contracts.md`.** It is normative, with its own update
+process: increment the revision, update the RFC cross-references. That makes each
+finding either a code defect or a contract that needs amending. Deciding which is
+design work for the architect and the owner, not a documentation edit. Add a
+rule-5 staleness banner that names findings F1–F15 by number, with one line each,
+and points to this dispatch. Change nothing else.
+
+**15e — `ROADMAP.md` present state.** The ROADMAP is the owner's record. These
+edits correct false present-tense statements. They change no decision, date or
+milestone window.
+- `:42-44` and `:258-262`: RFCs 094–096 were re-accepted on 2026-08-27. Correct
+  each statement with that dated fact.
+- *Traceability* (`:270-285`) is a dated snapshot. Add one line under its heading:
+  superseded, and current state is each RFC's folder and metadata. Leave the rows
+  as they are.
+- Risk register status cells: R3 → the measured count, with the command; R4 →
+  three releases (1.95 against stable 1.98.1, with the date measured); R6 → A3.4
+  landed, with the commit. The S3 detail gets a dated re-measure line; its old
+  list stays.
+- `:448`: the measured count, with the command.
+- *Current status* (`:466`): retitle it *Completed arcs before the remediation
+  programme*. Update every inbound anchor; G10b and G14 must stay green.
+- *Status* (`:661-705`): add a rule-5 banner. It is historical, it predates the
+  programme, and the present state is *Active plan*. Leave the text unedited
+  under the banner.
+- `:713`: delete "production-grade for small deployments" and point to the
+  programme's statement. `:717`: RFC 005 shipped as pluggable user backends and is
+  not a plugin system.
+
+**15f — handoff status lines.** `rfcs/handoffs/095-dynamic-client-registration/README.md`
+and `rfcs/handoffs/096-upstream-oidc-federation/README.md` still say "returned to
+`proposed/` … pending re-acceptance". Correct each to Accepted 2026-08-27.
+
+**Evidence.** A row per changed sentence (old text, new text, evidence). The
+measured master-key inventory for RFC 097. The sudo form you ran. The headers
+removed from the snippets. G10a, G10b, G11, G12, G14 and G15 green, plus the
+workspace tests for 15a's string change. `git diff --stat` for each commit.
+
+**Not in scope.** Any behaviour change beyond 15a's two strings.
+`docs/threat-model.md`.
+
 ### Step 6a — landed 2026-09-12
 
 Staleness banner on `docs/development-specification.md`, the rule-5 sanctioned
