@@ -21,7 +21,20 @@ Accepted 2026-09-17. **Implementer.** Mid-capability model.
 Reviewed, and committed as one commit. The password-policy refusal re-shows the
 form, which is accepted: the link is still good at that point.
 
-## Stage 2 — dispatched 2026-09-17
+## Stage 2 — landed `6aca4b3`, 2026-09-17
+
+Reviewed, and committed as one commit. Accepted:
+- **`via = cli`** is emitted only on the CLI path, so the web event is unchanged.
+- **U07's actor becomes `Optional`,** which a permitted command requires. The web
+  path's actor is held by `admin_reset_mfa` using `for_authorized_actor`; a test
+  and mutation R1 prove it.
+- **The CLI resets any non-deleted user.** Filesystem authority already implies
+  full control.
+
+**Stage 3 waits** for RFC 102 Part B to be Implemented, which needs RFC 102
+stages 6 and 7.
+
+## Stage 2 — as dispatched
 
 **Baseline.** The commit that adds this section, or later.
 

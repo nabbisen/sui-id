@@ -35,6 +35,46 @@ authorization 2026-09-17. **Implementer.** Mid-capability model.
 - **Keep existing names.** Preserve today's shadow-user upsert and session
   creation. RFC 102's L03 converts them later, so do not pre-empt its design.
 
+## Rulings on the stop of 2026-09-17 (architect)
+
+The owner's first preference was option A, stated in the implementer's session
+and routed here. The architect confirms it, with the conditions below.
+
+1. **Option A: authenticate by stable id.** Add
+   `UserSource::authenticate_stable_id(stable_id, password)`. Routing for a local
+   row with `source = ldap`, and RFC 102 B7's `rebind_directory_user`, both call
+   it. There is no migration, and no change to the shadow upsert.
+2. **The directory's own restrictions must still apply.** This condition is not
+   optional. `user_search_filter` often carries authorization, such as a group,
+   an objectClass or an account-status clause. A search by stable id alone would
+   bypass it, and a user removed from the allowed group could still sign in. The
+   LDAP search is therefore
+   `(&(<stable_id_attribute>=<RFC 4515-escaped id>)<user_search_filter with {username} replaced by *>)`
+   under `user_search_base`. The filter-building function is pure and
+   unit-tested, including:
+   - escaping;
+   - a filter with a group clause;
+   - a filter with `{username}` in more than one position.
+3. **DN fallback.** When the stored stable id is a DN (the attribute was missing
+   or binary at provisioning), use a base-object search on that DN, with the same
+   filter using `*`. Only a DN that lies under `user_search_base` is searched,
+   compared case-insensitively and normalised. Otherwise the result is `Ok(None)`.
+   Unit-test the containment check.
+4. **P3 is preserved.** A miss and a wrong password are both `Ok(None)`, and both
+   run a search and a bind attempt.
+5. **Live-directory coverage is not available in this lane.** Unit-test the pure
+   parts, and state plainly that the search and bind are compile-checked only.
+   Record it as input for RFC 099's live integration evidence; do not add a
+   container fixture in this package.
+6. **§3.1 MFA on the returning path: in scope.** It branches exactly like
+   `login_with_mfa`: a pending-MFA row and
+   `auth.login.password_ok_mfa_required`. Without it, a factor enrolled through
+   B7 would be skipped at sign-in. That would be an MFA bypass, and it must not
+   ship.
+7. **§3.2 a record with a different stable id: agreed.** Refuse with the uniform
+   401, do not count it, and log at warn with the source slug and user id (no
+   password).
+
 ## Evidence
 - End-to-end with `InMemoryUserSource`: first sign-in, second sign-in, a wrong
   password on the second (counted, 401), directory user removed (401), shadow user

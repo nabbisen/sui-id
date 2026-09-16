@@ -39,7 +39,68 @@ Carried forward:
 - **Federated users.** First-factor enrolment is refused until upstream
   re-authentication exists (RFC 096-B1).
 
-## Stage 2 — dispatched 2026-09-17: L01, the password sign-in
+## Stage 2 — landed `19344f4`, 2026-09-17
+
+Reviewed, and committed as one commit. Refusing a user who was locked after the
+password check (by a concurrent failure) is accepted: clearing that lock would
+undo U22.
+
+## Stage 3 — dispatched 2026-09-17: L02 and L07, the second factor
+
+**Baseline.** The commit that adds this section, or later.
+
+**Ruling on stage 2's question.** L02 takes over the reset of the password
+counter and stale lock. The MFA branch of `login_with_mfa` no longer calls
+`clear_lockout`. The counter resets only when the whole sign-in commits, so the
+reset belongs to A2's transaction. RFC 102's L02 row is read to include it.
+
+**Scope** — RFC 102 Part A, paths 2 and 3:
+- **L02** (sealed Class A), in one transaction:
+  - consume the pending-MFA row with a guarded delete (the row exists, belongs to
+    the user and is unexpired; zero rows → roll back);
+  - for TOTP, the guarded `last_used_step` advance (`WHERE last_used_step < ?`);
+  - for a recovery code, the compare-and-swap on `recovery_codes_enc`;
+  - re-read the user as active and not locked;
+  - reset the password counter and stale lock, and the user's second-factor
+    failure count;
+  - set `last_login_at`;
+  - set freshness **by method**: TOTP and WebAuthn set `last_step_up_at` and
+    `last_step_up_method`; a recovery code sets neither (RFC 102 N5 and open
+    question 3, ruled);
+  - insert the session and evict over-cap sessions (reuse L01's helper);
+  - event `auth.mfa.success` (method, evicted), now Atomic.
+- **L07** (sealed Class A). Add a per-user second-factor failure count; a
+  migration adds `users.mfa_failure_count`. At 5, delete every pending-MFA row
+  for the user and lock the account with U22's backoff. Events are
+  `auth.mfa.failure` (count) or `auth.mfa.lockout` (count, locked_for_secs).
+- **Wiring.** `mfa_challenge_post` and the sign-in WebAuthn completion call L02.
+  A wrong factor runs L07; a failed L02 does not (A9). Remove the best-effort
+  `auth.mfa.success` and `auth.mfa.failure` appends.
+- **A7 on the MFA path.** An admin-only destination for a user who cannot read
+  the admin panel is refused before any pending row is issued.
+- **N14.** The sign-in WebAuthn script follows the completion response, and a
+  pending `next` survives. Every error on that step maps to `Unauthenticated`
+  (a redirect to `/admin/login`).
+
+**Evidence.**
+- **Concurrency**, on a multi-thread runtime and repeated. Each case failed in
+  every iteration at the design review:
+  - one TOTP code on two pending rows gives one session;
+  - one recovery code on two pending rows gives one session, with one code
+    removed;
+  - two completions of one pending row give one session;
+  - steps N+1 and N written concurrently leave the stored step at N+1.
+- **Injected append failure:** nothing changes (no session, pending row kept,
+  step and codes unchanged, counters unchanged), and the response is uniform.
+- **L07:** four wrong codes then a right one signs in, and the count resets. Five
+  wrong codes lock the account, remove the pending rows and refuse the right
+  code. Minting new pending rows with the password does not reset the count.
+- **Freshness:** a TOTP sign-in is fresh; a recovery-code sign-in is not.
+- **A7** on the MFA path.
+- **N14:** a WebAuthn sign-in failure keeps `next`, and success lands on `next`.
+- **Mutation:** remove each guard, the per-user count, and the method rule for
+  freshness, one at a time; each is caught.
+- **Build and gates:** fmt, both clippy scopes, the test count, MSRV 1.95, G13.
 
 **Baseline.** The commit that adds this section, or later.
 
