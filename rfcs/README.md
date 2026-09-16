@@ -70,6 +70,8 @@ slot is `104`). One **parallel namespace** also exists:
 | 095 | [Dynamic Client Registration Transaction and Validation](./accepted/095-dynamic-client-registration-transaction.md) | M3 | `codex-developer` (OpenAI Codex) |
 | 096 | [Upstream OIDC Federation Validation](./accepted/096-upstream-oidc-federation-validation.md) | M4-A, M4-B | `codex-developer` (OpenAI Codex) |
 | 098 | [Documentation Authority and Reconciliation](./done/098-documentation-authority-reconciliation.md) | M5 | mid-capability model |
+| 102 | [Authentication that cannot be audited does not succeed](./accepted/102-authentication-fails-closed-without-audit.md) | R11 Part 2 and step-up | mid-capability model |
+| 103 | [Administrator-issued account recovery](./accepted/103-administrator-issued-account-recovery.md) | prerequisite of RFC 101 | mid-capability model |
 
 Acceptance makes an RFC implementation-eligible, but coding remains prohibited
 until its declared implementation prerequisites have repository-visible
@@ -82,7 +84,7 @@ by the implementation role, which authored none of them, and re-accepted by
 `@nabbisen`. Each RFC's `Independent design review` field records which role
 reviewed it and what that role checked. Prior acceptances remain in history.
 
-### Proposed — security and release-assurance remediation (097, 099–103)
+### Proposed — security and release-assurance remediation (097, 099–101)
 
 These RFCs implement the active remediation programme in
 [`ROADMAP.md`](../ROADMAP.md). Proposal status assigns their permanent numbers
@@ -94,8 +96,6 @@ and permits design review only; it does not authorize implementation.
 | 099 | [Operational Hardening and Soak Readiness](./proposed/099-operational-hardening-soak-readiness.md) | M6–M7 |
 | 101 | [Email lifecycle: verification and change](./proposed/101-email-lifecycle-verification-and-change.md) | sequenced at owner discretion |
 | 100 | [Master-Key Rotation Crash Recovery](./proposed/100-master-key-rotation-recovery.md) | sequenced at owner discretion |
-| 102 | [Authentication that cannot be audited does not succeed](./proposed/102-authentication-fails-closed-without-audit.md) | R11 Part 2 and step-up; gates RFC 096 F01/F03 |
-| 103 | [Administrator-issued account recovery](./proposed/103-administrator-issued-account-recovery.md) | prerequisite of RFC 101 |
 
 ### Implemented — Mockup Integration epic (Phase 0 → Phase 8)
 

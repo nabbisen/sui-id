@@ -1,6 +1,14 @@
 # RFC 103 — Administrator-issued account recovery
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-09-17
+**Approved by.** `@nabbisen`, who also ruled every open question as recommended.
+**Independent design review.** [Design review 2026-09-16](../handoffs/102-authentication-fails-closed/102-103-design-review-2026-09-16.md)
+by the implementation role, shared with RFC 102 (items 11–15: every credential writer, the forgot-password machinery, D3's
+invalidations, U06's reachability, the threat table) and
+[confirmation review 2026-09-17](../handoffs/102-authentication-fails-closed/102-103-confirmation-review-2026-09-17.md).
+**Implementation owner.** Mid-capability model, by dispatch.
+**Handoff.** [`../handoffs/103-administrator-issued-account-recovery/README.md`](../handoffs/103-administrator-issued-account-recovery/README.md)
 **Security review.** Required
 **Design prerequisites.** The owner ruling of 2026-09-16 that admin password
 reset is built, as a web operation and as a CLI operation. In the owner's words:
@@ -8,7 +16,7 @@ reset is built, as a web operation and as a CLI operation. In the owner's words:
 that. **Independent design review** (implementation role, 2026-09-16, shared
 with RFC 102): findings H5, H6, M5, M7 and M8 bear on this RFC and are resolved
 below; B1 is resolved in RFC 102 B7, which D6 depends on.
-**Implementation prerequisites.** This RFC Accepted; RFC 094 M2a runner foundation (in the tree); RFC 102 Part B Implemented, including B7, because D6 relies on step-up evidence that a stolen session cannot manufacture.
+**Implementation prerequisites.** Step 1 (D13 and D10 on the existing email path, which fix live defects): this RFC Accepted, and RFC 094 M2a's runner foundation (in the tree). Steps 2–6: also RFC 102 Part B Implemented, including B7, because D6 relies on step-up evidence that a stolen session cannot manufacture.
 **Closure prerequisites.** An administrator can issue a recovery link on the web and through the CLI; the user can set their own password with it; no code path lets anyone other than the account holder choose or learn a password; every threat below has a test that fails when its control is removed; `docs/threat-model.md` states the resulting properties; independent closure review accepts the evidence.
 **Tracks.** `ROADMAP.md` programme. This RFC is a prerequisite of RFC 101: the
 §6.4/§6.5 ruling's "nobody is stranded" is true only once this RFC is
@@ -61,7 +69,7 @@ tree.
 | T10 | An external-source (LDAP or federated) account gets a local password, bypassing the directory | D5, **D13** |
 | T11 | A link issued before a user is disabled, deleted or changed still completes | D3, D13 |
 | T12 | One token completes twice under concurrency | D13 |
-| T13 | A sole administrator who has lost every second factor has no way back in | **D12, owner ruling pending** |
+| T13 | A sole administrator who has lost every second factor has no way back in | **D12** |
 
 ## Design
 
@@ -197,15 +205,18 @@ Further:
   third-party resources.
 - The CLI prints the link to stdout only, never stderr, and never in a log line.
 
-**D12 — a sole administrator who has lost every second factor. Owner ruling
-pending.** With RFC 102 B7, lost-authenticator recovery goes through an
+**D12 — a sole administrator who has lost every second factor. Ruled 2026-09-17
+(`@nabbisen`): build the CLI reset.** With RFC 102 B7, lost-authenticator recovery goes through an
 administrator's MFA reset (U07). The last administrator has no other
 administrator. The CLI today has no MFA reset, and D4 keeps MFA in force on the
 recovery link. The design review found that such an administrator has **no path**
 (M7). Recommended: a CLI operation, `sui-id admin reset-mfa --username NAME
 --reason TEXT`. It runs U07 as a system principal, with the same filesystem
 authority as `admin unlock-user`, and is recorded with `via = cli`. Without it,
-the only remedy is restoring a backup.
+the only remedy is restoring a backup. **U07 is declared `system_principal:
+forbidden` today** (`crates/sui-id-store/src/commands.rs`). D12 changes that
+declaration to `permitted`, reachable only through the CLI adapter, with RFC 102
+B4's `not_applicable: system_principal` evidence.
 
 **D13 — completion re-checks everything, and consumes once.** U10 (every origin):
 - consumes the token with a guard: `UPDATE … SET consumed_at = ? WHERE id = ? AND
@@ -334,12 +345,14 @@ password (T2) and keeps the second factor in force (T6).
 
 ## Open questions
 
-1. **Expiry.** 30 minutes matches forgot-password and suits a real-time handover.
+*All four ruled 2026-09-17 by `@nabbisen`, as recommended.*
+
+1. **Expiry. Ruled: 30 minutes.** 30 minutes matches forgot-password and suits a real-time handover.
    Longer eases asynchronous handover but widens T4 and T7. Recommended: 30.
-2. **Throttle.** Five per administrator per hour. Is that right for the expected
+2. **Throttle. Ruled: five per administrator per hour, and five for the CLI.** Five per administrator per hour. Is that right for the expected
    deployment size?
-3. **Refusing admin targets on the web.** Recommended: refuse (T3). The cost is
+3. **Refusing admin targets on the web. Ruled: refuse.** Recommended: refuse (T3). The cost is
    that an administrator who forgot their password needs someone with filesystem
    access. The owner confirms this trade-off, together with D12, as the design
    review advised.
-4. **D12, CLI MFA reset for a sole administrator.** Recommended: yes.
+4. **D12, CLI MFA reset for a sole administrator. Ruled: yes.**

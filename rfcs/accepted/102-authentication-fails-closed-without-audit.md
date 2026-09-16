@@ -1,6 +1,16 @@
 # RFC 102 — Authentication that cannot be audited does not succeed
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-09-17
+**Approved by.** `@nabbisen`, who also ruled every open question as recommended.
+**Independent design review.** [Design review 2026-09-16](../handoffs/102-authentication-fails-closed/102-103-design-review-2026-09-16.md)
+by the implementation role, which authored neither RFC (one blocker, six high, eight medium, six low), and
+[confirmation review 2026-09-17](../handoffs/102-authentication-fails-closed/102-103-confirmation-review-2026-09-17.md)
+(three high, seven medium, four low, on the resolutions). Every finding is
+resolved in this text. It checked implementability against the runner, every
+session-insert and credential-writer call site, the gated call sites, and the
+failure responses, and demonstrated the replay races by test.
+**Implementation owner.** Mid-capability model, by dispatch.
 **Security review.** Required
 **Design prerequisites.** None beyond the owner rulings this RFC carries out:
 - **R11 Part 2** (`@nabbisen`, 2026-09-16): fail closed.
@@ -9,8 +19,8 @@
 - **Step-up** (same day): the owner's instruction on step-up auditing — "Log is
   important. Consider carefully." It extended this RFC from sign-in to step-up
   re-authentication (Part B).
-- **Independent design review** (implementation role, 2026-09-16,
-  `.git-exclude/review-requests/rfc-102-103-design-review-2026-09-16.md`): one
+- **Independent design review** (implementation role, 2026-09-16; see the
+  metadata above): one
   blocker, six high and eight medium findings. Every one is resolved in this text;
   the table under *Design review resolutions* maps each finding to where. A
   **confirmation review** of those resolutions (2026-09-17) found three high and
@@ -27,9 +37,7 @@ recorded in Part B's background.
 
 **Touches.** `crates/sui-id-store/src/`: `commands.rs` (new commands), `repos/sessions.rs`, `repos/users.rs`, `repos/login_pending_mfa.rs`, `repos/webauthn_pending.rs`, `repos/user_totp.rs`, and a migration; `crates/sui-id-core/src/authn/`: `session.rs`, `mfa.rs`, `step_up.rs`, `webauthn.rs`; `crates/sui-id/src/http/`: `handlers.rs`, `handlers/step_up.rs`, `handlers/admin/auth.rs`, `handlers/admin/webauthn.rs`, `handlers/federation.rs`, and every step-up-gated handler; `ci/write-commands.toml`, `ci/audit-coverage-matrix.md`, `docs/threat-model.md`.
 
-**Handoff.** Written on acceptance as
-`rfcs/handoffs/102-authentication-fails-closed/README.md`. The design review
-request is in the same directory.
+**Handoff.** [`../handoffs/102-authentication-fails-closed/README.md`](../handoffs/102-authentication-fails-closed/README.md)
 
 **Accountable owner and approver.** `@nabbisen`.
 
@@ -77,13 +85,14 @@ RFC 095 is the precedent. It tightens RFC 094's `client.dynamic_register` on the
 same seam without reopening RFC 094, and RFC 094 says so. This RFC does the same.
 **Where this RFC differs from RFC 094 or RFC 096 on how a session is established
 or stepped up, or on what a step-up-gated event carries, this RFC governs.** On
-acceptance, one-line pointers here go into:
-- RFC 094's inventory rows U24, U30, U31 and U32;
-- RFC 096's F01 and F03.
+acceptance, one-line pointers here went into RFC 094's command inventory
+(`rfcs/handoffs/094-transactional-audit/command-inventory.md`), rows U24, U30,
+U31 and U32, and rows F01 and F03, the RFC 096 commands that inventory holds.
+Neither RFC's body is edited.
 
-Their designs are otherwise unchanged. Until then, RFC 096-B1 must not implement
-F01 or F03. That hold is recorded in the RFC 096 handoff's entry gates and in
-`ROADMAP.md`.
+Their designs are otherwise unchanged. RFC 096-B1 builds F01 and F03 to this RFC.
+The hold that kept them from starting until acceptance is released, as recorded
+in the RFC 096 handoff.
 
 RFC 089 (done) already requires that recovery codes do not satisfy step-up. The
 code does not comply. Part B restores the contract; RFC 089 is not edited.
@@ -440,7 +449,8 @@ half of A3 and B5: the response is uniform, and the log is where the cause goes.
    otherwise directly); the RFC 094 and RFC 096 pointers are added.
 
 Each step can be reviewed on its own, and each leaves unconverted paths as they
-were.
+were. **The implementation order is the handoff's.** It starts with B7, which the
+owner authorized on 2026-09-17 as a fix for a live defect ahead of the rest.
 
 ## Test plan
 
@@ -614,7 +624,10 @@ Measured by reading on 2026-09-16. Each needs its own decision, not this RFC's:
    failed commit? The alternative is to advance the step in a separate committed
    write even when the operation fails. The recommendation is the former, because
    the latter burns a user's valid code on a server fault.
-3. **Recovery-code sign-in and freshness.** Today L02's predecessor sets
+3. **Recovery-code sign-in and freshness. Ruled 2026-09-17 (`@nabbisen`): as
+   recommended — a recovery-code sign-in sets no freshness; lost-authenticator
+   recovery is the administrator's MFA reset, with RFC 103 D12's CLI reset for a
+   sole administrator.** Today L02's predecessor sets
    `last_step_up_at = now` for every second factor, recovery codes included. So
    signing in with a recovery code grants step-up freshness, which RFC 089's rule
    forbids in spirit. Honouring the rule leaves a user who lost their only
