@@ -628,7 +628,8 @@ already shipped.
 
 - User identity is separated from credentials.
 - Tokens carry expiry and revocation state.
-- The audit log is tamper-resistant.
+- Audit-log integrity, and the trust boundary it holds within, is stated in
+  `docs/threat-model.md` (RFC 098 rule 7).
 - Signing keys are generation-managed; both active and retired
   generations are published in JWKS.
 - Encryption is **column-level**, not table-level: `secret`,
