@@ -4,7 +4,7 @@
 
 sui-id is an Identity-as-a-Service you run yourself. It speaks OpenID Connect
 on the front end, stores its data in a single encrypted SQLite file, and ships
-as one statically linked binary. There is no separate database service, no
+as one binary. There is no separate database service, no
 embedded JavaScript runtime, and no ambient cloud dependency.
 
 ## Who is this for?
