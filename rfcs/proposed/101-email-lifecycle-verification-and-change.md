@@ -6,7 +6,9 @@
 `0020_user_identity_invariants.sql` §2, which added `email_verified_at` and stated
 it would stay NULL "for every user until an email-verification flow ships (a
 future RFC)".
-**Implementation prerequisites.** RFC 094 M2a foundation Implemented — every
+**Implementation prerequisites.** RFC 103 (administrator-issued account recovery)
+Implemented — owner ruling 2026-09-16, see the §6.3 correction. RFC 094 M2a
+foundation Implemented — every
 mutation defined here is Class-A and must land on the sealed runner, not beside
 it. RFC 094's `U11` inventory row is the placeholder for the change command.
 **Closure prerequisites.** A user can verify an address, change it, and the OIDC
@@ -202,8 +204,11 @@ proves.
 > §6.4/§6.5 ruling lets only a verified address receive a reset. The ruling's
 > "nobody is stranded" rests on admin password reset **being reachable**. Until
 > it is, a user with no verified address and a forgotten password has no way back
-> in. Whether to build it is put to `@nabbisen`; this RFC cannot be accepted
-> until that is decided.
+> in. **Ruled 2026-09-16 (`@nabbisen`): build it**, with the web version's security
+> risk addressed. It is designed as
+> [RFC 103](103-administrator-issued-account-recovery.md): an administrator issues a
+> single-use recovery link and never sets or sees a password. RFC 103 is an
+> implementation prerequisite of this RFC.
 
 **A support path is structurally guaranteed to exist.** RFC 094's `U05` last-admin
 guard rejects any demotion that would leave zero admins, in-transaction and proven

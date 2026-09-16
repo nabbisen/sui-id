@@ -46,7 +46,7 @@ reviewer requirement applies to any approved overlap.
 
 **Hold on F01 and F03 (2026-09-16).** They establish sessions. `@nabbisen` ruled
 that a sign-in which cannot be audited does not succeed, and
-[RFC 102](../../proposed/102-sign-in-fails-closed-without-audit.md) carries the
+[RFC 102](../../proposed/102-authentication-fails-closed-without-audit.md) carries the
 ruling: session establishment becomes a Class-A command, not RFC 096's
 Protocol-plus-Class-B shape. F01 and F03 do not start until RFC 102 is Accepted,
 so they are built fail-closed once rather than rebuilt. F02, F04, F05 and F06 are

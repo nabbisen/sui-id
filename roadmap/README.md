@@ -56,6 +56,11 @@ harmful.
 | [prep-federation-module-split](prep-federation-module-split/README.md) | Withdrawn 2026-08-12 — ⛔ not ready to execute; roadmap *Execution order* item 5 |
 | [rfc-template-reconciliation](rfc-template-reconciliation/README.md) | Open, unstarted |
 | [test-file-organization](test-file-organization/README.md) | Open — §A and §B done, §C queued |
+| [audit-event-labels](audit-event-labels/README.md) | Open — owner ruling 2026-09-16 |
+| [schema-version-fail-closed](schema-version-fail-closed/README.md) | Open — owner authorization 2026-09-16 |
+| [client-confirm-screens](client-confirm-screens/README.md) | Open — owner authorization 2026-09-16 |
+| [cli-help-completeness](cli-help-completeness/README.md) | Open — owner authorization 2026-09-16 |
+| [ui-contract-reconciliation](ui-contract-reconciliation/README.md) | Open — owner authorization 2026-09-16; starts after RFC 098 dispatch 15 |
 | [fuzz-widen-matrix](fuzz-widen-matrix/README.md) | Complete, `d5e5402` |
 | [fuzz-corpus-persistence](fuzz-corpus-persistence/README.md) | Complete, `8d446b0` |
 | [stable-clippy-drift-1.98](stable-clippy-drift-1.98/README.md) | Complete, `b343a06` |
