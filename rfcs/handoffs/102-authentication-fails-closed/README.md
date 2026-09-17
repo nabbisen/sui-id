@@ -88,7 +88,83 @@ compile-negative fixture proves it. Accepted:
 - `sessions::insert` is `#[cfg(test)] pub(crate)`.
 - The runtime "no audit row" test for the Protocol runner moved to T09's test.
 
-## Stage 6 — dispatched 2026-09-17: L05, step-up success atomic
+## Stage 6 — landed `742fe08`, 2026-09-17
+
+Reviewed, and committed as one commit. Step-up success is atomic and recorded.
+Accepted:
+- **Ceremony guard.** `finish_authentication` now refuses a mismatched ceremony
+  and leaves it for its owner.
+- **Sign-in ceremony.** It is still consumed before L02, unchanged.
+- **`touch_step_up` and `set_last_used_step` are removed.** B6's raw touch no
+  longer exists.
+
+Carried into stage 7: L05 and L06 read `chrono::Utc::now()` rather than the
+injected `SharedClock`, which the sign-in commands L01–L04 use through their
+session row.
+
+## Stage 7 — dispatched 2026-09-17: B4, the action carries its authorization
+
+**Baseline.** The commit that adds this section, or later.
+
+**Found while scoping this stage — fix it here.** K01, signing-key rotation, is
+declared `system_principal: permitted` with the comment "an ops/CLI/scheduled
+trigger". Its only caller, though, is the web handler `signing_keys_rotate`,
+which is gated by an admin session and step-up. `commands::rotate_signing_key`
+builds its context with `for_system_actor(None)`. **So the administrator who
+rotated a signing key is not recorded as the actor.** No CLI or scheduled K01
+caller exists. Therefore:
+- K01 becomes `system_principal: forbidden` with actor `Required`;
+- `rotate_signing_key` takes the admin actor and uses `for_authorized_actor`;
+- the matrix row and descriptor tests follow.
+
+If you find a non-web K01 caller, stop and report.
+
+**Scope — B4 on the sealed gated commands:**
+
+| Command | Gated handler |
+|---|---|
+| U02 disable / U03 enable | `users_set_disabled` |
+| U04 delete | `users_delete` |
+| U07 MFA reset | `users_mfa_reset` (web); `operator_reset_mfa` (CLI) |
+| K01 rotate | `signing_keys_rotate` |
+
+- **Descriptors.** Each of these descriptors gains a **required** `step_up`
+  attribute.
+- **Computed by the command** (RFC 102 B4, M2). The command takes the session
+  ID, re-reads the session row in its transaction, and derives:
+  - `fresh:<method>:<seconds>` when `last_step_up_at` is within
+    `STEP_UP_FRESHNESS_SECS`;
+  - `not_required:no_second_factor` when the user has no second factor (read in
+    the transaction);
+  - `not_applicable:system_principal` **only** on a context built by
+    `for_system_actor`. This is U07's CLI path. Make it unconstructible from a
+    session-bound path: the session-bound entry takes a `SessionId`, and the
+    system entry takes none.
+- **Rollback when freshness lapsed.** If the user has a second factor and the
+  session is no longer fresh at commit, the command rolls back with a dedicated
+  error. The handler maps that error to the step-up redirect, as
+  `require_fresh_step_up` does (N11).
+- **The session ID is an input only.** It never enters the event.
+- **The eight B-F8 actions are not converted here.** They gain B4 when RFC 094
+  converts them. Leave them as they are, and name them in the matrix note.
+
+**The stage 6 follow-up.** L05 and L06 take `now` from the caller's
+`SharedClock`, as L01–L04 do. Test that a mocked clock controls
+`last_step_up_at` and the expiry checks.
+
+**Evidence.**
+- **Per command:** the three forms, with the `not_applicable` form on U07's CLI
+  path only. A compile-negative or structural test shows a session-bound entry
+  cannot produce `not_applicable`.
+- **Freshness lapse between gate and commit:** a rollback, the redirect, and no
+  mutation.
+- **K01:** the actor is the admin; the descriptor refuses a missing actor.
+- **Mutation:** remove the in-transaction freshness check, the no-factor
+  branch, and the actor on K01, one at a time; each is caught.
+- **Build and gates:** fmt, both clippy scopes, the test count (default and all
+  features), MSRV 1.95, G13, G15.
+
+## Stage 6 — as dispatched
 
 **Baseline.** The commit that adds this section, or later.
 
