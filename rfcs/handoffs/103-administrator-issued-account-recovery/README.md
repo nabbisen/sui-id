@@ -21,6 +21,66 @@ Accepted 2026-09-17. **Implementer.** Mid-capability model.
 Reviewed, and committed as one commit. The password-policy refusal re-shows the
 form, which is accepted: the link is still good at that point.
 
+## Stage 3 — dispatched 2026-09-17: the admin-issued link's data path
+
+**Baseline.** `4057e6a` or later.
+
+**Scope** — RFC 103 D2, D3, D9 (data path only; no CLI or web surface yet):
+- **Migration** on `password_reset_tokens`:
+  - `issued_via TEXT NOT NULL DEFAULT 'email'`, CHECK in `email`, `web`, `cli`;
+  - `issued_by` (nullable user ID), with a CHECK that it is non-NULL exactly when
+    `issued_via = 'web'`;
+  - `revoked_at` (nullable).
+
+  `count_active_for_user` excludes `consumed_at` and `revoked_at`.
+- **U37 — issue recovery link** (sealed Class A). Two entries, following RFC 102
+  stage 7's signature pattern:
+  - the web entry takes the admin actor and `SessionId`, and carries B4 `step_up`
+    evidence, which **must be `fresh`** (D6); `not_required` rolls back with
+    `StepUpRequired`;
+  - the system entry is for the CLI, with `not_applicable`.
+
+  In one transaction:
+  1. re-read the target: it exists, is active, not deleted, and
+     `source = local`; on the web entry it is also not an admin and not the
+     issuer (D5);
+  2. revoke every outstanding token for the target (`revoked_at`);
+  3. insert the new token hash with `issued_via` and `issued_by`;
+  4. write `user.recovery_link.issued` with actor, target, the reason as note,
+     `via`, `expires_at`, `invalidated` (count) and `step_up`.
+
+  It returns the plaintext token to the caller, which never logs it. The token
+  is generated outside the transaction and only its hash is stored.
+- **D8 throttle, counted from the database.** The web entry allows five per
+  issuing admin per rolling hour (`issued_by`). The CLI entry allows five with
+  `issued_via = 'cli'` per rolling hour. A refusal writes nothing and returns a
+  dedicated error.
+- **D3 invalidations**, each inside its own existing transaction:
+  - U09 (self password change): revoke the user's outstanding tokens;
+  - U10 (completion): revoke the user's *other* outstanding tokens;
+  - U02 (disable) and U04 (delete): revoke all tokens.
+  - **U11 (email change):** the command does not exist yet. It arrives with RFC
+    101, so record the requirement in RFC 101's handoff rather than build it
+    here. If you find that an email change exists in production, stop and report.
+- **U10 `origin`.** `auth.password.reset_completed` gains `origin` (`email`,
+  `web`, `cli`), read from the consumed token's `issued_via`.
+- **Retire U06 now?** No: its retirement is RFC 103 step 6. Leave it.
+
+**Evidence.**
+- U37 through the store: happy path on the web and the system entry.
+- Each D5 refusal writes nothing: admin target, self, non-local, disabled,
+  deleted.
+- `not_required` evidence on the web entry rolls back.
+- Throttle: the sixth issuance is refused, for web and for CLI.
+- Issuance revokes earlier tokens, and a revoked token is refused at completion.
+- Each D3 invalidation, per command.
+- `origin` on completion, for each origin.
+- Injected append failure: no token, no revocation.
+- **Mutation:** the D5 refusals, the `fresh` requirement, the throttle and each
+  invalidation, one at a time; each is caught.
+- **Build and gates:** fmt, both clippy scopes, the test count, MSRV 1.95, G13,
+  G15.
+
 ## Stage 2 — landed `6aca4b3`, 2026-09-17
 
 Reviewed, and committed as one commit. Accepted:
