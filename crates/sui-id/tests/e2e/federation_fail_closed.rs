@@ -17,7 +17,7 @@ const SUB: &str = "fed-sub-1";
 const SIGNIN_FAILED: &str = "/admin/login?fed_error=signin_failed";
 
 /// Start a mock upstream IdP and return its issuer URL.
-async fn mock_upstream() -> String {
+pub(super) async fn mock_upstream() -> String {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("bind");
@@ -66,7 +66,7 @@ async fn scalar(state: &AppState, sql: String) -> i64 {
 }
 
 /// A local user linked to the mock upstream's `SUB`.
-async fn linked_user(state: &AppState, issuer: &str) -> UserId {
+pub(super) async fn linked_user(state: &AppState, issuer: &str) -> UserId {
     let now = chrono::Utc::now();
     let uid = UserId::new();
     sui_id_store::repos::users::create(
@@ -111,15 +111,15 @@ async fn linked_user(state: &AppState, issuer: &str) -> UserId {
     uid
 }
 
-struct Outcome {
-    status: StatusCode,
-    location: String,
-    session_cookie: Option<String>,
-    pending_mfa_cookie: Option<String>,
+pub(super) struct Outcome {
+    pub(super) status: StatusCode,
+    pub(super) location: String,
+    pub(super) session_cookie: Option<String>,
+    pub(super) pending_mfa_cookie: Option<String>,
 }
 
 /// Run `/auth/federated/up/start` and then the callback.
-async fn federated_signin(state: &AppState) -> Outcome {
+pub(super) async fn federated_signin(state: &AppState) -> Outcome {
     let start = build_router(state.clone())
         .oneshot(
             Request::builder()

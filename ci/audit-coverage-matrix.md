@@ -118,7 +118,7 @@ then because `setup.` was not in the hand-written list.
 
 | Event name | Operation | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
-| `auth.federation.signin.success` | Federated sign-in completed | user id | user id | `provider=… sub=…` | B |
+| `auth.federation.signin.success` | Federated sign-in completed for a user with no second factor (command `L04`, with the in-transaction re-read, `last_login_at`, the session and cap eviction) | user id | user id | `provider=… evicted=…` | **A** |
 | `auth.federation.signin.upstream_failure` | Upstream IdP returned an error | — | — | `provider=… error=…` | B |
 | `auth.federation.link.created` | Federation link created (first sign-in or explicit link) | user id | user id | `provider=… sub=…` | B |
 | `auth.federation.takeover_blocked` | Email collision rejected as potential takeover | — | — | `provider=… email=…` | A |
@@ -129,11 +129,12 @@ then because `setup.` was not in the hand-written list.
 |---|---|---|---|---|---|
 | `client.dynamic_register` | RFC 7591 dynamic client registration | — | new client id | `name=…` | B |
 
-### External user-source authentication (`auth.user_source.*`, RFC 005)
+### External user-source authentication (RFC 005)
 
-| Event name | Operation | Actor | Target | Note fields | Class |
-|---|---|---|---|---|---|
-| `auth.user_source.matched` | External source authenticated a user | shadow user id | shadow user id | `source=… stable_id=…` | B |
+*Retired 2026-09-17 (RFC 102 stage 4): the best-effort user-source match event
+is no longer written, and nothing else wrote it. A directory sign-in without a
+second factor now commits `auth.login.success` with a `source` attribute through
+L03; one with a second factor completes through L02 as `auth.mfa.success`.*
 
 ### Self-service MFA (`mfa.*`)
 
@@ -224,6 +225,10 @@ now Class A for a user with no second factor, committed by command L01. The
 second-factor, directory and federation sign-ins still write their events best
 effort until L02-L04.*
 
+*Changed 2026-09-17 (RFC 102 stage 4): the directory sign-in writes
+`auth.login.success` through L03, and the federated sign-in writes
+`auth.federation.signin.success` through L04, both Class A.*
+
 *Changed 2026-09-17 (RFC 102 stage 3): the second-factor sign-in events are
 Class A. `auth.mfa.success` commits with the session through L02; a wrong second
 factor commits `auth.mfa.failure`, or `auth.mfa.lockout` at the fifth
@@ -232,7 +237,7 @@ consecutive one, through L07.*
 | Event name | Trigger | Actor | Class |
 |---|---|---|---|
 | `auth.login.password_ok_mfa_required` | Password correct; MFA challenge pending | user id | B |
-| `auth.login.success` | Password sign-in succeeded for a user with no second factor (command `L01`, with the session, counter reset, `last_login_at` and cap eviction; note field `evicted`) | user id | **A** |
+| `auth.login.success` | Sign-in succeeded for a user with no second factor: a local password (command `L01`) or a user-source password (`L03`, which also upserts the shadow user), with the session, counter reset, `last_login_at` and cap eviction; note fields `evicted`, and `source` for L03 | user id | **A** |
 | `auth.login.failure` | Wrong password | — | B |
 | `auth.mfa.success` | Second-factor sign-in completed: TOTP, recovery code or passkey (command `L02`, with the pending-row consume, the factor's guard, counter resets, `last_login_at`, the session and cap eviction; note fields `method`, `evicted`) | user id | **A** |
 | `auth.mfa.failure` | Wrong second factor at sign-in, counted on the user (`L07`; note field `count`) | user id | **A** |

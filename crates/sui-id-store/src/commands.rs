@@ -1349,10 +1349,16 @@ static L01_SUCCESS: EventDescriptor = EventDescriptor {
     class: AuditClass::Atomic,
     actor: ActorRequirement::Required,
     target: TargetRequirement::Required,
-    attributes: &[AttributeSpec {
-        name: "evicted",
-        description: "older sessions revoked to keep the user within the concurrent-session cap",
-    }],
+    attributes: &[
+        AttributeSpec {
+            name: "evicted",
+            description: "older sessions revoked to keep the user within the concurrent-session cap",
+        },
+        AttributeSpec {
+            name: "source",
+            description: "slug of the user source that authenticated a directory sign-in (L03); absent for a local password (L01)",
+        },
+    ],
 };
 
 crate::declare_write_command! {
@@ -1404,6 +1410,154 @@ pub async fn sign_in_with_password(
         crate::repos::sessions::insert_within_tx(tx.tx(), &session)?;
         let evicted = evict_over_cap_within_tx(tx.tx(), user_id, now)?;
         Ok((evicted, L01Event::Success { user_id, evicted }))
+    })
+    .await
+}
+
+// ── L03 — directory sign-in (RFC 102 Part A) ────────────────────────────
+
+crate::declare_write_command! {
+    /// L03 — a successful sign-in through an external user source, for a
+    /// user with no second factor. It shares `auth.login.success` with L01
+    /// and adds the `source` attribute. The actor is the shadow user whose
+    /// directory password a user source just verified.
+    command L03 = "L03" {
+        system_principal: forbidden;
+        enum L03Event {
+            Success { user_id: UserId, source: String, evicted: i64 } => &L01_SUCCESS,
+        }
+    }
+}
+
+impl SealedCommandEvent<L03> for L03Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Success { user_id, .. } = self;
+        Some(AuditTarget(user_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Success {
+            source, evicted, ..
+        } = self;
+        AuditAttributes::builder()
+            .attribute("evicted", evicted.to_string())
+            .attribute("source", source.clone())
+            .build()
+    }
+}
+
+/// Run L03. In one transaction: upsert the shadow row (creating it with
+/// `user_id`, or refreshing the display fields of the row that already has
+/// that id), re-read the user as active and unlocked, reset the password
+/// counter and stale lock, set `last_login_at`, insert the session and evict
+/// over-cap sessions. `session.user_id` must be `user_id`. Any refusal rolls
+/// back with `NotFound`.
+pub async fn sign_in_from_directory(
+    db: &crate::Database,
+    shadow: crate::repos::users::LdapShadowData,
+    source_slug: String,
+    session: crate::models::SessionRow,
+) -> StoreResult<crate::registry::Audited<i64>> {
+    let user_id = session.user_id;
+    let context = AuthorizedCommandContext::<L03>::for_authorized_actor(user_id, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, L03>| {
+        let now = session.created_at;
+        crate::repos::users::upsert_ldap_shadow_within_tx(tx.tx(), &shadow, Some(user_id), now)?;
+        crate::repos::users::record_password_login_within_tx(tx.tx(), user_id, now)?;
+        crate::repos::sessions::insert_within_tx(tx.tx(), &session)?;
+        let evicted = evict_over_cap_within_tx(tx.tx(), user_id, now)?;
+        Ok((
+            evicted,
+            L03Event::Success {
+                user_id,
+                source: source_slug,
+                evicted,
+            },
+        ))
+    })
+    .await
+}
+
+// ── L04 — federated sign-in (RFC 102 Part A) ────────────────────────────
+
+static L04_SUCCESS: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::AuthFederationSigninSuccess,
+    name: "auth.federation.signin.success",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[
+        AttributeSpec {
+            name: "provider",
+            description: "slug of the upstream federation provider",
+        },
+        AttributeSpec {
+            name: "evicted",
+            description: "older sessions revoked to keep the user within the concurrent-session cap",
+        },
+    ],
+};
+
+crate::declare_write_command! {
+    /// L04 — a successful federated sign-in (the shipped path), for a user
+    /// with no second factor. The actor is the user linked to the upstream
+    /// identity the callback just verified.
+    command L04 = "L04" {
+        system_principal: forbidden;
+        enum L04Event {
+            Success { user_id: UserId, provider: String, evicted: i64 } => &L04_SUCCESS,
+        }
+    }
+}
+
+impl SealedCommandEvent<L04> for L04Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Success { user_id, .. } = self;
+        Some(AuditTarget(user_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Success {
+            provider, evicted, ..
+        } = self;
+        AuditAttributes::builder()
+            .attribute("provider", provider.clone())
+            .attribute("evicted", evicted.to_string())
+            .build()
+    }
+}
+
+/// Run L04. In one transaction: re-read the user as active (not disabled,
+/// not deleted), set `last_login_at`, insert the session and evict over-cap
+/// sessions. A user no longer active rolls back with `NotFound`.
+pub async fn sign_in_federated(
+    db: &crate::Database,
+    provider_slug: String,
+    session: crate::models::SessionRow,
+) -> StoreResult<crate::registry::Audited<i64>> {
+    let user_id = session.user_id;
+    let context = AuthorizedCommandContext::<L04>::for_authorized_actor(user_id, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, L04>| {
+        let now = session.created_at;
+        crate::repos::users::record_federated_login_within_tx(tx.tx(), user_id, now)?;
+        crate::repos::sessions::insert_within_tx(tx.tx(), &session)?;
+        let evicted = evict_over_cap_within_tx(tx.tx(), user_id, now)?;
+        Ok((
+            evicted,
+            L04Event::Success {
+                user_id,
+                provider: provider_slug,
+                evicted,
+            },
+        ))
     })
     .await
 }

@@ -289,7 +289,7 @@ id = "U24"
 class = "P"
 status = "implemented"  # implemented | target-absent | target-legacy
 owner = "Successful-login bookkeeping"
-rationale = "timestamp/counter maintenance is not a separate privileged command; since RFC 102 stage 2 the no-MFA password sign-in does it inside L01, and the remaining callers (the MFA branch's `clear_lockout`, the directory and federation paths' `set_last_login`) move into L02-L04"
+rationale = "timestamp/counter maintenance is not a separate privileged command; since RFC 102 stage 2 the no-MFA password sign-in does it inside L01, and since stages 3 and 4 the second-factor, directory and federated sign-ins do it inside L02, L03 and L04"
 mutation_surface = "`users::clear_lockout`, `set_last_login`"
 files = ["crates/sui-id-store/src/repos/users.rs"]
 test_id = "`p_u24_login_bookkeeping`"
@@ -313,7 +313,7 @@ id = "U26"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
 owner = "LDAP shadow-user upsert"
-rationale = "`auth.user_source.shadow_upserted`"
+rationale = "corrected 2026-09-17 (RFC 102 stage 4): no command or event of its own ever existed (`users::upsert_ldap_shadow` was a raw function); L03 subsumes it for the no-MFA directory sign-in, and the MFA branch and federation provisioning still call the raw upsert"
 mutation_surface = "`users::upsert_ldap_shadow`"
 files = ["crates/sui-id-store/src/repos/users.rs"]
 test_id = "`a_u26_ldap_shadow`"
@@ -361,7 +361,7 @@ id = "U30"
 class = "P"
 status = "implemented"  # implemented | target-absent | target-legacy
 owner = "Session creation"
-rationale = "high-frequency authentication protocol state; since RFC 102 stage 2 the no-MFA password sign-in inserts its session inside L01, and the remaining raw callers (second factor, directory, federation) move into L02-L04"
+rationale = "high-frequency authentication protocol state; since RFC 102 stage 2 the no-MFA password sign-in inserts its session inside L01, and since stages 3 and 4 the second-factor, directory and federated sign-ins insert theirs inside L02, L03 and L04"
 mutation_surface = "`sessions::insert`"
 files = ["crates/sui-id-store/src/repos/sessions.rs"]
 test_id = "`p_u30_session_insert`"
@@ -461,6 +461,30 @@ rationale = "closed result branches: `auth.mfa.failure` below the threshold or `
 mutation_surface = "`users::increment_mfa_failure_within_tx`, `login_pending_mfa::delete_all_for_user_within_tx`, `users.locked_until`"
 files = ["crates/sui-id-store/src/repos/users.rs", "crates/sui-id-store/src/repos/login_pending_mfa.rs"]
 test_id = "`r102_l07_*` (e2e)"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "L03"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Directory sign-in (RFC 102 A1, A2; subsumes U26)"
+rationale = "one `auth.login.success` with `source`, the shadow upsert, the user re-read, counter and stale-lock reset, `last_login_at`, the session and cap eviction"
+mutation_surface = "`users::upsert_ldap_shadow_within_tx`, `users::record_password_login_within_tx`, `sessions::insert_within_tx`, `sessions::revoke_within_tx`"
+files = ["crates/sui-id-store/src/repos/users.rs", "crates/sui-id-store/src/repos/sessions.rs"]
+test_id = "`r102_l03_*` (e2e)"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "L04"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Federated sign-in, shipped path (RFC 102 A1, A2)"
+rationale = "one `auth.federation.signin.success` with `provider`, the user re-read, `last_login_at`, the session and cap eviction; RFC 096's F01 and F03 succeed it"
+mutation_surface = "`users::record_federated_login_within_tx`, `sessions::insert_within_tx`, `sessions::revoke_within_tx`"
+files = ["crates/sui-id-store/src/repos/users.rs", "crates/sui-id-store/src/repos/sessions.rs"]
+test_id = "`r102_l04_*` (e2e)"
 event = ""    # Stage 1: typed event-kind enum variant, not yet added
 descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
 

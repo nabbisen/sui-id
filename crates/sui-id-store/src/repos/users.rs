@@ -764,74 +764,96 @@ pub async fn upsert_ldap_shadow(
     data: LdapShadowData,
     now: chrono::DateTime<chrono::Utc>,
 ) -> StoreResult<UserId> {
-    let eid = data.external_stable_id.clone();
-    let source_str = crate::models::UserSource::Ldap.as_str().to_owned();
+    db.with_conn(move |conn| upsert_ldap_shadow_within_tx(conn, &data, None, now))
+        .await
+}
 
-    // Check whether a shadow already exists for this external stable id.
-    match find_by_external_stable_id(
-        db,
-        &crate::models::UserSource::Ldap,
-        &data.external_stable_id,
-    )
-    .await
-    {
-        Ok(existing) => {
-            // Update display fields if anything changed upstream.
-            let need_update = existing.display_name != data.display_name
-                || existing.email.as_deref() != data.email.as_deref();
-            if need_update {
-                let uid_str = existing.id.to_string();
-                let display_name = data.display_name.clone();
-                let email = data.email.clone();
-                let email_norm = email.as_deref().map(sui_id_shared::normalize_email);
-                db.with_conn(move |conn| {
-                    conn.execute(
-                        "UPDATE users SET display_name = ?1, email = ?2, \
-                         email_normalized = ?3, updated_at = ?4 WHERE id = ?5",
-                        rusqlite::params![display_name, email, email_norm, now, uid_str,],
-                    )?;
-                    Ok(())
-                })
-                .await?;
+/// [`upsert_ldap_shadow`] on the caller's transaction (RFC 102 L03, which
+/// subsumes the manifest's U26).
+///
+/// `expected_id`, when given, is the id the caller resolved before the
+/// transaction (the sign-in's actor). An existing shadow row with another id
+/// is `NotFound`, and a new row is created with exactly that id.
+pub fn upsert_ldap_shadow_within_tx(
+    conn: &rusqlite::Connection,
+    data: &LdapShadowData,
+    expected_id: Option<UserId>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> StoreResult<UserId> {
+    use rusqlite::OptionalExtension;
+    let source_str = crate::models::UserSource::Ldap.as_str();
+    let existing: Option<(String, Option<String>, Option<String>)> = conn
+        .query_row(
+            "SELECT id, display_name, email FROM users \
+             WHERE source = ?1 AND external_stable_id = ?2",
+            rusqlite::params![source_str, data.external_stable_id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .optional()?;
+    match existing {
+        Some((id_str, display_name, email)) => {
+            let id: UserId = id_str
+                .parse()
+                .map_err(|_| StoreError::Integrity(format!("malformed user id {id_str:?}")))?;
+            if expected_id.is_some_and(|expected| expected != id) {
+                return Err(StoreError::NotFound);
             }
-            Ok(existing.id)
-        }
-        Err(StoreError::NotFound) => {
-            // First sign-in: create a password-less shadow row.
-            let new_id = UserId::new();
-            let new_id_str = new_id.to_string();
-            let username = data.username.clone();
-            let display_name = data.display_name.clone();
-            let email = data.email.clone();
-            let email_norm = email.as_deref().map(sui_id_shared::normalize_email);
-            let user_uuid = uuid::Uuid::new_v4().to_string();
-            db.with_conn(move |conn| {
+            // Update display fields if anything changed upstream.
+            if display_name != data.display_name || email.as_deref() != data.email.as_deref() {
+                let email_norm = data.email.as_deref().map(sui_id_shared::normalize_email);
                 conn.execute(
-                    "INSERT INTO users \
-                     (id, username, display_name, is_admin, role, is_disabled, is_deleted, \
-                      user_uuid, failed_login_count, email, email_normalized, \
-                      source, external_stable_id, created_at, updated_at) \
-                     VALUES (?1, ?2, ?3, 0, 'user', 0, 0, ?4, 0, ?5, ?6, ?7, ?8, ?9, ?10)",
-                    rusqlite::params![
-                        new_id_str,
-                        username,
-                        display_name,
-                        user_uuid,
-                        email,
-                        email_norm,
-                        source_str,
-                        eid,
-                        now,
-                        now,
-                    ],
+                    "UPDATE users SET display_name = ?1, email = ?2, \
+                     email_normalized = ?3, updated_at = ?4 WHERE id = ?5",
+                    rusqlite::params![data.display_name, data.email, email_norm, now, id_str],
                 )?;
-                Ok(())
-            })
-            .await?;
+            }
+            Ok(id)
+        }
+        None => {
+            // First sign-in: create a password-less shadow row.
+            let new_id = expected_id.unwrap_or_default();
+            let email_norm = data.email.as_deref().map(sui_id_shared::normalize_email);
+            conn.execute(
+                "INSERT INTO users \
+                 (id, username, display_name, is_admin, role, is_disabled, is_deleted, \
+                  user_uuid, failed_login_count, email, email_normalized, \
+                  source, external_stable_id, created_at, updated_at) \
+                 VALUES (?1, ?2, ?3, 0, 'user', 0, 0, ?4, 0, ?5, ?6, ?7, ?8, ?9, ?10)",
+                rusqlite::params![
+                    new_id.to_string(),
+                    data.username,
+                    data.display_name,
+                    uuid::Uuid::new_v4().to_string(),
+                    data.email,
+                    email_norm,
+                    source_str,
+                    data.external_stable_id,
+                    now,
+                    now,
+                ],
+            )?;
             Ok(new_id)
         }
-        Err(e) => Err(e),
     }
+}
+
+/// RFC 102 L04: the bookkeeping of a federated sign-in, on the caller's
+/// transaction. Re-reads the user as active (not disabled, not deleted;
+/// otherwise `NotFound`, nothing written) and sets `last_login_at`.
+pub fn record_federated_login_within_tx(
+    conn: &rusqlite::Connection,
+    id: UserId,
+    now: chrono::DateTime<chrono::Utc>,
+) -> StoreResult<()> {
+    let n = conn.execute(
+        "UPDATE users SET last_login_at = ?1 \
+         WHERE id = ?2 AND is_disabled = 0 AND is_deleted = 0",
+        rusqlite::params![now, id.to_string()],
+    )?;
+    if n == 0 {
+        return Err(StoreError::NotFound);
+    }
+    Ok(())
 }
 
 // ── RFC 005: shadow row tests ─────────────────────────────────────────────────

@@ -571,7 +571,7 @@ pub async fn federated_callback(
     };
 
     // ── P4: enforce local MFA ─────────────────────────────────────────────────
-    complete_federated_signin(app, jar, user_id, &provider.slug, &id_claims.sub, now).await
+    complete_federated_signin(app, jar, user_id, &provider.slug, now).await
 }
 
 // ── GET /auth/federated/link — link-only approval ────────────────────────────
@@ -595,7 +595,6 @@ async fn complete_federated_signin(
     jar: CookieJar,
     user_id: UserId,
     provider_slug: &str,
-    upstream_sub: &str,
     now: chrono::DateTime<chrono::Utc>,
 ) -> Result<Response, HttpError> {
     // Refuse an inactive user before any pending-MFA or session row. The
@@ -676,23 +675,34 @@ async fn complete_federated_signin(
         last_step_up_at: None,
         last_used_at: None,
     };
-    sui_id_store::repos::sessions::insert(&app.db, &session_row)
-        .await
-        .map_err(|e| HttpError::html(CoreError::from(e)))?;
-    let _ = sui_id_store::repos::users::set_last_login(&app.db, &user_id, now).await;
-
-    let _ = sui_id_store::repos::audit::append(
+    // RFC 102 L04: `last_login_at`, the session, eviction and
+    // `auth.federation.signin.success` commit together, after an
+    // in-transaction re-read of the user. A failure is never counted (A9)
+    // and gets the uniform redirect; the cause is logged.
+    if let Err(e) = sui_id_store::commands::sign_in_federated(
         &app.db,
-        &AuditLogRow {
-            at: now,
-            actor: Some(user_id),
-            action: sui_id_store::repos::federation_provider::AUDIT_SIGNIN_SUCCESS.into(),
-            target: Some(user_id.to_string()),
-            result: "ok".into(),
-            note: Some(format!("provider={provider_slug} sub={upstream_sub}")),
-        },
+        provider_slug.to_owned(),
+        session_row.clone(),
     )
-    .await;
+    .await
+    {
+        if matches!(e, sui_id_store::StoreError::NotFound) {
+            tracing::warn!(
+                provider = %provider_slug,
+                user_id = %user_id,
+                "federation: user no longer active at commit; sign-in refused"
+            );
+        } else {
+            tracing::error!(
+                provider = %provider_slug,
+                user_id = %user_id,
+                error = %e,
+                detail = ?e,
+                "federation: sign-in transaction failed; sign-in refused"
+            );
+        }
+        return signin_failed(jar);
+    }
 
     // Metrics: record as a successful federated sign-in.
     if let Some(m) = app.metric() {

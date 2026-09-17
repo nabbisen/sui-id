@@ -53,6 +53,7 @@ mod password_change;
 mod r102_stage1;
 mod r102_stage2;
 mod r102_stage3;
+mod r102_stage4;
 mod r103_reset_mfa;
 mod r103_stage1;
 mod r103_stage2;

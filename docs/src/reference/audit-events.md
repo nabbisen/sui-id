@@ -107,9 +107,11 @@ verifies the chain tail on every load and shows a status banner:
 
 ## External user-source events (RFC 005)
 
-| Event name | Label | Description |
-|---|---|---|
-| `auth.user_source.matched` | External user source matched | The login cascade resolved the user via an LDAP or other external user source. |
+A sign-in through an external user source (LDAP) records `auth.login.success`,
+with the source's slug in the `source` note field. A user with a second factor
+completes with `auth.mfa.success`. Audit logs written before this change may
+also hold rows of an older, separate user-source match event, which is no
+longer written.
 
 ## Self-service MFA and passkey events
 

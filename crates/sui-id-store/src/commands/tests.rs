@@ -51,6 +51,7 @@ fn all_descriptors() -> Vec<&'static EventDescriptor> {
         &MFA_FACTOR_ADDED,
         &L01_SUCCESS,
         &L02_SUCCESS,
+        &L04_SUCCESS,
         &L07_FAILURE,
         &L07_LOCKOUT,
     ]
@@ -149,6 +150,8 @@ fn actor_requirement_agrees_with_system_principal_for_every_command() {
     check("U15", false, &[&MFA_FACTOR_ADDED]);
     check("L01", false, &[&L01_SUCCESS]);
     check("L02", false, &[&L02_SUCCESS]);
+    check("L03", false, &[&L01_SUCCESS]);
+    check("L04", false, &[&L04_SUCCESS]);
     check("L07", false, &[&L07_FAILURE, &L07_LOCKOUT]);
 }
 
@@ -267,6 +270,7 @@ fn event_names_match_command_inventory() {
         "auth.mfa.factor_added",
         "auth.login.success",
         "auth.mfa.success",
+        "auth.federation.signin.success",
         "auth.mfa.failure",
         "auth.mfa.lockout",
     ];

@@ -18,7 +18,6 @@ use std::str::FromStr;
 use sui_id_core::errors::CoreError;
 use sui_id_core::session;
 use sui_id_shared::ids::SessionId;
-use sui_id_store::repos::users;
 use sui_id_web::{Flash, FlashKind, LoginContext, render_login};
 
 #[derive(Debug, Deserialize)]
@@ -179,14 +178,7 @@ pub async fn try_login_with_cascade(
                         email: record.email.clone(),
                         external_stable_id: record.stable_id.clone(),
                     };
-                    let user_id = sui_id_store::repos::users::upsert_ldap_shadow(
-                        &app.db,
-                        shadow_data,
-                        app.clock.now(),
-                    )
-                    .await
-                    .map_err(CoreError::from)?;
-                    directory_session(app, user_id, &record, audience).await
+                    directory_session(app, None, shadow_data, &record, audience).await
                 }
                 CascadeOutcome::NotFound => {
                     // All external sources returned None or errored.
@@ -244,20 +236,15 @@ async fn directory_sign_in(
     for source in &app.user_sources {
         match source.authenticate_stable_id(stable_id, password).await {
             Ok(Some(record)) if record.stable_id == stable_id => {
-                // Refresh the display fields through today's upsert; the
-                // existing row keeps its username.
-                sui_id_store::repos::users::upsert_ldap_shadow(
-                    &app.db,
-                    sui_id_store::repos::users::LdapShadowData {
-                        username: user.username.clone(),
-                        display_name: record.display_name.clone(),
-                        email: record.email.clone(),
-                        external_stable_id: record.stable_id.clone(),
-                    },
-                    app.clock.now(),
-                )
-                .await?;
-                return directory_session(app, user.id, &record, audience).await;
+                // The upsert refreshes the display fields; the existing row
+                // keeps its username.
+                let shadow = sui_id_store::repos::users::LdapShadowData {
+                    username: user.username.clone(),
+                    display_name: record.display_name.clone(),
+                    email: record.email.clone(),
+                    external_stable_id: record.stable_id.clone(),
+                };
+                return directory_session(app, Some(user.id), shadow, &record, audience).await;
             }
             Ok(Some(_)) => {
                 // The source authenticated a different identity for this
@@ -294,64 +281,75 @@ async fn directory_sign_in(
     Err(CoreError::InvalidCredentials)
 }
 
-/// The end of a directory sign-in (first or returning): the audit row, then
-/// the MFA branch exactly as `login_with_mfa` takes it, or today's session
-/// creation. RFC 102 L03 converts this later.
+/// The end of a directory sign-in (first or returning), after a user source
+/// verified the password. `known_user` is the shadow row a returning user
+/// was found by; for a first sign-in the row is looked up by stable id.
+///
+/// - **MFA branch**, exactly as `login_with_mfa` takes it: A7, then the
+///   shadow upsert commits, then the pending-MFA row and the best-effort
+///   `auth.login.password_ok_mfa_required` row. Those three are what is
+///   written before the second factor; L02 commits the rest.
+/// - **No MFA:** A7 from the role (a new shadow user is always `user`),
+///   before any write; then **L03** commits the upsert, the bookkeeping,
+///   the session, eviction and `auth.login.success` together (RFC 102).
 async fn directory_session(
     app: &crate::handlers::AppState,
-    user_id: sui_id_shared::ids::UserId,
+    known_user: Option<sui_id_shared::ids::UserId>,
+    shadow: sui_id_store::repos::users::LdapShadowData,
     record: &sui_id_store::user_source::ExternalUserRecord,
     audience: sui_id_core::session::SessionAudience,
 ) -> sui_id_core::errors::CoreResult<sui_id_core::session::LoginOutcome> {
     use sui_id_core::errors::CoreError;
+    use sui_id_core::session::{LoginOutcome, SessionAudience};
 
-    let _ = sui_id_store::repos::audit::append(
-        &app.db,
-        &sui_id_store::models::AuditLogRow {
-            at: app.clock.now(),
-            actor: Some(user_id),
-            action: "auth.user_source.matched".into(),
-            target: Some(user_id.to_string()),
-            result: "ok".into(),
-            note: Some(format!(
-                "source={} stable_id={}",
-                record.source_slug, record.stable_id
-            )),
+    let existing = match known_user {
+        Some(id) => Some(sui_id_store::repos::users::get(&app.db, id).await?),
+        None => match sui_id_store::repos::users::find_by_external_stable_id(
+            &app.db,
+            &sui_id_store::models::UserSource::Ldap,
+            &record.stable_id,
+        )
+        .await
+        {
+            Ok(user) => Some(user),
+            Err(sui_id_store::StoreError::NotFound) => None,
+            Err(e) => return Err(e.into()),
         },
-    )
-    .await;
+    };
+    // RFC 102 A7, before any write.
+    let can_read_admin = existing
+        .as_ref()
+        .is_some_and(|user| user.role.can_read_admin());
+    if audience == SessionAudience::AdminReaders && !can_read_admin {
+        return Ok(LoginOutcome::AudienceRefused);
+    }
 
     // A factor enrolled through RFC 102 B7's re-bind must be asked for here;
-    // skipping it would be an MFA bypass. A7 first: a destination the user
-    // cannot read gets no pending row.
-    if sui_id_core::mfa::is_mfa_enabled(&app.db, user_id).await? {
-        let user = sui_id_store::repos::users::get(&app.db, user_id).await?;
-        if audience == sui_id_core::session::SessionAudience::AdminReaders
-            && !user.role.can_read_admin()
-        {
-            return Ok(sui_id_core::session::LoginOutcome::AudienceRefused);
-        }
-        let pending = sui_id_core::mfa::issue_pending_mfa(&app.db, &app.clock, user_id).await?;
+    // skipping it would be an MFA bypass.
+    if let Some(user) = &existing
+        && sui_id_core::mfa::is_mfa_enabled(&app.db, user.id).await?
+    {
+        sui_id_store::repos::users::upsert_ldap_shadow(&app.db, shadow, app.clock.now()).await?;
+        let pending = sui_id_core::mfa::issue_pending_mfa(&app.db, &app.clock, user.id).await?;
         let _ = sui_id_store::repos::audit::append(
             &app.db,
             &sui_id_store::models::AuditLogRow {
                 at: app.clock.now(),
-                actor: Some(user_id),
+                actor: Some(user.id),
                 action: "auth.login.password_ok_mfa_required".into(),
-                target: Some(user_id.to_string()),
+                target: Some(user.id.to_string()),
                 result: "ok".into(),
                 note: None,
             },
         )
         .await;
-        return Ok(sui_id_core::session::LoginOutcome::MfaRequired { pending });
+        return Ok(LoginOutcome::MfaRequired { pending });
     }
 
-    // Create a session for the shadow user.
     let now = app.clock.now();
     let session_row = sui_id_store::models::SessionRow {
         id: sui_id_shared::ids::SessionId::new(),
-        user_id,
+        user_id: existing.as_ref().map(|u| u.id).unwrap_or_default(),
         expires_at: now + chrono::Duration::hours(24),
         created_at: now,
         revoked_at: None,
@@ -359,18 +357,22 @@ async fn directory_session(
         last_step_up_at: None,
         last_used_at: None,
     };
-    sui_id_store::repos::sessions::insert(&app.db, &session_row)
-        .await
-        .map_err(CoreError::from)?;
-    // Session cap enforcement happens on the next local login;
-    // omitted here (the cap function is internal to sui-id-core).
-    let _ = sui_id_store::repos::users::set_last_login(&app.db, &user_id, now).await;
-    // A correct directory password ends a run of counted wrong ones, as a
-    // local sign-in does.
-    let _ = sui_id_store::repos::users::clear_lockout(&app.db, user_id).await;
-    Ok(sui_id_core::session::LoginOutcome::SessionEstablished(
-        session_row,
-    ))
+    // RFC 102 L03. A failure is never counted (A9); `login_post` logs it and
+    // returns the uniform 401. A lost re-read (the user was disabled,
+    // deleted or locked meanwhile, or another sign-in created the row
+    // first) is an ordinary refusal.
+    sui_id_store::commands::sign_in_from_directory(
+        &app.db,
+        shadow,
+        record.source_slug.clone(),
+        session_row.clone(),
+    )
+    .await
+    .map_err(|e| match e {
+        sui_id_store::StoreError::NotFound => CoreError::InvalidCredentials,
+        other => other.into(),
+    })?;
+    Ok(LoginOutcome::SessionEstablished(session_row))
 }
 
 /// Resolve a display_username for a new shadow row.
@@ -449,26 +451,10 @@ pub async fn login_post(
                 m.signin(sui_id_store::metrics::signin_result::SUCCESS);
             }
 
-            // The admin login page also serves as the authentication gate
-            // for the OIDC authorize flow (next = "/oauth2/authorize?...").
-            // Any authenticated user — admin or not — may complete that
-            // flow. But the admin panel itself requires admin or auditor
-            // role; check here so a non-privileged user gets a clear
-            // message rather than a 403 page after being redirected.
-            //
-            // A local password sign-in already refused this before L01
-            // (`AudienceRefused` above). The directory cascade has not been
-            // converted yet (RFC 102 L03): its session row is already
-            // written here, so if the role check fails we simply don't hand
-            // out the cookie and the row expires unused.
-            if audience == session::SessionAudience::AdminReaders {
-                let user = users::get(&app.db, row.user_id)
-                    .await
-                    .map_err(|e| HttpError::html(CoreError::from(e)))?;
-                if !user.role.can_read_admin() {
-                    return Ok(no_admin_access(form.next));
-                }
-            }
+            // The admin panel needs a role that can read it. Every sign-in
+            // path (L01, L02's password step, L03) refuses a non-reader
+            // bound for it before writing anything (`AudienceRefused`
+            // above), so no session reaches here that nobody will hold.
 
             let cookie = session_cookie(row.id.to_string(), app.config.server.cookie_secure);
             let jar = jar.add(cookie);

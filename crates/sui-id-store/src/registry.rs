@@ -204,6 +204,8 @@ pub enum AuditEventKind {
     AuthMfaFactorAdded,
     /// `auth.login.success` — L01, the password sign-in (RFC 102 Part A).
     AuthLoginSuccess,
+    /// `auth.federation.signin.success` — L04, the federated sign-in.
+    AuthFederationSigninSuccess,
     /// `auth.mfa.success` — L02, the second-factor sign-in (RFC 102 Part A).
     AuthMfaSuccess,
     /// `auth.mfa.failure` — L07, below-threshold branch.
