@@ -104,20 +104,50 @@ session row.
 
 ## Stage 7 — dispatched 2026-09-17: B4, the action carries its authorization
 
+### Ruling on the stop of 2026-09-17 — read this first
+
+The implementation role stopped and measured correctly.
+- **K01 has no production caller.** The web rotation (`signing_keys_rotate` →
+  `sui_id_core::admin::rotate_signing_key`) runs the raw
+  `signing_keys::rotate_atomic`, then a best-effort `audit_with_note`
+  (`signing_key.rotate`). That audit row **does** record the admin as actor, with
+  the reason, but it is not atomic.
+- **The records are wrong.** The matrix (class A) and the manifest (`implemented`)
+  describe K01 as wired, and it is not. The earlier premise, "the administrator
+  is not recorded", was the architect's error.
+
+**Ruling: option A, with `reason` kept.**
+1. **Convert the web rotation to K01 in this stage.**
+   `sui_id_core::admin::rotate_signing_key` calls `commands::rotate_signing_key`
+   with the admin actor and the session ID. `rotate_atomic` and `audit_with_note`
+   leave that path.
+   - The JWKS cache rebuild stays after commit, as today, and so does its
+     warn-on-failure.
+   - If `rotate_atomic` has no other caller afterwards, make it crate-private or
+     remove it; say which.
+2. **K01's declaration.** It becomes `system_principal: forbidden` with actor
+   `Required`, and gains B4 like the other four.
+3. **`reason`.** K01's descriptor gains an optional, bounded `reason` attribute,
+   so the atomic row keeps what production records today. Nothing already
+   recorded is dropped.
+4. **Correct the matrix and manifest rows** to what is actually wired after this
+   commit. Tick the RFC 094 migration checklist item "Convert `K01` signing-key
+   rotation to the Class-A runner" with the commit.
+5. **One signature pattern for all five commands.** A session-bound entry takes
+   `SessionId` and computes `fresh` or `not_required`. A system entry takes no
+   session and can only produce `not_applicable`. Today only U07 has a system
+   entry (the CLI).
+6. **The stage 6 clock follow-up** is folded in, as stated below.
+
+Everything else in this stage stands.
+
+
 **Baseline.** The commit that adds this section, or later.
 
-**Found while scoping this stage — fix it here.** K01, signing-key rotation, is
-declared `system_principal: permitted` with the comment "an ops/CLI/scheduled
-trigger". Its only caller, though, is the web handler `signing_keys_rotate`,
-which is gated by an admin session and step-up. `commands::rotate_signing_key`
-builds its context with `for_system_actor(None)`. **So the administrator who
-rotated a signing key is not recorded as the actor.** No CLI or scheduled K01
-caller exists. Therefore:
-- K01 becomes `system_principal: forbidden` with actor `Required`;
-- `rotate_signing_key` takes the admin actor and uses `for_authorized_actor`;
-- the matrix row and descriptor tests follow.
-
-If you find a non-web K01 caller, stop and report.
+~~**Found while scoping this stage — fix it here.** K01 … "the administrator who
+rotated a signing key is not recorded as the actor."~~ **Withdrawn 2026-09-17: the
+premise was wrong.** See *Ruling on the stop* below. The architect read K01's
+context construction and assumed K01 was the live path. It is not.
 
 **Scope — B4 on the sealed gated commands:**
 
