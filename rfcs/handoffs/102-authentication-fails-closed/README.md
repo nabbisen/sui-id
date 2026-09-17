@@ -102,7 +102,75 @@ Carried into stage 7: L05 and L06 read `chrono::Utc::now()` rather than the
 injected `SharedClock`, which the sign-in commands L01–L04 use through their
 session row.
 
-## Stage 7 — dispatched 2026-09-17: B4, the action carries its authorization
+## Stage 7 — landed `042b6dd`, 2026-09-17
+
+Reviewed, and committed as one commit. **The code of Part B is complete.**
+Accepted:
+- **The Class-A runner enforces required attributes,** in general.
+- **A session ended between gate and commit** is also `StepUpRequired`.
+- **U07 has two event variants,** web and CLI, instead of a flag.
+- **The K01 conversion** follows the ruling, with `reason` kept.
+
+Carried into stage 8: the five gated commands read `chrono::Utc::now()` for
+freshness, while L01–L07 take the caller's clock. One rule for every command is
+cleaner. The lapse-after-gate test can use a clock that advances between reads.
+
+## Stage 8 — dispatched 2026-09-17: documentation, consistency, closure evidence
+
+**Baseline.** The commit that adds this section, or later.
+
+**8a — one clock for every command.** U02, U03, U04, U07 and K01 take `now` from
+the caller's `SharedClock`, as L01–L07 do. Rewrite the lapse-after-gate test with
+a clock that advances between the gate's read and the command's read, for
+example a mock clock stepped by the test between two requests, or a stepping
+clock. Say which.
+
+**8b — documentation** (RFC 102 step 8, under RFC 098's rules).
+- **`ci/audit-coverage-matrix.md`.** Every event this RFC touched states its final
+  class and attributes. Check each row against its descriptor, and report any
+  mismatch.
+- **`docs/threat-model.md`.** State the resulting properties; the RFC's security
+  considerations are the decision, and this document states the property
+  (rule 7). The document carries a staleness banner owned by RFC 097: add a dated
+  entry under that banner for the properties below, and do not rewrite the
+  document.
+  - **Fail closed.** A sign-in or step-up that cannot be audited does not take
+    effect.
+  - **Step-up failures.** They are counted per session, with revocation at 5, and
+    throttled per address.
+  - **Second-factor failures.** They are counted per user, with lockout at 5.
+  - **Factor additions.** They require proof (B7).
+  - **Gated actions.** They record their authorization (B4), for the sealed
+    commands only. The eight B-F8 actions remain best-effort until RFC 094
+    converts them; name them.
+  - **Stated residuals.** A thief holding the session and the password can enrol
+    a factor, and availability is lost during an audit outage.
+- **`docs/src/guides/operators.md`.** Describe what an operator sees: the
+  sign-in and step-up failure modes during an audit outage, the new lockout
+  events to alert on, and how to read `step_up=` on a gated event. Point to the
+  threat model for claims.
+- **`docs/src/guides/dangerous-operations.md`.** Update the step-up paragraph
+  added by RFC 098 dispatch 15 ("step-up completion is not recorded"). It is
+  recorded now, and gated events carry their evidence.
+
+**8c — closure evidence.** List each RFC 102 closure prerequisite, with the
+commit and the test that meets it:
+- **every session path atomic:** L01–L04;
+- **raw inserts and touches gone:** A4 and B6;
+- **injected failure on every path:** list the tests;
+- **step-up throttled and counted:** L06 and the bucket;
+- **gated evidence:** B4;
+- **the threat model states it:** 8b.
+
+Mark anything unmet as unmet. Changing no code beyond 8a.
+
+**Evidence.**
+- 8a: the test and one mutation (the gated commands back on `Utc::now()`),
+  shown caught.
+- 8b: G10a, G10b, G15 and G13 green.
+- 8c: the closure table in the review package.
+
+## Stage 7 — as dispatched
 
 ### Ruling on the stop of 2026-09-17 — read this first
 

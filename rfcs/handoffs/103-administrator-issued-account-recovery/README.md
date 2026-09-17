@@ -31,8 +31,7 @@ Reviewed, and committed as one commit. Accepted:
 - **The CLI resets any non-deleted user.** Filesystem authority already implies
   full control.
 
-**Stage 3 waits** for RFC 102 Part B to be Implemented, which needs RFC 102
-stages 6 and 7.
+**Stage 3 may now start.** RFC 102 Part B's code is complete at `042b6dd`: B7, L05 and L06, B3, and B4 with its `not_applicable` form. RFC 102 stage 8 (documentation) does not gate RFC 103's code. Its dispatch follows the order table above: migration, U37, the D3 invalidations and U10 `origin`.
 
 ## Stage 2 — as dispatched
 

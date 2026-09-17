@@ -479,7 +479,7 @@ Repeat for every inventory row:
 
 - [x] Convert `K01` signing-key rotation to the Class-A runner: retire old,
   insert/activate new, and append `signing_key.rotate` in one transaction.
-  **Done in RFC 102 stage 7:** the web rotation now calls
+  **Done in RFC 102 stage 7 (`042b6dd`):** the web rotation now calls
   `commands::rotate_signing_key` as the administrator.
 - [ ] Inject failure before append and before commit; assert the prior active
   key is unchanged and no event committed.
