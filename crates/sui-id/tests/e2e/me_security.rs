@@ -243,9 +243,10 @@ async fn me_security_cannot_revoke_someone_elses_session() {
         .await
         .expect("bob");
     let s_bob = sui_id_shared::ids::SessionId::new();
-    sui_id_store::repos::sessions::insert(
+    // RFC 102 A4: bob's session is created by signing in (L01).
+    sui_id_store::commands::sign_in_with_password(
         &state.db,
-        &sui_id_store::models::SessionRow {
+        sui_id_store::models::SessionRow {
             id: s_bob,
             user_id: bob.id,
             expires_at: chrono::Utc::now() + chrono::Duration::hours(12),
@@ -257,7 +258,7 @@ async fn me_security_cannot_revoke_someone_elses_session() {
         },
     )
     .await
-    .expect("insert bob session");
+    .expect("sign bob in");
     let s_bob = s_bob.to_string();
 
     // The admin tries to revoke bob's session through /me/security.

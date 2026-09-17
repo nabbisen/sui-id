@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use sui_id::{AppState, build_router};
 use sui_id_shared::ids::{SessionId, UserId};
 use sui_id_store::models::{CredentialRow, Role, SessionRow, UserRow, UserSource};
-use sui_id_store::repos::{credentials, sessions, users};
+use sui_id_store::repos::{credentials, users};
 use tower::ServiceExt;
 
 const BOB: &str = "bob";
@@ -160,7 +160,8 @@ async fn set_cap(state: &AppState, cap: i64) {
     .await;
 }
 
-/// An earlier live session for `user`, inserted directly.
+/// An earlier live session for `user`, created by an earlier sign-in (L01;
+/// RFC 102 A4 allows no raw insert outside the store).
 async fn old_session(state: &AppState, user: UserId) -> SessionId {
     let at = chrono::Utc::now() - chrono::Duration::minutes(30);
     let row = SessionRow {
@@ -173,7 +174,7 @@ async fn old_session(state: &AppState, user: UserId) -> SessionId {
         last_step_up_at: None,
         last_used_at: None,
     };
-    sessions::insert(&state.db, &row)
+    sui_id_store::commands::sign_in_with_password(&state.db, row.clone())
         .await
         .expect("old session");
     row.id
@@ -270,6 +271,10 @@ async fn r102_l01_append_failure_commits_nothing_and_looks_like_any_failure() {
     let state = test_app();
     complete_setup_and_login(&state).await;
     let bob = seed_user(&state, BOB, BOB_PASSWORD, Role::User).await;
+    set_cap(&state, 1).await;
+    // The earlier session is itself a sign-in, which resets the counter, so
+    // the counter and stale lock are set after it.
+    let earlier = old_session(&state, bob).await;
     let stale_lock = "2000-01-01T00:00:00Z";
     exec(
         &state,
@@ -279,8 +284,11 @@ async fn r102_l01_append_failure_commits_nothing_and_looks_like_any_failure() {
         ),
     )
     .await;
-    set_cap(&state, 1).await;
-    let earlier = old_session(&state, bob).await;
+    let last_login_before = text(
+        &state,
+        format!("SELECT last_login_at FROM users WHERE id = '{bob}'"),
+    )
+    .await;
     let events_before = scalar(&state, "SELECT COUNT(*) FROM audit_log".into()).await;
     let locked_before = text(
         &state,
@@ -353,13 +361,13 @@ async fn r102_l01_append_failure_commits_nothing_and_looks_like_any_failure() {
         "the stale lock is not cleared"
     );
     assert_eq!(
-        scalar(
+        text(
             &state,
-            format!("SELECT last_login_at IS NULL FROM users WHERE id = '{bob}'")
+            format!("SELECT last_login_at FROM users WHERE id = '{bob}'")
         )
         .await,
-        1,
-        "last_login_at not set"
+        last_login_before,
+        "last_login_at unchanged"
     );
 
     let logged = String::from_utf8_lossy(&captured.0.lock().expect("lock")).into_owned();

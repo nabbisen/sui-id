@@ -118,7 +118,7 @@ then because `setup.` was not in the hand-written list.
 
 | Event name | Operation | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
-| `auth.federation.signin.success` | Federated sign-in completed for a user with no second factor (command `L04`, with the in-transaction re-read, `last_login_at`, the session and cap eviction) | user id | user id | `provider=… evicted=…` | **A** |
+| `auth.federation.signin.success` | Federated sign-in completed for a user with no second factor (command `L04`, with the in-transaction re-read, `last_login_at`, the session and cap eviction) | user id | user id | `provider=… sub=… evicted=…` (`sub` truncated to 255 bytes) | **A** |
 | `auth.federation.signin.upstream_failure` | Upstream IdP returned an error | — | — | `provider=… error=…` | B |
 | `auth.federation.link.created` | Federation link created (first sign-in or explicit link) | user id | user id | `provider=… sub=…` | B |
 | `auth.federation.takeover_blocked` | Email collision rejected as potential takeover | — | — | `provider=… email=…` | A |
@@ -237,7 +237,7 @@ consecutive one, through L07.*
 | Event name | Trigger | Actor | Class |
 |---|---|---|---|
 | `auth.login.password_ok_mfa_required` | Password correct; MFA challenge pending | user id | B |
-| `auth.login.success` | Sign-in succeeded for a user with no second factor: a local password (command `L01`) or a user-source password (`L03`, which also upserts the shadow user), with the session, counter reset, `last_login_at` and cap eviction; note fields `evicted`, and `source` for L03 | user id | **A** |
+| `auth.login.success` | Sign-in succeeded for a user with no second factor: a local password (command `L01`) or a user-source password (`L03`, which also upserts the shadow user), with the session, counter reset, `last_login_at` and cap eviction; note fields `evicted`, and for L03 `source` and `stable_id` (truncated to 255 bytes) | user id | **A** |
 | `auth.login.failure` | Wrong password | — | B |
 | `auth.mfa.success` | Second-factor sign-in completed: TOTP, recovery code or passkey (command `L02`, with the pending-row consume, the factor's guard, counter resets, `last_login_at`, the session and cap eviction; note fields `method`, `evicted`) | user id | **A** |
 | `auth.mfa.failure` | Wrong second factor at sign-in, counted on the user (`L07`; note field `count`) | user id | **A** |

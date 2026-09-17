@@ -1,0 +1,25 @@
+error[E0425]: cannot find function `insert` in module `sessions`
+  --> tests/compile_fail/session_insert_is_private.rs:14:23
+   |
+14 |     let _ = sessions::insert(db, row).await;
+   |                       ^^^^^^ not found in `sessions`
+   |
+note: found an item that was configured out
+  --> src/repos/sessions.rs
+   |
+   | #[cfg(test)] // this crate's own tests only
+   |       ---- the item is gated here
+   | pub(crate) async fn insert(db: &Database, s: &SessionRow) -> StoreResult<()> {
+   |                     ^^^^^^
+
+error[E0603]: function `insert_within_tx` is private
+  --> tests/compile_fail/session_insert_is_private.rs:18:23
+   |
+18 |     let _ = sessions::insert_within_tx(conn, row);
+   |                       ^^^^^^^^^^^^^^^^ private function
+   |
+note: the function `insert_within_tx` is defined here
+  --> src/repos/sessions.rs
+   |
+   | pub(crate) fn insert_within_tx(conn: &rusqlite::Connection, s: &SessionRow) -> StoreResult<()> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

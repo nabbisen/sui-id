@@ -361,10 +361,10 @@ id = "U30"
 class = "P"
 status = "implemented"  # implemented | target-absent | target-legacy
 owner = "Session creation"
-rationale = "high-frequency authentication protocol state; since RFC 102 stage 2 the no-MFA password sign-in inserts its session inside L01, and since stages 3 and 4 the second-factor, directory and federated sign-ins insert theirs inside L02, L03 and L04"
-mutation_surface = "`sessions::insert`"
+rationale = "corrected 2026-09-17 (RFC 102 A4): the Protocol runner `commands::insert_session` is retired (it had no production caller). A session is created only inside L01-L04, each committing it with its Class-A event; `sessions::insert` and `insert_within_tx` are crate-private, and nothing outside `sui-id-store` can name them"
+mutation_surface = "`sessions::insert_within_tx` (crate-private; called by L01, L02, L03, L04)"
 files = ["crates/sui-id-store/src/repos/sessions.rs"]
-test_id = "`p_u30_session_insert`"
+test_id = "`compile_fail_session_insert_is_private` (trybuild)"
 event = ""    # Stage 1: typed event-kind enum variant, not yet added
 descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
 

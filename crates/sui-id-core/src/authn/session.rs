@@ -514,6 +514,8 @@ mod session_limit_tests {
         id
     }
 
+    /// A session created at `created_at` by signing in through L01 (RFC 102
+    /// A4: no raw session insert outside the store).
     async fn insert_session(
         db: &Database,
         user_id: UserId,
@@ -521,9 +523,9 @@ mod session_limit_tests {
         last_used_at: Option<chrono::DateTime<Utc>>,
     ) -> SessionId {
         let id = SessionId::new();
-        sessions::insert(
+        sui_id_store::commands::sign_in_with_password(
             db,
-            &SessionRow {
+            SessionRow {
                 id,
                 user_id,
                 expires_at: created_at + ChronoDuration::hours(24),
@@ -535,7 +537,7 @@ mod session_limit_tests {
             },
         )
         .await
-        .expect("insert");
+        .expect("sign in");
         id
     }
 
@@ -677,15 +679,16 @@ mod session_limit_tests {
     async fn sign_in_evicts_oldest_in_fifo_order() {
         let db = fresh_db();
         let uid = make_user(&db).await;
-        // Cap = 2; three older sessions with distinct created_at, then a
-        // sign-in: 4 active, so the 2 oldest (s1, s2) are revoked.
-        sui_id_store::repos::server_settings::update_max_concurrent_sessions(&db, 2, Utc::now())
-            .await
-            .expect("set cap");
+        // Three older sessions with distinct created_at, then cap = 2 and a
+        // sign-in: 4 active, so the 2 oldest (s1, s2) are revoked. The cap is
+        // set after the first three, which are themselves sign-ins.
         let base = Utc::now() - ChronoDuration::hours(1);
         let s1 = insert_session(&db, uid, base, None).await;
         let s2 = insert_session(&db, uid, base + ChronoDuration::seconds(1), None).await;
         let s3 = insert_session(&db, uid, base + ChronoDuration::seconds(2), None).await;
+        sui_id_store::repos::server_settings::update_max_concurrent_sessions(&db, 2, Utc::now())
+            .await
+            .expect("set cap");
         let s4 = sign_in(&db, uid).await;
         for (id, revoked, label) in [
             (s1, true, "s1 should be revoked"),

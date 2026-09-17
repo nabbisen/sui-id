@@ -96,3 +96,15 @@ fn compile_fail_admin_command_forbidden_cannot_use_system_actor() {
     let t = trybuild::TestCases::new();
     t.compile_fail("tests/compile_fail/admin_command_forbidden_cannot_use_system_actor.rs");
 }
+
+/// RFC 102 A4: no session without its audit event. Nothing outside
+/// `sui-id-store` can name the raw session insert: `insert_within_tx` is
+/// `pub(crate)` (E0603, private function), and `insert` is `pub(crate)` and
+/// compiled only for the store's own tests (E0425, configured out). Ungated:
+/// checked directly on rustc 1.95.0 and 1.98.1, where the pinned `.stderr`
+/// matches unchanged.
+#[test]
+fn compile_fail_session_insert_is_private() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compile_fail/session_insert_is_private.rs");
+}

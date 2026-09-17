@@ -577,9 +577,10 @@ mod tests {
         let uid = create_user(&db).await;
         let session_id = SessionId::new();
         let now = clock.now();
-        sessions::insert(
+        // RFC 102 A4: a session is created by signing in (L01).
+        sui_id_store::commands::sign_in_with_password(
             &db,
-            &SessionRow {
+            SessionRow {
                 id: session_id,
                 user_id: uid,
                 expires_at: now + Duration::hours(8),
@@ -591,7 +592,7 @@ mod tests {
             },
         )
         .await
-        .expect("insert");
+        .expect("sign in");
 
         touch_step_up(&db, &clock, session_id).await.expect("touch");
         let row = sessions::get(&db, session_id).await.expect("get");
@@ -602,9 +603,10 @@ mod tests {
         use sui_id_store::models::SessionRow;
         let session_id = SessionId::new();
         let now = clock.now();
-        sessions::insert(
+        // RFC 102 A4: a session is created by signing in (L01).
+        sui_id_store::commands::sign_in_with_password(
             db,
-            &SessionRow {
+            SessionRow {
                 id: session_id,
                 user_id: uid,
                 expires_at: now + Duration::hours(8),
@@ -616,7 +618,7 @@ mod tests {
             },
         )
         .await
-        .expect("insert session");
+        .expect("sign in");
         session_id
     }
 

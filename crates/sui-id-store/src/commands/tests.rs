@@ -287,3 +287,101 @@ fn event_names_match_command_inventory() {
 
 #[allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 mod runner;
+
+// ── RFC 102 stage 5a: bounded upstream identifiers on L03 and L04 ──────
+
+fn attribute_map(attributes: &AuditAttributes) -> Vec<(String, String)> {
+    attributes
+        .iter()
+        .map(|(k, v)| (k.to_owned(), v.to_owned()))
+        .collect()
+}
+
+#[test]
+fn l03_success_records_source_and_stable_id() {
+    let event = L03Event::Success {
+        user_id: UserId::new(),
+        source: "corp".into(),
+        stable_id: "uid=bob,ou=people,dc=example,dc=com".into(),
+        evicted: 0,
+    };
+    assert_eq!(L03::descriptor(&event).name, "auth.login.success");
+    assert_eq!(
+        attribute_map(&event.attributes().expect("attributes")),
+        vec![
+            ("evicted".to_owned(), "0".to_owned()),
+            ("source".to_owned(), "corp".to_owned()),
+            (
+                "stable_id".to_owned(),
+                "uid=bob,ou=people,dc=example,dc=com".to_owned()
+            ),
+        ]
+    );
+}
+
+#[test]
+fn l03_stable_id_is_truncated_to_255_bytes() {
+    let long = "x".repeat(600);
+    let event = L03Event::Success {
+        user_id: UserId::new(),
+        source: "corp".into(),
+        stable_id: long.clone(),
+        evicted: 0,
+    };
+    let attributes = event.attributes().expect("a long id still builds");
+    let stable_id = attributes
+        .iter()
+        .find(|(k, _)| *k == "stable_id")
+        .map(|(_, v)| v.to_owned())
+        .expect("stable_id");
+    assert_eq!(stable_id, long[..EXTERNAL_ID_ATTRIBUTE_BYTES]);
+}
+
+#[test]
+fn l04_success_records_provider_and_sub() {
+    let event = L04Event::Success {
+        user_id: UserId::new(),
+        provider: "up".into(),
+        sub: "248289761001".into(),
+        evicted: 1,
+    };
+    assert_eq!(
+        L04::descriptor(&event).name,
+        "auth.federation.signin.success"
+    );
+    assert_eq!(
+        attribute_map(&event.attributes().expect("attributes")),
+        vec![
+            ("provider".to_owned(), "up".to_owned()),
+            ("sub".to_owned(), "248289761001".to_owned()),
+            ("evicted".to_owned(), "1".to_owned()),
+        ]
+    );
+}
+
+#[test]
+fn l04_sub_is_truncated_to_255_bytes_on_a_char_boundary() {
+    // 254 ASCII bytes, then a 3-byte character straddling the bound.
+    let sub = format!("{}€tail", "s".repeat(254));
+    let event = L04Event::Success {
+        user_id: UserId::new(),
+        provider: "up".into(),
+        sub,
+        evicted: 0,
+    };
+    let attributes = event.attributes().expect("attributes");
+    let recorded = attributes
+        .iter()
+        .find(|(k, _)| *k == "sub")
+        .map(|(_, v)| v.to_owned())
+        .expect("sub");
+    assert_eq!(recorded, "s".repeat(254), "cut before the split character");
+    assert!(recorded.len() <= EXTERNAL_ID_ATTRIBUTE_BYTES);
+}
+
+#[test]
+fn truncate_utf8_leaves_short_values_alone() {
+    assert_eq!(truncate_utf8("abc", 255), "abc");
+    assert_eq!(truncate_utf8(&"a".repeat(255), 255).len(), 255);
+    assert_eq!(truncate_utf8("ééé", 3), "é");
+}

@@ -1358,6 +1358,10 @@ static L01_SUCCESS: EventDescriptor = EventDescriptor {
             name: "source",
             description: "slug of the user source that authenticated a directory sign-in (L03); absent for a local password (L01)",
         },
+        AttributeSpec {
+            name: "stable_id",
+            description: "the directory stable id of a directory sign-in (L03), truncated to 255 bytes; absent for L01",
+        },
     ],
 };
 
@@ -1424,7 +1428,7 @@ crate::declare_write_command! {
     command L03 = "L03" {
         system_principal: forbidden;
         enum L03Event {
-            Success { user_id: UserId, source: String, evicted: i64 } => &L01_SUCCESS,
+            Success { user_id: UserId, source: String, stable_id: String, evicted: i64 } => &L01_SUCCESS,
         }
     }
 }
@@ -1441,11 +1445,18 @@ impl SealedCommandEvent<L03> for L03Event {
 
     fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
         let Self::Success {
-            source, evicted, ..
+            source,
+            stable_id,
+            evicted,
+            ..
         } = self;
         AuditAttributes::builder()
             .attribute("evicted", evicted.to_string())
             .attribute("source", source.clone())
+            .attribute(
+                "stable_id",
+                truncate_utf8(stable_id, EXTERNAL_ID_ATTRIBUTE_BYTES),
+            )
             .build()
     }
 }
@@ -1466,7 +1477,7 @@ pub async fn sign_in_from_directory(
     let context = AuthorizedCommandContext::<L03>::for_authorized_actor(user_id, None);
     db.class_a(context, move |tx: &mut ClassATx<'_, L03>| {
         let now = session.created_at;
-        crate::repos::users::upsert_ldap_shadow_within_tx(tx.tx(), &shadow, Some(user_id), now)?;
+        crate::repos::users::upsert_ldap_shadow_within_tx(tx.tx(), &shadow, user_id, now)?;
         crate::repos::users::record_password_login_within_tx(tx.tx(), user_id, now)?;
         crate::repos::sessions::insert_within_tx(tx.tx(), &session)?;
         let evicted = evict_over_cap_within_tx(tx.tx(), user_id, now)?;
@@ -1475,11 +1486,30 @@ pub async fn sign_in_from_directory(
             L03Event::Success {
                 user_id,
                 source: source_slug,
+                stable_id: shadow.external_stable_id.clone(),
                 evicted,
             },
         ))
     })
     .await
+}
+
+/// Byte bound for an upstream identifier recorded as an audit attribute: a
+/// directory stable id (a DN is allowed) or a federation `sub`. Well under
+/// the registry's per-value limit, so an unusually long identifier is
+/// recorded truncated rather than failing the sign-in.
+pub const EXTERNAL_ID_ATTRIBUTE_BYTES: usize = 255;
+
+/// `value` cut to at most `max` bytes, on a character boundary.
+pub fn truncate_utf8(value: &str, max: usize) -> String {
+    if value.len() <= max {
+        return value.to_owned();
+    }
+    let mut end = max;
+    while !value.is_char_boundary(end) {
+        end -= 1;
+    }
+    value[..end].to_owned()
 }
 
 // ── L04 — federated sign-in (RFC 102 Part A) ────────────────────────────
@@ -1496,6 +1526,10 @@ static L04_SUCCESS: EventDescriptor = EventDescriptor {
             description: "slug of the upstream federation provider",
         },
         AttributeSpec {
+            name: "sub",
+            description: "the upstream subject, truncated to 255 bytes",
+        },
+        AttributeSpec {
             name: "evicted",
             description: "older sessions revoked to keep the user within the concurrent-session cap",
         },
@@ -1509,7 +1543,7 @@ crate::declare_write_command! {
     command L04 = "L04" {
         system_principal: forbidden;
         enum L04Event {
-            Success { user_id: UserId, provider: String, evicted: i64 } => &L04_SUCCESS,
+            Success { user_id: UserId, provider: String, sub: String, evicted: i64 } => &L04_SUCCESS,
         }
     }
 }
@@ -1526,10 +1560,14 @@ impl SealedCommandEvent<L04> for L04Event {
 
     fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
         let Self::Success {
-            provider, evicted, ..
+            provider,
+            sub,
+            evicted,
+            ..
         } = self;
         AuditAttributes::builder()
             .attribute("provider", provider.clone())
+            .attribute("sub", truncate_utf8(sub, EXTERNAL_ID_ATTRIBUTE_BYTES))
             .attribute("evicted", evicted.to_string())
             .build()
     }
@@ -1541,6 +1579,7 @@ impl SealedCommandEvent<L04> for L04Event {
 pub async fn sign_in_federated(
     db: &crate::Database,
     provider_slug: String,
+    upstream_sub: String,
     session: crate::models::SessionRow,
 ) -> StoreResult<crate::registry::Audited<i64>> {
     let user_id = session.user_id;
@@ -1555,6 +1594,7 @@ pub async fn sign_in_federated(
             L04Event::Success {
                 user_id,
                 provider: provider_slug,
+                sub: upstream_sub,
                 evicted,
             },
         ))
@@ -2132,21 +2172,6 @@ pub async fn register_passkey(
         Ok(((), U15Event::Added { user_id }))
     })
     .await
-}
-
-// ── U30 — session creation (Protocol; proves no Audited<T> path) ───────
-
-/// Run U30 (session creation) through the `Protocol` runner. No event, no
-/// audit row is possible here by construction — there is no
-/// `WriteTx<Protocol>` method that produces `Audited<T>`. See
-/// `tests/compile_fail/protocol_cannot_construct_audited.rs` for the
-/// negative proof.
-pub async fn insert_session(
-    db: &crate::Database,
-    session: crate::models::SessionRow,
-) -> StoreResult<()> {
-    db.protocol(move |write| crate::repos::sessions::insert_within_tx(write.tx(), &session))
-        .await
 }
 
 // ── O01 — enqueue email (Operational) ────────────────────────────────────

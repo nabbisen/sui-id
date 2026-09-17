@@ -31,16 +31,19 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<SessionRow> {
 const SELECT_COLS: &str =
     "id, user_id, expires_at, created_at, revoked_at, auth_methods, last_step_up_at, last_used_at";
 
-pub async fn insert(db: &Database, s: &SessionRow) -> StoreResult<()> {
+/// Insert a session row. **Crate-private (RFC 102 A4):** a session for a
+/// sign-in is created only through the sign-in commands L01-L04, each of
+/// which commits the row with its audit event. See
+/// `tests/compile_fail/session_insert_is_private.rs`.
+#[cfg(test)] // this crate's own tests only
+pub(crate) async fn insert(db: &Database, s: &SessionRow) -> StoreResult<()> {
     let s = s.clone();
     db.with_conn(move |conn| insert_within_tx(conn, &s)).await
 }
 
-/// Same as [`insert`], for a caller that already holds a transaction (RFC
-/// 094 U30: the sealed `Protocol` capability). Takes `&rusqlite::Connection`
-/// so it accepts a bare connection or, via deref, a `WriteTx`'s
-/// transaction.
-pub fn insert_within_tx(conn: &rusqlite::Connection, s: &SessionRow) -> StoreResult<()> {
+/// Same as [`insert`], for a sign-in command that already holds its Class-A
+/// transaction. Crate-private for the same reason (RFC 102 A4).
+pub(crate) fn insert_within_tx(conn: &rusqlite::Connection, s: &SessionRow) -> StoreResult<()> {
     let methods_json = serde_json::to_string(&s.auth_methods)?;
     conn.execute(
         "INSERT INTO sessions(id, user_id, expires_at, created_at, revoked_at, \

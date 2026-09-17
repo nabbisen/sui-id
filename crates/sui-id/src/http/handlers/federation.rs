@@ -571,7 +571,7 @@ pub async fn federated_callback(
     };
 
     // ── P4: enforce local MFA ─────────────────────────────────────────────────
-    complete_federated_signin(app, jar, user_id, &provider.slug, now).await
+    complete_federated_signin(app, jar, user_id, &provider.slug, &id_claims.sub, now).await
 }
 
 // ── GET /auth/federated/link — link-only approval ────────────────────────────
@@ -595,6 +595,7 @@ async fn complete_federated_signin(
     jar: CookieJar,
     user_id: UserId,
     provider_slug: &str,
+    upstream_sub: &str,
     now: chrono::DateTime<chrono::Utc>,
 ) -> Result<Response, HttpError> {
     // Refuse an inactive user before any pending-MFA or session row. The
@@ -682,6 +683,7 @@ async fn complete_federated_signin(
     if let Err(e) = sui_id_store::commands::sign_in_federated(
         &app.db,
         provider_slug.to_owned(),
+        upstream_sub.to_owned(),
         session_row.clone(),
     )
     .await

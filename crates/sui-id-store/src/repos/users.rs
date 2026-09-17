@@ -764,17 +764,29 @@ pub async fn upsert_ldap_shadow(
     data: LdapShadowData,
     now: chrono::DateTime<chrono::Utc>,
 ) -> StoreResult<UserId> {
-    db.with_conn(move |conn| upsert_ldap_shadow_within_tx(conn, &data, None, now))
+    db.with_conn(move |conn| upsert_shadow(conn, &data, None, now))
         .await
 }
 
 /// [`upsert_ldap_shadow`] on the caller's transaction (RFC 102 L03, which
 /// subsumes the manifest's U26).
 ///
-/// `expected_id`, when given, is the id the caller resolved before the
-/// transaction (the sign-in's actor). An existing shadow row with another id
-/// is `NotFound`, and a new row is created with exactly that id.
+/// `id` is the id the caller resolved before the transaction (the
+/// sign-in's actor). An existing shadow row with another id is `NotFound`,
+/// and a new row is created with exactly that id.
 pub fn upsert_ldap_shadow_within_tx(
+    conn: &rusqlite::Connection,
+    data: &LdapShadowData,
+    id: UserId,
+    now: chrono::DateTime<chrono::Utc>,
+) -> StoreResult<UserId> {
+    upsert_shadow(conn, data, Some(id), now)
+}
+
+/// The shared upsert. `expected_id` is `None` only for the raw async
+/// upsert, whose callers (the directory MFA branch, federation
+/// provisioning) do not resolve an id first.
+fn upsert_shadow(
     conn: &rusqlite::Connection,
     data: &LdapShadowData,
     expected_id: Option<UserId>,
@@ -811,7 +823,10 @@ pub fn upsert_ldap_shadow_within_tx(
         }
         None => {
             // First sign-in: create a password-less shadow row.
-            let new_id = expected_id.unwrap_or_default();
+            let new_id = match expected_id {
+                Some(id) => id,
+                None => UserId::new(),
+            };
             let email_norm = data.email.as_deref().map(sui_id_shared::normalize_email);
             conn.execute(
                 "INSERT INTO users \

@@ -94,7 +94,7 @@ verifies the chain tail on every load and shows a status banner:
 
 | Event name | Label | Description |
 |---|---|---|
-| `auth.federation.signin.success` | Federated sign-in | User authenticated via an upstream OIDC provider and a local session was issued. |
+| `auth.federation.signin.success` | Federated sign-in | User authenticated via an upstream OIDC provider and a local session was issued. Note fields: `provider` (the provider slug), `sub` (the upstream subject, truncated to 255 bytes), `evicted`. |
 | `auth.federation.signin.upstream_failure` | Federation upstream error | The upstream identity provider returned an error during code exchange or discovery. |
 | `auth.federation.link.created` | Federation link created | A new link between a local user account and an upstream identity was established (on first sign-in with `provision_on_first_login`, or via the explicit link flow). |
 | `auth.federation.takeover_blocked` | Account takeover blocked | A federated sign-in was rejected because the upstream email matched an existing local user who is not linked to this provider (P2 — potential account takeover attempt). |
@@ -108,7 +108,8 @@ verifies the chain tail on every load and shows a status banner:
 ## External user-source events (RFC 005)
 
 A sign-in through an external user source (LDAP) records `auth.login.success`,
-with the source's slug in the `source` note field. A user with a second factor
+with the source's slug in the `source` note field and the user's directory
+stable id in `stable_id` (truncated to 255 bytes). A user with a second factor
 completes with `auth.mfa.success`. Audit logs written before this change may
 also hold rows of an older, separate user-source match event, which is no
 longer written.
