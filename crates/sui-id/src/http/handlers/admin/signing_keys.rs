@@ -142,7 +142,7 @@ pub async fn signing_keys_rotate(
     {
         return Ok(redirect);
     }
-    admin_uc::rotate_signing_key(
+    if let Err(e) = admin_uc::rotate_signing_key(
         &app.db,
         &app.clock,
         app.config.storage.key_file.to_str().unwrap_or_default(),
@@ -151,7 +151,9 @@ pub async fn signing_keys_rotate(
         &app.caches,
     )
     .await
-    .map_err(HttpError::html)?;
+    {
+        return crate::handlers::gated_command_error(e, "/admin/signing-keys/rotate-confirm");
+    }
     Ok(Redirect::to("/admin/signing-keys").into_response())
 }
 

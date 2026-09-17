@@ -3,13 +3,17 @@ use super::*;
 #[tokio::test]
 async fn k01_rotates_key_and_appends_audit_row() {
     let db = fresh_db();
+    let (admin, session) = an_admin_session(&db).await;
     let new_id = SigningKeyId::new();
     let audited = rotate_signing_key(
         &db,
+        admin,
+        session,
         new_id,
         "ed25519".into(),
         b"sealed-placeholder".to_vec(),
         b"public-key-placeholder".to_vec(),
+        None,
     )
     .await
     .expect("rotate");
@@ -37,16 +41,20 @@ async fn k01_rotates_key_and_appends_audit_row() {
 #[tokio::test]
 async fn k01_injected_failure_before_append_rolls_back_the_mutation() {
     let db = fresh_db();
+    let (admin, session) = an_admin_session(&db).await;
     let before_active = repos::signing_keys::active(&db).await;
     let before_audit = latest_audit_action(&db).await;
 
     db.fault_injector().fail_before_next_append();
     let result = rotate_signing_key(
         &db,
+        admin,
+        session,
         SigningKeyId::new(),
         "ed25519".into(),
         b"sealed-placeholder".to_vec(),
         b"public-key-placeholder".to_vec(),
+        None,
     )
     .await;
     assert!(result.is_err(), "injected failure must surface as Err");
@@ -66,15 +74,19 @@ async fn k01_injected_failure_before_append_rolls_back_the_mutation() {
 #[tokio::test]
 async fn k01_injected_failure_after_append_rolls_back_the_mutation_and_the_append() {
     let db = fresh_db();
+    let (admin, session) = an_admin_session(&db).await;
     let before_audit = latest_audit_action(&db).await;
 
     db.fault_injector().fail_after_next_append();
     let result = rotate_signing_key(
         &db,
+        admin,
+        session,
         SigningKeyId::new(),
         "ed25519".into(),
         b"sealed-placeholder".to_vec(),
         b"public-key-placeholder".to_vec(),
+        None,
     )
     .await;
     assert!(result.is_err(), "injected failure must surface as Err");
@@ -104,15 +116,19 @@ async fn k01_injected_commit_failure_rolls_back_the_mutation_and_the_append() {
     // `Audited<T>` from ever being constructed and still leaves no
     // trace in either table.
     let db = fresh_db();
+    let (admin, session) = an_admin_session(&db).await;
     let before_audit = latest_audit_action(&db).await;
 
     db.fail_next_commit_for_test();
     let result = rotate_signing_key(
         &db,
+        admin,
+        session,
         SigningKeyId::new(),
         "ed25519".into(),
         b"sealed-placeholder".to_vec(),
         b"public-key-placeholder".to_vec(),
+        None,
     )
     .await;
     assert!(
@@ -131,10 +147,13 @@ async fn k01_injected_commit_failure_rolls_back_the_mutation_and_the_append() {
     // connection unable to commit anything ever again.
     let audited = rotate_signing_key(
         &db,
+        admin,
+        session,
         SigningKeyId::new(),
         "ed25519".into(),
         b"sealed-placeholder".to_vec(),
         b"public-key-placeholder".to_vec(),
+        None,
     )
     .await
     .expect("rotate after the injected commit failure has cleared");

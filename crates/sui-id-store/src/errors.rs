@@ -44,6 +44,13 @@ pub enum StoreError {
 
     #[error("invalid data: {0}")]
     InvalidData(String),
+
+    /// RFC 102 B4: a step-up-gated command found, inside its transaction,
+    /// that the acting session is no longer fresh (or no longer live) while
+    /// the user has a second factor. Nothing was written; the caller sends
+    /// the user to step up again.
+    #[error("a fresh step-up is required")]
+    StepUpRequired,
 }
 
 pub type StoreResult<T> = Result<T, StoreError>;

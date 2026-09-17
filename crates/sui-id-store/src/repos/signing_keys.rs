@@ -232,50 +232,18 @@ pub fn reseal_all(
     Ok(count)
 }
 
-/// Retire the currently active key (if any) and insert a new one, atomically.
-///
-/// This is the correct rotation order when the partial unique index
-/// `idx_signing_keys_single_active` is present (migration 0021): the index
-/// allows at most one `is_active = 1` row, so the old insert-then-retire
-/// order would briefly create two active rows and violate the constraint.
-///
-/// Both steps execute inside a single transaction; external readers never
-/// observe the zero-active-keys gap between them.
-///
-/// `private_key_plain` is sealed with the master key before the INSERT.
-pub async fn rotate_atomic(
-    db: &Database,
-    new_id: SigningKeyId,
-    algorithm: &str,
-    private_key_plain: &[u8],
-    public_key: &[u8],
-) -> StoreResult<SigningKeyRow> {
-    // Seal outside the transaction so crypto work is not inside the mutex.
-    let sealed = seal(db.key(), private_key_plain, AAD)?;
-    let pk_vec = public_key.to_vec();
-    let pk_vec_ret = pk_vec.clone();
-    let algorithm_owned = algorithm.to_owned();
-    let algorithm_ret = algorithm_owned.clone();
-    let created_at = db
-        .with_tx(move |tx| {
-            rotate_atomic_within_tx(tx, new_id, algorithm_owned.as_str(), &sealed, &pk_vec)
-        })
-        .await?;
-    Ok(SigningKeyRow {
-        id: new_id,
-        algorithm: algorithm_ret,
-        private_key_enc: vec![],
-        public_key: pk_vec_ret,
-        is_active: true,
-        created_at,
-        rotated_at: None,
-    })
+/// Seal a signing key's private half for storage. Sealing needs only the
+/// master key, so the caller does it before K01's transaction (RFC 094:
+/// crypto work stays outside the write lock).
+pub fn seal_private_key(db: &Database, private_key_plain: &[u8]) -> StoreResult<Vec<u8>> {
+    seal(db.key(), private_key_plain, AAD)
 }
 
-/// Same as [`rotate_atomic`], for a caller that already holds a
+/// Retire the active key and insert the new one, for a caller that already
+/// holds a
 /// transaction (RFC 094 K01: the sealed `AtomicAudit` capability).
 /// `private_key_sealed` must already be sealed (crypto work stays outside
-/// the transaction, same reasoning as [`rotate_atomic`]). Returns the
+/// the transaction). Returns the
 /// `created_at` timestamp actually written, so the caller doesn't
 /// re-derive a slightly different one with a second `Utc::now()` call.
 pub fn rotate_atomic_within_tx(

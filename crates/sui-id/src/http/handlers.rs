@@ -660,12 +660,32 @@ pub async fn require_fresh_step_up(
             // `?return_to=https://attacker.example/...` can't be
             // used to bounce a user off-site after a successful
             // challenge.
-            let encoded: String =
-                url::form_urlencoded::byte_serialize(return_to.as_bytes()).collect();
-            let redirect =
-                axum::response::Redirect::to(&format!("/me/security/step-up?return_to={encoded}"));
-            Err(redirect.into_response())
+            Err(step_up_redirect(return_to))
         }
+    }
+}
+
+/// The redirect to the step-up page, back to `return_to` afterwards.
+pub fn step_up_redirect(return_to: &str) -> axum::response::Response {
+    let encoded: String = url::form_urlencoded::byte_serialize(return_to.as_bytes()).collect();
+    axum::response::Redirect::to(&format!("/me/security/step-up?return_to={encoded}"))
+        .into_response()
+}
+
+/// Map a gated command's error to a response (RFC 102 B4, N11): a command
+/// that found, inside its transaction, that the session's step-up had
+/// lapsed since the gate rolled back with `StepUpRequired`, and the user
+/// is sent to step up again, as `require_fresh_step_up` does. Every other
+/// error is the ordinary HTML error.
+pub fn gated_command_error(
+    err: CoreError,
+    return_to: &str,
+) -> Result<axum::response::Response, HttpError> {
+    match err {
+        CoreError::Store(sui_id_store::StoreError::StepUpRequired) => {
+            Ok(step_up_redirect(return_to))
+        }
+        other => Err(HttpError::html(other)),
     }
 }
 
@@ -794,7 +814,14 @@ pub async fn require_factor_addition_proof(
         return Ok(());
     }
 
-    match sui_id_core::step_up::record_step_up_failure(&app.db, ctx.user_id, ctx.session_id).await {
+    match sui_id_core::step_up::record_step_up_failure(
+        &app.db,
+        &app.clock,
+        ctx.user_id,
+        ctx.session_id,
+    )
+    .await
+    {
         Ok(outcome) if outcome.session_revoked => tracing::warn!(
             user_id = %ctx.user_id,
             count = outcome.count,

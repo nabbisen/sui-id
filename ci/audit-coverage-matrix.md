@@ -25,17 +25,30 @@ Until RFC 094 is implemented, treat the rows below as the coverage this project
 
 ## Coverage matrix
 
+*RFC 102 B4 (stage 7, 2026-09-17): the five step-up-gated sealed commands —
+`user.disable`, `user.enable`, `user.delete`, `mfa.admin_reset` and
+`signing_key.rotate` — carry a required `step_up` attribute, computed by the
+command from the acting session inside its transaction: `fresh:<method>:<seconds>`,
+`not_required:no_second_factor`, or, on the operator CLI's MFA reset only,
+`not_applicable:system_principal`. Until stage 7, `signing_key.rotate` was written
+best effort after a separate key rotation; its row claimed Class A for a command
+that had no production caller. The eight other gated actions (RFC 102 B-F8) are
+not converted and carry no `step_up` yet: client disable, delete and
+rotate-secret; signing-key hard delete; self-service MFA disable and passkey
+delete; revoke-all-other-sessions; and the SMTP pending-change apply. Each gains
+it when RFC 094 converts it.*
+
 ### User management (`user.*`)
 
 | Event name | Operation | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
 | `user.create` | Create user | admin user id | new user id | — | A |
 | `user.create_warned_hibp` | Create user (HIBP breach warning) | admin user id | new user id | — | A |
-| `user.disable` | Disable user account | admin user id | target user id | reason (optional) | A |
-| `user.enable` | Re-enable user account | admin user id | target user id | — | A |
-| `user.delete` | Soft-delete user | admin user id | target user id | reason (optional) | A |
+| `user.disable` | Disable user account | admin user id | target user id | reason (optional), `step_up` (required) | A |
+| `user.enable` | Re-enable user account | admin user id | target user id | `step_up` (required) | A |
+| `user.delete` | Soft-delete user | admin user id | target user id | reason (optional), `step_up` (required) | A |
 | `user.reset_password` | Admin password reset | admin user id | target user id | — | A |
-| `mfa.admin_reset` | Admin MFA reset (web), or operator MFA reset with `sui-id admin reset-mfa` (RFC 103 D12) | admin user id; none for the CLI | target user id | `totp=… passkeys=N reason=…`, plus `via=cli` for the CLI | A |
+| `mfa.admin_reset` | Admin MFA reset (web), or operator MFA reset with `sui-id admin reset-mfa` (RFC 103 D12) | admin user id; none for the CLI | target user id | `totp=… passkeys=N reason=…`, plus `via=cli` for the CLI; `step_up` (required) | A |
 | `user.role_change` | Admin role change | admin user id | target user id | `old_role=… new_role=…` | A |
 
 > **`user.role_change` row added 2026-09-08, reviewed and settled.** RFC
@@ -67,7 +80,7 @@ Until RFC 094 is implemented, treat the rows below as the coverage this project
 
 | Event name | Operation | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
-| `signing_key.rotate` | Issue new signing key | admin user id | new key id | — | A |
+| `signing_key.rotate` | Issue new signing key (command `K01`, the administrator's web rotation; converted RFC 102 stage 7) | admin user id | new key id | `algorithm`, `reason` (optional), `step_up` (required) | A |
 | `signing_key.delete` | Delete signing key | admin user id | key id | — | A |
 
 ### Administrative (`admin.*`)

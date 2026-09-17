@@ -314,7 +314,7 @@ async fn admin_can_reset_users_mfa_factors() {
     use sui_id_core::time::system_clock;
 
     let state = test_app();
-    let _ = complete_setup_and_login(&state).await;
+    let session = complete_setup_and_login(&state).await;
     let admin_id = sui_id_store::repos::users::find_by_username(&state.db, "alice")
         .await
         .expect("admin")
@@ -354,9 +354,14 @@ async fn admin_can_reset_users_mfa_factors() {
     assert!(mfa::is_mfa_enabled(&state.db, bob).await.unwrap());
 
     // Admin resets it.
-    let report = admin_reset_mfa(&state.db, &admin_actor_for(admin_id), bob, None)
-        .await
-        .expect("reset");
+    let report = admin_reset_mfa(
+        &state.db,
+        &admin_actor_on_session(admin_id, &session),
+        bob,
+        None,
+    )
+    .await
+    .expect("reset");
     assert!(report.totp_removed);
     assert_eq!(report.passkeys_removed, 0);
 

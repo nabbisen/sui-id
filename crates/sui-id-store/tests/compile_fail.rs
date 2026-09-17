@@ -108,3 +108,22 @@ fn compile_fail_session_insert_is_private() {
     let t = trybuild::TestCases::new();
     t.compile_fail("tests/compile_fail/session_insert_is_private.rs");
 }
+
+/// RFC 102 stage 7: K01 is forbidden the system principal. Gated for the
+/// same E0599 wording reason as the U01 fixture above.
+#[rustversion::attr(before(1.96), ignore)]
+#[test]
+fn compile_fail_k01_forbidden_cannot_use_system_actor() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compile_fail/k01_forbidden_cannot_use_system_actor.rs");
+}
+
+/// RFC 102 B4: a session-bound gated command cannot record
+/// `not_applicable`, because its evidence type has no such form. Gated for
+/// the E0599 wording drift noted on `arbitrary_event_kind_does_not_exist`.
+#[rustversion::attr(before(1.96), ignore)]
+#[test]
+fn compile_fail_session_evidence_has_no_not_applicable() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compile_fail/session_evidence_has_no_not_applicable.rs");
+}

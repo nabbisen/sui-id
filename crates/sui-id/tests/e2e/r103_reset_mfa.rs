@@ -154,7 +154,7 @@ async fn r103_cli_reset_mfa_removes_every_factor_with_one_cli_event() {
             &format!(
                 "SELECT COUNT(*) FROM audit_log WHERE action = 'mfa.admin_reset' \
                  AND actor IS NULL AND target = '{root}' \
-                 AND note = 'totp=removed passkeys=2 reason={REASON} via=cli'"
+                 AND note = 'totp=removed passkeys=2 reason={REASON} via=cli step_up=not_applicable:system_principal'"
             )
         )
         .await,

@@ -51,7 +51,9 @@ use sui_id_store::repos::user_totp;
 /// enough to avoid retyping a TOTP code three times in one
 /// admin-cleanup pass, short enough that a session stolen
 /// hours after a previous step-up gets re-challenged.
-pub const STEP_UP_FRESHNESS_SECS: i64 = 300; // 5 minutes
+/// 5 minutes. Defined with the gated commands in `sui-id-store`, which
+/// re-check it inside their transactions (RFC 102 B4).
+pub use sui_id_store::commands::STEP_UP_FRESHNESS_SECS;
 
 /// Outcome of `policy_for_session`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -179,7 +181,15 @@ pub async fn verify_totp_code(
         return Err(CoreError::InvalidCredentials);
     };
 
-    complete(db, user_id, session_id, StepUpProof::Totp { step }, gate).await
+    complete(
+        db,
+        clock,
+        user_id,
+        session_id,
+        StepUpProof::Totp { step },
+        gate,
+    )
+    .await
 }
 
 /// RFC 102 L05: commit a verified step-up. A guard that loses (the session
@@ -188,17 +198,25 @@ pub async fn verify_totp_code(
 /// factor, so the caller must not run L06 for it (A9).
 async fn complete(
     db: &Database,
+    clock: &SharedClock,
     user_id: UserId,
     session_id: SessionId,
     proof: StepUpProof,
     gate: &str,
 ) -> CoreResult<()> {
-    sui_id_store::commands::complete_step_up(db, user_id, session_id, proof, gate.to_owned())
-        .await
-        .map_err(|e| match e {
-            sui_id_store::StoreError::NotFound => CoreError::Unauthenticated,
-            other => other.into(),
-        })?;
+    sui_id_store::commands::complete_step_up(
+        db,
+        user_id,
+        session_id,
+        proof,
+        gate.to_owned(),
+        clock.now(),
+    )
+    .await
+    .map_err(|e| match e {
+        sui_id_store::StoreError::NotFound => CoreError::Unauthenticated,
+        other => other.into(),
+    })?;
     Ok(())
 }
 
@@ -309,6 +327,7 @@ pub async fn finish_webauthn(
         Ok(()) => {
             complete(
                 db,
+                clock,
                 user_id,
                 session_id,
                 StepUpProof::Webauthn { pending_id },
@@ -334,10 +353,13 @@ pub use sui_id_store::commands::{STEP_UP_FAILURE_REVOCATION_THRESHOLD, StepUpFai
 /// storage failure on the success path (RFC 102 A9).
 pub async fn record_step_up_failure(
     db: &Database,
+    clock: &SharedClock,
     user_id: UserId,
     session_id: SessionId,
 ) -> CoreResult<StepUpFailureOutcome> {
-    let audited = sui_id_store::commands::record_step_up_failure(db, user_id, session_id).await?;
+    let audited =
+        sui_id_store::commands::record_step_up_failure(db, user_id, session_id, clock.now())
+            .await?;
     Ok(audited.into_inner())
 }
 

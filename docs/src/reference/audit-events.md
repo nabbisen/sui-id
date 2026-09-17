@@ -31,6 +31,20 @@ Use **Admin panel → Audit log** to filter by event prefix or export to CSV.
 
 ## User management events
 
+The step-up-gated actions — disabling, enabling or deleting a user, resetting a
+user's MFA, and rotating the signing key — record what authorized them in a
+`step_up` note field, written in the same transaction as the action:
+
+- `fresh:<method>:<seconds>`: the administrator stepped up with `method`
+  (`totp` or `webauthn`) that many seconds earlier;
+- `not_required:no_second_factor`: the administrator has no second factor, so no
+  step-up was possible;
+- `not_applicable:system_principal`: the operator ran `sui-id admin reset-mfa`,
+  with no session (MFA reset only).
+
+If the step-up has lapsed by the time the action commits, nothing is changed and
+the administrator is asked to step up again.
+
 | Event name | Label | Description |
 |---|---|---|
 | `user.create` | User created | Administrator created a new user account. |

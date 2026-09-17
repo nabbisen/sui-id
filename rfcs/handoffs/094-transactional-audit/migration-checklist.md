@@ -477,8 +477,10 @@ Repeat for every inventory row:
 > need it.** Tracked here rather than left in a `commands.rs` comment, because a
 > provisional `permitted` on an admin command is exactly what becomes permanent.
 
-- [ ] Convert `K01` signing-key rotation to the Class-A runner: retire old,
+- [x] Convert `K01` signing-key rotation to the Class-A runner: retire old,
   insert/activate new, and append `signing_key.rotate` in one transaction.
+  **Done in RFC 102 stage 7:** the web rotation now calls
+  `commands::rotate_signing_key` as the administrator.
 - [ ] Inject failure before append and before commit; assert the prior active
   key is unchanged and no event committed.
 - [ ] Assert exactly one active signing key after a successful rotation, backed

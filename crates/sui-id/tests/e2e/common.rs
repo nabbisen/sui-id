@@ -124,6 +124,15 @@ pub fn admin_actor_for(user_id: UserId) -> AdminActor {
         .expect("admin actor")
 }
 
+/// An admin actor bound to the real session `session` (a cookie value).
+/// A step-up-gated command re-reads that session in its transaction (RFC
+/// 102 B4), so an actor with an invented session id is refused there.
+pub fn admin_actor_on_session(user_id: UserId, session: &str) -> AdminActor {
+    Actor::from_session(user_id, Role::Admin, session.parse().expect("session id"))
+        .into_admin()
+        .expect("admin actor")
+}
+
 /// Set the server-settings `hibp_mode` directly. Tests use this
 /// to flip between modes without going through the admin settings
 /// page.

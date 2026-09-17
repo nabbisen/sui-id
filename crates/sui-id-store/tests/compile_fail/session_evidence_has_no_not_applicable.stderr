@@ -1,0 +1,5 @@
+error[E0599]: no variant, associated function, or constant named `NotApplicable` found for enum `SessionStepUpEvidence` in the current scope
+ --> tests/compile_fail/session_evidence_has_no_not_applicable.rs:9:28
+  |
+9 |     SessionStepUpEvidence::NotApplicable
+  |                            ^^^^^^^^^^^^^ variant, associated function, or constant not found in `SessionStepUpEvidence`

@@ -222,7 +222,14 @@ pub async fn post(
 /// Run L06 for a wrong factor on this session. A failure to record it is
 /// logged and does not change the response.
 async fn record_failure(app: &crate::state::AppState, ctx: &SessionContext) {
-    match sui_id_core::step_up::record_step_up_failure(&app.db, ctx.user_id, ctx.session_id).await {
+    match sui_id_core::step_up::record_step_up_failure(
+        &app.db,
+        &app.clock,
+        ctx.user_id,
+        ctx.session_id,
+    )
+    .await
+    {
         Ok(outcome) if outcome.session_revoked => tracing::warn!(
             user_id = %ctx.user_id,
             count = outcome.count,

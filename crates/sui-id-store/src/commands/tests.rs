@@ -1,4 +1,4 @@
-#![allow(clippy::expect_used, clippy::unwrap_used)]
+#![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
 use super::*;
 use crate::registry::{CommandSpec, SystemPrincipalPermitted};
@@ -10,7 +10,6 @@ use crate::registry::{CommandSpec, SystemPrincipalPermitted};
 //    impl; it can't regress at runtime.
 const _: fn() = || {
     fn assert_system_principal_permitted<C: SystemPrincipalPermitted>() {}
-    assert_system_principal_permitted::<K01>();
     assert_system_principal_permitted::<U22>();
     assert_system_principal_permitted::<U08>();
     assert_system_principal_permitted::<U10>();
@@ -132,7 +131,7 @@ fn actor_requirement_agrees_with_system_principal_for_every_command() {
         }
     }
 
-    check("K01", true, &[&K01_ROTATED]);
+    check("K01", false, &[&K01_ROTATED]);
     check("U22", true, &[&U22_FAILURE, &U22_LOCKOUT]);
     check("U01", false, &[&U01_CREATE, &U01_CREATE_WARNED_HIBP]);
     check("U02", false, &[&U02_DISABLE]);
@@ -172,6 +171,8 @@ fn k01_descriptor_maps_are_exhaustive_and_correct() {
     let event = K01Event::Rotated {
         new_key: SigningKeyId::new(),
         algorithm: "ed25519".into(),
+        reason: None,
+        step_up: SessionStepUpEvidence::NotRequired,
     };
     assert_eq!(K01::descriptor(&event).name, "signing_key.rotate");
 }
@@ -387,4 +388,103 @@ fn truncate_utf8_leaves_short_values_alone() {
     assert_eq!(truncate_utf8("abc", 255), "abc");
     assert_eq!(truncate_utf8(&"a".repeat(255), 255).len(), 255);
     assert_eq!(truncate_utf8("ééé", 3), "é");
+}
+
+// ── RFC 102 stage 7: B4 ─────────────────────────────────────────────────
+
+#[test]
+fn b4_every_gated_descriptor_requires_step_up() {
+    for d in [
+        &U02_DISABLE,
+        &U03_ENABLE,
+        &U04_DELETE,
+        &U07_ADMIN_RESET,
+        &K01_ROTATED,
+    ] {
+        let step_up = d
+            .attributes
+            .iter()
+            .find(|a| a.name == "step_up")
+            .unwrap_or_else(|| panic!("{} has no step_up attribute", d.name));
+        assert!(step_up.required, "{}: step_up must be required", d.name);
+    }
+    // No other descriptor requires anything yet.
+    for d in all_descriptors() {
+        for a in d.attributes {
+            if a.required {
+                assert_eq!(
+                    a.name, "step_up",
+                    "{}: unexpected required {}",
+                    d.name, a.name
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn b4_session_evidence_renders_only_session_forms() {
+    // Structural: `SessionStepUpEvidence` is what a session-bound entry
+    // computes, and it has exactly these two forms. The system-principal
+    // form is written only by `U07Event::OperatorReset`.
+    for evidence in [
+        SessionStepUpEvidence::Fresh {
+            method: "totp".into(),
+            age_secs: 12,
+        },
+        SessionStepUpEvidence::NotRequired,
+    ] {
+        let rendered = evidence.as_attribute();
+        assert!(
+            rendered.starts_with("fresh:") || rendered == "not_required:no_second_factor",
+            "{rendered}"
+        );
+        assert!(!rendered.contains("not_applicable"));
+        // Exhaustive: adding a variant fails to compile here until it is
+        // considered.
+        match evidence {
+            SessionStepUpEvidence::Fresh { .. } | SessionStepUpEvidence::NotRequired => {}
+        }
+    }
+    assert_eq!(
+        SessionStepUpEvidence::Fresh {
+            method: "webauthn".into(),
+            age_secs: 42
+        }
+        .as_attribute(),
+        "fresh:webauthn:42"
+    );
+}
+
+#[test]
+fn b4_only_the_operator_reset_records_not_applicable() {
+    let uid = UserId::new();
+    let web = U07Event::Reset {
+        user_id: uid,
+        totp_removed: false,
+        passkeys_removed: 0,
+        reason: None,
+        step_up: SessionStepUpEvidence::NotRequired,
+    };
+    let cli = U07Event::OperatorReset {
+        user_id: uid,
+        totp_removed: false,
+        passkeys_removed: 0,
+        reason: "lost".into(),
+    };
+    let step_up = |e: &U07Event| {
+        e.attributes()
+            .expect("attributes")
+            .iter()
+            .find(|(k, _)| *k == "step_up")
+            .map(|(_, v)| v.to_owned())
+    };
+    assert_eq!(
+        step_up(&web).as_deref(),
+        Some("not_required:no_second_factor")
+    );
+    assert_eq!(
+        step_up(&cli).as_deref(),
+        Some("not_applicable:system_principal")
+    );
 }

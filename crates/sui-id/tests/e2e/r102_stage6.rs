@@ -217,6 +217,7 @@ async fn r102_l05_webauthn_step_up_through_the_command() {
             pending_id: ceremony.id,
         },
         GATE.into(),
+        chrono::Utc::now(),
     )
     .await
     .expect("L05");
@@ -284,6 +285,7 @@ async fn r102_l05_ceremony_guard_refuses_a_sign_in_or_foreign_ceremony() {
                 pending_id: ceremony.id,
             },
             GATE.into(),
+            chrono::Utc::now(),
         )
         .await;
         assert!(
@@ -376,6 +378,7 @@ async fn r102_l05_append_failure_changes_nothing_and_looks_like_a_wrong_code() {
             pending_id: ceremony.id,
         },
         GATE.into(),
+        chrono::Utc::now(),
     )
     .await;
     assert!(result.is_err());
@@ -505,6 +508,7 @@ async fn r102_l05_session_ended_between_verification_and_commit_rolls_back() {
             session.parse().expect("id"),
             StepUpProof::Totp { step },
             GATE.into(),
+            chrono::Utc::now(),
         )
         .await;
         assert!(
@@ -533,6 +537,7 @@ async fn r102_l05_session_ended_between_verification_and_commit_rolls_back() {
         session.parse().expect("id"),
         StepUpProof::Totp { step },
         GATE.into(),
+        chrono::Utc::now(),
     )
     .await;
     assert!(

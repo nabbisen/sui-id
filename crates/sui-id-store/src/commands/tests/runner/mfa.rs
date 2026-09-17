@@ -23,6 +23,7 @@ async fn seed_passkey(db: &Database, user_id: UserId) {
 #[tokio::test]
 async fn u07_reset_removes_totp_and_passkeys_and_appends_event() {
     let db = fresh_db();
+    let (admin, session) = an_admin_session(&db).await;
     let user = a_user();
     repos::users::create(&db, &user).await.expect("create user");
     repos::user_totp::upsert_pending(&db, user.id, b"totp-secret-placeholder")
@@ -33,7 +34,8 @@ async fn u07_reset_removes_totp_and_passkeys_and_appends_event() {
 
     let audited = admin_reset_mfa(
         &db,
-        an_admin(),
+        admin,
+        session,
         user.id,
         Some("lost authenticator".to_string()),
     )
@@ -67,17 +69,20 @@ async fn u07_reset_removes_totp_and_passkeys_and_appends_event() {
     assert_eq!(tail.action, "mfa.admin_reset");
     assert_eq!(
         tail.note.as_deref(),
-        Some("totp=removed passkeys=2 reason=lost authenticator")
+        Some(
+            "totp=removed passkeys=2 reason=lost authenticator step_up=not_required:no_second_factor"
+        )
     );
 }
 
 #[tokio::test]
 async fn u07_reset_with_no_factors_reports_absent_and_zero() {
     let db = fresh_db();
+    let (admin, session) = an_admin_session(&db).await;
     let user = a_user();
     repos::users::create(&db, &user).await.expect("create user");
 
-    let audited = admin_reset_mfa(&db, an_admin(), user.id, None)
+    let audited = admin_reset_mfa(&db, admin, session, user.id, None)
         .await
         .expect("reset");
     let (totp_removed, passkeys_removed) = audited.into_inner();
@@ -90,15 +95,19 @@ async fn u07_reset_with_no_factors_reports_absent_and_zero() {
         .into_iter()
         .next()
         .expect("row");
-    assert_eq!(tail.note.as_deref(), Some("totp=absent passkeys=0"));
+    assert_eq!(
+        tail.note.as_deref(),
+        Some("totp=absent passkeys=0 step_up=not_required:no_second_factor")
+    );
 }
 
 #[tokio::test]
 async fn u07_reset_of_nonexistent_user_returns_not_found_and_appends_nothing() {
     let db = fresh_db();
+    let (admin, session) = an_admin_session(&db).await;
     let before_audit = latest_audit_action(&db).await;
 
-    let result = admin_reset_mfa(&db, an_admin(), UserId::new(), None).await;
+    let result = admin_reset_mfa(&db, admin, session, UserId::new(), None).await;
     assert!(
         matches!(result, Err(StoreError::NotFound)),
         "the existence probe (get_role_within_tx) must reject a target that \
@@ -117,6 +126,7 @@ async fn u07_reset_of_soft_deleted_user_returns_not_found() {
     // now be rejected, deliberately, not as an unstated side effect
     // of borrowing a helper for its query shape.
     let db = fresh_db();
+    let (admin, session) = an_admin_session(&db).await;
     let user = a_user();
     repos::users::create(&db, &user).await.expect("create user");
     repos::user_totp::upsert_pending(&db, user.id, b"totp-secret-placeholder")
@@ -127,7 +137,7 @@ async fn u07_reset_of_soft_deleted_user_returns_not_found() {
         .expect("soft delete");
     let before_audit = latest_audit_action(&db).await;
 
-    let result = admin_reset_mfa(&db, an_admin(), user.id, None).await;
+    let result = admin_reset_mfa(&db, admin, session, user.id, None).await;
     assert!(
         matches!(result, Err(StoreError::NotFound)),
         "a soft-deleted target must be rejected, not silently reset"
@@ -150,6 +160,7 @@ async fn u07_reset_of_soft_deleted_user_returns_not_found() {
 #[tokio::test]
 async fn u07_injected_failure_before_append_rolls_back_totp_and_passkey_removal() {
     let db = fresh_db();
+    let (admin, session) = an_admin_session(&db).await;
     let user = a_user();
     repos::users::create(&db, &user).await.expect("create user");
     repos::user_totp::upsert_pending(&db, user.id, b"totp-secret-placeholder")
@@ -159,7 +170,7 @@ async fn u07_injected_failure_before_append_rolls_back_totp_and_passkey_removal(
     let before_audit = latest_audit_action(&db).await;
 
     db.fault_injector().fail_before_next_append();
-    let result = admin_reset_mfa(&db, an_admin(), user.id, None).await;
+    let result = admin_reset_mfa(&db, admin, session, user.id, None).await;
     assert!(result.is_err(), "injected failure must surface as Err");
 
     assert!(

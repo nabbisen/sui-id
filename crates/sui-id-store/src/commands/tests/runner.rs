@@ -92,6 +92,20 @@ async fn seed_active_session(db: &Database, user_id: UserId) -> sui_id_shared::i
     id
 }
 
+/// An administrator with a live session and no second factor: the acting
+/// side of a step-up-gated command (RFC 102 B4). Its step-up evidence is
+/// `not_required:no_second_factor`.
+async fn an_admin_session(db: &Database) -> (UserId, sui_id_shared::ids::SessionId) {
+    let mut admin = a_user();
+    admin.is_admin = true;
+    admin.role = crate::models::Role::Admin;
+    repos::users::create(db, &admin)
+        .await
+        .expect("create admin");
+    let session = seed_active_session(db, admin.id).await;
+    (admin.id, session)
+}
+
 mod chain_integrity;
 mod key_rotation;
 mod lockout;

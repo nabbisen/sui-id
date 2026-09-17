@@ -37,30 +37,126 @@ use sui_id_shared::{
     ids::{ClientId, SigningKeyId, UserId},
 };
 
+// ── RFC 102 B4 — the gated action carries its authorization ─────────────
+
+/// How recently a step-up counts as fresh (RFC 102 B4). The same window
+/// the HTTP gate uses; `sui-id-core` re-exports it.
+pub const STEP_UP_FRESHNESS_SECS: i64 = 300;
+
+/// The `step_up` attribute every gated command's descriptor requires.
+const STEP_UP_ATTRIBUTE: AttributeSpec = AttributeSpec {
+    name: "step_up",
+    description: "what authorized the action: \"fresh:<method>:<seconds>\", \"not_required:no_second_factor\", or \"not_applicable:system_principal\" (the CLI only)",
+    required: true,
+};
+
+/// The only `step_up` value a system-principal entry records.
+const STEP_UP_NOT_APPLICABLE: &str = "not_applicable:system_principal";
+
+/// What a session-bound gated command found about its acting session, read
+/// inside its own transaction (RFC 102 B4, M2). It has no
+/// `not_applicable` form: only an entry that takes no session, and runs as
+/// the system principal, records that.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SessionStepUpEvidence {
+    /// The session stepped up with `method` `age_secs` seconds ago, within
+    /// [`STEP_UP_FRESHNESS_SECS`].
+    Fresh { method: String, age_secs: i64 },
+    /// The acting user has no second factor, so no step-up was possible.
+    NotRequired,
+}
+
+impl SessionStepUpEvidence {
+    /// The attribute value.
+    pub fn as_attribute(&self) -> String {
+        match self {
+            Self::Fresh { method, age_secs } => format!("fresh:{method}:{age_secs}"),
+            Self::NotRequired => "not_required:no_second_factor".to_owned(),
+        }
+    }
+}
+
+/// Re-read the acting session inside a gated command's transaction and
+/// derive its step-up evidence. The session must be live and the actor's
+/// (otherwise `StepUpRequired`). A user with no second factor is
+/// `NotRequired`; a user with one must have stepped up within
+/// [`STEP_UP_FRESHNESS_SECS`] of `now`, or the command rolls back with
+/// `StepUpRequired` (freshness lapsed between the gate and the commit).
+fn session_step_up_evidence_within_tx(
+    conn: &rusqlite::Connection,
+    session_id: sui_id_shared::ids::SessionId,
+    actor: UserId,
+    now: chrono::DateTime<chrono::Utc>,
+) -> StoreResult<SessionStepUpEvidence> {
+    crate::repos::sessions::require_live_session_within_tx(conn, session_id, actor, now).map_err(
+        |e| match e {
+            crate::StoreError::NotFound => crate::StoreError::StepUpRequired,
+            other => other,
+        },
+    )?;
+    let has_second_factor: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM user_totp WHERE user_id = ?1 AND enabled = 1) \
+         OR EXISTS(SELECT 1 FROM user_webauthn_credentials WHERE user_id = ?1)",
+        [actor.to_string()],
+        |r| r.get(0),
+    )?;
+    if !has_second_factor {
+        return Ok(SessionStepUpEvidence::NotRequired);
+    }
+    let (last, method): (Option<chrono::DateTime<chrono::Utc>>, Option<String>) = conn.query_row(
+        "SELECT last_step_up_at, last_step_up_method FROM sessions WHERE id = ?1",
+        [session_id.to_string()],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )?;
+    match last {
+        Some(at) if at <= now && (now - at).num_seconds() <= STEP_UP_FRESHNESS_SECS => {
+            Ok(SessionStepUpEvidence::Fresh {
+                // A step-up recorded before RFC 102 stage 3 has no method.
+                method: method.unwrap_or_else(|| "unknown".to_owned()),
+                age_secs: (now - at).num_seconds(),
+            })
+        }
+        _ => Err(crate::StoreError::StepUpRequired),
+    }
+}
+
 // ── K01 — signing-key rotation ──────────────────────────────────────────
 
 static K01_ROTATED: EventDescriptor = EventDescriptor {
     kind: AuditEventKind::SigningKeyRotate,
     name: "signing_key.rotate",
     class: AuditClass::Atomic,
-    actor: ActorRequirement::None,
+    actor: ActorRequirement::Required,
     target: TargetRequirement::Required,
-    attributes: &[AttributeSpec {
-        name: "algorithm",
-        description: "the new key's signing algorithm",
-    }],
+    attributes: &[
+        AttributeSpec {
+            name: "algorithm",
+            description: "the new key's signing algorithm",
+            required: false,
+        },
+        AttributeSpec {
+            name: "reason",
+            description: "operator-supplied reason for the rotation, if given",
+            required: false,
+        },
+        STEP_UP_ATTRIBUTE,
+    ],
 };
 
 crate::declare_write_command! {
-    /// K01 — signing-key rotation.
+    /// K01 — signing-key rotation. Its caller is the administrator's web
+    /// rotation (`signing_keys_rotate`, gated by an admin session and a
+    /// step-up), so the administrator is the actor; no CLI or scheduled
+    /// rotation exists (RFC 102 stage 7).
     command K01 = "K01" {
-        // Key rotation is an ops/CLI/scheduled trigger, not an action a
-        // logged-in user takes on their own session — no human actor is
-        // ever the authority for it (K01_ROTATED's `actor: None` already
-        // says the same thing about the event payload).
-        system_principal: permitted;
+        system_principal: forbidden;
         enum K01Event {
-            Rotated { new_key: SigningKeyId, algorithm: String } => &K01_ROTATED,
+            Rotated {
+                new_key: SigningKeyId,
+                algorithm: String,
+                reason: Option<String>,
+                step_up: SessionStepUpEvidence,
+            } => &K01_ROTATED,
         }
     }
 }
@@ -76,27 +172,41 @@ impl SealedCommandEvent<K01> for K01Event {
     }
 
     fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
-        let Self::Rotated { algorithm, .. } = self;
-        AuditAttributes::builder()
-            .attribute("algorithm", algorithm.clone())
-            .build()
+        let Self::Rotated {
+            algorithm,
+            reason,
+            step_up,
+            ..
+        } = self;
+        let mut builder = AuditAttributes::builder().attribute("algorithm", algorithm.clone());
+        if let Some(r) = reason {
+            builder = builder.attribute("reason", r.clone());
+        }
+        builder.attribute("step_up", step_up.as_attribute()).build()
     }
 }
 
-/// Run K01 (signing-key rotation) through the Class-A runner.
+/// Run K01 (signing-key rotation) through the Class-A runner, as the
+/// administrator `admin` acting on `session_id` (RFC 102 B4: the step-up
+/// evidence is computed from that session inside the transaction).
 ///
-/// `private_key_plain` is sealed by the caller *before* this is called
-/// (RFC 094: crypto work stays outside the transaction) — same contract as
-/// [`crate::repos::signing_keys::rotate_atomic`].
+/// `private_key_sealed` is sealed by the caller *before* this is called
+/// (RFC 094: crypto work stays outside the transaction).
+#[allow(clippy::too_many_arguments)]
 pub async fn rotate_signing_key(
     db: &crate::Database,
+    admin: UserId,
+    session_id: sui_id_shared::ids::SessionId,
     new_id: SigningKeyId,
     algorithm: String,
     private_key_sealed: Vec<u8>,
     public_key: Vec<u8>,
+    reason: Option<String>,
 ) -> StoreResult<crate::registry::Audited<()>> {
-    let context = AuthorizedCommandContext::<K01>::for_system_actor(None);
+    let context = AuthorizedCommandContext::<K01>::for_authorized_actor(admin, None);
     db.class_a(context, move |tx: &mut ClassATx<'_, K01>| {
+        let step_up =
+            session_step_up_evidence_within_tx(tx.tx(), session_id, admin, chrono::Utc::now())?;
         crate::repos::signing_keys::rotate_atomic_within_tx(
             tx.tx(),
             new_id,
@@ -109,6 +219,8 @@ pub async fn rotate_signing_key(
             K01Event::Rotated {
                 new_key: new_id,
                 algorithm,
+                reason,
+                step_up,
             },
         ))
     })
@@ -126,6 +238,7 @@ static U22_FAILURE: EventDescriptor = EventDescriptor {
     attributes: &[AttributeSpec {
         name: "count",
         description: "failed-login counter value after this attempt",
+        required: false,
     }],
 };
 
@@ -139,11 +252,13 @@ static U22_LOCKOUT: EventDescriptor = EventDescriptor {
         AttributeSpec {
             name: "count",
             description: "failed-login counter value that crossed the threshold",
+            required: false,
         },
         AttributeSpec {
             name: "locked_for_secs",
             description: "the lock window's length in seconds, as computed by the caller's \
                 backoff policy",
+            required: false,
         },
     ],
 };
@@ -342,10 +457,14 @@ static U02_DISABLE: EventDescriptor = EventDescriptor {
     class: AuditClass::Atomic,
     actor: ActorRequirement::Required,
     target: TargetRequirement::Required,
-    attributes: &[AttributeSpec {
-        name: "reason",
-        description: "operator-supplied reason for the disable, if given",
-    }],
+    attributes: &[
+        AttributeSpec {
+            name: "reason",
+            description: "operator-supplied reason for the disable, if given",
+            required: false,
+        },
+        STEP_UP_ATTRIBUTE,
+    ],
 };
 
 crate::declare_write_command! {
@@ -354,7 +473,11 @@ crate::declare_write_command! {
     command U02 = "U02" {
         system_principal: forbidden;
         enum U02Event {
-            Disabled { user_id: UserId, reason: Option<String> } => &U02_DISABLE,
+            Disabled {
+                user_id: UserId,
+                reason: Option<String>,
+                step_up: SessionStepUpEvidence,
+            } => &U02_DISABLE,
         }
     }
 }
@@ -370,12 +493,14 @@ impl SealedCommandEvent<U02> for U02Event {
     }
 
     fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
-        let Self::Disabled { reason, .. } = self;
+        let Self::Disabled {
+            reason, step_up, ..
+        } = self;
         let mut builder = AuditAttributes::builder();
         if let Some(r) = reason {
             builder = builder.attribute("reason", r.clone());
         }
-        builder.build()
+        builder.attribute("step_up", step_up.as_attribute()).build()
     }
 }
 
@@ -387,11 +512,14 @@ impl SealedCommandEvent<U02> for U02Event {
 pub async fn disable_user(
     db: &crate::Database,
     admin: UserId,
+    session_id: sui_id_shared::ids::SessionId,
     target: UserId,
     reason: Option<String>,
 ) -> StoreResult<crate::registry::Audited<()>> {
     let context = AuthorizedCommandContext::<U02>::for_authorized_actor(admin, None);
     db.class_a(context, move |tx: &mut ClassATx<'_, U02>| {
+        let step_up =
+            session_step_up_evidence_within_tx(tx.tx(), session_id, admin, chrono::Utc::now())?;
         crate::repos::users::set_disabled_within_tx(tx.tx(), target, true)?;
         crate::repos::sessions::revoke_all_for_user_within_tx(tx.tx(), target, chrono::Utc::now())?;
         crate::repos::refresh_tokens::revoke_all_for_user_within_tx(
@@ -405,6 +533,7 @@ pub async fn disable_user(
             U02Event::Disabled {
                 user_id: target,
                 reason,
+                step_up,
             },
         ))
     })
@@ -419,7 +548,7 @@ static U03_ENABLE: EventDescriptor = EventDescriptor {
     class: AuditClass::Atomic,
     actor: ActorRequirement::Required,
     target: TargetRequirement::Required,
-    attributes: &[],
+    attributes: &[STEP_UP_ATTRIBUTE],
 };
 
 crate::declare_write_command! {
@@ -427,14 +556,14 @@ crate::declare_write_command! {
     command U03 = "U03" {
         system_principal: forbidden;
         enum U03Event {
-            Enabled { user_id: UserId } => &U03_ENABLE,
+            Enabled { user_id: UserId, step_up: SessionStepUpEvidence } => &U03_ENABLE,
         }
     }
 }
 
 impl SealedCommandEvent<U03> for U03Event {
     fn target(&self) -> Option<AuditTarget> {
-        let Self::Enabled { user_id } = self;
+        let Self::Enabled { user_id, .. } = self;
         Some(AuditTarget(user_id.to_string()))
     }
 
@@ -443,7 +572,10 @@ impl SealedCommandEvent<U03> for U03Event {
     }
 
     fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
-        AuditAttributes::builder().build()
+        let Self::Enabled { step_up, .. } = self;
+        AuditAttributes::builder()
+            .attribute("step_up", step_up.as_attribute())
+            .build()
     }
 }
 
@@ -454,12 +586,21 @@ impl SealedCommandEvent<U03> for U03Event {
 pub async fn enable_user(
     db: &crate::Database,
     admin: UserId,
+    session_id: sui_id_shared::ids::SessionId,
     target: UserId,
 ) -> StoreResult<crate::registry::Audited<()>> {
     let context = AuthorizedCommandContext::<U03>::for_authorized_actor(admin, None);
     db.class_a(context, move |tx: &mut ClassATx<'_, U03>| {
+        let step_up =
+            session_step_up_evidence_within_tx(tx.tx(), session_id, admin, chrono::Utc::now())?;
         crate::repos::users::set_disabled_within_tx(tx.tx(), target, false)?;
-        Ok(((), U03Event::Enabled { user_id: target }))
+        Ok((
+            (),
+            U03Event::Enabled {
+                user_id: target,
+                step_up,
+            },
+        ))
     })
     .await
 }
@@ -472,10 +613,14 @@ static U04_DELETE: EventDescriptor = EventDescriptor {
     class: AuditClass::Atomic,
     actor: ActorRequirement::Required,
     target: TargetRequirement::Required,
-    attributes: &[AttributeSpec {
-        name: "reason",
-        description: "operator-supplied reason for the deletion, if given",
-    }],
+    attributes: &[
+        AttributeSpec {
+            name: "reason",
+            description: "operator-supplied reason for the deletion, if given",
+            required: false,
+        },
+        STEP_UP_ATTRIBUTE,
+    ],
 };
 
 crate::declare_write_command! {
@@ -483,7 +628,11 @@ crate::declare_write_command! {
     command U04 = "U04" {
         system_principal: forbidden;
         enum U04Event {
-            Deleted { user_id: UserId, reason: Option<String> } => &U04_DELETE,
+            Deleted {
+                user_id: UserId,
+                reason: Option<String>,
+                step_up: SessionStepUpEvidence,
+            } => &U04_DELETE,
         }
     }
 }
@@ -499,12 +648,14 @@ impl SealedCommandEvent<U04> for U04Event {
     }
 
     fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
-        let Self::Deleted { reason, .. } = self;
+        let Self::Deleted {
+            reason, step_up, ..
+        } = self;
         let mut builder = AuditAttributes::builder();
         if let Some(r) = reason {
             builder = builder.attribute("reason", r.clone());
         }
-        builder.build()
+        builder.attribute("step_up", step_up.as_attribute()).build()
     }
 }
 
@@ -513,11 +664,14 @@ impl SealedCommandEvent<U04> for U04Event {
 pub async fn delete_user(
     db: &crate::Database,
     admin: UserId,
+    session_id: sui_id_shared::ids::SessionId,
     target: UserId,
     reason: Option<String>,
 ) -> StoreResult<crate::registry::Audited<()>> {
     let context = AuthorizedCommandContext::<U04>::for_authorized_actor(admin, None);
     db.class_a(context, move |tx: &mut ClassATx<'_, U04>| {
+        let step_up =
+            session_step_up_evidence_within_tx(tx.tx(), session_id, admin, chrono::Utc::now())?;
         crate::repos::users::soft_delete_within_tx(tx.tx(), target)?;
         crate::repos::sessions::revoke_all_for_user_within_tx(tx.tx(), target, chrono::Utc::now())?;
         crate::repos::refresh_tokens::revoke_all_for_user_within_tx(
@@ -531,6 +685,7 @@ pub async fn delete_user(
             U04Event::Deleted {
                 user_id: target,
                 reason,
+                step_up,
             },
         ))
     })
@@ -556,10 +711,12 @@ static U05_ROLE_CHANGE: EventDescriptor = EventDescriptor {
         AttributeSpec {
             name: "old_role",
             description: "the user's role before the change",
+            required: false,
         },
         AttributeSpec {
             name: "new_role",
             description: "the user's role after the change",
+            required: false,
         },
     ],
 };
@@ -735,19 +892,24 @@ static U07_ADMIN_RESET: EventDescriptor = EventDescriptor {
         AttributeSpec {
             name: "totp",
             description: "whether a TOTP enrollment was removed (\"removed\" or \"absent\")",
+            required: false,
         },
         AttributeSpec {
             name: "passkeys",
             description: "number of WebAuthn credentials removed",
+            required: false,
         },
         AttributeSpec {
             name: "reason",
             description: "operator-supplied reason for the reset, if given",
+            required: false,
         },
         AttributeSpec {
             name: "via",
             description: "\"cli\" when `sui-id admin reset-mfa` issued the reset; absent for the web path",
+            required: false,
         },
+        STEP_UP_ATTRIBUTE,
     ],
 };
 
@@ -759,12 +921,22 @@ crate::declare_write_command! {
     command U07 = "U07" {
         system_principal: permitted;
         enum U07Event {
+            /// The web reset: an administrator's session, with its step-up
+            /// evidence.
             Reset {
                 user_id: UserId,
                 totp_removed: bool,
                 passkeys_removed: usize,
                 reason: Option<String>,
-                via_cli: bool,
+                step_up: SessionStepUpEvidence,
+            } => &U07_ADMIN_RESET,
+            /// The operator CLI: no session, the system principal. The only
+            /// event in this crate that records `not_applicable`.
+            OperatorReset {
+                user_id: UserId,
+                totp_removed: bool,
+                passkeys_removed: usize,
+                reason: String,
             } => &U07_ADMIN_RESET,
         }
     }
@@ -772,7 +944,7 @@ crate::declare_write_command! {
 
 impl SealedCommandEvent<U07> for U07Event {
     fn target(&self) -> Option<AuditTarget> {
-        let Self::Reset { user_id, .. } = self;
+        let (Self::Reset { user_id, .. } | Self::OperatorReset { user_id, .. }) = self;
         Some(AuditTarget(user_id.to_string()))
     }
 
@@ -781,23 +953,36 @@ impl SealedCommandEvent<U07> for U07Event {
     }
 
     fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
-        let Self::Reset {
-            totp_removed,
-            passkeys_removed,
-            reason,
-            via_cli,
-            ..
-        } = self;
-        let mut builder = AuditAttributes::builder()
-            .attribute("totp", if *totp_removed { "removed" } else { "absent" })
-            .attribute("passkeys", passkeys_removed.to_string());
-        if let Some(r) = reason {
-            builder = builder.attribute("reason", r.clone());
+        let removed = |totp: bool, passkeys: usize| {
+            AuditAttributes::builder()
+                .attribute("totp", if totp { "removed" } else { "absent" })
+                .attribute("passkeys", passkeys.to_string())
+        };
+        match self {
+            Self::Reset {
+                totp_removed,
+                passkeys_removed,
+                reason,
+                step_up,
+                ..
+            } => {
+                let mut builder = removed(*totp_removed, *passkeys_removed);
+                if let Some(r) = reason {
+                    builder = builder.attribute("reason", r.clone());
+                }
+                builder.attribute("step_up", step_up.as_attribute()).build()
+            }
+            Self::OperatorReset {
+                totp_removed,
+                passkeys_removed,
+                reason,
+                ..
+            } => removed(*totp_removed, *passkeys_removed)
+                .attribute("reason", reason.clone())
+                .attribute("via", "cli")
+                .attribute("step_up", STEP_UP_NOT_APPLICABLE)
+                .build(),
         }
-        if *via_cli {
-            builder = builder.attribute("via", "cli");
-        }
-        builder.build()
     }
 }
 
@@ -833,20 +1018,34 @@ impl SealedCommandEvent<U07> for U07Event {
 pub async fn admin_reset_mfa(
     db: &crate::Database,
     admin: UserId,
+    session_id: sui_id_shared::ids::SessionId,
     target: UserId,
     reason: Option<String>,
 ) -> StoreResult<crate::registry::Audited<(bool, usize)>> {
     let context = AuthorizedCommandContext::<U07>::for_authorized_actor(admin, None);
     db.class_a(context, move |tx: &mut ClassATx<'_, U07>| {
-        reset_mfa_within_tx(tx, target, reason, false)
+        let step_up =
+            session_step_up_evidence_within_tx(tx.tx(), session_id, admin, chrono::Utc::now())?;
+        let (totp_removed, passkeys_removed) = remove_mfa_within_tx(tx, target)?;
+        Ok((
+            (totp_removed, passkeys_removed),
+            U07Event::Reset {
+                user_id: target,
+                totp_removed,
+                passkeys_removed,
+                reason,
+                step_up,
+            },
+        ))
     })
     .await
 }
 
 /// Run U07 for the operator CLI, `sui-id admin reset-mfa` (RFC 103 D12):
-/// the same removal as [`admin_reset_mfa`], with no actor and `via = cli`.
-/// Only the CLI adapter calls this; the web path must never reach the
-/// system principal.
+/// the same removal as [`admin_reset_mfa`], with no actor, `via = cli` and
+/// `step_up = not_applicable:system_principal`. It takes no session, so no
+/// step-up evidence exists to compute; only the CLI adapter calls it, and
+/// the web path must never reach the system principal.
 pub async fn operator_reset_mfa(
     db: &crate::Database,
     target: UserId,
@@ -854,17 +1053,21 @@ pub async fn operator_reset_mfa(
 ) -> StoreResult<crate::registry::Audited<(bool, usize)>> {
     let context = AuthorizedCommandContext::<U07>::for_system_actor(None);
     db.class_a(context, move |tx: &mut ClassATx<'_, U07>| {
-        reset_mfa_within_tx(tx, target, Some(reason), true)
+        let (totp_removed, passkeys_removed) = remove_mfa_within_tx(tx, target)?;
+        Ok((
+            (totp_removed, passkeys_removed),
+            U07Event::OperatorReset {
+                user_id: target,
+                totp_removed,
+                passkeys_removed,
+                reason,
+            },
+        ))
     })
     .await
 }
 
-fn reset_mfa_within_tx(
-    tx: &mut ClassATx<'_, U07>,
-    target: UserId,
-    reason: Option<String>,
-    via_cli: bool,
-) -> StoreResult<((bool, usize), U07Event)> {
+fn remove_mfa_within_tx(tx: &mut ClassATx<'_, U07>, target: UserId) -> StoreResult<(bool, usize)> {
     // Existence probe only -- the role itself is unused here. Also
     // deliberately excludes soft-deleted users (`is_deleted = 0` in
     // get_role_within_tx's WHERE clause): resetting MFA on a deleted
@@ -881,14 +1084,7 @@ fn reset_mfa_within_tx(
         crate::repos::user_webauthn_credentials::delete_within_tx(tx.tx(), c.id, target)?;
     }
 
-    let event = U07Event::Reset {
-        user_id: target,
-        totp_removed,
-        passkeys_removed,
-        reason,
-        via_cli,
-    };
-    Ok(((totp_removed, passkeys_removed), event))
+    Ok((totp_removed, passkeys_removed))
 }
 
 // ── U08 — CLI operator unlock ────────────────────────────────────────
@@ -981,10 +1177,12 @@ static U09_CHANGED_SELF: EventDescriptor = EventDescriptor {
         AttributeSpec {
             name: "sessions_revoked",
             description: "count of other sessions revoked by this change",
+            required: false,
         },
         AttributeSpec {
             name: "refresh_tokens_revoked",
             description: "count of refresh tokens revoked by this change",
+            required: false,
         },
     ],
 };
@@ -1168,6 +1366,7 @@ static T04_ROTATED: EventDescriptor = EventDescriptor {
     attributes: &[AttributeSpec {
         name: "family_id",
         description: "the rotation family the presented token belonged to",
+        required: false,
     }],
 };
 
@@ -1181,10 +1380,12 @@ static T04_THEFT_DETECTED: EventDescriptor = EventDescriptor {
         AttributeSpec {
             name: "family_id",
             description: "the rotation family that was revoked",
+            required: false,
         },
         AttributeSpec {
             name: "family_revoked_count",
             description: "how many still-active family members were revoked in this sweep",
+            required: false,
         },
     ],
 };
@@ -1353,14 +1554,17 @@ static L01_SUCCESS: EventDescriptor = EventDescriptor {
         AttributeSpec {
             name: "evicted",
             description: "older sessions revoked to keep the user within the concurrent-session cap",
+            required: false,
         },
         AttributeSpec {
             name: "source",
             description: "slug of the user source that authenticated a directory sign-in (L03); absent for a local password (L01)",
+            required: false,
         },
         AttributeSpec {
             name: "stable_id",
             description: "the directory stable id of a directory sign-in (L03), truncated to 255 bytes; absent for L01",
+            required: false,
         },
     ],
 };
@@ -1524,14 +1728,17 @@ static L04_SUCCESS: EventDescriptor = EventDescriptor {
         AttributeSpec {
             name: "provider",
             description: "slug of the upstream federation provider",
+            required: false,
         },
         AttributeSpec {
             name: "sub",
             description: "the upstream subject, truncated to 255 bytes",
+            required: false,
         },
         AttributeSpec {
             name: "evicted",
             description: "older sessions revoked to keep the user within the concurrent-session cap",
+            required: false,
         },
     ],
 };
@@ -1614,10 +1821,12 @@ static L02_SUCCESS: EventDescriptor = EventDescriptor {
         AttributeSpec {
             name: "method",
             description: "the second factor: \"totp\", \"recovery_code\" or \"webauthn\"",
+            required: false,
         },
         AttributeSpec {
             name: "evicted",
             description: "older sessions revoked to keep the user within the concurrent-session cap",
+            required: false,
         },
     ],
 };
@@ -1746,6 +1955,7 @@ static L07_FAILURE: EventDescriptor = EventDescriptor {
     attributes: &[AttributeSpec {
         name: "count",
         description: "consecutive wrong second factors for this user, after this one",
+        required: false,
     }],
 };
 
@@ -1759,10 +1969,12 @@ static L07_LOCKOUT: EventDescriptor = EventDescriptor {
         AttributeSpec {
             name: "count",
             description: "consecutive wrong second factors that reached the lockout threshold",
+            required: false,
         },
         AttributeSpec {
             name: "locked_for_secs",
             description: "length of the account lock, from U22's backoff",
+            required: false,
         },
     ],
 };
@@ -1908,10 +2120,12 @@ static L05_SUCCESS: EventDescriptor = EventDescriptor {
         AttributeSpec {
             name: "method",
             description: "the factor that satisfied the step-up: \"totp\" or \"webauthn\"",
+            required: false,
         },
         AttributeSpec {
             name: "gate",
             description: "the sanitised return_to path the step-up was for, truncated to 256 bytes",
+            required: false,
         },
     ],
 };
@@ -1973,10 +2187,10 @@ pub async fn complete_step_up(
     session_id: sui_id_shared::ids::SessionId,
     proof: StepUpProof,
     gate: String,
+    now: chrono::DateTime<chrono::Utc>,
 ) -> StoreResult<crate::registry::Audited<()>> {
     let context = AuthorizedCommandContext::<L05>::for_authorized_actor(user_id, None);
     db.class_a(context, move |tx: &mut ClassATx<'_, L05>| {
-        let now = chrono::Utc::now();
         crate::repos::sessions::require_live_session_within_tx(tx.tx(), session_id, user_id, now)?;
         let method = match proof {
             StepUpProof::Totp { step } => {
@@ -2017,6 +2231,7 @@ static L06_FAILURE: EventDescriptor = EventDescriptor {
     attributes: &[AttributeSpec {
         name: "count",
         description: "consecutive failed step-up attempts on this session, after this one",
+        required: false,
     }],
 };
 
@@ -2029,6 +2244,7 @@ static L06_SESSION_REVOKED: EventDescriptor = EventDescriptor {
     attributes: &[AttributeSpec {
         name: "count",
         description: "consecutive failed step-up attempts that reached the revocation threshold",
+        required: false,
     }],
 };
 
@@ -2088,6 +2304,7 @@ pub async fn record_step_up_failure(
     db: &crate::Database,
     user_id: UserId,
     session_id: sui_id_shared::ids::SessionId,
+    now: chrono::DateTime<chrono::Utc>,
 ) -> StoreResult<crate::registry::Audited<StepUpFailureOutcome>> {
     let context = AuthorizedCommandContext::<L06>::for_authorized_actor(user_id, None);
     db.class_a(context, move |tx: &mut ClassATx<'_, L06>| {
@@ -2097,7 +2314,7 @@ pub async fn record_step_up_failure(
             user_id,
         )?;
         if count >= STEP_UP_FAILURE_REVOCATION_THRESHOLD {
-            crate::repos::sessions::revoke_within_tx(tx.tx(), session_id, chrono::Utc::now())?;
+            crate::repos::sessions::revoke_within_tx(tx.tx(), session_id, now)?;
             Ok((
                 StepUpFailureOutcome {
                     count,
@@ -2131,6 +2348,7 @@ static MFA_FACTOR_ADDED: EventDescriptor = EventDescriptor {
     attributes: &[AttributeSpec {
         name: "method",
         description: "the factor added: `totp`, `recovery_codes` or `webauthn`",
+        required: false,
     }],
 };
 

@@ -44,31 +44,29 @@ pub async fn rotate_signing_key(
     let pk = sk.verifying_key();
     let new_id = SigningKeyId::new();
 
-    // Delegate the retire-then-insert to the store layer. Migration 0021
-    // adds a partial unique index (at most one is_active=1 row), so the
-    // old insert-then-retire order would violate the constraint. The new
-    // order retires first and inserts second inside one transaction.
-    signing_keys::rotate_atomic(
+    // RFC 094 K01 (RFC 102 stage 7): the retire-then-insert and the
+    // `signing_key.rotate` event commit in one Class-A transaction, as this
+    // administrator acting on this session, with the step-up evidence and
+    // the reason. The private half is sealed before the transaction.
+    let sealed = signing_keys::seal_private_key(db, sk.to_bytes().as_ref())?;
+    sui_id_store::commands::rotate_signing_key(
         db,
+        actor_id,
+        actor.session_id(),
         new_id,
-        "EdDSA",
-        sk.to_bytes().as_ref(),
-        pk.to_bytes().as_ref(),
+        "EdDSA".into(),
+        sealed,
+        pk.to_bytes().to_vec(),
+        reason,
     )
     .await?;
+    // After commit, as before: a failed rebuild is logged and the next
+    // rebuild picks the new key up.
     if let Err(e) = caches.jwks.rebuild(db).await {
         tracing::warn!(error = %e, "cache rebuild failed after rotate_signing_key");
     }
     let _ = clock;
     let _ = keyring_path;
-    audit_with_note(
-        db,
-        actor_id,
-        "signing_key.rotate",
-        Some(new_id.to_string()),
-        reason,
-    )
-    .await;
     Ok(new_id)
 }
 

@@ -149,6 +149,10 @@ pub enum TargetRequirement {
 pub struct AttributeSpec {
     pub name: &'static str,
     pub description: &'static str,
+    /// Whether every event of this descriptor must carry the attribute. The
+    /// Class-A runner rolls back an event that omits a required attribute
+    /// (RFC 102 B4's `step_up` is the first required attribute).
+    pub required: bool,
 }
 
 /// Stable identifier for every distinct audit event name in the registry.
@@ -356,6 +360,8 @@ pub enum AuditBuildError {
     TooManyAttributes,
     #[error("attribute {0:?} declared more than once")]
     DuplicateAttribute(&'static str),
+    #[error("required attribute {0:?} is missing")]
+    MissingRequiredAttribute(&'static str),
 }
 
 pub struct AuditAttributesBuilder {
@@ -686,7 +692,18 @@ impl Database {
                 let descriptor = C::descriptor(&event);
                 let target = event.target();
                 let audit_result = event.result();
-                let attributes = match event.attributes() {
+                let attributes = match event.attributes().and_then(|a| {
+                    match descriptor
+                        .attributes
+                        .iter()
+                        .find(|spec| spec.required && !a.iter().any(|(k, _)| k == spec.name))
+                    {
+                        Some(missing) => {
+                            Err(AuditBuildError::MissingRequiredAttribute(missing.name))
+                        }
+                        None => Ok(a),
+                    }
+                }) {
                     Ok(a) => a,
                     Err(build_err) => {
                         #[allow(clippy::expect_used)]

@@ -108,13 +108,15 @@ async fn u01_injected_failure_after_append_rolls_back_the_user_insert_and_the_ap
 #[tokio::test]
 async fn u02_disable_flips_flag_revokes_session_and_records_reason() {
     let db = fresh_db();
+    let (admin, session) = an_admin_session(&db).await;
     let user = a_user();
     repos::users::create(&db, &user).await.expect("create user");
     let session_id = seed_active_session(&db, user.id).await;
 
     let audited = disable_user(
         &db,
-        an_admin(),
+        admin,
+        session,
         user.id,
         Some("policy violation".to_string()),
     )
@@ -140,16 +142,20 @@ async fn u02_disable_flips_flag_revokes_session_and_records_reason() {
         .next()
         .expect("row");
     assert_eq!(tail.action, "user.disable");
-    assert_eq!(tail.note.as_deref(), Some("reason=policy violation"));
+    assert_eq!(
+        tail.note.as_deref(),
+        Some("reason=policy violation step_up=not_required:no_second_factor")
+    );
 }
 
 #[tokio::test]
-async fn u02_disable_without_reason_records_no_note() {
+async fn u02_disable_without_reason_records_only_the_step_up_evidence() {
     let db = fresh_db();
+    let (admin, session) = an_admin_session(&db).await;
     let user = a_user();
     repos::users::create(&db, &user).await.expect("create user");
 
-    disable_user(&db, an_admin(), user.id, None)
+    disable_user(&db, admin, session, user.id, None)
         .await
         .expect("disable");
 
@@ -159,19 +165,23 @@ async fn u02_disable_without_reason_records_no_note() {
         .into_iter()
         .next()
         .expect("row");
-    assert_eq!(tail.note, None);
+    assert_eq!(
+        tail.note.as_deref(),
+        Some("step_up=not_required:no_second_factor")
+    );
 }
 
 #[tokio::test]
 async fn u02_injected_failure_before_append_rolls_back_disable_and_session_revoke() {
     let db = fresh_db();
+    let (admin, session) = an_admin_session(&db).await;
     let user = a_user();
     repos::users::create(&db, &user).await.expect("create user");
     let session_id = seed_active_session(&db, user.id).await;
     let before_audit = latest_audit_action(&db).await;
 
     db.fault_injector().fail_before_next_append();
-    let result = disable_user(&db, an_admin(), user.id, None).await;
+    let result = disable_user(&db, admin, session, user.id, None).await;
     assert!(result.is_err(), "injected failure must surface as Err");
 
     let row = repos::users::get(&db, user.id).await.expect("get");
@@ -189,11 +199,14 @@ async fn u02_injected_failure_before_append_rolls_back_disable_and_session_revok
 #[tokio::test]
 async fn u03_enable_clears_disabled_flag_and_appends_event() {
     let db = fresh_db();
+    let (admin, session) = an_admin_session(&db).await;
     let mut user = a_user();
     user.is_disabled = true;
     repos::users::create(&db, &user).await.expect("create user");
 
-    let audited = enable_user(&db, an_admin(), user.id).await.expect("enable");
+    let audited = enable_user(&db, admin, session, user.id)
+        .await
+        .expect("enable");
     audited.into_inner();
 
     let row = repos::users::get(&db, user.id).await.expect("get");
@@ -206,19 +219,29 @@ async fn u03_enable_clears_disabled_flag_and_appends_event() {
         .next()
         .expect("row");
     assert_eq!(tail.action, "user.enable");
-    assert_eq!(tail.note, None);
+    assert_eq!(
+        tail.note.as_deref(),
+        Some("step_up=not_required:no_second_factor")
+    );
 }
 
 #[tokio::test]
 async fn u04_delete_soft_deletes_revokes_session_and_records_reason() {
     let db = fresh_db();
+    let (admin, session) = an_admin_session(&db).await;
     let user = a_user();
     repos::users::create(&db, &user).await.expect("create user");
     let session_id = seed_active_session(&db, user.id).await;
 
-    let audited = delete_user(&db, an_admin(), user.id, Some("gdpr request".to_string()))
-        .await
-        .expect("delete");
+    let audited = delete_user(
+        &db,
+        admin,
+        session,
+        user.id,
+        Some("gdpr request".to_string()),
+    )
+    .await
+    .expect("delete");
     audited.into_inner();
 
     let row = repos::users::get(&db, user.id).await.expect("get");
@@ -237,19 +260,23 @@ async fn u04_delete_soft_deletes_revokes_session_and_records_reason() {
         .next()
         .expect("row");
     assert_eq!(tail.action, "user.delete");
-    assert_eq!(tail.note.as_deref(), Some("reason=gdpr request"));
+    assert_eq!(
+        tail.note.as_deref(),
+        Some("reason=gdpr request step_up=not_required:no_second_factor")
+    );
 }
 
 #[tokio::test]
 async fn u04_injected_failure_before_append_rolls_back_delete_and_session_revoke() {
     let db = fresh_db();
+    let (admin, session) = an_admin_session(&db).await;
     let user = a_user();
     repos::users::create(&db, &user).await.expect("create user");
     let session_id = seed_active_session(&db, user.id).await;
     let before_audit = latest_audit_action(&db).await;
 
     db.fault_injector().fail_before_next_append();
-    let result = delete_user(&db, an_admin(), user.id, None).await;
+    let result = delete_user(&db, admin, session, user.id, None).await;
     assert!(result.is_err(), "injected failure must surface as Err");
 
     let row = repos::users::get(&db, user.id).await.expect("get");
