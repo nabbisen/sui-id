@@ -80,7 +80,61 @@ Carried into stage 5 as follow-ups:
 - **Log-capture retries** in the append-failure tests work around tracing's
   callsite interest cache. That goes to `roadmap/request-id-span/`.
 
-## Stage 5 — dispatched 2026-09-17: A4, no bypass; and stage 4's follow-ups
+## Stage 5 — landed `0b03f3a`, 2026-09-17
+
+Reviewed, and committed as one commit. **Part A is complete.** Every session is
+created by L01–L04, and nothing outside the store can insert one; a
+compile-negative fixture proves it. Accepted:
+- `sessions::insert` is `#[cfg(test)] pub(crate)`.
+- The runtime "no audit row" test for the Protocol runner moved to T09's test.
+
+## Stage 6 — dispatched 2026-09-17: L05, step-up success atomic
+
+**Baseline.** The commit that adds this section, or later.
+
+**Scope** — RFC 102 Part B, B1 and B-F5:
+- **L05** (sealed Class A) replaces `touch_step_up` on both success paths
+  (`verify_totp_code`, `finish_webauthn`). In one transaction:
+  - re-read the session: it exists, belongs to the user, is unrevoked and
+    unexpired, and the user is active;
+  - consume the factor:
+    - for TOTP, the guarded `last_used_step` advance (reuse L02's statement);
+    - for WebAuthn, a guarded delete of this user's `StepUp`-kind ceremony row
+      (zero rows → roll back);
+  - set `last_step_up_at` and `last_step_up_method`;
+  - reset `step_up_failure_count`;
+  - write `auth.step_up.success` with attributes `method` and `gate`. `gate` is
+    the sanitised `return_to`, truncated with `truncate_utf8`.
+- **B-F5: no kind swap.** `webauthn::finish_authentication` takes the expected
+  ceremony kind. `start_webauthn` creates the row as `StepUp` directly, and
+  `finish_webauthn` no longer rewrites it to `Authenticate`. The sign-in path
+  passes `Authenticate`. The ceremony row is consumed inside L05 for step-up;
+  on the sign-in path, say where it is consumed today and leave it there.
+- **Remove `touch_step_up`,** or make it crate-private if a store test needs it.
+  The two e2e callers in `crates/sui-id/tests/e2e/mfa.rs` reach freshness by
+  stepping up through the handler, or through L05. Do not add a raw test route.
+- **A9.** A failed L05 runs no L06, and gets the existing uniform step-up
+  response: the 400 page for TOTP, JSON 400 for WebAuthn. The cause is logged.
+
+**Evidence.**
+- **Happy path**, TOTP and WebAuthn (WebAuthn through the command, since no
+  authenticator is available): one event, fresh, the method recorded, the count
+  reset.
+- **Injected append failure:** no freshness, step or ceremony unchanged, count
+  unchanged, the uniform response, the log line.
+- **Concurrency:** one TOTP code on two concurrent step-ups gives exactly one
+  success event and one freshness change.
+- **Revalidation:** a session revoked between verification and commit is rolled
+  back.
+- **The ceremony kind:** a sign-in `Authenticate` ceremony cannot complete a
+  step-up, and a `StepUp` ceremony cannot complete a sign-in. Test both
+  directions against the new `finish_authentication` parameter.
+- **Mutation:** the session re-read, the TOTP guard, the ceremony guard and the
+  kind check, one at a time; each is caught.
+- **Build and gates:** fmt, both clippy scopes, the test count (default and all
+  features), MSRV 1.95, G13, G15.
+
+## Stage 5 — as dispatched
 
 **Baseline.** The commit that adds this section, or later.
 
