@@ -53,6 +53,13 @@ so they are built fail-closed once rather than rebuilt. F02, F04, F05 and F06 ar
 unaffected. **Released 2026-09-17:** RFC 102 is Accepted; F01 and F03 are built to
 it (its L04 is their predecessor).
 
+**Finding for 096-B1 (2026-09-17, RFC 102 stage 4).** The shipped callback stores
+`FedState.next` at start but never reads it: every federated sign-in lands on
+`/admin`, or `/admin/login/mfa`. A non-admin federated user therefore cannot
+complete an OIDC authorize flow through federation. When B1 honours `next`,
+apply RFC 102 A7 before F01 commits: refuse an admin-only destination for a
+user who cannot read it, before any write.
+
 ## Frozen boundaries
 
 - Public canonical HTTPS issuer and endpoint origins only; no private-network

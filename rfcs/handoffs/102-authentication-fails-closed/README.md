@@ -58,7 +58,67 @@ Reviewed, and committed as one commit. Accepted:
   authenticator is available. RFC 099's live-integration evidence must include
   a real passkey sign-in.
 
-## Stage 4 — dispatched 2026-09-17: L03 and L04, the directory and federated sign-ins
+## Stage 4 — landed `3041d8a`, 2026-09-17
+
+Reviewed, and committed as one commit. **Every sign-in path is now Class A.**
+
+Accepted:
+- **`auth.user_source.matched` is retired.** It had no other writer.
+- **A7 is not applicable on the federated callback.** The callback has no
+  post-authentication refusal, and `FedState.next` is stored but never read;
+  recorded for RFC 096-B1.
+- **A first directory sign-in resolves its id before the transaction.** A
+  concurrent first sign-in loses as an ordinary 401.
+
+Carried into stage 5 as follow-ups:
+- **Evidence was lost.** L04 dropped the upstream `sub`, and retiring
+  `auth.user_source.matched` dropped the directory `stable_id` from the audit
+  trail. Both are needed to answer "which upstream identity signed in",
+  especially after a link or shadow row changes. Neither is a secret.
+- **`unwrap_or_default()` for a new `UserId`** is correct, because `Default` is a
+  fresh v4, but it reads like a zero value in identity code.
+- **Log-capture retries** in the append-failure tests work around tracing's
+  callsite interest cache. That goes to `roadmap/request-id-span/`.
+
+## Stage 5 — dispatched 2026-09-17: A4, no bypass; and stage 4's follow-ups
+
+**Baseline.** The commit that adds this section, or later.
+
+**5a — stage 4 follow-ups.**
+- **L04:** `auth.federation.signin.success` gains a bounded `sub` attribute (the
+  upstream subject, truncated to 255 bytes), next to `provider` and `evicted`.
+- **L03:** `auth.login.success` gains a bounded `stable_id` attribute on the
+  directory path (truncated to 255 bytes; a DN is allowed).
+- **Explicit ids.** Replace `expected_id.unwrap_or_default()` with an explicit
+  `UserId::new()`, and require `expected_id` where the caller always has one.
+- **Docs.** Update the matrix and `docs/src/reference/audit-events.md`
+  attribute lists. G15 must pass.
+
+**5b — A4.**
+- **`sessions::insert` becomes `pub(crate)`** in `sui-id-store`, and so does
+  `insert_within_tx` if nothing outside needs it.
+- **Retire `commands::insert_session`** (U30's Protocol runner, no production
+  caller), and correct its manifest row.
+- **Test callers outside the store** — `crates/sui-id-core/src/authn/step_up.rs`
+  tests, `authn/session.rs` tests and `crates/sui-id/tests/e2e/me_security.rs`
+  (the design review's §2.6):
+  - they create sessions by signing in through the commands;
+  - or they use a store-side test constructor that runs **L01's transaction**.
+
+  **No `test-support` feature may re-export raw access** (RFC 094 migration
+  checklist). If a caller cannot use either route, stop and report.
+- **Structural check.** A test or gate that fails if a production module outside
+  `sui-id-store` names `sessions::insert`. A `pub(crate)` compile error is the
+  mechanism; show the compile-negative fixture, as RFC 094's fixtures do.
+
+**Evidence.**
+- 5a: attribute tests for both events, including truncation.
+- 5b: the compile-negative fixture, and the list of every former caller with
+  the route it now takes.
+- **Build and gates:** fmt, both clippy scopes, the test count (default and all
+  features), MSRV 1.95, G13, G15.
+
+## Stage 4 — as dispatched
 
 **Baseline.** The commit that adds this section, or later. It builds on the LDAP
 returning-sign-in package (`478ec5b`), which moved the directory path's session

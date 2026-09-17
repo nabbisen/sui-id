@@ -22,6 +22,17 @@ R11 test that checked for the span failed in 1 of 3 runs.
 - **Keep R11's field.** `login_post`'s explicit `request_id` field stays. Removing
   it is a separate decision.
 
+**One log-capture helper for the tests** (added 2026-09-17). Several e2e tests
+capture log lines with a scoped subscriber, and they work around tracing's
+callsite interest cache ad hoc:
+- `rebuild_interest_cache()` calls in `r103_stage1.rs`;
+- retry loops in `r102_stage4.rs`;
+- a current-thread runtime in the L04 test.
+
+Provide one shared helper in `crates/sui-id/tests/e2e/common.rs` that captures
+reliably across parallel tests, and move those tests onto it. A capture must
+never need a retry.
+
 ## Evidence
 - The test failing before the change and passing after.
 - One captured log line, before and after.
