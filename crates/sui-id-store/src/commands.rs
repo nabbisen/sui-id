@@ -1896,6 +1896,116 @@ fn evict_over_cap_within_tx(
     Ok(evicted)
 }
 
+// ── L05 — step-up success (RFC 102 Part B) ──────────────────────────────
+
+static L05_SUCCESS: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::AuthStepUpSuccess,
+    name: "auth.step_up.success",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[
+        AttributeSpec {
+            name: "method",
+            description: "the factor that satisfied the step-up: \"totp\" or \"webauthn\"",
+        },
+        AttributeSpec {
+            name: "gate",
+            description: "the sanitised return_to path the step-up was for, truncated to 256 bytes",
+        },
+    ],
+};
+
+/// Byte bound for L05's `gate` attribute (RFC 102's L05 row).
+pub const STEP_UP_GATE_ATTRIBUTE_BYTES: usize = 256;
+
+crate::declare_write_command! {
+    /// L05 — a successful step-up on a signed-in session. The actor is the
+    /// session's user, whose factor `sui-id-core` verified outside this
+    /// transaction.
+    command L05 = "L05" {
+        system_principal: forbidden;
+        enum L05Event {
+            Success { user_id: UserId, method: &'static str, gate: String } => &L05_SUCCESS,
+        }
+    }
+}
+
+impl SealedCommandEvent<L05> for L05Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Success { user_id, .. } = self;
+        Some(AuditTarget(user_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Success { method, gate, .. } = self;
+        AuditAttributes::builder()
+            .attribute("method", *method)
+            .attribute("gate", truncate_utf8(gate, STEP_UP_GATE_ATTRIBUTE_BYTES))
+            .build()
+    }
+}
+
+/// The factor L05 consumes, with what its guard compares.
+pub enum StepUpProof {
+    /// A TOTP code matched `step`; the stored step must still be below it.
+    Totp { step: i64 },
+    /// A WebAuthn assertion was verified against the `StepUp` ceremony
+    /// `pending_id`, which L05 deletes.
+    Webauthn {
+        pending_id: sui_id_shared::ids::WebauthnPendingId,
+    },
+}
+
+/// Run L05. In one transaction: re-read the session (exists, belongs to
+/// `user_id`, unrevoked, unexpired, user active); consume the factor (the
+/// guarded TOTP step advance, or the guarded delete of this user's `StepUp`
+/// ceremony); set `last_step_up_at` and `last_step_up_method`; reset the
+/// session's step-up failure count; and write `auth.step_up.success`. Any
+/// guard that loses rolls back with `NotFound`.
+pub async fn complete_step_up(
+    db: &crate::Database,
+    user_id: UserId,
+    session_id: sui_id_shared::ids::SessionId,
+    proof: StepUpProof,
+    gate: String,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<L05>::for_authorized_actor(user_id, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, L05>| {
+        let now = chrono::Utc::now();
+        crate::repos::sessions::require_live_session_within_tx(tx.tx(), session_id, user_id, now)?;
+        let method = match proof {
+            StepUpProof::Totp { step } => {
+                crate::repos::user_totp::advance_last_used_step_within_tx(tx.tx(), user_id, step)?;
+                "totp"
+            }
+            StepUpProof::Webauthn { pending_id } => {
+                crate::repos::webauthn_pending::consume_step_up_within_tx(
+                    tx.tx(),
+                    pending_id,
+                    user_id,
+                    now,
+                )?;
+                "webauthn"
+            }
+        };
+        crate::repos::sessions::record_step_up_within_tx(tx.tx(), session_id, method, now)?;
+        Ok((
+            (),
+            L05Event::Success {
+                user_id,
+                method,
+                gate,
+            },
+        ))
+    })
+    .await
+}
+
 // ── L06 — step-up failure (RFC 102 Part B) ──────────────────────────────
 
 static L06_FAILURE: EventDescriptor = EventDescriptor {

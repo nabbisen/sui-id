@@ -196,6 +196,8 @@ pub enum AuditEventKind {
     RefreshRotated,
     /// `auth.refresh.theft_detected` — T04, reuse/family-revocation branch.
     RefreshTheftDetected,
+    /// `auth.step_up.success` — L05, a successful step-up (RFC 102).
+    AuthStepUpSuccess,
     /// `auth.step_up.failure` — L06, below-threshold branch (RFC 102).
     AuthStepUpFailure,
     /// `auth.step_up.session_revoked` — L06, threshold-crossing branch.

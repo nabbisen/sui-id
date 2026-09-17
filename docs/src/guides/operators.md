@@ -969,7 +969,7 @@ wrong password counts as a step-up failure, and five in a row sign that session
 out.
 
 The audit log records every relevant event: `auth.mfa.factor_added`,
-`mfa.disable`, `webauthn.credential.delete`, `auth.step_up.failure`,
+`mfa.disable`, `webauthn.credential.delete`, `auth.step_up.success`, `auth.step_up.failure`,
 `auth.step_up.session_revoked`, `auth.mfa.success`, `auth.mfa.failure`,
 `auth.login.password_ok_mfa_required`.
 

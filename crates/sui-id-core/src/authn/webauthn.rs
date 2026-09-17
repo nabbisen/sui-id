@@ -196,11 +196,16 @@ pub struct AuthenticationStart {
     pub pending_id: WebauthnPendingId,
 }
 
+/// Begin a passkey assertion ceremony for `user_id`. `kind` is the flow the
+/// ceremony belongs to — `Authenticate` for the sign-in second factor,
+/// `StepUp` for a step-up — and is written once, when the row is created
+/// (RFC 102 B-F5: no later kind swap).
 pub async fn start_authentication(
     db: &Database,
     clock: &SharedClock,
     issuer_url: &str,
     user_id: UserId,
+    kind: WebauthnPendingKind,
 ) -> CoreResult<AuthenticationStart> {
     let webauthn = build(issuer_url).await?;
     let creds = user_webauthn_credentials::list_for_user(db, user_id).await?;
@@ -222,7 +227,7 @@ pub async fn start_authentication(
     let now = clock.now();
     let pending = WebauthnPendingRow {
         id: WebauthnPendingId::new(),
-        kind: WebauthnPendingKind::Authenticate,
+        kind,
         user_id: Some(user_id),
         state_json,
         expires_at: now + Duration::seconds(PENDING_TTL_SECS),
@@ -236,22 +241,35 @@ pub async fn start_authentication(
     })
 }
 
+/// Verify a passkey assertion against the ceremony `pending_id`, which must
+/// be of `expected_kind` (RFC 102 B-F5), belong to `expected_user_id` and
+/// be unexpired.
+///
+/// - A ceremony of another kind, or of another user, is refused **before**
+///   its state is read, and the row is left in place for the flow that
+///   owns it.
+/// - An expired ceremony is deleted and refused.
+/// - On success the credential's signature counter is updated (U29). An
+///   `Authenticate` ceremony is consumed here, as the sign-in path always
+///   has been; a `StepUp` ceremony is left for L05, which consumes it in
+///   the same transaction as the freshness and its event.
 pub async fn finish_authentication(
     db: &Database,
     clock: &SharedClock,
     issuer_url: &str,
     pending_id: WebauthnPendingId,
     expected_user_id: UserId,
+    expected_kind: WebauthnPendingKind,
     credential: &PublicKeyCredential,
 ) -> CoreResult<()> {
     let webauthn = build(issuer_url).await?;
     let pending = webauthn_pending::get(db, pending_id)
         .await?
         .ok_or(CoreError::Unauthenticated)?;
-    if pending.expires_at < clock.now()
-        || pending.kind != WebauthnPendingKind::Authenticate
-        || pending.user_id != Some(expected_user_id)
-    {
+    if pending.kind != expected_kind || pending.user_id != Some(expected_user_id) {
+        return Err(CoreError::Unauthenticated);
+    }
+    if pending.expires_at < clock.now() {
         let _ = webauthn_pending::delete(db, pending_id).await;
         return Err(CoreError::Unauthenticated);
     }
@@ -278,7 +296,9 @@ pub async fn finish_authentication(
     let _changed = passkey.update_credential(&result);
     let new_blob = serde_json::to_vec(&passkey).map_err(|_| CoreError::Internal)?;
     user_webauthn_credentials::update_passkey(db, row.id, &new_blob).await?;
-    let _ = webauthn_pending::delete(db, pending_id).await;
+    if expected_kind != WebauthnPendingKind::StepUp {
+        let _ = webauthn_pending::delete(db, pending_id).await;
+    }
     Ok(())
 }
 
@@ -464,7 +484,14 @@ mod integration_tests {
     async fn start_authentication_rejects_users_with_no_credentials() {
         let (db, uid) = fresh_db_with_user().await;
         let clock = system_clock();
-        let r = start_authentication(&db, &clock, "https://idp.example", uid).await;
+        let r = start_authentication(
+            &db,
+            &clock,
+            "https://idp.example",
+            uid,
+            WebauthnPendingKind::Authenticate,
+        )
+        .await;
         assert!(matches!(r, Err(crate::errors::CoreError::BadRequest(_))));
     }
 

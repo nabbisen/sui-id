@@ -175,11 +175,12 @@ atomically with the credential.*
 
 ### Step-up and factor additions (RFC 102)
 
-Added 2026-09-17, RFC 102 stage 1. All three are Class A, committed through
-RFC 094's runner with the mutation they record.
+Added 2026-09-17, RFC 102 stage 1; `auth.step_up.success` added in stage 6. All
+are Class A, committed through RFC 094's runner with the mutation they record.
 
 | Event name | Trigger | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
+| `auth.step_up.success` | A step-up succeeded: a TOTP code or passkey assertion on a signed-in session. Committed with the consumed factor (TOTP step, or the `StepUp` ceremony), `last_step_up_at`, `last_step_up_method` and the failure-count reset (command `L05`, added RFC 102 stage 6) | user id | user id | `method` (`totp`, `webauthn`), `gate` (sanitised `return_to`, truncated to 256 bytes) | **A** |
 | `auth.step_up.failure` | A wrong step-up code, failed WebAuthn step-up assertion, or wrong password when adding a first second factor; counted on the session (command `L06`) | user id | user id | `count` | **A** |
 | `auth.step_up.session_revoked` | The fifth consecutive step-up failure on a session; that session is revoked in the same transaction (`L06`) | user id | user id | `count` | **A** |
 | `auth.mfa.factor_added` | A second factor was added: TOTP enrolment confirmed (`U12`), recovery codes regenerated (`U14`) or a passkey registered (`U15`) | user id | user id | `method` (`totp`, `recovery_codes`, `webauthn`) | **A** |

@@ -91,6 +91,31 @@ pub async fn delete(db: &Database, id: WebauthnPendingId) -> StoreResult<()> {
     .await
 }
 
+/// RFC 102 L05: consume a step-up ceremony inside the caller's transaction.
+/// The row must be this user's, of kind `StepUp`, and unexpired at `now`;
+/// otherwise nothing is deleted and the result is `NotFound`.
+pub fn consume_step_up_within_tx(
+    conn: &rusqlite::Connection,
+    id: WebauthnPendingId,
+    user_id: UserId,
+    now: DateTime<Utc>,
+) -> StoreResult<()> {
+    let n = conn.execute(
+        "DELETE FROM webauthn_pending \
+         WHERE id = ?1 AND user_id = ?2 AND kind = ?3 AND expires_at > ?4",
+        params![
+            id.to_string(),
+            user_id.to_string(),
+            WebauthnPendingKind::StepUp.as_str(),
+            now
+        ],
+    )?;
+    if n == 0 {
+        return Err(StoreError::NotFound);
+    }
+    Ok(())
+}
+
 /// Hygiene: drop expired ceremonies. Called from the GC task.
 pub async fn purge_expired(db: &Database) -> StoreResult<usize> {
     db.with_conn(move |conn| {

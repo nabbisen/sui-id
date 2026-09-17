@@ -121,6 +121,7 @@ longer written.
 | `mfa.disable` | — | User turned off MFA from `/me/security/mfa`, a dangerous self-service action (RFC 058). |
 | `webauthn.credential.delete` | — | User deleted one of their passkeys. Step-up authentication is required first (RFC 058). |
 | `auth.mfa.factor_added` | — | User added a second factor: TOTP enrolment, fresh recovery codes, or a passkey. The `method` attribute says which. Recorded in the same transaction as the change. |
+| `auth.step_up.success` | — | A step-up re-authentication succeeded on a signed-in session. `method` is `totp` or `webauthn`; `gate` is the page the step-up was for (truncated to 256 bytes). Recorded in the same transaction as the session's new freshness. |
 | `auth.step_up.failure` | — | A step-up re-authentication failed on a signed-in session (wrong code, failed passkey assertion, or wrong password when adding a first second factor). The `count` attribute is the run of consecutive failures on that session. |
 | `auth.step_up.session_revoked` | — | The fifth consecutive step-up failure on a session; that session was revoked. **Alert on this.** |
 

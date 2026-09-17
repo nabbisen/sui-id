@@ -43,7 +43,8 @@ use crate::webauthn;
 use chrono::{DateTime, Duration};
 use sui_id_shared::ids::{SessionId, UserId};
 use sui_id_store::Database;
-use sui_id_store::repos::{sessions, user_totp};
+use sui_id_store::commands::StepUpProof;
+use sui_id_store::repos::user_totp;
 
 /// Default freshness window: a session whose last step-up
 /// happened within this many seconds is treated as fresh. Long
@@ -127,19 +128,6 @@ pub async fn user_has_mfa(db: &Database, user_id: UserId) -> CoreResult<bool> {
     Ok(has_passkey)
 }
 
-/// Mark a session as having just successfully completed a step-up
-/// challenge. The caller has *already* verified the second factor
-/// (TOTP code or WebAuthn assertion). This function only updates
-/// the session row's `last_step_up_at`.
-pub async fn touch_step_up(
-    db: &Database,
-    clock: &SharedClock,
-    session_id: SessionId,
-) -> CoreResult<()> {
-    sessions::touch_step_up(db, session_id, clock.now()).await?;
-    Ok(())
-}
-
 /// Verify a TOTP code entered into a step-up form by an already-signed-in
 /// user.
 ///
@@ -164,6 +152,7 @@ pub async fn verify_totp_code(
     user_id: UserId,
     session_id: SessionId,
     code_input: &str,
+    gate: &str,
 ) -> CoreResult<()> {
     use crate::totp;
     use zeroize::Zeroize;
@@ -176,28 +165,40 @@ pub async fn verify_totp_code(
     }
 
     let trimmed = code_input.trim();
-    let accepted = if let Ok(digits) = trimmed.parse::<u32>() {
+    let step = if let Ok(digits) = trimmed.parse::<u32>() {
         let mut secret = user_totp::decrypt_secret(db, &totp_row).await?;
         let now = clock.now().timestamp();
         let result = totp::verify(&secret, now, digits, totp_row.last_used_step).await;
         secret.zeroize();
-        match result {
-            Some(step) => {
-                user_totp::set_last_used_step(db, user_id, step).await?;
-                true
-            }
-            None => false,
-        }
+        result
     } else {
         // Not a TOTP code. Recovery codes are refused for step-up.
-        false
+        None
+    };
+    let Some(step) = step else {
+        return Err(CoreError::InvalidCredentials);
     };
 
-    if !accepted {
-        return Err(CoreError::InvalidCredentials);
-    }
+    complete(db, user_id, session_id, StepUpProof::Totp { step }, gate).await
+}
 
-    touch_step_up(db, clock, session_id).await?;
+/// RFC 102 L05: commit a verified step-up. A guard that loses (the session
+/// revoked or expired meanwhile, the TOTP step already used, the ceremony
+/// already consumed) is `Unauthenticated`; any failure here is not a wrong
+/// factor, so the caller must not run L06 for it (A9).
+async fn complete(
+    db: &Database,
+    user_id: UserId,
+    session_id: SessionId,
+    proof: StepUpProof,
+    gate: &str,
+) -> CoreResult<()> {
+    sui_id_store::commands::complete_step_up(db, user_id, session_id, proof, gate.to_owned())
+        .await
+        .map_err(|e| match e {
+            sui_id_store::StoreError::NotFound => CoreError::Unauthenticated,
+            other => other.into(),
+        })?;
     Ok(())
 }
 
@@ -251,32 +252,12 @@ pub async fn start_webauthn(
     user_id: UserId,
 ) -> CoreResult<WebauthnStepUpStart> {
     use crate::webauthn;
-    use sui_id_store::models::{WebauthnPendingKind, WebauthnPendingRow};
-    use sui_id_store::repos::webauthn_pending;
+    use sui_id_store::models::WebauthnPendingKind;
 
-    // Reuse the existing start function — it does the heavy
-    // lifting (collect passkeys, build the challenge). Then we
-    // peel its pending row out and re-tag it with our kind.
-    let started = webauthn::start_authentication(db, clock, issuer_url, user_id).await?;
-    // start_authentication wrote a `kind = Authenticate` row.
-    // Read it, replace it with a `kind = StepUp` row at the same
-    // id, so the finish path can demand the right kind. This is
-    // a tiny re-write, but the alternative — duplicating
-    // start_authentication's body — would mean two places to keep
-    // in sync if webauthn-rs ever changes shape.
-    let row = webauthn_pending::get(db, started.pending_id)
-        .await?
-        .ok_or(CoreError::Internal)?;
-    let stepped = WebauthnPendingRow {
-        id: row.id,
-        kind: WebauthnPendingKind::StepUp,
-        user_id: row.user_id,
-        state_json: row.state_json,
-        expires_at: row.expires_at,
-        created_at: row.created_at,
-    };
-    webauthn_pending::delete(db, row.id).await?;
-    webauthn_pending::insert(db, &stepped).await?;
+    // The ceremony row is created as `StepUp` directly (RFC 102 B-F5).
+    let started =
+        webauthn::start_authentication(db, clock, issuer_url, user_id, WebauthnPendingKind::StepUp)
+            .await?;
 
     Ok(WebauthnStepUpStart {
         challenge_json: started.challenge_json,
@@ -286,14 +267,17 @@ pub async fn start_webauthn(
 
 /// Finish a WebAuthn step-up ceremony.
 ///
-/// Reads the pending row, refuses if its `kind` isn't `StepUp` (so a
-/// stale login-MFA pending row can never satisfy a step-up gate),
-/// runs the assertion verify, and on success bumps the session's
-/// `last_step_up_at`. The pending row is consumed in either branch.
+/// [`crate::webauthn::finish_authentication`] verifies the assertion against
+/// a ceremony that must be of kind `StepUp` (a sign-in ceremony can never
+/// satisfy a step-up gate, RFC 102 B-F5) and this user's. On success L05
+/// consumes the ceremony and commits the freshness with its event.
 ///
 /// Failures collapse to `InvalidCredentials` for the same
 /// information-hiding reason the TOTP path does — a step-up form
-/// must look the same to a typo as to an attacker probing.
+/// must look the same to a typo as to an attacker probing. A storage or
+/// internal failure, or a failed L05, is not a wrong factor and is returned
+/// as itself (A9).
+#[allow(clippy::too_many_arguments)]
 pub async fn finish_webauthn(
     db: &Database,
     clock: &SharedClock,
@@ -302,68 +286,39 @@ pub async fn finish_webauthn(
     session_id: SessionId,
     pending_id: sui_id_shared::ids::WebauthnPendingId,
     credential_json: &str,
+    gate: &str,
 ) -> CoreResult<()> {
     use crate::webauthn;
     use sui_id_store::models::WebauthnPendingKind;
-    use sui_id_store::repos::webauthn_pending;
     use webauthn_rs::prelude::PublicKeyCredential;
-
-    // Verify the kind *before* we burn the row, so a wrong-kind
-    // pending row's failure doesn't also delete it (the legitimate
-    // login-MFA flow that owns the row should still be able to
-    // complete). The invariant we want: a step-up finish on a
-    // login-MFA pending row is a no-op for the row.
-    let pending = webauthn_pending::get(db, pending_id)
-        .await?
-        .ok_or(CoreError::InvalidCredentials)?;
-    if pending.kind != WebauthnPendingKind::StepUp {
-        return Err(CoreError::InvalidCredentials);
-    }
-    if pending.user_id != Some(user_id) {
-        // pending row belongs to someone else — refuse without
-        // burning it (so the rightful owner's parallel flow can
-        // still complete) and don't reveal the mismatch.
-        return Err(CoreError::InvalidCredentials);
-    }
 
     let credential: PublicKeyCredential =
         serde_json::from_str(credential_json).map_err(|_| CoreError::InvalidCredentials)?;
 
-    // Hand off to the existing finish function — it consumes the
-    // pending row on success or expiry, runs the webauthn-rs
-    // verify, and updates the credential's signature counter.
-    // Because we already validated the kind above, finish_authentication
-    // sees a well-formed Authenticate-shaped row from its perspective:
-    // the kind check inside webauthn::finish_authentication compares
-    // against `Authenticate`, so we have to swap the kind back
-    // momentarily.
-    //
-    // The cleanest way is to re-write the row to Authenticate, then
-    // delegate. The pending row's id and state_json are unchanged.
-    {
-        use sui_id_store::models::WebauthnPendingRow;
-        let switched = WebauthnPendingRow {
-            id: pending.id,
-            kind: WebauthnPendingKind::Authenticate,
-            user_id: pending.user_id,
-            state_json: pending.state_json.clone(),
-            expires_at: pending.expires_at,
-            created_at: pending.created_at,
-        };
-        webauthn_pending::delete(db, pending.id).await?;
-        webauthn_pending::insert(db, &switched).await?;
-    }
-
-    match webauthn::finish_authentication(db, clock, issuer_url, pending_id, user_id, &credential)
-        .await
+    match webauthn::finish_authentication(
+        db,
+        clock,
+        issuer_url,
+        pending_id,
+        user_id,
+        WebauthnPendingKind::StepUp,
+        &credential,
+    )
+    .await
     {
         Ok(()) => {
-            touch_step_up(db, clock, session_id).await?;
-            Ok(())
+            complete(
+                db,
+                user_id,
+                session_id,
+                StepUpProof::Webauthn { pending_id },
+                gate,
+            )
+            .await
         }
         // A storage or internal failure is not a wrong factor and must not
         // be counted as one (RFC 102 A9); everything else — a failed
-        // assertion, an expired or mismatched ceremony — is.
+        // assertion, an expired, foreign or wrong-kind ceremony — is.
         Err(e @ (CoreError::Store(_) | CoreError::Internal)) => Err(e),
         Err(_) => Err(CoreError::InvalidCredentials),
     }
@@ -569,36 +524,6 @@ mod tests {
         assert_eq!(r, StepUpDecision::Challenge);
     }
 
-    #[tokio::test]
-    async fn touch_step_up_updates_session_row() {
-        use sui_id_store::models::SessionRow;
-        let db = fresh_db();
-        let clock = crate::time::system_clock();
-        let uid = create_user(&db).await;
-        let session_id = SessionId::new();
-        let now = clock.now();
-        // RFC 102 A4: a session is created by signing in (L01).
-        sui_id_store::commands::sign_in_with_password(
-            &db,
-            SessionRow {
-                id: session_id,
-                user_id: uid,
-                expires_at: now + Duration::hours(8),
-                created_at: now,
-                revoked_at: None,
-                auth_methods: vec![sui_id_shared::AuthMethod::Pwd],
-                last_step_up_at: None,
-                last_used_at: None,
-            },
-        )
-        .await
-        .expect("sign in");
-
-        touch_step_up(&db, &clock, session_id).await.expect("touch");
-        let row = sessions::get(&db, session_id).await.expect("get");
-        assert!(row.last_step_up_at.is_some());
-    }
-
     async fn fresh_session(db: &Database, clock: &SharedClock, uid: UserId) -> SessionId {
         use sui_id_store::models::SessionRow;
         let session_id = SessionId::new();
@@ -643,11 +568,20 @@ mod tests {
         let step = now / 30;
         let code = totp::code_for_step(secret, step).await;
 
-        verify_totp_code(&db, &clock, uid, session_id, &code.to_string())
-            .await
-            .expect("verify ok");
+        verify_totp_code(
+            &db,
+            &clock,
+            uid,
+            session_id,
+            &code.to_string(),
+            "/me/security/mfa",
+        )
+        .await
+        .expect("verify ok");
 
-        let row = sessions::get(&db, session_id).await.expect("get");
+        let row = sui_id_store::repos::sessions::get(&db, session_id)
+            .await
+            .expect("get");
         assert!(row.last_step_up_at.is_some(), "session should be fresh");
     }
 
@@ -669,13 +603,16 @@ mod tests {
         // Pass a code that's almost certainly wrong (a fixed value
         // that's unlikely to coincide with the real one — and even
         // if it did, the next pass would still be wrong).
-        let result = verify_totp_code(&db, &clock, uid, session_id, "000000").await;
+        let result =
+            verify_totp_code(&db, &clock, uid, session_id, "000000", "/me/security/mfa").await;
         assert!(matches!(
             result,
             Err(crate::errors::CoreError::InvalidCredentials)
         ));
 
-        let row = sessions::get(&db, session_id).await.expect("get");
+        let row = sui_id_store::repos::sessions::get(&db, session_id)
+            .await
+            .expect("get");
         assert!(
             row.last_step_up_at.is_none(),
             "session must NOT be marked fresh on a failed verify"
@@ -689,7 +626,8 @@ mod tests {
         let uid = create_user(&db).await;
         let session_id = fresh_session(&db, &clock, uid).await;
 
-        let result = verify_totp_code(&db, &clock, uid, session_id, "123456").await;
+        let result =
+            verify_totp_code(&db, &clock, uid, session_id, "123456", "/me/security/mfa").await;
         // Same error shape as a wrong code: a step-up form should
         // not leak whether MFA is enrolled.
         assert!(matches!(
@@ -739,6 +677,7 @@ mod tests {
             session_id,
             pending_id,
             r#"{"id":"x","rawId":"x","type":"public-key","response":{}}"#,
+            "/me/security/mfa",
         )
         .await;
         assert!(matches!(
@@ -830,6 +769,7 @@ mod tests {
             session_id,
             pending_id,
             r#"{"id":"x","rawId":"x","type":"public-key","response":{}}"#,
+            "/me/security/mfa",
         )
         .await;
         assert!(matches!(

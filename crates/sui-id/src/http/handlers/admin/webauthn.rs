@@ -48,6 +48,7 @@ pub async fn webauthn_auth_start(
         &app.clock,
         app.issuer(),
         pending.user_id,
+        sui_id_store::models::WebauthnPendingKind::Authenticate,
     )
     .await
     .map_err(HttpError::html)?;
@@ -146,6 +147,7 @@ pub async fn webauthn_auth_complete(
         app.issuer(),
         webauthn_pending_id,
         pending.user_id,
+        sui_id_store::models::WebauthnPendingKind::Authenticate,
         &credential,
     )
     .await

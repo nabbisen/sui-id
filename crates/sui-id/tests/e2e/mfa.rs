@@ -96,14 +96,6 @@ async fn mfa_login_with_wrong_code_returns_401() {
     let state = test_app();
     let session = complete_setup_and_login(&state).await;
     let _ = enroll_mfa_for(&state, &session).await;
-    let session_id: sui_id_shared::ids::SessionId = session.parse().expect("session id");
-    sui_id_core::step_up::touch_step_up(&state.db, &state.clock, session_id)
-        .await
-        .expect("mark fresh step-up");
-    let session_id: sui_id_shared::ids::SessionId = session.parse().expect("session id");
-    sui_id_core::step_up::touch_step_up(&state.db, &state.clock, session_id)
-        .await
-        .expect("mark fresh step-up");
 
     // Password login → pending.
     let router = build_router(state.clone());

@@ -220,19 +220,6 @@ pub async fn set_recovery_codes(
     .await
 }
 
-/// Update the replay-defence cursor. Should be called immediately after
-/// a successful TOTP code verification.
-pub async fn set_last_used_step(db: &Database, user_id: UserId, step: i64) -> StoreResult<()> {
-    db.with_conn(move |conn| {
-        conn.execute(
-            "UPDATE user_totp SET last_used_step = ?1 WHERE user_id = ?2",
-            params![step, user_id.to_string()],
-        )?;
-        Ok(())
-    })
-    .await
-}
-
 /// Disable TOTP for the user (delete the row entirely). Used by the
 /// admin "disable MFA" action and by the user's own profile page.
 pub async fn delete(db: &Database, user_id: UserId) -> StoreResult<()> {

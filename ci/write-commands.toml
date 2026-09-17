@@ -337,8 +337,8 @@ id = "U28"
 class = "P"
 status = "implemented"  # implemented | target-absent | target-legacy
 owner = "TOTP anti-replay step"
-rationale = "per-auth anti-replay state; since RFC 102 stage 3 the sign-in's guarded advance runs inside L02, and `set_last_used_step` remains for the step-up path until L05"
-mutation_surface = "`user_totp::set_last_used_step`"
+rationale = "per-auth anti-replay state; the guarded advance runs only inside L02 (sign-in, RFC 102 stage 3) and L05 (step-up, stage 6); the unguarded `set_last_used_step` is removed"
+mutation_surface = "`user_totp::advance_last_used_step_within_tx` (inside L02 and L05)"
 files = ["crates/sui-id-store/src/repos/user_totp.rs"]
 test_id = "`p_u28_totp_step`"
 event = ""    # Stage 1: typed event-kind enum variant, not yet added
@@ -485,6 +485,18 @@ rationale = "one `auth.federation.signin.success` with `provider`, the user re-r
 mutation_surface = "`users::record_federated_login_within_tx`, `sessions::insert_within_tx`, `sessions::revoke_within_tx`"
 files = ["crates/sui-id-store/src/repos/users.rs", "crates/sui-id-store/src/repos/sessions.rs"]
 test_id = "`r102_l04_*` (e2e)"
+event = ""    # Stage 1: typed event-kind enum variant, not yet added
+descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
+
+[[command]]
+id = "L05"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+owner = "Step-up success (RFC 102 B1)"
+rationale = "one `auth.step_up.success` (method, gate) with the session re-read, the consumed factor (guarded TOTP step advance, or guarded delete of the user's `StepUp` ceremony), `last_step_up_at`, `last_step_up_method` and the failure-count reset; replaces the raw step-up touch"
+mutation_surface = "`sessions::require_live_session_within_tx`, `user_totp::advance_last_used_step_within_tx`, `webauthn_pending::consume_step_up_within_tx`, `sessions::record_step_up_within_tx`"
+files = ["crates/sui-id-store/src/repos/sessions.rs", "crates/sui-id-store/src/repos/user_totp.rs", "crates/sui-id-store/src/repos/webauthn_pending.rs"]
+test_id = "`r102_l05_*`, `r102_bf5_*` (e2e)"
 event = ""    # Stage 1: typed event-kind enum variant, not yet added
 descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
 

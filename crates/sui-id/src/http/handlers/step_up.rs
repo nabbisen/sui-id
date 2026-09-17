@@ -165,6 +165,7 @@ pub async fn post(
         ctx.user_id,
         ctx.session_id,
         &form.code,
+        &return_to,
     )
     .await
     {
@@ -178,6 +179,14 @@ pub async fn post(
             if matches!(err, CoreError::InvalidCredentials) {
                 // A wrong code: count it on this session (L06).
                 record_failure(&app, &ctx).await;
+            } else if matches!(err, CoreError::Unauthenticated) {
+                // L05 lost a guard: the code was already used by a
+                // concurrent step-up, or the session ended meanwhile. Not a
+                // wrong factor, not counted (A9); an expected race.
+                tracing::warn!(
+                    user_id = %ctx.user_id,
+                    "step-up with a correct code did not commit: a guard was lost"
+                );
             } else {
                 // A storage or internal failure on the success path is not a
                 // wrong factor and is not counted (RFC 102 A9). The user sees
@@ -346,6 +355,7 @@ pub async fn webauthn_finish(
         ctx.session_id,
         pending_id,
         &form.credential,
+        &return_to,
     )
     .await;
 
@@ -368,6 +378,13 @@ pub async fn webauthn_finish(
             if matches!(err, CoreError::InvalidCredentials) {
                 // A failed assertion: count it on this session (L06).
                 record_failure(&app, &ctx).await;
+            } else if matches!(err, CoreError::Unauthenticated) {
+                // L05 lost a guard (the ceremony already consumed, or the
+                // session ended meanwhile). Not counted (A9).
+                tracing::warn!(
+                    user_id = %ctx.user_id,
+                    "WebAuthn step-up with a verified assertion did not commit: a guard was lost"
+                );
             } else {
                 // Not a wrong factor; not counted (RFC 102 A9).
                 tracing::error!(

@@ -257,17 +257,50 @@ pub fn set_step_up_method_within_tx(
     Ok(())
 }
 
-pub async fn touch_step_up(db: &Database, id: SessionId, at: DateTime<Utc>) -> StoreResult<()> {
-    db.with_conn(move |conn| {
-        // A successful step-up ends the run of consecutive failures that
-        // L06 counts (RFC 102 B2).
-        conn.execute(
-            "UPDATE sessions SET last_step_up_at = ?1, step_up_failure_count = 0 WHERE id = ?2",
-            params![at, id.to_string()],
-        )?;
-        Ok(())
-    })
-    .await
+/// RFC 102 L05: re-read a session for a step-up commit, inside the caller's
+/// transaction. It must exist, belong to `user_id`, be unrevoked and
+/// unexpired at `now`, and its user must be active; otherwise `NotFound`.
+pub fn require_live_session_within_tx(
+    conn: &rusqlite::Connection,
+    id: SessionId,
+    user_id: UserId,
+    now: DateTime<Utc>,
+) -> StoreResult<()> {
+    let live: bool = conn
+        .query_row(
+            "SELECT s.user_id = ?2 AND s.revoked_at IS NULL AND s.expires_at > ?3 \
+             AND u.is_disabled = 0 AND u.is_deleted = 0 \
+             FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.id = ?1",
+            params![id.to_string(), user_id.to_string(), now],
+            |r| r.get(0),
+        )
+        .map(Some)
+        .or_else(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => Ok(None),
+            other => Err(other),
+        })?
+        .unwrap_or(false);
+    if !live {
+        return Err(StoreError::NotFound);
+    }
+    Ok(())
+}
+
+/// RFC 102 L05: record a successful step-up on the session — freshness,
+/// the method, and the end of the run of failures L06 counts — inside the
+/// caller's transaction.
+pub fn record_step_up_within_tx(
+    conn: &rusqlite::Connection,
+    id: SessionId,
+    method: &str,
+    at: DateTime<Utc>,
+) -> StoreResult<()> {
+    conn.execute(
+        "UPDATE sessions SET last_step_up_at = ?1, last_step_up_method = ?2, \
+         step_up_failure_count = 0 WHERE id = ?3",
+        params![at, method, id.to_string()],
+    )?;
+    Ok(())
 }
 
 /// Update `last_used_at` to `at`. Called by the application layer
