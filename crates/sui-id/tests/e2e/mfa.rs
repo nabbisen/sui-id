@@ -356,6 +356,7 @@ async fn admin_can_reset_users_mfa_factors() {
     // Admin resets it.
     let report = admin_reset_mfa(
         &state.db,
+        &state.clock,
         &admin_actor_on_session(admin_id, &session),
         bob,
         None,

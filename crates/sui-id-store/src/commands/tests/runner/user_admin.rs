@@ -119,6 +119,7 @@ async fn u02_disable_flips_flag_revokes_session_and_records_reason() {
         session,
         user.id,
         Some("policy violation".to_string()),
+        Utc::now(),
     )
     .await
     .expect("disable");
@@ -155,7 +156,7 @@ async fn u02_disable_without_reason_records_only_the_step_up_evidence() {
     let user = a_user();
     repos::users::create(&db, &user).await.expect("create user");
 
-    disable_user(&db, admin, session, user.id, None)
+    disable_user(&db, admin, session, user.id, None, Utc::now())
         .await
         .expect("disable");
 
@@ -181,7 +182,7 @@ async fn u02_injected_failure_before_append_rolls_back_disable_and_session_revok
     let before_audit = latest_audit_action(&db).await;
 
     db.fault_injector().fail_before_next_append();
-    let result = disable_user(&db, admin, session, user.id, None).await;
+    let result = disable_user(&db, admin, session, user.id, None, Utc::now()).await;
     assert!(result.is_err(), "injected failure must surface as Err");
 
     let row = repos::users::get(&db, user.id).await.expect("get");
@@ -204,7 +205,7 @@ async fn u03_enable_clears_disabled_flag_and_appends_event() {
     user.is_disabled = true;
     repos::users::create(&db, &user).await.expect("create user");
 
-    let audited = enable_user(&db, admin, session, user.id)
+    let audited = enable_user(&db, admin, session, user.id, Utc::now())
         .await
         .expect("enable");
     audited.into_inner();
@@ -239,6 +240,7 @@ async fn u04_delete_soft_deletes_revokes_session_and_records_reason() {
         session,
         user.id,
         Some("gdpr request".to_string()),
+        Utc::now(),
     )
     .await
     .expect("delete");
@@ -276,7 +278,7 @@ async fn u04_injected_failure_before_append_rolls_back_delete_and_session_revoke
     let before_audit = latest_audit_action(&db).await;
 
     db.fault_injector().fail_before_next_append();
-    let result = delete_user(&db, admin, session, user.id, None).await;
+    let result = delete_user(&db, admin, session, user.id, None, Utc::now()).await;
     assert!(result.is_err(), "injected failure must surface as Err");
 
     let row = repos::users::get(&db, user.id).await.expect("get");

@@ -785,10 +785,10 @@ not expect them to be renamed without a deprecation cycle):
 
 | Event | Meaning |
 |---|---|
-| `auth.login.success` | Password (and possibly MFA) check succeeded; session issued. |
-| `auth.login.failure` | Password did not match, or account is disabled. |
+| `auth.login.success` | A sign-in that needs no second factor succeeded (a local password, or a directory password); session issued. Note: `evicted` (older sessions revoked to stay within the concurrent-session cap), and for a directory sign-in `source` and `stable_id`. |
+| `auth.login.failure` | Password did not match, the user is unknown, or the account is disabled or locked. A known user's wrong password is counted toward a lockout. |
 | `auth.login.password_ok_mfa_required` | Password accepted; user redirected to MFA challenge. |
-| `auth.mfa.success` | TOTP / recovery code / WebAuthn assertion accepted. |
+| `auth.mfa.success` | A second factor completed the sign-in (TOTP, recovery code or passkey); session issued. Note: `method`, `evicted`. |
 | `auth.mfa.failure` | TOTP code, recovery code or passkey assertion rejected at sign-in; `count` is the user's consecutive failures. |
 | `auth.mfa.lockout` | Fifth consecutive wrong second factor; the account was locked. **Alert on this.** |
 | `auth.lockout` | A failed sign-in that just triggered or extended an account lockout. **Alert on bursts of this.** |
@@ -796,11 +796,14 @@ not expect them to be renamed without a deprecation cycle):
 | `auth.refresh.theft_detected` | A revoked refresh token was replayed at the token endpoint. The whole rotation family was revoked. **Alert on this.** |
 | `auth.sessions.bulk_revoke_self` | A user used "Sign out everywhere else" on `/me/security`. Note records how many sessions were swept. |
 | `auth.password.changed_self` | A user changed their own password via `/me/security/password`. Note records how many sessions and refresh tokens were swept (zero if the user unchecked the box). |
-| `mfa.admin_reset` | Every MFA factor was forcibly removed for a user: by an administrator on the web (actor set), or by the operator with `sui-id admin reset-mfa` (no actor, note `via=cli`). **Alert on this.** |
+| `mfa.admin_reset` | Every MFA factor was forcibly removed for a user: by an administrator on the web (actor set, `step_up=` says how they were authorized), or by the operator with `sui-id admin reset-mfa` (no actor, note `via=cli`). **Alert on this.** |
 | `admin.user.unlock` | An admin cleared an account lockout via `sui-id admin unlock-user`. |
 | `auth.mfa.factor_added` | A user added a second factor (`method`: `totp`, `recovery_codes` or `webauthn`). |
 | `webauthn.credential.delete` | A user deleted one of their passkeys. |
+| `auth.step_up.success` | A step-up re-authentication succeeded on a signed-in session. Note: `method` (`totp` or `webauthn`) and `gate` (the page the step-up was for). |
+| `auth.step_up.failure` | A step-up failed on a signed-in session (wrong code, failed passkey assertion, or wrong password when adding a first factor). Note: `count`, the run of consecutive failures on that session. |
 | `auth.step_up.session_revoked` | Five consecutive step-up failures on one session; the session was revoked. **Alert on this.** |
+| `user.disable`, `user.enable`, `user.delete`, `signing_key.rotate` | An administrator disabled, re-enabled or deleted a user, or rotated the signing key. The note ends with `step_up=…`; see [Reading `step_up=`](#reading-step_up). |
 
 To query them:
 
@@ -811,6 +814,44 @@ FROM audit_log
 WHERE action = 'mfa.admin_reset'
 ORDER BY seq DESC;
 ```
+
+### Reading `step_up=`
+
+Five administrator actions record what authorized them, as a `step_up=` field at
+the end of the audit row's note: disabling, re-enabling and deleting a user,
+resetting a user's MFA, and rotating the signing key. The value is one of:
+
+| Value | Meaning |
+|---|---|
+| `fresh:<method>:<seconds>` | The administrator re-authenticated with `<method>` (`totp` or `webauthn`) `<seconds>` seconds before the action committed. A step-up made before the method was tracked reads `fresh:unknown:<seconds>`. |
+| `not_required:no_second_factor` | The administrator's account has no second factor, so there was nothing to re-authenticate with. |
+| `not_applicable:system_principal` | The operator ran `sui-id admin reset-mfa` from the host. There is no session and no administrator; the row has no actor and `via=cli`. Only that command records this value. |
+
+The step-up is checked again as the action commits. If it lapsed between the
+confirmation page and the commit, nothing is changed and the administrator is
+sent back to re-authenticate.
+
+To review these rows, and to find administrators acting without a second factor:
+
+```sql
+SELECT at, actor, action, target, note
+FROM audit_log
+WHERE action IN ('user.disable', 'user.enable', 'user.delete',
+                 'mfa.admin_reset', 'signing_key.rotate')
+ORDER BY seq DESC;
+
+-- Only the actions taken by an account with no second factor.
+SELECT at, actor, action, target, note
+FROM audit_log
+WHERE note LIKE '%step_up=not_required%'
+ORDER BY seq DESC;
+```
+
+The other dangerous actions (client disable, delete and secret rotation,
+signing-key deletion, and the self-service MFA, passkey and session actions)
+still write their row after the action, without a `step_up=` field. See
+[Dangerous operations](dangerous-operations.md). What sui-id claims about all
+of this is in the [threat model](https://github.com/nabbisen/sui-id/blob/main/docs/threat-model.md).
 
 ## Audit log integrity
 
@@ -881,6 +922,56 @@ need the historical entries, you can re-bootstrap by truncating
 `audit_log` and restarting; new rows will form a clean chain
 from row 1. Be aware this destroys investigation evidence — only
 do it on a fresh deployment.
+
+## When the audit log cannot be written
+
+Signing in, completing a second factor, and stepping up each write an audit
+event as part of the same database transaction as the change they make. If
+that event cannot be written, the change is not made. While the audit log is
+unwritable, nobody can start a new session or step up an existing one.
+Sessions that already exist keep working. The
+[threat model](https://github.com/nabbisen/sui-id/blob/main/docs/threat-model.md)
+states the property and its limits; this section is what you will observe.
+
+**What users see.** Every refusal looks like the ordinary failure for that
+step, so the screen does not reveal the cause:
+
+| Step | What the user sees |
+|---|---|
+| Password sign-in (local or directory) | The usual "Sign-in failed" login page, HTTP 401. |
+| TOTP or recovery code at the sign-in challenge | The challenge page with its usual "code rejected" message, HTTP 401. The pending sign-in is kept, so a retry works once the log is writable. |
+| Passkey at the sign-in challenge | A redirect back to the sign-in page (a pending destination is kept). |
+| Federated (upstream) sign-in | A redirect to `/admin/login?fed_error=signin_failed`. |
+| Step-up with a TOTP code | The step-up page with its "invalid code" message, HTTP 400. |
+| Step-up with a passkey | A JSON `400` with `{"error":"step_up_failed"}`, which the page script shows as a failure. |
+| Adding a factor, or an administrator action whose event is recorded atomically (see [Reading `step_up=`](#reading-step_up)) | An error page carrying a request ID. Nothing is changed. |
+
+**What is not counted.** A correct password, second-factor code or passkey that
+fails only because the log cannot be written is not counted as a wrong one, and
+a wrong password during the outage is not counted either. Failure counters and
+lockouts do not move, so the outage cannot lock accounts by itself.
+
+**What you will see in the server log.** Each refusal is logged at error level
+with the underlying cause and never with a password, code or session ID. Look
+for these messages:
+
+- `sign-in failed for a reason other than invalid credentials; returning the uniform failure response`
+- `second-factor sign-in failed for a reason other than a wrong code; returning the uniform failure response`
+- `passkey sign-in failed for a reason other than a rejected assertion; returning the uniform failure response`
+- `federation: sign-in transaction failed; sign-in refused`
+- `step-up verification failed for a reason other than a wrong code`
+- `WebAuthn step-up failed for a reason other than a failed assertion`
+
+A burst of these with the same cause (for example a constraint error from the
+audit log, or a full disk) is the outage. Check the audit chain first: the
+startup check described above reports a broken chain, and the admin panel shows
+its status. Ordinary wrong passwords are *not* logged at error level, so these
+lines are a reliable signal.
+
+**Alert on.** In addition to the events above, alert on `auth.mfa.lockout` (a
+fifth consecutive wrong second factor locked an account) and
+`auth.step_up.session_revoked` (a session was signed out after five failed
+step-ups). Both mean someone holding a password, or a session, is guessing.
 
 ## Systemd unit
 
@@ -967,6 +1058,15 @@ password, or the directory password for an LDAP account). Accounts that sign in
 through an external identity provider cannot add a first factor here yet. A
 wrong password counts as a step-up failure, and five in a row sign that session
 out.
+
+A wrong code on the step-up form is counted per session: each is an
+`auth.step_up.failure` row with the running `count`, and the fifth in a row
+revokes that session (`auth.step_up.session_revoked`). The step-up forms are
+also limited per client address, to ten attempts a minute; above that the
+server answers `429 Too Many Requests` with a `Retry-After` header. A recovery
+code is never accepted on the step-up form. A sign-in completed with a recovery
+code does not count as a fresh step-up, so the user is asked to step up before
+a dangerous action.
 
 The audit log records every relevant event: `auth.mfa.factor_added`,
 `mfa.disable`, `webauthn.credential.delete`, `auth.step_up.success`, `auth.step_up.failure`,
@@ -1076,8 +1176,20 @@ window grows quickly:
 
 Each value is then capped by the `[security] max_lockout` setting.
 
-A successful password verification at any point clears the counter
-and lifts any active lock.
+A completed sign-in clears the counter and lifts any active lock. For an
+account with a second factor, the sign-in completes when the second factor is
+accepted, not when the password alone is verified.
+
+### Second-factor failures
+
+Wrong TOTP codes, recovery codes and passkey assertions at the sign-in
+challenge are counted separately, per user. Each is an `auth.mfa.failure` row
+with the consecutive `count`. Because the count belongs to the user, starting a
+new sign-in with the password does not reset it. The fifth consecutive wrong
+second factor locks the account for the backoff window for five failures
+(five minutes, subject to the cap below), removes every pending sign-in for that
+user, and writes `auth.mfa.lockout` with `count` and `locked_for_secs`. A
+completed sign-in clears the count.
 
 ### Configuring the cap
 
@@ -1112,15 +1224,19 @@ sui-id admin unlock-user --username alice --config /etc/sui-id/sui-id.toml
 
 This resets `failed_login_count` to 0 and removes any active lock.
 The account is immediately ready for sign-in. The action is
-recorded in the audit log as `admin.user.unlock`.
+recorded in the audit log as `admin.user.unlock`. It does not clear the
+second-factor count described above, which clears when the user completes a
+sign-in; a further wrong second-factor code straight after an unlock therefore
+locks the account again, for a longer window.
 
 ### What this looks like in the audit log
 
-The three relevant events:
+The relevant events:
 
 | Event                  | Meaning                                           |
 | ---------------------- | ------------------------------------------------- |
-| `auth.login.failure`   | Wrong password (or unknown user, or disabled). The audit row's `note` says which. |
+| `auth.login.failure`   | Wrong password (or unknown user, or disabled, or locked). The audit row's `note` says which. |
+| `auth.mfa.failure`, `auth.mfa.lockout` | A wrong second factor, and the lockout it triggered (see above). |
 | `auth.lockout`    | A failed attempt that *just* triggered or extended a lock. Includes the consecutive-failure count and the new window length in the note. |
 | `admin.user.unlock`    | An admin cleared the lock via the CLI.            |
 

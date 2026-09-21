@@ -237,7 +237,8 @@ above it, not `auth.password.changed_self`'s authenticated-actor shape below.*
 *Changed 2026-09-17 (RFC 102 stage 2): the password-sign-in success event is
 now Class A for a user with no second factor, committed by command L01. The
 second-factor, directory and federation sign-ins still write their events best
-effort until L02-L04.*
+effort until L02-L04. Superseded by the stage 3 and stage 4 notes below and the
+final-state note that follows them: all four sign-in paths are Class A.*
 
 *Changed 2026-09-17 (RFC 102 stage 4): the directory sign-in writes
 `auth.login.success` through L03, and the federated sign-in writes
@@ -248,15 +249,26 @@ Class A. `auth.mfa.success` commits with the session through L02; a wrong second
 factor commits `auth.mfa.failure`, or `auth.mfa.lockout` at the fifth
 consecutive one, through L07.*
 
+*Final state, 2026-09-22 (RFC 102 stage 8).* Every path that establishes a
+session or marks one freshly stepped-up commits that change with exactly one
+event, in one transaction: `L01` and `L03` (`auth.login.success`), `L02`
+(`auth.mfa.success`), `L04` (`auth.federation.signin.success`) and `L05`
+(`auth.step_up.success`). Their failures are `L07` (`auth.mfa.failure`,
+`auth.mfa.lockout`) and `L06` (`auth.step_up.failure`,
+`auth.step_up.session_revoked`), also Class A. Two rows in this section stay
+Class B on purpose or in part: `auth.login.password_ok_mfa_required` (RFC 102 A6:
+a continuation that grants no session) and `auth.login.failure` (see its row).
+Each row below was checked against its command's descriptor on this date.
+
 | Event name | Trigger | Actor | Class |
 |---|---|---|---|
-| `auth.login.password_ok_mfa_required` | Password correct; MFA challenge pending | user id | B |
+| `auth.login.password_ok_mfa_required` | Password correct; MFA challenge pending. Written best effort by every sign-in path that has a second factor, by design (RFC 102 A6): it grants no session and no authority | user id | B |
 | `auth.login.success` | Sign-in succeeded for a user with no second factor: a local password (command `L01`) or a user-source password (`L03`, which also upserts the shadow user), with the session, counter reset, `last_login_at` and cap eviction; note fields `evicted`, and for L03 `source` and `stable_id` (truncated to 255 bytes) | user id | **A** |
-| `auth.login.failure` | Wrong password | — | B |
+| `auth.login.failure` | Two writers. A known user's **wrong password** is counted with the lockout counter by `U22` (note field `count`), Class A. A refused attempt made **before any credential check** (unknown user, disabled or deleted user, locked account) is appended best effort with the reason as its note, Class B | — | **A** (wrong password) / B (refused before a credential check) |
 | `auth.mfa.success` | Second-factor sign-in completed: TOTP, recovery code or passkey (command `L02`, with the pending-row consume, the factor's guard, counter resets, `last_login_at`, the session and cap eviction; note fields `method`, `evicted`) | user id | **A** |
 | `auth.mfa.failure` | Wrong second factor at sign-in, counted on the user (`L07`; note field `count`) | user id | **A** |
 | `auth.mfa.lockout` | Fifth consecutive wrong second factor: every pending-MFA row removed and the account locked with the password backoff (`L07`; note fields `count`, `locked_for_secs`) | user id | **A** |
-| `auth.lockout` | Account locked after crossing the failure threshold | — | **A** |
+| `auth.lockout` | Account locked after crossing the failure threshold (`U22`; note fields `count`, `locked_for_secs`) | — | **A** |
 | `auth.sessions.bulk_revoke_self` | Bulk session revocation (self) | user id | B |
 | `auth.password.changed_self` | Self-service password change | user id | **A** |
 | `auth.password.reset_requested` | Forgot-password flow started | — | B |

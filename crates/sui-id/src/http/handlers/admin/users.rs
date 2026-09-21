@@ -203,7 +203,8 @@ pub async fn users_set_disabled(
         Some(form.reason.trim().to_string())
     };
     if let Err(e) =
-        admin_uc::set_user_disabled(&app.db, admin_actor, target, value, reason_opt).await
+        admin_uc::set_user_disabled(&app.db, &app.clock, admin_actor, target, value, reason_opt)
+            .await
     {
         return crate::handlers::gated_command_error(e, "/admin/users");
     }
@@ -227,7 +228,9 @@ pub async fn users_delete(
     }
     let target = UserId::from_str(&id)
         .map_err(|_| HttpError::html(CoreError::BadRequest("invalid user id".into())))?;
-    if let Err(e) = admin_uc::delete_user(&app.db, admin_actor, target, form.reason_opt()).await {
+    if let Err(e) =
+        admin_uc::delete_user(&app.db, &app.clock, admin_actor, target, form.reason_opt()).await
+    {
         return crate::handlers::gated_command_error(e, "/admin/users");
     }
     Ok(Redirect::to("/admin/users").into_response())
@@ -252,7 +255,8 @@ pub async fn users_mfa_reset(
     }
     let target = UserId::from_str(&id)
         .map_err(|_| HttpError::html(CoreError::BadRequest("invalid user id".into())))?;
-    if let Err(e) = admin_uc::admin_reset_mfa(&app.db, admin_actor, target, form.reason_opt()).await
+    if let Err(e) =
+        admin_uc::admin_reset_mfa(&app.db, &app.clock, admin_actor, target, form.reason_opt()).await
     {
         return crate::handlers::gated_command_error(e, "/admin/users");
     }

@@ -14,6 +14,7 @@ async fn k01_rotates_key_and_appends_audit_row() {
         b"sealed-placeholder".to_vec(),
         b"public-key-placeholder".to_vec(),
         None,
+        Utc::now(),
     )
     .await
     .expect("rotate");
@@ -55,6 +56,7 @@ async fn k01_injected_failure_before_append_rolls_back_the_mutation() {
         b"sealed-placeholder".to_vec(),
         b"public-key-placeholder".to_vec(),
         None,
+        Utc::now(),
     )
     .await;
     assert!(result.is_err(), "injected failure must surface as Err");
@@ -87,6 +89,7 @@ async fn k01_injected_failure_after_append_rolls_back_the_mutation_and_the_appen
         b"sealed-placeholder".to_vec(),
         b"public-key-placeholder".to_vec(),
         None,
+        Utc::now(),
     )
     .await;
     assert!(result.is_err(), "injected failure must surface as Err");
@@ -129,6 +132,7 @@ async fn k01_injected_commit_failure_rolls_back_the_mutation_and_the_append() {
         b"sealed-placeholder".to_vec(),
         b"public-key-placeholder".to_vec(),
         None,
+        Utc::now(),
     )
     .await;
     assert!(
@@ -154,6 +158,7 @@ async fn k01_injected_commit_failure_rolls_back_the_mutation_and_the_append() {
         b"sealed-placeholder".to_vec(),
         b"public-key-placeholder".to_vec(),
         None,
+        Utc::now(),
     )
     .await
     .expect("rotate after the injected commit failure has cleared");

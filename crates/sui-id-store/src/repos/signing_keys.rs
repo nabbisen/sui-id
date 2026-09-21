@@ -80,8 +80,8 @@ pub fn insert_sealed_on_conn(
     private_key_sealed: &[u8],
     public_key: &[u8],
     is_active: bool,
+    now: DateTime<Utc>,
 ) -> StoreResult<()> {
-    let now = Utc::now();
     tx.execute(
         "INSERT INTO signing_keys(id, algorithm, private_key_enc, public_key, is_active, created_at, rotated_at) \
          VALUES(?1, ?2, ?3, ?4, ?5, ?6, NULL)",
@@ -252,14 +252,22 @@ pub fn rotate_atomic_within_tx(
     algorithm: &str,
     private_key_sealed: &[u8],
     public_key: &[u8],
+    now: DateTime<Utc>,
 ) -> StoreResult<DateTime<Utc>> {
-    let now = Utc::now();
     // Step 1: retire any currently active key.
     tx.execute(
         "UPDATE signing_keys SET is_active = 0, rotated_at = ?1 WHERE is_active = 1",
         params![now],
     )?;
     // Step 2: insert the new active key.
-    insert_sealed_on_conn(tx, new_id, algorithm, private_key_sealed, public_key, true)?;
+    insert_sealed_on_conn(
+        tx,
+        new_id,
+        algorithm,
+        private_key_sealed,
+        public_key,
+        true,
+        now,
+    )?;
     Ok(now)
 }

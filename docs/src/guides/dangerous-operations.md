@@ -28,15 +28,24 @@ Every dangerous action is gated by:
    that the operator has completed a fresh re-authentication (within
    the last 5 minutes, a fixed constant). Stale sessions are redirected to
    `/me/security/step-up?return_to=…`
-   and the action waits.
+   and the action waits. An operator whose account has no second factor
+   passes this gate without a challenge. For the four operations recorded
+   atomically (disable user, delete user, reset MFA, rotate signing key) the
+   check is repeated inside the transaction that commits the action; if the
+   step-up lapsed in between, nothing is changed and the operator is sent to
+   step up again.
 3. **The action.** Only after both gates pass does the use case
    function in `sui-id-core` execute.
 4. **Audit row with note.** The action writes one row to the audit
-   log with `result="ok"` and `note` populated by the
-   operator-supplied reason — for MFA reset too — or, on the
-   self-service routes, by the fixed notes listed below.
-   The reason is your forensic signal when triaging "why did this
-   happen at 03:00 UTC."
+   log with `result="ok"`. For disable user, delete user, reset MFA and
+   rotate signing key, the row is committed in the same transaction as the
+   action, and its note is a list of `key=value` fields: the
+   operator-supplied reason as `reason=…` when one was given, and
+   `step_up=…`, which records what authorized the action (see below). For the
+   other four operations the row is written after the action and its note is
+   the operator-supplied reason alone; on the self-service routes it is the
+   fixed notes listed below. The reason is your forensic signal when
+   triaging "why did this happen at 03:00 UTC."
 
 ## Operation catalogue
 
@@ -90,7 +99,9 @@ why:
    whoever clicked the button. For self-service rows, actor and
    target are the same.
 2. **Read the note.** If the operator typed a reason, it's there
-   verbatim. If `note: "self"`, the user did this on their own
+   verbatim (as the `reason=` field for disable, delete, MFA reset and
+   key rotation, whose note also ends in `step_up=…`; as the whole note
+   for the others). If `note: "self"`, the user did this on their own
    account. If empty (`null`), the operator left the reason textarea
    blank — chase them up.
 3. **Look at the surrounding rows.** Dangerous actions usually come
@@ -98,9 +109,19 @@ why:
    disabled three users and rotated a key in a 90-second window
    during off-boarding). Isolated single rows at odd hours are the
    signal worth investigating.
-
-Step-up completion is not recorded in the audit log today, so the log
-cannot show whether a step-up preceded a dangerous action.
+4. **Check what authorized it.** Every successful step-up is recorded as
+   `auth.step_up.success`, with the `method` (`totp` or `webauthn`) and
+   the `gate`, the page it was for. For disable user, delete user, reset MFA
+   and rotate signing key, the action's own row says what authorized it in a
+   `step_up=` field: `fresh:<method>:<seconds>` (the operator stepped up that
+   many seconds earlier), `not_required:no_second_factor` (the operator's
+   account has none), or, for `sui-id admin reset-mfa` run from the host,
+   `not_applicable:system_principal` (no session, no actor). A row whose
+   value is `not_required` is an administrator acting with no second factor,
+   and is worth a question. The other four operations, and the self-service
+   actions, do not carry the field; to see whether a step-up preceded one,
+   look for an `auth.step_up.success` row by the same actor just before it.
+   See [Reading `step_up=`](operators.md#reading-step_up) for the queries.
 
 ## When a confirm screen is bypassed
 
@@ -114,9 +135,11 @@ through the confirm screen, it is a bug, not a configuration option:
 The four-step contract has no escape hatch. Operators who need to
 script bulk operations should use the OIDC management endpoints (if
 implemented for the action) or write a one-off script using the
-internal use-case functions in `sui-id-core::admin` — those bypass
-the step-up gate because they're trusted code, but they still write
-the same audit-log row.
+internal use-case functions in `sui-id-core::admin`. The HTTP step-up gate is
+not part of those functions, but each takes an administrator actor bound to a
+session, the four operations recorded atomically re-check that session's
+step-up inside their transaction, and every one of them still writes its
+audit-log row.
 
 ## Related references
 
@@ -125,5 +148,7 @@ the same audit-log row.
 - RFC 058 — Step-up enforcement on the four previously unguarded routes
 - RFC 059 — `<ConfirmScreen>` template component
 - RFC 060 — Audit-note rollout
+- RFC 102 — Authentication that cannot be audited does not succeed (step-up
+  completion and its evidence)
 - [Audit event reference](../reference/audit-events.md) — the canonical
   list of action strings and what each one means.

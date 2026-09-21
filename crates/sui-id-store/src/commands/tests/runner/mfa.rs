@@ -38,6 +38,7 @@ async fn u07_reset_removes_totp_and_passkeys_and_appends_event() {
         session,
         user.id,
         Some("lost authenticator".to_string()),
+        Utc::now(),
     )
     .await
     .expect("reset");
@@ -82,7 +83,7 @@ async fn u07_reset_with_no_factors_reports_absent_and_zero() {
     let user = a_user();
     repos::users::create(&db, &user).await.expect("create user");
 
-    let audited = admin_reset_mfa(&db, admin, session, user.id, None)
+    let audited = admin_reset_mfa(&db, admin, session, user.id, None, Utc::now())
         .await
         .expect("reset");
     let (totp_removed, passkeys_removed) = audited.into_inner();
@@ -107,7 +108,7 @@ async fn u07_reset_of_nonexistent_user_returns_not_found_and_appends_nothing() {
     let (admin, session) = an_admin_session(&db).await;
     let before_audit = latest_audit_action(&db).await;
 
-    let result = admin_reset_mfa(&db, admin, session, UserId::new(), None).await;
+    let result = admin_reset_mfa(&db, admin, session, UserId::new(), None, Utc::now()).await;
     assert!(
         matches!(result, Err(StoreError::NotFound)),
         "the existence probe (get_role_within_tx) must reject a target that \
@@ -137,7 +138,7 @@ async fn u07_reset_of_soft_deleted_user_returns_not_found() {
         .expect("soft delete");
     let before_audit = latest_audit_action(&db).await;
 
-    let result = admin_reset_mfa(&db, admin, session, user.id, None).await;
+    let result = admin_reset_mfa(&db, admin, session, user.id, None, Utc::now()).await;
     assert!(
         matches!(result, Err(StoreError::NotFound)),
         "a soft-deleted target must be rejected, not silently reset"
@@ -170,7 +171,7 @@ async fn u07_injected_failure_before_append_rolls_back_totp_and_passkey_removal(
     let before_audit = latest_audit_action(&db).await;
 
     db.fault_injector().fail_before_next_append();
-    let result = admin_reset_mfa(&db, admin, session, user.id, None).await;
+    let result = admin_reset_mfa(&db, admin, session, user.id, None, Utc::now()).await;
     assert!(result.is_err(), "injected failure must surface as Err");
 
     assert!(

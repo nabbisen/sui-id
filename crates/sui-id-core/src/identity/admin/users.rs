@@ -105,6 +105,7 @@ pub async fn list_users(db: &Database, actor: &ReadOnlyAdminActor) -> CoreResult
 
 pub async fn set_user_disabled(
     db: &Database,
+    clock: &SharedClock,
     actor: &AdminActor,
     target: sui_id_shared::ids::UserId,
     disabled: bool,
@@ -122,9 +123,18 @@ pub async fn set_user_disabled(
     // `users::set_disabled` followed by three separate best-effort revoke
     // calls and a fire-and-forget `audit_with_note`.
     let result = if disabled {
-        sui_id_store::commands::disable_user(db, actor_id, actor.session_id(), target, reason).await
+        sui_id_store::commands::disable_user(
+            db,
+            actor_id,
+            actor.session_id(),
+            target,
+            reason,
+            clock.now(),
+        )
+        .await
     } else {
-        sui_id_store::commands::enable_user(db, actor_id, actor.session_id(), target).await
+        sui_id_store::commands::enable_user(db, actor_id, actor.session_id(), target, clock.now())
+            .await
     };
     result.map_err(|e| match e {
         sui_id_store::StoreError::NotFound => CoreError::NotFound,
@@ -135,6 +145,7 @@ pub async fn set_user_disabled(
 
 pub async fn delete_user(
     db: &Database,
+    clock: &SharedClock,
     actor: &AdminActor,
     target: sui_id_shared::ids::UserId,
     reason: Option<String>,
@@ -146,12 +157,19 @@ pub async fn delete_user(
         ));
     }
     // RFC 094 U04: same atomicity shift as U02/U03 above.
-    sui_id_store::commands::delete_user(db, actor_id, actor.session_id(), target, reason)
-        .await
-        .map_err(|e| match e {
-            sui_id_store::StoreError::NotFound => CoreError::NotFound,
-            other => CoreError::from(other),
-        })?;
+    sui_id_store::commands::delete_user(
+        db,
+        actor_id,
+        actor.session_id(),
+        target,
+        reason,
+        clock.now(),
+    )
+    .await
+    .map_err(|e| match e {
+        sui_id_store::StoreError::NotFound => CoreError::NotFound,
+        other => CoreError::from(other),
+    })?;
     Ok(())
 }
 
@@ -182,6 +200,7 @@ pub struct MfaResetReport {
 /// admin to act on their behalf.
 pub async fn admin_reset_mfa(
     db: &Database,
+    clock: &SharedClock,
     actor: &AdminActor,
     target: sui_id_shared::ids::UserId,
     reason: Option<String>,
@@ -197,13 +216,19 @@ pub async fn admin_reset_mfa(
     // this conversion): the reset restores login capability rather than
     // forcing a logout. Operators who want both run `user.disable` /
     // `user.enable` as well.
-    let audited =
-        sui_id_store::commands::admin_reset_mfa(db, actor_id, actor.session_id(), target, reason)
-            .await
-            .map_err(|e| match e {
-                sui_id_store::StoreError::NotFound => CoreError::NotFound,
-                other => CoreError::from(other),
-            })?;
+    let audited = sui_id_store::commands::admin_reset_mfa(
+        db,
+        actor_id,
+        actor.session_id(),
+        target,
+        reason,
+        clock.now(),
+    )
+    .await
+    .map_err(|e| match e {
+        sui_id_store::StoreError::NotFound => CoreError::NotFound,
+        other => CoreError::from(other),
+    })?;
     let (totp_removed, passkeys_removed) = audited.into_inner();
 
     Ok(MfaResetReport {

@@ -118,16 +118,16 @@ async fn run_all_five(a: &Admin) -> Vec<(&'static str, Option<String>, Option<St
     let carol = target_user(a, "carol").await;
     let dave = target_user(a, "dave").await;
 
-    sui_id_core::admin::set_user_disabled(db, &actor, bob, true, Some("r".into()))
+    sui_id_core::admin::set_user_disabled(db, &a.state.clock, &actor, bob, true, Some("r".into()))
         .await
         .expect("U02");
-    sui_id_core::admin::set_user_disabled(db, &actor, bob, false, None)
+    sui_id_core::admin::set_user_disabled(db, &a.state.clock, &actor, bob, false, None)
         .await
         .expect("U03");
-    sui_id_core::admin::delete_user(db, &actor, carol, None)
+    sui_id_core::admin::delete_user(db, &a.state.clock, &actor, carol, None)
         .await
         .expect("U04");
-    sui_id_core::admin::admin_reset_mfa(db, &actor, dave, None)
+    sui_id_core::admin::admin_reset_mfa(db, &a.state.clock, &actor, dave, None)
         .await
         .expect("U07");
     sui_id_core::admin::rotate_signing_key(
@@ -268,16 +268,19 @@ async fn r102_b4_lapsed_freshness_rolls_back_every_gated_command() {
     let lapsed =
         |r: Result<(), CoreError>| matches!(r, Err(CoreError::Store(StoreError::StepUpRequired)));
     assert!(
-        lapsed(sui_id_core::admin::set_user_disabled(db, &actor, bob, true, None).await),
+        lapsed(
+            sui_id_core::admin::set_user_disabled(db, &a.state.clock, &actor, bob, true, None)
+                .await
+        ),
         "U02"
     );
     assert!(
-        lapsed(sui_id_core::admin::delete_user(db, &actor, bob, None).await),
+        lapsed(sui_id_core::admin::delete_user(db, &a.state.clock, &actor, bob, None).await),
         "U04"
     );
     assert!(
         lapsed(
-            sui_id_core::admin::admin_reset_mfa(db, &actor, bob, None)
+            sui_id_core::admin::admin_reset_mfa(db, &a.state.clock, &actor, bob, None)
                 .await
                 .map(|_| ())
         ),
@@ -311,21 +314,56 @@ async fn r102_b4_lapsed_freshness_rolls_back_every_gated_command() {
     );
 }
 
-#[tokio::test]
-async fn r102_b4_lapse_after_the_gate_redirects_to_step_up() {
-    // The HTTP gate reads the application clock; the command re-reads the
-    // session against the time of its own transaction. Holding the
-    // application clock back reproduces a step-up that was fresh at the
-    // gate and lapsed by the commit.
-    let mut a = admin().await;
-    give_second_factor(&a).await;
-    stepped_up(&a, "totp", 600).await;
-    let bob = target_user(&a, "bob").await;
-    let at_the_gate = chrono::Utc::now() - chrono::Duration::seconds(420);
-    a.state.clock = Arc::new(MockClock::at(at_the_gate)) as SharedClock;
+/// A clock that reads `base` for its first `hold` reads and `base + jump`
+/// for every read after that. With `hold` left at `usize::MAX` it never
+/// jumps, and it just counts reads. RFC 102 stage 8: the gate and the
+/// command read the same application clock, so a lapse between them needs a
+/// clock that moves between two of its own reads.
+struct SteppingClock {
+    base: chrono::DateTime<chrono::Utc>,
+    jump: chrono::Duration,
+    hold: std::sync::atomic::AtomicUsize,
+    reads: std::sync::atomic::AtomicUsize,
+}
 
+impl SteppingClock {
+    fn new(base: chrono::DateTime<chrono::Utc>, jump: chrono::Duration) -> Arc<Self> {
+        Arc::new(Self {
+            base,
+            jump,
+            hold: std::sync::atomic::AtomicUsize::new(usize::MAX),
+            reads: std::sync::atomic::AtomicUsize::new(0),
+        })
+    }
+
+    /// Restart the read count and jump after `hold` more reads.
+    fn arm(&self, hold: usize) {
+        use std::sync::atomic::Ordering::SeqCst;
+        self.reads.store(0, SeqCst);
+        self.hold.store(hold, SeqCst);
+    }
+
+    fn reads(&self) -> usize {
+        self.reads.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+impl sui_id_core::time::Clock for SteppingClock {
+    fn now(&self) -> chrono::DateTime<chrono::Utc> {
+        use std::sync::atomic::Ordering::SeqCst;
+        let n = self.reads.fetch_add(1, SeqCst) + 1;
+        if n <= self.hold.load(SeqCst) {
+            self.base
+        } else {
+            self.base + self.jump
+        }
+    }
+}
+
+/// POST the disable of `bob`, with the admin's session, through the router.
+async fn post_disable(a: &Admin, bob: UserId) -> axum::http::Response<Body> {
     let csrf = fetch_csrf(&a.state, &a.session).await;
-    let resp = build_router(a.state.clone())
+    build_router(a.state.clone())
         .oneshot(
             Request::builder()
                 .method(Method::POST)
@@ -341,28 +379,204 @@ async fn r102_b4_lapse_after_the_gate_redirects_to_step_up() {
                 .expect("req"),
         )
         .await
-        .expect("disable");
-    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
-    assert_eq!(
-        resp.headers()
-            .get(header::LOCATION)
-            .and_then(|v| v.to_str().ok()),
-        Some("/me/security/step-up?return_to=%2Fadmin%2Fusers"),
-        "the step-up redirect, as the gate gives"
-    );
+        .expect("disable")
+}
+
+const STEP_UP_REDIRECT: &str = "/me/security/step-up?return_to=%2Fadmin%2Fusers";
+
+fn location(resp: &axum::http::Response<Body>) -> Option<&str> {
+    resp.headers()
+        .get(header::LOCATION)
+        .and_then(|v| v.to_str().ok())
+}
+
+/// An admin with a factor whose application clock is `clock`, and a target
+/// user, with the step-up recorded `age` before `base`.
+async fn admin_on_clock(
+    clock: &Arc<SteppingClock>,
+    base: chrono::DateTime<chrono::Utc>,
+    age_secs: i64,
+) -> (Admin, UserId) {
+    let mut a = admin().await;
+    give_second_factor(&a).await;
+    let at = base - chrono::Duration::seconds(age_secs);
+    let session = a.session.clone();
+    a.state
+        .db
+        .with_conn(move |c| {
+            c.execute(
+                "UPDATE sessions SET last_step_up_at = ?1, last_step_up_method = 'totp' WHERE id = ?2",
+                rusqlite::params![at, session],
+            )?;
+            Ok(())
+        })
+        .await
+        .expect("step up");
+    let bob = target_user(&a, "bob").await;
+    a.state.clock = clock.clone() as SharedClock;
+    (a, bob)
+}
+
+async fn disabled_and_events(a: &Admin, bob: UserId) -> (bool, i64) {
     let row = sui_id_store::repos::users::get(&a.state.db, bob)
         .await
         .expect("bob");
-    assert!(!row.is_disabled, "no mutation");
-    assert_eq!(
-        scalar(
-            &a.state,
-            "SELECT COUNT(*) FROM audit_log WHERE action = 'user.disable'".into()
-        )
-        .await,
-        0,
-        "no event"
+    let events = scalar(
+        &a.state,
+        "SELECT COUNT(*) FROM audit_log WHERE action = 'user.disable'".into(),
+    )
+    .await;
+    (row.is_disabled, events)
+}
+
+#[tokio::test]
+async fn r102_b4_lapse_after_the_gate_redirects_to_step_up() {
+    // A stepping clock (not two mocked instants): the HTTP gate and the
+    // command read the same application clock, so the lapse is produced by a
+    // clock that holds still through the gate's read and moves before the
+    // command's. Where the gate's read falls is measured, not assumed.
+    let base = chrono::Utc::now();
+    let jump = chrono::Duration::seconds(120);
+
+    // Calibration: with a step-up already stale (10 min), the gate itself
+    // refuses, so the reads counted in the POST are exactly those up to and
+    // including the gate's.
+    let clock = SteppingClock::new(base, jump);
+    let (a, bob) = admin_on_clock(&clock, base, 600).await;
+    clock.arm(usize::MAX);
+    let resp = post_disable(&a, bob).await;
+    assert_eq!(location(&resp), Some(STEP_UP_REDIRECT), "the gate refuses");
+    let through_the_gate = clock.reads();
+    assert!(through_the_gate >= 1, "the gate reads the clock");
+
+    // The run: a step-up 4 minutes old (fresh at `base`, inside the 5-minute
+    // window). The clock holds through the gate's read and jumps 2 minutes
+    // after it, so the command finds the step-up 6 minutes old.
+    let clock = SteppingClock::new(base, jump);
+    let (a, bob) = admin_on_clock(&clock, base, 240).await;
+    clock.arm(through_the_gate);
+    let resp = post_disable(&a, bob).await;
+    assert!(
+        clock.reads() > through_the_gate,
+        "the request passed the gate and read the clock again ({} reads, gate at {through_the_gate})",
+        clock.reads()
     );
+    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        location(&resp),
+        Some(STEP_UP_REDIRECT),
+        "the command's rollback becomes the step-up redirect"
+    );
+    assert_eq!(
+        disabled_and_events(&a, bob).await,
+        (false, 0),
+        "no mutation and no event"
+    );
+
+    // Control: the same request with a clock that never jumps commits, and
+    // records the age as the caller's clock saw it.
+    let clock = SteppingClock::new(base, jump);
+    let (a, bob) = admin_on_clock(&clock, base, 240).await;
+    clock.arm(usize::MAX);
+    let resp = post_disable(&a, bob).await;
+    assert_eq!(
+        location(&resp),
+        Some("/admin/users"),
+        "commits: {}",
+        resp.status()
+    );
+    assert_eq!(disabled_and_events(&a, bob).await, (true, 1));
+    assert_eq!(
+        text(
+            &a.state,
+            "SELECT note FROM audit_log WHERE action = 'user.disable'".into()
+        )
+        .await
+        .as_deref(),
+        Some("step_up=fresh:totp:240")
+    );
+}
+
+#[tokio::test]
+async fn r102_stage8_gated_commands_judge_freshness_at_the_callers_now() {
+    // A clock one hour behind real time. By that clock the step-up (4
+    // minutes before it) is fresh; by real time it is over an hour old. So a
+    // command that read `Utc::now()` would roll back, and one that takes the
+    // caller's `now` commits and records the age the caller's clock saw.
+    let a = admin().await;
+    give_second_factor(&a).await;
+    let now = chrono::Utc::now() - chrono::Duration::hours(1);
+    let clock: SharedClock = Arc::new(MockClock::at(now));
+    let at = now - chrono::Duration::seconds(240);
+    let session = a.session.clone();
+    a.state
+        .db
+        .with_conn(move |c| {
+            c.execute(
+                "UPDATE sessions SET last_step_up_at = ?1, last_step_up_method = 'totp' WHERE id = ?2",
+                rusqlite::params![at, session],
+            )?;
+            Ok(())
+        })
+        .await
+        .expect("step up");
+    let actor = admin_actor_on_session(a.id, &a.session);
+    let db = &a.state.db;
+    let bob = target_user(&a, "bob").await;
+    let carol = target_user(&a, "carol").await;
+    let dave = target_user(&a, "dave").await;
+
+    sui_id_core::admin::set_user_disabled(db, &clock, &actor, bob, true, None)
+        .await
+        .expect("U02");
+    sui_id_core::admin::set_user_disabled(db, &clock, &actor, bob, false, None)
+        .await
+        .expect("U03");
+    sui_id_core::admin::delete_user(db, &clock, &actor, carol, None)
+        .await
+        .expect("U04");
+    sui_id_core::admin::admin_reset_mfa(db, &clock, &actor, dave, None)
+        .await
+        .expect("U07");
+    sui_id_core::admin::rotate_signing_key(db, &clock, "unused", &actor, None, &a.state.caches)
+        .await
+        .expect("K01");
+
+    for action in [
+        "user.disable",
+        "user.enable",
+        "user.delete",
+        "mfa.admin_reset",
+        "signing_key.rotate",
+    ] {
+        let note = text(
+            &a.state,
+            format!(
+                "SELECT note FROM audit_log WHERE action = '{action}' ORDER BY seq DESC LIMIT 1"
+            ),
+        )
+        .await
+        .unwrap_or_else(|| panic!("{action}: no note"));
+        assert_eq!(step_up_of(&note), "fresh:totp:240", "{action}");
+    }
+    // K01's timestamps are the caller's too.
+    let active = sui_id_store::repos::signing_keys::active(db)
+        .await
+        .expect("active key");
+    assert_eq!(active.created_at, now, "the new key's created_at");
+    let retired: Vec<chrono::DateTime<chrono::Utc>> = a
+        .state
+        .db
+        .with_conn(|c| {
+            let mut stmt = c.prepare("SELECT rotated_at FROM signing_keys WHERE is_active = 0")?;
+            let rows = stmt
+                .query_map([], |r| r.get(0))?
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(rows)
+        })
+        .await
+        .expect("retired keys");
+    assert_eq!(retired, vec![now], "the retired key's rotated_at");
 }
 
 // ── The stage 6 clock follow-up ──────────────────────────────────────

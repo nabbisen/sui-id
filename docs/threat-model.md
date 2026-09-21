@@ -25,6 +25,79 @@
 > document's reconciliation is tracked by RFC 098; see
 > `rfcs/handoffs/098-documentation-authority/task-checklist.md`.
 
+## Dated entries since the banner
+
+Properties that have shipped since v0.26.0 are recorded here as dated entries,
+each stating the property and naming the RFC that made the decision. RFC 097's
+re-baseline folds them into the body of this document; until then the body
+below is not rewritten.
+
+### 2026-09-22 — Authentication that cannot be audited does not succeed (RFC 102)
+
+The decision is [RFC 102](../rfcs/accepted/102-authentication-fails-closed-without-audit.md).
+The properties it establishes:
+
+- **Fail closed.** Every path that establishes a session — a local password
+  sign-in for a user with no second factor, the completion of a second factor,
+  a directory (LDAP) sign-in and a federated sign-in — and every step-up that
+  marks a session freshly re-authenticated commits that change together with
+  exactly one registered audit event, in one database transaction. If the event
+  cannot be written, nothing changes and the user receives the response they
+  would for any failed attempt at that step. No production code creates a
+  session or marks one stepped-up except through those commands, and the raw
+  session insert cannot be named outside the store crate. One event stays best
+  effort on purpose: the note that a password
+  was accepted and a second factor is now awaited, because it grants no
+  session and no authority.
+- **Step-up failures are counted and throttled.** A wrong factor on a step-up
+  is counted per session, and the fifth consecutive failure revokes that
+  session. Step-up attempts, including the password re-entry that guards
+  adding a first factor, are throttled per client address. A recovery code
+  never satisfies a step-up. A correct factor whose success cannot be
+  committed is never counted as a failure.
+- **Second-factor failures are counted per user.** A wrong second factor at
+  sign-in is counted on the user, across every pending sign-in the password
+  step has minted. The fifth consecutive failure removes every pending
+  sign-in and locks the account with the same backoff as password failures.
+  A sign-in completed with a recovery code does not make its session fresh
+  for step-up.
+- **Adding a factor requires proof.** A user who already has a second factor
+  must have a fresh step-up before registering a passkey, regenerating
+  recovery codes or enrolling TOTP. A user with none must re-prove the
+  primary credential: the local password, or a fresh bind for a directory
+  account. A federated account cannot add a first factor until re-authentication
+  upstream exists. A wrong password is a step-up failure and is counted and
+  throttled like one.
+- **Gated actions record their authorization — for sealed commands only.**
+  Disabling, enabling and deleting a user, resetting a user's MFA and rotating
+  the signing key each write an event that says what authorized them: a
+  fresh step-up and its method, that the acting account has no second factor,
+  or, for the operator command-line MFA reset only, that no session applies.
+  The freshness is checked again inside the same transaction, so a step-up
+  that lapses between the confirmation and the commit rolls the action back.
+  Eight other step-up-gated actions still append their event best effort
+  after the action, and their events carry no such record, until RFC 094
+  converts them: disabling, deleting and rotating the secret of a client;
+  deleting a signing key; a user disabling their own MFA or deleting their
+  own passkey; revoking all other sessions; and applying a pending SMTP
+  settings change. For those, an action can succeed without its event.
+
+**Stated residuals.**
+
+- A thief who holds both a session and the account's password can enrol a
+  first factor for a user who has none. Each path re-proves the primary
+  credential only, which is what a second factor exists to limit; every
+  enrolment is recorded. Requiring a second factor for every user is the
+  remedy and is outside RFC 102.
+- Availability is the cost of failing closed. While the audit log cannot be
+  written nobody can sign in or step up. Sessions that already exist keep
+  working. The audit log and the session table share one database, so most
+  causes of an audit-write failure also break the other writes; what remains
+  is a fault specific to the audit log or its hash chain, which the server
+  reports at error level.
+- An account with no second factor passes a step-up gate without a challenge.
+  The gated action's event says so.
+
 This document describes how sui-id thinks about the threats it
 faces, what defences are in place, and where the boundaries of
 those defences sit. It is current as of **v0.26.0** and reflects

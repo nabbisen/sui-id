@@ -58,6 +58,7 @@ pub async fn rotate_signing_key(
         sealed,
         pk.to_bytes().to_vec(),
         reason,
+        clock.now(),
     )
     .await?;
     // After commit, as before: a failed rebuild is logged and the next
@@ -65,7 +66,6 @@ pub async fn rotate_signing_key(
     if let Err(e) = caches.jwks.rebuild(db).await {
         tracing::warn!(error = %e, "cache rebuild failed after rotate_signing_key");
     }
-    let _ = clock;
     let _ = keyring_path;
     Ok(new_id)
 }

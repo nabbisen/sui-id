@@ -11,11 +11,11 @@ Use **Admin panel → Audit log** to filter by event prefix or export to CSV.
 
 | Event name | Label | Description |
 |---|---|---|
-| `auth.login.success` | Login | User authenticated successfully with password (and MFA if enrolled). |
-| `auth.login.failure` | Login failed | Credential check failed (wrong password or unknown username). |
+| `auth.login.success` | Login | A sign-in that needs no second factor succeeded: a local password, or a user-source (LDAP) password. Note fields: `evicted`; for a user-source sign-in also `source` and `stable_id`. A user with a second factor completes with `auth.mfa.success` instead. |
+| `auth.login.failure` | Login failed | The password did not match (counted toward a lockout; note field `count`), or the attempt was refused before any credential check: unknown username, disabled or deleted account, locked account (the note says which). |
 | `auth.lockout` | Account locked | A wrong-password attempt just crossed the progressive-lockout failure threshold. |
 | `auth.login.password_ok_mfa_required` | MFA required | Password was correct but MFA challenge is pending. |
-| `auth.mfa.success` | MFA verified | TOTP code or passkey assertion verified successfully. |
+| `auth.mfa.success` | MFA verified | A second factor completed the sign-in: a TOTP code, a recovery code or a passkey assertion. Note fields: `method` (`totp`, `recovery_code`, `webauthn`) and `evicted`. |
 | `auth.mfa.failure` | MFA failed | TOTP code, recovery code or passkey assertion failed verification at sign-in; the note carries the consecutive `count` for the user. |
 | `auth.mfa.lockout` | MFA lockout | The fifth consecutive wrong second factor: pending sign-ins removed and the account locked. |
 | `auth.password.changed_self` | Password changed | User changed their own password via `/me/security/password`. |
@@ -74,7 +74,7 @@ the administrator is asked to step up again.
 
 | Event name | Label | Description |
 |---|---|---|
-| `signing_key.rotate` | Signing key rotated | Administrator triggered a key rotation. A new Ed25519 key was generated and the previous key was retired. |
+| `signing_key.rotate` | Signing key rotated | Administrator triggered a key rotation. A new Ed25519 key was generated and the previous key was retired. Note fields: `algorithm`, the operator's `reason` when given, and `step_up` (see the user management events above). |
 | `signing_key.delete` | Signing key deleted | Administrator permanently deleted a retired signing key. |
 
 ## Infrastructure events

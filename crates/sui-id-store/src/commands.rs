@@ -188,7 +188,8 @@ impl SealedCommandEvent<K01> for K01Event {
 
 /// Run K01 (signing-key rotation) through the Class-A runner, as the
 /// administrator `admin` acting on `session_id` (RFC 102 B4: the step-up
-/// evidence is computed from that session inside the transaction).
+/// evidence is computed from that session inside the transaction, judged
+/// at the caller's `now`; RFC 102 stage 8: one clock for every command).
 ///
 /// `private_key_sealed` is sealed by the caller *before* this is called
 /// (RFC 094: crypto work stays outside the transaction).
@@ -202,17 +203,18 @@ pub async fn rotate_signing_key(
     private_key_sealed: Vec<u8>,
     public_key: Vec<u8>,
     reason: Option<String>,
+    now: chrono::DateTime<chrono::Utc>,
 ) -> StoreResult<crate::registry::Audited<()>> {
     let context = AuthorizedCommandContext::<K01>::for_authorized_actor(admin, None);
     db.class_a(context, move |tx: &mut ClassATx<'_, K01>| {
-        let step_up =
-            session_step_up_evidence_within_tx(tx.tx(), session_id, admin, chrono::Utc::now())?;
+        let step_up = session_step_up_evidence_within_tx(tx.tx(), session_id, admin, now)?;
         crate::repos::signing_keys::rotate_atomic_within_tx(
             tx.tx(),
             new_id,
             &algorithm,
             &private_key_sealed,
             &public_key,
+            now,
         )?;
         Ok((
             (),
@@ -515,18 +517,14 @@ pub async fn disable_user(
     session_id: sui_id_shared::ids::SessionId,
     target: UserId,
     reason: Option<String>,
+    now: chrono::DateTime<chrono::Utc>,
 ) -> StoreResult<crate::registry::Audited<()>> {
     let context = AuthorizedCommandContext::<U02>::for_authorized_actor(admin, None);
     db.class_a(context, move |tx: &mut ClassATx<'_, U02>| {
-        let step_up =
-            session_step_up_evidence_within_tx(tx.tx(), session_id, admin, chrono::Utc::now())?;
+        let step_up = session_step_up_evidence_within_tx(tx.tx(), session_id, admin, now)?;
         crate::repos::users::set_disabled_within_tx(tx.tx(), target, true)?;
-        crate::repos::sessions::revoke_all_for_user_within_tx(tx.tx(), target, chrono::Utc::now())?;
-        crate::repos::refresh_tokens::revoke_all_for_user_within_tx(
-            tx.tx(),
-            target,
-            chrono::Utc::now(),
-        )?;
+        crate::repos::sessions::revoke_all_for_user_within_tx(tx.tx(), target, now)?;
+        crate::repos::refresh_tokens::revoke_all_for_user_within_tx(tx.tx(), target, now)?;
         crate::repos::auth_codes::invalidate_all_for_user_within_tx(tx.tx(), target)?;
         Ok((
             (),
@@ -588,11 +586,11 @@ pub async fn enable_user(
     admin: UserId,
     session_id: sui_id_shared::ids::SessionId,
     target: UserId,
+    now: chrono::DateTime<chrono::Utc>,
 ) -> StoreResult<crate::registry::Audited<()>> {
     let context = AuthorizedCommandContext::<U03>::for_authorized_actor(admin, None);
     db.class_a(context, move |tx: &mut ClassATx<'_, U03>| {
-        let step_up =
-            session_step_up_evidence_within_tx(tx.tx(), session_id, admin, chrono::Utc::now())?;
+        let step_up = session_step_up_evidence_within_tx(tx.tx(), session_id, admin, now)?;
         crate::repos::users::set_disabled_within_tx(tx.tx(), target, false)?;
         Ok((
             (),
@@ -667,18 +665,14 @@ pub async fn delete_user(
     session_id: sui_id_shared::ids::SessionId,
     target: UserId,
     reason: Option<String>,
+    now: chrono::DateTime<chrono::Utc>,
 ) -> StoreResult<crate::registry::Audited<()>> {
     let context = AuthorizedCommandContext::<U04>::for_authorized_actor(admin, None);
     db.class_a(context, move |tx: &mut ClassATx<'_, U04>| {
-        let step_up =
-            session_step_up_evidence_within_tx(tx.tx(), session_id, admin, chrono::Utc::now())?;
+        let step_up = session_step_up_evidence_within_tx(tx.tx(), session_id, admin, now)?;
         crate::repos::users::soft_delete_within_tx(tx.tx(), target)?;
-        crate::repos::sessions::revoke_all_for_user_within_tx(tx.tx(), target, chrono::Utc::now())?;
-        crate::repos::refresh_tokens::revoke_all_for_user_within_tx(
-            tx.tx(),
-            target,
-            chrono::Utc::now(),
-        )?;
+        crate::repos::sessions::revoke_all_for_user_within_tx(tx.tx(), target, now)?;
+        crate::repos::refresh_tokens::revoke_all_for_user_within_tx(tx.tx(), target, now)?;
         crate::repos::auth_codes::invalidate_all_for_user_within_tx(tx.tx(), target)?;
         Ok((
             (),
@@ -1021,11 +1015,11 @@ pub async fn admin_reset_mfa(
     session_id: sui_id_shared::ids::SessionId,
     target: UserId,
     reason: Option<String>,
+    now: chrono::DateTime<chrono::Utc>,
 ) -> StoreResult<crate::registry::Audited<(bool, usize)>> {
     let context = AuthorizedCommandContext::<U07>::for_authorized_actor(admin, None);
     db.class_a(context, move |tx: &mut ClassATx<'_, U07>| {
-        let step_up =
-            session_step_up_evidence_within_tx(tx.tx(), session_id, admin, chrono::Utc::now())?;
+        let step_up = session_step_up_evidence_within_tx(tx.tx(), session_id, admin, now)?;
         let (totp_removed, passkeys_removed) = remove_mfa_within_tx(tx, target)?;
         Ok((
             (totp_removed, passkeys_removed),
