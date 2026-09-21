@@ -129,7 +129,64 @@ closure assessment. Accepted:
 Its three reported gaps are dispatched below as stage 9, and one item is an
 owner ruling at closure (prerequisite 6's wording).
 
-## Stage 9 — dispatched 2026-09-22: close the evidence gaps
+## Stage 9 — landed `4698af9`, 2026-09-22
+
+Reviewed, and committed as one commit. **RFC 102's implementation is complete.**
+- **B6 is compiler-enforced**, like A4: the raw step-up writes are `pub(crate)`,
+  with a fixture pinned on stable and MSRV.
+- **Every injected-failure gap is closed.** Each new test has a control, so none
+  can pass because the call could never change anything.
+- **`unlock-user` clears the second-factor count.** Without it an unlocked
+  account locked again on the next wrong code. A successful password check still
+  does not clear it, and a test pins that.
+
+Reported and not changed, each acceptable: `users::admin_unlock` survives beside
+U08 with one test caller; `ci/write-commands.toml`'s header counts are stale;
+`configuration.md` documented `unlock-user` with the wrong flag form (RFC 103
+stage 4 corrected the table).
+
+## Closure assessment — 2026-09-22: met, on one owner ruling
+
+Measured against RFC 102's closure prerequisites, after stages 1–9.
+
+| # | Prerequisite | State |
+|---|---|---|
+| 1 | Every production path that establishes a session commits it with exactly one registered event | **Met.** L01 `19344f4`, L02 `b25929e`, L03 and L04 `3041d8a`. Five paths, each with a happy-path test. |
+| 2 | Every path that marks a session freshly stepped-up does the same | **Met.** L02 (by method) and L05 `742fe08`. |
+| 3 | No production caller of the raw session insert or the raw step-up touch | **Met, compiler-enforced.** `0b03f3a` and `4698af9`, each with a compile-negative fixture pinned on stable and MSRV 1.95. |
+| 4 | An injected audit-append failure on each path leaves nothing changed, and the user gets the uniform failure response | **Met.** Every sign-in path, both step-up factors, the gated actions and the factor additions. Two handler paths (passkey step-up, passkey registration) are covered at the command only, because no software authenticator exists in the test lanes; recorded for RFC 099's live evidence. |
+| 5 | Step-up failures are counted and throttled | **Met.** L06, the per-address bucket, and B7's re-authentication counted the same way (`04a5760`). |
+| 6 | Every step-up-gated action's own event records the step-up evidence | **Met for the five sealed commands** (`042b6dd`). The eight actions RFC 094 has yet to convert still append best-effort and carry no evidence. **This needs the owner's reading** — see below. |
+| 7 | `docs/threat-model.md` states the resulting properties | **Met.** A dated entry under RFC 097's banner (`589a1d5`, tightened in `4698af9`), with the body left for RFC 097's re-baseline. |
+| 8 | Independent closure review accepts the evidence | **Not available** — see below. |
+
+**Prerequisite 6 — the owner's reading.** The sentence says *every* step-up-gated
+action. RFC 102 B4 says it "applies only to sealed commands", and its Security
+considerations say the other eight "still append best-effort until RFC 094
+converts them. This RFC does not change that, and does not claim to." The two
+sentences disagree, and the disagreement was in the RFC when it was accepted.
+The eight are: client disable, delete and rotate-secret; signing-key delete;
+self-service MFA disable and passkey delete; revoke-all-other-sessions; applying
+a pending SMTP change.
+- **Recommended:** read prerequisite 6 as *every action this RFC converts*,
+  record the eight in the closure metadata, and leave them to RFC 094's
+  conversion, which carries B4 with it (RFC 102 B4 says so).
+- **The alternative** is to hold RFC 102 open until RFC 094 M2b converts the
+  eight, which makes closure depend on another RFC's milestone.
+
+**Prerequisite 8 — independence.** No independent closure reviewer exists, for
+the same reason as RFC 098: the architect wrote the RFC and every dispatch, the
+implementation role built it, and `@nabbisen` approved the design and the
+acceptance. Per RFC 000 and the RFC 093 precedent, closure is recorded as an
+**unreviewed judgment carried by the owner**, not as a completed independent
+review. The evidence it rests on is unusually strong for that: every stage was
+reviewed against hash-pinned diffs, and each carried mutation testing that was
+shown to fail when a control was removed.
+
+**To close:** the owner rules on prerequisite 6 and approves. The architect then
+moves RFC 102 to `rfcs/done/` with the closure metadata pointing here.
+
+## Stage 9 — as dispatched
 
 **Baseline.** `93e4f50` or later.
 

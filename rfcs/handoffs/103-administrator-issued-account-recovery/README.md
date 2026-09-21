@@ -52,7 +52,64 @@ with their reasons.
 4. **Stage 5's threat-model and dangerous-operations updates** stand as the
    implementer left them: they belong to the stage that adds the surface.
 
-## Stage 4 — dispatched 2026-09-22: the web and CLI surfaces
+## Stage 4 — landed `b3ee7de`, 2026-09-22
+
+Reviewed, and committed as one commit. Accepted:
+- **The byte cap added to the reason.** The ruling's 200-character bound was not
+  enough: 200 Japanese characters is 600 bytes, over the audit attribute's
+  512-byte limit, which is the generic failure the ruling existed to prevent.
+  The implementer measured it and capped both, as the same typed refusal. The
+  ruling is amended to "200 characters **and** 512 bytes".
+- **An administrator with no second factor is told so,** instead of being sent to
+  a step-up page they can never pass. The dispatch's wording would have been a
+  dead end.
+- **The dead display condition was removed** rather than left untestable.
+
+**For the owner: the Japanese and Chinese strings are the implementer's own** and
+want a native read, especially the handover guidance and the refusal messages.
+
+## Stage 5 — dispatched 2026-09-22: notices, the account page, U06's retirement, closure
+
+**Baseline.** `b3ee7de` or later. This is RFC 103's last implementation stage.
+
+**5a — D7 notices.**
+- **At completion**, the existing notice goes to the address that received the
+  link — that is, the **email origin only**. A web- or CLI-issued link sends no
+  notice, because no address is proven yet: RFC 101 introduces verification, and
+  RFC 101's implementation adds the verified-address notices for both events.
+  Record that in RFC 101's handoff when it exists, not here.
+- **At issuance**, nothing is sent, for the same reason. Say so in the guide, so
+  an operator is not left expecting mail.
+- Do not gate any of this on SMTP being configured beyond what the mailer
+  already does.
+
+**5b — the account-page line.** `/me/security/overview` shows the most recent
+recovery event for the signed-in user: when a link was issued for them, and when
+one was completed. It is read from `audit_log` (`user.recovery_link.issued`,
+`auth.password.reset_completed`), shows no token and no actor's name, and says
+"an administrator" or "the host operator" by `via`. A user with no such event
+sees nothing.
+
+**5c — retire U06.** Remove `identity::admin::users::reset_user_password`, the
+store command, its descriptor and tests, the manifest row and the matrix row, and
+`user.reset_password` from `docs/src/reference/audit-events.md`. The design
+review's call-site list is the checklist. Confirm by grep that nothing names it.
+
+**5d — closure.** `docs/threat-model.md` gains a dated entry, as RFC 102's did:
+an administrator never learns a password; the link is single-use, expiring,
+hashed at rest and revoked by any competing change; the web path refuses
+administrator and non-local targets and needs a fresh step-up from an
+administrator who holds a second factor; the CLI's authority is the host key; the
+token never reaches a URL the server sees, a log or the audit row; and the
+residuals (an administrator can still take over a non-administrator account with
+no second factor, and the handover channel is procedural). Then a closure table,
+prerequisite by prerequisite, in the RFC 102 stage 8 form.
+
+**Evidence.** Tests for each notice rule (email origin sends, web and CLI do
+not), the account-page line for each event and its absence, a grep-proof that U06
+is gone, and the gates.
+
+## Stage 4 — as dispatched
 
 **Baseline.** `93e4f50` or later. This stage is the RFC's step 3 and step 4
 together, because both are thin callers of stage 3's data path.

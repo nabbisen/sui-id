@@ -48,6 +48,10 @@ fourth hand-kept list of the same flags.
 - **`verify-backup`'s help line** says it runs "without writing anything". It
   stages a temporary copy of the snapshot for the integrity check; say so, as
   `docs/src/guides/deployment.md` now does (backup move, 2026-09-17).
+- **RFC 103's CLI has landed** (`b3ee7de`): `admin issue-recovery-link` is in the
+  usage block, the descriptions and the dispatcher's unknown-subaction message,
+  each hand-kept. `admin reset-mfa` landed earlier. The single const this package
+  introduces must list **both**, and the binding test must cover them.
 - **Coordinate with RFC 103.** It will add `admin issue-recovery-link`. Do not add
   that name here; this package gives RFC 103 the place to add it.
 
