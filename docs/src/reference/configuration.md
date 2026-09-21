@@ -132,6 +132,7 @@ CLI arguments — apply only to the current process invocation, not persisted.
 | `sui-id restore --config <c> --src <path>` | Restore from an archive. Prompts for confirmation before overwriting. |
 | `sui-id verify-backup --src <path>` | Verify archive integrity and print a compatibility report without writing files. |
 | `sui-id admin unlock-user --config <c> <username>` | Clear an automatically-locked account immediately. |
+| `sui-id admin issue-recovery-link --config <c> --username <name> --reason <text>` | Issue a single-use, 30-minute account-recovery link for a local user, on the operator's authority; works for any local account including the sole administrator. The link and token text are printed once to stdout. At most 5 an hour. See [Issuing a recovery link from the host](../guides/operators.md#issuing-a-recovery-link-from-the-host). |
 | `sui-id admin rotate-key --config <c>` | Create and activate a new Ed25519 signing key; retire the old one. |
 | `sui-id admin rotate-metrics-token --config <c>` | Generate a new Prometheus metrics bearer token and print it once. |
 | `sui-id admin issue-registration-token --config <c> [--max-uses N] [--note TEXT]` | Generate an RFC 7591 initial-access token for dynamic client registration. Printed once — save it immediately. |

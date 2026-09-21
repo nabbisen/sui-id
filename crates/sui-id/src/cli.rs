@@ -102,12 +102,13 @@ pub(crate) async fn run_admin_subcommand(args: &[String]) -> Result<()> {
     match action {
         Some("unlock-user") => run_admin_unlock_user(args).await,
         Some("reset-mfa") => run_admin_reset_mfa(args).await,
+        Some("issue-recovery-link") => run_admin_issue_recovery_link(args).await,
         Some("rotate-key") => run_admin_rotate_key(args).await,
         Some("rotate-metrics-token") => run_admin_rotate_metrics_token(args).await,
         Some("issue-registration-token") => run_admin_issue_registration_token(args).await,
         Some(other) => bail!(
             "unknown admin subaction `{other}`. Known subactions: unlock-user, reset-mfa, \
-             rotate-key, rotate-metrics-token, issue-registration-token"
+             issue-recovery-link, rotate-key, rotate-metrics-token, issue-registration-token"
         ),
         None => bail!("admin requires a subaction. Try: sui-id admin unlock-user --username NAME"),
     }
@@ -194,6 +195,64 @@ pub(crate) async fn run_admin_reset_mfa(args: &[String]) -> Result<()> {
             bail!("no active user named {username:?} (unknown or deleted); nothing was changed")
         }
         Err(e) => Err(anyhow::anyhow!(e)).context("resetting MFA; nothing was changed"),
+    }
+}
+
+/// `sui-id admin issue-recovery-link --username NAME --reason TEXT [--config PATH]`
+///
+/// Issues a single-use, 30-minute account-recovery link for one local user, on
+/// the operator's authority (RFC 103 D2, D12): the last resort, which works
+/// for any local account including the sole administrator. It is a link, never
+/// a password: the user opens it and chooses their own. The issuance and its
+/// `user.recovery_link.issued` event (no actor, `via = cli`) commit together,
+/// and it invalidates the user's earlier links.
+///
+/// **Output.** The link and the token text are printed to **stdout** and
+/// nowhere else, once, and never through a logger. Everything else this
+/// command says (what it did, why it refused) goes to stderr and carries no
+/// token. It works while the server is running: it opens the database itself,
+/// as every other `admin` subcommand does.
+pub(crate) async fn run_admin_issue_recovery_link(args: &[String]) -> Result<()> {
+    let flag = |name: &str| {
+        args.iter()
+            .position(|a| a == name)
+            .and_then(|i| args.get(i + 1))
+    };
+    let username =
+        flag("--username").context("admin issue-recovery-link requires --username NAME")?;
+    let reason = flag("--reason").context("admin issue-recovery-link requires --reason TEXT")?;
+    let config_path = parse_config_path(args).unwrap_or_else(|| PathBuf::from("./sui-id.toml"));
+    let cfg = Config::load(&config_path)
+        .with_context(|| format!("loading config from {}", config_path.display()))?;
+    let resolved = sui_id::keyring::resolve(&cfg.storage.key_file).context("loading master key")?;
+    let db = sui_id_store::Database::open(&cfg.storage.db_path, resolved.key)
+        .context("opening database")?;
+    let clock: sui_id_core::time::SharedClock = std::sync::Arc::new(sui_id_core::time::SystemClock);
+
+    match sui_id_core::recovery_link::issue_as_operator(&db, &clock, username, reason).await {
+        Ok((user_id, link)) => {
+            let url = sui_id_core::recovery_link::completion_url(&cfg.server.issuer, &link.token);
+            eprintln!(
+                "issued a recovery link for {username} (id={user_id}); it expires at {} and \
+                 invalidated {} earlier link(s)",
+                link.expires_at
+                    .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+                link.invalidated
+            );
+            eprintln!(
+                "deliver it through a channel that authenticates the person, and immediately: \
+                 it is shown only once"
+            );
+            println!("Recovery link:");
+            println!("{url}");
+            println!("Token, if the link's fragment is dropped in transit:");
+            println!("{}", link.token.expose());
+            Ok(())
+        }
+        Err(sui_id_core::errors::CoreError::Store(sui_id_store::StoreError::RecoveryRefused(
+            why,
+        ))) => bail!("no recovery link was issued: {why}"),
+        Err(e) => Err(anyhow::anyhow!(e)).context("issuing the recovery link; nothing was changed"),
     }
 }
 
@@ -564,6 +623,7 @@ USAGE:
     sui-id verify-backup --from PATH [--decrypt]
     sui-id admin unlock-user --username NAME [--config PATH]
     sui-id admin reset-mfa --username NAME --reason TEXT [--config PATH]
+    sui-id admin issue-recovery-link --username NAME --reason TEXT [--config PATH]
     sui-id admin rotate-key [--generate-new-key | --new-key PATH] [--yes] [--config PATH]
     sui-id --dev [--dev-bind ADDR] [--dev-db PATH] [--dev-seed PATH]
                  [--dev-admin-password STR] [--dev-client-secret STR]
@@ -601,6 +661,15 @@ SUBCOMMANDS:
                              authority. The recovery for a sole
                              administrator who lost every factor. The
                              reason is recorded in the audit log.
+    admin issue-recovery-link
+                             Issue a single-use account-recovery link (valid
+                             30 minutes) for a local user, on the operator's
+                             authority: the last resort, and the way back for
+                             a sole administrator. The user opens it and
+                             chooses their own password; nobody else learns
+                             it. The link and its token text are printed to
+                             stdout once. The reason (at most 200 characters)
+                             is recorded in the audit log. At most 5 per hour.
     admin rotate-key         Re-seal every encrypted column under a new
                              32-byte master key. Runs OFFLINE: stop the
                              server first, take a fresh backup, then run
@@ -637,7 +706,10 @@ OPTIONS:
                              (default: ./sui-id.toml)
     --to PATH                Output path for `backup`.
     --from PATH              Input path for `restore` / `verify-backup`.
-    --username NAME          Target username for `admin unlock-user`.
+    --username NAME          Target username for `admin unlock-user`,
+                             `admin reset-mfa` and `admin issue-recovery-link`.
+    --reason TEXT            Why, recorded in the audit log, for `admin
+                             reset-mfa` and `admin issue-recovery-link`.
     --new-key PATH           Pre-prepared new key file for `admin rotate-key`.
     --generate-new-key       Have `admin rotate-key` mint a fresh key.
     --yes, -y                Skip the confirmation prompt.

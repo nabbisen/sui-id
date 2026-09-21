@@ -780,29 +780,109 @@ async fn u37_a_reason_that_imitates_fields_cannot_displace_the_recorded_ones() {
     );
 }
 
+/// RFC 103 stage 3 ruling 3: the reason is bounded and printable, as typed
+/// refusals raised before any write, on both entries.
 #[tokio::test]
-async fn u37_a_reason_over_the_attribute_bound_writes_nothing() {
-    // Values are bounded at 512 bytes; the event cannot be built, so the
-    // transaction rolls back (fail closed). The caller is expected to bound
-    // the reason before it gets here.
+async fn u37_reason_bounds_are_typed_refusals_that_write_nothing() {
     let db = fresh_db();
     let (admin, session) = seed_admin_with_fresh_step_up(&db).await;
     let target = seed_user(&db, |_| {}).await;
     let earlier = seed_token(&db, target, ResetTokenOrigin::Email, None).await;
-    let long = "r".repeat(600);
-    let web = issue_web(&db, admin, session, target, &long, Utc::now()).await;
-    assert!(web.is_err(), "over-long reason is not accepted");
-    let cli = issue_cli(&db, target, &long, Utc::now()).await;
-    assert!(
-        cli.is_err(),
-        "over-long reason is not accepted on the CLI either"
-    );
+    let cases: Vec<(&str, String, RecoveryRefusal)> = vec![
+        (
+            "201 characters",
+            "r".repeat(201),
+            RecoveryRefusal::ReasonTooLong,
+        ),
+        // 200 characters, but 600 bytes: over the audit attribute's byte
+        // bound. Before the byte cap this failed as a generic storage error.
+        (
+            "200 three-byte characters",
+            "あ".repeat(200),
+            RecoveryRefusal::ReasonTooLong,
+        ),
+        (
+            "171 three-byte characters (513 bytes)",
+            "あ".repeat(171),
+            RecoveryRefusal::ReasonTooLong,
+        ),
+        (
+            "a newline inside",
+            "line one\nline two".into(),
+            RecoveryRefusal::ReasonHasControlCharacters,
+        ),
+        (
+            "a tab inside",
+            "a\tb".into(),
+            RecoveryRefusal::ReasonHasControlCharacters,
+        ),
+        (
+            "an escape character",
+            "a\u{1b}[31mb".into(),
+            RecoveryRefusal::ReasonHasControlCharacters,
+        ),
+        (
+            "a DEL character",
+            "a\u{7f}b".into(),
+            RecoveryRefusal::ReasonHasControlCharacters,
+        ),
+        (
+            "a NUL character",
+            "a\0b".into(),
+            RecoveryRefusal::ReasonHasControlCharacters,
+        ),
+    ];
+    for (label, reason, why) in &cases {
+        let web = issue_web(&db, admin, session, target, reason, Utc::now()).await;
+        assert_eq!(refused(&web), Some(*why), "web: {label}");
+        let cli = issue_cli(&db, target, reason, Utc::now()).await;
+        assert_eq!(refused(&cli), Some(*why), "cli: {label}");
+    }
     assert_eq!(token_rows(&db).await, 1, "only the seeded token");
     assert!(
         token(&db, earlier).await.revoked_at.is_none(),
         "nothing was revoked"
     );
-    assert_eq!(audit_rows(&db).await, 0);
+    assert_eq!(audit_rows(&db).await, 0, "no event for any refusal");
+}
+
+#[tokio::test]
+async fn u37_reasons_at_the_bounds_are_accepted_and_recorded_trimmed() {
+    let db = fresh_db();
+    let (admin, session) = seed_admin_with_fresh_step_up(&db).await;
+    let target = seed_user(&db, |_| {}).await;
+    for (label, reason, recorded) in [
+        ("200 characters", "r".repeat(200), "r".repeat(200)),
+        (
+            "170 three-byte characters (510 bytes)",
+            "あ".repeat(170),
+            "あ".repeat(170),
+        ),
+        // Surrounding whitespace, including a newline, is trimmed away before
+        // the control-character check; only an inner one is refused.
+        (
+            "padded",
+            "  \treason with spaces\n ".into(),
+            "reason with spaces".into(),
+        ),
+    ] {
+        issue_web(&db, admin, session, target, &reason, Utc::now())
+            .await
+            .unwrap_or_else(|e| panic!("web: {label}: {e:?}"));
+        let note = last_event(&db).await.note.expect("note");
+        assert!(
+            note.starts_with(&format!("reason={recorded} via=web ")),
+            "{label}: {note}"
+        );
+        issue_cli(&db, target, &reason, Utc::now())
+            .await
+            .unwrap_or_else(|e| panic!("cli: {label}: {e:?}"));
+        let note = last_event(&db).await.note.expect("note");
+        assert!(
+            note.starts_with(&format!("reason={recorded} via=cli ")),
+            "{label}: {note}"
+        );
+    }
 }
 
 // ── the repo function's own contract ─────────────────────────────────

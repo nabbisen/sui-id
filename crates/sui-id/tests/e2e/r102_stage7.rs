@@ -319,7 +319,7 @@ async fn r102_b4_lapsed_freshness_rolls_back_every_gated_command() {
 /// jumps, and it just counts reads. RFC 102 stage 8: the gate and the
 /// command read the same application clock, so a lapse between them needs a
 /// clock that moves between two of its own reads.
-struct SteppingClock {
+pub(super) struct SteppingClock {
     base: chrono::DateTime<chrono::Utc>,
     jump: chrono::Duration,
     hold: std::sync::atomic::AtomicUsize,
@@ -327,7 +327,7 @@ struct SteppingClock {
 }
 
 impl SteppingClock {
-    fn new(base: chrono::DateTime<chrono::Utc>, jump: chrono::Duration) -> Arc<Self> {
+    pub(super) fn new(base: chrono::DateTime<chrono::Utc>, jump: chrono::Duration) -> Arc<Self> {
         Arc::new(Self {
             base,
             jump,
@@ -337,13 +337,13 @@ impl SteppingClock {
     }
 
     /// Restart the read count and jump after `hold` more reads.
-    fn arm(&self, hold: usize) {
+    pub(super) fn arm(&self, hold: usize) {
         use std::sync::atomic::Ordering::SeqCst;
         self.reads.store(0, SeqCst);
         self.hold.store(hold, SeqCst);
     }
 
-    fn reads(&self) -> usize {
+    pub(super) fn reads(&self) -> usize {
         self.reads.load(std::sync::atomic::Ordering::SeqCst)
     }
 }

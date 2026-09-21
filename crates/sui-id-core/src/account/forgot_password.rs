@@ -7,9 +7,6 @@
 //!   sends the reset link mail, returns. Always returns `Ok(())`
 //!   externally (user-enumeration protection); failures are
 //!   audit-logged.
-//! - [`validate_token`] — verifies a token without consuming it. Since
-//!   RFC 103 D10 the server no longer calls it: the token reaches the
-//!   server only in the `POST /reset-password` body.
 //! - [`consume_and_reset_password`] — issued from
 //!   `POST /reset-password`. Verifies the token, replaces the user's
 //!   password, marks the token consumed, all in one logical step.
@@ -46,7 +43,7 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::Duration;
 use getrandom;
 use sha2::{Digest, Sha256};
-use sui_id_shared::ids::{PasswordResetTokenId, UserId};
+use sui_id_shared::ids::PasswordResetTokenId;
 use sui_id_store::Database;
 use sui_id_store::models::{CredentialRow, HibpMode, PasswordResetTokenRow, ResetTokenOrigin};
 use sui_id_store::repos::{password_reset_tokens, smtp_config, users};
@@ -285,27 +282,6 @@ pub async fn request_reset(
         }
     }
     Ok(())
-}
-
-/// Verify a token without consuming it. Used by the GET handler
-/// that decides whether to render the new-password form or a
-/// "this link is invalid or expired" page.
-pub async fn validate_token(
-    db: &Database,
-    clock: &SharedClock,
-    plaintext_token: &str,
-) -> CoreResult<UserId> {
-    let hash = hash_token(plaintext_token);
-    let row = password_reset_tokens::find_by_hash(db, &hash)
-        .await?
-        .ok_or(CoreError::InvalidCredentials)?;
-    if row.consumed_at.is_some() || row.revoked_at.is_some() {
-        return Err(CoreError::InvalidCredentials);
-    }
-    if row.expires_at < clock.now() {
-        return Err(CoreError::InvalidCredentials);
-    }
-    Ok(row.user_id)
 }
 
 /// Verify the token, set the user's new password, mark the token consumed,

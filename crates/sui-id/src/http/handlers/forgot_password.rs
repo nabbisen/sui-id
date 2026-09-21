@@ -125,7 +125,10 @@ pub async fn reset_password_get(
     Query(q): Query<ResetTokenQuery>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
-    smtp_required_or_404(smtp_active(&app.db).await?)?;
+    // RFC 103: completion needs no mail. An administrator- or operator-issued
+    // link must be redeemable on an instance with no SMTP configured, and
+    // with SMTP off no email-origin token can exist (`/forgot-password` keeps
+    // its gate, because it sends mail).
     let token = csrf::ensure_token(&jar);
     // RFC 103 D10: a token in the query string has already reached every
     // access log on the way here. Do not process it; ask for a new link.
@@ -157,7 +160,7 @@ pub async fn reset_password_post(
     axum::Form(form): axum::Form<ResetPasswordForm>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
-    smtp_required_or_404(smtp_active(&app.db).await?)?;
+    // No SMTP requirement here either: see `reset_password_get`.
     crate::handlers::enforce_csrf(&jar, Some(&form.csrf))?;
     let t = lang.strings();
 

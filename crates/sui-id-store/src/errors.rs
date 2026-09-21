@@ -64,6 +64,11 @@ pub enum StoreError {
 pub enum RecoveryRefusal {
     /// The recorded reason is empty (D6).
     ReasonRequired,
+    /// The reason is longer than `commands::RECOVERY_REASON_MAX_CHARS`
+    /// characters after trimming.
+    ReasonTooLong,
+    /// The reason contains an ASCII control character.
+    ReasonHasControlCharacters,
     /// No user has that id.
     TargetUnknown,
     /// The target is the issuing administrator (web only): self-service
@@ -87,6 +92,17 @@ impl std::fmt::Display for RecoveryRefusal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Self::ReasonRequired => "a reason is required",
+            Self::ReasonTooLong => {
+                return write!(
+                    f,
+                    "the reason is too long (at most {} characters, and at most {} bytes)",
+                    crate::commands::RECOVERY_REASON_MAX_CHARS,
+                    crate::registry::MAX_ATTRIBUTE_VALUE_BYTES
+                );
+            }
+            Self::ReasonHasControlCharacters => {
+                "the reason must not contain control characters such as a newline or tab"
+            }
             Self::TargetUnknown => "no such user",
             Self::TargetIsSelf => "the target is the issuing administrator",
             Self::TargetIsAdmin => "the target is an administrator",

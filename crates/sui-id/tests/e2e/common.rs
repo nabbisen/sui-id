@@ -39,6 +39,18 @@ pub fn test_app_with_mailer() -> (
 ) {
     let key = MasterKey::generate();
     let db = Database::open_in_memory(key).expect("open db");
+    app_over_db(db)
+}
+
+/// The test app over an existing database, for a test that prepared one on
+/// disk (for example with an operator command) and wants the HTTP layer over
+/// it. Same configuration and stubs as [`test_app_with_mailer`].
+pub fn app_over_db(
+    db: Database,
+) -> (
+    AppState,
+    std::sync::Arc<sui_id_core::mail::InMemoryMailSender>,
+) {
     let cfg = Config {
         server: ServerConfig {
             listen_addr: "127.0.0.1:0".into(),

@@ -395,11 +395,18 @@ emails:
   `/me/security/password` page and via a successful
   `/reset-password` flow.
 
-Email is **opt-in**. Until it's configured, the four endpoints
-that depend on it (`/forgot-password`, `/reset-password`,
-`/admin/settings/email/test`, and the inbound email-related
-admin pages) behave as if the feature doesn't exist (404 or no
-notification mail). Existing functionality is unaffected.
+Email is **opt-in**. Until it's configured, the endpoints that
+depend on it (`/forgot-password`, `/admin/settings/email/test`, and the
+inbound email-related admin pages) behave as if the feature doesn't
+exist (404 or no notification mail). Existing functionality is
+unaffected.
+
+`/reset-password` does **not** need email. It is where a user opens a
+recovery link an administrator or the operator issued for them (see
+[Dangerous operations](dangerous-operations.md#issuing-a-recovery-link) and
+[Issuing a recovery link from the host](#issuing-a-recovery-link-from-the-host)),
+and that must work on an instance with no SMTP configured. With email off no
+forgot-password link can exist, so the page only ever redeems those.
 
 ### Configuring SMTP
 
@@ -818,15 +825,16 @@ ORDER BY seq DESC;
 
 ### Reading `step_up=`
 
-Five administrator actions record what authorized them, as a `step_up=` field at
+Six administrator actions record what authorized them, as a `step_up=` field at
 the end of the audit row's note: disabling, re-enabling and deleting a user,
-resetting a user's MFA, and rotating the signing key. The value is one of:
+resetting a user's MFA, rotating the signing key, and issuing a recovery link.
+The value is one of:
 
 | Value | Meaning |
 |---|---|
 | `fresh:<method>:<seconds>` | The administrator re-authenticated with `<method>` (`totp` or `webauthn`) `<seconds>` seconds before the action committed. A step-up made before the method was tracked reads `fresh:unknown:<seconds>`. |
-| `not_required:no_second_factor` | The administrator's account has no second factor, so there was nothing to re-authenticate with. |
-| `not_applicable:system_principal` | The operator ran `sui-id admin reset-mfa` from the host. There is no session and no administrator; the row has no actor and `via=cli`. Only that command records this value. |
+| `not_required:no_second_factor` | The administrator's account has no second factor, so there was nothing to re-authenticate with. Issuing a recovery link **never** records this: it is refused for an administrator with no second factor. |
+| `not_applicable:system_principal` | The operator ran `sui-id admin reset-mfa` or `sui-id admin issue-recovery-link` from the host. There is no session and no administrator; the row has no actor and `via=cli`. Only those two commands record this value. |
 
 The step-up is checked again as the action commits. If it lapsed between the
 confirmation page and the commit, nothing is changed and the administrator is
@@ -838,7 +846,8 @@ To review these rows, and to find administrators acting without a second factor:
 SELECT at, actor, action, target, note
 FROM audit_log
 WHERE action IN ('user.disable', 'user.enable', 'user.delete',
-                 'mfa.admin_reset', 'signing_key.rotate')
+                 'mfa.admin_reset', 'signing_key.rotate',
+                 'user.recovery_link.issued')
 ORDER BY seq DESC;
 
 -- Only the actions taken by an account with no second factor.
@@ -847,6 +856,11 @@ FROM audit_log
 WHERE note LIKE '%step_up=not_required%'
 ORDER BY seq DESC;
 ```
+
+A reason is free text and the note does not escape it, so a
+`LIKE '%step_up=…%'` query can also match a reason that imitates a field (a false
+positive, never a false negative): the real fields are written after the reason,
+so the last occurrence in a note is the recorded one.
 
 The other dangerous actions (client disable, delete and secret rotation,
 signing-key deletion, and the self-service MFA, passkey and session actions)
@@ -1130,6 +1144,66 @@ for backups (the config file and the master key):
    ```
 
 As with the web reset, existing sessions are not revoked.
+
+### Issuing a recovery link from the host
+
+A user who has forgotten their password and has no verified email address
+cannot use `/forgot-password`. An administrator can issue them a recovery
+link from the admin panel (see
+[Dangerous operations](dangerous-operations.md#issuing-a-recovery-link)), but
+**not** for another administrator, and not when the only administrator is the
+one who is locked out. For those, and as the last resort in general, issue the
+link from the host, with the same access you use for backups (the config file
+and the master key). It works for any local account, including the sole
+administrator, and it works while the server is running.
+
+1. Confirm who is asking, through a channel that authenticates the person.
+   The command trusts whoever can run it on the host.
+2. Run:
+
+   ```sh
+   sui-id admin issue-recovery-link --username alice \
+       --reason "caller verified by call-back to the number on record; ticket 4711" \
+       --config /etc/sui-id/sui-id.toml
+   ```
+
+   It prints the link and the token text on **stdout**, once. What it did, and
+   any refusal, go to stderr; neither carries the token. Capture stdout somewhere
+   only you can read, and do not paste it into a ticket. The link is
+   single-use, expires in 30 minutes, and invalidates every earlier link for
+   that user.
+3. Give the link to the person, immediately, by the channel you verified them
+   on. **Never to an address or number the requester supplied in the same
+   request.** The link is the only control against someone talking their way to
+   another person's account: nothing in sui-id can tell who is on the other end.
+   If the link's fragment (the part after `#`) is lost in transit, they can
+   paste the token text into the reset page.
+4. They open the link and **choose their own password**; you never see it. They
+   still pass their second factor at the next sign-in. If they have lost that
+   too, follow with `sui-id admin reset-mfa` (above).
+
+The reason is required (at most 200 characters, no control characters) and is
+stored in the audit note. Only local accounts are eligible: an unknown, disabled,
+deleted, directory or federated user is refused, with a message and a non-zero
+exit, and nothing changes. At most five links an hour can be issued this way; the
+count is read from the database, so it holds across separate runs. It needs no
+SMTP.
+
+Check the audit log. The issuance is `user.recovery_link.issued` with no actor
+and `via=cli` in the note; when the user completes it, `auth.password.reset_completed`
+carries `origin=cli`:
+
+```sql
+SELECT at, target, note FROM audit_log
+WHERE action = 'user.recovery_link.issued' AND note LIKE '%via=cli%'
+ORDER BY seq DESC;
+
+SELECT at, target, note FROM audit_log
+WHERE action = 'auth.password.reset_completed' AND note = 'origin=cli'
+ORDER BY seq DESC;
+```
+
+An issuance with no completion after 30 minutes is a link that was never used.
 
 ## WebAuthn / passkey requirements
 

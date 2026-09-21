@@ -22,20 +22,18 @@ use sui_id_store::errors::RecoveryRefusal;
 
 const REASON: &str = "caller verified by call-back, ticket 4711";
 
-struct Admin {
-    state: AppState,
-    id: UserId,
-    session: String,
+pub(super) struct Admin {
+    pub(super) state: AppState,
+    pub(super) id: UserId,
+    pub(super) session: String,
 }
 
 /// The setup administrator with a second factor (a passkey row) and a step-up
-/// recorded just now, so U37's in-transaction check finds it fresh.
-async fn admin() -> Admin {
+/// recorded just now, so U37's in-transaction check finds it fresh. **SMTP is
+/// off**: `/reset-password` no longer needs it (RFC 103 stage 4).
+pub(super) async fn admin() -> Admin {
     let state = test_app();
     let session = complete_setup_and_login(&state).await;
-    // `/reset-password` answers 404 unless SMTP is active (measured; see the
-    // stage 3 review request), so completing a link needs it on.
-    enable_smtp(&state).await;
     let id = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
         .await
         .expect("admin")
@@ -54,7 +52,7 @@ async fn admin() -> Admin {
     Admin { state, id, session }
 }
 
-async fn stepped_up(state: &AppState, session: &str) {
+pub(super) async fn stepped_up(state: &AppState, session: &str) {
     let (at, session) = (chrono::Utc::now(), session.to_owned());
     state
         .db
@@ -70,7 +68,7 @@ async fn stepped_up(state: &AppState, session: &str) {
         .expect("step up");
 }
 
-async fn target_user(a: &Admin, name: &str) -> UserId {
+pub(super) async fn target_user(a: &Admin, name: &str) -> UserId {
     sui_id_core::admin::create_user(
         &a.state.db,
         &a.state.clock,
@@ -554,44 +552,4 @@ async fn r103_s3_the_sixth_issuance_in_an_hour_is_refused() {
         "{sixth:?}"
     );
     assert_eq!(events(&a.state, "user.recovery_link.issued").await, 10);
-}
-
-#[tokio::test]
-async fn r103_s3_validate_token_refuses_a_revoked_link() {
-    // `validate_token` has no caller since RFC 103 D10, but it is public and
-    // was changed here, so its behaviour is pinned directly.
-    let a = admin().await;
-    let bob = target_user(&a, "bob").await;
-    let first = issue_web(&a, bob).await.expect("first");
-    assert_eq!(
-        sui_id_core::forgot_password::validate_token(
-            &a.state.db,
-            &a.state.clock,
-            first.token.expose()
-        )
-        .await
-        .expect("a live link validates"),
-        bob
-    );
-    let second = issue_web(&a, bob).await.expect("second");
-    assert!(
-        sui_id_core::forgot_password::validate_token(
-            &a.state.db,
-            &a.state.clock,
-            first.token.expose()
-        )
-        .await
-        .is_err(),
-        "the revoked link no longer validates"
-    );
-    assert_eq!(
-        sui_id_core::forgot_password::validate_token(
-            &a.state.db,
-            &a.state.clock,
-            second.token.expose()
-        )
-        .await
-        .expect("the newer link validates"),
-        bob
-    );
 }

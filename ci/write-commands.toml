@@ -528,11 +528,11 @@ descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
 id = "U37"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-owner = "Issue an account-recovery link (RFC 103): administrator on the web, operator on the CLI"
-rationale = "`user.recovery_link.issued`; two entries: `issue_recovery_link_as_admin` (actor and session, required fresh `step_up`, `not_required` refused; refuses the issuer, any administrator, and a disabled, deleted or non-local user) and `issue_recovery_link_as_operator` (system principal, `not_applicable:system_principal`, no administrator/self refusal); D8 throttle of 5 per rolling hour per issuing administrator and for the CLI, counted from the database; revokes the target's outstanding links (D3); the token is never recorded"
+owner = "Issue an account-recovery link (RFC 103): administrator on the web (`users_recovery_link`, `POST /admin/users/{id}/recovery-link`), operator on the CLI (`sui-id admin issue-recovery-link`)"
+rationale = "`user.recovery_link.issued`; two entries: `issue_recovery_link_as_admin` (actor and session, required fresh `step_up`, `not_required` refused; refuses the issuer, any administrator, and a disabled, deleted or non-local user) and `issue_recovery_link_as_operator` (system principal, `not_applicable:system_principal`, no administrator/self refusal); D8 throttle of 5 per rolling hour per issuing administrator and for the CLI, counted from the database; the reason is trimmed, at most 200 characters and 512 bytes, with no ASCII control character, as typed refusals before any write; revokes the target's outstanding links (D3); the token is never recorded"
 mutation_surface = "`password_reset_tokens::insert_within_tx`, `password_reset_tokens::revoke_outstanding_for_user_within_tx`"
 files = ["crates/sui-id-store/src/repos/password_reset_tokens.rs"]
-test_id = "`u37_*` (store), `r103_s3_*` (e2e)"
+test_id = "`u37_*` (store), `r103_s3_*` and `r103_s4_*` (e2e)"
 event = ""    # Stage 1: typed event-kind enum variant, not yet added
 descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
 

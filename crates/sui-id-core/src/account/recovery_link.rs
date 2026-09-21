@@ -44,6 +44,23 @@ impl Drop for RecoveryToken {
     }
 }
 
+/// The link an administrator or operator hands to the user:
+/// `<issuer>/reset-password#t=<token>` (RFC 103 D10). The token is in the
+/// URL **fragment**, which a browser does not send, so it reaches no proxy, no
+/// access log and no server log. The same base, `server.issuer`, is used for
+/// every origin. A trailing slash on the issuer is dropped, so the path is
+/// never doubled.
+///
+/// The returned string contains the token. Show it to whoever issued the link
+/// once; never log it.
+pub fn completion_url(issuer: &str, token: &RecoveryToken) -> String {
+    format!(
+        "{}/reset-password#t={}",
+        issuer.trim_end_matches('/'),
+        token.expose()
+    )
+}
+
 /// A freshly issued recovery link.
 #[derive(Debug)]
 pub struct RecoveryLink {

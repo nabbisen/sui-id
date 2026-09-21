@@ -353,7 +353,7 @@ impl AttributeValue for &str {
 /// Maximum attribute entries per event and maximum bytes per value. Small,
 /// deliberately: this is a typed audit record, not a debug dump.
 const MAX_ATTRIBUTES: usize = 16;
-const MAX_ATTRIBUTE_VALUE_BYTES: usize = 512;
+pub(crate) const MAX_ATTRIBUTE_VALUE_BYTES: usize = 512;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum AuditBuildError {

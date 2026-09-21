@@ -193,6 +193,10 @@ pub struct UserDetailData {
     /// RFC 071: explicit role for display and the role-change form.
     pub role: sui_id_store::models::Role,
     pub is_disabled: bool,
+    /// Whether to offer "Issue recovery link" (RFC 103): a local, active user
+    /// who is not an administrator and not the viewer. Display only; U37
+    /// re-reads and enforces every rule in its transaction.
+    pub can_issue_recovery: bool,
     pub totp_enabled: bool,
     pub passkey_count: usize,
     pub sessions: Vec<UserDetailSession>,
@@ -258,6 +262,7 @@ pub fn render_user_detail(
         let disable_confirm_url = format!("/admin/users/{uid}/disable-confirm");
         let delete_confirm_url = format!("/admin/users/{uid}/delete-confirm");
         let reset_mfa_confirm_url = format!("/admin/users/{uid}/mfa-reset-confirm");
+        let recovery_link_confirm_url = format!("/admin/users/{uid}/recovery-link-confirm");
 
         view! {
             <Shell title=username.clone() show_nav=true
@@ -383,6 +388,11 @@ pub fn render_user_detail(
                             </h2>
                             <p class="danger-zone__body">{t.user_detail_danger_zone_body}</p>
                             <div class="form-actions">
+                                {data.can_issue_recovery.then(|| view! {
+                                    <a href=recovery_link_confirm_url class="button secondary">
+                                        {t.confirm_recovery_link_button}
+                                    </a>
+                                })}
                                 {data.totp_enabled.then(|| view! {
                                     <a href=reset_mfa_confirm_url class="button secondary">
                                         {t.confirm_reset_mfa_button}

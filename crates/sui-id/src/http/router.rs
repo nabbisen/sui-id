@@ -141,6 +141,14 @@ pub fn build_router(app: AppState) -> Router {
             "/admin/users/{id}/mfa-reset-confirm",
             get(admin::users_mfa_reset_confirm_get),
         )
+        .route(
+            "/admin/users/{id}/recovery-link",
+            post(admin::users_recovery_link),
+        )
+        .route(
+            "/admin/users/{id}/recovery-link-confirm",
+            get(admin::users_recovery_link_confirm_get),
+        )
         .route("/admin/users/{id}/role", post(admin::users_set_role))
         .route(
             "/admin/clients",

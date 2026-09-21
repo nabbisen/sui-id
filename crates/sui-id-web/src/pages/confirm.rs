@@ -61,6 +61,12 @@ pub struct ConfirmScreenData {
     pub extra_hidden: Vec<(String, String)>,
     /// If true, render the disable-reason textarea (RFC 045).
     pub include_reason_field: bool,
+    /// The reason is mandatory (RFC 103 D6): the field is marked `required`
+    /// and labelled as such. The server enforces it either way.
+    pub reason_required: bool,
+    /// An extra paragraph under the impact text, for guidance the person
+    /// must read before confirming (for example the recovery-link handover).
+    pub notice: Option<String>,
     /// Submit button label.
     pub button_label: String,
     /// True → `class="danger"`, false → `class="btn"`. The re-enable
@@ -96,6 +102,8 @@ pub fn confirm_screen(data: ConfirmScreenData, lang: sui_id_i18n::Locale) -> imp
         csrf_token,
         extra_hidden,
         include_reason_field,
+        reason_required,
+        notice,
         button_label,
         button_danger,
         cancel_url,
@@ -112,14 +120,28 @@ pub fn confirm_screen(data: ConfirmScreenData, lang: sui_id_i18n::Locale) -> imp
         })
         .collect();
     let reason_block = include_reason_field.then(|| {
+        let (label, placeholder, hint) = if reason_required {
+            (
+                t.recovery_reason_label,
+                t.recovery_reason_placeholder,
+                t.recovery_reason_hint,
+            )
+        } else {
+            (
+                t.disable_reason_label,
+                t.disable_reason_placeholder,
+                t.disable_reason_hint,
+            )
+        };
         view! {
             <div class="field">
                 <label for="disable-reason" class="field__label">
-                    {t.disable_reason_label}
+                    {label}
                 </label>
                 <textarea id="disable-reason" name="reason" rows="2" maxlength="200"
-                          placeholder=t.disable_reason_placeholder></textarea>
-                <span class="field__hint">{t.disable_reason_hint}</span>
+                          required=reason_required
+                          placeholder=placeholder></textarea>
+                <span class="field__hint">{hint}</span>
             </div>
         }
     });
@@ -129,6 +151,7 @@ pub fn confirm_screen(data: ConfirmScreenData, lang: sui_id_i18n::Locale) -> imp
             <h1>{title_owned}</h1>
             <p><strong>{identity}</strong></p>
             {impact.map(|s| view! { <p class="muted">{s}</p> })}
+            {notice.map(|s| view! { <p class="muted">{s}</p> })}
             {badge_view.map(|b| view! { <p>{b}</p> })}
             {reversibility_text.map(|s| view! {
                 <p class="muted text-caption">{s}</p>
@@ -190,6 +213,8 @@ pub fn render_confirm_disable_user(
                 csrf_token: data.csrf_token.clone(),
                 extra_hidden: vec![("disabled".into(), new_state.into())],
                 include_reason_field: !data.is_disabled,
+                reason_required: false,
+                notice: None,
                 button_label: btn.into(),
                 button_danger: btn_danger,
                 cancel_url: "/admin/users".into(),
@@ -229,6 +254,8 @@ pub fn render_confirm_delete_user(
                 csrf_token: data.csrf_token.clone(),
                 extra_hidden: vec![],
                 include_reason_field: true,
+                reason_required: false,
+                notice: None,
                 button_label: t.confirm_delete_user_button.into(),
                 button_danger: true,
                 cancel_url: "/admin/users".into(),
@@ -268,6 +295,8 @@ pub fn render_confirm_reset_mfa(
                 csrf_token: data.csrf_token.clone(),
                 extra_hidden: vec![],
                 include_reason_field: true,
+                reason_required: false,
+                notice: None,
                 button_label: t.confirm_reset_mfa_button.into(),
                 button_danger: true,
                 cancel_url: "/admin/users".into(),
@@ -276,6 +305,50 @@ pub fn render_confirm_reset_mfa(
         );
         view! {
             <Shell title=t.confirm_reset_mfa_title.to_string() show_nav=true
+                   current=Some("users".to_string()) dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
+                {body}
+            </Shell>
+        }
+    })
+}
+
+/// The confirm screen for issuing an account-recovery link (RFC 103 D6): the
+/// same template as the other dangerous operations, with the reason required
+/// and the handover guidance (D11) shown before the button.
+pub struct ConfirmRecoveryLinkData {
+    pub user_id: String,
+    pub username: String,
+    pub csrf_token: String,
+}
+
+pub fn render_confirm_recovery_link(
+    data: ConfirmRecoveryLinkData,
+    dev_mode: bool,
+    lang: sui_id_i18n::Locale,
+) -> String {
+    render(move || {
+        let t = lang.strings();
+        let body = confirm_screen(
+            ConfirmScreenData {
+                title: t.confirm_recovery_link_title.into(),
+                identity: data.username.clone(),
+                impact: Some(t.confirm_recovery_link_impact.into()),
+                badge: Some(ReversibilityKind::Irreversible),
+                reversibility_text: Some(t.confirm_recovery_link_reversibility.into()),
+                action_url: format!("/admin/users/{}/recovery-link", data.user_id),
+                csrf_token: data.csrf_token.clone(),
+                extra_hidden: vec![],
+                include_reason_field: true,
+                reason_required: true,
+                notice: Some(t.recovery_link_handover.into()),
+                button_label: t.confirm_recovery_link_button.into(),
+                button_danger: true,
+                cancel_url: format!("/admin/users/{}", data.user_id),
+            },
+            lang,
+        );
+        view! {
+            <Shell title=t.confirm_recovery_link_title.to_string() show_nav=true
                    current=Some("users".to_string()) dev_mode=dev_mode lang=lang csrf_token=data.csrf_token.clone()>
                 {body}
             </Shell>
@@ -307,6 +380,8 @@ pub fn render_confirm_delete_client(
                 csrf_token: data.csrf_token.clone(),
                 extra_hidden: vec![],
                 include_reason_field: true,
+                reason_required: false,
+                notice: None,
                 button_label: t.confirm_delete_client_button.into(),
                 button_danger: true,
                 cancel_url: "/admin/clients".into(),
@@ -347,6 +422,8 @@ pub fn render_confirm_delete_signing_key(
                 csrf_token: data.csrf_token.clone(),
                 extra_hidden: vec![],
                 include_reason_field: true,
+                reason_required: false,
+                notice: None,
                 button_label: t.confirm_delete_signing_key_button.into(),
                 button_danger: true,
                 cancel_url: "/admin/signing-keys".into(),
@@ -400,6 +477,8 @@ pub fn render_confirm_rotate_signing_key(
                 csrf_token: data.csrf_token.clone(),
                 extra_hidden: vec![],
                 include_reason_field: false,
+                reason_required: false,
+                notice: None,
                 button_label: t.confirm_rotate_signing_key_button.into(),
                 button_danger: true,
                 cancel_url: "/admin/signing-keys".into(),
@@ -444,6 +523,8 @@ pub fn render_settings_email_confirm(
                 csrf_token: data.csrf_token.clone(),
                 extra_hidden: vec![("pending_change_id".into(), data.pending_change_id.clone())],
                 include_reason_field: false,
+                reason_required: false,
+                notice: None,
                 button_label: t.confirm_email_settings_button.into(),
                 button_danger: false,
                 cancel_url: "/admin/settings/email".into(),

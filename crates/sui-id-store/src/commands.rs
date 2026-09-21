@@ -1517,6 +1517,40 @@ fn refuse(why: crate::errors::RecoveryRefusal) -> crate::StoreError {
     crate::StoreError::RecoveryRefused(why)
 }
 
+/// The longest recovery reason U37 accepts, in characters, after trimming.
+/// The confirm screen's field carries the same bound. It is not the only
+/// bound: the reason is also capped at the audit attribute's byte limit
+/// (`registry::MAX_ATTRIBUTE_VALUE_BYTES`, 512), because 200 characters of a
+/// script with three-byte characters (Japanese, Chinese) is 600 bytes and
+/// would otherwise reach that limit and fail as a generic storage error.
+pub const RECOVERY_REASON_MAX_CHARS: usize = 200;
+
+/// RFC 103 stage 3 ruling 3: the reason is free text written into a
+/// `key=value` audit note whose values are not escaped, and attribute values
+/// are bounded at 512 bytes. So it is trimmed, must not be empty, must not
+/// exceed [`RECOVERY_REASON_MAX_CHARS`] characters or the attribute byte
+/// bound (whichever is reached first), and must not contain an
+/// ASCII control character (a newline, tab or escape). Each is a typed
+/// refusal, raised before any write, so an over-long reason never reaches the
+/// attribute bound and fails as a generic storage error. Both U37 entries
+/// call this, so every caller gets the same rule.
+fn validated_recovery_reason(reason: &str) -> StoreResult<String> {
+    use crate::errors::RecoveryRefusal as Why;
+    let reason = reason.trim();
+    if reason.is_empty() {
+        return Err(refuse(Why::ReasonRequired));
+    }
+    if reason.chars().count() > RECOVERY_REASON_MAX_CHARS
+        || reason.len() > crate::registry::MAX_ATTRIBUTE_VALUE_BYTES
+    {
+        return Err(refuse(Why::ReasonTooLong));
+    }
+    if reason.chars().any(|c| c.is_ascii_control()) {
+        return Err(refuse(Why::ReasonHasControlCharacters));
+    }
+    Ok(reason.to_owned())
+}
+
 /// RFC 103 D5, read inside U37's transaction: who a recovery link may be
 /// issued for. `admin_issuer` is `Some` on the web (which also refuses the
 /// issuer and any administrator) and `None` on the CLI (whose authority is
@@ -1614,10 +1648,7 @@ pub async fn issue_recovery_link_as_admin(
     use crate::errors::RecoveryRefusal as Why;
     let context = AuthorizedCommandContext::<U37>::for_authorized_actor(admin, None);
     db.class_a(context, move |tx: &mut ClassATx<'_, U37>| {
-        let reason = reason.trim().to_owned();
-        if reason.is_empty() {
-            return Err(refuse(Why::ReasonRequired));
-        }
+        let reason = validated_recovery_reason(&reason)?;
         let step_up = session_step_up_evidence_within_tx(tx.tx(), session_id, admin, now)?;
         if !matches!(step_up, SessionStepUpEvidence::Fresh { .. }) {
             // D6: `not_required` is refused for this operation.
@@ -1673,10 +1704,7 @@ pub async fn issue_recovery_link_as_operator(
     use crate::errors::RecoveryRefusal as Why;
     let context = AuthorizedCommandContext::<U37>::for_system_actor(None);
     db.class_a(context, move |tx: &mut ClassATx<'_, U37>| {
-        let reason = reason.trim().to_owned();
-        if reason.is_empty() {
-            return Err(refuse(Why::ReasonRequired));
-        }
+        let reason = validated_recovery_reason(&reason)?;
         check_recovery_target(tx.tx(), target, None)?;
         let issued = crate::repos::password_reset_tokens::count_issued_via_cli_within_tx(
             tx.tx(),

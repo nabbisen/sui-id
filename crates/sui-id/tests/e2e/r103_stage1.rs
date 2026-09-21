@@ -13,7 +13,7 @@ use sui_id::{AppState, build_router};
 use sui_id_shared::ids::{PasswordResetTokenId, UserId};
 use tower::ServiceExt;
 
-const NEW_PASSWORD: &str = "brand-new-secure-pw-12345";
+pub(super) const NEW_PASSWORD: &str = "brand-new-secure-pw-12345";
 
 pub(super) struct Resp {
     pub(super) status: StatusCode,
