@@ -1,6 +1,27 @@
 # RFC 102 — Authentication that cannot be audited does not succeed
 
-**Status.** Accepted
+**Status.** Implemented
+**Closure reviewed on.** 2026-09-22
+**Closure approved by.** `@nabbisen` (accountable owner), 2026-09-22, who also
+ruled prerequisite 6 (below). The closure review was performed by the architect,
+which wrote this RFC and every dispatch, and is **not** independent of it. No
+independent role existed: the implementation role built it, and `@nabbisen`
+approved its design and acceptance. As with RFCs 093 and 098, recorded under
+RFC 000 as an **unreviewed judgment carried by the owner**, not as a completed
+independent review.
+**Closure evidence.** [Closure assessment 2026-09-22](../handoffs/102-authentication-fails-closed/README.md)
+(§*Closure assessment*, with the per-stage records above it: `19344f4`, `b25929e`,
+`3041d8a`, `0b03f3a`, `742fe08`, `042b6dd`, `589a1d5`, `4698af9`, and stage 1's
+`04a5760`). Every stage was reviewed against hash-pinned diffs with mutation
+testing; CI green on each.
+**Prerequisite 6, as ruled 2026-09-22 (`@nabbisen`).** "Every step-up-gated
+action's own event records the step-up evidence" is read as **every action this
+RFC converts** — U02, U03, U04, U07 and K01. Eight gated actions remain
+unconverted and still append best-effort: client disable, delete and
+rotate-secret; signing-key delete; self-service MFA disable and passkey delete;
+revoke-all-other-sessions; applying a pending SMTP change. They gain B4 when
+RFC 094 converts them, which RFC 102 B4 already requires; the ruling changes no
+code and hides nothing.
 **Accepted on.** 2026-09-17
 **Approved by.** `@nabbisen`, who also ruled every open question as recommended.
 **Independent design review.** [Design review 2026-09-16](../handoffs/102-authentication-fails-closed/102-103-design-review-2026-09-16.md)

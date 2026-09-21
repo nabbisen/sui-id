@@ -64,7 +64,7 @@ contract instead of an accident of one match arm.
 
 **`@nabbisen` accepted the architect's recommendation: fail closed.** Not dispatched.
 The same day the owner chose to carry it in a new RFC rather than amend RFCs 094
-and 096 in place: [RFC 102](../../accepted/102-authentication-fails-closed-without-audit.md),
+and 096 in place: [RFC 102](../../done/102-authentication-fails-closed-without-audit.md),
 which supersedes the "RFC 094 amendment" named below. Part 1 is unaffected.
 
 The design as recommended: If the audit log

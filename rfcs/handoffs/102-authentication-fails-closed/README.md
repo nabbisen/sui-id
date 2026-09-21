@@ -1,6 +1,6 @@
 # RFC 102 implementation handoff
 
-**Governing RFC.** [RFC 102](../../accepted/102-authentication-fails-closed-without-audit.md),
+**Governing RFC.** [RFC 102](../../done/102-authentication-fails-closed-without-audit.md),
 Accepted 2026-09-17. The RFC is the contract; this file sets the order and the
 evidence. **Implementer.** Mid-capability model.
 **Reviews.** [design review](102-103-design-review-2026-09-16.md),
@@ -144,6 +144,13 @@ Reported and not changed, each acceptable: `users::admin_unlock` survives beside
 U08 with one test caller; `ci/write-commands.toml`'s header counts are stale;
 `configuration.md` documented `unlock-user` with the wrong flag form (RFC 103
 stage 4 corrected the table).
+
+## Closed — 2026-09-22
+
+`@nabbisen` ruled prerequisite 6 as recommended (every action this RFC converts;
+the eight unconverted ones are named in the closure metadata and belong to
+RFC 094) and approved closure. RFC 102 is in `rfcs/done/` with its closure
+metadata pointing here.
 
 ## Closure assessment — 2026-09-22: met, on one owner ruling
 

@@ -1,7 +1,7 @@
 # RFCs 102 and 103: independent design review request
 
 **RFCs.**
-- [RFC 102](../../accepted/102-authentication-fails-closed-without-audit.md) —
+- [RFC 102](../../done/102-authentication-fails-closed-without-audit.md) —
   authentication that cannot be audited does not succeed. Part A covers sign-in;
   Part B covers step-up.
 - [RFC 103](../../accepted/103-administrator-issued-account-recovery.md) —

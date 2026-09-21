@@ -61,6 +61,7 @@ harmful.
 | [ldap-returning-signin](ldap-returning-signin/README.md) | Complete, `478ec5b` |
 | [request-id-span](request-id-span/README.md) | Open — owner authorization 2026-09-17 |
 | [backup-restore-hardening](backup-restore-hardening/README.md) | Open — owner authorization 2026-09-17 |
+| [audit-note-escaping](audit-note-escaping/README.md) | Open — owner authorization 2026-09-22 |
 | [audit-event-labels](audit-event-labels/README.md) | Open — owner ruling 2026-09-16 |
 | [schema-version-fail-closed](schema-version-fail-closed/README.md) | Open — owner authorization 2026-09-16 |
 | [client-confirm-screens](client-confirm-screens/README.md) | Open — owner authorization 2026-09-16 |

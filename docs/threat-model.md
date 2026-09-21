@@ -34,7 +34,7 @@ below is not rewritten.
 
 ### 2026-09-22 — Authentication that cannot be audited does not succeed (RFC 102)
 
-The decision is [RFC 102](../rfcs/accepted/102-authentication-fails-closed-without-audit.md).
+The decision is [RFC 102](../rfcs/done/102-authentication-fails-closed-without-audit.md).
 The properties it establishes:
 
 - **Fail closed.** Every path that establishes a session — a local password
