@@ -167,7 +167,8 @@ with event `user.recovery_link.issued`:
   invalidated, and RFC 102's `step_up` evidence on the web.
 
 U10's `auth.password.reset_completed` gains an `origin` attribute (`email` |
-`admin` | `cli`). An operator can then join each issuance to its completion. The
+`web` | `cli`; *corrected 2026-09-22 from `admin`, to match the `issued_via`
+column*). An operator can then join each issuance to its completion. The
 audit row never carries the token or its hash.
 
 **D10 — the link never leaks.** The token never appears in a URL the server

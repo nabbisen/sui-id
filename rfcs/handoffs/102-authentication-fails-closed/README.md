@@ -115,7 +115,56 @@ Carried into stage 8: the five gated commands read `chrono::Utc::now()` for
 freshness, while L01–L07 take the caller's clock. One rule for every command is
 cleaner. The lapse-after-gate test can use a clock that advances between reads.
 
-## Stage 8 — dispatched 2026-09-17: documentation, consistency, closure evidence
+## Stage 8 — landed `589a1d5`, 2026-09-22
+
+Reviewed, and committed as one commit. The closure table is the input to the
+closure assessment. Accepted:
+- **The matrix mismatch on `auth.login.failure`** (Atomic from U22, best-effort
+  from the refusal path) is corrected, and it predates RFC 102.
+- **The threat model** gains a dated entry under RFC 097's banner, without
+  rewriting the body.
+- **The stepping-clock test**, calibrated by a dry run rather than a hard-coded
+  read count.
+
+Its three reported gaps are dispatched below as stage 9, and one item is an
+owner ruling at closure (prerequisite 6's wording).
+
+## Stage 9 — dispatched 2026-09-22: close the evidence gaps
+
+**Baseline.** `93e4f50` or later.
+
+**9a — B6 compiler-enforced, like A4.** `sessions::record_step_up_within_tx` and
+`set_step_up_method_within_tx` are `pub`, so the "no production caller of the raw
+step-up touch" prerequisite holds only by absence of callers. Make both
+`pub(crate)` and add a compile-negative fixture beside
+`session_insert_is_private.rs`. If a caller outside the store needs one, stop and
+report.
+
+**9b — the two missing injected-failure tests** (closure prerequisite 4).
+- **L02 with the `Webauthn` proof.** Inject the `audit_log` trigger and call
+  `verify_pending_webauthn`: no session, the pending row kept, nothing counted,
+  and the ceremony untouched.
+- **U14 and U15** (recovery-code regeneration, passkey registration): an injected
+  append failure leaves the factor unchanged, as U12's test already shows.
+
+**9c — `unlock-user` clears the second-factor count.** Measured in stage 8:
+`users::admin_unlock` resets `failed_login_count` and `locked_until` only, so
+after an `auth.mfa.lockout` the operator's unlock leaves `mfa_failure_count` at
+five, and the next wrong code locks the account again with a longer window. That
+is a defect: an operator who unlocks an account expects it usable. U08 clears
+`mfa_failure_count` too. Update `operators.md`, which stage 8 made say the
+opposite.
+
+**Evidence.**
+- 9a: the fixture, pinned on stable and MSRV, and a mutation (`pub` again) shown
+  caught.
+- 9b: the three tests.
+- 9c: a test that an unlock after an MFA lockout leaves the next wrong code at
+  count 1, and one mutation.
+- **Build and gates:** fmt, both clippy scopes, the test count (default and all
+  features), MSRV 1.95, G13, G15.
+
+## Stage 8 — as dispatched
 
 **Baseline.** The commit that adds this section, or later.
 

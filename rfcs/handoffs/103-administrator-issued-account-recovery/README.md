@@ -21,7 +21,76 @@ Accepted 2026-09-17. **Implementer.** Mid-capability model.
 Reviewed, and committed as one commit. The password-policy refusal re-shows the
 form, which is accepted: the link is still good at that point.
 
-## Stage 3 — dispatched 2026-09-17: the admin-issued link's data path
+## Stage 3 — landed `93e4f50`, 2026-09-22
+
+Reviewed, and committed as one commit. Accepted: `origin = web` (the RFC text
+said `admin`; the RFC is corrected to match the column), `issued_by ON DELETE
+CASCADE`, a throttled attempt writing nothing, and the two equivalent mutants
+with their reasons.
+
+### Rulings on stage 3's findings
+
+1. **The SMTP gate on `/reset-password` goes** (finding 1). `GET` and `POST
+   /reset-password` no longer require active SMTP; `/forgot-password` keeps the
+   gate, because it sends mail. Measured: without SMTP the completion page
+   answers 404 today, so an administrator- or operator-issued link could not be
+   redeemed on exactly the instances RFC 103 exists for. With SMTP off no
+   email-origin token can exist, so opening completion exposes nothing new.
+2. **`validate_token` is removed** (finding 2). D10 took away its only caller,
+   and the store's guarded consume is the authority. Remove the function, its
+   test and the contradicting doc lines.
+3. **A reason cannot forge note fields** (finding 3). Two parts:
+   - **Now, in stage 4:** the entry points bound the reason to **200 characters**
+     after trimming, and refuse ASCII control characters, as a typed refusal.
+     That also settles finding 4 (an over-long reason must not reach the
+     512-byte attribute bound and fail generically).
+   - **Proposed to the owner:** escaping attribute values in the note builder,
+     which is registry-wide and affects every event. Until it lands,
+     `operators.md`'s `LIKE '%step_up=…%'` queries can match a forged reason —
+     a false positive, never a false negative. Say so in the guide, in one
+     sentence, with the note that the real fields are written last.
+4. **Stage 5's threat-model and dangerous-operations updates** stand as the
+   implementer left them: they belong to the stage that adds the surface.
+
+## Stage 4 — dispatched 2026-09-22: the web and CLI surfaces
+
+**Baseline.** `93e4f50` or later. This stage is the RFC's step 3 and step 4
+together, because both are thin callers of stage 3's data path.
+
+**Scope.**
+- **The rulings above:** the SMTP gate, `validate_token`, and the reason bound.
+- **Web (D5, D6, D10).** A dangerous-operation surface on the user detail page:
+  confirm screen, `_confirmed=1`, fresh step-up, a required reason. It calls
+  `recovery_link::issue_as_admin`. The response **renders the link and the token
+  once**, with `Cache-Control: no-store` and `Referrer-Policy: no-referrer`, and
+  never a redirect carrying either. `StoreError::StepUpRequired` maps to the
+  step-up redirect; each `RecoveryRefusal` maps to its own message.
+- **CLI.** `sui-id admin issue-recovery-link --config PATH --username NAME
+  --reason TEXT`, printing the link and the token to stdout only, exiting
+  non-zero on each refusal with its message. Add it to `--help`, coordinating
+  with `roadmap/cli-help-completeness/`.
+- **The link** is `<server.issuer>/reset-password#t=<token>` on both paths.
+- **i18n** in en, ja and zh_hans for every new string.
+- **Docs.** `dangerous-operations.md` gains the operation and its handover
+  procedure (D11); `operators.md` gains the CLI command and the query caveat
+  above.
+
+**Evidence.**
+- End to end on the web: issue, then complete at `/reset-password`, with SMTP
+  **off**; the second use is refused.
+- The same for the CLI, with the real binary.
+- Refusals: admin target, self, non-local, disabled, deleted, missing reason,
+  over-long reason, control characters, the sixth issuance within an hour.
+- No step-up, and stale step-up: refused and redirected.
+- The token appears in no log line at any level, in no redirect and in no
+  request URI, with `log.access_log = true`.
+- Headers asserted on the issuance response.
+- **Mutation:** the confirm gate, the step-up gate, the reason bound and the
+  no-store header, one at a time; each caught.
+- **Build and gates:** fmt, both clippy scopes, the test count, MSRV 1.95, G12,
+  G13, G15, G10a, G10b.
+
+## Stage 3 — as dispatched
 
 **Baseline.** `4057e6a` or later.
 
