@@ -641,6 +641,55 @@ pub fn set_role_within_tx(
 /// from the same transaction that performs the change, not from a value
 /// the caller resolved before acquiring the writer (RFC 094 "racy state
 /// is rechecked inside the transaction").
+/// What U37 (issue a recovery link) needs to know about its target, read
+/// inside its transaction (RFC 103 D5).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecoveryTarget {
+    pub role: crate::models::Role,
+    pub source: crate::models::UserSource,
+    pub is_disabled: bool,
+    pub is_deleted: bool,
+}
+
+/// Read the target's role, source and state, including a deleted user (which
+/// U37 refuses explicitly rather than reporting as unknown). `NotFound` if
+/// there is no such user.
+pub fn recovery_target_within_tx(
+    conn: &rusqlite::Connection,
+    user_id: UserId,
+) -> StoreResult<RecoveryTarget> {
+    conn.query_row(
+        "SELECT role, is_admin, source, is_disabled, is_deleted FROM users WHERE id = ?1",
+        [user_id.to_string()],
+        |row| {
+            let role_str: Option<String> = row.get(0)?;
+            let is_admin: i64 = row.get(1)?;
+            let source: String = row.get(2)?;
+            let is_disabled: i64 = row.get(3)?;
+            let is_deleted: i64 = row.get(4)?;
+            Ok(RecoveryTarget {
+                role: role_str
+                    .as_deref()
+                    .and_then(crate::models::Role::from_db_str)
+                    .unwrap_or(if is_admin != 0 {
+                        crate::models::Role::Admin
+                    } else {
+                        crate::models::Role::User
+                    }),
+                // An unrecognised source is treated as not local: refused.
+                source: crate::models::UserSource::parse(&source)
+                    .unwrap_or(crate::models::UserSource::Ldap),
+                is_disabled: is_disabled != 0,
+                is_deleted: is_deleted != 0,
+            })
+        },
+    )
+    .map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
+        other => StoreError::from(other),
+    })
+}
+
 pub fn get_role_within_tx(
     conn: &rusqlite::Connection,
     user_id: UserId,

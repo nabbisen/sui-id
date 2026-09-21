@@ -13,6 +13,7 @@ const _: fn() = || {
     assert_system_principal_permitted::<U22>();
     assert_system_principal_permitted::<U08>();
     assert_system_principal_permitted::<U10>();
+    assert_system_principal_permitted::<U37>();
     // U01-U07 and U09 are deliberately absent: all eight are
     // `system_principal: forbidden` (an authenticated actor —
     // admin or self-service — is required; U09's self-service actor
@@ -43,6 +44,7 @@ fn all_descriptors() -> Vec<&'static EventDescriptor> {
         &U08_UNLOCK,
         &U09_CHANGED_SELF,
         &U10_RESET_COMPLETED,
+        &U37_ISSUED,
         &T04_ROTATED,
         &T04_THEFT_DETECTED,
         &L06_FAILURE,
@@ -143,6 +145,7 @@ fn actor_requirement_agrees_with_system_principal_for_every_command() {
     check("U08", true, &[&U08_UNLOCK]);
     check("U09", false, &[&U09_CHANGED_SELF]);
     check("U10", true, &[&U10_RESET_COMPLETED]);
+    check("U37", true, &[&U37_ISSUED]);
     check("T04", true, &[&T04_ROTATED, &T04_THEFT_DETECTED]);
     check("L05", false, &[&L05_SUCCESS]);
     check("L06", false, &[&L06_FAILURE, &L06_SESSION_REVOKED]);
@@ -266,6 +269,7 @@ fn event_names_match_command_inventory() {
         "admin.user.unlock",
         "auth.password.changed_self",
         "auth.password.reset_completed",
+        "user.recovery_link.issued",
         "auth.refresh.rotated",
         "auth.refresh.theft_detected",
         "auth.step_up.success",
@@ -399,6 +403,7 @@ fn b4_every_gated_descriptor_requires_step_up() {
         &U03_ENABLE,
         &U04_DELETE,
         &U07_ADMIN_RESET,
+        &U37_ISSUED,
         &K01_ROTATED,
     ] {
         let step_up = d
@@ -426,7 +431,8 @@ fn b4_every_gated_descriptor_requires_step_up() {
 fn b4_session_evidence_renders_only_session_forms() {
     // Structural: `SessionStepUpEvidence` is what a session-bound entry
     // computes, and it has exactly these two forms. The system-principal
-    // form is written only by `U07Event::OperatorReset`.
+    // form is written only by the operator entries, `U07Event::OperatorReset`
+    // and `U37Event::OperatorIssued`.
     for evidence in [
         SessionStepUpEvidence::Fresh {
             method: "totp".into(),
@@ -486,5 +492,95 @@ fn b4_only_the_operator_reset_records_not_applicable() {
     assert_eq!(
         step_up(&cli).as_deref(),
         Some("not_applicable:system_principal")
+    );
+}
+
+// ── RFC 103 stage 3: U37 ────────────────────────────────────────────────
+
+#[test]
+fn u37_both_entries_record_the_same_attribute_set_and_differ_in_via_and_step_up() {
+    let target = UserId::new();
+    let expires_at = chrono::DateTime::parse_from_rfc3339("2026-09-22T12:30:00Z")
+        .expect("time")
+        .with_timezone(&chrono::Utc);
+    let web = U37Event::Issued {
+        target,
+        reason: "call-back verified".into(),
+        expires_at,
+        invalidated: 2,
+        step_up: SessionStepUpEvidence::Fresh {
+            method: "totp".into(),
+            age_secs: 7,
+        },
+    };
+    let cli = U37Event::OperatorIssued {
+        target,
+        reason: "call-back verified".into(),
+        expires_at,
+        invalidated: 0,
+    };
+    assert_eq!(U37::descriptor(&web).name, "user.recovery_link.issued");
+    assert_eq!(U37::descriptor(&cli).name, "user.recovery_link.issued");
+    assert_eq!(
+        attribute_map(&web.attributes().expect("attributes")),
+        vec![
+            ("reason".to_owned(), "call-back verified".to_owned()),
+            ("via".to_owned(), "web".to_owned()),
+            ("expires_at".to_owned(), "2026-09-22T12:30:00Z".to_owned()),
+            ("invalidated".to_owned(), "2".to_owned()),
+            ("step_up".to_owned(), "fresh:totp:7".to_owned()),
+        ]
+    );
+    assert_eq!(
+        attribute_map(&cli.attributes().expect("attributes")),
+        vec![
+            ("reason".to_owned(), "call-back verified".to_owned()),
+            ("via".to_owned(), "cli".to_owned()),
+            ("expires_at".to_owned(), "2026-09-22T12:30:00Z".to_owned()),
+            ("invalidated".to_owned(), "0".to_owned()),
+            (
+                "step_up".to_owned(),
+                "not_applicable:system_principal".to_owned()
+            ),
+        ]
+    );
+    // Every attribute the events emit is declared, and every declared one is
+    // emitted: the descriptor and the events cannot drift apart silently.
+    let declared: Vec<&str> = U37_ISSUED.attributes.iter().map(|a| a.name).collect();
+    for event in [&web, &cli] {
+        let emitted: Vec<String> = attribute_map(&event.attributes().expect("attributes"))
+            .into_iter()
+            .map(|(k, _)| k)
+            .collect();
+        let mut emitted: Vec<&str> = emitted.iter().map(String::as_str).collect();
+        let mut declared = declared.clone();
+        emitted.sort_unstable();
+        declared.sort_unstable();
+        assert_eq!(emitted, declared);
+    }
+}
+
+#[test]
+fn u37_events_never_carry_the_token_or_its_hash() {
+    // Structural, by construction: neither variant has a field that could hold
+    // one. This pins that the attribute names stay free of any such name.
+    for a in U37_ISSUED.attributes {
+        assert!(
+            !a.name.contains("token") && !a.name.contains("hash") && !a.name.contains("secret"),
+            "{}",
+            a.name
+        );
+    }
+}
+
+#[test]
+fn u10_records_origin() {
+    let event = U10Event::Completed {
+        user_id: UserId::new(),
+        origin: crate::models::ResetTokenOrigin::Cli,
+    };
+    assert_eq!(
+        attribute_map(&event.attributes().expect("attributes")),
+        vec![("origin".to_owned(), "cli".to_owned())]
     );
 }

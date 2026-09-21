@@ -59,6 +59,7 @@ mod r102_stage7;
 mod r103_reset_mfa;
 mod r103_stage1;
 mod r103_stage2;
+mod r103_stage3;
 mod r11_login_failure;
 mod refresh_theft;
 mod request_id;

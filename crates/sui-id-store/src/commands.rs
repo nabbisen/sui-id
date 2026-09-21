@@ -526,6 +526,13 @@ pub async fn disable_user(
         crate::repos::sessions::revoke_all_for_user_within_tx(tx.tx(), target, now)?;
         crate::repos::refresh_tokens::revoke_all_for_user_within_tx(tx.tx(), target, now)?;
         crate::repos::auth_codes::invalidate_all_for_user_within_tx(tx.tx(), target)?;
+        // RFC 103 D3: a disabled user's recovery links stop working.
+        crate::repos::password_reset_tokens::revoke_outstanding_for_user_within_tx(
+            tx.tx(),
+            target,
+            None,
+            now,
+        )?;
         Ok((
             (),
             U02Event::Disabled {
@@ -674,6 +681,13 @@ pub async fn delete_user(
         crate::repos::sessions::revoke_all_for_user_within_tx(tx.tx(), target, now)?;
         crate::repos::refresh_tokens::revoke_all_for_user_within_tx(tx.tx(), target, now)?;
         crate::repos::auth_codes::invalidate_all_for_user_within_tx(tx.tx(), target)?;
+        // RFC 103 D3: a deleted user's recovery links stop working.
+        crate::repos::password_reset_tokens::revoke_outstanding_for_user_within_tx(
+            tx.tx(),
+            target,
+            None,
+            now,
+        )?;
         Ok((
             (),
             U04Event::Deleted {
@@ -1239,8 +1253,16 @@ pub async fn change_password_self(
     let context = AuthorizedCommandContext::<U09>::for_authorized_actor(user_id, None);
     db.class_a(context, move |tx: &mut ClassATx<'_, U09>| {
         crate::repos::credentials::upsert_within_tx(tx.tx(), &credential)?;
+        let now = chrono::Utc::now();
+        // RFC 103 D3: a password change invalidates outstanding reset links,
+        // whether or not the other sessions are being swept.
+        crate::repos::password_reset_tokens::revoke_outstanding_for_user_within_tx(
+            tx.tx(),
+            user_id,
+            None,
+            now,
+        )?;
         let (sessions_revoked, refresh_tokens_revoked) = if revoke_others {
-            let now = chrono::Utc::now();
             let sessions_revoked = match keep_current_session {
                 Some(keep) => crate::repos::sessions::revoke_all_for_user_except_within_tx(
                     tx.tx(),
@@ -1278,7 +1300,11 @@ static U10_RESET_COMPLETED: EventDescriptor = EventDescriptor {
     class: AuditClass::Atomic,
     actor: ActorRequirement::None,
     target: TargetRequirement::Required,
-    attributes: &[],
+    attributes: &[AttributeSpec {
+        name: "origin",
+        description: "where the consumed token came from: \"email\" (forgot-password), \"web\" (an administrator) or \"cli\" (the operator)",
+        required: false,
+    }],
 };
 
 crate::declare_write_command! {
@@ -1291,14 +1317,17 @@ crate::declare_write_command! {
     command U10 = "U10" {
         system_principal: permitted;
         enum U10Event {
-            Completed { user_id: UserId } => &U10_RESET_COMPLETED,
+            Completed {
+                user_id: UserId,
+                origin: crate::models::ResetTokenOrigin,
+            } => &U10_RESET_COMPLETED,
         }
     }
 }
 
 impl SealedCommandEvent<U10> for U10Event {
     fn target(&self) -> Option<AuditTarget> {
-        let Self::Completed { user_id } = self;
+        let Self::Completed { user_id, .. } = self;
         Some(AuditTarget(user_id.to_string()))
     }
 
@@ -1307,7 +1336,10 @@ impl SealedCommandEvent<U10> for U10Event {
     }
 
     fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
-        AuditAttributes::builder().build()
+        let Self::Completed { origin, .. } = self;
+        AuditAttributes::builder()
+            .attribute("origin", origin.as_str())
+            .build()
     }
 }
 
@@ -1341,10 +1373,336 @@ pub async fn consume_and_reset_password(
         if !crate::repos::users::is_active_local_within_tx(tx.tx(), user_id)? {
             return Err(crate::StoreError::NotFound);
         }
+        // RFC 103 U10 `origin`: read from the token this completion consumed.
+        let origin = crate::repos::password_reset_tokens::origin_within_tx(tx.tx(), token_id)?;
         crate::repos::credentials::upsert_within_tx(tx.tx(), &credential)?;
         crate::repos::sessions::revoke_all_for_user_within_tx(tx.tx(), user_id, consumed_at)?;
         crate::repos::refresh_tokens::revoke_all_for_user_within_tx(tx.tx(), user_id, consumed_at)?;
-        Ok(((), U10Event::Completed { user_id }))
+        // RFC 103 D3: completing one link invalidates the user's other
+        // outstanding links.
+        crate::repos::password_reset_tokens::revoke_outstanding_for_user_within_tx(
+            tx.tx(),
+            user_id,
+            Some(token_id),
+            consumed_at,
+        )?;
+        Ok(((), U10Event::Completed { user_id, origin }))
+    })
+    .await
+}
+
+// ── U37 — issue a recovery link (RFC 103 D2, D3, D5, D6, D8, D9) ────────
+
+static U37_ISSUED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::UserRecoveryLinkIssued,
+    name: "user.recovery_link.issued",
+    class: AuditClass::Atomic,
+    // The issuing administrator on the web; none for the operator CLI.
+    actor: ActorRequirement::Optional,
+    target: TargetRequirement::Required,
+    attributes: &[
+        AttributeSpec {
+            name: "reason",
+            description: "the operator's recorded reason for issuing the link",
+            required: false,
+        },
+        AttributeSpec {
+            name: "via",
+            description: "\"web\" (an administrator) or \"cli\" (the operator)",
+            required: false,
+        },
+        AttributeSpec {
+            name: "expires_at",
+            description: "when the link stops working (RFC 3339, UTC)",
+            required: false,
+        },
+        AttributeSpec {
+            name: "invalidated",
+            description: "how many of the target's outstanding links this issuance invalidated",
+            required: false,
+        },
+        STEP_UP_ATTRIBUTE,
+    ],
+};
+
+/// Most recovery links one administrator, or the operator CLI, may issue in
+/// a rolling hour (RFC 103 D8).
+pub const RECOVERY_LINKS_PER_HOUR: i64 = 5;
+
+crate::declare_write_command! {
+    /// U37 — issue a recovery link. Two entries: the administrator's web
+    /// operation (`issue_recovery_link_as_admin`, an actor and a session)
+    /// and the operator CLI (`issue_recovery_link_as_operator`, the system
+    /// principal, no session), so U37 permits the system principal, as U07
+    /// does. The event never carries the token or its hash.
+    command U37 = "U37" {
+        system_principal: permitted;
+        enum U37Event {
+            /// Issued by an administrator on the web, with the session's
+            /// step-up evidence.
+            Issued {
+                target: UserId,
+                reason: String,
+                expires_at: chrono::DateTime<chrono::Utc>,
+                invalidated: usize,
+                step_up: SessionStepUpEvidence,
+            } => &U37_ISSUED,
+            /// Issued by the operator CLI: no session, the system
+            /// principal. The only U37 event that records `not_applicable`.
+            OperatorIssued {
+                target: UserId,
+                reason: String,
+                expires_at: chrono::DateTime<chrono::Utc>,
+                invalidated: usize,
+            } => &U37_ISSUED,
+        }
+    }
+}
+
+impl SealedCommandEvent<U37> for U37Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let (Self::Issued { target, .. } | Self::OperatorIssued { target, .. }) = self;
+        Some(AuditTarget(target.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let expires = |at: &chrono::DateTime<chrono::Utc>| {
+            at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+        };
+        match self {
+            Self::Issued {
+                reason,
+                expires_at,
+                invalidated,
+                step_up,
+                ..
+            } => AuditAttributes::builder()
+                .attribute("reason", reason.clone())
+                .attribute("via", "web")
+                .attribute("expires_at", expires(expires_at))
+                .attribute("invalidated", invalidated.to_string())
+                .attribute("step_up", step_up.as_attribute())
+                .build(),
+            Self::OperatorIssued {
+                reason,
+                expires_at,
+                invalidated,
+                ..
+            } => AuditAttributes::builder()
+                .attribute("reason", reason.clone())
+                .attribute("via", "cli")
+                .attribute("expires_at", expires(expires_at))
+                .attribute("invalidated", invalidated.to_string())
+                .attribute("step_up", STEP_UP_NOT_APPLICABLE)
+                .build(),
+        }
+    }
+}
+
+/// What U37 issued. The plaintext token is not here: it never reaches the
+/// store, only its hash does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RecoveryLinkGrant {
+    pub token_id: sui_id_shared::ids::PasswordResetTokenId,
+    pub expires_at: chrono::DateTime<chrono::Utc>,
+    /// How many of the target's outstanding links this issuance invalidated.
+    pub invalidated: usize,
+}
+
+fn refuse(why: crate::errors::RecoveryRefusal) -> crate::StoreError {
+    crate::StoreError::RecoveryRefused(why)
+}
+
+/// RFC 103 D5, read inside U37's transaction: who a recovery link may be
+/// issued for. `admin_issuer` is `Some` on the web (which also refuses the
+/// issuer and any administrator) and `None` on the CLI (whose authority is
+/// not an administrator session).
+fn check_recovery_target(
+    conn: &rusqlite::Connection,
+    target: UserId,
+    admin_issuer: Option<UserId>,
+) -> StoreResult<()> {
+    use crate::errors::RecoveryRefusal as Why;
+    let t = crate::repos::users::recovery_target_within_tx(conn, target).map_err(|e| match e {
+        crate::StoreError::NotFound => refuse(Why::TargetUnknown),
+        other => other,
+    })?;
+    if let Some(admin) = admin_issuer {
+        if admin == target {
+            return Err(refuse(Why::TargetIsSelf));
+        }
+        if t.role.is_admin() {
+            return Err(refuse(Why::TargetIsAdmin));
+        }
+    }
+    if t.is_deleted {
+        return Err(refuse(Why::TargetDeleted));
+    }
+    if t.is_disabled {
+        return Err(refuse(Why::TargetDisabled));
+    }
+    if !t.source.is_local() {
+        return Err(refuse(Why::TargetNonLocal));
+    }
+    Ok(())
+}
+
+/// Revoke the target's outstanding links and insert the new one: the shared
+/// tail of both U37 entries.
+fn revoke_and_insert_recovery_token(
+    conn: &rusqlite::Connection,
+    target: UserId,
+    token_hash: Vec<u8>,
+    via: crate::models::ResetTokenOrigin,
+    issued_by: Option<UserId>,
+    expires_at: chrono::DateTime<chrono::Utc>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> StoreResult<RecoveryLinkGrant> {
+    let invalidated = crate::repos::password_reset_tokens::revoke_outstanding_for_user_within_tx(
+        conn, target, None, now,
+    )?;
+    let token_id = sui_id_shared::ids::PasswordResetTokenId::new();
+    crate::repos::password_reset_tokens::insert_within_tx(
+        conn,
+        &crate::models::PasswordResetTokenRow {
+            id: token_id,
+            user_id: target,
+            token_hash,
+            issued_at: now,
+            expires_at,
+            consumed_at: None,
+            requester_ip: None,
+            issued_via: via,
+            issued_by,
+            revoked_at: None,
+        },
+    )?;
+    Ok(RecoveryLinkGrant {
+        token_id,
+        expires_at,
+        invalidated,
+    })
+}
+
+/// Run U37 for an administrator on the web (RFC 103 D5, D6, D8, D9). In one
+/// transaction: the acting session's step-up evidence is computed and must
+/// be `fresh` (D6: an administrator with no second factor is refused with
+/// `StepUpRequired`, as is a lapsed step-up); the target is re-read and
+/// refused if it is the issuer, an administrator, deleted, disabled or not
+/// local (D5); the issuer's hourly limit is counted from the database (D8);
+/// then every outstanding link of the target is revoked (D3), the new
+/// token's hash is inserted, and `user.recovery_link.issued` is written.
+/// Every refusal writes nothing.
+///
+/// `token_hash` is the SHA-256 of a token generated outside the transaction;
+/// the plaintext never reaches this function.
+#[allow(clippy::too_many_arguments)]
+pub async fn issue_recovery_link_as_admin(
+    db: &crate::Database,
+    admin: UserId,
+    session_id: sui_id_shared::ids::SessionId,
+    target: UserId,
+    token_hash: Vec<u8>,
+    reason: String,
+    expires_at: chrono::DateTime<chrono::Utc>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> StoreResult<crate::registry::Audited<RecoveryLinkGrant>> {
+    use crate::errors::RecoveryRefusal as Why;
+    let context = AuthorizedCommandContext::<U37>::for_authorized_actor(admin, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, U37>| {
+        let reason = reason.trim().to_owned();
+        if reason.is_empty() {
+            return Err(refuse(Why::ReasonRequired));
+        }
+        let step_up = session_step_up_evidence_within_tx(tx.tx(), session_id, admin, now)?;
+        if !matches!(step_up, SessionStepUpEvidence::Fresh { .. }) {
+            // D6: `not_required` is refused for this operation.
+            return Err(crate::StoreError::StepUpRequired);
+        }
+        check_recovery_target(tx.tx(), target, Some(admin))?;
+        let issued = crate::repos::password_reset_tokens::count_issued_by_within_tx(
+            tx.tx(),
+            admin,
+            now - chrono::TimeDelta::hours(1),
+        )?;
+        if issued >= RECOVERY_LINKS_PER_HOUR {
+            return Err(refuse(Why::Throttled));
+        }
+        let grant = revoke_and_insert_recovery_token(
+            tx.tx(),
+            target,
+            token_hash,
+            crate::models::ResetTokenOrigin::Web,
+            Some(admin),
+            expires_at,
+            now,
+        )?;
+        Ok((
+            grant,
+            U37Event::Issued {
+                target,
+                reason,
+                expires_at,
+                invalidated: grant.invalidated,
+                step_up,
+            },
+        ))
+    })
+    .await
+}
+
+/// Run U37 for the operator CLI (`sui-id admin issue-recovery-link`, RFC 103
+/// D12 precedent): the system principal, no session, no actor, and
+/// `step_up = not_applicable:system_principal`. The same target refusals as
+/// the web entry **except** the administrator and self refusals, because its
+/// authority is not an administrator session (D5). D8's CLI limit is counted
+/// from the database (`issued_via = 'cli'` in the last hour), because the CLI
+/// is a separate process.
+pub async fn issue_recovery_link_as_operator(
+    db: &crate::Database,
+    target: UserId,
+    token_hash: Vec<u8>,
+    reason: String,
+    expires_at: chrono::DateTime<chrono::Utc>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> StoreResult<crate::registry::Audited<RecoveryLinkGrant>> {
+    use crate::errors::RecoveryRefusal as Why;
+    let context = AuthorizedCommandContext::<U37>::for_system_actor(None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, U37>| {
+        let reason = reason.trim().to_owned();
+        if reason.is_empty() {
+            return Err(refuse(Why::ReasonRequired));
+        }
+        check_recovery_target(tx.tx(), target, None)?;
+        let issued = crate::repos::password_reset_tokens::count_issued_via_cli_within_tx(
+            tx.tx(),
+            now - chrono::TimeDelta::hours(1),
+        )?;
+        if issued >= RECOVERY_LINKS_PER_HOUR {
+            return Err(refuse(Why::Throttled));
+        }
+        let grant = revoke_and_insert_recovery_token(
+            tx.tx(),
+            target,
+            token_hash,
+            crate::models::ResetTokenOrigin::Cli,
+            None,
+            expires_at,
+            now,
+        )?;
+        Ok((
+            grant,
+            U37Event::OperatorIssued {
+                target,
+                reason,
+                expires_at,
+                invalidated: grant.invalidated,
+            },
+        ))
     })
     .await
 }

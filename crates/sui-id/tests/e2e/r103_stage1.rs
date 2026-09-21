@@ -161,6 +161,9 @@ async fn mint_token(state: &AppState, user: UserId, plaintext: &str) -> Password
         expires_at: now + chrono::Duration::minutes(30),
         consumed_at: None,
         requester_ip: None,
+        issued_via: sui_id_store::models::ResetTokenOrigin::Email,
+        issued_by: None,
+        revoked_at: None,
     };
     sui_id_store::repos::password_reset_tokens::insert(&state.db, &row)
         .await

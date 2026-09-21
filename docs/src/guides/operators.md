@@ -797,6 +797,7 @@ not expect them to be renamed without a deprecation cycle):
 | `auth.sessions.bulk_revoke_self` | A user used "Sign out everywhere else" on `/me/security`. Note records how many sessions were swept. |
 | `auth.password.changed_self` | A user changed their own password via `/me/security/password`. Note records how many sessions and refresh tokens were swept (zero if the user unchecked the box). |
 | `mfa.admin_reset` | Every MFA factor was forcibly removed for a user: by an administrator on the web (actor set, `step_up=` says how they were authorized), or by the operator with `sui-id admin reset-mfa` (no actor, note `via=cli`). **Alert on this.** |
+| `user.recovery_link.issued` | An administrator (web), or the operator (`via=cli`, no actor), issued an account-recovery link for a user. The note carries the reason, when the link expires, how many earlier links it invalidated, and `step_up=…`. Issuing a link invalidates the user's outstanding ones. **Alert on this.** |
 | `admin.user.unlock` | An admin cleared an account lockout via `sui-id admin unlock-user`. |
 | `auth.mfa.factor_added` | A user added a second factor (`method`: `totp`, `recovery_codes` or `webauthn`). |
 | `webauthn.credential.delete` | A user deleted one of their passkeys. |

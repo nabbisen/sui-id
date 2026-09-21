@@ -55,6 +55,8 @@ pub mod oauth_token;
 pub mod password;
 #[path = "settings/pending_change.rs"]
 pub mod pending_change;
+#[path = "account/recovery_link.rs"]
+pub mod recovery_link;
 pub mod security;
 #[path = "authn/session.rs"]
 pub mod session;

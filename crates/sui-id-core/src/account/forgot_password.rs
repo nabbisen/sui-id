@@ -48,7 +48,7 @@ use getrandom;
 use sha2::{Digest, Sha256};
 use sui_id_shared::ids::{PasswordResetTokenId, UserId};
 use sui_id_store::Database;
-use sui_id_store::models::{CredentialRow, HibpMode, PasswordResetTokenRow};
+use sui_id_store::models::{CredentialRow, HibpMode, PasswordResetTokenRow, ResetTokenOrigin};
 use sui_id_store::repos::{password_reset_tokens, smtp_config, users};
 
 /// 30 minutes — a balance between user-friendly delivery delays
@@ -60,7 +60,7 @@ pub const DEFAULT_TOKEN_TTL: Duration = Duration::minutes(30);
 /// can't tell). Prevents a single user's inbox from being spammed.
 const MAX_OUTSTANDING_TOKENS_PER_USER: i64 = 3;
 
-fn mint_random_token() -> CoreResult<(String, Vec<u8>)> {
+pub(crate) fn mint_random_token() -> CoreResult<(String, Vec<u8>)> {
     let mut bytes = [0u8; 32];
     getrandom::fill(&mut bytes).map_err(|_| CoreError::Internal)?;
     let plaintext = Base64UrlUnpadded::encode_string(&bytes);
@@ -154,6 +154,9 @@ pub async fn request_reset(
         expires_at: now + DEFAULT_TOKEN_TTL,
         consumed_at: None,
         requester_ip: requester_ip.map(str::to_owned),
+        issued_via: ResetTokenOrigin::Email,
+        issued_by: None,
+        revoked_at: None,
     };
     password_reset_tokens::insert(db, &row).await?;
 
@@ -296,7 +299,7 @@ pub async fn validate_token(
     let row = password_reset_tokens::find_by_hash(db, &hash)
         .await?
         .ok_or(CoreError::InvalidCredentials)?;
-    if row.consumed_at.is_some() {
+    if row.consumed_at.is_some() || row.revoked_at.is_some() {
         return Err(CoreError::InvalidCredentials);
     }
     if row.expires_at < clock.now() {
@@ -350,7 +353,9 @@ pub async fn consume_and_reset_password(
         .await?
         .ok_or(CoreError::InvalidCredentials)?;
     let now = clock.now();
-    if row.consumed_at.is_some() || row.expires_at < now {
+    // A revoked link (RFC 103 D3: a newer link was issued, the password
+    // changed, or the user was disabled or deleted) is refused like a used one.
+    if row.consumed_at.is_some() || row.revoked_at.is_some() || row.expires_at < now {
         return Err(CoreError::InvalidCredentials);
     }
 

@@ -174,6 +174,10 @@ const MIGRATIONS: &[Migration] = &[
         version: 40,
         sql: include_str!("./migrations/0040_mfa_failure_count.sql"),
     },
+    Migration {
+        version: 41,
+        sql: include_str!("./migrations/0041_recovery_link_tokens.sql"),
+    },
 ];
 
 /// The highest schema version this build of sui-id-store knows how to

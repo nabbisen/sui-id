@@ -23,7 +23,7 @@ Use **Admin panel → Audit log** to filter by event prefix or export to CSV.
 | `auth.password.reset_email_sent` | Reset email sent | A password-reset email was queued successfully. |
 | `auth.password.reset_email_failed` | Reset email failed | The password-reset email could not be delivered. |
 | `auth.password.reset_throttled` | Reset throttled | The forgot-password rate limit was reached for this address. |
-| `auth.password.reset_completed` | Password reset | Password was successfully changed via the reset link. |
+| `auth.password.reset_completed` | Password reset | Password was successfully changed via a reset link. The note records `origin=` — `email` (the forgot-password flow), `web` (issued by an administrator) or `cli` (issued by the operator). |
 | `auth.refresh.rotated` | Refresh token rotated | A refresh token was exchanged for a fresh access/refresh token pair (the normal, routine case). |
 | `auth.refresh.theft_detected` | Token theft detected | A refresh token was presented that had already been rotated, indicating a possible token theft. The entire token family is revoked. |
 | `auth.sessions.bulk_revoke_self` | All other sessions revoked | User revoked all sessions except the current one. |
@@ -54,6 +54,7 @@ the administrator is asked to step up again.
 | `user.delete` | User deleted | Administrator deleted a user account. |
 | `user.reset_password` | Password reset (admin) | Administrator reset a user's password. |
 | `mfa.admin_reset` | MFA reset (admin) | An administrator (web), or the operator with `sui-id admin reset-mfa` (no actor, `via=cli`), reset a user's MFA factors (TOTP and all passkeys removed). |
+| `user.recovery_link.issued` | Recovery link issued | An administrator (web), or the operator with `sui-id admin issue-recovery-link` (no actor, `via=cli`), issued a single-use account-recovery link for a user. The note records the `reason`, `via`, `expires_at`, how many of the user's earlier links this one `invalidated`, and `step_up`. The link itself is never recorded. |
 | `admin.user.unlock` | Account unlocked | Administrator cleared a user's progressive lockout. |
 | `user.role_change` | — | Administrator changed a user's role (admin, auditor or user). The mutation and this row commit in one transaction; the note records the old and new role. |
 

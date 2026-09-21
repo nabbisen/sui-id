@@ -3,7 +3,10 @@
 //! The plaintext token is never stored. Callers compute SHA-256
 //! and pass the hash bytes to `find_by_hash` / `consume`.
 
-use crate::{Database, StoreError, StoreResult, models::PasswordResetTokenRow};
+use crate::{
+    Database, StoreError, StoreResult,
+    models::{PasswordResetTokenRow, ResetTokenOrigin},
+};
 use chrono::{DateTime, Utc};
 use rusqlite::params;
 use sui_id_shared::ids::{PasswordResetTokenId, UserId};
@@ -23,40 +26,72 @@ fn map_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<PasswordResetTokenRow> {
         expires_at: row.get::<_, DateTime<Utc>>(4)?,
         consumed_at: row.get::<_, Option<DateTime<Utc>>>(5)?,
         requester_ip: row.get(6)?,
+        issued_via: {
+            let s: String = row.get(7)?;
+            ResetTokenOrigin::parse(&s).ok_or_else(|| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    7,
+                    rusqlite::types::Type::Text,
+                    "unknown password_reset_tokens.issued_via".into(),
+                )
+            })?
+        },
+        issued_by: row
+            .get::<_, Option<String>>(8)?
+            .map(|s| {
+                s.parse().map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        8,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })
+            })
+            .transpose()?,
+        revoked_at: row.get::<_, Option<DateTime<Utc>>>(9)?,
     })
 }
 
-const SELECT_COLUMNS: &str =
-    "id, user_id, token_hash, issued_at, expires_at, consumed_at, requester_ip";
+const SELECT_COLUMNS: &str = "id, user_id, token_hash, issued_at, expires_at, consumed_at, \
+     requester_ip, issued_via, issued_by, revoked_at";
 
 pub async fn insert(db: &Database, row: &PasswordResetTokenRow) -> StoreResult<()> {
     let row = row.clone();
-    db.with_conn(move |conn| {
-        conn.execute(
-            "INSERT INTO password_reset_tokens(id, user_id, token_hash, issued_at, \
-                                                 expires_at, consumed_at, requester_ip) \
-             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            params![
-                row.id.to_string(),
-                row.user_id.to_string(),
-                row.token_hash,
-                row.issued_at,
-                row.expires_at,
-                row.consumed_at,
-                row.requester_ip,
-            ],
-        )
-        .map_err(|e| match e {
-            rusqlite::Error::SqliteFailure(err, _)
-                if err.code == rusqlite::ErrorCode::ConstraintViolation =>
-            {
-                StoreError::Conflict
-            }
-            other => StoreError::from(other),
-        })?;
-        Ok(())
-    })
-    .await
+    db.with_conn(move |conn| insert_within_tx(conn, &row)).await
+}
+
+/// [`insert`] on a caller-held connection or transaction (RFC 103 U37).
+pub fn insert_within_tx(
+    conn: &rusqlite::Connection,
+    row: &PasswordResetTokenRow,
+) -> StoreResult<()> {
+    conn.execute(
+        "INSERT INTO password_reset_tokens(id, user_id, token_hash, issued_at, \
+                                             expires_at, consumed_at, requester_ip, \
+                                             issued_via, issued_by, revoked_at) \
+         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        params![
+            row.id.to_string(),
+            row.user_id.to_string(),
+            row.token_hash,
+            row.issued_at,
+            row.expires_at,
+            row.consumed_at,
+            row.requester_ip,
+            row.issued_via.as_str(),
+            row.issued_by.map(|u| u.to_string()),
+            row.revoked_at,
+        ],
+    )
+    .map_err(|e| match e {
+        rusqlite::Error::SqliteFailure(err, _)
+            if err.code == rusqlite::ErrorCode::ConstraintViolation =>
+        {
+            StoreError::Conflict
+        }
+        other => StoreError::from(other),
+    })?;
+    Ok(())
 }
 
 /// Look up a token row by its hashed value. Returns `None` if no
@@ -110,13 +145,13 @@ pub fn mark_consumed_within_tx(
     id: PasswordResetTokenId,
     consumed_at: DateTime<Utc>,
 ) -> StoreResult<()> {
-    // RFC 103 D13: consume exactly once. A token already consumed, or
-    // expired by `consumed_at`, changes no row, and the caller's
+    // RFC 103 D13: consume exactly once. A token already consumed, revoked
+    // (D3) or expired by `consumed_at` changes no row, and the caller's
     // transaction rolls back. Without the guard two concurrent completions
     // of one token both commit.
     let n = tx.execute(
         "UPDATE password_reset_tokens SET consumed_at = ?1 \
-         WHERE id = ?2 AND consumed_at IS NULL AND expires_at > ?1",
+         WHERE id = ?2 AND consumed_at IS NULL AND revoked_at IS NULL AND expires_at > ?1",
         params![consumed_at, id.to_string()],
     )?;
     if n == 0 {
@@ -141,7 +176,75 @@ pub async fn delete_expired(db: &Database, before: DateTime<Utc>) -> StoreResult
     .await
 }
 
-/// Count outstanding (unconsumed, unexpired) reset tokens for a
+/// RFC 103 D3: invalidate the user's outstanding tokens (unconsumed,
+/// unrevoked, unexpired at `now`) by setting `revoked_at`, on the caller's
+/// transaction. `except` spares one token: U10 keeps the token it is
+/// consuming. Returns how many were revoked.
+pub fn revoke_outstanding_for_user_within_tx(
+    conn: &rusqlite::Connection,
+    user_id: UserId,
+    except: Option<PasswordResetTokenId>,
+    now: DateTime<Utc>,
+) -> StoreResult<usize> {
+    let except = except.map(|id| id.to_string());
+    Ok(conn.execute(
+        "UPDATE password_reset_tokens SET revoked_at = ?1 \
+         WHERE user_id = ?2 AND consumed_at IS NULL AND revoked_at IS NULL \
+           AND expires_at > ?1 AND (?3 IS NULL OR id != ?3)",
+        params![now, user_id.to_string(), except],
+    )?)
+}
+
+/// RFC 103 D8: how many tokens `admin` issued on the web since `since`,
+/// counting every state (used, revoked and expired tokens count too).
+pub fn count_issued_by_within_tx(
+    conn: &rusqlite::Connection,
+    admin: UserId,
+    since: DateTime<Utc>,
+) -> StoreResult<i64> {
+    Ok(conn.query_row(
+        "SELECT COUNT(*) FROM password_reset_tokens \
+         WHERE issued_by = ?1 AND issued_via = 'web' AND issued_at > ?2",
+        params![admin.to_string(), since],
+        |row| row.get(0),
+    )?)
+}
+
+/// RFC 103 D8: how many tokens the operator CLI issued since `since`. The
+/// CLI is a separate process, so the count comes from the database.
+pub fn count_issued_via_cli_within_tx(
+    conn: &rusqlite::Connection,
+    since: DateTime<Utc>,
+) -> StoreResult<i64> {
+    Ok(conn.query_row(
+        "SELECT COUNT(*) FROM password_reset_tokens \
+         WHERE issued_via = 'cli' AND issued_at > ?1",
+        params![since],
+        |row| row.get(0),
+    )?)
+}
+
+/// The origin of token `id`, read on the caller's transaction (RFC 103 U10's
+/// `origin`). `NotFound` if there is no such row.
+pub fn origin_within_tx(
+    conn: &rusqlite::Connection,
+    id: PasswordResetTokenId,
+) -> StoreResult<ResetTokenOrigin> {
+    let via: String = conn
+        .query_row(
+            "SELECT issued_via FROM password_reset_tokens WHERE id = ?1",
+            [id.to_string()],
+            |row| row.get(0),
+        )
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
+            other => StoreError::from(other),
+        })?;
+    ResetTokenOrigin::parse(&via)
+        .ok_or_else(|| StoreError::Integrity(format!("unknown issued_via {via:?}")))
+}
+
+/// Count outstanding (unconsumed, unrevoked, unexpired) reset tokens for a
 /// user. The forgot-password rate limit can use this to refuse
 /// "issue another token" beyond a small ceiling, regardless of IP.
 pub async fn count_active_for_user(
@@ -152,7 +255,8 @@ pub async fn count_active_for_user(
     db.with_conn(move |conn| {
         let n: i64 = conn.query_row(
             "SELECT COUNT(*) FROM password_reset_tokens \
-             WHERE user_id = ?1 AND consumed_at IS NULL AND expires_at > ?2",
+             WHERE user_id = ?1 AND consumed_at IS NULL AND revoked_at IS NULL \
+               AND expires_at > ?2",
             params![user_id.to_string(), now],
             |row| row.get(0),
         )?;
@@ -172,7 +276,7 @@ pub async fn count_outstanding(
     db.with_conn(move |conn| {
         let n: i64 = conn.query_row(
             "SELECT COUNT(*) FROM password_reset_tokens \
-             WHERE consumed_at IS NULL AND expires_at > ?1",
+             WHERE consumed_at IS NULL AND revoked_at IS NULL AND expires_at > ?1",
             params![now_str],
             |row| row.get(0),
         )?;

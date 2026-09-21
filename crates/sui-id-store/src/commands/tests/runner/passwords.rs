@@ -265,6 +265,9 @@ async fn seed_reset_token(
             expires_at: Utc::now() + TimeDelta::hours(1),
             consumed_at: None,
             requester_ip: None,
+            issued_via: crate::models::ResetTokenOrigin::Email,
+            issued_by: None,
+            revoked_at: None,
         },
     )
     .await

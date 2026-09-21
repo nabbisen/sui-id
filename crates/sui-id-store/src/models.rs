@@ -570,8 +570,40 @@ pub struct SmtpConfigRow {
 
 // ---------- Password reset tokens (v0.22.0) ----------
 
+/// Where a `password_reset_tokens` row came from (RFC 103 D2). Stored as the
+/// string `'email' | 'web' | 'cli'` in `issued_via`, CHECK-constrained by
+/// migration 0041.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResetTokenOrigin {
+    /// The forgot-password email flow; every row before migration 0041.
+    Email,
+    /// An administrator issued it in the admin panel.
+    Web,
+    /// The operator issued it with `sui-id admin issue-recovery-link`.
+    Cli,
+}
+
+impl ResetTokenOrigin {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Email => "email",
+            Self::Web => "web",
+            Self::Cli => "cli",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "email" => Some(Self::Email),
+            "web" => Some(Self::Web),
+            "cli" => Some(Self::Cli),
+            _ => None,
+        }
+    }
+}
+
 /// One row in `password_reset_tokens`. The plaintext token never
-/// touches the database; only its SHA-256 hash. See migration 0015.
+/// touches the database; only its SHA-256 hash. See migrations 0015 and 0041.
 #[derive(Debug, Clone)]
 pub struct PasswordResetTokenRow {
     pub id: sui_id_shared::ids::PasswordResetTokenId,
@@ -581,6 +613,13 @@ pub struct PasswordResetTokenRow {
     pub expires_at: chrono::DateTime<chrono::Utc>,
     pub consumed_at: Option<chrono::DateTime<chrono::Utc>>,
     pub requester_ip: Option<String>,
+    /// Where the token came from (RFC 103 D2).
+    pub issued_via: ResetTokenOrigin,
+    /// The administrator who issued a `Web` token; `None` for every other
+    /// origin (the CHECK in migration 0041).
+    pub issued_by: Option<sui_id_shared::ids::UserId>,
+    /// Set when the token was invalidated without being used (RFC 103 D3).
+    pub revoked_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// HIBP (Pwned Passwords) check operational mode. Stored as the

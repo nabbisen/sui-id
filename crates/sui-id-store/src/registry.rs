@@ -212,6 +212,9 @@ pub enum AuditEventKind {
     AuthLoginSuccess,
     /// `auth.federation.signin.success` — L04, the federated sign-in.
     AuthFederationSigninSuccess,
+    /// `user.recovery_link.issued` — U37, the administrator-issued recovery
+    /// link (RFC 103).
+    UserRecoveryLinkIssued,
     /// `auth.mfa.success` — L02, the second-factor sign-in (RFC 102 Part A).
     AuthMfaSuccess,
     /// `auth.mfa.failure` — L07, below-threshold branch.
