@@ -1,0 +1,32 @@
+error[E0603]: function `record_step_up_within_tx` is private
+  --> tests/compile_fail/step_up_touch_is_private.rs:16:23
+   |
+16 |     let _ = sessions::record_step_up_within_tx(conn, id, "totp", Utc::now());
+   |                       ^^^^^^^^^^^^^^^^^^^^^^^^ private function
+   |
+note: the function `record_step_up_within_tx` is defined here
+  --> src/repos/sessions.rs
+   |
+   | / pub(crate) fn record_step_up_within_tx(
+   | |     conn: &rusqlite::Connection,
+   | |     id: SessionId,
+   | |     method: &str,
+   | |     at: DateTime<Utc>,
+   | | ) -> StoreResult<()> {
+   | |____________________^
+
+error[E0603]: function `set_step_up_method_within_tx` is private
+  --> tests/compile_fail/step_up_touch_is_private.rs:20:23
+   |
+20 |     let _ = sessions::set_step_up_method_within_tx(conn, id, "totp");
+   |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ private function
+   |
+note: the function `set_step_up_method_within_tx` is defined here
+  --> src/repos/sessions.rs
+   |
+   | / pub(crate) fn set_step_up_method_within_tx(
+   | |     conn: &rusqlite::Connection,
+   | |     id: SessionId,
+   | |     method: &str,
+   | | ) -> StoreResult<()> {
+   | |____________________^

@@ -1223,12 +1223,11 @@ the lock from the host:
 sui-id admin unlock-user --username alice --config /etc/sui-id/sui-id.toml
 ```
 
-This resets `failed_login_count` to 0 and removes any active lock.
-The account is immediately ready for sign-in. The action is
-recorded in the audit log as `admin.user.unlock`. It does not clear the
-second-factor count described above, which clears when the user completes a
-sign-in; a further wrong second-factor code straight after an unlock therefore
-locks the account again, for a longer window.
+This resets the password-failure count and the second-factor failure count
+to 0 and removes any active lock. The account is immediately ready for
+sign-in: a wrong second-factor code straight after an unlock counts as the
+first, not the sixth. The action is recorded in the audit log as
+`admin.user.unlock`.
 
 ### What this looks like in the audit log
 

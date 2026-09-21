@@ -191,3 +191,102 @@ async fn u07_injected_failure_before_append_rolls_back_totp_and_passkey_removal(
     );
     assert_eq!(latest_audit_action(&db).await, before_audit);
 }
+
+// ── U14, U15 — an injected append failure leaves the factor unchanged ───
+// (RFC 102 closure prerequisite 4; U12's counterpart is the e2e test
+// `r102_factor_added_rolls_back_with_its_write`.) Each has a control that
+// runs the same call with no injected failure, so the test cannot pass
+// because the call was never able to change the factor.
+
+async fn user_with_confirmed_totp(db: &Database) -> UserId {
+    let user = a_user();
+    repos::users::create(db, &user).await.expect("create user");
+    repos::user_totp::upsert_pending(db, user.id, b"totp-secret-placeholder")
+        .await
+        .expect("seed totp");
+    repos::user_totp::confirm_with_recovery(db, user.id, br#"["old-hash-1","old-hash-2"]"#)
+        .await
+        .expect("confirm");
+    user.id
+}
+
+async fn recovery_blob(db: &Database, user: UserId) -> Vec<u8> {
+    repos::user_totp::get(db, user)
+        .await
+        .expect("get totp")
+        .expect("enrolment")
+        .recovery_codes_enc
+        .expect("recovery codes")
+}
+
+#[tokio::test]
+async fn u14_injected_failure_before_append_leaves_the_recovery_codes_unchanged() {
+    let db = fresh_db();
+    let user = user_with_confirmed_totp(&db).await;
+    let before = recovery_blob(&db, user).await;
+    let before_audit = latest_audit_action(&db).await;
+    let sealed = repos::user_totp::seal_recovery_codes(&db, br#"["new-hash-1"]"#).expect("seal");
+
+    db.fault_injector().fail_before_next_append();
+    let result = regenerate_recovery_codes(&db, user, sealed.clone()).await;
+    assert!(result.is_err(), "injected failure must surface as Err");
+    assert_eq!(
+        recovery_blob(&db, user).await,
+        before,
+        "the old codes are still the stored ones"
+    );
+    assert_eq!(latest_audit_action(&db).await, before_audit, "no event");
+
+    // Control: the same call, with no failure injected, replaces the codes
+    // and writes the event.
+    regenerate_recovery_codes(&db, user, sealed.clone())
+        .await
+        .expect("the control succeeds");
+    assert_eq!(recovery_blob(&db, user).await, sealed);
+    assert_eq!(
+        latest_audit_action(&db).await.as_deref(),
+        Some("auth.mfa.factor_added")
+    );
+}
+
+#[tokio::test]
+async fn u15_injected_failure_before_append_registers_no_passkey() {
+    let db = fresh_db();
+    let user = a_user();
+    repos::users::create(&db, &user).await.expect("create user");
+    let row = || crate::models::UserWebauthnCredentialRow {
+        id: sui_id_shared::ids::WebauthnCredentialId::new(),
+        user_id: user.id,
+        credential_id: b"cred-u15".to_vec(),
+        passkey_enc: b"sealed-passkey-placeholder".to_vec(),
+        nickname: "u15".into(),
+        created_at: Utc::now(),
+        last_used_at: None,
+    };
+    let count = |db: &Database| {
+        let db = db.clone();
+        async move {
+            repos::user_webauthn_credentials::list_for_user(&db, user.id)
+                .await
+                .expect("list passkeys")
+                .len()
+        }
+    };
+    let before_audit = latest_audit_action(&db).await;
+
+    db.fault_injector().fail_before_next_append();
+    let result = register_passkey(&db, row()).await;
+    assert!(result.is_err(), "injected failure must surface as Err");
+    assert_eq!(count(&db).await, 0, "no passkey was registered");
+    assert_eq!(latest_audit_action(&db).await, before_audit, "no event");
+
+    // Control: with no failure injected the same registration lands.
+    register_passkey(&db, row())
+        .await
+        .expect("the control succeeds");
+    assert_eq!(count(&db).await, 1);
+    assert_eq!(
+        latest_audit_action(&db).await.as_deref(),
+        Some("auth.mfa.factor_added")
+    );
+}

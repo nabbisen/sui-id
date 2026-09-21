@@ -44,8 +44,9 @@ The properties it establishes:
   exactly one registered audit event, in one database transaction. If the event
   cannot be written, nothing changes and the user receives the response they
   would for any failed attempt at that step. No production code creates a
-  session or marks one stepped-up except through those commands, and the raw
-  session insert cannot be named outside the store crate. One event stays best
+  session or marks one stepped-up except through those commands, and neither the
+  raw session insert nor the raw step-up write can be named outside the store
+  crate. One event stays best
   effort on purpose: the note that a password
   was accepted and a second factor is now awaited, because it grants no
   session and no authority.

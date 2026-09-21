@@ -434,26 +434,32 @@ pub fn increment_mfa_failure_within_tx(
     })
 }
 
-/// Admin-initiated unlock: reset both fields without requiring a
-/// successful password check. Used by `sui-id admin unlock-user`.
+/// Admin-initiated unlock: reset the password-failure count, the
+/// second-factor failure count and the lock, without requiring a successful
+/// password check. Used by `sui-id admin unlock-user`. The second-factor count
+/// is cleared too (RFC 102 stage 9): otherwise the next wrong code after an
+/// `auth.mfa.lockout` unlock would be the sixth and lock the account again.
 pub async fn admin_unlock(db: &Database, id: UserId) -> StoreResult<()> {
     db.with_conn(move |conn| {
         let n = conn.execute(
-            "UPDATE users SET failed_login_count = 0, locked_until = NULL, updated_at = ?1 WHERE id = ?2",
+            "UPDATE users SET failed_login_count = 0, mfa_failure_count = 0, locked_until = NULL, \
+             updated_at = ?1 WHERE id = ?2",
             params![Utc::now(), id.to_string()],
         )?;
         if n == 0 {
             return Err(StoreError::NotFound);
         }
         Ok(())
-    }).await
+    })
+    .await
 }
 
 /// Same as [`admin_unlock`], for a caller that already holds a
 /// transaction (RFC 094 U08: the sealed Class-A capability).
 pub fn admin_unlock_within_tx(conn: &rusqlite::Connection, id: UserId) -> StoreResult<()> {
     let n = conn.execute(
-        "UPDATE users SET failed_login_count = 0, locked_until = NULL, updated_at = ?1 WHERE id = ?2",
+        "UPDATE users SET failed_login_count = 0, mfa_failure_count = 0, locked_until = NULL, \
+             updated_at = ?1 WHERE id = ?2",
         params![Utc::now(), id.to_string()],
     )?;
     if n == 0 {

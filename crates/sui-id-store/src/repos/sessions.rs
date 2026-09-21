@@ -245,7 +245,7 @@ pub fn revoke_all_for_user_except_within_tx(
 /// regardless of step-up state.
 /// RFC 102 L02: record which factor made a new session fresh, inside the
 /// caller's transaction.
-pub fn set_step_up_method_within_tx(
+pub(crate) fn set_step_up_method_within_tx(
     conn: &rusqlite::Connection,
     id: SessionId,
     method: &str,
@@ -289,7 +289,7 @@ pub fn require_live_session_within_tx(
 /// RFC 102 L05: record a successful step-up on the session — freshness,
 /// the method, and the end of the run of failures L06 counts — inside the
 /// caller's transaction.
-pub fn record_step_up_within_tx(
+pub(crate) fn record_step_up_within_tx(
     conn: &rusqlite::Connection,
     id: SessionId,
     method: &str,

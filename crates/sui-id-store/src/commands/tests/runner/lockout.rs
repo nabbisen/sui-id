@@ -119,6 +119,71 @@ async fn u08_unlock_clears_lockout_and_appends_actorless_event() {
     assert_eq!(tail.target.as_deref(), Some(user.id.to_string().as_str()));
 }
 
+/// RFC 102 stage 9c: after `auth.mfa.lockout` the second-factor count is at
+/// the threshold; an operator's unlock must clear it with the lock.
+async fn seed_mfa_locked_user(db: &Database) -> UserId {
+    let mut user = a_user();
+    user.locked_until = Some(Utc::now() + TimeDelta::hours(48));
+    repos::users::create(db, &user).await.expect("create user");
+    let id = user.id;
+    db.with_conn(move |c| {
+        c.execute(
+            "UPDATE users SET mfa_failure_count = 5 WHERE id = ?1",
+            [id.to_string()],
+        )?;
+        Ok(())
+    })
+    .await
+    .expect("seed count");
+    id
+}
+
+async fn mfa_failure_count(db: &Database, id: UserId) -> i64 {
+    db.with_conn(move |c| {
+        Ok(c.query_row(
+            "SELECT mfa_failure_count FROM users WHERE id = ?1",
+            [id.to_string()],
+            |r| r.get(0),
+        )?)
+    })
+    .await
+    .expect("count")
+}
+
+#[tokio::test]
+async fn u08_unlock_also_clears_the_second_factor_count() {
+    let db = fresh_db();
+    let id = seed_mfa_locked_user(&db).await;
+    assert_eq!(mfa_failure_count(&db, id).await, 5);
+
+    admin_unlock_user(&db, id).await.expect("unlock");
+
+    assert_eq!(mfa_failure_count(&db, id).await, 0, "second-factor count");
+    let row = repos::users::get(&db, id).await.expect("get");
+    assert!(row.locked_until.is_none());
+    assert_eq!(row.failed_login_count, 0);
+}
+
+#[tokio::test]
+async fn the_unguarded_admin_unlock_clears_the_second_factor_count_too() {
+    // `users::admin_unlock` is not U08's path but is the same statement in
+    // another form; the two must not drift.
+    let db = fresh_db();
+    let id = seed_mfa_locked_user(&db).await;
+    repos::users::admin_unlock(&db, id).await.expect("unlock");
+    assert_eq!(mfa_failure_count(&db, id).await, 0);
+}
+
+#[tokio::test]
+async fn a_password_verification_does_not_clear_the_second_factor_count() {
+    // The reverse guard: only the whole sign-in (L02) or an operator unlock
+    // resets it. `clear_lockout` is the password path's reset.
+    let db = fresh_db();
+    let id = seed_mfa_locked_user(&db).await;
+    repos::users::clear_lockout(&db, id).await.expect("clear");
+    assert_eq!(mfa_failure_count(&db, id).await, 5);
+}
+
 #[tokio::test]
 async fn u08_unlock_of_nonexistent_user_returns_not_found() {
     let db = fresh_db();

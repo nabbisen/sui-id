@@ -127,3 +127,15 @@ fn compile_fail_session_evidence_has_no_not_applicable() {
     let t = trybuild::TestCases::new();
     t.compile_fail("tests/compile_fail/session_evidence_has_no_not_applicable.rs");
 }
+
+/// RFC 102 B6: no freshness without its audit event. Nothing outside
+/// `sui-id-store` can name the raw step-up touch or the method setter: both
+/// are `pub(crate)` (E0603, private function). Ungated, like
+/// `session_insert_is_private`, which raises the same error code: E0603's
+/// wording is the same on every toolchain the fixture was checked on (see the
+/// stage 9 review request for the versions).
+#[test]
+fn compile_fail_step_up_touch_is_private() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compile_fail/step_up_touch_is_private.rs");
+}
