@@ -146,6 +146,19 @@ Single-use, expiring, hashed at rest, invalidated on consumption, and invalidate
 when a competing change is initiated. `password_reset_tokens` is the existing
 shape and there is no reason to invent a second one.
 
+### D7 — An email change invalidates outstanding password-reset tokens
+
+*Required by [RFC 103](../accepted/103-administrator-issued-account-recovery.md)
+D3, recorded here 2026-09-17 because the email-change command (inventory `U11`)
+arrives with this RFC and not with RFC 103.*
+
+The command that changes an address revokes every outstanding
+`password_reset_tokens` row for that user, in its own transaction. A reset link
+mailed to the **old** address must not outlive the address: after a change, that
+mailbox may belong to someone else, which is the reuse threat §2 exists to close.
+RFC 103's stage 3 adds the same invalidation to U09, U10, U02 and U04, and marks
+this one as this RFC's.
+
 ## Security considerations
 
 **Recovery during a pending change.** The live address stays authoritative until
