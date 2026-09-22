@@ -20,7 +20,7 @@ touches their files. Do it as **two commits**: G14 first, G15 second.
 
 | File | Change |
 |---|---|
-| `ci/gate-inputs.toml` | `[gate_lane_sources]`: `"098" = "Gate Matrix lanes owned by RFC 098"` — the heading verbatim. `[gate_owners]`: `G14 = "098"`, `G15 = "098"`. `[gates]`: `G14 = "python3.14 scripts/check-markdown-links.py --root . rfcs/handoffs roadmap"`. `[gate_matrix_exceptions]`: `G15 = "<reason>"` — the reason must say it is declared by RFC 098, fails today on F1–F3, and moves to `[gates]` with step 6; check 6 requires G15 to exist in the RFC's table, which it does. `[rust_components]`: follow G10b/G11's convention for script lanes. |
+| `ci/gate-inputs.toml` | `[gate_lane_sources]`: `"098" = "Gate Matrix lanes owned by RFC 098"` — the heading verbatim. `[gate_owners]`: `G14 = "098"`, `G15 = "098"`. `[gates]`: `G14 = "python3.14 scripts/check-markdown-links.py --root . rfcs/handoffs"`. `[gate_matrix_exceptions]`: `G15 = "<reason>"` — the reason must say it is declared by RFC 098, fails today on F1–F3, and moves to `[gates]` with step 6; check 6 requires G15 to exist in the RFC's table, which it does. `[rust_components]`: follow G10b/G11's convention for script lanes. |
 | `.github/workflows/ci.yml` | A `G14` job shaped exactly like G11's — checkout, `setup-python` 3.14 (the SHA is already `setup_python_v7`), `bash scripts/ci-gate.sh G14`. Name: `"G14 — markdown links: handoffs and roadmap (Python 3.14)"`. |
 
 **Evidence.** The A3.4 run *after* adding `"098"` to sources but *before* the

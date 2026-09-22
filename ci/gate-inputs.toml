@@ -83,7 +83,7 @@ G10a = "mdbook build docs --dest-dir target/mdbook-gate"
 G10b = "python3.14 scripts/check-markdown-links.py --root . README.md ROADMAP.md docs"
 G11 = "python3.14 scripts/check-rfc-integrity.py --root . --policy ci/rfc-policy.toml"
 G13 = "bash scripts/check-audit-matrix.sh"
-G14 = "python3.14 scripts/check-markdown-links.py --root . rfcs/handoffs roadmap"
+G14 = "python3.14 scripts/check-markdown-links.py --root . rfcs/handoffs"
 G15 = "python3.14 scripts/check-doc-authority.py --root . --policy ci/doc-authority.toml"
 
 # RFC 093 M1b C2.1: the lane-completeness rule (scripts/check-gate-inputs.sh

@@ -337,8 +337,8 @@ password (T2) and keeps the second factor in force (T6).
 
 - The rotated client secret is placed in a redirect URL
   (`/admin/clients/{id}/edit?rotated_secret=…`). It lands in browser history and
-  server access logs, and can leak through `Referer`. Fixed by the roadmap package
-  [client-confirm-screens](../../roadmap/client-confirm-screens/README.md).
+  server access logs, and can leak through `Referer`. Fixed by
+  [RFC 108](../proposed/108-client-confirm-screens.md).
 
 ## Open questions
 

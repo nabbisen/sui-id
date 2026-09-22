@@ -165,7 +165,7 @@ own hash-pinned package. Items at the same number may run concurrently.
 | 3 | M1b debt repair: RFC status and `rfcs/` broken links — **re-measured by G11, not by the 2026-07-28 counts** | B | item 1 tooling (G11 must exist first) | 093 M1b |
 | 4 | **M1a closes** — G01–G09 hosted green on one clean commit | A | item 3 | — |
 | 4 | **M1b closes** — G10–G12 hosted green, integrity debt zero | B | item 3 | — |
-| 5 | `handlers/federation.rs` split, zero behaviour change — **withdrawn 2026-08-12, not ready to execute** | prep | M1a; clippy landed (both met at `0fcb423`); **module boundary confirmed by RFC 096's correction review — not yet** | [prep split](roadmap/prep-federation-module-split/README.md) |
+| 5 | `handlers/federation.rs` split, zero behaviour change — **withdrawn 2026-08-12, not ready to execute** | prep | M1a; clippy landed (both met at `0fcb423`); **module boundary confirmed by RFC 096's correction review — not yet** | withdrawn; see *Work packages* below |
 | 6 | RFC 094 M2a: registry, seam, `ReadConn`, Class-B emitter, priority conversion incl. C15 | A | M1a; RFC 094 re-accepted | [094](rfcs/handoffs/094-transactional-audit/README.md) |
 | 6 | RFC 096-A: discovery, JWKS, claims, mandatory nonce — no durable mutation | B | M1a; item 5; RFC 096 re-accepted | [096](rfcs/handoffs/096-upstream-oidc-federation/README.md) |
 | 7 | RFC 095 (M3): validate-first dynamic registration | A | M2a incl. C15; RFC 095 re-accepted | [095](rfcs/handoffs/095-dynamic-client-registration/README.md) |
@@ -227,7 +227,7 @@ named, and the owner confirmed increased review capacity on 2026-07-28. As of
 2026-08-26 that has not happened — Lane B has not started. `handlers/federation.rs`
 would be split first, since it currently contains both Lane A and Lane B
 territory, but that split is itself withdrawn pending RFC 096's correction
-review (`roadmap/prep-federation-module-split/`).
+review (withdrawn 2026-08-12; see *Work packages*).
 
 - RFC 093 lands first because later evidence is not trustworthy until the
   build and gate contract is reliable.
@@ -459,58 +459,62 @@ Standing rules, effective now:
    residue needs its own RFC or is accepted with translation tables excluded.
    Deferral without a decision point is how this became debt in the first place.
 
-## Non-RFC work packages
+## Work packages
 
-Not every piece of project work needs a design RFC. Toolchain repairs, test
-organisation, fuzz infrastructure and gate-template defects change the codebase
-but decide nothing about the product's design or security posture.
+Not every piece of project work needs a *feature* RFC, but every piece of it
+needs a decision record and a handoff, and both live in one place.
+**Owner ruling, 2026-09-22: implementation handoffs live under
+`rfcs/handoffs/`, now and in future.** RFC 000 requires every
+`rfcs/handoffs/NNN-slug/` to correspond to an existing RFC number, and leaves
+to each project what an RFC may cover — so operational and repair work gets an
+RFC here on the same terms as a feature.
 
-**This roadmap is the decision record for that work** (owner ruling,
-2026-09-10). A non-RFC work package is authorized by an entry in this section
-or in *Execution order* above, and its execution package lives in
-[`roadmap/<slug>/`](roadmap/README.md). A package with no entry here is not
-authorized work.
+**What this replaced.** From 2026-09-10 to 2026-09-22 this work was carried in
+a `roadmap/` directory created by `ee48257`, which justified itself as an
+"Owner ruling, 2026-09-10". `@nabbisen` states he made no such ruling. The
+directory is removed and its nineteen packages are resolved below; see §S1 for
+why an attribution of this shape cannot be taken at face value.
 
-`rfcs/handoffs/NNN-slug/` is reserved for companions to an existing RFC and
-holds nothing else — RFC 000's rule that "every `rfcs/handoffs/NNN-slug/`
-directory ... corresponds to an existing RFC number", enforced by G11's
-invariant 13. Before 2026-09-10 six non-RFC packages sat there, which is how
-work with no decision record became invisible.
+### Open — each an RFC, all Proposed
 
-### Open
+The twelve live packages became RFCs 104–115 on 2026-09-22, with their
+specifications moved unchanged into each RFC's handoff. **All are Proposed:
+the move manufactured no approval.** The package text inside each handoff
+still carries the authorization line it was written with; those lines are
+historical record, not evidence.
 
-| Work item | Why | Package |
-|---|---|---|
-| `rfcs/README.md` template vs. what G11 enforces | The normative RFC template is missing ten labels, one of them gate-enforced. A defect in a gate RFC 093 owns, exposed by that gate. | [rfc-template-reconciliation](roadmap/rfc-template-reconciliation/README.md) |
-| RFC headers may not legislate | Eleven RFC headers (093–103) asserted a reviewer-independence bar that RFC 000 does not contain, two of them citing the disposed RFC 018; the same mechanic cost four weeks in July. The clauses are removed; G11 gains two conditions so a header cannot state a review rule or cite an archived RFC. **RFC 000 is not amended.** Owner authorization 2026-09-22. | [rfc-header-governance-guard](roadmap/rfc-header-governance-guard/README.md) |
-| User creation without a password | U01 still takes an administrator-chosen password, so RFC 103's closure prerequisite 4 and threat T2 are not met; `must_change` is written and read by nothing. **Proposed by the architect 2026-09-22, not authorized.** | [user-creation-without-a-password](roadmap/user-creation-without-a-password/README.md) |
-| Audit event labels | Twenty-nine translated audit-event labels were never displayed, and drifted: 30 registered events have none, 4 name events that do not exist. Owner ruling 2026-09-16: show the translated label beside the raw action, bound by a test to `ci/audit-coverage-matrix.md`. | [audit-event-labels](roadmap/audit-event-labels/README.md) |
-| Request ID across `.await` | The request-id middleware holds a span guard across `.await`, so handler logs can lose `request_id`. Owner authorization 2026-09-17. | [request-id-span](roadmap/request-id-span/README.md) |
-| Backup restore hardening | A manifest-less archive bypasses both version refusals; `verify` skips them; `restore` validates nothing it writes. Owner authorization 2026-09-17. | [backup-restore-hardening](roadmap/backup-restore-hardening/README.md) |
-| Audit-note escaping | An event's note is `key=value` pairs with unescaped values, so an operator-supplied reason can add fields that look real. The true fields are written last, so a query can produce a false positive, never a false negative. Owner authorization 2026-09-22. | [audit-note-escaping](roadmap/audit-note-escaping/README.md) |
-| Schema version fails closed | An older binary runs against a newer schema without complaint, and a failed read of the stored version re-runs every migration. Found by RFC 098 dispatch 14; owner authorization 2026-09-16. | [schema-version-fail-closed](roadmap/schema-version-fail-closed/README.md) |
-| Client confirm screens; secret out of URLs | Client disable and secret rotation have no confirm screen, although RFCs 030/059 require one, and the rotated secret travels in a redirect URL. Owner authorization 2026-09-16. | [client-confirm-screens](roadmap/client-confirm-screens/README.md) |
-| CLI help completeness | `sui-id --help` omits three dispatched subcommands; three hand-kept lists drifted. Owner authorization 2026-09-16. | [cli-help-completeness](roadmap/cli-help-completeness/README.md) |
-| UI contract reconciliation | `docs/ui-ux-contracts.md` is normative, and the code has left it in 15 places. Each is a code defect or a contract amendment; the owner signs the revision. Owner authorization 2026-09-16. | [ui-contract-reconciliation](roadmap/ui-contract-reconciliation/README.md) |
-| Test-file organization | `project-instructions-rust.md` requires test modules in their own files; 41 files under `crates/` still carry an inline `mod tests { … }` (measured 2026-09-16: `git ls-files 'crates/*.rs' \| xargs grep -lE '^\s*mod tests\s*\{' \| wc -l`). `commands.rs` and its runner split are done; `registry.rs` is next. | [test-file-organization](roadmap/test-file-organization/README.md) |
+| RFC | Work item |
+|---|---|
+| [104](rfcs/proposed/104-audit-event-labels.md) | Audit event labels shown, and bound to the registered events |
+| [105](rfcs/proposed/105-audit-note-escaping.md) | Audit notes: escape attribute values |
+| [106](rfcs/proposed/106-backup-restore-hardening.md) | Backup restore fails closed |
+| [107](rfcs/proposed/107-cli-help-completeness.md) | `sui-id --help` names every subcommand the binary accepts |
+| [108](rfcs/proposed/108-client-confirm-screens.md) | Confirm screens for client disable and secret rotation; the secret leaves the URL |
+| [109](rfcs/proposed/109-request-id-span.md) | Request logs keep their request ID across `.await` |
+| [110](rfcs/proposed/110-rfc-header-governance-guard.md) | An RFC header may not legislate |
+| [111](rfcs/proposed/111-rfc-template-reconciliation.md) | Reconcile `rfcs/README.md`'s template with what G11 enforces |
+| [112](rfcs/proposed/112-schema-version-fail-closed.md) | Refuse to run against a database this build does not understand |
+| [113](rfcs/proposed/113-test-file-organization.md) | Test modules live in their own files |
+| [114](rfcs/proposed/114-ui-contract-reconciliation.md) | Reconcile `docs/ui-ux-contracts.md` with the code |
+| [115](rfcs/proposed/115-user-creation-without-a-password.md) | Creating a user without choosing their password |
 
-The `handlers/federation.rs` split is tracked as item 5 of *Execution order*
-above, not here — it is a prerequisite of the remediation programme rather than
-standalone maintenance.
+### Completed and withdrawn before the move
 
-### Completed
+Six shipped and one withdrawn. No RFC was created for them: a Done RFC would
+need closure metadata naming a reviewer and a date, and inventing either is the
+failure this section exists to record. Their packages were removed with the
+directory; the work itself is in the commits named here, and the package text
+remains in git history at `6b5307d`.
 
-Retained as the record of what was asked and why. No action remains on any of
-them.
-
-| Work item | Landed | Package |
-|---|---|---|
-| Fuzz matrix widened to all six targets | `d5e5402` | [fuzz-widen-matrix](roadmap/fuzz-widen-matrix/README.md) |
-| Fuzz seed corpus and CI corpus persistence | `8d446b0` | [fuzz-corpus-persistence](roadmap/fuzz-corpus-persistence/README.md) |
-| Stable clippy drift, rustc 1.98.0 | `b343a06` | [stable-clippy-drift-1.98](roadmap/stable-clippy-drift-1.98/README.md) |
-| RUSTSEC-2026-0285: rustls 0.23.41 → 0.23.45 | `536ffd5` | [rustls-advisory-2026-0285](roadmap/rustls-advisory-2026-0285/README.md) |
-| Federation sign-in fails closed (live defect) | `b2ecc5c` | [federation-signin-fail-closed](roadmap/federation-signin-fail-closed/README.md) |
-| Returning LDAP sign-in (by stable id) | `478ec5b` | [ldap-returning-signin](roadmap/ldap-returning-signin/README.md) |
+| Work item | Landed |
+|---|---|
+| Fuzz matrix widened to all six targets | `d5e5402` |
+| Fuzz seed corpus and CI corpus persistence | `8d446b0` |
+| Stable clippy drift, rustc 1.98.0 | `b343a06` |
+| RUSTSEC-2026-0285: rustls 0.23.41 → 0.23.45 | `536ffd5` |
+| Federation sign-in fails closed (live defect) | `b2ecc5c` |
+| Returning LDAP sign-in (by stable id) | `478ec5b` |
+| `handlers/federation.rs` split — **withdrawn 2026-08-12**, not ready to execute; *Execution order* item 5 above still describes it | — |
 
 ## Completed arcs before the remediation programme
 

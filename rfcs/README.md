@@ -97,6 +97,29 @@ and permits design review only; it does not authorize implementation.
 | 101 | [Email lifecycle: verification and change](./proposed/101-email-lifecycle-verification-and-change.md) | sequenced at owner discretion |
 | 100 | [Master-Key Rotation Crash Recovery](./proposed/100-master-key-rotation-recovery.md) | sequenced at owner discretion |
 
+### Proposed — operational and repair work (104–115)
+
+Carried under a `roadmap/` directory from 2026-09-10 until 2026-09-22, when
+`@nabbisen` ruled that implementation handoffs live under `rfcs/handoffs/`,
+now and in future. RFC 000 requires every handoff directory to correspond to
+an RFC number, and leaves to each project what an RFC may cover. All are
+Proposed: the move approved nothing.
+
+| RFC | Title | Handoff |
+|---|---|---|
+| 104 | [Audit event labels shown, and bound to the registered events](./proposed/104-audit-event-labels.md) | [104-audit-event-labels](./handoffs/104-audit-event-labels/README.md) |
+| 105 | [Audit notes: escape attribute values](./proposed/105-audit-note-escaping.md) | [105-audit-note-escaping](./handoffs/105-audit-note-escaping/README.md) |
+| 106 | [Backup restore fails closed](./proposed/106-backup-restore-hardening.md) | [106-backup-restore-hardening](./handoffs/106-backup-restore-hardening/README.md) |
+| 107 | [`sui-id --help` names every subcommand the binary accepts](./proposed/107-cli-help-completeness.md) | [107-cli-help-completeness](./handoffs/107-cli-help-completeness/README.md) |
+| 108 | [Confirm screens for client disable and secret rotation; the secret leaves the URL](./proposed/108-client-confirm-screens.md) | [108-client-confirm-screens](./handoffs/108-client-confirm-screens/README.md) |
+| 109 | [Request logs keep their request ID across `.await`](./proposed/109-request-id-span.md) | [109-request-id-span](./handoffs/109-request-id-span/README.md) |
+| 110 | [An RFC header may not legislate](./proposed/110-rfc-header-governance-guard.md) | [110-rfc-header-governance-guard](./handoffs/110-rfc-header-governance-guard/README.md) |
+| 111 | [Reconcile `rfcs/README.md`'s template with what G11 enforces](./proposed/111-rfc-template-reconciliation.md) | [111-rfc-template-reconciliation](./handoffs/111-rfc-template-reconciliation/README.md) |
+| 112 | [Refuse to run against a database this build does not understand](./proposed/112-schema-version-fail-closed.md) | [112-schema-version-fail-closed](./handoffs/112-schema-version-fail-closed/README.md) |
+| 113 | [Test modules live in their own files](./proposed/113-test-file-organization.md) | [113-test-file-organization](./handoffs/113-test-file-organization/README.md) |
+| 114 | [Reconcile `docs/ui-ux-contracts.md` with the code](./proposed/114-ui-contract-reconciliation.md) | [114-ui-contract-reconciliation](./handoffs/114-ui-contract-reconciliation/README.md) |
+| 115 | [Creating a user without choosing their password](./proposed/115-user-creation-without-a-password.md) | [115-user-creation-without-a-password](./handoffs/115-user-creation-without-a-password/README.md) |
+
 ### Implemented — Mockup Integration epic (Phase 0 → Phase 8)
 
 **The mockup integration arc is complete as of v0.57.0.**

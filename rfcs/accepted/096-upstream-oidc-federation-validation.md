@@ -137,8 +137,9 @@ neither this RFC nor RFC 094, and concurrent editing by both lanes risks a merge
 that silently drops a security check.
 
 **Accountable owner: the ROADMAP `prep — federation module split` item**, not this
-RFC and not RFC 094. Its handoff is
-[`../../roadmap/prep-federation-module-split/README.md`](../../roadmap/prep-federation-module-split/README.md). It is a standalone preparatory change that must land, and be
+RFC and not RFC 094. Its package was withdrawn on 2026-08-12 as not ready to execute and was removed
+with the `roadmap/` directory on 2026-09-22; *Execution order* item 5 in
+[`ROADMAP.md`](../../ROADMAP.md) still describes it. It is a standalone preparatory change that must land, and be
 independently reviewed, before **either** 096-A or any RFC 094 federation work
 begins.
 

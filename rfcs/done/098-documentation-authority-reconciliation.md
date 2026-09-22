@@ -297,7 +297,7 @@ mirrors RFC 093's table so one parser reads both.
 
 | ID | Toolchain | Features | Blocking command / assertion |
 |---|---|---|---|
-| G14 | Python 3.14 | n/a | `python3.14 scripts/check-markdown-links.py --root . rfcs/handoffs roadmap` |
+| G14 | Python 3.14 | n/a | `python3.14 scripts/check-markdown-links.py --root . rfcs/handoffs` |
 | G15 | Python 3.14 | n/a | `python3.14 scripts/check-doc-authority.py --root . --policy ci/doc-authority.toml` |
 
 **G14 — the links no gate checked.** G11 link-checks every RFC file and

@@ -114,7 +114,7 @@ The properties it establishes:
   (U01) still takes an administrator-chosen password, stored without any
   rotation requirement, so an administrator knows a working password for every
   local account they created until its holder changes it. Closing that is
-  tracked at `roadmap/user-creation-without-a-password/`; until it lands, an
+  tracked as [RFC 115](../rfcs/proposed/115-user-creation-without-a-password.md); until it lands, an
   administrator's reach over accounts they created is the same as the residual
   stated below.
 - **The link is single-use, expiring, hashed at rest, and revoked by any
