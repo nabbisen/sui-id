@@ -497,6 +497,7 @@ historical record, not evidence.
 | [113](rfcs/proposed/113-test-file-organization.md) | Test modules live in their own files |
 | [114](rfcs/proposed/114-ui-contract-reconciliation.md) | Reconcile `docs/ui-ux-contracts.md` with the code |
 | [115](rfcs/proposed/115-user-creation-without-a-password.md) | Creating a user without choosing their password |
+| [116](rfcs/proposed/116-gate-contracts.md) | Gate contracts: one source, one gate each |
 
 ### Completed and withdrawn before the move
 
