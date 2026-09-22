@@ -24,6 +24,20 @@ crates/sui-id-i18n/src/
     zh_hant.rs        — Chinese Traditional stub — see file for contribution guide
 ```
 
+## Which locales are offered
+
+`Locale::ALL` is the list sui-id offers to users; today it is Japanese and
+English. A locale file can exist without being offered: Chinese Simplified is a
+complete translation and Chinese Traditional delegates to it, but neither is in
+`Locale::ALL`, so neither appears in the language picker.
+
+**Ruled 2026-09-22 (`@nabbisen`):** Chinese is necessary but not urgent. It
+waits until the APIs are stable, and then a native-speaker review, before either
+locale joins `Locale::ALL`. Until then the files stay compiling, which the
+exhaustive `Strings` struct enforces for free. See the
+[roadmap](https://github.com/nabbisen/sui-id/blob/main/ROADMAP.md),
+"Constraints and non-goals (pre-1.0)".
+
 ## Updating an existing translation
 
 Open the relevant file under `locale/` and edit the field values.

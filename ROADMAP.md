@@ -738,3 +738,11 @@ review, and integration verification have occurred.**
   operators.
 - **No plugin system.** RFC 005 shipped as pluggable user backends (LDAP user
   sources, v0.76.1); it is not a plugin system, and none is scheduled.
+- **Chinese is not offered.** `zh_hans` is a complete translation and the
+  compiler keeps it complete; `zh_hant` is a stub that delegates to it. Neither
+  is in `Locale::ALL`, so neither is selectable, and no UI offers it. **Ruled
+  2026-09-22 (`@nabbisen`):** Chinese is *necessary but not urgent* — it waits
+  until the APIs are stable, and then a native-speaker review, before either
+  locale joins `Locale::ALL`. Keeping the files compiling is the ongoing cost we
+  accept; offering a locale no native speaker has read is the cost we do not.
+  See [the translator guide](docs/src/contributing/translators.md).

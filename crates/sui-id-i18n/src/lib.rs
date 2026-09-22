@@ -89,6 +89,11 @@ impl Locale {
     /// All locales available as selectable options in the UI and as
     /// server-default choices. Add a variant here only when its translation
     /// file is complete and reviewed.
+    ///
+    /// `ZhHans` and `ZhHant` are deliberately absent. Ruled 2026-09-22
+    /// (`@nabbisen`): Chinese is necessary but not urgent, and waits until the
+    /// APIs are stable and a native speaker has reviewed it. See the roadmap,
+    /// "Constraints and non-goals (pre-1.0)".
     pub const ALL: &'static [Locale] = &[Locale::Ja, Locale::En];
 
     /// BCP-47 language tag. Used in HTML `lang=` attributes, cookies, and
