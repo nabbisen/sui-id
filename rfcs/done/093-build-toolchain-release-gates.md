@@ -24,16 +24,6 @@ per RFC 000, rather than as a completed independent review.
 **Touches.** `Cargo.toml`, crate manifests, `Cargo.lock`, `.github/workflows/`, `scripts/`, `docs/book.toml`, `rfcs/README.md`, RFC metadata and links.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** `codex-project-architect` (OpenAI Codex).
-**Independent security and closure reviewer.** Role independence per RFC 000 —
-the reviewer must not have authored, implemented, or previously approved this
-RFC; vendor is not a criterion. *Corrected 2026-08-27: this field previously
-designated `codex-independent-architecture-security-reviewer` (OpenAI Codex)
-under the vendor-independence rule withdrawn on 2026-08-26 (see `ROADMAP.md`
-§S1). The completed 2026-07-17 design review recorded above is unaffected and
-stands as a record of what happened.* Closure review routes to a role that did
-not author the corrections under review; where only their author can perform a
-check, the closure evidence must record that plainly rather than presenting it
-as independent.
 
 ## Summary
 

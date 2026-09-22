@@ -64,12 +64,6 @@ recorded in Part B's background.
 
 **RFC author / architect.** High-capability model, requirements-architect role.
 
-**Independent security and closure reviewer.** Role independence per RFC 000:
-the reviewer must not have authored, implemented, or previously approved this
-RFC; vendor is not a criterion. Design review goes to the implementation role,
-for implementability and for any gaps it would hit while building. The judgments
-named in *Open questions* go to `@nabbisen` where no other role can adjudicate
-them, and are recorded as unreviewed design judgment.
 
 ## Summary
 

@@ -32,15 +32,6 @@ coverage control, exactly as §Structural coverage gate already states.
 **Command inventory.** [`../handoffs/094-transactional-audit/command-inventory.md`](../handoffs/094-transactional-audit/command-inventory.md)
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** `codex-project-architect` (OpenAI Codex).
-**Independent security and closure reviewer.** Role independence per RFC 000 —
-the reviewer must not have authored, implemented, or previously approved this
-RFC; vendor is not a criterion. Design review routes to the implementation
-role, for implementability and for specification gaps it would hit while
-building. Judgments that role cannot adjudicate are named explicitly in the
-review request and route to a second capable reviewer when one is available,
-otherwise to `@nabbisen`, recorded as unreviewed design judgment. Closure
-review routes to the specifying role and is evidenced by executing the closure
-prerequisites.
 
 > **Returned to Proposed on 2026-07-28; re-accepted 2026-08-27.** This RFC was Accepted on 2026-07-21
 > including the C17/C18/C23/F01–F06 federation command additions, which remain

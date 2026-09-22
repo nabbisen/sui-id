@@ -25,15 +25,6 @@ justification found. Also
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** `codex-project-architect` (OpenAI Codex).
 **Implementation owner.** `codex-developer` (OpenAI Codex); implementation start remains gated below.
-**Independent security and closure reviewer.** Role independence per RFC 000 —
-the reviewer must not have authored, implemented, or previously approved this
-RFC; vendor is not a criterion. Design review routes to the implementation
-role, for implementability and for specification gaps it would hit while
-building. Judgments that role cannot adjudicate — including the 096-B1/B2 split
-inference — are named explicitly in the review request and route to a second
-capable reviewer when one is available, otherwise to `@nabbisen`, recorded as
-unreviewed design judgment. Closure review routes to the specifying role and is
-evidenced by executing the closure prerequisites.
 
 ## Summary
 

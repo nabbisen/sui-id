@@ -386,6 +386,37 @@ explicitly by `@nabbisen` rather than by a reviewer who does not exist. RFC 094'
 `ReadConn` sufficiency question and RFC 096's B1/B2 split inference are the two
 live examples; both are named in their RFCs and in the amendment review request.
 
+**Where this rule lives, from 2026-09-22.** In [RFC 000](rfcs/done/000-rfc-lifecycle-policy.md)
+and in this section — nowhere else. Eleven RFCs (093–103) each carried a
+`**Independent security and closure reviewer.**` header field restating the rule
+in their own words, three of them routing it differently, two citing the
+disposed RFC 018 as its authority, and all of them asserting a bar that RFC 000
+does not contain: "the reviewer must not have authored, implemented, or
+previously approved this RFC". None of those clauses was an owner decision. All
+were removed on 2026-09-22, and no RFC states an independence rule again; RFC 000
+is untouched by the removal. The two dated records that were embedded inside
+those clauses are preserved here:
+
+- **2026-08-27, RFC 093.** Its reviewer field had designated
+  `codex-independent-architecture-security-reviewer` (OpenAI Codex) under the
+  vendor-independence rule withdrawn on 2026-08-26. The completed 2026-07-17
+  design review is unaffected and stands as a record of what happened.
+- **2026-09-09, recorded in RFC 098 at its acceptance.** That RFC's clause
+  states: "`@nabbisen` ruled on 2026-09-09 that the implementation role is not a
+  reviewer", and that RFCs 094–096, reviewed by that role, "stand as performed
+  and are not reopened."
+
+  **This is recorded, not resolved.** It reads against the owner decision of
+  2026-08-26 above, which routes a design to the role that must build against it
+  — the implementation role. The two cannot both govern. The practice since has
+  followed 2026-08-26: RFC 102's and RFC 103's design reviews were performed by
+  the implementation role on 2026-09-16 and 2026-09-17, after the date of the
+  ruling RFC 098 records. Like the withdrawn 2026-07-28 attribution above, the
+  2026-09-09 ruling reaches this repository only through a document written by
+  the architect role, so it is set down here as an open question for
+  `@nabbisen` rather than applied. Until it is settled, 2026-08-26 governs,
+  because it is the one recorded as a decision in this section.
+
 #### S2 — The audit hash chain has no external anchor, permanently for this programme
 
 RFC 094 corrects the *claims* about the chain but explicitly introduces no
@@ -451,6 +482,8 @@ work with no decision record became invisible.
 | Work item | Why | Package |
 |---|---|---|
 | `rfcs/README.md` template vs. what G11 enforces | The normative RFC template is missing ten labels, one of them gate-enforced. A defect in a gate RFC 093 owns, exposed by that gate. | [rfc-template-reconciliation](roadmap/rfc-template-reconciliation/README.md) |
+| RFC headers may not legislate | Eleven RFC headers (093–103) asserted a reviewer-independence bar that RFC 000 does not contain, two of them citing the disposed RFC 018; the same mechanic cost four weeks in July. The clauses are removed; G11 gains two conditions so a header cannot state a review rule or cite an archived RFC. **RFC 000 is not amended.** Owner authorization 2026-09-22. | [rfc-header-governance-guard](roadmap/rfc-header-governance-guard/README.md) |
+| User creation without a password | U01 still takes an administrator-chosen password, so RFC 103's closure prerequisite 4 and threat T2 are not met; `must_change` is written and read by nothing. **Proposed by the architect 2026-09-22, not authorized.** | [user-creation-without-a-password](roadmap/user-creation-without-a-password/README.md) |
 | Audit event labels | Twenty-nine translated audit-event labels were never displayed, and drifted: 30 registered events have none, 4 name events that do not exist. Owner ruling 2026-09-16: show the translated label beside the raw action, bound by a test to `ci/audit-coverage-matrix.md`. | [audit-event-labels](roadmap/audit-event-labels/README.md) |
 | Request ID across `.await` | The request-id middleware holds a span guard across `.await`, so handler logs can lose `request_id`. Owner authorization 2026-09-17. | [request-id-span](roadmap/request-id-span/README.md) |
 | Backup restore hardening | A manifest-less archive bypasses both version refusals; `verify` skips them; `restore` validates nothing it writes. Owner authorization 2026-09-17. | [backup-restore-hardening](roadmap/backup-restore-hardening/README.md) |

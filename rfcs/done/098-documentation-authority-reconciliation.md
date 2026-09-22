@@ -33,13 +33,6 @@ amended. No scope, prerequisite or acceptance criterion changes.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** `codex-project-architect` (OpenAI Codex).
 **Implementation owner.** `codex-developer` (OpenAI Codex), after acceptance and prerequisites.
-**Independent security and closure reviewer.** Role independence per RFC 000 —
-the reviewer must not have authored, implemented, or previously approved this
-RFC, and the implementer cannot be the sole approver; vendor is not a
-criterion. *Corrected at acceptance, 2026-09-10: this clause previously routed
-independent review to the implementation role, which is how RFCs 094–096 were
-reviewed. `@nabbisen` ruled on 2026-09-09 that the implementation role is not
-a reviewer. Those earlier reviews stand as performed and are not reopened.*
 
 ## Summary
 

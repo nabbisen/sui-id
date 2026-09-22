@@ -24,10 +24,6 @@ implemented.
 **Touches.** Store and core: `crates/sui-id-store/src/commands.rs`, `repos/password_reset_tokens.rs` plus a migration, `crates/sui-id-core/src/identity/admin/users.rs`, `crates/sui-id-core/src/account/forgot_password.rs`; web and CLI: `crates/sui-id/src/http/handlers/admin/users.rs`, `crates/sui-id/src/cli.rs`, `crates/sui-id-web/src/pages/`, `crates/sui-id-i18n`; registries and docs: `ci/write-commands.toml`, `ci/audit-coverage-matrix.md`, `docs/src/guides/dangerous-operations.md`, `docs/threat-model.md`.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** High-capability model, requirements-architect role.
-**Independent security and closure reviewer.** Role independence per RFC 000 —
-the reviewer must not have authored, implemented, or previously approved this
-RFC; vendor is not a criterion. Design review goes to the implementation role.
-The risk judgments in *Open questions* go to `@nabbisen`.
 
 ## Summary
 
