@@ -15,7 +15,7 @@ const RECENT_EVENT_LIMIT: i64 = 30;
 use super::{describe_auth_methods, flash_from_query};
 use crate::handlers::admin::with_csrf_cookie;
 use crate::handlers::{AppStateExt, CurrentUser};
-use sui_id_web::pages::{MeOverviewData, MeShellData, MeTab};
+use sui_id_web::pages::{MeOverviewData, MeRecoveryEvent, MeShellData, MeTab};
 
 pub async fn page_get(
     state_ext: AppStateExt,
@@ -148,6 +148,33 @@ pub async fn overview_get(
             note: r.note,
         })
         .collect();
+    // RFC 103 5b: the user's own most recent recovery-link event, if any.
+    let recovery_event = audit::most_recent_recovery_event_for_user(&app.db, user_id)
+        .await
+        .ok()
+        .flatten()
+        .and_then(|row| sui_id_core::recovery_link::summarize_recent_event(&row))
+        .map(|summary| match summary {
+            sui_id_core::recovery_link::RecoveryEventSummary::Issued { by_admin: true, at } => {
+                MeRecoveryEvent::IssuedByAdmin(at)
+            }
+            sui_id_core::recovery_link::RecoveryEventSummary::Issued {
+                by_admin: false,
+                at,
+            } => MeRecoveryEvent::IssuedByOperator(at),
+            sui_id_core::recovery_link::RecoveryEventSummary::Completed {
+                origin: sui_id_store::models::ResetTokenOrigin::Email,
+                at,
+            } => MeRecoveryEvent::CompletedSelfService(at),
+            sui_id_core::recovery_link::RecoveryEventSummary::Completed {
+                origin: sui_id_store::models::ResetTokenOrigin::Web,
+                at,
+            } => MeRecoveryEvent::CompletedByAdmin(at),
+            sui_id_core::recovery_link::RecoveryEventSummary::Completed {
+                origin: sui_id_store::models::ResetTokenOrigin::Cli,
+                at,
+            } => MeRecoveryEvent::CompletedByOperator(at),
+        });
     let csrf_tok = csrf::ensure_token(&jar);
     let resp = axum::response::Html(sui_id_web::render_me_overview(
         MeOverviewData {
@@ -158,6 +185,7 @@ pub async fn overview_get(
             recent_events,
             csrf_token: csrf_tok.clone(),
             last_login_at: user.last_login_at,
+            recovery_event,
         },
         app.is_dev_mode,
         lang,

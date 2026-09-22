@@ -61,6 +61,7 @@ mod r103_stage1;
 mod r103_stage2;
 mod r103_stage3;
 mod r103_stage4;
+mod r103_stage5;
 mod r11_login_failure;
 mod refresh_theft;
 mod request_id;

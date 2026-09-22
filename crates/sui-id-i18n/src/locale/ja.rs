@@ -800,6 +800,13 @@ pub static STRINGS_JA: Strings = Strings {
     me_overview_label_mfa_totp: "MFA（TOTP）",
     me_overview_label_passkeys: "パスキー",
     me_overview_no_recent_events: "最近の操作はまだ記録されていません。",
+
+    // Account-page recovery event line (RFC 103 5b)
+    me_overview_recovery_issued_by_admin: "{date} に、管理者があなたのアカウント復旧リンクを発行しました。",
+    me_overview_recovery_issued_by_operator: "{date} に、運用担当者があなたのアカウント復旧リンクを発行しました。",
+    me_overview_recovery_completed_self: "{date} に、メールで送られたリンクを使ってパスワードをリセットしました。",
+    me_overview_recovery_completed_by_admin: "{date} に、管理者が発行したリンクを使ってパスワードがリセットされました。",
+    me_overview_recovery_completed_by_operator: "{date} に、運用担当者が発行したリンクを使ってパスワードがリセットされました。",
     setup_welcome_lang_picker_label: "言語選択",
     me_passkey_origin_warning: "パスキーは HTTPS または localhost 上でのみ使用できます。",
     me_passkey_section_title: "登録済みパスキー",

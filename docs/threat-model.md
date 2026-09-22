@@ -99,6 +99,68 @@ The properties it establishes:
 - An account with no second factor passes a step-up gate without a challenge.
   The gated action's event says so.
 
+### 2026-09-22 — Administrator-issued account recovery (RFC 103)
+
+The decision is [RFC 103](../rfcs/accepted/103-administrator-issued-account-recovery.md).
+The properties it establishes:
+
+- **An administrator never learns a password.** The operation issues a
+  single-use link; the user opens it and chooses their own password. The
+  function that let an administrator set one directly
+  (`identity::admin::users::reset_user_password`, U06) is removed from the
+  tree.
+- **The link is single-use, expiring, hashed at rest, and revoked by any
+  competing change.** A 256-bit random token; only its SHA-256 hash is ever
+  stored, and it expires 30 minutes after issuance. Completion is guarded so
+  concurrent uses cannot both win. Issuing a new link, completing any link,
+  changing the user's password, or disabling or deleting the user each
+  revoke the user's other outstanding links in the same transaction as that
+  change.
+- **The web path refuses an administrator or a non-local target, and needs
+  a fresh step-up from an administrator who holds a second factor.** It
+  cannot be issued for another administrator, for the issuer's own account,
+  for a directory or federated account, or for a disabled or deleted user.
+  An administrator with no second factor is refused outright; a stale
+  step-up rolls back inside the same transaction that would otherwise
+  commit, the same re-check RFC 102 B4 uses. At most five links per rolling
+  hour per administrator.
+- **The CLI's authority is the host's master key**, the same authority
+  `sui-id admin unlock-user` and `sui-id admin reset-mfa` already carry. It
+  works for any local account, including the sole administrator, which is
+  the only path back for that account (RFC 102's step-up contract otherwise
+  gives it none). It is throttled the same way, counted from the database
+  so the limit holds across separate runs.
+- **The token never reaches a URL the server sees, a log, or the audit
+  row.** The link places it in a URL fragment, which browsers do not send;
+  the completion page moves it into a form field before submitting; the
+  legacy `?token=` form is refused rather than processed. Neither issuance
+  nor completion writes the token or its hash anywhere in `audit_log`, and
+  neither is present in any request URI or log line at any level, checked
+  with the access log active.
+
+**Stated residuals.**
+
+- **An administrator who holds a second factor, and is exactly who this
+  operation exists to trust, can take over any non-administrator account
+  that itself has no second factor.** They receive the plaintext token when
+  they issue the link and can complete it themselves before the real user
+  ever sees it. Nothing in this RFC's controls distinguishes that from the
+  legitimate case, because it is the same action with the same authority; a
+  stolen administrator session with a second factor of its own has the same
+  reach. The user is not emailed about it — an administrator- or
+  operator-issued link sends no notice at either end, because no address is
+  proven until RFC 101 lands — so the only trace a signed-out user has is
+  the audit log an operator would have to think to check, until they can
+  sign back in and read the line on their own `/me/security/overview`.
+  Requiring every user to hold a second factor closes this the same way
+  RFC 102's equivalent residual does, and is outside this RFC.
+- **The handover channel is procedural, not code-enforced.** Whoever issues
+  or delivers the link is trusted to verify the person on the other end
+  through a channel that already authenticates them, and never to the
+  address or number the requester supplies in the same request. sui-id
+  cannot verify who actually received it; a social-engineered handoff is
+  not solvable in code.
+
 This document describes how sui-id thinks about the threats it
 faces, what defences are in place, and where the boundaries of
 those defences sit. It is current as of **v0.26.0** and reflects

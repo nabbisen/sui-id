@@ -52,7 +52,6 @@ the administrator is asked to step up again.
 | `user.disable` | User disabled | Administrator disabled a user account. All active sessions and refresh tokens are immediately revoked. |
 | `user.enable` | User enabled | Administrator re-enabled a previously disabled user account. |
 | `user.delete` | User deleted | Administrator deleted a user account. |
-| `user.reset_password` | Password reset (admin) | Administrator reset a user's password. |
 | `mfa.admin_reset` | MFA reset (admin) | An administrator (web), or the operator with `sui-id admin reset-mfa` (no actor, `via=cli`), reset a user's MFA factors (TOTP and all passkeys removed). |
 | `user.recovery_link.issued` | Recovery link issued | An administrator (web), or the operator with `sui-id admin issue-recovery-link` (no actor, `via=cli`), issued a single-use account-recovery link for a user. The note records the `reason`, `via`, `expires_at`, how many of the user's earlier links this one `invalidated`, and `step_up`. The link itself is never recorded. |
 | `admin.user.unlock` | Account unlocked | Administrator cleared a user's progressive lockout. |

@@ -81,18 +81,6 @@ event = ""    # Stage 1: typed event-kind enum variant, not yet added
 descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
 
 [[command]]
-id = "U06"
-class = "A"
-status = "implemented"  # implemented | target-absent | target-legacy
-owner = "Admin password reset"
-rationale = "`user.reset_password`"
-mutation_surface = "`credentials::upsert`, token/session invalidation"
-files = ["crates/sui-id-store/src/repos/credentials.rs"]
-test_id = "`a_u06_password`"
-event = ""    # Stage 1: typed event-kind enum variant, not yet added
-descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
-
-[[command]]
 id = "U07"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
@@ -421,7 +409,7 @@ id = "U35"
 class = "I"
 status = "implemented"  # implemented | target-absent | target-legacy
 owner = "Credential primitive"
-rationale = "callable only inside U01/U06/U09/U10"
+rationale = "callable only inside U01/U09/U10"
 mutation_surface = "`credentials::upsert`, `upsert_within_tx`"
 files = ["crates/sui-id-store/src/repos/credentials.rs"]
 test_id = "`i_u35_credentials`"
@@ -913,7 +901,7 @@ id = "T03"
 class = "I"
 status = "implemented"  # implemented | target-absent | target-legacy
 owner = "Invalidate user authorization codes"
-rationale = "subordinate to U02/U04/U06/U09/U10"
+rationale = "subordinate to U02/U04/U09/U10"
 mutation_surface = "`auth_codes::invalidate_all_for_user`"
 files = ["crates/sui-id-store/src/repos/auth_codes.rs"]
 test_id = "`i_t03_code_invalidate`"
@@ -937,7 +925,7 @@ id = "T06"
 class = "I"
 status = "implemented"  # implemented | target-absent | target-legacy
 owner = "Administrative/user refresh revocation"
-rationale = "subordinate to U02/U04/U06/U09/U10/U19/C06"
+rationale = "subordinate to U02/U04/U09/U10/U19/C06"
 mutation_surface = "`refresh_tokens::revoke`, `revoke_all_for_user`, `revoke_all_for_client`"
 files = ["crates/sui-id-store/src/repos/refresh_tokens.rs"]
 test_id = "`i_t06_refresh_revoke`"

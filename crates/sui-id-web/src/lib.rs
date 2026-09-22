@@ -49,6 +49,7 @@ pub use pages::{
     MeMfaData,
     MeOverviewData,
     MePasskeyData,
+    MeRecoveryEvent,
     MeSecurityData,
     MeSessionDescriptor,
     MeSessionsData,

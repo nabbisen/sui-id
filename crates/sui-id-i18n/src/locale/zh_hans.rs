@@ -802,6 +802,13 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     me_overview_label_mfa_totp: "MFA（TOTP）",
     me_overview_label_passkeys: "通行密钥",
     me_overview_no_recent_events: "暂无最近活动记录。",
+
+    // Account-page recovery event line (RFC 103 5b)
+    me_overview_recovery_issued_by_admin: "管理员于 {date} 为您签发了账号恢复链接。",
+    me_overview_recovery_issued_by_operator: "运维人员于 {date} 为您签发了账号恢复链接。",
+    me_overview_recovery_completed_self: "您于 {date} 使用邮件中的链接重置了密码。",
+    me_overview_recovery_completed_by_admin: "您的密码已于 {date} 使用管理员签发的链接重置。",
+    me_overview_recovery_completed_by_operator: "您的密码已于 {date} 使用运维人员签发的链接重置。",
     setup_welcome_lang_picker_label: "语言选择",
     me_passkey_origin_warning: "通行密钥需要 HTTPS 或 localhost。",
     me_passkey_section_title: "已注册的通行密钥",

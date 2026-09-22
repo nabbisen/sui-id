@@ -13,6 +13,21 @@ pub struct MeOverviewData {
     /// RFC 074: timestamp of the user's previous successful login.
     /// None = no prior login recorded (first login, or pre-migration row).
     pub last_login_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// RFC 103 5b: the user's own most recent recovery-link event, if any.
+    pub recovery_event: Option<MeRecoveryEvent>,
+}
+
+/// The signed-in user's own most recent recovery-link event (RFC 103 5b):
+/// when an administrator- or operator-issued link was created for them, or
+/// when their password was last reset through a link of any origin. Never
+/// carries a token, a reason, or a name — only what kind of actor and when.
+#[derive(Debug, Clone, Copy)]
+pub enum MeRecoveryEvent {
+    IssuedByAdmin(chrono::DateTime<chrono::Utc>),
+    IssuedByOperator(chrono::DateTime<chrono::Utc>),
+    CompletedSelfService(chrono::DateTime<chrono::Utc>),
+    CompletedByAdmin(chrono::DateTime<chrono::Utc>),
+    CompletedByOperator(chrono::DateTime<chrono::Utc>),
 }
 
 pub fn render_me_overview(
@@ -30,6 +45,7 @@ pub fn render_me_overview(
             passkey_count,
             active_session_count,
             recent_events,
+            recovery_event,
             ..
         } = data;
         let event_rows: Vec<_> = recent_events
@@ -63,11 +79,33 @@ pub fn render_me_overview(
                 view! { <p class="muted text-caption">{t.me_overview_first_login}</p> }.into_any()
             }
         };
+        // RFC 103 5b: the account-page recovery-link line. `None` renders
+        // nothing — a user with no such event sees no line at all.
+        let recovery_event_line = recovery_event.map(|e| {
+            let (template, at) = match e {
+                MeRecoveryEvent::IssuedByAdmin(at) => (t.me_overview_recovery_issued_by_admin, at),
+                MeRecoveryEvent::IssuedByOperator(at) => {
+                    (t.me_overview_recovery_issued_by_operator, at)
+                }
+                MeRecoveryEvent::CompletedSelfService(at) => {
+                    (t.me_overview_recovery_completed_self, at)
+                }
+                MeRecoveryEvent::CompletedByAdmin(at) => {
+                    (t.me_overview_recovery_completed_by_admin, at)
+                }
+                MeRecoveryEvent::CompletedByOperator(at) => {
+                    (t.me_overview_recovery_completed_by_operator, at)
+                }
+            };
+            let text = template.replace("{date}", &fmt_time(at));
+            view! { <p class="muted text-caption">{text}</p> }
+        });
         view! {
             <Shell title=t.me_tab_overview.to_string() show_nav=true current=Some("me".to_string()) lang=lang csrf_token=data.csrf_token.clone()>
                 <header class="page-header">
                     <h1 class="page-header__title">{t.me_tab_overview}</h1>
                     {last_login_line}
+                    {recovery_event_line}
                 </header>
                 {tabs}
                 <div class="stack mt-4">

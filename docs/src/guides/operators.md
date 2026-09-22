@@ -391,9 +391,11 @@ emails:
 - a **password-reset link** when a user submits the
   `/forgot-password` form;
 - a **password-change notification** when any user (including
-  the admin) changes their password — both via the self-service
-  `/me/security/password` page and via a successful
-  `/reset-password` flow.
+  the admin) changes their password via the self-service
+  `/me/security/password` page, or via a `/reset-password` flow
+  **completed from that same forgot-password link** — an
+  administrator- or operator-issued link sends none (RFC 103 D7,
+  next paragraph).
 
 Email is **opt-in**. Until it's configured, the endpoints that
 depend on it (`/forgot-password`, `/admin/settings/email/test`, and the
@@ -407,6 +409,16 @@ recovery link an administrator or the operator issued for them (see
 [Issuing a recovery link from the host](#issuing-a-recovery-link-from-the-host)),
 and that must work on an instance with no SMTP configured. With email off no
 forgot-password link can exist, so the page only ever redeems those.
+
+**No mail for an administrator- or operator-issued link, at either end.**
+Neither issuing one nor completing one sends anything — not the
+password-change notification above, and nothing at issuance either. This
+is deliberate (RFC 103 D7): the notice can only go to a proven address,
+and until RFC 101's verified addresses land, an admin- or operator-issued
+link proves none. Don't expect mail either way for these two origins. The
+signed-in user does see a line about it on their own
+[`/me/security/overview`](#the-account-page-recovery-line) once they sign
+back in.
 
 ### Configuring SMTP
 
@@ -1204,6 +1216,22 @@ ORDER BY seq DESC;
 ```
 
 An issuance with no completion after 30 minutes is a link that was never used.
+
+### The account-page recovery line
+
+Neither issuing nor completing an administrator- or operator-issued link
+sends any mail (see [Email features](#email-features) above). So the user
+learns about it, other than from the handover itself, through their own
+`/me/security/overview` page, which shows one line about their own
+most recent recovery-link event — that a link was issued
+for them (and by whom, generically: "an administrator" or "the host
+operator", never a name), or that their password was last reset through
+one (and through which origin — an emailed link, an administrator's, or
+the operator's). It never shows a token, a reason, or an actor's identity.
+A user with no such event sees nothing there. This is the only place in
+the product a user sees this on their own, so if they say "I don't
+remember resetting my password", this is where to point them, alongside
+the audit log itself.
 
 ## WebAuthn / passkey requirements
 

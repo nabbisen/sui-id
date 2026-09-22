@@ -374,7 +374,14 @@ pub async fn consume_and_reset_password(
     // not affect the password change itself. The recipient's
     // locale comes from their `preferred_lang` if set, falling
     // through to the server default.
-    if let Ok(Some(user_row)) = users::find_by_id_opt(db, row.user_id).await
+    //
+    // RFC 103 D7: only the email origin sends this notice. It goes to the
+    // address that received the link — the only one that has been proven at
+    // this point. A web- or CLI-issued link proves no address at all (RFC
+    // 101 introduces verified addresses; until then there is nothing safe
+    // to notify).
+    if row.issued_via == sui_id_store::models::ResetTokenOrigin::Email
+        && let Ok(Some(user_row)) = users::find_by_id_opt(db, row.user_id).await
         && let Some(email) = user_row.email.as_deref()
     {
         let default_locale_pw = sui_id_store::repos::server_settings::get(db)

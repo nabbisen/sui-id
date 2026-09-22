@@ -458,6 +458,35 @@ pub async fn recent_for_user(
     .await
 }
 
+/// RFC 103 5b: the signed-in user's own most recent recovery-link event —
+/// `user.recovery_link.issued` (the target is always the user this reads
+/// for; the actor, if any, is the issuing administrator) or
+/// `auth.password.reset_completed` — for the account page's summary line.
+/// `None` if the user has neither. The two action names are those U37 and
+/// U10 actually write; nothing here derives them from the registry, so a
+/// rename of either must update this query too (as G13 requires for the
+/// registry side).
+pub async fn most_recent_recovery_event_for_user(
+    db: &Database,
+    user_id: sui_id_shared::ids::UserId,
+) -> StoreResult<Option<AuditLogRow>> {
+    use rusqlite::OptionalExtension;
+    let uid = user_id.to_string();
+    db.with_conn(move |conn| {
+        Ok(conn
+            .query_row(
+                "SELECT at, actor, action, target, result, note FROM audit_log \
+                 WHERE target = ?1 \
+                   AND action IN ('user.recovery_link.issued', 'auth.password.reset_completed') \
+                 ORDER BY seq DESC LIMIT 1",
+                [uid],
+                map,
+            )
+            .optional()?)
+    })
+    .await
+}
+
 /// One bucket of a counted audit-action time series.
 ///
 /// `bucket_start` is the inclusive start of the bucket window (in
@@ -571,8 +600,8 @@ pub const DASHBOARD_IMPORTANT_PREFIXES: &[&str] = &[
     "user.create",
     "user.disable",
     "user.delete",
-    "user.reset_password",
     "mfa.admin_reset",
+    "user.recovery_link.issued",
     "client.create",
     "client.delete",
     "client.rotate_secret",

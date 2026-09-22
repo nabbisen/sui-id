@@ -698,6 +698,12 @@ pub struct Strings {
     /// `me_security_sessions_lede` (which describes "other active
     /// sessions"), reading as nonsense in context.
     pub me_overview_no_recent_events: &'static str,
+    // Account-page recovery event line (RFC 103 5b)
+    pub me_overview_recovery_issued_by_admin: &'static str,
+    pub me_overview_recovery_issued_by_operator: &'static str,
+    pub me_overview_recovery_completed_self: &'static str,
+    pub me_overview_recovery_completed_by_admin: &'static str,
+    pub me_overview_recovery_completed_by_operator: &'static str,
     /// v0.48.2: aria-label for the setup-wizard welcome screen's
     /// language picker (`<nav>` containing 3 language links).
     pub setup_welcome_lang_picker_label: &'static str,

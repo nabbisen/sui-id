@@ -18,7 +18,7 @@ pub use clients::{
 pub use signing_keys::{delete_signing_key, list_signing_keys, rotate_signing_key};
 pub use users::{
     CreateUserSpec, MfaResetReport, admin_reset_mfa, create_user, delete_user, list_users,
-    operator_reset_mfa, reset_user_password, set_user_disabled,
+    operator_reset_mfa, set_user_disabled,
 };
 
 use crate::errors::{CoreError, CoreResult};

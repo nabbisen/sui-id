@@ -929,3 +929,56 @@ async fn revoke_outstanding_spares_the_excepted_used_and_expired_tokens() {
         );
     }
 }
+
+// ── D2/D3: an expired link, of any origin, is refused at completion ────
+
+#[tokio::test]
+async fn an_expired_token_cannot_complete_and_writes_no_credential() {
+    // RFC 103 T4/T7's control is that the link expires; measured directly
+    // against the completion guard rather than assumed from the D3
+    // revocation tests, which never exercise the `expires_at` branch.
+    let db = fresh_db();
+    let user = seed_user(&db, |_| {}).await;
+    let id = sui_id_shared::ids::PasswordResetTokenId::new();
+    let now = Utc::now();
+    repos::password_reset_tokens::insert(
+        &db,
+        &PasswordResetTokenRow {
+            id,
+            user_id: user,
+            token_hash: hash(),
+            issued_at: now - TimeDelta::minutes(31),
+            expires_at: now - TimeDelta::minutes(1),
+            consumed_at: None,
+            requester_ip: None,
+            issued_via: ResetTokenOrigin::Email,
+            issued_by: None,
+            revoked_at: None,
+        },
+    )
+    .await
+    .expect("seed an already-expired token");
+
+    let result = consume_and_reset_password(
+        &db,
+        user,
+        id,
+        crate::models::CredentialRow {
+            user_id: user,
+            password_hash: "new-hash-placeholder".into(),
+            must_change: false,
+            updated_at: now,
+        },
+        now,
+    )
+    .await;
+    assert!(
+        matches!(result, Err(StoreError::NotFound)),
+        "an expired token is refused"
+    );
+    assert!(
+        repos::credentials::get(&db, user).await.is_err(),
+        "no credential row"
+    );
+    assert_eq!(audit_rows(&db).await, 0);
+}

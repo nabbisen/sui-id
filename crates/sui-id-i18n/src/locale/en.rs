@@ -803,6 +803,13 @@ pub static STRINGS_EN: Strings = Strings {
     me_overview_label_mfa_totp: "MFA (TOTP)",
     me_overview_label_passkeys: "Passkeys",
     me_overview_no_recent_events: "No recent activity to display.",
+
+    // Account-page recovery event line (RFC 103 5b)
+    me_overview_recovery_issued_by_admin: "An administrator issued you an account-recovery link on {date}.",
+    me_overview_recovery_issued_by_operator: "The host operator issued you an account-recovery link on {date}.",
+    me_overview_recovery_completed_self: "You reset your password using an emailed link on {date}.",
+    me_overview_recovery_completed_by_admin: "Your password was reset on {date}, using a link an administrator issued.",
+    me_overview_recovery_completed_by_operator: "Your password was reset on {date}, using a link the host operator issued.",
     setup_welcome_lang_picker_label: "Language picker",
     me_passkey_origin_warning: "Passkeys require HTTPS or localhost.",
     me_passkey_section_title: "Registered passkeys",

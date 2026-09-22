@@ -47,7 +47,6 @@ it when RFC 094 converts it.*
 | `user.disable` | Disable user account | admin user id | target user id | reason (optional), `step_up` (required) | A |
 | `user.enable` | Re-enable user account | admin user id | target user id | `step_up` (required) | A |
 | `user.delete` | Soft-delete user | admin user id | target user id | reason (optional), `step_up` (required) | A |
-| `user.reset_password` | Admin password reset | admin user id | target user id | — | A |
 | `mfa.admin_reset` | Admin MFA reset (web), or operator MFA reset with `sui-id admin reset-mfa` (RFC 103 D12) | admin user id; none for the CLI | target user id | `totp=… passkeys=N reason=…`, plus `via=cli` for the CLI; `step_up` (required) | A |
 | `user.recovery_link.issued` | Account-recovery link issued (RFC 103): by an administrator on the web, or by the operator with `sui-id admin issue-recovery-link` | admin user id; none for the CLI | target user id | `reason=… via=web\|cli expires_at=… invalidated=N step_up=…`; `step_up` (required). Never the token or its hash | A |
 | `user.role_change` | Admin role change | admin user id | target user id | `old_role=… new_role=…` | A |

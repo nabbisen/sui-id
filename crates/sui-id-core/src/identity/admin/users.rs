@@ -6,7 +6,7 @@ use crate::password::{check_password_policy, hash_password};
 use crate::time::SharedClock;
 use sui_id_shared::ids::UserId;
 use sui_id_store::Database;
-use sui_id_store::models::{CredentialRow, HibpMode, UserRow};
+use sui_id_store::models::{CredentialRow, UserRow};
 use sui_id_store::repos::users;
 // Shared audit helpers from parent module.
 pub struct CreateUserSpec<'a> {
@@ -280,77 +280,6 @@ pub async fn operator_reset_mfa(
             passkeys_removed,
         },
     ))
-}
-
-/// Reset another user's password (admin-initiated).
-///
-/// Enforces the same HIBP policy as the setup wizard and self-service
-/// password change (RFC 003 consistency requirement). Pass
-/// `HibpMode::Off` / `None` to skip the check when HIBP is disabled.
-///
-/// # Security — RFC 005 LDAP shadow users
-///
-/// Password reset is blocked for users whose `source` is `Ldap` (or any
-/// non-Local source).  Setting a local password on an LDAP shadow row would
-/// allow the user to authenticate via the local credential path, bypassing
-/// LDAP entirely.  Administrators who need to reset an LDAP user's password
-/// must do so in the upstream directory.
-#[allow(clippy::too_many_arguments)]
-pub async fn reset_user_password(
-    db: &Database,
-    clock: &SharedClock,
-    hibp_client: Option<&dyn HibpClient>,
-    hibp_mode: HibpMode,
-    actor: &AdminActor,
-    target: sui_id_shared::ids::UserId,
-    new_password: &str,
-    min_password_len: usize,
-) -> CoreResult<()> {
-    let actor_id = actor.user_id();
-    check_password_policy(new_password, min_password_len)?;
-
-    // RFC 005: block password reset on non-local (e.g. LDAP shadow) users.
-    // Setting a local password on a shadow row bypasses the upstream directory.
-    let user_row = users::get(db, target).await?;
-    if user_row.source != sui_id_store::models::UserSource::Local {
-        return Err(CoreError::BadRequest(
-            "Cannot set a local password for a user managed by an external user source \
-             (e.g. LDAP). Reset the password in the upstream directory instead."
-                .into(),
-        ));
-    }
-
-    // RFC 003: HIBP breach check on admin-driven password reset.
-    // Fail-open: network failures let the reset through.
-    if matches!(
-        hibp::enforce_hibp(hibp_mode, hibp_client, new_password).await,
-        HibpEnforcement::Blocked { .. }
-    ) {
-        return Err(CoreError::BadRequest(
-            "New password found in known data breaches. Please choose a different password.".into(),
-        ));
-    }
-
-    let hash = hash_password(new_password)?;
-    let now = clock.now();
-    let credential = CredentialRow {
-        user_id: target,
-        password_hash: hash,
-        must_change: false,
-        updated_at: now,
-    };
-    // RFC 094 U06: same atomicity shift as U02/U04 — the credential swap,
-    // the target's session/refresh-token/auth-code revocations, and the
-    // audit event now commit in one Class-A transaction, replacing the
-    // previous unguarded `credentials::upsert` followed by three separate
-    // best-effort revoke calls and a fire-and-forget `audit_ok`.
-    sui_id_store::commands::reset_user_password(db, actor_id, target, credential)
-        .await
-        .map_err(|e| match e {
-            sui_id_store::StoreError::NotFound => CoreError::NotFound,
-            other => CoreError::from(other),
-        })?;
-    Ok(())
 }
 
 #[cfg(test)]

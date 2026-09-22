@@ -810,74 +810,6 @@ pub async fn change_user_role(
     .await
 }
 
-// ── U06 — admin password reset ───────────────────────────────────────
-
-static U06_RESET_PASSWORD: EventDescriptor = EventDescriptor {
-    kind: AuditEventKind::UserResetPassword,
-    name: "user.reset_password",
-    class: AuditClass::Atomic,
-    actor: ActorRequirement::Required,
-    target: TargetRequirement::Required,
-    attributes: &[],
-};
-
-crate::declare_write_command! {
-    /// U06 — admin password reset. Same `forbidden` reasoning as U01-U05:
-    /// the coverage matrix requires `admin user id` as the actor.
-    command U06 = "U06" {
-        system_principal: forbidden;
-        enum U06Event {
-            Reset { user_id: UserId } => &U06_RESET_PASSWORD,
-        }
-    }
-}
-
-impl SealedCommandEvent<U06> for U06Event {
-    fn target(&self) -> Option<AuditTarget> {
-        let Self::Reset { user_id } = self;
-        Some(AuditTarget(user_id.to_string()))
-    }
-
-    fn result(&self) -> AuditResult {
-        AuditResult::Ok
-    }
-
-    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
-        AuditAttributes::builder().build()
-    }
-}
-
-/// Run U06 (admin password reset) through the Class-A runner. `credential`
-/// is the already-hashed replacement row — password hashing and the HIBP
-/// breach check are network/CPU-bound work that stays outside the
-/// transaction, same contract as U01's HIBP branch and K01's sealed key
-/// material. Revokes the target's sessions, refresh tokens, and in-flight
-/// auth codes in the same transaction as the credential swap and the
-/// audit append, same reasoning as U02/U04: a password reset is exactly
-/// the kind of operation where "credential changed but old sessions
-/// survived the crash between the two calls" is the failure this RFC
-/// exists to close.
-pub async fn reset_user_password(
-    db: &crate::Database,
-    admin: UserId,
-    target: UserId,
-    credential: crate::models::CredentialRow,
-) -> StoreResult<crate::registry::Audited<()>> {
-    let context = AuthorizedCommandContext::<U06>::for_authorized_actor(admin, None);
-    db.class_a(context, move |tx: &mut ClassATx<'_, U06>| {
-        crate::repos::credentials::upsert_within_tx(tx.tx(), &credential)?;
-        crate::repos::sessions::revoke_all_for_user_within_tx(tx.tx(), target, chrono::Utc::now())?;
-        crate::repos::refresh_tokens::revoke_all_for_user_within_tx(
-            tx.tx(),
-            target,
-            chrono::Utc::now(),
-        )?;
-        crate::repos::auth_codes::invalidate_all_for_user_within_tx(tx.tx(), target)?;
-        Ok(((), U06Event::Reset { user_id: target }))
-    })
-    .await
-}
-
 // ── U07 — admin MFA reset ────────────────────────────────────────────
 //
 // Event name settled 2026-09-09 (`.git-exclude/reviewed/
@@ -1239,7 +1171,7 @@ impl SealedCommandEvent<U09> for U09Event {
 
 /// Run U09 (self-service password change) through the Class-A runner.
 /// `credential` is the already-hashed replacement row — same
-/// outside-the-transaction contract as U01/U06. When `revoke_others` is
+/// outside-the-transaction contract as U01. When `revoke_others` is
 /// false, the sweep counts are always `(0, 0)`: this mirrors the
 /// pre-conversion behavior exactly rather than emitting a zero-effort
 /// audit note that implies a sweep was attempted and found nothing.

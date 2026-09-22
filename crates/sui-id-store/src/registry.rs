@@ -178,8 +178,6 @@ pub enum AuditEventKind {
     UserDelete,
     /// `user.role_change` — U05.
     UserRoleChange,
-    /// `user.reset_password` — U06.
-    UserResetPassword,
     /// `mfa.admin_reset` — U07. Named `mfa.admin_reset`, not
     /// `user.reset_mfa`, per the 2026-09-09 review resolving the
     /// RFC 060 naming mismatch in favor of the shipped, documented,

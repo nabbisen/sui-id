@@ -39,7 +39,6 @@ fn all_descriptors() -> Vec<&'static EventDescriptor> {
         &U03_ENABLE,
         &U04_DELETE,
         &U05_ROLE_CHANGE,
-        &U06_RESET_PASSWORD,
         &U07_ADMIN_RESET,
         &U08_UNLOCK,
         &U09_CHANGED_SELF,
@@ -140,7 +139,6 @@ fn actor_requirement_agrees_with_system_principal_for_every_command() {
     check("U03", false, &[&U03_ENABLE]);
     check("U04", false, &[&U04_DELETE]);
     check("U05", false, &[&U05_ROLE_CHANGE]);
-    check("U06", false, &[&U06_RESET_PASSWORD]);
     check("U07", true, &[&U07_ADMIN_RESET]);
     check("U08", true, &[&U08_UNLOCK]);
     check("U09", false, &[&U09_CHANGED_SELF]);
@@ -264,7 +262,6 @@ fn event_names_match_command_inventory() {
         "user.enable",
         "user.delete",
         "user.role_change",
-        "user.reset_password",
         "mfa.admin_reset",
         "admin.user.unlock",
         "auth.password.changed_self",

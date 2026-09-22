@@ -22,6 +22,10 @@ use sui_id_store::Database;
 use sui_id_store::errors::RecoveryRefusal;
 use zeroize::Zeroize;
 
+#[cfg(test)]
+#[path = "recovery_link/tests.rs"]
+mod tests;
+
 /// The plaintext recovery token. Shown once, to whoever issued the link.
 pub struct RecoveryToken(String);
 
@@ -144,4 +148,58 @@ pub async fn issue_as_operator(
             invalidated: grant.invalidated,
         },
     ))
+}
+
+/// A signed-in user's own most recent recovery-link event, for the account
+/// page (RFC 103 5b). Built from an `audit_log` row by
+/// [`summarize_recent_event`]; carries no token, no reason, and no actor's
+/// identity — only what kind of actor and when.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RecoveryEventSummary {
+    /// `user.recovery_link.issued`: a link exists (or existed) for this
+    /// user, issued on the web by an administrator (`true`) or by the
+    /// operator CLI (`false`).
+    Issued { by_admin: bool, at: DateTime<Utc> },
+    /// `auth.password.reset_completed`: the password was last reset through
+    /// a link of this origin.
+    Completed {
+        origin: sui_id_store::models::ResetTokenOrigin,
+        at: DateTime<Utc>,
+    },
+}
+
+/// The value of the last `key=…` field in a `key=value`-joined audit note,
+/// up to the next space. Notes are not escaped (RFC 102 stage 3 finding,
+/// authorized then, not yet built): a free-text field earlier in the note
+/// (U37's `reason`) could contain something that looks like `key=`, so this
+/// reads from the **end**, matching the fields U37 and U10 always write
+/// last and the convention documented in `operators.md`.
+fn last_note_field<'a>(note: &'a str, key: &str) -> Option<&'a str> {
+    let prefix = format!("{key}=");
+    note.split(' ')
+        .rev()
+        .find_map(|tok| tok.strip_prefix(prefix.as_str()))
+}
+
+/// Interpret one `audit_log` row as a [`RecoveryEventSummary`]. `None` for
+/// any row that is not one of the two events this reads, or whose note does
+/// not carry the field this needs (a row from before that field existed, or
+/// a corrupt one) — the caller treats that the same as no event.
+pub fn summarize_recent_event(
+    row: &sui_id_store::models::AuditLogRow,
+) -> Option<RecoveryEventSummary> {
+    let note = row.note.as_deref()?;
+    match row.action.as_str() {
+        "user.recovery_link.issued" => Some(RecoveryEventSummary::Issued {
+            by_admin: last_note_field(note, "via")? == "web",
+            at: row.at,
+        }),
+        "auth.password.reset_completed" => Some(RecoveryEventSummary::Completed {
+            origin: sui_id_store::models::ResetTokenOrigin::parse(last_note_field(
+                note, "origin",
+            )?)?,
+            at: row.at,
+        }),
+        _ => None,
+    }
 }
