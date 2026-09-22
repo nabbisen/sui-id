@@ -68,6 +68,38 @@ Reviewed, and committed as one commit. Accepted:
 **For the owner: the Japanese and Chinese strings are the implementer's own** and
 want a native read, especially the handover guidance and the refusal messages.
 
+## Stage 5 — landed `37c10c2`, 2026-09-22
+
+Reviewed, and committed as one commit. 40 of 40 hunk hashes verified, nothing
+unclaimed. Gates re-run on the candidate: fmt, G07, G07b, G01, G10a, G10b, G11,
+G12, G13 (56 matrix entries, 56 source literals), G15 all exit 0; 837 tests pass
+on the workspace and 843 with all features, 0 failed, 3 ignored — both matching
+the package's own counts.
+
+Accepted, each flagged by the implementer rather than folded in silently:
+- **The D7 gate fixes a live defect, not only an absent feature.** Before it,
+  `consume_and_reset_password` mailed the target's stored address on *every*
+  origin, so a web- or CLI-issued link's completion already sent the notice D7
+  forbids. Shipped in stage 3; corrected here.
+- **`DASHBOARD_IMPORTANT_PREFIXES` swaps `user.reset_password` for
+  `user.recovery_link.issued`.** Beyond the dispatch. Endorsed: removing the
+  dead prefix is forced by the retirement, and without the new one the
+  dashboard's "important events" filter would quietly stop covering the most
+  dangerous operation an administrator has.
+- **The expiry test, added rather than reported.** Nothing anywhere exercised
+  `expires_at` — every D3 test kills a token by a competing event. Since T4 and
+  T7 name expiry as their control, filing it as a gap would have left
+  prerequisite 5 unmet for two threats. Origin-agnostic, correctly: the guard
+  has no origin branch.
+
+**Closure, for `@nabbisen`.** Prerequisites 1–4 and 6 are met. Prerequisite 5 is
+met for 10 of 13 threats; T2's control is deletion (grep-proof, no code to test),
+T8 is procedural by construction, and T12 is the same compare-and-swap statement
+tested at stage 1 under a different origin. Prerequisite 7 has **no eligible
+reviewer in this team**: RFC 103's own clause bars its author, which is the
+architect role, and RFC 000 bars the implementer. The same position RFC 102
+reached, which `be829c4` resolved as an owner-carried judgment.
+
 ## Stage 5 — dispatched 2026-09-22: notices, the account page, U06's retirement, closure
 
 **Baseline.** `b3ee7de` or later. This is RFC 103's last implementation stage.
