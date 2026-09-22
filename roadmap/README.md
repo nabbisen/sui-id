@@ -63,6 +63,8 @@ harmful.
 | [backup-restore-hardening](backup-restore-hardening/README.md) | Open — owner authorization 2026-09-17 |
 | [audit-note-escaping](audit-note-escaping/README.md) | Open — owner authorization 2026-09-22 |
 | [audit-event-labels](audit-event-labels/README.md) | Open — owner ruling 2026-09-16 |
+| [rfc-header-governance-guard](rfc-header-governance-guard/README.md) | Open — owner authorization 2026-09-22 |
+| [user-creation-without-a-password](user-creation-without-a-password/README.md) | **Proposed by the architect 2026-09-22 — not authorized**; three forks await `@nabbisen` |
 | [schema-version-fail-closed](schema-version-fail-closed/README.md) | Open — owner authorization 2026-09-16 |
 | [client-confirm-screens](client-confirm-screens/README.md) | Open — owner authorization 2026-09-16 |
 | [cli-help-completeness](cli-help-completeness/README.md) | Open — owner authorization 2026-09-16 |
