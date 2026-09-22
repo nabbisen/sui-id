@@ -475,6 +475,34 @@ a `roadmap/` directory created by `ee48257`, which justified itself as an
 directory is removed and its nineteen packages are resolved below; see §S1 for
 why an attribution of this shape cannot be taken at face value.
 
+### Release cycles — authorized 2026-09-22
+
+Proposed by the architect and authorized by `@nabbisen` on 2026-09-22, in his
+word: "Authorized." Windows are planning aids under the 2026-07-16 rule: a
+failed gate moves the window, and scope or evidence is never cut to hold a
+date. The release treatment of each item follows the 2026-08-26 surface test.
+
+| Cycle | Target | Window | Contents |
+|---|---|---|---|
+| **A — close what is open** | v0.78.0 | 2026-09-23 → 10-03 | RFC 115, then RFC 103's closure, then RFC 110, then RFC 105 |
+| **B — make the contracts true** | v0.79.0 | 2026-10-06 → 10-17 | RFC 116 stages 1–2, then RFC 112, then RFC 106, then RFC 116 stages 3–4 |
+| **C — the main line resumes** | v0.80.0 | from 2026-10-20 | RFC 094 M2a. Window open-ended until M2a's handoff is re-read against the eight commands RFCs 102 and 103 converted after it was written; the architect proposes a dated window with the cycle-B review |
+
+Cycle A leads with RFC 115 because `docs/threat-model.md` states a property the
+tree does not have: U01 still lets an administrator choose a password at user
+creation. RFC 103 cannot close while that is true.
+
+RFCs 104, 107, 108, 109, 111, 113 and 114 are small, touch unrelated files, and
+are scheduled into slack by the architect, who reports where each went. RFCs
+097, 099, 100 and 101 stay Proposed: each sits behind the M2–M4 line.
+
+**RFC 116 was accepted by `@nabbisen` on 2026-09-22** — "Well, RFC-116 is
+accepted." It stays in `proposed/` until its independent design review lands,
+because RFC 000 requires one for a security-sensitive RFC and G11 refuses an
+Accepted RFC whose `Independent design review` field has no durable reference.
+The review was requested the same day:
+[`rfcs/handoffs/116-gate-contracts/design-review-request.md`](rfcs/handoffs/116-gate-contracts/design-review-request.md).
+
 ### Open — each an RFC, all Proposed
 
 The twelve live packages became RFCs 104–115 on 2026-09-22, with their
