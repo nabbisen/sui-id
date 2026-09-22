@@ -104,11 +104,19 @@ The properties it establishes:
 The decision is [RFC 103](../rfcs/accepted/103-administrator-issued-account-recovery.md).
 The properties it establishes:
 
-- **An administrator never learns a password.** The operation issues a
-  single-use link; the user opens it and chooses their own password. The
-  function that let an administrator set one directly
+- **Recovering an account never tells an administrator a password.** The
+  operation issues a single-use link; the user opens it and chooses their own
+  password. The function that let an administrator set one directly
   (`identity::admin::users::reset_user_password`, U06) is removed from the
   tree.
+
+  **This is a property of recovery, not of the product.** Creating a user
+  (U01) still takes an administrator-chosen password, stored without any
+  rotation requirement, so an administrator knows a working password for every
+  local account they created until its holder changes it. Closing that is
+  tracked at `roadmap/user-creation-without-a-password/`; until it lands, an
+  administrator's reach over accounts they created is the same as the residual
+  stated below.
 - **The link is single-use, expiring, hashed at rest, and revoked by any
   competing change.** A 256-bit random token; only its SHA-256 hash is ever
   stored, and it expires 30 minutes after issuance. Completion is guarded so
