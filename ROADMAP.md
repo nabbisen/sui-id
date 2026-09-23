@@ -496,7 +496,10 @@ consequence. Cycles A, B and C each move one week. Scope was not cut to hold
 the date, per the rule of 2026-07-16.
 
 RFC 117 is not scheduled into a cycle: it cannot start until `@nabbisen` holds
-a signing key no agent can use, which is its own prerequisite.
+a signing key no agent can use, which is its own prerequisite. It was accepted
+on 2026-09-24 and carries an open objection the architect raised against his
+own design — that the verifier lives in the same tree as the thing it verifies
+— which its design review is asked to settle before anything is built.
 
 Cycle A leads with RFC 115 because `docs/threat-model.md` states a property the
 tree does not have: U01 still lets an administrator choose a password at user
@@ -519,6 +522,7 @@ day the RFC was accepted, routed to the implementation role:
 | 115 | 2026-09-24 | [`rfcs/handoffs/115-user-creation-without-a-password/design-review-request.md`](rfcs/handoffs/115-user-creation-without-a-password/design-review-request.md) |
 | 110 | 2026-09-24 | [`rfcs/handoffs/110-rfc-header-governance-guard/design-review-request.md`](rfcs/handoffs/110-rfc-header-governance-guard/design-review-request.md) |
 | 116 | 2026-09-22 | [`rfcs/handoffs/116-gate-contracts/design-review-request.md`](rfcs/handoffs/116-gate-contracts/design-review-request.md) |
+| 117 | 2026-09-24 | [`rfcs/handoffs/117-verifiable-owner-decisions/design-review-request.md`](rfcs/handoffs/117-verifiable-owner-decisions/design-review-request.md) |
 
 RFC 115's three open questions stay open: they are design forks for
 `@nabbisen`, and the design review is asked for its view on each as an input,
