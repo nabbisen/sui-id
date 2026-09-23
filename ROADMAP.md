@@ -496,12 +496,23 @@ RFCs 104, 107, 108, 109, 111, 113 and 114 are small, touch unrelated files, and
 are scheduled into slack by the architect, who reports where each went. RFCs
 097, 099, 100 and 101 stay Proposed: each sits behind the M2–M4 line.
 
-**RFC 116 was accepted by `@nabbisen` on 2026-09-22** — "Well, RFC-116 is
-accepted." It stays in `proposed/` until its independent design review lands,
-because RFC 000 requires one for a security-sensitive RFC and G11 refuses an
-Accepted RFC whose `Independent design review` field has no durable reference.
-The review was requested the same day:
-[`rfcs/handoffs/116-gate-contracts/design-review-request.md`](rfcs/handoffs/116-gate-contracts/design-review-request.md).
+**Accepted by `@nabbisen`, awaiting their design reviews.** RFC 116 on
+2026-09-22 — "Well, RFC-116 is accepted." — and RFCs 115 and 110 on
+2026-09-24 — "RFC 115 and 110 are accpepted." Each stays in `proposed/` until
+its independent design review lands, because RFC 000 requires one for a
+security-sensitive RFC and G11 refuses an Accepted RFC whose `Independent
+design review` field has no durable reference. Each review was requested the
+day the RFC was accepted, routed to the implementation role:
+
+| RFC | Accepted | Design review requested |
+|---|---|---|
+| 115 | 2026-09-24 | [`rfcs/handoffs/115-user-creation-without-a-password/design-review-request.md`](rfcs/handoffs/115-user-creation-without-a-password/design-review-request.md) |
+| 110 | 2026-09-24 | [`rfcs/handoffs/110-rfc-header-governance-guard/design-review-request.md`](rfcs/handoffs/110-rfc-header-governance-guard/design-review-request.md) |
+| 116 | 2026-09-22 | [`rfcs/handoffs/116-gate-contracts/design-review-request.md`](rfcs/handoffs/116-gate-contracts/design-review-request.md) |
+
+RFC 115's three open questions stay open: they are design forks for
+`@nabbisen`, and the design review is asked for its view on each as an input,
+not as the decision.
 
 ### Open — each an RFC, all Proposed
 
