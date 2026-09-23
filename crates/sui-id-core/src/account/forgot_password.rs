@@ -28,7 +28,8 @@
 //! ## User enumeration
 //!
 //! `request_reset` returns `Ok(())` whether the email matched a
-//! user or not, takes roughly the same time in both branches, and
+//! user or not (and, since RFC 115 D1, whether the matching local
+//! account has ever held a password or not), takes roughly the same time in both branches, and
 //! emits a `auth.password.reset_requested` event in either case.
 //! The handler always shows a generic "if an account exists, we've
 //! sent the link" page.
@@ -46,7 +47,7 @@ use sha2::{Digest, Sha256};
 use sui_id_shared::ids::PasswordResetTokenId;
 use sui_id_store::Database;
 use sui_id_store::models::{CredentialRow, HibpMode, PasswordResetTokenRow, ResetTokenOrigin};
-use sui_id_store::repos::{password_reset_tokens, smtp_config, users};
+use sui_id_store::repos::{credentials, password_reset_tokens, smtp_config, users};
 
 /// 30 minutes — a balance between user-friendly delivery delays
 /// and a reasonably tight attack window.
@@ -101,6 +102,21 @@ pub async fn request_reset(
     // receives a local password. It gets exactly what an unknown address
     // gets: the same Class-B event with no user, no token and no mail.
     let user_row = user_row.filter(|u| u.source == sui_id_store::models::UserSource::Local);
+    // RFC 115 D1: a local account that has never held a password is
+    // activated only by an administrator-issued link (audited, step-up
+    // gated, second-factor gated and throttled), never by this
+    // unauthenticated form: the address on such an account was typed by the
+    // administrator who created it and nothing has verified it. It gets
+    // exactly what an unknown address gets. Credential rows are never
+    // deleted, so no account that has ever held a password is affected.
+    let user_row = match user_row {
+        Some(u) => match credentials::get(db, u.id).await {
+            Ok(_) => Some(u),
+            Err(sui_id_store::StoreError::NotFound) => None,
+            Err(e) => return Err(e.into()),
+        },
+        None => None,
+    };
     let Some(user_row) = user_row else {
         events::emit(
             db,

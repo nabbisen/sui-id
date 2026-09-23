@@ -187,12 +187,26 @@ pub async fn login_with_mfa(
         // has our knowledge of them).
     }
 
-    let cred = credentials::get(db, user.id).await.map_err(|e| match e {
-        sui_id_store::StoreError::NotFound => CoreError::InvalidCredentials,
-        other => other.into(),
-    })?;
+    // RFC 115 D8: a local account with no credential row (created without a
+    // password, not yet activated) is refused like any other wrong
+    // password: the dummy verify runs for timing equivalence and the
+    // failure is counted and audited by U22 below. This used to return
+    // here, before both, so "never activated" was distinguishable by
+    // timing and its attempts were neither counted nor audited.
+    let cred = match credentials::get(db, user.id).await {
+        Ok(cred) => Some(cred),
+        Err(sui_id_store::StoreError::NotFound) => None,
+        Err(other) => return Err(other.into()),
+    };
+    let verdict = match &cred {
+        Some(cred) => verify_password(password, &cred.password_hash),
+        None => {
+            let _ = verify_password(password, DUMMY_PHC);
+            Err(CoreError::InvalidCredentials)
+        }
+    };
 
-    if let Err(e) = verify_password(password, &cred.password_hash) {
+    if let Err(e) = verdict {
         // Wrong password: bump the counter and, if it crosses the
         // threshold, stamp the lock — atomically, as RFC 094's U22.
         // `lock_window_for_count` runs *inside* the transaction against
