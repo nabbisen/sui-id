@@ -4,11 +4,11 @@
 Nothing here is authorized until it is Accepted.
 **Implementer.** Mid-capability model.
 **Baseline.** The commit that adds this file, or later.
-**Hard prerequisite.** **Open question 1 must be answered and the key must
-exist before stage 1 starts.** Every stage below verifies signatures; without a
-key there is nothing to verify and the work cannot be tested. Do not begin by
-building the gate and stubbing the key — a gate whose only fixture is a stub is
-a gate that has never run.
+**Prerequisites, split 2026-09-24 on the design review's recommendation.**
+**Stage 0 needs no key** and should be built first: it is the control that
+actually works against the real adversary, and it would have caught all three
+past failures. **Stages 1–3 need the key**, and do not begin them by stubbing
+it — a gate whose only fixture is a stub is a gate that has never run.
 
 ## The measurements this RFC rests on
 
@@ -25,9 +25,35 @@ Re-run before starting; a disagreement is a blocker.
 
 | Stage | Content | Prerequisite |
 |---|---|---|
-| 1 | The ledger format, the pinned allowed-signers file, and the verify gate | RFC Accepted; **the key exists** |
-| 2 | The citation rule: a document asserting a post-adoption owner decision must cite an entry | stage 1 |
-| 3 | Labelling the seven pre-adoption attributions (D6) | stage 1 |
+| **0** | **The census and the closed baseline (D0)** — no key needed | RFC Accepted |
+| 1 | The ledger format, the pinned allowed-signers file, and the verify gate | stage 0; **the key exists** |
+| 2 | The citation rule wired to the baseline | stage 1 |
+| 3 | Labelling the pre-adoption attributions (D6) | stage 1; **the owner's word on the two load-bearing ones** |
+
+## Stage 0 — the census and the baseline (no key)
+
+Match **generously**, not narrowly: the owner or `@nabbisen` within a line of a
+decision verb stem (`rul`, `decid`, `decision`, `authori[sz]`, `approv`,
+`accept`, `direct`, `instruct`), **regardless of date**. The narrow pattern in
+the measurements below **misses the 2026-09-09 attribution**, which is one of
+the three known-bad ones — verified. A gate keyed to one pattern misses the
+incident you already know about.
+
+- **Print every hit in the CI summary.** The census is half the value: two of
+  the three failures were single commits that nobody looked at.
+- **Record the closed baseline at the adoption commit** — path plus normalised
+  text hash for every attribution that then exists. The cutoff is the tree, not
+  a date in a sentence.
+- **Fail only** on a hit that is neither baselined nor citing a ledger entry.
+  Clearing a false positive is an edit to the baseline file, in a visible diff —
+  not a marker the author types into their own paragraph.
+
+**Evidence.** The three historical commits, replayed: `1e59e3d` (2026-07-28),
+RFC 098's clause (2026-09-09) and `ee48257` (2026-09-10) each introduce an
+attribution the gate would reject. The real tree passes without editing any
+document. A new attribution with no date fails. A baselined one passes.
+
+**This stage can be built today and is the one to start with.**
 
 ## Stage 1 — the ledger and its gate
 
