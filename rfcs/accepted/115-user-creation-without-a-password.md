@@ -1,6 +1,8 @@
 # RFC 115 — Creating a user without choosing their password
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-09-24
+**Approved by.** `@nabbisen`, 2026-09-24: "RFC 115 and 110 are accpepted." He ruled all three open questions the same day, each as the independent design review recommended (D10–D12).
 **Security review.** Required
 **Independent design review.** [Design review 2026-09-24](../handoffs/115-user-creation-without-a-password/design-review-2026-09-24.md) by the implementation role, which authored neither this RFC nor its handoff. One blocker, two high, six medium, three low; all resolved in this text. It also corrected two of this RFC's factual premises (§Corrections).
 **Design prerequisites.** None outstanding. The three forks were ruled by `@nabbisen` on 2026-09-24, each as the design review recommended; they are D10, D11 and D12 below.

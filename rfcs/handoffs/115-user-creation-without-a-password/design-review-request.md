@@ -1,6 +1,6 @@
 # RFC 115 — independent design review request
 
-**RFC.** [RFC 115 — Creating a user without choosing their password](../../proposed/115-user-creation-without-a-password.md). Proposed.
+**RFC.** [RFC 115 — Creating a user without choosing their password](../../accepted/115-user-creation-without-a-password.md). Proposed.
 **Reviewer.** Mid-capability model, implementation role. It authored neither the
 RFC nor its handoff.
 **Route.** Owner decision of 2026-08-26 (`ROADMAP.md` §S1): a design is reviewed

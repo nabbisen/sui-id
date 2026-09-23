@@ -1,6 +1,6 @@
 # RFC 116 implementation handoff — gate contracts
 
-**Governing RFC.** [RFC 116](../../proposed/116-gate-contracts.md), **Proposed**.
+**Governing RFC.** [RFC 116](../../accepted/116-gate-contracts.md), **Proposed**.
 Nothing here is authorized until it is Accepted.
 **Implementer.** Mid-capability model.
 **Baseline.** `0c15eca` or later.

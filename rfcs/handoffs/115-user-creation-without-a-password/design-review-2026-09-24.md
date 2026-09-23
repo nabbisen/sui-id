@@ -1,7 +1,7 @@
 # RFC 115 — independent design review
 
 **Date:** 2026-09-24
-**RFC:** [RFC 115 — Creating a user without choosing their password](../../proposed/115-user-creation-without-a-password.md)
+**RFC:** [RFC 115 — Creating a user without choosing their password](../../accepted/115-user-creation-without-a-password.md)
 **Request:** [`design-review-request.md`](design-review-request.md)
 **Reviewer:** Mid-capability model, implementation role. Authored neither the RFC nor its handoff.
 **Baseline read:** `f33c7e5` (working tree clean). Read-only: no code and no RFC text changed.

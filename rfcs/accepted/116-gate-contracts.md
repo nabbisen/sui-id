@@ -1,6 +1,8 @@
 # RFC 116 — Gate contracts: one source, one gate each
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-09-22
+**Approved by.** `@nabbisen`, 2026-09-22: "Well, RFC-116 is accepted." He ruled its two open questions on 2026-09-24 (D1, D3a).
 **Security review.** Required
 **Independent design review.** [Design review 2026-09-24](../handoffs/116-gate-contracts/design-review-2026-09-24.md) by the implementation role, which authored neither this RFC nor its handoff. Every measurement in §1 of this RFC was reproduced and agrees; three blockers and four high findings against its *remedies*, all resolved in this text. It also ran D3 by hand and disproved twelve rows of `ci/audit-coverage-matrix.md`.
 **Design prerequisites.** None outstanding. The twelve disproved Class-A rows were ruled by `@nabbisen` on 2026-09-24 and corrected the same day (D3a); open question 1 was ruled the same day (D1).

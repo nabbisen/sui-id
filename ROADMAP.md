@@ -484,7 +484,7 @@ date. The release treatment of each item follows the 2026-08-26 surface test.
 
 | Cycle | Target | Window | Contents |
 |---|---|---|---|
-| **A — close what is open** | v0.78.0 | 2026-09-23 → **10-10** | RFC 115, then RFC 103's closure, then RFC 110, then RFC 105 |
+| **A — close what is open** | v0.78.0 | 2026-09-23 → **10-10** | **RFC 115 dispatched 2026-09-24** (3 stages), then RFC 103's closure, then RFC 110, then RFC 105 |
 | **B — make the contracts true** | v0.79.0 | **2026-10-13 → 10-24** | RFC 116 stages 1–2, then RFC 112, then RFC 106, then RFC 116 stages 3–4 |
 | **C — the main line resumes** | v0.80.0 | from **2026-10-27** | RFC 094 M2a. Window open-ended until M2a's handoff is re-read against the eight commands RFCs 102 and 103 converted after it was written; the architect proposes a dated window with the cycle-B review |
 
@@ -509,13 +509,12 @@ RFCs 104, 107, 108, 109, 111, 113 and 114 are small, touch unrelated files, and
 are scheduled into slack by the architect, who reports where each went. RFCs
 097, 099, 100 and 101 stay Proposed: each sits behind the M2–M4 line.
 
-**Accepted by `@nabbisen`, awaiting their design reviews.** RFC 116 on
-2026-09-22 — "Well, RFC-116 is accepted." — and RFCs 115 and 110 on
-2026-09-24 — "RFC 115 and 110 are accpepted." Each stays in `proposed/` until
-its independent design review lands, because RFC 000 requires one for a
-security-sensitive RFC and G11 refuses an Accepted RFC whose `Independent
-design review` field has no durable reference. Each review was requested the
-day the RFC was accepted, routed to the implementation role:
+**RFCs 110, 115 and 116 are Accepted and implementation-eligible**, moved to
+`accepted/` on 2026-09-24 once their independent design reviews had landed and
+each RFC had been amended to answer them. All three reviews returned blockers
+and none of the three was buildable as first written; the reviews are committed
+beside their RFCs as the durable evidence each header cites. RFC 117 was
+accepted on 2026-09-24 and its review is outstanding.
 
 | RFC | Accepted | Design review requested |
 |---|---|---|
@@ -544,13 +543,13 @@ historical record, not evidence.
 | [107](rfcs/proposed/107-cli-help-completeness.md) | `sui-id --help` names every subcommand the binary accepts |
 | [108](rfcs/proposed/108-client-confirm-screens.md) | Confirm screens for client disable and secret rotation; the secret leaves the URL |
 | [109](rfcs/proposed/109-request-id-span.md) | Request logs keep their request ID across `.await` |
-| [110](rfcs/proposed/110-rfc-header-governance-guard.md) | An RFC header may not legislate |
+| [110](rfcs/accepted/110-rfc-header-governance-guard.md) | An RFC header may not legislate |
 | [111](rfcs/proposed/111-rfc-template-reconciliation.md) | Reconcile `rfcs/README.md`'s template with what G11 enforces |
 | [112](rfcs/proposed/112-schema-version-fail-closed.md) | Refuse to run against a database this build does not understand |
 | [113](rfcs/proposed/113-test-file-organization.md) | Test modules live in their own files |
 | [114](rfcs/proposed/114-ui-contract-reconciliation.md) | Reconcile `docs/ui-ux-contracts.md` with the code |
-| [115](rfcs/proposed/115-user-creation-without-a-password.md) | Creating a user without choosing their password |
-| [116](rfcs/proposed/116-gate-contracts.md) | Gate contracts: one source, one gate each |
+| [115](rfcs/accepted/115-user-creation-without-a-password.md) | Creating a user without choosing their password |
+| [116](rfcs/accepted/116-gate-contracts.md) | Gate contracts: one source, one gate each |
 | [117](rfcs/proposed/117-verifiable-owner-decisions.md) | Owner decisions must be verifiable |
 
 ### Completed and withdrawn before the move

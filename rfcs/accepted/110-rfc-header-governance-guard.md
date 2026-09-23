@@ -1,6 +1,8 @@
 # RFC 110 — An RFC header may not legislate
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-09-24
+**Approved by.** `@nabbisen`, 2026-09-24: "RFC 115 and 110 are accpepted."
 **Security review.** Required
 **Independent design review.** [Design review 2026-09-24](../handoffs/110-rfc-header-governance-guard/design-review-2026-09-24.md) by the implementation role, which authored neither this RFC nor its handoff. Two blockers, three high, three medium, three low; all resolved in this text. Its measurement overturned the RFC's central mechanism (§D1).
 **Design prerequisites.** RFC 000 is the source of the rule being guarded and is not amended by this RFC.

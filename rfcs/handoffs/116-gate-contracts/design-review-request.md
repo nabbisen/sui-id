@@ -1,6 +1,6 @@
 # RFC 116 — independent design review request
 
-**RFC.** [RFC 116 — Gate contracts: one source, one gate each](../../proposed/116-gate-contracts.md). Proposed.
+**RFC.** [RFC 116 — Gate contracts: one source, one gate each](../../accepted/116-gate-contracts.md). Proposed.
 **Reviewer.** Mid-capability model, implementation role. It authored neither the
 RFC nor its handoff.
 **Route.** Owner decision of 2026-08-26 (`ROADMAP.md` §S1): a design is reviewed

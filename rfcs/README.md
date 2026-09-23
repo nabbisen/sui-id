@@ -72,6 +72,9 @@ slot is `104`). One **parallel namespace** also exists:
 | 098 | [Documentation Authority and Reconciliation](./done/098-documentation-authority-reconciliation.md) | M5 | mid-capability model |
 | 102 | [Authentication that cannot be audited does not succeed](./done/102-authentication-fails-closed-without-audit.md) | **Implemented, closed 2026-09-22** | mid-capability model |
 | 103 | [Administrator-issued account recovery](./accepted/103-administrator-issued-account-recovery.md) | prerequisite of RFC 101 | mid-capability model |
+| 110 | [An RFC header may not legislate](./accepted/110-rfc-header-governance-guard.md) | cycle A | mid-capability model |
+| 115 | [Creating a user without choosing their password](./accepted/115-user-creation-without-a-password.md) | cycle A | mid-capability model |
+| 116 | [Gate contracts: one source, one gate each](./accepted/116-gate-contracts.md) | cycle B | mid-capability model |
 
 Acceptance makes an RFC implementation-eligible, but coding remains prohibited
 until its declared implementation prerequisites have repository-visible
@@ -113,13 +116,10 @@ Proposed: the move approved nothing.
 | 107 | [`sui-id --help` names every subcommand the binary accepts](./proposed/107-cli-help-completeness.md) | [107-cli-help-completeness](./handoffs/107-cli-help-completeness/README.md) |
 | 108 | [Confirm screens for client disable and secret rotation; the secret leaves the URL](./proposed/108-client-confirm-screens.md) | [108-client-confirm-screens](./handoffs/108-client-confirm-screens/README.md) |
 | 109 | [Request logs keep their request ID across `.await`](./proposed/109-request-id-span.md) | [109-request-id-span](./handoffs/109-request-id-span/README.md) |
-| 110 | [An RFC header may not legislate](./proposed/110-rfc-header-governance-guard.md) | [110-rfc-header-governance-guard](./handoffs/110-rfc-header-governance-guard/README.md) |
 | 111 | [Reconcile `rfcs/README.md`'s template with what G11 enforces](./proposed/111-rfc-template-reconciliation.md) | [111-rfc-template-reconciliation](./handoffs/111-rfc-template-reconciliation/README.md) |
 | 112 | [Refuse to run against a database this build does not understand](./proposed/112-schema-version-fail-closed.md) | [112-schema-version-fail-closed](./handoffs/112-schema-version-fail-closed/README.md) |
 | 113 | [Test modules live in their own files](./proposed/113-test-file-organization.md) | [113-test-file-organization](./handoffs/113-test-file-organization/README.md) |
 | 114 | [Reconcile `docs/ui-ux-contracts.md` with the code](./proposed/114-ui-contract-reconciliation.md) | [114-ui-contract-reconciliation](./handoffs/114-ui-contract-reconciliation/README.md) |
-| 115 | [Creating a user without choosing their password](./proposed/115-user-creation-without-a-password.md) | [115-user-creation-without-a-password](./handoffs/115-user-creation-without-a-password/README.md) |
-| 116 | [Gate contracts: one source, one gate each](./proposed/116-gate-contracts.md) | [116-gate-contracts](./handoffs/116-gate-contracts/README.md) |
 | 117 | [Owner decisions must be verifiable](./proposed/117-verifiable-owner-decisions.md) | [117-verifiable-owner-decisions](./handoffs/117-verifiable-owner-decisions/README.md) |
 
 ### Implemented — Mockup Integration epic (Phase 0 → Phase 8)

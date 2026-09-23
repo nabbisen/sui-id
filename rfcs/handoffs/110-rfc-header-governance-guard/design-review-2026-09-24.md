@@ -1,7 +1,7 @@
 # RFC 110 — independent design review
 
 **Date:** 2026-09-24
-**RFC:** [RFC 110 — An RFC header may not legislate](../../proposed/110-rfc-header-governance-guard.md)
+**RFC:** [RFC 110 — An RFC header may not legislate](../../accepted/110-rfc-header-governance-guard.md)
 **Request:** [`design-review-request.md`](design-review-request.md)
 **Reviewer:** Mid-capability model, implementation role. Authored neither the RFC nor its handoff.
 **Baseline read:** `f33c7e5`, working tree clean. Read-only: no code and no RFC text changed. Every count below was produced by running the real `parse_header` from `scripts/check-rfc-integrity.py` over the tree (scratch scripts only; nothing committed).

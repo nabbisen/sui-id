@@ -34,7 +34,7 @@ and wrong for the *choice*, and is superseded here. Raised by RFC 115's
 independent design review (H1), 2026-09-24.
 
 **Still unmet under that reading.** U01 lets an administrator choose a password at
-user creation, so the first clause fails today regardless. [RFC 115](../proposed/115-user-creation-without-a-password.md)
+user creation, so the first clause fails today regardless. [RFC 115](115-user-creation-without-a-password.md)
 closes it, and RFC 103 cannot close before it lands.
 **Tracks.** `ROADMAP.md` programme. This RFC is a prerequisite of RFC 101: the
 §6.4/§6.5 ruling's "nobody is stranded" is true only once this RFC is

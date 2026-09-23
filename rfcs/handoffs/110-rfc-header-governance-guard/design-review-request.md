@@ -1,6 +1,6 @@
 # RFC 110 — independent design review request
 
-**RFC.** [RFC 110 — An RFC header may not legislate](../../proposed/110-rfc-header-governance-guard.md). Proposed.
+**RFC.** [RFC 110 — An RFC header may not legislate](../../accepted/110-rfc-header-governance-guard.md). Proposed.
 **Reviewer.** Mid-capability model, implementation role. It authored neither the
 RFC nor its handoff.
 **Route.** Owner decision of 2026-08-26 (`ROADMAP.md` §S1): a design is reviewed

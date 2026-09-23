@@ -1,7 +1,7 @@
 # RFC 116 — independent design review
 
 **Date:** 2026-09-24
-**RFC:** [RFC 116 — Gate contracts: one source, one gate each](../../proposed/116-gate-contracts.md)
+**RFC:** [RFC 116 — Gate contracts: one source, one gate each](../../accepted/116-gate-contracts.md)
 **Request:** [`design-review-request.md`](design-review-request.md)
 **Reviewer:** Mid-capability model, implementation role. Authored neither the RFC nor its handoff.
 **Baseline read:** `f33c7e5`, working tree clean before and after (`git status --short` empty). Read-only: no code, no RFC text and no `ci/` file changed. Every mutation below ran on a scratch copy of the matrix in the session scratchpad, against a scratch copy of the G13 script; nothing under the repository was touched.
