@@ -18,6 +18,24 @@ with RFC 102): findings H5, H6, M5, M7 and M8 bear on this RFC and are resolved
 below; B1 is resolved in RFC 102 B7, which D6 depends on.
 **Implementation prerequisites.** Step 1 (D13 and D10 on the existing email path, which fix live defects): this RFC Accepted, and RFC 094 M2a's runner foundation (in the tree). Steps 2–6: also RFC 102 Part B Implemented, including B7, because D6 relies on step-up evidence that a stolen session cannot manufacture.
 **Closure prerequisites.** An administrator can issue a recovery link on the web and through the CLI; the user can set their own password with it; no code path lets anyone other than the account holder choose or learn a password; every threat below has a test that fails when its control is removed; `docs/threat-model.md` states the resulting properties; independent closure review accepts the evidence.
+**Prerequisite 4, as ruled 2026-09-24 (`@nabbisen`).** "No code path lets anyone
+other than the account holder choose or learn a password" is **unmeetable as
+literally worded**, and not by oversight: the administrator who issues a link
+receives the plaintext token and can open `/reset-password` themself. That is
+inherent in making the administrator the courier, and this RFC's own threat-model
+entry already states it as a residual. The prerequisite is read as: **no path lets
+an administrator set a password, or learn one a user has chosen; the only route by
+which an administrator can reach a new account's password is issuing a recovery
+link through U37 — audited, fresh-step-up, second-factor-gated and throttled — and
+an issuer's ability to complete the link they issued is a stated residual, not a
+defect.** RFC 103 assessed this prerequisite "met" on 2026-09-22 on the ground that
+the administrator "sees only the link"; that reading is correct for the *password*
+and wrong for the *choice*, and is superseded here. Raised by RFC 115's
+independent design review (H1), 2026-09-24.
+
+**Still unmet under that reading.** U01 lets an administrator choose a password at
+user creation, so the first clause fails today regardless. [RFC 115](../proposed/115-user-creation-without-a-password.md)
+closes it, and RFC 103 cannot close before it lands.
 **Tracks.** `ROADMAP.md` programme. This RFC is a prerequisite of RFC 101: the
 §6.4/§6.5 ruling's "nobody is stranded" is true only once this RFC is
 implemented.

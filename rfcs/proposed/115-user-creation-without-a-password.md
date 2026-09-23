@@ -3,7 +3,7 @@
 **Status.** Proposed
 **Security review.** Required
 **Independent design review.** [Design review 2026-09-24](../handoffs/115-user-creation-without-a-password/design-review-2026-09-24.md) by the implementation role, which authored neither this RFC nor its handoff. One blocker, two high, six medium, three low; all resolved in this text. It also corrected two of this RFC's factual premises (§Corrections).
-**Design prerequisites.** Three forks are open and belong to `@nabbisen`, stated in *Open questions*: creating a second administrator against D5's refusal of administrator targets; the five-per-hour throttle against bulk provisioning; and whether `must_change` is enforced or deleted. The design review gives a measured view on each.
+**Design prerequisites.** None outstanding. The three forks were ruled by `@nabbisen` on 2026-09-24, each as the design review recommended; they are D10, D11 and D12 below.
 **Implementation prerequisites.** RFC 103 Implemented — this reuses its recovery-link issuance as the replacement for the password field.
 **Closure prerequisites.** No path lets an administrator **set** a user's password or **learn** one the user has chosen; the only route by which an administrator can reach a new account's password is issuing a recovery link through U37 — audited, fresh-step-up, second-factor-gated and throttled — and that an issuer can complete the link they issued is a stated residual, not a defect (D7, and RFC 103's threat-model entry). A created account cannot be activated by any unaudited path, including `/forgot-password` (D1). `must_change` is enforced or gone. No form's `Debug` can print a password or any other secret. `--dev` seeding is a named exception (D6).
 **Tracks.** Account integrity. Found by the T2 re-review of 2026-09-22.
@@ -124,40 +124,56 @@ Retiring the event follows RFC 103's U06 precedent: descriptor, variant,
 manifest row, matrix row, reference row and the pinned event list, with a
 grep-proof.
 
-## Open questions
+## D10, D11, D12 — the three forks, ruled 2026-09-24
 
-`@nabbisen` rules on each. The design review's measured view is recorded
-beside each as an input, not as the answer.
+`@nabbisen` ruled all three on 2026-09-24, adopting the design review's measured
+view in each case. Recorded as decisions rather than left as questions.
 
-1. **Creating a second administrator.** D5 of RFC 103 refuses administrator
-   targets on the web. Options: keep a password field for that one case; route
-   administrator creation through `sui-id admin issue-recovery-link`; or relax
-   D5 for an account that has never held a credential.
-   *Review's view:* the third, with the predicate `NOT EXISTS credentials AND
-   last_login_at IS NULL` — the `last_login_at` clause keeps the rule correct
-   if a later RFC introduces passwordless local accounts, where "no row" would
-   stop meaning "never activated". It notes option 2 works today with no change
-   at all, and recommends against option 1, which reintroduces the defect.
-2. **The throttle against provisioning.** Five links per hour per issuer would
-   cap bulk creation at five an hour.
-   *Review's view:* exempt issuance-at-creation, marked by a column and
-   evaluated inside U37's transaction on a target that is local, has no
-   credential row and has no earlier token of any kind — so an existing account
-   can never qualify. It adds two conditions to the architect's version:
-   **do not exempt administrator targets** (an unthrottled stream of new
-   administrators is the persistence primitive a stolen session would want),
-   and give provisioning its own larger ceiling rather than making it free.
-3. **`must_change`: enforce it or delete it.** The architect recommended
-   enforcing it as "the smaller change".
-   *Review's view:* that pricing is wrong, and the RFC should not repeat it.
-   A check at the shared session extractor is not enough: `/authorize` and
-   `/metrics` read sessions directly, so a forced-change account would still
-   complete OIDC authorisation. Enforcing it means defining behaviour for every
-   raw session reader, forbidding step-up and factor enrolment during the
-   forced state, and storing the flag on the session row. **Its view is to
-   delete it**, since after this RFC the only writer of `true` is `sui-id setup`
-   for the operator's own account; if it is enforced instead, it is its own
-   package, not a clause of this one.
+**D10 — Creating a second administrator: RFC 103's D5 is relaxed for an account
+that has never held a credential.** D5 refuses administrator targets on the web
+to stop one administrator capturing another's **live** account. An account that
+has never been used is not that. The predicate is
+`NOT EXISTS credentials AND last_login_at IS NULL`, read inside U37's
+transaction on the same fresh read D5 already performs. The `last_login_at`
+clause is not redundant: it keeps the rule correct if a later RFC introduces
+passwordless local accounts, where "no credential row" would stop meaning "never
+activated". Live administrators are unaffected, because credential rows are
+never deleted; non-local targets are refused earlier in the same function and
+cannot be reached through the relaxation. The `can_issue_recovery` flag
+(`admin/users.rs:349`), which today hides the button for an administrator
+target, changes in lockstep.
+
+**D11 — The throttle exempts issuance at creation, for non-administrator
+targets only, under its own ceiling.** The exemption is marked by a column and
+evaluated **inside U37's transaction** on a target that is local, has no
+credential row, and has no earlier token of any kind — so an account that
+already exists can never qualify, and "create a user in order to get an
+unthrottled issuance" yields a link only to the account the attacker just
+created and already controls. Two conditions beyond the architect's original
+recommendation, both adopted: **administrator targets are not exempt**, because
+an unthrottled stream of new administrator accounts is exactly the persistence
+primitive a stolen session with a fresh step-up would want; and exempt
+issuances are **not free** — provisioning gets its own larger ceiling, counted
+from the database the same way, so a bulk import is possible and a runaway is
+not.
+
+**D12 — `must_change` is deleted.** The architect recommended enforcing it as
+"the smaller change". That pricing was wrong, and the design review measured
+why: a check at the shared session extractor is not enough, because
+`/authorize` and `/metrics` read sessions directly, so a forced-change account
+would still complete OIDC authorisation and be issued codes and tokens.
+Enforcing it properly means defining behaviour for every raw session reader,
+forbidding step-up and factor enrolment during the forced state, and storing
+the flag on the session row — its own package, not a clause of this one. After
+this RFC the only writer of `true` is `sui-id setup` for the operator's **own**
+account, so the column, `CredentialRow.must_change`, the three function
+parameters and one test go, with one migration. `cli.rs`'s doc comment then
+says what is true: a printed password to change after first sign-in. **The
+benefit being given up is stated, not hidden:** that printed password is
+captured into Ansible, cloud-init and Docker logs, and forcing rotation would
+have bounded how long that log line stays a working credential. That is the
+operator's exposure rather than this RFC's threat, and it may return as its own
+RFC.
 
 ## Risks
 

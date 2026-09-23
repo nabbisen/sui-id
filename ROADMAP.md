@@ -484,9 +484,19 @@ date. The release treatment of each item follows the 2026-08-26 surface test.
 
 | Cycle | Target | Window | Contents |
 |---|---|---|---|
-| **A — close what is open** | v0.78.0 | 2026-09-23 → 10-03 | RFC 115, then RFC 103's closure, then RFC 110, then RFC 105 |
-| **B — make the contracts true** | v0.79.0 | 2026-10-06 → 10-17 | RFC 116 stages 1–2, then RFC 112, then RFC 106, then RFC 116 stages 3–4 |
-| **C — the main line resumes** | v0.80.0 | from 2026-10-20 | RFC 094 M2a. Window open-ended until M2a's handoff is re-read against the eight commands RFCs 102 and 103 converted after it was written; the architect proposes a dated window with the cycle-B review |
+| **A — close what is open** | v0.78.0 | 2026-09-23 → **10-10** | RFC 115, then RFC 103's closure, then RFC 110, then RFC 105 |
+| **B — make the contracts true** | v0.79.0 | **2026-10-13 → 10-24** | RFC 116 stages 1–2, then RFC 112, then RFC 106, then RFC 116 stages 3–4 |
+| **C — the main line resumes** | v0.80.0 | from **2026-10-27** | RFC 094 M2a. Window open-ended until M2a's handoff is re-read against the eight commands RFCs 102 and 103 converted after it was written; the architect proposes a dated window with the cycle-B review |
+
+**Windows moved 2026-09-24, authorized the same day.** RFC 115's independent
+design review returned a blocker — an administrator-typed email address reaches
+the unauthenticated `/forgot-password` form, so removing the password field
+alone would not have closed the hole — and the RFC grew by five decisions in
+consequence. Cycles A, B and C each move one week. Scope was not cut to hold
+the date, per the rule of 2026-07-16.
+
+RFC 117 is not scheduled into a cycle: it cannot start until `@nabbisen` holds
+a signing key no agent can use, which is its own prerequisite.
 
 Cycle A leads with RFC 115 because `docs/threat-model.md` states a property the
 tree does not have: U01 still lets an administrator choose a password at user
@@ -537,6 +547,7 @@ historical record, not evidence.
 | [114](rfcs/proposed/114-ui-contract-reconciliation.md) | Reconcile `docs/ui-ux-contracts.md` with the code |
 | [115](rfcs/proposed/115-user-creation-without-a-password.md) | Creating a user without choosing their password |
 | [116](rfcs/proposed/116-gate-contracts.md) | Gate contracts: one source, one gate each |
+| [117](rfcs/proposed/117-verifiable-owner-decisions.md) | Owner decisions must be verifiable |
 
 ### Completed and withdrawn before the move
 

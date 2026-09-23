@@ -3,8 +3,8 @@
 **Status.** Proposed
 **Security review.** Required
 **Independent design review.** [Design review 2026-09-24](../handoffs/116-gate-contracts/design-review-2026-09-24.md) by the implementation role, which authored neither this RFC nor its handoff. Every measurement in §1 of this RFC was reproduced and agrees; three blockers and four high findings against its *remedies*, all resolved in this text. It also ran D3 by hand and disproved twelve rows of `ci/audit-coverage-matrix.md`.
-**Design prerequisites.** **`@nabbisen` must rule on the twelve Class-A rows the design review disproved (D3a) before stage 2 can begin.** They are false statements in a normative file, and whether they become `B` or gain a scheduled-conversion caveat is a security-claim decision, not an implementation choice.
-**Implementation prerequisites.** None for stage 1. Stage 2 waits on the D3a ruling. Stage 3 waits until stages 1 and 2 have landed, so that a change to how every lane is defined happens on a tree whose contracts are already true.
+**Design prerequisites.** None outstanding. The twelve disproved Class-A rows were ruled by `@nabbisen` on 2026-09-24 and corrected the same day (D3a); open question 1 was ruled the same day (D1).
+**Implementation prerequisites.** None for stages 1 and 2. Stage 3 waits until stages 1 and 2 have landed, so that a change to how every lane is defined happens on a tree whose contracts are already true.
 **Closure prerequisites.** No fact stated in `ci/` exists in a second hand-maintained place; every surviving file in `ci/` is read by a gate that fails when the file stops being true; the audit matrix's `class` and `actor` columns are checked against the code, keyed on table rows rather than on names anywhere in the file; every lane runs through one dispatcher or its exception is a dated decision; and the placement of what survives is settled.
 **Tracks.** Gate integrity. Raised by `@nabbisen` on 2026-09-22: "`ci/` seems also messy and dirty because partially duplicate of `.github/workflows/`."
 **Touches.** `ci/`, `.github/workflows/ci.yml`, `scripts/check-audit-matrix.sh`, `scripts/check-gate-inputs.sh`, `scripts/ci-gate.sh`, `scripts/check-ui-invariants.sh`, `scripts/tests/`, `rfcs/handoffs/094-transactional-audit/command-inventory.md`, and a one-line pointer in `rfcs/accepted/094-transactional-audit-registry.md` (D6).
@@ -65,11 +65,15 @@ better-named directory leaves a broken, ungated registry.**
 
 ## Decisions
 
-**D1 — One source per registry**, and the surviving copy is the one a gate can
-check. *Which copy survives is open question 1; the design review's measured
-view is the TOML, because the markdown has no `status` and no `files` column at
-all, so "every `files` path exists" is not expressible against it without
-adding columns first.*
+**D1 — One source per registry: the TOML survives.** Ruled by `@nabbisen`,
+2026-09-24, on the design review's measurement: `ci/write-commands.toml` is the
+copy being maintained, it carries `status`, `files` and `test_id` on 99 of 99
+rows, and it parses in one call — while
+`rfcs/handoffs/094-transactional-audit/command-inventory.md` has **no `files`
+and no `status` column at all**, so "every `files` path exists" is not
+expressible against it without adding columns first. The markdown keeps its
+prose, which is the part the TOML cannot carry, and loses its table; if a table
+is wanted there it is **generated** from the TOML, never parsed back out of it.
 
 **D2 — Every file in `ci/` is read by a gate that fails when it stops being
 true.** A file no gate reads is not a contract; it is a document that looks
@@ -95,8 +99,7 @@ free prose whose backticks yield values rather than attribute names — an
 approximate check is worse than none. Only the `step_up (required)` marker is
 checked, which is exact over five rows.
 
-**D3a — Twelve rows are already wrong, and `@nabbisen` rules on them before
-stage 2.** Run by hand, twelve rows claim `A` with no descriptor, and the code
+**D3a — Twelve rows were wrong; ruled and corrected 2026-09-24.** Run by hand, twelve rows claim `A` with no descriptor, and the code
 that writes each is `let _ = audit::append(…)` after the state change — Class B
 in fact: `client.create`, `client.update`, `client.set_allowed_scopes`,
 `client.set_post_logout_redirect_uris`, `client.disable`, `client.enable`,
@@ -107,9 +110,15 @@ in fact: `client.create`, `client.update`, `client.set_allowed_scopes`,
 Separately, `auth.refresh.theft_detected`'s `actor` cell says "user id" where
 its descriptor says `ActorRequirement::None` — which also falsifies the file's
 own sentence that "each row below was checked against its command's descriptor
-on this date". Either the rows become `B`, or a conversion is scheduled and they
-say so as the auth section already does. Both are edits to a security-claim
-file, so neither is the implementer's to choose.
+on this date". `@nabbisen` ruled on 2026-09-24 that the rows take the treatment the
+auth-flow section already gives its own unconverted rows. They now read
+`B *(A required)*` — Class B is what the code does, Class A is what the
+document requires — and **RFC 094 M2b converts them**, its scope being settings,
+pending settings, federation configuration and client metadata. The actor cell
+is corrected to `—`. Both landed in `ci/audit-coverage-matrix.md` under a dated
+"Class corrections" block, with G13 still green because no event name changed.
+**Stage 2 therefore lands on a matrix that is already true**, and its job is to
+make it stay true.
 
 **D3b — The check keys on table rows, not on names.** G13 today extracts
 backticked `word.word` strings from anywhere in the file — prose, notes,
@@ -176,24 +185,18 @@ commit with every reference updated in it.
 
 ## Open questions
 
-1. **Which copy of the command inventory survives.** *Review's view: the TOML,
-   measured — it is the maintained copy, it carries `status`, `files` and
-   `test_id` on 99 of 99 rows, it parses in one call, and the markdown has no
-   `files` or `status` column at all, so a path-existence gate is impossible
-   against it. If the owner wants a table in the handoff, generate it from the
-   TOML rather than parse it.*
-2. **`doc-authority.toml`'s `tolerance_minor = 2`**, marked in the file as "a
+1. **`doc-authority.toml`'s `tolerance_minor = 2`**, marked in the file as "a
    starting value for `@nabbisen` to adjust: it is chosen, not derived", and
    never adjusted.
-3. **`ui-invariants.toml`'s `inline-style-bound maximum = 20`**, a ratchet with
+2. **`ui-invariants.toml`'s `inline-style-bound maximum = 20`**, a ratchet with
    no record of when it was last tightened.
 
 ## Risks
 
-- **D3a is a correction to shipped security claims.** Twelve rows of a
-  normative file say a guarantee the code does not provide. Nothing is
-  *newly* broken — the code has always been what it is — but the file has been
-  read as authoritative by four RFCs.
+- **D3a was a correction to shipped security claims, now landed.** Twelve rows
+  of a normative file stated a guarantee the code does not provide. Nothing was
+  *newly* broken — the code has always been what it is — but the file had been
+  read as authoritative by four RFCs for as long as the rows existed.
 - **D4 changes how every lane is defined**, and is sequenced last of the
   functional stages for that reason. A generated workflow missing a lane fails
   invisibly, so the generator's test asserts the lane set round-trips.

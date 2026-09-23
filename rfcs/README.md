@@ -120,6 +120,7 @@ Proposed: the move approved nothing.
 | 114 | [Reconcile `docs/ui-ux-contracts.md` with the code](./proposed/114-ui-contract-reconciliation.md) | [114-ui-contract-reconciliation](./handoffs/114-ui-contract-reconciliation/README.md) |
 | 115 | [Creating a user without choosing their password](./proposed/115-user-creation-without-a-password.md) | [115-user-creation-without-a-password](./handoffs/115-user-creation-without-a-password/README.md) |
 | 116 | [Gate contracts: one source, one gate each](./proposed/116-gate-contracts.md) | [116-gate-contracts](./handoffs/116-gate-contracts/README.md) |
+| 117 | [Owner decisions must be verifiable](./proposed/117-verifiable-owner-decisions.md) | [117-verifiable-owner-decisions](./handoffs/117-verifiable-owner-decisions/README.md) |
 
 ### Implemented — Mockup Integration epic (Phase 0 → Phase 8)
 

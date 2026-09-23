@@ -23,6 +23,38 @@ Until RFC 094 is implemented, treat the rows below as the coverage this project
 | **A — atomic** | State change and audit row commit in one SQLite transaction, or neither does. A crash between them is impossible by construction (`audit::append_within_tx`). |
 | **B — best-effort** | Audit append is attempted; a failure is logged loudly but does not suppress the primary security response (revocation, denial). |
 
+### Class corrections — 2026-09-24
+
+**Twelve rows said `A` and were wrong.** RFC 116's independent design review ran
+the check by hand against `crates/sui-id-store/src/commands.rs`: a row may claim
+Class A only if a sealed `EventDescriptor { class: AuditClass::Atomic }` carries
+its name. Twelve did not, and the code that writes each of them is
+`let _ = audit::append(…)` **after** the state change, outside any transaction —
+Class B in fact:
+
+`client.create`, `client.update`, `client.set_allowed_scopes`,
+`client.set_post_logout_redirect_uris`, `client.disable`, `client.enable`,
+`client.delete`, `client.rotate_secret`, `signing_key.delete`,
+`admin.master_key.rotated`, `auth.federation.takeover_blocked`,
+`auth.smtp_config.changed`.
+
+Their cells now read **`B *(A required)*`**: Class B is what the code does
+today, Class A is what this document requires, and **[RFC 094](../rfcs/accepted/094-transactional-audit-registry.md)
+M2b converts them** — its scope is settings, pending settings, federation
+configuration and client metadata. This is the same treatment the auth-flow
+section already gives its own unconverted rows; these twelve simply never
+received it. Ruled by `@nabbisen`, 2026-09-24.
+
+**One actor cell was also wrong.** `auth.refresh.theft_detected` said `user id`;
+its descriptor is `ActorRequirement::None` and its command runs under
+`for_system_actor(None)`. Corrected to `—`, matching `auth.refresh.rotated`.
+That also falsifies the sentence in the auth-flow section claiming every row
+there had been checked against its descriptor on 2026-09-22; one had not.
+
+**Nothing about the code changed on this date.** These rows have described the
+code inaccurately since they were written; what changed is that they were
+checked.
+
 ## Coverage matrix
 
 *RFC 102 B4 (stage 7, 2026-09-17): the five step-up-gated sealed commands —
@@ -67,27 +99,27 @@ it when RFC 094 converts it.*
 
 | Event name | Operation | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
-| `client.create` | Create OIDC client | admin user id | new client id | — | A |
-| `client.update` | Update client basic info | admin user id | client id | — | A |
-| `client.set_allowed_scopes` | Set client allowed scopes | admin user id | client id | — | A |
-| `client.set_post_logout_redirect_uris` | Set post-logout URIs | admin user id | client id | — | A |
-| `client.disable` | Disable client | admin user id | client id | — | A |
-| `client.enable` | Re-enable client | admin user id | client id | — | A |
-| `client.delete` | Soft-delete client | admin user id | client id | reason (optional) | A |
-| `client.rotate_secret` | Rotate client secret | admin user id | client id | — | A |
+| `client.create` | Create OIDC client | admin user id | new client id | — | B *(A required)* |
+| `client.update` | Update client basic info | admin user id | client id | — | B *(A required)* |
+| `client.set_allowed_scopes` | Set client allowed scopes | admin user id | client id | — | B *(A required)* |
+| `client.set_post_logout_redirect_uris` | Set post-logout URIs | admin user id | client id | — | B *(A required)* |
+| `client.disable` | Disable client | admin user id | client id | — | B *(A required)* |
+| `client.enable` | Re-enable client | admin user id | client id | — | B *(A required)* |
+| `client.delete` | Soft-delete client | admin user id | client id | reason (optional) | B *(A required)* |
+| `client.rotate_secret` | Rotate client secret | admin user id | client id | — | B *(A required)* |
 
 ### Signing keys (`signing_key.*`)
 
 | Event name | Operation | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
 | `signing_key.rotate` | Issue new signing key (command `K01`, the administrator's web rotation; converted RFC 102 stage 7) | admin user id | new key id | `algorithm`, `reason` (optional), `step_up` (required) | A |
-| `signing_key.delete` | Delete signing key | admin user id | key id | — | A |
+| `signing_key.delete` | Delete signing key | admin user id | key id | — | B *(A required)* |
 
 ### Administrative (`admin.*`)
 
 | Event name | Operation | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
-| `admin.master_key.rotated` | Master key rotation | CLI principal | — | `keys_resealed=N` | A |
+| `admin.master_key.rotated` | Master key rotation | CLI principal | — | `keys_resealed=N` | B *(A required)* |
 | `admin.user.unlock` | Clear account lockout (CLI operator) | — *(see note)* | target user id | — | A |
 
 > **`admin.user.unlock` has no user actor, and that is correct.** Decided
@@ -134,7 +166,7 @@ then because `setup.` was not in the hand-written list.
 | `auth.federation.signin.success` | Federated sign-in completed for a user with no second factor (command `L04`, with the in-transaction re-read, `last_login_at`, the session and cap eviction) | user id | user id | `provider=… sub=… evicted=…` (`sub` truncated to 255 bytes) | **A** |
 | `auth.federation.signin.upstream_failure` | Upstream IdP returned an error | — | — | `provider=… error=…` | B |
 | `auth.federation.link.created` | Federation link created (first sign-in or explicit link) | user id | user id | `provider=… sub=…` | B |
-| `auth.federation.takeover_blocked` | Email collision rejected as potential takeover | — | — | `provider=… email=…` | A |
+| `auth.federation.takeover_blocked` | Email collision rejected as potential takeover | — | — | `provider=… email=…` | B *(A required)* |
 
 ### Dynamic client registration (`client.dynamic_register`, RFC 008)
 
@@ -202,7 +234,7 @@ are Class A, committed through RFC 094's runner with the mutation they record.
 
 | Event name | Operation | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
-| `auth.smtp_config.changed` | SMTP configuration change | admin user id | — | changed fields (non-secret) | A |
+| `auth.smtp_config.changed` | SMTP configuration change | admin user id | — | changed fields (non-secret) | B *(A required)* |
 
 ### Authentication flow (`auth.*`)
 
@@ -277,7 +309,7 @@ Each row below was checked against its command's descriptor on this date.
 | `auth.password.reset_throttled` | Reset request throttled | — | B |
 | `auth.password.reset_completed` | Password reset completed | — | **A** |
 | `auth.refresh.rotated` | Refresh token rotated (the normal, routine case) | — | **A** |
-| `auth.refresh.theft_detected` | Replay of a rotated refresh token (family revoked) | user id | **A** |
+| `auth.refresh.theft_detected` | Replay of a rotated refresh token (family revoked) | — | **A** |
 
 ### Token introspection and revocation (`token.*`, RFC 7662 / RFC 7009)
 
