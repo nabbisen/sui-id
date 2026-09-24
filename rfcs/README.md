@@ -76,6 +76,7 @@ slot is `104`). One **parallel namespace** also exists:
 | 115 | [Creating a user without choosing their password](./accepted/115-user-creation-without-a-password.md) | cycle A | mid-capability model |
 | 116 | [Gate contracts: one source, one gate each](./accepted/116-gate-contracts.md) | cycle B | mid-capability model |
 | 117 | [Owner decisions must be verifiable](./accepted/117-verifiable-owner-decisions.md) | stages 0/0b landed; 1–3 need the key | mid-capability model |
+| 118 | [A credential change clears the lockout, and the user is told](./accepted/118-lockout-clears-on-credential-change.md) | cycle B, head | mid-capability model |
 | 105 | [Audit notes: escape attribute values](./accepted/105-audit-note-escaping.md) | cycle A; **no independent design review — see its header** | mid-capability model |
 
 Acceptance makes an RFC implementation-eligible, but coding remains prohibited
@@ -121,7 +122,6 @@ Proposed: the move approved nothing.
 | 112 | [Refuse to run against a database this build does not understand](./proposed/112-schema-version-fail-closed.md) | [112-schema-version-fail-closed](./handoffs/112-schema-version-fail-closed/README.md) |
 | 113 | [Test modules live in their own files](./proposed/113-test-file-organization.md) | [113-test-file-organization](./handoffs/113-test-file-organization/README.md) |
 | 114 | [Reconcile `docs/ui-ux-contracts.md` with the code](./proposed/114-ui-contract-reconciliation.md) | [114-ui-contract-reconciliation](./handoffs/114-ui-contract-reconciliation/README.md) |
-| 118 | [A credential change clears the lockout, and the user is told](./proposed/118-lockout-clears-on-credential-change.md) | [118-lockout-clears-on-credential-change](./handoffs/118-lockout-clears-on-credential-change/README.md) |
 
 ### Implemented — Mockup Integration epic (Phase 0 → Phase 8)
 

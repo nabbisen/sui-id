@@ -1,6 +1,6 @@
 # RFC 118 — independent design review request
 
-**RFC.** [RFC 118 — A credential change clears the lockout, and the user is told](../../proposed/118-lockout-clears-on-credential-change.md). **Proposed.**
+**RFC.** [RFC 118 — A credential change clears the lockout, and the user is told](../../accepted/118-lockout-clears-on-credential-change.md). **Proposed.**
 **Reviewer.** Mid-capability model, implementation role. It authored neither the
 RFC nor its handoff.
 **Route.** The routing recorded in `ROADMAP.md` §S1 (2026-08-26); §S1b puts that

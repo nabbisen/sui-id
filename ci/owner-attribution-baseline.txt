@@ -135,6 +135,8 @@ rfcs/accepted/117-verifiable-owner-decisions.md	95f29d68f0ba53963117920020d4e0d3
 rfcs/accepted/117-verifiable-owner-decisions.md	9e25f3cafa1812f69ab50db1b31903b5fa3948ede9bb9eddde18662138ba0514	1	# RFC 117 — Owner decisions must be verifiable
 rfcs/accepted/117-verifiable-owner-decisions.md	af8c8fc625da0ea05edd2dab1bbe7db2a4ab9bbac20c89658d54e3dafa4b165d	1	A decision in the ledger is provably the owner's: it is signed by a key held
 rfcs/accepted/117-verifiable-owner-decisions.md	e86a430835d4c9aafe81dcd352f15e04f785d9efe2a621af8fc3adec1d88beae	1	Status. Accepted Accepted on. 2026-09-24 Approved by. @nabbisen , 2026-09-24: "RFC-117 is accepted." The move to accepted/ lagged the accept
+rfcs/accepted/118-lockout-clears-on-credential-change.md	599c9c4f0fe1b07b526512470c5ff6c2e4e0ed46a550a28951bcbb721dd30145	1	Status. Accepted Accepted on. 2026-09-25 Approved by. @nabbisen , 2026-09-25: "RFC 118 is accepted." Accepted on the amended text: its indep
+rfcs/accepted/118-lockout-clears-on-credential-change.md	874edb9b41d7b7c8d1211a597c52d7ff33065d66fdd53f677f49116f0f63ba9d	1	Accountable owner and approver. @nabbisen .
 rfcs/archive/018-rfc-lifecycle-policy.md	32f6fe8bd5505c3c995ae0cef7fc4f1cf84dbcebfdc40f970120e51030e7fb29	1	RFC 000 is a copy of a source shared across projects and the owner directed it remain byte-identical to that source; editing it here would r
 rfcs/archive/018-rfc-lifecycle-policy.md	5d5232fd83c5c629550cd9e38b72e9726f4677bde9a14f4f6cec15eac303cf51	1	Record the acceptance date, approver, security classification, independent design review where required, and implementation owner; update St
 rfcs/archive/018-rfc-lifecycle-policy.md	6b1ef7ca5c9559cacd4f1d59be08f1ba412a7ac0f29ddbc526c9d1de4b6139b3	1	Its cause is recorded in ROADMAP.md §S1: the previous rule defined independence by vendor, was written by the architect role and attributed 
@@ -448,5 +450,4 @@ rfcs/proposed/113-test-file-organization.md	22ab7d44654ddcfa387ee5c6220b1c8c15c0
 rfcs/proposed/113-test-file-organization.md	874edb9b41d7b7c8d1211a597c52d7ff33065d66fdd53f677f49116f0f63ba9d	1	Accountable owner and approver. @nabbisen .
 rfcs/proposed/114-ui-contract-reconciliation.md	72000bc2d21e97351f621a8f448d4cc9e7660015c31ffe847df7e560716129f0	1	This work was carried under roadmap/ui-contract-reconciliation/ until 2026-09-22, when @nabbisen ruled that implementation handoffs live und
 rfcs/proposed/114-ui-contract-reconciliation.md	874edb9b41d7b7c8d1211a597c52d7ff33065d66fdd53f677f49116f0f63ba9d	1	Accountable owner and approver. @nabbisen .
-rfcs/proposed/118-lockout-clears-on-credential-change.md	874edb9b41d7b7c8d1211a597c52d7ff33065d66fdd53f677f49116f0f63ba9d	1	Accountable owner and approver. @nabbisen .
 scripts/tests/test_owner_attributions.py	f6bbaf57737fffc7e4f6cd6c1d3631ab46a6042d0b2b20a71787c16b621e45a7	1	@nabbisen ruled on <date has no "owner ruling" in it: the pattern the RFC's first draft used does not match it.

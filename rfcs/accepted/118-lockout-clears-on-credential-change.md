@@ -1,6 +1,12 @@
 # RFC 118 — A credential change clears the lockout, and the user is told
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-09-25
+**Approved by.** `@nabbisen`, 2026-09-25: "RFC 118 is accepted." Accepted on the
+**amended** text: its independent design review returned "accept with changes,
+not as written", and the change that matters is D1's second-factor carve-out —
+without it this RFC would have opened a second-factor bypass while closing an
+availability defect.
 **Security review.** Required
 **Independent design review.** [Design review 2026-09-24](../handoffs/118-lockout-clears-on-credential-change/design-review-2026-09-24.md) by the implementation role, which authored neither this RFC nor its handoff. It **reproduced the defect end to end on both paths** in a throwaway worktree, and returned one blocker, two high and four medium findings. **Its verdict was accept with changes, not as written**, and it was right on every one: all are resolved below.
 **Design prerequisites.** None. [RFC 115](../accepted/115-user-creation-without-a-password.md) is Implemented; this closes the residual its threat-model entry states.

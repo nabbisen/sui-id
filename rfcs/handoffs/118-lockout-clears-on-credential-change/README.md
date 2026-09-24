@@ -1,6 +1,6 @@
 # RFC 118 implementation handoff
 
-**Governing RFC.** [RFC 118](../../proposed/118-lockout-clears-on-credential-change.md), **Proposed**.
+**Governing RFC.** [RFC 118](../../accepted/118-lockout-clears-on-credential-change.md), **Proposed**.
 Nothing here is authorized until it is Accepted.
 **Implementer.** Mid-capability model.
 **Baseline.** The commit that adds this file, or later.
@@ -20,37 +20,93 @@ Re-run before starting; a disagreement is a blocker.
 
 ## One stage
 
-Small enough that splitting it would cost more in review than it saves.
+**Rewritten 2026-09-25, after the design review.** The version of this section
+written before that review specified a design the accepted RFC now rejects:
+"clear `failed_login_count` and `locked_until`" with no carve-out, and a message
+that could never have fired. **[RFC 118](../../accepted/118-lockout-clears-on-credential-change.md)
+is the authority; build it, not this page's memory of it.** Read D1 and D4 there
+before starting, and the [design review](design-review-2026-09-24.md) for why.
 
-**D1.** U09 and U10 clear `failed_login_count` and `locked_until` inside the
-transaction that writes the credential. **Do not add a second path** — if the
-two commands end up with their own copies of the clearing logic, they will
-drift, which is the defect this RFC exists to remove one level up.
+### D1 — clear the password lockout, and only that
 
-**D3.** The completion flow tells a user whose account is locked that it is,
-and when it lifts. i18n in en, ja and zh-Hans, as every user-facing string is.
+In the transaction that writes the credential, U09 and U10:
 
-**D4.** The sign-in form is untouched.
+- clear `failed_login_count` — **always**;
+- clear `locked_until` — **only when `mfa_failure_count < MFA_FAILURE_LOCKOUT_THRESHOLD`**;
+- **never** touch `mfa_failure_count`.
+
+> **The carve-out is the point.** `locked_until` is a **shared column**: L07
+> writes the same field from `mfa_failure_count` (`commands.rs:2445`) that U22
+> writes from `failed_login_count` (`commands.rs:341`), and nothing records
+> which lockout set it. Without the condition, someone holding the user's
+> mailbox could reset the password, clear a lock the **second factor** imposed,
+> and then guess second-factor codes. **A test must fail if the condition is
+> removed.**
+
+### D3 — one helper, not two call sites
+
+`users::clear_password_lockout_within_tx`, beside
+`record_password_login_within_tx`, called from both closures. Extend RFC 115's
+`r115_s2_credentials_writers_are_the_allowlist` so the production writers of
+`credentials` outside setup and `--dev` are exactly the ones that call it, and a
+mutation removing a call is caught. **Do not** put the clear inside
+`credentials::upsert_within_tx`: setup and `--dev` create new rows with nothing
+to clear.
+
+### D4 — the completion response says what was *cleared*
+
+Not "you are locked" — that state no longer exists by the time the flow can
+speak. U10 returns a **pre-clear snapshot taken inside its own transaction**;
+the handler renders it in the **response to the completion `POST`**, not a
+redirect, with `Cache-Control: no-store` and `Referrer-Policy: no-referrer`.
+Today's redirect to `/admin/login?reset=ok` is read by nothing, so this is the
+first confirmation that flow has ever given. i18n in en, ja and zh-Hans.
+
+Say that sign-in had been refused after repeated failures and is now cleared;
+that a further refusal soon may mean someone is trying passwords; and, when a
+second-factor lock is **retained**, the **time it lifts** — as a time, never a
+count. Never the number of attempts, never the source.
+
+### D5 — the operator keeps a signal
+
+An optional `lockout_cleared=<count>` attribute on U09 and U10, present only
+when a counter was non-zero or a lock was live. Two descriptors, so the audit
+matrix and `docs/src/reference/audit-events.md` change with it, and G13's count
+is unaffected (no new event).
+
+### D6 — the sign-in form is untouched
 
 ## Evidence
 
-- **The defect, before the fix:** an account is locked by failed attempts, its
-  password is then reset through a valid link, and sign-in with the new
-  password is still refused. Write this test first and show it failing.
-- U09 clears the lock; U10 clears the lock; each with a mutation that removes
-  the clearing and is caught.
-- **The lock cannot outlive the credential** — the clearing is in the same
-  transaction, shown by an injected failure before the append: the credential
-  and the cleared lock roll back together. The store's fault injector does
-  this; RFC 102's U09/U10 tests are the pattern.
-- **D4's boundary, which is the part to get right:** the sign-in path's
-  response for a locked account is byte-identical to a wrong password, and
-  identical to what it was before this change. The new message is reachable
-  only through a completion that presented a valid token. **State how you
-  tested that it is not reachable otherwise**, rather than asserting it.
-- `docs/threat-model.md`: RFC 115's second residual is the one this closes.
-  Update it in the same package — do not leave the threat model claiming a
-  residual that no longer exists.
+- **The defect, before the fix:** lock an account, reset its password through a
+  valid link, and show sign-in with the new password still refused. **Write this
+  first and show it failing.** The design review reproduced it on both paths;
+  note that the per-IP limiter (10/min) stopped them reaching a ten-failure
+  lock, so use a smaller count and rewrite `locked_until` to simulate elapsed
+  time, as they did.
+- U09 and U10 each clear; a mutation removing either call is caught.
+- **The carve-out:** an account locked by the *second-factor* lockout keeps its
+  lock through a reset, and `mfa_failure_count` is untouched. **A mutation that
+  drops the condition must be caught.** This is the single most important test
+  in the package.
+- **Same transaction:** an injected failure before the append rolls back the
+  credential **and** leaves the counter and lock exactly as they were. The
+  pattern is `u10_injected_failure_before_append_rolls_back_everything`.
+- **D4's boundary**, and state how it was tested rather than asserting it:
+  every non-success completion input (no token, unknown, replayed, expired,
+  revoked, too-short password, breached in `block` mode) returns a body and
+  status **byte-identical to the baseline commit's**; `GET /admin/login` with
+  any query is byte-identical to without; `POST /admin/login` for a locked
+  account matches a wrong password in status, body and metric; and the message
+  appears in exactly one response class, once — a replay shows the invalid-link
+  page.
+- `docs/threat-model.md`: **RFC 115's second residual is narrowed, not
+  removed.** The re-lock residual stays and is restated — an attacker can still
+  re-lock, but must now do it continuously rather than once. Do not delete the
+  bullet.
+- Correct the two stale references the review found: `clear_lockout` is dead
+  code (the resets are L01, L02, L03, U08), and `runtime/config.rs`'s comment
+  claiming `max_lockout` stamps a `Retry-After` describes nothing that exists.
 
 ## What to return
 

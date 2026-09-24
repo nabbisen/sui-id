@@ -538,7 +538,7 @@ date. The release treatment of each item follows the 2026-08-26 surface test.
 | Cycle | Target | Window | Contents |
 |---|---|---|---|
 | **A — close what is open** | v0.78.0 | 2026-09-23 → 10-10 | **Complete 2026-09-24**, ahead of the window. RFC 115 Implemented; RFC 103 closed; RFC 110 Implemented; RFC 105 Implemented; RFC 117 stages 0/0b landed |
-| **B — make the contracts true** | v0.79.0 | **2026-10-13 → 10-24** | **RFC 118 first**, then RFC 116 stages 1–2, then RFC 112, then RFC 106, then RFC 116 stages 3–4 |
+| **B — make the contracts true** | v0.79.0 | **2026-10-13 → 10-24** | RFC 116 stages 1/1b **landed 2026-09-25**; **RFC 118 Accepted 2026-09-25 and dispatched**; then RFC 116 stage 2, RFC 112, RFC 106, then RFC 116 stages 3–4 |
 | **C — the main line resumes** | v0.80.0 | from **2026-10-27** | RFC 094 M2a. Window open-ended until M2a's handoff is re-read against the eight commands RFCs 102 and 103 converted after it was written; the architect proposes a dated window with the cycle-B review |
 
 **Windows moved 2026-09-24, authorized the same day.** RFC 115's independent
@@ -606,7 +606,7 @@ historical record, not evidence.
 | [115](rfcs/accepted/115-user-creation-without-a-password.md) | Creating a user without choosing their password |
 | [116](rfcs/accepted/116-gate-contracts.md) | Gate contracts: one source, one gate each |
 | [117](rfcs/accepted/117-verifiable-owner-decisions.md) | Owner decisions must be verifiable |
-| [118](rfcs/proposed/118-lockout-clears-on-credential-change.md) | A credential change clears the lockout, and the user is told |
+| [118](rfcs/accepted/118-lockout-clears-on-credential-change.md) | A credential change clears the lockout, and the user is told |
 
 ### Completed and withdrawn before the move
 

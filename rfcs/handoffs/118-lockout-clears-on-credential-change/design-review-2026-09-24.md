@@ -1,7 +1,7 @@
 # RFC 118 — independent design review
 
 **Date:** 2026-09-24
-**RFC:** [RFC 118 — A credential change clears the lockout, and the user is told](../../proposed/118-lockout-clears-on-credential-change.md), Proposed
+**RFC:** [RFC 118 — A credential change clears the lockout, and the user is told](../../accepted/118-lockout-clears-on-credential-change.md), Proposed
 **Request:** [`design-review-request.md`](design-review-request.md)
 **Reviewer:** Mid-capability model, implementation role. Authored neither the RFC nor its handoff.
 **Baseline read:** `c0e0ac5` (contains `0.78.0`). **Read-only: no code, no RFC text and no `ci/` file changed.** The one thing I ran that touches code was a **scratch probe in a throwaway `git worktree`** (`item 6`), never committed and removed; `git status` on the repository is empty.
