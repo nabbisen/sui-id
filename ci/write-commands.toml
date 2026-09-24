@@ -1141,7 +1141,7 @@ sealed = false
 owner = "Create SQLite backup snapshot"
 rationale = "operator-invoked backup evidence owns outcome; no domain mutation in the live database"
 mutation_surface = "`backup::ops` `VACUUM INTO` destination"
-files = ["crates/sui-id-store/src/repos/backup.rs"]
+files = ["crates/sui-id-store/src/backup/ops.rs"]
 test_id = "`o_o04_backup_snapshot`"
 
 [[command]]
@@ -1163,5 +1163,5 @@ sealed = false
 owner = "Development seed/reset"
 rationale = "dev-only, unreachable in production mode; dev warning/summary"
 mutation_surface = "`runtime::dev_mode` writes"
-files = ["crates/sui-id-store/src/repos/runtime.rs"]
+files = ["crates/sui-id/src/runtime/dev_mode.rs"]
 test_id = "`x_x02_dev_seed`"

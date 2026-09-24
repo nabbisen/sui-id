@@ -496,6 +496,25 @@ jobs:
       - name: G16
         run: bash scripts/ci-gate.sh G16
 
+  G17:
+    # RFC 116 stage 1's lane, registered through RFC 094's multi-source lane
+    # registry (R10): ci/write-commands.toml against the sealed commands in
+    # crates/. Every sealed command has a row, every row that says it is sealed
+    # names a command, every `files` path exists, and `event` and `descriptor`
+    # are what the code says. Declared with stage 1 and held in
+    # [gate_matrix_exceptions] until its two dead `files` paths (O04, X02) were
+    # corrected in stage 1b, because a lane that is red on main is not a gate.
+    name: "G17 — write-command inventory (Python 3.14)"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Install Python 3.14
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14"
+      - name: G17
+        run: bash scripts/ci-gate.sh G17
+
   gate-inputs:
     # RFC 093 A3.4: ci/gate-inputs.toml enforcement. Verifies the manifest
     # scripts/ci-gate.sh reads is itself correct — action pinning, the
@@ -674,10 +693,9 @@ jobs:
           echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           exit "$status"
       - name: G17 self-tests (write-command inventory checker)
-        # RFC 116 stage 1. The lane itself is held in [gate_matrix_exceptions]
-        # until the two inventory rows it disproves (O04, X02) are ruled; its
-        # self-tests run from the day the script exists, so the script cannot
-        # rot unnoticed while it waits for registration.
+        # RFC 116 stage 1. The self-tests ran from the day the script existed,
+        # before the lane (job G17) was registered; they stay so that the
+        # script's own negative cases are checked apart from the tree's.
         run: |
           set +e
           echo "command=python3.14 -m unittest scripts.tests.test_write_commands"
