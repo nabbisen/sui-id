@@ -55,6 +55,38 @@ document. A new attribution with no date fails. A baselined one passes.
 
 **This stage can be built today and is the one to start with.**
 
+## Stage 0b — print what the baseline edit changed — dispatched 2026-09-24
+
+Stage 0 landed with a gap its own implementer named, and I reproduced: a commit
+that adds an attribution **and** runs `--update-baseline` passes G16 with "0
+new". The only trace is the diff of `ci/owner-attribution-baseline.txt`, and two
+of the three past failures were single commits nobody read.
+
+It compounds with the other finding: every RFC acceptance trips the gate on its
+own `Approved by` header until someone baselines it, so **baseline edits will be
+routine — and a routine laundering path is not a control.**
+
+**Required.** The G16 job fetches enough history to diff against the base, and
+prints `git diff <base> -- ci/owner-attribution-baseline.txt` into the step
+summary, under its own heading, **above** the census. What clears a hit is then
+printed beside the hit it clears.
+
+**Not required, and deliberately not chosen:** failing when the baseline changes
+without a matching pin elsewhere. The pin is agent-writable too, so it buys
+ceremony rather than evidence.
+
+**Evidence.**
+- A branch that adds an attribution and baselines it in one commit shows the
+  added baseline line in the summary.
+- A branch that touches neither shows an empty section, not a broken one.
+- **Say what happens when there is no base** — a first push, a tag, a detached
+  build — and make it degrade to a stated message rather than an obscure
+  failure. That case is the one most likely to be met first and least likely to
+  be tested.
+
+This does not need the key, and it gets stronger once the credential split the
+design review raised is decided.
+
 ## Stage 1 — the ledger and its gate
 
 **The ledger.** One tracked file. Each entry carries: an id (`D-0001`, stable
