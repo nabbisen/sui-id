@@ -629,6 +629,57 @@ fn u37_events_never_carry_the_token_or_its_hash() {
 }
 
 #[test]
+fn every_registered_event_escapes_every_one_of_its_attributes() {
+    // RFC 105: the encoding is applied by the one builder, to **every** event,
+    // not only the ones known to carry free text. Give each attribute each
+    // registered event declares a value that imitates the next pair, render the
+    // note the runner renders, and check no value crossed a boundary.
+    let hostile = "x step_up=fresh:totp:1 via=cli\nnext=1";
+    let mut checked = 0;
+    for descriptor in all_descriptors() {
+        let mut builder = AuditAttributes::builder();
+        for spec in descriptor.attributes {
+            builder = builder.attribute(spec.name, hostile);
+        }
+        let attrs = builder.build().expect("attributes");
+        let Some(note) = crate::registry::render_note(&attrs) else {
+            assert!(descriptor.attributes.is_empty(), "{}", descriptor.name);
+            continue;
+        };
+        let keys: Vec<String> = crate::registry::parse_note(&note)
+            .into_iter()
+            .map(|(k, _)| k)
+            .collect();
+        let declared: Vec<String> = descriptor
+            .attributes
+            .iter()
+            .map(|a| a.name.to_owned())
+            .collect();
+        assert_eq!(keys, declared, "{}: {note:?}", descriptor.name);
+        assert!(!note.contains('\n'), "{}: one line", descriptor.name);
+        assert_eq!(
+            note.matches('=').count(),
+            declared.len(),
+            "{}: only the separators are `=`: {note:?}",
+            descriptor.name
+        );
+        for name in &declared {
+            assert_eq!(
+                crate::registry::note_field(&note, name).as_deref(),
+                Some(hostile),
+                "{}.{name} reads back as written",
+                descriptor.name
+            );
+        }
+        checked += 1;
+    }
+    assert!(
+        checked >= 10,
+        "the registered events with attributes were checked ({checked})"
+    );
+}
+
+#[test]
 fn u10_records_origin() {
     let event = U10Event::Completed {
         user_id: UserId::new(),

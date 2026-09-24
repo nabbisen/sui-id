@@ -134,7 +134,7 @@ async fn u02_disable_flips_flag_revokes_session_and_records_reason() {
     assert_eq!(tail.action, "user.disable");
     assert_eq!(
         tail.note.as_deref(),
-        Some("reason=policy violation step_up=not_required:no_second_factor")
+        Some("reason=policy%20violation step_up=not_required:no_second_factor")
     );
 }
 
@@ -253,7 +253,7 @@ async fn u04_delete_soft_deletes_revokes_session_and_records_reason() {
     assert_eq!(tail.action, "user.delete");
     assert_eq!(
         tail.note.as_deref(),
-        Some("reason=gdpr request step_up=not_required:no_second_factor")
+        Some("reason=gdpr%20request step_up=not_required:no_second_factor")
     );
 }
 

@@ -136,7 +136,10 @@ async fn r103_s3_a_web_issued_link_completes_and_records_origin_web() {
     assert_eq!(link.invalidated, 0);
 
     let issued = note_of(&a.state, "user.recovery_link.issued").await;
-    assert!(issued.contains(&format!("reason={REASON}")), "{issued}");
+    assert!(
+        issued.contains("reason=caller%20verified%20by%20call-back,%20ticket%204711"),
+        "{issued}"
+    );
     assert!(issued.contains(" via=web "), "{issued}");
     assert!(issued.contains(" step_up=fresh:totp:"), "{issued}");
     assert_eq!(events(&a.state, "user.recovery_link.issued").await, 1);

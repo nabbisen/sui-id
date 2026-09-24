@@ -103,6 +103,32 @@ verifies the chain tail on every load and shows a status banner:
 - **✗ Audit chain integrity check failed** — a row hash does not match its
   recomputed value. Investigate immediately.
 
+## The note format
+
+An event's `note` is its attributes as `key=value` pairs, joined by single ASCII
+spaces, in the order the event declares them. **Values are percent-encoded**, so
+a value can never introduce a pair (RFC 105):
+
+- these are written as `%XX`, one per UTF-8 byte, uppercase hex: `%` (`%25`), `=`
+  (`%3D`), the space (`%20`), and every other whitespace or control character (a
+  newline is `%0A`, a no-break space `%C2%A0`);
+- every other character, including all non-ASCII text, `:`, `,` and `-`, is
+  written as it is;
+- keys are fixed by the event and are never encoded.
+
+The encoding is reversible: decode each value by replacing every `%XX` with its
+byte. An ordinary value, such as `via=web` or `origin=cli`, is unchanged, and an
+event with no attributes has no note. A note has at most one of each key.
+
+The Admin panel's audit page shows no note. The **CSV export** and the operator's
+own SQL show the stored, encoded form exactly; nothing decodes it for display, so
+what you read is what was recorded. A handful of best-effort events (the ones the
+coverage matrix marks as not atomic) still write hand-built plain text.
+
+**Rows written before RFC 105 are not rewritten.** They carry unencoded values,
+so a free-text value such as a recovery-link reason could contain text that looked
+like a field. In such a row the real field is the *last* occurrence of its key.
+
 ## Federation events (RFC 004)
 
 | Event name | Label | Description |

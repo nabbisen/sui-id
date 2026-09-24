@@ -869,10 +869,25 @@ WHERE note LIKE '%step_up=not_required%'
 ORDER BY seq DESC;
 ```
 
-A reason is free text and the note does not escape it, so a
-`LIKE '%step_up=…%'` query can also match a reason that imitates a field (a false
-positive, never a false negative): the real fields are written after the reason,
-so the last occurrence in a note is the recorded one.
+A reason is free text, and it is **encoded** when the note is written (RFC 105):
+every space, `=`, `%` and control character in a value is written as `%XX`, so a
+reason such as `x step_up=fresh:totp:1` is stored as `x%20step_up%3Dfresh:totp:1`
+and can neither imitate a field nor match a `LIKE '%step_up=…%'` query. The
+[note format](../reference/audit-events.md#the-note-format) is described in the
+event reference. To search for a reason, search for its encoded form, and use
+`instr` rather than `LIKE`, because `%` is a wildcard in a `LIKE` pattern:
+
+```sql
+SELECT at, actor, action, target, note
+FROM audit_log
+WHERE instr(note, 'reason=lost%20authenticator') > 0;
+```
+
+**Rows written before this change carry the old form**: values were not encoded,
+so a reason could imitate a field. Those rows are not rewritten. In one of them
+the real fields are the *last* occurrence of each key, because every command wrote
+its free text first, so read a historical note from the end, and treat a
+`LIKE '%step_up=…%'` match on an old row as possibly a false positive.
 
 The other dangerous actions (client disable, delete and secret rotation,
 signing-key deletion, and the self-service MFA, passkey and session actions)

@@ -168,17 +168,13 @@ pub enum RecoveryEventSummary {
     },
 }
 
-/// The value of the last `key=…` field in a `key=value`-joined audit note,
-/// up to the next space. Notes are not escaped (RFC 102 stage 3 finding,
-/// authorized then, not yet built): a free-text field earlier in the note
-/// (U37's `reason`) could contain something that looks like `key=`, so this
-/// reads from the **end**, matching the fields U37 and U10 always write
-/// last and the convention documented in `operators.md`.
-fn last_note_field<'a>(note: &'a str, key: &str) -> Option<&'a str> {
-    let prefix = format!("{key}=");
-    note.split(' ')
-        .rev()
-        .find_map(|tok| tok.strip_prefix(prefix.as_str()))
+/// The value of `key` in an audit note, decoded, taking the **last**
+/// occurrence. Since RFC 105 a value cannot contain a pair, so a key occurs
+/// once; rows written before it carry unescaped free text (U37's `reason`)
+/// ahead of the fixed fields, so the last occurrence is still the recorded one.
+/// One implementation, next to the encoder: [`sui_id_store::registry::note_field`].
+fn last_note_field(note: &str, key: &str) -> Option<String> {
+    sui_id_store::registry::note_field(note, key)
 }
 
 /// Interpret one `audit_log` row as a [`RecoveryEventSummary`]. `None` for
@@ -195,7 +191,7 @@ pub fn summarize_recent_event(
             at: row.at,
         }),
         "auth.password.reset_completed" => Some(RecoveryEventSummary::Completed {
-            origin: sui_id_store::models::ResetTokenOrigin::parse(last_note_field(
+            origin: sui_id_store::models::ResetTokenOrigin::parse(&last_note_field(
                 note, "origin",
             )?)?,
             at: row.at,

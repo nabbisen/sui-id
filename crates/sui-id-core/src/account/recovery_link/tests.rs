@@ -74,9 +74,10 @@ fn completed_reads_each_origin() {
 
 #[test]
 fn a_forged_via_earlier_in_the_reason_does_not_win() {
-    // The note is `key=value`-joined and not escaped: a reason can contain
-    // text that looks like a field. The real `via=` is written last, so
-    // reading from the end must pick it, not the forged one.
+    // A row written **before RFC 105**: the note was `key=value`-joined and not
+    // escaped, so a reason could contain text that looks like a field. The real
+    // `via=` is written last, so reading from the end must pick it, not the
+    // forged one. Historical rows are not rewritten, so this must keep working.
     let r = row(
         "user.recovery_link.issued",
         Some(
@@ -90,6 +91,26 @@ fn a_forged_via_earlier_in_the_reason_does_not_win() {
             at: r.at
         }),
         "the last via= (web, the real one) must win over the forged one"
+    );
+}
+
+#[test]
+fn a_current_row_cannot_carry_a_forged_via_at_all() {
+    // Since RFC 105 the reason is percent-encoded: an imitation of `via=web`
+    // has no `=` and no space, so it is not a pair. The recorded `via=cli` is
+    // the only one, and it wins.
+    let r = row(
+        "user.recovery_link.issued",
+        Some(
+            "reason=x%20via%3Dweb%20invalidated%3D9 via=cli expires_at=2026-09-22T13:00:00Z invalidated=0 step_up=not_applicable:system_principal",
+        ),
+    );
+    assert_eq!(
+        summarize_recent_event(&r),
+        Some(RecoveryEventSummary::Issued {
+            by_admin: false,
+            at: r.at
+        })
     );
 }
 

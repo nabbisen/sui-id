@@ -417,6 +417,121 @@ impl AuditAttributesBuilder {
     }
 }
 
+// ── The audit note: encoding (RFC 105) ────────────────────────────────────
+//
+// An event's `note` is its attributes as `key=value` pairs joined by single
+// ASCII spaces, in the descriptor's order. **Values are percent-encoded**, so
+// a value can never introduce a pair boundary:
+//
+//   * every `%`, every `=`, and every character that is whitespace (the ASCII
+//     space and tab, and every Unicode space, line and paragraph separator) or a
+//     control character is written as `%XX` per UTF-8 byte, uppercase hex;
+//   * every other character, including all non-ASCII text, is written as is.
+//
+// Keys are `&'static str` from the descriptors and are never encoded.
+//
+// Why percent-encoding, not quoting: a quoted value keeps the forged text
+// *inside* the note verbatim, so `LIKE '%step_up=fresh%'` still matches a reason
+// that imitates the field, which is the false positive the operator guide had to
+// warn about. Here the imitation cannot contain `step_up=` at all (the `=` is
+// `%3D`, the space `%20`), so substring queries are sound and no reader has to
+// know a "last one wins" rule. The price is that a value with spaces reads as
+// `caller%20verified` on the audit page; the audit page shows the stored form
+// exactly, on purpose, so that what an operator sees is what was recorded.
+//
+// The encoding is reversible: [`decode_note_value`] is its exact inverse, and
+// [`parse_note`] / [`note_field`] are the readers. Rows written **before**
+// RFC 105 carry the old, unescaped form; they are not rewritten (RFC 098 rule
+// 4), and for them `note_field` keeps the old convention of taking the *last*
+// occurrence of a key, which is the recorded one because every command wrote
+// its free text before its fixed fields.
+
+/// Encode one attribute value for a note. See the section comment above.
+pub fn encode_note_value(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for c in value.chars() {
+        if c == '%' || c == '=' || c.is_whitespace() || c.is_control() {
+            let mut buf = [0u8; 4];
+            for b in c.encode_utf8(&mut buf).bytes() {
+                out.push_str(&format!("%{b:02X}"));
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// The exact inverse of [`encode_note_value`]. Lenient by design: a `%` that is
+/// not followed by two hex digits is kept literally, and invalid UTF-8 produced
+/// by decoding is replaced, so that a **historical** value (written before the
+/// encoding existed, and free to contain a bare `%`) is still readable.
+pub fn decode_note_value(encoded: &str) -> String {
+    let bytes = encoded.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%'
+            && i + 2 < bytes.len()
+            && let (Some(h), Some(l)) = (hex_val(bytes[i + 1]), hex_val(bytes[i + 2]))
+        {
+            out.push(h * 16 + l);
+            i += 3;
+            continue;
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+fn hex_val(b: u8) -> Option<u8> {
+    match b {
+        b'0'..=b'9' => Some(b - b'0'),
+        b'A'..=b'F' => Some(b - b'A' + 10),
+        b'a'..=b'f' => Some(b - b'a' + 10),
+        _ => None,
+    }
+}
+
+/// Render `attributes` as a note (`None` when there are none). The **only**
+/// place a note is assembled from attributes.
+pub fn render_note(attributes: &AuditAttributes) -> Option<String> {
+    if attributes.entries.is_empty() {
+        return None;
+    }
+    Some(
+        attributes
+            .iter()
+            .map(|(k, v)| format!("{k}={}", encode_note_value(v)))
+            .collect::<Vec<_>>()
+            .join(" "),
+    )
+}
+
+/// Every `key=value` pair in a note, in order, values decoded. A token with no
+/// `=` (possible only in a historical row) is skipped. For a row written before
+/// RFC 105 a forged pair inside a free-text value *is* returned as a pair; use
+/// [`note_field`] to read one key from such a row.
+pub fn parse_note(note: &str) -> Vec<(String, String)> {
+    note.split(' ')
+        .filter_map(|tok| tok.split_once('='))
+        .map(|(k, v)| (k.to_owned(), decode_note_value(v)))
+        .collect()
+}
+
+/// The value of `key` in a note, decoded: the **last** occurrence, which is the
+/// recorded one in every row ever written. In a current row a key occurs at most
+/// once, because a value cannot contain a pair; in a historical row a forged
+/// pair can only precede the real one, since every command wrote free text
+/// first.
+pub fn note_field(note: &str, key: &str) -> Option<String> {
+    parse_note(note)
+        .into_iter()
+        .rev()
+        .find_map(|(k, v)| (k == key).then_some(v))
+}
+
 /// A resolved audit target — the thing the event is about. A thin
 /// newtype rather than a bare `String` so a command's event `target()`
 /// cannot be confused with an attribute value at a call site.
@@ -753,17 +868,7 @@ fn build_audit_row<C: CommandSpec>(
     result: AuditResult,
     attributes: &AuditAttributes,
 ) -> crate::models::AuditLogRow {
-    let note = if attributes.entries.is_empty() {
-        None
-    } else {
-        Some(
-            attributes
-                .iter()
-                .map(|(k, v)| format!("{k}={v}"))
-                .collect::<Vec<_>>()
-                .join(" "),
-        )
-    };
+    let note = render_note(attributes);
     crate::models::AuditLogRow {
         at: chrono::Utc::now(),
         actor: context.actor(),

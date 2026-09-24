@@ -71,7 +71,7 @@ async fn u07_reset_removes_totp_and_passkeys_and_appends_event() {
     assert_eq!(
         tail.note.as_deref(),
         Some(
-            "totp=removed passkeys=2 reason=lost authenticator step_up=not_required:no_second_factor"
+            "totp=removed passkeys=2 reason=lost%20authenticator step_up=not_required:no_second_factor"
         )
     );
 }

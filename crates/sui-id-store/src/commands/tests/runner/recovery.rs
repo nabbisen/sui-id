@@ -201,8 +201,11 @@ async fn u37_web_issues_a_link_and_writes_one_event() {
     assert_eq!(event.actor, Some(admin));
     assert_eq!(event.target.as_deref(), Some(target.to_string().as_str()));
     let note = event.note.expect("note");
+    // The reason is percent-encoded (RFC 105): every space is `%20`.
     assert!(
-        note.starts_with(&format!("reason={REASON} via=web expires_at=")),
+        note.starts_with(
+            "reason=caller%20verified%20by%20call-back,%20ticket%204711 via=web expires_at="
+        ),
         "{note}"
     );
     assert!(
@@ -853,9 +856,9 @@ async fn u10_records_the_origin_of_the_consumed_link() {
 
 #[tokio::test]
 async fn u37_a_reason_that_imitates_fields_cannot_displace_the_recorded_ones() {
-    // The note format does not escape values, so a reason can add fake
-    // fields. The real ones are written after it, which is what makes the
-    // last occurrence of each the true one; this pins that order.
+    // RFC 105: a value cannot introduce a pair. The forged pairs must not
+    // appear as pairs *at all* (before it, they appeared but happened to come
+    // before the real ones, and "the last one wins" was an unwritten rule).
     let db = fresh_db();
     let (admin, session) = seed_admin_with_fresh_step_up(&db).await;
     let target = seed_live_user(&db).await;
@@ -864,23 +867,38 @@ async fn u37_a_reason_that_imitates_fields_cannot_displace_the_recorded_ones() {
         .await
         .expect("issue");
     let note = last_event(&db).await.note.expect("note");
-    let after_reason = note
-        .strip_prefix(&format!("reason={forged} "))
-        .unwrap_or_else(|| panic!("the reason is the first field: {note}"));
-    assert!(after_reason.starts_with("via=web expires_at="), "{note}");
+
+    // The forged text is present only in its encoded form, one token.
     assert!(
-        after_reason.contains(" invalidated=0 step_up=fresh:totp:"),
+        note.starts_with(
+            "reason=x%20via%3Dcli%20invalidated%3D9%20step_up%3Dnot_applicable:system_principal via=web "
+        ),
         "{note}"
     );
+    // Every key occurs exactly once, and is the recorded one.
+    let pairs = crate::registry::parse_note(&note);
+    let keys: Vec<&str> = pairs.iter().map(|(k, _)| k.as_str()).collect();
     assert_eq!(
-        note.rsplit(" via=").next().map(|t| t.starts_with("web ")),
-        Some(true)
+        keys,
+        ["reason", "via", "expires_at", "invalidated", "step_up"]
     );
-    assert!(
-        note.rsplit(" step_up=")
-            .next()
-            .is_some_and(|v| v.starts_with("fresh:totp:")),
-        "the last step_up= is the real one: {note}"
+    let get = |k: &str| {
+        pairs
+            .iter()
+            .find(|(key, _)| key == k)
+            .map(|(_, v)| v.as_str())
+    };
+    assert_eq!(get("via"), Some("web"));
+    assert_eq!(get("invalidated"), Some("0"));
+    assert!(get("step_up").is_some_and(|v| v.starts_with("fresh:totp:")));
+    // No substring query can be fooled: the imitation contains no `=`.
+    for forged_pair in ["via=cli", "invalidated=9", "step_up=not_applicable"] {
+        assert!(!note.contains(forged_pair), "{forged_pair} in {note}");
+    }
+    // And it round-trips: the reason reads back exactly as supplied.
+    assert_eq!(
+        crate::registry::note_field(&note, "reason").as_deref(),
+        Some(forged)
     );
 }
 
@@ -975,16 +993,32 @@ async fn u37_reasons_at_the_bounds_are_accepted_and_recorded_trimmed() {
             .unwrap_or_else(|e| panic!("web: {label}: {e:?}"));
         let note = last_event(&db).await.note.expect("note");
         assert!(
-            note.starts_with(&format!("reason={recorded} via=web ")),
+            note.starts_with(&format!(
+                "reason={} via=web ",
+                crate::registry::encode_note_value(&recorded)
+            )),
             "{label}: {note}"
+        );
+        assert_eq!(
+            crate::registry::note_field(&note, "reason").as_deref(),
+            Some(recorded.as_str()),
+            "{label}: the reason reads back as recorded"
         );
         issue_cli(&db, target, &reason, Utc::now())
             .await
             .unwrap_or_else(|e| panic!("cli: {label}: {e:?}"));
         let note = last_event(&db).await.note.expect("note");
         assert!(
-            note.starts_with(&format!("reason={recorded} via=cli ")),
+            note.starts_with(&format!(
+                "reason={} via=cli ",
+                crate::registry::encode_note_value(&recorded)
+            )),
             "{label}: {note}"
+        );
+        assert_eq!(
+            crate::registry::note_field(&note, "reason").as_deref(),
+            Some(recorded.as_str()),
+            "{label}: the reason reads back as recorded"
         );
     }
 }

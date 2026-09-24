@@ -231,7 +231,7 @@ async fn r102_b4_not_applicable_only_on_the_cli_reset() {
         .await
         .as_deref(),
         Some(
-            "totp=absent passkeys=0 reason=lost everything via=cli step_up=not_applicable:system_principal"
+            "totp=absent passkeys=0 reason=lost%20everything via=cli step_up=not_applicable:system_principal"
         )
     );
     // No session-bound event anywhere records the system-principal form.
