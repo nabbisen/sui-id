@@ -79,7 +79,28 @@ mutation each, each restored. Plus: the gate is green on the tree it lands in
 without editing the inventory to make it so, or, if it is not, every row it
 disproves is listed in the review package rather than fixed silently.
 
-## Stage 1b — correct the two dead paths, put G17 live — dispatched 2026-09-24
+## Stage 1b — landed `a214472`, 2026-09-25
+
+Both paths corrected, G17 live, `[gate_matrix_exceptions]` back to G12 alone.
+The lane was verified through `ci-gate.sh` as well as directly, in a throwaway
+worktree, because the dispatcher demands a clean tree and a matching HEAD.
+
+**The `test_id` measurement, which is the part to carry forward.** Of the
+inventory's 99 rows, **one** `test_id` resolves to a function and **98** do not
+— re-measured independently by the architect with a different extraction (106
+distinct names, one resolving: `compile_fail_session_insert_is_private`). All 23
+sealed rows are among the unresolved, and yet those commands *are* tested, under
+other names. So the column records tests RFC 094 Stage 0 planned and nobody
+wrote under those names.
+
+It is either a **plan**, in which case it should say so, or a **pointer**, in
+which case it points nowhere 98 times out of 99. G17 does not check it; nothing
+has changed it. **RFC 094's `audit-structure` is the natural owner** — its own
+condition "a Class-A command lacks its failure test" is exactly this question —
+and the pointer RFC 116 D6 added to RFC 094 is where whoever builds it will
+look. Not scheduled here.
+
+## Stage 1b — as dispatched 2026-09-24
 
 **J1 is ruled: correct them, then promote the lane.** Holding G17 in
 `[gate_matrix_exceptions]` was the right call for stage 1 — a red lane on main
