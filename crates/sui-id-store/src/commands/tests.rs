@@ -511,6 +511,7 @@ fn u37_both_entries_record_the_same_attribute_set_and_differ_in_via_and_step_up(
         reason: "call-back verified".into(),
         expires_at,
         invalidated: 2,
+        provisioning: false,
         step_up: SessionStepUpEvidence::Fresh {
             method: "totp".into(),
             age_secs: 7,
@@ -521,6 +522,7 @@ fn u37_both_entries_record_the_same_attribute_set_and_differ_in_via_and_step_up(
         reason: "call-back verified".into(),
         expires_at,
         invalidated: 0,
+        provisioning: false,
     };
     assert_eq!(U37::descriptor(&web).name, "user.recovery_link.issued");
     assert_eq!(U37::descriptor(&cli).name, "user.recovery_link.issued");
@@ -549,6 +551,10 @@ fn u37_both_entries_record_the_same_attribute_set_and_differ_in_via_and_step_up(
     );
     // Every attribute the events emit is declared, and every declared one is
     // emitted: the descriptor and the events cannot drift apart silently.
+    // `provisioning` is declared but emitted only for a provisioning link
+    // (RFC 115 D11): an ordinary link emits every declared attribute except
+    // that one, and `u37_records_provisioning_on_both_entries…` proves the
+    // provisioning link emits all of them.
     let declared: Vec<&str> = U37_ISSUED.attributes.iter().map(|a| a.name).collect();
     for event in [&web, &cli] {
         let emitted: Vec<String> = attribute_map(&event.attributes().expect("attributes"))
@@ -556,10 +562,56 @@ fn u37_both_entries_record_the_same_attribute_set_and_differ_in_via_and_step_up(
             .map(|(k, _)| k)
             .collect();
         let mut emitted: Vec<&str> = emitted.iter().map(String::as_str).collect();
+        emitted.push("provisioning");
         let mut declared = declared.clone();
         emitted.sort_unstable();
         declared.sort_unstable();
         assert_eq!(emitted, declared);
+    }
+}
+
+#[test]
+fn u37_records_provisioning_on_both_entries_and_only_when_it_applies() {
+    // RFC 115 D11: the attribute is present, ahead of `step_up`, only for a
+    // provisioning link; an ordinary link's note is unchanged.
+    let target = UserId::new();
+    let expires_at = chrono::Utc::now();
+    let web = U37Event::Issued {
+        target,
+        reason: "r".into(),
+        expires_at,
+        invalidated: 0,
+        provisioning: true,
+        step_up: SessionStepUpEvidence::Fresh {
+            method: "totp".into(),
+            age_secs: 1,
+        },
+    };
+    let cli = U37Event::OperatorIssued {
+        target,
+        reason: "r".into(),
+        expires_at,
+        invalidated: 0,
+        provisioning: true,
+    };
+    for (event_attrs, last) in [
+        (attribute_map(&web.attributes().expect("attrs")), "step_up"),
+        (attribute_map(&cli.attributes().expect("attrs")), "step_up"),
+    ] {
+        let names: Vec<&str> = event_attrs.iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(names.last(), Some(&last), "step_up stays last");
+        assert!(
+            event_attrs.contains(&("provisioning".to_owned(), "1".to_owned())),
+            "{event_attrs:?}"
+        );
+        let mut emitted: Vec<&str> = event_attrs.iter().map(|(k, _)| k.as_str()).collect();
+        let mut declared: Vec<&str> = U37_ISSUED.attributes.iter().map(|a| a.name).collect();
+        emitted.sort_unstable();
+        declared.sort_unstable();
+        assert_eq!(
+            emitted, declared,
+            "a provisioning link emits every declared attribute"
+        );
     }
 }
 

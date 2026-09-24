@@ -388,7 +388,6 @@ async fn r103_the_command_consumes_a_token_only_once() {
     let credential = |hash: &str| sui_id_store::models::CredentialRow {
         user_id: admin,
         password_hash: hash.into(),
-        must_change: false,
         updated_at: chrono::Utc::now(),
     };
     sui_id_store::commands::consume_and_reset_password(

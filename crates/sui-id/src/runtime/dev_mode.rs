@@ -462,7 +462,6 @@ pub async fn apply_seed(
                 user_id: created.id,
                 password_hash: sui_id_core::password::hash_password(&u.password)
                     .with_context(|| format!("hashing dev-mode password for {:?}", u.username))?,
-                must_change: false,
                 updated_at: clock.now(),
             },
         )

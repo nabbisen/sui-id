@@ -12,7 +12,6 @@ async fn u09_change_with_sweep_revokes_others_keeps_current_and_appends_counts()
         &crate::models::CredentialRow {
             user_id: user.id,
             password_hash: "old-hash-placeholder".into(),
-            must_change: false,
             updated_at: Utc::now(),
         },
     )
@@ -25,7 +24,6 @@ async fn u09_change_with_sweep_revokes_others_keeps_current_and_appends_counts()
     let new_credential = crate::models::CredentialRow {
         user_id: user.id,
         password_hash: "new-hash-placeholder".into(),
-        must_change: false,
         updated_at: Utc::now(),
     };
     let audited = change_password_self(&db, user.id, new_credential, Some(keep_id), true)
@@ -76,7 +74,6 @@ async fn u09_change_without_sweep_revokes_nothing_and_reports_zero() {
     let new_credential = crate::models::CredentialRow {
         user_id: user.id,
         password_hash: "new-hash-placeholder".into(),
-        must_change: false,
         updated_at: Utc::now(),
     };
     let audited = change_password_self(&db, user.id, new_credential, None, false)
@@ -116,7 +113,6 @@ async fn u09_injected_failure_before_append_rolls_back_credential_and_revocation
         &crate::models::CredentialRow {
             user_id: user.id,
             password_hash: "old-hash-placeholder".into(),
-            must_change: false,
             updated_at: Utc::now(),
         },
     )
@@ -128,7 +124,6 @@ async fn u09_injected_failure_before_append_rolls_back_credential_and_revocation
     let new_credential = crate::models::CredentialRow {
         user_id: user.id,
         password_hash: "new-hash-placeholder".into(),
-        must_change: false,
         updated_at: Utc::now(),
     };
     db.fault_injector().fail_before_next_append();
@@ -186,7 +181,6 @@ async fn u10_completion_swaps_credential_consumes_token_and_revokes_everything()
         &crate::models::CredentialRow {
             user_id: user.id,
             password_hash: "old-hash-placeholder".into(),
-            must_change: false,
             updated_at: Utc::now(),
         },
     )
@@ -198,7 +192,6 @@ async fn u10_completion_swaps_credential_consumes_token_and_revokes_everything()
     let new_credential = crate::models::CredentialRow {
         user_id: user.id,
         password_hash: "new-hash-placeholder".into(),
-        must_change: false,
         updated_at: Utc::now(),
     };
     let consumed_at = Utc::now();
@@ -251,7 +244,6 @@ async fn u10_injected_failure_before_append_rolls_back_everything() {
         &crate::models::CredentialRow {
             user_id: user.id,
             password_hash: "old-hash-placeholder".into(),
-            must_change: false,
             updated_at: Utc::now(),
         },
     )
@@ -264,7 +256,6 @@ async fn u10_injected_failure_before_append_rolls_back_everything() {
     let new_credential = crate::models::CredentialRow {
         user_id: user.id,
         password_hash: "new-hash-placeholder".into(),
-        must_change: false,
         updated_at: Utc::now(),
     };
     db.fault_injector().fail_before_next_append();

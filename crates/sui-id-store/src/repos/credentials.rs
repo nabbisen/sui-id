@@ -14,8 +14,7 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<CredentialRow> {
             rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
         })?,
         password_hash: row.get(1)?,
-        must_change: row.get::<_, i64>(2)? != 0,
-        updated_at: row.get::<_, DateTime<Utc>>(3)?,
+        updated_at: row.get::<_, DateTime<Utc>>(2)?,
     })
 }
 
@@ -23,16 +22,14 @@ pub async fn upsert(db: &Database, cred: &CredentialRow) -> StoreResult<()> {
     let cred = cred.clone();
     db.with_conn(move |conn| {
         conn.execute(
-            "INSERT INTO credentials(user_id, password_hash, must_change, updated_at) \
-             VALUES(?1, ?2, ?3, ?4) \
+            "INSERT INTO credentials(user_id, password_hash, updated_at) \
+             VALUES(?1, ?2, ?3) \
              ON CONFLICT(user_id) DO UPDATE SET \
                  password_hash = excluded.password_hash, \
-                 must_change = excluded.must_change, \
                  updated_at = excluded.updated_at",
             params![
                 cred.user_id.to_string(),
                 cred.password_hash,
-                cred.must_change as i64,
                 cred.updated_at,
             ],
         )?;
@@ -44,16 +41,14 @@ pub async fn upsert(db: &Database, cred: &CredentialRow) -> StoreResult<()> {
 /// Same as [`upsert`] but runs inside a caller-owned transaction.
 pub fn upsert_within_tx(tx: &rusqlite::Transaction<'_>, cred: &CredentialRow) -> StoreResult<()> {
     tx.execute(
-        "INSERT INTO credentials(user_id, password_hash, must_change, updated_at) \
-         VALUES(?1, ?2, ?3, ?4) \
+        "INSERT INTO credentials(user_id, password_hash, updated_at) \
+         VALUES(?1, ?2, ?3) \
          ON CONFLICT(user_id) DO UPDATE SET \
              password_hash = excluded.password_hash, \
-             must_change = excluded.must_change, \
              updated_at = excluded.updated_at",
         params![
             cred.user_id.to_string(),
             cred.password_hash,
-            cred.must_change as i64,
             cred.updated_at,
         ],
     )?;
@@ -63,7 +58,7 @@ pub fn upsert_within_tx(tx: &rusqlite::Transaction<'_>, cred: &CredentialRow) ->
 pub async fn get(db: &Database, user_id: UserId) -> StoreResult<CredentialRow> {
     db.with_conn(move |conn| {
         conn.query_row(
-            "SELECT user_id, password_hash, must_change, updated_at FROM credentials WHERE user_id = ?1",
+            "SELECT user_id, password_hash, updated_at FROM credentials WHERE user_id = ?1",
             [user_id.to_string()],
             map,
         )
@@ -71,5 +66,6 @@ pub async fn get(db: &Database, user_id: UserId) -> StoreResult<CredentialRow> {
             rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
             other => StoreError::from(other),
         })
-    }).await
+    })
+    .await
 }

@@ -55,6 +55,7 @@ use crate::handlers::{AppStateExt, session_cookie};
 use axum::Form;
 use axum::response::{Html, IntoResponse, Redirect};
 use axum_extra::extract::cookie::CookieJar;
+use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 use sui_id_core::errors::CoreError;
 use sui_id_core::{session, setup};
@@ -79,7 +80,7 @@ pub struct WelcomeQuery {
     /// v0.48.4: the setup URL printed at startup embeds the token as
     /// `?token=xxx` so operators never need to copy-paste it manually.
     #[serde(default)]
-    pub token: Option<String>,
+    pub token: Option<SecretString>,
 }
 
 pub async fn welcome_get(
@@ -119,14 +120,23 @@ pub async fn welcome_get(
         c.set_max_age(time::Duration::days(365));
         let jar = jar.add(c);
         // v0.48.4: preserve ?token= through the lang PRG redirect.
-        let redirect = match query.token.as_deref().filter(|t| !t.is_empty()) {
+        let redirect = match query
+            .token
+            .as_ref()
+            .map(|s| s.expose_secret())
+            .filter(|t| !t.is_empty())
+        {
             Some(tok) => format!("/setup?token={tok}"),
             None => "/setup".to_owned(),
         };
         return Ok((jar, Redirect::to(&redirect)).into_response());
     }
 
-    let token = query.token.clone().unwrap_or_default();
+    let token = query
+        .token
+        .as_ref()
+        .map(|t| t.expose_secret().to_owned())
+        .unwrap_or_default();
     Ok(Html(render_setup_welcome(None, lang, &token)).into_response())
 }
 
@@ -138,7 +148,7 @@ pub async fn welcome_get(
 #[derive(Debug, serde::Deserialize, Default)]
 pub struct SetupAdminQuery {
     #[serde(default)]
-    pub token: Option<String>,
+    pub token: Option<SecretString>,
 }
 
 pub async fn admin_get(
@@ -152,20 +162,24 @@ pub async fn admin_get(
     if initialized {
         return Ok(Redirect::to("/admin/login").into_response());
     }
-    let token = query.token.unwrap_or_default();
+    let token = query
+        .token
+        .as_ref()
+        .map(|t| t.expose_secret().to_owned())
+        .unwrap_or_default();
     Ok(Html(render_setup_admin(None, lang, &token)).into_response())
 }
 
 #[derive(Debug, Deserialize)]
 pub struct SetupAdminForm {
-    pub setup_token: String,
+    pub setup_token: SecretString,
     pub username: String,
     #[serde(default)]
     pub email: String,
     #[serde(default)]
     pub display_name: String,
-    pub password: String,
-    pub confirm_password: String,
+    pub password: SecretString,
+    pub confirm_password: SecretString,
 }
 
 pub async fn admin_post(
@@ -188,14 +202,18 @@ pub async fn admin_post(
     // Form-level checks first so we can surface them as friendly
     // flash banners without consuming the setup token (which would
     // otherwise count against the rate limit and require re-entry).
-    if form.password != form.confirm_password {
+    if form.password.expose_secret() != form.confirm_password.expose_secret() {
         let flash = Flash {
             kind: FlashKind::Warn,
             text: t.setup_password_mismatch.into(),
         };
         return Ok((
             axum::http::StatusCode::BAD_REQUEST,
-            Html(render_setup_admin(Some(flash), lang, &form.setup_token)),
+            Html(render_setup_admin(
+                Some(flash),
+                lang,
+                form.setup_token.expose_secret(),
+            )),
         )
             .into_response());
     }
@@ -211,7 +229,7 @@ pub async fn admin_post(
     let hibp_mode = hibp_settings.hibp_mode;
     if hibp_mode != sui_id_store::models::HibpMode::Off {
         let client = app.hibp_client.clone();
-        let pw_for_check = form.password.clone();
+        let pw_for_check = form.password.expose_secret().to_owned();
         let outcome =
             sui_id_core::hibp::enforce_hibp(hibp_mode, Some(client.as_ref()), &pw_for_check).await;
         match outcome {
@@ -234,7 +252,11 @@ pub async fn admin_post(
                 };
                 return Ok((
                     axum::http::StatusCode::BAD_REQUEST,
-                    Html(render_setup_admin(Some(flash), lang, &form.setup_token)),
+                    Html(render_setup_admin(
+                        Some(flash),
+                        lang,
+                        form.setup_token.expose_secret(),
+                    )),
                 )
                     .into_response());
             }
@@ -248,9 +270,9 @@ pub async fn admin_post(
         &app.db,
         &app.clock,
         &app.setup_token,
-        form.setup_token.trim(),
+        form.setup_token.expose_secret().trim(),
         form.username.trim(),
-        &form.password,
+        form.password.expose_secret(),
         display,
         email,
     )
@@ -266,7 +288,7 @@ pub async fn admin_post(
                 &app.db,
                 &app.clock,
                 form.username.trim(),
-                &form.password,
+                form.password.expose_secret(),
                 app.config.security.max_lockout.as_secs(),
             )
             .await
@@ -287,7 +309,11 @@ pub async fn admin_post(
             tracing::warn!(error = %e, "setup form rejected");
             Ok((
                 axum::http::StatusCode::BAD_REQUEST,
-                Html(render_setup_admin(Some(flash), lang, &form.setup_token)),
+                Html(render_setup_admin(
+                    Some(flash),
+                    lang,
+                    form.setup_token.expose_secret(),
+                )),
             )
                 .into_response())
         }

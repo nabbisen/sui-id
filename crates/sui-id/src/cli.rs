@@ -467,8 +467,11 @@ pub(crate) async fn run_admin_rotate_key(args: &[String]) -> Result<()> {
 ///
 ///   1. `SUI_ID_ADMIN_PASSWORD` env var, if set — validated at
 ///      Standard level (12+ chars).
-///   2. Otherwise a random 24-char password is generated, stored with
-///      `must_change = true`, and printed ONCE to stdout.
+///   2. Otherwise a random 24-char password is generated and printed ONCE to
+///      stdout. **Nothing forces its rotation**: there is no such flag (RFC 115
+///      D12 removed the one that pretended to). Change it after first sign-in;
+///      note that stdout is often captured into Ansible, cloud-init and Docker
+///      logs, where this line remains a working credential until you do.
 ///
 /// stdout carries only the credential block (machine-capturable);
 /// diagnostics go to stderr.
@@ -521,7 +524,6 @@ async fn run_setup(args: &[String]) -> Result<()> {
         &password,
         display_name,
         email,
-        /* must_change */ generated,
     )
     .await
     .map_err(|e| match e {

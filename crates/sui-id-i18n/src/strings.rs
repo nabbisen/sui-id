@@ -808,6 +808,7 @@ pub struct Strings {
     pub users_label_display_name: &'static str,
     pub users_label_email: &'static str,
     pub users_create_password_note: &'static str,
+    pub users_create_needs_second_factor: &'static str,
 
     // ---- Admin: Client edit (RFC 051) ----
     pub client_edit_title: &'static str,

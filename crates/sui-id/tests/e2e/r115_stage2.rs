@@ -19,7 +19,7 @@ use sui_id_shared::ids::UserId;
 
 const REASON: &str = "caller verified by call-back, ticket 4711";
 
-async fn scalar(state: &AppState, sql: String) -> i64 {
+pub(super) async fn scalar(state: &AppState, sql: String) -> i64 {
     state
         .db
         .with_conn(move |c| Ok(c.query_row(&sql, [], |r| r.get(0))?))
@@ -27,7 +27,7 @@ async fn scalar(state: &AppState, sql: String) -> i64 {
         .expect("scalar")
 }
 
-async fn credential_rows(state: &AppState, user: UserId) -> i64 {
+pub(super) async fn credential_rows(state: &AppState, user: UserId) -> i64 {
     scalar(
         state,
         format!("SELECT COUNT(*) FROM credentials WHERE user_id = '{user}'"),
@@ -37,7 +37,13 @@ async fn credential_rows(state: &AppState, user: UserId) -> i64 {
 
 /// `POST /admin/users` as the signed-in administrator. `extra` is appended to
 /// the form body verbatim, so a test can submit a field the form no longer has.
-async fn web_create(a: &Admin, username: &str, email: &str, is_admin: bool, extra: &str) -> Resp {
+pub(super) async fn web_create(
+    a: &Admin,
+    username: &str,
+    email: &str,
+    is_admin: bool,
+    extra: &str,
+) -> Resp {
     let csrf = fetch_csrf(&a.state, &a.session).await;
     let mut body = format!(
         "_csrf={csrf}&username={}&display_name=&email={}",
@@ -64,7 +70,7 @@ async fn web_create(a: &Admin, username: &str, email: &str, is_admin: bool, extr
     .await
 }
 
-fn created_id(r: &Resp) -> UserId {
+pub(super) fn created_id(r: &Resp) -> UserId {
     let loc = r.location.as_deref().expect("a redirect");
     let id = loc
         .strip_prefix("/admin/users/")
@@ -73,7 +79,7 @@ fn created_id(r: &Resp) -> UserId {
     id.parse().expect("user id")
 }
 
-async fn get_as(a: &Admin, uri: &str) -> Resp {
+pub(super) async fn get_as(a: &Admin, uri: &str) -> Resp {
     send(
         &a.state,
         Request::builder()
@@ -86,7 +92,7 @@ async fn get_as(a: &Admin, uri: &str) -> Resp {
     .await
 }
 
-async fn post_issue(a: &Admin, id: UserId) -> Resp {
+pub(super) async fn post_issue(a: &Admin, id: UserId) -> Resp {
     let csrf = fetch_csrf(&a.state, &a.session).await;
     send(
         &a.state,
@@ -120,7 +126,7 @@ fn token_on_page(body: &str) -> String {
 }
 
 /// Complete a reset with an explicit new password.
-async fn complete_with(state: &AppState, token: &str, password: &str) -> Resp {
+pub(super) async fn complete_with(state: &AppState, token: &str, password: &str) -> Resp {
     let csrf = csrf_from(state, "/reset-password").await;
     send(
         state,
@@ -160,7 +166,7 @@ async fn login_status(state: &AppState, username: &str, password: &str) -> Statu
 
 /// Issue the link for `id` from the confirm screen the redirect leads to, and
 /// return the token. Asserts each step on the way.
-async fn issue_from_confirm(a: &Admin, id: UserId) -> String {
+pub(super) async fn issue_from_confirm(a: &Admin, id: UserId) -> String {
     let confirm = get_as(a, &format!("/admin/users/{id}/recovery-link-confirm")).await;
     assert_eq!(confirm.status, StatusCode::OK, "{}", confirm.body);
     let issued = post_issue(a, id).await;
@@ -510,7 +516,7 @@ fn production_source(text: &str) -> String {
 }
 
 /// Every non-test `.rs` file under `crates/*/src`, with its production text.
-fn production_sources() -> Vec<(String, String)> {
+pub(super) fn production_sources() -> Vec<(String, String)> {
     fn walk(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
         for e in std::fs::read_dir(dir).expect("read_dir").flatten() {
             let p = e.path();

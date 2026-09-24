@@ -1445,9 +1445,11 @@ Brute-forcing the current-password field requires a valid cookie
 to begin with; raising lockouts here would let a user lock
 themselves out by typo. The IP-keyed rate limit still applies.
 
-The `must_change` flag (set by an admin reset) is cleared on
-self-change — the user has demonstrated agency, so the prompt
-to rotate goes away.
+There is no "must change password" flag. An earlier version of the
+product stored one and documented it, but nothing ever read it, so it
+was removed (RFC 115). A password an administrator did not choose is
+now the only kind: accounts are created without one, and their holder
+sets it through a recovery link.
 
 ### Audit trail
 

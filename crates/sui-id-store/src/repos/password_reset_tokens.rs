@@ -65,11 +65,22 @@ pub fn insert_within_tx(
     conn: &rusqlite::Connection,
     row: &PasswordResetTokenRow,
 ) -> StoreResult<()> {
+    insert_with_within_tx(conn, row, false)
+}
+
+/// Insert `row`, marking it as a *provisioning* link (RFC 115 D11) or not.
+/// Only U37 passes `true`, from the target's state read in its own
+/// transaction.
+pub fn insert_with_within_tx(
+    conn: &rusqlite::Connection,
+    row: &PasswordResetTokenRow,
+    provisioning: bool,
+) -> StoreResult<()> {
     conn.execute(
         "INSERT INTO password_reset_tokens(id, user_id, token_hash, issued_at, \
                                              expires_at, consumed_at, requester_ip, \
-                                             issued_via, issued_by, revoked_at) \
-         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                                             issued_via, issued_by, revoked_at, provisioning) \
+         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         params![
             row.id.to_string(),
             row.user_id.to_string(),
@@ -81,6 +92,7 @@ pub fn insert_within_tx(
             row.issued_via.as_str(),
             row.issued_by.map(|u| u.to_string()),
             row.revoked_at,
+            provisioning,
         ],
     )
     .map_err(|e| match e {
@@ -197,29 +209,35 @@ pub fn revoke_outstanding_for_user_within_tx(
 
 /// RFC 103 D8: how many tokens `admin` issued on the web since `since`,
 /// counting every state (used, revoked and expired tokens count too).
+/// `provisioning` selects which throttle is being counted (RFC 115 D11): the
+/// ordinary links (`false`, the five an hour) or the provisioning ones
+/// (`true`, their own ceiling). The two never share a count.
 pub fn count_issued_by_within_tx(
     conn: &rusqlite::Connection,
     admin: UserId,
     since: DateTime<Utc>,
+    provisioning: bool,
 ) -> StoreResult<i64> {
     Ok(conn.query_row(
         "SELECT COUNT(*) FROM password_reset_tokens \
-         WHERE issued_by = ?1 AND issued_via = 'web' AND issued_at > ?2",
-        params![admin.to_string(), since],
+         WHERE issued_by = ?1 AND issued_via = 'web' AND issued_at > ?2 AND provisioning = ?3",
+        params![admin.to_string(), since, provisioning],
         |row| row.get(0),
     )?)
 }
 
 /// RFC 103 D8: how many tokens the operator CLI issued since `since`. The
 /// CLI is a separate process, so the count comes from the database.
+/// `provisioning` as in [`count_issued_by_within_tx`].
 pub fn count_issued_via_cli_within_tx(
     conn: &rusqlite::Connection,
     since: DateTime<Utc>,
+    provisioning: bool,
 ) -> StoreResult<i64> {
     Ok(conn.query_row(
         "SELECT COUNT(*) FROM password_reset_tokens \
-         WHERE issued_via = 'cli' AND issued_at > ?1",
-        params![since],
+         WHERE issued_via = 'cli' AND issued_at > ?1 AND provisioning = ?2",
+        params![since, provisioning],
         |row| row.get(0),
     )?)
 }

@@ -4,6 +4,7 @@ use crate::{csrf, errors::HttpError};
 use axum::extract::{Form, Path, State};
 use axum::response::{IntoResponse, Redirect, Response};
 use axum_extra::extract::cookie::CookieJar;
+use secrecy::ExposeSecret;
 use sui_id_core::errors::CoreError;
 
 use super::forms::*;
@@ -114,7 +115,7 @@ pub async fn passkey_register_start(
         ip,
         lang,
         "/me/security/passkeys",
-        form.current_password.as_deref(),
+        form.current_password.as_ref().map(|s| s.expose_secret()),
         crate::handlers::ErrorAs::Json,
     )
     .await
@@ -173,7 +174,7 @@ pub async fn passkey_register_complete(
         .map(|c| c.value().to_owned())
         .unwrap_or_default();
     let credential: webauthn_rs::prelude::RegisterPublicKeyCredential =
-        serde_json::from_str(&form.credential).map_err(|_| {
+        serde_json::from_str(form.credential.expose_secret()).map_err(|_| {
             HttpError::html(CoreError::BadRequest("malformed credential JSON".into()))
         })?;
     sui_id_core::webauthn::finish_registration(

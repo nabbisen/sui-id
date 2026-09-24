@@ -7,6 +7,7 @@ use axum::Json;
 use axum::extract::State;
 use axum::response::{IntoResponse, Redirect, Response};
 use axum_extra::extract::cookie::CookieJar;
+use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 use sui_id_core::errors::CoreError;
 
@@ -65,7 +66,7 @@ pub async fn webauthn_auth_start(
 #[derive(Debug, Deserialize)]
 
 pub struct WebauthnAuthCompleteForm {
-    pub credential: String,
+    pub credential: SecretString,
     #[serde(rename = "_csrf", default)]
     pub csrf: String,
 }
@@ -136,9 +137,9 @@ pub async fn webauthn_auth_complete(
         Ok(_) => return refused(None),
         Err(e) => return refused(Some(CoreError::from(e))),
     };
-    let Ok(credential) =
-        serde_json::from_str::<webauthn_rs::prelude::PublicKeyCredential>(&form.credential)
-    else {
+    let Ok(credential) = serde_json::from_str::<webauthn_rs::prelude::PublicKeyCredential>(
+        form.credential.expose_secret(),
+    ) else {
         return refused(None);
     };
     match sui_id_core::webauthn::finish_authentication(

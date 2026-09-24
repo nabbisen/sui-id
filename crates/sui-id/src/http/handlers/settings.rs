@@ -23,6 +23,7 @@ use crate::{csrf, errors::HttpError};
 use axum::extract::State;
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum_extra::extract::cookie::CookieJar;
+use secrecy::{ExposeSecret, SecretString};
 use std::str::FromStr;
 
 use chrono::{Duration, Utc};
@@ -355,7 +356,7 @@ pub struct EmailSettingsForm {
     /// stored password". `None` (form field absent) is treated the
     /// same as empty for resilience against missing fields.
     #[serde(default)]
-    pub password: String,
+    pub password: SecretString,
     pub from_address: String,
     #[serde(default)]
     pub from_name: String,
@@ -426,7 +427,7 @@ pub async fn email_post(
         .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
 
-    if !form.password.is_empty() {
+    if !form.password.expose_secret().is_empty() {
         // Seal the payload for pending-change storage.
         use serde::{Deserialize, Serialize};
         #[derive(Serialize, Deserialize)]
@@ -447,7 +448,7 @@ pub async fn email_post(
             port: form.port,
             tls_mode: form.tls_mode.clone(),
             username: username.clone(),
-            password: form.password.clone(),
+            password: form.password.expose_secret().to_owned(),
             from_address: form.from_address.trim().to_owned(),
             from_name: from_name.clone(),
             base_url: form.base_url.trim().trim_end_matches('/').to_owned(),

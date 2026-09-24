@@ -1033,6 +1033,18 @@ async fn r103_s4_cli_refusals_exit_non_zero_with_a_message_and_write_nothing() {
 async fn r103_s4_cli_sixth_issuance_in_an_hour_is_refused() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (cfg, db) = on_disk(dir.path()).await;
+    // RFC 103 D8's five an hour is the ordinary throttle. A fixture user with
+    // no credential is a never-activated account, whose first link is a
+    // provisioning link with its own ceiling (RFC 115 D11), so give bob a
+    // credential to make him an ordinary target.
+    db.with_conn(|c| {
+        Ok(c.execute_batch(
+            "INSERT INTO credentials(user_id, password_hash, updated_at) \
+             SELECT id, 'hash', datetime('now') FROM users WHERE username = 'bob'",
+        )?)
+    })
+    .await
+    .expect("give bob a credential");
     for i in 0..5 {
         let o = cli(&cfg, &["--username", "bob", "--reason", REASON]);
         assert!(o.status.success(), "issuance {i}: {}", err(&o));

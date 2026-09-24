@@ -40,6 +40,7 @@ use crate::{csrf, handlers::admin::with_csrf_cookie};
 use axum::extract::{Query, State};
 use axum::response::{Html, IntoResponse, Json, Redirect, Response};
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
+use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use sui_id_core::errors::CoreError;
 use sui_id_shared::ids::WebauthnPendingId;
@@ -134,7 +135,7 @@ pub async fn get(
 pub struct StepUpForm {
     #[serde(rename = "_csrf", default)]
     pub csrf: String,
-    pub code: String,
+    pub code: SecretString,
     #[serde(default)]
     pub return_to: String,
 }
@@ -164,7 +165,7 @@ pub async fn post(
         &app.clock,
         ctx.user_id,
         ctx.session_id,
-        &form.code,
+        form.code.expose_secret(),
         &return_to,
     )
     .await
@@ -320,7 +321,7 @@ pub struct WebauthnFinishForm {
     pub csrf: String,
     /// The PublicKeyCredential JSON from navigator.credentials.get(),
     /// stringified by the client.
-    pub credential: String,
+    pub credential: SecretString,
     #[serde(default)]
     pub return_to: String,
 }
@@ -361,7 +362,7 @@ pub async fn webauthn_finish(
         ctx.user_id,
         ctx.session_id,
         pending_id,
-        &form.credential,
+        form.credential.expose_secret(),
         &return_to,
     )
     .await;

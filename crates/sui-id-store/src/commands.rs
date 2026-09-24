@@ -1356,6 +1356,11 @@ static U37_ISSUED: EventDescriptor = EventDescriptor {
             description: "how many of the target's outstanding links this issuance invalidated",
             required: false,
         },
+        AttributeSpec {
+            name: "provisioning",
+            description: "\"1\" when the link was issued for a just-created account and counted against the provisioning ceiling (RFC 115 D11); absent otherwise",
+            required: false,
+        },
         STEP_UP_ATTRIBUTE,
     ],
 };
@@ -1363,6 +1368,21 @@ static U37_ISSUED: EventDescriptor = EventDescriptor {
 /// Most recovery links one administrator, or the operator CLI, may issue in
 /// a rolling hour (RFC 103 D8).
 pub const RECOVERY_LINKS_PER_HOUR: i64 = 5;
+
+/// Most *provisioning* links one administrator, or the operator CLI, may
+/// issue in a rolling hour (RFC 115 D11). A link is provisioning when U37
+/// reads its target, inside its own transaction, as a local non-administrator
+/// account that has never held a credential, never signed in and never had a
+/// token of any kind. Provisioning is not free: a bulk import is possible and
+/// a runaway is not. The number is an implementer's choice, larger than
+/// [`RECOVERY_LINKS_PER_HOUR`] and small enough that an unattended loop is
+/// stopped within minutes; the architect may set it.
+pub const PROVISIONING_LINKS_PER_HOUR: i64 = 50;
+
+// "Its own, larger ceiling" (RFC 115 D11), enforced at compile time: a ceiling
+// that fell back to the ordinary five would make bulk provisioning impossible
+// again, and this fails the build instead of a test.
+const _: () = assert!(PROVISIONING_LINKS_PER_HOUR > RECOVERY_LINKS_PER_HOUR);
 
 crate::declare_write_command! {
     /// U37 — issue a recovery link. Two entries: the administrator's web
@@ -1380,6 +1400,7 @@ crate::declare_write_command! {
                 reason: String,
                 expires_at: chrono::DateTime<chrono::Utc>,
                 invalidated: usize,
+                provisioning: bool,
                 step_up: SessionStepUpEvidence,
             } => &U37_ISSUED,
             /// Issued by the operator CLI: no session, the system
@@ -1389,6 +1410,7 @@ crate::declare_write_command! {
                 reason: String,
                 expires_at: chrono::DateTime<chrono::Utc>,
                 invalidated: usize,
+                provisioning: bool,
             } => &U37_ISSUED,
         }
     }
@@ -1413,27 +1435,41 @@ impl SealedCommandEvent<U37> for U37Event {
                 reason,
                 expires_at,
                 invalidated,
+                provisioning,
                 step_up,
                 ..
-            } => AuditAttributes::builder()
-                .attribute("reason", reason.clone())
-                .attribute("via", "web")
-                .attribute("expires_at", expires(expires_at))
-                .attribute("invalidated", invalidated.to_string())
-                .attribute("step_up", step_up.as_attribute())
-                .build(),
+            } => {
+                let builder = AuditAttributes::builder()
+                    .attribute("reason", reason.clone())
+                    .attribute("via", "web")
+                    .attribute("expires_at", expires(expires_at))
+                    .attribute("invalidated", invalidated.to_string());
+                let builder = if *provisioning {
+                    builder.attribute("provisioning", "1")
+                } else {
+                    builder
+                };
+                builder.attribute("step_up", step_up.as_attribute()).build()
+            }
             Self::OperatorIssued {
                 reason,
                 expires_at,
                 invalidated,
+                provisioning,
                 ..
-            } => AuditAttributes::builder()
-                .attribute("reason", reason.clone())
-                .attribute("via", "cli")
-                .attribute("expires_at", expires(expires_at))
-                .attribute("invalidated", invalidated.to_string())
-                .attribute("step_up", STEP_UP_NOT_APPLICABLE)
-                .build(),
+            } => {
+                let builder = AuditAttributes::builder()
+                    .attribute("reason", reason.clone())
+                    .attribute("via", "cli")
+                    .attribute("expires_at", expires(expires_at))
+                    .attribute("invalidated", invalidated.to_string());
+                let builder = if *provisioning {
+                    builder.attribute("provisioning", "1")
+                } else {
+                    builder
+                };
+                builder.attribute("step_up", STEP_UP_NOT_APPLICABLE).build()
+            }
         }
     }
 }
@@ -1494,7 +1530,7 @@ fn check_recovery_target(
     conn: &rusqlite::Connection,
     target: UserId,
     admin_issuer: Option<UserId>,
-) -> StoreResult<()> {
+) -> StoreResult<crate::repos::users::RecoveryTarget> {
     use crate::errors::RecoveryRefusal as Why;
     let t = crate::repos::users::recovery_target_within_tx(conn, target).map_err(|e| match e {
         crate::StoreError::NotFound => refuse(Why::TargetUnknown),
@@ -1520,17 +1556,33 @@ fn check_recovery_target(
     if !t.source.is_local() {
         return Err(refuse(Why::TargetNonLocal));
     }
-    Ok(())
+    Ok(t)
+}
+
+/// RFC 115 D11: is a link for `t` a *provisioning* link? Decided from the
+/// target's state read in this same transaction, never from anything the
+/// caller says: a local, **non-administrator** account that has never held a
+/// credential, never signed in, and has never had a token of any kind. A live
+/// account can therefore never qualify (it has a credential), an account that
+/// already had a link can never qualify a second time, and an administrator
+/// is never exempt: an unthrottled stream of new administrator accounts is the
+/// persistence primitive a stolen session with a fresh step-up would want.
+/// Creating a user to obtain an unthrottled issuance yields a link only to the
+/// account just created.
+fn is_provisioning(t: &crate::repos::users::RecoveryTarget) -> bool {
+    t.source.is_local() && !t.role.is_admin() && t.never_activated && !t.has_any_token
 }
 
 /// Revoke the target's outstanding links and insert the new one: the shared
 /// tail of both U37 entries.
+#[allow(clippy::too_many_arguments)]
 fn revoke_and_insert_recovery_token(
     conn: &rusqlite::Connection,
     target: UserId,
     token_hash: Vec<u8>,
     via: crate::models::ResetTokenOrigin,
     issued_by: Option<UserId>,
+    provisioning: bool,
     expires_at: chrono::DateTime<chrono::Utc>,
     now: chrono::DateTime<chrono::Utc>,
 ) -> StoreResult<RecoveryLinkGrant> {
@@ -1538,7 +1590,7 @@ fn revoke_and_insert_recovery_token(
         conn, target, None, now,
     )?;
     let token_id = sui_id_shared::ids::PasswordResetTokenId::new();
-    crate::repos::password_reset_tokens::insert_within_tx(
+    crate::repos::password_reset_tokens::insert_with_within_tx(
         conn,
         &crate::models::PasswordResetTokenRow {
             id: token_id,
@@ -1552,6 +1604,7 @@ fn revoke_and_insert_recovery_token(
             issued_by,
             revoked_at: None,
         },
+        provisioning,
     )?;
     Ok(RecoveryLinkGrant {
         token_id,
@@ -1592,13 +1645,24 @@ pub async fn issue_recovery_link_as_admin(
             // D6: `not_required` is refused for this operation.
             return Err(crate::StoreError::StepUpRequired);
         }
-        check_recovery_target(tx.tx(), target, Some(admin))?;
+        let t = check_recovery_target(tx.tx(), target, Some(admin))?;
+        // RFC 115 D11: which throttle applies is decided here, from `t`.
+        let provisioning = is_provisioning(&t);
+        let (ceiling, since) = (
+            if provisioning {
+                PROVISIONING_LINKS_PER_HOUR
+            } else {
+                RECOVERY_LINKS_PER_HOUR
+            },
+            now - chrono::TimeDelta::hours(1),
+        );
         let issued = crate::repos::password_reset_tokens::count_issued_by_within_tx(
             tx.tx(),
             admin,
-            now - chrono::TimeDelta::hours(1),
+            since,
+            provisioning,
         )?;
-        if issued >= RECOVERY_LINKS_PER_HOUR {
+        if issued >= ceiling {
             return Err(refuse(Why::Throttled));
         }
         let grant = revoke_and_insert_recovery_token(
@@ -1607,6 +1671,7 @@ pub async fn issue_recovery_link_as_admin(
             token_hash,
             crate::models::ResetTokenOrigin::Web,
             Some(admin),
+            provisioning,
             expires_at,
             now,
         )?;
@@ -1617,6 +1682,7 @@ pub async fn issue_recovery_link_as_admin(
                 reason,
                 expires_at,
                 invalidated: grant.invalidated,
+                provisioning,
                 step_up,
             },
         ))
@@ -1643,12 +1709,19 @@ pub async fn issue_recovery_link_as_operator(
     let context = AuthorizedCommandContext::<U37>::for_system_actor(None);
     db.class_a(context, move |tx: &mut ClassATx<'_, U37>| {
         let reason = validated_recovery_reason(&reason)?;
-        check_recovery_target(tx.tx(), target, None)?;
+        let t = check_recovery_target(tx.tx(), target, None)?;
+        let provisioning = is_provisioning(&t);
+        let ceiling = if provisioning {
+            PROVISIONING_LINKS_PER_HOUR
+        } else {
+            RECOVERY_LINKS_PER_HOUR
+        };
         let issued = crate::repos::password_reset_tokens::count_issued_via_cli_within_tx(
             tx.tx(),
             now - chrono::TimeDelta::hours(1),
+            provisioning,
         )?;
-        if issued >= RECOVERY_LINKS_PER_HOUR {
+        if issued >= ceiling {
             return Err(refuse(Why::Throttled));
         }
         let grant = revoke_and_insert_recovery_token(
@@ -1657,6 +1730,7 @@ pub async fn issue_recovery_link_as_operator(
             token_hash,
             crate::models::ResetTokenOrigin::Cli,
             None,
+            provisioning,
             expires_at,
             now,
         )?;
@@ -1667,6 +1741,7 @@ pub async fn issue_recovery_link_as_operator(
                 reason,
                 expires_at,
                 invalidated: grant.invalidated,
+                provisioning,
             },
         ))
     })

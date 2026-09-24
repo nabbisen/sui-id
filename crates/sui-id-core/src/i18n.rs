@@ -133,7 +133,6 @@ mod tests {
         let _ = CredentialRow {
             user_id: id,
             password_hash: String::new(),
-            must_change: false,
             updated_at: now,
         };
         id

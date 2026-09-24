@@ -4,13 +4,15 @@ use crate::models::{PasswordResetTokenRow, ResetTokenOrigin, Role, UserSource};
 
 // ── RFC 103 stage 3 — U37, the D3 invalidations, U10 `origin` ─────────
 
-fn hash() -> Vec<u8> {
+pub(super) fn hash() -> Vec<u8> {
     uuid::Uuid::new_v4().as_bytes().to_vec()
 }
 
-const REASON: &str = "caller verified by call-back, ticket 4711";
+pub(super) const REASON: &str = "caller verified by call-back, ticket 4711";
 
-async fn seed_admin_with_fresh_step_up(db: &Database) -> (UserId, sui_id_shared::ids::SessionId) {
+pub(super) async fn seed_admin_with_fresh_step_up(
+    db: &Database,
+) -> (UserId, sui_id_shared::ids::SessionId) {
     let (admin, session) = an_admin_session(db).await;
     repos::user_totp::upsert_pending(db, admin, b"totp-secret-placeholder")
         .await
@@ -24,7 +26,7 @@ async fn seed_admin_with_fresh_step_up(db: &Database) -> (UserId, sui_id_shared:
     (admin, session)
 }
 
-async fn seed_user(db: &Database, f: impl FnOnce(&mut UserRow)) -> UserId {
+pub(super) async fn seed_user(db: &Database, f: impl FnOnce(&mut UserRow)) -> UserId {
     let mut user = a_user();
     f(&mut user);
     repos::users::create(db, &user).await.expect("create user");
@@ -69,7 +71,7 @@ async fn seed_token(
     id
 }
 
-async fn token(
+pub(super) async fn token(
     db: &Database,
     id: sui_id_shared::ids::PasswordResetTokenId,
 ) -> PasswordResetTokenRow {
@@ -100,7 +102,7 @@ async fn token(
         .expect("row")
 }
 
-async fn token_rows(db: &Database) -> i64 {
+pub(super) async fn token_rows(db: &Database) -> i64 {
     db.with_conn(|c| {
         Ok(
             c.query_row("SELECT COUNT(*) FROM password_reset_tokens", [], |r| {
@@ -112,13 +114,13 @@ async fn token_rows(db: &Database) -> i64 {
     .expect("count")
 }
 
-async fn audit_rows(db: &Database) -> i64 {
+pub(super) async fn audit_rows(db: &Database) -> i64 {
     db.with_conn(|c| Ok(c.query_row("SELECT COUNT(*) FROM audit_log", [], |r| r.get(0))?))
         .await
         .expect("count")
 }
 
-async fn last_event(db: &Database) -> crate::models::AuditLogRow {
+pub(super) async fn last_event(db: &Database) -> crate::models::AuditLogRow {
     repos::audit::recent(db, 1)
         .await
         .expect("audit tail")
@@ -127,7 +129,7 @@ async fn last_event(db: &Database) -> crate::models::AuditLogRow {
         .expect("row")
 }
 
-fn refused(
+pub(super) fn refused(
     result: &StoreResult<crate::registry::Audited<RecoveryLinkGrant>>,
 ) -> Option<RecoveryRefusal> {
     match result {
@@ -136,7 +138,7 @@ fn refused(
     }
 }
 
-async fn issue_web(
+pub(super) async fn issue_web(
     db: &Database,
     admin: UserId,
     session: sui_id_shared::ids::SessionId,
@@ -157,7 +159,7 @@ async fn issue_web(
     .await
 }
 
-async fn issue_cli(
+pub(super) async fn issue_cli(
     db: &Database,
     target: UserId,
     reason: &str,
@@ -180,7 +182,7 @@ async fn issue_cli(
 async fn u37_web_issues_a_link_and_writes_one_event() {
     let db = fresh_db();
     let (admin, session) = seed_admin_with_fresh_step_up(&db).await;
-    let target = seed_user(&db, |_| {}).await;
+    let target = seed_live_user(&db).await;
     let now = Utc::now();
     let grant = issue_web(&db, admin, session, target, REASON, now)
         .await
@@ -240,14 +242,23 @@ async fn u37_operator_issues_a_link_with_no_actor_and_not_applicable() {
     );
 }
 
+/// A user who already has a credential: an *ordinary* target, for the tests of
+/// RFC 103's D8 throttle. A fresh `seed_user` is a never-activated account,
+/// and the first link for one is a provisioning link (RFC 115 D11), which has
+/// its own ceiling and its own tests.
+pub(super) async fn seed_live_user(db: &Database) -> UserId {
+    let id = seed_user(db, |_| {}).await;
+    give_credential(db, id).await;
+    id
+}
+
 /// Give `user` a credential row, making it a live account (RFC 115 D10).
-async fn give_credential(db: &Database, user: UserId) {
+pub(super) async fn give_credential(db: &Database, user: UserId) {
     repos::credentials::upsert(
         db,
         &crate::models::CredentialRow {
             user_id: user,
             password_hash: "some-hash-placeholder".into(),
-            must_change: false,
             updated_at: Utc::now(),
         },
     )
@@ -471,7 +482,7 @@ async fn u37_web_needs_a_fresh_step_up() {
 async fn u37_the_sixth_web_issuance_in_an_hour_is_refused_per_issuer() {
     let db = fresh_db();
     let (admin, session) = seed_admin_with_fresh_step_up(&db).await;
-    let target = seed_user(&db, |_| {}).await;
+    let target = seed_live_user(&db).await;
     let now = Utc::now();
     for i in 0..RECOVERY_LINKS_PER_HOUR {
         issue_web(
@@ -533,7 +544,7 @@ async fn u37_the_sixth_web_issuance_in_an_hour_is_refused_per_issuer() {
 #[tokio::test]
 async fn u37_the_sixth_cli_issuance_in_an_hour_is_refused() {
     let db = fresh_db();
-    let target = seed_user(&db, |_| {}).await;
+    let target = seed_live_user(&db).await;
     let now = Utc::now();
     for i in 0..RECOVERY_LINKS_PER_HOUR {
         issue_cli(&db, target, REASON, now + TimeDelta::seconds(i))
@@ -670,7 +681,6 @@ async fn d3_self_password_change_revokes_outstanding_links() {
             crate::models::CredentialRow {
                 user_id: user,
                 password_hash: "new-hash-placeholder".into(),
-                must_change: false,
                 updated_at: Utc::now(),
             },
             None,
@@ -699,7 +709,6 @@ async fn d3_completing_one_link_revokes_the_others() {
         crate::models::CredentialRow {
             user_id: user,
             password_hash: "new-hash-placeholder".into(),
-            must_change: false,
             updated_at: Utc::now(),
         },
         Utc::now(),
@@ -774,7 +783,6 @@ async fn a_revoked_link_cannot_complete_and_writes_no_credential() {
         crate::models::CredentialRow {
             user_id: user,
             password_hash: "new-hash-placeholder".into(),
-            must_change: false,
             updated_at: Utc::now(),
         },
         Utc::now(),
@@ -824,7 +832,6 @@ async fn u10_records_the_origin_of_the_consumed_link() {
             crate::models::CredentialRow {
                 user_id: user,
                 password_hash: "new-hash-placeholder".into(),
-                must_change: false,
                 updated_at: Utc::now(),
             },
             Utc::now(),
@@ -851,7 +858,7 @@ async fn u37_a_reason_that_imitates_fields_cannot_displace_the_recorded_ones() {
     // last occurrence of each the true one; this pins that order.
     let db = fresh_db();
     let (admin, session) = seed_admin_with_fresh_step_up(&db).await;
-    let target = seed_user(&db, |_| {}).await;
+    let target = seed_live_user(&db).await;
     let forged = "x via=cli invalidated=9 step_up=not_applicable:system_principal";
     issue_web(&db, admin, session, target, forged, Utc::now())
         .await
@@ -1063,7 +1070,6 @@ async fn an_expired_token_cannot_complete_and_writes_no_credential() {
         crate::models::CredentialRow {
             user_id: user,
             password_hash: "new-hash-placeholder".into(),
-            must_change: false,
             updated_at: now,
         },
         now,

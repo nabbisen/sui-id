@@ -32,6 +32,7 @@ use crate::{csrf, handlers::admin::with_csrf_cookie};
 use axum::extract::{Query, State};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum_extra::extract::cookie::CookieJar;
+use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 use sui_id_core::errors::CoreError;
 use sui_id_web::{Flash, FlashKind};
@@ -115,7 +116,7 @@ pub async fn forgot_password_post(
 #[derive(Debug, Deserialize)]
 pub struct ResetTokenQuery {
     #[serde(default)]
-    pub token: String,
+    pub token: SecretString,
 }
 
 pub async fn reset_password_get(
@@ -132,7 +133,7 @@ pub async fn reset_password_get(
     let token = csrf::ensure_token(&jar);
     // RFC 103 D10: a token in the query string has already reached every
     // access log on the way here. Do not process it; ask for a new link.
-    if !q.token.is_empty() {
+    if !q.token.expose_secret().is_empty() {
         let html = sui_id_web::render_reset_password_invalid(lang);
         return Ok(with_csrf_cookie(Html(html).into_response(), &app, &token));
     }
@@ -146,9 +147,9 @@ pub async fn reset_password_get(
 pub struct ResetPasswordForm {
     #[serde(rename = "_csrf", default)]
     pub csrf: String,
-    pub token: String,
-    pub password: String,
-    pub confirm_password: String,
+    pub token: SecretString,
+    pub password: SecretString,
+    pub confirm_password: SecretString,
 }
 
 pub async fn reset_password_post(
@@ -164,14 +165,18 @@ pub async fn reset_password_post(
     crate::handlers::enforce_csrf(&jar, Some(&form.csrf))?;
     let t = lang.strings();
 
-    if form.password != form.confirm_password {
+    if form.password.expose_secret() != form.confirm_password.expose_secret() {
         let token = csrf::ensure_token(&jar);
         let flash = Flash {
             kind: FlashKind::Warn,
             text: t.password_mismatch_flash.into(),
         };
-        let html =
-            sui_id_web::render_reset_password(form.token.clone(), token.clone(), Some(flash), lang);
+        let html = sui_id_web::render_reset_password(
+            form.token.expose_secret().to_owned(),
+            token.clone(),
+            Some(flash),
+            lang,
+        );
         return Ok(with_csrf_cookie(
             (axum::http::StatusCode::BAD_REQUEST, Html(html)).into_response(),
             &app,
@@ -192,8 +197,8 @@ pub async fn reset_password_post(
         app.mailer.as_ref(),
         Some(app.hibp_client.as_ref()),
         hibp_mode,
-        &form.token,
-        &form.password,
+        form.token.expose_secret(),
+        form.password.expose_secret(),
         Some(&ip_str),
         crate::handlers::password_min_len(&app),
     )
@@ -210,7 +215,7 @@ pub async fn reset_password_post(
                 text: friendly(&other, lang),
             };
             let html = sui_id_web::render_reset_password(
-                form.token.clone(),
+                form.token.expose_secret().to_owned(),
                 token.clone(),
                 Some(flash),
                 lang,

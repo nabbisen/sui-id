@@ -467,7 +467,6 @@ mod tests {
             &CredentialRow {
                 user_id: id,
                 password_hash: phc,
-                must_change: false,
                 updated_at: now,
             },
         )

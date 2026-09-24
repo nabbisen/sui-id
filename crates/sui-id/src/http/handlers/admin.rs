@@ -20,9 +20,9 @@ use axum::response::Response;
 #[path = "admin/audit.rs"]
 mod audit;
 #[path = "admin/auth.rs"]
-mod auth;
+pub(crate) mod auth;
 #[path = "admin/clients.rs"]
-mod clients;
+pub(crate) mod clients;
 #[path = "admin/dashboard.rs"]
 mod dashboard;
 #[path = "admin/forms.rs"]
@@ -32,7 +32,7 @@ mod signing_keys;
 #[path = "admin/users.rs"]
 mod users;
 #[path = "admin/webauthn.rs"]
-mod webauthn;
+pub(crate) mod webauthn;
 
 pub use audit::*;
 pub use auth::*;

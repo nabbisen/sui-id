@@ -112,6 +112,7 @@ mod lockout;
 mod mfa;
 mod passwords;
 mod policy_markers;
+mod provisioning;
 mod recovery;
 mod refresh;
 mod user_admin;

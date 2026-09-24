@@ -85,7 +85,24 @@ pub async fn users_new_get(
     let State(app) = state_ext;
     let token = crate::csrf::ensure_token(&jar);
     let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
-    let resp = Html(render_users_new(None, token.clone(), app.is_dev_mode, lang)).into_response();
+    // The account is created without a password and activated through a
+    // recovery link, and issuing one needs the administrator's own second
+    // factor (RFC 103 D6). Say so *before* the form is filled in, not on the
+    // confirm screen after the account already exists (RFC 115 stage 2 review).
+    let has_second_factor = sui_id_core::step_up::user_has_mfa(&app.db, admin_id)
+        .await
+        .map_err(HttpError::html)?;
+    let flash = (!has_second_factor).then(|| Flash {
+        kind: FlashKind::Warn,
+        text: lang.strings().users_create_needs_second_factor.to_owned(),
+    });
+    let resp = Html(render_users_new(
+        flash,
+        token.clone(),
+        app.is_dev_mode,
+        lang,
+    ))
+    .into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
 }
 

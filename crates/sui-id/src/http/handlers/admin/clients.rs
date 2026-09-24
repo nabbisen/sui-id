@@ -8,6 +8,7 @@ use axum::Form;
 use axum::extract::{Path, State};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum_extra::extract::cookie::CookieJar;
+use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 use std::str::FromStr;
 use sui_id_core::admin::{self as admin_uc};
@@ -291,7 +292,7 @@ pub async fn clients_delete(
 pub struct ClientEditQuery {
     /// Present after a successful secret rotation — contains the new
     /// plaintext secret to display once (RFC 047).
-    pub rotated_secret: Option<String>,
+    pub rotated_secret: Option<SecretString>,
 }
 
 pub async fn clients_edit_get(
@@ -319,7 +320,7 @@ pub async fn clients_edit_get(
             confidential: row.confidential,
             is_disabled: row.is_disabled,
             consent_policy: row.consent_policy.as_str().to_string(),
-            freshly_rotated_secret: q.rotated_secret,
+            freshly_rotated_secret: q.rotated_secret.map(|s| s.expose_secret().to_owned()),
         },
         None,
         token.clone(),

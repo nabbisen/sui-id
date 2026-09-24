@@ -125,7 +125,6 @@ pub async fn change_password_self(
     let credential = CredentialRow {
         user_id,
         password_hash: new_phc,
-        must_change: false,
         updated_at: Utc::now(),
     };
     let audited = sui_id_store::commands::change_password_self(
@@ -196,7 +195,6 @@ mod tests {
             &CredentialRow {
                 user_id: id,
                 password_hash: phc,
-                must_change: false,
                 updated_at: now,
             },
         )
@@ -299,44 +297,6 @@ mod tests {
             .expect("cred")
             .password_hash;
         assert!(password::verify_password("the-old-tester-password", &stored).is_ok());
-    }
-
-    #[tokio::test]
-    async fn must_change_flag_is_reset_on_self_change() {
-        let db = fresh_db();
-        let clock = crate::time::system_clock();
-        let uid = create_user_with_password(&db, "the-old-tester-password").await;
-        let actor = self_actor_for(uid);
-        // Set must_change=true via direct upsert, simulating a
-        // pending admin reset.
-        let phc = password::hash_password("the-old-tester-password").expect("hash");
-        credentials::upsert(
-            &db,
-            &CredentialRow {
-                user_id: uid,
-                password_hash: phc,
-                must_change: true,
-                updated_at: Utc::now(),
-            },
-        )
-        .await
-        .expect("upsert");
-        change_password_self(
-            &db,
-            &clock,
-            None,
-            sui_id_store::models::HibpMode::Off,
-            &actor,
-            "the-old-tester-password",
-            "the-new-tester-password",
-            None,
-            false,
-            crate::security::SecurityLevel::Standard.password_min_len(),
-        )
-        .await
-        .expect("change");
-        let row = credentials::get(&db, uid).await.expect("cred");
-        assert!(!row.must_change, "must_change should be cleared");
     }
 
     #[tokio::test]

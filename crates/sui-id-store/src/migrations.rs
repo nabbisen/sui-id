@@ -178,6 +178,14 @@ const MIGRATIONS: &[Migration] = &[
         version: 41,
         sql: include_str!("./migrations/0041_recovery_link_tokens.sql"),
     },
+    Migration {
+        version: 42,
+        sql: include_str!("./migrations/0042_recovery_link_provisioning.sql"),
+    },
+    Migration {
+        version: 43,
+        sql: include_str!("./migrations/0043_drop_credentials_must_change.sql"),
+    },
 ];
 
 /// The highest schema version this build of sui-id-store knows how to

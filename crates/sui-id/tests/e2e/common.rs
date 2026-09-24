@@ -159,7 +159,6 @@ pub async fn create_user_with_password(
         &sui_id_store::models::CredentialRow {
             user_id: row.id,
             password_hash: sui_id_core::password::hash_password(password).expect("hash"),
-            must_change: false,
             updated_at: chrono::Utc::now(),
         },
     )

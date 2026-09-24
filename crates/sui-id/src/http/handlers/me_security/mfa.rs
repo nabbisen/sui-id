@@ -4,6 +4,7 @@ use crate::{csrf, errors::HttpError};
 use axum::extract::{Form, State};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum_extra::extract::cookie::CookieJar;
+use secrecy::ExposeSecret;
 use sui_id_core::errors::CoreError;
 use sui_id_store::repos::user_totp;
 
@@ -85,7 +86,7 @@ pub async fn mfa_enroll_start(
         ip,
         lang,
         "/me/security/mfa",
-        form.current_password.as_deref(),
+        form.current_password.as_ref().map(|s| s.expose_secret()),
         crate::handlers::ErrorAs::Html,
     )
     .await
@@ -137,7 +138,7 @@ pub async fn mfa_enroll_confirm(
     {
         return Ok(resp);
     }
-    let code: u32 = form.code.trim().parse().map_err(|_| {
+    let code: u32 = form.code.expose_secret().trim().parse().map_err(|_| {
         HttpError::html(CoreError::BadRequest(
             "verification code must be 6 digits".into(),
         ))

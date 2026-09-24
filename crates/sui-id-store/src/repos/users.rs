@@ -664,6 +664,10 @@ pub struct RecoveryTarget {
     /// passwordless local accounts, where "no credential row" would stop
     /// meaning "never activated".
     pub never_activated: bool,
+    /// The account has **ever** had a password-reset or recovery token, of any
+    /// kind and in any state (RFC 115 D11). Read in the same statement as the
+    /// rest; with `never_activated` it decides whether a link is provisioning.
+    pub has_any_token: bool,
 }
 
 /// Read the target's role, source and state, including a deleted user (which
@@ -676,7 +680,8 @@ pub fn recovery_target_within_tx(
     conn.query_row(
         "SELECT role, is_admin, source, is_disabled, is_deleted, \
                 (NOT EXISTS (SELECT 1 FROM credentials WHERE credentials.user_id = users.id) \
-                 AND last_login_at IS NULL) \
+                 AND last_login_at IS NULL), \
+                EXISTS (SELECT 1 FROM password_reset_tokens WHERE password_reset_tokens.user_id = users.id) \
          FROM users WHERE id = ?1",
         [user_id.to_string()],
         |row| {
@@ -686,6 +691,7 @@ pub fn recovery_target_within_tx(
             let is_disabled: i64 = row.get(3)?;
             let is_deleted: i64 = row.get(4)?;
             let never_activated: i64 = row.get(5)?;
+            let has_any_token: i64 = row.get(6)?;
             Ok(RecoveryTarget {
                 role: role_str
                     .as_deref()
@@ -701,6 +707,7 @@ pub fn recovery_target_within_tx(
                 is_disabled: is_disabled != 0,
                 is_deleted: is_deleted != 0,
                 never_activated: never_activated != 0,
+                has_any_token: has_any_token != 0,
             })
         },
     )

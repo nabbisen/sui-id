@@ -1,5 +1,6 @@
 //! Shared form / query structs for /me/security/* handlers (RFC 068).
 
+use secrecy::SecretString;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -23,9 +24,9 @@ pub struct RevokeAllOthersForm {
 pub struct PasswordChangeForm {
     #[serde(rename = "_csrf")]
     pub csrf: String,
-    pub current_password: String,
-    pub new_password: String,
-    pub confirm_password: String,
+    pub current_password: SecretString,
+    pub new_password: SecretString,
+    pub confirm_password: SecretString,
     /// Checkbox value. Browsers send the field only when checked,
     /// so the option is presence-detected. Any non-empty string
     /// means "yes, sweep my other sessions and refresh tokens".
@@ -61,7 +62,7 @@ pub struct LanguageForm {
 
 #[derive(Debug, Deserialize)]
 pub struct MfaConfirmForm {
-    pub code: String,
+    pub code: SecretString,
     #[serde(rename = "_csrf", default)]
     pub csrf: String,
 }
@@ -75,7 +76,7 @@ pub struct PasskeyRegisterStartForm {
     pub csrf: String,
     /// RFC 102 B7: required when the user has no second factor yet.
     #[serde(default)]
-    pub current_password: Option<String>,
+    pub current_password: Option<SecretString>,
 }
 
 /// `POST /me/security/mfa/enroll/start`: CSRF plus, for a user with no
@@ -85,14 +86,14 @@ pub struct MfaEnrollStartForm {
     #[serde(rename = "_csrf", default)]
     pub csrf: String,
     #[serde(default)]
-    pub current_password: Option<String>,
+    pub current_password: Option<SecretString>,
 }
 
 /// POST /me/security/passkeys/register/start
 
 #[derive(Debug, Deserialize)]
 pub struct PasskeyRegisterCompleteForm {
-    pub credential: String,
+    pub credential: SecretString,
     #[serde(rename = "_csrf", default)]
     pub csrf: String,
 }

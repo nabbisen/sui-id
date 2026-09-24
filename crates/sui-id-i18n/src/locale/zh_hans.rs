@@ -511,6 +511,7 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     users_label_username: "用户名",
     users_label_display_name: "显示名（可选）",
     users_label_email: "邮箱地址（可选）",
+    users_create_needs_second_factor: "您尚未设置第二因素。您可以创建此账户，但签发让新用户自行设置密码的恢复链接需要第二因素（通行密钥或验证器应用）。请先在安全设置页面中设置。",
     users_create_password_note: "此处不设置密码。创建账户后，您将签发一个恢复链接，用户打开该链接时自行设置密码。",
 
     // Admin: 客户端管理 (RFC 029)

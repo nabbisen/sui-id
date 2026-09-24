@@ -510,6 +510,7 @@ pub static STRINGS_EN: Strings = Strings {
     users_label_username: "Username",
     users_label_display_name: "Display name (optional)",
     users_label_email: "Email address (optional)",
+    users_create_needs_second_factor: "You have no second factor set up. You can create this account, but issuing the recovery link that lets the new user choose a password needs one (a passkey or an authenticator app). Set one up on your security page first.",
     users_create_password_note: "No password is set here. After you create the account you will issue a recovery link, and the user chooses their own password when they open it.",
 
     // Admin: Clients (RFC 029)

@@ -52,7 +52,7 @@ the administrator is asked to step up again.
 | `user.enable` | User enabled | Administrator re-enabled a previously disabled user account. |
 | `user.delete` | User deleted | Administrator deleted a user account. |
 | `mfa.admin_reset` | MFA reset (admin) | An administrator (web), or the operator with `sui-id admin reset-mfa` (no actor, `via=cli`), reset a user's MFA factors (TOTP and all passkeys removed). |
-| `user.recovery_link.issued` | Recovery link issued | An administrator (web), or the operator with `sui-id admin issue-recovery-link` (no actor, `via=cli`), issued a single-use account-recovery link for a user. The note records the `reason`, `via`, `expires_at`, how many of the user's earlier links this one `invalidated`, and `step_up`. The link itself is never recorded. |
+| `user.recovery_link.issued` | Recovery link issued | An administrator (web), or the operator with `sui-id admin issue-recovery-link` (no actor, `via=cli`), issued a single-use account-recovery link for a user. The note records the `reason`, `via`, `expires_at`, how many of the user's earlier links this one `invalidated`, `provisioning=1` when the link was issued for a just-created account and counted against the provisioning ceiling rather than the ordinary five an hour (absent otherwise), and `step_up`. The link itself is never recorded. |
 | `admin.user.unlock` | Account unlocked | Administrator cleared a user's progressive lockout. |
 | `user.role_change` | — | Administrator changed a user's role (admin, auditor or user). The mutation and this row commit in one transaction; the note records the old and new role. |
 
@@ -157,3 +157,18 @@ are stored encrypted and applied only after the administrator confirms them.
 | `settings.pending_change.applied` | — | Administrator confirmed a pending settings change and it was applied. |
 | `settings.pending_change.cancelled` | — | A pending settings change was cancelled before it was applied. |
 | `settings.pending_change.binding_failed` | — | A pending settings change was refused on confirmation because a binding check (session, actor, CSRF or expiry) failed. |
+
+## Retired events
+
+These events are no longer written. Rows recorded by an earlier version may still
+appear in an existing audit log, and this section is where to look one up.
+
+- `user.create_warned_hibp` — retired by RFC 115. An administrator created a user
+  whose password appeared in a known breach, with the breach check in `warn` mode.
+  Accounts are now created without a password, so the event cannot occur. The
+  `warn`-mode outcome is recorded where the password is chosen:
+  `auth.password.reset_completed` carries `hibp=warned`.
+- `user.reset_password` — retired by RFC 103. An administrator set a user's
+  password directly. That operation was removed: an administrator issues a
+  recovery link (`user.recovery_link.issued`) and the user chooses their own
+  password.

@@ -9,6 +9,7 @@ use axum::http::{HeaderMap, header};
 use axum::response::{IntoResponse, Redirect, Response};
 use base64ct::{Base64, Encoding};
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
+use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use sui_id_core::authorize::{
@@ -331,12 +332,12 @@ fn build_query_string(q: &AuthorizeQuery) -> String {
 #[derive(Debug, Deserialize)]
 pub struct TokenForm {
     pub grant_type: String,
-    pub code: Option<String>,
+    pub code: Option<SecretString>,
     pub redirect_uri: Option<String>,
     pub client_id: Option<String>,
-    pub client_secret: Option<String>,
-    pub code_verifier: Option<String>,
-    pub refresh_token: Option<String>,
+    pub client_secret: Option<SecretString>,
+    pub code_verifier: Option<SecretString>,
+    pub refresh_token: Option<SecretString>,
 }
 
 #[derive(Debug, Serialize)]
@@ -384,7 +385,11 @@ pub async fn token(
             description: "client_id is not a valid identifier".into(),
         })
     })?;
-    let client_secret = header_secret.or_else(|| form.client_secret.clone());
+    let client_secret = header_secret.or_else(|| {
+        form.client_secret
+            .as_ref()
+            .map(|s| s.expose_secret().to_owned())
+    });
 
     let lifetimes = app.token_lifetimes();
     let issuer = app.issuer().to_owned();
@@ -395,24 +400,32 @@ pub async fn token(
 
     let set = match form.grant_type.as_str() {
         "authorization_code" => {
-            let code = form.code.ok_or_else(|| {
-                HttpError::oauth(CoreError::Protocol {
-                    code: ProtocolError::InvalidRequest,
-                    description: "code is required".into(),
-                })
-            })?;
+            let code = form
+                .code
+                .ok_or_else(|| {
+                    HttpError::oauth(CoreError::Protocol {
+                        code: ProtocolError::InvalidRequest,
+                        description: "code is required".into(),
+                    })
+                })?
+                .expose_secret()
+                .to_owned();
             let redirect_uri = form.redirect_uri.ok_or_else(|| {
                 HttpError::oauth(CoreError::Protocol {
                     code: ProtocolError::InvalidRequest,
                     description: "redirect_uri is required".into(),
                 })
             })?;
-            let code_verifier = form.code_verifier.ok_or_else(|| {
-                HttpError::oauth(CoreError::Protocol {
-                    code: ProtocolError::InvalidRequest,
-                    description: "code_verifier is required (PKCE)".into(),
-                })
-            })?;
+            let code_verifier = form
+                .code_verifier
+                .ok_or_else(|| {
+                    HttpError::oauth(CoreError::Protocol {
+                        code: ProtocolError::InvalidRequest,
+                        description: "code_verifier is required (PKCE)".into(),
+                    })
+                })?
+                .expose_secret()
+                .to_owned();
             authorize::exchange_code(
                 &app.db,
                 &app.clock,
@@ -429,12 +442,16 @@ pub async fn token(
             .map_err(HttpError::oauth)?
         }
         "refresh_token" => {
-            let refresh_token = form.refresh_token.ok_or_else(|| {
-                HttpError::oauth(CoreError::Protocol {
-                    code: ProtocolError::InvalidRequest,
-                    description: "refresh_token is required".into(),
-                })
-            })?;
+            let refresh_token = form
+                .refresh_token
+                .ok_or_else(|| {
+                    HttpError::oauth(CoreError::Protocol {
+                        code: ProtocolError::InvalidRequest,
+                        description: "refresh_token is required".into(),
+                    })
+                })?
+                .expose_secret()
+                .to_owned();
             authorize::exchange_refresh(
                 &app.db,
                 &app.clock,

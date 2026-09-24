@@ -11,18 +11,19 @@ use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::{Form, Json};
+use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use sui_id_core::errors::CoreError;
 
 #[derive(Debug, Deserialize)]
 pub struct IntrospectForm {
-    pub token: String,
+    pub token: SecretString,
     #[serde(default)]
     pub token_type_hint: Option<String>,
     #[serde(default)]
     pub client_id: Option<String>,
     #[serde(default)]
-    pub client_secret: Option<String>,
+    pub client_secret: Option<SecretString>,
 }
 
 /// Wire format for `/oauth2/introspect` per RFC 7662 §2.2.
@@ -68,7 +69,7 @@ pub async fn introspect(
         &app.db,
         &app.clock,
         cid,
-        &form.token,
+        form.token.expose_secret(),
         form.token_type_hint.as_deref(),
     )
     .await
@@ -106,13 +107,13 @@ pub async fn introspect(
 
 #[derive(Debug, Deserialize)]
 pub struct RevokeForm {
-    pub token: String,
+    pub token: SecretString,
     #[serde(default)]
     pub token_type_hint: Option<String>,
     #[serde(default)]
     pub client_id: Option<String>,
     #[serde(default)]
-    pub client_secret: Option<String>,
+    pub client_secret: Option<SecretString>,
 }
 
 pub async fn revoke(
@@ -131,7 +132,7 @@ pub async fn revoke(
         &app.db,
         &app.clock,
         cid,
-        &form.token,
+        form.token.expose_secret(),
         form.token_type_hint.as_deref(),
     )
     .await
@@ -158,13 +159,13 @@ pub async fn revoke(
 fn client_credentials(
     headers: &HeaderMap,
     form_client_id: &Option<String>,
-    form_client_secret: &Option<String>,
+    form_client_secret: &Option<SecretString>,
 ) -> Option<(String, String)> {
     if let Some((id, secret)) = crate::handlers::oidc::parse_basic_auth(headers) {
         return Some((id, secret));
     }
     match (form_client_id, form_client_secret) {
-        (Some(i), Some(s)) => Some((i.clone(), s.clone())),
+        (Some(i), Some(s)) => Some((i.clone(), s.expose_secret().to_owned())),
         _ => None,
     }
 }

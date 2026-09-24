@@ -377,7 +377,6 @@ pub async fn consume_and_reset_password(
     let credential = CredentialRow {
         user_id: row.user_id,
         password_hash: new_hash,
-        must_change: false,
         updated_at: now,
     };
     // RFC 103 D13: the command consumes the token once and re-reads the

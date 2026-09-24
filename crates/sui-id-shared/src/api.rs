@@ -16,27 +16,12 @@ pub struct SetupStatusDto {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CreateInitialAdminRequest {
-    /// Setup token printed once on stderr at first start.
-    pub setup_token: String,
-    pub username: String,
-    pub password: String,
-    pub display_name: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateInitialAdminResponse {
     pub user_id: UserId,
     pub username: String,
 }
 
 // ---------- session / login ----------
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LoginRequest {
-    pub username: String,
-    pub password: String,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WhoAmIResponse {
@@ -47,15 +32,6 @@ pub struct WhoAmIResponse {
 }
 
 // ---------- users ----------
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CreateUserRequest {
-    pub username: String,
-    pub password: String,
-    pub display_name: Option<String>,
-    #[serde(default)]
-    pub is_admin: bool,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserSummary {
@@ -78,11 +54,6 @@ pub struct UserListResponse {
     pub users: Vec<UserSummary>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ResetPasswordRequest {
-    pub new_password: String,
-}
-
 // ---------- clients ----------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -96,15 +67,6 @@ pub struct CreateClientRequest {
 
 fn default_true() -> bool {
     true
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CreateClientResponse {
-    pub client_id: ClientId,
-    pub client_secret: Option<String>,
-    pub name: String,
-    pub redirect_uris: Vec<String>,
-    pub confidential: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

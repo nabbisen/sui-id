@@ -510,6 +510,7 @@ pub static STRINGS_JA: Strings = Strings {
     users_label_username: "ユーザー名",
     users_label_display_name: "表示名（任意）",
     users_label_email: "メールアドレス（任意）",
+    users_create_needs_second_factor: "あなたには第二要素が設定されていません。アカウントは作成できますが、新しいユーザーがパスワードを決めるための復旧リンクの発行には、第二要素（パスキーまたは認証アプリ）が必要です。先にセキュリティ設定で設定してください。",
     users_create_password_note: "ここではパスワードを設定しません。アカウントを作成したあと、復旧リンクを発行します。ユーザー本人がそのリンクを開いて自分のパスワードを決めます。",
 
     // Admin: クライアント編集 (RFC 051)

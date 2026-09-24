@@ -13,6 +13,7 @@ use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum_extra::extract::cookie::CookieJar;
+use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 use std::str::FromStr;
 use sui_id_core::errors::CoreError;
@@ -24,7 +25,7 @@ use sui_id_web::{Flash, FlashKind, LoginContext, render_login};
 
 pub struct LoginForm {
     pub username: String,
-    pub password: String,
+    pub password: SecretString,
     #[serde(default)]
     pub next: String,
 }
@@ -443,7 +444,14 @@ pub async fn login_post(
     };
     // RFC 005: local-first cascade; falls back to external user-sources
     // when the username is not found locally.
-    match try_login_with_cascade(&app, form.username.trim(), &form.password, audience).await {
+    match try_login_with_cascade(
+        &app,
+        form.username.trim(),
+        form.password.expose_secret(),
+        audience,
+    )
+    .await
+    {
         Ok(session::LoginOutcome::AudienceRefused) => Ok(no_admin_access(form.next)),
         Ok(session::LoginOutcome::SessionEstablished(row)) => {
             // RFC 006: record successful sign-in.
@@ -567,7 +575,7 @@ pub async fn mfa_challenge_get(
 #[derive(Debug, Deserialize)]
 
 pub struct MfaChallengeForm {
-    pub code: String,
+    pub code: SecretString,
     #[serde(rename = "_csrf", default)]
     pub csrf: String,
 }
@@ -602,8 +610,14 @@ pub async fn mfa_challenge_post(
         Err(_) => return Ok(Redirect::to("/admin/login").into_response()),
     };
     let max_lockout = app.config.security.max_lockout.as_secs();
-    match sui_id_core::mfa::verify_pending(&app.db, &app.clock, pending_id, &form.code, max_lockout)
-        .await
+    match sui_id_core::mfa::verify_pending(
+        &app.db,
+        &app.clock,
+        pending_id,
+        form.code.expose_secret(),
+        max_lockout,
+    )
+    .await
     {
         Ok(session) => {
             let cookie = session_cookie(session.id.to_string(), app.config.server.cookie_secure);

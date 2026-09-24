@@ -203,7 +203,6 @@ pub struct FederationLinkRow {
 pub struct CredentialRow {
     pub user_id: UserId,
     pub password_hash: String,
-    pub must_change: bool,
     pub updated_at: DateTime<Utc>,
 }
 

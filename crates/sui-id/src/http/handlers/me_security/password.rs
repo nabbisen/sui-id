@@ -4,6 +4,7 @@ use crate::{csrf, errors::HttpError};
 use axum::extract::{Form, State};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum_extra::extract::cookie::CookieJar;
+use secrecy::ExposeSecret;
 use std::str::FromStr;
 use sui_id_core::errors::CoreError;
 use sui_id_shared::ids::SessionId;
@@ -74,7 +75,7 @@ pub async fn password_change_post(
         crate::handlers::ErrorAs::Html,
     )?;
 
-    if form.new_password != form.confirm_password {
+    if form.new_password.expose_secret() != form.confirm_password.expose_secret() {
         return Err(HttpError::html(CoreError::BadRequest(
             "new password and confirmation do not match".into(),
         )));
@@ -113,8 +114,8 @@ pub async fn password_change_post(
         Some(app.hibp_client.as_ref()),
         hibp_mode,
         &self_actor,
-        &form.current_password,
-        &form.new_password,
+        form.current_password.expose_secret(),
+        form.new_password.expose_secret(),
         Some(keep),
         revoke_others,
         crate::handlers::password_min_len(&app),

@@ -60,7 +60,6 @@ pub async fn create_initial_admin(
         password,
         display_name,
         email,
-        /* must_change */ false,
         /* headless */ false,
     )
     .await
@@ -72,10 +71,9 @@ pub async fn create_initial_admin(
 /// and master key, and an actor with that access already controls the
 /// instance. (Same trust model as the `admin unlock-user` subcommand.)
 ///
-/// `must_change` records that the password should be rotated after first
-/// login — set `true` when the password was machine-generated and printed
-/// to the console. Login-time enforcement is a future RFC; the flag makes
-/// the intent durable today.
+/// There is no "rotate after first login" flag (RFC 115 D12): the column that
+/// pretended to record one was read by nothing and is gone. A password the
+/// operator generated is printed once; it is the operator's to change.
 pub async fn create_initial_admin_headless(
     db: &Database,
     clock: &SharedClock,
@@ -83,7 +81,6 @@ pub async fn create_initial_admin_headless(
     password: &str,
     display_name: Option<&str>,
     email: Option<&str>,
-    must_change: bool,
 ) -> CoreResult<CreatedInitialAdmin> {
     if state::is_initialized(db)? {
         return Err(CoreError::AlreadyInitialized);
@@ -96,7 +93,6 @@ pub async fn create_initial_admin_headless(
         password,
         display_name,
         email,
-        must_change,
         /* headless */ true,
     )
     .await
@@ -143,7 +139,6 @@ async fn create_initial_admin_inner(
     password: &str,
     display_name: Option<&str>,
     email: Option<&str>,
-    must_change: bool,
     headless: bool,
 ) -> CoreResult<CreatedInitialAdmin> {
     if username.trim().is_empty() {
@@ -196,7 +191,6 @@ async fn create_initial_admin_inner(
     let cred = CredentialRow {
         user_id: user.id,
         password_hash: hash,
-        must_change,
         updated_at: now,
     };
     credentials::upsert(db, &cred).await?;
@@ -294,7 +288,6 @@ mod tests {
             "a-long-enough-password",
             Some("First Admin"),
             Some("admin@example.com"),
-            /* must_change */ true,
         )
         .await
         .expect("headless setup");
@@ -302,12 +295,8 @@ mod tests {
         assert_eq!(created.username, "first-admin");
         assert!(state::is_initialized(&db).expect("state read"));
 
-        // must_change persisted as passed.
-        let cred = credentials::get(&db, created.user_id).await.expect("cred");
-        assert!(
-            cred.must_change,
-            "generated-password intent must be recorded"
-        );
+        // The headless path writes an ordinary credential row.
+        credentials::get(&db, created.user_id).await.expect("cred");
     }
 
     #[tokio::test]
@@ -322,7 +311,6 @@ mod tests {
             "a-long-enough-password",
             None,
             None,
-            false,
         )
         .await
         .expect("first setup");
@@ -334,7 +322,6 @@ mod tests {
             "another-long-password",
             None,
             None,
-            false,
         )
         .await;
         assert!(matches!(second, Err(CoreError::AlreadyInitialized)));
@@ -346,16 +333,8 @@ mod tests {
         let clock = crate::time::system_clock();
 
         // 8 chars passes Development but must fail here: setup is always Standard.
-        let r = create_initial_admin_headless(
-            &db,
-            &clock,
-            "first-admin",
-            "changeme",
-            None,
-            None,
-            false,
-        )
-        .await;
+        let r =
+            create_initial_admin_headless(&db, &clock, "first-admin", "changeme", None, None).await;
         assert!(matches!(r, Err(CoreError::BadRequest(_))));
         assert!(!state::is_initialized(&db).expect("state read"));
     }
@@ -390,10 +369,8 @@ mod tests {
         )
         .await;
         assert!(ok.is_ok());
-        // Wizard-created credential is NOT flagged must_change.
-        let cred = credentials::get(&db, ok.unwrap().user_id)
+        credentials::get(&db, ok.unwrap().user_id)
             .await
             .expect("cred");
-        assert!(!cred.must_change);
     }
 }

@@ -41,6 +41,10 @@ pub mod setup;
 #[path = "handlers/step_up.rs"]
 pub mod step_up;
 
+#[cfg(test)]
+#[path = "handlers/secret_forms_tests.rs"]
+mod secret_forms_tests;
+
 /// Cookie name for the in-flight WebAuthn ceremony id (used by both
 /// registration and authentication challenges). HttpOnly because the
 /// browser-side JS only needs the JSON challenge body, not the id.
