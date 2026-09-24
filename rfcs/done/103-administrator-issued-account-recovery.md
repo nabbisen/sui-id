@@ -1,6 +1,21 @@
 # RFC 103 — Administrator-issued account recovery
 
-**Status.** Accepted
+**Status.** Implemented
+**Closure reviewed on.** 2026-09-24
+**Closure approved by.** `@nabbisen`, 2026-09-24. Closure review by the
+high-capability model in its architect role, which implemented no stage of this
+RFC — the bar RFC 000 sets. The evidence was **re-verified at the closing
+commit** rather than inherited from stage 5, because RFC 115 stage 3 changed the
+fixtures of tests that evidence cites: all 33 cited tests exist and pass at
+`420fbef`.
+**Closure evidence.** [Closure assessment 2026-09-24](../handoffs/103-administrator-issued-account-recovery/README.md)
+**Closed with three live limitations in view**, each owned elsewhere and named
+in that assessment: the recovery flow can be denied by an unauthenticated
+stranger through the lockout (RFC 118); the audit note format is unescaped, so
+operator queries can produce a false positive but never a false negative (RFC
+105); and stage 5's evidence cited the audit matrix as if the whole file were
+verified, which it was not — though RFC 103's own rows were among the correct
+ones.
 **Accepted on.** 2026-09-17
 **Approved by.** `@nabbisen`, who also ruled every open question as recommended.
 **Independent design review.** [Design review 2026-09-16](../handoffs/102-authentication-fails-closed/102-103-design-review-2026-09-16.md)
@@ -34,7 +49,7 @@ and wrong for the *choice*, and is superseded here. Raised by RFC 115's
 independent design review (H1), 2026-09-24.
 
 **Still unmet under that reading.** U01 lets an administrator choose a password at
-user creation, so the first clause fails today regardless. [RFC 115](115-user-creation-without-a-password.md)
+user creation, so the first clause fails today regardless. [RFC 115](../accepted/115-user-creation-without-a-password.md)
 closes it, and RFC 103 cannot close before it lands.
 **Tracks.** `ROADMAP.md` programme. This RFC is a prerequisite of RFC 101: the
 §6.4/§6.5 ruling's "nobody is stranded" is true only once this RFC is

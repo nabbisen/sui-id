@@ -10,7 +10,7 @@ package text, kept as the record of how the defect was found.
 **Implementer.** Mid-capability model.
 **Found by.** The T2 re-review of 2026-09-22, tracing every production writer of
 the `credentials` table rather than re-reading RFC 103's checklist.
-**Bears on.** [RFC 103](../../accepted/103-administrator-issued-account-recovery.md)
+**Bears on.** [RFC 103](../../done/103-administrator-issued-account-recovery.md)
 closure prerequisite 4, threat T2, and `docs/threat-model.md`'s RFC 103 entry.
 
 ## The defect

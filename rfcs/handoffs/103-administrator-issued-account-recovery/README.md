@@ -1,6 +1,6 @@
 # RFC 103 implementation handoff
 
-**Governing RFC.** [RFC 103](../../accepted/103-administrator-issued-account-recovery.md),
+**Governing RFC.** [RFC 103](../../done/103-administrator-issued-account-recovery.md),
 Accepted 2026-09-17. **Implementer.** Mid-capability model.
 **Reviews.** In [`../102-authentication-fails-closed/`](../102-authentication-fails-closed/README.md)
 (shared with RFC 102).
@@ -344,3 +344,62 @@ and the trace span.
   MSRV 1.95, G12 (en, ja and zh_hans strings), G13.
 - **Docs.** Update `docs/src/guides/operators.md` wherever it describes the reset
   link.
+
+---
+
+## Closure assessment — 2026-09-24
+
+**Assessed by.** High-capability model, architect / deputy PM — **not the
+implementer of any stage**, which is the bar RFC 000 sets ("the implementer
+cannot be the sole approver of a security-sensitive design or its closure
+evidence"). Routing per `ROADMAP.md` §S1: an implementation is reviewed by the
+role that specified it.
+**Tree.** `420fbef`.
+
+### The evidence was re-verified at this commit, not taken from stage 5
+
+Stage 5's control-by-control table was assessed on 2026-09-22. RFC 115 stage 3
+then changed the **fixtures** of several U37 tests that table cites — a freshly
+seeded user is now a *provisioning* target, so tests about the ordinary
+five-per-hour limit had to seed a live one. The tests still prove their
+controls, but a closure record citing them had to be re-checked rather than
+inherited.
+
+**Re-run at `420fbef`: all 33 tests the stage 5 table cites exist and pass.**
+No cited test was renamed, deleted or weakened; the three whose fixtures changed
+(`u37_web_issues_a_link_and_writes_one_event`, `u37_web_refusals_write_nothing`,
+and the sixth-issuance pair) assert the same controls against a target that is
+now explicitly live.
+
+### Prerequisites
+
+| # | Prerequisite | Status at `420fbef` |
+|---|---|---|
+| 1 | Issue on the web | met |
+| 2 | …and through the CLI | met |
+| 3 | The user sets their own password with it | met |
+| 4 | No path lets anyone but the holder choose or learn a password | **met**, under the owner's recorded reading of 2026-09-24, *and* materially: RFC 115 removed U01's password parameter, so setting a password on a user's behalf is now a compile error |
+| 5 | Every threat has a test that fails when its control is removed | **met.** T2's control was deletion, evidenced by a grep-proof and called out at the time as the weakest row; RFC 115 has since made it a **compile error**. T8 is procedural and the RFC says so. T12 is the same compare-and-swap statement tested at stage 1 — re-checked here: RFC 115 stage 3 did **not** touch `mark_consumed_within_tx`, so that disclosure still holds |
+| 6 | `docs/threat-model.md` states the properties | met, and extended 2026-09-24 by RFC 115's entry |
+| 7 | Independent closure review accepts the evidence | **met** — this assessment |
+
+### Three things this closure is made with in view, not in spite of
+
+Recorded because a closure that hides what is still true is worth less than one
+that does not.
+
+1. **RFC 103's own flow can be denied by a stranger.** A link lives 30 minutes;
+   an unauthenticated attacker who knows a username can lock the account for up
+   to 24 hours, renewably, and completing a reset clears neither the counter nor
+   the lock. So the recovery this RFC provides can be made to fail before the
+   holder can use it. Stated in `docs/threat-model.md` and owned by **RFC 118**.
+2. **Its audit story rests on an unescaped note format.** `last_note_field`
+   depends on "the real fields are written last", which is a convention rather
+   than a property of the data. False positives only, never false negatives.
+   Owned by **RFC 105**.
+3. **Its stage 5 evidence cited `ci/audit-coverage-matrix.md` as though the
+   whole file were verified.** It was not — RFC 116's review later disproved
+   twelve rows. Checked here: **RFC 103's own rows were not among them**; both
+   `user.recovery_link.issued` and `auth.password.reset_completed` are backed by
+   sealed descriptors and still read `A` without qualification. The evidence
+   holds; the confidence expressed in it at the time did not.

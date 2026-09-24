@@ -71,7 +71,7 @@ slot is `104`). One **parallel namespace** also exists:
 | 096 | [Upstream OIDC Federation Validation](./accepted/096-upstream-oidc-federation-validation.md) | M4-A, M4-B | `codex-developer` (OpenAI Codex) |
 | 098 | [Documentation Authority and Reconciliation](./done/098-documentation-authority-reconciliation.md) | M5 | mid-capability model |
 | 102 | [Authentication that cannot be audited does not succeed](./done/102-authentication-fails-closed-without-audit.md) | **Implemented, closed 2026-09-22** | mid-capability model |
-| 103 | [Administrator-issued account recovery](./accepted/103-administrator-issued-account-recovery.md) | prerequisite of RFC 101 | mid-capability model |
+| 103 | [Administrator-issued account recovery](./done/103-administrator-issued-account-recovery.md) | **Implemented, closed 2026-09-24** | mid-capability model |
 | 110 | [An RFC header may not legislate](./accepted/110-rfc-header-governance-guard.md) | cycle A | mid-capability model |
 | 115 | [Creating a user without choosing their password](./accepted/115-user-creation-without-a-password.md) | cycle A | mid-capability model |
 | 116 | [Gate contracts: one source, one gate each](./accepted/116-gate-contracts.md) | cycle B | mid-capability model |
@@ -121,6 +121,7 @@ Proposed: the move approved nothing.
 | 113 | [Test modules live in their own files](./proposed/113-test-file-organization.md) | [113-test-file-organization](./handoffs/113-test-file-organization/README.md) |
 | 114 | [Reconcile `docs/ui-ux-contracts.md` with the code](./proposed/114-ui-contract-reconciliation.md) | [114-ui-contract-reconciliation](./handoffs/114-ui-contract-reconciliation/README.md) |
 | 117 | [Owner decisions must be verifiable](./proposed/117-verifiable-owner-decisions.md) | [117-verifiable-owner-decisions](./handoffs/117-verifiable-owner-decisions/README.md) |
+| 118 | [A credential change clears the lockout, and the user is told](./proposed/118-lockout-clears-on-credential-change.md) | [118-lockout-clears-on-credential-change](./handoffs/118-lockout-clears-on-credential-change/README.md) |
 
 ### Implemented — Mockup Integration epic (Phase 0 → Phase 8)
 

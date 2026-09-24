@@ -62,7 +62,7 @@ though each pair shares one current repository function family.
 | U03 | Admin enable user | A | `user.enable` | `users::set_disabled(false)` | `a_u03_enable` |
 | U04 | Admin soft-delete user | A | `user.delete` | `users::soft_delete` plus revocations | `a_u04_delete` |
 | U05 | Admin role change | A | `user.role_change` | `users::set_role` | `a_u05_role` |
-| U06 | Admin password reset **Retired by [RFC 103](../../accepted/103-administrator-issued-account-recovery.md) D1** — replaced by U37 (issue recovery link); no path may set a password on a user's behalf. | A | `user.reset_password` | `credentials::upsert`, token/session invalidation | `a_u06_password` |
+| U06 | Admin password reset **Retired by [RFC 103](../../done/103-administrator-issued-account-recovery.md) D1** — replaced by U37 (issue recovery link); no path may set a password on a user's behalf. | A | `user.reset_password` | `credentials::upsert`, token/session invalidation | `a_u06_password` |
 | U07 | Admin MFA reset | A | `mfa.admin_reset` | `user_totp::delete`, WebAuthn credential deletes | `a_u07_mfa_reset` |
 | U08 | CLI operator unlock | A | `admin.user.unlock` | `users::admin_unlock` only — `clear_lockout` is **U24**, not this command (decided 2026-09-09) | `a_u08_unlock` |
 | U09 | Self password change | A | `auth.password.changed_self` | `credentials::upsert`, session/token revocation | `a_u09_self_password` |

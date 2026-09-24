@@ -417,6 +417,59 @@ those clauses are preserved here:
   `@nabbisen` rather than applied. Until it is settled, 2026-08-26 governs,
   because it is the one recorded as a decision in this section.
 
+#### S1b — The agents' credential, and the routing rule it reviews under
+
+Two findings of 2026-09-24, recorded together because they are the same
+weakness seen from two sides: **nothing in this repository can be trusted
+further than the credential that writes it.**
+
+**The credential.** Measured by RFC 117's design review and re-verified by the
+architect: the token the agents hold carries `repo` and `workflow` scope and
+**`admin: true`** on a personal-account repository with **no branch protection
+and no `CODEOWNERS`**. An agent can therefore remove protection, rewrite a
+workflow, and sign as the owner. This is not specific to RFC 117 — **it applies
+to every gate in the programme, G01 through G16.** What RFC 117 did was claim
+more than the others, and its text has been corrected.
+
+**Decided 2026-09-24, on the architect's recommendation:**
+
+1. The agents' credential loses `admin` and `workflow`. Measured cost: nine
+   commits touched `.github/workflows/` in the three weeks to 2026-09-24, so
+   `@nabbisen` is in the loop about every other day, and each of those is a
+   lane change worth a glance.
+2. `CODEOWNERS` covers **`ci/` and `.github/workflows/`** — the verifier's
+   *roots of trust* — and **not `scripts/`**. The first recommendation said
+   `CODEOWNERS` was too expensive at "39 commits in three weeks"; that number
+   was `ci/` and `scripts/` together and was the wrong thing to measure.
+   Separately: `rfc-policy.toml` 0, `ui-invariants.toml` 0, `doc-authority.toml`
+   2, `gate-inputs.toml` 7, `scripts/` 17. A weakened *script* is visible as
+   code in review; a quietly edited *policy or baseline* is one data line. The
+   leverage is in the data, and the data barely moves.
+3. Neither takes effect until `@nabbisen` configures them: the token is his to
+   reissue and branch protection is his to set. A `CODEOWNERS` file without
+   protection enforcing it would be a control that does not control, which is
+   the pattern this section exists to record.
+
+**The routing rule.** The decision of 2026-08-26 recorded above — that a design
+is reviewed by the role that must build against it — is the rule under which
+**every design review in this programme is routed**, including the five of
+2026-09-24 that each returned a blocker. Its only source is architect-written
+text in this section.
+
+Asking whether it was really made has two outcomes and neither is clean: a yes
+that is still unverifiable, or a no that leaves every review since August
+unsourced. **So the architect proposes, and `@nabbisen` decides prospectively,
+a routing rule that exists from the date he decides it** — carrying a signature
+once RFC 117 stage 1 lands — while the 2026-08-26 text is labelled unverifiable
+history under RFC 117 D6, alongside the other pre-adoption attributions.
+
+**Proposed text, awaiting his decision** — the architect's words, not a
+restatement of his: *a design is reviewed by the role that must build against
+it; an implementation by the role that specified it; rules, scope and schedule
+are proposed by the architect and decided by the owner; where no role but the
+author can review something, the gap is recorded as unreviewed judgment and
+ruled on with the gap in view, never labelled a completed independent review.*
+
 #### S2 — The audit hash chain has no external anchor, permanently for this programme
 
 RFC 094 corrects the *claims* about the chain but explicitly introduces no
@@ -484,8 +537,8 @@ date. The release treatment of each item follows the 2026-08-26 surface test.
 
 | Cycle | Target | Window | Contents |
 |---|---|---|---|
-| **A — close what is open** | v0.78.0 | 2026-09-23 → **10-10** | **RFC 115 dispatched 2026-09-24** (3 stages), then RFC 103's closure, then RFC 110, then RFC 105 |
-| **B — make the contracts true** | v0.79.0 | **2026-10-13 → 10-24** | RFC 116 stages 1–2, then RFC 112, then RFC 106, then RFC 116 stages 3–4 |
+| **A — close what is open** | v0.78.0 | 2026-09-23 → **10-10** | RFC 115 **Implemented 2026-09-24**; RFC 103 **closed 2026-09-24**; RFC 117 stages 0/0b landed. Remaining: RFC 110, then RFC 105 |
+| **B — make the contracts true** | v0.79.0 | **2026-10-13 → 10-24** | **RFC 118 first**, then RFC 116 stages 1–2, then RFC 112, then RFC 106, then RFC 116 stages 3–4 |
 | **C — the main line resumes** | v0.80.0 | from **2026-10-27** | RFC 094 M2a. Window open-ended until M2a's handoff is re-read against the eight commands RFCs 102 and 103 converted after it was written; the architect proposes a dated window with the cycle-B review |
 
 **Windows moved 2026-09-24, authorized the same day.** RFC 115's independent
@@ -551,6 +604,7 @@ historical record, not evidence.
 | [115](rfcs/accepted/115-user-creation-without-a-password.md) | Creating a user without choosing their password |
 | [116](rfcs/accepted/116-gate-contracts.md) | Gate contracts: one source, one gate each |
 | [117](rfcs/proposed/117-verifiable-owner-decisions.md) | Owner decisions must be verifiable |
+| [118](rfcs/proposed/118-lockout-clears-on-credential-change.md) | A credential change clears the lockout, and the user is told |
 
 ### Completed and withdrawn before the move
 

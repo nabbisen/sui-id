@@ -204,7 +204,7 @@ audit-log row.
 - RFC 060 — Audit-note rollout
 - RFC 102 — Authentication that cannot be audited does not succeed (step-up
   completion and its evidence)
-- [RFC 103](https://github.com/nabbisen/sui-id/blob/main/rfcs/accepted/103-administrator-issued-account-recovery.md) —
+- [RFC 103](https://github.com/nabbisen/sui-id/blob/main/rfcs/done/103-administrator-issued-account-recovery.md) —
   Administrator-issued account recovery (the recovery link and its handover)
 - [Audit event reference](../reference/audit-events.md) — the canonical
   list of action strings and what each one means.

@@ -101,7 +101,7 @@ The properties it establishes:
 
 ### 2026-09-22 — Administrator-issued account recovery (RFC 103)
 
-The decision is [RFC 103](../rfcs/accepted/103-administrator-issued-account-recovery.md).
+The decision is [RFC 103](../rfcs/done/103-administrator-issued-account-recovery.md).
 The properties it establishes:
 
 - **Recovering an account never tells an administrator a password.** The

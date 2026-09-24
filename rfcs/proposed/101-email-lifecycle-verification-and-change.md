@@ -143,7 +143,7 @@ shape and there is no reason to invent a second one.
 
 ### D7 — An email change invalidates outstanding password-reset tokens
 
-*Required by [RFC 103](../accepted/103-administrator-issued-account-recovery.md)
+*Required by [RFC 103](../done/103-administrator-issued-account-recovery.md)
 D3, recorded here 2026-09-17 because the email-change command (inventory `U11`)
 arrives with this RFC and not with RFC 103.*
 
@@ -214,7 +214,7 @@ proves.
 > it is, a user with no verified address and a forgotten password has no way back
 > in. **Ruled 2026-09-16 (`@nabbisen`): build it**, with the web version's security
 > risk addressed. It is designed as
-> [RFC 103](../accepted/103-administrator-issued-account-recovery.md): an administrator issues a
+> [RFC 103](../done/103-administrator-issued-account-recovery.md): an administrator issues a
 > single-use recovery link and never sets or sees a password. RFC 103 is an
 > implementation prerequisite of this RFC.
 
