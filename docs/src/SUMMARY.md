@@ -36,3 +36,4 @@
 - [Adding translations](./contributing/translators.md)
 - [UI state word contract](./contributing/state-contract.md)
 - [Release process](./contributing/release-process.md)
+- [Owner attributions (G16)](./contributing/owner-attributions.md)

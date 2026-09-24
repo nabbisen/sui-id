@@ -231,3 +231,15 @@ project got here.
   owner say "I did not decide that", which is what happened twice. The honest
   case for building it is that the third time cost a directory, nineteen
   packages and a day of restructuring to undo.
+
+## Gate Matrix lanes owned by RFC 117
+
+Registered through the multi-source lane registry (RFC 094 R10), as RFC 098 does.
+The heading above is the recorded source heading and is matched by plain
+equality; do not rename it without changing the manifest in the same commit.
+Column layout mirrors RFC 093's table so one parser reads both. Added with stage
+0 (D0); stages 1–3 add their own rows here.
+
+| ID | Toolchain | Features | Blocking command / assertion |
+|---|---|---|---|
+| G16 | Python 3.14 | n/a | `python3.14 scripts/check-owner-attributions.py --root . --policy ci/owner-attributions.toml` |

@@ -470,6 +470,24 @@ jobs:
       - name: G15
         run: bash scripts/ci-gate.sh G15
 
+  G16:
+    # RFC 117 stage 0's lane, registered through RFC 094's multi-source lane
+    # registry (R10): the owner-attribution census and its closed baseline.
+    # It needs no key. It prints every attribution of a decision to the owner
+    # in the step summary and fails on one that is not in the baseline, so a
+    # sentence like "Owner ruling, 2026-07-28" cannot be added unseen. It reads
+    # the whole tree, so it needs full file contents and nothing else.
+    name: "G16 — owner attributions (Python 3.14)"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Install Python 3.14
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14"
+      - name: G16
+        run: bash scripts/ci-gate.sh G16
+
   gate-inputs:
     # RFC 093 A3.4: ci/gate-inputs.toml enforcement. Verifies the manifest
     # scripts/ci-gate.sh reads is itself correct — action pinning, the
@@ -633,6 +651,16 @@ jobs:
           echo "command=python3.14 -m unittest scripts.tests.test_doc_authority"
           echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           python3.14 -m unittest scripts.tests.test_doc_authority
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
+      - name: G16 self-tests (owner-attribution census)
+        run: |
+          set +e
+          echo "command=python3.14 -m unittest scripts.tests.test_owner_attributions"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3.14 -m unittest scripts.tests.test_owner_attributions
           status=$?
           echo "exit_status=$status"
           echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"

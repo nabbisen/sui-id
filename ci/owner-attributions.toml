@@ -1,0 +1,34 @@
+# RFC 117 stage 0 (G16): the owner-attribution census.
+#
+# A machine-consumed contract, read by scripts/check-owner-attributions.py and
+# nothing else (RFC 116 D2: a file in ci/ is read by a gate that fails when it
+# stops being true). The two patterns below *define* what counts as an
+# attribution; they are data so that a change to them is a visible diff.
+#
+# They are deliberately generous. The first draft of RFC 117 used a narrow
+# pattern that misses the 2026-09-09 incident ("`@nabbisen` ruled on ..."), one
+# of the three the RFC exists to catch. A false positive costs a line in the
+# baseline; a false negative is the failure being prevented.
+version = 1
+
+# The closed baseline: every attribution that existed when the gate was adopted.
+baseline = "ci/owner-attribution-baseline.txt"
+
+[scan]
+# Whole-file text: every sentence is read.
+markdown_extensions = ["md"]
+# Code and configuration: only comments are read, never string literals.
+comment_extensions = ["rs", "toml", "yml", "yaml", "py", "sh", "sql"]
+
+[match]
+# The owner. `@nabbisen` or bare `nabbisen` (not as part of a URL or path), or
+# the word "owner". Matched against the sentence text after markdown decoration
+# is stripped.
+owner = '''(?<![/\w])@?nabbisen(?![/\w-])|\b[Oo]wner(?:'s)?\b'''
+# A decision verb, by stem: rul(e|ed|ing), decid*, decision*, authori[sz]*,
+# approv*, accept*, direct (as a word, so not "directory"), instruct*.
+verb = '''\b(?:rul(?:e|ed|es|ing|ings)|decid\w*|decision\w*|authori[sz]\w*|approv\w*|accept\w*|direct(?:ed|s|ion|ive)?|instruct\w*)\b'''
+
+[report]
+# How much of a sentence is shown in the log, the step summary and the baseline.
+excerpt_chars = 140

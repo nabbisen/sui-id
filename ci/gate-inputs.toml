@@ -38,6 +38,7 @@ G09b = []
 "093" = "Gate Matrix v1"
 "094" = "Gate Matrix lanes owned by RFC 094"
 "098" = "Gate Matrix lanes owned by RFC 098"
+"117" = "Gate Matrix lanes owned by RFC 117"
 
 # RFC 094 R10: lane -> owning RFC number. Exactly one owner per lane; two
 # owners for one lane is a TOML parse error rather than a condition to detect.
@@ -61,6 +62,7 @@ G11 = "093"
 G13 = "094"
 G14 = "098"
 G15 = "098"
+G16 = "117"
 
 # RFC 093 Gate Matrix v1 (rfcs/done/093-build-toolchain-release-gates.md),
 # machine-readable expansion. scripts/ci-gate.sh executes these commands
@@ -85,6 +87,7 @@ G11 = "python3.14 scripts/check-rfc-integrity.py --root . --policy ci/rfc-policy
 G13 = "bash scripts/check-audit-matrix.sh"
 G14 = "python3.14 scripts/check-markdown-links.py --root . rfcs/handoffs"
 G15 = "python3.14 scripts/check-doc-authority.py --root . --policy ci/doc-authority.toml"
+G16 = "python3.14 scripts/check-owner-attributions.py --root . --policy ci/owner-attributions.toml"
 
 # RFC 093 M1b C2.1: the lane-completeness rule (scripts/check-gate-inputs.sh
 # condition 7) requires every lane declared by any source RFC to be
