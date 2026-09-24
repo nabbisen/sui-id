@@ -32,3 +32,13 @@ ids = [
 # status agreement, index, links) apply (invariant 11).
 [metadata_required_from]
 min_number = 93
+
+# RFC 110 (G11 condition 15): a header in proposed/, accepted/ or done/ may not
+# cite an archived RFC as authority. This table is the closed list of
+# exceptions: RFC number -> the archived RFC numbers its header may name. It is
+# a policy entry, not a lexical marker in the header, so an author cannot write
+# their own exemption: adding a line here is a visible edit to a reviewed file.
+# `Supersedes [RFC 007]` is the one legitimate case (a supersession names what
+# it replaces); the RFC 007 it names is `rfcs/archive/007-multi-tenancy.md`.
+[archive_citations]
+"025" = ["007"]

@@ -353,7 +353,6 @@ The standard shape is light:
 **Handoff.** Link to the implementation handoff (omit for RFCs too small to need one).
 **Accountable owner and approver.** NAME — the human who approves this RFC and its closure.
 **RFC author / architect.** NAME or role that wrote this RFC.
-**Independent security and closure reviewer.** Role independence per RFC 000 — the reviewing role and what it reviews, or None if Security review is not required.
 
 <!-- Add when moving to accepted/: -->
 **Accepted on.** YYYY-MM-DD

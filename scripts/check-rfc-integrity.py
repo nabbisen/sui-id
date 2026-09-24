@@ -32,13 +32,25 @@ rfcs/README.md against RFC 093's RFC-integrity contract:
       existing RFC -- a handoff is a companion to an RFC, and work no RFC
       governs belongs in roadmap/ instead.
 
+  14. no RFC header in proposed/, accepted/ or done/ states a rule about who
+      may review: (a) every header field label that mentions review,
+      approval, independence or authorisation is one of six recorded
+      labels, and (b) no header contains one of four review-rule phrases.
+      A header may *record* who reviewed something; it may not *rule* on
+      who is allowed to. There is no exemption field (RFC 110 D5);
+  15. no RFC header in proposed/, accepted/ or done/ cites an archived RFC as
+      authority, except by a closed entry in --policy's [archive_citations].
+
 (Numbering 1-11 matches RFC 093's own list; item 8 is not an
 independently-checkable invariant -- it is subsumed by (9), which is what
-actually fires once a Proposed RFC moves to Accepted. Item 12 is not RFC
-093's, and neither is 13: they enforce RFC 000's folder layout and
+actually fires once a Proposed RFC moves to Accepted. Items 12 and 13 are
+not RFC 093's: they enforce RFC 000's folder layout and
 handoff-correspondence rules, which had no gate at all before 2026-09-10.
-G11 hosts them because this is the RFC-structure gate; RFC 000 remains
-their source.)
+Items 14 and 15 are RFC 110's, and are not RFC 093's either: they enforce
+that RFC 000 is not *restated* in headers, after two incidents in which a
+governance sentence was written into RFC headers, attributed to an authority
+that does not contain it, and left unchecked. G11 hosts all four because this
+is the RFC-structure gate; RFC 000 remains their source and is not amended.)
 
 Metadata is recognized only from bold, period-terminated labels
 (`**Label.** value`) in the RFC header -- from the title line up to but
@@ -68,6 +80,7 @@ import re
 import subprocess
 import sys
 import tomllib
+import unicodedata
 from pathlib import Path
 
 LIFECYCLE_FOLDERS = ("proposed", "accepted", "done", "archive")
@@ -101,6 +114,40 @@ REQUIRED_METADATA_FIELDS = (
     "Accountable owner and approver",
 )
 
+# RFC 110 (conditions 14 and 15). The label allowlist is closed: exactly six
+# header labels mention review, approval, independence or authorisation, and
+# each *records* a fact. Anything else that matches the pattern is a clause
+# being written into a header (both past incidents did it under a
+# reviewer-named label), including a renamed one.
+REVIEW_LABEL_RE = re.compile(r"review|approv|independen|authori", re.IGNORECASE)
+ALLOWED_REVIEW_LABELS = frozenset(
+    (
+        "Security review",
+        "Accountable owner and approver",
+        "Approved by",
+        "Independent design review",
+        "Closure reviewed on",
+        "Closure approved by",
+    )
+)
+# Review-rule phrases, matched on *normalised* header text (whitespace
+# collapsed, `*`, `_` and backticks stripped, case-folded). Deliberately not
+# RFC 000's own sentence ("cannot be the sole approver"): a header may quote
+# the policy; it may not legislate (RFC 110 D3).
+REVIEW_RULE_PHRASES = (
+    "must not have authored",
+    "role independence",
+    "independence means",
+    "vendor is not a criterion",
+)
+# Conditions 14 and 15 guard what may *enter* the live set, so they read the
+# three live folders; an archived header is the record of a disposed document.
+LIVE_FOLDERS = ("proposed", "accepted", "done")
+REVIEW_RULE_PRINCIPLE = (
+    "a header may record who reviewed something; it may not rule on who is "
+    "allowed to (RFC 110; the rule lives in RFC 000 and ROADMAP.md §S1)"
+)
+
 FOLDER_STATUS_PREFIXES = {
     "proposed": ("Proposed",),
     "accepted": ("Accepted",),
@@ -120,6 +167,8 @@ class Rfc:
         )
         self.header_lines: list[str] = []
         self.fields: dict[str, list[str]] = {}
+        # (1-based lineno, line, in_fence) for the RFC 110 guard's header.
+        self.guard_header: list[tuple[int, str, bool]] = []
 
     def field(self, label: str) -> str | None:
         """First occurrence's value, or None if the label is absent."""
@@ -226,6 +275,37 @@ def parse_header(text: str) -> tuple[list[str], dict[str, list[str]]]:
     return header_lines, fields
 
 
+def parse_guard_header(text: str) -> list[tuple[int, str, bool]]:
+    """The header as conditions 14 and 15 read it: every line from the top of
+    the file up to the first level-2 heading **that is not inside a fenced code
+    block**, as (1-based lineno, line, in_fence). `parse_header` cuts at the
+    first `## ` even inside a fence, so a fenced block carrying such a line early
+    in a header would end it short and hide a later clause from the guard; this
+    boundary is fence-aware (the hardening the RFC 110 design review asked for).
+    Fenced lines stay *in* the header, because a clause inside a fence is still
+    header text."""
+    out: list[tuple[int, str, bool]] = []
+    fence_char: str | None = None
+    fence_len = 0
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        stripped = line.strip()
+        in_fence = fence_char is not None
+        if fence_char is None:
+            m = FENCE_MARKER_RE.match(stripped)
+            if m:
+                fence_char, fence_len = m.group(1)[0], len(m.group(1))
+                out.append((lineno, line, True))
+                continue
+            if re.match(r"^## ", line):
+                break
+        else:
+            m = FENCE_CLOSER_RE.match(stripped)
+            if m and m.group(1)[0] == fence_char and len(m.group(1)) >= fence_len:
+                fence_char, fence_len = None, 0
+        out.append((lineno, line, in_fence))
+    return out
+
+
 TOML_FENCE_RE = re.compile(r"```toml\n(.*?)\n```", re.DOTALL)
 
 
@@ -268,6 +348,7 @@ def discover_rfcs(root: Path, policy: dict, failures: list[str]) -> list[Rfc]:
             rfc = Rfc(md, folder, namespace, number)
             text = md.read_text(encoding="utf-8")
             rfc.header_lines, rfc.fields = parse_header(text)
+            rfc.guard_header = parse_guard_header(text)
             # Narrowed TOML front-matter reading (design decision,
             # m1b-c2-rfc-integrity-checker-review-2026-08-01.md §4):
             # applies only to identifiers already on the closed
@@ -611,6 +692,132 @@ def check_closure_metadata(root: Path, rfcs: list[Rfc], policy: dict, failures: 
             check_evidence_field(root, rfc, "Closure evidence", failures)
 
 
+def normalise_header(guard_header: list[tuple[int, str, bool]]) -> tuple[str, list[int]]:
+    """The header as one normalised string, plus the original line number of
+    every character in it. Whitespace (including line breaks) collapses to one
+    space; `*`, `_`, backticks and invisible format characters (zero-width
+    spaces, bidi controls) are dropped; text is case-folded. A phrase that
+    a hard line break or an emphasis span splits in the source is contiguous
+    here, and a match maps back to the line it starts on."""
+    chars: list[str] = []
+    lines: list[int] = []
+    for lineno, line, _ in guard_header:
+        for ch in line + "\n":
+            if ch in "*_`" or unicodedata.category(ch) == "Cf":
+                # Markdown decoration, and zero-width / bidi format characters:
+                # invisible in a rendered header, so they must not split a phrase.
+                continue
+            if ch.isspace():
+                if chars and chars[-1] != " ":
+                    chars.append(" ")
+                    lines.append(lineno)
+                continue
+            chars.append(ch.lower())
+            lines.append(lineno)
+    return "".join(chars), lines
+
+
+def check_review_rules(rfcs: list[Rfc], failures: list[str]) -> None:
+    """Invariant 14: no live RFC header rules on who may review."""
+    for rfc in rfcs:
+        if rfc.folder not in LIVE_FOLDERS:
+            continue
+        # (a) the label allowlist, over real (unfenced) field labels.
+        for lineno, line, in_fence in rfc.guard_header:
+            if in_fence:
+                continue
+            m = LABEL_RE.match(line)
+            if not m:
+                continue
+            label = m.group(1)
+            if REVIEW_LABEL_RE.search(label) and label not in ALLOWED_REVIEW_LABELS:
+                failures.append(
+                    f"{rfc.path}:{lineno}: header field '{label}.' is not one of "
+                    f"the recorded review fields {sorted(ALLOWED_REVIEW_LABELS)} "
+                    f"(condition 14) -- {REVIEW_RULE_PRINCIPLE}"
+                )
+        # (b) the phrases, on normalised text of the whole header.
+        text, line_of = normalise_header(rfc.guard_header)
+        for phrase in REVIEW_RULE_PHRASES:
+            at = text.find(phrase)
+            if at != -1:
+                failures.append(
+                    f"{rfc.path}:{line_of[at]}: header contains the review-rule "
+                    f"phrase '{phrase}' (condition 14) -- {REVIEW_RULE_PRINCIPLE}"
+                )
+
+
+# `RFC 018`, `RFCs 018`, `RFC-018`, and lists/ranges after the plural:
+# `RFCs 018 and 099`, `RFCs 093-103`, `RFCs 007, 018`.
+RFC_REF_RE = re.compile(
+    r"\bRFCs?[ -]?(\d{3})"
+    r"((?:\s*(?:,|and|&|or|to|-|\u2013)\s*\d{3})*)",
+    re.IGNORECASE,
+)
+MI_REF_RE = re.compile(r"\bRFC-MI-(\d{3})\b")
+ARCHIVE_LINK_RE = re.compile(r"/archive/(\d{3})-|/archive/(RFC-MI-\d{3})-")
+
+
+def _header_citations(rfc: Rfc) -> list[tuple[int, str]]:
+    """(lineno, cited identifier) for every RFC the header names: text
+    references (singular, plural, list and range forms, and RFC-MI) and any
+    Markdown link whose target passes through `/archive/`. The title line
+    (line 1) is skipped: it names the RFC itself."""
+    cites: list[tuple[int, str]] = []
+    body = [(n, l, f) for n, l, f in rfc.guard_header if n > 1]
+    text, line_of = normalise_header(body)
+    for m in RFC_REF_RE.finditer(text):
+        first = m.group(1)
+        numbers = [first]
+        tail = m.group(2) or ""
+        parts = re.findall(r"(,|and|&|or|to|-|\u2013)\s*(\d{3})", tail, re.IGNORECASE)
+        prev = first
+        for sep, num in parts:
+            if sep.lower() in ("to", "-", "\u2013") and int(num) >= int(prev) and int(num) - int(prev) <= 200:
+                numbers.extend(f"{n:03d}" for n in range(int(prev) + 1, int(num)))
+            numbers.append(num)
+            prev = num
+        cites.extend((line_of[m.start()], n) for n in numbers)
+    for m in MI_REF_RE.finditer(text):
+        cites.append((line_of[m.start()], f"RFC-MI-{m.group(1)}"))
+    for lineno, line, _ in body:
+        for lm in LINK_RE.finditer(INLINE_CODE_RE.sub("", line)):
+            target = lm.group(1).strip()
+            if "/archive/" not in target:
+                continue
+            am = ARCHIVE_LINK_RE.search(target)
+            cites.append((lineno, (am.group(1) or am.group(2)) if am else f"archive:{target}"))
+    return cites
+
+
+def check_archive_citations(rfcs: list[Rfc], policy: dict, failures: list[str]) -> None:
+    """Invariant 15: no live RFC header rests on an archived RFC. The one
+    legitimate case today (025's `Supersedes RFC 007`) is a closed entry in the
+    policy's [archive_citations] table, whose diff is reviewed, not a lexical
+    carve-out an author can write."""
+    archived = {r.identifier for r in rfcs if r.folder == "archive"}
+    allowed = policy.get("archive_citations", {})
+    for rfc in rfcs:
+        if rfc.folder not in LIVE_FOLDERS:
+            continue
+        permitted = set(allowed.get(rfc.identifier, []))
+        reported: set[str] = set()
+        for lineno, cited in _header_citations(rfc):
+            if cited == rfc.identifier or cited in reported:
+                continue
+            if cited not in archived and not cited.startswith("archive:"):
+                continue
+            if cited in permitted:
+                continue
+            reported.add(cited)
+            failures.append(
+                f"{rfc.path}:{lineno}: header cites archived RFC {cited} "
+                f"(condition 15) -- a header is normative metadata and must not "
+                f"rest on a disposed document; discuss it in the body, or add a "
+                f"closed entry to [archive_citations] in the policy file"
+            )
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", required=True)
@@ -632,6 +839,8 @@ def main(argv: list[str]) -> int:
     check_required_metadata(rfcs, policy, failures)
     check_accepted_metadata(root, rfcs, failures)
     check_closure_metadata(root, rfcs, policy, failures)
+    check_review_rules(rfcs, failures)
+    check_archive_citations(rfcs, policy, failures)
 
     if failures:
         for line in failures:

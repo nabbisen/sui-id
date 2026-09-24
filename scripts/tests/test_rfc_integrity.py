@@ -518,5 +518,287 @@ class RfcIntegrityTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
 
 
+ARCHIVED_RFC = """\
+# RFC 007 — Old design
+
+**Status.** Withdrawn
+
+## Summary
+
+An archived RFC.
+"""
+
+DONE_RFC = """\
+# RFC 050 — Older design
+
+**Status.** Implemented (v0.1.0)
+
+## Summary
+
+A done RFC.
+"""
+
+
+class ReviewRuleGuardTest(unittest.TestCase):
+    """RFC 110, conditions 14 and 15: an RFC header may record who reviewed
+    something and may not rule on who is allowed to, and may not rest on an
+    archived RFC. One invalid and one boundary-valid fixture per branch."""
+
+    def run_tree(
+        self,
+        extra_header: str = "",
+        body: str = "Example RFC used as a fixture baseline.\n",
+        folder: str = "accepted",
+        policy: str = POLICY,
+        archived: bool = False,
+        done: bool = False,
+        header_replace: tuple[str, str] | None = None,
+    ) -> subprocess.CompletedProcess:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_baseline(root)
+            write(root / "ci" / "rfc-policy.toml", policy)
+            header = VALID_RFC.split("## Summary")[0]
+            if header_replace:
+                header = header.replace(*header_replace)
+            if extra_header:
+                header = header.rstrip("\n") + "\n" + extra_header.rstrip("\n") + "\n\n"
+            text = header + "## Summary\n\n" + body
+            if folder == "accepted":
+                write(root / "rfcs" / "accepted" / "100-example.md", text)
+            else:
+                # Move the RFC under test to another live/archive folder.
+                (root / "rfcs" / "accepted" / "100-example.md").unlink()
+                status = {"proposed": "Proposed", "done": "Implemented (v0.1.0)", "archive": "Withdrawn"}[folder]
+                text = text.replace("**Status.** Accepted", f"**Status.** {status}")
+                write(root / "rfcs" / folder / "100-example.md", text)
+                readme = VALID_README.replace("./accepted/100-example.md", f"./{folder}/100-example.md")
+                write(root / "rfcs" / "README.md", readme)
+            readme = (root / "rfcs" / "README.md").read_text()
+            if archived:
+                write(root / "rfcs" / "archive" / "007-old.md", ARCHIVED_RFC)
+                readme += "| 007 | [Old](./archive/007-old.md) |\n"
+            if done:
+                write(root / "rfcs" / "done" / "050-older.md", DONE_RFC)
+                readme += "| 050 | [Older](./done/050-older.md) |\n"
+            write(root / "rfcs" / "README.md", readme)
+            git_commit(root)
+            return run_checker(root)
+
+    def assertRejected(self, result, *needles):
+        self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        for needle in needles:
+            self.assertIn(needle, result.stderr)
+
+    def assertPasses(self, result):
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+
+    # ---- condition 14: phrases ------------------------------------------
+
+    def test_each_review_rule_phrase_is_rejected_and_named(self):
+        for phrase in (
+            "must not have authored",
+            "Role independence",
+            "Independence means",
+            "vendor is not a criterion",
+        ):
+            with self.subTest(phrase):
+                r = self.run_tree(extra_header=f"Rule: the reviewer {phrase} this RFC.")
+                self.assertRejected(
+                    r, "100-example.md", "(condition 14)", phrase.lower(),
+                    "may not rule on who is allowed to",
+                )
+
+    def test_message_names_the_line_of_the_phrase(self):
+        r = self.run_tree(extra_header="filler\nThe reviewer must not have authored it.")
+        # header: title(1), blank(2), Status(3) ... the phrase is the last header line.
+        last_field = len(VALID_RFC.split("## Summary")[0].rstrip().splitlines())
+        self.assertRejected(r, f"100-example.md:{last_field + 2}:")
+
+    def test_phrase_wrapped_across_a_line_break_is_rejected(self):
+        r = self.run_tree(extra_header="The reviewer must not\nhave authored the design.")
+        self.assertRejected(r, "must not have authored")
+
+    def test_phrase_split_by_emphasis_or_code_is_rejected(self):
+        for text in (
+            "The reviewer **must not** have authored it.",
+            "The reviewer `must not have` authored it.",
+            "The reviewer _must not_ have authored it.",
+        ):
+            with self.subTest(text):
+                self.assertRejected(self.run_tree(extra_header=text), "condition 14")
+
+    def test_invisible_characters_cannot_split_a_phrase(self):
+        # A zero-width space or a bidi control is invisible in the rendered header.
+        for text in ("The reviewer must not\u200b have authored it.", "Role\u202e independence per RFC 000."):
+            with self.subTest(repr(text)):
+                self.assertRejected(self.run_tree(extra_header=text), "condition 14")
+
+    def test_phrase_case_variants_are_rejected(self):
+        for text in ("ROLE INDEPENDENCE per RFC 000.", "role Independence per RFC 000."):
+            with self.subTest(text):
+                self.assertRejected(self.run_tree(extra_header=text), "role independence")
+
+    def test_phrase_in_a_fenced_block_inside_the_header_is_still_header_text(self):
+        r = self.run_tree(extra_header="```text\nRole independence per RFC 000\n```")
+        self.assertRejected(r, "role independence")
+
+    def test_a_fenced_heading_does_not_cut_the_header_short_and_hide_a_clause(self):
+        # `parse_header` ends at the first `## `, even inside a fence; the guard's
+        # boundary is fence-aware, so a clause after such a fence is still seen.
+        hidden = "```text\n## not a heading\n```\nThe reviewer must not have authored it."
+        self.assertRejected(self.run_tree(extra_header=hidden), "must not have authored")
+
+    def test_the_same_phrase_in_the_body_is_accepted(self):
+        r = self.run_tree(body="Role independence per RFC 000, and the reviewer must not have authored it.\n")
+        self.assertPasses(r)
+
+    def test_a_header_in_the_archive_is_out_of_scope(self):
+        r = self.run_tree(extra_header="Role independence per RFC 000.", folder="archive")
+        self.assertPasses(r)
+
+    def test_a_proposed_and_a_done_header_are_in_scope(self):
+        for folder in ("proposed", "done"):
+            with self.subTest(folder):
+                r = self.run_tree(extra_header="Role independence per RFC 000.", folder=folder)
+                self.assertRejected(r, "condition 14")
+
+    def test_rfc_000s_own_sentence_may_be_quoted_in_a_header(self):
+        # D3: "cannot be the sole approver" is RFC 000's rule, not an invention.
+        r = self.run_tree(
+            extra_header="RFC 000: the implementer cannot be the sole approver of a design."
+        )
+        self.assertPasses(r)
+
+    def test_sole_and_approver_separately_are_accepted(self):
+        self.assertPasses(self.run_tree(extra_header="The sole owner is the approver of record."))
+
+    # ---- condition 14: labels -------------------------------------------
+
+    def test_the_field_that_carried_the_eleven_clauses_is_rejected(self):
+        r = self.run_tree(
+            extra_header="**Independent security and closure reviewer.** Per RFC 000 the reviewer is external."
+        )
+        self.assertRejected(
+            r, "100-example.md", "'Independent security and closure reviewer.'",
+            "(condition 14)", "may not rule on who is allowed to",
+        )
+
+    def test_a_renamed_review_field_is_rejected(self):
+        for label in (
+            "Reviewer requirements",
+            "Independence",
+            "Independent security reviewer",
+            "Review authority",
+            "Authorised reviewers",
+        ):
+            with self.subTest(label):
+                r = self.run_tree(extra_header=f"**{label}.** Someone outside the author.")
+                self.assertRejected(r, f"'{label}.'", "(condition 14)")
+
+    def test_an_exemption_field_is_not_a_thing(self):
+        # D5: there is no `Reviewer-rule exemption`; the label is itself rejected,
+        # with or without a date and a link.
+        for value in ("necessary.", "necessary, approved by the owner 2026-09-22, [x](../handoffs/100-example/100-review.md)."):
+            with self.subTest(value):
+                r = self.run_tree(extra_header=f"**Reviewer-rule exemption.** {value}")
+                self.assertRejected(r, "'Reviewer-rule exemption.'")
+
+    def test_the_six_recorded_review_labels_are_accepted(self):
+        r = self.run_tree(
+            extra_header=(
+                "**Closure reviewed on.** 2026-01-02\n"
+                "**Closure approved by.** `@owner`"
+            )
+        )
+        self.assertPasses(r)
+
+    def test_a_label_unrelated_to_review_is_accepted(self):
+        self.assertPasses(self.run_tree(extra_header="**Amended on.** 2026-01-02 - why."))
+
+    # ---- condition 15 ---------------------------------------------------
+
+    def test_a_header_citing_an_archived_rfc_is_rejected(self):
+        r = self.run_tree(extra_header="**Amended on.** 2026-01-02 - per RFC 007.", archived=True)
+        self.assertRejected(r, "100-example.md", "header cites archived RFC 007", "(condition 15)")
+
+    def test_plural_list_and_range_forms_are_rejected(self):
+        for text in ("See RFCs 050 and 007.", "See RFCs 007, 050.", "See RFCs 005-010.", "See RFC-007."):
+            with self.subTest(text):
+                r = self.run_tree(extra_header=f"**Amended on.** {text}", archived=True, done=True)
+                self.assertRejected(r, "header cites archived RFC 007")
+
+    def test_a_markdown_link_into_the_archive_is_rejected(self):
+        r = self.run_tree(
+            extra_header="**Amended on.** 2026-01-02 - see [the old design](../archive/007-old.md).",
+            archived=True,
+        )
+        self.assertRejected(r, "header cites archived RFC 007")
+
+    def test_a_header_citing_a_done_rfc_is_accepted(self):
+        r = self.run_tree(extra_header="**Amended on.** 2026-01-02 - per RFC 050.", archived=True, done=True)
+        self.assertPasses(r)
+
+    def test_a_bare_number_is_not_a_citation(self):
+        self.assertPasses(self.run_tree(extra_header="**Amended on.** i18n 007 and commit 007abc.", archived=True))
+
+    def test_an_rfcs_own_number_and_title_are_not_citations(self):
+        self.assertPasses(self.run_tree(extra_header="**Amended on.** RFC 100 amended itself.", archived=True))
+
+    def test_the_title_line_is_not_read_for_citations(self):
+        # D6: the title line names the RFC itself (and an archived RFC's own title
+        # is what put two archive files in the red before the scope fix); it is
+        # skipped whole, not only when it names its own number.
+        r = self.run_tree(header_replace=("# RFC 100 — Example", "# RFC 100 — The successor to RFC 007"), archived=True)
+        self.assertPasses(r)
+
+    def test_the_same_citation_in_the_body_is_accepted(self):
+        r = self.run_tree(body="This supersedes RFC 007 historically.\n", archived=True)
+        self.assertPasses(r)
+
+    def test_an_archived_header_may_name_an_archived_rfc(self):
+        r = self.run_tree(extra_header="**Amended on.** per RFC 007.", folder="archive", archived=True)
+        self.assertPasses(r)
+
+    def test_the_policy_allowlist_admits_exactly_its_entry(self):
+        header = "**Amended on.** 2026-01-02 - Supersedes RFC 007."
+        without = self.run_tree(extra_header=header, archived=True)
+        self.assertRejected(without, "header cites archived RFC 007")
+        allowed = POLICY + '\n[archive_citations]\n"100" = ["007"]\n'
+        self.assertPasses(self.run_tree(extra_header=header, archived=True, policy=allowed))
+        # An entry for another RFC, or for another cited number, admits nothing.
+        for entry in ('"101" = ["007"]', '"100" = ["018"]'):
+            with self.subTest(entry):
+                policy = POLICY + f"\n[archive_citations]\n{entry}\n"
+                self.assertRejected(
+                    self.run_tree(extra_header=header, archived=True, policy=policy),
+                    "header cites archived RFC 007",
+                )
+
+    def test_the_allowlist_does_not_silence_condition_14(self):
+        policy = POLICY + '\n[archive_citations]\n"100" = ["007"]\n'
+        r = self.run_tree(extra_header="Role independence per RFC 007.", archived=True, policy=policy)
+        self.assertRejected(r, "(condition 14)")
+
+    # ---- the repository as it stands ------------------------------------
+
+    def test_the_repository_as_it_stands_passes_both_conditions(self):
+        result = subprocess.run(
+            [sys.executable, str(CHECKER), "--root", str(REPO_ROOT), "--policy", "ci/rfc-policy.toml"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertNotIn("condition 14", result.stderr)
+        self.assertNotIn("condition 15", result.stderr)
+
+    def test_the_real_policy_names_the_one_legitimate_citation(self):
+        import tomllib
+
+        with (REPO_ROOT / "ci" / "rfc-policy.toml").open("rb") as f:
+            policy = tomllib.load(f)
+        self.assertEqual(policy["archive_citations"], {"025": ["007"]})
+
+
 if __name__ == "__main__":
     unittest.main()

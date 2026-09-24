@@ -45,10 +45,13 @@ but absent from the template:
 **1. Add `**Accountable owner and approver.**` to the required block.** This is the
 only change the gate forces, and the only one that is currently a trap.
 
-**2. Add the three other established labels** — `Handoff`, `RFC author /
-architect`, `Independent security and closure reviewer`. Seven or eight uses each
-is convention, not accident, and a template that omits them teaches the wrong
-shape.
+**2. Add the two other established labels** — `Handoff` and `RFC author /
+architect`. Eight uses each is convention, not accident, and a template that
+omits them teaches the wrong shape. **Do not add `Independent security and
+closure reviewer`** (amended 2026-09-24, RFC 110 D7): that label carried the
+reviewer-rule clauses removed on 2026-09-22 and G11 condition 14 now rejects it.
+A header records that a review happened, in `Independent design review`; it does
+not state who is permitted to perform one.
 
 **3. Add `Amended on` and `Lifecycle history` in the commentary**, not the required
 block. Both are real governance fields — `Amended on` is explicitly repeatable, and
