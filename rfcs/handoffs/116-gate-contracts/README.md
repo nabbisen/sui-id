@@ -79,6 +79,40 @@ mutation each, each restored. Plus: the gate is green on the tree it lands in
 without editing the inventory to make it so, or, if it is not, every row it
 disproves is listed in the review package rather than fixed silently.
 
+## Stage 1b — correct the two dead paths, put G17 live — dispatched 2026-09-24
+
+**J1 is ruled: correct them, then promote the lane.** Holding G17 in
+`[gate_matrix_exceptions]` was the right call for stage 1 — a red lane on main
+is not a gate — but the exception is not where this ends. The two rows are not a
+judgment: `O04` and `X02` name `repos/backup.rs` and `repos/runtime.rs`, and
+`git log --all` shows **neither file has ever existed**. That is a factual error
+in a manifest, not a claim anyone decided. It is unlike RFC 116 D3a's twelve
+rows, which asserted a security property and went to the owner.
+
+**Required.**
+
+1. **Correct the two `files` paths** to the homes the stage 1 package
+   identified and this review confirmed exist:
+   `O04` → `crates/sui-id-store/src/backup/ops.rs`,
+   `X02` → `crates/sui-id/src/runtime/dev_mode.rs`.
+   Change nothing else in either row.
+2. **Promote G17 to a live lane**, exactly as J1 sets out: move the line from
+   `[gate_matrix_exceptions]` to `[gates]`, byte-matching RFC 116's table row;
+   add `G17 = "116"` to `[gate_owners]`; add a `G17` job to `ci.yml` shaped like
+   G15's. `[gate_matrix_exceptions]` returns to holding G12 alone, which is what
+   its own comment says it is for.
+
+**Evidence.** G17 exits 0 on the tree it lands in, as a live lane, with no row
+edited beyond the two paths above. A3.4 passes including condition 7's
+byte-match. A mutation that reverts either path is caught by G17 itself.
+
+**While you are there, and only if it is one line:** the stage 1 package
+observed that neither row's `test_id` (`o_o04_backup_snapshot`,
+`x_x02_dev_seed`) exists anywhere under `crates/`, and that it did not check the
+other 97. **Do not fix that here.** Report whether the other 97 resolve, as a
+measurement, so the scale is known before anyone decides whose gate it is —
+RFC 094's `audit-structure` most likely owns it.
+
 ## Stage 2 — the audit matrix: check the load-bearing column
 
 **Unblocked 2026-09-24, and the ground has moved.** D3a's twelve disproved rows
