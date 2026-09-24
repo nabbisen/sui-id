@@ -34,18 +34,28 @@ depends on what survives.
 
 | Stage | Content | Prerequisite |
 |---|---|---|
-| 1 | D1, D2 — the command inventory: one source, gated | RFC Accepted; **open question 1 ruled** |
-| 2 | D3 — the audit matrix's `class` column, and the others where derivable | RFC Accepted |
+| 1 | D1, D2 — the command inventory: one source, gated | **unblocked 2026-09-24** |
+| 2 | D3 — the audit matrix's `class` column, and the others where derivable | **unblocked 2026-09-24**; the matrix is already corrected |
 | 3 | D4 — generate `ci.yml`; collapse A3.4 | stages 1 and 2 landed |
 | 4 | D5 — G12 through the dispatcher, or the exception restated as a dated decision | stage 3 |
 | 5 | D6 — placement of the survivors, one move, all references in the same commit | stages 1–4 |
 
 ## Stage 1 — the command inventory: one source, gated
 
-**Blocked on open question 1.** Do not start until `@nabbisen` has said which
-copy survives. Building this against the wrong copy wastes the whole stage.
+**Unblocked 2026-09-24: the TOML survives.** `@nabbisen` ruled open question 1
+on the design review's measurement — `ci/write-commands.toml` is the maintained
+copy, carries `status`, `files` and `test_id` on 99 of 99 rows, and parses in
+one call, while the markdown twin has **no `files` and no `status` column at
+all**, so a path-existence gate is not expressible against it.
 
-**If the TOML survives (the architect's recommendation):**
+**Read RFC 116's D2a before building the gate.** The design review showed the
+gate as first worded here **cannot be green**: 76 of the 99 rows name no command
+in `commands.rs`, because the inventory records *planned* conversions too, and
+those rows are true. The schema needs a state distinguishing sealed from
+planned, and the direction rules follow from it. The two dead `files` paths
+(`O04`, `X02`) are reported in the package, not silently fixed.
+
+**What the ruling means concretely:**
 - `rfcs/handoffs/094-transactional-audit/command-inventory.md` loses its table
   and keeps its prose, pointing at the TOML. Do not delete the file: it carries
   the reasoning, which the TOML cannot.
@@ -70,6 +80,14 @@ without editing the inventory to make it so, or, if it is not, every row it
 disproves is listed in the review package rather than fixed silently.
 
 ## Stage 2 — the audit matrix: check the load-bearing column
+
+**Unblocked 2026-09-24, and the ground has moved.** D3a's twelve disproved rows
+were ruled and **already corrected** in `ci/audit-coverage-matrix.md`: they read
+`B *(A required)*`, pointing at RFC 094 M2b. So stage 2 no longer has to find
+them — it has to make the file *stay* true. **Re-run the by-hand check at your
+own baseline before building**: RFC 115 and RFC 105 have both touched
+`commands.rs` since the count was taken, and the twelve were a measurement of
+2026-09-24, not a constant.
 
 `ci/audit-coverage-matrix.md`'s `class` column asserts that a command is
 Class-A. That assertion is cited by `docs/threat-model.md` and by RFCs 094, 102
