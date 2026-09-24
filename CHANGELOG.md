@@ -7,6 +7,87 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.78.0] — 2026-09-24
+
+**No path in sui-id sets a password on a user's behalf any more, and an audit
+note can no longer be made to read as fields it does not carry.** Minor rather
+than patch: the administrator user-creation form loses its password field, a
+database column is dropped, and the audit note format changes.
+
+**What this release does not claim.** It is not production-ready, it has not had
+a security review in the sense the roadmap reserves that phrase, and it
+inherits none of the confidence the M7 soak is meant to establish. Two of the
+RFCs below were reviewed by a role that then implemented them, and one — RFC
+105 — has **no independent design review at all** and says so in its own header.
+
+### Changed
+
+- **Creating a user no longer takes a password** (RFC 115). `/admin/users/new`
+  has no password field; the administrator creates the account and issues a
+  recovery link, which is audited, step-up gated, second-factor gated and
+  throttled. Reintroducing a password at creation is a compile error, not a
+  review finding. **Operators: the create-user flow now has a second step.**
+- **Audit note values are percent-encoded** (RFC 105). `%`, `=`, whitespace and
+  control characters are written as `%XX`; everything else, including all
+  non-ASCII text, is unchanged. Substring queries over notes are now sound —
+  a reason that imitates a field can no longer match one. **Operators: a reason
+  containing spaces now reads `lost%20authenticator` in queries and in the CSV
+  export. Rows written before this release keep the old form and are not
+  rewritten.**
+- **A link issued for a just-created account has its own hourly ceiling**,
+  separate from the five-per-hour recovery limit, so bulk provisioning is
+  possible without loosening recovery. An account that already exists can never
+  qualify, and administrator targets are never exempt.
+
+### Fixed
+
+- **`/forgot-password` could be used to set the first password of an account an
+  administrator had just created.** The administrator types the new user's
+  email address and nothing verifies it, so the unauthenticated form — no
+  step-up, no second factor, no throttle, no audit event — would otherwise have
+  been a second way for them to choose that user's password. A local account
+  with no credential is now treated exactly as a directory account is.
+- **A never-activated account was distinguishable by timing at sign-in**, and
+  its failed attempts were neither counted nor audited. It now costs the same
+  Argon2 verify and is recorded like any other refusal.
+- **Twelve rows of `ci/audit-coverage-matrix.md` claimed atomic audit
+  guarantees the code does not provide.** They now read `B *(A required)*`,
+  with RFC 094 M2b named as what converts them. No code changed; the rows were
+  checked for the first time.
+
+### Removed
+
+- **`credentials.must_change`** (RFC 115). It was written in three places and
+  read by nothing — no sign-in path consulted it, so a flagged account was
+  never forced to change anything. Migration 0043 drops the column. **This is
+  irreversible: a backup taken by 0.78.0 cannot be restored by an earlier
+  binary.**
+- **The `user.create_warned_hibp` audit event.** The breach-warning outcome it
+  carried is now recorded on `auth.password.reset_completed`, where the user
+  actually chooses the password. Historical rows keep the name; the reference
+  gains a "Retired events" section.
+
+### Added
+
+- **Secrets in HTTP forms are redacted by their type.** Twenty form and query
+  structs hold passwords, client secrets, tokens and codes as
+  `secrecy::SecretString`, so a debug format cannot print one and a new field
+  that takes a secret as a plain string fails a test.
+- **G11 refuses an RFC header that rules on who may review**, or that cites an
+  archived RFC (RFC 110). Demonstrated against both occasions this project got
+  it wrong.
+- **G16 prints every attribution of a decision to the owner** and fails on one
+  that is not in a closed baseline (RFC 117 stage 0), with the diff of that
+  baseline printed beside it.
+
+### Closed
+
+- **RFC 103**, administrator-issued account recovery, with three live
+  limitations named in its closure record rather than hidden: the flow can be
+  denied by an unauthenticated stranger through the lockout (RFC 118 is
+  scheduled), and its stage-5 evidence overstated the audit matrix's
+  reliability, though RFC 103's own rows were among the correct ones.
+
 ## [0.77.0] — 2026-08-26
 
 **Raises the MSRV to 1.95 and fixes a startup-time crash on every TLS path

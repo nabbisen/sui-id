@@ -12,6 +12,7 @@
 .github/workflows/audit.yml	095d39017068e58a47de148dfe1ed151d30d595da5764d0cc24320c68e31e11c	1	Owner decision, 2026-09-05. unsound is a defect and yanked is nearly always a one-line patch bump away, so both should block. unmaintained i
 .github/workflows/ci.yml	6b5262843886d8230595468f25f44199ff8bbc25de381eca45389f67cb6dc487	1	It prints every attribution of a decision to the owner in the step summary and fails on one that is not in the baseline, so a sentence like 
 CHANGELOG.md	925252f4f9f24122a2e1bc983a30b2c154b619d3f06e4cee3a44881b4c04b5c1	1	All six remain Proposed with no scheduled delivery; each requires explicit owner direction and real-environment soak before implementation.
+CHANGELOG.md	db232c919a31fb485e0a7b8ca0852e1513c4b0f8fc8791e351cfb7c938ff1531	1	G16 prints every attribution of a decision to the owner and fails on one that is not in a closed baseline (RFC 117 stage 0), with the diff o
 ROADMAP.md	00e3f29eb3bc1938bf5010ca6376a16faed6d8baadd1372257a8cdcb059368c8	1	Proposed by the architect and authorized by @nabbisen on 2026-09-22, in his word: "Authorized." Windows are planning aids under the 2026-07-
 ROADMAP.md	00f66e9eb2c02e6f7a0df547538cc62dec158209611ddd6e4de6b6cf9d1bdecd	1	Decision owner @nabbisen means the risk cannot be closed by the architect alone.
 ROADMAP.md	02addf2dc720692a8e3ff8b300b32e5944765ed850fe7ec512d600c9bed92a0e	1	Part 2 ruled 2026-09-16: fail closed — a sign-in that cannot be audited does not succeed — carried by a new RFC rather than an in-place amen
