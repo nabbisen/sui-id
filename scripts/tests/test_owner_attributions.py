@@ -284,6 +284,143 @@ class Replay(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
 
+class BaselineDiff(unittest.TestCase):
+    """Stage 0b: what a baseline edit changed is printed above the census."""
+
+    NEW = "The owner ruled on 2026-12-01 that this is required."
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.repo = Repo(self._tmp.name)
+        self.repo.write("doc.md", "# Doc\n\nNothing here.\n")
+        self.repo.adopt()
+        self.repo.commit("adopt")
+
+    def _launder(self):
+        """A branch that adds an attribution AND baselines it, in one commit."""
+        self.repo.write("new.md", f"# New\n\n{self.NEW}\n")
+        self.repo.adopt()
+        self.repo.commit("add an attribution and clear it")
+
+    def _event(self, name, payload):
+        path = Path(self._tmp.name) / "event.json"
+        path.write_text(__import__("json").dumps(payload))
+        return {"GITHUB_EVENT_NAME": name, "GITHUB_EVENT_PATH": str(path), "PATH": _path()}
+
+    def test_a_branch_that_adds_and_baselines_shows_the_added_line_above_the_census(self):
+        self._launder()
+        r = self.repo.check("--base", "HEAD^")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)  # the gate itself passes
+        out = r.stdout
+        self.assertIn("## Baseline changes (RFC 117 stage 0b)", out)
+        self.assertIn("**changed**", out)
+        self.assertIn("1 line(s) added", out)
+        self.assertRegex(out, r"\+new\.md\t[0-9a-f]{64}\t1\t" + self.NEW[:40])
+        # ... above the census, so what clears a hit is beside the hit it clears.
+        self.assertLess(
+            out.index("## Baseline changes"), out.index("## Owner attributions")
+        )
+
+    def test_a_branch_that_touches_neither_shows_an_empty_section_not_a_broken_one(self):
+        self.repo.write("other.md", "# Other\n")
+        self.repo.commit("unrelated")
+        r = self.repo.check("--base", "HEAD^")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("## Baseline changes (RFC 117 stage 0b)", r.stdout)
+        self.assertIn("is unchanged since", r.stdout)
+        self.assertNotIn("```diff", r.stdout)
+
+    def test_a_removed_baseline_line_is_shown_too(self):
+        # Deleting a baseline entry (and the attribution with it) is also a
+        # change to the closed set.
+        self.repo.write("old.md", "# Old\n\nThe owner decided the old thing.\n")
+        self.repo.adopt()
+        self.repo.commit("baseline an old attribution")
+        self.repo.write("old.md", "# Old\n")
+        self.repo.adopt()
+        self.repo.commit("remove it and prune the baseline")
+        r = self.repo.check("--base", "HEAD^")
+        self.assertIn("1 removed", r.stdout)
+
+    def test_no_base_is_a_stated_message_not_a_failure(self):
+        self._launder()
+        # No `--base` and no event payload: a manual or detached run.
+        r = self.repo.check(env={"PATH": _path()})
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("**No base revision", r.stdout)
+        self.assertIn("this is not a GitHub event run", r.stdout)
+        self.assertIn("## Owner attributions", r.stdout, "the census is still printed")
+
+    def test_a_first_push_has_no_base_and_says_why(self):
+        self._launder()
+        env = self._event("push", {"before": "0" * 40, "after": "abc"})
+        r = self.repo.check(env=env)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("**No base revision", r.stdout)
+        self.assertIn("a first push, a new branch or a new tag", r.stdout)
+
+    def test_a_push_uses_the_previous_commit(self):
+        self._launder()
+        before = subprocess.run(
+            ["git", "rev-parse", "HEAD^"], cwd=self.repo.root, capture_output=True, text=True
+        ).stdout.strip()
+        r = self.repo.check(env=self._event("push", {"before": before}))
+        self.assertIn("the push's previous commit", r.stdout)
+        self.assertIn("1 line(s) added", r.stdout)
+
+    def test_a_pull_request_uses_its_base(self):
+        self._launder()
+        base = subprocess.run(
+            ["git", "rev-parse", "HEAD^"], cwd=self.repo.root, capture_output=True, text=True
+        ).stdout.strip()
+        env = self._event("pull_request", {"pull_request": {"base": {"sha": base}}})
+        r = self.repo.check(env=env)
+        self.assertIn("the pull request's base", r.stdout)
+        self.assertIn("1 line(s) added", r.stdout)
+
+    def test_a_base_that_is_not_in_this_clone_is_a_stated_message(self):
+        # A shallow checkout, or a history that was rewritten: the sha is not a commit here.
+        self._launder()
+        r = self.repo.check("--base", "1" * 40)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("**No base revision", r.stdout)
+        self.assertIn("is not a commit in this clone", r.stdout)
+
+    def test_a_manual_run_names_the_event_that_has_no_base(self):
+        r = self.repo.check(env=self._event("workflow_dispatch", {}))
+        self.assertIn("a `workflow_dispatch` event has no base revision", r.stdout)
+
+    def test_an_unreadable_event_payload_degrades_to_a_message(self):
+        env = {"GITHUB_EVENT_NAME": "push", "GITHUB_EVENT_PATH": "/nonexistent/event.json", "PATH": _path()}
+        r = self.repo.check(env=env)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("the event payload could not be read", r.stdout)
+
+    def test_the_step_summary_carries_the_section_first(self):
+        self._launder()
+        summary = Path(self._tmp.name) / "summary.md"
+        env = {"GITHUB_STEP_SUMMARY": str(summary), "PATH": _path()}
+        r = self.repo.check("--base", "HEAD^", env=env)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        text = summary.read_text()
+        self.assertLess(text.index("## Baseline changes"), text.index("## Owner attributions"))
+        self.assertIn("1 line(s) added", text)
+
+    def test_the_section_never_changes_the_verdict(self):
+        # A new, un-baselined attribution still fails, whatever the diff says.
+        self.repo.write("new.md", f"# New\n\n{self.NEW}\n")
+        r = self.repo.check("--base", "HEAD")
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("### New: not in the baseline", r.stdout)
+
+    def test_replay_modes_do_not_print_the_section(self):
+        # `--rev` / `--baseline-rev` replay a historic commit against its parent;
+        # there is no "this change" to diff, so the section is not printed.
+        r = self.repo.check("--rev", "HEAD", "--baseline-rev", "HEAD")
+        self.assertNotIn("## Baseline changes", r.stdout)
+
+
 def _path():
     import os
 

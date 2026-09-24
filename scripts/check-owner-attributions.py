@@ -40,8 +40,20 @@ What this does not do (stated because RFC 117 exists to stop overclaiming):
   * It matches text. An attribution phrased with no owner token, or in an image,
     is not seen.
 
+  5. **What the baseline edit changed is printed above the census** (stage 0b).
+     A commit that adds an attribution and its baseline line passes with "0 new",
+     so the only trace of the clearing is the diff of the baseline file. The gate
+     therefore finds the base revision (a push's `before`, a pull request's base,
+     or `--base`) and prints `git diff <base> -- <baseline>` under its own
+     heading, first, so what clears a hit is shown beside the hit it clears. When
+     there is no base (a first push, a new tag, a manual or detached run, a base
+     that is not in this clone) it says so and why, rather than failing or
+     printing nothing. It never changes the exit code: it is evidence, not a gate.
+
 Usage:
   check-owner-attributions.py --root . --policy ci/owner-attributions.toml
+  ... --base REV             the revision the baseline diff is taken against
+                             (default: from the GitHub event payload, if any)
   ... --update-baseline      rewrite the baseline from the current tree
   ... --rev REV              scan the tree at REV instead of the working tree
   ... --baseline-rev REV0    take the baseline from the tree at REV0 (replaying a
@@ -54,6 +66,7 @@ from __future__ import annotations
 import argparse
 import collections
 import hashlib
+import json
 import os
 import re
 import subprocess
@@ -306,6 +319,101 @@ def write_baseline(path: str, hits: list[tuple[str, str]], excerpt: int) -> int:
     return len(counts)
 
 
+# ── what the baseline edit changed (stage 0b) ─────────────────────────────
+
+_NULL_SHA = "0" * 40
+
+
+def base_from_event(env: dict) -> tuple[str | None, str]:
+    """The base revision named by the GitHub event payload, and how it was
+    found. `(None, reason)` when the event names none: a first push or a new
+    tag has a `before` of forty zeros, and a manual or scheduled run has no
+    base at all."""
+    name = env.get("GITHUB_EVENT_NAME", "")
+    path = env.get("GITHUB_EVENT_PATH", "")
+    if not name or not path:
+        return None, "this is not a GitHub event run"
+    try:
+        with open(path, encoding="utf-8") as fh:
+            event = json.load(fh)
+    except (OSError, ValueError) as exc:
+        return None, f"the event payload could not be read ({exc.__class__.__name__})"
+    if name == "pull_request":
+        sha = (event.get("pull_request") or {}).get("base", {}).get("sha")
+        return (sha, "the pull request's base") if sha else (None, "the pull request payload names no base")
+    if name == "push":
+        sha = event.get("before")
+        if not sha or sha == _NULL_SHA:
+            return None, "this push has no previous commit (a first push, a new branch or a new tag)"
+        return sha, "the push's previous commit"
+    return None, f"a `{name}` event has no base revision"
+
+
+def resolve_base(root: str, explicit: str | None, env: dict) -> tuple[str | None, str]:
+    """(revision, how) or (None, why not). The revision is verified to be a
+    commit in this clone: a base that is not here (a shallow checkout, a rewritten
+    history) cannot be diffed against, and saying so is the point."""
+    if explicit:
+        sha, how = explicit, "`--base`"
+    else:
+        sha, how = base_from_event(env)
+        if sha is None:
+            return None, how
+    res = subprocess.run(
+        ["git", "-C", root, "rev-parse", "--verify", "--quiet", f"{sha}^{{commit}}"],
+        capture_output=True,
+        check=False,
+    )
+    if res.returncode != 0:
+        return None, f"the base {sha[:12]} ({how}) is not a commit in this clone (a shallow checkout, or a rewritten history)"
+    return res.stdout.decode().strip(), how
+
+
+def render_baseline_section(root: str, baseline_rel: str, base: str | None, how: str) -> str:
+    """The `## Baseline changes` section: the diff of the baseline file against
+    the base, an explicit 'unchanged' when there is none, or a stated reason when
+    there is no base."""
+    head = ["## Baseline changes (RFC 117 stage 0b)", ""]
+    if base is None:
+        return "\n".join(
+            head
+            + [
+                f"**No base revision, so what this commit changed in `{baseline_rel}` cannot be shown:** {how}.",
+                "The census below is complete, but a baseline edit made in this change is not "
+                "displayed here. Read the diff of that file directly.",
+                "",
+            ]
+        )
+    diff = _git(root, "diff", "--no-color", base, "--", baseline_rel).decode(
+        "utf-8", "replace"
+    )
+    if not diff.strip():
+        return "\n".join(
+            head
+            + [
+                f"`{baseline_rel}` is unchanged since `{base[:12]}` ({how}). No attribution was cleared by an edit to the baseline.",
+                "",
+            ]
+        )
+    lines = diff.split("\n")
+    added = sum(1 for l in lines if l.startswith("+") and not l.startswith("+++"))
+    removed = sum(1 for l in lines if l.startswith("-") and not l.startswith("---"))
+    return "\n".join(
+        head
+        + [
+            f"`{baseline_rel}` **changed** since `{base[:12]}` ({how}): "
+            f"**{added} line(s) added**, {removed} removed. Each added line clears an "
+            "attribution that would otherwise fail this gate. **Read them.** The text after "
+            "the third tab is the sentence.",
+            "",
+            "```diff",
+            diff.rstrip("\n"),
+            "```",
+            "",
+        ]
+    )
+
+
 # ── the verdict ───────────────────────────────────────────────────────────
 
 
@@ -358,6 +466,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--policy", required=True)
     ap.add_argument("--rev", help="scan the tree at this revision")
     ap.add_argument("--baseline-rev", help="take the baseline from the tree at this revision")
+    ap.add_argument("--base", help="the revision the baseline diff is taken against")
     ap.add_argument("--update-baseline", action="store_true")
     args = ap.parse_args(argv)
 
@@ -385,6 +494,11 @@ def main(argv: list[str] | None = None) -> int:
     seen = tally(hits)
     stale = sum(1 for key in baseline if key not in seen)
     report = render(new, known, stale, policy["excerpt"])
+    if not args.rev and not args.baseline_rev:
+        # The baseline diff comes first: what clears a hit is printed above the
+        # census it changes (stage 0b). Evidence only; it never sets the exit code.
+        base, how = resolve_base(args.root, args.base, os.environ)
+        report = render_baseline_section(args.root, policy["baseline"], base, how) + "\n" + report
     print(report)
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:

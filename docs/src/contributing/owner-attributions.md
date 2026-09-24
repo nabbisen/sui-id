@@ -19,6 +19,22 @@ step summary. It **fails** when a sentence is not in the closed baseline,
 `ci/owner-attribution-baseline.txt`, which lists the attributions that existed
 when the gate was adopted.
 
+## What the job summary shows first
+
+Above the census, G16 prints **what this change did to the baseline**: the diff
+of `ci/owner-attribution-baseline.txt` against the previous commit of a push or
+the base of a pull request. A commit that adds an attribution *and* its baseline
+line passes the gate with "0 new", so this section is where the clearing is
+visible: each added line is the sentence that was cleared, after the third tab.
+Read them.
+
+- If the baseline is untouched, the section says so.
+- If there is **no base** (a first push, a new branch or tag, a manual run, or a
+  base that is not in the checkout), the section says that and why, and the
+  census is still printed. In that case read the baseline's diff yourself.
+
+The section is evidence, not a gate: it never changes the result.
+
 ## When it fails
 
 A new attribution has appeared. Read it, then do one of three things:
@@ -42,7 +58,7 @@ A new attribution has appeared. Read it, then do one of three things:
 - It does not honour a citation yet. There is no ledger, and a citation checked
   against an unsigned file would be a hole.
 - It does not stop a commit that edits the script, the policy or the baseline
-  in the same change. The verifier lives in the tree it verifies, as every gate
+  in the same change; it only shows the baseline edit. The verifier lives in the tree it verifies, as every gate
   in this repository does. A change to `scripts/check-owner-attributions.py`,
   `ci/owner-attributions.toml` or `ci/owner-attribution-baseline.txt` should be
   read as carefully as a change to a security control.

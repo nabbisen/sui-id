@@ -476,11 +476,19 @@ jobs:
     # It needs no key. It prints every attribution of a decision to the owner
     # in the step summary and fails on one that is not in the baseline, so a
     # sentence like "Owner ruling, 2026-07-28" cannot be added unseen. It reads
-    # the whole tree, so it needs full file contents and nothing else.
+    # the whole tree.
+    #
+    # Stage 0b: it also prints, above the census, what this change did to
+    # ci/owner-attribution-baseline.txt, taken against the push's previous commit
+    # or the pull request's base. That needs history, so this job fetches all of
+    # it (the repository is small); a first push, a new tag or a manual run has no
+    # base, and the script says so in the summary instead of failing.
     name: "G16 — owner attributions (Python 3.14)"
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
       - name: Install Python 3.14
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
