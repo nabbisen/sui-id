@@ -76,6 +76,7 @@ slot is `104`). One **parallel namespace** also exists:
 | 115 | [Creating a user without choosing their password](./accepted/115-user-creation-without-a-password.md) | cycle A | mid-capability model |
 | 116 | [Gate contracts: one source, one gate each](./accepted/116-gate-contracts.md) | cycle B | mid-capability model |
 | 117 | [Owner decisions must be verifiable](./accepted/117-verifiable-owner-decisions.md) | stages 0/0b landed; 1–3 need the key | mid-capability model |
+| 105 | [Audit notes: escape attribute values](./accepted/105-audit-note-escaping.md) | cycle A; **no independent design review — see its header** | mid-capability model |
 
 Acceptance makes an RFC implementation-eligible, but coding remains prohibited
 until its declared implementation prerequisites have repository-visible
@@ -112,7 +113,6 @@ Proposed: the move approved nothing.
 | RFC | Title | Handoff |
 |---|---|---|
 | 104 | [Audit event labels shown, and bound to the registered events](./proposed/104-audit-event-labels.md) | [104-audit-event-labels](./handoffs/104-audit-event-labels/README.md) |
-| 105 | [Audit notes: escape attribute values](./proposed/105-audit-note-escaping.md) | [105-audit-note-escaping](./handoffs/105-audit-note-escaping/README.md) |
 | 106 | [Backup restore fails closed](./proposed/106-backup-restore-hardening.md) | [106-backup-restore-hardening](./handoffs/106-backup-restore-hardening/README.md) |
 | 107 | [`sui-id --help` names every subcommand the binary accepts](./proposed/107-cli-help-completeness.md) | [107-cli-help-completeness](./handoffs/107-cli-help-completeness/README.md) |
 | 108 | [Confirm screens for client disable and secret rotation; the secret leaves the URL](./proposed/108-client-confirm-screens.md) | [108-client-confirm-screens](./handoffs/108-client-confirm-screens/README.md) |

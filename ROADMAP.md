@@ -593,7 +593,7 @@ historical record, not evidence.
 | RFC | Work item |
 |---|---|
 | [104](rfcs/proposed/104-audit-event-labels.md) | Audit event labels shown, and bound to the registered events |
-| [105](rfcs/proposed/105-audit-note-escaping.md) | Audit notes: escape attribute values |
+| [105](rfcs/accepted/105-audit-note-escaping.md) | Audit notes: escape attribute values |
 | [106](rfcs/proposed/106-backup-restore-hardening.md) | Backup restore fails closed |
 | [107](rfcs/proposed/107-cli-help-completeness.md) | `sui-id --help` names every subcommand the binary accepts |
 | [108](rfcs/proposed/108-client-confirm-screens.md) | Confirm screens for client disable and secret rotation; the secret leaves the URL |

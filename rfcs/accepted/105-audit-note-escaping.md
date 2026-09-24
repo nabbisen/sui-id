@@ -1,6 +1,16 @@
 # RFC 105 — Audit notes: escape attribute values
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-09-24
+**Approved by.** `@nabbisen`, 2026-09-24, **with the design-review gap below in
+view and carried by him.**
+**Independent design review.** [None was performed, and none now can be — the record of the gap](../handoffs/105-audit-note-escaping/design-review-gap-2026-09-24.md).
+This RFC was dispatched for implementation while still Proposed, through the
+architect's error; the role that would have reviewed the design has now built
+it and cannot review its own work. The field cites the record rather than a
+review, because there is no review to cite. What is unreviewed is named there:
+the choice of percent-encoding over quoting, and the judgment that sound
+operator queries are worth a less legible reason.
 **Security review.** Required
 **Design prerequisites.** None.
 **Implementation prerequisites.** RFC 094's audit-note builder is the single place a note is assembled.
