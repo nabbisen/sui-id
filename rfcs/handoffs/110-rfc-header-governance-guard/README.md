@@ -27,70 +27,28 @@ nothing checks the attribution.
 Deleting the clauses fixes the instance. This package fixes the mechanic, so
 that vigilance is not what stands between the project and a third occurrence.
 
-## Required
+## Superseded — read the RFC, not this section
 
-Two new conditions in `scripts/check-rfc-integrity.py` (G11), which already
-parses every RFC's header block — the title line up to but excluding the first
-`## ` heading — into bold, period-terminated `**Label.** value` fields. The gate
-command in `ci/gate-inputs.toml` does not change.
+**Corrected 2026-09-24.** Everything between here and *Out of scope* described
+the design as first proposed. Its independent design review overturned the
+central mechanism, [RFC 110](../../accepted/110-rfc-header-governance-guard.md)
+was amended to match, and **this page was not** — so it went on specifying five
+phrases including RFC 000's own sentence, an exact-regex label rule, a
+`Reviewer-rule exemption` field, nine tests, and no archive scope, all of which
+the accepted RFC rejects.
 
-### Condition 14 — no RFC header states a rule about who may review
+The implementer found the contradiction, built the RFC because the RFC is the
+authority, and said so in the review package rather than picking one quietly.
+That was the right call, and the stale page was the architect's error.
 
-Reject any RFC whose **header block** contains a review-rule phrase. The list is
-literal, closed, and small, so that a failure is unambiguous and a false
-positive is rare:
-
-- `must not have authored`
-- `Role independence`
-- `independence means` (any case)
-- `vendor is not a criterion`
-- `cannot be the sole approver`
-
-Also reject any header **field label** matching
-`Independent security and <anything> reviewer` — the field that carried all
-eleven clauses. It has no legitimate use: `Independent design review` (a record
-of a review that happened) and `Accountable owner and approver` are the fields
-that carry reviewer facts, and both stay required.
-
-**The distinction the gate is drawing**, and the failure message must say it: a
-header may **record** who reviewed something. It may not **rule** on who is
-allowed to.
-
-**Exemption, so that a real exception is visible rather than invisible.** A
-header may carry `**Reviewer-rule exemption.**` whose value states the necessity
-and cites the owner's dated approval. When that field is present, condition 14
-does not fire for that RFC. An RFC with the exemption field and no such citation
-fails.
-
-### Condition 15 — no RFC header cites an archived RFC as authority
-
-Reject any `RFC NNN` reference in the **header block** where `NNN` resolves to a
-file under `rfcs/archive/`. Bodies may discuss an archived RFC historically;
-a header is normative metadata and must not rest on a disposed document.
-
-Today this catches nothing — RFC 099's and RFC 100's "per RFC 018" went out with
-the clauses — which is the point: it catches the next one.
-
-## Evidence
-
-Negative self-tests in `scripts/tests/test_rfc_integrity.py`, following the
-existing fixtures there. One per branch, each asserting the exit status **and**
-that the message names the offending file and phrase:
-
-| Test | Expect |
-|---|---|
-| Header containing `must not have authored` | fail |
-| Header containing `Role independence` | fail |
-| Header with an `Independent security and closure reviewer` field | fail |
-| The same, plus a `Reviewer-rule exemption` field citing a dated owner approval | pass |
-| The same, plus an exemption field with no citation | fail |
-| Header citing an RFC that lives in `rfcs/archive/` | fail |
-| Header citing an RFC that lives in `done/` | pass |
-| The same phrase in an RFC **body**, not its header | pass |
-| The repository as it stands | pass |
-
-The last row matters: the gate must be green on the tree it lands in, without
-editing any RFC to make it so.
+**What was built, and what governs:** RFC 110's decisions D1–D9. In outline —
+the **label allowlist leads** (six recorded labels; anything else matching
+review, approval, independence or authority fails), **four** phrases rather than
+five, matched normalised across the whole header; **no exemption field**;
+conditions scoped to `proposed/`, `accepted/` and `done/`; a closed
+`[archive_citations]` allowlist in `ci/rfc-policy.toml` for condition 15's one
+legitimate case; and the template and RFC 111's handoff corrected in the same
+package. Landed in `738c233` with 59 self-tests.
 
 ## Out of scope
 
