@@ -153,7 +153,10 @@ pins the behaviour. The `can_issue_recovery` flag
 target, changes in lockstep.
 
 **D11 — The throttle exempts issuance at creation, for non-administrator
-targets only, under its own ceiling.** The exemption is marked by a column and
+targets only, under its own ceiling of fifty an hour** (set at implementation,
+2026-09-24: the RFC said "its own larger ceiling" and gave no number; fifty
+lets a real bulk import through and stops an unattended loop within minutes,
+and a compile-time assertion keeps it above the ordinary five). The exemption is marked by a column and
 evaluated **inside U37's transaction** on a target that is local, has no
 credential row, and has no earlier token of any kind — so an account that
 already exists can never qualify, and "create a user in order to get an

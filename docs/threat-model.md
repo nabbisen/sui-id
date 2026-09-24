@@ -110,13 +110,11 @@ The properties it establishes:
   (`identity::admin::users::reset_user_password`, U06) is removed from the
   tree.
 
-  **This is a property of recovery, not of the product.** Creating a user
-  (U01) still takes an administrator-chosen password, stored without any
-  rotation requirement, so an administrator knows a working password for every
-  local account they created until its holder changes it. Closing that is
-  tracked as [RFC 115](../rfcs/accepted/115-user-creation-without-a-password.md); until it lands, an
-  administrator's reach over accounts they created is the same as the residual
-  stated below.
+  **Closed for creation too, 2026-09-24 ([RFC 115](../rfcs/accepted/115-user-creation-without-a-password.md), below).**
+  This paragraph previously said the property held of recovery but not of the
+  product, because creating a user took an administrator-chosen password.
+  Creation no longer takes one — it is a compile error — and an account with no
+  credential is activated only through a recovery link.
 - **The link is single-use, expiring, hashed at rest, and revoked by any
   competing change.** A 256-bit random token; only its SHA-256 hash is ever
   stored, and it expires 30 minutes after issuance. Completion is guarded so
@@ -168,6 +166,63 @@ The properties it establishes:
   address or number the requester supplies in the same request. sui-id
   cannot verify who actually received it; a social-engineered handoff is
   not solvable in code.
+
+### 2026-09-24 — Creating a user without choosing their password (RFC 115)
+
+The decision is [RFC 115](../rfcs/accepted/115-user-creation-without-a-password.md).
+It finishes what RFC 103 began: RFC 103 removed the path that re-set an
+existing user's password and left untouched the one that set every user's
+first.
+
+- **No path sets a password on a user's behalf.** `/admin/users/new` has no
+  password field, the store's create-user command has no credential parameter,
+  and reintroducing one is a compile error rather than a review finding. A
+  structural test pins the set of production writers of `credentials`, so a new
+  one fails CI instead of passing unnoticed.
+- **A never-activated account is reachable only through an audited link.** An
+  administrator types the new user's email address and nothing verifies it, so
+  `/forgot-password` — unauthenticated, no step-up, no second factor, no
+  throttle — would otherwise have been a second way for an administrator to
+  choose that user's password. It now treats a local account with no credential
+  exactly as it treats a directory account: the same neutral response, no
+  token, no mail. Activation goes through the recovery-link command, which is
+  audited, step-up gated, second-factor gated and throttled.
+- **Such an account fails sign-in like any other refusal.** It costs the same
+  Argon2 verify and its failures are counted and audited, so it is neither
+  distinguishable by timing nor a way to try passwords unrecorded.
+- **An administrator can be created and activated, but only while unused.** The
+  refusal on administrator targets is relaxed only for an account that has
+  never held a credential and never signed in, read inside the issuing
+  transaction. A live administrator is refused exactly as before.
+- **Bulk creation has its own ceiling, and it is not a way around the five.** A
+  link for an account that has just been created counts against a separate,
+  larger hourly limit. The predicate is read inside the transaction from the
+  target's own state, so an account that already exists can never satisfy it,
+  and administrator targets are never exempt. The audit row records which limit
+  applied.
+- **Secrets in HTTP forms are redacted by their type**, so a debug format
+  cannot print one, and a field that takes a secret as a plain string fails a
+  test.
+
+**Stated residuals.**
+
+- **The issuing administrator can complete the link they issued.** They hold
+  the plaintext token, so for an account that has never been activated they can
+  choose its first password. This is the residual RFC 103 already states for
+  recovery, and it is unavoidable while the administrator is the courier: what
+  this design removes is *silent, indefinite* knowledge of a working password,
+  not the authority to activate an account. Every such activation is one
+  audited, throttled, gated event.
+- **A never-activated account can be locked out by a stranger.** Its failures
+  are now counted, which is the point — but completing a reset clears neither
+  the counter nor the lock, and a recovery link lives thirty minutes. Someone
+  who knows the username can therefore make each link expire before its holder
+  can sign in. This is not new with this RFC; it is true of every account. What
+  this RFC changes is that it becomes reachable for accounts that have never
+  been used. It is tracked for an RFC of its own.
+- **`--dev` seeding still sets passwords directly** and prints them. It runs in
+  the production binary under a runtime flag, so it cannot use a test-only
+  helper. It is a named exception, not an oversight.
 
 This document describes how sui-id thinks about the threats it
 faces, what defences are in place, and where the boundaries of
