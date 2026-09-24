@@ -510,7 +510,7 @@ pub static STRINGS_EN: Strings = Strings {
     users_label_username: "Username",
     users_label_display_name: "Display name (optional)",
     users_label_email: "Email address (optional)",
-    users_label_password: "Password (12 or more characters)",
+    users_create_password_note: "No password is set here. After you create the account you will issue a recovery link, and the user chooses their own password when they open it.",
 
     // Admin: Clients (RFC 029)
     // Admin: Client edit (RFC 051)

@@ -511,7 +511,7 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     users_label_username: "用户名",
     users_label_display_name: "显示名（可选）",
     users_label_email: "邮箱地址（可选）",
-    users_label_password: "密码（12 个字符以上）",
+    users_create_password_note: "此处不设置密码。创建账户后，您将签发一个恢复链接，用户打开该链接时自行设置密码。",
 
     // Admin: 客户端管理 (RFC 029)
     // Admin: 客户端编辑 (RFC 051)

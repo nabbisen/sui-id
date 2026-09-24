@@ -162,11 +162,7 @@ pub fn render_users_new(
                             <label for="u-email" class="field__label">{t.users_label_email}</label>
                             <input id="u-email" name="email" type="email" autocomplete="off" />
                         </div>
-                        <div class="field">
-                            <label for="u-pw" class="field__label">{t.users_label_password}</label>
-                            <input id="u-pw" name="password" type="password"
-                                   required=true minlength="12" autocomplete="new-password" />
-                        </div>
+                        <p class="muted">{t.users_create_password_note}</p>
                         <label class="row gap-2">
                             <input name="is_admin" type="checkbox" value="true" />
                             <span>{t.users_is_admin_label}</span>

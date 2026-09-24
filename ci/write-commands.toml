@@ -25,10 +25,10 @@ id = "U01"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
 owner = "Admin create user / `core::identity::admin::users`"
-rationale = "closed result branches: `user.create` or `user.create_warned_hibp`"
-mutation_surface = "`users::create`, `credentials::upsert`"
-files = ["crates/sui-id-store/src/repos/users.rs", "crates/sui-id-store/src/repos/credentials.rs"]
-test_id = "`a_u01_create_normal`, `a_u01_create_hibp`"
+rationale = "one event, `user.create`; it writes no credential (RFC 115 D4). `user.create_warned_hibp` retired by D9"
+mutation_surface = "`users::create`"
+files = ["crates/sui-id-store/src/repos/users.rs"]
+test_id = "`a_u01_create_normal`"
 event = ""    # Stage 1: typed event-kind enum variant, not yet added
 descriptor = ""  # Stage 1: sealed descriptor set member, not yet added
 

@@ -136,6 +136,38 @@ pub fn admin_actor_for(user_id: UserId) -> AdminActor {
         .expect("admin actor")
 }
 
+/// Create a user **who can sign in**, for a test that needs one.
+///
+/// RFC 115 makes the product create accounts without a password: the holder
+/// chooses it through a recovery link. A test that needs a signed-in-capable
+/// target does what the product no longer can. It creates the account through
+/// the real, audited U01 (`admin::create_user`, exactly as before) and then
+/// writes the credential directly. That second step is a writer of
+/// `credentials` outside production code, which is why it lives here, in a
+/// test helper, and why `r115_stage2::credentials_writers_are_the_allowlist`
+/// scans production sources only.
+pub async fn create_user_with_password(
+    db: &Database,
+    clock: &sui_id_core::time::SharedClock,
+    actor: &AdminActor,
+    spec: sui_id_core::admin::CreateUserSpec<'_>,
+    password: &str,
+) -> sui_id_core::errors::CoreResult<sui_id_store::models::UserRow> {
+    let row = sui_id_core::admin::create_user(db, clock, actor, spec).await?;
+    sui_id_store::repos::credentials::upsert(
+        db,
+        &sui_id_store::models::CredentialRow {
+            user_id: row.id,
+            password_hash: sui_id_core::password::hash_password(password).expect("hash"),
+            must_change: false,
+            updated_at: chrono::Utc::now(),
+        },
+    )
+    .await
+    .map_err(sui_id_core::errors::CoreError::from)?;
+    Ok(row)
+}
+
 /// An admin actor bound to the real session `session` (a cookie value).
 /// A step-up-gated command re-reads that session in its transaction (RFC
 /// 102 B4), so an actor with an invented session id is refused there.

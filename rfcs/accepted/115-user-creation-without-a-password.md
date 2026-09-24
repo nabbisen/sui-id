@@ -140,8 +140,15 @@ transaction on the same fresh read D5 already performs. The `last_login_at`
 clause is not redundant: it keeps the rule correct if a later RFC introduces
 passwordless local accounts, where "no credential row" would stop meaning "never
 activated". Live administrators are unaffected, because credential rows are
-never deleted; non-local targets are refused earlier in the same function and
-cannot be reached through the relaxation. The `can_issue_recovery` flag
+never deleted. **Correction, 2026-09-24:** this decision first said non-local
+targets "are refused earlier in the same function". They are not —
+`TargetIsAdmin` is checked *before* `TargetNonLocal`, so a never-activated
+directory administrator passes the admin check and is refused by the non-local
+check that follows. The outcome is the one this RFC intends (refused), only the
+refusal *kind* differs from what "earlier" implied. Found by stage 2's
+implementer, who declined to reorder the checks because that would change
+existing refusal kinds; `u37_web_still_refuses_a_never_activated_administrator_that_is_not_local`
+pins the behaviour. The `can_issue_recovery` flag
 (`admin/users.rs:349`), which today hides the button for an administrator
 target, changes in lockstep.
 

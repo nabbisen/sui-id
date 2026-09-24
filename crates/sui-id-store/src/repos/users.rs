@@ -655,6 +655,15 @@ pub struct RecoveryTarget {
     pub source: crate::models::UserSource,
     pub is_disabled: bool,
     pub is_deleted: bool,
+    /// The account has never held a credential **and** has never signed in
+    /// (RFC 115 D10): `NOT EXISTS credentials AND last_login_at IS NULL`. Read
+    /// in the same statement as the rest, so it is the same fresh read D5
+    /// already performs. Credential rows are never deleted, so a live
+    /// account can never satisfy it. The `last_login_at` clause is not
+    /// redundant: it keeps the rule correct if a later RFC introduces
+    /// passwordless local accounts, where "no credential row" would stop
+    /// meaning "never activated".
+    pub never_activated: bool,
 }
 
 /// Read the target's role, source and state, including a deleted user (which
@@ -665,7 +674,10 @@ pub fn recovery_target_within_tx(
     user_id: UserId,
 ) -> StoreResult<RecoveryTarget> {
     conn.query_row(
-        "SELECT role, is_admin, source, is_disabled, is_deleted FROM users WHERE id = ?1",
+        "SELECT role, is_admin, source, is_disabled, is_deleted, \
+                (NOT EXISTS (SELECT 1 FROM credentials WHERE credentials.user_id = users.id) \
+                 AND last_login_at IS NULL) \
+         FROM users WHERE id = ?1",
         [user_id.to_string()],
         |row| {
             let role_str: Option<String> = row.get(0)?;
@@ -673,6 +685,7 @@ pub fn recovery_target_within_tx(
             let source: String = row.get(2)?;
             let is_disabled: i64 = row.get(3)?;
             let is_deleted: i64 = row.get(4)?;
+            let never_activated: i64 = row.get(5)?;
             Ok(RecoveryTarget {
                 role: role_str
                     .as_deref()
@@ -687,6 +700,7 @@ pub fn recovery_target_within_tx(
                     .unwrap_or(crate::models::UserSource::Ldap),
                 is_disabled: is_disabled != 0,
                 is_deleted: is_deleted != 0,
+                never_activated: never_activated != 0,
             })
         },
     )

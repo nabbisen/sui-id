@@ -202,9 +202,10 @@ async fn u10_completion_swaps_credential_consumes_token_and_revokes_everything()
         updated_at: Utc::now(),
     };
     let consumed_at = Utc::now();
-    let audited = consume_and_reset_password(&db, user.id, token_id, new_credential, consumed_at)
-        .await
-        .expect("complete reset");
+    let audited =
+        consume_and_reset_password(&db, user.id, token_id, new_credential, consumed_at, false)
+            .await
+            .expect("complete reset");
     audited.into_inner();
 
     let cred = repos::credentials::get(&db, user.id)
@@ -268,7 +269,7 @@ async fn u10_injected_failure_before_append_rolls_back_everything() {
     };
     db.fault_injector().fail_before_next_append();
     let result =
-        consume_and_reset_password(&db, user.id, token_id, new_credential, Utc::now()).await;
+        consume_and_reset_password(&db, user.id, token_id, new_credential, Utc::now(), false).await;
     assert!(result.is_err(), "injected failure must surface as Err");
 
     let cred = repos::credentials::get(&db, user.id)

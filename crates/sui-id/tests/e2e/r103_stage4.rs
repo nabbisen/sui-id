@@ -218,20 +218,17 @@ async fn r103_s4_the_operation_is_offered_only_where_it_could_succeed() {
         ),
         "self"
     );
-    let other_admin = sui_id_core::admin::create_user(
+    let other_admin = create_user_with_password(
         &a.state.db,
         &a.state.clock,
-        None,
-        sui_id_store::models::HibpMode::Off,
         &admin_actor_for(a.id),
         sui_id_core::admin::CreateUserSpec {
             username: "carol",
-            password: "target-very-strong-password",
-            min_password_len: 12,
             display_name: None,
             email: None,
             is_admin: true,
         },
+        "target-very-strong-password",
     )
     .await
     .expect("second admin")
@@ -530,20 +527,17 @@ async fn r103_s4_an_administrator_with_no_second_factor_is_told_so_not_bounced()
 async fn r103_s4_each_refusal_has_its_own_message_and_writes_nothing() {
     let a = admin().await;
     let bob = target_user(&a, "bob").await;
-    let carol = sui_id_core::admin::create_user(
+    let carol = create_user_with_password(
         &a.state.db,
         &a.state.clock,
-        None,
-        sui_id_store::models::HibpMode::Off,
         &admin_actor_for(a.id),
         sui_id_core::admin::CreateUserSpec {
             username: "carol",
-            password: "target-very-strong-password",
-            min_password_len: 12,
             display_name: None,
             email: None,
             is_admin: true,
         },
+        "target-very-strong-password",
     )
     .await
     .expect("second admin")

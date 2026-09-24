@@ -510,7 +510,7 @@ pub static STRINGS_JA: Strings = Strings {
     users_label_username: "ユーザー名",
     users_label_display_name: "表示名（任意）",
     users_label_email: "メールアドレス（任意）",
-    users_label_password: "パスワード（12 文字以上）",
+    users_create_password_note: "ここではパスワードを設定しません。アカウントを作成したあと、復旧リンクを発行します。ユーザー本人がそのリンクを開いて自分のパスワードを決めます。",
 
     // Admin: クライアント編集 (RFC 051)
     client_edit_title: "クライアントを編集",

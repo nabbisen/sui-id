@@ -322,20 +322,17 @@ async fn admin_can_reset_users_mfa_factors() {
     let clock = system_clock();
 
     // Create a second user (the target) and enrol TOTP for them.
-    sui_id_core::admin::create_user(
+    create_user_with_password(
         &state.db,
         &state.clock,
-        None,
-        sui_id_store::models::HibpMode::Off,
         &admin_actor_for(admin_id),
         CreateUserSpec {
             username: "bob",
-            password: "bob-very-strong-password",
-            min_password_len: 12,
             display_name: None,
             email: None,
             is_admin: false,
         },
+        "bob-very-strong-password",
     )
     .await
     .expect("create");
@@ -399,20 +396,17 @@ async fn admin_mfa_reset_via_http_redirects_and_disables_mfa_requirement() {
         .id;
     let clock = system_clock();
 
-    sui_id_core::admin::create_user(
+    create_user_with_password(
         &state.db,
         &state.clock,
-        None,
-        sui_id_store::models::HibpMode::Off,
         &admin_actor_for(admin_id),
         CreateUserSpec {
             username: "carol",
-            password: "carol-very-strong-password",
-            min_password_len: 12,
             display_name: None,
             email: None,
             is_admin: false,
         },
+        "carol-very-strong-password",
     )
     .await
     .expect("create");

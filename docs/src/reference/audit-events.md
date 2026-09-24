@@ -23,7 +23,7 @@ Use **Admin panel → Audit log** to filter by event prefix or export to CSV.
 | `auth.password.reset_email_sent` | Reset email sent | A password-reset email was queued successfully. |
 | `auth.password.reset_email_failed` | Reset email failed | The password-reset email could not be delivered. |
 | `auth.password.reset_throttled` | Reset throttled | The forgot-password rate limit was reached for this address. |
-| `auth.password.reset_completed` | Password reset | Password was successfully changed via a reset link. The note records `origin=` — `email` (the forgot-password flow), `web` (issued by an administrator) or `cli` (issued by the operator). |
+| `auth.password.reset_completed` | Password reset | Password was successfully changed via a reset link. The note records `origin=` — `email` (the forgot-password flow), `web` (issued by an administrator) or `cli` (issued by the operator). When the new password appears in a known breach and the breach check is in `warn` mode, the reset is allowed and the note also carries `hibp=warned`. |
 | `auth.refresh.rotated` | Refresh token rotated | A refresh token was exchanged for a fresh access/refresh token pair (the normal, routine case). |
 | `auth.refresh.theft_detected` | Token theft detected | A refresh token was presented that had already been rotated, indicating a possible token theft. The entire token family is revoked. |
 | `auth.sessions.bulk_revoke_self` | All other sessions revoked | User revoked all sessions except the current one. |
@@ -47,8 +47,7 @@ the administrator is asked to step up again.
 
 | Event name | Label | Description |
 |---|---|---|
-| `user.create` | User created | Administrator created a new user account. |
-| `user.create_warned_hibp` | — | Administrator created a user account whose password appears in a known breach (Have I Been Pwned), with the breach check in `warn` mode. |
+| `user.create` | User created | Administrator created a new user account. No password is set at creation: the user chooses their own through a recovery link the administrator issues next. |
 | `user.disable` | User disabled | Administrator disabled a user account. All active sessions and refresh tokens are immediately revoked. |
 | `user.enable` | User enabled | Administrator re-enabled a previously disabled user account. |
 | `user.delete` | User deleted | Administrator deleted a user account. |

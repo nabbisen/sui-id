@@ -32,20 +32,17 @@ async fn delete_user_without_confirmed_is_rejected() {
         .await
         .expect("alice")
         .id;
-    let target = sui_id_core::admin::create_user(
+    let target = create_user_with_password(
         &state.db,
         &clock,
-        None,
-        sui_id_store::models::HibpMode::Off,
         &admin_actor_for(admin_id),
         sui_id_core::admin::CreateUserSpec {
             username: "target-for-delete-test",
             display_name: None,
             email: None,
-            password: "target-password-12345",
-            min_password_len: 12,
             is_admin: false,
         },
+        "target-password-12345",
     )
     .await
     .expect("create target");
@@ -97,20 +94,17 @@ async fn mfa_reset_without_confirmed_is_rejected() {
         .await
         .expect("alice")
         .id;
-    let target = sui_id_core::admin::create_user(
+    let target = create_user_with_password(
         &state.db,
         &clock,
-        None,
-        sui_id_store::models::HibpMode::Off,
         &admin_actor_for(admin_id),
         sui_id_core::admin::CreateUserSpec {
             username: "target-mfa-test",
             display_name: None,
             email: None,
-            password: "target-pw-mfa-123456",
-            min_password_len: 12,
             is_admin: false,
         },
+        "target-pw-mfa-123456",
     )
     .await
     .expect("create");
@@ -153,20 +147,17 @@ async fn delete_confirm_page_renders() {
         .await
         .expect("alice")
         .id;
-    let target = sui_id_core::admin::create_user(
+    let target = create_user_with_password(
         &state.db,
         &clock,
-        None,
-        sui_id_store::models::HibpMode::Off,
         &admin_actor_for(admin_id),
         sui_id_core::admin::CreateUserSpec {
             username: "confirm-page-target",
             display_name: None,
             email: None,
-            password: "confirm-pw-12345678",
-            min_password_len: 12,
             is_admin: false,
         },
+        "confirm-pw-12345678",
     )
     .await
     .expect("create");
@@ -305,20 +296,17 @@ async fn user_detail_page_renders() {
         .await
         .expect("alice")
         .id;
-    let target = sui_id_core::admin::create_user(
+    let target = create_user_with_password(
         &state.db,
         &clock,
-        None,
-        sui_id_store::models::HibpMode::Off,
         &admin_actor_for(admin_id),
         sui_id_core::admin::CreateUserSpec {
             username: "detail-page-user",
             display_name: Some("Detail Page User"),
             email: None,
-            password: "detail-pw-12345678",
-            min_password_len: 12,
             is_admin: false,
         },
+        "detail-pw-12345678",
     )
     .await
     .expect("create");

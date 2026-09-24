@@ -1,33 +1,29 @@
 //! User admin operations (RFC 075, v0.62.0).
 use crate::actor::{AdminActor, ReadOnlyAdminActor};
 use crate::errors::{CoreError, CoreResult};
-use crate::hibp::{self, HibpClient, HibpEnforcement};
-use crate::password::{check_password_policy, hash_password};
 use crate::time::SharedClock;
 use sui_id_shared::ids::UserId;
 use sui_id_store::Database;
-use sui_id_store::models::{CredentialRow, UserRow};
+use sui_id_store::models::UserRow;
 use sui_id_store::repos::users;
 // Shared audit helpers from parent module.
+/// What an administrator supplies to create a user. **There is no password
+/// field, and there must not be one** (RFC 115 D4): nobody but the account
+/// holder ever chooses a password. The account is activated through an
+/// administrator-issued recovery link (RFC 103), where the holder sets it.
 pub struct CreateUserSpec<'a> {
     pub username: &'a str,
-    pub password: &'a str,
     pub display_name: Option<&'a str>,
     /// Optional email address. Stored if non-empty, dropped to None
     /// otherwise. The admin form treats it as an optional field; the
     /// setup wizard recommends but does not enforce filling it in.
     pub email: Option<&'a str>,
     pub is_admin: bool,
-    /// Effective password minimum length — `PASSWORD_MIN_LEN` in
-    /// production, `PASSWORD_MIN_LEN_DEV` when running with `--dev`.
-    pub min_password_len: usize,
 }
 
 pub async fn create_user(
     db: &Database,
     clock: &SharedClock,
-    hibp_client: Option<&dyn HibpClient>,
-    hibp_mode: sui_id_store::models::HibpMode,
     actor: &AdminActor,
     spec: CreateUserSpec<'_>,
 ) -> CoreResult<UserRow> {
@@ -35,11 +31,6 @@ pub async fn create_user(
     if spec.username.trim().is_empty() {
         return Err(CoreError::BadRequest("username must not be empty".into()));
     }
-    check_password_policy(spec.password, spec.min_password_len)?;
-    // RFC 041: enforce HIBP consistently with all other password entrypoints.
-    let hibp_result = hibp::enforce_hibp(hibp_mode, hibp_client, spec.password).await;
-    let hibp_warned = matches!(hibp_result, HibpEnforcement::AllowedWithWarning { .. });
-
     let now = clock.now();
     let row = UserRow {
         source: sui_id_store::models::UserSource::default(),
@@ -76,18 +67,9 @@ pub async fn create_user(
         failed_login_count: 0,
         locked_until: None,
     };
-    let hash = hash_password(spec.password)?;
-    let credential = CredentialRow {
-        user_id: row.id,
-        password_hash: hash,
-        must_change: false,
-        updated_at: now,
-    };
-    // RFC 094 U01: mutation, credential insert, and the closed-branch
-    // `user.create` / `user.create_warned_hibp` audit event commit in one
-    // Class-A transaction — replacing the previous unguarded `users::create`
-    // + `credentials::upsert` + fire-and-forget `audit_ok` sequence.
-    sui_id_store::commands::create_user(db, actor_id, row.clone(), Some(credential), hibp_warned)
+    // RFC 094 U01: the insert and the `user.create` audit event commit in one
+    // Class-A transaction. No credential is written (RFC 115 D4).
+    sui_id_store::commands::create_user(db, actor_id, row.clone())
         .await
         .map_err(|e| match e {
             sui_id_store::StoreError::Conflict => {
@@ -289,7 +271,7 @@ mod tests {
     use crate::time::system_clock;
     use sui_id_shared::ids::SessionId;
     use sui_id_store::crypto::MasterKey;
-    use sui_id_store::models::{HibpMode, Role};
+    use sui_id_store::models::Role;
 
     fn admin_actor_for(user_id: UserId) -> crate::actor::AdminActor {
         Actor::from_session(user_id, Role::Admin, SessionId::new())
@@ -307,22 +289,23 @@ mod tests {
         let created = create_user(
             &db,
             &clock,
-            None,
-            HibpMode::Off,
             &actor,
             CreateUserSpec {
                 username: "created",
-                password: "created-user-password",
                 display_name: None,
                 email: None,
                 is_admin: false,
-                min_password_len: 12,
             },
         )
         .await
         .expect("create user");
 
         assert_ne!(created.id, actor_id);
+        // RFC 115 D4: no password is chosen at creation, so no credential row.
+        assert!(matches!(
+            sui_id_store::repos::credentials::get(&db, created.id).await,
+            Err(sui_id_store::StoreError::NotFound)
+        ));
     }
 }
 

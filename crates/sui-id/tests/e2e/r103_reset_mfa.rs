@@ -280,20 +280,17 @@ async fn r103_web_reset_still_needs_an_admin_session_and_step_up() {
         .expect("admin")
         .id;
     // The target: a plain user with a passkey.
-    sui_id_core::admin::create_user(
+    create_user_with_password(
         &state.db,
         &state.clock,
-        None,
-        sui_id_store::models::HibpMode::Off,
         &admin_actor_for(admin),
         sui_id_core::admin::CreateUserSpec {
             username: "carol",
-            password: "carol-very-strong-password",
-            min_password_len: 12,
             display_name: None,
             email: None,
             is_admin: false,
         },
+        "carol-very-strong-password",
     )
     .await
     .expect("create carol");

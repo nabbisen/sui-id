@@ -397,6 +397,7 @@ async fn r103_the_command_consumes_a_token_only_once() {
         token_id,
         credential("first"),
         chrono::Utc::now(),
+        false,
     )
     .await
     .expect("first consume");
@@ -406,6 +407,7 @@ async fn r103_the_command_consumes_a_token_only_once() {
         token_id,
         credential("second"),
         chrono::Utc::now(),
+        false,
     )
     .await;
     assert!(

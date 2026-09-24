@@ -720,20 +720,17 @@ async fn r102_u08_unlock_after_an_mfa_lockout_leaves_the_next_wrong_code_at_coun
 #[tokio::test]
 async fn r102_a7_non_admin_with_mfa_to_an_admin_destination_gets_no_pending_row() {
     let a = mfa_admin().await;
-    sui_id_core::admin::create_user(
+    create_user_with_password(
         &a.state.db,
         &a.state.clock,
-        None,
-        sui_id_store::models::HibpMode::Off,
         &admin_actor_for(a.user),
         sui_id_core::admin::CreateUserSpec {
             username: "carol",
-            password: "carol-very-strong-password",
-            min_password_len: 12,
             display_name: None,
             email: None,
             is_admin: false,
         },
+        "carol-very-strong-password",
     )
     .await
     .expect("create carol");

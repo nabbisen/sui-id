@@ -1,23 +1,27 @@
 use super::*;
 
 #[tokio::test]
-async fn u01_normal_branch_creates_user_and_credential() {
+async fn u01_creates_the_user_and_no_credential() {
+    // RFC 115 D4: U01 has no credential parameter. The account exists, its
+    // event is written, and there is nothing to sign in with until its
+    // holder sets a password through a recovery link.
     let db = fresh_db();
     let user = a_user();
-    let cred = crate::models::CredentialRow {
-        user_id: user.id,
-        password_hash: "argon2-placeholder".into(),
-        must_change: false,
-        updated_at: Utc::now(),
-    };
 
-    let audited = create_user(&db, an_admin(), user.clone(), Some(cred), false)
+    let audited = create_user(&db, an_admin(), user.clone())
         .await
         .expect("create");
     audited.into_inner();
 
     let row = repos::users::get(&db, user.id).await.expect("get");
     assert_eq!(row.id, user.id);
+    assert!(
+        matches!(
+            repos::credentials::get(&db, user.id).await,
+            Err(StoreError::NotFound)
+        ),
+        "U01 must not write a credential row"
+    );
     assert_eq!(
         latest_audit_action(&db).await.as_deref(),
         Some("user.create")
@@ -25,22 +29,7 @@ async fn u01_normal_branch_creates_user_and_credential() {
 }
 
 #[tokio::test]
-async fn u01_hibp_branch_emits_the_warned_event_name() {
-    let db = fresh_db();
-    let user = a_user();
-
-    create_user(&db, an_admin(), user.clone(), None, true)
-        .await
-        .expect("create");
-
-    assert_eq!(
-        latest_audit_action(&db).await.as_deref(),
-        Some("user.create_warned_hibp")
-    );
-}
-
-#[tokio::test]
-async fn u01_rolls_back_credential_and_user_together_on_conflict() {
+async fn u01_a_conflicting_create_writes_nothing() {
     // A real SQL-level failure (duplicate primary key), distinct
     // from -- and weaker than -- the two injected-failure tests
     // right below: SQLite's default `ABORT` conflict resolution
@@ -59,7 +48,7 @@ async fn u01_rolls_back_credential_and_user_together_on_conflict() {
 
     let mut dup = a_user();
     dup.id = user.id; // force the conflict
-    let result = create_user(&db, an_admin(), dup, None, false).await;
+    let result = create_user(&db, an_admin(), dup).await;
     assert!(matches!(result, Err(StoreError::Conflict)));
 
     // No new audit row from the failed attempt.
@@ -73,7 +62,7 @@ async fn u01_injected_failure_before_append_rolls_back_the_user_insert() {
     let before_audit = latest_audit_action(&db).await;
 
     db.fault_injector().fail_before_next_append();
-    let result = create_user(&db, an_admin(), user.clone(), None, false).await;
+    let result = create_user(&db, an_admin(), user.clone()).await;
     assert!(result.is_err(), "injected failure must surface as Err");
 
     // The user insert really ran (it's before this injection
@@ -93,7 +82,7 @@ async fn u01_injected_failure_after_append_rolls_back_the_user_insert_and_the_ap
     let before_audit = latest_audit_action(&db).await;
 
     db.fault_injector().fail_after_next_append();
-    let result = create_user(&db, an_admin(), user.clone(), None, false).await;
+    let result = create_user(&db, an_admin(), user.clone()).await;
     assert!(result.is_err(), "injected failure must surface as Err");
 
     assert!(

@@ -240,17 +240,34 @@ async fn u37_operator_issues_a_link_with_no_actor_and_not_applicable() {
     );
 }
 
+/// Give `user` a credential row, making it a live account (RFC 115 D10).
+async fn give_credential(db: &Database, user: UserId) {
+    repos::credentials::upsert(
+        db,
+        &crate::models::CredentialRow {
+            user_id: user,
+            password_hash: "some-hash-placeholder".into(),
+            must_change: false,
+            updated_at: Utc::now(),
+        },
+    )
+    .await
+    .expect("credential");
+}
+
 // ── D5: each refusal writes nothing ───────────────────────────────────
 
 #[tokio::test]
 async fn u37_web_refusals_write_nothing() {
     let db = fresh_db();
     let (admin, session) = seed_admin_with_fresh_step_up(&db).await;
+    // A *live* administrator: it holds a credential (RFC 115 D10).
     let other_admin = seed_user(&db, |u| {
         u.is_admin = true;
         u.role = Role::Admin;
     })
     .await;
+    give_credential(&db, other_admin).await;
     let non_local = seed_user(&db, |u| u.source = UserSource::Ldap).await;
     let disabled = seed_user(&db, |u| u.is_disabled = true).await;
     let deleted = seed_user(&db, |u| {
@@ -286,6 +303,83 @@ async fn u37_web_refusals_write_nothing() {
         assert_eq!(token_rows(&db).await, tokens_before, "{label}: no token");
         assert_eq!(audit_rows(&db).await, events_before, "{label}: no event");
     }
+}
+
+// ── RFC 115 D10: an administrator is refused only when it is live ─────
+
+#[tokio::test]
+async fn u37_web_issues_for_an_administrator_that_has_never_been_activated() {
+    let db = fresh_db();
+    let (admin, session) = seed_admin_with_fresh_step_up(&db).await;
+    let new_admin = seed_user(&db, |u| {
+        u.is_admin = true;
+        u.role = Role::Admin;
+    })
+    .await;
+    let grant = issue_web(&db, admin, session, new_admin, REASON, Utc::now())
+        .await
+        .expect("a never-activated administrator can be activated on the web")
+        .into_inner();
+    assert_eq!(token(&db, grant.token_id).await.user_id, new_admin);
+}
+
+#[tokio::test]
+async fn u37_web_refuses_an_administrator_that_is_live_by_either_signal() {
+    // Each half of the predicate `NOT EXISTS credentials AND last_login_at IS
+    // NULL` must independently keep an administrator out of reach. The
+    // `last_login_at` half is the one a later passwordless-account RFC would
+    // rely on; dropping it must be caught here.
+    let db = fresh_db();
+    let (admin, session) = seed_admin_with_fresh_step_up(&db).await;
+    let with_credential = seed_user(&db, |u| {
+        u.is_admin = true;
+        u.role = Role::Admin;
+    })
+    .await;
+    give_credential(&db, with_credential).await;
+    let signed_in_no_credential = seed_user(&db, |u| {
+        u.is_admin = true;
+        u.role = Role::Admin;
+    })
+    .await;
+    // `users::create` does not carry `last_login_at`; set it as a sign-in would.
+    let signed_in = signed_in_no_credential;
+    db.with_conn(move |c| {
+        c.execute(
+            "UPDATE users SET last_login_at = ?1 WHERE id = ?2",
+            rusqlite::params![Utc::now(), signed_in.to_string()],
+        )?;
+        Ok(())
+    })
+    .await
+    .expect("set last_login_at");
+    for (label, target) in [
+        ("has a credential, never signed in", with_credential),
+        ("has signed in, no credential row", signed_in_no_credential),
+    ] {
+        let result = issue_web(&db, admin, session, target, REASON, Utc::now()).await;
+        assert_eq!(
+            refused(&result),
+            Some(RecoveryRefusal::TargetIsAdmin),
+            "{label}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn u37_web_still_refuses_a_never_activated_administrator_that_is_not_local() {
+    // D10's relaxation cannot reach a directory account: the later non-local
+    // check still refuses it (a shadow row has no credential either).
+    let db = fresh_db();
+    let (admin, session) = seed_admin_with_fresh_step_up(&db).await;
+    let ldap_admin = seed_user(&db, |u| {
+        u.is_admin = true;
+        u.role = Role::Admin;
+        u.source = UserSource::Ldap;
+    })
+    .await;
+    let result = issue_web(&db, admin, session, ldap_admin, REASON, Utc::now()).await;
+    assert_eq!(refused(&result), Some(RecoveryRefusal::TargetNonLocal));
 }
 
 #[tokio::test]
@@ -609,6 +703,7 @@ async fn d3_completing_one_link_revokes_the_others() {
             updated_at: Utc::now(),
         },
         Utc::now(),
+        false,
     )
     .await
     .expect("complete");
@@ -683,6 +778,7 @@ async fn a_revoked_link_cannot_complete_and_writes_no_credential() {
             updated_at: Utc::now(),
         },
         Utc::now(),
+        false,
     )
     .await;
     assert!(
@@ -732,6 +828,7 @@ async fn u10_records_the_origin_of_the_consumed_link() {
                 updated_at: Utc::now(),
             },
             Utc::now(),
+            false,
         )
         .await
         .expect("complete");
@@ -970,6 +1067,7 @@ async fn an_expired_token_cannot_complete_and_writes_no_credential() {
             updated_at: now,
         },
         now,
+        false,
     )
     .await;
     assert!(

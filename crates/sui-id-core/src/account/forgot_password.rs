@@ -331,15 +331,19 @@ pub async fn consume_and_reset_password(
     password::check_password_policy(new_password, min_password_len)?;
 
     // RFC 003: HIBP breach check on token-based password reset.
-    // Fail-open: network failures let the reset through.
-    if matches!(
-        hibp::enforce_hibp(hibp_mode, hibp_client, new_password).await,
-        HibpEnforcement::Blocked { .. }
-    ) {
-        return Err(CoreError::BadRequest(
-            "New password found in known data breaches. Please choose a different password.".into(),
-        ));
-    }
+    // Fail-open: network failures let the reset through. A `warn`-mode hit is
+    // allowed, and is recorded on the completion event (RFC 115 D9): it used
+    // to be discarded here.
+    let hibp_warned = match hibp::enforce_hibp(hibp_mode, hibp_client, new_password).await {
+        HibpEnforcement::Blocked { .. } => {
+            return Err(CoreError::BadRequest(
+                "New password found in known data breaches. Please choose a different password."
+                    .into(),
+            ));
+        }
+        HibpEnforcement::AllowedWithWarning { .. } => true,
+        HibpEnforcement::Allowed => false,
+    };
     let hash = hash_token(plaintext_token);
     let row = password_reset_tokens::find_by_hash(db, &hash)
         .await?
@@ -379,12 +383,19 @@ pub async fn consume_and_reset_password(
     // RFC 103 D13: the command consumes the token once and re-reads the
     // user inside its transaction; an ineligible token or user rolls back
     // as `NotFound`, which is the ordinary invalid-link outcome.
-    sui_id_store::commands::consume_and_reset_password(db, row.user_id, row.id, credential, now)
-        .await
-        .map_err(|e| match e {
-            sui_id_store::StoreError::NotFound => CoreError::InvalidCredentials,
-            other => other.into(),
-        })?;
+    sui_id_store::commands::consume_and_reset_password(
+        db,
+        row.user_id,
+        row.id,
+        credential,
+        now,
+        hibp_warned,
+    )
+    .await
+    .map_err(|e| match e {
+        sui_id_store::StoreError::NotFound => CoreError::InvalidCredentials,
+        other => other.into(),
+    })?;
 
     // Best-effort post-reset notification mail. Failures here do
     // not affect the password change itself. The recipient's

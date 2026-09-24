@@ -97,7 +97,6 @@ pub struct CreateUserForm {
     pub display_name: String,
     #[serde(default)]
     pub email: String,
-    pub password: String,
     #[serde(default)]
     pub is_admin: Option<String>,
     #[serde(rename = "_csrf", default)]
@@ -127,30 +126,32 @@ pub async fn users_create(
         .as_deref()
         .map(|v| matches!(v, "true" | "on" | "1"))
         .unwrap_or(false);
+    // RFC 115 D2/D3: the account is created with no password, and the
+    // administrator goes straight to issuing the recovery link that lets its
+    // holder choose one. Two commands in sequence (U01, then U37 on the next
+    // request), never one transaction: U37 keeps its own step-up, target and
+    // throttle checks, and there is one copy of them. If the second never
+    // happens there is a user with no credential and nothing that can sign
+    // in; the administrator issues the link from the user's page.
     let create_result = admin_uc::create_user(
         &app.db,
         &app.clock,
-        Some(app.hibp_client.as_ref()),
-        {
-            sui_id_store::repos::server_settings::get(&app.db)
-                .await
-                .map(|s| s.hibp_mode)
-                .unwrap_or_default()
-        },
         admin_actor,
         CreateUserSpec {
             username: form.username.trim(),
-            password: &form.password,
             display_name: display,
             email,
             is_admin,
-            min_password_len: crate::handlers::password_min_len(&app),
         },
     )
     .await;
 
     match create_result {
-        Ok(_) => Ok(Redirect::to("/admin/users").into_response()),
+        Ok(created) => Ok(Redirect::to(&format!(
+            "/admin/users/{}/recovery-link-confirm",
+            created.id
+        ))
+        .into_response()),
         Err(CoreError::Conflict(msg)) => {
             // Duplicate username: re-render the create form with the error
             // so the admin can correct it without re-entering everything.
@@ -332,6 +333,19 @@ pub async fn users_detail_get(
         })
         .collect();
 
+    // RFC 115 D10, display only: an administrator who has never held a
+    // credential and never signed in is being activated, not captured, so the
+    // button is offered for them. U37 re-reads and decides in its transaction.
+    let never_activated_admin = if user.role.is_admin() && user.last_login_at.is_none() {
+        match sui_id_store::repos::credentials::get(&app.db, user.id).await {
+            Ok(_) => false,
+            Err(sui_id_store::StoreError::NotFound) => true,
+            Err(e) => return Err(HttpError::html(CoreError::from(e))),
+        }
+    } else {
+        false
+    };
+
     let token = crate::csrf::ensure_token(&jar);
     let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let data = UserDetailData {
@@ -343,14 +357,15 @@ pub async fn users_detail_get(
         role: user.role, // RFC 071
         is_disabled: user.is_disabled,
         // Display only (RFC 103 D5): U37 enforces every rule in its transaction.
-        // The viewer is an administrator here, so refusing an administrator
-        // target also refuses the viewer's own page (D5's "not the issuer"
-        // rule needs no separate condition).
+        // The viewer is an administrator here. An administrator target is
+        // refused unless it has never been activated (RFC 115 D10), which the
+        // viewer's own account never satisfies (they are signed in), so D5's
+        // "not the issuer" rule needs no separate condition.
         can_issue_recovery: role.is_admin()
             && user.source.is_local()
             && !user.is_disabled
             && !user.is_deleted
-            && !user.role.is_admin(),
+            && (!user.role.is_admin() || never_activated_admin),
         totp_enabled,
         passkey_count,
         sessions,

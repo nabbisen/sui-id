@@ -421,11 +421,9 @@ pub async fn apply_seed(
     let admin_id = created.user_id;
 
     for u in &seed.users {
-        create_user(
+        let created = create_user(
             db,
             clock,
-            None, // dev-mode: HIBP off
-            sui_id_store::models::HibpMode::Off,
             &sui_id_core::actor::Actor::from_session(
                 admin_id,
                 sui_id_store::models::Role::Admin,
@@ -435,17 +433,41 @@ pub async fn apply_seed(
             .unwrap_or_else(|_| unreachable!("dev-mode initial admin must be admin")),
             CreateUserSpec {
                 username: &u.username,
-                password: &u.password,
                 display_name: u.display_name.as_deref(),
                 email: u.email.as_deref(),
                 is_admin: false,
-                // dev_mode always runs at Development level
-                min_password_len: sui_id_core::security::SecurityLevel::Development
-                    .password_min_len(),
             },
         )
         .await
         .with_context(|| format!("creating dev-mode user {:?}", u.username))?;
+        // RFC 115 D6: **the named exception.** `--dev` seeds fixture users
+        // whose passwords are printed for the developer, so it is the one
+        // place a password is chosen by someone other than its holder. It
+        // cannot use a `#[cfg(test)]` helper (this is a runtime flag in the
+        // production binary), so it writes the credential itself, after the
+        // audited U01, as a second step. The structural test in
+        // `tests/e2e/r115_stage2.rs` pins this file as the only allowed
+        // writer of `credentials` outside `sui-id-core`'s setup and the
+        // registry's commands; this is not a production path and never runs
+        // without `--dev`.
+        sui_id_core::password::check_password_policy(
+            &u.password,
+            // dev_mode always runs at Development level
+            sui_id_core::security::SecurityLevel::Development.password_min_len(),
+        )
+        .with_context(|| format!("dev-mode user {:?}: password policy", u.username))?;
+        sui_id_store::repos::credentials::upsert(
+            db,
+            &sui_id_store::models::CredentialRow {
+                user_id: created.id,
+                password_hash: sui_id_core::password::hash_password(&u.password)
+                    .with_context(|| format!("hashing dev-mode password for {:?}", u.username))?,
+                must_change: false,
+                updated_at: clock.now(),
+            },
+        )
+        .await
+        .with_context(|| format!("setting dev-mode password for {:?}", u.username))?;
     }
 
     let mut seeded_clients = Vec::with_capacity(seed.clients.len());

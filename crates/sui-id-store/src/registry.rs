@@ -166,10 +166,8 @@ pub enum AuditEventKind {
     AuthLoginFailure,
     /// `auth.lockout` — U22, threshold-crossing branch.
     AuthLockout,
-    /// `user.create` — U01, normal branch.
+    /// `user.create` — U01.
     UserCreate,
-    /// `user.create_warned_hibp` — U01, HIBP-flagged branch.
-    UserCreateWarnedHibp,
     /// `user.disable` — U02.
     UserDisable,
     /// `user.enable` — U03.

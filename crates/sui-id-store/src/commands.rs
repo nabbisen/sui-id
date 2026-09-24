@@ -8,7 +8,7 @@
 //! |---|---|
 //! | [`K01`] (`signing_keys::rotate_atomic_within_tx`) | Class-A runner, simple case: one command, one event |
 //! | [`U22`] (`users::record_login_failure_within_tx`) | Conditional Class-A: `auth.login.failure` **or** `auth.lockout`, exhaustively |
-//! | [`U01`] (`users::create_within_tx` + `credentials::upsert_within_tx`) | Class-A with a closed result branch on *input*, not observed state: `user.create` / `user.create_warned_hibp` |
+//! | [`U01`] (`users::create_within_tx`) | Class-A, one event: `user.create` (it once branched on input into `user.create_warned_hibp`, retired by RFC 115 D9) |
 //! | `u30_protocol_insert` | `Database::protocol` — proves it **cannot** construct `Audited<T>` |
 //! | `o01_operational_enqueue` | `Database::operational` — the fourth runner exists and is distinct from `protocol` |
 //!
@@ -357,7 +357,7 @@ pub async fn record_login_failure(
     .await
 }
 
-// ── U01 — create user (closed branch on input) ──────────────────────────
+// ── U01 — create user ───────────────────────────────────────────────────
 
 static U01_CREATE: EventDescriptor = EventDescriptor {
     kind: AuditEventKind::UserCreate,
@@ -368,21 +368,11 @@ static U01_CREATE: EventDescriptor = EventDescriptor {
     attributes: &[],
 };
 
-static U01_CREATE_WARNED_HIBP: EventDescriptor = EventDescriptor {
-    kind: AuditEventKind::UserCreateWarnedHibp,
-    name: "user.create_warned_hibp",
-    class: AuditClass::Atomic,
-    actor: ActorRequirement::Required,
-    target: TargetRequirement::Required,
-    attributes: &[],
-};
-
 crate::declare_write_command! {
-    /// U01 — admin create user, branching on the HIBP policy outcome
-    /// decided by the *caller* before this runs (not observed inside the
-    /// transaction) — the branch is closed over input, which is why this
-    /// slice member is distinct from U22's closed branch over observed
-    /// state.
+    /// U01 — admin create user. **It creates no credential** (RFC 115 D4):
+    /// nobody but the account holder ever chooses a password, so this
+    /// command has no parameter that could carry one. The account is
+    /// activated through an administrator-issued recovery link (U37).
     command U01 = "U01" {
         // Settled 2026-09-08, not provisional: this is "admin create
         // user", the coverage matrix requires `admin user id` as its
@@ -396,18 +386,14 @@ crate::declare_write_command! {
         system_principal: forbidden;
         enum U01Event {
             Created { user_id: UserId } => &U01_CREATE,
-            CreatedWarnedHibp { user_id: UserId } => &U01_CREATE_WARNED_HIBP,
         }
     }
 }
 
 impl SealedCommandEvent<U01> for U01Event {
     fn target(&self) -> Option<AuditTarget> {
-        match self {
-            Self::Created { user_id } | Self::CreatedWarnedHibp { user_id } => {
-                Some(AuditTarget(user_id.to_string()))
-            }
-        }
+        let Self::Created { user_id } = self;
+        Some(AuditTarget(user_id.to_string()))
     }
 
     fn result(&self) -> AuditResult {
@@ -419,9 +405,9 @@ impl SealedCommandEvent<U01> for U01Event {
     }
 }
 
-/// Run U01 (admin create user) through the Class-A runner. `hibp_warned`
-/// is the caller's already-decided branch (RFC 094: the branch is closed
-/// over input, not re-derived here).
+/// Run U01 (admin create user) through the Class-A runner. The user is
+/// created **without a credential**: there is no parameter for one (RFC 115
+/// D4), so a password at creation is a compile error, not a review finding.
 /// `admin` is the authorizing actor's `UserId` — the caller is
 /// responsible for it genuinely coming from a verified authorization
 /// decision (RFC 094 §"Class-A transaction seam"; see
@@ -431,22 +417,12 @@ pub async fn create_user(
     db: &crate::Database,
     admin: UserId,
     user: crate::models::UserRow,
-    credential: Option<crate::models::CredentialRow>,
-    hibp_warned: bool,
 ) -> StoreResult<crate::registry::Audited<()>> {
     let context = AuthorizedCommandContext::<U01>::for_authorized_actor(admin, None);
     let user_id = user.id;
     db.class_a(context, move |tx: &mut ClassATx<'_, U01>| {
         crate::repos::users::create_within_tx(tx.tx(), &user)?;
-        if let Some(cred) = &credential {
-            crate::repos::credentials::upsert_within_tx(tx.tx(), cred)?;
-        }
-        let event = if hibp_warned {
-            U01Event::CreatedWarnedHibp { user_id }
-        } else {
-            U01Event::Created { user_id }
-        };
-        Ok(((), event))
+        Ok(((), U01Event::Created { user_id }))
     })
     .await
 }
@@ -1232,11 +1208,18 @@ static U10_RESET_COMPLETED: EventDescriptor = EventDescriptor {
     class: AuditClass::Atomic,
     actor: ActorRequirement::None,
     target: TargetRequirement::Required,
-    attributes: &[AttributeSpec {
-        name: "origin",
-        description: "where the consumed token came from: \"email\" (forgot-password), \"web\" (an administrator) or \"cli\" (the operator)",
-        required: false,
-    }],
+    attributes: &[
+        AttributeSpec {
+            name: "origin",
+            description: "where the consumed token came from: \"email\" (forgot-password), \"web\" (an administrator) or \"cli\" (the operator)",
+            required: false,
+        },
+        AttributeSpec {
+            name: "hibp",
+            description: "\"warned\" when the new password appears in a known breach and the deployment's HIBP mode is `warn` (RFC 115 D9); absent otherwise",
+            required: false,
+        },
+    ],
 };
 
 crate::declare_write_command! {
@@ -1252,6 +1235,7 @@ crate::declare_write_command! {
             Completed {
                 user_id: UserId,
                 origin: crate::models::ResetTokenOrigin,
+                hibp_warned: bool,
             } => &U10_RESET_COMPLETED,
         }
     }
@@ -1268,15 +1252,26 @@ impl SealedCommandEvent<U10> for U10Event {
     }
 
     fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
-        let Self::Completed { origin, .. } = self;
-        AuditAttributes::builder()
-            .attribute("origin", origin.as_str())
-            .build()
+        let Self::Completed {
+            origin,
+            hibp_warned,
+            ..
+        } = self;
+        let builder = AuditAttributes::builder().attribute("origin", origin.as_str());
+        if *hibp_warned {
+            builder.attribute("hibp", "warned").build()
+        } else {
+            builder.build()
+        }
     }
 }
 
-/// Run U10 (forgot-password completion) through the Class-A runner:
-/// credential swap, token consume, and session/refresh-token revocation
+/// Run U10 (forgot-password completion) through the Class-A runner.
+/// `hibp_warned` is the caller's already-decided outcome of the breach check
+/// on the new password in `warn` mode (RFC 115 D9): the event records it, so
+/// a breached password the deployment chose to allow is no longer silent.
+///
+/// The credential swap, token consume, and session/refresh-token revocation
 /// were already atomic before this candidate (a raw `db.with_tx` block
 /// in `forgot_password.rs`) — RFC 094's actual gap here was the audit
 /// event, appended separately and afterward via `events::emit`, whose
@@ -1289,6 +1284,7 @@ pub async fn consume_and_reset_password(
     token_id: sui_id_shared::ids::PasswordResetTokenId,
     credential: crate::models::CredentialRow,
     consumed_at: chrono::DateTime<chrono::Utc>,
+    hibp_warned: bool,
 ) -> StoreResult<crate::registry::Audited<()>> {
     let context = AuthorizedCommandContext::<U10>::for_system_actor(None);
     db.class_a(context, move |tx: &mut ClassATx<'_, U10>| {
@@ -1318,7 +1314,14 @@ pub async fn consume_and_reset_password(
             Some(token_id),
             consumed_at,
         )?;
-        Ok(((), U10Event::Completed { user_id, origin }))
+        Ok((
+            (),
+            U10Event::Completed {
+                user_id,
+                origin,
+                hibp_warned,
+            },
+        ))
     })
     .await
 }
@@ -1501,7 +1504,10 @@ fn check_recovery_target(
         if admin == target {
             return Err(refuse(Why::TargetIsSelf));
         }
-        if t.role.is_admin() {
+        // RFC 115 D10: an administrator target is refused only when it is a
+        // live account. One that has never held a credential and never
+        // signed in is being activated, not captured.
+        if t.role.is_admin() && !t.never_activated {
             return Err(refuse(Why::TargetIsAdmin));
         }
     }

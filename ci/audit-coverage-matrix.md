@@ -74,8 +74,7 @@ it when RFC 094 converts it.*
 
 | Event name | Operation | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
-| `user.create` | Create user | admin user id | new user id | — | A |
-| `user.create_warned_hibp` | Create user (HIBP breach warning) | admin user id | new user id | — | A |
+| `user.create` | Create user (no credential is written: the holder sets a password through a recovery link, RFC 115) | admin user id | new user id | — | A |
 | `user.disable` | Disable user account | admin user id | target user id | reason (optional), `step_up` (required) | A |
 | `user.enable` | Re-enable user account | admin user id | target user id | `step_up` (required) | A |
 | `user.delete` | Soft-delete user | admin user id | target user id | reason (optional), `step_up` (required) | A |
@@ -307,7 +306,7 @@ Each row below was checked against its command's descriptor on this date.
 | `auth.password.reset_email_sent` | Reset email dispatched | — | B |
 | `auth.password.reset_email_failed` | Reset email failed to send | — | B |
 | `auth.password.reset_throttled` | Reset request throttled | — | B |
-| `auth.password.reset_completed` | Password reset completed | — | **A** |
+| `auth.password.reset_completed` | Password reset completed; note field `hibp=warned` when the new password is in a known breach and the HIBP mode is `warn` (RFC 115 D9) | — | **A** |
 | `auth.refresh.rotated` | Refresh token rotated (the normal, routine case) | — | **A** |
 | `auth.refresh.theft_detected` | Replay of a rotated refresh token (family revoked) | — | **A** |
 

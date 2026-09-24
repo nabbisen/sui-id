@@ -89,20 +89,17 @@ async fn stepped_up(a: &Admin, method: &'static str, ago_secs: i64) {
 }
 
 async fn target_user(a: &Admin, name: &str) -> UserId {
-    sui_id_core::admin::create_user(
+    create_user_with_password(
         &a.state.db,
         &a.state.clock,
-        None,
-        sui_id_store::models::HibpMode::Off,
         &admin_actor_for(a.id),
         sui_id_core::admin::CreateUserSpec {
             username: name,
-            password: "target-very-strong-password",
-            min_password_len: 12,
             display_name: None,
             email: None,
             is_admin: false,
         },
+        "target-very-strong-password",
     )
     .await
     .expect("create target")

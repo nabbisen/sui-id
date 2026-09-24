@@ -34,7 +34,6 @@ fn all_descriptors() -> Vec<&'static EventDescriptor> {
         &U22_FAILURE,
         &U22_LOCKOUT,
         &U01_CREATE,
-        &U01_CREATE_WARNED_HIBP,
         &U02_DISABLE,
         &U03_ENABLE,
         &U04_DELETE,
@@ -134,7 +133,7 @@ fn actor_requirement_agrees_with_system_principal_for_every_command() {
 
     check("K01", false, &[&K01_ROTATED]);
     check("U22", true, &[&U22_FAILURE, &U22_LOCKOUT]);
-    check("U01", false, &[&U01_CREATE, &U01_CREATE_WARNED_HIBP]);
+    check("U01", false, &[&U01_CREATE]);
     check("U02", false, &[&U02_DISABLE]);
     check("U03", false, &[&U03_ENABLE]);
     check("U04", false, &[&U04_DELETE]);
@@ -199,12 +198,20 @@ fn u22_both_branches_map_to_distinct_descriptors() {
 }
 
 #[test]
-fn u01_both_branches_map_to_distinct_descriptors() {
-    let uid = UserId::new();
-    let created = U01Event::Created { user_id: uid };
-    let warned = U01Event::CreatedWarnedHibp { user_id: uid };
+fn u01_has_one_event_and_the_warned_hibp_event_is_retired() {
+    // RFC 115 D9: U01 sets no password, so the HIBP-flagged branch is
+    // unreachable and its event is gone from the registry. Pinned by name so
+    // a revival shows up as a diff here.
+    let created = U01Event::Created {
+        user_id: UserId::new(),
+    };
     assert_eq!(U01::descriptor(&created).name, "user.create");
-    assert_eq!(U01::descriptor(&warned).name, "user.create_warned_hibp");
+    assert!(
+        all_descriptors()
+            .iter()
+            .all(|d| d.name != "user.create_warned_hibp"),
+        "user.create_warned_hibp must not be registered"
+    );
 }
 
 #[test]
@@ -257,7 +264,6 @@ fn event_names_match_command_inventory() {
         "auth.login.failure",
         "auth.lockout",
         "user.create",
-        "user.create_warned_hibp",
         "user.disable",
         "user.enable",
         "user.delete",
@@ -575,9 +581,29 @@ fn u10_records_origin() {
     let event = U10Event::Completed {
         user_id: UserId::new(),
         origin: crate::models::ResetTokenOrigin::Cli,
+        hibp_warned: false,
     };
     assert_eq!(
         attribute_map(&event.attributes().expect("attributes")),
         vec![("origin".to_owned(), "cli".to_owned())]
+    );
+}
+
+#[test]
+fn u10_records_a_warn_mode_breach_hit_and_only_then() {
+    // RFC 115 D9: the outcome that used to be discarded. Present as
+    // `hibp=warned` when the warn-mode check found the password; absent
+    // otherwise, so an ordinary completion's note is unchanged.
+    let warned = U10Event::Completed {
+        user_id: UserId::new(),
+        origin: crate::models::ResetTokenOrigin::Email,
+        hibp_warned: true,
+    };
+    assert_eq!(
+        attribute_map(&warned.attributes().expect("attributes")),
+        vec![
+            ("origin".to_owned(), "email".to_owned()),
+            ("hibp".to_owned(), "warned".to_owned())
+        ]
     );
 }
