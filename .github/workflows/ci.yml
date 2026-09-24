@@ -673,3 +673,17 @@ jobs:
           echo "exit_status=$status"
           echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           exit "$status"
+      - name: G17 self-tests (write-command inventory checker)
+        # RFC 116 stage 1. The lane itself is held in [gate_matrix_exceptions]
+        # until the two inventory rows it disproves (O04, X02) are ruled; its
+        # self-tests run from the day the script exists, so the script cannot
+        # rot unnoticed while it waits for registration.
+        run: |
+          set +e
+          echo "command=python3.14 -m unittest scripts.tests.test_write_commands"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3.14 -m unittest scripts.tests.test_write_commands
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"

@@ -9,9 +9,23 @@ approved by `@nabbisen` on 2026-07-21, durably returned to Proposed in commit
 complete amended RFC; implementation reconciliation and entry gates remain pending
 
 This is the closed Stage-0 classification of production durable-write entry
-points. The implementation converts it to `ci/write-commands.toml` without
-dropping rows. Source changes discovered during implementation amend this file
-and return through design review before they can enter the closure universe.
+points. **The rows are no longer in this file.** They live in
+[`ci/write-commands.toml`](../../../ci/write-commands.toml), the one copy
+([RFC 116](../../accepted/116-gate-contracts.md) D1), which
+`scripts/check-write-commands.py` (lane G17) checks against the code: every
+sealed command has a row, every row that says it is sealed names a command,
+every `files` path exists. A row cited elsewhere as "row U24" or "F04" is that
+`id` in the TOML. This file keeps what a table cannot carry: the classes, the
+closed event-branch rule, the reasoning, and the record of what was retired or
+removed. Source changes discovered during implementation amend the TOML and
+return through design review before they can enter the closure universe.
+
+**Retired: `U06`, admin password reset.** It was retired by
+[RFC 103](../../done/103-administrator-issued-account-recovery.md) D1 and replaced
+by `U37` (issue a recovery link); no path may set a password on a user's behalf.
+Its row was `A`, event `user.reset_password`, mutation surface
+`credentials::upsert` plus token and session invalidation, test
+`a_u06_password`. The TOML has no `U06` row; this paragraph is its record.
 
 ## Classes
 
@@ -53,90 +67,14 @@ Client enable/disable and registration-authorization issue/revoke are distinct
 operator intents and therefore use separate IDs (C05/C21 and C14/C22), even
 though each pair shares one current repository function family.
 
-## Users, credentials, MFA, and sessions
-
-| ID | Logical command / owner | Class | Typed event or rationale | Current mutation surface | Required test ID |
-|---|---|---|---|---|---|
-| U01 | Admin create user / `core::identity::admin::users` | A | closed result branches: `user.create` or `user.create_warned_hibp` | `users::create`, `credentials::upsert` | `a_u01_create_normal`, `a_u01_create_hibp` |
-| U02 | Admin disable user | A | `user.disable` | `users::set_disabled(true)` plus revocations | `a_u02_disable` |
-| U03 | Admin enable user | A | `user.enable` | `users::set_disabled(false)` | `a_u03_enable` |
-| U04 | Admin soft-delete user | A | `user.delete` | `users::soft_delete` plus revocations | `a_u04_delete` |
-| U05 | Admin role change | A | `user.role_change` | `users::set_role` | `a_u05_role` |
-| U06 | Admin password reset **Retired by [RFC 103](../../done/103-administrator-issued-account-recovery.md) D1** — replaced by U37 (issue recovery link); no path may set a password on a user's behalf. | A | `user.reset_password` | `credentials::upsert`, token/session invalidation | `a_u06_password` |
-| U07 | Admin MFA reset | A | `mfa.admin_reset` | `user_totp::delete`, WebAuthn credential deletes | `a_u07_mfa_reset` |
-| U08 | CLI operator unlock | A | `admin.user.unlock` | `users::admin_unlock` only — `clear_lockout` is **U24**, not this command (decided 2026-09-09) | `a_u08_unlock` |
-| U09 | Self password change | A | `auth.password.changed_self` | `credentials::upsert`, session/token revocation | `a_u09_self_password` |
-| U10 | Forgot-password completion | A | `auth.password.reset_completed` | `password_reset_tokens::mark_consumed`, `credentials::upsert`, revocations | `a_u10_reset_complete` |
-| U11 | User email change | A | `user.email_change` | `users::update_email` | `a_u11_email` |
-| U12 | TOTP enrollment confirm | A | `auth.mfa.factor_added` (method `totp`) since `04a5760`, RFC 102 B7; was `mfa.enable` — *corrected 2026-09-09; `auth.mfa.totp_enabled` appeared in no code, matrix, or doc* | `user_totp::confirm_with_recovery` | `a_u12_totp_enable` |
-| U13 | TOTP disable | A | `auth.mfa.totp_disabled` | `user_totp::delete` | `a_u13_totp_disable` |
-| U14 | Recovery-code regeneration | A | `auth.mfa.factor_added` (method `recovery_codes`) since `04a5760`, RFC 102 B7 | `user_totp::set_recovery_codes` | `a_u14_recovery` |
-| U15 | Passkey register | A | `auth.mfa.factor_added` (method `webauthn`) since `04a5760`, RFC 102 B7 | `user_webauthn_credentials::create` | `a_u15_passkey_create` |
-| U16 | Passkey delete | A | `auth.passkey.deleted` | `user_webauthn_credentials::delete` | `a_u16_passkey_delete` |
-| U17 | Passkey rename | A | `auth.passkey.renamed` | `user_webauthn_credentials::update_nickname` | `a_u17_passkey_rename` |
-| U18 | Revoke one session | A | `auth.session.revoked` | `sessions::revoke` | `a_u18_session_one` |
-| U19 | Revoke user sessions / force logout | A | `auth.sessions.revoked` | `sessions::revoke_all_for_user`, `revoke_all_for_user_except` | `a_u19_sessions_all` |
-| U20 | Revoke user authorization grants | A | `auth.consent.revoked` | `user_consent::revoke_with_tokens` / `revoke`, refresh/access revocation | `a_u20_consent_revoke` |
-| U21 | Grant/update consent | A | `auth.consent.granted` | `user_consent::upsert` | `a_u21_consent_grant` |
-| U22 | Record login failure / optional lockout | A | closed result branches: `auth.login.failure` below threshold or `auth.lockout` on threshold crossing | `users::record_login_failure` | `a_u22_failure`, `a_u22_lockout` |
-| U24 | Successful-login bookkeeping **Reclassified by [RFC 102](../../done/102-authentication-fails-closed-without-audit.md)** — sign-in bookkeeping commits atomically inside L01–L04. | P | `auth.login.success` is Class B; timestamp/counter maintenance is not a separate privileged command | `users::clear_lockout`, `set_last_login` | `p_u24_login_bookkeeping` |
-| U25 | Preferred-language change | P | non-security user preference; UI confirmation is sufficient | `users::set_preferred_lang` | `p_u25_language` |
-| U26 | LDAP shadow-user upsert | A | `auth.user_source.shadow_upserted` | `users::upsert_ldap_shadow` | `a_u26_ldap_shadow` |
-| U27 | TOTP pending enrollment | P | short-lived ceremony state; final enable is U12 | `user_totp::upsert_pending` | `p_u27_totp_pending` |
-| U28 | TOTP anti-replay step | P | per-auth anti-replay state; covered by MFA success/failure events | `user_totp::set_last_used_step` | `p_u28_totp_step` |
-| U29 | Passkey signature-counter update | P | per-auth authenticator state; covered by login/MFA event | `user_webauthn_credentials::update_passkey` | `p_u29_passkey_counter` |
-| U30 | Session creation **Reclassified by [RFC 102](../../done/102-authentication-fails-closed-without-audit.md)** — sign-in session creation is Class A (L01–L04); the Protocol runner `insert_session` is retired. | P | high-frequency authentication protocol state; `auth.login.success` is Class B | `sessions::insert` | `p_u30_session_insert` |
-| U31 | Session activity/step-up touch **Step-up touch reclassified by [RFC 102](../../done/102-authentication-fails-closed-without-audit.md)** — L05/L06; activity touch unchanged. | P | high-frequency expiry/auth-context bookkeeping | `sessions::touch_last_used`, `touch_step_up` | `p_u31_session_touch` |
-| U32 | Pending MFA ceremony create/consume **Consumption reclassified by [RFC 102](../../done/102-authentication-fails-closed-without-audit.md)** — consumed inside L02; failures counted by L07. | P | short-lived one-time protocol state | `login_pending_mfa::insert`, `delete` | `p_u32_pending_mfa` |
-| U33 | WebAuthn ceremony create/consume | P | short-lived one-time protocol state | `webauthn_pending::insert`, `delete` | `p_u33_webauthn_pending` |
-| U34 | Password-reset token issue | P | one-time protocol state; request/email events are Class B | `password_reset_tokens::insert` | `p_u34_reset_issue` |
-| U35 | Credential primitive | I | callable only inside U01/U06/U09/U10 | `credentials::upsert`, `upsert_within_tx` | `i_u35_credentials` |
-| U36 | Consent last-used touch | P | high-frequency usage bookkeeping; grant/revoke commands are U20/U21 | `user_consent::touch_last_used` | `p_u36_consent_touch` |
-
-## Clients, scopes, registration, and federation
-
-| ID | Logical command / owner | Class | Typed event or rationale | Current mutation surface | Required test ID |
-|---|---|---|---|---|---|
-| C01 | Admin create client | A | `client.create` | `clients::create` | `a_c01_create` |
-| C02 | Update client basic metadata | A | `client.update` | `clients::update_basic` | `a_c02_basic` |
-| C03 | Replace allowed scopes | A | `client.set_allowed_scopes` | `clients::set_allowed_scopes` | `a_c03_scopes` |
-| C04 | Replace post-logout URIs | A | `client.set_post_logout_redirect_uris` | `clients::set_post_logout_redirect_uris` | `a_c04_logout_uris` |
-| C05 | Disable client | A | `client.disable` | `clients::set_disabled(true)` | `a_c05_disable` |
-| C06 | Soft-delete client | A | `client.delete` | `clients::soft_delete` plus token revocation | `a_c06_delete` |
-| C07 | Rotate/set production client secret | A | `client.rotate_secret` | `clients::set_secret_hash` | `a_c07_secret` |
-| C08 | Set dev client secret | A | `client.rotate_secret` with dev-source attribute | `clients::set_dev_secret_hash` | `a_c08_dev_secret` |
-| C09 | Change consent policy | A | `client.consent_policy_changed` | `clients::update_consent_policy` | `a_c09_consent_policy` |
-| C10 | Change app identity/URIs | A | `client.app_identity_changed` | `clients::update_app_identity` | `a_c10_identity` |
-| C11 | Stamp registration source | I | part of C15; no standalone caller | `clients::set_registered_via` | `i_c11_registered_via` |
-| C12 | Create authorization-scope definition | A | `scope_definition.created` | `scope_definition::create` | `a_c12_scope_create` |
-| C13 | Delete authorization-scope definition | A | `scope_definition.deleted` | `scope_definition::delete` | `a_c13_scope_delete` |
-| C14 | Issue registration authorization | A | `client.registration_token.created` | `client_registration_token::create` | `a_c14_registration_issue` |
-| C15 | Dynamic client registration baseline | A | `client.dynamic_register` | guarded `client_registration_token::consume`, `clients::create`, `set_registered_via` in one RFC 094 transaction | `a_c15_dynamic_register` |
-| C16 | Federation-provider create | A | `federation.provider.created` | create globally fresh never-reused provider ID, disabled/review-required, with canonical `activation_generation=0` | `a_c16_provider_create` |
-| C17 | Federation-provider enable/disable | A | closed branches `federation.provider.enabled` / `federation.provider.disabled`; both record old/new activation generation; enable consumes sealed preflight (<600s), disable clears evidence | exact provider/version/policy/generation/enabled guard; both checked-increment generation; enable stores evidence bound to new generation, disable invalidates login/MFA/ceremony state; no standalone writer | `a_c17_provider_enable`, `a_c17_provider_disable`, `a_c17_preflight_race`, `a_c17_generation_overflow` |
-| C18 | Federation-provider delete | A | `federation.provider.deleted`; old/new activation generation + bounded invalidated counts | exact non-deleted generation guard; checked-increment generation, clear evidence, invalidate login/MFA/ceremony state, then mark/remove provider in one transaction | `a_c18_provider_delete`, `a_c18_generation_overflow` |
-| C19 | Federation-link upsert | A | closed persistence-result branches: `auth.federation.link.created` / `auth.federation.link.updated` | `federation_link::upsert` | `a_c19_link_create`, `a_c19_link_update` |
-| C20 | Federation-link delete | A | `auth.federation.link.deleted` | `federation_link::delete` | `a_c20_link_delete` |
-| C21 | Enable client | A | `client.enable` | `clients::set_disabled(false)` | `a_c21_enable` |
-| C22 | Revoke registration authorization | A | `client.registration_token.revoked` | `client_registration_token::revoke` | `a_c22_registration_revoke` |
-| C23 | Replace federation-provider trust policy / RFC 096 startup configuration | A | `federation.provider.policy_updated`; sealed `StartupConfiguration` actor, provider-ID target, old/new version and activation generation + changed-field enums + invalidated counts | guarded full policy replace on exact non-deleted old version/generation, checked-increment both, force disabled/review-required, clear evidence, invalidate old flows; cache eviction post-commit | `a_c23_provider_policy_update`, `a_c23_generation_overflow` |
-
 ## RFC 096 federation login commands (accepted amendment)
 
-These rows freeze the compound ownership boundary. F01–F03/F05/F06 are explicit
+The F01–F06 rows of the TOML freeze the compound ownership boundary. F01–F03/F05/F06 are explicit
 Protocol exclusions under the previously reviewed base-design U24/U30/U32 and Class-B
 login-result policy; “P” does not mean separate best-effort writes. Each uses
-one protocol transaction and the private subordinate primitives listed here.
+one protocol transaction and the private subordinate primitives listed in
+its row's `mutation_surface`.
 F04 creates identity authority and is Class A.
-
-| ID | Logical command / owner | Class | Typed event or rationale | Atomic mutation surface | Required test ID |
-|---|---|---|---|---|---|
-| F01 | Existing federation link, no local MFA / RFC 096 federation login **Built to [RFC 102](../../done/102-authentication-fails-closed-without-audit.md)** — session and success event atomic (L04's successor). | P | one authentication protocol promotion; post-commit `auth.federation.signin.success` is Class B under U24/U30 policy | require enabled exact-version/generation provider + same active link/user; guarded `federation_login_attempt exchanging -> completed`; observe existing link last-seen/bounded verified email; login bookkeeping; insert session with `[Fed]`; enforce session cap | `p_f01_linked_direct` |
-| F02 | Existing federation link, local MFA required / RFC 096 federation login | P | short-lived continuation under U32; no login-success event before MFA | require enabled exact-version/generation provider + same active link/user; guarded attempt `exchanging -> completed`; insert one pending MFA row sealed as `Fed` primary and bound to provider/version/generation/link/user/continuation | `p_f02_linked_mfa_begin` |
-| F03 | Submit/complete federated local MFA / RFC 096 MFA login **Built to [RFC 102](../../done/102-authentication-fails-closed-without-audit.md)** — session and success event atomic (L04's successor). | P | closed `Promoted`, `RejectedStillPending`, `AttemptsExhausted`, `Invalidated`; exact Class-B success/rejected/exhausted/invalidated event after commit | guard pending, unexpired, count 0–4, exact provider/link/user/factor/method; wrong proof increments once (1–4 pending, 5 exhausted); Promoted consumes method anti-replay + pending, observes link, bookkeeps, inserts `[Fed, local_method]` session/cap; Invalidated terminalizes only | `p_f03_promoted`, `p_f03_rejected`, `p_f03_exhausted`, `p_f03_invalidated` |
-| F04 | First federated provisioning and direct login / RFC 096 federation login | A | `auth.federation.provisioned`; new-user sealed-federated actor/target, internal provider/link IDs, fixed mode | require enabled exact-version/generation provider; guard attempt `exchanging -> completed`; recheck absent link + verified unique email + username uniqueness; create passwordless non-admin user; create exactly one provider/sub link; insert `[Fed]` session; enforce cap; append sole intent event | `a_f04_provision` |
-| F05 | Terminal federation attempt failure/denial / RFC 096 federation login | P | one-time terminalization; exact Class-B sum: `auth.federation.signin.upstream_failure`, `takeover_blocked`, `link_required`, or `signin.denied` with closed reason enum | guarded pending/exchanging attempt to failed; no link/user/session/last-seen mutation | `p_f05_upstream`, `p_f05_takeover`, `p_f05_link_required`, `p_f05_denied` |
-| F06 | Begin/replace federated WebAuthn method ceremony / RFC 096 MFA login | P | method ceremony under U33; no authentication-success event/authority | require pending F02 row count 0–4 and exact unexpired provider/version/generation/link/user; atomically replace at most one `FederatedLogin` ceremony bound to parent/RP/origin/challenge and capped expiry | `p_f06_webauthn_begin`, `p_f06_webauthn_replace` |
 
 F01/F03/F04 update link observation only for a successful session-producing
 transaction. Observation cannot create, reassign, or delete a link and is an
@@ -181,43 +119,7 @@ from the wrong command. Fault tests inject every write/event/commit point and
 reconcile attempt, pending-MFA, anti-replay, user, link, session, bookkeeping,
 session-cap, event, and chain state.
 
-## Tokens and protocol grants
-
-| ID | Logical command / owner | Class | Typed event or rationale | Current mutation surface | Required test ID |
-|---|---|---|---|---|---|
-| T01 | Authorization-code issue | P | short-lived protocol grant; authorization decision/consent is audited separately | `auth_codes::insert` | `p_t01_code_issue` |
-| T02 | Authorization-code consume | P | one-time guarded protocol transition; exchange failure/success telemetry applies | `auth_codes::consume` | `p_t02_code_consume` |
-| T03 | Invalidate user authorization codes | I | subordinate to U02/U04/U06/U09/U10 | `auth_codes::invalidate_all_for_user` | `i_t03_code_invalidate` |
-| T04 | Refresh-token rotation / reuse revocation | A | closed result branches: `auth.refresh.rotated` for normal winner or `auth.refresh.theft_detected` for reuse/family revocation | guarded old-row revoke plus successor-only `refresh_tokens::insert`, or `revoke_family`, in one T04 transaction | `a_t04_refresh_normal`, `a_t04_refresh_reuse` |
-| T06 | Administrative/user refresh revocation | I | subordinate to U02/U04/U06/U09/U10/U19/C06 | `refresh_tokens::revoke`, `revoke_all_for_user`, `revoke_all_for_client` | `i_t06_refresh_revoke` |
-| T07 | Access-token revocation | I | subordinate to U20/U19/C06 or another inventoried revoke command | `revoked_access_tokens::insert` | `i_t07_access_revoke` |
-| T08 | Refresh hash backfill | O | idempotent startup migration/maintenance with structured telemetry | `refresh_tokens::backfill_token_hashes` | `o_t08_hash_backfill` |
-| T09 | Initial root-family refresh-token issue | P | high-frequency protocol issuance; authorization/login events are separate and this exclusion is not audit-equivalent | initial-issuance call site of `refresh_tokens::insert` | `p_t09_refresh_initial_issue` |
-
 ## Settings, setup, keys, and operational state
-
-| ID | Logical command / owner | Class | Typed event or rationale | Current mutation surface | Required test ID |
-|---|---|---|---|---|---|
-| S01 | Change default language | A | `settings.default_language.changed` | `server_settings::update_default_lang` | `a_s01_language` |
-| S02 | Change HIBP mode | A | `settings.hibp_mode.changed` | `server_settings::update_hibp_mode` | `a_s02_hibp` |
-| S03 | Change idle timeout | A | `settings.idle_timeout.changed` | `server_settings::update_idle_session_timeout` | `a_s03_idle` |
-| S04 | Change concurrent-session limit | A | `settings.max_sessions.changed` | `server_settings::update_max_concurrent_sessions` | `a_s04_sessions` |
-| S05 | Rotate metrics token | A | `settings.metrics_token.rotated` | `server_settings::update_metrics_token_hash` | `a_s05_metrics_token` |
-| S06 | Change SMTP configuration | A | `auth.smtp_config.changed` | `smtp_config::upsert` | `a_s06_smtp` |
-| S07 | Create pending sensitive change | A | `settings.pending_change.created` | `pending_settings_change::insert` | `a_s07_pending_create` |
-| S08 | Apply pending sensitive change | A | `settings.pending_change.applied` with typed intent/changed-field attributes | `pending_settings_change::consume` and setting mutation | `a_s08_pending_apply` |
-| S09 | Cancel pending sensitive change | A | `settings.pending_change.cancelled` | `pending_settings_change::cancel` | `a_s09_pending_cancel` |
-| S10 | Complete first setup | A | `admin.setup.completed` | initial admin/client/config writes and `state::mark_initialized` | `a_s10_setup` |
-| K01 | Rotate signing key | A | `signing_key.rotate` | `signing_keys::rotate_atomic` | `a_k01_signing_rotate` |
-| K02 | Retire signing key | A | `signing_key.retire` | `signing_keys::retire` | `a_k02_signing_retire` |
-| K03 | Delete signing key | A | `signing_key.delete` | `signing_keys::delete` | `a_k03_signing_delete` |
-| K06 | Sealed-key insert/reseal primitives | I | subordinate to S10 or K01 only | `signing_keys::insert_with_plaintext`, `insert_sealed_on_conn`, all `reseal_all` functions | `i_k06_key_primitives` |
-| O01 | Enqueue email | O | delivery queue state; originating security command owns its event | `email_outbox::enqueue` | `o_o01_enqueue` |
-| O02 | Claim/update/requeue email work | O | worker lifecycle with structured operational telemetry | `claim_one_eligible`, `mark_sent`, `record_failure`, `mark_permanently_failed`, `requeue_stuck_sending` | `o_o02_outbox_worker` |
-| O03 | Purge expired protocol rows | O | retention housekeeping; count/error telemetry | purge functions in auth codes, sessions, pending MFA/WebAuthn, reset tokens, pending changes, refresh/access tokens | `o_o03_purge` |
-| O04 | Create SQLite backup snapshot | O | operator-invoked backup evidence owns outcome; no domain mutation in the live database | `backup::ops` `VACUUM INTO` destination | `o_o04_backup_snapshot` |
-| X01 | Schema migrations | X | ordered migration identity/result in upgrade evidence | `Database` migration runner and migration SQL only | `x_x01_migrations` |
-| X02 | Development seed/reset | X | dev-only, unreachable in production mode; dev warning/summary | `runtime::dev_mode` writes | `x_x02_dev_seed` |
 
 **Removed 2026-07-28 — master-key rotation.** `K04` (master-key database
 reseal phase) and `K05` (master-key activation completion) were removed from
