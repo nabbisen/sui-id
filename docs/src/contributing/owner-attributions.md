@@ -3,7 +3,7 @@
 This repository has, three times, recorded a decision as the owner's that the
 owner did not make. Each was a single sentence in a single commit that nobody
 read. Lane **G16** exists so that such a sentence cannot be added *unseen*.
-It is described by [RFC 117](https://github.com/nabbisen/sui-id/blob/main/rfcs/proposed/117-verifiable-owner-decisions.md)
+It is described by [RFC 117](https://github.com/nabbisen/sui-id/blob/main/rfcs/accepted/117-verifiable-owner-decisions.md)
 (stage 0) and needs no key.
 
 ## What it does

@@ -1,6 +1,6 @@
 # RFC 117 — independent design review request
 
-**RFC.** [RFC 117 — Owner decisions must be verifiable](../../proposed/117-verifiable-owner-decisions.md). Proposed.
+**RFC.** [RFC 117 — Owner decisions must be verifiable](../../accepted/117-verifiable-owner-decisions.md). Proposed.
 **Reviewer.** Mid-capability model, implementation role. It authored neither the
 RFC nor its handoff.
 **Route.** Owner decision of 2026-08-26 (`ROADMAP.md` §S1): a design is reviewed

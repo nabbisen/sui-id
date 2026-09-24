@@ -1,6 +1,6 @@
 # RFC 117 implementation handoff — verifiable owner decisions
 
-**Governing RFC.** [RFC 117](../../proposed/117-verifiable-owner-decisions.md), **Proposed**.
+**Governing RFC.** [RFC 117](../../accepted/117-verifiable-owner-decisions.md), **Proposed**.
 Nothing here is authorized until it is Accepted.
 **Implementer.** Mid-capability model.
 **Baseline.** The commit that adds this file, or later.

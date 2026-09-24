@@ -566,8 +566,10 @@ are scheduled into slack by the architect, who reports where each went. RFCs
 `accepted/` on 2026-09-24 once their independent design reviews had landed and
 each RFC had been amended to answer them. All three reviews returned blockers
 and none of the three was buildable as first written; the reviews are committed
-beside their RFCs as the durable evidence each header cites. RFC 117 was
-accepted on 2026-09-24 and its review is outstanding.
+beside their RFCs as the durable evidence each header cites. RFC 117 was accepted on
+2026-09-24, its design review landed the same day, and it moved to `accepted/`
+after a day's lag — the architect amended the RFC on the review's findings and
+did not walk the folder.
 
 | RFC | Accepted | Design review requested |
 |---|---|---|
@@ -603,7 +605,7 @@ historical record, not evidence.
 | [114](rfcs/proposed/114-ui-contract-reconciliation.md) | Reconcile `docs/ui-ux-contracts.md` with the code |
 | [115](rfcs/accepted/115-user-creation-without-a-password.md) | Creating a user without choosing their password |
 | [116](rfcs/accepted/116-gate-contracts.md) | Gate contracts: one source, one gate each |
-| [117](rfcs/proposed/117-verifiable-owner-decisions.md) | Owner decisions must be verifiable |
+| [117](rfcs/accepted/117-verifiable-owner-decisions.md) | Owner decisions must be verifiable |
 | [118](rfcs/proposed/118-lockout-clears-on-credential-change.md) | A credential change clears the lockout, and the user is told |
 
 ### Completed and withdrawn before the move

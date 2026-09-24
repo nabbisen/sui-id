@@ -1,6 +1,12 @@
 # RFC 117 — Owner decisions must be verifiable
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-09-24
+**Approved by.** `@nabbisen`, 2026-09-24: "RFC-117 is accepted." The move to
+`accepted/` lagged the acceptance by a day: it waited on the independent design
+review, which landed the same day, and the architect then amended the RFC and
+did not walk the folder. Stages 0 and 0b were implemented after the acceptance
+and before the move.
 **Security review.** Required
 **Independent design review.** [Design review 2026-09-24](../handoffs/117-verifiable-owner-decisions/design-review-2026-09-24.md) by the implementation role, which authored neither this RFC nor its handoff. Two blockers, four high, four medium; all resolved in this text. It measured the objection below and found it **stronger** than stated, and it disproved D1's central property as written (B2).
 **Design prerequisites.** None. RFC 000 is not amended by this RFC; it adds a way to evidence decisions, not a new rule about who may make them.

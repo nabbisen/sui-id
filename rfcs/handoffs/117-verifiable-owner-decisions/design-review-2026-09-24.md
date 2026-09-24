@@ -1,7 +1,7 @@
 # RFC 117 — independent design review
 
 **Date:** 2026-09-24
-**RFC:** [RFC 117 — Owner decisions must be verifiable](../../proposed/117-verifiable-owner-decisions.md)
+**RFC:** [RFC 117 — Owner decisions must be verifiable](../../accepted/117-verifiable-owner-decisions.md)
 **Request:** [`design-review-request.md`](design-review-request.md)
 **Reviewer:** Mid-capability model, implementation role. Authored neither the RFC nor its handoff.
 **Baseline read:** `11d28a4` (contains `8741fa6`). Read-only: no code, no RFC text, no `ci/` file changed. Everything I ran was in the session scratchpad or was a read (`git`, `gh api` GETs, `man`, `ssh-keygen` on throwaway keys). **I generated no key in `~/.ssh`, signed nothing with any existing key, and made no change on GitHub.**
