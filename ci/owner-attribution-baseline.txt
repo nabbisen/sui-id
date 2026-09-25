@@ -27,11 +27,13 @@ ROADMAP.md	2d4ab9968741d00b73c18bdf3c32d69f3d6cb9508934906d06fc3574002da5e4	1	On
 ROADMAP.md	3351aec715f3ba49395145f7af82e742bc1233506da4da1df6facb4916f22f56	1	Every statement in this repository that the owner made that ruling traces to documents written by the architect role that proposed it: this 
 ROADMAP.md	36060284344212921053b00aa09fd5934b9a264236165a241f43611f1ab7e726	1	Like the withdrawn 2026-07-28 attribution above, the 2026-09-09 ruling reaches this repository only through a document written by the archit
 ROADMAP.md	3819b157556c0f450210d9cbec9757bc02793f17a71349a72ed4a8ae337717d0	1	M2b — Remaining conversion and authority switch owner to set Convert settings, pending settings, federation configuration, client metadata; 
+ROADMAP.md	38f8d3a5e52a28d525badaf0268450567f8059782601207d98077667c97b15c4	1	@nabbisen raised two themes on 2026-09-25 — an embeddable (pluggable) auth module , and ZKP as an optional feature with the constraint that 
 ROADMAP.md	3ff17aee5d6f11a9c0b47dbe077c8ede26d6ef622b52bc9aaa7129ab54825d44	1	What this replaced. From 2026-09-10 to 2026-09-22 this work was carried in a roadmap/ directory created by ee48257 , which justified itself 
 ROADMAP.md	49dbfcab44b8ec3a2978613ef519cb233fb5c91c5e0ab44211be15c4f749b3bd	1	Recording a proposal as an owner ruling removes the owner's decision without their knowledge.
 ROADMAP.md	4c13be87c9cd301126e224cb8a1f947e693bb723402b21dcd2f85f83df07e5d9	1	This is recorded, not resolved. It reads against the owner decision of 2026-08-26 above, which routes a design to the role that must build a
 ROADMAP.md	51d83c78c92ecb1ab8f6f8bc8b4f55f9eb9186270f7a3d2cd902f480365d5473	1	None of those clauses was an owner decision.
 ROADMAP.md	5aceb88bc92843455c6e08971dae256f5c2e6f2241e83905f10b37dd4c748c4c	1	Required format: description, likelihood, impact, detection, mitigation, residual risk, decision owner.
+ROADMAP.md	61ebd8965b3dd0fcc8e3a9c37355e909fc111ea1976d772bcae5c1fb13d8e7a3	1	It needs @nabbisen 's decision separately, at cycle E, and is not assumed here.
 ROADMAP.md	66ee0dcfa997e967a91d9f0d1db35574fc86300bf75651f760fcb9863f6b9022	1	R7 Pre-RFC-094 dynamic registrations are indistinguishable from admin-created clients Certain (historical) Medium — provenance cannot be pro
 ROADMAP.md	68a3e3ed97de6ca9d6583624727828adfc39a44555bbbb185c9180166cba96e7	1	Where no role other than the author can perform a review, the gap is recorded as unreviewed design judgment and the owner rules on it with t
 ROADMAP.md	7c3b4d73cf9008f591c43f49ceb79d4570fa262c5fa82e72506f9abea4c17ebb	1	All remain Proposed , no schedule, require owner direction + soak.
@@ -44,6 +46,7 @@ ROADMAP.md	98ceb61a86f24277ce9291924a6e17133bb443462bede8d98ec302a9c90aff71	1	La
 ROADMAP.md	9ff0dd77fb1198d8f3af66327073695a788b5334736b6a8bbb99dc85baabdbe0	1	[117](rfcs/accepted/117-verifiable-owner-decisions.md) Owner decisions must be verifiable
 ROADMAP.md	a157d761db02ba8b26f6cc7aa722d2d4eeac428bc894e744c552b599283546cb	1	M6 — Release-assurance closure and soak entry owner to set Runtime file modes; all fuzz targets; package automation and inspection; live LDA
 ROADMAP.md	a9bbc3d5025b4c0528bdbca925b2a6d6b32f670b9b1391a0c5e6ca7c07a456e4	1	RFC 115's three open questions stay open: they are design forks for @nabbisen , and the design review is asked for its view on each as an in
+ROADMAP.md	b47cd980c89ef41abd8de0e517a02478a2c05f57670c73373d4075e5a12650b1	1	This schedule is the architect's proposal. It is recorded here so it can be argued with; it becomes a plan when @nabbisen authorizes it.
 ROADMAP.md	b896eddb59d1bc16048f69a92af1c552c0e99023d5a710c6021e4b4c4096611c	1	Correction, 2026-08-26 — this entry was previously wrong about its own provenance. The version written on 2026-07-30 in 1e59e3d recorded a t
 ROADMAP.md	ba516c67d0d3dd1fdb14f601de2a4b446ec1230d87e5baf7c7738d4e0d691338	1	117 2026-09-24 [ rfcs/handoffs/117-verifiable-owner-decisions/design-review-request.md ](rfcs/handoffs/117-verifiable-owner-decisions/design
 ROADMAP.md	bb235e2112792587a7ec5c03335238612a542d7b027f1b50e0382ea0526d46f6	1	codex-project-architect , codex-developer , and codex-independent-architecture-security-reviewer are agent identities from one vendor, with 

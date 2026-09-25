@@ -582,6 +582,49 @@ RFC 115's three open questions stay open: they are design forks for
 `@nabbisen`, and the design review is asked for its view on each as an input,
 not as the decision.
 
+### Cycles C–E — the embeddable boundary — proposed 2026-09-25, **not yet authorized**
+
+`@nabbisen` raised two themes on 2026-09-25 — an **embeddable (pluggable) auth
+module**, and **ZKP as an optional feature** with the constraint that *"the core
+must be kept as minimal, lightweight and clean."* He ruled that neither starts
+before the governance work in flight closes, and that **embeddable is
+relatively prioritized and is to be scheduled with concrete release timing**.
+ZKP is a watching brief: WebAuthn already ships, and no ZKP work is scheduled.
+
+**This schedule is the architect's proposal.** It is recorded here so it can be
+argued with; it becomes a plan when `@nabbisen` authorizes it. Windows are
+planning aids under the 2026-07-16 rule: **a failed gate moves the window, and
+scope or evidence is never cut to hold a date.**
+
+**Why three RFCs and not one.** The measurement taken on 2026-09-25 is that the
+web boundary largely exists already — `axum` appears outside `crates/sui-id/`
+exactly once, in a doc comment at `crates/sui-id-core/src/authn/hibp.rs:241`,
+and 11,347 of that crate's 14,878 lines are `src/http/`. What does not exist is
+a boundary between `sui-id-core` and the concrete store: **269 references to
+`sui_id_store::` and 22 public functions taking `db: &`**. So the work is a
+contract, then a boundary, then a split — in that order, because a module that
+compiles into any framework and guarantees nothing is worse than no module.
+
+| Cycle | Target | Window | Embeddable contents |
+|---|---|---|---|
+| **C** | v0.80.0 | **2026-10-27 → 11-14** (proposed; the authorized row leaves C open-ended) | **RFC 119 — the embedding contract.** Design only, no code: what a host must promise about sessions, CSRF, redirects, clock and the audit sink for RFC 102's audited sign-in, RFC 118's lockout and RFC 094's audit seam to still mean what they claim. Written by the architect during cycle B at no cost to implementation capacity; its independent design review is the first review dispatched in C |
+| **D** | v0.81.0 | **2026-11-17 → 12-05** | **RFC 120 — the store boundary.** `sui-id-core` written against a trait rather than `sui-id-store`: the 22 entry points and the 269 references. With it, **`contracts/embeddable-deps.toml` and a gate** over the embeddable crate's resolved dependency set, so "minimal, lightweight and clean" is a checked contract rather than an intention |
+| **E** | v0.82.0 | **2027-01-12 → 01-30** | **RFC 121 — the embeddable module.** The split proper, plus a worked example embedding it in one host framework. The gap over the year end is deliberate, not slack |
+
+**Ordering constraints, stated so they can be checked:**
+
+- **RFC 120 comes after RFCs 112 and 106, not beside them.** Both change the
+  store — `migrations::run`, `Database::open`, restore — and RFC 120 is the
+  largest single refactor since the programme began. Running them concurrently
+  would put two lanes through the same files.
+- **RFC 119 blocks RFC 121, not RFC 120.** The store boundary is worth having
+  whether or not sui-id is ever embedded, so it does not wait on the contract.
+- **Each is a minor bump in v0** under the 2026-08-26 surface test: each changes
+  public surface.
+- **Publishing an embeddable crate is an outward-facing act** and is not
+  covered by any standing authorization. It needs `@nabbisen`'s decision
+  separately, at cycle E, and is not assumed here.
+
 ### Open — each an RFC, all Proposed
 
 The twelve live packages became RFCs 104–115 on 2026-09-22, with their
