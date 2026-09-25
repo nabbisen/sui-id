@@ -14,8 +14,8 @@ false: the table holds no lane-to-setup mapping, no triggers and no rationale):
                               [lane_profiles]: what each lane needs from a runner.
   ci/workflow-template.toml   the parts that are text, not facts: the header, the
                               per-lane rationale comments, and the jobs that are
-                              not a lane's `checkout + dispatcher` shape (G12's
-                              job, `gate-inputs`, `gate-matrix-fixtures`).
+                              not a lane's `checkout + dispatcher` shape
+                              (`gate-inputs`, `gate-matrix-fixtures`).
 
 What this holds that nothing held before (the hole D4a names): the tool versions
 in `[tools]` are no longer compared to a workflow after the fact; they are the
@@ -68,7 +68,7 @@ ACTION_REPOS = {
     "rust_toolchain": "dtolnay/rust-toolchain",
     "setup_python": "actions/setup-python",
 }
-PROFILE_KEYS = {"title", "setup", "toolchain", "apt", "cache", "mdbook", "tz", "fetch_depth", "job"}
+PROFILE_KEYS = {"title", "setup", "toolchain", "apt", "cache", "mdbook", "tz", "bash", "fetch_depth"}
 TOOLS = ("rust_msrv", "rust_stable", "mdbook", "python")
 
 # What a raw block (or a comment) must not spell out itself.
@@ -169,6 +169,9 @@ def lane_job(lane: str, prof: dict, inp: Inputs) -> str:
     for key in prof:
         if key not in PROFILE_KEYS:
             inp.fail(f"{where}: unknown key `{key}`")
+    for flag in ("bash",):
+        if flag in prof and prof[flag] is not True:
+            inp.fail(f"{where}: `{flag}` is either true or absent")
     setup = prof.get("setup")
     if setup not in ("rust", "python", "none"):
         inp.fail(f"{where}: `setup` must be rust, python or none")
@@ -322,16 +325,7 @@ def render(inp: Inputs) -> str:
     profiles = m.get("lane_profiles", {})
     jobs: list[str] = []
     for lane in sorted(profiles, key=natural):
-        prof = profiles[lane]
-        if "job" in prof:
-            block = t.get("lane_jobs", {}).get(prof["job"])
-            if block is None:
-                inp.fail(f"[lane_profiles] {lane}: job {prof['job']!r} is not in [lane_jobs]")
-                continue
-            lint_raw(block, f"[lane_jobs] {prof['job']}", inp)
-            jobs.append(expand(strip_nl(block), inp, f"[lane_jobs] {prof['job']}"))
-        else:
-            jobs.append(lane_job(lane, prof, inp))
+        jobs.append(lane_job(lane, profiles[lane], inp))
     for name, block in t.get("extra_jobs", {}).items():
         lint_raw(block, f"[extra_jobs] {name}", inp)
         jobs.append(expand(strip_nl(block), inp, f"[extra_jobs] {name}"))

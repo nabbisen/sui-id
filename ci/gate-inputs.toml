@@ -60,6 +60,7 @@ G09b = "093"
 G10a = "093"
 G10b = "093"
 G11 = "093"
+G12 = "093"
 G13 = "094"
 G14 = "098"
 G15 = "098"
@@ -86,6 +87,7 @@ G09b = "cargo +stable test -p sui-id-store --features ldap --test ldap_smoke --l
 G10a = "mdbook build docs --dest-dir target/mdbook-gate"
 G10b = "python3.14 scripts/check-markdown-links.py --root . README.md ROADMAP.md docs"
 G11 = "python3.14 scripts/check-rfc-integrity.py --root . --policy ci/rfc-policy.toml"
+G12 = "bash scripts/check-ui-invariants.sh --all --policy ci/ui-invariants.toml"
 G13 = "bash scripts/check-audit-matrix.sh"
 G14 = "python3.14 scripts/check-markdown-links.py --root . rfcs/handoffs"
 G15 = "python3.14 scripts/check-doc-authority.py --root . --policy ci/doc-authority.toml"
@@ -94,12 +96,18 @@ G17 = "python3.14 scripts/check-write-commands.py --root . --inventory ci/write-
 
 # RFC 093 M1b C2.1: the lane-completeness rule (scripts/check-gate-inputs.sh
 # condition 7) requires every lane declared by any source RFC to be
-# either a [gates] key or listed here, never both, never neither. This list
-# is meant to stay this short: a lane belongs here only when it predates the
-# dispatcher and already has its own working, independently reviewed entry
-# point -- not as a place to defer wiring a new lane.
+# either a [gates] key or listed here, never both, never neither. A lane belongs
+# here only when it predates the dispatcher and already has its own working,
+# independently reviewed entry point -- not as a place to defer wiring a new lane.
+#
+# EMPTY since 2026-09-25 (RFC 116 stage 4). G12 was the only entry: it predated
+# ci-gate.sh and was "a reason not to touch it right now, not a claim that this
+# exception can never be revisited". It is revisited: G12 is a [gates] lane, its
+# Bash >=5.2,<6 assertion is the dispatcher's (the `bash` flag in [lane_profiles],
+# the range in [runner]), and its negative self-tests run in the
+# gate-matrix-fixtures job. The table stays, empty, because condition 7 and its
+# fixtures still define what an exception is.
 [gate_matrix_exceptions]
-G12 = "Predates ci-gate.sh and has its own working entry point (ui-invariants-v1, RFC 093 M1a). Not migrated: churning a green gate for symmetry is not worth the risk. Currently also a dependency of M1b C5 -- a reason not to touch it right now, not a claim that this exception can never be revisited."
 
 # RFC 116 stage 3: what each lane needs from a runner, and the one fact about a
 # lane that is neither its command nor its toolchain. .github/workflows/ci.yml is
@@ -119,7 +127,8 @@ G12 = "Predates ci-gate.sh and has its own working entry point (ui-invariants-v1
 #             stage 3b); the workflow does not set it. One inline table per line:
 #             ci-gate.sh reads it with awk, like [gates]
 #   fetch_depth  actions/checkout fetch-depth
-#   job       a lane whose job is written out in the template ([lane_jobs])
+#   bash      assert the [runner] Bash range (bash_minimum, bash_maximum_exclusive)
+#             before the lane runs: scripts/ci-gate.sh reads this, like tz (G12)
 #   title     the display name after "GNN — "; {rust_msrv}, {rust_stable},
 #             {mdbook} and {python} are filled from [tools]
 [lane_profiles]
@@ -137,7 +146,7 @@ G09b = { title = "LDAP smoke ({rust_stable})", setup = "rust", toolchain = "stab
 G10a = { title = "mdBook build ({rust_stable} / mdBook {mdbook})", setup = "rust", toolchain = "stable", cache = true, mdbook = true }
 G10b = { title = "markdown links (Python {python})", setup = "python" }
 G11 = { title = "RFC integrity (Python {python})", setup = "python" }
-G12 = { job = "ui-invariants-v1" }
+G12 = { title = "UI invariants v1", setup = "none", bash = true }
 G13 = { title = "audit coverage matrix (interim, RFC 094)", setup = "python" }
 G14 = { title = "markdown links: handoffs and roadmap (Python {python})", setup = "python" }
 G15 = { title = "documentation authority (Python {python})", setup = "python" }

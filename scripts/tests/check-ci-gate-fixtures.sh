@@ -142,4 +142,69 @@ grep -Fq 'not a plain timezone name' "$output" && [[ ! -e "$tz_dir/pwned" ]] || 
   echo "ci-gate rejected the bad tz for the wrong reason" >&2; cat "$output" >&2; exit 1; }
 echo "tz-unsafe: rejected"
 
+# --- Cases 6-9: a lane's Bash range is asserted by the dispatcher (RFC 116 stage 4)
+# G12's job used to assert Bash >=5.2,<6 in a workflow step of its own, which is
+# why G12 could not go through ci-gate.sh. A lane whose [lane_profiles] entry says
+# `bash = true` now has the [runner] range asserted before its command runs.
+cat >"$tmp/bash-manifest.toml" <<'TOML'
+version = 1
+
+[runner]
+label = "ubuntu-24.04"
+bash_minimum = "3.0"
+bash_maximum_exclusive = "99"
+
+[gates]
+GB1 = "echo ran-under-bash"
+GB2 = "echo ran-under-bash"
+
+[lane_profiles]
+GB1 = { title = "asserted", setup = "none", bash = true }
+GB2 = { title = "not asserted", setup = "none" }
+
+[actions]
+TOML
+run_bash_case() {
+  local gate=$1 mf=$2
+  env GITHUB_SHA="$(git -C "$tz_dir" rev-parse HEAD)" bash "$ci_gate" "$gate" --root "$tz_dir" --manifest "$mf"
+}
+output="$tmp/bash-pass.output"
+run_bash_case GB1 "$tmp/bash-manifest.toml" >"$output" 2>&1
+grep -q '^bash_version=' "$output" && grep -q '^bash_path=' "$output" && grep -Fxq 'ran-under-bash' "$output" || {
+  echo "ci-gate did not record and accept the Bash version for a bash = true lane" >&2; cat "$output" >&2; exit 1; }
+echo "bash-in-range: recorded and accepted"
+
+# Case 7: below the minimum, and at or above the exclusive maximum.
+for bad in 'bash_minimum = "3.0"|bash_minimum = "99.0"' 'bash_maximum_exclusive = "99"|bash_maximum_exclusive = "3"' 'bash_maximum_exclusive = "99"|bash_maximum_exclusive = "1.2"'; do
+  sed "s/${bad%%|*}/${bad##*|}/" "$tmp/bash-manifest.toml" >"$tmp/bash-bad.toml"
+  output="$tmp/bash-bad.output"
+  if run_bash_case GB1 "$tmp/bash-bad.toml" >"$output" 2>&1; then
+    echo "ci-gate accepted a Bash outside the range (${bad##*|})" >&2; cat "$output" >&2; exit 1
+  fi
+  grep -Fq "requires Bash >=" "$output" && ! grep -Fxq 'ran-under-bash' "$output" || {
+    echo "ci-gate rejected an out-of-range Bash for the wrong reason (${bad##*|})" >&2; cat "$output" >&2; exit 1; }
+done
+echo "bash-out-of-range: refused before the command ran (below the minimum, and at the exclusive maximum)"
+
+# Case 8: a lane without the flag is not asserted, whatever the range says.
+sed 's/bash_minimum = "3.0"/bash_minimum = "99.0"/' "$tmp/bash-manifest.toml" >"$tmp/bash-bad.toml"
+output="$tmp/bash-unflagged.output"
+run_bash_case GB2 "$tmp/bash-bad.toml" >"$output" 2>&1
+grep -Fxq 'ran-under-bash' "$output" && ! grep -q '^bash_version=' "$output" || {
+  echo "ci-gate asserted Bash for a lane that did not ask" >&2; cat "$output" >&2; exit 1; }
+echo "bash-unflagged: not asserted"
+
+# Case 9: the real manifest's G12 entry. Only the command is replaced; the
+# profile and the [runner] range are the shipped ones, so this is the dispatcher
+# reading what the old G12 job asserted. It must have *asserted* (a version
+# recorded, or a refusal naming the range), never skipped.
+sed -E 's|^G12 = "[^"]*"$|G12 = "echo ran-g12"|' "$manifest" >"$tmp/bash-real.toml"
+output="$tmp/bash-real.output"
+run_bash_case G12 "$tmp/bash-real.toml" >"$output" 2>&1 || true
+if grep -q '^bash_version=' "$output" || grep -Fq 'requires Bash >=5.2,<6' "$output"; then
+  echo "bash-real-manifest: G12 asserts the [runner] range (5.2 <= Bash < 6)"
+else
+  echo "the shipped G12 profile did not make the dispatcher assert Bash" >&2; cat "$output" >&2; exit 1
+fi
+
 echo "ci-gate evidence-contract fixtures passed"

@@ -210,10 +210,9 @@ expect_success gates-and-form-accepted
 # Move a real lane (G09b) from [gates] to the exception list with a
 # reason. It remains fully accounted for -- the completeness rule does
 # not care *which* of the two lists a lane is in, only that it is in
-# exactly one. This is deliberately not just "the real fixture already
-# has G12 excepted": it isolates the property by moving a lane that
-# normally is *not* excepted, so the pass is not coincidental to G12
-# specifically.
+# exactly one. The real manifest's exception list is empty (RFC 116 stage 4
+# moved G12 out of it), so this case is the only thing that exercises the accept
+# path: it moves a lane that normally is *not* excepted.
 exception_pass="$tmp/gate-matrix-exception-accepted"
 make_valid_fixture "$exception_pass"
 sed -i '/^G09b = "cargo/d' "$exception_pass/ci/gate-inputs.toml"
@@ -223,16 +222,16 @@ expect_success gate-matrix-exception-accepted
 
 # --- Condition 7g: a lane in both [gates] and [gate_matrix_exceptions] --
 # --- fails (RFC 093 M1b C2.1) -----------------------------------------------
-# G12 stays in [gate_matrix_exceptions] (as it must) *and* also gains a
-# [gates] entry with its real RFC command -- the two lists are supposed
-# to be disjoint by construction, so this must fail even though the
-# added command is not itself wrong.
+# G13 stays in [gates] and *also* gains an exception entry with a reason -- the
+# two lists are supposed to be disjoint by construction, so this must fail even
+# though the added reason is not itself wrong. (It used G12, which stopped being
+# an exception in RFC 116 stage 4.)
 both_lists="$tmp/gate-matrix-exception-and-gates-fails"
 make_valid_fixture "$both_lists"
-sed -i '/^\[gate_matrix_exceptions\]/i G12 = "bash scripts/check-ui-invariants.sh --all --policy ci/ui-invariants.toml"\n' \
+sed -i '/^\[gate_matrix_exceptions\]/a G13 = "fixture: listed as an exception while still in [gates]"' \
   "$both_lists/ci/gate-inputs.toml"
 expect_failure gate-matrix-exception-and-gates-fails \
-  "condition 7 (check 5):" "G12"
+  "condition 7 (check 5):" "G13"
 
 # --- Conditions 4, 6 and 8 -------------------------------------------------
 # No fixture here: RFC 116 stage 3 moved them to scripts/generate-ci-workflow.py

@@ -104,6 +104,37 @@ if [[ -n "$lane_tz" && ! "$lane_tz" =~ ^[A-Za-z0-9_+:/-]+$ ]]; then
   exit 2
 fi
 
+# RFC 116 stage 4: a lane whose [lane_profiles] entry says `bash = true` requires
+# the [runner] Bash range, and this dispatcher asserts it before the command runs
+# (G12 used to assert it in a workflow step of its own, which is why G12 could not
+# be run here). Read like `tz` above and like [runner]: single-line, exact keys.
+lane_needs_bash=$(awk -v gate="$gate" '
+  /^\[lane_profiles\]/ { in_profiles = 1; next }
+  /^\[/ { in_profiles = 0 }
+  in_profiles {
+    eq = index($0, " = ")
+    if (eq > 0 && substr($0, 1, eq - 1) == gate) {
+      if ($0 ~ /[{,][[:space:]]*bash = true/) print "yes"
+      exit
+    }
+  }
+' "$manifest")
+runner_value() {
+  awk -v key="$1" '
+    /^\[runner\]/ { in_runner = 1; next }
+    /^\[/ { in_runner = 0 }
+    in_runner {
+      eq = index($0, " = ")
+      if (eq > 0 && substr($0, 1, eq - 1) == key) {
+        value = substr($0, eq + 3)
+        gsub(/^"|"$/, "", value)
+        print value
+        exit
+      }
+    }
+  ' "$manifest"
+}
+
 echo "gate=$gate"
 
 if ! checked_out_sha=$(git rev-parse HEAD 2>/dev/null); then
@@ -133,6 +164,27 @@ if command -v cargo >/dev/null 2>&1; then
   echo "cargo_version=$(cargo -V 2>&1)"
 fi
 
+if [[ "$lane_needs_bash" == "yes" ]]; then
+  bash_min=$(runner_value bash_minimum)
+  bash_max=$(runner_value bash_maximum_exclusive)
+  if [[ ! "$bash_min" =~ ^[0-9]+\.[0-9]+$ || ! "$bash_max" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+    echo "::error::ci-gate $gate: [runner] bash_minimum/bash_maximum_exclusive missing or malformed in $manifest" >&2
+    exit 2
+  fi
+  echo "bash_path=$(command -v bash)"
+  echo "bash_version=${BASH_VERSION}"
+  have=$((BASH_VERSINFO[0] * 1000 + BASH_VERSINFO[1]))
+  low=$((${bash_min%%.*} * 1000 + ${bash_min##*.}))
+  if [[ "$bash_max" == *.* ]]; then
+    high=$((${bash_max%%.*} * 1000 + ${bash_max##*.}))
+  else
+    high=$((bash_max * 1000))
+  fi
+  if ((have < low || have >= high)); then
+    echo "::error::ci-gate $gate: requires Bash >=$bash_min,<$bash_max; this is ${BASH_VERSION}" >&2
+    exit 1
+  fi
+fi
 if [[ -n "$lane_tz" ]]; then
   export TZ="$lane_tz"
   echo "tz=$lane_tz"

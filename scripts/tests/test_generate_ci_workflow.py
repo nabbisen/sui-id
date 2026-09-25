@@ -198,10 +198,10 @@ class GenerateCiWorkflow(unittest.TestCase):
         self.assert_red("a literal Python version")
 
     def test_a_raw_block_may_not_spell_a_runner_or_a_sha_out(self) -> None:
-        self.mutate("ci/workflow-template.toml", "runs-on: @@runner.label@@", "runs-on: ubuntu-latest", 3)
+        self.mutate("ci/workflow-template.toml", "runs-on: @@runner.label@@", "runs-on: ubuntu-latest", 2)
         self.assert_red("a literal runner label")
-        self.mutate("ci/workflow-template.toml", "runs-on: ubuntu-latest", "runs-on: @@runner.label@@", 3)
-        self.mutate("ci/workflow-template.toml", "@@uses.checkout_v6@@", "actions/checkout@" + "a" * 40, 3)
+        self.mutate("ci/workflow-template.toml", "runs-on: ubuntu-latest", "runs-on: @@runner.label@@", 2)
+        self.mutate("ci/workflow-template.toml", "@@uses.checkout_v6@@", "actions/checkout@" + "a" * 40, 2)
         self.assert_red("a literal action SHA")
 
     def test_an_action_pin_is_the_manifests(self) -> None:
@@ -252,9 +252,37 @@ class GenerateCiWorkflow(unittest.TestCase):
         self.assertEqual(self.run_gen("--write").returncode, 0)
         self.assertNotIn("TZ:", self.read(".github/workflows/ci.yml"))
 
-    def test_a_custom_job_that_is_not_in_the_template_is_caught(self) -> None:
-        self.mutate("ci/gate-inputs.toml", 'G12 = { job = "ui-invariants-v1" }', 'G12 = { job = "no-such-job" }')
-        self.assert_red("job 'no-such-job' is not in [lane_jobs]")
+    def test_g12_is_a_plain_dispatcher_lane_now(self) -> None:
+        # RFC 116 stage 4: the last job outside ci-gate.sh became a lane.
+        text = self.read(".github/workflows/ci.yml")
+        self.assertIn('  G12:\n', text)
+        self.assertIn('name: "G12 — UI invariants v1"', text)
+        self.assertIn("run: bash scripts/ci-gate.sh G12", text)
+        self.assertNotIn("ui-invariants-v1", text.replace("# was `ui-invariants-v1`", ""))
+        self.assertNotIn("Record gate environment\n        run: |\n          set -euo pipefail\n          checked_out_sha=$(git rev-parse HEAD)\n          echo \"event_commit=$GITHUB_SHA\"\n          echo \"checked_out_commit=$checked_out_sha\"\n          if [[ \"$checked_out_sha\" != \"$GITHUB_SHA\" ]]; then\n            echo \"::error::Checked-out HEAD does not match GITHUB_SHA\"\n            exit 1\n          fi\n          test -z \"$(git status --porcelain)\"\n          echo \"runner_image=${ImageOS:-unknown} ${ImageVersion:-unknown}\"\n          bash_path", text)
+        self.assertEqual(self.read("ci/gate-inputs.toml").count('bash = true'), 1)
+
+    def test_the_g12_self_tests_run_in_the_fixtures_job(self) -> None:
+        text = self.read(".github/workflows/ci.yml")
+        fixtures = text[text.index("\n  gate-matrix-fixtures:\n"):]
+        self.assertIn("bash scripts/tests/check-ui-invariants-fixtures.sh", fixtures)
+        self.assertEqual(text.count("check-ui-invariants-fixtures.sh\n          status"), 1)
+
+    def test_the_custom_job_mechanism_is_gone_and_bash_must_be_true_or_absent(self) -> None:
+        self.mutate("ci/gate-inputs.toml", 'G12 = { title = "UI invariants v1", setup = "none", bash = true }', 'G12 = { title = "UI invariants v1", setup = "none", job = "x" }')
+        self.assert_red("[lane_profiles] G12: unknown key `job`")
+        self.mutate("ci/gate-inputs.toml", 'setup = "none", job = "x" }', 'setup = "none", bash = "yes" }')
+        self.assert_red("`bash` is either true or absent")
+
+    def test_g12_must_have_an_owner_and_no_exception(self) -> None:
+        # The exceptions table is empty; a G12 line there beside [gates] is check 5's.
+        text = self.read("ci/gate-inputs.toml")
+        self.assertIn('G12 = "bash scripts/check-ui-invariants.sh --all --policy ci/ui-invariants.toml"', text)
+        self.assertIn('G12 = "093"', text)
+        import re
+        exceptions = re.split(r"(?m)^\[gate_matrix_exceptions\]$", text)[1]
+        exceptions = re.split(r"(?m)^\[lane_profiles\]$", exceptions)[0]
+        self.assertNotIn("G12 =", exceptions)
 
     def test_a_lane_comment_for_no_lane_is_caught(self) -> None:
         self.mutate("ci/workflow-template.toml", "[lane_comments]\n", "[lane_comments]\nG77 = '''\n    # nobody\n'''\n")

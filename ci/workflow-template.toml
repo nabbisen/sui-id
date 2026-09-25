@@ -49,6 +49,29 @@ G11 = '''
     # RFC 093 M1b C2: the RFC integrity checker. Routed through the
     # dispatcher like every other lane, same reasoning as G10a/G10b.
 '''
+G12 = '''
+    # RFC 093 G12 consolidated entry point. Retired the four legacy inline
+    # jobs (text-leaks, css-tokens, semantic-palette-parity,
+    # inline-style-bound) in M1b C5, once a hosted run showed this job and
+    # all four passing on the same commit. Their four blocking checks are
+    # fully subsumed here and are negative-self-tested
+    # (scripts/tests/check-ui-invariants-fixtures.sh, run by the
+    # gate-matrix-fixtures job).
+    #
+    # The GitHub ::warning:: annotations those jobs produced are gone by
+    # design: the jobs echoed them inline; check-ui-invariants.sh has never
+    # emitted annotation syntax. The advisory reports themselves survive as
+    # plain log output from this job -- standalone `t.field` lines and
+    # unused CSS tokens -- and are deliberately not fixture-covered, being
+    # advisory rather than blocking.
+    #
+    # RFC 116 stage 4: this is a dispatcher lane like the others. It was the
+    # last one outside scripts/ci-gate.sh (its job carried its own evidence
+    # block and a Bash >=5.2,<6 assertion, so it could not be run locally the way
+    # CI runs it). The assertion is now the dispatcher's, driven by `bash = true`
+    # in this lane's [lane_profiles] entry and the range in [runner]. The job key
+    # was `ui-invariants-v1` and is now `G12`, like every other lane.
+'''
 G13 = '''
     # RFC 094's interim audit-coverage lane, registered through the R10
     # multi-source registry. The string half is bash and grep only; since RFC 116
@@ -102,70 +125,6 @@ G17 = '''
 mdbook_step_comment = '''
 # ci/gate-inputs.toml's [tools] table pins this version; installing
 # it from crates.io needs no new SHA-pinned action (RFC 093 C0).
-'''
-
-[lane_jobs]
-ui-invariants-v1 = '''
-  ui-invariants-v1:
-    # RFC 093 G12 consolidated entry point. Retired the four legacy inline
-    # jobs (text-leaks, css-tokens, semantic-palette-parity,
-    # inline-style-bound) in M1b C5, once a hosted run showed this job and
-    # all four passing on the same commit. Their four blocking checks are
-    # fully subsumed here and are negative-self-tested
-    # (scripts/tests/check-ui-invariants-fixtures.sh).
-    #
-    # The GitHub ::warning:: annotations those jobs produced are gone by
-    # design: the jobs echoed them inline; check-ui-invariants.sh has never
-    # emitted annotation syntax. The advisory reports themselves survive as
-    # plain log output from this job -- standalone `t.field` lines and
-    # unused CSS tokens -- and are deliberately not fixture-covered, being
-    # advisory rather than blocking.
-    name: G12 UI invariants v1
-    runs-on: @@runner.label@@
-    steps:
-      - uses: @@uses.checkout_v6@@
-      - name: Record gate environment
-        run: |
-          set -euo pipefail
-          checked_out_sha=$(git rev-parse HEAD)
-          echo "event_commit=$GITHUB_SHA"
-          echo "checked_out_commit=$checked_out_sha"
-          if [[ "$checked_out_sha" != "$GITHUB_SHA" ]]; then
-            echo "::error::Checked-out HEAD does not match GITHUB_SHA"
-            exit 1
-          fi
-          test -z "$(git status --porcelain)"
-          echo "runner_image=${ImageOS:-unknown} ${ImageVersion:-unknown}"
-          bash_path=$(command -v bash)
-          echo "bash_path=$bash_path"
-          test "$bash_path" = /usr/bin/bash
-          /usr/bin/bash --version | head -n 1
-          bash_major=${BASH_VERSINFO[0]}
-          bash_minor=${BASH_VERSINFO[1]}
-          if ((bash_major != @@runner.bash_major@@ || bash_minor < @@runner.bash_minor@@)); then
-            echo "::error::G12 requires Bash >=@@runner.bash_minimum@@,<@@runner.bash_maximum_exclusive@@"
-            exit 1
-          fi
-      - name: G12 negative self-tests
-        run: |
-          set +e
-          echo "command=bash scripts/tests/check-ui-invariants-fixtures.sh"
-          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          bash scripts/tests/check-ui-invariants-fixtures.sh
-          status=$?
-          echo "exit_status=$status"
-          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          exit "$status"
-      - name: G12 blocking gate
-        run: |
-          set +e
-          echo "command=bash scripts/check-ui-invariants.sh --all --policy ci/ui-invariants.toml"
-          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          bash scripts/check-ui-invariants.sh --all --policy ci/ui-invariants.toml
-          status=$?
-          echo "exit_status=$status"
-          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          exit "$status"
 '''
 
 [extra_jobs]
@@ -240,11 +199,10 @@ gate-matrix-fixtures = '''
     # RFC 093 A3.2: negative self-tests for the Gate Matrix v1 lane commands
     # themselves (scripts/tests/fixtures/gate-matrix/) and for
     # scripts/ci-gate.sh's own evidence-contract preconditions. Unlike
-    # ui-invariants-v1/gate-inputs above, there is no separate "blocking
-    # check against the real repository" step here: the G01-G09b jobs
-    # already are that check against the real repository. This job only
-    # proves the fixtures fail (or pass) exactly as each lane's command
-    # requires.
+    # gate-inputs above, there is no separate "blocking check against the real
+    # repository" step here: the lane jobs already are that check against the
+    # real repository. This job only proves the fixtures fail (or pass) exactly
+    # as each lane's command requires.
     name: A3.2 gate-matrix negative self-tests
     runs-on: @@runner.label@@
     steps:
@@ -321,6 +279,20 @@ gate-matrix-fixtures = '''
             exit 1
           fi
           echo "G10a self-test: expected failure observed"
+      - name: G12 negative self-tests (UI invariants)
+        # RFC 093 G12; moved here from the G12 job by RFC 116 stage 4, when that
+        # job became a plain dispatcher lane. The blocking gate asserts the Bash
+        # range through the dispatcher; this step does not, because the fixtures
+        # job runs on the same runner image.
+        run: |
+          set +e
+          echo "command=bash scripts/tests/check-ui-invariants-fixtures.sh"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          bash scripts/tests/check-ui-invariants-fixtures.sh
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
       - name: G10b self-tests (markdown link checker)
         run: |
           set +e
