@@ -251,7 +251,72 @@ Measured cost of leaving it: G12 cannot be invoked by `ci-gate.sh`, so it is
 the one lane that has to be run by hand — as it was during the RFC 103 stage 5
 review on 2026-09-22.
 
-## Stage 5 — placement
+## Stage 5 — re-walked 2026-09-25, before dispatch
+
+**Not yet dispatched.** The architect re-walked this stage against the tree
+rather than sending the version written on 2026-09-22, because four of its
+premises have changed under it. What follows replaces the section below, which
+is kept as the record of what was first asked.
+
+### What changed while stages 1–4 ran
+
+| Premise, as written | Now |
+|---|---|
+| `ci/` holds **six** files | **nine** — `workflow-template.toml` (stage 3), `owner-attributions.toml` and `owner-attribution-baseline.txt` (RFC 117 stage 0) |
+| `write-commands.toml` is read by no gate | **G17 reads it**, and fails on it |
+| The matrix is gated on one column of five | **class, actor and the `step_up` marker** are gated too, keyed on rows |
+| **47** files reference something in `ci/` | **74** |
+
+**D2 is now satisfied for every one of the nine.** Each is read by a gate that
+fails when it stops being true: G13 (+ the column check), G15, A3.4 and
+`ci-gate.sh` and the generator, G16 twice, G11 and G12 by `--policy`, the
+generator's `--check`, and G17. **So D2's clause "anything that cannot be given
+a gate leaves `ci/` and becomes documentation" now has no candidates.** The
+directory's original complaint — a 60 KB registry nobody checked — is answered.
+
+### The constraint the RFC did not anticipate, and it is the decision
+
+**Five of the nine files are named inside a `[gates]` command**, and A3.4
+condition 7 requires each command to **byte-match a row in its owning RFC's
+table**. Measured:
+
+| File | Lane | Owning RFC | Status |
+|---|---|---|---|
+| `rfc-policy.toml` | G11 | 093 | **Implemented (Done)** |
+| `ui-invariants.toml` | G12 | 093 | **Implemented (Done)** |
+| `doc-authority.toml` | G15 | 098 | **Implemented (Done)** |
+| `owner-attributions.toml` | G16 | 117 | Accepted |
+| `write-commands.toml` | G17 | 116 | Accepted |
+
+**Renaming or moving `ci/` therefore requires editing two Done RFCs.** That is a
+lifecycle act and `@nabbisen`'s, not this stage's — and it is the kind of edit
+RFC 000 treats carefully, because a Done RFC is a shipped record.
+
+The other four — `audit-coverage-matrix.md`, `gate-inputs.toml`,
+`owner-attribution-baseline.txt`, `workflow-template.toml` — are named only
+inside scripts or by a `--policy` path the manifest supplies, and could move
+without touching an RFC table.
+
+### What stage 5 should therefore produce
+
+**An analysis, and options with their costs. Not a move.**
+
+1. **Re-measure** the four rows above at your own baseline; they are a
+   measurement of 2026-09-25.
+2. **Say what each of the nine files is** — policy fed to a checker, a registry
+   that `docs/` and RFCs cite as a source of truth, or an input to a generator —
+   and which of the three `ci/` is now mostly made of.
+3. **Cost each option**, including doing nothing: leave `ci/` as it is and
+   document what it means; rename it and edit the two Done RFCs; split it and
+   move only the four that are free to move, leaving five behind, which is the
+   option that trades a coherent directory for a cheap one.
+4. **Do not propose a name as though it were settled**, and do not move
+   anything. The naming and the Done-RFC question are both `@nabbisen`'s; he
+   raised the directory in the first place.
+
+---
+
+## Stage 5 — placement, as first written 2026-09-22
 
 Only now is this answerable, because only now is the file set known.
 
