@@ -459,6 +459,7 @@ rfcs/proposed/111-rfc-template-reconciliation.md	4c9c053925fa3a72fc6a179c2e16ee2
 rfcs/proposed/111-rfc-template-reconciliation.md	874edb9b41d7b7c8d1211a597c52d7ff33065d66fdd53f677f49116f0f63ba9d	1	Accountable owner and approver. @nabbisen .
 rfcs/proposed/112-schema-version-fail-closed.md	4f60083d813c875ada83df3c2ad5bce348f13c73ac06ed9ad5ddd5ca847561fb	1	This work was carried under roadmap/schema-version-fail-closed/ until 2026-09-22, when @nabbisen ruled that implementation handoffs live und
 rfcs/proposed/112-schema-version-fail-closed.md	874edb9b41d7b7c8d1211a597c52d7ff33065d66fdd53f677f49116f0f63ba9d	1	Accountable owner and approver. @nabbisen .
+rfcs/proposed/112-schema-version-fail-closed.md	bfdd56651c1312c46a9a67f8c41c07d8038dccde7037ebd9bddebf17d8460cef	1	@nabbisen accepts or rejects them.
 rfcs/proposed/113-test-file-organization.md	22ab7d44654ddcfa387ee5c6220b1c8c15c0da32153d9ec3291c270840265d2d	1	This work was carried under roadmap/test-file-organization/ until 2026-09-22, when @nabbisen ruled that implementation handoffs live under r
 rfcs/proposed/113-test-file-organization.md	874edb9b41d7b7c8d1211a597c52d7ff33065d66fdd53f677f49116f0f63ba9d	1	Accountable owner and approver. @nabbisen .
 rfcs/proposed/114-ui-contract-reconciliation.md	72000bc2d21e97351f621a8f448d4cc9e7660015c31ffe847df7e560716129f0	1	This work was carried under roadmap/ui-contract-reconciliation/ until 2026-09-22, when @nabbisen ruled that implementation handoffs live und
