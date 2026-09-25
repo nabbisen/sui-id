@@ -30,8 +30,8 @@ trap 'rm -rf "$tmp"' EXIT
 # lane in this harness -- G01-G08 run cargo, which the fixture does not
 # contain either.
 declare -A FIXTURE_OVERLAY=(
-  [audit-desync]="scripts/check-audit-matrix.sh"
-  [audit-in-sync]="scripts/check-audit-matrix.sh"
+  [audit-desync]="scripts/check-audit-matrix.sh scripts/check-audit-matrix-columns.py scripts/rust_registry.py"
+  [audit-in-sync]="scripts/check-audit-matrix.sh scripts/check-audit-matrix-columns.py scripts/rust_registry.py"
 )
 
 stage_fixture() {

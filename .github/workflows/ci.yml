@@ -425,14 +425,20 @@ jobs:
 
   G13:
     # RFC 094's interim audit-coverage lane, registered through the R10
-    # multi-source registry. The script is bash and grep only -- no toolchain
-    # and no Python -- so this job is checkout plus the dispatcher. It had
+    # multi-source registry. The string half is bash and grep only; since RFC 116
+    # stage 2 the script ends with a Python step (`check-audit-matrix-columns.py`)
+    # that holds the matrix's class and actor columns to the sealed descriptors,
+    # so this job installs Python 3.14 like the other Python lanes. It had
     # never run in CI: RFC 085 closed at v0.68.0 on "CI gate live and
     # bidirectional" and no workflow in this repository's history invoked it.
     name: "G13 — audit coverage matrix (interim, RFC 094)"
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Install Python 3.14
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14"
       - name: G13
         run: bash scripts/ci-gate.sh G13
 
@@ -688,6 +694,18 @@ jobs:
           echo "command=python3.14 -m unittest scripts.tests.test_owner_attributions"
           echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           python3.14 -m unittest scripts.tests.test_owner_attributions
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
+      - name: G13 column-check self-tests (audit matrix class and actor)
+        # RFC 116 stage 2. The step G13's script ends with; its negative cases
+        # are run apart from the tree's, as the other checkers' are.
+        run: |
+          set +e
+          echo "command=python3.14 -m unittest scripts.tests.test_audit_matrix_columns"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3.14 -m unittest scripts.tests.test_audit_matrix_columns
           status=$?
           echo "exit_status=$status"
           echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"

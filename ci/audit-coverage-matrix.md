@@ -347,8 +347,27 @@ fire-and-forget `let _ = audit::append(...)` in
 1. Every event name in this matrix exists as a string literal in the codebase.
 2. Every audit-namespaced string literal in the codebase has a row in this matrix.
 
-A mismatch between those two sets fails the gate. That is the whole of what it
-checks.
+A mismatch between those two sets fails the gate. **Since 2026-09-25 (RFC 116
+stage 2) it also runs `scripts/check-audit-matrix-columns.py`**, which reads this
+file's *table rows* (the string comparison above takes every backticked name from
+anywhere in the file, so a whole row could be deleted while its name survived in
+prose) and holds three things to the sealed descriptors in `crates/`:
+
+- the **Class** column, both ways: a row claiming Class A names an event a sealed
+  descriptor of class `Atomic` carries, a row claiming Class B names none, and
+  every sealed `Atomic` event has a row that claims A;
+- the **Actor** column, against the descriptor's `ActorRequirement`: none is a
+  dash, optional names an actor and says `none`, required names an actor;
+- the `step_up` (required) marker in the note column, exactly when the descriptor
+  requires that attribute.
+
+**Not checked, on purpose:** the Target column, which passes by construction, and
+attribute *names* in the note column, which is free prose. A row whose event is
+not sealed has no descriptor, so its Actor cell is not checked either. A table
+whose header does not start with `Event name` may not hold event rows at all, so a
+new table shape cannot drop its rows out of the check.
+
+Together that is the whole of what the gate checks.
 
 **What it therefore catches:** a newly introduced audit-namespaced event-name
 literal with no matrix row, or a matrix row naming an event no longer present in

@@ -885,7 +885,7 @@ table so one parser reads both.
 
 | ID | Toolchain | Features | Blocking command / assertion |
 |---|---|---|---|
-| G13 | n/a | n/a | `bash scripts/check-audit-matrix.sh` |
+| G13 | Python 3.14 | n/a | `bash scripts/check-audit-matrix.sh` |
 
 *Registered `1ec5dad`, 2026-09-12 — the first time this script ran in CI. The
 desync fixture RFC 085 promised is in the A3.2 set, both directions pinned by
@@ -913,6 +913,18 @@ authoritative coverage control at M2b. Fourteen dead `SecurityEvent` variants
 (six `oauth.*`, eight more) were found by the same work; the emitter path's
 log-line behaviour is a design item for the runner, recorded in the migration
 checklist.
+
+*Amended 2026-09-25 ([RFC 116](116-gate-contracts.md) stage 2).* The script gained a
+second step, `scripts/check-audit-matrix-columns.py`, so the lane is no longer
+"bash and grep only" and its toolchain cell above now reads Python 3.14; **the
+command is unchanged.** The step reads the matrix's *table rows* (not every
+backticked name in the file) and holds three things to the sealed descriptors:
+the `class` column, in both directions (a row claiming Class A names a sealed
+`Atomic` event, and every sealed `Atomic` event has a row claiming it); the
+`actor` column, against `ActorRequirement`; and the `step_up (required)` marker.
+`target` and attribute names are deliberately not checked (RFC 116 D3). It
+remains interim in the sense above: it reads text, not types, and
+`audit-structure` still owns the structural gate.
 
 **Negative self-test.** As for every lane, G13 carries a fixture the gate must
 fail on — a deliberately desynchronised matrix, one literal in source with no row
