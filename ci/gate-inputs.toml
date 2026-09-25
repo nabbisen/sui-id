@@ -101,6 +101,46 @@ G17 = "python3.14 scripts/check-write-commands.py --root . --inventory ci/write-
 [gate_matrix_exceptions]
 G12 = "Predates ci-gate.sh and has its own working entry point (ui-invariants-v1, RFC 093 M1a). Not migrated: churning a green gate for symmetry is not worth the risk. Currently also a dependency of M1b C5 -- a reason not to touch it right now, not a claim that this exception can never be revisited."
 
+# RFC 116 stage 3: what each lane needs from a runner, and the one fact about a
+# lane that is neither its command nor its toolchain. .github/workflows/ci.yml is
+# generated from this table, [runner], [tools], [rust_components], [actions] and
+# ci/workflow-template.toml by scripts/generate-ci-workflow.py; a lane with no
+# entry here has no job, and a job with no entry here is a failure. One line per
+# lane, single-line values: the awk readers in ci-gate.sh and check-gate-inputs.sh
+# stop at the next table header and never read this one.
+#   setup     "rust" (a cargo lane), "python", or "none"
+#   toolchain "msrv" or "stable" (rust only; must agree with the `+toolchain` in
+#             the lane's command, and with [tools])
+#   apt, cache  the runner's system packages and the cargo registry cache
+#   mdbook    install mdBook from [tools] (G10a)
+#   tz        an env TZ for the job. NOTE: ci-gate.sh does not set it, so these
+#             lanes do not run locally exactly as CI runs them (RFC 116 D7)
+#   fetch_depth  actions/checkout fetch-depth
+#   job       a lane whose job is written out in the template ([lane_jobs])
+#   title     the display name after "GNN — "; {rust_msrv}, {rust_stable},
+#             {mdbook} and {python} are filled from [tools]
+[lane_profiles]
+G01 = { title = "build ({rust_msrv}, default)", setup = "rust", toolchain = "msrv", apt = true, cache = true }
+G02 = { title = "test ({rust_msrv}, default)", setup = "rust", toolchain = "msrv", apt = true, cache = true, tz = "UTC" }
+G03 = { title = "build ({rust_msrv}, all-features)", setup = "rust", toolchain = "msrv", apt = true, cache = true }
+G04 = { title = "test ({rust_msrv}, all-features)", setup = "rust", toolchain = "msrv", apt = true, cache = true, tz = "UTC" }
+G05 = { title = "build + test ({rust_stable}, default)", setup = "rust", toolchain = "stable", apt = true, cache = true, tz = "UTC" }
+G06 = { title = "build + test ({rust_stable}, all-features)", setup = "rust", toolchain = "stable", apt = true, cache = true, tz = "UTC" }
+G07 = { title = "clippy ({rust_stable}, all-features)", setup = "rust", toolchain = "stable", apt = true, cache = true }
+G07b = { title = "clippy ({rust_stable}, default)", setup = "rust", toolchain = "stable", apt = true, cache = true }
+G08 = { title = "fmt ({rust_stable})", setup = "rust", toolchain = "stable" }
+G09a = { title = "LDAP smoke ({rust_msrv})", setup = "rust", toolchain = "msrv", apt = true, cache = true }
+G09b = { title = "LDAP smoke ({rust_stable})", setup = "rust", toolchain = "stable", apt = true, cache = true }
+G10a = { title = "mdBook build ({rust_stable} / mdBook {mdbook})", setup = "rust", toolchain = "stable", cache = true, mdbook = true }
+G10b = { title = "markdown links (Python {python})", setup = "python" }
+G11 = { title = "RFC integrity (Python {python})", setup = "python" }
+G12 = { job = "ui-invariants-v1" }
+G13 = { title = "audit coverage matrix (interim, RFC 094)", setup = "python" }
+G14 = { title = "markdown links: handoffs and roadmap (Python {python})", setup = "python" }
+G15 = { title = "documentation authority (Python {python})", setup = "python" }
+G16 = { title = "owner attributions (Python {python})", setup = "python", fetch_depth = 0 }
+G17 = { title = "write-command inventory (Python {python})", setup = "python" }
+
 [actions]
 checkout_v6 = "d23441a48e516b6c34aea4fa41551a30e30af803"
 checkout_v4 = "11d5960a326750d5838078e36cf38b85af677262"

@@ -1,0 +1,409 @@
+header = '''
+name: CI
+
+# Build and test on every push and PR. Kept deliberately minimal
+# (one Linux + stable toolchain matrix) to keep CI fast; we cover
+# audit and lints in their own files.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  # RFC 093 Gate Matrix v1 (A3.5): a global RUSTFLAGS="-D warnings" made
+  # every build/test lane (G01-G06) fail on ordinary lint drift, which is
+  # G07's job, and conflicted with RFC 093's rule that stable-only lint
+  # drift may be fixed without touching MSRV. G07's own clippy invocation
+  # already carries -D warnings explicitly.
+
+jobs:
+  # RFC 093 Gate Matrix v1 (A3.1). Each lane is checkout + the dispatcher;
+  # the dispatcher (scripts/ci-gate.sh) owns the environment/evidence block
+  # and executes the literal command recorded in ci/gate-inputs.toml's
+  # [gates] table verbatim (decision D1). This replaces the former
+  # build-test/fmt-clippy jobs, which G01-G09b strictly supersede (decision
+  # D2) — MSRV and stable, default and all-features, plus G07b closing the
+  # default-features clippy gap all-features-only G07 cannot see, plus LDAP
+  # smoke. Caching is registry/git only, no target/ (decision D3): a gate
+  # matrix exists to distinguish build configurations, so its evidence
+  # should not depend on artifacts built under a different one.
+'''
+
+[lane_comments]
+G10a = '''
+    # RFC 093 M1b C0: mdBook builds the versioned docs tree. Routed through
+    # the dispatcher rather than a direct `mdbook build` step so it carries
+    # the same evidence block as every other lane (decision, C0 handoff).
+'''
+G10b = '''
+    # RFC 093 M1b C1: the markdown link checker. Routed through the
+    # dispatcher like every other lane, same reasoning as G10a.
+'''
+G11 = '''
+    # RFC 093 M1b C2: the RFC integrity checker. Routed through the
+    # dispatcher like every other lane, same reasoning as G10a/G10b.
+'''
+G13 = '''
+    # RFC 094's interim audit-coverage lane, registered through the R10
+    # multi-source registry. The string half is bash and grep only; since RFC 116
+    # stage 2 the script ends with a Python step (`check-audit-matrix-columns.py`)
+    # that holds the matrix's class and actor columns to the sealed descriptors,
+    # so this job installs Python 3.14 like the other Python lanes. It had
+    # never run in CI: RFC 085 closed at v0.68.0 on "CI gate live and
+    # bidirectional" and no workflow in this repository's history invoked it.
+'''
+G14 = '''
+    # RFC 098's own lane, registered through RFC 094's multi-source lane
+    # registry (R10). G10b covers README.md, ROADMAP.md and docs/; G11 covers
+    # the RFC files themselves. Neither covers rfcs/handoffs/ or roadmap/,
+    # which is how thirty-one broken links passed unseen during the
+    # rfcs/reviews/ migration. Same checker, the complement of the scope.
+'''
+G15 = '''
+    # RFC 098's documentation-authority checker. Declared with G14 on
+    # 2026-09-12 and held in [gate_matrix_exceptions] until the
+    # reconciliation it enforces had landed: a lane that is red on main is
+    # not a gate (RFC 093 §Gate entry points). Registered when RFC 098
+    # step 5 cleared the last of its findings.
+'''
+G16 = '''
+    # RFC 117 stage 0's lane, registered through RFC 094's multi-source lane
+    # registry (R10): the owner-attribution census and its closed baseline.
+    # It needs no key. It prints every attribution of a decision to the owner
+    # in the step summary and fails on one that is not in the baseline, so a
+    # sentence like "Owner ruling, 2026-07-28" cannot be added unseen. It reads
+    # the whole tree.
+    #
+    # Stage 0b: it also prints, above the census, what this change did to
+    # ci/owner-attribution-baseline.txt, taken against the push's previous commit
+    # or the pull request's base. That needs history, so this job fetches all of
+    # it (the repository is small); a first push, a new tag or a manual run has no
+    # base, and the script says so in the summary instead of failing.
+'''
+G17 = '''
+    # RFC 116 stage 1's lane, registered through RFC 094's multi-source lane
+    # registry (R10): ci/write-commands.toml against the sealed commands in
+    # crates/. Every sealed command has a row, every row that says it is sealed
+    # names a command, every `files` path exists, and `event` and `descriptor`
+    # are what the code says. Declared with stage 1 and held in
+    # [gate_matrix_exceptions] until its two dead `files` paths (O04, X02) were
+    # corrected in stage 1b, because a lane that is red on main is not a gate.
+'''
+
+# Comment lines a generated lane step carries, without their indentation.
+[lane_env_comments]
+G02 = '''
+# Tests that bind sockets / clocks need a stable timezone.
+'''
+
+[snippets]
+mdbook_step_comment = '''
+# ci/gate-inputs.toml's [tools] table pins this version; installing
+# it from crates.io needs no new SHA-pinned action (RFC 093 C0).
+'''
+
+[lane_jobs]
+ui-invariants-v1 = '''
+  ui-invariants-v1:
+    # RFC 093 G12 consolidated entry point. Retired the four legacy inline
+    # jobs (text-leaks, css-tokens, semantic-palette-parity,
+    # inline-style-bound) in M1b C5, once a hosted run showed this job and
+    # all four passing on the same commit. Their four blocking checks are
+    # fully subsumed here and are negative-self-tested
+    # (scripts/tests/check-ui-invariants-fixtures.sh).
+    #
+    # The GitHub ::warning:: annotations those jobs produced are gone by
+    # design: the jobs echoed them inline; check-ui-invariants.sh has never
+    # emitted annotation syntax. The advisory reports themselves survive as
+    # plain log output from this job -- standalone `t.field` lines and
+    # unused CSS tokens -- and are deliberately not fixture-covered, being
+    # advisory rather than blocking.
+    name: G12 UI invariants v1
+    runs-on: @@runner.label@@
+    steps:
+      - uses: @@uses.checkout_v6@@
+      - name: Record gate environment
+        run: |
+          set -euo pipefail
+          checked_out_sha=$(git rev-parse HEAD)
+          echo "event_commit=$GITHUB_SHA"
+          echo "checked_out_commit=$checked_out_sha"
+          if [[ "$checked_out_sha" != "$GITHUB_SHA" ]]; then
+            echo "::error::Checked-out HEAD does not match GITHUB_SHA"
+            exit 1
+          fi
+          test -z "$(git status --porcelain)"
+          echo "runner_image=${ImageOS:-unknown} ${ImageVersion:-unknown}"
+          bash_path=$(command -v bash)
+          echo "bash_path=$bash_path"
+          test "$bash_path" = /usr/bin/bash
+          /usr/bin/bash --version | head -n 1
+          bash_major=${BASH_VERSINFO[0]}
+          bash_minor=${BASH_VERSINFO[1]}
+          if ((bash_major != @@runner.bash_major@@ || bash_minor < @@runner.bash_minor@@)); then
+            echo "::error::G12 requires Bash >=@@runner.bash_minimum@@,<@@runner.bash_maximum_exclusive@@"
+            exit 1
+          fi
+      - name: G12 negative self-tests
+        run: |
+          set +e
+          echo "command=bash scripts/tests/check-ui-invariants-fixtures.sh"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          bash scripts/tests/check-ui-invariants-fixtures.sh
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
+      - name: G12 blocking gate
+        run: |
+          set +e
+          echo "command=bash scripts/check-ui-invariants.sh --all --policy ci/ui-invariants.toml"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          bash scripts/check-ui-invariants.sh --all --policy ci/ui-invariants.toml
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
+'''
+
+[extra_jobs]
+gate-inputs = '''
+  gate-inputs:
+    # RFC 093 A3.4: ci/gate-inputs.toml enforcement. Verifies the manifest
+    # scripts/ci-gate.sh reads is itself correct — action pinning, the
+    # [actions] table, version fields, and (condition 7) that [gates] matches
+    # the owning RFC's lane table exactly — so the dispatcher's "runs the matrix
+    # command" property is a checked invariant, not a convention. Since RFC 116
+    # stage 3 it also checks that this file is a fresh generation of the
+    # manifest: runner label, tool versions and components are true by
+    # construction rather than compared after the fact.
+    name: A3.4 gate-inputs.toml enforcement
+    runs-on: @@runner.label@@
+    steps:
+      - uses: @@uses.checkout_v6@@
+      - name: Install Python 3.14
+        uses: @@uses.setup_python_v7@@
+        with:
+          python-version: "@@tools.python@@"
+      - name: Record gate environment
+        run: |
+          set -euo pipefail
+          checked_out_sha=$(git rev-parse HEAD)
+          echo "event_commit=$GITHUB_SHA"
+          echo "checked_out_commit=$checked_out_sha"
+          if [[ "$checked_out_sha" != "$GITHUB_SHA" ]]; then
+            echo "::error::Checked-out HEAD does not match GITHUB_SHA"
+            exit 1
+          fi
+          test -z "$(git status --porcelain)"
+          echo "runner_image=${ImageOS:-unknown} ${ImageVersion:-unknown}"
+      - name: gate-inputs negative self-tests
+        run: |
+          set +e
+          echo "command=bash scripts/tests/check-gate-inputs-fixtures.sh"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          bash scripts/tests/check-gate-inputs-fixtures.sh
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
+      - name: gate-inputs blocking check
+        run: |
+          set +e
+          echo "command=bash scripts/check-gate-inputs.sh --all --policy ci/gate-inputs.toml"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          bash scripts/check-gate-inputs.sh --all --policy ci/gate-inputs.toml
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
+      - name: ci.yml is a fresh generation
+        # RFC 116 stage 3. This workflow is generated; the check is the one
+        # `cargo fmt --check` is to source. It replaces gate-inputs conditions 6
+        # and 8 (every gate job on the [runner] label; every [tools] version is
+        # what the workflow installs) and condition 4 (each lane's components):
+        # they are true by construction now, or checked by the generator.
+        run: |
+          set +e
+          echo "command=python3.14 scripts/generate-ci-workflow.py --root . --check"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3.14 scripts/generate-ci-workflow.py --root . --check
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
+'''
+gate-matrix-fixtures = '''
+  gate-matrix-fixtures:
+    # RFC 093 A3.2: negative self-tests for the Gate Matrix v1 lane commands
+    # themselves (scripts/tests/fixtures/gate-matrix/) and for
+    # scripts/ci-gate.sh's own evidence-contract preconditions. Unlike
+    # ui-invariants-v1/gate-inputs above, there is no separate "blocking
+    # check against the real repository" step here: the G01-G09b jobs
+    # already are that check against the real repository. This job only
+    # proves the fixtures fail (or pass) exactly as each lane's command
+    # requires.
+    name: A3.2 gate-matrix negative self-tests
+    runs-on: @@runner.label@@
+    steps:
+      - uses: @@uses.checkout_v6@@
+      - name: Record gate environment
+        run: |
+          set -euo pipefail
+          checked_out_sha=$(git rev-parse HEAD)
+          echo "event_commit=$GITHUB_SHA"
+          echo "checked_out_commit=$checked_out_sha"
+          if [[ "$checked_out_sha" != "$GITHUB_SHA" ]]; then
+            echo "::error::Checked-out HEAD does not match GITHUB_SHA"
+            exit 1
+          fi
+          test -z "$(git status --porcelain)"
+          echo "runner_image=${ImageOS:-unknown} ${ImageVersion:-unknown}"
+      - name: Install Rust 1.95
+        uses: @@uses.rust_toolchain_stable@@
+        with:
+          toolchain: "@@tools.rust_msrv@@"
+      - name: Install Rust stable
+        uses: @@uses.rust_toolchain_stable@@
+        with:
+          toolchain: @@tools.rust_stable@@
+          components: clippy, rustfmt
+      - name: Cache cargo registry
+        uses: @@uses.cache_v5@@
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-gate-input-v1-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      - name: Install mdBook @@tools.mdbook@@
+        # ci/gate-inputs.toml's [tools] table already pins this version for
+        # G10a; installing it from crates.io needs no new SHA-pinned action.
+        run: cargo install mdbook --version @@tools.mdbook@@ --locked
+      - name: Install Python 3.14
+        uses: @@uses.setup_python_v7@@
+        with:
+          python-version: "@@tools.python@@"
+      - name: gate-matrix negative self-tests (G01-G08, G07b)
+        run: |
+          set +e
+          echo "command=bash scripts/tests/check-gate-matrix-fixtures.sh"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          bash scripts/tests/check-gate-matrix-fixtures.sh
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
+      - name: ci-gate evidence-contract self-tests
+        run: |
+          set +e
+          echo "command=bash scripts/tests/check-ci-gate-fixtures.sh"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          bash scripts/tests/check-ci-gate-fixtures.sh
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
+      - name: G10a self-test (mdbook-missing-chapter must fail)
+        run: |
+          set +e
+          echo "command=mdbook build scripts/tests/fixtures/mdbook-missing-chapter"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          mdbook build scripts/tests/fixtures/mdbook-missing-chapter
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          if [[ "$status" -eq 0 ]]; then
+            echo "::error::G10a self-test: mdbook-missing-chapter fixture unexpectedly succeeded"
+            exit 1
+          fi
+          echo "G10a self-test: expected failure observed"
+      - name: G10b self-tests (markdown link checker)
+        run: |
+          set +e
+          echo "command=python3.14 -m unittest scripts.tests.test_markdown_links"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3.14 -m unittest scripts.tests.test_markdown_links
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
+      - name: G11 self-tests (RFC integrity checker)
+        run: |
+          set +e
+          echo "command=python3.14 -m unittest scripts.tests.test_rfc_integrity"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3.14 -m unittest scripts.tests.test_rfc_integrity
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
+      - name: G15 self-tests (documentation authority checker)
+        # RFC 098 G15. The lane itself is held in [gate_matrix_exceptions]
+        # until the reconciliation it enforces has landed; its self-tests run
+        # from the day the script exists, so the script cannot rot unnoticed
+        # while it waits for registration.
+        run: |
+          set +e
+          echo "command=python3.14 -m unittest scripts.tests.test_doc_authority"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3.14 -m unittest scripts.tests.test_doc_authority
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
+      - name: G16 self-tests (owner-attribution census)
+        run: |
+          set +e
+          echo "command=python3.14 -m unittest scripts.tests.test_owner_attributions"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3.14 -m unittest scripts.tests.test_owner_attributions
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
+      - name: G13 column-check self-tests (audit matrix class and actor)
+        # RFC 116 stage 2. The step G13's script ends with; its negative cases
+        # are run apart from the tree's, as the other checkers' are.
+        run: |
+          set +e
+          echo "command=python3.14 -m unittest scripts.tests.test_audit_matrix_columns"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3.14 -m unittest scripts.tests.test_audit_matrix_columns
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
+      - name: G17 self-tests (write-command inventory checker)
+        # RFC 116 stage 1. The self-tests ran from the day the script existed,
+        # before the lane (job G17) was registered; they stay so that the
+        # script's own negative cases are checked apart from the tree's.
+        run: |
+          set +e
+          echo "command=python3.14 -m unittest scripts.tests.test_write_commands"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3.14 -m unittest scripts.tests.test_write_commands
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
+      - name: workflow generator self-tests
+        # RFC 116 stage 3. The lane set round-trips: a lane added to the table
+        # is a job, a lane with no profile or a job with no table entry fails.
+        run: |
+          set +e
+          echo "command=python3.14 -m unittest scripts.tests.test_generate_ci_workflow"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3.14 -m unittest scripts.tests.test_generate_ci_workflow
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
+'''

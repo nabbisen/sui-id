@@ -58,6 +58,7 @@ ROADMAP.md	f28ee07a59bcf8fe20042bcdd369924c17453b138e4bafc7bfaaace5d1b7fedb	1	Th
 ROADMAP.md	f32dcc76269a196d385d376160fb29d7153b957a91d29685f7127e2c7439a70a	1	M7 — Real-environment soak owner to set Exercise the exact M6 artifact under representative auth traffic, failure modes, operational cycles,
 ci/audit-coverage-matrix.md	7eabca6616e34b638eb38be8c856450237a82e58159180fbb802125fb837aca9	1	Ruled by @nabbisen , 2026-09-24.
 ci/owner-attributions.toml	7eb734c035286253be1076df5d3beceea9b8b06a99c4838b7d8cb78f7bb0044f	1	The first draft of RFC 117 used a narrow pattern that misses the 2026-09-09 incident (" @nabbisen ruled on ..."), one of the three the RFC e
+ci/workflow-template.toml	6b5262843886d8230595468f25f44199ff8bbc25de381eca45389f67cb6dc487	1	It prints every attribution of a decision to the owner in the step summary and fails on one that is not in the baseline, so a sentence like 
 crates/sui-id-i18n/src/lib.rs	6998fc64e47777906077c04c3a6bbdfb28fb368423b4a78e45236a30cfa3ba35	1	Ruled 2026-09-22 ( @nabbisen ): Chinese is necessary but not urgent, and waits until the APIs are stable and a native speaker has reviewed i
 docs/development-specification.md	00a431b3acb9c699f844d987671c11c2d11a10257afbec29dbcf08c23690d051	1	Acceptance records the date, approver, implementation owner, and independent design reviewer where required.
 docs/development-specification.md	21a91db1fff2a5b687550287d31f1dd571eb1ae813bc2552c5734ad3e055dcb7	1	This reverses the v3 rule, which told authors to write absolute https://github.com/<owner /<repo /blob/main/... URLs for files.

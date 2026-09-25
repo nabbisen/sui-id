@@ -6,20 +6,28 @@
 # Until this script existed, nothing read it: it recorded a contract it
 # could not defend.
 #
-# Nine things, in the order they run; all but the first accumulate and are
+# Six things, in the order they run; all but the first accumulate and are
 # reported together:
 #
 #   0. precheck: the manifest parses as TOML (R10-b);
-#   1. every `uses:` in the workflows is pinned to a 40-hex commit SHA;
-#   2. every workflow action SHA is recorded in [actions];
+#   1. every `uses:` in a workflow *this script reads* is pinned to a 40-hex
+#      commit SHA. ci.yml is not one of them: it is generated (RFC 116 stage 3)
+#      from [actions], so it cannot hold an unpinned reference without
+#      scripts/generate-ci-workflow.py --check failing. audit.yml and fuzz.yml
+#      are hand-written and are read;
+#   2. every workflow action SHA (all three files) is recorded in [actions];
 #   3. every [actions] SHA is used by some workflow -- no stale rows;
-#   4. [rust_components] declares each toolchain lane with the components
-#      it expects, and carries no key that is not a lane;
 #   5. version and gate_matrix_version are both 1;
-#   6. every gate-lane job in ci.yml runs on the [runner] label;
 #   7. the multi-source lane registry (RFC 094 R10) -- six checks, plus the
-#      rule that every [gate_matrix_exceptions] entry records a reason;
-#   8. every [tools] version is the one ci.yml installs or invokes.
+#      rule that every [gate_matrix_exceptions] entry records a reason.
+#
+# Conditions 4, 6 and 8 are gone from this script and were not dropped. RFC 116
+# stage 3 moved them: 6 (every gate job runs on the [runner] label) and 8 (every
+# [tools] version is what ci.yml installs) are true by construction, because
+# ci.yml is generated from [runner] and [tools]; 4 (each lane's components) is
+# checked by the generator against what the lane's command uses, replacing an
+# array that used to be hard-coded here. The numbering keeps its gaps so an old
+# reference to "condition 7" still means condition 7.
 #
 # The count was wrong from A3.4 until 2026-09-12: this comment claimed
 # "all seven conditions" while the script ran eight, and then a precheck.
@@ -127,8 +135,12 @@ trap 'rm -rf "$tmp"' EXIT
 grep -rhoE 'uses:[[:space:]]*[^[:space:]#]+' "$root/$workflows_dir" \
   | sed -E 's/^uses:[[:space:]]*//' >"$tmp/workflow-uses"
 
-# Condition 1: every `uses:` is pinned to a full 40-hex commit SHA.
-unpinned=$(grep -vE '@[0-9a-f]{40}$' "$tmp/workflow-uses" || true)
+# Condition 1: every `uses:` in a hand-written workflow is pinned to a full
+# 40-hex commit SHA. ci.yml is generated and checked by the generator (RFC 116
+# stage 3), so it is not read here; conditions 2 and 3 still read it.
+grep -rhoE --exclude=ci.yml 'uses:[[:space:]]*[^[:space:]#]+' "$root/$workflows_dir" \
+  | sed -E 's/^uses:[[:space:]]*//' >"$tmp/workflow-uses-handwritten"
+unpinned=$(grep -vE '@[0-9a-f]{40}$' "$tmp/workflow-uses-handwritten" || true)
 if [[ -n "$unpinned" ]]; then
   fail "condition 1: unpinned action reference(s):"
   echo "$unpinned" >&2
@@ -154,68 +166,6 @@ if [[ -n "$stale_in_manifest" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Condition 4: [rust_components] declares each lane exactly once, with the
-# required component arrays.
-# ---------------------------------------------------------------------------
-
-declare -A expected_components=(
-  [G01]="" [G02]="" [G03]="" [G04]="" [G05]="" [G06]=""
-  [G07]="clippy" [G07b]="clippy" [G08]="rustfmt" [G09a]="" [G09b]=""
-)
-
-extract_table_value() {
-  # Prints the value of `KEY = ...` inside table $2, or nothing if absent,
-  # followed by COUNT= so callers can tell absent from present. The count
-  # can no longer exceed 1: the TOML precheck rejects a duplicate key before
-  # any condition runs.
-  local key=$1 table=$2
-  awk -v key="$key" -v table="$table" '
-    $0 ~ ("^\\[" table "\\]") { in_table = 1; next }
-    /^\[/ { in_table = 0 }
-    in_table {
-      eq = index($0, " = ")
-      if (eq > 0 && substr($0, 1, eq - 1) == key) {
-        count++
-        print substr($0, eq + 3)
-      }
-    }
-    END { print "COUNT=" (count + 0) }
-  ' "$policy_path"
-}
-
-for gate in "${!expected_components[@]}"; do
-  raw=$(extract_table_value "$gate" "rust_components")
-  count=$(printf '%s\n' "$raw" | sed -nE 's/^COUNT=([0-9]+)$/\1/p')
-  value=$(printf '%s\n' "$raw" | grep -v '^COUNT=' || true)
-  if [[ "$count" -eq 0 ]]; then
-    fail "condition 4: [rust_components] is missing $gate"
-    continue
-  fi
-  # value looks like: ["clippy"]  or  []
-  got=$(printf '%s\n' "$value" | sed -E 's/^\[//; s/\]$//; s/"//g; s/[[:space:]]//g')
-  want="${expected_components[$gate]}"
-  if [[ "$got" != "$want" ]]; then
-    fail "condition 4: [rust_components] $gate = [$value], expected components [\"$want\"] (empty means [])"
-  fi
-done
-# Reject any extra/unexpected key inside [rust_components] too, so a typo'd
-# lane name (e.g. "G7") doesn't sit alongside the real one undetected.
-awk '
-  /^\[rust_components\]/ { in_table = 1; next }
-  /^\[/ { in_table = 0 }
-  in_table {
-    eq = index($0, " = ")
-    if (eq > 0) print substr($0, 1, eq - 1)
-  }
-' "$policy_path" | sort >"$tmp/rust_components-keys"
-printf '%s\n' "${!expected_components[@]}" | sort >"$tmp/rust_components-expected"
-extra_keys=$(comm -23 "$tmp/rust_components-keys" "$tmp/rust_components-expected" || true)
-if [[ -n "$extra_keys" ]]; then
-  fail "condition 4: [rust_components] has unexpected key(s):"
-  echo "$extra_keys" >&2
-fi
-
-# ---------------------------------------------------------------------------
 # Condition 5: version and gate_matrix_version are both 1.
 # ---------------------------------------------------------------------------
 
@@ -233,53 +183,6 @@ check_top_level_int() {
 }
 check_top_level_int "version" "1"
 check_top_level_int "gate_matrix_version" "1"
-
-# ---------------------------------------------------------------------------
-# Condition 6: every gate-lane job in ci.yml uses the [runner] label.
-# ---------------------------------------------------------------------------
-
-runner_label=$(sed -nE 's/^label = "([^"]*)"$/\1/p' "$policy_path" | head -n1)
-if [[ -z "$runner_label" ]]; then
-  fail "condition 6: [runner] label not found in manifest"
-else
-  # A "gate-lane job" is a job whose YAML key is a Gate Matrix ID
-  # (G01-G09b, G07b) or the consolidated G12 entry point (ui-invariants-v1).
-  # Matched on the job-key line (two-space indent, "key:" at start), not on
-  # the free-text "name:" field, so a renamed display name can't hide a
-  # missing runner-label check.
-  awk -v want="$runner_label" '
-    function check_previous_job() {
-      # Condition 6 must catch a gate-lane job with no runs-on line at all,
-      # not only one whose value is wrong — a job-key transition (or EOF)
-      # is where the previous job'"'"'s runs-on line, if any, is now known.
-      if (is_gate && !seen_runs_on) {
-        print "gate-lane job " job " has no runs-on line"
-      }
-    }
-    /^  [A-Za-z0-9_-]+:[[:space:]]*$/ {
-      check_previous_job()
-      key = $1
-      sub(/:$/, "", key)
-      job = key
-      is_gate = (key ~ /^G[0-9]+[a-z]?$/) || (key == "ui-invariants-v1")
-      seen_runs_on = 0
-      next
-    }
-    is_gate && /^    runs-on:/ {
-      seen_runs_on = 1
-      line = $0
-      sub(/^    runs-on:[[:space:]]*/, "", line)
-      if (line != want) {
-        print "gate-lane job " job " runs-on " line ", expected " want
-      }
-    }
-    END { check_previous_job() }
-  ' "$root/$workflows_dir/ci.yml" >"$tmp/condition6-violations"
-  if [[ -s "$tmp/condition6-violations" ]]; then
-    fail "condition 6: gate-lane job(s) not using [runner] label ($runner_label):"
-    cat "$tmp/condition6-violations" >&2
-  fi
-fi
 
 # ---------------------------------------------------------------------------
 # Condition 7 (RFC 094 R10): the multi-source lane registry.
@@ -558,72 +461,6 @@ if [[ -s "$tmp/stale-exceptions" ]]; then
   fail "condition 7 (check 6): [gate_matrix_exceptions] lane(s) not declared by any source RFC:"
   cat "$tmp/stale-exceptions" >&2
 fi
-
-# ---------------------------------------------------------------------------
-# Condition 8: every [tools] entry corresponds to what .github/workflows/
-# ci.yml actually installs or invokes for that tool (RFC 093 M1b C2.1 --
-# an M1a-era gap: mdBook's pinned version specifically was enforced by
-# nothing, while ci.yml carried a comment claiming otherwise). rust_msrv
-# and python happen to also be checked transitively, since the gate
-# commands embed them and condition 7 compares those; mdbook has no such
-# transitive coverage, since its version never appears in a [gates]
-# command. All four are checked the same way here regardless, so none of
-# them depends on a coincidence of some other condition's coverage.
-# ---------------------------------------------------------------------------
-
-get_toml_value() {
-  local key=$1 table=$2
-  awk -v key="$key" -v table="$table" '
-    $0 ~ ("^\\[" table "\\]") { in_table = 1; next }
-    /^\[/ { in_table = 0 }
-    in_table {
-      eq = index($0, " = ")
-      if (eq > 0 && substr($0, 1, eq - 1) == key) {
-        val = substr($0, eq + 3)
-        sub(/^"/, "", val)
-        sub(/"$/, "", val)
-        print val
-        exit
-      }
-    }
-  ' "$policy_path"
-}
-
-check_tool_pin() {
-  local tool=$1 expected=$2 grep_pattern=$3 extract_pattern=$4
-  local found
-  # Every occurrence must equal the pin, not merely include it among
-  # several -- "the pin is one of the values found" would accept a
-  # version drifted in one job but not another, which is exactly the
-  # "moves under a pin nothing reads" failure this condition exists to
-  # catch. Comment lines are excluded first so a stray commented-out
-  # example (or a future one) cannot false-positive under this stricter
-  # all-must-match rule.
-  found=$(grep -vE '^[[:space:]]*#' "$root/$workflows_dir/ci.yml" \
-    | grep -oE "$grep_pattern" \
-    | sed -E "$extract_pattern" | sort -u)
-  if [[ -z "$found" ]]; then
-    fail "condition 8: [tools] $tool = \"$expected\" not found anywhere in $workflows_dir/ci.yml (declared but unused, or not mechanically locatable)"
-    return
-  fi
-  if [[ "$found" != "$expected" ]]; then
-    fail "condition 8: [tools] $tool = \"$expected\", but $workflows_dir/ci.yml installs/invokes: $(echo "$found" | tr '\n' ' ')"
-  fi
-}
-
-tools_rust_msrv=$(get_toml_value "rust_msrv" "tools")
-tools_rust_stable=$(get_toml_value "rust_stable" "tools")
-tools_mdbook=$(get_toml_value "mdbook" "tools")
-tools_python=$(get_toml_value "python" "tools")
-
-check_tool_pin "rust_msrv" "$tools_rust_msrv" \
-  'toolchain: "[0-9]+\.[0-9]+"' 's/toolchain: "([0-9.]+)"/\1/'
-check_tool_pin "rust_stable" "$tools_rust_stable" \
-  'toolchain: [a-z]+' 's/toolchain: //'
-check_tool_pin "mdbook" "$tools_mdbook" \
-  'mdbook --version [0-9]+\.[0-9]+\.[0-9]+' 's/mdbook --version //'
-check_tool_pin "python" "$tools_python" \
-  'python-version: "[0-9]+\.[0-9]+"' 's/python-version: "([0-9.]+)"/\1/'
 
 # ---------------------------------------------------------------------------
 

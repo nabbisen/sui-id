@@ -4,9 +4,8 @@
 # Each fixture is a copy of the real ci/gate-inputs.toml, the real RFC 093
 # Gate Matrix v1 table, and the real .github/workflows/ tree, with exactly
 # one deliberate violation applied. Using the real files as the baseline
-# (rather than a synthetic minimal schema) matches condition 4's own design:
-# it is hardwired to the eleven real lane names RFC 093 defines, not an
-# abstract schema, so a fixture needs the real shape to exercise it.
+# (rather than a synthetic minimal schema) keeps each fixture attributable to
+# the one violation applied to it: condition 7 resolves real RFCs by number.
 
 set -euo pipefail
 
@@ -116,8 +115,11 @@ expect_success valid
 # --- Condition 1: unpinned action reference ------------------------------
 unpinned="$tmp/unpinned-action"
 make_valid_fixture "$unpinned"
+# In a hand-written workflow: ci.yml is generated and not read by condition 1
+# (RFC 116 stage 3); an unpinned action there is caught by the generator's own
+# check, and by condition 2 here.
 sed -i 's|uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6|uses: actions/checkout@v6|' \
-  "$unpinned/.github/workflows/ci.yml"
+  "$unpinned/.github/workflows/audit.yml"
 expect_failure unpinned-action "condition 1: unpinned action reference"
 
 # --- Condition 2: workflow SHA missing from [actions] ---------------------
@@ -138,32 +140,14 @@ sed -i '/^setup_python_v7 = /a stale_entry = "2222222222222222222222222222222222
   "$stale/ci/gate-inputs.toml"
 expect_failure stale-action "condition 3: [actions] SHA(s) not used by any workflow"
 
-# --- Condition 4a: [rust_components] missing a required lane -------------
-missing_lane="$tmp/rust-components-missing-lane"
-make_valid_fixture "$missing_lane"
-sed -i '/^G09b = \[\]$/d' "$missing_lane/ci/gate-inputs.toml"
-expect_failure rust-components-missing-lane "condition 4: [rust_components] is missing G09b"
-
-# --- Condition 4b: [rust_components] wrong component array ---------------
-wrong_components="$tmp/rust-components-wrong-value"
-make_valid_fixture "$wrong_components"
-sed -i 's/^G08 = \["rustfmt"\]$/G08 = ["clippy"]/' "$wrong_components/ci/gate-inputs.toml"
-expect_failure rust-components-wrong-value "condition 4: [rust_components] G08 ="
-
-# --- Condition 4c: [rust_components] duplicate lane -----------------------
-# Since R10-b this is caught by the TOML precheck, which reaches the file
-# before condition 4 does. Condition 4's own duplicate detector is kept and
-# unchanged, but no manifest that survives the precheck can now reach it.
+# --- Condition 0 (the TOML precheck): a duplicate key in [rust_components] --
+# Since R10-b a duplicate key is caught by the TOML precheck, before any
+# condition runs. (It was filed under condition 4, which RFC 116 stage 3 moved
+# to the workflow generator; the precheck is what still catches this.)
 dup_lane="$tmp/rust-components-duplicate"
 make_valid_fixture "$dup_lane"
 sed -i '/^G01 = \[\]$/a G01 = []' "$dup_lane/ci/gate-inputs.toml"
 expect_failure rust-components-duplicate "not valid TOML" "line"
-
-# --- Condition 4d: [rust_components] unexpected extra key ----------------
-extra_lane="$tmp/rust-components-extra-key"
-make_valid_fixture "$extra_lane"
-sed -i '/^G09b = \[\]$/a G10 = []' "$extra_lane/ci/gate-inputs.toml"
-expect_failure rust-components-extra-key "condition 4: [rust_components] has unexpected key"
 
 # --- Condition 5: version is not 1 ----------------------------------------
 bad_version="$tmp/bad-version"
@@ -176,32 +160,6 @@ missing_gmv="$tmp/missing-gate-matrix-version"
 make_valid_fixture "$missing_gmv"
 sed -i '/^gate_matrix_version = 1$/d' "$missing_gmv/ci/gate-inputs.toml"
 expect_failure missing-gate-matrix-version "condition 5: manifest requires exactly one top-level gate_matrix_version"
-
-# --- Condition 6: a gate-lane job uses the wrong runner -------------------
-wrong_runner="$tmp/wrong-runner"
-make_valid_fixture "$wrong_runner"
-awk '
-  /^  G01:$/ { print; in_g01 = 1; next }
-  in_g01 && /^    runs-on: ubuntu-24.04$/ { print "    runs-on: ubuntu-latest"; in_g01 = 0; next }
-  { print }
-' "$wrong_runner/.github/workflows/ci.yml" >"$wrong_runner/.github/workflows/ci.yml.new"
-mv "$wrong_runner/.github/workflows/ci.yml.new" "$wrong_runner/.github/workflows/ci.yml"
-expect_failure wrong-runner "condition 6: gate-lane job(s) not using [runner] label"
-
-# --- Condition 6b: a gate-lane job has no runs-on line at all (C1) -------
-# GitHub Actions itself rejects a job with no runs-on, so this cannot slip
-# a lane past the gate in practice — but the check must still assert
-# *presence*, not only compare a value that might not exist. Regression
-# fixture for review finding C1 (dead seen_runs_on scaffolding).
-missing_runs_on="$tmp/missing-runs-on"
-make_valid_fixture "$missing_runs_on"
-awk '
-  /^  G03:$/ { print; in_g03 = 1; next }
-  in_g03 && /^    runs-on: ubuntu-24.04$/ { in_g03 = 0; next }
-  { print }
-' "$missing_runs_on/.github/workflows/ci.yml" >"$missing_runs_on/.github/workflows/ci.yml.new"
-mv "$missing_runs_on/.github/workflows/ci.yml.new" "$missing_runs_on/.github/workflows/ci.yml"
-expect_failure missing-runs-on "gate-lane job G03 has no runs-on line"
 
 # --- Condition 7a: [gates] command diverges from the RFC table -----------
 diverged_command="$tmp/gates-diverged-command"
@@ -276,42 +234,13 @@ sed -i '/^\[gate_matrix_exceptions\]/i G12 = "bash scripts/check-ui-invariants.s
 expect_failure gate-matrix-exception-and-gates-fails \
   "condition 7 (check 5):" "G12"
 
-# --- Condition 8a: [tools] version drifted from what ci.yml installs -----
-# (RFC 093 M1b C2.1 -- mdBook specifically had no enforcement at all
-# before this: ci.yml could install any version and every prior check
-# would still pass.)
-tool_drift="$tmp/tools-mdbook-drift"
-make_valid_fixture "$tool_drift"
-sed -i 's/^mdbook = "0.5.4"$/mdbook = "0.6.0"/' "$tool_drift/ci/gate-inputs.toml"
-expect_failure tools-mdbook-drift \
-  'condition 8: [tools] mdbook = "0.6.0", but .github/workflows/ci.yml installs/invokes: 0.5.4'
-
-# --- Condition 8b: [tools] entry with nothing in ci.yml to check it -----
-# --- against (declared but unused) --------------------------------------
-# Delete every line the checker's own grep pattern would match, so
-# python-version is not merely wrong but entirely absent -- proving the
-# "not found anywhere" branch, distinct from 8a's "found, but drifted".
-tool_unused="$tmp/tools-python-unused"
-make_valid_fixture "$tool_unused"
-sed -i '/python-version: "3\.14"/d' "$tool_unused/.github/workflows/ci.yml"
-expect_failure tools-python-unused \
-  'condition 8: [tools] python = "3.14" not found anywhere'
-
-# --- Condition 8c: [tools] drifted in one job but not the others --------
-# Neither 8a (all wrong) nor 8b (none found) exercises "some right, some
-# wrong" -- the actual failure mode condition 8 exists to prevent: a
-# version moving under a pin that nothing reads, in one job, while every
-# other job (and the manifest) still says the old value. Change only the
-# first of ci.yml's three python-version occurrences.
-tool_partial_drift="$tmp/tools-python-partial-drift"
-make_valid_fixture "$tool_partial_drift"
-awk '
-  !done && /python-version: "3\.14"/ { sub(/3\.14/, "3.13"); done = 1 }
-  { print }
-' "$tool_partial_drift/.github/workflows/ci.yml" >"$tool_partial_drift/.github/workflows/ci.yml.new"
-mv "$tool_partial_drift/.github/workflows/ci.yml.new" "$tool_partial_drift/.github/workflows/ci.yml"
-expect_failure tools-python-partial-drift \
-  'condition 8: [tools] python = "3.14", but .github/workflows/ci.yml installs/invokes: 3.13 3.14'
+# --- Conditions 4, 6 and 8 -------------------------------------------------
+# No fixture here: RFC 116 stage 3 moved them to scripts/generate-ci-workflow.py
+# (component sets, runner label, [tools] versions), whose own negative tests are
+# scripts/tests/test_generate_ci_workflow.py. What each old fixture proved is
+# proved there: a missing or extra [rust_components] lane, a wrong component
+# array, a wrong runner label, a [tools] version that drifted or that nothing
+# uses, and a version that drifted in one job only.
 
 # ==========================================================================
 # RFC 094 R10: the multi-source lane registry.
