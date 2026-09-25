@@ -431,6 +431,42 @@ workflow, and sign as the owner. This is not specific to RFC 117 — **it applie
 to every gate in the programme, G01 through G16.** What RFC 117 did was claim
 more than the others, and its text has been corrected.
 
+**Re-measured 2026-09-26, and two things recorded above were wrong.**
+
+- **`admin: true` is the repository permission, not a token scope.** Measured:
+  the credential's scopes are `gist`, `read:org`, `repo`, `workflow`, and
+  `repos/nabbisen/sui-id` reports `{"admin": true, "maintain": true, …}`
+  **because `repo` scope on a repository its owner owns carries
+  administration.** So item 1 below, "loses `admin`", **is not actionable as
+  written**: a classic token has no `admin` scope to drop, and `repo` cannot be
+  narrowed. The actionable form is a **fine-grained** personal access token
+  scoped to this repository, with **Administration: no access** and
+  **Workflows: no access**, and Contents write. The weakness is exactly as
+  recorded; the remedy was misdescribed.
+- **Branch protection on its own does not close it.** A credential with
+  administration can edit or delete the protection rule, so protecting `main`
+  while the same token can unprotect it is a control that does not control —
+  the pattern item 3 already names, one level up. **The token change is the
+  load-bearing one; protection and `CODEOWNERS` only mean something after it.**
+- **The cost of dropping `workflow` is higher than measured.** Nine commits
+  touched `.github/workflows/` in the three weeks to 2026-09-24; in the three
+  weeks to **2026-09-26 it is 16**, because RFC 116 made `ci.yml` generated and
+  added lanes. Nearer one every day and a half than every other day. Each is
+  still a lane change worth a glance, and `ci.yml` is **generated**, so what
+  `@nabbisen` would be applying is a regenerated file, not hand-edited YAML.
+- **`ci/` is `contracts/` since 2026-09-25** (RFC 116 stage 7). Item 2 below is
+  read with that substitution. This section is a `[[record]]` for G18, so the
+  gate did not catch the stale path — the exemption is right and this is its
+  price, paid here by hand.
+
+**What it costs the architect, stated so the decision is not made blind.**
+Dropping `workflow` means a lane change waits for `@nabbisen`. Adding
+`CODEOWNERS` with required review on top means the agents **stop pushing to
+`main`** and open pull requests he merges, which replaces the standing
+commit-and-push authorization for anything the rule covers. That is a real
+change in how this programme runs, and it is the reason to decide the token
+first and the review requirement separately.
+
 **Decided 2026-09-24, on the architect's recommendation:**
 
 1. The agents' credential loses `admin` and `workflow`. Measured cost: nine

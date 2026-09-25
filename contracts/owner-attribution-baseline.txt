@@ -54,6 +54,7 @@ ROADMAP.md	ba516c67d0d3dd1fdb14f601de2a4b446ec1230d87e5baf7c7738d4e0d691338	1	11
 ROADMAP.md	bb235e2112792587a7ec5c03335238612a542d7b027f1b50e0382ea0526d46f6	1	codex-project-architect , codex-developer , and codex-independent-architecture-security-reviewer are agent identities from one vendor, with 
 ROADMAP.md	bd873ea5fa5be8b218d9a441f7a9bb71ffb3d08e288c993dc9fa2b3265676439	1	Owner ruling, 2026-09-22: implementation handoffs live under rfcs/handoffs/ , now and in future. RFC 000 requires every rfcs/handoffs/NNN-sl
 ROADMAP.md	c5a4e72e2e7e1266b23b9fcba9c5273fcb9553728ae4358a455b49eb54df2ab0	1	This section holds the reasoning, the owner rulings, and the revisit triggers for the three risks that are not owned by any RFC and would ot
+ROADMAP.md	c7f1e35be50044c487b2b4057e969a72c2f64e1f725cde24c38f7bae20193109	1	What it costs the architect, stated so the decision is not made blind. Dropping workflow means a lane change waits for @nabbisen .
 ROADMAP.md	c85ab670b7b295f5f71a70048e2389912bb49a45e6d38982b6df9d3b6d5139d6	1	@nabbisen states he made no such ruling.
 ROADMAP.md	db3f9fec5fc0a4aef4764549974c5ed2bf37c7d8171674da0967eb0238eec2a7	1	M2c — Master-key rotation recovery owner to set Rotation journal, atomic key-file publication, startup crash recovery across every transitio
 ROADMAP.md	e48726a2966498de86bf8216ccf3cd161bf3681500bce35a105c0dfc6ac665e0	1	119 accepted by @nabbisen 2026-09-26; status held — G11 refuses an Accepted RFC whose security review is Required and which cites no review 
