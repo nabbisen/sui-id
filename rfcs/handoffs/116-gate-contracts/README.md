@@ -361,6 +361,92 @@ re-measure before moving.
 settled.** Name the options and what each one costs. The naming is
 `@nabbisen`'s.
 
+## Stage 6 — the names in the tree must match the tree — dispatched 2026-09-25
+
+**Ruled by `@nabbisen`, 2026-09-25**, on the stage 5 analysis and the
+architect's recommendation: `ci/` is renamed to **`contracts/`**, it gains a
+**README that a gate keeps honest**, and **RFC 098's D3 row is amended** to
+match. His reason, recorded because it is the reason the name was wrong:
+`docs/` names its audience and `.github/` names the convention's owner, while
+`ci/` named *one of its two callers* — and RFC 116 D7 is the accepted decision
+that says that caller is not privileged.
+
+**Build the gate first.** The rename is stage 7 and must not start until this
+lands. Stage 5 measured the reason: ~27 references are enforced by some gate
+and **~50 are backticked paths that nothing checks**, so a rename today buys a
+better name at the price of fifty silently wrong references. That is the same
+class of defect RFC 116 exists to remove.
+
+**What the gate checks** (both halves, because they are one property — *what is
+written about the directory must match the directory*):
+
+1. every `contracts/<file>` path named in a file **in scope** exists; and
+2. every file in `contracts/` has a row in `contracts/README.md`, and every row
+   names a file that exists, a gate id that is in `[gates]` **and** in the Gate
+   Matrix, and an RFC that exists.
+
+**Scope is the design question of this stage, and it is not "every tracked
+file".** 34 of the 77 references live in `rfcs/handoffs/`, and those are
+**dated records**. A handoff written on 2026-09-22 saying `ci/gate-inputs.toml`
+was true when it was written; rewriting it to say `contracts/` would falsify a
+record to satisfy a gate, which this project does not do. So: **records keep
+their paths and are out of scope** — `rfcs/handoffs/`, and the prose (not the
+gated rows) of `rfcs/done/`. Live files are in scope: `scripts/`, `.github/`,
+`contracts/` itself, `docs/`, `README.md`, `ROADMAP.md`, `CHANGELOG.md`,
+`crates/` doc comments, and `rfcs/accepted/` + `rfcs/proposed/`. Measure that
+split, state it, and say in the package if the boundary should fall elsewhere —
+but do not falsify a record.
+
+**Allow-list, with a reason required per entry**: the planned
+`contracts/write-authority.toml` (RFC 094, named in eight places and not yet
+built) and the test-fixture names under `scripts/tests/fixtures/`. An entry
+without a stated reason is not an allow-list, it is a hiding place — the same
+rule stage 3b's `[exclude]` marker guard established.
+
+**Gate id and placement.** RFC 116's own principle is one source, one gate.
+Propose whether this is a new gate id or a condition added to an existing lane,
+say which, and carry it into `[gates]`, `[gate_owners]`, the Gate Matrix and
+the RFC 116 table in the same commit. Do not invent an id silently.
+
+**The README's content** is the table the architect drafted and `@nabbisen`
+approved — file, kind, read by, owning RFC — for all nine files, above it one
+paragraph saying these are the contracts a gate compares against, that every
+file here is read by a gate that fails when it stops being true, and that **CI
+is one caller and a developer's `scripts/ci-gate.sh` is the other**. That last
+clause is the sentence whose absence let the directory be called `ci/`. Add one
+line recording the former name, so a reader following a path out of an old
+record can find where it went.
+
+Write the README in this stage, under `ci/`, so the gate has something to check
+before anything moves. It is renamed with everything else in stage 7.
+
+## Stage 7 — the rename, in one commit
+
+Only after stage 6 is green. `ci/` → `contracts/`, with **every reference in
+scope updated in the same commit**, and every gate green in that commit — the
+original D8 requirement, unchanged.
+
+In that commit: RFC 098's **D3 row** (the location column, and its
+`ci/audit-coverage-matrix.md` mentions at lines 97 and 234, and the
+`doc-authority.toml` mention at line 316); RFC 093's **G11 and G12 lane rows**
+(lines 116, 117) and RFC 098's **G15 row** (line 301); the **G16 and G17 rows**
+in RFCs 117 and 116; `docs/development-specification.md:311`; the constants and
+arguments stage 5 listed (`ci-gate.sh`'s default manifest, `MATRIX=` in
+`check-audit-matrix.sh`, the generator's two paths, `--policy`/`--inventory`,
+`doc-authority.toml`'s `matrix =`, `owner-attributions.toml`'s `baseline =`,
+the gate-inputs job, the fixture `sed`/`cp` lines); and the three `ci/` lines in
+`owner-attribution-baseline.txt`. `ci.yml` is **regenerated, not edited**.
+
+Amending a Done RFC's decision row is a lifecycle act. `rfcs/README.md` forbids
+files moving *out of* `done/`, not edits; RFC 093 was edited after it closed.
+Record the amendment in RFC 098 as dated and attributed to `@nabbisen`'s ruling
+of 2026-09-25, not to the implementer and not to the architect.
+
+**Check before you finish:** which sentences in RFCs 093 and 098 that this
+commit touches carry baselined attributions (stage 5 §3 left this unmeasured —
+093 and 098 carry nine baseline lines each). A reworded sentence changes its
+hash and G16 will call it new.
+
 ## What to return, each stage
 
 A review-request package under `.git-exclude/review-requests/`, in the form the
