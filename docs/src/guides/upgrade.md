@@ -92,6 +92,8 @@ Rollback is not supported. If a bad release is deployed:
    `sui-id restore --config sui-id.toml --from sui-id-pre-upgrade.tar --force`.
 3. Start the previous binary.
 
-An older binary **starts without complaint** against a database that a newer
-binary has migrated: it does not check for a newer schema. Running it that way
-is unsupported. The recovery is to restore the pre-upgrade backup, as above.
+An older binary **refuses to start** against a database that a newer binary has
+migrated. It reads the recorded schema version before it touches the file, and
+stops if that version is newer than it understands; **nothing is written to the
+database** when it does. The recovery is to run the newer binary again, or to
+restore the pre-upgrade backup, as above.

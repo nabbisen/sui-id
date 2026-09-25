@@ -5,7 +5,9 @@ use crate::layout::Shell;
 
 pub struct SettingsOtherData {
     pub binary_version: String,
-    pub schema_version: i32,
+    /// The schema version **stored in the database** (RFC 112 D4), not the
+    /// binary's ceiling: the two differ exactly when it matters.
+    pub schema_version: i64,
     pub db_path: String,
     pub master_key_file: String,
     pub user_count: usize,

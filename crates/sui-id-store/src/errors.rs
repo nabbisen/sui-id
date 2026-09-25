@@ -57,6 +57,35 @@ pub enum StoreError {
     /// an explicit message (D5, D8).
     #[error("recovery link refused: {0}")]
     RecoveryRefused(RecoveryRefusal),
+
+    /// RFC 112 D6: the database's stored schema version is **newer** than this
+    /// build's `migrations::MAX_SCHEMA_VERSION`. Nothing was written. `found` is
+    /// `i64` so a stored value beyond `i32` is reported as what it is: too new.
+    #[error(
+        "the database schema is newer than this build understands \
+         (found version {found}; this build supports up to {supported})"
+    )]
+    SchemaTooNew { found: i64, supported: i32 },
+
+    /// RFC 112 D2, D6: the stored schema version cannot be trusted: unreadable
+    /// (not a canonical non-negative integer, empty, a BLOB, negative) or
+    /// **absent from a database that has application tables** (a foreign SQLite
+    /// file, or a sui-id database whose row was lost). `tables` is how many
+    /// application tables the database has. Nothing was written, and no
+    /// migration ran: re-running them from 0001 against a populated database is
+    /// the defect this refuses.
+    #[error("the database schema version is unreadable: {detail} ({tables} application table(s))")]
+    SchemaVersionInvalid { tables: usize, detail: String },
+
+    /// RFC 112 D6: a migration failed to apply. It used to surface as
+    /// `Db`, whose Display is "database I/O error", which sends an operator to
+    /// look at their disk.
+    #[error("migration {version} failed to apply")]
+    MigrationFailed {
+        version: i32,
+        #[source]
+        source: rusqlite::Error,
+    },
 }
 
 /// Why U37 refused to issue a recovery link (RFC 103 D5, D6, D8).

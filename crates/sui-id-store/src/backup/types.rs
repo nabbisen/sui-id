@@ -119,6 +119,11 @@ pub enum BackupError {
          Use a newer sui-id binary to restore this backup."
     )]
     SchemaVersionTooNew { found: i64, max: i64 },
+    /// RFC 112 D4: the database inside the snapshot (or being snapshotted) has
+    /// a schema version that cannot be trusted: unreadable, or missing from a
+    /// database that has tables. Never recorded as `0`, never restored.
+    #[error("the database's schema version is unreadable: {0}")]
+    SchemaVersionUnreadable(String),
     #[error(
         "refusing to overwrite existing database at {} (pass --force to override)",
         .0.display()

@@ -116,19 +116,25 @@ pub fn run_backup(
     let db_bytes = std::fs::read(&snapshot_path).map_err(BackupError::ReadSnapshot)?;
     let key_bytes = std::fs::read(key_file).map_err(BackupError::ReadKeyFile)?;
 
-    // Step 2: read schema_version from the snapshot for the manifest.
+    // Step 2: read schema_version from the snapshot for the manifest, with the
+    // one reader every caller uses (RFC 112 D4). It used to be `unwrap_or(0)`
+    // twice, so a snapshot whose version could not be read was stamped `0`,
+    // passed `restore`'s check, and was re-run from 0001 on the next open. A
+    // snapshot that is **newer** than this build is recorded truthfully: taking
+    // a backup of a database this binary cannot open is the operator's way out.
     let schema_version: i64 = {
-        let conn =
-            rusqlite::Connection::open(&snapshot_path).map_err(BackupError::ReopenSnapshot)?;
-        conn.query_row(
-            "SELECT value FROM sui_meta WHERE key = 'schema_version'",
-            [],
-            |r| {
-                let s: String = r.get(0)?;
-                Ok(s.parse::<i64>().unwrap_or(0))
-            },
+        let conn = rusqlite::Connection::open_with_flags(
+            &snapshot_path,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
         )
-        .unwrap_or(0)
+        .map_err(BackupError::ReopenSnapshot)?;
+        match crate::migrations::read_stored_version(&conn) {
+            Ok(v) => v.number(),
+            Err(crate::migrations::SchemaError::Read(e)) => {
+                return Err(BackupError::ReopenSnapshot(e));
+            }
+            Err(e) => return Err(BackupError::SchemaVersionUnreadable(e.to_string())),
+        }
     };
 
     let manifest = Manifest {
@@ -194,8 +200,9 @@ pub fn run_restore(
     let bytes = read_source(src)?;
     let (_, manifest, db_bytes, key_bytes) = parse_backup(&bytes, opts.passphrase.as_deref())?;
 
-    // Manifest checks.
+    // Manifest checks, then the database's own version (RFC 112 D4).
     check_manifest_compatibility(&manifest)?;
+    check_snapshot_schema(&db_bytes)?;
 
     if !opts.force {
         if db_path.exists() {
@@ -231,6 +238,10 @@ pub fn run_verify(src: &Path, passphrase: Option<&str>) -> Result<VerifyReport> 
     let bytes = read_source(src)?;
     let encrypted = is_encrypted(&bytes);
     let (tar_bytes_len, manifest, db_bytes, key_bytes) = parse_backup(&bytes, passphrase)?;
+    // `verify` fails where `restore` would fail on the database's own schema
+    // version (RFC 112 D4). The manifest and format-version checks stay
+    // restore-only until RFC 106 F2 brings the rest of them across.
+    check_snapshot_schema(&db_bytes)?;
     // Run a SQLite integrity check on the inner database. This catches
     // a corrupted snapshot before the operator commits to the restore.
     {
@@ -319,6 +330,45 @@ fn parse_backup(
         .map(|(_, b)| b.clone())
         .ok_or(BackupError::MissingKeyEntry)?;
     Ok((tar_bytes.len(), manifest, db_bytes, key_bytes))
+}
+
+/// Read and judge the schema version of the database bytes inside a backup, with
+/// the same reader and rule the server uses on its own database (RFC 112 D4).
+/// The manifest's `schema_version` is the archive's own claim; a pre-0.13 archive
+/// has none and is fabricated as `0`. This reads the database itself, so neither
+/// a lying nor a missing manifest can carry a too-new or unreadable database past
+/// `restore` or `verify`.
+fn check_snapshot_schema(db_bytes: &[u8]) -> Result<()> {
+    let dir = tempfile_dir()?;
+    let temp_db = dir.join("schema-check.sqlite");
+    let result = (|| {
+        std::fs::write(&temp_db, db_bytes).map_err(BackupError::StageSnapshot)?;
+        let conn = rusqlite::Connection::open_with_flags(
+            &temp_db,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+        )
+        .map_err(BackupError::OpenStagedSnapshot)?;
+        let stored = match crate::migrations::read_stored_version(&conn) {
+            Ok(v) => v,
+            Err(crate::migrations::SchemaError::Read(e)) => {
+                return Err(BackupError::OpenStagedSnapshot(e));
+            }
+            Err(e) => return Err(BackupError::SchemaVersionUnreadable(e.to_string())),
+        };
+        match crate::migrations::check_supported(stored) {
+            Ok(()) => Ok(()),
+            Err(crate::migrations::SchemaError::TooNew { found, supported }) => {
+                Err(BackupError::SchemaVersionTooNew {
+                    found,
+                    max: i64::from(supported),
+                })
+            }
+            Err(e) => Err(BackupError::SchemaVersionUnreadable(e.to_string())),
+        }
+    })();
+    let _ = std::fs::remove_file(&temp_db);
+    let _ = std::fs::remove_dir(&dir);
+    result
 }
 
 fn check_manifest_compatibility(m: &Manifest) -> Result<()> {

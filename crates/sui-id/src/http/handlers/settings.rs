@@ -322,9 +322,21 @@ pub async fn other_get(
         .await
         .map(|v| v.len())
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
+    // RFC 112 D4: the version the database *records*, read with the one reader
+    // every caller uses. This page used to show `MAX_SCHEMA_VERSION` under the
+    // label "schema version": the binary's ceiling, not the database's value.
+    let stored_schema_version = app
+        .db
+        .with_conn(|conn| {
+            sui_id_store::migrations::read_stored_version(conn)
+                .map(|v| v.number())
+                .map_err(sui_id_store::StoreError::from)
+        })
+        .await
+        .map_err(|e| HttpError::html(CoreError::from(e)))?;
     let data = sui_id_web::SettingsOtherData {
         binary_version: env!("CARGO_PKG_VERSION").to_owned(),
-        schema_version: sui_id_store::migrations::MAX_SCHEMA_VERSION,
+        schema_version: stored_schema_version,
         db_path: cfg.storage.db_path.display().to_string(),
         master_key_file: cfg.storage.key_file.display().to_string(),
         user_count,

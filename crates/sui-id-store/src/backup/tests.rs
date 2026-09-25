@@ -52,6 +52,24 @@ mod tests_inner {
         (db, key)
     }
 
+    /// The bytes of a real SQLite database that looks like a migrated sui-id one:
+    /// a `sui_meta` row and one application table. Restore now reads the
+    /// database's own schema version (RFC 112 D4), so the fake bytes these
+    /// tests used to restore (`b"db-bytes"`, which is not a database) are refused.
+    fn snapshot_bytes(schema_version: &str) -> Vec<u8> {
+        let dir = TempDir::new().expect("tempdir");
+        let path = dir.path().join("snap.sqlite");
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.execute_batch(&format!(
+            "CREATE TABLE sui_meta(key TEXT PRIMARY KEY, value TEXT NOT NULL); \
+             INSERT INTO sui_meta(key, value) VALUES('schema_version', '{schema_version}'); \
+             CREATE TABLE t(k TEXT); INSERT INTO t VALUES('hello');"
+        ))
+        .unwrap();
+        drop(conn);
+        std::fs::read(&path).unwrap()
+    }
+
     /// K28 (backup-into-store equivalence record): the writer refuses a
     /// name that does not fit the 100-byte ustar name field. Every name
     /// the public path writes is a constant, so this check is reachable
@@ -109,7 +127,7 @@ mod tests_inner {
                 .mode(0o600)
                 .open(&backup_path)
                 .unwrap();
-            write_tar_entry(&mut f, ENTRY_DB, b"db-bytes").unwrap();
+            write_tar_entry(&mut f, ENTRY_DB, &snapshot_bytes("5")).unwrap();
             write_tar_entry(&mut f, ENTRY_KEY, b"key-bytes").unwrap();
             write_tar_terminator(&mut f).unwrap();
         }
@@ -133,7 +151,7 @@ mod tests_inner {
             },
         )
         .expect("force restore");
-        assert_eq!(std::fs::read(&db).unwrap(), b"db-bytes");
+        assert_eq!(std::fs::read(&db).unwrap(), snapshot_bytes("5"));
         assert_eq!(std::fs::read(&key).unwrap(), b"key-bytes");
     }
 
@@ -153,7 +171,7 @@ mod tests_inner {
                 .mode(0o600)
                 .open(&backup_path)
                 .unwrap();
-            write_tar_entry(&mut f, ENTRY_DB, b"db-bytes").unwrap();
+            write_tar_entry(&mut f, ENTRY_DB, &snapshot_bytes("5")).unwrap();
             write_tar_entry(&mut f, ENTRY_KEY, b"key-bytes").unwrap();
             write_tar_terminator(&mut f).unwrap();
         }
@@ -178,8 +196,12 @@ mod tests_inner {
         // Real SQLite file.
         {
             let conn = rusqlite::Connection::open(&db).unwrap();
+            // A sui_meta version row makes it a migrated sui-id database; a
+            // database with tables and no version is refused (RFC 112 D2).
             conn.execute_batch(
-                "CREATE TABLE t (k TEXT PRIMARY KEY); INSERT INTO t VALUES ('hello');",
+                "CREATE TABLE sui_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL); \
+                 INSERT INTO sui_meta VALUES ('schema_version', '5'); \
+                 CREATE TABLE t (k TEXT PRIMARY KEY); INSERT INTO t VALUES ('hello');",
             )
             .unwrap();
         }
@@ -472,5 +494,179 @@ mod tests_inner {
         );
         let msg = format!("{}", r.unwrap_err());
         assert!(msg.contains("schema_version"), "got: {msg}");
+    }
+
+    // ---------- RFC 112 D4: the database's own schema version ----------
+    //
+    // Backup create, restore and verify read the version with the one reader the
+    // server uses. Before, backup create read it with `unwrap_or(0)` twice, and
+    // restore trusted the manifest (a manifest-less archive is fabricated as 0).
+
+    fn archive(dir: &Path, manifest_schema: Option<i64>, db_bytes: &[u8]) -> PathBuf {
+        let mut tar_buf = Vec::new();
+        if let Some(schema_version) = manifest_schema {
+            let manifest = Manifest {
+                format_version: FORMAT_VERSION,
+                sui_id_version: "x".into(),
+                schema_version,
+                created_at: "2099-01-01T00:00:00Z".into(),
+                hostname: "x".into(),
+                issuer: "x".into(),
+            };
+            write_tar_entry(
+                &mut tar_buf,
+                ENTRY_MANIFEST,
+                &serde_json::to_vec(&manifest).unwrap(),
+            )
+            .unwrap();
+        }
+        write_tar_entry(&mut tar_buf, ENTRY_DB, db_bytes).unwrap();
+        write_tar_entry(&mut tar_buf, ENTRY_KEY, b"key").unwrap();
+        write_tar_terminator(&mut tar_buf).unwrap();
+        let dest = dir.join("a.tar");
+        std::fs::write(&dest, &tar_buf).unwrap();
+        dest
+    }
+
+    fn restore_into(dir: &Path, src: &Path) -> (Result<(), BackupError>, Target) {
+        let cfg = fake_cfg(dir, dir.join("restored.sqlite"), dir.join("restored.key"));
+        let r = restore(
+            &cfg,
+            src,
+            &RestoreOptions {
+                force: false,
+                passphrase: None,
+            },
+        );
+        (r, cfg)
+    }
+
+    #[test]
+    fn restore_reads_the_databases_own_version_when_the_manifest_lies() {
+        // The manifest says 5; the database inside says 9999.
+        let tmp = TempDir::new().unwrap();
+        let src = archive(tmp.path(), Some(5), &snapshot_bytes("9999"));
+        let (r, cfg) = restore_into(tmp.path(), &src);
+        assert!(
+            matches!(r, Err(BackupError::SchemaVersionTooNew { found: 9999, .. })),
+            "{r:?}"
+        );
+        assert!(!cfg.db.exists() && !cfg.key.exists(), "nothing was written");
+    }
+
+    #[test]
+    fn restore_refuses_a_manifest_less_archive_whose_database_is_too_new() {
+        // RFC 106 F1 in this respect: the fabricated manifest says 0 "so the
+        // compatibility check stays out of the way".
+        let tmp = TempDir::new().unwrap();
+        let src = archive(tmp.path(), None, &snapshot_bytes("9999"));
+        let (r, cfg) = restore_into(tmp.path(), &src);
+        assert!(
+            matches!(r, Err(BackupError::SchemaVersionTooNew { .. })),
+            "{r:?}"
+        );
+        assert!(!cfg.db.exists(), "nothing was written");
+    }
+
+    #[test]
+    fn restore_refuses_a_database_with_no_readable_version_and_writes_nothing() {
+        let tmp = TempDir::new().unwrap();
+        // A populated database with no version row.
+        let dir = TempDir::new().unwrap();
+        let p = dir.path().join("s.sqlite");
+        rusqlite::Connection::open(&p)
+            .unwrap()
+            .execute_batch("CREATE TABLE t(k TEXT);")
+            .unwrap();
+        let src = archive(tmp.path(), Some(5), &std::fs::read(&p).unwrap());
+        let (r, cfg) = restore_into(tmp.path(), &src);
+        assert!(
+            matches!(r, Err(BackupError::SchemaVersionUnreadable(_))),
+            "{r:?}"
+        );
+        assert!(!cfg.db.exists() && !cfg.key.exists());
+        // And a garbled stamp.
+        let src = archive(tmp.path(), Some(5), &snapshot_bytes("garbage"));
+        let (r, _) = restore_into(tmp.path(), &src);
+        assert!(
+            matches!(r, Err(BackupError::SchemaVersionUnreadable(_))),
+            "{r:?}"
+        );
+    }
+
+    #[test]
+    fn verify_fails_where_restore_would_on_the_databases_own_version() {
+        let tmp = TempDir::new().unwrap();
+        let src = archive(tmp.path(), Some(5), &snapshot_bytes("9999"));
+        assert!(matches!(
+            run_verify(&src, None),
+            Err(BackupError::SchemaVersionTooNew { found: 9999, .. })
+        ));
+        let ok = archive(tmp.path(), Some(5), &snapshot_bytes("5"));
+        run_verify(&ok, None).expect("a current archive still verifies");
+    }
+
+    #[test]
+    fn backup_create_refuses_a_database_with_no_readable_version_and_writes_no_file() {
+        // It used to stamp `schema_version: 0` into the manifest.
+        let tmp = TempDir::new().unwrap();
+        let db = tmp.path().join("foreign.sqlite");
+        let key = tmp.path().join("k.key");
+        rusqlite::Connection::open(&db)
+            .unwrap()
+            .execute_batch("CREATE TABLE ledger(x TEXT);")
+            .unwrap();
+        std::fs::write(&key, b"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=").unwrap();
+        let cfg = target(db, key, "https://x");
+        let dest = tmp.path().join("out.tar");
+        let r = backup(&cfg, &dest, &BackupOptions::default());
+        assert!(
+            matches!(r, Err(BackupError::SchemaVersionUnreadable(_))),
+            "{r:?}"
+        );
+        assert!(!dest.exists(), "no archive was written");
+    }
+
+    #[test]
+    fn backup_create_records_a_too_new_database_truthfully() {
+        // The operator's way out of a refusal is a backup; it must work, and it
+        // must say what the database is so an older restore refuses it.
+        let tmp = TempDir::new().unwrap();
+        let db = tmp.path().join("new.sqlite");
+        let key = tmp.path().join("k.key");
+        std::fs::write(&db, snapshot_bytes("9999")).unwrap();
+        std::fs::write(&key, b"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=").unwrap();
+        let cfg = target(db, key, "https://x");
+        let dest = tmp.path().join("out.tar");
+        backup(&cfg, &dest, &BackupOptions::default()).expect("backup of a too-new database works");
+        let report = run_verify_manifest_only(&dest);
+        assert_eq!(report, 9999);
+    }
+
+    /// The manifest's recorded version, without `verify`'s schema refusal.
+    fn run_verify_manifest_only(src: &Path) -> i64 {
+        let bytes = std::fs::read(src).unwrap();
+        let entries = read_tar(&bytes).unwrap();
+        let m: Manifest =
+            serde_json::from_slice(&entries.iter().find(|(n, _)| n == ENTRY_MANIFEST).unwrap().1)
+                .unwrap();
+        m.schema_version
+    }
+
+    #[test]
+    fn backup_create_reads_a_fresh_database_as_version_zero() {
+        // A database with no application tables is fresh, which is 0 (D2).
+        let tmp = TempDir::new().unwrap();
+        let db = tmp.path().join("fresh.sqlite");
+        let key = tmp.path().join("k.key");
+        rusqlite::Connection::open(&db)
+            .unwrap()
+            .execute_batch("PRAGMA user_version = 0;")
+            .unwrap();
+        std::fs::write(&key, b"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=").unwrap();
+        let cfg = target(db, key, "https://x");
+        let dest = tmp.path().join("out.tar");
+        backup(&cfg, &dest, &BackupOptions::default()).expect("backup");
+        assert_eq!(run_verify_manifest_only(&dest), 0);
     }
 }

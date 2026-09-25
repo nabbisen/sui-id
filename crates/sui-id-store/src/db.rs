@@ -29,7 +29,15 @@ pub struct Database {
 impl Database {
     /// Open (or create) a SQLite database at `path`, run pending migrations,
     /// and return a ready handle.
+    ///
+    /// **A database this build does not understand is refused before anything
+    /// is written to the file** (RFC 112 D3): the stored schema version is read
+    /// on a read-only connection first, so the pragmas below (the journal-mode
+    /// switch is a write) and the migration runner only ever touch a database
+    /// that passed. Newer than this build, or unreadable, or missing from a
+    /// database that has tables, is `SchemaTooNew` / `SchemaVersionInvalid`.
     pub fn open(path: &Path, key: MasterKey) -> StoreResult<Self> {
+        migrations::check_database_file(path)?;
         let mut conn = Connection::open(path)?;
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "synchronous", "NORMAL")?;
