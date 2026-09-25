@@ -74,8 +74,7 @@ async fn r115_s3_provisioning_cannot_be_used_to_reach_an_existing_account_unthro
     assert!(
         complete_with(&a.state, &token, NEW_PASSWORD)
             .await
-            .status
-            .is_redirection()
+            .completed()
     );
     // Five ordinary links for the live account are allowed, the sixth is not,
     // however many provisioning links were issued before them.
@@ -159,8 +158,7 @@ async fn r115_s3_the_credentials_table_has_no_must_change_column() {
     assert!(
         complete_with(&a.state, &token, NEW_PASSWORD)
             .await
-            .status
-            .is_redirection()
+            .completed()
     );
     assert!(!sign_in(&a.state, "dave", NEW_PASSWORD).await.is_empty());
 }

@@ -1298,6 +1298,21 @@ A completed sign-in clears the counter and lifts any active lock. For an
 account with a second factor, the sign-in completes when the second factor is
 accepted, not when the password alone is verified.
 
+**A credential change also clears the password lockout.** Completing a
+password-reset link, or changing one's own password, clears the password
+failure count and lifts the lock in the same transaction that writes the new
+password — so a user is not refused, as "invalid credentials", for the
+password they set seconds earlier. It clears **only the password lockout**: a
+lock set by the second-factor lockout (below) is kept, and the second-factor
+failure count is never touched, because a reset link proves nothing about the
+second factor. The audit row (`auth.password.reset_completed` or
+`auth.password.changed_self`) carries `lockout_cleared=<count>` when there was
+something to clear, so an `auth.lockout` row followed by one of these reads as
+what happened. Whoever completes the reset is told, in the response to that
+completion and nowhere else, that the lock was cleared and, if a second-factor
+lock is kept, the time it lifts; the sign-in form itself never says an account
+is locked.
+
 ### Second-factor failures
 
 Wrong TOTP codes, recovery codes and passkey assertions at the sign-in
@@ -1356,6 +1371,7 @@ The relevant events:
 | `auth.mfa.failure`, `auth.mfa.lockout` | A wrong second factor, and the lockout it triggered (see above). |
 | `auth.lockout`    | A failed attempt that *just* triggered or extended a lock. Includes the consecutive-failure count and the new window length in the note. |
 | `admin.user.unlock`    | An admin cleared the lock via the CLI.            |
+| `auth.password.reset_completed`, `auth.password.changed_self` | A credential change. With `lockout_cleared=<count>`, it also cleared that many counted password failures and any live password lock. |
 
 A SIEM rule on `auth.lockout` rows in `audit_log` is a useful signal
 that something is hammering an account.

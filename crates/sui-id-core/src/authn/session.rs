@@ -181,7 +181,8 @@ pub async fn login_with_mfa(
     }
     if user.locked_until.is_some() {
         // Stale lock — `locked_until` is in the past. Fall through;
-        // a successful password will clear it via `clear_lockout`,
+        // a successful sign-in clears it (L01, L02, L03), as does a
+        // credential change for the password lockout (U09, U10, RFC 118),
         // and a failure restarts the counter from where it was
         // (which is correct: the attacker has been sleeping, but so
         // has our knowledge of them).

@@ -193,9 +193,11 @@ pub enum MaxLockoutDuration {
 }
 
 impl MaxLockoutDuration {
-    /// The duration as a count of seconds. Used both to compute
-    /// `users.locked_until` and to stamp the `Retry-After` HTTP
-    /// header on a locked response.
+    /// The duration as a count of seconds. Used to compute
+    /// `users.locked_until`. **Nothing stamps a `Retry-After` on a locked
+    /// response**, and nothing may: the sign-in form's single generic refusal
+    /// is what keeps a lock invisible to an unauthenticated visitor (RFC 118
+    /// D6). `Retry-After` exists only on the per-IP rate limiter's 429.
     pub fn as_secs(self) -> i64 {
         match self {
             Self::FifteenMinutes => 15 * 60,

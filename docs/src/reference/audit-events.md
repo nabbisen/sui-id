@@ -18,12 +18,12 @@ Use **Admin panel → Audit log** to filter by event prefix or export to CSV.
 | `auth.mfa.success` | MFA verified | A second factor completed the sign-in: a TOTP code, a recovery code or a passkey assertion. Note fields: `method` (`totp`, `recovery_code`, `webauthn`) and `evicted`. |
 | `auth.mfa.failure` | MFA failed | TOTP code, recovery code or passkey assertion failed verification at sign-in; the note carries the consecutive `count` for the user. |
 | `auth.mfa.lockout` | MFA lockout | The fifth consecutive wrong second factor: pending sign-ins removed and the account locked. |
-| `auth.password.changed_self` | Password changed | User changed their own password via `/me/security/password`. |
+| `auth.password.changed_self` | Password changed | User changed their own password via `/me/security/password`. When the change cleared a non-zero password failure count or a live password lock, the note also carries `lockout_cleared=` with the count it cleared; it is absent otherwise. |
 | `auth.password.reset_requested` | Password reset requested | User submitted the forgot-password form. |
 | `auth.password.reset_email_sent` | Reset email sent | A password-reset email was queued successfully. |
 | `auth.password.reset_email_failed` | Reset email failed | The password-reset email could not be delivered. |
 | `auth.password.reset_throttled` | Reset throttled | The forgot-password rate limit was reached for this address. |
-| `auth.password.reset_completed` | Password reset | Password was successfully changed via a reset link. The note records `origin=` — `email` (the forgot-password flow), `web` (issued by an administrator) or `cli` (issued by the operator). When the new password appears in a known breach and the breach check is in `warn` mode, the reset is allowed and the note also carries `hibp=warned`. |
+| `auth.password.reset_completed` | Password reset | Password was successfully changed via a reset link. The note records `origin=` — `email` (the forgot-password flow), `web` (issued by an administrator) or `cli` (issued by the operator). When the new password appears in a known breach and the breach check is in `warn` mode, the reset is allowed and the note also carries `hibp=warned`. When the reset cleared a non-zero password failure count or a live password lock, the note carries `lockout_cleared=` with the count it cleared. |
 | `auth.refresh.rotated` | Refresh token rotated | A refresh token was exchanged for a fresh access/refresh token pair (the normal, routine case). |
 | `auth.refresh.theft_detected` | Token theft detected | A refresh token was presented that had already been rotated, indicating a possible token theft. The entire token family is revoked. |
 | `auth.sessions.bulk_revoke_self` | All other sessions revoked | User revoked all sessions except the current one. |

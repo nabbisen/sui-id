@@ -483,6 +483,52 @@ pub fn render_reset_password(
     })
 }
 
+/// What the page a completed reset renders may say (RFC 118 D4). **No count and
+/// no source**: a page handed only these two fields cannot show either.
+#[derive(Debug, Clone, Copy)]
+pub struct ResetDoneData {
+    /// Sign-in had been refused after repeated failures, and that is cleared.
+    pub lockout_cleared: bool,
+    /// A second-factor lock was live and is kept; when it lifts.
+    pub second_factor_lock_until: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+/// The response to a completion that consumed its token. Nothing renders this
+/// page without one: its only caller is the `Ok` arm of `POST /reset-password`.
+pub fn render_reset_password_done(data: ResetDoneData, lang: sui_id_i18n::Locale) -> String {
+    render(move || {
+        let t = lang.strings();
+        let cleared = data.lockout_cleared.then(|| {
+            view! {
+                <p data-lockout="cleared">{t.reset_done_lockout_cleared}</p>
+                <p class="muted">{t.reset_done_lockout_watch}</p>
+            }
+        });
+        let kept = data.second_factor_lock_until.map(|until| {
+            view! {
+                <p data-lockout="second-factor">
+                    {t.reset_done_second_factor_before}
+                    <strong>{fmt_time(until)}</strong>
+                    {t.reset_done_second_factor_after}
+                </p>
+            }
+        });
+        view! {
+            <crate::layout::AuthShell title=t.reset_done_title.to_string() lang=lang>
+                <div id="reset-done">
+                    <h1>{t.reset_done_title}</h1>
+                    <p class="muted">{t.reset_done_lede}</p>
+                    {cleared}
+                    {kept}
+                    <p class="mt-4">
+                        <a href="/admin/login" class="button">{t.back_to_login}</a>
+                    </p>
+                </div>
+            </crate::layout::AuthShell>
+        }
+    })
+}
+
 pub fn render_reset_password_invalid(lang: sui_id_i18n::Locale) -> String {
     render(move || {
         let t = lang.strings();

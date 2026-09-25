@@ -355,7 +355,11 @@ pub fn record_login_failure_within_tx(
 }
 
 /// Reset the user's failure counter and clear any active lock.
-/// Called on a successful password verification.
+///
+/// **Has no production caller** (RFC 118, correction 1): the resets that run are
+/// L01/L03 (`record_password_login_within_tx`), L02
+/// (`record_second_factor_login_within_tx`), U08 (`admin_unlock`) and, for the
+/// password lockout only, U09 and U10 (`clear_password_lockout_within_tx`).
 pub async fn clear_lockout(db: &Database, id: UserId) -> StoreResult<()> {
     db.with_conn(move |conn| {
         conn.execute(
@@ -396,6 +400,95 @@ pub fn record_password_login_within_tx(
         params![now, id.to_string()],
     )?;
     Ok(())
+}
+
+/// What [`clear_password_lockout_within_tx`] found and did, read inside the
+/// transaction that wrote the credential (RFC 118 D1, D4).
+///
+/// `password_failures` is the counter that was cleared. It reaches the audit
+/// row (D5) and never a page: the page is handed [`Self::cleared`] and
+/// [`Self::second_factor_lock_until`] only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PasswordLockoutCleared {
+    /// `failed_login_count` before the clear.
+    pub password_failures: i64,
+    /// A lock was live and was lifted.
+    pub lock_lifted: bool,
+    /// A lock is live and was **kept**, because the second-factor lockout may
+    /// have set it. This is when it lifts.
+    pub second_factor_lock_until: Option<DateTime<Utc>>,
+}
+
+impl PasswordLockoutCleared {
+    /// Something was there to clear: a non-zero counter or a live lock. What
+    /// D5's `lockout_cleared` attribute and D4's first sentence are keyed on.
+    pub fn cleared(&self) -> bool {
+        self.password_failures > 0 || self.lock_lifted
+    }
+
+    /// The attribute value, `None` when nothing was there to clear.
+    pub fn attribute(&self) -> Option<i64> {
+        self.cleared().then_some(self.password_failures)
+    }
+}
+
+/// RFC 118 D1: clear the *password* lockout on the caller's transaction, and
+/// only that. Called by U09 and U10, in the transaction that writes the
+/// credential (D3: the one helper, so there is no second path).
+///
+/// - `failed_login_count` is cleared **always**;
+/// - `locked_until` is cleared **only when** `mfa_failure_count` is under
+///   [`crate::commands::MFA_FAILURE_LOCKOUT_THRESHOLD`];
+/// - `mfa_failure_count` is **never** written.
+///
+/// `locked_until` is one column with two causes: U22 writes it from
+/// `failed_login_count`, L07 from `mfa_failure_count`, and nothing records which
+/// did. A credential change proves more than the password attempt the password
+/// counter was counting, so it may clear that lock; it proves nothing about the
+/// second factor, so it must not clear this one. Without the condition, the
+/// holder of a user's mailbox could reset the password, lift a second-factor
+/// lock and guess second-factor codes.
+///
+/// Returns what was found, so U10 can hand its caller a pre-clear snapshot.
+/// `NotFound` if the user does not exist.
+pub fn clear_password_lockout_within_tx(
+    conn: &rusqlite::Connection,
+    id: UserId,
+    now: DateTime<Utc>,
+) -> StoreResult<PasswordLockoutCleared> {
+    let (password_failures, locked_until, mfa_failures): (i64, Option<DateTime<Utc>>, i64) = conn
+        .query_row(
+            "SELECT failed_login_count, locked_until, mfa_failure_count FROM users WHERE id = ?1",
+            [id.to_string()],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
+            other => StoreError::from(other),
+        })?;
+    let second_factor_may_hold_it = mfa_failures >= crate::commands::MFA_FAILURE_LOCKOUT_THRESHOLD;
+    let live = locked_until.filter(|until| *until > now);
+    if second_factor_may_hold_it {
+        conn.execute(
+            "UPDATE users SET failed_login_count = 0, updated_at = ?1 WHERE id = ?2",
+            params![now, id.to_string()],
+        )?;
+    } else {
+        conn.execute(
+            "UPDATE users SET failed_login_count = 0, locked_until = NULL, updated_at = ?1 \
+             WHERE id = ?2",
+            params![now, id.to_string()],
+        )?;
+    }
+    Ok(PasswordLockoutCleared {
+        password_failures,
+        lock_lifted: !second_factor_may_hold_it && live.is_some(),
+        second_factor_lock_until: if second_factor_may_hold_it {
+            live
+        } else {
+            None
+        },
+    })
 }
 
 /// RFC 102 L02: the bookkeeping of a completed second-factor sign-in, on

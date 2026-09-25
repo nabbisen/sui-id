@@ -1,10 +1,13 @@
 # RFC 118 implementation handoff
 
-**Governing RFC.** [RFC 118](../../accepted/118-lockout-clears-on-credential-change.md), **Proposed**.
-Nothing here is authorized until it is Accepted.
+**Governing RFC.** [RFC 118](../../accepted/118-lockout-clears-on-credential-change.md),
+**Accepted 2026-09-25.** *(This line said "Proposed" until 2026-09-25: the
+architect rewrote the stage below after the design review and left the header
+saying what it had said before. The implementer caught it and built against the
+accepted text, which was right.)*
 **Implementer.** Mid-capability model.
-**Baseline.** The commit that adds this file, or later.
-**Scheduled.** Release cycle B, **first item**, ahead of RFC 116 stages 1–2.
+**Baseline.** `655d4c4` or later.
+**Scheduled.** Release cycle B, head.
 
 ## The measurements this RFC rests on
 

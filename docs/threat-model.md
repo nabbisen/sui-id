@@ -213,13 +213,25 @@ first.
   this design removes is *silent, indefinite* knowledge of a working password,
   not the authority to activate an account. Every such activation is one
   audited, throttled, gated event.
-- **A never-activated account can be locked out by a stranger.** Its failures
-  are now counted, which is the point — but completing a reset clears neither
-  the counter nor the lock, and a recovery link lives thirty minutes. Someone
-  who knows the username can therefore make each link expire before its holder
-  can sign in. This is not new with this RFC; it is true of every account. What
-  this RFC changes is that it becomes reachable for accounts that have never
-  been used. It is tracked for an RFC of its own.
+- **A never-activated account can be locked out by a stranger, and kept
+  locked by continued effort.** Its failures are now counted, which is the
+  point, and a recovery link lives thirty minutes. Someone who knows the
+  username can make an account refuse sign-in. This is not new with this RFC;
+  it is true of every account. What this RFC changes is that it becomes
+  reachable for accounts that have never been used.
+  **Narrowed by [RFC 118](../rfcs/accepted/118-lockout-clears-on-credential-change.md),
+  not removed.** Completing a reset (and a self-service password change) now
+  clears the password counter and lock in the same transaction, so a lock can
+  no longer outlive the credential change that made it moot: before, one burst
+  locked the account for up to twenty-four hours while the attacker slept.
+  After, the counter is zero and the attacker must **keep renewing the lock**:
+  three counted failures re-lock at thirty seconds, and climbing back to the
+  24-hour step takes about twenty-one hours of correctly timed attempts. It is
+  still a denial of service, per-account lockout cannot close it, and a change
+  to what the counter is keyed on is its own RFC. **The second-factor lock is
+  deliberately not cleared** (`locked_until` is one column with two causes), so
+  a reset token does not buy a holder of the user's mailbox any second-factor
+  guesses.
 - **`--dev` seeding still sets passwords directly** and prints them. It runs in
   the production binary under a runtime flag, so it cannot use a test-only
   helper. It is a named exception, not an oversight.

@@ -292,17 +292,15 @@ async fn reset_password_full_flow_changes_password_and_sends_notification() {
         )
         .await
         .expect("POST reset");
-    assert!(
-        resp.status().is_redirection(),
-        "expected redirect, got {}",
-        resp.status()
+    // RFC 118 D4: the confirmation is the response itself, not a redirect.
+    assert_eq!(
+        resp.status(),
+        StatusCode::OK,
+        "expected the confirmation page"
     );
-    let location = resp
-        .headers()
-        .get(header::LOCATION)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
-    assert!(location.starts_with("/admin/login"));
+    assert!(resp.headers().get(header::LOCATION).is_none());
+    let confirmation = String::from_utf8_lossy(&read_body(resp.into_body()).await).into_owned();
+    assert!(confirmation.contains(r#"id="reset-done""#));
 
     // 4) The captured mailer now has 2 mails: the reset link + a
     //    post-reset password-changed notification.
@@ -467,10 +465,10 @@ async fn redeem_reset_token(state: &AppState, token: &str, new_password: &str) {
         )
         .await
         .expect("POST reset");
-    assert!(
-        resp.status().is_redirection(),
-        "expected redirect after reset, got {}",
-        resp.status()
+    assert_eq!(
+        resp.status(),
+        StatusCode::OK,
+        "expected the confirmation page after reset"
     );
 }
 

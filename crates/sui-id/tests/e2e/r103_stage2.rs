@@ -154,6 +154,6 @@ async fn r103_s2_every_reset_password_response_is_no_store() {
         "brand-new-secure-pw-1",
     )
     .await;
-    assert!(ok.status.is_redirection(), "reset succeeds: {}", ok.status);
+    assert!(ok.completed(), "reset succeeds: {}", ok.status);
     assert_no_store("POST success", &ok);
 }

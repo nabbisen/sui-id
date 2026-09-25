@@ -301,12 +301,12 @@ Each row below was checked against its command's descriptor on this date.
 | `auth.mfa.lockout` | Fifth consecutive wrong second factor: every pending-MFA row removed and the account locked with the password backoff (`L07`; note fields `count`, `locked_for_secs`) | user id | **A** |
 | `auth.lockout` | Account locked after crossing the failure threshold (`U22`; note fields `count`, `locked_for_secs`) | — | **A** |
 | `auth.sessions.bulk_revoke_self` | Bulk session revocation (self) | user id | B |
-| `auth.password.changed_self` | Self-service password change | user id | **A** |
+| `auth.password.changed_self` | Self-service password change; note field `lockout_cleared=<count>` only when the change cleared a non-zero password failure count or a live password lock (RFC 118 D5; the second-factor lock and count are never cleared) | user id | **A** |
 | `auth.password.reset_requested` | Forgot-password flow started | — | B |
 | `auth.password.reset_email_sent` | Reset email dispatched | — | B |
 | `auth.password.reset_email_failed` | Reset email failed to send | — | B |
 | `auth.password.reset_throttled` | Reset request throttled | — | B |
-| `auth.password.reset_completed` | Password reset completed; note field `hibp=warned` when the new password is in a known breach and the HIBP mode is `warn` (RFC 115 D9) | — | **A** |
+| `auth.password.reset_completed` | Password reset completed; note field `hibp=warned` when the new password is in a known breach and the HIBP mode is `warn` (RFC 115 D9), and `lockout_cleared=<count>` only when the reset cleared a non-zero password failure count or a live password lock (RFC 118 D5) | — | **A** |
 | `auth.refresh.rotated` | Refresh token rotated (the normal, routine case) | — | **A** |
 | `auth.refresh.theft_detected` | Replay of a rotated refresh token (family revoked) | — | **A** |
 

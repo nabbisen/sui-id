@@ -241,8 +241,11 @@ async fn r115_s2_a_created_user_activates_through_the_issued_link_with_their_own
 
     let token = issue_from_confirm(&a, dave).await;
     let done = complete_with(&a.state, &token, NEW_PASSWORD).await;
-    assert!(done.status.is_redirection(), "{}", done.status);
-    assert_eq!(done.location.as_deref(), Some("/admin/login?reset=ok"));
+    assert!(done.completed(), "{}", done.status);
+    assert_eq!(
+        done.location, None,
+        "the confirmation is the response itself"
+    );
 
     assert_eq!(credential_rows(&a.state, dave).await, 1);
     let session = sign_in(&a.state, "dave", NEW_PASSWORD).await;
@@ -316,7 +319,7 @@ async fn r115_s2_the_password_policy_and_the_breach_check_run_at_activation() {
     // event records that it was, which used to be discarded.
     set_hibp_mode(&a.state, sui_id_store::models::HibpMode::Warn).await;
     let allowed = complete_with(&a.state, &token, NEW_PASSWORD).await;
-    assert!(allowed.status.is_redirection(), "{}", allowed.status);
+    assert!(allowed.completed(), "{}", allowed.status);
     assert_eq!(credential_rows(&a.state, dave).await, 1);
     assert_eq!(
         scalar(
@@ -339,8 +342,7 @@ async fn r115_s2_a_clean_activation_records_no_breach_warning() {
     assert!(
         complete_with(&a.state, &token, NEW_PASSWORD)
             .await
-            .status
-            .is_redirection()
+            .completed()
     );
     assert_eq!(
         scalar(
@@ -379,7 +381,7 @@ async fn r115_s2_a_second_administrator_is_created_and_activated_on_the_web() {
 
     let token = issue_from_confirm(&a, bea).await;
     let done = complete_with(&a.state, &token, NEW_PASSWORD).await;
-    assert!(done.status.is_redirection(), "{}", done.status);
+    assert!(done.completed(), "{}", done.status);
     let session = sign_in(&a.state, "bea", NEW_PASSWORD).await;
     assert!(!session.is_empty(), "the second administrator signs in");
 }
@@ -392,8 +394,7 @@ async fn r115_s2_a_live_administrator_is_still_refused_and_the_button_is_gone() 
     assert!(
         complete_with(&a.state, &token, NEW_PASSWORD)
             .await
-            .status
-            .is_redirection()
+            .completed()
     );
     // Bea signs in once: she now has a credential *and* a last login.
     sign_in(&a.state, "bea", NEW_PASSWORD).await;
@@ -444,8 +445,7 @@ async fn r115_s2_an_account_with_a_credential_but_no_sign_in_is_not_reachable_ei
     assert!(
         complete_with(&a.state, &token, NEW_PASSWORD)
             .await
-            .status
-            .is_redirection()
+            .completed()
     );
     // Activated (a credential exists) but never signed in.
     assert_eq!(credential_rows(&a.state, bea).await, 1);
@@ -584,6 +584,73 @@ fn r115_s2_credentials_writers_are_the_allowlist() {
         found, expected,
         "the set of production writers of `credentials` changed; a new writer needs the \
          architect's decision (RFC 115 D4/D6), not an edit to this list"
+    );
+}
+
+#[test]
+fn r118_the_credential_writers_that_change_a_password_all_clear_the_lockout() {
+    // RFC 118 D3: the allowlist above says *which* production code writes a
+    // credential; this says the two that change a *live* account's password
+    // (U09 and U10, both in `commands.rs`) also call the one helper that clears
+    // the password lockout in the same transaction, and that nothing else calls
+    // it. Setup and `--dev` create new rows and have nothing to clear. A writer
+    // added without the call, or a call removed, fails here.
+    const HELPER: &str = "clear_password_lockout_within_tx(";
+    let sources = production_sources();
+
+    let (_, commands) = sources
+        .iter()
+        .find(|(rel, _)| rel == "sui-id-store/src/commands.rs")
+        .expect("commands.rs");
+    // Split into top-level items at column-0 `fn`s, so a call in one function
+    // cannot stand in for a missing call in another.
+    let mut items: Vec<&str> = Vec::new();
+    let mut start = 0;
+    for (i, _) in commands.match_indices("\n") {
+        let rest = &commands[i + 1..];
+        if rest.starts_with("pub async fn ")
+            || rest.starts_with("pub fn ")
+            || rest.starts_with("async fn ")
+            || rest.starts_with("fn ")
+        {
+            items.push(&commands[start..i]);
+            start = i + 1;
+        }
+    }
+    items.push(&commands[start..]);
+    let writers: Vec<&&str> = items
+        .iter()
+        .filter(|item| item.contains("credentials::upsert"))
+        .collect();
+    assert_eq!(
+        writers.len(),
+        2,
+        "U09 and U10 are the two writers in commands.rs"
+    );
+    for item in &writers {
+        assert!(
+            item.contains(HELPER),
+            "a credential writer in commands.rs does not clear the password lockout:\n{}",
+            item.lines().next().unwrap_or_default()
+        );
+    }
+
+    // The helper is called exactly twice in production, both there; its
+    // definition is the only other mention.
+    let mut calls: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    for (rel, text) in &sources {
+        let n = text.matches(HELPER).count();
+        let defs = text.matches(&format!("fn {HELPER}")).count();
+        if n > defs {
+            calls.insert(rel.clone(), n - defs);
+        }
+    }
+    assert_eq!(
+        calls,
+        [("sui-id-store/src/commands.rs".to_owned(), 2)]
+            .into_iter()
+            .collect(),
+        "the password lockout is cleared by U09 and U10 and nothing else"
     );
 }
 

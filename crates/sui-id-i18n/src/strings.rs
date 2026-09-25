@@ -367,6 +367,18 @@ pub struct Strings {
     pub reset_password_invalid_title: &'static str,
     pub reset_password_invalid_lede: &'static str,
     pub reset_password_invalid_request_again: &'static str,
+    /// RFC 118 D4: the page a completed reset renders. Its lockout sentences
+    /// are shown only to the holder of a token that was just consumed.
+    pub reset_done_title: &'static str,
+    pub reset_done_lede: &'static str,
+    /// Sign-in had been refused after repeated failures, and that is cleared.
+    pub reset_done_lockout_cleared: &'static str,
+    /// Why a further refusal soon is worth noticing.
+    pub reset_done_lockout_watch: &'static str,
+    /// Before and after the time a second-factor lock lifts. A time, never a
+    /// count.
+    pub reset_done_second_factor_before: &'static str,
+    pub reset_done_second_factor_after: &'static str,
     pub password_mismatch_flash: &'static str,
     pub reset_password_failed_flash: &'static str,
     /// Common navigational link from forgot-password / reset-password

@@ -1015,12 +1015,13 @@ fn remove_mfa_within_tx(tx: &mut ClassATx<'_, U07>, target: UserId) -> StoreResu
 // command uses the sealed system-authority adapter (`for_system_actor`),
 // the same mechanism K01 and T04 use for their own non-human callers.
 //
-// U08 covers `users::admin_unlock` only. `clear_lockout` — the automatic
-// counter reset on a successful post-failure login — is a distinct
-// command (U24, Class P, no audit event), not an alternate branch of
-// this one; the two share byte-identical SQL but opposite security
-// meanings, and conflating them was the second half of the blocking
-// finding. Nothing here touches `clear_lockout`.
+// U08 covers `users::admin_unlock` only. The automatic counter reset on a
+// successful sign-in is a distinct thing, not an alternate branch of this
+// command; the two share near-identical SQL but opposite security meanings,
+// and conflating them was the second half of the blocking finding. (Written
+// when that reset was `users::clear_lockout`; that function now has no
+// production caller. The resets that run are L01, L02 and L03, and U09 and
+// U10 clear the password lockout only, RFC 118.)
 
 static U08_UNLOCK: EventDescriptor = EventDescriptor {
     kind: AuditEventKind::AdminUserUnlock,
@@ -1100,6 +1101,11 @@ static U09_CHANGED_SELF: EventDescriptor = EventDescriptor {
             description: "count of refresh tokens revoked by this change",
             required: false,
         },
+        AttributeSpec {
+            name: "lockout_cleared",
+            description: "the password failure count this change cleared, present only when a counter was non-zero or a lock was live (RFC 118 D5); the second-factor lock and count are never cleared",
+            required: false,
+        },
     ],
 };
 
@@ -1117,6 +1123,7 @@ crate::declare_write_command! {
                 user_id: UserId,
                 sessions_revoked: usize,
                 refresh_tokens_revoked: usize,
+                lockout_cleared: Option<i64>,
             } => &U09_CHANGED_SELF,
         }
     }
@@ -1136,12 +1143,16 @@ impl SealedCommandEvent<U09> for U09Event {
         let Self::Changed {
             sessions_revoked,
             refresh_tokens_revoked,
+            lockout_cleared,
             ..
         } = self;
-        AuditAttributes::builder()
+        let mut builder = AuditAttributes::builder()
             .attribute("sessions_revoked", sessions_revoked.to_string())
-            .attribute("refresh_tokens_revoked", refresh_tokens_revoked.to_string())
-            .build()
+            .attribute("refresh_tokens_revoked", refresh_tokens_revoked.to_string());
+        if let Some(count) = lockout_cleared {
+            builder = builder.attribute("lockout_cleared", count.to_string());
+        }
+        builder.build()
     }
 }
 
@@ -1162,6 +1173,9 @@ pub async fn change_password_self(
     db.class_a(context, move |tx: &mut ClassATx<'_, U09>| {
         crate::repos::credentials::upsert_within_tx(tx.tx(), &credential)?;
         let now = chrono::Utc::now();
+        // RFC 118 D1, D3: the password lockout does not outlive the credential
+        // change that made it moot; the second-factor lock is not touched.
+        let lockout = crate::repos::users::clear_password_lockout_within_tx(tx.tx(), user_id, now)?;
         // RFC 103 D3: a password change invalidates outstanding reset links,
         // whether or not the other sessions are being swept.
         crate::repos::password_reset_tokens::revoke_outstanding_for_user_within_tx(
@@ -1194,6 +1208,7 @@ pub async fn change_password_self(
                 user_id,
                 sessions_revoked,
                 refresh_tokens_revoked,
+                lockout_cleared: lockout.attribute(),
             },
         ))
     })
@@ -1219,6 +1234,11 @@ static U10_RESET_COMPLETED: EventDescriptor = EventDescriptor {
             description: "\"warned\" when the new password appears in a known breach and the deployment's HIBP mode is `warn` (RFC 115 D9); absent otherwise",
             required: false,
         },
+        AttributeSpec {
+            name: "lockout_cleared",
+            description: "the password failure count this change cleared, present only when a counter was non-zero or a lock was live (RFC 118 D5); the second-factor lock and count are never cleared",
+            required: false,
+        },
     ],
 };
 
@@ -1236,6 +1256,7 @@ crate::declare_write_command! {
                 user_id: UserId,
                 origin: crate::models::ResetTokenOrigin,
                 hibp_warned: bool,
+                lockout_cleared: Option<i64>,
             } => &U10_RESET_COMPLETED,
         }
     }
@@ -1255,14 +1276,17 @@ impl SealedCommandEvent<U10> for U10Event {
         let Self::Completed {
             origin,
             hibp_warned,
+            lockout_cleared,
             ..
         } = self;
-        let builder = AuditAttributes::builder().attribute("origin", origin.as_str());
+        let mut builder = AuditAttributes::builder().attribute("origin", origin.as_str());
         if *hibp_warned {
-            builder.attribute("hibp", "warned").build()
-        } else {
-            builder.build()
+            builder = builder.attribute("hibp", "warned");
         }
+        if let Some(count) = lockout_cleared {
+            builder = builder.attribute("lockout_cleared", count.to_string());
+        }
+        builder.build()
     }
 }
 
@@ -1285,7 +1309,7 @@ pub async fn consume_and_reset_password(
     credential: crate::models::CredentialRow,
     consumed_at: chrono::DateTime<chrono::Utc>,
     hibp_warned: bool,
-) -> StoreResult<crate::registry::Audited<()>> {
+) -> StoreResult<crate::registry::Audited<crate::repos::users::PasswordLockoutCleared>> {
     let context = AuthorizedCommandContext::<U10>::for_system_actor(None);
     db.class_a(context, move |tx: &mut ClassATx<'_, U10>| {
         // RFC 103 D13: consume the token once (guarded), and re-read the
@@ -1304,6 +1328,11 @@ pub async fn consume_and_reset_password(
         // RFC 103 U10 `origin`: read from the token this completion consumed.
         let origin = crate::repos::password_reset_tokens::origin_within_tx(tx.tx(), token_id)?;
         crate::repos::credentials::upsert_within_tx(tx.tx(), &credential)?;
+        // RFC 118 D1, D3, D4: clear the password lockout in this transaction,
+        // and keep what was found, read before the clear, for the completion
+        // response. A lock the second-factor lockout may have set stays.
+        let lockout =
+            crate::repos::users::clear_password_lockout_within_tx(tx.tx(), user_id, consumed_at)?;
         crate::repos::sessions::revoke_all_for_user_within_tx(tx.tx(), user_id, consumed_at)?;
         crate::repos::refresh_tokens::revoke_all_for_user_within_tx(tx.tx(), user_id, consumed_at)?;
         // RFC 103 D3: completing one link invalidates the user's other
@@ -1315,11 +1344,12 @@ pub async fn consume_and_reset_password(
             consumed_at,
         )?;
         Ok((
-            (),
+            lockout,
             U10Event::Completed {
                 user_id,
                 origin,
                 hibp_warned,
+                lockout_cleared: lockout.attribute(),
             },
         ))
     })

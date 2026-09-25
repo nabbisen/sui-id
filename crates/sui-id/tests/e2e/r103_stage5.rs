@@ -67,7 +67,7 @@ async fn r103_s5_an_email_origin_completion_sends_the_changed_notice_to_the_prov
     let (token, _) = issue_token(&state, &mailer).await;
     assert_eq!(mailer.count().await, 1, "just the reset-link mail so far");
     let r = complete(&state, &token).await;
-    assert!(r.status.is_redirection(), "{}", r.status);
+    assert!(r.completed(), "{}", r.status);
     assert_eq!(mailer.count().await, 2, "and now the completion notice too");
     let notice = mailer.last().await.expect("notice");
     assert_eq!(
@@ -97,7 +97,7 @@ async fn r103_s5_a_web_issued_link_sends_no_notice_at_issuance_or_completion() {
     assert_eq!(mailer.count().await, 0, "nothing sent at issuance");
 
     let r = complete(&a.state, link.token.expose()).await;
-    assert!(r.status.is_redirection(), "{}", r.status);
+    assert!(r.completed(), "{}", r.status);
     assert_eq!(mailer.count().await, 0, "and nothing at completion either");
 }
 
@@ -111,7 +111,7 @@ async fn r103_s5_a_cli_issued_link_sends_no_notice_at_issuance_or_completion() {
     assert_eq!(mailer.count().await, 0, "nothing sent at issuance");
 
     let r = complete(&a.state, link.token.expose()).await;
-    assert!(r.status.is_redirection(), "{}", r.status);
+    assert!(r.completed(), "{}", r.status);
     assert_eq!(mailer.count().await, 0, "and nothing at completion either");
 }
 
@@ -132,7 +132,7 @@ async fn r103_s5_a_web_issued_link_for_a_user_with_no_email_still_completes_and_
     .await
     .expect("issue");
     let r = complete(&a.state, link.token.expose()).await;
-    assert!(r.status.is_redirection(), "{}", r.status);
+    assert!(r.completed(), "{}", r.status);
     assert_eq!(mailer.count().await, 0);
 }
 
@@ -252,7 +252,7 @@ async fn r103_s5_overview_shows_a_web_completed_reset() {
     .await
     .expect("issue");
     let done = complete(&a.state, link.token.expose()).await;
-    assert!(done.status.is_redirection(), "{}", done.status);
+    assert!(done.completed(), "{}", done.status);
     // Completion revoked bob's other sessions; sign in fresh with the new
     // password he chose at `/reset-password`.
     let session = sign_in(&a.state, "bob", "brand-new-secure-pw-12345").await;
@@ -269,7 +269,7 @@ async fn r103_s5_overview_shows_an_operator_completed_reset() {
         .await
         .expect("issue");
     let done = complete(&a.state, link.token.expose()).await;
-    assert!(done.status.is_redirection(), "{}", done.status);
+    assert!(done.completed(), "{}", done.status);
     let session = sign_in(&a.state, "bob", "brand-new-secure-pw-12345").await;
     let body = overview_body(&a.state, &session).await;
     assert_only(&body, COMPLETED_BY_OPERATOR);
@@ -281,7 +281,7 @@ async fn r103_s5_overview_shows_a_self_service_completion() {
     set_lang_en(&state, admin_id).await;
     let (token, _) = issue_token(&state, &mailer).await;
     let done = complete(&state, &token).await;
-    assert!(done.status.is_redirection(), "{}", done.status);
+    assert!(done.completed(), "{}", done.status);
     let session = sign_in(&state, USERNAME, "brand-new-secure-pw-12345").await;
     let body = overview_body(&state, &session).await;
     assert_only(&body, COMPLETED_SELF);
@@ -306,7 +306,7 @@ async fn r103_s5_overview_shows_the_most_recent_event_not_the_first() {
     assert_only(&overview_body(&a.state, &session).await, ISSUED_BY_ADMIN);
 
     let done = complete(&a.state, link.token.expose()).await;
-    assert!(done.status.is_redirection(), "{}", done.status);
+    assert!(done.completed(), "{}", done.status);
     // After completion: the completed line displaces the issued one.
     let session = sign_in(&a.state, "bob", "brand-new-secure-pw-12345").await;
     assert_only(&overview_body(&a.state, &session).await, COMPLETED_BY_ADMIN);
@@ -376,7 +376,7 @@ async fn r103_s5_completing_a_web_issued_link_leaves_mfa_untouched() {
     .await
     .expect("issue");
     let done = complete(&a.state, link.token.expose()).await;
-    assert!(done.status.is_redirection(), "{}", done.status);
+    assert!(done.completed(), "{}", done.status);
 
     let still_enrolled = scalar(
         &a.state,

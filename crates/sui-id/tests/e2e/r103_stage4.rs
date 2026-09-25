@@ -138,8 +138,11 @@ async fn r103_s4_web_issue_then_complete_with_smtp_off() {
         StatusCode::OK
     );
     let done = complete(&a.state, &token).await;
-    assert!(done.status.is_redirection(), "{}", done.status);
-    assert_eq!(done.location.as_deref(), Some("/admin/login?reset=ok"));
+    assert!(done.completed(), "{}", done.status);
+    assert_eq!(
+        done.location, None,
+        "the confirmation is the response itself"
+    );
     // bob chose the password: it now works.
     let session = sign_in(&a.state, "bob", NEW_PASSWORD).await;
     assert!(
@@ -750,7 +753,7 @@ async fn r103_s4_the_token_is_in_no_log_line_at_any_level_and_in_no_request_uri(
     let page = get(&a.state, "/reset-password").await;
     assert_eq!(page.status, StatusCode::OK);
     let done = complete(&a.state, &token).await;
-    assert!(done.status.is_redirection());
+    assert!(done.completed());
     tracing::callsite::rebuild_interest_cache();
     let replay = complete(&a.state, &token).await;
     assert_eq!(replay.status, StatusCode::BAD_REQUEST);
@@ -908,7 +911,7 @@ async fn r103_s4_cli_issues_a_link_that_completes_over_http_with_smtp_off() {
         StatusCode::NOT_FOUND
     );
     let done = complete(&state, &token).await;
-    assert!(done.status.is_redirection(), "{}", done.status);
+    assert!(done.completed(), "{}", done.status);
     assert!(!sign_in(&state, "bob", NEW_PASSWORD).await.is_empty());
     let replay = complete(&state, &token).await;
     assert!(is_invalid_link_page(&replay), "the second use is refused");

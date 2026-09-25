@@ -182,9 +182,10 @@ pub enum AuditEventKind {
     /// alerted-on production name (`.git-exclude/reviewed/
     /// 094-wave-b-u06-dispatch-u07-blocked-2026-09-09.md` §2).
     MfaAdminReset,
-    /// `admin.user.unlock` — U08. `users::admin_unlock` only —
-    /// `clear_lockout` is a separate command (U24, Class P), not this
-    /// one; decided 2026-09-09 (`.git-exclude/reviewed/
+    /// `admin.user.unlock` — U08. `users::admin_unlock` only — the
+    /// automatic reset on a successful sign-in is not this command
+    /// (`clear_lockout`, which has since lost its last production caller);
+    /// decided 2026-09-09 (`.git-exclude/reviewed/
     /// 094-wave-b-scoping-u08-blocked-2026-09-09.md`, applied in
     /// `migration-checklist.md`).
     AdminUserUnlock,

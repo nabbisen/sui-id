@@ -107,6 +107,7 @@ async fn an_admin_session(db: &Database) -> (UserId, sui_id_shared::ids::Session
 }
 
 mod chain_integrity;
+mod credential_lockout;
 mod key_rotation;
 mod lockout;
 mod mfa;

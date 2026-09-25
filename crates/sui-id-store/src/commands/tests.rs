@@ -685,11 +685,46 @@ fn u10_records_origin() {
         user_id: UserId::new(),
         origin: crate::models::ResetTokenOrigin::Cli,
         hibp_warned: false,
+        lockout_cleared: None,
     };
     assert_eq!(
         attribute_map(&event.attributes().expect("attributes")),
         vec![("origin".to_owned(), "cli".to_owned())]
     );
+}
+
+#[test]
+fn u09_and_u10_record_lockout_cleared_when_given_and_only_then() {
+    // RFC 118 D5: present when a counter was non-zero or a lock was live,
+    // after `hibp` on U10, and absent otherwise.
+    let u10 = U10Event::Completed {
+        user_id: UserId::new(),
+        origin: crate::models::ResetTokenOrigin::Email,
+        hibp_warned: true,
+        lockout_cleared: Some(4),
+    };
+    assert_eq!(
+        attribute_map(&u10.attributes().expect("attributes")),
+        vec![
+            ("origin".to_owned(), "email".to_owned()),
+            ("hibp".to_owned(), "warned".to_owned()),
+            ("lockout_cleared".to_owned(), "4".to_owned())
+        ]
+    );
+    let u09 = |lockout_cleared| U09Event::Changed {
+        user_id: UserId::new(),
+        sessions_revoked: 0,
+        refresh_tokens_revoked: 0,
+        lockout_cleared,
+    };
+    let names = |e: &U09Event| -> Vec<String> {
+        attribute_map(&e.attributes().expect("attributes"))
+            .into_iter()
+            .map(|(k, _)| k)
+            .collect()
+    };
+    assert!(names(&u09(Some(3))).contains(&"lockout_cleared".to_owned()));
+    assert!(!names(&u09(None)).contains(&"lockout_cleared".to_owned()));
 }
 
 #[test]
@@ -701,6 +736,7 @@ fn u10_records_a_warn_mode_breach_hit_and_only_then() {
         user_id: UserId::new(),
         origin: crate::models::ResetTokenOrigin::Email,
         hibp_warned: true,
+        lockout_cleared: None,
     };
     assert_eq!(
         attribute_map(&warned.attributes().expect("attributes")),

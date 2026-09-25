@@ -122,8 +122,8 @@ fn refused_with(r: &Result<impl std::fmt::Debug, CoreError>, why: RecoveryRefusa
 }
 
 fn assert_completed(r: &Resp) {
-    assert!(r.status.is_redirection(), "reset succeeds: {}", r.status);
-    assert_eq!(r.location.as_deref(), Some("/admin/login?reset=ok"));
+    assert!(r.completed(), "reset succeeds: {}", r.status);
+    assert_eq!(r.location, None, "the confirmation is the response itself");
 }
 
 // ── issuing, and completing at the existing page ─────────────────────

@@ -146,7 +146,7 @@ async fn u09_injected_failure_before_append_rolls_back_credential_and_revocation
 
 // ── U10 — forgot-password completion ───────────────────────────
 
-async fn seed_reset_token(
+pub(super) async fn seed_reset_token(
     db: &Database,
     user_id: UserId,
 ) -> sui_id_shared::ids::PasswordResetTokenId {

@@ -66,6 +66,7 @@ mod r105_escaping;
 mod r115_stage1;
 mod r115_stage2;
 mod r115_stage3;
+mod r118;
 mod r11_login_failure;
 mod refresh_theft;
 mod request_id;

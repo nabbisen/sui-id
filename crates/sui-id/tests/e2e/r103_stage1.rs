@@ -22,6 +22,14 @@ pub(super) struct Resp {
     pub(super) body: String,
 }
 
+impl Resp {
+    /// A completion that took: RFC 118's confirmation page. It used to be a
+    /// redirect to `/admin/login?reset=ok`, which nothing read.
+    pub(super) fn completed(&self) -> bool {
+        self.status == StatusCode::OK && self.body.contains(r#"id="reset-done""#)
+    }
+}
+
 pub(super) async fn send(state: &AppState, req: Request<Body>) -> Resp {
     let resp = build_router(state.clone())
         .oneshot(req)
@@ -151,7 +159,11 @@ async fn token_consumed(state: &AppState, id: PasswordResetTokenId) -> bool {
 }
 
 /// Insert a live token for `user` directly, bypassing `request_reset`.
-async fn mint_token(state: &AppState, user: UserId, plaintext: &str) -> PasswordResetTokenId {
+pub(super) async fn mint_token(
+    state: &AppState,
+    user: UserId,
+    plaintext: &str,
+) -> PasswordResetTokenId {
     let now = chrono::Utc::now();
     let row = sui_id_store::models::PasswordResetTokenRow {
         id: PasswordResetTokenId::new(),
@@ -365,7 +377,7 @@ async fn r103_two_concurrent_completions_change_the_password_once() {
     });
     let statuses = [a.await.expect("a"), b.await.expect("b")];
     assert_eq!(
-        statuses.iter().filter(|s| s.is_redirection()).count(),
+        statuses.iter().filter(|s| **s == StatusCode::OK).count(),
         1,
         "exactly one completion succeeds: {statuses:?}"
     );
@@ -456,8 +468,8 @@ async fn r103_token_appears_in_no_log_line_and_no_request_uri() {
     assert!(page.body.contains(r#"name="token""#));
     assert!(!page.body.contains(&token));
     let ok = complete(&state, &token).await;
-    assert!(ok.status.is_redirection(), "reset succeeds: {}", ok.status);
-    assert_eq!(ok.location.as_deref(), Some("/admin/login?reset=ok"));
+    assert!(ok.completed(), "reset succeeds: {}", ok.status);
+    assert_eq!(ok.location, None, "the confirmation is the response itself");
     // A used link is an ordinary refusal: logged at info (RFC 103 stage
     // 2), without the token. `r103_stage2` covers the error level.
     tracing::callsite::rebuild_interest_cache();

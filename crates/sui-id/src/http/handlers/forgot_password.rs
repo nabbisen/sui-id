@@ -30,7 +30,7 @@ use crate::errors::HttpError;
 use crate::handlers::{AppStateExt, ClientIp};
 use crate::{csrf, handlers::admin::with_csrf_cookie};
 use axum::extract::{Query, State};
-use axum::response::{Html, IntoResponse, Redirect, Response};
+use axum::response::{Html, IntoResponse, Response};
 use axum_extra::extract::cookie::CookieJar;
 use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
@@ -204,7 +204,27 @@ pub async fn reset_password_post(
     )
     .await
     {
-        Ok(()) => Ok(Redirect::to("/admin/login?reset=ok").into_response()),
+        // RFC 118 D4: the confirmation is the response itself, not a redirect
+        // (nothing read `?reset=ok`, so this flow had none). It is built only
+        // here, after the completion consumed the token, from a snapshot the
+        // completion's own transaction took; no other response can carry it.
+        // `no-store` comes from the route layer; the referrer policy is added
+        // here because this page states something about the account.
+        Ok(done) => {
+            let html = sui_id_web::render_reset_password_done(
+                sui_id_web::ResetDoneData {
+                    lockout_cleared: done.lockout_cleared,
+                    second_factor_lock_until: done.second_factor_lock_until,
+                },
+                lang,
+            );
+            let mut resp = Html(html).into_response();
+            resp.headers_mut().insert(
+                axum::http::header::REFERRER_POLICY,
+                axum::http::HeaderValue::from_static("no-referrer"),
+            );
+            Ok(resp)
+        }
         // Password-policy and breach refusals happen before the token is
         // looked up, so the link is still good: re-show the form with the
         // reason and let the user choose another password.

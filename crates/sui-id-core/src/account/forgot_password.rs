@@ -300,9 +300,37 @@ pub async fn request_reset(
     Ok(())
 }
 
+/// What a completed reset may tell the person who completed it (RFC 118 D4).
+///
+/// **There is deliberately no count and no source here.** The store hands back
+/// how many failures it cleared (that reaches the audit row); this type
+/// carries only what a page may say, so a page cannot say more by accident.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ResetCompletion {
+    /// Sign-in had been refused after repeated failures, and that is cleared:
+    /// a non-zero counter or a live lock existed before this completion.
+    pub lockout_cleared: bool,
+    /// A lock the second-factor lockout may have set was live and was
+    /// **kept**; this is when it lifts.
+    pub second_factor_lock_until: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+impl From<sui_id_store::repos::users::PasswordLockoutCleared> for ResetCompletion {
+    fn from(found: sui_id_store::repos::users::PasswordLockoutCleared) -> Self {
+        Self {
+            lockout_cleared: found.cleared(),
+            second_factor_lock_until: found.second_factor_lock_until,
+        }
+    }
+}
+
 /// Verify the token, set the user's new password, mark the token consumed,
 /// and revoke all existing sessions and refresh tokens for the user — all
 /// in a single atomic transaction.
+///
+/// The same transaction clears the user's *password* lockout (RFC 118 D1) and
+/// the returned [`ResetCompletion`] is the snapshot it took before clearing.
+/// It exists only on `Ok`, that is, only after this call consumed the token.
 ///
 /// Revoking prior sessions is essential: the user completed this flow
 /// precisely because they lost control of their credentials. An attacker
@@ -327,7 +355,7 @@ pub async fn consume_and_reset_password(
     // unrelated public-API change.
     _requester_ip: Option<&str>,
     min_password_len: usize,
-) -> CoreResult<()> {
+) -> CoreResult<ResetCompletion> {
     password::check_password_policy(new_password, min_password_len)?;
 
     // RFC 003: HIBP breach check on token-based password reset.
@@ -382,7 +410,7 @@ pub async fn consume_and_reset_password(
     // RFC 103 D13: the command consumes the token once and re-reads the
     // user inside its transaction; an ineligible token or user rolls back
     // as `NotFound`, which is the ordinary invalid-link outcome.
-    sui_id_store::commands::consume_and_reset_password(
+    let completion: ResetCompletion = sui_id_store::commands::consume_and_reset_password(
         db,
         row.user_id,
         row.id,
@@ -394,7 +422,9 @@ pub async fn consume_and_reset_password(
     .map_err(|e| match e {
         sui_id_store::StoreError::NotFound => CoreError::InvalidCredentials,
         other => other.into(),
-    })?;
+    })?
+    .into_inner()
+    .into();
 
     // Best-effort post-reset notification mail. Failures here do
     // not affect the password change itself. The recipient's
@@ -424,7 +454,7 @@ pub async fn consume_and_reset_password(
             notify_password_changed(mailer, email, &user_row.display_name, recipient_locale).await;
     }
 
-    Ok(())
+    Ok(completion)
 }
 
 /// Send the "your password has just been changed" notification.
