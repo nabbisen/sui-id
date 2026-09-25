@@ -2,6 +2,7 @@
 
 **Status.** Proposed
 **Security review.** Required
+**Owner acceptance.** Recorded 2026-09-26: `@nabbisen` said "Accepted." **The status stays Proposed**, because G11 refuses an Accepted RFC whose security review is Required and which cites no independent design review — the guard adopted after RFC 105 shipped without one. His acceptance is not in doubt; the status changes the moment the review lands, and the architect does not work around the gate to record it sooner.
 **Design prerequisites.** None. This RFC is the prerequisite: RFC 121 (the split; not yet written) may not be written until this is Accepted.
 **Implementation prerequisites.** None — **this RFC ships no code.** It is a contract and a conformance suite's specification.
 **Closure prerequisites.** Every security property sui-id claims today is either (a) carried by the embeddable module itself, (b) written here as a numbered obligation on the host with a stated failure mode and a conformance test, or (c) named as a property an embedding cannot have, in which case sui-id says so in its own documentation. No property is left unassigned, and sui-id's own service crate satisfies the contract through the published interface rather than around it.

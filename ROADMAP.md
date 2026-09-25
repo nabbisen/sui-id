@@ -578,6 +578,7 @@ did not walk the folder.
 | 116 | 2026-09-22 | [`rfcs/handoffs/116-gate-contracts/design-review-request.md`](rfcs/handoffs/116-gate-contracts/design-review-request.md) |
 | 117 | 2026-09-24 | [`rfcs/handoffs/117-verifiable-owner-decisions/design-review-request.md`](rfcs/handoffs/117-verifiable-owner-decisions/design-review-request.md) |
 | 112 | 2026-09-25 | [`rfcs/handoffs/112-schema-version-fail-closed/design-review-request.md`](rfcs/handoffs/112-schema-version-fail-closed/design-review-request.md) |
+| 119 | **accepted by `@nabbisen` 2026-09-26; status held** — G11 refuses an Accepted RFC whose security review is Required and which cites no review | [`rfcs/handoffs/119-embedding-contract/design-review-request.md`](rfcs/handoffs/119-embedding-contract/design-review-request.md) |
 
 RFC 115's three open questions stay open: they are design forks for
 `@nabbisen`, and the design review is asked for its view on each as an input,
