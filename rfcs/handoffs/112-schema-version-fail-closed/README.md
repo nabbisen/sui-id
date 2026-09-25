@@ -74,6 +74,43 @@ with the version row deleted. Mutation check: move the check back after the
 pragma and show the rollback-journal case failing; remove each guard in turn
 and show the matching test failing.
 
+### Stage 1 — landed `0b54ce0`, 2026-09-25
+
+Verified by the reviewer: 23 of 23 hunks and both new files match, nothing
+unclaimed; fmt, clippy `-D warnings`, 969 tests and every doc gate re-run.
+**Stage 2 is dispatched on this tree.**
+
+**What stage 2 inherits**, measured rather than promised:
+`StoreError::SchemaTooNew { found: i64, supported: i32 }`,
+`SchemaVersionInvalid { tables, detail }` and `MigrationFailed { version, source }`;
+`migrations::last_migrated_by(&Connection) -> Option<String>` for the
+"stamped by sui-id X" clause, best effort and `None` on a database no D7 build
+has migrated; and `migrations::check_database_file(path)`, which reads
+read-only, so the handler may call it directly. The `Display` strings on those
+variants are deliberately plain — **stage 2 owns the one operator line**, and
+should not inherit three competing ones.
+
+**One thing stage 2 must add that the RFC did not name.** A file that is not a
+SQLite database at all reaches `SchemaError::Read` → `StoreError::Db`, whose
+`Display` is **"database I/O error"** — the exact message D6 exists to remove,
+for a case that is not I/O. Give `SQLITE_NOTADB` its own line: *this file is
+not a sui-id database*. The refusal is already correct and writes nothing; this
+is the message, which is stage 2's whole subject.
+
+**A known limit, recorded and not in scope.** Two binaries opening one **fresh
+or rollback-journal** database at the same instant can fail with `database is
+locked`, from `Database::open`'s journal-mode pragma. It predates this RFC and
+is not the runner's race that D8 and the review's L1 address. No busy timeout
+was added, correctly — a behavioural change nobody asked for does not belong
+here. It earns an RFC only if two simultaneous first starts matter to an
+operator.
+
+**The upgrade guide was corrected by the reviewer with stage 1**, to the
+*factual* statement that an older binary now refuses and writes nothing. It
+deliberately does not describe the line or the exit code. **Stage 2 replaces
+that paragraph with the full operator guidance (D9)** — the guidance lands with
+the behaviour it describes.
+
 ### Stage 2 — the operator is told, once, in a line they can act on
 
 - **One handler (D5)**, called by `startup::prepare` and by all seven CLI
