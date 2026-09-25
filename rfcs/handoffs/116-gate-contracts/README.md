@@ -189,6 +189,58 @@ test asserts the **lane set round-trips**: a lane added to the table appears as
 a job; a job with no table entry is a failure. A missing lane is the failure
 mode that fails invisibly, which is why it gets its own test.
 
+## Stage 3b — the two things stage 3 raised — dispatched 2026-09-25
+
+Both were raised rather than decided, which was right in each case. Both are
+ruled here.
+
+### 1. The census must not count a generated file and its source
+
+**Ruled: exclude generated files from G16's scan.** Since stage 3, every
+census-tripping sentence in a lane comment lives twice — in
+`ci/workflow-template.toml`, where it is written, and in
+`.github/workflows/ci.yml`, where it is generated — so it needs two baseline
+lines. The implementer cleared it the sanctioned way and flagged the edit; the
+recurrence is the problem, not that edit.
+
+**A census should read sources, not artefacts.** The reason this is safe rather
+than a hole: an attribution smuggled directly into `ci.yml` would make it differ
+from a fresh generation, and `generate-ci-workflow.py --check` fails on that. The
+generated file is covered by a different gate, so removing it from this one
+loses nothing. **Say so in the policy file**, beside the exclusion, or the next
+reader will read it as a gap.
+
+- Add the exclusion to `ci/owner-attributions.toml`, as data, not to the script.
+- **Remove the now-redundant baseline line** for `.github/workflows/ci.yml`'s
+  lane comment, and leave the template's. A test should show that a new
+  attribution in the template still fails, and that the same sentence appearing
+  in the generated file does not double it.
+
+### 2. `TZ` — close it, do not soften the claim
+
+**Ruled: close it.** RFC 116 D7 said the local-run property was already weaker
+than claimed, because `TZ: UTC` is set in the workflow for G02, G04, G05 and
+G06 and `ci-gate.sh` does not export it. Stage 3 put `tz` into
+`[lane_profiles]`, so **the data now exists in the one place the dispatcher
+already reads.** Softening the claim was the alternative when closing it meant
+inventing a new fact; it no longer does.
+
+- `ci-gate.sh` reads a lane's `tz` from `[lane_profiles]` and exports it.
+- **The single-line-value rule still binds** (D7): the awk readers must keep
+  working, and a test should pin that they do.
+- The workflow's per-job `env: TZ` becomes redundant. **Remove it and let the
+  generator stop emitting it** — two facts where one will do is what this RFC
+  exists to remove — or state why it stays.
+- Evidence: a lane whose profile names a `tz` runs locally with it set, shown
+  rather than asserted; and `--check` still passes, so the generated workflow
+  and the dispatcher agree.
+
+### Not in scope
+
+The `exit "$status"` written twice in the `gate-inputs` job's first step. Stage
+3 reproduced it faithfully rather than fixing it, which was correct — it is
+unrelated drift and belongs to whoever touches that job next.
+
 ## Stage 4 — the last exception
 
 G12 is the only entry in `[gate_matrix_exceptions]`, and its own text says the
