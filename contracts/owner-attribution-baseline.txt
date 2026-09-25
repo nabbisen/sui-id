@@ -28,6 +28,7 @@ ROADMAP.md	3351aec715f3ba49395145f7af82e742bc1233506da4da1df6facb4916f22f56	1	Ev
 ROADMAP.md	36060284344212921053b00aa09fd5934b9a264236165a241f43611f1ab7e726	1	Like the withdrawn 2026-07-28 attribution above, the 2026-09-09 ruling reaches this repository only through a document written by the archit
 ROADMAP.md	3819b157556c0f450210d9cbec9757bc02793f17a71349a72ed4a8ae337717d0	1	M2b — Remaining conversion and authority switch owner to set Convert settings, pending settings, federation configuration, client metadata; 
 ROADMAP.md	38f8d3a5e52a28d525badaf0268450567f8059782601207d98077667c97b15c4	1	@nabbisen raised two themes on 2026-09-25 — an embeddable (pluggable) auth module , and ZKP as an optional feature with the constraint that 
+ROADMAP.md	392884e1eb83766da2d205ed9de35e2f8930f22c298a692da72804110c3c0f6f	1	What is actually being decided — corrected 2026-09-25. The architect first put this to @nabbisen as three windows and a date.
 ROADMAP.md	3ff17aee5d6f11a9c0b47dbe077c8ede26d6ef622b52bc9aaa7129ab54825d44	1	What this replaced. From 2026-09-10 to 2026-09-22 this work was carried in a roadmap/ directory created by ee48257 , which justified itself 
 ROADMAP.md	49dbfcab44b8ec3a2978613ef519cb233fb5c91c5e0ab44211be15c4f749b3bd	1	Recording a proposal as an owner ruling removes the owner's decision without their knowledge.
 ROADMAP.md	4c13be87c9cd301126e224cb8a1f947e693bb723402b21dcd2f85f83df07e5d9	1	This is recorded, not resolved. It reads against the owner decision of 2026-08-26 above, which routes a design to the role that must build a
@@ -110,6 +111,10 @@ rfcs/accepted/110-rfc-header-governance-guard.md	82ea630d6175a5e0cda4d654ae2faf6
 rfcs/accepted/110-rfc-header-governance-guard.md	874edb9b41d7b7c8d1211a597c52d7ff33065d66fdd53f677f49116f0f63ba9d	1	Accountable owner and approver. @nabbisen .
 rfcs/accepted/110-rfc-header-governance-guard.md	c3370852123472f89bdcdacae1fd8e40768393a8939b59de6bb2fda3522d3165	1	A lexical guard over attributions is not viable either: 12 RFC headers carry an owner attribution legitimately ( Approved by , Accepted on )
 rfcs/accepted/110-rfc-header-governance-guard.md	eb35c431045c0c0eb8a7a59def96bf00d1feab2fd1af6456f2795579e25ef66d	1	D1 — The primary rule is a closed allowlist of header labels. Exactly six header labels mention review, approval or independence today: Secu
+rfcs/accepted/112-schema-version-fail-closed.md	4f60083d813c875ada83df3c2ad5bce348f13c73ac06ed9ad5ddd5ca847561fb	1	This work was carried under roadmap/schema-version-fail-closed/ until 2026-09-22, when @nabbisen ruled that implementation handoffs live und
+rfcs/accepted/112-schema-version-fail-closed.md	5dc52647095afe4e471ce23ae22a02cc1d25079f9d97e6728ac05da6c22e821e	1	Status. Accepted Accepted on. 2026-09-25 Approved by. @nabbisen , 2026-09-25: "RFC 112 is accepted." Accepted on the amended text: its indep
+rfcs/accepted/112-schema-version-fail-closed.md	874edb9b41d7b7c8d1211a597c52d7ff33065d66fdd53f677f49116f0f63ba9d	1	Accountable owner and approver. @nabbisen .
+rfcs/accepted/112-schema-version-fail-closed.md	bfdd56651c1312c46a9a67f8c41c07d8038dccde7037ebd9bddebf17d8460cef	1	@nabbisen accepts or rejects them.
 rfcs/accepted/115-user-creation-without-a-password.md	874edb9b41d7b7c8d1211a597c52d7ff33065d66fdd53f677f49116f0f63ba9d	1	Accountable owner and approver. @nabbisen .
 rfcs/accepted/115-user-creation-without-a-password.md	8c989fe75516a814584e1874484ac17a99934a7bd652f044a1c28de1e89f0003	1	Status. Accepted Accepted on. 2026-09-24 Approved by. @nabbisen , 2026-09-24: "RFC 115 and 110 are accpepted." He ruled all three open quest
 rfcs/accepted/115-user-creation-without-a-password.md	d51c09c2452a6de1e5656aa0fe75f3c6153b3edbec4e884a57ff1a4c829c0290	1	The three forks were ruled by @nabbisen on 2026-09-24, each as the design review recommended; they are D10, D11 and D12 below.
@@ -457,9 +462,6 @@ rfcs/proposed/109-request-id-span.md	308d557b5531bee925a321980451e935f946bbaf68e
 rfcs/proposed/109-request-id-span.md	874edb9b41d7b7c8d1211a597c52d7ff33065d66fdd53f677f49116f0f63ba9d	1	Accountable owner and approver. @nabbisen .
 rfcs/proposed/111-rfc-template-reconciliation.md	4c9c053925fa3a72fc6a179c2e16ee2cf7c97fc5f868534a1e064b1fdacc40ba	1	This work was carried under roadmap/rfc-template-reconciliation/ until 2026-09-22, when @nabbisen ruled that implementation handoffs live un
 rfcs/proposed/111-rfc-template-reconciliation.md	874edb9b41d7b7c8d1211a597c52d7ff33065d66fdd53f677f49116f0f63ba9d	1	Accountable owner and approver. @nabbisen .
-rfcs/proposed/112-schema-version-fail-closed.md	4f60083d813c875ada83df3c2ad5bce348f13c73ac06ed9ad5ddd5ca847561fb	1	This work was carried under roadmap/schema-version-fail-closed/ until 2026-09-22, when @nabbisen ruled that implementation handoffs live und
-rfcs/proposed/112-schema-version-fail-closed.md	874edb9b41d7b7c8d1211a597c52d7ff33065d66fdd53f677f49116f0f63ba9d	1	Accountable owner and approver. @nabbisen .
-rfcs/proposed/112-schema-version-fail-closed.md	bfdd56651c1312c46a9a67f8c41c07d8038dccde7037ebd9bddebf17d8460cef	1	@nabbisen accepts or rejects them.
 rfcs/proposed/113-test-file-organization.md	22ab7d44654ddcfa387ee5c6220b1c8c15c0da32153d9ec3291c270840265d2d	1	This work was carried under roadmap/test-file-organization/ until 2026-09-22, when @nabbisen ruled that implementation handoffs live under r
 rfcs/proposed/113-test-file-organization.md	874edb9b41d7b7c8d1211a597c52d7ff33065d66fdd53f677f49116f0f63ba9d	1	Accountable owner and approver. @nabbisen .
 rfcs/proposed/114-ui-contract-reconciliation.md	72000bc2d21e97351f621a8f448d4cc9e7660015c31ffe847df7e560716129f0	1	This work was carried under roadmap/ui-contract-reconciliation/ until 2026-09-22, when @nabbisen ruled that implementation handoffs live und

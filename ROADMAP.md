@@ -577,6 +577,7 @@ did not walk the folder.
 | 110 | 2026-09-24 | [`rfcs/handoffs/110-rfc-header-governance-guard/design-review-request.md`](rfcs/handoffs/110-rfc-header-governance-guard/design-review-request.md) |
 | 116 | 2026-09-22 | [`rfcs/handoffs/116-gate-contracts/design-review-request.md`](rfcs/handoffs/116-gate-contracts/design-review-request.md) |
 | 117 | 2026-09-24 | [`rfcs/handoffs/117-verifiable-owner-decisions/design-review-request.md`](rfcs/handoffs/117-verifiable-owner-decisions/design-review-request.md) |
+| 112 | 2026-09-25 | [`rfcs/handoffs/112-schema-version-fail-closed/design-review-request.md`](rfcs/handoffs/112-schema-version-fail-closed/design-review-request.md) |
 
 RFC 115's three open questions stay open: they are design forks for
 `@nabbisen`, and the design review is asked for its view on each as an input,
@@ -611,6 +612,39 @@ compiles into any framework and guarantees nothing is worse than no module.
 | **D** | v0.81.0 | **2026-11-17 → 12-05** | **RFC 120 — the store boundary.** `sui-id-core` written against a trait rather than `sui-id-store`: the 22 entry points and the 269 references. With it, **`contracts/embeddable-deps.toml` and a gate** over the embeddable crate's resolved dependency set, so "minimal, lightweight and clean" is a checked contract rather than an intention |
 | **E** | v0.82.0 | **2027-01-12 → 01-30** | **RFC 121 — the embeddable module.** The split proper, plus a worked example embedding it in one host framework. The gap over the year end is deliberate, not slack |
 
+**What is actually being decided — corrected 2026-09-25.** The architect first
+put this to `@nabbisen` as three windows and a date. That was the wrong
+framing, and he asked what there was to decide. The dates are planning aids
+under the 2026-07-16 rule and move when a gate moves. **Two things are real
+decisions, and neither is a date:**
+
+1. **Whether embeddable is an authorized exception to the feature freeze.**
+   The freeze above admits four kinds of work — urgent security fixes,
+   remediation-enabling refactors, dependency and security maintenance, and
+   repairs that keep approved gates executable. **An embeddable module is none
+   of them.** RFC 120 (the store boundary) has a real claim to being a
+   remediation-enabling refactor; RFC 119 ships no code at all; RFC 121 is a
+   feature. Scheduling any of it is `@nabbisen`'s exception to make, and the
+   architect's first proposal scheduled it without naming the freeze, which it
+   should have.
+2. **Whether the store boundary comes before or after M2b.** Cycles D and E as
+   proposed **displace M2b** and push M2c, M3 and everything to M7 by roughly
+   two months. That is a trade on the critical path to production readiness,
+   not an addition to it. It cuts both ways: **M2b converts settings, pending
+   settings, federation configuration and client metadata onto the Class-A
+   seam — all store code — so doing the 269-site store refactor first means
+   M2b is written against the new boundary, and doing it second means
+   refactoring M2b's work too.** The technical argument favours before; the
+   programme argument favours after.
+
+**The architect's recommendation, revised:** take **RFC 119 now** — it ships no
+code, breaks no freeze, and costs design capacity rather than implementation
+capacity, so it answers "relatively prioritized" immediately. Then **decide D
+and E at the end of cycle C**, when M2a's real cost is known, rather than
+trading two months of the critical path against an estimate today. If they
+proceed, **RFC 120 before M2b**, for the reason above. Cycle C's end date is
+the only genuinely date-shaped item and is the smallest of the three.
+
 **Ordering constraints, stated so they can be checked:**
 
 - **RFC 120 comes after RFCs 112 and 106, not beside them.** Both change the
@@ -643,7 +677,7 @@ historical record, not evidence.
 | [109](rfcs/proposed/109-request-id-span.md) | Request logs keep their request ID across `.await` |
 | [110](rfcs/accepted/110-rfc-header-governance-guard.md) | An RFC header may not legislate |
 | [111](rfcs/proposed/111-rfc-template-reconciliation.md) | Reconcile `rfcs/README.md`'s template with what G11 enforces |
-| [112](rfcs/proposed/112-schema-version-fail-closed.md) | Refuse to run against a database this build does not understand |
+| [112](rfcs/accepted/112-schema-version-fail-closed.md) | Refuse to run against a database this build does not understand |
 | [113](rfcs/proposed/113-test-file-organization.md) | Test modules live in their own files |
 | [114](rfcs/proposed/114-ui-contract-reconciliation.md) | Reconcile `docs/ui-ux-contracts.md` with the code |
 | [115](rfcs/accepted/115-user-creation-without-a-password.md) | Creating a user without choosing their password |

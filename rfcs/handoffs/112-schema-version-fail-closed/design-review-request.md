@@ -1,6 +1,6 @@
 # RFC 112 — independent design review request
 
-**RFC.** [RFC 112 — Refuse to run against a database this build does not understand](../../proposed/112-schema-version-fail-closed.md). **Proposed.**
+**RFC.** [RFC 112 — Refuse to run against a database this build does not understand](../../accepted/112-schema-version-fail-closed.md). **Proposed.**
 **Reviewer.** Mid-capability model, implementation role. It authored neither the
 RFC nor its handoff.
 **Route.** The routing recorded in `ROADMAP.md` §S1 (2026-08-26); §S1b puts that

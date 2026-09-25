@@ -1,6 +1,12 @@
 # RFC 112 — Refuse to run against a database this build does not understand
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-09-25
+**Approved by.** `@nabbisen`, 2026-09-25: "RFC 112 is accepted." Accepted on the
+**amended** text: its independent design review returned "accept with changes",
+and the changes that matter are D2 and D3 — without them this RFC would have
+shipped a rule that still adds tables to a foreign database, and a
+"nothing is written on refusal" promise the code could not keep.
 **Security review.** Required
 **Independent design review.** [Design review 2026-09-25](../handoffs/112-schema-version-fail-closed/design-review-2026-09-25.md) by the implementation role, which authored neither this RFC nor its handoff. It **measured the defect and the damage** in a throwaway worktree, against the real binary as well as the store, and returned three high, four medium and three low findings with **no blocker**. Its verdict was **accept with changes**, and it was right on all three high findings: each is answered below. It also **corrected this RFC's own framing** of the severity.
 **Design prerequisites.** None.
@@ -81,7 +87,7 @@ runner, backup create, restore, verify and the settings page. Today backup
 create reads the version with `unwrap_or(0)` **twice**, so a snapshot whose
 version cannot be read is stamped `0` in its manifest and passes restore's
 check — the same defect in a second place — and the settings page shows the
-binary's ceiling under the label "schema version". [RFC 106](106-backup-restore-hardening.md)
+binary's ceiling under the label "schema version". [RFC 106](../proposed/106-backup-restore-hardening.md)
 consumes these rather than writing a third reader.
 
 **D5 — The refusal reaches the operator, or it has not happened.** Every
@@ -92,8 +98,22 @@ sees `Error: opening database` and the real cause on line four, at exit code
 limit trips. One handler, shared by `startup::prepare` and the CLI openers,
 prints the line **first and alone** on stderr, emits one `tracing::error!`
 carrying `found`, `supported` and `db_path` where tracing exists, and exits
-with a **distinct code** so `RestartPreventExitStatus=` can be set. The RFC
-names that code before implementation starts.
+with a **distinct code** so `RestartPreventExitStatus=` can be set.
+
+**The code is `65`**, and **both refusal variants use it** — `SchemaTooNew`
+and `SchemaVersionInvalid` alike. A code that covers only one of them covers
+nothing, because the operator sets `RestartPreventExitStatus=65` once and the
+other variant would still restart until the start limit trips. 65 is
+`EX_DATAERR` in `sysexits.h` ("the input data was incorrect"), which is what a
+database this build cannot read is; it collides with neither the shell's
+reserved codes (126–128, 128+signal) nor systemd's own (200–242).
+
+**This is the first explicit exit code in sui-id** — the binary returns
+`anyhow::Result` from `main` and has no `process::exit` anywhere, so every
+failure is `1` today. The RFC therefore also establishes the convention, and it
+is deliberately two lines long: **`0` success; `65` the database is not one
+this build can use; `1` everything else.** Adopting one `sysexits.h` code is
+not adopting the table, and `deployment.md` states these three and no more.
 
 **D6 — The taxonomy, with the hole closed.** `SchemaTooNew { found, supported }`,
 `SchemaVersionInvalid`, and a new `MigrationFailed { version, source }` — a

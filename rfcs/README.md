@@ -119,7 +119,7 @@ Proposed: the move approved nothing.
 | 108 | [Confirm screens for client disable and secret rotation; the secret leaves the URL](./proposed/108-client-confirm-screens.md) | [108-client-confirm-screens](./handoffs/108-client-confirm-screens/README.md) |
 | 109 | [Request logs keep their request ID across `.await`](./proposed/109-request-id-span.md) | [109-request-id-span](./handoffs/109-request-id-span/README.md) |
 | 111 | [Reconcile `rfcs/README.md`'s template with what G11 enforces](./proposed/111-rfc-template-reconciliation.md) | [111-rfc-template-reconciliation](./handoffs/111-rfc-template-reconciliation/README.md) |
-| 112 | [Refuse to run against a database this build does not understand](./proposed/112-schema-version-fail-closed.md) | [112-schema-version-fail-closed](./handoffs/112-schema-version-fail-closed/README.md) |
+| 112 | [Refuse to run against a database this build does not understand](./accepted/112-schema-version-fail-closed.md) | [112-schema-version-fail-closed](./handoffs/112-schema-version-fail-closed/README.md) |
 | 113 | [Test modules live in their own files](./proposed/113-test-file-organization.md) | [113-test-file-organization](./handoffs/113-test-file-organization/README.md) |
 | 114 | [Reconcile `docs/ui-ux-contracts.md` with the code](./proposed/114-ui-contract-reconciliation.md) | [114-ui-contract-reconciliation](./handoffs/114-ui-contract-reconciliation/README.md) |
 

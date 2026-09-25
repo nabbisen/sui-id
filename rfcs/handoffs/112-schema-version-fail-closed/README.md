@@ -24,35 +24,90 @@ it.
    (a busy database, an I/O fault) and any unparsable value become `0`, and the
    runner then re-applies every migration from 0001 against a populated database.
 
-## Required behaviour
+## Required behaviour — rewritten 2026-09-25 to match RFC 112 D1–D9
 
-- **Missing row** (`QueryReturnedNoRows`, a fresh database): version 0, as now.
-- **Any other read error:** return it. No migration runs.
-- **A value that does not parse as a non-negative integer:** a new
-  `StoreError::SchemaVersionInvalid`. No migration runs.
-- **Stored version > `MAX_SCHEMA_VERSION`:** a new
-  `StoreError::SchemaTooNew { found, supported }`. No migration runs, and nothing
-  is written.
+Dispatched in **two stages**. Stage 1 is the store; stage 2 is what the
+operator sees. Stage 2 does not start until stage 1 lands.
 
-The server must exit non-zero with a one-line message that names both versions
-and says to run the newer binary or restore the pre-upgrade backup. Check how
-`Database::open`'s callers report errors, and make the message reach the
-operator as that line. `open_in_memory` keeps its behaviour.
+### Stage 1 — the store refuses, and writes nothing doing it
 
-## Evidence
+- **One reader, one rule (D4).** Land
+  `migrations::read_stored_version(&Connection) -> Result<StoredVersion, SchemaError>`
+  and `migrations::check_supported(v)`. Route the runner, **backup create**
+  (`backup/ops.rs:120-133`, which reads with `unwrap_or(0)` **twice** today),
+  restore, verify, and the settings page (`http/handlers/settings.rs:327`,
+  which shows `MAX_SCHEMA_VERSION` under the label "schema version" — the
+  binary's ceiling, not the database's value) through them. RFC 106 consumes
+  these; do not leave it a third reader to write.
+- **The check runs first, on a read-only connection (D3).** `Database::open`
+  today sets `journal_mode = WAL` and two more pragmas **before**
+  `migrations::run`, and `run` executes `CREATE TABLE IF NOT EXISTS sui_meta`
+  before it reads the version. Open `SQLITE_OPEN_READ_ONLY`, read, decide;
+  only then the pragmas and `run`. `open_in_memory` keeps its behaviour.
+- **Classification (D2, D6).** Version `0` **only** when the database has no
+  tables other than `sui_meta`. Otherwise:
+  - stored > `MAX_SCHEMA_VERSION` → `SchemaTooNew { found: i64, supported: i32 }`;
+  - unparsable, negative, empty, a BLOB, **or absent from a database that has
+    application tables** → `SchemaVersionInvalid`, naming the table count;
+  - parse as **`i64`**: today `current` is `i32`, so `99999999999` overflows
+    and is reported invalid when it is unmistakably too new;
+  - a migration that fails to apply → `MigrationFailed { version, source }`,
+    which today surfaces as `StoreError::Db`, Display **"database I/O error"**,
+    sending an operator to look at their disk.
+  - `+43` parses today. Refuse non-canonical forms.
+- **Read the version inside `BEGIN IMMEDIATE`**, which closes the race between
+  two **new** binaries starting together (the loser currently fails with
+  `duplicate column name`). It does **not** close the older-binary-already-
+  running case: that is D8(a)'s stated non-goal.
+- **Stamp the release (D7).** `sui_meta.last_migrated_by = <CARGO_PKG_VERSION>`,
+  written in the **same transaction** as the version. No schema change.
 
-- One test per branch above, including a database stamped at
-  `MAX_SCHEMA_VERSION + 1` whose other tables are left untouched: compare row
-  counts and `sqlite_master` before and after.
-- A read-error test. Use an injected fault or a locked database, whichever the
-  store's test utilities support; say which.
-- Run the binary against a database stamped `MAX_SCHEMA_VERSION + 1`, and give
-  the exit code and stderr.
-- Mutation check: remove each guard in turn, and show the matching test failing.
-- fmt, both clippy scopes, `cargo test --workspace` count before and after, and
-  MSRV 1.95.
-- Update `docs/src/guides/upgrade.md` in the same package. Dispatch 15 makes it
-  state today's behaviour; once this lands, it states the refusal.
+**Evidence for stage 1.** One test per branch above. The no-write property is
+asserted for a database in **rollback-journal mode and in WAL mode**, each
+stamped `MAX_SCHEMA_VERSION + 1`: `Database::open` returns `SchemaTooNew`, and
+afterwards the **main file's bytes**, `sqlite_master` and **every table's row
+count** are identical and `sui_meta.schema_version` is unchanged. **Do not
+assert the absence of `-wal`/`-shm`** — a read-only connection leaves empty
+ones. Include a **foreign SQLite file** (one unrelated table): it must be
+refused, not migrated; today it gains 26 tables. Include a populated database
+with the version row deleted. Mutation check: move the check back after the
+pragma and show the rollback-journal case failing; remove each guard in turn
+and show the matching test failing.
+
+### Stage 2 — the operator is told, once, in a line they can act on
+
+- **One handler (D5)**, called by `startup::prepare` and by all seven CLI
+  openers. Every caller today wraps the open in `.context("opening database")`,
+  so the operator sees `Error: opening database` with the real cause on line
+  four. The line goes to **stderr, first and alone**.
+- **Exit `65`**, for **both** refusal variants. See D5: a code covering one of
+  them covers nothing.
+- **One `tracing::error!`** carrying `found`, `supported` and `db_path` where
+  tracing exists (`serve` initialises it before the open; the CLI has none and
+  stderr is its record).
+- **The line itself** is drafted in the design review §4 item 11. It names the
+  path, both versions, the release that stamped it when `last_migrated_by` is
+  present, the route back, and what **not** to do. It contains "schema" and
+  "migrat" so that the `journalctl | grep -i migrat` that `deployment.md`
+  already teaches will find it.
+- **Docs (D9).** `docs/src/guides/upgrade.md:94-98` says an older binary
+  "**starts without complaint**" — it becomes the refusal and its recovery.
+  `docs/src/guides/deployment.md`: the downgrade sequence, the
+  `Restart=on-failure` stanza at `:227` (a refusing service restarts until the
+  start limit trips — state `RestartPreventExitStatus=65`), and the three-line
+  exit-code table D5 establishes. State D8(a) as "one binary version per
+  database at a time".
+
+**Evidence for stage 2.** Run the real binary against a database stamped
+`MAX_SCHEMA_VERSION + 1` and against a garbled stamp: give the **exact stderr
+and the exit code** for each, for `serve` and for one CLI subcommand. Show the
+`tracing` event. Show `mdbook build docs` green.
+
+### Both stages
+
+fmt, both clippy scopes, `cargo test --workspace` count before and after, and
+MSRV 1.95. **Cite by function, not by line** — the numbers in this document
+moved once already.
 
 ## Independent design review returned 2026-09-25 — this specification is superseded in part
 

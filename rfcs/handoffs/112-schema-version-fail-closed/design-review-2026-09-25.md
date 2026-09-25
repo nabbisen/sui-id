@@ -1,7 +1,7 @@
 # RFC 112 — independent design review
 
 **Date:** 2026-09-25
-**RFC:** [RFC 112 — Refuse to run against a database this build does not understand](../../proposed/112-schema-version-fail-closed.md), Proposed; **handoff** `rfcs/handoffs/112-schema-version-fail-closed/README.md`; **request** `rfcs/handoffs/112-schema-version-fail-closed/design-review-request.md`.
+**RFC:** [RFC 112 — Refuse to run against a database this build does not understand](../../accepted/112-schema-version-fail-closed.md), Proposed; **handoff** `rfcs/handoffs/112-schema-version-fail-closed/README.md`; **request** `rfcs/handoffs/112-schema-version-fail-closed/design-review-request.md`.
 **Reviewer:** mid-capability model, implementation role. I authored neither the RFC nor its handoff.
 **Baseline:** `2adf796` (contains `d59bc44`). **Read-only: no repository file changed.** Everything I ran ran in a **throwaway `git worktree` at that commit** (a scratch integration test, a scratch debug build of the binary, a scratch database directory), removed afterwards; the probe is described in §3 so it can be reproduced.
 **Outcome: accept with changes.** The rule is right and refusing is right. But the RFC as written would **leave the measured damage path open for a populated database with no version row, would not deliver "nothing is written on refusal"**, and would not deliver its "one-line message" without more than a new error variant. Two high findings, four medium, three low, and no blocker. They are all fixable inside this RFC's scope.
