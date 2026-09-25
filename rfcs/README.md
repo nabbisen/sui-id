@@ -122,6 +122,7 @@ Proposed: the move approved nothing.
 | 112 | [Refuse to run against a database this build does not understand](./accepted/112-schema-version-fail-closed.md) | [112-schema-version-fail-closed](./handoffs/112-schema-version-fail-closed/README.md) |
 | 113 | [Test modules live in their own files](./proposed/113-test-file-organization.md) | [113-test-file-organization](./handoffs/113-test-file-organization/README.md) |
 | 114 | [Reconcile `docs/ui-ux-contracts.md` with the code](./proposed/114-ui-contract-reconciliation.md) | [114-ui-contract-reconciliation](./handoffs/114-ui-contract-reconciliation/README.md) |
+| 119 | [What a host must promise before sui-id can be embedded in it](./proposed/119-embedding-contract.md) | [119-embedding-contract](./handoffs/119-embedding-contract/README.md) |
 
 ### Implemented — Mockup Integration epic (Phase 0 → Phase 8)
 
