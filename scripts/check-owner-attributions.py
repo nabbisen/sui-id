@@ -15,7 +15,7 @@ gate makes such a sentence impossible to add *unseen*:
      line; a false negative is the failure this gate exists to prevent.
   2. **Every hit is printed**, to the log and to the GitHub step summary, new
      ones first.
-  3. **Closed baseline.** `ci/owner-attribution-baseline.txt` records, per
+  3. **Closed baseline.** `contracts/owner-attribution-baseline.txt` records, per
      (path, normalised sentence hash), how many such sentences existed when the
      gate was adopted. The cutoff is the *tree*, not a date written in a
      sentence, which an author controls: an attribution that is not in the
@@ -51,7 +51,7 @@ What this does not do (stated because RFC 117 exists to stop overclaiming):
      printing nothing. It never changes the exit code: it is evidence, not a gate.
 
 Usage:
-  check-owner-attributions.py --root . --policy ci/owner-attributions.toml
+  check-owner-attributions.py --root . --policy contracts/owner-attributions.toml
   ... --base REV             the revision the baseline diff is taken against
                              (default: from the GitHub event payload, if any)
   ... --update-baseline      rewrite the baseline from the current tree
@@ -465,7 +465,7 @@ def render(new, known, stale: int, excerpt: int) -> str:
             "Each of these attributes something to the owner and was not there when "
             "the gate was adopted. **Read them.** If the owner said it, it belongs "
             "in the ledger once one exists; until then the sentence is added to "
-            "`ci/owner-attribution-baseline.txt` in a visible edit, or removed.",
+            "`contracts/owner-attribution-baseline.txt` in a visible edit, or removed.",
             "",
         ]
         out += [f"- `{p}`: {s[:excerpt]}" for p, s in new]

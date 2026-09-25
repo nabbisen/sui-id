@@ -9,7 +9,7 @@
 **Implementation prerequisites.** None.
 **Closure prerequisites.** An RFC header in `proposed/`, `accepted/` or `done/` cannot carry a reviewer-rule field or state a rule about who may review, and cannot cite an archived RFC as authority except by a closed, diffable allowlist entry; the guard catches the clauses of **both** past incidents, demonstrated against their commits; and the gate is green on the tree it lands in without editing any RFC to make it so.
 **Tracks.** Governance integrity.
-**Touches.** `scripts/check-rfc-integrity.py`, `scripts/tests/test_rfc_integrity.py`, `ci/rfc-policy.toml`, `rfcs/README.md` (the template still reproduces the banned clause), and `rfcs/handoffs/111-rfc-template-reconciliation/README.md` (which instructs the opposite).
+**Touches.** `scripts/check-rfc-integrity.py`, `scripts/tests/test_rfc_integrity.py`, `contracts/rfc-policy.toml`, `rfcs/README.md` (the template still reproduces the banned clause), and `rfcs/handoffs/111-rfc-template-reconciliation/README.md` (which instructs the opposite).
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** High-capability model, requirements-architect role.
 **Handoff.** [`../handoffs/110-rfc-header-governance-guard/README.md`](../handoffs/110-rfc-header-governance-guard/README.md)
@@ -82,7 +82,7 @@ asserting one — and closure prerequisite 3 would be unmeetable.
 can check that a field holds a date and a link to a tracked file, and any
 author can write both, so the field would be satisfied whether or not anyone
 approved anything. An exemption anyone can write is a hole. If a real exception
-ever exists it becomes a closed entry in `ci/rfc-policy.toml`, whose diff is
+ever exists it becomes a closed entry in `contracts/rfc-policy.toml`, whose diff is
 reviewed — which is weaker than proof and stronger than free text in the very
 header the guard polices.
 
@@ -91,7 +91,7 @@ header citations of an archived RFC exist: `rfcs/proposed/025`'s legitimate
 `Supersedes [RFC 007]`, and the **title lines** of `archive/007` and
 `archive/018` themselves. D4 removes the last two with no special case. For 025,
 a lexical carve-out on the word "Supersedes" would be writable by anyone, so
-instead `ci/rfc-policy.toml` gains `[archive_citations]` with the single entry
+instead `contracts/rfc-policy.toml` gains `[archive_citations]` with the single entry
 `"025" = ["007"]` — the same mechanism as `[historical_rfc_mi]`. The check also
 skips an RFC's own title line and self-references, and matches the singular,
 plural and list forms plus any Markdown link whose target contains `/archive/`.
@@ -110,7 +110,7 @@ documentation and the gate disagree again — which is RFC 098's thesis and RFC
 
 **D8 — The gate is hosted by G11, and RFC 093 is not amended.** G11's docstring
 already hosts invariants 12 and 13 with the disclaimer that RFC 000 remains
-their source; 14 and 15 follow that precedent. `ci/gate-inputs.toml` pins only
+their source; 14 and 15 follow that precedent. `contracts/gate-inputs.toml` pins only
 the command, which does not change, so A3.4's lane-agreement check is not
 engaged.
 
@@ -143,7 +143,7 @@ ledger file in the tree is therefore also something an agent can write, and a
 gate requiring "cite a ledger entry" would be satisfied by an entry the agent
 added. The construction that would make "the owner said this" checkable is a
 signing key the agents cannot use — held on a hardware token requiring the
-owner's touch, its fingerprint pinned in `ci/`, with the gate verifying the
+owner's touch, its fingerprint pinned in `contracts/`, with the gate verifying the
 signature on the commit that added each entry. That is a real, recurring cost
 to `@nabbisen` and is **his decision, in its own RFC**. This one does not
 foreclose it.

@@ -1,7 +1,7 @@
 # RFC 117 stage 0 (G16): the owner-attribution census.
 #
 # A machine-consumed contract, read by scripts/check-owner-attributions.py and
-# nothing else (RFC 116 D2: a file in ci/ is read by a gate that fails when it
+# nothing else (RFC 116 D2: a file in contracts/ is read by a gate that fails when it
 # stops being true). The two patterns below *define* what counts as an
 # attribution; they are data so that a change to them is a visible diff.
 #
@@ -12,7 +12,7 @@
 version = 1
 
 # The closed baseline: every attribution that existed when the gate was adopted.
-baseline = "ci/owner-attribution-baseline.txt"
+baseline = "contracts/owner-attribution-baseline.txt"
 
 [scan]
 # Whole-file text: every sentence is read.
@@ -36,8 +36,8 @@ excerpt_chars = 140
 [exclude]
 # RFC 116 stage 3b. A census reads sources, not artefacts.
 #
-# .github/workflows/ci.yml is generated from ci/gate-inputs.toml and
-# ci/workflow-template.toml, both of which this census reads. A sentence in a lane
+# .github/workflows/ci.yml is generated from contracts/gate-inputs.toml and
+# contracts/workflow-template.toml, both of which this census reads. A sentence in a lane
 # comment therefore lived twice, once where it is written and once where it is
 # generated, and needed two baseline lines. Excluding the generated file counts it
 # once, in the template.

@@ -10,7 +10,7 @@ complete amended RFC; implementation reconciliation and entry gates remain pendi
 
 This is the closed Stage-0 classification of production durable-write entry
 points. **The rows are no longer in this file.** They live in
-[`ci/write-commands.toml`](../../../ci/write-commands.toml), the one copy
+[`contracts/write-commands.toml`](../../../contracts/write-commands.toml), the one copy
 ([RFC 116](../../accepted/116-gate-contracts.md) D1), which
 `scripts/check-write-commands.py` (lane G17) checks against the code: every
 sealed command has a row, every row that says it is sealed names a command,

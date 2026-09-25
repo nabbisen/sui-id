@@ -113,8 +113,8 @@ parsed repository file under `ci/`, and keeps this RFC as its normative design.
 | G09b | stable | LDAP | `cargo +stable test -p sui-id-store --features ldap --test ldap_smoke --locked -- --exact rustls_provider_and_tls_connector_reach_fixture` |
 | G10a | stable / mdBook 0.5.4 | n/a | `mdbook build docs --dest-dir target/mdbook-gate` |
 | G10b | Python 3.14 | n/a | `python3.14 scripts/check-markdown-links.py --root . README.md ROADMAP.md docs` |
-| G11 | Python 3.14 | n/a | `python3.14 scripts/check-rfc-integrity.py --root . --policy ci/rfc-policy.toml` |
-| G12 | Bash >=5.2,<6 / repository script | n/a | `bash scripts/check-ui-invariants.sh --all --policy ci/ui-invariants.toml` |
+| G11 | Python 3.14 | n/a | `python3.14 scripts/check-rfc-integrity.py --root . --policy contracts/rfc-policy.toml` |
+| G12 | Bash >=5.2,<6 / repository script | n/a | `bash scripts/check-ui-invariants.sh --all --policy contracts/ui-invariants.toml` |
 
 The security audit and fuzz schedules remain separate policies. RFC 099 owns
 the complete pre-soak fuzz execution; they are not silently promoted into M1.

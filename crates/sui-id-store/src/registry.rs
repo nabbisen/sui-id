@@ -550,7 +550,7 @@ pub trait CommandSpec: sealed::Sealed + Sized + Send + Sync + 'static {
     type Event: SealedCommandEvent<Self>;
 
     /// Stable command identifier, matching `command-inventory.md` /
-    /// `ci/write-commands.toml` (e.g. `"K01"`).
+    /// `contracts/write-commands.toml` (e.g. `"K01"`).
     const ID: &'static str;
 
     /// Map an event variant to its registry descriptor. Implementations

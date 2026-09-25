@@ -123,7 +123,7 @@ The proposed exact Stage-0 inventory is attached at
 It classifies the current production durable-write universe one logical command
 at a time and names owner, typed event or exclusion rationale, mutation surface,
 and stable test ID. The reviewed implementation manifest
-`ci/write-commands.toml` is a machine-readable expansion of that document down
+`contracts/write-commands.toml` is a machine-readable expansion of that document down
 to individual Rust function and SQL write-site identifiers.
 
 The following is a summary only; the attached inventory is normative:
@@ -398,7 +398,7 @@ same bare write. RFC 094 therefore makes raw database write authority private:
    migration runner, and test fixtures. The workspace's `unsafe_code = forbid`
    is an independent barrier to direct SQLite FFI. The small allowed-module
    list is exact in
-   `ci/write-authority.toml`; changing it requires independent review.
+   `contracts/write-authority.toml`; changing it requires independent review.
 
 The compiler capability is primary; the AST check protects the module boundary
 and detects a newly introduced bare write absent from both inventory and
@@ -701,7 +701,7 @@ revoke, successor insert, family revoke, audit append, and commit.
 ## Structural coverage gate
 
 The new gate consumes the checked-in command inventory
-`ci/write-commands.toml` and a registry dump/test API. Each inventory row has:
+`contracts/write-commands.toml` and a registry dump/test API. Each inventory row has:
 
 - stable command ID and owning module/function;
 - mutation repository surface;
@@ -713,7 +713,7 @@ The new gate consumes the checked-in command inventory
 - threat/rollback notes.
 
 CI runs `cargo +stable xtask audit-structure --locked --policy
-ci/write-authority.toml --commands ci/write-commands.toml`. It fails if a source
+contracts/write-authority.toml --commands contracts/write-commands.toml`. It fails if a source
 write site lacks a generated command declaration, a manifest row lacks a
 registry descriptor, two commands claim one exclusive binding, a Class-A
 command lacks its failure test, generated documentation differs, an
@@ -756,7 +756,7 @@ from. What follows is the mechanism.*
 
 #### Manifest shape
 
-Two tables are added to `ci/gate-inputs.toml`:
+Two tables are added to `contracts/gate-inputs.toml`:
 
 ```toml
 [gate_lane_sources]
@@ -846,7 +846,7 @@ Ownership is explicit single-writer data rather than something derived by
 scanning several documents and reconciling what they say.
 
 *Realised 2026-09-12 (R10-b, `73df7ee`).* The argument above holds in TOML;
-it did not hold in the pipeline, where every reader of `ci/gate-inputs.toml`
+it did not hold in the pipeline, where every reader of `contracts/gate-inputs.toml`
 was awk and a duplicate key was read leniently. Measured at R10's review: a
 second `"093"` source entry whose heading resolved cleanly passed every
 condition. `scripts/check-gate-inputs.sh` now parses the manifest with

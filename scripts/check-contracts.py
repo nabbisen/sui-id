@@ -25,7 +25,7 @@ because they are one property:
             file is referred to by a machine-read place, not that the reader fails
             when it should; that is each gate's own test.
 
-**Scope** is data (ci/contract-paths.toml), and it is by exemption: a file is
+**Scope** is data (contracts/contract-paths.toml), and it is by exemption: a file is
 scanned unless a `[[record]]` entry exempts it, so a new top-level directory is
 scanned by default. Records keep the path they had when they were written; rewriting
 one to satisfy a gate would falsify it. Every exemption and every allowed name

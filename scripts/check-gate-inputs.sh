@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# RFC 093 A3.4: ci/gate-inputs.toml enforcement.
+# RFC 093 A3.4: contracts/gate-inputs.toml enforcement.
 #
 # The manifest records action pins, toolchain components, and (since A3.1)
 # the literal per-lane commands the scripts/ci-gate.sh dispatcher executes.

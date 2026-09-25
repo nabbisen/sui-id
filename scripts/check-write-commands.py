@@ -1,7 +1,7 @@
 #!/usr/bin/env python3.14
 """RFC 116 stage 1: the write-command inventory is checked against the code.
 
-ci/write-commands.toml is the one inventory of durable-write commands
+contracts/write-commands.toml is the one inventory of durable-write commands
 (RFC 116 D1). It records *planned* conversions as well as sealed ones, so
 the gate cannot ask every row to name a command (RFC 116 D2a). Each row says
 which it is with `sealed`, and the directions follow from that:

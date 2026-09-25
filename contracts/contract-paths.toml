@@ -21,12 +21,12 @@ version = 1
 # The directory the gate guards, and the names it used to have. A live file that
 # still names a former directory's file is a violation ("moved to ..."), which is
 # what makes a rename checkable rather than merely possible.
-directory = "ci"
-former_directories = []
+directory = "contracts"
+former_directories = ["ci"]
 
 # The gate's own inputs, as paths from the repository root.
-manifest = "ci/gate-inputs.toml"
-readme_file = "ci/README.md"
+manifest = "contracts/gate-inputs.toml"
+readme_file = "contracts/README.md"
 
 # Files that count as naming a contract: a path with one of these extensions.
 extensions = ["toml", "md", "txt", "yml", "yaml", "sh", "py", "json"]
@@ -61,7 +61,11 @@ reason = "an append-only release ledger; each entry names the path it had at tha
 
 [[record]]
 path = "ROADMAP.md"
-reason = "a dated milestone ledger; closed rows describe what shipped under the names it had"
+reason = "both a dated ledger and a forward plan: closed milestone rows describe what shipped under the names it had, and live rows deliberately name artifacts that do not exist yet, because naming a planned contract before it is built is what a roadmap is for. Neither half is a claim about the current tree"
+
+[[record]]
+path = "contracts/owner-attribution-baseline.txt"
+reason = "a ledger of sentences quoted (first 140 characters) from other files, some of them records; each quotation is true of the file it came from and is keyed by G16, not by this gate"
 
 [[record]]
 path = "scripts/tests/test_contracts.py"
@@ -70,7 +74,7 @@ reason = "this gate's own self-test: its fixtures are synthetic repositories who
 # Allowed names that are not files in the directory. Each must still be named by a
 # file in scope, or the entry is stale and the gate says so.
 [[allow]]
-path = "ci/write-authority.toml"
+path = "contracts/write-authority.toml"
 reason = "planned by RFC 094 (the policy for `xtask audit-structure`); named in RFCs 094 and 116 and not yet built"
 
 [[allow]]

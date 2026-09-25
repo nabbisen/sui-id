@@ -25,7 +25,7 @@ Three checks, in one script so one failure names one cause:
       remaining path must be a tracked file.
 
   (C) A document that declares the version it is current as of is either
-      within the tolerance ci/doc-authority.toml sets, or carries a
+      within the tolerance contracts/doc-authority.toml sets, or carries a
       staleness banner. RFC 098 rule 5 makes the banner the sanctioned
       state for a document that lags, so a bannered document passes. A
       document the policy lists that declares no version at all also
@@ -38,7 +38,7 @@ Three checks, in one script so one failure names one cause:
       events behind. A name counts only as the whole first cell of a table
       row, written as inline code: prose, other columns and fenced blocks
       may mention an event without registering it. Both paths come from
-      [event_reference] in ci/doc-authority.toml.
+      [event_reference] in contracts/doc-authority.toml.
 
 Exit 0 = pass. Exit 1 = any violation, each on stderr, prefixed
 `check-doc-authority:` and naming its check and the file (with a line

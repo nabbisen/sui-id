@@ -19,5 +19,5 @@ documents = ["docs/threat-model.md", "docs/development-specification.md"]
 # Check (D): the reader reference lists exactly the events the matrix
 # registers. The matrix is the gated copy (G13 checks it against the code);
 # the reference follows it.
-matrix = "ci/audit-coverage-matrix.md"
+matrix = "contracts/audit-coverage-matrix.md"
 reference = "docs/src/reference/audit-events.md"

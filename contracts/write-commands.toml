@@ -16,7 +16,7 @@
 # `event` lists the audit event names the command can emit; `descriptor` lists
 # the `EventDescriptor` statics they come from. Both are derived, never written
 # by hand: `python3.14 scripts/check-write-commands.py --root . --inventory
-# ci/write-commands.toml --fix` rewrites them from the code.
+# contracts/write-commands.toml --fix` rewrites them from the code.
 #
 # `status` says what the row's `files` are:
 #   implemented    code exists and implements what the row describes

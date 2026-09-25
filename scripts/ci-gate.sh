@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # RFC 093 Gate Matrix v1 dispatcher (A3.1, decision D1).
 #
-# Each gate ID below runs the exact command recorded in `ci/gate-inputs.toml`
+# Each gate ID below runs the exact command recorded in `contracts/gate-inputs.toml`
 # under `[gates]`, which is the machine-readable expansion of RFC 093's Gate
 # Matrix v1 table (rfcs/done/093-build-toolchain-release-gates.md). This
 # script owns the environment/evidence block once — resolve HEAD, assert it
@@ -13,7 +13,7 @@
 # scripts/check-gate-inputs.sh (A3.4) verifies `[gates]` matches the RFC's
 # table exactly, which is what makes this indirection a checked invariant
 # rather than a convention: this script is not itself the source of truth
-# for what a gate runs, `ci/gate-inputs.toml` is.
+# for what a gate runs, `contracts/gate-inputs.toml` is.
 
 set -uo pipefail
 
@@ -27,7 +27,7 @@ gate="${1:-}"
 shift
 
 root="."
-manifest="ci/gate-inputs.toml"
+manifest="contracts/gate-inputs.toml"
 while (($#)); do
   case "$1" in
     --root)

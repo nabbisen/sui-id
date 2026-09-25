@@ -3,17 +3,17 @@
 **Status.** Proposed
 **Security review.** Required
 **Design prerequisites.** None. The label text already exists in `crates/sui-id-i18n`.
-**Implementation prerequisites.** RFC 094's `ci/audit-coverage-matrix.md` is the registered-event source of truth, kept true against the code by G13.
+**Implementation prerequisites.** RFC 094's `contracts/audit-coverage-matrix.md` is the registered-event source of truth, kept true against the code by G13.
 **Closure prerequisites.** Every registered event has a label in every locale in `Locale::ALL`; no label names an unregistered event; a test binds the label set to the matrix so neither can drift again.
 **Tracks.** Audit legibility.
-**Touches.** `crates/sui-id-i18n/src/strings.rs`, `crates/sui-id-i18n/src/locale/`, `crates/sui-id-web/src/pages/audit.rs`, `crates/sui-id-web/src/pages/dashboard.rs`, `ci/audit-coverage-matrix.md`.
+**Touches.** `crates/sui-id-i18n/src/strings.rs`, `crates/sui-id-i18n/src/locale/`, `crates/sui-id-web/src/pages/audit.rs`, `crates/sui-id-web/src/pages/dashboard.rs`, `contracts/audit-coverage-matrix.md`.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** High-capability model, requirements-architect role.
 **Handoff.** [`../handoffs/104-audit-event-labels/README.md`](../handoffs/104-audit-event-labels/README.md)
 
 ## Summary
 
-Translated audit-event labels shipped with RFC 002 on 2026-06-05 and no code has ever read them. The audit page and the dashboard render the raw action string — `auth.login.failure` — in every language. Unread, the labels drifted: measured against `ci/audit-coverage-matrix.md`'s 55 registered events, 30 registered events have no label and 4 labels name events that do not exist.
+Translated audit-event labels shipped with RFC 002 on 2026-06-05 and no code has ever read them. The audit page and the dashboard render the raw action string — `auth.login.failure` — in every language. Unread, the labels drifted: measured against `contracts/audit-coverage-matrix.md`'s 55 registered events, 30 registered events have no label and 4 labels name events that do not exist.
 
 ## Why this is an RFC
 

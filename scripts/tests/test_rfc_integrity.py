@@ -73,7 +73,7 @@ def write(path: Path, content: str) -> None:
 
 
 def make_baseline(root: Path) -> None:
-    write(root / "ci" / "rfc-policy.toml", POLICY)
+    write(root / "contracts" / "rfc-policy.toml", POLICY)
     write(root / "rfcs" / "README.md", VALID_README)
     write(root / "rfcs" / "accepted" / "100-example.md", VALID_RFC)
     write(root / "rfcs" / "handoffs" / "100-example" / "100-review.md", VALID_REVIEW)
@@ -97,7 +97,7 @@ def git_commit(root: Path) -> None:
 
 def run_checker(root: Path) -> subprocess.CompletedProcess:
     return subprocess.run(
-        [sys.executable, str(CHECKER), "--root", str(root), "--policy", "ci/rfc-policy.toml"],
+        [sys.executable, str(CHECKER), "--root", str(root), "--policy", "contracts/rfc-policy.toml"],
         capture_output=True,
         text=True,
     )
@@ -557,7 +557,7 @@ class ReviewRuleGuardTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             make_baseline(root)
-            write(root / "ci" / "rfc-policy.toml", policy)
+            write(root / "contracts" / "rfc-policy.toml", policy)
             header = VALID_RFC.split("## Summary")[0]
             if header_replace:
                 header = header.replace(*header_replace)
@@ -784,7 +784,7 @@ class ReviewRuleGuardTest(unittest.TestCase):
 
     def test_the_repository_as_it_stands_passes_both_conditions(self):
         result = subprocess.run(
-            [sys.executable, str(CHECKER), "--root", str(REPO_ROOT), "--policy", "ci/rfc-policy.toml"],
+            [sys.executable, str(CHECKER), "--root", str(REPO_ROOT), "--policy", "contracts/rfc-policy.toml"],
             capture_output=True,
             text=True,
         )
@@ -795,7 +795,7 @@ class ReviewRuleGuardTest(unittest.TestCase):
     def test_the_real_policy_names_the_one_legitimate_citation(self):
         import tomllib
 
-        with (REPO_ROOT / "ci" / "rfc-policy.toml").open("rb") as f:
+        with (REPO_ROOT / "contracts" / "rfc-policy.toml").open("rb") as f:
             policy = tomllib.load(f)
         self.assertEqual(policy["archive_citations"], {"025": ["007"]})
 

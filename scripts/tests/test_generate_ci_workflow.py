@@ -2,7 +2,7 @@
 
 Run as: python3.14 -m unittest scripts.tests.test_generate_ci_workflow
 
-Each test copies the *real* `ci/gate-inputs.toml`, `ci/workflow-template.toml`
+Each test copies the *real* `contracts/gate-inputs.toml`, `contracts/workflow-template.toml`
 and `.github/workflows/ci.yml` into a throwaway root and applies one mutation,
 for the reason the gate-inputs fixtures use the real files: a fixture that
 impersonates them drifts from them. The generator is invoked as a subprocess.
@@ -23,7 +23,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 GENERATOR = REPO_ROOT / "scripts" / "generate-ci-workflow.py"
-FILES = ("ci/gate-inputs.toml", "ci/workflow-template.toml", ".github/workflows/ci.yml")
+FILES = ("contracts/gate-inputs.toml", "contracts/workflow-template.toml", ".github/workflows/ci.yml")
 
 
 class GenerateCiWorkflow(unittest.TestCase):
@@ -93,11 +93,11 @@ class GenerateCiWorkflow(unittest.TestCase):
     # ── the lane set round-trips ─────────────────────────────────────────
 
     def add_lane(self, lane: str = "G19") -> None:
-        self.mutate("ci/gate-inputs.toml", "G18 = { title", f'{lane} = {{ title = "an added lane", setup = "python" }}\nG18 = {{ title', 1)
+        self.mutate("contracts/gate-inputs.toml", "G18 = { title", f'{lane} = {{ title = "an added lane", setup = "python" }}\nG18 = {{ title', 1)
         self.mutate(
-            "ci/gate-inputs.toml",
-            'G18 = "python3.14 scripts/check-contracts.py --root . --policy ci/contract-paths.toml"\n',
-            'G18 = "python3.14 scripts/check-contracts.py --root . --policy ci/contract-paths.toml"\n'
+            "contracts/gate-inputs.toml",
+            'G18 = "python3.14 scripts/check-contracts.py --root . --policy contracts/contract-paths.toml"\n',
+            'G18 = "python3.14 scripts/check-contracts.py --root . --policy contracts/contract-paths.toml"\n'
             f'{lane} = "python3.14 scripts/added.py"\n',
         )
 
@@ -112,15 +112,15 @@ class GenerateCiWorkflow(unittest.TestCase):
 
     def test_a_lane_in_gates_with_no_profile_has_no_job_and_fails(self) -> None:
         self.mutate(
-            "ci/gate-inputs.toml",
-            'G18 = "python3.14 scripts/check-contracts.py --root . --policy ci/contract-paths.toml"\n',
-            'G18 = "python3.14 scripts/check-contracts.py --root . --policy ci/contract-paths.toml"\n'
+            "contracts/gate-inputs.toml",
+            'G18 = "python3.14 scripts/check-contracts.py --root . --policy contracts/contract-paths.toml"\n',
+            'G18 = "python3.14 scripts/check-contracts.py --root . --policy contracts/contract-paths.toml"\n'
             'G19 = "python3.14 scripts/added.py"\n',
         )
         self.assert_red("lane G19 is in [gates] or [gate_matrix_exceptions] but has no [lane_profiles] entry")
 
     def test_a_profile_for_no_lane_fails(self) -> None:
-        self.mutate("ci/gate-inputs.toml", "G18 = { title", 'G99 = { title = "ghost", setup = "python" }\nG18 = { title')
+        self.mutate("contracts/gate-inputs.toml", "G18 = { title", 'G99 = { title = "ghost", setup = "python" }\nG18 = { title')
         self.assert_red("[lane_profiles] has G99, which is neither a [gates] lane")
 
     def test_a_job_in_the_workflow_with_no_table_entry_fails(self) -> None:
@@ -139,19 +139,19 @@ class GenerateCiWorkflow(unittest.TestCase):
 
     def test_a_lane_removed_from_the_table_but_not_the_workflow_fails(self) -> None:
         # The lane's [gates] entry, owner and profile all go; the job stays.
-        self.mutate("ci/gate-inputs.toml", 'G14 = "python3.14 scripts/check-markdown-links.py --root . rfcs/handoffs"\n', "")
-        self.mutate("ci/gate-inputs.toml", 'G14 = "098"\n', "")
-        self.mutate("ci/gate-inputs.toml", 'G14 = { title = "markdown links: handoffs and roadmap (Python {python})", setup = "python" }\n', "")
-        template = self.read("ci/workflow-template.toml")
+        self.mutate("contracts/gate-inputs.toml", 'G14 = "python3.14 scripts/check-markdown-links.py --root . rfcs/handoffs"\n', "")
+        self.mutate("contracts/gate-inputs.toml", 'G14 = "098"\n', "")
+        self.mutate("contracts/gate-inputs.toml", 'G14 = { title = "markdown links: handoffs and roadmap (Python {python})", setup = "python" }\n', "")
+        template = self.read("contracts/workflow-template.toml")
         start = template.index("G14 = '''")
         end = template.index("'''", start + 8) + 4
-        (self.root / "ci/workflow-template.toml").write_text(template[:start] + template[end:], encoding="utf-8")
+        (self.root / "contracts/workflow-template.toml").write_text(template[:start] + template[end:], encoding="utf-8")
         self.assert_red("job G14 is in .github/workflows/ci.yml but no table entry generates it")
 
     # ── what conditions 6 and 8 used to hold ────────────────────────────
 
     def test_the_runner_label_is_the_manifests_in_every_job(self) -> None:
-        self.mutate("ci/gate-inputs.toml", 'label = "ubuntu-24.04"', 'label = "ubuntu-26.04"')
+        self.mutate("contracts/gate-inputs.toml", 'label = "ubuntu-24.04"', 'label = "ubuntu-26.04"')
         self.assert_red("ubuntu-26.04")  # the diff shows every job changing
         self.assertEqual(self.run_gen("--write").returncode, 0)
         text = self.read(".github/workflows/ci.yml")
@@ -164,7 +164,7 @@ class GenerateCiWorkflow(unittest.TestCase):
         self.assert_red("is not a fresh generation", "+    runs-on: ubuntu-24.04")
 
     def test_a_tool_version_bump_is_the_workflow_not_a_second_edit(self) -> None:
-        self.mutate("ci/gate-inputs.toml", 'mdbook = "0.5.4"', 'mdbook = "0.5.5"')
+        self.mutate("contracts/gate-inputs.toml", 'mdbook = "0.5.4"', 'mdbook = "0.5.5"')
         self.assert_red("0.5.5")
         self.assertEqual(self.run_gen("--write").returncode, 0)
         text = self.read(".github/workflows/ci.yml")
@@ -174,81 +174,81 @@ class GenerateCiWorkflow(unittest.TestCase):
     def test_an_msrv_bump_in_tools_alone_is_caught(self) -> None:
         # D4a's hole: with the ci.yml copy generated, nothing compared [tools]
         # to the +toolchain in [gates] commands. The generator does.
-        self.mutate("ci/gate-inputs.toml", 'rust_msrv = "1.95"', 'rust_msrv = "1.96"')
+        self.mutate("contracts/gate-inputs.toml", 'rust_msrv = "1.95"', 'rust_msrv = "1.96"')
         r = self.assert_red("the command runs `cargo +1.95`", "[tools] says 1.96")
         self.assertGreaterEqual(r.stderr.count("cargo +1.95"), 5, "every MSRV lane, not the first")
 
     def test_a_python_bump_in_tools_alone_is_caught(self) -> None:
-        self.mutate("ci/gate-inputs.toml", 'python = "3.14"', 'python = "3.15"')
+        self.mutate("contracts/gate-inputs.toml", 'python = "3.14"', 'python = "3.15"')
         self.assert_red("the command runs python3.14, but [tools] python is 3.15")
 
     def test_a_command_toolchain_that_disagrees_with_the_profile_is_caught(self) -> None:
-        self.mutate("ci/gate-inputs.toml", 'G08 = "cargo +stable fmt', 'G08 = "cargo +nightly fmt')
+        self.mutate("contracts/gate-inputs.toml", 'G08 = "cargo +stable fmt', 'G08 = "cargo +nightly fmt')
         self.assert_red("[gates] G08: the command runs `cargo +nightly`")
 
     def test_a_tool_nothing_uses_is_a_pin_nothing_reads(self) -> None:
-        self.mutate("ci/gate-inputs.toml", ", mdbook = true }", " }")
-        self.mutate("ci/gate-inputs.toml", " / mdBook {mdbook})", ")")
-        self.mutate("ci/workflow-template.toml", "Install mdBook @@tools.mdbook@@", "Install mdBook", 1)
-        self.mutate("ci/workflow-template.toml", "mdbook --version @@tools.mdbook@@", "mdbook", 1)
+        self.mutate("contracts/gate-inputs.toml", ", mdbook = true }", " }")
+        self.mutate("contracts/gate-inputs.toml", " / mdBook {mdbook})", ")")
+        self.mutate("contracts/workflow-template.toml", "Install mdBook @@tools.mdbook@@", "Install mdBook", 1)
+        self.mutate("contracts/workflow-template.toml", "mdbook --version @@tools.mdbook@@", "mdbook", 1)
         self.assert_red("[tools] mdbook is declared but nothing in the generated workflow uses it")
 
     def test_a_raw_block_may_not_spell_a_version_out(self) -> None:
-        self.mutate("ci/workflow-template.toml", 'python-version: "@@tools.python@@"', 'python-version: "3.13"', 2)
+        self.mutate("contracts/workflow-template.toml", 'python-version: "@@tools.python@@"', 'python-version: "3.13"', 2)
         self.assert_red("a literal Python version")
 
     def test_a_raw_block_may_not_spell_a_runner_or_a_sha_out(self) -> None:
-        self.mutate("ci/workflow-template.toml", "runs-on: @@runner.label@@", "runs-on: ubuntu-latest", 2)
+        self.mutate("contracts/workflow-template.toml", "runs-on: @@runner.label@@", "runs-on: ubuntu-latest", 2)
         self.assert_red("a literal runner label")
-        self.mutate("ci/workflow-template.toml", "runs-on: ubuntu-latest", "runs-on: @@runner.label@@", 2)
-        self.mutate("ci/workflow-template.toml", "@@uses.checkout_v6@@", "actions/checkout@" + "a" * 40, 2)
+        self.mutate("contracts/workflow-template.toml", "runs-on: ubuntu-latest", "runs-on: @@runner.label@@", 2)
+        self.mutate("contracts/workflow-template.toml", "@@uses.checkout_v6@@", "actions/checkout@" + "a" * 40, 2)
         self.assert_red("a literal action SHA")
 
     def test_an_action_pin_is_the_manifests(self) -> None:
-        self.mutate("ci/gate-inputs.toml", "d23441a48e516b6c34aea4fa41551a30e30af803", "1" * 40)
+        self.mutate("contracts/gate-inputs.toml", "d23441a48e516b6c34aea4fa41551a30e30af803", "1" * 40)
         r = self.assert_red("actions/checkout@" + "1" * 40)
         self.assertIn("# v6", r.stderr)
 
     def test_a_placeholder_naming_nothing_is_caught(self) -> None:
-        self.mutate("ci/workflow-template.toml", "@@uses.cache_v5@@", "@@uses.cache_v9@@", 1)
+        self.mutate("contracts/workflow-template.toml", "@@uses.cache_v5@@", "@@uses.cache_v9@@", 1)
         self.assert_red("@@uses.cache_v9@@ names no [actions] entry")
 
     # ── what condition 4 used to hold ────────────────────────────────────
 
     def test_a_cargo_lane_missing_from_rust_components_fails(self) -> None:
-        self.mutate("ci/gate-inputs.toml", "G09b = []\n", "")
+        self.mutate("contracts/gate-inputs.toml", "G09b = []\n", "")
         self.assert_red("[rust_components] is missing G09b")
 
     def test_a_wrong_component_array_fails(self) -> None:
-        self.mutate("ci/gate-inputs.toml", 'G08 = ["rustfmt"]', 'G08 = ["clippy"]')
+        self.mutate("contracts/gate-inputs.toml", 'G08 = ["rustfmt"]', 'G08 = ["clippy"]')
         self.assert_red("[rust_components] G08 = ['clippy'], but its command needs ['rustfmt']")
 
     def test_an_extra_rust_components_key_fails(self) -> None:
-        self.mutate("ci/gate-inputs.toml", "G09b = []\n", "G09b = []\nG10a = []\n")
+        self.mutate("contracts/gate-inputs.toml", "G09b = []\n", "G09b = []\nG10a = []\n")
         self.assert_red("[rust_components] has G10a, which is not a cargo lane")
 
     def test_a_command_that_needs_a_component_its_lane_lacks_fails(self) -> None:
-        self.mutate("ci/gate-inputs.toml", 'G07 = ["clippy"]', "G07 = []")
+        self.mutate("contracts/gate-inputs.toml", 'G07 = ["clippy"]', "G07 = []")
         self.assert_red("[rust_components] G07 = [], but its command needs ['clippy']")
 
     # ── profile hygiene, and the unreadable ──────────────────────────────
 
     def test_an_unknown_profile_key_or_setup_is_caught(self) -> None:
-        self.mutate("ci/gate-inputs.toml", 'G11 = { title = "RFC integrity (Python {python})", setup = "python" }', 'G11 = { title = "RFC integrity (Python {python})", setup = "python", colour = "red" }')
+        self.mutate("contracts/gate-inputs.toml", 'G11 = { title = "RFC integrity (Python {python})", setup = "python" }', 'G11 = { title = "RFC integrity (Python {python})", setup = "python", colour = "red" }')
         self.assert_red("[lane_profiles] G11: unknown key `colour`")
-        self.mutate("ci/gate-inputs.toml", 'setup = "python", colour = "red"', 'setup = "perl"')
+        self.mutate("contracts/gate-inputs.toml", 'setup = "python", colour = "red"', 'setup = "perl"')
         self.assert_red("`setup` must be rust, python or none")
 
     def test_a_title_may_not_contain_a_quote(self) -> None:
         # ci-gate.sh reads a lane's tz from its profile line with awk.
-        self.mutate("ci/gate-inputs.toml", 'title = "RFC integrity (Python {python})"', 'title = "RFC \\"x\\" (Python {python})"')
+        self.mutate("contracts/gate-inputs.toml", 'title = "RFC integrity (Python {python})"', 'title = "RFC \\"x\\" (Python {python})"')
         self.assert_red("`title` may not contain a double quote")
 
     def test_the_workflow_no_longer_sets_a_timezone_and_the_profile_still_names_one(self) -> None:
         # Stage 3b: ci-gate.sh exports `tz` from [lane_profiles]; the workflow's
         # per-job env is gone, so the fact lives in one place.
         self.assertNotIn("TZ:", self.read(".github/workflows/ci.yml"))
-        self.assertEqual(self.read("ci/gate-inputs.toml").count('tz = "UTC"'), 4)
+        self.assertEqual(self.read("contracts/gate-inputs.toml").count('tz = "UTC"'), 4)
         self.assertEqual(self.run_gen("--write").returncode, 0)
         self.assertNotIn("TZ:", self.read(".github/workflows/ci.yml"))
 
@@ -260,7 +260,7 @@ class GenerateCiWorkflow(unittest.TestCase):
         self.assertIn("run: bash scripts/ci-gate.sh G12", text)
         self.assertNotIn("ui-invariants-v1", text.replace("# was `ui-invariants-v1`", ""))
         self.assertNotIn("Record gate environment\n        run: |\n          set -euo pipefail\n          checked_out_sha=$(git rev-parse HEAD)\n          echo \"event_commit=$GITHUB_SHA\"\n          echo \"checked_out_commit=$checked_out_sha\"\n          if [[ \"$checked_out_sha\" != \"$GITHUB_SHA\" ]]; then\n            echo \"::error::Checked-out HEAD does not match GITHUB_SHA\"\n            exit 1\n          fi\n          test -z \"$(git status --porcelain)\"\n          echo \"runner_image=${ImageOS:-unknown} ${ImageVersion:-unknown}\"\n          bash_path", text)
-        self.assertEqual(self.read("ci/gate-inputs.toml").count('bash = true'), 1)
+        self.assertEqual(self.read("contracts/gate-inputs.toml").count('bash = true'), 1)
 
     def test_the_g12_self_tests_run_in_the_fixtures_job(self) -> None:
         text = self.read(".github/workflows/ci.yml")
@@ -269,15 +269,15 @@ class GenerateCiWorkflow(unittest.TestCase):
         self.assertEqual(text.count("check-ui-invariants-fixtures.sh\n          status"), 1)
 
     def test_the_custom_job_mechanism_is_gone_and_bash_must_be_true_or_absent(self) -> None:
-        self.mutate("ci/gate-inputs.toml", 'G12 = { title = "UI invariants v1", setup = "none", bash = true }', 'G12 = { title = "UI invariants v1", setup = "none", job = "x" }')
+        self.mutate("contracts/gate-inputs.toml", 'G12 = { title = "UI invariants v1", setup = "none", bash = true }', 'G12 = { title = "UI invariants v1", setup = "none", job = "x" }')
         self.assert_red("[lane_profiles] G12: unknown key `job`")
-        self.mutate("ci/gate-inputs.toml", 'setup = "none", job = "x" }', 'setup = "none", bash = "yes" }')
+        self.mutate("contracts/gate-inputs.toml", 'setup = "none", job = "x" }', 'setup = "none", bash = "yes" }')
         self.assert_red("`bash` is either true or absent")
 
     def test_g12_must_have_an_owner_and_no_exception(self) -> None:
         # The exceptions table is empty; a G12 line there beside [gates] is check 5's.
-        text = self.read("ci/gate-inputs.toml")
-        self.assertIn('G12 = "bash scripts/check-ui-invariants.sh --all --policy ci/ui-invariants.toml"', text)
+        text = self.read("contracts/gate-inputs.toml")
+        self.assertIn('G12 = "bash scripts/check-ui-invariants.sh --all --policy contracts/ui-invariants.toml"', text)
         self.assertIn('G12 = "093"', text)
         import re
         exceptions = re.split(r"(?m)^\[gate_matrix_exceptions\]$", text)[1]
@@ -285,20 +285,20 @@ class GenerateCiWorkflow(unittest.TestCase):
         self.assertNotIn("G12 =", exceptions)
 
     def test_a_lane_comment_for_no_lane_is_caught(self) -> None:
-        self.mutate("ci/workflow-template.toml", "[lane_comments]\n", "[lane_comments]\nG77 = '''\n    # nobody\n'''\n")
+        self.mutate("contracts/workflow-template.toml", "[lane_comments]\n", "[lane_comments]\nG77 = '''\n    # nobody\n'''\n")
         self.assert_red("[lane_comments] G77: no such lane profile")
 
     def test_an_unreadable_input_is_exit_two(self) -> None:
-        (self.root / "ci/workflow-template.toml").write_text("this is = not [valid", encoding="utf-8")
+        (self.root / "contracts/workflow-template.toml").write_text("this is = not [valid", encoding="utf-8")
         r = self.run_gen()
         self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
 
     def test_the_local_run_property_is_not_touched(self) -> None:
         # D7: `[gates]` is read, never rewritten, and stays single-line values
         # for scripts/ci-gate.sh's awk.
-        before = self.read("ci/gate-inputs.toml")
+        before = self.read("contracts/gate-inputs.toml")
         self.assertEqual(self.run_gen("--write").returncode, 0)
-        self.assertEqual(self.read("ci/gate-inputs.toml"), before)
+        self.assertEqual(self.read("contracts/gate-inputs.toml"), before)
         in_gates = False
         for line in before.split("\n"):
             if line.startswith("["):

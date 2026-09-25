@@ -4,15 +4,21 @@
 **Accepted on.** 2026-09-22
 **Approved by.** `@nabbisen`, 2026-09-22: "Well, RFC-116 is accepted." He ruled its two open questions on 2026-09-24 (D1, D3a).
 **Security review.** Required
-**Independent design review.** [Design review 2026-09-24](../handoffs/116-gate-contracts/design-review-2026-09-24.md) by the implementation role, which authored neither this RFC nor its handoff. Every measurement in §1 of this RFC was reproduced and agrees; three blockers and four high findings against its *remedies*, all resolved in this text. It also ran D3 by hand and disproved twelve rows of `ci/audit-coverage-matrix.md`.
+**Independent design review.** [Design review 2026-09-24](../handoffs/116-gate-contracts/design-review-2026-09-24.md) by the implementation role, which authored neither this RFC nor its handoff. Every measurement in §1 of this RFC was reproduced and agrees; three blockers and four high findings against its *remedies*, all resolved in this text. It also ran D3 by hand and disproved twelve rows of `contracts/audit-coverage-matrix.md`.
 **Design prerequisites.** None outstanding. The twelve disproved Class-A rows were ruled by `@nabbisen` on 2026-09-24 and corrected the same day (D3a); open question 1 was ruled the same day (D1).
 **Implementation prerequisites.** None for stages 1 and 2. Stage 3 waits until stages 1 and 2 have landed, so that a change to how every lane is defined happens on a tree whose contracts are already true.
-**Closure prerequisites.** No fact stated in `ci/` exists in a second hand-maintained place; every surviving file in `ci/` is read by a gate that fails when the file stops being true; the audit matrix's `class` and `actor` columns are checked against the code, keyed on table rows rather than on names anywhere in the file; every lane runs through one dispatcher or its exception is a dated decision; and the placement of what survives is settled.
+**Closure prerequisites.** No fact stated in `contracts/` exists in a second hand-maintained place; every surviving file in `contracts/` is read by a gate that fails when the file stops being true; the audit matrix's `class` and `actor` columns are checked against the code, keyed on table rows rather than on names anywhere in the file; every lane runs through one dispatcher or its exception is a dated decision; and the placement of what survives is settled.
 **Tracks.** Gate integrity. Raised by `@nabbisen` on 2026-09-22: "`ci/` seems also messy and dirty because partially duplicate of `.github/workflows/`."
-**Touches.** `ci/`, `.github/workflows/ci.yml`, `scripts/check-audit-matrix.sh`, `scripts/check-gate-inputs.sh`, `scripts/ci-gate.sh`, `scripts/check-ui-invariants.sh`, `scripts/tests/`, `rfcs/handoffs/094-transactional-audit/command-inventory.md`, and a one-line pointer in `rfcs/accepted/094-transactional-audit-registry.md` (D6).
+**Touches.** `contracts/`, `.github/workflows/ci.yml`, `scripts/check-audit-matrix.sh`, `scripts/check-gate-inputs.sh`, `scripts/ci-gate.sh`, `scripts/check-ui-invariants.sh`, `scripts/tests/`, `rfcs/handoffs/094-transactional-audit/command-inventory.md`, and a one-line pointer in `rfcs/accepted/094-transactional-audit-registry.md` (D6).
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** High-capability model, requirements-architect role.
 **Handoff.** [`../handoffs/116-gate-contracts/README.md`](../handoffs/116-gate-contracts/README.md)
+
+*Amended 2026-09-25 (stage 7), on `@nabbisen`'s ruling of the same day: the directory
+this RFC calls `ci/` is now `contracts/`. Its normative statements (the closure
+prerequisites, the touched paths, D2) say `contracts/`; its narrative (the Summary's
+measurements, the quoted request, the dated corrections) keeps the name the directory
+had when they were made.*
 
 ## Summary
 
@@ -68,7 +74,7 @@ better-named directory leaves a broken, ungated registry.**
 ## Decisions
 
 **D1 — One source per registry: the TOML survives.** Ruled by `@nabbisen`,
-2026-09-24, on the design review's measurement: `ci/write-commands.toml` is the
+2026-09-24, on the design review's measurement: `contracts/write-commands.toml` is the
 copy being maintained, it carries `status`, `files` and `test_id` on 99 of 99
 rows, and it parses in one call — while
 `rfcs/handoffs/094-transactional-audit/command-inventory.md` has **no `files`
@@ -77,10 +83,10 @@ expressible against it without adding columns first. The markdown keeps its
 prose, which is the part the TOML cannot carry, and loses its table; if a table
 is wanted there it is **generated** from the TOML, never parsed back out of it.
 
-**D2 — Every file in `ci/` is read by a gate that fails when it stops being
+**D2 — Every file in `contracts/` is read by a gate that fails when it stops being
 true.** A file no gate reads is not a contract; it is a document that looks
 like one, which is worse, because a reader trusts it. Anything that cannot be
-given a gate leaves `ci/` and becomes documentation, labelled as such.
+given a gate leaves `contracts/` and becomes documentation, labelled as such.
 
 **D2a — The inventory schema separates *sealed* from *planned*.** The review
 showed the gate as first worded cannot be green: **76 of 99 rows name no
@@ -117,7 +123,7 @@ auth-flow section already gives its own unconverted rows. They now read
 `B *(A required)*` — Class B is what the code does, Class A is what the
 document requires — and **RFC 094 M2b converts them**, its scope being settings,
 pending settings, federation configuration and client metadata. The actor cell
-is corrected to `—`. Both landed in `ci/audit-coverage-matrix.md` under a dated
+is corrected to `—`. Both landed in `contracts/audit-coverage-matrix.md` under a dated
 "Class corrections" block, with G13 still green because no event name changed.
 **Stage 2 therefore lands on a matrix that is already true**, and its job is to
 make it stay true.
@@ -165,8 +171,8 @@ as a dated decision with a reason that is still true. Routing it costs moving
 the job's Bash ≥ 5.2 assertion, which the dispatcher does not carry.
 
 **D6 — Stage 1 is an interim gate that RFC 094's `audit-structure` subsumes.**
-RFC 094 plans `xtask audit-structure --policy ci/write-authority.toml --commands
-ci/write-commands.toml` as "the authority" over this same file, including the
+RFC 094 plans `xtask audit-structure --policy contracts/write-authority.toml --commands
+contracts/write-commands.toml` as "the authority" over this same file, including the
 `event` and `descriptor` columns this RFC would fill. Neither RFC knows about
 the other, and the xtask does not exist. Stage 1 takes the conditions available
 without the AST — id ↔ code, `files` exist, counts derived — and leaves the
@@ -217,5 +223,5 @@ with stage 1 (D1, D2, D2a); later stages add their own rows here (G18, stage 6).
 
 | ID | Toolchain | Features | Blocking command / assertion |
 |---|---|---|---|
-| G17 | Python 3.14 | n/a | `python3.14 scripts/check-write-commands.py --root . --inventory ci/write-commands.toml` |
-| G18 | Python 3.14 | n/a | `python3.14 scripts/check-contracts.py --root . --policy ci/contract-paths.toml` |
+| G17 | Python 3.14 | n/a | `python3.14 scripts/check-write-commands.py --root . --inventory contracts/write-commands.toml` |
+| G18 | Python 3.14 | n/a | `python3.14 scripts/check-contracts.py --root . --policy contracts/contract-paths.toml` |

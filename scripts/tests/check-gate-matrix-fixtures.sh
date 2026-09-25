@@ -74,7 +74,7 @@ run_gate() {
   # hosted run.
   GITHUB_SHA=$(git -C "$fixture_dir" rev-parse HEAD) \
     bash "$ci_gate" "$gate" --root "$fixture_dir" \
-    --manifest "$repo_root/ci/gate-inputs.toml"
+    --manifest "$repo_root/contracts/gate-inputs.toml"
 }
 
 expect_gate_fails() {
@@ -191,8 +191,8 @@ done
 expect_gate_fails G13 audit-desync
 expect_gate_output G13 audit-desync \
   "user.in_matrix_only  (in matrix but NOT found in crates/**/*.rs)" \
-  "client.in_source_only  (in source but NOT in matrix ci/audit-coverage-matrix.md)" \
-  "webauthn.fixture_only  (in source but NOT in matrix ci/audit-coverage-matrix.md)" \
+  "client.in_source_only  (in source but NOT in matrix contracts/audit-coverage-matrix.md)" \
+  "webauthn.fixture_only  (in source but NOT in matrix contracts/audit-coverage-matrix.md)" \
   "auth.written_only_by_tests  (in matrix but NOT found in crates/**/*.rs)"
 # The clean case is a minimal in-sync fixture rather than a copy of the real
 # tree: staging the whole repository for one grep would dominate the harness's

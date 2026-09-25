@@ -13,7 +13,7 @@ availability defect.
 **Implementation prerequisites.** None.
 **Closure prerequisites.** **A lock cannot outlive the credential change that made it moot** — for any path that sets a credential, and without disturbing a lock that the second-factor lockout set; a holder of a consumed reset token is told what was cleared, in the completion's own response, and that message is unreachable without such a token; and no sign-in response changes for any account.
 **Tracks.** Account availability. Found while reviewing RFC 115 stage 1, 2026-09-24, from the implementer's disclosure that they had not checked whether activation clears a lock.
-**Touches.** `crates/sui-id-store/src/commands.rs` (U09, U10), `crates/sui-id-store/src/repos/users.rs` (the one helper), `crates/sui-id-core/src/account/forgot_password.rs`, `crates/sui-id/src/http/handlers/forgot_password.rs`, `crates/sui-id-web/src/pages/`, `crates/sui-id-i18n/`, `ci/audit-coverage-matrix.md` and `docs/src/reference/audit-events.md` (D5's attribute), `docs/src/guides/operators.md`, `docs/threat-model.md`.
+**Touches.** `crates/sui-id-store/src/commands.rs` (U09, U10), `crates/sui-id-store/src/repos/users.rs` (the one helper), `crates/sui-id-core/src/account/forgot_password.rs`, `crates/sui-id/src/http/handlers/forgot_password.rs`, `crates/sui-id-web/src/pages/`, `crates/sui-id-i18n/`, `contracts/audit-coverage-matrix.md` and `docs/src/reference/audit-events.md` (D5's attribute), `docs/src/guides/operators.md`, `docs/threat-model.md`.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** High-capability model, requirements-architect role.
 **Handoff.** [`../handoffs/118-lockout-clears-on-credential-change/README.md`](../handoffs/118-lockout-clears-on-credential-change/README.md)

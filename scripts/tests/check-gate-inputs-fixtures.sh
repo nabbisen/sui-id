@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Negative self-tests for RFC 093 A3.4 (scripts/check-gate-inputs.sh).
 #
-# Each fixture is a copy of the real ci/gate-inputs.toml, the real RFC 093
+# Each fixture is a copy of the real contracts/gate-inputs.toml, the real RFC 093
 # Gate Matrix v1 table, and the real .github/workflows/ tree, with exactly
 # one deliberate violation applied. Using the real files as the baseline
 # (rather than a synthetic minimal schema) keeps each fixture attributable to
@@ -16,8 +16,8 @@ trap 'rm -rf "$tmp"' EXIT
 
 make_valid_fixture() {
   local target=$1 dir
-  mkdir -p "$target/ci" "$target/.github/workflows"
-  cp "$repo_root/ci/gate-inputs.toml" "$target/ci/gate-inputs.toml"
+  mkdir -p "$target/contracts" "$target/.github/workflows"
+  cp "$repo_root/contracts/gate-inputs.toml" "$target/contracts/gate-inputs.toml"
   # All four lifecycle folders, because R10 resolves an RFC number to a file
   # by searching them — a fixture holding only RFC 093 could not tell
   # "resolves to exactly one" from "happens to be the only file present".
@@ -57,15 +57,15 @@ It exists to give the lane registry a second source to resolve.
 | G90 | stable | n/a | `bash scripts/fixture-lane.sh` |
 FIXTURE_RFC
   sed -i 's|^"093" = "Gate Matrix v1"$|&\n"900" = "Gate Matrix lanes owned by RFC 900"|' \
-    "$target/ci/gate-inputs.toml"
-  sed -i 's|^G11 = "093"$|&\nG90 = "900"|' "$target/ci/gate-inputs.toml"
-  sed -i 's|^G11 = "python3.14 scripts/check-rfc-integrity.py --root . --policy ci/rfc-policy.toml"$|&\nG90 = "bash scripts/fixture-lane.sh"|' \
-    "$target/ci/gate-inputs.toml"
+    "$target/contracts/gate-inputs.toml"
+  sed -i 's|^G11 = "093"$|&\nG90 = "900"|' "$target/contracts/gate-inputs.toml"
+  sed -i 's|^G11 = "python3.14 scripts/check-rfc-integrity.py --root . --policy contracts/rfc-policy.toml"$|&\nG90 = "bash scripts/fixture-lane.sh"|' \
+    "$target/contracts/gate-inputs.toml"
 }
 
 run_checker() {
   local root=$1
-  bash "$checker" --all --policy ci/gate-inputs.toml \
+  bash "$checker" --all --policy contracts/gate-inputs.toml \
     --workflows-dir .github/workflows \
     --root "$root"
 }
@@ -137,7 +137,7 @@ make_valid_fixture "$stale"
 # manifest is parsed as TOML first, and this fixture would stop reaching
 # condition 3 at all.
 sed -i '/^setup_python_v7 = /a stale_entry = "222222222222222222222222222222222222222f"' \
-  "$stale/ci/gate-inputs.toml"
+  "$stale/contracts/gate-inputs.toml"
 expect_failure stale-action "condition 3: [actions] SHA(s) not used by any workflow"
 
 # --- Condition 0 (the TOML precheck): a duplicate key in [rust_components] --
@@ -146,33 +146,33 @@ expect_failure stale-action "condition 3: [actions] SHA(s) not used by any workf
 # to the workflow generator; the precheck is what still catches this.)
 dup_lane="$tmp/rust-components-duplicate"
 make_valid_fixture "$dup_lane"
-sed -i '/^G01 = \[\]$/a G01 = []' "$dup_lane/ci/gate-inputs.toml"
+sed -i '/^G01 = \[\]$/a G01 = []' "$dup_lane/contracts/gate-inputs.toml"
 expect_failure rust-components-duplicate "not valid TOML" "line"
 
 # --- Condition 5: version is not 1 ----------------------------------------
 bad_version="$tmp/bad-version"
 make_valid_fixture "$bad_version"
-sed -i 's/^version = 1$/version = 2/' "$bad_version/ci/gate-inputs.toml"
+sed -i 's/^version = 1$/version = 2/' "$bad_version/contracts/gate-inputs.toml"
 expect_failure bad-version "condition 5: version = 2, expected 1"
 
 # --- Condition 5b: gate_matrix_version missing (not exactly one) ---------
 missing_gmv="$tmp/missing-gate-matrix-version"
 make_valid_fixture "$missing_gmv"
-sed -i '/^gate_matrix_version = 1$/d' "$missing_gmv/ci/gate-inputs.toml"
+sed -i '/^gate_matrix_version = 1$/d' "$missing_gmv/contracts/gate-inputs.toml"
 expect_failure missing-gate-matrix-version "condition 5: manifest requires exactly one top-level gate_matrix_version"
 
 # --- Condition 7a: [gates] command diverges from the RFC table -----------
 diverged_command="$tmp/gates-diverged-command"
 make_valid_fixture "$diverged_command"
 sed -i 's|^G02 = "cargo +1.95 test --workspace --locked"$|G02 = "cargo +1.95 test --workspace"|' \
-  "$diverged_command/ci/gate-inputs.toml"
+  "$diverged_command/contracts/gate-inputs.toml"
 expect_failure gates-diverged-command \
   "condition 7 (check 4):" "G02 (owner 093)"
 
 # --- Condition 7b: [gates] missing a lane the RFC table has ---------------
 missing_gate="$tmp/gates-missing-lane"
 make_valid_fixture "$missing_gate"
-sed -i '/^G09b = "cargo +stable test -p sui-id-store/d' "$missing_gate/ci/gate-inputs.toml"
+sed -i '/^G09b = "cargo +stable test -p sui-id-store/d' "$missing_gate/contracts/gate-inputs.toml"
 expect_failure gates-missing-lane \
   "condition 7 (check 3):" "G09b"
 
@@ -180,7 +180,7 @@ expect_failure gates-missing-lane \
 extra_gate="$tmp/gates-extra-lane"
 make_valid_fixture "$extra_gate"
 sed -i '/^G09b = "cargo +stable test -p sui-id-store/a G10 = "echo not-a-real-lane"' \
-  "$extra_gate/ci/gate-inputs.toml"
+  "$extra_gate/contracts/gate-inputs.toml"
 expect_failure gates-extra-lane \
   "condition 7 (check 1):" "G10 (0 [gate_owners] entries"
 
@@ -188,7 +188,7 @@ expect_failure gates-extra-lane \
 dup_gate="$tmp/gates-duplicate-key"
 make_valid_fixture "$dup_gate"
 sed -i '/^G01 = "cargo +1.95 build --workspace --all-targets --locked"$/a G01 = "cargo +1.95 build --workspace --all-targets --locked"' \
-  "$dup_gate/ci/gate-inputs.toml"
+  "$dup_gate/contracts/gate-inputs.toml"
 # Caught by the TOML precheck since R10-b, for the same reason as
 # rust-components-duplicate above: condition 7's duplicate detector is intact
 # but no longer reachable through a manifest.
@@ -215,9 +215,9 @@ expect_success gates-and-form-accepted
 # path: it moves a lane that normally is *not* excepted.
 exception_pass="$tmp/gate-matrix-exception-accepted"
 make_valid_fixture "$exception_pass"
-sed -i '/^G09b = "cargo/d' "$exception_pass/ci/gate-inputs.toml"
+sed -i '/^G09b = "cargo/d' "$exception_pass/contracts/gate-inputs.toml"
 sed -i '/^\[gate_matrix_exceptions\]/a G09b = "fixture: moved to exceptions to test the accept path"' \
-  "$exception_pass/ci/gate-inputs.toml"
+  "$exception_pass/contracts/gate-inputs.toml"
 expect_success gate-matrix-exception-accepted
 
 # --- Condition 7g: a lane in both [gates] and [gate_matrix_exceptions] --
@@ -229,7 +229,7 @@ expect_success gate-matrix-exception-accepted
 both_lists="$tmp/gate-matrix-exception-and-gates-fails"
 make_valid_fixture "$both_lists"
 sed -i '/^\[gate_matrix_exceptions\]/a G13 = "fixture: listed as an exception while still in [gates]"' \
-  "$both_lists/ci/gate-inputs.toml"
+  "$both_lists/contracts/gate-inputs.toml"
 expect_failure gate-matrix-exception-and-gates-fails \
   "condition 7 (check 5):" "G13"
 
@@ -259,7 +259,7 @@ expect_success registry-multi-source-valid
 # --- Check 1: a [gates] lane with no [gate_owners] entry ------------------
 check1="$tmp/registry-check1-unowned-lane"
 make_multi_source_fixture "$check1"
-sed -i '/^G90 = "900"$/d' "$check1/ci/gate-inputs.toml"
+sed -i '/^G90 = "900"$/d' "$check1/contracts/gate-inputs.toml"
 expect_failure registry-check1-unowned-lane \
   "condition 7 (check 1):" "G90 (0 [gate_owners] entries"
 
@@ -267,7 +267,7 @@ expect_failure registry-check1-unowned-lane \
 check2_unsourced="$tmp/registry-check2-owner-not-a-source"
 make_multi_source_fixture "$check2_unsourced"
 sed -i '/^"900" = "Gate Matrix lanes owned by RFC 900"$/d' \
-  "$check2_unsourced/ci/gate-inputs.toml"
+  "$check2_unsourced/contracts/gate-inputs.toml"
 expect_failure registry-check2-owner-not-a-source \
   "condition 7 (check 2):" 'not declared in [gate_lane_sources]'
 
@@ -292,7 +292,7 @@ expect_failure registry-check2-resolves-to-two \
 # --- Check 3: a source declares a lane the manifest accounts for nowhere --
 check3="$tmp/registry-check3-source-lane-unaccounted"
 make_multi_source_fixture "$check3"
-sed -i '/^G90 = "bash scripts\/fixture-lane.sh"$/d' "$check3/ci/gate-inputs.toml"
+sed -i '/^G90 = "bash scripts\/fixture-lane.sh"$/d' "$check3/contracts/gate-inputs.toml"
 expect_failure registry-check3-source-lane-unaccounted \
   "condition 7 (check 3):" "G90"
 
@@ -320,7 +320,7 @@ expect_failure registry-check4-command-drift-in-owner-table \
 check4_norm="$tmp/registry-check4-normalisation-not-widened"
 make_multi_source_fixture "$check4_norm"
 sed -i 's|^G05 = "cargo +stable build --workspace --all-targets --locked && cargo +stable test --workspace --locked"$|G05 = "cargo +stable build --workspace --all-targets --locked and cargo +stable test --workspace --locked"|' \
-  "$check4_norm/ci/gate-inputs.toml"
+  "$check4_norm/contracts/gate-inputs.toml"
 expect_failure registry-check4-normalisation-not-widened \
   "condition 7 (check 4):" "G05 (owner 093)"
 
@@ -328,7 +328,7 @@ expect_failure registry-check4-normalisation-not-widened \
 check5="$tmp/registry-check5-both-gates-and-exception"
 make_multi_source_fixture "$check5"
 sed -i '/^\[gate_matrix_exceptions\]/a G90 = "fixture: excepted while still dispatched, which must fail"' \
-  "$check5/ci/gate-inputs.toml"
+  "$check5/contracts/gate-inputs.toml"
 expect_failure registry-check5-both-gates-and-exception \
   "condition 7 (check 5):" "G90"
 
@@ -336,7 +336,7 @@ expect_failure registry-check5-both-gates-and-exception \
 check6="$tmp/registry-check6-ungrounded-exception"
 make_multi_source_fixture "$check6"
 sed -i '/^\[gate_matrix_exceptions\]/a G99 = "fixture: exception naming a lane no source RFC declares"' \
-  "$check6/ci/gate-inputs.toml"
+  "$check6/contracts/gate-inputs.toml"
 expect_failure registry-check6-ungrounded-exception \
   "condition 7 (check 6):" "G99"
 
@@ -363,7 +363,7 @@ make_multi_source_fixture "$heading_literal"
 sed -i 's|^### Gate Matrix lanes owned by RFC 900$|### Gate Matrix (v2)|' \
   "$heading_literal/rfcs/accepted/900-fixture.md"
 sed -i 's|^"900" = "Gate Matrix lanes owned by RFC 900"$|"900" = "Gate Matrix (v2)"|' \
-  "$heading_literal/ci/gate-inputs.toml"
+  "$heading_literal/contracts/gate-inputs.toml"
 expect_success registry-heading-parens-literal-pass
 
 # ...and must *not* match `Gate Matrix v2`. This is the discriminating case:
@@ -375,7 +375,7 @@ make_multi_source_fixture "$heading_regex"
 sed -i 's|^### Gate Matrix lanes owned by RFC 900$|### Gate Matrix v2|' \
   "$heading_regex/rfcs/accepted/900-fixture.md"
 sed -i 's|^"900" = "Gate Matrix lanes owned by RFC 900"$|"900" = "Gate Matrix (v2)"|' \
-  "$heading_regex/ci/gate-inputs.toml"
+  "$heading_regex/contracts/gate-inputs.toml"
 expect_failure registry-heading-parens-not-regex "heading" "occurs 0 times"
 
 # --- R10-b: the manifest must be valid TOML ------------------------------
@@ -387,7 +387,7 @@ expect_failure registry-heading-parens-not-regex "heading" "occurs 0 times"
 dup_source="$tmp/registry-duplicate-source-key"
 make_valid_fixture "$dup_source"
 sed -i 's|^"093" = "Gate Matrix v1"$|&\n"093" = "Summary"|' \
-  "$dup_source/ci/gate-inputs.toml"
+  "$dup_source/contracts/gate-inputs.toml"
 expect_failure registry-duplicate-source-key "not valid TOML" "line"
 
 # One lane with two owners. Check 1's "exactly one" caught this before the
@@ -396,7 +396,7 @@ expect_failure registry-duplicate-source-key "not valid TOML" "line"
 # file first and names the cause as what it is.
 dup_owner="$tmp/registry-duplicate-owner-key"
 make_valid_fixture "$dup_owner"
-sed -i 's|^G02 = "093"$|&\nG02 = "093"|' "$dup_owner/ci/gate-inputs.toml"
+sed -i 's|^G02 = "093"$|&\nG02 = "093"|' "$dup_owner/contracts/gate-inputs.toml"
 expect_failure registry-duplicate-owner-key "not valid TOML" "line"
 
 echo "gate-inputs negative fixtures passed"

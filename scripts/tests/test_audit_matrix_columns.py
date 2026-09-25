@@ -137,7 +137,7 @@ class MatrixColumns(unittest.TestCase):
         self.addCleanup(self._tmp.cleanup)
         self.root = Path(self._tmp.name)
         self.write("crates/sui-id-store/src/commands.rs", COMMANDS_RS)
-        self.write("ci/audit-coverage-matrix.md", MATRIX)
+        self.write("contracts/audit-coverage-matrix.md", MATRIX)
 
     def write(self, rel: str, text: str) -> None:
         path = self.root / rel
@@ -148,12 +148,12 @@ class MatrixColumns(unittest.TestCase):
         text = MATRIX if old is None else MATRIX.replace(old, new)
         if old is not None:
             self.assertNotEqual(text, MATRIX, f"mutation did not apply: {old!r}")
-        self.write("ci/audit-coverage-matrix.md", text)
+        self.write("contracts/audit-coverage-matrix.md", text)
 
     def run_checker(self) -> subprocess.CompletedProcess:
         return subprocess.run(
             [sys.executable, str(CHECKER), "--root", str(self.root),
-             "--matrix", "ci/audit-coverage-matrix.md"],
+             "--matrix", "contracts/audit-coverage-matrix.md"],
             capture_output=True,
             text=True,
         )
@@ -237,7 +237,7 @@ class MatrixColumns(unittest.TestCase):
     def test_a_row_deleted_while_its_name_survives_in_prose_is_caught(self) -> None:
         # G13's name extraction would still see `user.disable` in the prose.
         lines = [l for l in MATRIX.splitlines() if not l.startswith("| `user.disable`")]
-        self.write("ci/audit-coverage-matrix.md", "\n".join(lines) + "\n")
+        self.write("contracts/audit-coverage-matrix.md", "\n".join(lines) + "\n")
         self.assertIn("`user.disable`", "\n".join(lines))
         self.assert_red("user.disable is a sealed Class-A event", "no table row")
 
@@ -259,7 +259,7 @@ class MatrixColumns(unittest.TestCase):
         self.assert_red("(class)", "does not start with A or B")
 
     def test_a_second_row_for_one_event_is_caught(self) -> None:
-        self.write("ci/audit-coverage-matrix.md", MATRIX + "| `auth.login.failure` | again | — | B |\n")
+        self.write("contracts/audit-coverage-matrix.md", MATRIX + "| `auth.login.failure` | again | — | B |\n")
         self.assert_red("auth.login.failure has a second row")
 
     # ── the source side ──────────────────────────────────────────────────

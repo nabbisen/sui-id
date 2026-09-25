@@ -5,7 +5,7 @@ set -euo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 gate="$repo_root/scripts/check-ui-invariants.sh"
-policy="$repo_root/ci/ui-invariants.toml"
+policy="$repo_root/contracts/ui-invariants.toml"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 

@@ -87,14 +87,14 @@ G09a = "cargo +1.95 test -p sui-id-store --features ldap --test ldap_smoke --loc
 G09b = "cargo +stable test -p sui-id-store --features ldap --test ldap_smoke --locked -- --exact rustls_provider_and_tls_connector_reach_fixture"
 G10a = "mdbook build docs --dest-dir target/mdbook-gate"
 G10b = "python3.14 scripts/check-markdown-links.py --root . README.md ROADMAP.md docs"
-G11 = "python3.14 scripts/check-rfc-integrity.py --root . --policy ci/rfc-policy.toml"
-G12 = "bash scripts/check-ui-invariants.sh --all --policy ci/ui-invariants.toml"
+G11 = "python3.14 scripts/check-rfc-integrity.py --root . --policy contracts/rfc-policy.toml"
+G12 = "bash scripts/check-ui-invariants.sh --all --policy contracts/ui-invariants.toml"
 G13 = "bash scripts/check-audit-matrix.sh"
 G14 = "python3.14 scripts/check-markdown-links.py --root . rfcs/handoffs"
-G15 = "python3.14 scripts/check-doc-authority.py --root . --policy ci/doc-authority.toml"
-G16 = "python3.14 scripts/check-owner-attributions.py --root . --policy ci/owner-attributions.toml"
-G17 = "python3.14 scripts/check-write-commands.py --root . --inventory ci/write-commands.toml"
-G18 = "python3.14 scripts/check-contracts.py --root . --policy ci/contract-paths.toml"
+G15 = "python3.14 scripts/check-doc-authority.py --root . --policy contracts/doc-authority.toml"
+G16 = "python3.14 scripts/check-owner-attributions.py --root . --policy contracts/owner-attributions.toml"
+G17 = "python3.14 scripts/check-write-commands.py --root . --inventory contracts/write-commands.toml"
+G18 = "python3.14 scripts/check-contracts.py --root . --policy contracts/contract-paths.toml"
 
 # RFC 093 M1b C2.1: the lane-completeness rule (scripts/check-gate-inputs.sh
 # condition 7) requires every lane declared by any source RFC to be
@@ -114,7 +114,7 @@ G18 = "python3.14 scripts/check-contracts.py --root . --policy ci/contract-paths
 # RFC 116 stage 3: what each lane needs from a runner, and the one fact about a
 # lane that is neither its command nor its toolchain. .github/workflows/ci.yml is
 # generated from this table, [runner], [tools], [rust_components], [actions] and
-# ci/workflow-template.toml by scripts/generate-ci-workflow.py; a lane with no
+# contracts/workflow-template.toml by scripts/generate-ci-workflow.py; a lane with no
 # entry here has no job, and a job with no entry here is a failure. One line per
 # lane, single-line values: the awk readers in ci-gate.sh and check-gate-inputs.sh
 # stop at the next table header and never read this one.

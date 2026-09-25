@@ -3,7 +3,7 @@
 Run as: python3.14 -m unittest scripts.tests.test_owner_attributions
 
 Each fixture is a throwaway git repository carrying the **real**
-`ci/owner-attributions.toml` (so the patterns under test are the shipped ones),
+`contracts/owner-attributions.toml` (so the patterns under test are the shipped ones),
 mutated one way per test. The checker is invoked as a subprocess, matching this
 project's convention of testing checkers as black boxes; a few pure-function
 tests import it directly for the phrasing cases.
@@ -17,12 +17,12 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 CHECKER = REPO_ROOT / "scripts" / "check-owner-attributions.py"
-REAL_POLICY = (REPO_ROOT / "ci" / "owner-attributions.toml").read_text()
+REAL_POLICY = (REPO_ROOT / "contracts" / "owner-attributions.toml").read_text()
 
 _spec = importlib.util.spec_from_file_location("check_owner_attributions", CHECKER)
 coa = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(coa)
-POLICY = coa.load_policy(str(REPO_ROOT / "ci" / "owner-attributions.toml"))
+POLICY = coa.load_policy(str(REPO_ROOT / "contracts" / "owner-attributions.toml"))
 
 # The three sentences RFC 117 was written to catch, as they appeared.
 JULY = "**Vendor independence required** by the owner's 2026-07-28 S1 ruling."
@@ -53,7 +53,7 @@ class Repo:
         self._git("config", "user.email", "t@example.invalid")
         self._git("config", "user.name", "t")
         self._git("config", "commit.gpgsign", "false")
-        self.write("ci/owner-attributions.toml", REAL_POLICY)
+        self.write("contracts/owner-attributions.toml", REAL_POLICY)
 
     def _git(self, *args):
         subprocess.run(["git", *args], cwd=self.root, check=True, capture_output=True)
@@ -69,7 +69,7 @@ class Repo:
 
     def adopt(self):
         r = run(
-            "--root", ".", "--policy", "ci/owner-attributions.toml", "--update-baseline",
+            "--root", ".", "--policy", "contracts/owner-attributions.toml", "--update-baseline",
             cwd=self.root,
         )
         assert r.returncode == 0, r.stderr
@@ -77,7 +77,7 @@ class Repo:
 
     def check(self, *extra, env=None):
         return run(
-            "--root", ".", "--policy", "ci/owner-attributions.toml", *extra,
+            "--root", ".", "--policy", "contracts/owner-attributions.toml", *extra,
             cwd=self.root, env=env,
         )
 
@@ -242,7 +242,7 @@ class Gate(unittest.TestCase):
     def test_a_malformed_baseline_line_is_a_usage_error_not_a_pass(self):
         self.repo.write("doc.md", f"# Doc\n\n{SEPTEMBER_098}\n")
         self.repo.adopt()
-        baseline = self.repo.root / "ci" / "owner-attribution-baseline.txt"
+        baseline = self.repo.root / "contracts" / "owner-attribution-baseline.txt"
         baseline.write_text(baseline.read_text() + "doc.md\tnot-a-hash\t1\tx\n")
         r = self.repo.check()
         self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
@@ -253,7 +253,7 @@ class Gate(unittest.TestCase):
         self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
 
     def test_a_malformed_policy_is_a_usage_error(self):
-        self.repo.write("ci/owner-attributions.toml", "version = 1\n")
+        self.repo.write("contracts/owner-attributions.toml", "version = 1\n")
         r = self.repo.check()
         self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
 
@@ -274,15 +274,15 @@ class GeneratedFiles(unittest.TestCase):
 
     def write_pair(self, sentence):
         # The sentence written once in the template, and generated into the file.
-        self.repo.write("ci/workflow-template.toml", f"# {sentence}\nheader = 'x'\n")
+        self.repo.write("contracts/workflow-template.toml", f"# {sentence}\nheader = 'x'\n")
         self.repo.write(self.GENERATED, f"{self.HEADER}# {sentence}\nname: CI\n")
 
     def test_a_sentence_in_the_template_and_the_generated_file_is_counted_once(self):
         self.write_pair(self.SENTENCE)
         r = self.repo.adopt()
         self.assertIn("wrote", r.stdout)
-        baseline = (self.repo.root / "ci" / "owner-attribution-baseline.txt").read_text()
-        self.assertIn("ci/workflow-template.toml\t", baseline)
+        baseline = (self.repo.root / "contracts" / "owner-attribution-baseline.txt").read_text()
+        self.assertIn("contracts/workflow-template.toml\t", baseline)
         self.assertNotIn(self.GENERATED, baseline, "the generated copy is not a second line")
         self.repo.commit()
         r = self.repo.check()
@@ -294,7 +294,7 @@ class GeneratedFiles(unittest.TestCase):
         self.write_pair(self.SENTENCE)
         r = self.repo.check()
         self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
-        self.assertIn("`ci/workflow-template.toml`", r.stdout)
+        self.assertIn("`contracts/workflow-template.toml`", r.stdout)
         self.assertNotIn(f"`{self.GENERATED}`: {self.SENTENCE}", r.stdout.split("<details>")[0])
 
     def test_the_new_attribution_is_reported_once_not_twice(self):

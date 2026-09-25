@@ -13,7 +13,7 @@ set -euo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 ci_gate="$repo_root/scripts/ci-gate.sh"
-manifest="$repo_root/ci/gate-inputs.toml"
+manifest="$repo_root/contracts/gate-inputs.toml"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 

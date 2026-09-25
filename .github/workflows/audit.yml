@@ -55,7 +55,7 @@ jobs:
   audit:
     name: cargo audit
     # Pinned rather than ubuntu-latest, matching the [runner] label the
-    # Gate Matrix pins in ci/gate-inputs.toml. A security lane should not
+    # Gate Matrix pins in contracts/gate-inputs.toml. A security lane should not
     # be the one place the runner is allowed to drift.
     runs-on: ubuntu-24.04
     permissions:

@@ -70,7 +70,7 @@ happens to sit today. Six domains cover every tracked document.
 |---|---|---|---|---|
 | **D1** | Product documentation | How do I run, integrate with, or contribute to the shipped product? | Behaviour of released code | `docs/src/`, every page reachable from `SUMMARY.md` |
 | **D2** | Engineering specification | What contracts must the code satisfy? | Accepted RFCs and code | `docs/` top level |
-| **D3** | Machine-consumed contracts | What does a gate compare against? | The gate that reads it | `ci/` |
+| **D3** | Machine-consumed contracts | What does a gate compare against? | The gate that reads it | `contracts/` |
 | **D4** | Decision records | What was decided, and why? | RFC 000's lifecycle | `rfcs/{proposed,accepted,done,archive}/` |
 | **D5** | Decision companions | How is a decided thing implemented and verified? | Its RFC; status inherited | `rfcs/handoffs/NNN-slug/` |
 | **D6** | Roadmap work packages | How is work that no RFC governs carried out? | A `ROADMAP.md` entry | `roadmap/<slug>/` |
@@ -78,6 +78,14 @@ happens to sit today. Six domains cover every tracked document.
 D4, D5 and D6 are settled and enforced: RFC 000 governs D4, and G11's
 invariants 12 and 13 enforce D5's boundary and D6's separation as of
 2026-09-10. **This RFC owns D1, D2 and D3**, which have no boundary today.
+
+*Amended 2026-09-25 ([RFC 116](../accepted/116-gate-contracts.md) stage 7), on
+`@nabbisen`'s ruling of the same day: D3's home is `contracts/`, formerly `ci/`.
+The old name described one of the two callers of these files, and RFC 116 D7 is the
+decision that says CI is not the privileged one. The rows and lines of this RFC that
+a gate compares against, or that name D3's home (D3 above, the G15 row, the matrix's
+location, and `doc-authority.toml`'s), are updated; every other mention of `ci/` in
+this RFC is a record of what it was called and is left as written.*
 
 ### 2. Authority table
 
@@ -94,7 +102,7 @@ hand-synchronised.
 | Relying-party integration | `docs/src/reference/oidc-api.md` | Route table in `crates/sui-id/src/http/` wins |
 | Configuration keys | `docs/src/reference/configuration.md` | `crates/sui-id/src/runtime/config.rs` wins |
 | Audit event vocabulary | `docs/src/reference/audit-events.md` | The event literals in `crates/sui-id-store` win; enforced by G-audit-matrix |
-| Audit coverage matrix | `ci/audit-coverage-matrix.md` (**D3**, moves from `docs/src/reference/`) | It *is* the gate input; source literals win, and the gate says so |
+| Audit coverage matrix | `contracts/audit-coverage-matrix.md` (**D3**, moves from `docs/src/reference/`) | It *is* the gate input; source literals win, and the gate says so |
 | Threat model | `docs/threat-model.md` — the document is authoritative throughout; **RFC 097 re-baselines it** (RFC 097 `Touches` names this file; its Summary is "replace… with a current baseline"). The step-1 banner is its sanctioned state until then. *Corrected 2026-09-12: this row previously read "RFC 097 once Implemented", as if the RFC would become the threat model — an RFC is the decision, never the document (rule 3).* | A shipped trust boundary absent from the document is a defect in the document; any other document restating threat-model content is a defect in *that* document (rule 7) |
 | Security assurance history | `docs/security-assurance-audit-v0.63.1.md` | Historical; never updated, only superseded |
 | Development specification | `docs/development-specification.md` | Accepted RFCs win over it; it is a synthesis, not a source |
@@ -298,7 +306,7 @@ mirrors RFC 093's table so one parser reads both.
 | ID | Toolchain | Features | Blocking command / assertion |
 |---|---|---|---|
 | G14 | Python 3.14 | n/a | `python3.14 scripts/check-markdown-links.py --root . rfcs/handoffs` |
-| G15 | Python 3.14 | n/a | `python3.14 scripts/check-doc-authority.py --root . --policy ci/doc-authority.toml` |
+| G15 | Python 3.14 | n/a | `python3.14 scripts/check-doc-authority.py --root . --policy contracts/doc-authority.toml` |
 
 **G14 — the links no gate checked.** G11 link-checks every RFC file and
 `rfcs/README.md`; G10b checks `README.md`, `ROADMAP.md` and `docs/`. Neither
@@ -313,7 +321,7 @@ tree at `a33fd7e`; registers immediately.
 document declaring a version it is current as of is within the tolerance
 `ci/doc-authority.toml` sets, **or carries a staleness banner** — rule 5 makes
 the banner the sanctioned state for a lagging document, so a bannered document
-passes and an unbannered stale one fails. `ci/doc-authority.toml` is D3: it holds
+passes and an unbannered stale one fails. `contracts/doc-authority.toml` is D3: it holds
 the tolerance and the list of version-pinned documents, and nothing else.
 
 **G15 is declared now and registered later.** On the tree at `a33fd7e` it would

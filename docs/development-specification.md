@@ -308,7 +308,7 @@ HIBP client, which this workspace does not depend on.
 ## 9. Project structure
 
 A Cargo workspace of six crates (§9.1), with documentation under `docs/`,
-governance under `rfcs/`, and the machine-consumed gate inputs under `ci/`.
+governance under `rfcs/`, and the machine-consumed gate inputs under `contracts/`.
 The principle is that a reader should be able to guess where something
 lives from what it does.
 
@@ -688,7 +688,7 @@ bytes of the prior hash plus the current event) provides tamper evidence
 within the trust boundary `docs/threat-model.md` states.
 
 The event vocabulary is authoritative and is not transcribed here:
-`ci/audit-coverage-matrix.md` is the gate input that G13 checks against the
+`contracts/audit-coverage-matrix.md` is the gate input that G13 checks against the
 source literals in both directions, and `docs/src/reference/audit-events.md`
 is the reader-facing reference. The v3 list named six events against
 fifty-four registered, and one of the six — `auth.refresh.family_revoked` —
@@ -837,7 +837,7 @@ no third-party CSS, no fonts; behaviour that cannot be server-rendered is
 written by hand rather than imported. The files themselves are
 `crates/sui-id/static/`, and the invariants that bind this section — token
 resolution, semantic-palette parity, the inline-style bound, text leaks —
-are `ci/ui-invariants.toml`, enforced as lane G12. The v3 table listed
+are `contracts/ui-invariants.toml`, enforced as lane G12. The v3 table listed
 three files, one of which no longer exists, and named two of those checks
 as standalone CI gates that RFC 093 M1b C5 consolidated into G12.
 
@@ -1026,7 +1026,7 @@ be quietly renamed, removed, or pointed at a different command.
 
 The lane set is authoritative and is not transcribed here. RFC 093 §Gate
 Matrix v1 owns G01–G12; RFC 094 and RFC 098 own their own lanes through
-the multi-source registry; `ci/gate-inputs.toml` is the machine-readable
+the multi-source registry; `contracts/gate-inputs.toml` is the machine-readable
 manifest that `scripts/ci-gate.sh` dispatches and that lane A3.4 verifies
 against each owning RFC's table, byte for byte.
 

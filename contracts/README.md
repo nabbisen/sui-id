@@ -1,4 +1,4 @@
-# `ci/` — the contracts a gate compares against
+# `contracts/` — the contracts a gate compares against
 
 These are the **contracts a gate compares against** (RFC 098 D3): policies fed to a
 checker, registries that the docs and RFCs cite as a source of truth, and the inputs
@@ -10,10 +10,15 @@ this directory and becomes documentation.
 other.** A lane runs locally by the same command CI runs, so nothing here belongs to
 CI alone. (That is the sentence whose absence let this directory be called `ci/`.)
 
+**Formerly `ci/`** (renamed 2026-09-25, RFC 116 stage 7). A path in an older record
+that names `ci/<file>` is `contracts/<file>` now; the records keep the path they had
+when they were written.
+
 This table is checked by `scripts/check-contracts.py` (lane G18): every file in the
 directory has a row, every row names a file that exists, a gate that is in `[gates]`
-and in the Gate Matrix, a script that exists, and an RFC that exists. A file
-outside this directory that names `ci/<file>` must name one that exists.
+and in the Gate Matrix, a script that exists, and an RFC that exists. A live file
+outside this directory that names `contracts/<file>` must name one that exists, and
+one that still names `ci/<file>` is a violation that says where the file moved.
 
 | File | Kind | Read by | Owning RFC |
 |---|---|---|---|

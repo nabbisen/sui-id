@@ -87,7 +87,7 @@ def write(path: Path, content: str) -> None:
 
 
 def make_baseline(root: Path) -> None:
-    write(root / "ci" / "doc-authority.toml", POLICY)
+    write(root / "contracts" / "doc-authority.toml", POLICY)
     write(root / "Cargo.toml", CARGO_TOML)
     write(root / "README.md", README)
     write(root / "ROADMAP.md", ROADMAP)
@@ -120,7 +120,7 @@ def run_checker(root: Path) -> subprocess.CompletedProcess:
         [
             sys.executable, str(CHECKER),
             "--root", str(root),
-            "--policy", "ci/doc-authority.toml",
+            "--policy", "contracts/doc-authority.toml",
         ],
         capture_output=True,
         text=True,
@@ -478,8 +478,8 @@ class DocAuthorityTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             make_baseline(root)
-            policy = (root / "ci" / "doc-authority.toml").read_text()
-            write(root / "ci" / "doc-authority.toml", policy.split("[event_reference]")[0])
+            policy = (root / "contracts" / "doc-authority.toml").read_text()
+            write(root / "contracts" / "doc-authority.toml", policy.split("[event_reference]")[0])
             git_commit(root)
             result = run_checker(root)
             self.assertNotEqual(result.returncode, 0)

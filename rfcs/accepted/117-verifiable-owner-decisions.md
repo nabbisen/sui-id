@@ -14,7 +14,7 @@ and before the move.
 **Implementation prerequisites.** **Stage 0 has none** — the census and the closed baseline (D0) need no key and deliver the control that works against the real adversary. Stages 1–3 need `@nabbisen` to hold a signing key that no agent can use (D1, open question 1).
 **Closure prerequisites.** Every decision in the ledger from the adoption date onward carries a signature that verifies against a key pinned in the repository; a gate fails when a ledger entry's signature is absent, malformed or made by an unpinned key; every document that asserts an owner decision dated on or after the adoption date cites a ledger entry, and a gate fails when one does not; and the seven attributions that predate adoption are labelled unverifiable rather than quietly grandfathered.
 **Tracks.** Governance integrity. Raised by `@nabbisen`, 2026-09-24, on RFC 110's design review.
-**Touches.** A new ledger file, `ci/` (the pinned allowed-signers file), `scripts/` (the gate and its self-tests), `ROADMAP.md` §S1, and `docs/src/contributing/` for the procedure.
+**Touches.** A new ledger file, `contracts/` (the pinned allowed-signers file), `scripts/` (the gate and its self-tests), `ROADMAP.md` §S1, and `docs/src/contributing/` for the procedure.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** High-capability model, requirements-architect role.
 **Handoff.** [`../handoffs/117-verifiable-owner-decisions/README.md`](../handoffs/117-verifiable-owner-decisions/README.md)
@@ -248,4 +248,4 @@ Column layout mirrors RFC 093's table so one parser reads both. Added with stage
 
 | ID | Toolchain | Features | Blocking command / assertion |
 |---|---|---|---|
-| G16 | Python 3.14 | n/a | `python3.14 scripts/check-owner-attributions.py --root . --policy ci/owner-attributions.toml` |
+| G16 | Python 3.14 | n/a | `python3.14 scripts/check-owner-attributions.py --root . --policy contracts/owner-attributions.toml` |

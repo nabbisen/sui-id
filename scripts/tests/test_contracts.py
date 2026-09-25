@@ -147,7 +147,7 @@ class Contracts(unittest.TestCase):
 
     def test_the_real_repository_is_green(self) -> None:
         r = subprocess.run(
-            [sys.executable, str(CHECKER), "--root", str(REPO_ROOT), "--policy", "ci/contract-paths.toml"],
+            [sys.executable, str(CHECKER), "--root", str(REPO_ROOT), "--policy", "contracts/contract-paths.toml"],
             capture_output=True,
             text=True,
         )

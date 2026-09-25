@@ -254,7 +254,7 @@ section is Class B only until its command is converted** — check
 *Corrected 2026-09-08: this section previously classified `auth.lockout` as `B`,
 and `auth.refresh.theft_detected` likewise, and
 stated without qualification that these events guard no state mutation, while
-`command-inventory.md` and `ci/write-commands.toml` both classified `U22` as `A`.
+`command-inventory.md` and `contracts/write-commands.toml` both classified `U22` as `A`.
 Two normative documents disagreed about the same event and this one was wrong —
 by understating, which is the same defect as overstating: the document not
 matching the code.*
