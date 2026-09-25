@@ -76,6 +76,34 @@ command=${command#\"}
   exit 2
 }
 
+# RFC 116 stage 3b (D7): a lane's `tz`, if its [lane_profiles] entry names one,
+# is exported to the command, so a lane runs locally with the environment CI runs
+# it in. It used to be set in the workflow's per-job `env:` alone, which made G02,
+# G04, G05 and G06 differ between a laptop and a runner. The workflow no longer
+# sets it (scripts/generate-ci-workflow.py does not emit it): this is the one place.
+# Read like [gates]: a single-line inline table, compared by exact key, and the
+# table's own header ends the scan.
+lane_tz=$(awk -v gate="$gate" '
+  /^\[lane_profiles\]/ { in_profiles = 1; next }
+  /^\[/ { in_profiles = 0 }
+  in_profiles {
+    eq = index($0, " = ")
+    if (eq > 0 && substr($0, 1, eq - 1) == gate) {
+      if (match($0, /[{,][[:space:]]*tz = "[^"]*"/)) {
+        value = substr($0, RSTART, RLENGTH)
+        sub(/^.*tz = "/, "", value)
+        sub(/"$/, "", value)
+        print value
+      }
+      exit
+    }
+  }
+' "$manifest")
+if [[ -n "$lane_tz" && ! "$lane_tz" =~ ^[A-Za-z0-9_+:/-]+$ ]]; then
+  echo "ci-gate: $gate: [lane_profiles] tz is not a plain timezone name: $lane_tz" >&2
+  exit 2
+fi
+
 echo "gate=$gate"
 
 if ! checked_out_sha=$(git rev-parse HEAD 2>/dev/null); then
@@ -105,6 +133,10 @@ if command -v cargo >/dev/null 2>&1; then
   echo "cargo_version=$(cargo -V 2>&1)"
 fi
 
+if [[ -n "$lane_tz" ]]; then
+  export TZ="$lane_tz"
+  echo "tz=$lane_tz"
+fi
 echo "command=$command"
 echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 bash -c "$command"

@@ -239,6 +239,19 @@ class GenerateCiWorkflow(unittest.TestCase):
         self.mutate("ci/gate-inputs.toml", 'setup = "python", colour = "red"', 'setup = "perl"')
         self.assert_red("`setup` must be rust, python or none")
 
+    def test_a_title_may_not_contain_a_quote(self) -> None:
+        # ci-gate.sh reads a lane's tz from its profile line with awk.
+        self.mutate("ci/gate-inputs.toml", 'title = "RFC integrity (Python {python})"', 'title = "RFC \\"x\\" (Python {python})"')
+        self.assert_red("`title` may not contain a double quote")
+
+    def test_the_workflow_no_longer_sets_a_timezone_and_the_profile_still_names_one(self) -> None:
+        # Stage 3b: ci-gate.sh exports `tz` from [lane_profiles]; the workflow's
+        # per-job env is gone, so the fact lives in one place.
+        self.assertNotIn("TZ:", self.read(".github/workflows/ci.yml"))
+        self.assertEqual(self.read("ci/gate-inputs.toml").count('tz = "UTC"'), 4)
+        self.assertEqual(self.run_gen("--write").returncode, 0)
+        self.assertNotIn("TZ:", self.read(".github/workflows/ci.yml"))
+
     def test_a_custom_job_that_is_not_in_the_template_is_caught(self) -> None:
         self.mutate("ci/gate-inputs.toml", 'G12 = { job = "ui-invariants-v1" }', 'G12 = { job = "no-such-job" }')
         self.assert_red("job 'no-such-job' is not in [lane_jobs]")

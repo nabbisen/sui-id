@@ -85,9 +85,6 @@ jobs:
             ${{ runner.os }}-cargo-
       - name: G02
         run: bash scripts/ci-gate.sh G02
-        env:
-          # Tests that bind sockets / clocks need a stable timezone.
-          TZ: UTC
 
   G03:
     name: "G03 — build (1.95, all-features)"
@@ -138,8 +135,6 @@ jobs:
             ${{ runner.os }}-cargo-
       - name: G04
         run: bash scripts/ci-gate.sh G04
-        env:
-          TZ: UTC
 
   G05:
     name: "G05 — build + test (stable, default)"
@@ -165,8 +160,6 @@ jobs:
             ${{ runner.os }}-cargo-
       - name: G05
         run: bash scripts/ci-gate.sh G05
-        env:
-          TZ: UTC
 
   G06:
     name: "G06 — build + test (stable, all-features)"
@@ -192,8 +185,6 @@ jobs:
             ${{ runner.os }}-cargo-
       - name: G06
         run: bash scripts/ci-gate.sh G06
-        env:
-          TZ: UTC
 
   G07:
     name: "G07 — clippy (stable, all-features)"

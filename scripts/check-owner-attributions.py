@@ -102,6 +102,10 @@ def load_policy(path: str) -> dict:
             "owner": re.compile(raw["match"]["owner"]),
             "verb": re.compile(raw["match"]["verb"], re.IGNORECASE),
             "excerpt": int(raw["report"]["excerpt_chars"]),
+            # RFC 116 stage 3b: files generated from another file this census
+            # already reads. Optional, so an old policy still loads.
+            "generated": tuple(raw.get("exclude", {}).get("generated", ())),
+            "generated_marker": raw.get("exclude", {}).get("generated_marker", ""),
         }
     except (KeyError, TypeError, ValueError, re.error) as exc:
         raise PolicyError(f"policy {path} is malformed: {exc!r}") from exc
@@ -176,6 +180,18 @@ def census(files: dict[str, str], policy: dict) -> list[tuple[str, str]]:
     stem are both in it."""
     hits: list[tuple[str, str]] = []
     for path in sorted(files):
+        if path in policy["generated"]:
+            # A census reads sources, not artefacts (RFC 116 stage 3b). The
+            # exclusion is only honest while the file is one, so it is checked
+            # every run: a path listed here that does not carry the generator's
+            # marker is read like any other file, and is a policy error.
+            marker = policy["generated_marker"]
+            if not marker or not files[path].startswith(marker):
+                raise PolicyError(
+                    f"policy: {path} is excluded as generated but does not begin with "
+                    f"{marker!r}; a census exclusion must not hide a hand-written file"
+                )
+            continue
         ext = path.rsplit(".", 1)[-1] if "." in os.path.basename(path) else ""
         if ext in policy["markdown"]:
             sentences = sentences_markdown(files[path])

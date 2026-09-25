@@ -175,6 +175,10 @@ def lane_job(lane: str, prof: dict, inp: Inputs) -> str:
     title = prof.get("title", "")
     if not title:
         inp.fail(f"{where}: no `title`")
+    if '"' in title:
+        # ci-gate.sh reads `tz` from this very line with awk; a quote in a title
+        # is how a title could be taken for a field.
+        inp.fail(f"{where}: `title` may not contain a double quote")
     for t in TOOLS:
         if "{" + t + "}" in title:
             inp.tools_used.add(t)
@@ -244,12 +248,9 @@ def lane_job(lane: str, prof: dict, inp: Inputs) -> str:
                     f"{where}: the command runs python{found}, but [tools] python is {tools['python']}"
                 )
     out += [f"      - name: {lane}", f"        run: bash scripts/ci-gate.sh {lane}"]
-    if "tz" in prof:
-        out.append("        env:")
-        note = inp.template.get("lane_env_comments", {}).get(lane)
-        if note:
-            out.append(indent(note, "          "))
-        out.append(f"          TZ: {prof['tz']}")
+    # `tz` is not emitted: scripts/ci-gate.sh reads it from [lane_profiles] and
+    # exports it, so a lane runs the same on a laptop and on a runner and the fact
+    # lives in one place (RFC 116 stage 3b).
     return "\n".join(out)
 
 

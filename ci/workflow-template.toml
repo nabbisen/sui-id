@@ -96,12 +96,8 @@ G17 = '''
     # corrected in stage 1b, because a lane that is red on main is not a gate.
 '''
 
-# Comment lines a generated lane step carries, without their indentation.
-[lane_env_comments]
-G02 = '''
-# Tests that bind sockets / clocks need a stable timezone.
-'''
-
+# (RFC 116 stage 3b: there is no [lane_env_comments]. A lane's env TZ is exported by
+# scripts/ci-gate.sh from [lane_profiles], not written into the workflow.)
 [snippets]
 mdbook_step_comment = '''
 # ci/gate-inputs.toml's [tools] table pins this version; installing

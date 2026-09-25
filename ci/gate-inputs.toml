@@ -113,8 +113,11 @@ G12 = "Predates ci-gate.sh and has its own working entry point (ui-invariants-v1
 #             the lane's command, and with [tools])
 #   apt, cache  the runner's system packages and the cargo registry cache
 #   mdbook    install mdBook from [tools] (G10a)
-#   tz        an env TZ for the job. NOTE: ci-gate.sh does not set it, so these
-#             lanes do not run locally exactly as CI runs them (RFC 116 D7)
+#   tz        the TZ the lane's command runs under (tests that bind sockets or
+#             clocks need a stable timezone). scripts/ci-gate.sh exports it, so
+#             a lane runs locally under the same TZ as in CI (RFC 116 D7,
+#             stage 3b); the workflow does not set it. One inline table per line:
+#             ci-gate.sh reads it with awk, like [gates]
 #   fetch_depth  actions/checkout fetch-depth
 #   job       a lane whose job is written out in the template ([lane_jobs])
 #   title     the display name after "GNN — "; {rust_msrv}, {rust_stable},
