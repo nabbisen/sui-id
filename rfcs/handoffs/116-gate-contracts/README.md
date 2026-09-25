@@ -251,6 +251,36 @@ Measured cost of leaving it: G12 cannot be invoked by `ci-gate.sh`, so it is
 the one lane that has to be run by hand — as it was during the RFC 103 stage 5
 review on 2026-09-22.
 
+## Stage 5 — analysis returned 2026-09-25; the decision is `@nabbisen`'s
+
+**[The analysis](stage-5-placement-analysis-2026-09-25.md)** is the stage's whole
+output: nothing was moved, renamed or proposed as a name, and the tree was
+untouched.
+
+**It corrected the re-walk above.** That re-walk found that five files are named
+in a `[gates]` command whose owning RFC's table must byte-match, two of those
+RFCs being Done. The analysis found the deeper constraint: **`ci/` is itself a
+decision of Done RFC 098** — its D3 row, "Machine-consumed contracts … `ci/`",
+names the directory, and `docs/development-specification.md:311` repeats it. So
+renaming *or splitting* amends a **decision** of a Done RFC, not merely a lane
+row, and that is true of every option except leaving it alone. Verified at
+`rfcs/done/098-…md:73`.
+
+**The second cost, which nothing gates.** Of 77 files naming `ci/`, about **27**
+must change or a gate breaks, and about **50** would go **silently stale** — RFC
+and handoff prose carrying backticked paths that no gate checks. That is the
+same class of defect this RFC exists to remove, and it is a cost of every option
+that changes a path.
+
+**Recorded for whoever acts on this:** the analysis's own recommendation, which
+the architect endorses — a small gate checking that every `ci/<file>` path named
+in a tracked file exists would remove that cost entirely and is worth building
+**whatever is decided**. It also catches rot today: four `ci/…` names in the tree
+resolve to nothing, none of them live.
+
+**This stage produces no further dispatch.** Options A–E and their costs are in
+the analysis; the name and the D3 question are `@nabbisen`'s.
+
 ## Stage 5 — re-walked 2026-09-25, before dispatch
 
 **Not yet dispatched.** The architect re-walked this stage against the tree
