@@ -213,8 +213,9 @@ Registered through the multi-source lane registry (RFC 094 R10), as RFC 098 and
 RFC 117 do. The heading above is the recorded source heading and is matched by
 plain equality; do not rename it without changing the manifest in the same
 commit. Column layout mirrors RFC 093's table so one parser reads both. Added
-with stage 1 (D1, D2, D2a); later stages add their own rows here.
+with stage 1 (D1, D2, D2a); later stages add their own rows here (G18, stage 6).
 
 | ID | Toolchain | Features | Blocking command / assertion |
 |---|---|---|---|
 | G17 | Python 3.14 | n/a | `python3.14 scripts/check-write-commands.py --root . --inventory ci/write-commands.toml` |
+| G18 | Python 3.14 | n/a | `python3.14 scripts/check-contracts.py --root . --policy ci/contract-paths.toml` |

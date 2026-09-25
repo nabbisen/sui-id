@@ -67,7 +67,7 @@ class GenerateCiWorkflow(unittest.TestCase):
     def test_the_committed_workflow_is_a_fresh_generation(self) -> None:
         r = self.run_gen()
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("22 jobs", r.stdout)
+        self.assertIn("23 jobs", r.stdout)
 
     def test_the_real_repository_is_a_fresh_generation(self) -> None:
         # The check CI runs, on the real tree rather than the copy.
@@ -92,35 +92,35 @@ class GenerateCiWorkflow(unittest.TestCase):
 
     # ── the lane set round-trips ─────────────────────────────────────────
 
-    def add_lane(self, lane: str = "G18") -> None:
-        self.mutate("ci/gate-inputs.toml", "G17 = { title", f'{lane} = {{ title = "an added lane", setup = "python" }}\nG17 = {{ title', 1)
+    def add_lane(self, lane: str = "G19") -> None:
+        self.mutate("ci/gate-inputs.toml", "G18 = { title", f'{lane} = {{ title = "an added lane", setup = "python" }}\nG18 = {{ title', 1)
         self.mutate(
             "ci/gate-inputs.toml",
-            'G17 = "python3.14 scripts/check-write-commands.py --root . --inventory ci/write-commands.toml"\n',
-            'G17 = "python3.14 scripts/check-write-commands.py --root . --inventory ci/write-commands.toml"\n'
+            'G18 = "python3.14 scripts/check-contracts.py --root . --policy ci/contract-paths.toml"\n',
+            'G18 = "python3.14 scripts/check-contracts.py --root . --policy ci/contract-paths.toml"\n'
             f'{lane} = "python3.14 scripts/added.py"\n',
         )
 
     def test_a_lane_added_to_the_table_appears_as_a_job(self) -> None:
         self.add_lane()
-        self.assert_red("job G18 is generated but missing")
+        self.assert_red("job G19 is generated but missing")
         self.assertEqual(self.run_gen("--write").returncode, 0)
         text = self.read(".github/workflows/ci.yml")
-        self.assertIn('  G18:\n    name: "G18 — an added lane"', text)
-        self.assertIn("run: bash scripts/ci-gate.sh G18", text)
+        self.assertIn('  G19:\n    name: "G19 — an added lane"', text)
+        self.assertIn("run: bash scripts/ci-gate.sh G19", text)
         self.assert_green()
 
     def test_a_lane_in_gates_with_no_profile_has_no_job_and_fails(self) -> None:
         self.mutate(
             "ci/gate-inputs.toml",
-            'G17 = "python3.14 scripts/check-write-commands.py --root . --inventory ci/write-commands.toml"\n',
-            'G17 = "python3.14 scripts/check-write-commands.py --root . --inventory ci/write-commands.toml"\n'
-            'G18 = "python3.14 scripts/added.py"\n',
+            'G18 = "python3.14 scripts/check-contracts.py --root . --policy ci/contract-paths.toml"\n',
+            'G18 = "python3.14 scripts/check-contracts.py --root . --policy ci/contract-paths.toml"\n'
+            'G19 = "python3.14 scripts/added.py"\n',
         )
-        self.assert_red("lane G18 is in [gates] or [gate_matrix_exceptions] but has no [lane_profiles] entry")
+        self.assert_red("lane G19 is in [gates] or [gate_matrix_exceptions] but has no [lane_profiles] entry")
 
     def test_a_profile_for_no_lane_fails(self) -> None:
-        self.mutate("ci/gate-inputs.toml", "G17 = { title", 'G99 = { title = "ghost", setup = "python" }\nG17 = { title')
+        self.mutate("ci/gate-inputs.toml", "G18 = { title", 'G99 = { title = "ghost", setup = "python" }\nG18 = { title')
         self.assert_red("[lane_profiles] has G99, which is neither a [gates] lane")
 
     def test_a_job_in_the_workflow_with_no_table_entry_fails(self) -> None:

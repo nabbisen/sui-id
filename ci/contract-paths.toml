@@ -1,0 +1,82 @@
+# RFC 116 stage 6 (G18): what is written about the contracts directory must match
+# the directory.
+#
+# A machine-consumed contract, read by scripts/check-contracts.py and nothing
+# else (RFC 116 D2: a file here is read by a gate that fails when it stops being
+# true). It says which directory the gate guards, which files are records that
+# keep the path they had when they were written, and which paths are allowed to
+# name a file that does not exist. **Every exemption carries a reason**, and an
+# entry with none is a policy error, not a shorthand: an allow-list without
+# reasons is a hiding place (the rule stage 3b's census exclusion established).
+#
+# The gate checks two things, because they are one property:
+#   1. every `<directory>/<file>` path named in a file in scope exists;
+#   2. every file in the directory has a row in its README, and every row names a
+#      file that exists, a gate that is in [gates] and in the Gate Matrix, a script
+#      that exists and an RFC that exists.
+# A file is in scope unless a [[record]] entry below exempts it, so a new top-level
+# directory is scanned by default rather than missed by default.
+version = 1
+
+# The directory the gate guards, and the names it used to have. A live file that
+# still names a former directory's file is a violation ("moved to ..."), which is
+# what makes a rename checkable rather than merely possible.
+directory = "ci"
+former_directories = []
+
+# The gate's own inputs, as paths from the repository root.
+manifest = "ci/gate-inputs.toml"
+readme_file = "ci/README.md"
+
+# Files that count as naming a contract: a path with one of these extensions.
+extensions = ["toml", "md", "txt", "yml", "yaml", "sh", "py", "json"]
+
+[readme]
+# The closed vocabulary of the README's Kind column.
+kinds = ["policy", "registry", "generator input", "baseline"]
+# The README must name these. The dispatcher is the developer's caller of a
+# contract; CI is the other. A README that names only CI is how the directory came
+# to be called ci/.
+must_name = ["scripts/ci-gate.sh"]
+
+# Records: files that are dated and keep the path they had when they were written.
+# A handoff written on 2026-09-22 that says the manifest is at the old path was
+# true when it was written; rewriting it to satisfy a gate would falsify a record.
+# Matching is by path prefix (a directory) or exact file.
+[[record]]
+path = "rfcs/handoffs"
+reason = "dated companions to RFCs; each is true of the day it was written"
+
+[[record]]
+path = "rfcs/done"
+reason = "implemented RFCs are historical records; the lane-table rows and decision rows in them that a gate compares against are amended deliberately, not swept"
+
+[[record]]
+path = "rfcs/archive"
+reason = "withdrawn or superseded RFCs, preserved as written"
+
+[[record]]
+path = "CHANGELOG.md"
+reason = "an append-only release ledger; each entry names the path it had at that release"
+
+[[record]]
+path = "ROADMAP.md"
+reason = "a dated milestone ledger; closed rows describe what shipped under the names it had"
+
+[[record]]
+path = "scripts/tests/test_contracts.py"
+reason = "this gate's own self-test: its fixtures are synthetic repositories whose paths are examples of references, not references"
+
+# Allowed names that are not files in the directory. Each must still be named by a
+# file in scope, or the entry is stale and the gate says so.
+[[allow]]
+path = "ci/write-authority.toml"
+reason = "planned by RFC 094 (the policy for `xtask audit-structure`); named in RFCs 094 and 116 and not yet built"
+
+[[allow]]
+path = "ci/matrix.md"
+reason = "a test-fixture name inside a synthetic repository built by scripts/tests/test_doc_authority.py"
+
+[[allow]]
+path = "ci/decisions.txt"
+reason = "a test-fixture name inside a synthetic repository built by scripts/tests/test_owner_attributions.py"

@@ -121,6 +121,17 @@ G17 = '''
 
 # (RFC 116 stage 3b: there is no [lane_env_comments]. A lane's env TZ is exported by
 # scripts/ci-gate.sh from [lane_profiles], not written into the workflow.)
+G18 = '''
+    # RFC 116 stage 6's lane, registered through RFC 094's multi-source lane
+    # registry (R10): what is written about the contracts directory must match the
+    # directory. Every path a file in scope names into it exists, and its README has
+    # a row for every file and only for files, naming gates, scripts and RFCs that
+    # exist. Records (handoffs, done RFCs, the changelog and roadmap) keep the paths
+    # they had when they were written and are exempt by name, each with a reason.
+    # It exists so that renaming the directory is checkable rather than merely
+    # possible.
+'''
+
 [snippets]
 mdbook_step_comment = '''
 # ci/gate-inputs.toml's [tools] table pins this version; installing
@@ -358,6 +369,16 @@ gate-matrix-fixtures = '''
           echo "command=python3.14 -m unittest scripts.tests.test_write_commands"
           echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           python3.14 -m unittest scripts.tests.test_write_commands
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
+      - name: G18 self-tests (contract paths and README)
+        run: |
+          set +e
+          echo "command=python3.14 -m unittest scripts.tests.test_contracts"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3.14 -m unittest scripts.tests.test_contracts
           status=$?
           echo "exit_status=$status"
           echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"

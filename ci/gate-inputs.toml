@@ -66,6 +66,7 @@ G14 = "098"
 G15 = "098"
 G16 = "117"
 G17 = "116"
+G18 = "116"
 
 # RFC 093 Gate Matrix v1 (rfcs/done/093-build-toolchain-release-gates.md),
 # machine-readable expansion. scripts/ci-gate.sh executes these commands
@@ -93,6 +94,7 @@ G14 = "python3.14 scripts/check-markdown-links.py --root . rfcs/handoffs"
 G15 = "python3.14 scripts/check-doc-authority.py --root . --policy ci/doc-authority.toml"
 G16 = "python3.14 scripts/check-owner-attributions.py --root . --policy ci/owner-attributions.toml"
 G17 = "python3.14 scripts/check-write-commands.py --root . --inventory ci/write-commands.toml"
+G18 = "python3.14 scripts/check-contracts.py --root . --policy ci/contract-paths.toml"
 
 # RFC 093 M1b C2.1: the lane-completeness rule (scripts/check-gate-inputs.sh
 # condition 7) requires every lane declared by any source RFC to be
@@ -152,6 +154,7 @@ G14 = { title = "markdown links: handoffs and roadmap (Python {python})", setup 
 G15 = { title = "documentation authority (Python {python})", setup = "python" }
 G16 = { title = "owner attributions (Python {python})", setup = "python", fetch_depth = 0 }
 G17 = { title = "write-command inventory (Python {python})", setup = "python" }
+G18 = { title = "contract paths and README (Python {python})", setup = "python" }
 
 [actions]
 checkout_v6 = "d23441a48e516b6c34aea4fa41551a30e30af803"
