@@ -486,25 +486,54 @@ first and the review requirement separately.
    protection enforcing it would be a control that does not control, which is
    the pattern this section exists to record.
 
-**The routing rule.** The decision of 2026-08-26 recorded above — that a design
-is reviewed by the role that must build against it — is the rule under which
-**every design review in this programme is routed**, including the five of
-2026-09-24 that each returned a blocker. Its only source is architect-written
-text in this section.
+**The routing rule — withdrawn by the architect, 2026-09-26.**
 
-Asking whether it was really made has two outcomes and neither is clean: a yes
-that is still unverifiable, or a no that leaves every review since August
-unsourced. **So the architect proposes, and `@nabbisen` decides prospectively,
-a routing rule that exists from the date he decides it** — carrying a signature
-once RFC 117 stage 1 lands — while the 2026-08-26 text is labelled unverifiable
-history under RFC 117 D6, alongside the other pre-adoption attributions.
+`@nabbisen` asked whether RFC 000 had not worked properly. Measured against
+[RFC 000](rfcs/done/000-rfc-lifecycle-policy.md) rather than argued: **it
+worked.** It already requires, for a security-sensitive RFC, a **named**
+independent design reviewer and an `independent design-review
+identity/reference` in the header, states that **the implementer cannot be the
+sole approver** of a security-sensitive design or its closure evidence, and
+makes `proposed/` **implementation-prohibited** with Accepted the only
+implementation-eligible state.
 
-**Proposed text, awaiting his decision** — the architect's words, not a
-restatement of his: *a design is reviewed by the role that must build against
-it; an implementation by the role that specified it; rules, scope and schedule
-are proposed by the architect and decided by the owner; where no role but the
-author can review something, the gap is recorded as unreviewed judgment and
-ruled on with the gap in view, never labelled a completed independent review.*
+**Every failure this programme has had was a breach of RFC 000, not a gap in
+it:**
+
+- **RFC 105 shipped with no independent design review** because the architect
+  dispatched it for implementation **while it was Proposed**. RFC 000 prohibits
+  that in as many words.
+- The **eleven per-RFC reviewer-independence clauses** the architect wrote, and
+  `@nabbisen` had removed, were restatements of a requirement RFC 000 already
+  made — which is what "spoiling RFC 000" meant.
+- **G11's refusal of RFC 119's move to `accepted/`** on 2026-09-26 was RFC 000's
+  own header requirement, enforced mechanically for the first time.
+
+What RFC 000 deliberately does **not** do — it is a portable lifecycle policy —
+is say *which role* reviews what. It requires independence and a name, not a
+routing table. **The practice this programme already follows satisfies it**: the
+implementation role reviews designs, which RFC 000 permits, and `@nabbisen`
+approves, so the implementer is never the sole approver.
+
+So the proposed rule was **three restatements and a scheduling note**, and its
+fourth clause — that where no role but the author can review something, the gap
+is recorded as unreviewed judgment rather than labelled a completed independent
+review — is RFC 000's "named independent design reviewer" read honestly: if one
+cannot be named, there is not one. **The architect withdraws it.** Nothing is
+lost, and `@nabbisen` may reinstate it if he disagrees.
+
+**What is actually missing is a gate, not a rule.** G11 checks numbering,
+folder/status agreement, the index, links, that a header does not legislate
+(invariant 14), that no header cites an archived RFC (15), and the design-review
+field. **Nothing checks that an implementation package was not dispatched
+against a Proposed RFC** — the precise failure that produced RFC 105. That is
+the recommendation that replaces the routing rule, and it is an ordinary gate
+proposal, not governance text: the architect will bring it with a measured cost
+rather than adding it here.
+
+The 2026-08-26 routing text above stays labelled **unverifiable history** under
+RFC 117 D6, alongside the other pre-adoption attributions. Nothing is built on
+it now.
 
 #### S2 — The audit hash chain has no external anchor, permanently for this programme
 

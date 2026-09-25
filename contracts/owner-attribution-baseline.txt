@@ -21,7 +21,6 @@ ROADMAP.md	05d958ac6f5f40dfdf44ceef8aa1c5be49af72608bd5edfeb79e1f5648b4d3ad	1	Th
 ROADMAP.md	0c81f3419a775229d96ce56bbf97aa9e8fa871c816f6d3007ff90fb08dd5a202	1	Independence means role independence, defined and routed in RFC 000: a design is reviewed by the role that must build against it; an impleme
 ROADMAP.md	0cc3b4a1f8aa52ae6f4f201fc4520c924b82b64620697ae02b5bc0972c3532eb	1	1 Corrective fixes: ldap3 rustls provider, mdBook icon A none — owner-authorized [093 M1a](rfcs/handoffs/093-build-toolchain-release-gates/m
 ROADMAP.md	211874c3a846ff839aeff608f419cc7a2cba68b6445fee4b3524302d321db5dd	1	R3 Source-size debt: 28 files over 500 lines (measured 2026-09-16: git ls-files ' .rs' \ xargs wc -l \ awk '$2 != "total" && $1 500' \ wc -l
-ROADMAP.md	25aab8cf8abb0bc1ba7cdb2e078b067a614fe2c173d91fe49ed7f3151ae58c18	1	So the architect proposes, and @nabbisen decides prospectively, a routing rule that exists from the date he decides it — carrying a signatur
 ROADMAP.md	26de88e14f6fa11f02c4846c6a1a577eaf8cb96761082e7c37663009ee51ade0	1	The owner and independent reviewer decide whether a narrower change resets a targeted exercise or the complete four-week window.
 ROADMAP.md	2d4ab9968741d00b73c18bdf3c32d69f3d6cb9508934906d06fc3574002da5e4	1	On 2026-07-28 the owner authorized the programme to run two lanes : a second implementer was assigned and increased security-review capacity
 ROADMAP.md	3351aec715f3ba49395145f7af82e742bc1233506da4da1df6facb4916f22f56	1	Every statement in this repository that the owner made that ruling traces to documents written by the architect role that proposed it: this 
@@ -53,13 +52,13 @@ ROADMAP.md	b896eddb59d1bc16048f69a92af1c552c0e99023d5a710c6021e4b4c4096611c	1	Co
 ROADMAP.md	ba516c67d0d3dd1fdb14f601de2a4b446ec1230d87e5baf7c7738d4e0d691338	1	117 2026-09-24 [ rfcs/handoffs/117-verifiable-owner-decisions/design-review-request.md ](rfcs/handoffs/117-verifiable-owner-decisions/design
 ROADMAP.md	bb235e2112792587a7ec5c03335238612a542d7b027f1b50e0382ea0526d46f6	1	codex-project-architect , codex-developer , and codex-independent-architecture-security-reviewer are agent identities from one vendor, with 
 ROADMAP.md	bd873ea5fa5be8b218d9a441f7a9bb71ffb3d08e288c993dc9fa2b3265676439	1	Owner ruling, 2026-09-22: implementation handoffs live under rfcs/handoffs/ , now and in future. RFC 000 requires every rfcs/handoffs/NNN-sl
+ROADMAP.md	bede9b30c360d8ae13a8e25d699c2e27f9d43d875107eecbfcc6ec1486ede54b	1	The practice this programme already follows satisfies it : the implementation role reviews designs, which RFC 000 permits, and @nabbisen app
 ROADMAP.md	c5a4e72e2e7e1266b23b9fcba9c5273fcb9553728ae4358a455b49eb54df2ab0	1	This section holds the reasoning, the owner rulings, and the revisit triggers for the three risks that are not owned by any RFC and would ot
 ROADMAP.md	c7f1e35be50044c487b2b4057e969a72c2f64e1f725cde24c38f7bae20193109	1	What it costs the architect, stated so the decision is not made blind. Dropping workflow means a lane change waits for @nabbisen .
 ROADMAP.md	c85ab670b7b295f5f71a70048e2389912bb49a45e6d38982b6df9d3b6d5139d6	1	@nabbisen states he made no such ruling.
 ROADMAP.md	db3f9fec5fc0a4aef4764549974c5ed2bf37c7d8171674da0967eb0238eec2a7	1	M2c — Master-key rotation recovery owner to set Rotation journal, atomic key-file publication, startup crash recovery across every transitio
 ROADMAP.md	e48726a2966498de86bf8216ccf3cd161bf3681500bce35a105c0dfc6ac665e0	1	119 accepted by @nabbisen 2026-09-26; status held — G11 refuses an Accepted RFC whose security review is Required and which cites no review 
 ROADMAP.md	e6f1f58936bb198e6cbf52b097706dd3f657138d41979fec0180306eb2121be9	1	R1 Review independence: authoring, implementation and review concentrate in few roles Certain (structural) High — the readiness claim rests 
-ROADMAP.md	efcb4fa8b0bbc83d852d65b4d61f4e6c2e569ae039baffd1c13c34078abd3af9	1	Proposed text, awaiting his decision — the architect's words, not a restatement of his: a design is reviewed by the role that must build aga
 ROADMAP.md	f28ee07a59bcf8fe20042bcdd369924c17453b138e4bafc7bfaaace5d1b7fedb	1	The architect legislated. Rules, scope and schedule are proposed by the architect and decided by the owner.
 ROADMAP.md	f32dcc76269a196d385d376160fb29d7153b957a91d29685f7127e2c7439a70a	1	M7 — Real-environment soak owner to set Exercise the exact M6 artifact under representative auth traffic, failure modes, operational cycles,
 contracts/audit-coverage-matrix.md	7eabca6616e34b638eb38be8c856450237a82e58159180fbb802125fb837aca9	1	Ruled by @nabbisen , 2026-09-24.
