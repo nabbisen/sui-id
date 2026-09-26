@@ -136,8 +136,7 @@ pub(crate) async fn run_admin_unlock_user(args: &[String]) -> Result<()> {
     // server uses (env var > file). No need to spin up the HTTP
     // layer or the clock; we read one row, write one row, exit.
     let resolved = sui_id::keyring::resolve(&cfg.storage.key_file).context("loading master key")?;
-    let db = sui_id_store::Database::open(&cfg.storage.db_path, resolved.key)
-        .context("opening database")?;
+    let db = sui_id::database::open(&cfg.storage.db_path, resolved.key)?;
 
     let user = sui_id_store::repos::users::find_by_username(&db, username)
         .await
@@ -175,8 +174,7 @@ pub(crate) async fn run_admin_reset_mfa(args: &[String]) -> Result<()> {
     let cfg = Config::load(&config_path)
         .with_context(|| format!("loading config from {}", config_path.display()))?;
     let resolved = sui_id::keyring::resolve(&cfg.storage.key_file).context("loading master key")?;
-    let db = sui_id_store::Database::open(&cfg.storage.db_path, resolved.key)
-        .context("opening database")?;
+    let db = sui_id::database::open(&cfg.storage.db_path, resolved.key)?;
 
     match sui_id_core::admin::operator_reset_mfa(&db, username, reason).await {
         Ok((user_id, report)) => {
@@ -225,8 +223,7 @@ pub(crate) async fn run_admin_issue_recovery_link(args: &[String]) -> Result<()>
     let cfg = Config::load(&config_path)
         .with_context(|| format!("loading config from {}", config_path.display()))?;
     let resolved = sui_id::keyring::resolve(&cfg.storage.key_file).context("loading master key")?;
-    let db = sui_id_store::Database::open(&cfg.storage.db_path, resolved.key)
-        .context("opening database")?;
+    let db = sui_id::database::open(&cfg.storage.db_path, resolved.key)?;
     let clock: sui_id_core::time::SharedClock = std::sync::Arc::new(sui_id_core::time::SystemClock);
 
     match sui_id_core::recovery_link::issue_as_operator(&db, &clock, username, reason).await {
@@ -297,6 +294,10 @@ pub(crate) async fn run_admin_rotate_key(args: &[String]) -> Result<()> {
     let config_path = parse_config_path(args).unwrap_or_else(|| PathBuf::from("./sui-id.toml"));
     let cfg = Config::load(&config_path)
         .with_context(|| format!("loading config from {}", config_path.display()))?;
+    // RFC 112 D5: this command prints a summary and asks for confirmation before
+    // it opens the database, so the refusal is checked first; it must be the
+    // first thing the operator reads, not the last after a "type yes".
+    sui_id::database::check(&cfg.storage.db_path)?;
 
     // Source-of-new-key flag handling. Mutually exclusive: at
     // most one of `--new-key` / `--generate-new-key`. Default is
@@ -355,8 +356,7 @@ pub(crate) async fn run_admin_rotate_key(args: &[String]) -> Result<()> {
     // the server's startup logic).
     let resolved_old =
         sui_id::keyring::resolve(&cfg.storage.key_file).context("loading old master key")?;
-    let db = sui_id_store::Database::open(&cfg.storage.db_path, resolved_old.key)
-        .context("opening database with old key")?;
+    let db = sui_id::database::open(&cfg.storage.db_path, resolved_old.key)?;
 
     // Construct the NEW key. Either generate one or read it
     // from the operator-provided file.
@@ -503,8 +503,7 @@ async fn run_setup(args: &[String]) -> Result<()> {
         .with_context(|| format!("loading config from {}", config_path.display()))?;
 
     let resolved = sui_id::keyring::resolve(&cfg.storage.key_file).context("loading master key")?;
-    let db = sui_id_store::Database::open(&cfg.storage.db_path, resolved.key)
-        .context("opening database")?;
+    let db = sui_id::database::open(&cfg.storage.db_path, resolved.key)?;
 
     let clock = sui_id_core::time::system_clock();
 
@@ -771,8 +770,7 @@ pub(crate) async fn run_admin_rotate_metrics_token(args: &[String]) -> Result<()
         .with_context(|| format!("loading config from {}", config_path.display()))?;
 
     let resolved = sui_id::keyring::resolve(&cfg.storage.key_file).context("loading master key")?;
-    let db = sui_id_store::Database::open(&cfg.storage.db_path, resolved.key)
-        .context("opening database")?;
+    let db = sui_id::database::open(&cfg.storage.db_path, resolved.key)?;
 
     // Generate a fresh 32-byte random token and encode it as URL-safe base64.
     let mut raw = [0u8; 32];
@@ -825,8 +823,7 @@ pub(crate) async fn run_admin_issue_registration_token(args: &[String]) -> Resul
         .with_context(|| format!("loading config from {}", config_path.display()))?;
 
     let resolved = sui_id::keyring::resolve(&cfg.storage.key_file).context("loading master key")?;
-    let db = sui_id_store::Database::open(&cfg.storage.db_path, resolved.key)
-        .context("opening database")?;
+    let db = sui_id::database::open(&cfg.storage.db_path, resolved.key)?;
 
     // Parse --max-uses N (default 1)
     let max_uses: i64 = {

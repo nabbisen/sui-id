@@ -16,6 +16,8 @@ pub mod config;
 pub mod cors;
 #[path = "http/csrf.rs"]
 pub mod csrf;
+#[path = "runtime/database.rs"]
+pub mod database;
 #[path = "runtime/dev_mode.rs"]
 pub mod dev_mode;
 #[path = "http/errors.rs"]

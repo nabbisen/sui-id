@@ -97,3 +97,17 @@ migrated. It reads the recorded schema version before it touches the file, and
 stops if that version is newer than it understands; **nothing is written to the
 database** when it does. The recovery is to run the newer binary again, or to
 restore the pre-upgrade backup, as above.
+
+What the refusal looks like: one line on stderr, first and alone (`sui-id:
+refusing to run: the database at … is at schema version 44, but this sui-id
+0.78.0 understands up to 43 …`), naming the path, both versions and, when the
+database recorded it, the release that migrated it, and exit code **65**.
+Nothing is written to the database. There is no override flag. A schema version
+that cannot be read, or that is missing from a database that has tables, is
+refused the same way. The full text, the exit codes and the systemd setting
+(`RestartPreventExitStatus=65`) are in the
+[deployment guide](deployment.md#11-upgrades).
+
+**One binary version per database at a time**: the check is made when a binary
+opens the database, so a newer binary migrating while an older one is already
+running is not detected by the older one. Stop the old instance first.

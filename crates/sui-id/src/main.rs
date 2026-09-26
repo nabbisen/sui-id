@@ -14,9 +14,29 @@ use sui_id::{build_router, config::Config, startup};
 
 mod cli;
 
+/// The process entry point. It exists to give a refused database its own exit
+/// code (RFC 112 D5): the binary used to return `anyhow::Result` from `main`, so
+/// every failure was `1` and printed under `Error:`. The convention is two lines:
+/// `0` success; `65` the database is not one this build can use; `1` everything
+/// else, printed exactly as before.
 #[tokio::main]
+async fn main() -> std::process::ExitCode {
+    match run().await {
+        Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(err) => match err.downcast_ref::<sui_id::database::DatabaseRefused>() {
+            Some(refused) => {
+                eprintln!("{}", refused.line());
+                std::process::ExitCode::from(sui_id::database::EXIT_DATABASE_REFUSED)
+            }
+            None => {
+                eprintln!("Error: {err:?}");
+                std::process::ExitCode::FAILURE
+            }
+        },
+    }
+}
 
-async fn main() -> Result<()> {
+async fn run() -> Result<()> {
     // Must run before any subcommand or code path that could open a TLS
     // connection (LDAPS via ldap3, implicit-TLS SMTP via wasm-smtp-tokio,
     // or reqwest for federation/HIBP) — see the doc comment on this

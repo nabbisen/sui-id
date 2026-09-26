@@ -64,6 +64,7 @@ mod r103_stage4;
 mod r103_stage5;
 mod r105_escaping;
 mod r112;
+mod r112_stage2;
 mod r115_stage1;
 mod r115_stage2;
 mod r115_stage3;

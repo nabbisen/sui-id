@@ -389,6 +389,15 @@ pub fn last_migrated_by(conn: &Connection) -> Option<String> {
     .ok()
 }
 
+/// [`last_migrated_by`] for a database **file**, read-only, best effort. Used
+/// to name the release in a refusal (RFC 112 D5, D7): the refusing binary has no
+/// open connection, and must not open one for writing. `None` if the file cannot
+/// be read or records no release.
+pub fn last_migrated_by_file(path: &Path) -> Option<String> {
+    let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY).ok()?;
+    last_migrated_by(&conn)
+}
+
 /// RFC 112 D3: decide about the database **file** before anything touches it.
 ///
 /// `Database::open` used to set `journal_mode = WAL` before `run`, and `run`

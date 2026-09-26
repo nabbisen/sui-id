@@ -10,7 +10,6 @@ use base64ct::{Base64, Encoding};
 use getrandom;
 use std::sync::Once;
 use sui_id_core::time::system_clock;
-use sui_id_store::Database;
 use sui_id_store::repos::state;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
@@ -161,7 +160,7 @@ pub async fn prepare(cfg: Config) -> Result<Startup> {
     {
         std::fs::create_dir_all(parent).ok();
     }
-    let db = Database::open(&cfg.storage.db_path, resolved.key).context("opening database")?;
+    let db = crate::database::open(&cfg.storage.db_path, resolved.key)?;
 
     // Verify the tail of the audit-log hash chain. A mismatch here
     // indicates DB-level tampering since the most recent restart;

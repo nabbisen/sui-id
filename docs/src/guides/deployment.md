@@ -226,6 +226,9 @@ Group=sui-id
 ExecStart=/usr/local/bin/sui-id --config /etc/sui-id/sui-id.toml
 Restart=on-failure
 RestartSec=2s
+# Exit 65 means the database is not one this build can use (see "Exit codes"
+# below). Restarting cannot fix that, so do not.
+RestartPreventExitStatus=65
 
 # Read-only filesystem except the explicit state directory.
 ProtectSystem=strict
@@ -255,6 +258,23 @@ systemctl daemon-reload
 systemctl enable --now sui-id
 systemctl status sui-id
 ```
+
+### Exit codes
+
+sui-id uses three, and only three:
+
+| Code | Meaning |
+|---|---|
+| `0` | Success. |
+| `65` | The database is not one this build can use: its schema is **newer** than this build understands, or its schema version is **unreadable** (or missing from a database that has tables). Nothing was written to it. |
+| `1` | Everything else. |
+
+`65` is `EX_DATAERR` from `sysexits.h`. Both refusals use it, so
+`RestartPreventExitStatus=65` in the unit above covers both; without it,
+`Restart=on-failure` restarts a refusing service every two seconds until
+systemd's start limit stops it. The refusal is one line, first and alone on
+stderr (and one `error` event in the log where logging is configured); see
+[Upgrades](#11-upgrades).
 
 The hardening directives here are the standard `systemd-analyze
 security` recommendations for a long-running unprivileged HTTP
@@ -505,6 +525,38 @@ There is no automatic schema downgrade. If a release introduces a
 schema change you cannot live with, the only path back is the
 pre-upgrade backup. Read the CHANGELOG before upgrading minor
 versions for that reason.
+
+**An older binary now refuses a database a newer one has migrated.** Start
+`sui-id.bak` against the upgraded database, without restoring first, and it
+reads the recorded schema version before it touches the file, writes nothing,
+and exits `65` with one line on stderr:
+
+```text
+sui-id: refusing to run: the database at /var/lib/sui-id/sui-id.sqlite is at schema
+version 44, but this sui-id 0.78.0 understands up to 43 (it was last migrated by
+sui-id 0.79.0). Run sui-id 0.79.0 or newer, or restore the pre-upgrade backup with
+"sui-id restore --config <config> --from <backup.tar> --force". Nothing was changed.
+Do not edit or delete the database, and do not run migrations by hand.
+```
+
+(On one line, in practice.) It contains "schema" and "migrat", so the
+`journalctl … | grep -i migrat` above finds it. There is **no override flag**:
+some migrations drop or rebuild columns, so an older binary can fail at run
+time on operations the operator has not tried yet, which is worse than failing
+to start. The two routes forward are the ones the line names. `sui-id backup`,
+`verify-backup` and `restore` are unaffected, because none of them opens the
+database through the migration runner; take a backup first if you have not.
+
+A schema version that is unreadable, or missing from a database that has tables
+(including a SQLite file that is not a sui-id database at all), is refused the
+same way, with the same exit code and a line that says the version could not be
+trusted and that no migrations were run.
+
+**One binary version per database at a time.** The check is made when a binary
+opens the database. A newer binary that migrates while an older one is *already
+running* is not detected by the older one. Stop the old instance before
+starting the new one against the same database file, and do not run two
+different versions against one database during a cutover.
 
 ## 12. Things to verify after deployment
 
