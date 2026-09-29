@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **The audit hash chain was built but never verified as a chain.** Verification
+  recomputed each row's hash from that row's own `prev_hash` and compared it to
+  that row's own `hash`; it never compared one row's `prev_hash` against the
+  previous row's actual `hash`, and never checked `seq` for gaps. So rewriting a
+  row (with its own hash recomputed), deleting a row, and truncating the log were
+  all undetected, against exactly the database-access attacker the chain exists
+  to catch. Verification now checks linkage, sequence continuity, and one row
+  past the window it was asked about. **Releases up to and including 0.78.0 are
+  affected**, and the module documentation, the migration comment, `ROADMAP.md`
+  and `docs/threat-model.md` each claimed the property that was missing — those
+  are corrected too ([RFC 125](rfcs/proposed/125-the-chain-must-be-verified-as-a-chain.md)).
+  One residual is named in those documents and closes in stage 2.
+
 - **Two routes acted without establishing who was asking, and now cannot.** The
   OIDC consent answer took its subject, and the authentication methods it
   recorded, from a cookie rather than from the session; it now requires a live

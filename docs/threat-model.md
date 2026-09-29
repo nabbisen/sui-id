@@ -954,19 +954,44 @@ Two important properties hold:
 Every audit row's `hash` column is
 `SHA-256(prev_hash_hex || length-prefixed canonical bytes)`.
 A row's bytes are deterministic over the row's content
-(actor, action, target, result, timestamp, note). Inserting
-or modifying a row breaks the chain at that row and at every
-row after it.
+(actor, action, target, result, timestamp, note). Verification
+(`verify_chain_tail`, RFC 125) checks the chain **as a chain**:
+row N's own `hash` must still match its own `prev_hash` and
+content, row N's `prev_hash` must equal row N-1's actual
+`hash`, and `seq` must be contiguous. Modifying a row without
+also relinking its successor is caught at that successor;
+modifying a row and correctly recomputing only that row's own
+hash is caught the same way, at the very next row. Verification
+stops at the first row it finds wrong, walking oldest to
+newest, and reports that one.
 
 Properties:
 
 - **Tamper-evident, not tamper-proof.** A determined L+K
   attacker can rewrite the chain end-to-end (every row's
-  hash recomputed). What they cannot do is *partially*
-  rewrite — once they touch one row, they have to fix every
-  subsequent row, which means they need the
-  column-encryption state of those rows to be self-
-  consistent and the timestamp ordering to remain monotone.
+  hash recomputed). Rewriting a *single* row now requires
+  fixing up its successor's linkage as well, and verification
+  checks that.
+- **One residual, measured 2026-09-30 and not yet closed.**
+  Verification skips a row whose `hash` column is empty,
+  treating it as a pre-v0.17.0 legacy row. Blanking a hashed
+  row's `hash` and relinking its successor therefore removes
+  that row from verification in two writes, and the only
+  signal is that `legacy_unhashed` rises — which no surface
+  shows today. The rule that closes it is that legacy rows
+  form a contiguous prefix: once a hashed row has been seen,
+  an empty `hash` is a break. Until that ships, do not read
+  "intact" as covering a row whose `hash` is empty.
+- **The current newest row is the one exception, inherently.**
+  Before anything is appended after it, nothing yet records
+  its hash, so it can be rewritten (with its own hash
+  recomputed) with no trace *at that moment*. The next append
+  closes that window for good.
+- **A tail-only check covers its window, and one row past it.**
+  `verify_chain_tail` reads one row older than the window it
+  was given so that row's linkage is actually checked rather
+  than assumed (RFC 125 D3) — but a row older than that remains
+  unchecked by a call with a smaller limit than the whole log.
 - **Detection via off-host comparison.** An operator who
   exports audit rows nightly and compares against the live
   DB sees the divergence at the first row touched. The

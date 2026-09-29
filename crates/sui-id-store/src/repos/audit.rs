@@ -1,13 +1,25 @@
 //! Append-only audit log with a tamper-evident hash chain.
 //!
 //! Each row's `hash` is `SHA-256(prev_hash || canonical_row_bytes)`.
-//! The `prev_hash` of row N+1 is the `hash` of row N. To rewrite or
-//! delete row N you must recompute every subsequent row's hash —
-//! something an attacker with raw SQL access can do, but they
-//! cannot do it without leaving any trace because there's no point
-//! at which the legitimate code path produces a chain that doesn't
-//! match the canonical recipe. A startup-time verifier walking the
-//! tail of the log catches the mismatch.
+//! The `prev_hash` of row N+1 is the `hash` of row N. Rewriting or
+//! deleting row N without also fixing up **row N+1's `prev_hash`** is what
+//! makes the tamper detectable (RFC 125): [`verify_chain_tail`] checks that
+//! linkage — row N+1's `prev_hash` really is row N's `hash` — and that `seq`
+//! is contiguous, not merely that each row's own `hash` column is a correct
+//! function of that row's own `prev_hash` and content. The one thing this
+//! cannot detect, inherent to any forward hash chain and not a defect: the
+//! **current newest row**, before anything is appended after it, has no
+//! successor yet to record its hash, so it can be rewritten (with its own
+//! hash recomputed from its own unchanged `prev_hash`) without leaving a
+//! trace *at that moment*. The moment a further row is appended, that
+//! window closes for good — its `prev_hash` now fixes the value forever.
+//!
+//! One further gap is known and open as of 2026-09-30: a row whose `hash`
+//! column is empty is treated as a pre-v0.17.0 legacy row and skipped, so
+//! blanking a hashed row's `hash` and relinking its successor takes it out
+//! of verification in two writes, raising only `legacy_unhashed`. The rule
+//! that closes it — legacy rows form a contiguous prefix, so an empty
+//! `hash` after a hashed row is a break — is not implemented yet.
 //!
 //! The hashes are not signed by any external party — that's an
 //! orthogonal extension (RFC 3161 timestamping or a notary service)
@@ -22,6 +34,7 @@ use crate::db::Database;
 use crate::errors::StoreResult;
 use crate::models::AuditLogRow;
 use chrono::{DateTime, Utc};
+use rusqlite::OptionalExtension;
 use rusqlite::params;
 use sha2::{Digest, Sha256};
 
@@ -223,11 +236,18 @@ pub async fn recent_filtered(
 /// Result of a tail-verification pass.
 #[derive(Debug, Clone)]
 pub struct ChainVerifyReport {
-    /// Rows examined that participate in the chain.
+    /// Rows examined that participate in the chain (excludes
+    /// `legacy_unhashed`, includes every row a break could be reported at).
     pub checked: usize,
-    /// Sequence number of the first row whose stored hash disagrees
-    /// with the recomputation. `None` means every checked row
-    /// hashes correctly.
+    /// The `seq` of the first row (walking oldest to newest) found to be
+    /// wrong in any of the ways this covers: its own `hash` does not match
+    /// `SHA-256(prev_hash || content)`; its `prev_hash` does not match the
+    /// previous row's actual `hash`; a `seq` gap precedes it; or it is the
+    /// oldest row in the whole table (no predecessor exists at all) but its
+    /// own `seq` is not `1`. `None` means none of those held for any row
+    /// examined, **within the window this call was given** — see
+    /// [`verify_chain_tail`]'s own doc for what "examined" covers at the
+    /// window's edge.
     pub broken_at_seq: Option<i64>,
     /// Rows that were skipped because they predate the v0.17.0
     /// migration (their `hash` column is empty). These don't
@@ -236,15 +256,35 @@ pub struct ChainVerifyReport {
     pub legacy_unhashed: usize,
 }
 
-/// Walk the most-recent `limit` audit rows and verify each row's
-/// hash matches `SHA-256(prev_hash || canonical_bytes)`. Stops at
-/// the first mismatch and reports the offending row's `seq`.
+/// Walk the most-recent `limit` audit rows and verify them **as a chain**:
+/// each row's `prev_hash` must equal the previous row's `hash`, `seq` must be
+/// contiguous, and each row's own `hash` must still be
+/// `SHA-256(prev_hash || canonical_bytes)`. Stops at the first row (oldest to
+/// newest) that fails any of those and reports its `seq`.
 ///
-/// Intended to be called once at startup with a cheap limit (a few
-/// thousand rows): more than enough to catch a recent tampering
-/// attempt, cheap enough to not noticeably extend boot time.
+/// **The window's edge is checked, not assumed (RFC 125 D3).** The oldest row
+/// the `LIMIT` returns has no predecessor *within that result set*, so this
+/// reads one row further back (`seq` one less than the oldest one returned)
+/// to learn what its `prev_hash` actually had to be, rather than treating
+/// that boundary as verified when it was never compared to anything. If no
+/// such row exists, the oldest row returned must genuinely be the table's
+/// first row ever (`seq == 1`) for this to be legitimate (D4) — a survivor of
+/// a truncated head has no predecessor either, but is not `seq == 1`, and
+/// that is exactly what this catches.
+///
+/// **What one call cannot tell you.** It covers the returned window plus the
+/// one boundary row behind it — not rows older than that, and not the
+/// current newest row's own vulnerability to a rewrite with no successor yet
+/// to catch it (module doc above). Intended to be called once at startup
+/// with a cheap limit (a few thousand rows): more than enough to catch a
+/// recent tampering attempt, cheap enough to not noticeably extend boot time.
 pub async fn verify_chain_tail(db: &Database, limit: i64) -> StoreResult<ChainVerifyReport> {
-    let rows: Vec<(i64, AuditLogRow, String, String)> = db
+    // (seq, row, prev_hash, hash) per row in the window; and the one row
+    // older than the window (seq, hash), if any (RFC 125 D3).
+    type ChainRows = Vec<(i64, AuditLogRow, String, String)>;
+    type ChainBoundary = Option<(i64, String)>;
+
+    let (rows, boundary): (ChainRows, ChainBoundary) = db
         .with_conn(move |conn| {
             let mut stmt = conn.prepare(
                 "SELECT seq, at, actor, action, target, result, note, prev_hash, hash \
@@ -276,7 +316,21 @@ pub async fn verify_chain_tail(db: &Database, limit: i64) -> StoreResult<ChainVe
                     Ok((seq, row, prev, hash))
                 })?
                 .collect::<Result<Vec<_>, _>>()?;
-            Ok(collected)
+            // RFC 125 D3: one row older than the oldest one returned, so the
+            // window's edge is checked against its true predecessor instead
+            // of silently treated as verified.
+            let boundary = match collected.last() {
+                Some((oldest_seq, ..)) => conn
+                    .query_row(
+                        "SELECT seq, hash FROM audit_log WHERE seq < ?1 \
+                         ORDER BY seq DESC LIMIT 1",
+                        [oldest_seq],
+                        |r| Ok((r.get(0)?, r.get(1)?)),
+                    )
+                    .optional()?,
+                None => None,
+            };
+            Ok((collected, boundary))
         })
         .await?;
 
@@ -285,18 +339,58 @@ pub async fn verify_chain_tail(db: &Database, limit: i64) -> StoreResult<ChainVe
         broken_at_seq: None,
         legacy_unhashed: 0,
     };
-    for (seq, row, prev, hash) in &rows {
+
+    // Walking oldest to newest, `expected_prev` and `expected_seq` are what
+    // the row about to be examined must match, given everything already
+    // verified — starting from the boundary row read above, if one exists.
+    // A predecessor whose own `hash` is empty (a legacy row) sets
+    // `expected_prev` to `""`, which is exactly what a legitimate row
+    // starting the hashed portion of the log has, so genesis-after-legacy
+    // and genesis-at-the-very-first-row share one comparison, not two.
+    let mut expected_prev = boundary.as_ref().map_or(String::new(), |(_, h)| h.clone());
+    let mut expected_seq = boundary.as_ref().map(|(seq, _)| seq + 1);
+    let no_boundary = boundary.is_none();
+
+    for (i, (seq, row, prev, hash)) in rows.iter().rev().enumerate() {
+        // D4: when nothing precedes this row at all, it is only legitimate
+        // if it is genuinely the table's first row. A row surviving a
+        // truncated head has no predecessor either, but was not `seq == 1`.
+        if i == 0 && no_boundary && *seq != 1 {
+            report.broken_at_seq = Some(*seq);
+            return Ok(report);
+        }
+        // D2: `seq` must be contiguous. A gap is a deleted row (middle or
+        // head) that the linkage check below might otherwise not catch on
+        // its own if the surviving rows happen to still agree pairwise.
+        if let Some(exp_seq) = expected_seq
+            && *seq != exp_seq
+        {
+            report.broken_at_seq = Some(*seq);
+            return Ok(report);
+        }
+        expected_seq = Some(seq + 1);
+
         if hash.is_empty() {
-            // Pre-v0.17.0 row: not part of the chain.
+            // Pre-v0.17.0 row: not part of the chain, and its `prev_hash` is
+            // a migration default, not data — nothing to compare it to.
             report.legacy_unhashed += 1;
+            expected_prev = String::new();
             continue;
         }
         report.checked += 1;
+
+        // D1: row N's `prev_hash` must be row N-1's actual `hash` — not
+        // merely a value this row's own hash formula happens to agree with.
+        if *prev != expected_prev {
+            report.broken_at_seq = Some(*seq);
+            return Ok(report);
+        }
         let computed = compute_hash(prev, row);
         if computed != *hash {
             report.broken_at_seq = Some(*seq);
             return Ok(report);
         }
+        expected_prev = hash.clone();
     }
     Ok(report)
 }
@@ -358,14 +452,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn tampering_with_a_row_makes_chain_verification_fail() {
+    async fn a_tamper_that_leaves_its_own_hash_stale_is_caught_by_the_row_formula() {
+        // RFC 125 D6: this is the *careless* tamper — content changed, `hash`
+        // column left as it was — caught by the single-row formula check
+        // that existed before this RFC (`compute_hash(prev, row) == hash`).
+        // It says nothing about linkage between rows, and previously had a
+        // comment that did. `a_single_row_rewrite_with_its_own_hash_recomputed_is_now_caught`,
+        // below, is the harder case this RFC actually added: the same tamper
+        // with `hash` also recomputed, which this check alone cannot see.
         let db = fresh_db();
         append(&db, &sample_row("a")).await.expect("append");
         append(&db, &sample_row("b")).await.expect("append");
         append(&db, &sample_row("c")).await.expect("append");
 
-        // Rewrite row #2's `action` directly via SQL — exactly the
-        // attack the chain is supposed to detect.
         db.with_conn(|c| {
             c.execute("UPDATE audit_log SET action = 'tampered' WHERE seq = 2", [])?;
             Ok(())
@@ -374,9 +473,268 @@ mod tests {
         .expect("tamper");
 
         let r = verify_chain_tail(&db, 100).await.expect("verify");
-        // Walking newest-first, seq=3 still hashes correctly because
-        // its prev_hash was committed before the tamper. seq=2 is
-        // the row whose recomputed hash now disagrees with stored.
+        assert_eq!(r.broken_at_seq, Some(2), "{r:?}");
+    }
+
+    /// Read every column `verify_chain_tail` reads for the row at `seq`, so a
+    /// test can change one field and recompute a self-consistent `hash` for
+    /// the rest without guessing at the row's other content.
+    async fn read_row_raw(
+        db: &Database,
+        seq: i64,
+    ) -> (String, Option<String>, Option<String>, String) {
+        db.with_conn(move |c| {
+            c.query_row(
+                "SELECT at, actor, target, prev_hash FROM audit_log WHERE seq = ?1",
+                [seq],
+                |r| {
+                    Ok((
+                        r.get::<_, String>(0)?,
+                        r.get::<_, Option<String>>(1)?,
+                        r.get::<_, Option<String>>(2)?,
+                        r.get::<_, String>(3)?,
+                    ))
+                },
+            )
+            .map_err(Into::into)
+        })
+        .await
+        .expect("read row")
+    }
+
+    #[tokio::test]
+    async fn a_single_row_rewrite_with_its_own_hash_recomputed_is_now_caught() {
+        // RFC 125 D1. Before this RFC: change row 2's content, recompute
+        // row 2's own `hash` from row 2's *unchanged* `prev_hash`, touch no
+        // other row — `verify_chain_tail` reported the tail intact, because
+        // it never compared row 2's `hash` to row 3's `prev_hash`. That
+        // comparison is what this test requires.
+        let db = fresh_db();
+        append(&db, &sample_row("a")).await.expect("append");
+        append(&db, &sample_row("b")).await.expect("append");
+        append(&db, &sample_row("c")).await.expect("append");
+
+        let (at, actor, target, prev_hash) = read_row_raw(&db, 2).await;
+        let tampered = AuditLogRow {
+            at: at.parse().expect("at"),
+            actor: actor.map(|s| s.parse().expect("actor")),
+            action: "tampered".into(),
+            target,
+            result: "ok".into(),
+            note: None,
+        };
+        let new_hash = compute_hash(&prev_hash, &tampered);
+        db.with_conn(move |c| {
+            c.execute(
+                "UPDATE audit_log SET action = ?1, hash = ?2 WHERE seq = 2",
+                params![tampered.action, new_hash],
+            )?;
+            Ok(())
+        })
+        .await
+        .expect("tamper with recomputed hash");
+
+        let r = verify_chain_tail(&db, 100).await.expect("verify");
+        assert_eq!(r.broken_at_seq, Some(3), "{r:?}");
+    }
+
+    #[tokio::test]
+    async fn the_window_edge_catches_a_rewrite_just_outside_it() {
+        // RFC 125 D3. Same tamper as above, but the window (`limit = 3`)
+        // does not include row 2 at all — only rows 3, 4, 5. If the window's
+        // oldest row (3) were treated as verified without checking its true
+        // predecessor, this tamper on row 2 would be invisible to a caller
+        // using a limit smaller than the whole table, which is every caller.
+        let db = fresh_db();
+        for a in ["a", "b", "c", "d", "e"] {
+            append(&db, &sample_row(a)).await.expect("append");
+        }
+        let (at, actor, target, prev_hash) = read_row_raw(&db, 2).await;
+        let tampered = AuditLogRow {
+            at: at.parse().expect("at"),
+            actor: actor.map(|s| s.parse().expect("actor")),
+            action: "tampered".into(),
+            target,
+            result: "ok".into(),
+            note: None,
+        };
+        let new_hash = compute_hash(&prev_hash, &tampered);
+        db.with_conn(move |c| {
+            c.execute(
+                "UPDATE audit_log SET action = ?1, hash = ?2 WHERE seq = 2",
+                params![tampered.action, new_hash],
+            )?;
+            Ok(())
+        })
+        .await
+        .expect("tamper");
+
+        let r = verify_chain_tail(&db, 3).await.expect("verify");
+        assert_eq!(r.broken_at_seq, Some(3), "{r:?}");
+    }
+
+    #[tokio::test]
+    async fn the_window_edge_does_not_false_positive_on_a_clean_predecessor() {
+        // The positive twin of the test above: nothing tampered, and a
+        // narrow window still verifies clean once the boundary read confirms
+        // its oldest row's `prev_hash` matches the row just outside it.
+        let db = fresh_db();
+        for a in ["a", "b", "c", "d", "e"] {
+            append(&db, &sample_row(a)).await.expect("append");
+        }
+        let r = verify_chain_tail(&db, 3).await.expect("verify");
+        assert_eq!(r.checked, 3);
+        assert_eq!(r.broken_at_seq, None, "{r:?}");
+    }
+
+    #[tokio::test]
+    async fn a_deleted_row_relinked_to_hide_it_is_caught_by_sequence_continuity() {
+        // RFC 125 D2. The harder case D2 exists for: row 3 is deleted *and*
+        // row 4 is rewritten to point at row 2 with a correctly recomputed
+        // `hash`, so linkage is fully consistent across the survivors — the
+        // only remaining evidence is that `seq` jumps from 2 to 4.
+        let db = fresh_db();
+        for a in ["a", "b", "c", "d", "e"] {
+            append(&db, &sample_row(a)).await.expect("append");
+        }
+        let row2_hash: String = db
+            .with_conn(|c| {
+                c.query_row("SELECT hash FROM audit_log WHERE seq = 2", [], |r| r.get(0))
+                    .map_err(Into::into)
+            })
+            .await
+            .expect("read row 2");
+        let (at, actor, target, _) = read_row_raw(&db, 4).await;
+        let row4 = AuditLogRow {
+            at: at.parse().expect("at"),
+            actor: actor.map(|s| s.parse().expect("actor")),
+            action: "d".into(),
+            target,
+            result: "ok".into(),
+            note: None,
+        };
+        let relinked_hash = compute_hash(&row2_hash, &row4);
+        db.with_conn(move |c| {
+            c.execute("DELETE FROM audit_log WHERE seq = 3", [])?;
+            c.execute(
+                "UPDATE audit_log SET prev_hash = ?1, hash = ?2 WHERE seq = 4",
+                params![row2_hash, relinked_hash],
+            )?;
+            Ok(())
+        })
+        .await
+        .expect("delete and relink");
+
+        let r = verify_chain_tail(&db, 100).await.expect("verify");
+        assert_eq!(r.broken_at_seq, Some(4), "{r:?}");
+    }
+
+    #[tokio::test]
+    async fn a_truncated_head_with_no_surviving_predecessor_is_caught() {
+        // RFC 125 D3 + D4. Rows 1 and 2 are deleted outright (no relinking
+        // attempted); row 3 survives untouched and is internally
+        // self-consistent and correctly linked to nothing that still
+        // exists. The only tell is that nothing precedes it at all, and its
+        // own `seq` is not `1` — the shape D4 names as illegitimate.
+        let db = fresh_db();
+        for a in ["a", "b", "c"] {
+            append(&db, &sample_row(a)).await.expect("append");
+        }
+        db.with_conn(|c| {
+            c.execute("DELETE FROM audit_log WHERE seq IN (1, 2)", [])?;
+            Ok(())
+        })
+        .await
+        .expect("truncate head");
+
+        let r = verify_chain_tail(&db, 100).await.expect("verify");
+        assert_eq!(r.broken_at_seq, Some(3), "{r:?}");
+    }
+
+    #[tokio::test]
+    async fn a_truncated_legacy_prefix_is_caught_even_though_prev_hash_still_matches() {
+        // RFC 125 D4's narrowest case. Rows 1-2 are legacy (pre-v0.17.0,
+        // `hash` and `prev_hash` both `""`). Row 3 is the first row this
+        // build ever hashed, so its `prev_hash` is legitimately `""` too —
+        // it read row 2's `hash`, which was `""`. If rows 1-2 are later
+        // deleted, row 3 has no predecessor at all, and its `prev_hash` of
+        // `""` now matches the *default* used when there is no boundary —
+        // linkage alone cannot tell this apart from a genuine, lone first
+        // row. Only checking that a no-predecessor row's own `seq` is `1`
+        // catches it; row 3's `seq` is not `1`.
+        let db = fresh_db();
+        let now = Utc::now();
+        for _ in 0..2 {
+            db.with_conn(move |c| {
+                c.execute(
+                    "INSERT INTO audit_log(at, actor, action, target, result, note, prev_hash, hash) \
+                     VALUES(?1, NULL, 'legacy', NULL, 'ok', NULL, '', '')",
+                    [now],
+                )?;
+                Ok(())
+            })
+            .await
+            .expect("insert legacy row");
+        }
+        append(&db, &sample_row("genesis-after-legacy"))
+            .await
+            .expect("append"); // seq 3, prev_hash legitimately ""
+        append(&db, &sample_row("d")).await.expect("append"); // seq 4
+        append(&db, &sample_row("e")).await.expect("append"); // seq 5
+
+        db.with_conn(|c| {
+            c.execute("DELETE FROM audit_log WHERE seq IN (1, 2)", [])?;
+            Ok(())
+        })
+        .await
+        .expect("delete the legacy prefix");
+
+        let r = verify_chain_tail(&db, 100).await.expect("verify");
+        assert_eq!(r.broken_at_seq, Some(3), "{r:?}");
+    }
+
+    #[tokio::test]
+    async fn a_lone_genesis_row_verifies_clean() {
+        // RFC 125 D4, the legitimate half: the table's true first row has an
+        // empty `prev_hash` and no predecessor at all, and that is fine.
+        let db = fresh_db();
+        append(&db, &sample_row("a")).await.expect("append");
+        let r = verify_chain_tail(&db, 100).await.expect("verify");
+        assert_eq!(r.checked, 1);
+        assert_eq!(r.broken_at_seq, None, "{r:?}");
+    }
+
+    #[tokio::test]
+    async fn a_later_row_forged_to_look_like_genesis_is_rejected() {
+        // RFC 125 D4, the illegitimate half: row 2's `prev_hash` is forged to
+        // `""` and its own `hash` is recomputed to match that forgery, so the
+        // single-row formula check alone would pass. A real predecessor
+        // (row 1) still exists and disagrees, which is what catches it.
+        let db = fresh_db();
+        append(&db, &sample_row("a")).await.expect("append");
+        append(&db, &sample_row("b")).await.expect("append");
+
+        let (at, actor, target, _) = read_row_raw(&db, 2).await;
+        let row2 = AuditLogRow {
+            at: at.parse().expect("at"),
+            actor: actor.map(|s| s.parse().expect("actor")),
+            action: "b".into(),
+            target,
+            result: "ok".into(),
+            note: None,
+        };
+        let forged_hash = compute_hash("", &row2);
+        db.with_conn(move |c| {
+            c.execute(
+                "UPDATE audit_log SET prev_hash = '', hash = ?1 WHERE seq = 2",
+                params![forged_hash],
+            )?;
+            Ok(())
+        })
+        .await
+        .expect("forge genesis");
+
+        let r = verify_chain_tail(&db, 100).await.expect("verify");
         assert_eq!(r.broken_at_seq, Some(2), "{r:?}");
     }
 

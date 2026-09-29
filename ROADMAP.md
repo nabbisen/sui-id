@@ -312,7 +312,7 @@ it, and the impact ratings below should be re-read.
 | ID | Risk | Likelihood | Impact | Detection | Mitigation | Residual | Owner |
 |---|---|---|---|---|---|---|---|
 | R1 | Review independence: authoring, implementation and review concentrate in few roles | Certain (structural) | High — the readiness claim rests on it | Review documents state which role reviewed and what it checked | Role-based routing per RFC 000: design reviewed by the implementation role, implementation by the specifying role, rules and scope decided by the owner; vendor is not a criterion | Design judgments no role but the author can assess, carried explicitly by the owner — currently RFC 094 `ReadConn` sufficiency and RFC 096 B1/B2 | `@nabbisen` |
-| R2 | Audit hash chain is unkeyed and unanchored — tamper-evident only within its trust boundary | Certain (by design) | High if misrepresented; low if stated | Documentation review | RFC 094 corrects the claims; no external anchor is introduced | Accepted permanently for this programme; revisit on a non-repudiation requirement or an untrusted-DB-writer deployment | `@nabbisen` |
+| R2 | Audit hash chain is unkeyed and unanchored — tamper-evident only within its trust boundary | Certain (by design) | High if misrepresented; low if stated | Documentation review | RFC 094 corrects the claims; RFC 125 corrected verification itself, which previously did not check chain linkage or `seq` continuity and so did not deliver tamper-evidence even within that boundary; no external anchor is introduced | Accepted permanently for this programme; revisit on a non-repudiation requirement or an untrusted-DB-writer deployment | `@nabbisen` |
 | R3 | Source-size debt: 28 files over 500 lines (measured 2026-09-16: `git ls-files '*.rs' \| xargs wc -l \| awk '$2 != "total" && $1 > 500' \| wc -l`), incl. load-bearing security modules | Certain (measured) | Medium — raises review cost and change-collision risk | `find`/`wc` sweep | No new file over 500 ELOC; split-when-touched-if-it-helps; **M5 revisit** | Residue unresolved until the M5 decision | `@nabbisen` at M5 |
 | R4 | MSRV 1.95 leaves three releases of headroom below current stable (1.98.1, measured 2026-09-16) | Certain (measured) | Medium — operators need `rustup`, not distro Rust | Toolchain bisect (done) | README states the `rustup` expectation | Narrow support window accepted when the floor was approved | `@nabbisen` |
 | R5 | **No hosted CI run has ever occurred.** All gate evidence to date is local | **Retired 2026-07-29** | — | — | First hosted run executed on `1e59e3d` | Superseded by R9 | — |
@@ -539,9 +539,24 @@ it now.
 
 RFC 094 corrects the *claims* about the chain but explicitly introduces no
 external anchoring or notarization service. The chain is therefore
-tamper-evident **within its trust boundary only**: a writer with database access
-who knows the public algorithm can edit rows and recompute the affected suffix,
-and a tail-only verifier cannot detect an altered old row outside its window.
+tamper-evident **within its trust boundary only**: a writer with database
+access who knows the public algorithm can rewrite the **current newest row**
+with no trace at all — nothing yet points to its hash, which is inherent to
+any forward hash chain, not a gap this programme can close — and a tail-only
+verifier cannot detect an altered row entirely outside the window it was given
+(older than that window's boundary). Any other row's tamper now requires also
+fixing up its immediate successor's linkage to match, which verification
+checks, including one row past its own window's edge, so it does not merely
+assume that edge (RFC 125).
+
+**One residual remains open, demonstrated by the architect on 2026-09-30 against
+the RFC 125 fix itself:** verification skips a row whose `hash` column is empty,
+reading it as a pre-v0.17.0 legacy row, so blanking a hashed row's `hash` and
+relinking its successor removes that row from verification in **two** writes and
+raises only `legacy_unhashed`, which no surface displays. Measured:
+`ChainVerifyReport { checked: 2, broken_at_seq: None, legacy_unhashed: 1 }`.
+RFC 125 stage 2 closes it with the rule that legacy rows form a contiguous
+prefix. Until then, "intact" does not cover a row whose `hash` is empty.
 
 This is a deliberate scope decision, not an oversight. It becomes a defect only
 if documentation implies otherwise — which RFC 098 must check and RFC 097 must
