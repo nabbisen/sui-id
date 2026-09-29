@@ -123,7 +123,7 @@ Proposed: the move approved nothing.
 | 113 | [Test modules live in their own files](./proposed/113-test-file-organization.md) | [113-test-file-organization](./handoffs/113-test-file-organization/README.md) |
 | 114 | [Reconcile `docs/ui-ux-contracts.md` with the code](./proposed/114-ui-contract-reconciliation.md) | [114-ui-contract-reconciliation](./handoffs/114-ui-contract-reconciliation/README.md) |
 | 119 | [What a host must promise before sui-id can be embedded in it](./proposed/119-embedding-contract.md) | [119-embedding-contract](./handoffs/119-embedding-contract/README.md) |
-| 120 | [Consent and the setup wizard must prove who is asking](./proposed/120-consent-and-setup-prove-the-caller.md) | [120-consent-and-setup-prove-the-caller](./handoffs/120-consent-and-setup-prove-the-caller/README.md) |
+| 120 | [Consent and the setup wizard must prove who is asking](./accepted/120-consent-and-setup-prove-the-caller.md) | [120-consent-and-setup-prove-the-caller](./handoffs/120-consent-and-setup-prove-the-caller/README.md) |
 
 ### Implemented — Mockup Integration epic (Phase 0 → Phase 8)
 

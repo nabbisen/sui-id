@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   language and breach-password steps could be reached after first-run
   initialization without an administrator, CSRF, a rate limit or an audit row;
   they now require all four. **Releases up to and including 0.78.0 are
-  affected.** Found by an internal review ([RFC 120](rfcs/proposed/120-consent-and-setup-prove-the-caller.md)).
+  affected.** Found by an internal review ([RFC 120](rfcs/accepted/120-consent-and-setup-prove-the-caller.md)).
 - A test now asserts the exact set of routes that answer without an
   authenticated caller, so adding one is a reviewed change rather than an
   accident. It would have caught both of the above.

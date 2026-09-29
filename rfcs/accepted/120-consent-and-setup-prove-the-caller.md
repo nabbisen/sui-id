@@ -1,8 +1,12 @@
 # RFC 120 — Consent and the setup wizard must prove who is asking
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-09-29
+**Approved by.** `@nabbisen`, 2026-09-29: "Authorized." Ratifying both the fix
+and the lifecycle deviation below, after the fix had landed.
 **Lifecycle note, stated rather than discovered.** The fix landed **while this
-RFC is Proposed**, which RFC 000 otherwise prohibits. `@nabbisen` authorized the
+RFC was Proposed**, which RFC 000 otherwise prohibits. It was ratified on
+2026-09-29, after the fact. `@nabbisen` authorized the
 fix itself on 2026-09-26 under the feature freeze's urgent-security-fix
 exception, and leaving a confirmed authentication defect in a public tree to
 complete paperwork would have been the worse choice. **This is a deliberate
@@ -18,7 +22,7 @@ design is "identity comes from the session", which is not novel; the judgment
 that carries risk is D3's choice of a signed cookie over server-side state, and
 that choice is argued in the review package.
 **Security review.** Required
-**Independent design review.** Found by the RFC 119 design review, 2026-09-26, by the implementation role — which authored neither RFC 119 nor this one. Both defects were confirmed independently by the architect, line by line, before this RFC was written.
+**Independent design review.** [The findings this RFC answers](../handoffs/120-consent-and-setup-prove-the-caller/design-review-findings-2026-09-26.md), extracted from the RFC 119 design review of 2026-09-26 by the implementation role — which authored neither RFC 119 nor this one. Both defects were confirmed independently by the architect, line by line, before this RFC was written.
 **Design prerequisites.** None. This RFC is an urgent security fix and takes precedence over every scheduled item under the feature freeze's first exception.
 **Implementation prerequisites.** None.
 **Closure prerequisites.** No request can establish, or act as, an identity it has not authenticated: the consent flow derives the subject and the authentication methods from the session alone, and every state-changing route reachable after first-run initialization requires an authorized actor, CSRF, a rate limit and an audit row. Each has a test that **fails on the code before this RFC** and passes after.

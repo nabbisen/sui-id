@@ -663,7 +663,7 @@ argued with; it becomes a plan when `@nabbisen` authorizes it. Windows are
 planning aids under the 2026-07-16 rule: **a failed gate moves the window, and
 scope or evidence is never cut to hold a date.**
 
-**Why three RFCs and not one.** The measurement taken on 2026-09-25 is that the
+**Why three RFCs and not one.** (RFC 119 is written; the other two are unwritten and **reserve no numbers** — reserving numbers for unwritten RFCs is how 120 came to mean two different things for three days.) The measurement taken on 2026-09-25 is that the
 web boundary largely exists already — `axum` appears outside `crates/sui-id/`
 exactly once, in a doc comment at `crates/sui-id-core/src/authn/hibp.rs:241`,
 and 11,347 of that crate's 14,878 lines are `src/http/`. What does not exist is
@@ -675,8 +675,8 @@ compiles into any framework and guarantees nothing is worse than no module.
 | Cycle | Target | Window | Embeddable contents |
 |---|---|---|---|
 | **C** | v0.80.0 | **2026-10-27 → 11-14** (proposed; the authorized row leaves C open-ended) | **[RFC 119](rfcs/proposed/119-embedding-contract.md) — the embedding contract.** **Written 2026-09-25 and Proposed**, on `@nabbisen`'s "Yes" of the same day. Design only, no code: what a host must promise about sessions, CSRF, redirects, clock and the audit sink for RFC 102's audited sign-in, RFC 118's lockout and RFC 094's audit seam to still mean what they claim. Written by the architect during cycle B at no cost to implementation capacity; its independent design review is the first review dispatched in C |
-| **D** | v0.81.0 | **2026-11-17 → 12-05** | **RFC 120 — the store boundary.** `sui-id-core` written against a trait rather than `sui-id-store`: the 22 entry points and the 269 references. With it, **`contracts/embeddable-deps.toml` and a gate** over the embeddable crate's resolved dependency set, so "minimal, lightweight and clean" is a checked contract rather than an intention |
-| **E** | v0.82.0 | **2027-01-12 → 01-30** | **RFC 121 — the embeddable module.** The split proper, plus a worked example embedding it in one host framework. The gap over the year end is deliberate, not slack |
+| **D** | v0.81.0 | **2026-11-17 → 12-05** | **The store-boundary RFC** (number assigned when it is written; **120 is taken** — it is the consent and setup security fix of 2026-09-29). `sui-id-core` written against a trait rather than `sui-id-store`: the 22 entry points and the 269 references. With it, **`contracts/embeddable-deps.toml` and a gate** over the embeddable crate's resolved dependency set, so "minimal, lightweight and clean" is a checked contract rather than an intention |
+| **E** | v0.82.0 | **2027-01-12 → 01-30** | **The embeddable-module RFC** (number assigned when it is written). The split proper, plus a worked example embedding it in one host framework. The gap over the year end is deliberate, not slack |
 
 **What is actually being decided — corrected 2026-09-25.** The architect first
 put this to `@nabbisen` as three windows and a date. That was the wrong
