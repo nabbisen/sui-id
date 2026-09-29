@@ -481,4 +481,8 @@ rfcs/proposed/119-embedding-contract.md	874edb9b41d7b7c8d1211a597c52d7ff33065d66
 rfcs/proposed/119-embedding-contract.md	ce4f657fed8d02eb4d7204104941c37da1ad82aaeb086781e3d0c7f9fdecc949	1	Questions 1–3 are for the independent design review to attack and for @nabbisen to settle; the architect does not treat them as decided.
 rfcs/proposed/119-embedding-contract.md	da6830023e43ba36a4c0bb3cd5c2821d459819017c552e7e372ae5e425b62303	1	It does not commit to publishing anything: publishing is an outward-facing act and @nabbisen 's decision separately.
 rfcs/proposed/119-embedding-contract.md	f7fbc23fa224f727986b417c32ecfcf8df8cac8e592f5ab0baa3de81847ae74c	1	Status. Proposed Security review. Required Owner acceptance. Recorded 2026-09-26: @nabbisen said "Accepted." The status stays Proposed , bec
+rfcs/proposed/121-a-verification-failure-is-not-a-pass.md	874edb9b41d7b7c8d1211a597c52d7ff33065d66fdd53f677f49116f0f63ba9d	1	Accountable owner and approver. @nabbisen .
+rfcs/proposed/122-one-time-secrets-do-not-travel-where-they-persist.md	874edb9b41d7b7c8d1211a597c52d7ff33065d66fdd53f677f49116f0f63ba9d	1	Accountable owner and approver. @nabbisen .
+rfcs/proposed/123-authenticating-a-client-costs-the-caller.md	874edb9b41d7b7c8d1211a597c52d7ff33065d66fdd53f677f49116f0f63ba9d	1	Accountable owner and approver. @nabbisen .
+rfcs/proposed/124-the-uniform-response-is-uniform.md	874edb9b41d7b7c8d1211a597c52d7ff33065d66fdd53f677f49116f0f63ba9d	1	Accountable owner and approver. @nabbisen .
 scripts/tests/test_owner_attributions.py	f6bbaf57737fffc7e4f6cd6c1d3631ab46a6042d0b2b20a71787c16b621e45a7	1	@nabbisen ruled on <date has no "owner ruling" in it: the pattern the RFC's first draft used does not match it.
