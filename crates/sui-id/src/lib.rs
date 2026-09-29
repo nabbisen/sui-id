@@ -12,6 +12,8 @@ pub mod assets;
 pub mod backup;
 #[path = "runtime/config.rs"]
 pub mod config;
+#[path = "http/consent_state.rs"]
+pub mod consent_state;
 #[path = "http/cors.rs"]
 pub mod cors;
 #[path = "http/csrf.rs"]

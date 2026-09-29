@@ -4,8 +4,14 @@ use leptos::prelude::*;
 use super::setup_step_indicator;
 
 /// Step 4 of 5 — HIBP policy selection (RFC 012).
-pub fn render_setup_hibp(flash: Option<Flash>, current: &str, lang: sui_id_i18n::Locale) -> String {
+pub fn render_setup_hibp(
+    flash: Option<Flash>,
+    current: &str,
+    csrf_token: &str,
+    lang: sui_id_i18n::Locale,
+) -> String {
     let current = current.to_owned();
+    let csrf_token = csrf_token.to_owned();
     render(move || {
         let t = lang.strings();
         let off_checked = current == "off";
@@ -18,6 +24,7 @@ pub fn render_setup_hibp(flash: Option<Flash>, current: &str, lang: sui_id_i18n:
                 <p class="muted">{t.setup_hibp_step_lede}</p>
                 {flash_banner(flash)}
                 <form method="post" action="/setup/hibp" class="stack">
+                    <input type="hidden" name="_csrf" value=csrf_token.clone() />
                     <fieldset class="button-reset">
                         <div class="stack gap-3">
                             <label class="card clickable-block">

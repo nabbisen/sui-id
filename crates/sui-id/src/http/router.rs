@@ -34,6 +34,19 @@ pub fn build_router(app: AppState) -> Router {
         )
         .layer(token_cors);
 
+    // RFC 120 D5: the setup steps that follow the creation of the first
+    // administrator change server-wide settings, so they are one group whose
+    // requirement is stated once: an authenticated administrator, checked by
+    // the same extractor every admin route uses. A step added here inherits it.
+    // (CSRF, the rate limit and the audit row are each handler's own.)
+    let setup_steps = Router::new()
+        .route("/setup/lang", get(setup::lang_get).post(setup::lang_post))
+        .route("/setup/hibp", get(setup::hibp_get).post(setup::hibp_post))
+        .layer(axum::middleware::from_extractor_with_state::<
+            crate::handlers::CurrentAdmin,
+            _,
+        >(app.clone()));
+
     let router = Router::new()
         .route("/", get(index::root))
         .route("/healthz", get(index::healthz))
@@ -42,9 +55,8 @@ pub fn build_router(app: AppState) -> Router {
             "/setup/admin",
             get(setup::admin_get).post(setup::admin_post),
         )
-        .route("/setup/lang", get(setup::lang_get).post(setup::lang_post))
-        .route("/setup/hibp", get(setup::hibp_get).post(setup::hibp_post))
         .route("/setup/done", get(setup::done_get))
+        .merge(setup_steps)
         .merge(public_routes)
         .merge(token_routes)
         .route("/oauth2/authorize", get(oidc::authorize))

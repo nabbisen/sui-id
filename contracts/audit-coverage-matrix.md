@@ -229,6 +229,19 @@ are Class A, committed through RFC 094's runner with the mutation they record.
 | `auth.step_up.session_revoked` | The fifth consecutive step-up failure on a session; that session is revoked in the same transaction (`L06`) | user id | user id | `count` | **A** |
 | `auth.mfa.factor_added` | A second factor was added: TOTP enrolment confirmed (`U12`), recovery codes regenerated (`U14`) or a passkey registered (`U15`) | user id | user id | `method` (`totp`, `recovery_codes`, `webauthn`) | **A** |
 
+### Server settings (`settings.hibp_mode.*`, `settings.default_language.*`)
+
+Both are written **in one transaction with the change they record**
+(`server_settings::change_hibp_mode`, `change_default_lang`; RFC 120 D5), so a
+failed audit append rolls the change back. They are still not sealed Class-A
+commands (the `S01`/`S02` rows of `contracts/write-commands.toml` remain
+planned), which is why the class cell says what the gate can verify.
+
+| Event name | Operation | Actor | Target | Note fields | Class |
+|---|---|---|---|---|---|
+| `settings.hibp_mode.changed` | The breach-password (HIBP) check mode was set from the setup wizard; written whether or not the value differs | admin user id | — | `old=<mode> new=<mode>` | B *(A required)* |
+| `settings.default_language.changed` | The server default language was set from the setup wizard; written whether or not the value differs | admin user id | — | `old=<tag> new=<tag>` | B *(A required)* |
+
 ### Self-service settings (`auth.smtp_config.*`)
 
 | Event name | Operation | Actor | Target | Note fields | Class |

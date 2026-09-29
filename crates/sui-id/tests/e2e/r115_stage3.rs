@@ -214,6 +214,16 @@ const NOT_A_SECRET: &[(&str, &str, &str)] = &[
         "code_challenge_method",
     ),
     (
+        "sui-id/src/http/consent_state.rs",
+        "ConsentRequest",
+        "code_challenge",
+    ),
+    (
+        "sui-id/src/http/consent_state.rs",
+        "ConsentRequest",
+        "code_challenge_method",
+    ),
+    (
         "sui-id/src/http/handlers/oidc.rs",
         "LogoutQuery",
         "id_token_hint",

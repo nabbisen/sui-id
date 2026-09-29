@@ -13,10 +13,12 @@
 
 use crate::{
     Database, StoreError, StoreResult,
-    models::{HibpMode, ServerSettingsRow},
+    models::{AuditLogRow, HibpMode, ServerSettingsRow},
+    repos::audit,
 };
 use chrono::{DateTime, Utc};
 use rusqlite::params;
+use sui_id_shared::ids::UserId;
 
 const SINGLETON_ID: &str = "singleton";
 
@@ -101,6 +103,78 @@ pub async fn update_hibp_mode(
         } else {
             Ok(())
         }
+    })
+    .await
+}
+
+/// Change the server-wide Pwned Passwords (HIBP) check mode on behalf of
+/// `actor`, and record the change, **in one transaction** (RFC 120 D5).
+///
+/// Returns `(old, new)`. The audit row is `settings.hibp_mode.changed` with the
+/// note `old=<mode> new=<mode>`; it is written whether or not the value differs,
+/// because what is audited is that an administrator made this decision.
+pub async fn change_hibp_mode(
+    db: &Database,
+    actor: UserId,
+    mode: HibpMode,
+    now: DateTime<Utc>,
+) -> StoreResult<(HibpMode, HibpMode)> {
+    db.with_tx(move |tx| {
+        let old = get_within_tx(tx)?.hibp_mode;
+        let n = tx.execute(
+            "UPDATE server_settings SET hibp_mode = ?1, updated_at = ?2 WHERE id = ?3",
+            params![mode.as_str(), now, SINGLETON_ID],
+        )?;
+        if n == 0 {
+            return Err(StoreError::NotFound);
+        }
+        audit::append_within_tx(
+            tx,
+            &AuditLogRow {
+                at: now,
+                actor: Some(actor),
+                action: "settings.hibp_mode.changed".into(),
+                target: None,
+                result: "ok".into(),
+                note: Some(format!("old={} new={}", old.as_str(), mode.as_str())),
+            },
+        )?;
+        Ok((old, mode))
+    })
+    .await
+}
+
+/// Change the server-wide default language on behalf of `actor`, and record the
+/// change, in one transaction. Returns `(old, new)`. The audit row is
+/// `settings.default_language.changed` with the note `old=<tag> new=<tag>`.
+pub async fn change_default_lang(
+    db: &Database,
+    actor: UserId,
+    lang: &str,
+    now: DateTime<Utc>,
+) -> StoreResult<(String, String)> {
+    let lang = lang.to_owned();
+    db.with_tx(move |tx| {
+        let old = get_within_tx(tx)?.default_lang;
+        let n = tx.execute(
+            "UPDATE server_settings SET default_lang = ?1, updated_at = ?2 WHERE id = ?3",
+            params![lang, now, SINGLETON_ID],
+        )?;
+        if n == 0 {
+            return Err(StoreError::NotFound);
+        }
+        audit::append_within_tx(
+            tx,
+            &AuditLogRow {
+                at: now,
+                actor: Some(actor),
+                action: "settings.default_language.changed".into(),
+                target: None,
+                result: "ok".into(),
+                note: Some(format!("old={old} new={lang}")),
+            },
+        )?;
+        Ok((old, lang))
     })
     .await
 }

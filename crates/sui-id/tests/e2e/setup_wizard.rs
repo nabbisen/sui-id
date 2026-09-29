@@ -317,63 +317,85 @@ async fn setup_wizard_lang_step_renders() {
     assert!(body.contains(r#"value="en""#));
 }
 
-#[tokio::test]
-async fn setup_wizard_lang_step_saves_selection() {
-    let state = test_app();
-    let _session = post_setup_admin(&state).await;
-
-    // POST lang = "en"
+/// Drive one wizard step as the administrator step 2 signed in (RFC 120 D5):
+/// GET the form for its CSRF pair, then POST it with the session.
+async fn wizard_step(
+    state: &AppState,
+    session: &str,
+    path: &str,
+    fields: &str,
+) -> axum::response::Response {
     let resp = build_router(state.clone())
         .oneshot(
             Request::builder()
-                .method(Method::POST)
-                .uri("/setup/lang")
-                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-                .body(Body::from("lang=en"))
+                .method(Method::GET)
+                .uri(path)
+                .header(header::COOKIE, format!("sui_id_session={session}"))
+                .body(Body::empty())
                 .expect("req"),
         )
         .await
-        .expect("POST /setup/lang");
+        .expect("GET step form");
+    assert_eq!(resp.status(), StatusCode::OK, "GET {path}");
+    let csrf = extract_csrf_cookie(resp.headers()).expect("csrf cookie on the step form");
+    let body = if fields.is_empty() {
+        format!("_csrf={csrf}")
+    } else {
+        format!("{fields}&_csrf={csrf}")
+    };
+    build_router(state.clone())
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri(path)
+                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .header(
+                    header::COOKIE,
+                    format!("sui_id_session={session}; sui_id_csrf={csrf}"),
+                )
+                .body(Body::from(body))
+                .expect("req"),
+        )
+        .await
+        .expect("POST step form")
+}
+
+fn redirect_target(resp: &axum::response::Response) -> String {
+    resp.headers()
+        .get(header::LOCATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_owned()
+}
+
+#[tokio::test]
+async fn setup_wizard_lang_step_saves_selection() {
+    let state = test_app();
+    let session = post_setup_admin(&state).await;
+
+    let resp = wizard_step(&state, &session, "/setup/lang", "lang=en").await;
     assert!(
         resp.status().is_redirection(),
         "expected redirect to /setup/hibp, got {}",
         resp.status()
     );
-    let loc = resp
-        .headers()
-        .get(header::LOCATION)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
-    assert_eq!(loc, "/setup/hibp");
+    assert_eq!(redirect_target(&resp), "/setup/hibp");
 
-    // Verify server_settings updated
     let settings = sui_id_store::repos::server_settings::get(&state.db)
         .await
         .expect("settings");
-    assert_eq!(
-        settings.default_lang, "en",
-        "default_lang should be 'en' after selecting English"
-    );
+    assert_eq!(settings.default_lang, "en");
 }
 
 #[tokio::test]
 async fn setup_wizard_lang_step_defaults_to_ja() {
     let state = test_app();
-    let _session = post_setup_admin(&state).await;
+    let session = post_setup_admin(&state).await;
 
     // POST without an explicit lang value (empty string) — should default to "ja"
-    let resp = build_router(state.clone())
-        .oneshot(
-            Request::builder()
-                .method(Method::POST)
-                .uri("/setup/lang")
-                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-                .body(Body::from(""))
-                .expect("req"),
-        )
-        .await
-        .expect("POST /setup/lang empty");
+    let resp = wizard_step(&state, &session, "/setup/lang", "").await;
     assert!(resp.status().is_redirection());
+    assert_eq!(redirect_target(&resp), "/setup/hibp");
 
     let settings = sui_id_store::repos::server_settings::get(&state.db)
         .await
@@ -384,13 +406,14 @@ async fn setup_wizard_lang_step_defaults_to_ja() {
 #[tokio::test]
 async fn setup_wizard_hibp_step_renders() {
     let state = test_app();
-    let _session = post_setup_admin(&state).await;
+    let session = post_setup_admin(&state).await;
 
     let resp = build_router(state)
         .oneshot(
             Request::builder()
                 .method(Method::GET)
                 .uri("/setup/hibp")
+                .header(header::COOKIE, format!("sui_id_session={session}"))
                 .body(Body::empty())
                 .expect("req"),
         )
@@ -411,26 +434,11 @@ async fn setup_wizard_hibp_step_renders() {
 #[tokio::test]
 async fn setup_wizard_hibp_step_saves_block() {
     let state = test_app();
-    let _session = post_setup_admin(&state).await;
+    let session = post_setup_admin(&state).await;
 
-    let resp = build_router(state.clone())
-        .oneshot(
-            Request::builder()
-                .method(Method::POST)
-                .uri("/setup/hibp")
-                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-                .body(Body::from("hibp_mode=block"))
-                .expect("req"),
-        )
-        .await
-        .expect("POST /setup/hibp");
+    let resp = wizard_step(&state, &session, "/setup/hibp", "hibp_mode=block").await;
     assert!(resp.status().is_redirection());
-    let loc = resp
-        .headers()
-        .get(header::LOCATION)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
-    assert_eq!(loc, "/setup/done");
+    assert_eq!(redirect_target(&resp), "/setup/done");
 
     let settings = sui_id_store::repos::server_settings::get(&state.db)
         .await
@@ -441,21 +449,12 @@ async fn setup_wizard_hibp_step_saves_block() {
 #[tokio::test]
 async fn setup_wizard_hibp_step_defaults_to_warn() {
     let state = test_app();
-    let _session = post_setup_admin(&state).await;
+    let session = post_setup_admin(&state).await;
 
     // POST without a value — should default to "warn"
-    let resp = build_router(state.clone())
-        .oneshot(
-            Request::builder()
-                .method(Method::POST)
-                .uri("/setup/hibp")
-                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-                .body(Body::from(""))
-                .expect("req"),
-        )
-        .await
-        .expect("POST /setup/hibp empty");
+    let resp = wizard_step(&state, &session, "/setup/hibp", "").await;
     assert!(resp.status().is_redirection());
+    assert_eq!(redirect_target(&resp), "/setup/done");
 
     let settings = sui_id_store::repos::server_settings::get(&state.db)
         .await
@@ -467,34 +466,14 @@ async fn setup_wizard_hibp_step_defaults_to_warn() {
 async fn setup_wizard_full_extended_flow_completes() {
     // Drive the complete 5-step wizard: admin → lang → hibp → done.
     let state = test_app();
-    let _session = post_setup_admin(&state).await;
+    let session = post_setup_admin(&state).await;
 
     // Step 3: language
-    let resp = build_router(state.clone())
-        .oneshot(
-            Request::builder()
-                .method(Method::POST)
-                .uri("/setup/lang")
-                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-                .body(Body::from("lang=en"))
-                .expect("req"),
-        )
-        .await
-        .expect("lang step");
+    let resp = wizard_step(&state, &session, "/setup/lang", "lang=en").await;
     assert!(resp.status().is_redirection());
 
     // Step 4: HIBP
-    let resp = build_router(state.clone())
-        .oneshot(
-            Request::builder()
-                .method(Method::POST)
-                .uri("/setup/hibp")
-                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-                .body(Body::from("hibp_mode=off"))
-                .expect("req"),
-        )
-        .await
-        .expect("hibp step");
+    let resp = wizard_step(&state, &session, "/setup/hibp", "hibp_mode=off").await;
     assert!(resp.status().is_redirection());
 
     // Step 5: done renders

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Two routes acted without establishing who was asking, and now cannot.** The
+  OIDC consent answer took its subject, and the authentication methods it
+  recorded, from a cookie rather than from the session; it now requires a live
+  session and takes both from it, and the request parameters it still carries
+  are integrity-protected and bound to that session. The setup wizard's
+  language and breach-password steps could be reached after first-run
+  initialization without an administrator, CSRF, a rate limit or an audit row;
+  they now require all four. **Releases up to and including 0.78.0 are
+  affected.** Found by an internal review ([RFC 120](rfcs/proposed/120-consent-and-setup-prove-the-caller.md)).
+- A test now asserts the exact set of routes that answer without an
+  authenticated caller, so adding one is a reviewed change rather than an
+  accident. It would have caught both of the above.
+
 ## [0.78.0] — 2026-09-24
 
 **No path in sui-id sets a password on a user's behalf any more, and an audit

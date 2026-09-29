@@ -45,6 +45,10 @@
 //! - `/setup` and `/setup/admin` redirect to `/admin/login` if the
 //!   system is already initialized — there's no first admin to
 //!   create twice.
+//! - `/setup/lang` and `/setup/hibp` (GET and POST) require an authenticated
+//!   administrator; the POSTs also require CSRF and take the setup rate limit,
+//!   and audit what they change (RFC 120 D5). They are registered as one group
+//!   in `router.rs` so that a step added there inherits the requirement.
 //! - `/setup/done` is informational only and renders any time;
 //!   if a curious operator types it in by hand before completing
 //!   step 2, they see a generic "setup not yet complete" notice
@@ -321,42 +325,63 @@ pub async fn admin_post(
 }
 
 // ---------- 画面 3 — language selection (RFC 012) ----------
+//
+// Steps 3 and 4 are reached with the session that step 2 opened for the new
+// administrator, so they need **no first-run exemption**: each requires an
+// administrator, CSRF and a rate limit, and audits what it changes (RFC 120
+// D5). Before the system is initialized there is no administrator, so no
+// request satisfies the requirement, and nothing is written.
 
 #[derive(Deserialize)]
 pub struct SetupLangForm {
+    #[serde(rename = "_csrf", default)]
+    pub csrf: String,
     #[serde(default)]
     pub lang: String,
 }
 
+/// The CSRF cookie for a step form, and the token its hidden field must carry.
+fn form_csrf(app: &crate::AppState, jar: CookieJar) -> (CookieJar, String) {
+    let token = crate::csrf::ensure_token(&jar);
+    let jar = jar.add(crate::csrf::csrf_cookie(
+        token.clone(),
+        app.config.server.cookie_secure,
+    ));
+    (jar, token)
+}
+
 pub async fn lang_get(
     state_ext: AppStateExt,
+    _admin: crate::handlers::CurrentAdmin,
     crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
+    jar: CookieJar,
 ) -> Result<axum::response::Response, HttpError> {
     let axum::extract::State(app) = state_ext;
-    let initialized =
-        state::is_initialized(&app.db).map_err(|e| HttpError::html(CoreError::from(e)))?;
-    if !initialized {
-        return Ok(Redirect::to("/setup").into_response());
-    }
     // Pre-fill with current server default (falls back to "ja" if not yet set).
     let current = server_settings::get(&app.db)
         .await
         .map(|s| s.default_lang)
         .unwrap_or_else(|_| "ja".into());
-    Ok(Html(render_setup_lang(None, &current, lang)).into_response())
+    let (jar, token) = form_csrf(&app, jar);
+    Ok((jar, Html(render_setup_lang(None, &current, &token, lang))).into_response())
 }
 
 pub async fn lang_post(
     state_ext: AppStateExt,
-    crate::handlers::RequestLocale(_lang): crate::handlers::RequestLocale,
+    crate::handlers::CurrentAdmin(admin_id, _): crate::handlers::CurrentAdmin,
+    crate::handlers::ClientIp(ip): crate::handlers::ClientIp,
+    jar: CookieJar,
     Form(form): Form<SetupLangForm>,
 ) -> Result<axum::response::Response, HttpError> {
     let axum::extract::State(app) = state_ext;
-    let initialized =
-        state::is_initialized(&app.db).map_err(|e| HttpError::html(CoreError::from(e)))?;
-    if !initialized {
-        return Ok(Redirect::to("/setup").into_response());
-    }
+    crate::handlers::enforce_rate_limit(
+        &app.limiters,
+        &app.clock,
+        crate::handlers::RateLimitKey::Setup,
+        ip,
+        crate::handlers::ErrorAs::Html,
+    )?;
+    crate::handlers::enforce_csrf(&jar, Some(&form.csrf))?;
     // Validate and normalise the choice; fall back to "ja".
     let chosen = match form.lang.as_str() {
         "en" => "en",
@@ -364,7 +389,7 @@ pub async fn lang_post(
     };
     // Parse as Locale to confirm it's a valid tag before writing.
     let locale = sui_id_i18n::Locale::parse(chosen).unwrap_or_default();
-    server_settings::update_default_lang(&app.db, locale.tag(), chrono::Utc::now())
+    server_settings::change_default_lang(&app.db, admin_id, locale.tag(), app.clock.now())
         .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
     Ok(Redirect::to("/setup/hibp").into_response())
@@ -374,47 +399,53 @@ pub async fn lang_post(
 
 #[derive(Deserialize)]
 pub struct SetupHibpForm {
+    #[serde(rename = "_csrf", default)]
+    pub csrf: String,
     #[serde(default)]
     pub hibp_mode: String,
 }
 
 pub async fn hibp_get(
     state_ext: AppStateExt,
+    _admin: crate::handlers::CurrentAdmin,
     crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
+    jar: CookieJar,
 ) -> Result<axum::response::Response, HttpError> {
     let axum::extract::State(app) = state_ext;
-    let initialized =
-        state::is_initialized(&app.db).map_err(|e| HttpError::html(CoreError::from(e)))?;
-    if !initialized {
-        return Ok(Redirect::to("/setup").into_response());
-    }
     let current = server_settings::get(&app.db)
         .await
         .map(|s| s.hibp_mode.as_str().to_owned())
         .unwrap_or_else(|_| "warn".into());
-    Ok(Html(render_setup_hibp(None, &current, lang)).into_response())
+    let (jar, token) = form_csrf(&app, jar);
+    Ok((jar, Html(render_setup_hibp(None, &current, &token, lang))).into_response())
 }
 
 pub async fn hibp_post(
     state_ext: AppStateExt,
-    crate::handlers::RequestLocale(lang): crate::handlers::RequestLocale,
+    crate::handlers::CurrentAdmin(admin_id, _): crate::handlers::CurrentAdmin,
+    crate::handlers::ClientIp(ip): crate::handlers::ClientIp,
+    jar: CookieJar,
     Form(form): Form<SetupHibpForm>,
 ) -> Result<axum::response::Response, HttpError> {
     let axum::extract::State(app) = state_ext;
-    let initialized =
-        state::is_initialized(&app.db).map_err(|e| HttpError::html(CoreError::from(e)))?;
-    if !initialized {
-        return Ok(Redirect::to("/setup").into_response());
-    }
+    crate::handlers::enforce_rate_limit(
+        &app.limiters,
+        &app.clock,
+        crate::handlers::RateLimitKey::Setup,
+        ip,
+        crate::handlers::ErrorAs::Html,
+    )?;
+    crate::handlers::enforce_csrf(&jar, Some(&form.csrf))?;
     let mode: sui_id_store::models::HibpMode = match form.hibp_mode.as_str() {
         "off" => sui_id_store::models::HibpMode::Off,
         "block" => sui_id_store::models::HibpMode::Block,
         _ => sui_id_store::models::HibpMode::Warn,
     };
-    server_settings::update_hibp_mode(&app.db, mode, chrono::Utc::now())
+    // Disabling the breach-password check is a change of security posture: it
+    // is audited with the old and the new value, in the same transaction.
+    server_settings::change_hibp_mode(&app.db, admin_id, mode, app.clock.now())
         .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
-    let _ = lang; // used by future flash messages if needed
     Ok(Redirect::to("/setup/done").into_response())
 }
 

@@ -172,6 +172,16 @@ longer written.
 | `token.introspect` | — | A confidential client called `/oauth2/introspect` (RFC 7662). The row's result is `active` or `inactive`. |
 | `token.revoke` | — | A confidential client called `/oauth2/revoke` (RFC 7009). |
 
+## Server settings events
+
+Settings an administrator changes directly. Each is written in the same
+transaction as the change it records.
+
+| Event name | Label | Description |
+|---|---|---|
+| `settings.hibp_mode.changed` | — | An administrator set the breach-password (HIBP) check mode in the setup wizard. Note field: `old=<mode> new=<mode>`. Written with the change, in one transaction, and whether or not the value differs. |
+| `settings.default_language.changed` | — | An administrator set the server default language in the setup wizard. Note field: `old=<tag> new=<tag>`. Written with the change, in one transaction. |
+
 ## Pending settings change events (RFC 090)
 
 High-risk settings changes that include a secret, such as new SMTP credentials,
