@@ -55,6 +55,7 @@ pub struct IntrospectionWire {
 
 pub async fn introspect(
     state_ext: AppStateExt,
+    crate::handlers::ClientIp(ip): crate::handlers::ClientIp,
     headers: HeaderMap,
     Form(form): Form<IntrospectForm>,
 ) -> Result<Response, HttpError> {
@@ -62,6 +63,7 @@ pub async fn introspect(
     let (client_id, client_secret) =
         client_credentials(&headers, &form.client_id, &form.client_secret)
             .ok_or_else(|| HttpError::oauth(CoreError::Unauthenticated))?;
+    enforce_client_endpoint_rate_limits(&app, ip, &client_id)?;
     let cid = sui_id_core::oauth_token::authenticate_client(&app.db, &client_id, &client_secret)
         .await
         .map_err(HttpError::oauth)?;
@@ -118,6 +120,7 @@ pub struct RevokeForm {
 
 pub async fn revoke(
     state_ext: AppStateExt,
+    crate::handlers::ClientIp(ip): crate::handlers::ClientIp,
     headers: HeaderMap,
     Form(form): Form<RevokeForm>,
 ) -> Result<Response, HttpError> {
@@ -125,6 +128,7 @@ pub async fn revoke(
     let (client_id, client_secret) =
         client_credentials(&headers, &form.client_id, &form.client_secret)
             .ok_or_else(|| HttpError::oauth(CoreError::Unauthenticated))?;
+    enforce_client_endpoint_rate_limits(&app, ip, &client_id)?;
     let cid = sui_id_core::oauth_token::authenticate_client(&app.db, &client_id, &client_secret)
         .await
         .map_err(HttpError::oauth)?;
@@ -151,6 +155,31 @@ pub async fn revoke(
     .await;
     // RFC 7009 §2.2: 200 OK with empty body.
     Ok(StatusCode::OK.into_response())
+}
+
+/// RFC 123 D1/D2: both buckets, checked immediately after credential
+/// extraction and before `authenticate_client` — the one expensive step.
+/// Per-IP first, then per-claimed-client-id; a caller tripping either is
+/// refused before Argon2 ever runs. Neither requires the claimed `client_id`
+/// to be verified first — see `ratelimit`'s module doc.
+fn enforce_client_endpoint_rate_limits(
+    app: &crate::state::AppState,
+    ip: std::net::IpAddr,
+    client_id: &str,
+) -> Result<(), HttpError> {
+    crate::handlers::enforce_rate_limit(
+        &app.limiters,
+        &app.clock,
+        crate::handlers::RateLimitKey::IntrospectRevoke,
+        ip,
+        crate::handlers::ErrorAs::OAuth,
+    )?;
+    crate::handlers::enforce_client_rate_limit(
+        &app.limiters.introspect_revoke_client,
+        &app.clock,
+        "introspect_revoke",
+        client_id,
+    )
 }
 
 /// Pull the client credentials from either an HTTP Basic header or

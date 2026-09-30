@@ -509,6 +509,7 @@ pub fn enforce_rate_limit(
         RateLimitKey::Setup => &limiters.setup,
         RateLimitKey::ForgotPassword => &limiters.forgot_password,
         RateLimitKey::StepUp => &limiters.step_up,
+        RateLimitKey::IntrospectRevoke => &limiters.introspect_revoke_ip,
     };
     let decision = limiter.check(key.as_str(), ip, clock.now());
     if decision.allowed {
@@ -520,6 +521,35 @@ pub fn enforce_rate_limit(
         retry_after = decision.retry_after_secs,
         "rate limit exceeded"
     );
+    Err(rate_limit_error(representation, decision.retry_after_secs))
+}
+
+/// RFC 123 D1: like [`enforce_rate_limit`], but keyed on a **claimed**
+/// `client_id` rather than a source IP — checked before that claim is
+/// authenticated, since here it is a rate-limiting key, not an identity
+/// assertion (the same trust level an unauthenticated source IP already
+/// has). Always represented in the RFC 6749 §5.2 wire format: both callers
+/// (`/oauth2/introspect`, `/oauth2/revoke`) are OAuth protocol endpoints.
+pub fn enforce_client_rate_limit(
+    limiter: &crate::ratelimit::Limiter<String>,
+    clock: &SharedClock,
+    route_key: &str,
+    client_id: &str,
+) -> Result<(), HttpError> {
+    let decision = limiter.check(route_key, client_id.to_owned(), clock.now());
+    if decision.allowed {
+        return Ok(());
+    }
+    tracing::warn!(
+        route_key,
+        client_id,
+        retry_after = decision.retry_after_secs,
+        "rate limit exceeded (per claimed client id)"
+    );
+    Err(rate_limit_error(ErrorAs::OAuth, decision.retry_after_secs))
+}
+
+fn rate_limit_error(representation: ErrorAs, retry_after_secs: i64) -> HttpError {
     let core_err = sui_id_core::CoreError::Protocol {
         code: match representation {
             // For OAuth protocol endpoints, use the registered error code.
@@ -527,27 +557,23 @@ pub fn enforce_rate_limit(
             // For admin/UI endpoints, BadRequest is fine (humans see the message).
             _ => {
                 let err = sui_id_core::CoreError::BadRequest(format!(
-                    "Too many requests. Try again in {} seconds.",
-                    decision.retry_after_secs
+                    "Too many requests. Try again in {retry_after_secs} seconds."
                 ));
                 let mut e = match representation {
                     ErrorAs::Json => HttpError::api(err),
                     ErrorAs::Html => HttpError::html(err),
                     ErrorAs::OAuth => unreachable!(),
                 };
-                e.set_retry_after_secs(decision.retry_after_secs);
+                e.set_retry_after_secs(retry_after_secs);
                 e.force_status(StatusCode::TOO_MANY_REQUESTS);
-                return Err(e);
+                return e;
             }
         },
-        description: format!(
-            "Too many requests. Try again in {} seconds.",
-            decision.retry_after_secs
-        ),
+        description: format!("Too many requests. Try again in {retry_after_secs} seconds."),
     };
     let mut err = HttpError::oauth(core_err);
-    err.set_retry_after_secs(decision.retry_after_secs);
-    Err(err)
+    err.set_retry_after_secs(retry_after_secs);
+    err
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -557,6 +583,10 @@ pub enum RateLimitKey {
     Setup,
     ForgotPassword,
     StepUp,
+    /// RFC 123 D1: per-IP half of `/oauth2/introspect` and `/oauth2/revoke`'s
+    /// two buckets. The per-claimed-client-id half is a different `Limiter<Id>`
+    /// type ([`enforce_client_rate_limit`]) and has no `RateLimitKey` variant.
+    IntrospectRevoke,
 }
 
 impl RateLimitKey {
@@ -567,6 +597,7 @@ impl RateLimitKey {
             Self::Setup => "setup",
             Self::ForgotPassword => "forgot_password",
             Self::StepUp => "step_up",
+            Self::IntrospectRevoke => "introspect_revoke",
         }
     }
 }

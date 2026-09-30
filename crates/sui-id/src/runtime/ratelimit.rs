@@ -1,6 +1,13 @@
-//! Per-IP rate limiting.
+//! Per-caller rate limiting.
 //!
-//! Implemented as a fixed-window counter map keyed on `(route_key, client_ip)`.
+//! Implemented as a fixed-window counter map keyed on `(route_key, id)`,
+//! where `id` is whatever the caller claims to be — an IP address for every
+//! limiter this module originally had, and (RFC 123 D1) a claimed
+//! `client_id` string for the two new ones `/oauth2/introspect` and
+//! `/oauth2/revoke` add. Neither identity is authenticated before the check
+//! runs: it is used as a rate-limiting key, not an identity assertion,
+//! exactly as an IP address always has been here.
+//!
 //! A fixed window is slightly less accurate than a sliding window or token
 //! bucket, but it is simple, allocation-light, and the failure mode (some
 //! callers get a slightly more or slightly less generous quota near a
@@ -12,15 +19,17 @@
 
 use chrono::{DateTime, Duration, Utc};
 use std::collections::HashMap;
+use std::hash::Hash;
 use std::net::IpAddr;
 use std::sync::Mutex;
 
 /// One named limiter, e.g. "login" or "token". Each takes a separate
-/// per-IP counter map.
-pub struct Limiter {
+/// per-`Id` counter map. `Id` is `IpAddr` for every limiter that existed
+/// before RFC 123, and `String` (a claimed `client_id`) for the two it adds.
+pub struct Limiter<Id: Eq + Hash + Clone> {
     per_window: i64,
     window: Duration,
-    state: Mutex<HashMap<(String, IpAddr), Window>>,
+    state: Mutex<HashMap<(String, Id), Window>>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -36,7 +45,7 @@ pub struct Decision {
     pub retry_after_secs: i64,
 }
 
-impl Limiter {
+impl<Id: Eq + Hash + Clone> Limiter<Id> {
     pub fn new(per_window: i64, window_secs: i64) -> Self {
         Self {
             per_window,
@@ -45,7 +54,7 @@ impl Limiter {
         }
     }
 
-    pub fn check(&self, key: &str, ip: IpAddr, now: DateTime<Utc>) -> Decision {
+    pub fn check(&self, key: &str, id: Id, now: DateTime<Utc>) -> Decision {
         let mut guard = match self.state.lock() {
             Ok(g) => g,
             Err(p) => p.into_inner(),
@@ -55,7 +64,7 @@ impl Limiter {
             let cutoff = now - self.window * 4;
             guard.retain(|_, w| w.started_at >= cutoff);
         }
-        let entry = guard.entry((key.to_owned(), ip)).or_insert(Window {
+        let entry = guard.entry((key.to_owned(), id)).or_insert(Window {
             started_at: now,
             count: 0,
         });
@@ -82,22 +91,38 @@ impl Limiter {
 
 /// Bundle of named limiters used by the HTTP layer.
 pub struct Limiters {
-    pub login: Limiter,
-    pub token: Limiter,
-    pub setup: Limiter,
+    pub login: Limiter<IpAddr>,
+    pub token: Limiter<IpAddr>,
+    pub setup: Limiter<IpAddr>,
     /// Per-IP throttle on `POST /forgot-password`. The flow is
     /// safe-by-design (constant-time response, audit log records
     /// real outcome, single-use 30-minute tokens, outstanding-token
     /// ceiling per user) but a per-IP limiter still blunts a
     /// would-be enumeration scanner before it generates audit-log
     /// noise.
-    pub forgot_password: Limiter,
+    pub forgot_password: Limiter<IpAddr>,
     /// Per-IP throttle on step-up re-authentication (RFC 102 B2): the
     /// step-up TOTP form, both WebAuthn step-up endpoints, and every
     /// password re-entry for adding a first second factor (B7). Separate
     /// from `login` so a signed-in session's guesses do not spend, or
     /// borrow from, the sign-in budget.
-    pub step_up: Limiter,
+    pub step_up: Limiter<IpAddr>,
+    /// RFC 123 D1: `/oauth2/introspect` and `/oauth2/revoke`, per source IP.
+    /// Sized more generously than `token` — a resource server calling
+    /// introspection on every request it serves, possibly from behind one
+    /// shared egress address, is a heavier traffic shape than a browser's
+    /// token exchanges. The exact number is an operational starting point,
+    /// not a measured ceiling; `@nabbisen` and the implementer can retune it
+    /// once real integrations exist.
+    pub introspect_revoke_ip: Limiter<IpAddr>,
+    /// RFC 123 D1: `/oauth2/introspect` and `/oauth2/revoke`, per **claimed**
+    /// `client_id` (not yet authenticated when this bucket is checked — see
+    /// the module doc). Sized higher than the per-IP bucket above: one
+    /// legitimate integration can be served by several resource-server
+    /// instances behind different addresses, all authenticating as the same
+    /// client. Defends the shape `introspect_revoke_ip` alone would miss —
+    /// one attacker rotating source addresses against a single known id.
+    pub introspect_revoke_client: Limiter<String>,
 }
 
 impl Default for Limiters {
@@ -117,6 +142,8 @@ impl Default for Limiters {
             // five consecutive failures anyway; this bounds a thief who
             // holds several sessions.
             step_up: Limiter::new(10, 60),
+            introspect_revoke_ip: Limiter::new(300, 60),
+            introspect_revoke_client: Limiter::new(600, 60),
         }
     }
 }
@@ -132,7 +159,7 @@ mod tests {
 
     #[test]
     fn first_request_is_allowed() {
-        let l = Limiter::new(3, 60);
+        let l: Limiter<IpAddr> = Limiter::new(3, 60);
         let d = l.check("k", "127.0.0.1".parse().unwrap(), t(0));
         assert!(d.allowed);
         assert_eq!(d.remaining, 2);
@@ -140,7 +167,7 @@ mod tests {
 
     #[test]
     fn limit_blocks_within_window() {
-        let l = Limiter::new(2, 60);
+        let l: Limiter<IpAddr> = Limiter::new(2, 60);
         let ip = "127.0.0.1".parse().unwrap();
         assert!(l.check("k", ip, t(0)).allowed);
         assert!(l.check("k", ip, t(1)).allowed);
@@ -151,7 +178,7 @@ mod tests {
 
     #[test]
     fn limit_resets_after_window() {
-        let l = Limiter::new(1, 60);
+        let l: Limiter<IpAddr> = Limiter::new(1, 60);
         let ip = "127.0.0.1".parse().unwrap();
         assert!(l.check("k", ip, t(0)).allowed);
         assert!(!l.check("k", ip, t(30)).allowed);
@@ -161,7 +188,7 @@ mod tests {
 
     #[test]
     fn different_ips_are_independent() {
-        let l = Limiter::new(1, 60);
+        let l: Limiter<IpAddr> = Limiter::new(1, 60);
         let a = "10.0.0.1".parse().unwrap();
         let b = "10.0.0.2".parse().unwrap();
         assert!(l.check("k", a, t(0)).allowed);
@@ -171,10 +198,21 @@ mod tests {
 
     #[test]
     fn different_keys_are_independent() {
-        let l = Limiter::new(1, 60);
+        let l: Limiter<IpAddr> = Limiter::new(1, 60);
         let ip = "10.0.0.1".parse().unwrap();
         assert!(l.check("login", ip, t(0)).allowed);
         assert!(l.check("token", ip, t(0)).allowed);
         assert!(!l.check("login", ip, t(1)).allowed);
+    }
+
+    /// RFC 123: the same mechanism, keyed on a `String` claimed client id
+    /// rather than an `IpAddr` — the generic bound (`Eq + Hash + Clone`) is
+    /// what makes this possible without a second, duplicated struct.
+    #[test]
+    fn a_string_keyed_limiter_behaves_the_same_as_an_ip_keyed_one() {
+        let l: Limiter<String> = Limiter::new(1, 60);
+        assert!(l.check("k", "client-a".to_owned(), t(0)).allowed);
+        assert!(!l.check("k", "client-a".to_owned(), t(1)).allowed);
+        assert!(l.check("k", "client-b".to_owned(), t(1)).allowed);
     }
 }

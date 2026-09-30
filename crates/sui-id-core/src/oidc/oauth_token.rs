@@ -264,30 +264,48 @@ async fn try_revoke_refresh(
 /// We accept the credentials in either the form-body (`client_id` +
 /// `client_secret`) or HTTP Basic — both are spec-permitted and the
 /// HTTP layer normalises them before calling us.
+///
+/// RFC 123 D4: every branch that rejects before reaching a real
+/// `verify_password` call runs a dummy one first (`password::DUMMY_PHC`,
+/// the same decoy `authn::session::login_with_mfa` uses), so an unknown,
+/// public, disabled or secret-less client id costs the same wall-clock time
+/// as a known, confidential, enabled one with a wrong secret. Measured at
+/// ~34ms hashing vs under 200µs unequalised — see the RFC 123 design review
+/// and `rfcs/handoffs/123-authenticating-a-client-costs-the-caller/`.
 pub async fn authenticate_client(
     db: &Database,
     client_id: &str,
     client_secret: &str,
 ) -> CoreResult<ClientId> {
-    let id = client_id
-        .parse::<ClientId>()
-        .map_err(|_| CoreError::Unauthenticated)?;
-    let row = clients::get(db, id).await.map_err(|e| match e {
-        sui_id_store::StoreError::NotFound => CoreError::Unauthenticated,
-        other => CoreError::from(other),
-    })?;
-    if !row.confidential {
-        // RFC 7009 / 7662: public clients aren't supported at these
-        // endpoints. They have no secret to authenticate with.
+    let id = match client_id.parse::<ClientId>() {
+        Ok(id) => id,
+        Err(_) => {
+            let _ = crate::password::verify_password(client_secret, crate::password::DUMMY_PHC);
+            return Err(CoreError::Unauthenticated);
+        }
+    };
+    let row = match clients::get(db, id).await {
+        Ok(row) => row,
+        Err(sui_id_store::StoreError::NotFound) => {
+            let _ = crate::password::verify_password(client_secret, crate::password::DUMMY_PHC);
+            return Err(CoreError::Unauthenticated);
+        }
+        Err(other) => return Err(other.into()),
+    };
+    // RFC 7009 / 7662: public clients aren't supported at these endpoints
+    // (they have no secret to authenticate with); disabled/deleted clients
+    // are refused the same way an unknown one is.
+    if !row.confidential || row.is_disabled || row.is_deleted {
+        let _ = crate::password::verify_password(client_secret, crate::password::DUMMY_PHC);
         return Err(CoreError::Unauthenticated);
     }
-    if row.is_disabled || row.is_deleted {
-        return Err(CoreError::Unauthenticated);
-    }
-    let hash = row
-        .secret_hash
-        .as_deref()
-        .ok_or(CoreError::Unauthenticated)?;
+    let hash = match row.secret_hash.as_deref() {
+        Some(h) => h,
+        None => {
+            let _ = crate::password::verify_password(client_secret, crate::password::DUMMY_PHC);
+            return Err(CoreError::Unauthenticated);
+        }
+    };
     crate::password::verify_password(client_secret, hash)
         .map_err(|_| CoreError::Unauthenticated)?;
     Ok(id)

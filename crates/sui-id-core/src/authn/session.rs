@@ -10,7 +10,7 @@
 //! recorded *without* the supplied password.
 
 use crate::errors::{CoreError, CoreResult};
-use crate::password::verify_password;
+use crate::password::{DUMMY_PHC, verify_password};
 use crate::time::SharedClock;
 use chrono::Duration;
 use sui_id_shared::ids::{SessionId, UserId};
@@ -19,17 +19,6 @@ use sui_id_store::models::{AuditLogRow, SessionRow};
 use sui_id_store::repos::{audit, credentials, sessions, users};
 
 const SESSION_LIFETIME_HOURS: i64 = 12;
-
-/// A fixed dummy Argon2id PHC string used as a decoy when we want to
-/// burn comparable wall-clock time on a path that wouldn't otherwise
-/// hit the password hash — most importantly the "this user is locked"
-/// path, but also the "no such user" path. Without this, an attacker
-/// could distinguish locked accounts (instant 401) from active
-/// accounts (Argon2-delayed 401) by timing alone.
-///
-/// The hash is well-formed but does not match any real password.
-const DUMMY_PHC: &str =
-    "$argon2id$v=19$m=65536,t=2,p=1$c2FsdHNhbHRzYWx0$ZHVtbXloYXNoZHVtbXloYXNoZHVtbXloYXNoZHVtbQ";
 
 /// Progressive backoff curve. Maps a *new* consecutive-failure count
 /// (so n = 1 means "this is the first failure") to an optional lock

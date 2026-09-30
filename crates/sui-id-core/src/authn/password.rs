@@ -13,6 +13,15 @@ fn argon2() -> Argon2<'static> {
     Argon2::new(Algorithm::Argon2id, Version::V0x13, params)
 }
 
+/// A fixed, well-formed Argon2id PHC string that matches no real password —
+/// a decoy for a caller to call [`verify_password`] against on any path that
+/// would otherwise skip hashing entirely, so that path costs the same
+/// wall-clock time as a real verification (RFC 123 D4). Originally private to
+/// `authn::session`; promoted here so `oidc::oauth_token::authenticate_client`
+/// can use the same decoy rather than defining its own.
+pub const DUMMY_PHC: &str =
+    "$argon2id$v=19$m=65536,t=2,p=1$c2FsdHNhbHRzYWx0$ZHVtbXloYXNoZHVtbXloYXNoZHVtbXloYXNoZHVtbQ";
+
 /// Hash a password and return its PHC-encoded string.
 pub fn hash_password(password: &str) -> CoreResult<String> {
     // RFC 069: generate salt via getrandom (16 bytes = 128 bits, then B64-encode
