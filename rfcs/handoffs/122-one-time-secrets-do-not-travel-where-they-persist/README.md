@@ -1,6 +1,6 @@
 # A one-time secret does not travel where it persists
 
-**RFC.** [RFC 122](../../proposed/122-one-time-secrets-do-not-travel-where-they-persist.md), **Proposed**.
+**RFC.** [RFC 122](../../accepted/122-one-time-secrets-do-not-travel-where-they-persist.md), **Proposed**.
 **Author.** High-capability model, requirements-architect role.
 **Baseline.** `4ebf0f7` or later.
 
@@ -18,6 +18,47 @@
 
 State the full list you find; the numbers above are a starting point, not the
 answer.
+
+## Dispatched for implementation 2026-09-30, on the amended RFC
+
+The [design review](design-review-2026-09-30.md) returned **accept with the
+changes named**, and all three corrected what the RFC *claimed* rather than what
+it asks to be built. **Build against the amended RFC**; this section's earlier
+text is superseded where they differ, and the two design questions it posed are
+now answered — by the review, not by you.
+
+**What changed, so you do not re-derive it:**
+
+1. **Six surfaces, not five.** `POST /oauth2/register` returns a `client_secret`
+   in its JSON body with no `no-store`, and it is the **only one not behind an
+   administrator session** — bearer registration token only, under the token
+   routes. Treat it as in scope everywhere the others are.
+2. **D1 is not a design problem.** Five of the six already render their secret
+   straight from the POST response; only the rotated client secret redirects.
+   Making `clients_rotate_secret_post` do what `clients_create` already does — in
+   the same file — is the whole transport change. **And it is not a durability
+   improvement:** a directly-rendered response is not re-derivable by a reload
+   either, so do not describe it as one.
+3. **D3's placement is decided: a router layer on the named routes**, the pattern
+   `/reset-password` already uses at `router.rs:105-112`. Not a response builder,
+   not a typed wrapper — both still need a handler to remember. The layer
+   relocates the remembering into one file.
+4. **A referrer policy is redundant, not required**, once D1 holds. Do not add
+   one to these surfaces; the global default already covers a page whose own URL
+   never held a secret.
+5. **D4's test asserts both directions**: every route on the list carries the
+   layer, and no route off the list carries it. State in the package that the
+   list's own completeness is unchecked — that is the known residual and the RFC
+   says so.
+
+**Two things to get right that the review flagged and this dispatch will not
+restate:** the edit page must not render a secret handed to it by the caller
+(D2), and the severity of that is **medium** — a display forgery, not XSS. Do not
+write it up as more than it is.
+
+**One unrelated line while you are in the file:** the doc comment above
+`render_qr_svg` (`handlers/admin.rs:65-68`) names a call site that does not
+exist. Fix it; say you did.
 
 ## What to build
 

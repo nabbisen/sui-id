@@ -1,6 +1,11 @@
 # RFC 122 — A one-time secret does not travel where it persists
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-09-30
+**Approved by.** `@nabbisen`, 2026-09-30: "RFC 122 is accepted." Accepted on the
+**amended** text: its design review corrected three things this RFC claimed and
+found a sixth surface it had missed. An ordinary lifecycle act — nothing here is
+exploitable, so nothing justified landing ahead of acceptance.
 **Security review.** Required
 **Independent design review.** [Design review 2026-09-30](../handoffs/122-one-time-secrets-do-not-travel-where-they-persist/design-review-2026-09-30.md) by the implementation role. Verdict **accept with the changes named**, all three of which correct what this RFC *claimed* rather than what it asks to be built. It also found a **sixth surface this RFC had missed**, with a weaker trust boundary than any it had measured. This RFC was amended on that review the same day.
 **Design prerequisites.** None.
