@@ -128,7 +128,7 @@ Proposed: the move approved nothing.
 | 122 | [A one-time secret does not travel where it persists](./proposed/122-one-time-secrets-do-not-travel-where-they-persist.md) | [122-one-time-secrets-do-not-travel-where-they-persist](./handoffs/122-one-time-secrets-do-not-travel-where-they-persist/README.md) |
 | 123 | [An endpoint that authenticates a client costs the caller something](./proposed/123-authenticating-a-client-costs-the-caller.md) | [123-authenticating-a-client-costs-the-caller](./handoffs/123-authenticating-a-client-costs-the-caller/README.md) |
 | 124 | [The uniform response must be uniform, and must be shown to be](./proposed/124-the-uniform-response-is-uniform.md) | [124-the-uniform-response-is-uniform](./handoffs/124-the-uniform-response-is-uniform/README.md) |
-| 125 | [The audit chain must be verified as a chain](./proposed/125-the-chain-must-be-verified-as-a-chain.md) | [125-the-chain-must-be-verified-as-a-chain](./handoffs/125-the-chain-must-be-verified-as-a-chain/README.md) |
+| 125 | [The audit chain must be verified as a chain](./accepted/125-the-chain-must-be-verified-as-a-chain.md) | [125-the-chain-must-be-verified-as-a-chain](./handoffs/125-the-chain-must-be-verified-as-a-chain/README.md) |
 
 ### Implemented — Mockup Integration epic (Phase 0 → Phase 8)
 

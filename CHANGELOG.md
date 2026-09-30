@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   past the window it was asked about. **Releases up to and including 0.78.0 are
   affected**, and the module documentation, the migration comment, `ROADMAP.md`
   and `docs/threat-model.md` each claimed the property that was missing — those
-  are corrected too ([RFC 125](rfcs/proposed/125-the-chain-must-be-verified-as-a-chain.md)).
+  are corrected too ([RFC 125](rfcs/accepted/125-the-chain-must-be-verified-as-a-chain.md)).
   One residual is named in those documents and closes in stage 2.
 
 - **Two routes acted without establishing who was asking, and now cannot.** The

@@ -22,11 +22,14 @@ surface deciding what an error means. Where the chain state is rendered in
 could not be verified" is not the same as "the chain is broken", and an operator
 must not read the first as the second.
 
-**Decide and state:** whether a failure to verify belongs in the audit log
-itself, and argue both sides. A row recording that the audit log could not be
-read is of doubtful value when the cause is the audit store, and of real value
-when the cause is transient. Say which you would ship and why; the architect
-reviews the choice.
+**D3 is settled and no longer yours to decide** — the review resolved it: a
+`tracing::error!` is the primary record, an audit row is best-effort secondary.
+The reasoning is in D3 and it is circular-dependency, not preference.
+
+**What is yours to decide:** where the one shared answer lives, given that its
+three consumers are two HTTP handlers and a startup path in a different crate
+from `verify_chain_tail` itself. Name the placement and why the next consumer
+cannot bypass it.
 
 ## Evidence
 

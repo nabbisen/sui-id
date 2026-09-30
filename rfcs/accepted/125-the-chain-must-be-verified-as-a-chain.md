@@ -1,8 +1,14 @@
 # RFC 125 — The audit chain must be verified as a chain
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-09-30
+**Approved by.** `@nabbisen`, 2026-09-30: "Ratified." Ratifying both stages and
+the lifecycle deviation: the fix landed while this RFC was Proposed, under the
+urgent-integrity exception, and ratification waited until stage 2 closed the
+residual found in stage 1 — so the closure prerequisites were met before the
+folder moved, not after.
 **Security review.** Required
-**Independent design review.** Found by the RFC 121 design review, 2026-09-29, by the implementation role, which proved it by execution in a disposable worktree. Confirmed independently by the architect by reading, who added the deletion and truncation consequences below.
+**Independent design review.** [The finding this RFC answers](../handoffs/125-the-chain-must-be-verified-as-a-chain/design-review-findings-2026-09-29.md) — extracted from the RFC 121 design review of 2026-09-29 by the implementation role, which proved it by execution in a disposable worktree. Confirmed independently by the architect by reading, who added the deletion and truncation consequences below.
 **Design prerequisites.** None. This RFC is an urgent integrity fix and takes precedence over RFCs 121–124, all of which are about this control or its display.
 **Implementation prerequisites.** None.
 **Closure prerequisites.** Verification detects every single-row rewrite, every deletion and every truncation within the window it reports on, including a rewrite whose own hash was recomputed; the window it covers is stated wherever a result is shown; and no document claims a property that no test defends.

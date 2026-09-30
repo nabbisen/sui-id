@@ -153,6 +153,8 @@ rfcs/accepted/120-consent-and-setup-prove-the-caller.md	49fa5531a23075819add8276
 rfcs/accepted/120-consent-and-setup-prove-the-caller.md	62a67ea947075eb31318ec79a88ef5afe0b353a0a8f6bc71241fd1db73c96c8f	1	Status. Accepted Accepted on. 2026-09-29 Approved by. @nabbisen , 2026-09-29: "Authorized." Ratifying both the fix and the lifecycle deviati
 rfcs/accepted/120-consent-and-setup-prove-the-caller.md	874edb9b41d7b7c8d1211a597c52d7ff33065d66fdd53f677f49116f0f63ba9d	1	Accountable owner and approver. @nabbisen .
 rfcs/accepted/120-consent-and-setup-prove-the-caller.md	e79be1643e1206e5753c5908bd5f51129288770d00ffa977e9ccdc01519124e1	1	Authorized by @nabbisen , 2026-09-26: fix quietly, then consider whether an advisory is necessary, since there is no production use yet.
+rfcs/accepted/125-the-chain-must-be-verified-as-a-chain.md	874edb9b41d7b7c8d1211a597c52d7ff33065d66fdd53f677f49116f0f63ba9d	1	Accountable owner and approver. @nabbisen .
+rfcs/accepted/125-the-chain-must-be-verified-as-a-chain.md	d4ab906492aaa43203ec5ef305161b4652a4c48d5b216c6e79271d564bf8e2f6	1	Status. Accepted Accepted on. 2026-09-30 Approved by. @nabbisen , 2026-09-30: "Ratified." Ratifying both stages and the lifecycle deviation:
 rfcs/archive/018-rfc-lifecycle-policy.md	32f6fe8bd5505c3c995ae0cef7fc4f1cf84dbcebfdc40f970120e51030e7fb29	1	RFC 000 is a copy of a source shared across projects and the owner directed it remain byte-identical to that source; editing it here would r
 rfcs/archive/018-rfc-lifecycle-policy.md	5d5232fd83c5c629550cd9e38b72e9726f4677bde9a14f4f6cec15eac303cf51	1	Record the acceptance date, approver, security classification, independent design review where required, and implementation owner; update St
 rfcs/archive/018-rfc-lifecycle-policy.md	6b1ef7ca5c9559cacd4f1d59be08f1ba412a7ac0f29ddbc526c9d1de4b6139b3	1	Its cause is recorded in ROADMAP.md §S1: the previous rule defined independence by vendor, was written by the architect role and attributed 
@@ -485,5 +487,4 @@ rfcs/proposed/121-a-verification-failure-is-not-a-pass.md	874edb9b41d7b7c8d1211a
 rfcs/proposed/122-one-time-secrets-do-not-travel-where-they-persist.md	874edb9b41d7b7c8d1211a597c52d7ff33065d66fdd53f677f49116f0f63ba9d	1	Accountable owner and approver. @nabbisen .
 rfcs/proposed/123-authenticating-a-client-costs-the-caller.md	874edb9b41d7b7c8d1211a597c52d7ff33065d66fdd53f677f49116f0f63ba9d	1	Accountable owner and approver. @nabbisen .
 rfcs/proposed/124-the-uniform-response-is-uniform.md	874edb9b41d7b7c8d1211a597c52d7ff33065d66fdd53f677f49116f0f63ba9d	1	Accountable owner and approver. @nabbisen .
-rfcs/proposed/125-the-chain-must-be-verified-as-a-chain.md	874edb9b41d7b7c8d1211a597c52d7ff33065d66fdd53f677f49116f0f63ba9d	1	Accountable owner and approver. @nabbisen .
 scripts/tests/test_owner_attributions.py	f6bbaf57737fffc7e4f6cd6c1d3631ab46a6042d0b2b20a71787c16b621e45a7	1	@nabbisen ruled on <date has no "owner ruling" in it: the pattern the RFC's first draft used does not match it.
