@@ -178,3 +178,45 @@ when implementation is dispatched:
 
 **Before implementation is dispatched**, this specification is rewritten to
 match D1–D9, and the RFC names D5's exit code.
+
+## Repair dispatched 2026-09-30 — this RFC's e2e test reds CI intermittently
+
+**It is not flaky in the usual sense; it is deterministic given the clock**, and
+the diagnosis is complete. `r112_settings_shows_the_stored_schema_version_not_the_binarys_ceiling`
+uses `schema_item` (`crates/sui-id/tests/e2e/r112.rs:27-30`), which takes **160
+characters** from the schema-version label. That window sweeps past the cell it
+means to read and into the following rows, including the server clock. The test
+then asserts `!after.contains(&ceiling.to_string())` — a bare substring over that
+whole span.
+
+`MAX_SCHEMA_VERSION` is **43**, so the assertion fails whenever the rendered time
+inside the window contains "43". The CI failure on `d2af7ee`
+(run 36711349086) captured exactly that:
+
+```
+スキーマバージョン</th><td><span>7</span></td></tr><tr><th …>サーバ時刻</th>
+<td><span class="code">2026-09-30 12:07:43 UTC</span></td></tr>
+```
+
+The schema version shown is `7`, which is correct — the page was right and the
+test was wrong. **Roughly one run in thirty**: seconds `43`, or any time in minute
+`43`. That matches the three sightings recorded on 2026-09-30.
+
+**Fix:** read the cell, not a character window — extract the value between the
+label's `<td>` and its `</td>`, and assert on that value. Do not widen or narrow
+the 160; a window over rendered HTML is the defect, and a different number only
+changes how often it bites.
+
+**While you are there:** `before` asserts `contains(ceiling)` over the same
+window, so it can pass for the wrong reason too — a clock containing "43" would
+satisfy it even if the cell were wrong. Fix both assertions, not only the one
+that failed.
+
+**Evidence:** show the new assertions failing against a page whose schema cell is
+wrong but whose clock contains the ceiling, and passing against the real page.
+That is the case the old test could not distinguish and is the whole point of the
+repair.
+
+**No RFC.** This is a repair that keeps an approved gate executable — the
+controlled exception `ROADMAP.md` already names — not a design change. It is
+recorded here because the test belongs to RFC 112.

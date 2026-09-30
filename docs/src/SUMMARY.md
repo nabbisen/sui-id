@@ -26,6 +26,7 @@
 - [Configuration](./reference/configuration.md)
 - [OIDC API for integrators](./reference/oidc-api.md)
 - [Audit event reference](./reference/audit-events.md)
+- [Security surfaces reference](./reference/security-surfaces.md)
 
 ---
 

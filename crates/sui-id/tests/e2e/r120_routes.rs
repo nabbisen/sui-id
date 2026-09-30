@@ -48,6 +48,12 @@ const VERBS: [&str; 5] = ["get", "post", "put", "delete", "patch"];
 /// authenticates something other than a browser session (a client, a bearer
 /// token, a one-time token, a pending sign-in), or because it does its own
 /// session check inline. **Read the reason before adding to this list.**
+///
+/// RFC 127 D2: this fact also has a home in
+/// `docs/src/reference/security-surfaces.md`'s first table, in this exact
+/// order — [`the_documented_route_table_matches_expected_without_actor`]
+/// asserts the two match. A route added here without also updating that
+/// table fails that test the same way it fails the ones below.
 const EXPECTED_WITHOUT_ACTOR: &[(&str, &str, &str)] = &[
     // ---- public by nature
     ("GET", "/", "landing; redirects by initialization state"),
@@ -335,6 +341,63 @@ fn requires_actor(params: &str) -> bool {
     ACTOR_EXTRACTORS.iter().any(|e| params.contains(e))
 }
 
+/// RFC 127 D7: parse the markdown pipe table directly under a `## <heading>`
+/// line in `path`, returning each data row's cells. Shared with
+/// [`super::r122_routes`], which checks a different table on the same page.
+///
+/// Deliberately simple, not a general markdown-table parser: it finds the
+/// first `|`-prefixed line after the heading (the header row), skips the
+/// next line (the `---|---` separator, asserted present but not otherwise
+/// checked), then collects `|`-prefixed lines until one that isn't — the
+/// page's own two tables are never interrupted by anything else, which this
+/// assumes rather than defends against. Each cell has its surrounding
+/// backticks stripped (the page writes `Method`/`Path`/`Route` cells as
+/// inline code for readability) and is otherwise left exactly as written.
+pub(crate) fn parse_doc_table(path: &Path, heading: &str) -> Vec<Vec<String>> {
+    let text =
+        std::fs::read_to_string(path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+    let needle = format!("## {heading}");
+    let start = text
+        .find(&needle)
+        .unwrap_or_else(|| panic!("heading {heading:?} not found in {}", path.display()));
+    let mut lines = text[start..].lines();
+    for line in lines.by_ref() {
+        if line.trim_start().starts_with('|') {
+            break;
+        }
+    }
+    let sep = lines
+        .next()
+        .unwrap_or_else(|| panic!("no separator row under {heading:?}"));
+    assert!(
+        sep.trim_start().starts_with('|') && sep.contains("---"),
+        "expected a `---` table separator row under {heading:?}, got: {sep:?}"
+    );
+    let mut rows = Vec::new();
+    for line in lines {
+        let line = line.trim();
+        if !line.starts_with('|') {
+            break;
+        }
+        let cells: Vec<String> = line
+            .trim_matches('|')
+            .split('|')
+            .map(|c| c.trim().trim_matches('`').to_owned())
+            .collect();
+        rows.push(cells);
+    }
+    rows
+}
+
+/// The repository root, from this crate's own `CARGO_MANIFEST_DIR`
+/// (`crates/sui-id`). Shared with [`super::r122_routes`].
+pub(crate) fn repo_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .expect("repo root")
+}
+
 /// `(method, path)` pairs.
 type RouteSet = BTreeSet<(String, String)>;
 
@@ -392,6 +455,38 @@ fn every_expected_route_has_a_reason() {
     for (m, p, why) in EXPECTED_WITHOUT_ACTOR {
         assert!(why.len() > 8, "{m} {p} needs a reason");
     }
+}
+
+/// RFC 127 D7: the documented table is the checked artefact, not merely a
+/// cross-reference. `docs/src/reference/security-surfaces.md`'s first table
+/// must list exactly `EXPECTED_WITHOUT_ACTOR`, in the same order and with the
+/// same reasons — a route added to one without the other now fails here,
+/// the same way `the_routes_that_answer_without_an_actor_are_exactly_the_expected_set`
+/// already fails a route added to the router without a reason.
+#[test]
+fn the_documented_route_table_matches_expected_without_actor() {
+    let doc = repo_root().join("docs/src/reference/security-surfaces.md");
+    let rows = parse_doc_table(&doc, "Routes that answer without an authenticated caller");
+    let documented: Vec<(String, String, String)> = rows
+        .into_iter()
+        .map(|c| {
+            assert_eq!(
+                c.len(),
+                3,
+                "expected 3 columns (Method, Path, Why), got {c:?}"
+            );
+            (c[0].clone(), c[1].clone(), c[2].clone())
+        })
+        .collect();
+    let expected: Vec<(String, String, String)> = EXPECTED_WITHOUT_ACTOR
+        .iter()
+        .map(|(m, p, w)| ((*m).to_owned(), (*p).to_owned(), (*w).to_owned()))
+        .collect();
+    assert_eq!(
+        documented, expected,
+        "docs/src/reference/security-surfaces.md's first table must match \
+         EXPECTED_WITHOUT_ACTOR exactly, in the same order (RFC 127 D7)"
+    );
 }
 
 fn fill(path: &str) -> String {

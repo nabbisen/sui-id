@@ -26,12 +26,17 @@
 
 use std::collections::BTreeSet;
 
-use super::r120_routes::{balanced, routes, src, strip_line_comments};
+use super::r120_routes::{balanced, parse_doc_table, repo_root, routes, src, strip_line_comments};
 
 /// Every route this RFC (or its RFC 103 precedent) attaches the router-layer
 /// `no-store` header to, with why. **Read the reason before removing an
 /// entry** — the header stops being sent the moment its `.layer(...)` call
 /// is removed from `router.rs`, silently, unless this list catches it.
+///
+/// RFC 127 D2: this fact also has a home in
+/// `docs/src/reference/security-surfaces.md`'s second table, in this exact
+/// order — [`the_documented_table_matches_expected_no_store_routes`] asserts
+/// the two match.
 const EXPECTED_NO_STORE_ROUTES: &[(&str, &str)] = &[
     (
         "/reset-password",
@@ -127,4 +132,34 @@ fn every_expected_route_has_a_reason() {
     for (path, why) in EXPECTED_NO_STORE_ROUTES {
         assert!(why.len() > 8, "{path} needs a reason");
     }
+}
+
+/// RFC 127 D7: `docs/src/reference/security-surfaces.md`'s second table must
+/// list exactly `EXPECTED_NO_STORE_ROUTES`, in the same order and with the
+/// same reasons — the document is the checked artefact, not a cross-cited
+/// description of one.
+#[test]
+fn the_documented_table_matches_expected_no_store_routes() {
+    let doc = repo_root().join("docs/src/reference/security-surfaces.md");
+    let rows = parse_doc_table(&doc, "Surfaces that show a secret once");
+    let documented: Vec<(String, String)> = rows
+        .into_iter()
+        .map(|c| {
+            assert_eq!(
+                c.len(),
+                2,
+                "expected 2 columns (Route, What it shows), got {c:?}"
+            );
+            (c[0].clone(), c[1].clone())
+        })
+        .collect();
+    let expected: Vec<(String, String)> = EXPECTED_NO_STORE_ROUTES
+        .iter()
+        .map(|(p, w)| ((*p).to_owned(), (*w).to_owned()))
+        .collect();
+    assert_eq!(
+        documented, expected,
+        "docs/src/reference/security-surfaces.md's second table must match \
+         EXPECTED_NO_STORE_ROUTES exactly, in the same order (RFC 127 D7)"
+    );
 }
