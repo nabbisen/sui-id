@@ -451,6 +451,7 @@ rfcs/handoffs/119-embedding-contract/design-review-request.md	1249df79836f34c718
 rfcs/handoffs/119-embedding-contract/design-review-request.md	6e342c4c95d18ec752a948b4669243b11de0bee247af6972791ce9fd7d3dcf93	1	Proposed , with @nabbisen 's acceptance recorded 2026-09-26 and the status held until this review exists.
 rfcs/handoffs/120-consent-and-setup-prove-the-caller/README.md	05519fb48b1660398cb6abaa29f09130566120014361c1ee44e058d10e068ec2	1	Authorized as an urgent security fix by @nabbisen , 2026-09-26: fix quietly, then consider disclosure.
 rfcs/handoffs/120-consent-and-setup-prove-the-caller/README.md	ee9df6281d1d753b41f8b91b7f6ca3ee0a8eec5393c79253b1bb4fb1ea5342c3	1	@nabbisen ruled that implementation handoffs live under rfcs/handoffs/ — "ever, now and in the future".
+rfcs/handoffs/124-the-uniform-response-is-uniform/README.md	8438ad3f34f1a3d6f05834c33fd616885926f7ffad6cd156441eec7a015cb8c4	1	It runs when @nabbisen accepts the RFC.
 rfcs/handoffs/126-password-hashing-must-not-block-the-runtime/design-review-request.md	3eeb43a827000321bbff80307d8ac79cddd4c1c081728062fc8ee135fc524734	1	Why a review of an Accepted RFC. @nabbisen accepted it on the strength of the finding.
 rfcs/proposed/009-sql-backends.md	71bcda199dd7a9e7b4d32577425dd85cea7613eb17d006d2782f3750fd63e515	1	Requires explicit owner direction before scheduling.
 rfcs/proposed/009-sql-backends.md	deca24718bfe0e0e869e69bbc850d2c1ad5c9ccb19ad62ea5bfb0e49c168ef1d	1	No version designation without owner direction and soak.
