@@ -1,6 +1,6 @@
 # An endpoint that authenticates a client costs the caller something
 
-**RFC.** [RFC 123](../../proposed/123-authenticating-a-client-costs-the-caller.md), **Proposed**.
+**RFC.** [RFC 123](../../accepted/123-authenticating-a-client-costs-the-caller.md), **Proposed**.
 **Author.** High-capability model, requirements-architect role.
 **Baseline.** `4ebf0f7` or later.
 

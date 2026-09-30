@@ -4,7 +4,7 @@
 **Security review.** Required
 **Independent design review.** Found by the [RFC 123 design review](../handoffs/123-authenticating-a-client-costs-the-caller/design-review-2026-09-30.md), 2026-09-30, by the implementation role, while answering whether a rate limit was sufficient. Confirmed independently by the architect, who corrected one detail of it: `spawn_blocking` **is** used in this codebase, which strengthens rather than weakens the finding.
 **Design prerequisites.** None.
-**Implementation prerequisites.** None. Independent of [RFC 123](123-authenticating-a-client-costs-the-caller.md), which closes a different half of the same exposure.
+**Implementation prerequisites.** None. Independent of [RFC 123](../accepted/123-authenticating-a-client-costs-the-caller.md), which closes a different half of the same exposure.
 **Closure prerequisites.** No request-path call to Argon2 runs on a runtime worker thread: hashing and verification are executed where blocking is expected, every call site is converted, and a test demonstrates that concurrent authentication attempts do not stall unrelated requests.
 **Tracks.** Availability.
 **Touches.** `crates/sui-id-core/src/authn/password.rs` and every call site of `verify_password` / `hash_password`.

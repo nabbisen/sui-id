@@ -1,6 +1,6 @@
 # RFC 123 — independent design review
 
-**RFC.** [RFC 123 — An endpoint that authenticates a client costs the caller something](../../proposed/123-authenticating-a-client-costs-the-caller.md). **Proposed.**
+**RFC.** [RFC 123 — An endpoint that authenticates a client costs the caller something](../../accepted/123-authenticating-a-client-costs-the-caller.md). **Proposed.**
 **Handoff reviewed against.** [`rfcs/handoffs/123-authenticating-a-client-costs-the-caller/design-review-request.md`](../../handoffs/123-authenticating-a-client-costs-the-caller/design-review-request.md).
 **Baseline.** `f43f7bd` (`≥ 9712215`; no source file this RFC touches differs from `9712215`). Nothing tracked was changed by this review.
 **Reviewer.** Mid-capability model, implementer role. I narrowed this finding myself in the RFC 120 triage (four endpoints to two); disclosed there and again here rather than left to be noticed.

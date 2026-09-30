@@ -1,6 +1,12 @@
 # RFC 123 — An endpoint that authenticates a client costs the caller something
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-09-30
+**Approved by.** `@nabbisen`, 2026-09-30: "Accepted." On the **amended** text.
+Its implementation was built while this RFC was still Proposed, because the
+architect's own end-of-turn file list named the handoff as a dispatch; that work
+was **held unconmitted** until this acceptance rather than landed, and the
+implementer's package recorded the Proposed status correctly throughout.
 **Security review.** Required
 **Independent design review.** [Design review 2026-09-30](../handoffs/123-authenticating-a-client-costs-the-caller/design-review-2026-09-30.md) by the implementation role, which had itself narrowed this finding from four endpoints to two in the RFC 120 triage. Verdict **accept with the changes named**. It **measured** what this RFC asserted, answered D3 rather than leaving it open, and found a larger problem this RFC does not fix. Amended on it the same day.
 **Design prerequisites.** None.
@@ -43,7 +49,7 @@ every other request the service is serving — not only these two endpoints. Thi
 already applies to `/oauth2/token`, which has a limiter.
 
 **That is a separate, larger piece of work and is not folded in here.** It is
-[RFC 126](126-password-hashing-must-not-block-the-runtime.md). This RFC closes the
+[RFC 126](../proposed/126-password-hashing-must-not-block-the-runtime.md). This RFC closes the
 volume-over-time half; a reader must not take "RFC 123 landed" to mean the
 exposure class is closed.
 
