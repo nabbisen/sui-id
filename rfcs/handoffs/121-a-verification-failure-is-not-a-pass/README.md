@@ -22,9 +22,12 @@ surface deciding what an error means. Where the chain state is rendered in
 could not be verified" is not the same as "the chain is broken", and an operator
 must not read the first as the second.
 
-**D3 is settled and no longer yours to decide** — the review resolved it: a
-`tracing::error!` is the primary record, an audit row is best-effort secondary.
-The reasoning is in D3 and it is circular-dependency, not preference.
+**D3 is settled and no longer an open question in the build** — the architect
+decided it, on the review's recommendation: a `tracing::error!` is the primary
+record, an audit row is best-effort secondary. The reasoning is in D3 and it is
+circular-dependency, not preference. (The earlier wording here said "the review
+resolved it". A review recommends; the design and the decision are the
+architect's. Corrected 2026-09-30.)
 
 **What is yours to decide:** where the one shared answer lives, given that its
 three consumers are two HTTP handlers and a startup path in a different crate
