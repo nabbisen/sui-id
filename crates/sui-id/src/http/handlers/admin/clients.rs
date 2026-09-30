@@ -8,7 +8,6 @@ use axum::Form;
 use axum::extract::{Path, State};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum_extra::extract::cookie::CookieJar;
-use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 use std::str::FromStr;
 use sui_id_core::admin::{self as admin_uc};
@@ -287,20 +286,11 @@ pub async fn clients_delete(
     Ok(Redirect::to("/admin/clients").into_response())
 }
 
-#[derive(Debug, serde::Deserialize, Default)]
-
-pub struct ClientEditQuery {
-    /// Present after a successful secret rotation — contains the new
-    /// plaintext secret to display once (RFC 047).
-    pub rotated_secret: Option<SecretString>,
-}
-
 pub async fn clients_edit_get(
     state_ext: AppStateExt,
     CurrentAdminOrAuditor(admin_id, _role, ref read_actor): CurrentAdminOrAuditor,
     jar: CookieJar,
     Path(id): Path<String>,
-    axum::extract::Query(q): axum::extract::Query<ClientEditQuery>,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
     let target = ClientId::from_str(&id)
@@ -309,6 +299,10 @@ pub async fn clients_edit_get(
         .await
         .map_err(HttpError::html)?;
     let token = crate::csrf::ensure_token(&jar);
+    // RFC 122 D2: this page renders a secret it obtained, never one it was
+    // handed. A rotated secret is shown once, directly from the POST that
+    // produced it (`clients_rotate_secret_post`), not from a query
+    // parameter a caller could supply.
     let resp = Html(sui_id_web::render_client_edit(
         read_actor.can_write(),
         sui_id_web::ClientEditData {
@@ -320,7 +314,7 @@ pub async fn clients_edit_get(
             confidential: row.confidential,
             is_disabled: row.is_disabled,
             consent_policy: row.consent_policy.as_str().to_string(),
-            freshly_rotated_secret: q.rotated_secret.map(|s| s.expose_secret().to_owned()),
+            freshly_rotated_secret: None,
         },
         None,
         token.clone(),
@@ -400,7 +394,7 @@ pub async fn clients_edit_post(
 
 pub async fn clients_rotate_secret_post(
     state_ext: AppStateExt,
-    CurrentAdmin(_, ref admin_actor): CurrentAdmin,
+    CurrentAdmin(admin_id, ref admin_actor): CurrentAdmin,
     ctx: crate::handlers::SessionContext,
     jar: CookieJar,
     Path(id): Path<String>,
@@ -420,14 +414,33 @@ pub async fn clients_rotate_secret_post(
         admin_uc::rotate_client_secret(&app.db, &app.clock, admin_actor, target, form.reason_opt())
             .await
             .map_err(HttpError::html)?;
-    // Redirect to edit page with the new secret in the query string.
-    // The secret is URL-encoded; the edit page displays it once and the
-    // browser history entry is replaced by the subsequent navigation.
-    let encoded =
-        percent_encoding::utf8_percent_encode(&new_secret, percent_encoding::NON_ALPHANUMERIC)
-            .to_string();
-    Ok(Redirect::to(&format!(
-        "/admin/clients/{id}/edit?rotated_secret={encoded}"
+    // RFC 122 D1: the new secret never becomes a URL component. Render the
+    // edit page directly from this response — the same pattern
+    // `clients_create` already uses for the creation secret — instead of
+    // redirecting with the secret in the query string. The route carries
+    // `Cache-Control: no-store` at the router layer (router.rs).
+    let read_actor = admin_actor.as_read_only();
+    let row = admin_uc::get_client(&app.db, &read_actor, target)
+        .await
+        .map_err(HttpError::html)?;
+    let token = crate::csrf::ensure_token(&jar);
+    let resp = Html(sui_id_web::render_client_edit(
+        read_actor.can_write(),
+        sui_id_web::ClientEditData {
+            id: row.id.to_string(),
+            name: row.name,
+            redirect_uris: row.redirect_uris,
+            allowed_scopes: row.allowed_scopes,
+            post_logout_redirect_uris: row.post_logout_redirect_uris,
+            confidential: row.confidential,
+            is_disabled: row.is_disabled,
+            consent_policy: row.consent_policy.as_str().to_string(),
+            freshly_rotated_secret: Some(new_secret),
+        },
+        None,
+        token.clone(),
+        crate::handlers::resolve_admin_locale(&app, admin_id).await,
     ))
-    .into_response())
+    .into_response();
+    Ok(with_csrf_cookie(resp, &app, &token))
 }

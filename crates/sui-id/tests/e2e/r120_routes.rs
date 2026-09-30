@@ -163,12 +163,14 @@ const EXPECTED_WITHOUT_ACTOR: &[(&str, &str, &str)] = &[
 
 // ---------- reading the router ----------
 
-fn src(rel: &str) -> PathBuf {
+/// Shared with [`super::r122_routes`], which parses the same router source
+/// for a different `.route(` property (a header layer, not an extractor).
+pub(crate) fn src(rel: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join(rel)
 }
 
 /// `text` with `//` comments removed (outside string literals).
-fn strip_line_comments(text: &str) -> String {
+pub(crate) fn strip_line_comments(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for line in text.lines() {
         let mut in_str = false;
@@ -192,7 +194,7 @@ fn strip_line_comments(text: &str) -> String {
 
 /// The text between the `(` at `open` and its matching `)`, and the index after
 /// that `)`. String literals are skipped.
-fn balanced(text: &str, open: usize) -> (&str, usize) {
+pub(crate) fn balanced(text: &str, open: usize) -> (&str, usize) {
     let bytes = text.as_bytes();
     assert_eq!(bytes[open], b'(');
     let mut depth = 0usize;
@@ -225,7 +227,7 @@ fn balanced(text: &str, open: usize) -> (&str, usize) {
 }
 
 /// `(method, path, handler)` for every verb of every `.route(` in the router.
-fn routes() -> Vec<(String, String, String)> {
+pub(crate) fn routes() -> Vec<(String, String, String)> {
     let raw = std::fs::read_to_string(src("http/router.rs")).expect("read router.rs");
     let text = strip_line_comments(&raw);
     let mut found = Vec::new();

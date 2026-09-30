@@ -28,9 +28,16 @@ pub fn build_router(app: AppState) -> Router {
 
     let token_routes = Router::new()
         .route("/oauth2/token", post(oidc::token))
+        // RFC 122 D3: the returned `client_secret` is shown once; this
+        // response is unstorable, the same pattern `/reset-password` uses.
         .route(
             "/oauth2/register",
-            post(crate::handlers::dynamic_register::dynamic_register),
+            post(crate::handlers::dynamic_register::dynamic_register).layer(
+                tower_http::set_header::SetResponseHeaderLayer::overriding(
+                    axum::http::header::CACHE_CONTROL,
+                    axum::http::HeaderValue::from_static("no-store"),
+                ),
+            ),
         )
         .layer(token_cors);
 
@@ -162,9 +169,17 @@ pub fn build_router(app: AppState) -> Router {
             get(admin::users_recovery_link_confirm_get),
         )
         .route("/admin/users/{id}/role", post(admin::users_set_role))
+        // RFC 122 D3: the POST here shows a freshly generated client secret
+        // once; this route's whole response is unstorable, the same pattern
+        // `/reset-password` uses.
         .route(
             "/admin/clients",
-            get(admin::clients_get).post(admin::clients_create),
+            get(admin::clients_get).post(admin::clients_create).layer(
+                tower_http::set_header::SetResponseHeaderLayer::overriding(
+                    axum::http::header::CACHE_CONTROL,
+                    axum::http::HeaderValue::from_static("no-store"),
+                ),
+            ),
         )
         .route("/admin/clients/new", get(admin::clients_new_get))
         .route(
@@ -189,9 +204,16 @@ pub fn build_router(app: AppState) -> Router {
             "/admin/signing-keys/rotate",
             post(admin::signing_keys_rotate),
         )
+        // RFC 122 D1/D3: the rotated secret is rendered directly from this
+        // response (never a URL), which is unstorable at the router layer.
         .route(
             "/admin/clients/{id}/rotate-secret",
-            post(admin::clients_rotate_secret_post),
+            post(admin::clients_rotate_secret_post).layer(
+                tower_http::set_header::SetResponseHeaderLayer::overriding(
+                    axum::http::header::CACHE_CONTROL,
+                    axum::http::HeaderValue::from_static("no-store"),
+                ),
+            ),
         )
         .route(
             "/admin/signing-keys/{id}/delete",
@@ -283,13 +305,25 @@ pub fn build_router(app: AppState) -> Router {
             post(crate::handlers::me_security::passkey_rename_post),
         )
         // MFA mutative routes (RFC 055, v0.44.0)
+        // RFC 122 D3: each of the next three shows a TOTP secret/QR or
+        // recovery codes once; unstorable at the router layer.
         .route(
             "/me/security/mfa/enroll/start",
-            post(crate::handlers::me_security::mfa_enroll_start),
+            post(crate::handlers::me_security::mfa_enroll_start).layer(
+                tower_http::set_header::SetResponseHeaderLayer::overriding(
+                    axum::http::header::CACHE_CONTROL,
+                    axum::http::HeaderValue::from_static("no-store"),
+                ),
+            ),
         )
         .route(
             "/me/security/mfa/enroll/confirm",
-            post(crate::handlers::me_security::mfa_enroll_confirm),
+            post(crate::handlers::me_security::mfa_enroll_confirm).layer(
+                tower_http::set_header::SetResponseHeaderLayer::overriding(
+                    axum::http::header::CACHE_CONTROL,
+                    axum::http::HeaderValue::from_static("no-store"),
+                ),
+            ),
         )
         .route(
             "/me/security/mfa/disable",
@@ -297,7 +331,12 @@ pub fn build_router(app: AppState) -> Router {
         )
         .route(
             "/me/security/mfa/recovery-codes/regenerate",
-            post(crate::handlers::me_security::mfa_regenerate_recovery),
+            post(crate::handlers::me_security::mfa_regenerate_recovery).layer(
+                tower_http::set_header::SetResponseHeaderLayer::overriding(
+                    axum::http::header::CACHE_CONTROL,
+                    axum::http::HeaderValue::from_static("no-store"),
+                ),
+            ),
         )
         // Passkey mutative routes (RFC 055, v0.44.0)
         .route(

@@ -73,6 +73,8 @@ mod r11_login_failure;
 mod r120;
 mod r120_routes;
 mod r121;
+mod r122;
+mod r122_routes;
 mod refresh_theft;
 mod request_id;
 mod rfc030_033_035;

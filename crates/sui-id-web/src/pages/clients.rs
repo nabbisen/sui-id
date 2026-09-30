@@ -237,7 +237,9 @@ pub struct ClientEditData {
     pub is_disabled: bool,
     /// RFC 038: "none", "first_time", or "always"
     pub consent_policy: String,
-    /// RFC 047: populated only when the secret was just rotated. Shown once.
+    /// RFC 047, RFC 122 D2: populated only by the handler that just rotated
+    /// the secret, from the value that operation produced — never from a
+    /// caller-supplied value. Shown once.
     pub freshly_rotated_secret: Option<String>,
 }
 

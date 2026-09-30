@@ -62,10 +62,8 @@ pub(crate) fn with_csrf_cookie(mut resp: Response, app: &AppState, token: &str) 
 /// Render an `otpauth://` URI as an inline SVG QR code for the MFA
 /// enrolment screen (TOTP setup, RFC 040).
 ///
-/// Used both by `mfa_challenge_post` here in admin (called inline
-/// where the secret is first generated) and by
-/// `crate::handlers::me_security::mfa_enroll_start` through the
-/// public wrapper below.
+/// Called only through the public wrapper below, by
+/// `crate::handlers::me_security::mfa_enroll_start`.
 fn render_qr_svg(uri: &str) -> String {
     use qrcode::QrCode;
     use qrcode::render::svg;

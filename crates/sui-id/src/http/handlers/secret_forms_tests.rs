@@ -72,7 +72,6 @@ macro_rules! redaction_test {
 }
 
 use super::admin::auth::{LoginForm, MfaChallengeForm};
-use super::admin::clients::ClientEditQuery;
 use super::admin::webauthn::WebauthnAuthCompleteForm;
 use super::forgot_password::{ResetPasswordForm, ResetTokenQuery};
 use super::me_security::forms::{
@@ -98,13 +97,6 @@ redaction_test!(
     MfaChallengeForm,
     "_csrf=c&code=CODE-mfa-challenge-91",
     ["CODE-mfa-challenge-91"]
-);
-redaction_test!(
-    client_edit_query,
-    query,
-    ClientEditQuery,
-    "rotated_secret=SECRET-rotated-client-33",
-    ["SECRET-rotated-client-33"]
 );
 redaction_test!(
     webauthn_auth_complete_form,
