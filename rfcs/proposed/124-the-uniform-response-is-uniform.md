@@ -2,6 +2,7 @@
 
 **Status.** Proposed
 **Security review.** Required
+**Independent design review.** [Security review 2026-10-01](../handoffs/124-the-uniform-response-is-uniform/security-review-2026-10-01.md) — **by the architect, who authored this RFC, and therefore not independent.** `@nabbisen` assigned the review on 2026-10-01. It is recorded as the author's own judgement rather than dressed as a completed independent review; RFC 000's actual constraint, that the implementer cannot be the sole approver, holds because the implementer is the dev team and the approver is `@nabbisen`. **This field's name overstates what the linked document is**, and that is said here rather than left for a reader to assume.
 **Design prerequisites.** None.
 **Implementation prerequisites.** None. **Stage 1 is a measurement and changes no behaviour.**
 **Closure prerequisites.** The account-recovery request does not tell an unauthenticated caller whether an address exists — by response, by status, or by the time it takes — and the request path's work is **identical in both branches by construction**, so that no measurement is needed to defend it and no later change can lose it silently. And **no screen asserts something that may be false**: what the user is told is true for every caller, and a user whose address is not registered is given a route forward rather than left waiting.
@@ -75,17 +76,31 @@ of the code takes it for a property the code has.
 
 ## Decision
 
-**D1 — The request path does the same work in both branches, by construction.**
-Whether the address exists decides what happens *afterwards*, not what the
-request does. The handler performs the lookup and hands off; token creation and
-mail belong to the work that follows, not to the response. Then the response
-time is the lookup's, which is one query either way, and the property holds
-without anyone measuring it again.
+**D1 — The request path performs no classification at all.** Accept the address,
+hand it off, respond. Every decision — source, credentials, disabled, the
+outstanding-token throttle, the token, the mail — happens **after** the response
+is written.
 
-The amplification this invites — a caller enqueuing work for addresses that do
-not exist — is already bounded by the existing per-IP limit of five requests per
-sixty seconds. **Confirm that bound is sufficient rather than assuming it**; if it
-is not, the RFC says what bound is.
+**This replaces "the same work in both branches", which was not achievable
+because there are not two branches.** The security review found **six**, and the
+work increases monotonically across them: an unknown address, a directory-sourced
+one, a local account that has never been activated, a disabled one, one at the
+outstanding-token cap, and one under it. Three of those distinctions are sharper
+than mere existence — most of all the never-activated account, which is exactly
+what RFC 115 exists to protect and whose extra `credentials::get` query names it.
+
+Equalising two paths is a small job. Equalising six, and keeping them equal
+through every future edit to any of them, is not. **With no classification in the
+request, there is one code path before the response and no branch to equalise** —
+which is why this is structural rather than maintained.
+
+The amplification this invites — a caller queueing work for addresses that do
+not exist — is bounded today by the per-IP limit of five requests per sixty
+seconds. **Confirm that bound is sufficient rather than assuming it**; it is the
+only thing between this design and a cheap way to fill a queue.
+
+**And the hand-off must not be conditional on anything address-derived**, or the
+ladder returns somewhere new.
 
 **D1b — Measure, to establish the exposure, not to decide the design.** Stage 1 produces numbers for both
 branches, by a stated method, in a stated environment, committed as a file that
