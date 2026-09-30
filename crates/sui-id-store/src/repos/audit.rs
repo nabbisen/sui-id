@@ -14,12 +14,16 @@
 //! trace *at that moment*. The moment a further row is appended, that
 //! window closes for good — its `prev_hash` now fixes the value forever.
 //!
-//! One further gap is known and open as of 2026-09-30: a row whose `hash`
-//! column is empty is treated as a pre-v0.17.0 legacy row and skipped, so
-//! blanking a hashed row's `hash` and relinking its successor takes it out
-//! of verification in two writes, raising only `legacy_unhashed`. The rule
-//! that closes it — legacy rows form a contiguous prefix, so an empty
-//! `hash` after a hashed row is a break — is not implemented yet.
+//! A row whose `hash` column is empty is a pre-v0.17.0 legacy row and is
+//! skipped rather than linkage-checked — its `prev_hash` is a migration
+//! default, not data. **Legacy rows are therefore held to a rule of their
+//! own, closed 2026-09-30 (RFC 125 stage 2): once a hashed row has been
+//! seen walking the chain, a later row cannot legitimately be legacy.**
+//! Hashing turned on once and never off, so blanking a hashed row's `hash`
+//! and relinking its successor to make it look like the legacy boundary —
+//! which used to take that row out of verification in two writes, raising
+//! only `legacy_unhashed` and nothing else — is now exactly what this rule
+//! catches, at the demoted row itself.
 //!
 //! The hashes are not signed by any external party — that's an
 //! orthogonal extension (RFC 3161 timestamping or a notary service)
@@ -350,6 +354,12 @@ pub async fn verify_chain_tail(db: &Database, limit: i64) -> StoreResult<ChainVe
     let mut expected_prev = boundary.as_ref().map_or(String::new(), |(_, h)| h.clone());
     let mut expected_seq = boundary.as_ref().map(|(seq, _)| seq + 1);
     let no_boundary = boundary.is_none();
+    // RFC 125 stage 2: legacy rows are a contiguous prefix — hashing turned
+    // on once and never off, so a genuine legacy row can never follow a
+    // genuine hashed one. `seen_hashed` starts true if the boundary row
+    // (one older than the window) was itself hashed, so the window's very
+    // first row is held to the same rule as every row after it.
+    let mut seen_hashed = boundary.as_ref().is_some_and(|(_, h)| !h.is_empty());
 
     for (i, (seq, row, prev, hash)) in rows.iter().rev().enumerate() {
         // D4: when nothing precedes this row at all, it is only legitimate
@@ -371,12 +381,21 @@ pub async fn verify_chain_tail(db: &Database, limit: i64) -> StoreResult<ChainVe
         expected_seq = Some(seq + 1);
 
         if hash.is_empty() {
+            if seen_hashed {
+                // A hashed row cannot legitimately be followed by a legacy
+                // one. Blanking row `seq`'s `hash` and relinking its
+                // successor to treat it as a legacy boundary is exactly
+                // what this catches (RFC 125 stage 2).
+                report.broken_at_seq = Some(*seq);
+                return Ok(report);
+            }
             // Pre-v0.17.0 row: not part of the chain, and its `prev_hash` is
             // a migration default, not data — nothing to compare it to.
             report.legacy_unhashed += 1;
             expected_prev = String::new();
             continue;
         }
+        seen_hashed = true;
         report.checked += 1;
 
         // D1: row N's `prev_hash` must be row N-1's actual `hash` — not
@@ -536,6 +555,46 @@ mod tests {
 
         let r = verify_chain_tail(&db, 100).await.expect("verify");
         assert_eq!(r.broken_at_seq, Some(3), "{r:?}");
+    }
+
+    #[tokio::test]
+    async fn a_hashed_row_demoted_to_look_legacy_is_caught() {
+        // RFC 125 stage 2. Before this rule: blank row 2's `hash` (so it is
+        // read as a pre-v0.17.0 legacy row and skipped, its own `prev_hash`
+        // never compared) and relink row 3 to treat row 2 as that legacy
+        // boundary (`prev_hash = ""`, `hash` recomputed to match). Two
+        // writes, and the exact shape the residual's own probe measured:
+        // `ChainVerifyReport { checked: 2, broken_at_seq: None,
+        // legacy_unhashed: 1 }`. A hashed row can never legitimately be
+        // followed by a legacy one, which is what catches it now.
+        let db = fresh_db();
+        append(&db, &sample_row("a")).await.expect("append");
+        append(&db, &sample_row("b")).await.expect("append");
+        append(&db, &sample_row("c")).await.expect("append");
+
+        let (at, actor, target, _) = read_row_raw(&db, 3).await;
+        let row3 = AuditLogRow {
+            at: at.parse().expect("at"),
+            actor: actor.map(|s| s.parse().expect("actor")),
+            action: "c".into(),
+            target,
+            result: "ok".into(),
+            note: None,
+        };
+        let relinked_hash = compute_hash("", &row3);
+        db.with_conn(move |c| {
+            c.execute("UPDATE audit_log SET hash = '' WHERE seq = 2", [])?;
+            c.execute(
+                "UPDATE audit_log SET prev_hash = '', hash = ?1 WHERE seq = 3",
+                params![relinked_hash],
+            )?;
+            Ok(())
+        })
+        .await
+        .expect("demote row 2 and relink row 3");
+
+        let r = verify_chain_tail(&db, 100).await.expect("verify");
+        assert_eq!(r.broken_at_seq, Some(2), "{r:?}");
     }
 
     #[tokio::test]

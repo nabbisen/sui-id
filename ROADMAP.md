@@ -549,14 +549,16 @@ fixing up its immediate successor's linkage to match, which verification
 checks, including one row past its own window's edge, so it does not merely
 assume that edge (RFC 125).
 
-**One residual remains open, demonstrated by the architect on 2026-09-30 against
-the RFC 125 fix itself:** verification skips a row whose `hash` column is empty,
-reading it as a pre-v0.17.0 legacy row, so blanking a hashed row's `hash` and
-relinking its successor removes that row from verification in **two** writes and
-raises only `legacy_unhashed`, which no surface displays. Measured:
+**A residual the architect demonstrated on 2026-09-30 against the RFC 125 fix
+itself is closed the same day, by RFC 125 stage 2:** verification skips a row
+whose `hash` column is empty, reading it as a pre-v0.17.0 legacy row, so
+blanking a hashed row's `hash` and relinking its successor removed that row
+from verification in **two** writes and raised only `legacy_unhashed`, which no
+surface displayed. Measured:
 `ChainVerifyReport { checked: 2, broken_at_seq: None, legacy_unhashed: 1 }`.
-RFC 125 stage 2 closes it with the rule that legacy rows form a contiguous
-prefix. Until then, "intact" does not cover a row whose `hash` is empty.
+Stage 2's rule — legacy rows form a contiguous prefix, so a row with an empty
+`hash` after a hashed row has already been seen is a break — closes it: "intact"
+now covers a row whose `hash` is empty exactly as it does any other.
 
 This is a deliberate scope decision, not an oversight. It becomes a defect only
 if documentation implies otherwise — which RFC 098 must check and RFC 097 must

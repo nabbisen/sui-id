@@ -972,16 +972,17 @@ Properties:
   hash recomputed). Rewriting a *single* row now requires
   fixing up its successor's linkage as well, and verification
   checks that.
-- **One residual, measured 2026-09-30 and not yet closed.**
-  Verification skips a row whose `hash` column is empty,
-  treating it as a pre-v0.17.0 legacy row. Blanking a hashed
-  row's `hash` and relinking its successor therefore removes
-  that row from verification in two writes, and the only
-  signal is that `legacy_unhashed` rises — which no surface
-  shows today. The rule that closes it is that legacy rows
-  form a contiguous prefix: once a hashed row has been seen,
-  an empty `hash` is a break. Until that ships, do not read
-  "intact" as covering a row whose `hash` is empty.
+- **Legacy rows are a contiguous prefix, and verification holds
+  them to it (closed 2026-09-30, RFC 125 stage 2).** A row
+  whose `hash` column is empty is a pre-v0.17.0 legacy row and
+  is skipped rather than linkage-checked. A residual demonstrated
+  the same day showed that blanking a hashed row's `hash` and
+  relinking its successor made it look like that legacy boundary,
+  removing it from verification in two writes with only
+  `legacy_unhashed` rising to show it. Because hashing turned on
+  once and never off, a legacy row can never legitimately follow
+  a hashed one — so a later row with an empty `hash` is now a
+  break, caught at the demoted row itself.
 - **The current newest row is the one exception, inherently.**
   Before anything is appended after it, nothing yet records
   its hash, so it can be rewritten (with its own hash
