@@ -1,6 +1,6 @@
 # Documentation carries the truth; a test enforces it
 
-**RFC.** [RFC 127](../../proposed/127-documentation-carries-the-truth.md), **Proposed** — not accepted, nothing dispatched.
+**RFC.** [RFC 127](../../accepted/127-documentation-carries-the-truth.md), **Proposed** — not accepted, nothing dispatched.
 **Author.** High-capability model, requirements-architect role.
 
 ## Where the two facts are today
@@ -13,22 +13,47 @@
 
 Neither has any counterpart under `docs/`.
 
-## What a reviewer or implementer will need to settle
+## Dispatched for implementation 2026-09-30
 
-1. **Which `docs/` layer.** RFC 098's taxonomy puts product documentation in
-   `docs/src/` and the engineering specification at `docs/` top level. An
-   operator assessing exposure and an architect designing against the system are
-   different readers; say which this serves, and whether it is one page or two.
-2. **Whether the route table belongs in public documentation at all.** It is
-   derivable from `router.rs` by anyone, and `docs/threat-model.md` already
-   states security posture publicly — but that is an argument, not a conclusion,
-   and it should be made rather than assumed.
-3. **D3's check.** G15 reads `doc-authority.toml`. Is "this page names this test,
-   and this test names this page" expressible there, or does it need its own
-   small gate? **If the honest answer is that no cheap check exists, say so** —
-   RFC 122 has just established that claiming a mechanical guarantee one does not
-   have is worse than an honest hand-maintained pairing.
-4. **The generated-versus-written question.** The route list is derived from
-   `router.rs` by a test. A document could be generated from the same source. Say
-   whether it should be, given that `ci.yml` is generated and the project has one
-   working pattern for that already.
+**The four questions this handoff previously left open are settled in the RFC, as
+D5–D8.** They were design questions — which reader the page serves, whether it is
+public, how the pairing is held true, and written versus generated — and settling
+them is the architect's, not the implementer's. They are not reopened here.
+
+## What to build
+
+**One page: `docs/src/reference/security-surfaces.md`**, reachable from
+`SUMMARY.md`, holding two tables:
+
+1. **Routes that answer without an authenticated caller** — method, path, and the
+   reason each is intended to. The reasons already exist in
+   `crates/sui-id/tests/e2e/r120_routes.rs`'s hand-list; they were written to be
+   read and have never been read by anyone but a reviewer.
+2. **Surfaces that show a secret once** — the surface, how the secret reaches the
+   reader, and what keeps the response out of a cache. Sourced from
+   `r122_routes.rs` and RFC 122's own enumeration.
+
+Above them, a short statement of what the page is for: an operator assessing
+exposure, and what the page does **not** cover — it states what the system
+promises, not how the code keeps the promise.
+
+**Then extend both enumeration tests (D7)** so each asserts the documented table
+matches the set it derives from `router.rs`. The document becomes the checked
+artefact. A route added without a documentation row then fails the same test that
+already catches a route added without a reason.
+
+## Decide and state
+
+**How the table is parsed out of the page.** A markdown table is easy to read and
+fiddly to parse; a reader's needs come first, so do not deform the page to make
+the test simpler. Say what you chose and why. If the parse turns out to be
+brittle, say that too — RFC 122 established that an honest limitation beats a
+claimed mechanism.
+
+## Evidence
+
+- Both tests failing before the page exists, passing after.
+- A mutation per test: add a route to `router.rs` without documenting it; remove a
+  row from the page. Name the test that catches each.
+- `mdbook build docs`, G10a, G10b, G15, and the full suite count before and after.
+

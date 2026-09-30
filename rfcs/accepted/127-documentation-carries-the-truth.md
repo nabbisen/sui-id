@@ -1,7 +1,9 @@
 # RFC 127 — Documentation carries the truth; a test enforces it
 
-**Status.** Proposed
-**Security review.** Not required — reason: this RFC moves facts into documentation and changes no behaviour. Approval of that classification is `@nabbisen`'s.
+**Status.** Accepted
+**Accepted on.** 2026-09-30
+**Approved by.** `@nabbisen`, 2026-09-30: "Accepted." 
+**Security review.** Not required — reason approved by `@nabbisen`, 2026-09-30: this RFC moves facts into documentation and changes no behaviour.
 **Design prerequisites.** None.
 **Implementation prerequisites.** None.
 **Closure prerequisites.** No security-relevant fact about this system is discoverable only by reading source or tests: each such fact has a stated home in `docs/`, the test that enforces it cites that home, and the document names the test that keeps it true.
@@ -61,6 +63,31 @@ check is not available, the RFC says so plainly rather than claiming one.
 the write-command inventory, the audit event vocabulary, whatever RFC 126 and
 RFC 124 produce — is written into `docs/` when it is created, not retrofitted.
 The two repairs here are the first application, not the scope.
+
+**D5 — One page, in the product reference.** `docs/src/reference/security-surfaces.md`,
+RFC 098's **D1** layer, reachable from `SUMMARY.md`. One page and not two, because
+both tables answer one question — *what can be reached, and what protects it* —
+and a reader who has to check two places will check one. It sits beside
+`audit-events.md`, which is the same kind of material for the same reader.
+
+**D6 — It is public, and that is a decision rather than an oversight.** The route
+set is derivable from `router.rs` by anyone who clones the repository, and
+`docs/threat-model.md` already states this system's posture publicly. Withholding
+the table protects nobody and costs the operator who needs it to assess their own
+exposure.
+
+**D7 — The pairing is enforced by the enumeration tests, not by a new gate.**
+The tests that derive these sets already exist and already run. Each is extended
+to assert that **the documented table matches the set it derives** — so the
+document itself becomes the checked artefact, not merely cross-cited. This adds
+no gate, no lane, and no amendment to a Done RFC, which a new G15 condition would
+have required.
+
+**D8 — The page is written, not generated.** A generator can produce the list; it
+cannot produce the **reason** each route is intended to answer without an actor,
+and the reasons are what a reader comes for. So the prose is written and the list
+within it is held to the router by D7's test. `ci.yml` is generated because
+nothing about it is a judgement; this page is the opposite case.
 
 ## What this RFC does not do
 
