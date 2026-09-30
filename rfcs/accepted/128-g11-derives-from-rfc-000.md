@@ -1,7 +1,10 @@
 # RFC 128 — G11's conditions derive from RFC 000, not from a retired RFC
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-10-01
+**Approved by.** `@nabbisen`, 2026-10-01: "RFC 128 is accepted." 
 **Security review.** Required
+**Independent design review.** [Security review 2026-10-01](../handoffs/128-g11-derives-from-rfc-000/security-review-2026-10-01.md) — **by the architect, who authored this RFC, and therefore not independent**; carried by `@nabbisen` under `ROADMAP.md` R1's residual. **This RFC was refused `accepted/` by the very condition it removes**, and satisfying that condition was the only way to land the fix for it. The field's name overstates the document; the document says so in its first lines.
 **Design prerequisites.** None.
 **Implementation prerequisites.** None.
 **Closure prerequisites.** Every G11 condition traces to a live document: RFC 000, or the RFC that legitimately owns it. No condition enforces a formulation whose only source is an archived RFC. Where RFC 000 leaves something undefined, the gate does not supply a definition inherited from elsewhere, and says so.
@@ -64,6 +67,29 @@ review does not have, so the honest entry has to say, inside a field called
 `Independent design review`, that the review was not independent. A record whose
 field name contradicts its content is not a record.
 
+## The audit criterion, given by `@nabbisen` on 2026-10-01
+
+He stated it sharper than the first draft had: the doubtful statements are those
+that **presuppose the existence of a skilled architect external to this team**.
+*"No such a person out of our team."* That is what "too ideal" means, and it is a
+testable question to ask of each statement rather than a judgement about tone.
+
+**And `ROADMAP.md` §S1 already records the fact that makes it testable:**
+`codex-project-architect`, `codex-developer` and
+`codex-independent-architecture-security-reviewer` are **agent identities from
+one vendor**, with `@nabbisen` as sole human owner. So RFC 093's own
+"independent design review" — the review this RFC's condition 9 demands of
+everyone else — was by a same-vendor agent, not an external architect. The
+roadmap says so in its own words: *"a change authored, implemented and approved
+by one party has had no review at all."*
+
+**The mechanism for this case already exists and predates this RFC.** R1's
+residual column reads: *"Design judgments no role but the author can assess,
+**carried explicitly by the owner**"*, and already lists two — RFC 094's
+`ReadConn` sufficiency and RFC 096's B1/B2. **That is the honest home for a
+review only the author can do**, and it needs no new rule: the judgement is
+recorded as the owner's to carry, not as a completed independent review.
+
 ## Decision
 
 **D1 — Condition 9 is re-derived from RFC 000 alone.** Record who reviewed and a
@@ -86,6 +112,11 @@ decide it.**
 a review by the author. The twenty RFCs carrying the field today then say what
 those reviews actually were, rather than all claiming a property only some of
 them have.
+
+**D4b — A review only the author can do is carried by the owner under R1, not
+dressed as independent.** The RFC records who reviewed and their relation to the
+author; the judgement itself joins R1's residual list, where two already sit.
+**RFC 124 is the first entry added under this decision.**
 
 **D5 — Amending G11 amends RFC 093, which is Done.** A lifecycle act, recorded
 in RFC 093 as dated and attributed to `@nabbisen`'s approval of 2026-10-01 — not

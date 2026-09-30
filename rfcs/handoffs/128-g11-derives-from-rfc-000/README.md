@@ -1,6 +1,6 @@
 # G11's conditions derive from RFC 000, not from a retired RFC
 
-**RFC.** [RFC 128](../../proposed/128-g11-derives-from-rfc-000.md), **Proposed** — nothing dispatched.
+**RFC.** [RFC 128](../../accepted/128-g11-derives-from-rfc-000.md), **Proposed** — nothing dispatched.
 **Author.** High-capability model, requirements-architect role.
 
 ## The trace, so it is not re-derived
@@ -18,6 +18,27 @@
   in the same month by the same architect.
 - RFC 000 has the substance and neither the `N/A` prohibition nor a definition
   of independence.
+
+## The audit criterion, sharpened by `@nabbisen` on 2026-10-01
+
+**Ask of each statement: does it presuppose a skilled architect external to this
+team?** *"No such a person out of our team."* That is the test — not tone, not
+strictness.
+
+**Four RFCs, not ninety-eight.** Measured: 75 RFCs were first added in June 2026
+and **none** is classified `Security review: Required`; 23 in July 2026, of which
+**three** are — RFCs **094, 095, 096**, all Accepted and all load-bearing in the
+live programme. Add **RFC 093**, which owns every gate. Auditing the other 94
+would be cost without return, which is the same failure in the opposite
+direction.
+
+**And the answer is already partly on the record.** `ROADMAP.md` §S1 states that
+`codex-project-architect`, `codex-developer` and
+`codex-independent-architecture-security-reviewer` are **agent identities from one
+vendor**, and that *"a change authored, implemented and approved by one party has
+had no review at all."* So the July-era "independent" reviews were same-vendor
+agents. **Do not re-derive this; start from it.** What the audit adds is which
+*statements* in those four RFCs only make sense if an external architect exists.
 
 ## What D2's audit must produce
 
