@@ -123,12 +123,23 @@ on the one-to-four-core shape this RFC describes, 128–512 MiB peak. The ceilin
 retunable by `@nabbisen` and the implementer; the derivation is the part that must
 be stated.
 
-**A caller that meets the bound queues, and that is a decision.**
-`Semaphore::acquire().await` does not occupy a worker thread while pending, so
-queuing does not reintroduce the defect. Rejecting instead would turn a burst of
-**legitimate** concurrent sign-ins into visible failures, which is worse for
-availability than a slightly slower one. A bounded wait is a reasonable later
-refinement; it is not required for closure.
+**A caller that meets the bound queues rather than being refused. That is the
+architect's decision**, and it is user-visible behaviour under load, not a
+consequence of the primitive: rejecting would turn a burst of **legitimate**
+concurrent sign-ins into visible failures, and a user who waits longer is better
+served than one who is told to try again. `Semaphore::acquire().await` does not
+occupy a worker thread while pending, so queuing does not reintroduce the defect
+— that part is the design review's, and it is what makes the decision
+implementable. A bounded wait is a reasonable later refinement; it is not
+required for closure.
+
+*Recorded because the route matters: this RFC's design-review request asked the
+implementation role what should happen to such a caller, while saying in the same
+sentence that the choice **is** the availability behaviour and not an
+implementation detail. Naming it as design and then asking someone else to settle
+it was the architect's error. The answer that came back is the one the architect
+would have reached, and it is adopted on its merits — but the question should not
+have been delegated.*
 
 **D5 — The evidence is a demonstration, not an assertion.** A test issues
 concurrent authenticating requests and shows an unrelated request served during
