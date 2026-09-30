@@ -60,6 +60,6 @@ rejection now costs the same wall-clock time as a real, failed verification.
   RFC's changes to `authenticate_client`.
 - Not re-measured against a live, loaded server; this closes the *timing
   side channel* D4 was about, not a claim about throughput or latency under
-  production load, which [RFC 126](../../proposed/126-password-hashing-must-not-block-the-runtime.md)
+  production load, which [RFC 126](../../accepted/126-password-hashing-must-not-block-the-runtime.md)
   addresses separately (RFC 123 closes the volume-over-time half of the
   exposure; it does not close the concurrency half).

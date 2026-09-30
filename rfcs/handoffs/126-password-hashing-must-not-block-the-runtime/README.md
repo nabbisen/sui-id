@@ -1,6 +1,6 @@
 # Password hashing must not block the request runtime
 
-**RFC.** [RFC 126](../../proposed/126-password-hashing-must-not-block-the-runtime.md), **Proposed** — not yet accepted, and nothing is dispatched for implementation.
+**RFC.** [RFC 126](../../accepted/126-password-hashing-must-not-block-the-runtime.md), **Proposed** — not yet accepted, and nothing is dispatched for implementation.
 **Author.** High-capability model, requirements-architect role.
 
 ## Status

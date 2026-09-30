@@ -129,7 +129,7 @@ Proposed: the move approved nothing.
 | 123 | [An endpoint that authenticates a client costs the caller something](./accepted/123-authenticating-a-client-costs-the-caller.md) | [123-authenticating-a-client-costs-the-caller](./handoffs/123-authenticating-a-client-costs-the-caller/README.md) |
 | 124 | [The uniform response must be uniform, and must be shown to be](./proposed/124-the-uniform-response-is-uniform.md) | [124-the-uniform-response-is-uniform](./handoffs/124-the-uniform-response-is-uniform/README.md) |
 | 125 | [The audit chain must be verified as a chain](./accepted/125-the-chain-must-be-verified-as-a-chain.md) | [125-the-chain-must-be-verified-as-a-chain](./handoffs/125-the-chain-must-be-verified-as-a-chain/README.md) |
-| 126 | [Password hashing must not block the request runtime](./proposed/126-password-hashing-must-not-block-the-runtime.md) | [126-password-hashing-must-not-block-the-runtime](./handoffs/126-password-hashing-must-not-block-the-runtime/README.md) |
+| 126 | [Password hashing must not block the request runtime](./accepted/126-password-hashing-must-not-block-the-runtime.md) | [126-password-hashing-must-not-block-the-runtime](./handoffs/126-password-hashing-must-not-block-the-runtime/README.md) |
 
 ### Implemented — Mockup Integration epic (Phase 0 → Phase 8)
 

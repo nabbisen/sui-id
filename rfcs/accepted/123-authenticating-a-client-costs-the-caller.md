@@ -49,7 +49,7 @@ every other request the service is serving — not only these two endpoints. Thi
 already applies to `/oauth2/token`, which has a limiter.
 
 **That is a separate, larger piece of work and is not folded in here.** It is
-[RFC 126](../proposed/126-password-hashing-must-not-block-the-runtime.md). This RFC closes the
+[RFC 126](../accepted/126-password-hashing-must-not-block-the-runtime.md). This RFC closes the
 volume-over-time half; a reader must not take "RFC 123 landed" to mean the
 exposure class is closed.
 

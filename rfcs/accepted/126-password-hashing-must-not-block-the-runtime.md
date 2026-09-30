@@ -1,6 +1,18 @@
 # RFC 126 — Password hashing must not block the request runtime
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-09-30
+**Approved by.** `@nabbisen`, 2026-09-30: "Accepted."
+**What has not been reviewed, stated because a gate cannot see it.** The
+`Independent design review` field below cites the review that **found** this
+problem. That review examined RFC 123's design, not this one's. G11 accepts the
+citation because it resolves to a tracked document; it cannot tell that the
+document reviews a different RFC. **So this RFC's own design is unreviewed**, and
+its handoff names four questions a reviewer must settle — where the boundary
+goes, how the blocking pool is bounded, whether the timing equalisation survives
+a thread hop, and whether Argon2 is the only synchronous work on the request
+path. **Implementation is not dispatched until those are settled**, which is the
+architect's to hold and not a matter of status.
 **Security review.** Required
 **Independent design review.** Found by the [RFC 123 design review](../handoffs/123-authenticating-a-client-costs-the-caller/design-review-2026-09-30.md), 2026-09-30, by the implementation role, while answering whether a rate limit was sufficient. Confirmed independently by the architect, who corrected one detail of it: `spawn_blocking` **is** used in this codebase, which strengthens rather than weakens the finding.
 **Design prerequisites.** None.
