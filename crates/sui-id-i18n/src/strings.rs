@@ -146,6 +146,7 @@ pub struct Strings {
     pub status_pending: &'static str,
     pub status_healthy: &'static str,
     pub status_unhealthy: &'static str,
+    pub status_unknown: &'static str,
 
     // ---- Empty placeholders (RFC 052) ----
     // For rendering "no value" / "any" / "fallback" cells consistently.
@@ -873,6 +874,9 @@ pub struct Strings {
     pub audit_filter_button: &'static str,
     pub audit_chain_broken_note: fn(i64) -> String,
     pub audit_chain_ok_note: fn(usize, usize) -> String,
+    // ---- Audit chain: could-not-verify outcome (RFC 121) ----
+    pub audit_chain_could_not_verify: &'static str,
+    pub audit_chain_could_not_verify_note: fn(&str) -> String,
 
     // ---- Admin: Signing keys (RFC 029) ----
     pub signing_keys_title: &'static str,

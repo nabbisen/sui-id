@@ -168,29 +168,16 @@ pub async fn prepare(cfg: Config) -> Result<Startup> {
     // have left the row's hash mismatching its recomputation.
     //
     // We don't refuse to start on detection — that would let an
-    // attacker DoS the IdP by corrupting one row — but we surface
-    // the finding loudly so an operator's monitoring catches it.
-    match sui_id_store::repos::audit::verify_chain_tail(&db, AUDIT_VERIFY_TAIL).await {
-        Ok(report) => {
-            if let Some(seq) = report.broken_at_seq {
-                tracing::error!(
-                    broken_at_seq = seq,
-                    checked = report.checked,
-                    legacy_unhashed = report.legacy_unhashed,
-                    "audit-log hash-chain verification FAILED — tampering or DB corruption suspected"
-                );
-            } else {
-                tracing::info!(
-                    checked = report.checked,
-                    legacy_unhashed = report.legacy_unhashed,
-                    "audit-log hash chain verified"
-                );
-            }
-        }
-        Err(e) => {
-            tracing::warn!(error = %e, "audit-log chain verification could not run");
-        }
-    }
+    // attacker DoS the IdP by corrupting one row, and the same
+    // reasoning applies at least as strongly to a check that could not
+    // run at all, whose overwhelmingly common cause is transient
+    // (RFC 121 D4) — but we surface the finding loudly so an operator's
+    // monitoring catches it. `sui_id_core::audit_chain::check` is the one
+    // function every caller of `verify_chain_tail` now goes through
+    // (RFC 121): it decides the three outcomes and records a failure to
+    // verify itself, so this call site only has to log at startup, once
+    // more, that boot completed.
+    sui_id_core::audit_chain::check(&db, &system_clock(), AUDIT_VERIFY_TAIL).await;
 
     // 3. Generate setup token if the system is uninitialized; print it once.
     let setup_token = generate_setup_token();

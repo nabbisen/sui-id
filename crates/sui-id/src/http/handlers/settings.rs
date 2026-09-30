@@ -279,6 +279,10 @@ pub async fn logs_get(
     let login_locked = count_action(&app.db, "auth.lockout", since_24h, now).await?;
     let password_changed =
         count_action(&app.db, "auth.password.changed_self", since_24h, now).await?;
+    // RFC 121 D6: the one shared check, which never fails the whole handler —
+    // a chain-verify error is one of its three outcomes, not a `?` that
+    // takes the 24-hour counters above down with it.
+    let chain_report = crate::handlers::chain_status(&app, 100).await;
     let data = sui_id_web::SettingsLogsData {
         log_format: app.config.log.format.clone(),
         log_filter: app.config.log.filter.clone(),
@@ -286,16 +290,7 @@ pub async fn logs_get(
         login_failure_24h: login_failure,
         login_locked_24h: login_locked,
         password_changed_self_24h: password_changed,
-        // Audit chain status — small tail check, same shape the
-        // boot-time verifier uses.
-        chain_report: audit::verify_chain_tail(&app.db, 100)
-            .await
-            .map(|r| sui_id_web::SettingsChainStatus {
-                checked: r.checked,
-                broken_at_seq: r.broken_at_seq,
-                legacy_unhashed: r.legacy_unhashed,
-            })
-            .map_err(|e| HttpError::html(CoreError::from(e)))?,
+        chain_report,
         can_write: actor.can_write(),
     };
     let token = csrf::ensure_token(&jar);

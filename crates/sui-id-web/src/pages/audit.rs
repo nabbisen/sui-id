@@ -43,7 +43,7 @@ pub(super) fn audit_row_view(
 
 pub fn render_audit(
     entries: Vec<AuditLogEntryDto>,
-    chain_ok: bool,
+    chain: ChainStatus,
     filter_query: Option<String>,
     flash: Option<Flash>,
     csrf_token: String,
@@ -61,21 +61,21 @@ pub fn render_audit(
         };
         let fq_display = fq.clone();
         let rows: Vec<_> = entries.into_iter().map(|e| audit_row_view(t, e)).collect();
-        let chain_banner_view = if chain_ok {
-            view! {
-                <p class="badge badge--ok mb-3">
-                    "✓ " {t.audit_chain_ok}
-                </p>
-            }
-            .into_any()
-        } else {
-            view! {
-                <p class="badge badge--danger mb-3">
-                    "✗ " {t.audit_chain_broken}
-                </p>
-            }
-            .into_any()
+        // RFC 121 D1, D2: the label comes from the one place every surface
+        // that shows a chain result reads it from, so this page and the
+        // settings logs page cannot describe the same outcome differently.
+        let (prefix, class) = match chain {
+            ChainStatus::Intact { .. } => ("✓ ", "badge badge--ok mb-3"),
+            ChainStatus::Broken { .. } => ("✗ ", "badge badge--danger mb-3"),
+            ChainStatus::CouldNotVerify { .. } => ("⚠ ", "badge badge--warn mb-3"),
         };
+        let label = chain_status_label(t, &chain);
+        let chain_banner_view = view! {
+            <p class=class>
+                {prefix} {label}
+            </p>
+        }
+        .into_any();
         view! {
             <Shell title=t.audit_title.to_string() show_nav=true current=Some("audit".to_string()) dev_mode=dev_mode lang=lang csrf_token=csrf_token.clone()>
                 <header class="page-header">

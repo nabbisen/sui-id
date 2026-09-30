@@ -22,6 +22,7 @@
 pub mod actor;
 #[path = "identity/admin.rs"]
 pub mod admin;
+pub mod audit_chain;
 #[path = "oidc/authorize.rs"]
 pub mod authorize;
 #[path = "identity/authz.rs"]

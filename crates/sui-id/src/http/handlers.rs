@@ -937,3 +937,36 @@ pub async fn resolve_admin_locale(
 pub fn password_min_len(app: &crate::state::AppState) -> usize {
     app.security_level().password_min_len()
 }
+
+/// Verify the audit-log chain's most recent `limit` rows and return the
+/// result in the shape both pages that show it render (RFC 121). The one
+/// call every consumer goes through: `sui_id_core::audit_chain::check`
+/// decides the outcome and records a failure to verify; this only converts
+/// its answer into `sui-id-web`'s boundary type, since neither crate depends
+/// on the other and the conversion has to live somewhere that depends on
+/// both.
+pub async fn chain_status(app: &crate::state::AppState, limit: i64) -> sui_id_web::ChainStatus {
+    match sui_id_core::audit_chain::check(&app.db, &app.clock, limit).await {
+        sui_id_core::audit_chain::ChainCheck::Intact {
+            checked,
+            legacy_unhashed,
+            ..
+        } => sui_id_web::ChainStatus::Intact {
+            checked,
+            legacy_unhashed,
+        },
+        sui_id_core::audit_chain::ChainCheck::Broken {
+            at_seq,
+            checked,
+            legacy_unhashed,
+            ..
+        } => sui_id_web::ChainStatus::Broken {
+            at_seq,
+            checked,
+            legacy_unhashed,
+        },
+        sui_id_core::audit_chain::ChainCheck::CouldNotVerify { detail, .. } => {
+            sui_id_web::ChainStatus::CouldNotVerify { detail }
+        }
+    }
+}

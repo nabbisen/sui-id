@@ -10,15 +10,9 @@ pub struct SettingsLogsData {
     pub login_failure_24h: i64,
     pub login_locked_24h: i64,
     pub password_changed_self_24h: i64,
-    pub chain_report: SettingsChainStatus,
+    pub chain_report: ChainStatus,
     /// RFC 088: false for auditors → render static rows instead of form.
     pub can_write: bool,
-}
-
-pub struct SettingsChainStatus {
-    pub checked: usize,
-    pub broken_at_seq: Option<i64>,
-    pub legacy_unhashed: usize,
 }
 
 pub fn render_settings_logs(
@@ -40,15 +34,10 @@ pub fn render_settings_logs(
             can_write: _can_write,
         } = data;
 
-        let chain_badge = if chain_report.broken_at_seq.is_some() {
-            crate::components::status_badge(t, crate::components::StatusKind::Unhealthy).into_any()
-        } else {
-            crate::components::status_badge(t, crate::components::StatusKind::Healthy).into_any()
-        };
-        let chain_note = match chain_report.broken_at_seq {
-            Some(seq) => (t.audit_chain_broken_note)(seq),
-            None => (t.audit_chain_ok_note)(chain_report.checked, chain_report.legacy_unhashed),
-        };
+        // RFC 121 D1, D2: read from the one shared place, so this page
+        // cannot describe an outcome differently from the audit page.
+        let (kind, chain_note) = chain_status_words(t, &chain_report);
+        let chain_badge = crate::components::status_badge(t, kind).into_any();
 
         view! {
             <Shell title=t.settings_title_logs.to_string() show_nav=true current=Some("settings".to_string()) lang=lang csrf_token=csrf_token.clone()>

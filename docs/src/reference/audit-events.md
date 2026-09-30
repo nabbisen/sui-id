@@ -82,6 +82,7 @@ the administrator is asked to step up again.
 |---|---|---|
 | `admin.master_key.rotated` | Master key rotated | The master key was rotated offline. All column-encrypted values were re-sealed under the new key. |
 | `setup.create_initial_admin` | Initial admin created | The setup wizard completed and the first administrator account was created. |
+| `audit.chain.verification_failed` | Audit chain verification failed | The audit log's hash chain could not be checked at all (a read or data error, not a broken chain — see "Audit log integrity" below). Note fields: `limit`, `detail`. Best-effort: recorded when the write itself succeeds, which is not guaranteed if the same fault also affects writes. |
 
 ## Using audit events in filters
 
@@ -96,12 +97,24 @@ The CSV export respects the same filter.
 ## Audit log integrity
 
 Each row in the audit log contains a SHA-256 hash of its own content
-concatenated with the previous row's hash (a hash chain). The Admin panel
-verifies the chain tail on every load and shows a status banner:
+concatenated with the previous row's hash (a hash chain), and its `prev_hash`
+must equal the previous row's own `hash`, with `seq` contiguous and legacy
+rows forming a contiguous prefix (RFC 125). The Admin panel and the settings
+logs page verify the same window on every load, with the same three possible
+outcomes and the same words, because a verification failure that only one of
+the two showed would be as misleading as one that showed on neither:
 
-- **✓ Audit chain verified** — no tampering detected in the checked rows.
-- **✗ Audit chain integrity check failed** — a row hash does not match its
-  recomputed value. Investigate immediately.
+- **✓ Audit chain verified** — the most recent checked rows form an intact
+  chain. This covers only that window, not rows older than it.
+- **✗ Audit chain integrity check failed** — a row is wrong: its own hash, its
+  link to the row before it, its position in the sequence, or a legacy row
+  appearing after a hashed one. Investigate immediately.
+- **⚠ Audit chain could not be verified** — the check itself did not
+  complete (a read or data error), which is not the same as "no problem
+  found" and is never shown as such. This is recorded
+  (`audit.chain.verification_failed`, above, on a best-effort basis) and
+  logged at the same severity as a failed check, because an unknown is not a
+  lesser finding than a known break.
 
 ## The note format
 

@@ -158,6 +158,12 @@ then because `setup.` was not in the hand-written list.
 | `settings.pending_change.cancelled` | Pending change cancelled | admin user id | — | `id=…` | B |
 | `settings.pending_change.binding_failed` | Binding check failed on apply | admin user id | — | `intent=… id=…` | B |
 
+### Audit-chain integrity (`audit.chain.*`, RFC 121)
+
+| Event name | Operation | Actor | Target | Note fields | Class |
+|---|---|---|---|---|---|
+| `audit.chain.verification_failed` | `verify_chain_tail` returned an error (RFC 121 D3); written best-effort, on the same connection that just failed to be read, and deliberately never Class A — see `sui_id_core::audit_chain`'s own doc for why | — | — | `limit=… detail=…` | B |
+
 ### Federation sign-in (`auth.federation.*`, RFC 004)
 
 | Event name | Operation | Actor | Target | Note fields | Class |

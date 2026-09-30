@@ -18,6 +18,69 @@ use leptos::reactive::owner::Owner;
 
 pub(super) const DOCTYPE: &str = "<!DOCTYPE html>";
 
+/// One audit-chain verification result, in the shape every page that shows
+/// it renders (RFC 121 D1, D2). The handler crate builds this from
+/// `sui_id_core::audit_chain::ChainCheck` — `sui-id-web` does not depend on
+/// `sui-id-core`, so this is the boundary type, not a re-export of it.
+///
+/// There is no default variant and no `Option` standing in for one: a page
+/// that has a result to show always has exactly one of these three.
+#[derive(Debug, Clone)]
+pub enum ChainStatus {
+    Intact {
+        checked: usize,
+        legacy_unhashed: usize,
+    },
+    Broken {
+        at_seq: i64,
+        checked: usize,
+        legacy_unhashed: usize,
+    },
+    CouldNotVerify {
+        detail: String,
+    },
+}
+
+/// The badge kind and explanatory note for one [`ChainStatus`] — the one
+/// place that decides the words, so the audit page and the settings logs
+/// page cannot drift into describing the same outcome differently.
+pub(super) fn chain_status_words(
+    t: &'static sui_id_i18n::Strings,
+    status: &ChainStatus,
+) -> (crate::components::StatusKind, String) {
+    use crate::components::StatusKind;
+    match status {
+        ChainStatus::Intact {
+            checked,
+            legacy_unhashed,
+        } => (
+            StatusKind::Healthy,
+            (t.audit_chain_ok_note)(*checked, *legacy_unhashed),
+        ),
+        ChainStatus::Broken { at_seq, .. } => {
+            (StatusKind::Unhealthy, (t.audit_chain_broken_note)(*at_seq))
+        }
+        ChainStatus::CouldNotVerify { detail } => (
+            StatusKind::Unknown,
+            (t.audit_chain_could_not_verify_note)(detail),
+        ),
+    }
+}
+
+/// The short label for a [`ChainStatus`], for a surface that wants the
+/// headline text alone (the audit page's top banner) rather than the badge
+/// plus explanatory note pairing [`chain_status_words`] gives.
+pub(super) fn chain_status_label(
+    t: &'static sui_id_i18n::Strings,
+    status: &ChainStatus,
+) -> &'static str {
+    match status {
+        ChainStatus::Intact { .. } => t.audit_chain_ok,
+        ChainStatus::Broken { .. } => t.audit_chain_broken,
+        ChainStatus::CouldNotVerify { .. } => t.audit_chain_could_not_verify,
+    }
+}
+
 /// Severity of a flash banner displayed at the top of a page.
 #[derive(Debug, Clone, Copy)]
 pub enum FlashKind {

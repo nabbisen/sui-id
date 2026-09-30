@@ -126,6 +126,7 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     status_pending: "待处理",
     status_healthy: "正常",
     status_unhealthy: "异常",
+    status_unknown: "未知",
 
     // Empty placeholders (RFC 052)
     empty_dash: "—",
@@ -574,6 +575,13 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     audit_chain_broken_note: |seq| format!("在 seq={seq} 处检测到不一致，请立即调查。"),
     audit_chain_ok_note: |checked, legacy| {
         format!("已检查最近 {checked} 行。遗留（v0.17 之前）未哈希行：{legacy}")
+    },
+    // 审计链：无法验证的结果 (RFC 121)
+    audit_chain_could_not_verify: "无法验证审计链。",
+    audit_chain_could_not_verify_note: |detail| {
+        format!(
+            "检查本身未能完成（{detail}）。这与「未发现问题」不同——请先调查原因，不要将其视为任何一种结论。"
+        )
     },
 
     // Admin: 签名密钥 (RFC 029)

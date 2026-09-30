@@ -83,6 +83,12 @@ pub enum StatusKind {
     Healthy,
     /// Service is unhealthy. → `badge badge--danger`
     Unhealthy,
+    /// A check did not complete — an unknown, not a known-good or a
+    /// known-bad result. Deliberately its own colour, not `Healthy`'s green
+    /// or `Unhealthy`'s red: collapsing it into either would be the same
+    /// mistake RFC 121 fixed in the words, just done again in the colour.
+    /// → `badge badge--warn`
+    Unknown,
 }
 
 /// Render a status badge with localised text and the matching CSS
@@ -102,6 +108,7 @@ pub fn status_badge(t: &'static sui_id_i18n::Strings, kind: StatusKind) -> impl 
         StatusKind::Pending => ("badge badge--info", t.status_pending),
         StatusKind::Healthy => ("badge badge--ok", t.status_healthy),
         StatusKind::Unhealthy => ("badge badge--danger", t.status_unhealthy),
+        StatusKind::Unknown => ("badge badge--warn", t.status_unknown),
     };
     view! { <span class=class>{text}</span> }
 }

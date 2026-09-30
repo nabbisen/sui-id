@@ -123,6 +123,7 @@ pub static STRINGS_EN: Strings = Strings {
     status_pending: "Pending",
     status_healthy: "Healthy",
     status_unhealthy: "Unhealthy",
+    status_unknown: "Unknown",
 
     // Empty placeholders (RFC 052)
     empty_dash: "—",
@@ -575,6 +576,14 @@ pub static STRINGS_EN: Strings = Strings {
     },
     audit_chain_ok_note: |checked, legacy| {
         format!("Last {checked} rows inspected. Legacy unhashed rows (pre-v0.17): {legacy}")
+    },
+    // Audit chain: could-not-verify outcome (RFC 121)
+    audit_chain_could_not_verify: "Audit chain could not be verified.",
+    audit_chain_could_not_verify_note: |detail| {
+        format!(
+            "The check itself did not complete ({detail}). This is not the same as no problem \
+             found — investigate the cause before trusting either answer."
+        )
     },
 
     // Admin: Signing keys (RFC 029)

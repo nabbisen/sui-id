@@ -123,6 +123,7 @@ pub static STRINGS_JA: Strings = Strings {
     status_pending: "保留中",
     status_healthy: "正常",
     status_unhealthy: "異常",
+    status_unknown: "不明",
 
     // Empty placeholders (RFC 052)
     empty_dash: "—",
@@ -572,6 +573,14 @@ pub static STRINGS_JA: Strings = Strings {
     audit_chain_broken_note: |seq| format!("seq={seq} で不一致を検出。すぐに調査してください。"),
     audit_chain_ok_note: |checked, legacy| {
         format!("末尾 {checked} 行を検査。レガシー(v0.17 以前)未ハッシュ行: {legacy}")
+    },
+    // 監査チェーン: 検証不能という結果 (RFC 121)
+    audit_chain_could_not_verify: "監査チェーンを検証できませんでした。",
+    audit_chain_could_not_verify_note: |detail| {
+        format!(
+            "検査そのものが完了しませんでした（{detail}）。「問題なし」とは異なります。\
+             どちらとも判断せず、まず原因を調査してください。"
+        )
     },
 
     // Admin: 署名キー (RFC 029)

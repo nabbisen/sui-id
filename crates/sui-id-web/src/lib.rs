@@ -22,6 +22,7 @@ pub mod tokens;
 pub use components::{StatusKind, copy_field, empty_state, error_summary, status_badge};
 
 pub use pages::{
+    ChainStatus,
     ClientEditData,
     ConfirmDeleteClientData,
     ConfirmDeleteSigningKeyData,
@@ -65,7 +66,6 @@ pub use pages::{
     ReversibilityKind,
     SettingsAuthenticationData,
     SettingsBasicData,
-    SettingsChainStatus,
     SettingsEmailConfirmData,
     SettingsEmailData,
     SettingsLogsData,

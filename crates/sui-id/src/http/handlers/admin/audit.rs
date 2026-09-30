@@ -34,14 +34,8 @@ pub async fn audit_get(
     let entries = audit::recent_filtered(&app.db, 200, filter.clone())
         .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
-    let chain = audit::verify_chain_tail(&app.db, 500).await.unwrap_or(
-        sui_id_store::repos::audit::ChainVerifyReport {
-            checked: 0,
-            broken_at_seq: None,
-            legacy_unhashed: 0,
-        },
-    );
-    let chain_ok = chain.broken_at_seq.is_none();
+    // RFC 121: the one shared check, not a re-decision of what an error means.
+    let chain = crate::handlers::chain_status(&app, 500).await;
     let dtos: Vec<AuditLogEntryDto> = entries
         .into_iter()
         .map(|r| AuditLogEntryDto {
@@ -56,7 +50,7 @@ pub async fn audit_get(
     let token = crate::csrf::ensure_token(&jar);
     let resp = Html(render_audit(
         dtos,
-        chain_ok,
+        chain,
         filter,
         None,
         token.clone(),
