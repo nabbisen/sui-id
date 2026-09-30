@@ -24,11 +24,13 @@ ROADMAP.md	211874c3a846ff839aeff608f419cc7a2cba68b6445fee4b3524302d321db5dd	1	R3
 ROADMAP.md	26de88e14f6fa11f02c4846c6a1a577eaf8cb96761082e7c37663009ee51ade0	1	The owner and independent reviewer decide whether a narrower change resets a targeted exercise or the complete four-week window.
 ROADMAP.md	2a29ae17a5167459bb933a6e2f0fa114c30c4452df38af543f9ca0f24a9448c0	1	R2 Audit hash chain is unkeyed and unanchored — tamper-evident only within its trust boundary Certain (by design) High if misrepresented; lo
 ROADMAP.md	2d4ab9968741d00b73c18bdf3c32d69f3d6cb9508934906d06fc3574002da5e4	1	On 2026-07-28 the owner authorized the programme to run two lanes : a second implementer was assigned and increased security-review capacity
+ROADMAP.md	3020eded07c19c334137809bde2ec4452e08da628c4f96b495921fec478089da	1	Acceptance @nabbisen
 ROADMAP.md	3351aec715f3ba49395145f7af82e742bc1233506da4da1df6facb4916f22f56	1	Every statement in this repository that the owner made that ruling traces to documents written by the architect role that proposed it: this 
 ROADMAP.md	36060284344212921053b00aa09fd5934b9a264236165a241f43611f1ab7e726	1	Like the withdrawn 2026-07-28 attribution above, the 2026-09-09 ruling reaches this repository only through a document written by the archit
 ROADMAP.md	3819b157556c0f450210d9cbec9757bc02793f17a71349a72ed4a8ae337717d0	1	M2b — Remaining conversion and authority switch owner to set Convert settings, pending settings, federation configuration, client metadata; 
 ROADMAP.md	38f8d3a5e52a28d525badaf0268450567f8059782601207d98077667c97b15c4	1	@nabbisen raised two themes on 2026-09-25 — an embeddable (pluggable) auth module , and ZKP as an optional feature with the constraint that 
 ROADMAP.md	392884e1eb83766da2d205ed9de35e2f8930f22c298a692da72804110c3c0f6f	1	What is actually being decided — corrected 2026-09-25. The architect first put this to @nabbisen as three windows and a date.
+ROADMAP.md	39f12d68482659d1745c435af3eb426e697afd7383d1751a002d104edf3f914e	1	And where no reviewer exists , the judgement is carried by @nabbisen under R1's residual rather than labelled a completed independent review
 ROADMAP.md	3e2fd484ea37da4f4c594e8799ad7199eba7b4055d7eb8ad4088398d9f6332f8	1	C v0.80.0 2026-10-27 → 11-14 (proposed; the authorized row leaves C open-ended) [RFC 119](rfcs/proposed/119-embedding-contract.md) — the emb
 ROADMAP.md	3ff17aee5d6f11a9c0b47dbe077c8ede26d6ef622b52bc9aaa7129ab54825d44	1	What this replaced. From 2026-09-10 to 2026-09-22 this work was carried in a roadmap/ directory created by ee48257 , which justified itself 
 ROADMAP.md	49dbfcab44b8ec3a2978613ef519cb233fb5c91c5e0ab44211be15c4f749b3bd	1	Recording a proposal as an owner ruling removes the owner's decision without their knowledge.
@@ -38,6 +40,7 @@ ROADMAP.md	5aceb88bc92843455c6e08971dae256f5c2e6f2241e83905f10b37dd4c748c4c	1	Re
 ROADMAP.md	61ebd8965b3dd0fcc8e3a9c37355e909fc111ea1976d772bcae5c1fb13d8e7a3	1	It needs @nabbisen 's decision separately, at cycle E, and is not assumed here.
 ROADMAP.md	66ee0dcfa997e967a91d9f0d1db35574fc86300bf75651f760fcb9863f6b9022	1	R7 Pre-RFC-094 dynamic registrations are indistinguishable from admin-created clients Certain (historical) Medium — provenance cannot be pro
 ROADMAP.md	68a3e3ed97de6ca9d6583624727828adfc39a44555bbbb185c9180166cba96e7	1	Where no role other than the author can perform a review, the gap is recorded as unreviewed design judgment and the owner rules on it with t
+ROADMAP.md	766450b57c4bb79e356dfd9ac065f79cbec7c49ef087e3ca6fa8ba0c5afad2b6	1	#### S1a — The workflow, ruled by @nabbisen on 2026-10-01
 ROADMAP.md	7c3b4d73cf9008f591c43f49ceb79d4570fa262c5fa82e72506f9abea4c17ebb	1	All remain Proposed , no schedule, require owner direction + soak.
 ROADMAP.md	831b9986beea7e5a3407a96fb665d91220901ae66ea5285416a15da856e8f4df	1	Ruled 2026-09-22 ( @nabbisen ): Chinese is necessary but not urgent — it waits until the APIs are stable, and then a native-speaker review, 
 ROADMAP.md	85972bca8cfda9e25847b615a12c3709aae33d07115fcd9c82cad11b804bd37b	1	Owner decision, 2026-08-26. Review is not skipped.
@@ -172,6 +175,7 @@ rfcs/accepted/128-g11-derives-from-rfc-000.md	52f4fec8fe54d500e7d1de3aa76dc9800f
 rfcs/accepted/128-g11-derives-from-rfc-000.md	874edb9b41d7b7c8d1211a597c52d7ff33065d66fdd53f677f49116f0f63ba9d	1	Accountable owner and approver. @nabbisen .
 rfcs/accepted/128-g11-derives-from-rfc-000.md	920f3b63020882721a4248efab3a726e504b07db8ef2ddb313aee956bc1a8f60	1	Whether an author may review their own RFC is @nabbisen 's to decide, and this RFC does not decide it.
 rfcs/accepted/128-g11-derives-from-rfc-000.md	ad183085280a29748add3deb6567707334a4fa3326a8c72ffd76f1a9c85a36b6	1	That is the honest home for a review only the author can do , and it needs no new rule: the judgement is recorded as the owner's to carry, n
+rfcs/accepted/128-g11-derives-from-rfc-000.md	c019ae66c21c3ba8bb701ca5cc9ec707b9e56dcda2dd9056999142132a457beb	1	D4 — The field records what is true, and is no longer gated. @nabbisen ruled the workflow on 2026-10-01 ( ROADMAP.md §S1a): the architect de
 rfcs/archive/018-rfc-lifecycle-policy.md	32f6fe8bd5505c3c995ae0cef7fc4f1cf84dbcebfdc40f970120e51030e7fb29	1	RFC 000 is a copy of a source shared across projects and the owner directed it remain byte-identical to that source; editing it here would r
 rfcs/archive/018-rfc-lifecycle-policy.md	5d5232fd83c5c629550cd9e38b72e9726f4677bde9a14f4f6cec15eac303cf51	1	Record the acceptance date, approver, security classification, independent design review where required, and implementation owner; update St
 rfcs/archive/018-rfc-lifecycle-policy.md	6b1ef7ca5c9559cacd4f1d59be08f1ba412a7ac0f29ddbc526c9d1de4b6139b3	1	Its cause is recorded in ROADMAP.md §S1: the previous rule defined independence by vendor, was written by the architect role and attributed 

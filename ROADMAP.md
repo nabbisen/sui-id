@@ -417,6 +417,40 @@ those clauses are preserved here:
   `@nabbisen` rather than applied. Until it is settled, 2026-08-26 governs,
   because it is the one recorded as a decision in this section.
 
+#### S1a — The workflow, ruled by `@nabbisen` on 2026-10-01
+
+His words: *"You make design. I accept it. Then you make handoff. Dev team
+implements."* And: *"I will ask some external architect to help us as a temporary
+act of exception if necessary."*
+
+| Step | Role |
+|---|---|
+| Design | The architect |
+| Acceptance | `@nabbisen` |
+| Handoff | The architect |
+| Implementation | The dev team |
+| Design review | **`@nabbisen`, or an external architect he engages. Not the dev team.** |
+
+**What this ends.** The dev team is not sent designs to review. Measured
+2026-10-01, it had reviewed the architect's design **fifteen times** — RFCs 094,
+095, 096, 102, 103, 110, 112, 115, 116, 117, 118, 121, 122, 123, 126 — eleven of
+them dispatched by the current architect in the two weeks to that date, four
+predating him. He identified this as *"serious bad directioning made by the
+ex-architect"*, and the label those fifteen headers carry is corrected under
+RFC 128 D4.
+
+**What it does not end.** The dev team escalates and shares what it finds while
+implementing, which is where every valuable finding actually came from: the
+consent-flow bypass, the audit chain that never verified linkage, the six-rung
+timing ladder, the unprotected `/oauth2/register` surface. **None of those
+required a judgement about whether a design was right** — each was a measurement
+or an enumeration. The architect continues to ask for measurement, enumeration
+and feasibility, and stops asking for verdicts on design.
+
+**And where no reviewer exists**, the judgement is carried by `@nabbisen` under
+R1's residual rather than labelled a completed independent review — the mechanism
+that already existed and already held two entries before this ruling.
+
 #### S1b — The agents' credential, and the routing rule it reviews under
 
 Two findings of 2026-09-24, recorded together because they are the same

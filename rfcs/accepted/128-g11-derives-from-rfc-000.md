@@ -108,10 +108,19 @@ forbids a header from doing — the same fault one layer down. **Whether an auth
 may review their own RFC is `@nabbisen`'s to decide, and this RFC does not
 decide it.**
 
-**D4 — The field records what is true.** A review by the author is recordable as
-a review by the author. The twenty RFCs carrying the field today then say what
-those reviews actually were, rather than all claiming a property only some of
-them have.
+**D4 — The field records what is true, and is no longer gated.** `@nabbisen`
+ruled the workflow on 2026-10-01 (`ROADMAP.md` §S1a): the architect designs, he
+accepts, the architect writes the handoff, the dev team implements, and **design
+review is his or an external architect's — not the dev team's.**
+
+So the fifteen RFCs whose field names the implementation role as having reviewed
+the architect's design — 094, 095, 096, 102, 103, 110, 112, 115, 116, 117, 118,
+121, 122, 123, 126 — **do not describe what happened.** What those packages
+contained was measurement, enumeration and feasibility, which is the dev team's
+to give; the field calls it a design review, which under his ruling it was not.
+Each is corrected to say what it was. **The findings are not retracted** — they
+found a consent bypass and an audit chain that never checked itself — only the
+label is.
 
 **D4b — A review only the author can do is carried by the owner under R1, not
 dressed as independent.** The RFC records who reviewed and their relation to the

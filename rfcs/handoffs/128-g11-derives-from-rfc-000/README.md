@@ -57,6 +57,30 @@ looking at:
 Conditions 12 and 13 cite RFC 000 in the script itself and are expected to pass
 the audit; cite them anyway, because the output of this audit is the citation.
 
+## Stage 0 — audit and understand the current status, before anything is changed
+
+`@nabbisen`, 2026-10-01: *"To audit and understand the current status should be
+first."* This stage produces no code and no corrections. It answers, with
+`file:line` evidence:
+
+1. **The fifteen mislabelled reviews.** For each of RFCs 094, 095, 096, 102, 103,
+   110, 112, 115, 116, 117, 118, 121, 122, 123 and 126: what the review package
+   actually contained, classified as **measurement**, **enumeration**,
+   **feasibility**, or **a judgement about whether the design was right**. The
+   last category is the one that matters, and the architect already knows of
+   three — RFC 121's D3 settlement, RFC 123's two-bucket design, RFC 126's
+   caller-queues behaviour — all three adopted by the architect, which is how
+   they became decisions. **Find the rest. Do not re-argue them.**
+2. **Statements presupposing an external skilled architect** in RFCs 093, 094,
+   095 and 096 — `@nabbisen`'s criterion, and the reason the audit exists.
+   `ROADMAP.md` §S1 is the starting point, not something to re-derive.
+3. **Which of those statements are load-bearing now** — a milestone exit gate, a
+   closure prerequisite, a gate condition — and which are historical prose. The
+   first group blocks the programme; the second costs a sentence.
+
+**Nothing in this stage changes a file under `rfcs/`.** The corrections are D1–D5
+and they wait on the audit, because the audit may change what they should say.
+
 ## Order
 
 1. The audit (D2), as a package, **before any code changes**. It may change what
