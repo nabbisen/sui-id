@@ -130,6 +130,7 @@ Proposed: the move approved nothing.
 | 124 | [The uniform response must be uniform, and must be shown to be](./proposed/124-the-uniform-response-is-uniform.md) | [124-the-uniform-response-is-uniform](./handoffs/124-the-uniform-response-is-uniform/README.md) |
 | 125 | [The audit chain must be verified as a chain](./accepted/125-the-chain-must-be-verified-as-a-chain.md) | [125-the-chain-must-be-verified-as-a-chain](./handoffs/125-the-chain-must-be-verified-as-a-chain/README.md) |
 | 126 | [Password hashing must not block the request runtime](./accepted/126-password-hashing-must-not-block-the-runtime.md) | [126-password-hashing-must-not-block-the-runtime](./handoffs/126-password-hashing-must-not-block-the-runtime/README.md) |
+| 127 | [Documentation carries the truth; a test enforces it](./proposed/127-documentation-carries-the-truth.md) | [127-documentation-carries-the-truth](./handoffs/127-documentation-carries-the-truth/README.md) |
 
 ### Implemented — Mockup Integration epic (Phase 0 → Phase 8)
 
