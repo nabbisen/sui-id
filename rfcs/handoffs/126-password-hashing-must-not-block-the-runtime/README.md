@@ -3,29 +3,67 @@
 **RFC.** [RFC 126](../../accepted/126-password-hashing-must-not-block-the-runtime.md), **Proposed** — not yet accepted, and nothing is dispatched for implementation.
 **Author.** High-capability model, requirements-architect role.
 
-## Status
+## Dispatched for implementation 2026-09-30
 
-Written 2026-09-30, the same day the RFC 123 design review found it. It needs its
-own independent design review before it can be accepted, and that review is not
-dispatched yet: the dev team holds RFC 123's implementation next.
+RFC 126 is **Accepted**, and its design is now reviewed — the four questions this
+section used to pose are settled in the RFC as D2–D4 and D6. **Build against the
+RFC.** They are not reopened here, and this section no longer asks them.
 
-## What a reviewer will need to settle
+## What to build
 
-1. **Where the boundary goes (D2).** At the `password.rs` API, or at each call
-   site? The first is the only one that cannot be forgotten by a new caller; it
-   may not be achievable if a caller needs a borrowed value across the boundary.
-   Whoever reviews this should establish which, from the actual call sites, not
-   from preference.
-2. **The pool's bound (D4).** Tokio's blocking pool defaults to 512 threads.
-   At 64 MiB per concurrent hash that is not a bound anyone wants to discover
-   under load. What is the right number, and is it a fixed cap or derived?
-3. **Whether the timing equalisation survives (D3).** The `DUMMY_PHC` calls
-   exist to make a failed lookup cost what a real verification costs. Crossing a
-   thread boundary adds its own variable cost to both — establish that it adds
-   it to both, and not only to one.
-4. **Whether this is the whole exposure.** Argon2 is the expensive one measured,
-   but it may not be the only synchronous work on the request path. A reviewer
-   should look rather than assume.
+**One async boundary, inside `password.rs` (D2).** `verify_password` and
+`hash_password` become `async fn`, wrapping `tokio::task::spawn_blocking`
+internally, with the password and stored hash cloned to owned `String`s before
+the closure. **23 of the 24 call sites then need only `.await`.**
+
+**The 24th needs a rewrite, and it is the only one (D2).** `authn/mfa.rs:363`
+passes a *synchronous* closure to `Iterator::position`, which cannot host an
+`.await` however ownership is arranged. Replace it with an explicit loop. Do
+**not** keep a synchronous wrapper for this one site: that would reintroduce
+exactly what the boundary exists to prevent, and it would do so at the call site
+with the worst blocking cost in the codebase.
+
+**A semaphore inside `password.rs` (D4).** `tokio::sync::Semaphore`, acquired
+before `spawn_blocking` and released by a guard dropped in the async wrapper, so
+no call site sees it. Bound derived, not picked:
+`(available_parallelism() * 2).min(16)`. **A caller that meets the bound queues**
+— `acquire().await` does not hold a worker thread — and that is the architect's
+decision about user-visible behaviour, not a property of the primitive. Do not
+substitute a rejection.
+
+**Leave the recovery-code loops sequential (D6).** `mfa.rs`'s enrollment and
+regeneration hash eight codes each. Once `hash_password` is async it becomes
+possible to run them concurrently; do not. Eight permits at once for one
+enrollment would compete with unrelated sign-ins to save latency nobody asked to
+improve.
+
+## Evidence
+
+**D5 is the closure requirement and is not optional.** A test issues concurrent
+*real* (non-dummy) authentication attempts and shows an unrelated,
+health-check-shaped request served promptly during the burst — **failing before
+this change and passing after**. Run it under
+`#[tokio::test(flavor = "multi_thread", worker_threads = 1)]` so the result is
+deterministic rather than machine-dependent.
+
+**D3's timing test** compares a real verification against a `DUMMY_PHC` one after
+the wrap exists: same-order medians over many samples, not equality, which would
+be flaky. The assertion is that the thread hop's cost lands on **both** branches
+— not that it is zero.
+
+**Mutations:** remove the semaphore; move the wrap to one call site instead of
+the API; revert `mfa.rs:363` to a synchronous wrapper. Name the test that catches
+each.
+
+Plus fmt, both clippy scopes, the workspace count before and after, MSRV, and
+every doc gate.
+
+## Say, in the package
+
+Whether **anything else on the request path blocks**. The design review found
+Argon2 is the only comparable cost and checked WebAuthn, JWT signing and the
+AES-GCM operations. If you find another while you are in here, report it rather
+than fixing it — that is the escalation this project runs on.
 
 ## What is already known, so it is not re-derived
 

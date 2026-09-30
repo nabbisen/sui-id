@@ -16,24 +16,52 @@ person exactly where this one started — with a claim and nothing behind it.
 
 ## Stage 1 — measure, change nothing
 
-Measured at `e1a251d`, to be confirmed: the claim is in
-`sui-id-core/src/account/forgot_password.rs:32`. The known-address path inserts
-a reset token (`:174`), reads SMTP configuration, inserts into the outbox, and
-writes more audit events; the unknown-address path returns after one lookup and
-one event. The production mailer is the persistent outbox (`runtime/startup.rs:243`),
-so the send is a local insert — **confirm this**, because if a deployment can
-configure an inline SMTP mailer instead, the difference is much larger and the
-RFC's framing changes.
+**Not dispatched.** RFC 124 is Proposed; this stage is specified so that it is
+ready, not started. It runs when `@nabbisen` accepts the RFC.
 
-**Produce:** a committed file under this handoff giving the method, the
-environment, the sample count, and the distribution for both branches — not two
-averages. Say plainly whether the difference is distinguishable, and what an
-attacker would need to exploit it (how many samples, over what network). If the
-answer is "not distinguishable under this method", say what method *would*
-distinguish it, so the claim's limits are known.
+### Confirm first, at the baseline
 
-Do not change behaviour in this stage. Do not tune the code to make the numbers
-better.
+- The claim itself: `sui-id-core/src/account/forgot_password.rs:32` states the
+  request "takes roughly the same time in both branches".
+- The known-address path inserts a reset token (`:174`), reads SMTP
+  configuration, inserts into the outbox, and writes more audit events; the
+  unknown-address path returns after one lookup and one event.
+- **The production mailer is the persistent outbox** (`runtime/startup.rs:243`),
+  so the send is a local encrypt-and-insert, not inline SMTP. **Confirm this**,
+  and confirm whether a deployment can configure an inline SMTP mailer instead —
+  if it can, the difference is far larger and this RFC's framing changes.
+
+### The measurement
+
+**Method, stated so it can be re-run rather than believed.** Both branches, same
+process, enough samples to say something, **distribution not average** — p10,
+median, p90, max, as RFC 123's own measurement reported. Name the environment:
+machine, build profile, and whether the timing is taken in-process or through
+the real HTTP path. In-process is acceptable and RFC 123's precedent shows why —
+a large enough gap survives network jitter without careful statistics — but
+**say which you measured**, because the honest conclusion depends on it.
+
+**What the numbers must answer, explicitly:**
+
+1. Is the difference distinguishable at all under this method?
+2. If it is, **what would an attacker need** — how many samples per address, over
+   what network — to classify "this address exists" with confidence? A difference
+   that exists but needs ten thousand samples per guess is a different finding
+   from one that needs three.
+3. If it is **not** distinguishable, say what method *would* distinguish it, so
+   the claim's limits are known rather than assumed absent.
+
+**The artefact is a committed file** under this handoff, with the method, the
+environment, the raw numbers and the code that produced them — the shape RFC
+123's `d4-measurement.md` established. A measurement nobody can re-run is an
+opinion with a number attached.
+
+### Do not
+
+Change behaviour. Tune the code to improve the numbers. Or report a conclusion
+the numbers do not carry — **"this claim should simply be deleted" is a
+legitimate outcome**, and so is "the asymmetry is real but unexploitable, and
+here is why".
 
 ## Stage 2 — dispatched only after stage 1 is reviewed
 
