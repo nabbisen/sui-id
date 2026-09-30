@@ -90,7 +90,7 @@ pub async fn change_password_self(
     })?;
 
     // 2. Verify the current password.
-    password::verify_password(current_password, &row.password_hash)?;
+    password::verify_password(current_password, &row.password_hash).await?;
 
     // 3. Enforce the policy on the new one. Done after the verify
     //    so that someone fishing for "is X my password?" via this
@@ -121,7 +121,7 @@ pub async fn change_password_self(
     // failure between any of these steps used to leave the password
     // changed with some, none, or all of the requested sweep applied,
     // and no audit row recording what actually happened.
-    let new_phc = password::hash_password(new_password)?;
+    let new_phc = password::hash_password(new_password).await?;
     let credential = CredentialRow {
         user_id,
         password_hash: new_phc,
@@ -189,7 +189,7 @@ mod tests {
         )
         .await
         .expect("create user");
-        let phc = password::hash_password(password).expect("hash");
+        let phc = password::hash_password(password).await.expect("hash");
         credentials::upsert(
             db,
             &CredentialRow {
@@ -239,8 +239,16 @@ mod tests {
             .await
             .expect("cred")
             .password_hash;
-        assert!(password::verify_password("the-old-tester-password", &stored).is_err());
-        assert!(password::verify_password("the-new-tester-password", &stored).is_ok());
+        assert!(
+            password::verify_password("the-old-tester-password", &stored)
+                .await
+                .is_err()
+        );
+        assert!(
+            password::verify_password("the-new-tester-password", &stored)
+                .await
+                .is_ok()
+        );
     }
 
     #[tokio::test]
@@ -268,7 +276,11 @@ mod tests {
             .await
             .expect("cred")
             .password_hash;
-        assert!(password::verify_password("the-old-tester-password", &stored).is_ok());
+        assert!(
+            password::verify_password("the-old-tester-password", &stored)
+                .await
+                .is_ok()
+        );
     }
 
     #[tokio::test]
@@ -296,7 +308,11 @@ mod tests {
             .await
             .expect("cred")
             .password_hash;
-        assert!(password::verify_password("the-old-tester-password", &stored).is_ok());
+        assert!(
+            password::verify_password("the-old-tester-password", &stored)
+                .await
+                .is_ok()
+        );
     }
 
     #[tokio::test]

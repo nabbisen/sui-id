@@ -91,7 +91,9 @@ async fn seed_user(state: &AppState, username: &str, password: &str, role: Role)
         &state.db,
         &CredentialRow {
             user_id: uid,
-            password_hash: sui_id_core::password::hash_password(password).expect("hash"),
+            password_hash: sui_id_core::password::hash_password(password)
+                .await
+                .expect("hash"),
             updated_at: now,
         },
     )

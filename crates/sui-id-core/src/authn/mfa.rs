@@ -121,7 +121,10 @@ pub async fn confirm_enrollment(
     }
     let mut hashed: Vec<String> = Vec::with_capacity(plain_codes.len());
     for c in &plain_codes {
-        hashed.push(hash_password(c)?);
+        // RFC 126 D6: sequential, deliberately — parallelising these would
+        // demand several concurrent permits from password.rs's semaphore
+        // for one enrollment, to save latency nobody asked to improve.
+        hashed.push(hash_password(c).await?);
     }
     let blob = serde_json::to_vec(&hashed).map_err(|_| CoreError::Internal)?;
     // U12 (RFC 102 B7): enabling TOTP, storing the codes, advancing the
@@ -157,7 +160,9 @@ pub async fn regenerate_recovery_codes(db: &Database, user_id: UserId) -> CoreRe
     }
     let mut hashed: Vec<String> = Vec::with_capacity(plain.len());
     for c in &plain {
-        hashed.push(hash_password(c)?);
+        // RFC 126 D6: sequential, deliberately — see the identical note in
+        // `confirm_enrollment` above.
+        hashed.push(hash_password(c).await?);
     }
     let blob = serde_json::to_vec(&hashed).map_err(|_| CoreError::Internal)?;
     // U14 (RFC 102 B7): the replacement codes and `auth.mfa.factor_added`
@@ -358,10 +363,21 @@ async fn match_recovery_code(
         return Ok(None);
     };
     let mut hashes: Vec<String> = serde_json::from_slice(&blob).map_err(|_| CoreError::Internal)?;
-    let Some(i) = hashes
-        .iter()
-        .position(|h| verify_password(candidate, h).is_ok())
-    else {
+    // RFC 126 D2: `Iterator::position` takes a synchronous closure, which
+    // cannot host an `.await` — the one call site of `verify_password`
+    // that could not simply gain `.await` in place. An explicit loop is
+    // the whole rewrite; keeping a synchronous wrapper here instead would
+    // reintroduce the blocking call this RFC exists to remove, at the
+    // costliest call site in the codebase (up to `RECOVERY_CODE_COUNT`
+    // sequential verifications for one guess).
+    let mut matched = None;
+    for (i, h) in hashes.iter().enumerate() {
+        if verify_password(candidate, h).await.is_ok() {
+            matched = Some(i);
+            break;
+        }
+    }
+    let Some(i) = matched else {
         return Ok(None);
     };
     hashes.remove(i);

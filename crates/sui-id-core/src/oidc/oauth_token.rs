@@ -280,14 +280,16 @@ pub async fn authenticate_client(
     let id = match client_id.parse::<ClientId>() {
         Ok(id) => id,
         Err(_) => {
-            let _ = crate::password::verify_password(client_secret, crate::password::DUMMY_PHC);
+            let _ =
+                crate::password::verify_password(client_secret, crate::password::DUMMY_PHC).await;
             return Err(CoreError::Unauthenticated);
         }
     };
     let row = match clients::get(db, id).await {
         Ok(row) => row,
         Err(sui_id_store::StoreError::NotFound) => {
-            let _ = crate::password::verify_password(client_secret, crate::password::DUMMY_PHC);
+            let _ =
+                crate::password::verify_password(client_secret, crate::password::DUMMY_PHC).await;
             return Err(CoreError::Unauthenticated);
         }
         Err(other) => return Err(other.into()),
@@ -296,17 +298,19 @@ pub async fn authenticate_client(
     // (they have no secret to authenticate with); disabled/deleted clients
     // are refused the same way an unknown one is.
     if !row.confidential || row.is_disabled || row.is_deleted {
-        let _ = crate::password::verify_password(client_secret, crate::password::DUMMY_PHC);
+        let _ = crate::password::verify_password(client_secret, crate::password::DUMMY_PHC).await;
         return Err(CoreError::Unauthenticated);
     }
     let hash = match row.secret_hash.as_deref() {
         Some(h) => h,
         None => {
-            let _ = crate::password::verify_password(client_secret, crate::password::DUMMY_PHC);
+            let _ =
+                crate::password::verify_password(client_secret, crate::password::DUMMY_PHC).await;
             return Err(CoreError::Unauthenticated);
         }
     };
     crate::password::verify_password(client_secret, hash)
+        .await
         .map_err(|_| CoreError::Unauthenticated)?;
     Ok(id)
 }

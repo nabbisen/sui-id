@@ -187,7 +187,7 @@ async fn create_initial_admin_inner(
     })?;
 
     // 2. Persist password hash.
-    let hash = hash_password(password)?;
+    let hash = hash_password(password).await?;
     let cred = CredentialRow {
         user_id: user.id,
         password_hash: hash,
