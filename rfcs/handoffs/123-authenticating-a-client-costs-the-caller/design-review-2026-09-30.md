@@ -1,0 +1,92 @@
+# RFC 123 — independent design review
+
+**RFC.** [RFC 123 — An endpoint that authenticates a client costs the caller something](../../proposed/123-authenticating-a-client-costs-the-caller.md). **Proposed.**
+**Handoff reviewed against.** [`rfcs/handoffs/123-authenticating-a-client-costs-the-caller/design-review-request.md`](../../handoffs/123-authenticating-a-client-costs-the-caller/design-review-request.md).
+**Baseline.** `f43f7bd` (`≥ 9712215`; no source file this RFC touches differs from `9712215`). Nothing tracked was changed by this review.
+**Reviewer.** Mid-capability model, implementer role. I narrowed this finding myself in the RFC 120 triage (four endpoints to two); disclosed there and again here rather than left to be noticed.
+**Scope.** Read-only. No tracked file changed. The D4 measurement (§2) ran inside a disposable `git worktree` — created, used, and removed (`git worktree remove --force` + `prune`) — never against a live instance and never through a real socket. Its source and raw output are committed as companion files in this same directory (`rfc-123-design-review-2026-09-30-evidence/`) rather than inlined at full length here.
+
+---
+
+## 1. Confirming the measurement
+
+**Both confirmed exactly as the RFC states, at the current baseline.**
+
+- `/oauth2/introspect` (`handlers/oauth_token.rs:56-106`, `introspect`) and `/oauth2/revoke` (`:119-154`, `revoke`) call `client_credentials(...)` then `sui_id_core::oauth_token::authenticate_client(...)` (`:65`, `:128`) with **no** call to `enforce_rate_limit` anywhere in either function — confirmed by reading both in full, not by absence-of-grep-hit alone.
+- `/oauth2/token` (`handlers/oidc.rs:360-372`, `token`) calls `crate::handlers::enforce_rate_limit(&app.limiters, &app.clock, RateLimitKey::Token, ip, ErrorAs::OAuth)` as its **first** statement, before any credential parsing. The limiter itself (`runtime/ratelimit.rs`) is a fixed-window, **per-`(route_key, IpAddr)`** counter (`Limiter::check`, `:48-80`); `Limiters::default()` (`:103-122`) configures `token: Limiter::new(60, 60)` — 60 requests per 60-second window, per IP. There is no per-client-identity bucket anywhere in the tree; `Limiters` has exactly five named limiters (`login`, `token`, `setup`, `forgot_password`, `step_up`), all IP-keyed.
+- **Argon2 parameters, measured rather than assumed:** `authn/password.rs:11-13`, `Params::new(64 * 1024, 2, 1, None)` — **m_cost = 65536 KiB = 64 MiB exactly**, **t_cost = 2** (two passes over that memory), **p_cost = 1**. The module doc (`:1-5`) states this and it is correct. **The RFC's "64 MiB" claim is exactly right**, not merely asserted — but the RFC does not mention `t_cost = 2`, which is the more load-bearing number for severity: it is *why* one call costs what §2 measures, not just how much memory it touches.
+- `authenticate_client` (`oidc/oauth_token.rs:267-294`): parse `client_id` → `clients::get` (DB read; `NotFound` → `Unauthenticated`) → reject if `!confidential` → reject if `is_disabled || is_deleted` → reject if `secret_hash` is `None` → **only then** `password::verify_password`. Every rejection before the hash call is cheap (a UUID parse, one indexed row read, three field checks); only the last line is expensive.
+
+## 2. D4 — the client-id timing difference, measured (committed artefact)
+
+**Method.** A disposable worktree at `f43f7bd`, a throwaway `#[tokio::test]` added only there (`crates/sui-id-core/tests/rfc123_timing.rs`, reproduced in full at `rfc-123-design-review-2026-09-30-evidence/rfc123_timing.rs` (kept with the review package outside this repository)), run with `cargo test -p sui-id-core --test rfc123_timing --locked --release -- --nocapture`, worktree then removed. It calls `authenticate_client` directly (in-process, in-memory SQLite — no HTTP, no socket) against four fixtures: a confidential enabled client with the **wrong** secret (the attacker's realistic best case — reaches `verify_password`, which still costs the same whether it matches or not), an unknown client id, a disabled confidential client, and a public client. 300 timed samples per branch after a 5-iteration warm-up; raw output at `rfc-123-design-review-2026-09-30-evidence/rfc123_timing_raw_output.txt` (kept with the review package outside this repository).
+
+**Result, p10 / median / max:**
+
+| Branch | p10 | median | max |
+|---|---|---|---|
+| known confidential+enabled, wrong secret (hashes) | 34.01ms | 34.24ms | 40.62ms |
+| unknown client id (no hash) | 81µs | 99µs | 165µs |
+| disabled confidential client (no hash) | 36µs | 62µs | 108µs |
+| public client (no hash) | 17µs | 42µs | 90µs |
+
+**This is not a subtle side channel.** The hashing branch's *entire* range (34.0-40.6ms) sits 200-2000× above every non-hashing branch's *maximum* (under 165µs). I measured in-process rather than over a real socket, which the request's phrasing ("distinguishable over a network") anticipates as a possible objection — but a gap this size does not need careful statistics or many samples to survive ordinary WAN jitter (single- to low-double-digit milliseconds); a handful of requests per candidate id would classify "known, confidential, enabled" from everything else with high confidence. **I am confident this generalises to a real deployment without needing to measure one**, and say so rather than let the in-process caveat imply more doubt than it warrants.
+
+**Decision (D4 asks for one, not just a number): close it.** Add a dummy `verify_password` call (against a fixed decoy PHC hash, discarding the result) on every branch that currently returns before hashing — unknown client, public client, disabled client, confidential client with no stored hash — so every rejection costs approximately the same wall-clock time. **This project already has the exact pattern to copy**: `authn/session.rs` calls `verify_password(password, DUMMY_PHC)` on three separate early-return branches (`:154`, `:162`, `:175`) specifically to keep login's timing uniform. `authenticate_client` should do the same, not invent a new idiom.
+
+## 3. Item 2 — is a limit the right instrument, and what shape?
+
+**Traffic shape assumed: a legitimate resource server calls `/oauth2/introspect` once per incoming API request it serves, from a small number of source IPs (its own egress, possibly one shared corporate NAT address), at a rate that has nothing to do with how many *browsers* are behind it.** A per-IP budget sized like `login` (10/60s) or even `token` (60/60s) is sized for a human or a browser's retry loop, not for that shape — it would throttle a real integration long before it throttles an attacker who only needs to send requests slower than the window resets.
+
+**The honest bucket is per-client, and the request is right that this creates a tension worth working through rather than picking a side of.** I worked through it and think it **dissolves rather than resolves**: `client_id` is available, unauthenticated, from `client_credentials()` (`handlers/oauth_token.rs`) before `authenticate_client` is ever called — it is a claim, not a proof, exactly like the `login` limiter's IP is a claim (nothing proves the request actually originates where the socket says). **A per-claimed-client-id bucket does not require authenticating first; it requires trusting the claim only as much as the existing IP bucket trusts the IP** — as a rate-limiting key, not as an identity assertion. This means D2's ordering (limit before the expensive step) is fully compatible with a per-client bucket: check it immediately after `client_credentials()` extracts `(client_id, client_secret)`, before `authenticate_client` runs.
+
+**Recommend both, not one instead of the other, because they defend against different shapes of the same attack** (D3's own text makes the point for per-IP: "a per-IP limit is defeated by many addresses" — the symmetric failure of per-client-only is one address hammering many different, harder-to-guess client ids, which is a weaker attack since the attacker still needs the ids, but not zero):
+
+- **Per-IP** (reuse the existing `Limiter`, a new named bucket — call it `introspect_revoke` or split the two if their traffic shapes diverge in practice), sized generously enough that a shared-NAT resource server doesn't trip it under normal load. I would not guess the exact number; that is an operational tuning call the implementer and `@nabbisen` should make together, informed by what real integrations look like, not something this review should mandate.
+- **Per-claimed-client-id**, sized higher than any per-IP browser-shaped bucket, since one legitimate resource server integration can legitimately burst far more than one signed-in human. Same `Limiter` type, new key shape (`(route_key, client_id_string)` instead of `(route_key, IpAddr)`) — `Limiter::check`'s signature already takes an arbitrary `&str` key component (the `key: &str` parameter, distinct from the map's `(String, IpAddr)` tuple key — a small generalisation, not a rewrite, would be needed to key on something other than `IpAddr`).
+
+**A caller submitting many distinct garbage client-id strings to grow the per-client-id map is not a new hazard.** The existing `Limiter` already self-prunes at 1024 entries, evicting anything older than `4 × window` (`:54-57`); a per-client-id bucket inherits that bound unchanged.
+
+## 4. Item 3 — cheap-before-expensive, and protocol conformance
+
+**What is cheap, on both endpoints, established by reading rather than assumed:** `Form<...>` extraction (Axum, before the handler body runs), `client_credentials()` (header/string parsing, no I/O), and — *within* `authenticate_client` itself — client-id parse, one DB row read, and three field checks. **What is expensive:** exactly one call, `password::verify_password`, the last line of `authenticate_client`. **The internal ordering inside `authenticate_client` is already cheap-before-expensive** (§1) — D2 is not asking to reorder anything that exists today. What D2 is actually asking for is where the **new** rate-limit check goes relative to that existing order: immediately after credential extraction, before `authenticate_client` is called at all — the same position `/oauth2/token` already uses (`oidc.rs:367`, first statement in the handler, before even `client_id_raw` is resolved).
+
+**Reordering does not change which error a bad request gets, and I checked this by reading the response-building code, not by assuming it.** `HttpError::oauth`'s own doc comment (`http/errors.rs:98`) says explicitly: *"Use this for all OAuth/OIDC protocol endpoints (token, introspect, revoke)"* — introspect and revoke already build every one of their errors through the identical RFC 6749 §5.2 wire format `/oauth2/token` uses (`oauth_error_response`, `:177-228`): `{"error": "...", "error_description": "..."}`, `WWW-Authenticate: Basic realm="sui-id"` only on a 401, `Cache-Control: no-store` always, `Retry-After` when `retry_after_secs` is set. **A rate-limited request would get exactly the same 429/`temporarily_unavailable` shape `/oauth2/token` already produces today for the same condition** — a new response for a condition that previously could not occur on these two endpoints (there was no limiter to trip), not a changed response for a condition that already existed. Every existing error path (bad credentials → 401 `invalid_client`, malformed request → 400) is untouched. **No RFC 7662 or RFC 7009 conformance question survives this** — neither spec defines a required shape for "too many requests," and the one this project already uses is the one both endpoints already use for everything else.
+
+## 5. Item 4 — D3, a per-client failure counter
+
+**Recommend: no, and the reason is the one the RFC's own framing already points at.** A failure counter distinct from the volume limiters in §3 is state keyed on an **unauthenticated claim** that a caller can trigger by *failing* — which means any caller who knows (or guesses) a real client id can deliberately fail authentication against it repeatedly to **lock out the legitimate resource server that owns it**. That is not a smaller version of the problem D1 is fixing; it is a *sharper* one — a targeted denial of a specific real integration, triggered for free by anyone who can name its client id (which, unlike a client secret, is not treated as confidential anywhere else in this protocol — it appears in `/oauth2/authorize` URLs a browser carries). The login lockout this pattern resembles has the same weakness in principle, but a username is at least sometimes treated as somewhat private; a client id in OAuth is closer to public-by-design.
+
+**The volume limiters from §3 already give introspect/revoke a failure-adjacent defense without this hazard**: they cap *total* calls (success or failure) per client id per window, which bounds how many failed guesses a caller can throw at one client id in the same breath as it bounds legitimate load. That is enough. I would not add a separate lockout on top of it.
+
+## 6. Item 6 — worth doing at all?
+
+**Yes**, and more concretely than the RFC's own "the attacker gains CPU, not secrets" framing suggests, for a reason this review found rather than assumed:
+
+**`verify_password`/`hash_password` run synchronously, inline, on whatever Tokio worker thread is executing the request — nowhere in this codebase are they wrapped in `spawn_blocking`.** I checked every call site (`grep` across both `sui-id-core` and `sui-id`, 20 non-test hits): login (`session.rs:154,162,175,203,205`), password change (`me_security.rs:93,124`), step-up (`step_up.rs:414`), MFA recovery-code checks (`mfa.rs`), client-secret verification at **both** `/oauth2/token` (`authorize.rs:629`) and `authenticate_client` (`oauth_token.rs:291`), and every `hash_password` call at creation/rotation. `main.rs:22` is a plain `#[tokio::main]` with no `worker_threads` override, so the runtime defaults to one worker thread per CPU core. **On a small deployment (this project's own stated shape — a self-hosted, single-tenant IDaaS, plausibly 1-4 vCPUs) a small number of concurrent Argon2 calls, well within what any per-time-window rate limit would permit as a burst, can occupy every worker thread for the ~34ms §2 measured, stalling every other request the service is handling — not just introspect/revoke, and not just the endpoint being hit.** This is materially worse than "spends CPU": it is synchronous blocking of the whole async executor, and it already applies to `/oauth2/token` today, which has a rate limiter and is still exposed to it, since a limiter bounds *requests per window*, not *requests in flight at once*.
+
+**This is outside RFC 123's stated touches** (`password.rs` isn't in its `Touches` list, and the pattern is systemic, not local to these two endpoints) **— I am not asking this RFC to fix it.** But it changes what I think D1 alone buys: a well-sized rate limit stops sustained abuse over time; it does not stop a short, sharp burst of legitimate-looking concurrent calls from stalling the service for the duration of that burst, on a small deployment. **Recommend a follow-up RFC** — wrap `verify_password`/`hash_password` in `tokio::task::spawn_blocking` (or move them onto a dedicated blocking pool) — tracked separately, the way RFC 120's design review tracked out-of-scope findings rather than folding them into the RFC that found them.
+
+With that said: **RFC 123 as scoped is still worth doing, on its own terms, independent of the blocking-thread finding.** A rate limit is cheap (reuses an existing, tested mechanism), fixes the volume-over-time half of the exposure regardless of the concurrency half, and — per §2 — the client-id timing side channel it's adjacent to is real and closeable at near-zero cost. None of that needs the broader finding to be true to justify shipping.
+
+## Findings, ranked
+
+**High**
+
+1. **`verify_password`/`hash_password` block the async runtime's worker threads directly — no `spawn_blocking` anywhere in the codebase** (§6). Broader than RFC 123's scope and not something this RFC should absorb, but it means a rate limit alone does not close the concurrency-based version of the exposure this RFC is fixing the volume-based version of. Recommend a follow-up RFC; name it in RFC 123's own text so the limitation is not implied away.
+2. **D4's timing gap is confirmed, large, and cheap to close** (§2): ~34ms vs <165µs, 200-2000×. Close it with a dummy `verify_password` call on every non-hashing rejection branch, copying `authn/session.rs`'s existing `DUMMY_PHC` pattern rather than inventing one.
+
+**Medium**
+
+3. **D1's limit should be two buckets, not one** — per-IP and per-claimed-client-id, both checked before `authenticate_client`, neither requiring authentication first (§3). A per-IP-only limit is sized wrong for a resource server behind shared NAT; a per-client-only limit is defeated by an attacker who rotates source IPs against one fixed target id.
+4. **D3's counter should be answered "no," not left open** (§5): a failure-specific lockout keyed on an unauthenticated client-id claim is itself a denial vector against the legitimate integration that owns that id, and is a sharper problem than the one it would be built to solve. The volume limiters in finding 3 already cover the failure case without this hazard.
+
+**Low**
+
+5. RFC's summary states 64 MiB without citing that it was measured; confirmed exactly right, but should cite `authn/password.rs:11-13` and mention `t_cost = 2`, which is the number that actually explains the ~34ms figure once someone measures it (§1).
+
+## Recommendation
+
+**Accept with the changes named above.** D1's core diagnosis is correct and its fix is small; D2's ordering concern turns out to already hold internally and only needs the new limiter check placed correctly, which introduces no protocol-conformance regression; D3 is answered (no separate counter) rather than left as an open question; D4 is measured, decisively, and closeable cheaply. The one thing I'd want stated in the RFC before it ships, beyond the fixes above: that this RFC's rate limit is the volume-over-time defense, and the concurrency/worker-blocking defense is a separate, larger piece of work this RFC does not by itself complete — so a reader doesn't take "RFC 123 landed" to mean the whole exposure class this finding sits inside is closed.
+
+**Entry point of this package:** `.git-exclude/review-requests/rfc-123-design-review-2026-09-30.md`
