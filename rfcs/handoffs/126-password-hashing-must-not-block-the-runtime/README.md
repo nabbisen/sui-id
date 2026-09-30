@@ -74,3 +74,50 @@ than fixing it — that is the escalation this project runs on.
 - `spawn_blocking` is **already used** in `sui-id-store/src/backend.rs` and
   `authn/hibp.rs`. The pattern exists; it is simply not applied here.
 - Roughly 20 non-test call sites across `sui-id-core` and `sui-id`.
+
+## Reverted 2026-09-30, and re-dispatched: the D5 deadline does not discriminate
+
+The implementation landed as `ff19f05` and was **reverted** as `7813b35`. The
+production change was verified and is not in question. **Both D5 tests failed in
+CI**, on `G06` (stable, all-features) and `G02` (1.95, default), with the same
+assertion:
+
+```
+a probe iteration took 52.837674ms (deadline 30ms) while 8 real login
+attempts were in flight — a single worker thread was busy with Argon2
+```
+
+**The design of the test is right; the threshold is wrong.** Measuring elapsed
+wall-clock across the whole iteration — the third design, the one that survived
+mutation testing — is the correct shape and should be kept. What fails is the
+**30 ms deadline**, which is tight rather than discriminating: on a
+GitHub-hosted runner inside a 1300-second suite, 52 ms of ordinary scheduling
+delay clears it with no Argon2 blocking involved at all.
+
+**Choose the threshold to separate the two populations, not to be small.**
+
+- **Blocked** (what the test must catch): a probe stuck behind Argon2 on the one
+  worker waits on the order of one hash per queued caller — RFC 126's own
+  numbers make that **~34 ms each, and up to ~270 ms** for the recovery-code
+  path, with eight in flight.
+- **Not blocked, just a slow runner**: tens of milliseconds, as measured — 52 ms
+  here.
+
+A deadline in the low hundreds of milliseconds separates those cleanly; 30 ms
+separates neither. **Derive it from the RFC's own measured hash cost rather than
+picking a number**, and say in the package what margin you chose and against
+which of the two populations.
+
+**Also required, because this is the second time a test in this suite has been
+environment-dependent:** state how the test behaves on a runner slower still.
+A threshold that merely moves the failure to a slower machine has not fixed it.
+If the honest answer is that no wall-clock threshold is safe in CI, say so — the
+alternative is to assert the *relationship* (a probe during the burst is not
+dramatically slower than a probe outside it, measured in the same run) rather
+than an absolute, which is immune to machine speed.
+
+**The reviewer's error, recorded because it caused this.** The architect landed
+`ff19f05` on twenty clean local runs, having argued that the r126 tests were not
+implicated in an intermittent failure. Local runs on a quiet machine cannot clear
+a wall-clock promptness test for a contended runner. The evidence needed was a
+CI run, and it existed twenty-two minutes later.
