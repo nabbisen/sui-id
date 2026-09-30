@@ -1,6 +1,6 @@
 # Password hashing must not block the request runtime
 
-**RFC.** [RFC 126](../../accepted/126-password-hashing-must-not-block-the-runtime.md), **Accepted 2026-09-30**, design reviewed and amended. Implementation dispatched — see below.
+**RFC.** [RFC 126](../../accepted/126-password-hashing-must-not-block-the-runtime.md), **Proposed** — not yet accepted, and nothing is dispatched for implementation.
 **Author.** High-capability model, requirements-architect role.
 
 ## Dispatched for implementation 2026-09-30
@@ -71,9 +71,6 @@ than fixing it — that is the escalation this project runs on.
 - One verification: **~34 ms**, measured over 300 samples (RFC 123's design
   review evidence).
 - `#[tokio::main]` with no `worker_threads` override — `crates/sui-id/src/main.rs:22`.
-- `spawn_blocking` is **already used** — but **twice, and only in
-  `sui-id-store/src/backend.rs`** (`:146`, `:159`). An earlier version of this
-  line also named `authn/hibp.rs`; that was the architect's error, corrected in
-  the RFC on 2026-09-30. `hibp.rs`'s matches are doc comments, one describing a
-  design RFC 070 *removed*. The pattern exists; it is simply not applied here.
+- `spawn_blocking` is **already used** in `sui-id-store/src/backend.rs` and
+  `authn/hibp.rs`. The pattern exists; it is simply not applied here.
 - Roughly 20 non-test call sites across `sui-id-core` and `sui-id`.

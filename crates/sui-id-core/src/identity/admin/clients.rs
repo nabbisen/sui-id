@@ -73,7 +73,7 @@ pub async fn create_client(
         None
     };
     let secret_hash = match secret_plain.as_deref() {
-        Some(s) => Some(hash_password(s).await?),
+        Some(s) => Some(hash_password(s)?),
         None => None,
     };
 
@@ -405,7 +405,7 @@ pub async fn rotate_client_secret(
         ));
     }
     let new_secret = tokens::random_token(32);
-    let new_hash = crate::password::hash_password(&new_secret).await?;
+    let new_hash = crate::password::hash_password(&new_secret)?;
     clients::set_secret_hash(db, client_id, Some(&new_hash), clock.now())
         .await
         .map_err(CoreError::from)?;

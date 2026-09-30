@@ -1,61 +1,24 @@
 use super::*;
 use crate::security::SecurityLevel;
 
-#[tokio::test]
-async fn hash_then_verify_roundtrips() {
+#[test]
+fn hash_then_verify_roundtrips() {
     let pw = "correct horse battery staple";
-    let phc = hash_password(pw).await.expect("hash");
-    verify_password(pw, &phc).await.expect("verify");
+    let phc = hash_password(pw).expect("hash");
+    verify_password(pw, &phc).expect("verify");
 }
 
-#[tokio::test]
-async fn wrong_password_is_rejected() {
-    let phc = hash_password("a-very-strong-password").await.expect("hash");
-    let r = verify_password("not the right password", &phc).await;
+#[test]
+fn wrong_password_is_rejected() {
+    let phc = hash_password("a-very-strong-password").expect("hash");
+    let r = verify_password("not the right password", &phc);
     assert!(matches!(r, Err(CoreError::InvalidCredentials)));
 }
 
-#[tokio::test]
-async fn malformed_stored_hash_returns_password_error() {
-    let r = verify_password("anything", "this is not phc").await;
-    assert!(matches!(r, Err(CoreError::Password)));
-}
-
-// ---------- RFC 126 D4: the concurrency bound ----------
-
 #[test]
-fn concurrency_bound_is_derived_and_capped() {
-    assert_eq!(concurrency_bound(1), 2);
-    assert_eq!(concurrency_bound(4), 8);
-    assert_eq!(concurrency_bound(8), 16);
-    assert_eq!(
-        concurrency_bound(100),
-        16,
-        "the ceiling must cap a many-core box"
-    );
-}
-
-/// A white-box check, deliberately: a wall-clock timing test of the live
-/// semaphore cannot tell "the semaphore is missing" from "Argon2's own
-/// memory-bandwidth contention slowed 24 concurrent hashes down anyway" —
-/// both produce the same slower-than-baseline signal on real hardware. This
-/// asks the semaphore itself. It is also immune to other tests concurrently
-/// holding permits: requesting one more than the derived bound can never
-/// succeed regardless of what else is currently held, because the total
-/// never reaches that number in the first place.
-#[tokio::test]
-async fn the_semaphore_never_grants_more_than_its_derived_bound_at_once() {
-    let cores = std::thread::available_parallelism()
-        .map(|n| n.get())
-        .unwrap_or(1);
-    let bound = concurrency_bound(cores);
-    let oversubscribed = hash_semaphore().try_acquire_many((bound + 1) as u32);
-    assert!(
-        oversubscribed.is_err(),
-        "requesting {} permits (one more than the derived bound {bound}) succeeded — \
-         the semaphore is not bounding concurrency to what RFC 126 D4 states",
-        bound + 1
-    );
+fn malformed_stored_hash_returns_password_error() {
+    let r = verify_password("anything", "this is not phc");
+    assert!(matches!(r, Err(CoreError::Password)));
 }
 
 #[test]
@@ -113,21 +76,8 @@ fn standard_rejects_development_password() {
 // Argon2id is intentionally slow (production parameters target tens
 // of ms per call), so we cap proptest cases tight — under 30 — to
 // keep `cargo test` from blowing past a reasonable budget.
-//
-// RFC 126: `hash_password`/`verify_password` are `async fn` now (the
-// semaphore permit and `spawn_blocking` hop live behind that boundary), but
-// `proptest!`'s case closures are synchronous — `block_on` bridges the two
-// rather than pulling in an async-proptest dependency for three properties.
 
 use proptest::prelude::*;
-
-fn block_on<F: std::future::Future>(f: F) -> F::Output {
-    tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .expect("current-thread runtime")
-        .block_on(f)
-}
 
 proptest! {
     #![proptest_config(ProptestConfig {
@@ -148,8 +98,8 @@ proptest! {
         // is the printable ASCII range.
         password in "[ -~]{12,64}",
     ) {
-        let hash = block_on(hash_password(&password)).expect("hash");
-        prop_assert!(block_on(verify_password(&password, &hash)).is_ok());
+        let hash = hash_password(&password).expect("hash");
+        prop_assert!(verify_password(&password, &hash).is_ok());
     }
 
     #[test]
@@ -158,8 +108,8 @@ proptest! {
         other in "[ -~]{12,64}",
     ) {
         prop_assume!(password != other);
-        let hash = block_on(hash_password(&password)).expect("hash");
-        prop_assert!(block_on(verify_password(&other, &hash)).is_err());
+        let hash = hash_password(&password).expect("hash");
+        prop_assert!(verify_password(&other, &hash).is_err());
     }
 
     #[test]
@@ -171,8 +121,8 @@ proptest! {
         // with the same password would share a hash and the
         // database would leak that fact. This property guards
         // against an accidental zero-salt regression.
-        let h1 = block_on(hash_password(&password)).expect("hash 1");
-        let h2 = block_on(hash_password(&password)).expect("hash 2");
+        let h1 = hash_password(&password).expect("hash 1");
+        let h2 = hash_password(&password).expect("hash 2");
         prop_assert_ne!(h1, h2);
     }
 }

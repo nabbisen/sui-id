@@ -461,7 +461,6 @@ pub async fn apply_seed(
             &sui_id_store::models::CredentialRow {
                 user_id: created.id,
                 password_hash: sui_id_core::password::hash_password(&u.password)
-                    .await
                     .with_context(|| format!("hashing dev-mode password for {:?}", u.username))?,
                 updated_at: clock.now(),
             },
@@ -511,7 +510,6 @@ pub async fn apply_seed(
             match c.client_secret.as_deref() {
                 Some(custom) if !custom.is_empty() => {
                     let hash = sui_id_core::password::hash_password(custom)
-                        .await
                         .context("hashing dev-mode client_secret")?;
                     sui_id_store::repos::clients::set_dev_secret_hash(
                         db,

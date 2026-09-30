@@ -129,7 +129,7 @@ mod tests {
         )
         .await
         .expect("user");
-        let _ = hash_password("alice-the-tester-password").await;
+        let _ = hash_password("alice-the-tester-password");
         let _ = CredentialRow {
             user_id: id,
             password_hash: String::new(),

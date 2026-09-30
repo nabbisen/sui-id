@@ -183,11 +183,7 @@ pub async fn dynamic_register(
         None
     };
     let secret_hash = match secret_plain.as_deref() {
-        Some(s) => Some(
-            sui_id_core::password::hash_password(s)
-                .await
-                .map_err(HttpError::api)?,
-        ),
+        Some(s) => Some(sui_id_core::password::hash_password(s).map_err(HttpError::api)?),
         None => None,
     };
 
