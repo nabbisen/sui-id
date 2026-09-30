@@ -1,6 +1,6 @@
 # Documentation carries the truth; a test enforces it
 
-**RFC.** [RFC 127](../../accepted/127-documentation-carries-the-truth.md), **Proposed** — not accepted, nothing dispatched.
+**RFC.** [RFC 127](../../accepted/127-documentation-carries-the-truth.md), **Accepted 2026-09-30**. Implemented — see the note at the end of this file about the commit that carries it.
 **Author.** High-capability model, requirements-architect role.
 
 ## Where the two facts are today
@@ -57,3 +57,24 @@ claimed mechanism.
   row from the page. Name the test that catches each.
 - `mdbook build docs`, G10a, G10b, G15, and the full suite count before and after.
 
+
+## The commit that carries this implementation is mislabelled
+
+`59ff2b1` is titled *"docs(rfc-112): dispatch the repair for this RFC's
+intermittently red e2e test"*. **It also contains the whole of RFC 127's
+implementation** — `docs/src/reference/security-surfaces.md`, the `SUMMARY.md`
+entry, and the two enumeration tests' new assertions.
+
+The architect ran `git add -A` while the dev team's delivered-but-unreviewed work
+was in the tree, and committed and pushed both together. The commit message
+describes only the dispatch.
+
+**The work itself is sound and was verified afterwards** against the package's
+claims: 6 of 6 hunks match, `security-surfaces.md` hashes to
+`8f90a472…` as claimed, nothing unclaimed, 1049 tests, every gate green. **Nothing
+wrong entered the repository** — what entered it is correctly labelled nowhere.
+
+**It is not being rewritten.** `59ff2b1` is pushed to a public repository, and
+amending it is a history rewrite, which no standing authorization covers. This
+note is the repair: the commit's real contents are recorded where someone looking
+for RFC 127's implementation will look for it.
