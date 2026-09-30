@@ -1,6 +1,6 @@
 # The finding this RFC answers
 
-**Source.** The independent design review of [RFC 121](../../proposed/121-a-verification-failure-is-not-a-pass.md),
+**Source.** The independent design review of [RFC 121](../../accepted/121-a-verification-failure-is-not-a-pass.md),
 2026-09-29, by the implementation role. It was asked to review a *display*
 defect and found that the control whose display was being corrected did not
 implement its own stated property.

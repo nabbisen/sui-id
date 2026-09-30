@@ -1,6 +1,13 @@
 # RFC 121 — A verification failure is not a pass
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-09-30
+**Approved by.** `@nabbisen`, 2026-09-30: "RFC 121 is accepted." Accepted on the
+**amended** text — its independent design review returned "accept with changes"
+and, outside this RFC's scope, the blocker that became RFC 125 and shipped
+first. **This acceptance is an ordinary lifecycle act, not a ratification after
+the fact:** unlike RFCs 120 and 125, nothing here was exploitable, so nothing
+justified landing ahead of acceptance.
 **Security review.** Required
 **Independent design review.** [Design review 2026-09-29](../handoffs/121-a-verification-failure-is-not-a-pass/design-review-2026-09-29.md) by the implementation role. Its verdict was **accept with changes**, and it also returned a **blocker outside this RFC's scope** — that `verify_chain_tail` did not verify linkage at all — which became [RFC 125](../accepted/125-the-chain-must-be-verified-as-a-chain.md) and shipped first. Every change it named is folded in below.
 **Amended 2026-09-30 on that review, and on RFC 125.** The amendment is material: this RFC was written believing the check it displays was sound.
