@@ -1,0 +1,55 @@
+# G11's conditions derive from RFC 000, not from a retired RFC
+
+**RFC.** [RFC 128](../../proposed/128-g11-derives-from-rfc-000.md), **Proposed** — nothing dispatched.
+**Author.** High-capability model, requirements-architect role.
+
+## The trace, so it is not re-derived
+
+- `scripts/check-rfc-integrity.py:658-665` is condition 9: when `Security
+  review` is Required, an Accepted RFC must carry `Independent design review`
+  with a durable repository-relative reference.
+- `contracts/rfc-policy.toml` — G11's own policy data — **never mentions
+  independence at all.** The rule is hard-coded in the script.
+- `rfcs/archive/018-rfc-lifecycle-policy.md:216` is the sentence it implements,
+  nearly verbatim, including the `N/A` prohibition; `:220` defines independence
+  as "the reviewer did not author".
+- `git log -S'Independent design review' -- scripts/check-rfc-integrity.py`
+  gives `3f2eace`, **RFC 093's** G11 checker. RFC 093 and RFC 018 were written
+  in the same month by the same architect.
+- RFC 000 has the substance and neither the `N/A` prohibition nor a definition
+  of independence.
+
+## What D2's audit must produce
+
+One row per G11 condition — there are fourteen live ones (1–7, 9–15) — each
+with: what it checks, the live document that requires it, and the `file:line`
+where that document says so. **A condition whose only source is RFC 018, or
+which has no source at all, is named as such.** Two are already known to need
+looking at:
+
+- **Condition 7** (`RFC-MI-*` identifiers): the token `RFC-MI-` appears in
+  **neither** RFC 000 nor RFC 018. It may be legitimate — the closed historical
+  list lives in `contracts/rfc-policy.toml`, which is data an RFC may own — but
+  the owning document has not been identified.
+- **Condition 9**: D1's subject.
+
+Conditions 12 and 13 cite RFC 000 in the script itself and are expected to pass
+the audit; cite them anyway, because the output of this audit is the citation.
+
+## Order
+
+1. The audit (D2), as a package, **before any code changes**. It may change what
+   D1 should say.
+2. D1 and D3's changes to the checker and the policy.
+3. D4's pass over the twenty RFCs carrying the field — **only after
+   `@nabbisen` has settled whether an author may review their own RFC** (D3
+   leaves it to him deliberately). Until he does, the correct entry for RFC 124
+   is the honest one it already has.
+4. D5's amendment to RFC 093, in the same commit as the checker change.
+
+## What is not yours to decide
+
+Whether an author may review their own RFC. RFC 128 D3 says the gate stops
+supplying a definition RFC 000 does not give; it does not supply a different
+one. If the audit turns up an argument either way, **report it — do not settle
+it.**
