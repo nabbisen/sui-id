@@ -1,8 +1,11 @@
 # RFC 131 — Two gate levels, and one rule about claims
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-10-01
+**Approved by.** `@nabbisen`, 2026-10-01: "Reviewed. Accepted."
 **Security review.** Required
-**Design prerequisites.** [RFC 130](../accepted/130-gates-declare-their-input-scope.md), accepted 2026-10-01. This RFC supersedes its D5.
+**Independent design review.** [Owner review 2026-10-01](../handoffs/131-two-gate-levels-and-one-rule/owner-review-2026-10-01.md) — by `@nabbisen`, who did **not** author this RFC. He stated that he reviewed it, and three of his interventions changed the design: he rejected RFC 130 D5's question as one a design should answer, identified RFC completion as a missing stage, and then capped the stage count — which collapsed five gate lists into two levels. **This field's name fits, in the ordinary sense**, unlike RFC 124's, 128's and 130's.
+**Design prerequisites.** [RFC 130](./130-gates-declare-their-input-scope.md), accepted 2026-10-01. This RFC supersedes its D5.
 **Implementation prerequisites.** None. Unlike RFC 130, this RFC answers its own policy question rather than deferring one.
 **Closure prerequisites.** There is exactly one answer to "what must pass before this claim", it is the same answer for all three claims that make it, and no document states a weaker one. A milestone cannot be closed over an RFC that has not been. `docs/src/contributing/release-process.md` cannot drift from the Gate Matrix without a gate failing.
 **Tracks.** Release stability. Raised by `@nabbisen`, 2026-10-01, as a stage model for release cycles.

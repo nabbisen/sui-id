@@ -431,6 +431,43 @@ act of exception if necessary."*
 | Implementation | The dev team |
 | Design review | **`@nabbisen`, or an external architect he engages. Not the dev team.** |
 
+#### S1c — Self-review, ruled by `@nabbisen` on 2026-10-01
+
+Asked whether an author may review their own RFC — the question RFC 128 D4 was
+blocked on — his words: *"Generally prohibitted. Review request flow = Dev team
+-> Architect -> Owner. However, self-review is not necessarily forbidden
+completely; Owner sometimes asks architect to review some part(s) of specific
+design etc. beforehand."*
+
+So it is a **prohibition with an owner-invoked exception**, not a ban and not a
+permission:
+
+| | |
+|---|---|
+| The normal route | Dev team → Architect → Owner |
+| Self-review by default | **Prohibited** |
+| Self-review when the owner asks for it | Permitted, and the record must say he asked |
+
+**What this does not change.** G11 condition 9 keeps accepting a self-review
+record, and the three acceptance tests added under RFC 128 D1/D3 stay as written.
+They must: because owner-requested self-review is legitimate, a gate that rejected
+every self-review would reject work this ruling permits. The ruling is enforced by
+the record being honest about who reviewed and on whose request — RFC 127's
+principle — not by the gate guessing. The tests' comment should now cite this
+ruling instead of describing the question as open.
+
+**What this does change.** The fifteen RFC headers recording a design review by
+the implementation role (094, 095, 096, 110, 112, 115, 116, 117, 118, 120, 121,
+122, 123, 125, 126) record a review by a role this ruling and S1a both place
+outside design review. Correcting them is the deferred re-review, not a wording
+pass — see RFC 128 D4.
+
+**The architect's self-reviews to date**, each to be confirmed against this ruling
+rather than assumed compliant: RFC 124 (`@nabbisen` assigned it, 2026-10-01),
+RFC 128 (carried under R1's residual), RFC 130 (carried under R1's residual, but
+**not individually asked for** — the architect reviewed it on his own initiative
+and records that here rather than claiming the exception).
+
 **The roles that exist.** Recorded here because twelve requirements across
 `ROADMAP.md` and RFCs 094–096 named a role that did not, and survived three
 months. `@nabbisen`, 2026-10-01, on whether a gate should check this: *"I don't
@@ -442,7 +479,7 @@ read by a person writing a requirement.
 | Role | Who | May review a design? |
 |---|---|---|
 | Owner and approver | `@nabbisen` | **Yes** |
-| Architect | high-capability model | Own work only, carried by the owner under R1 |
+| Architect | high-capability model | **Generally no — self-review is prohibited** (S1c). Permitted only where the owner asks for it, including the standing R1 residual |
 | Implementation | mid-capability model | **No** |
 | External architect | **nobody, unless engaged** | Yes, when engaged — RFC 129 D2 |
 

@@ -3,25 +3,24 @@
 **RFC.** [`../../accepted/130-gates-declare-their-input-scope.md`](../../accepted/130-gates-declare-their-input-scope.md)
 **Status of the RFC.** **Accepted** 2026-10-01 by `@nabbisen` ("Accepted."), amended the same day on its security review to add D7 and D8.
 
-## Nothing is dispatched yet, and this is why
+## Not dispatched yet — but no longer blocked
 
-**Do not start.** RFC 130 is Accepted, so it is no longer build-prohibited by RFC
-000 — but its own **Implementation prerequisites** name a condition that is not
-met: **D5 is unanswered.**
+**Status corrected 2026-10-01.** This file previously said *do not start*, because
+D5 was unanswered. **D5 is superseded** by [RFC 131](../../accepted/131-two-gate-levels-and-one-rule.md)
+D2, which answers it by design rather than by asking the owner. RFC 130 has **no
+unmet implementation prerequisite.**
 
-D5 asks whether a release or milestone claim requires the complete matrix on the
-commit it cites. That is `@nabbisen`'s to state. It is not a detail that can be
-settled during implementation, because the answer decides whether
-`workflow_dispatch` must be wired into the release process as a required step or
-merely remains available. Building the scoping first and discovering the answer
-later is how a release ends up citing a commit whose Rust lanes never ran.
+It is still not dispatched: the architect dispatches RFC 130 and RFC 131 together,
+**RFC 130's D1 first**, because RFC 131 D3 refers to the `paths` declarations D1
+introduces. Wait for that dispatch.
 
-The architect has **not** recorded an answer, and nothing in this file should be
-read as one.
+**D7 and RFC 131 D2 must not be split across dispatches.** D7's fail-open rule is
+what makes `workflow_dispatch` reliable, and RFC 131 D2 relies on
+`workflow_dispatch` to obtain the complete set on a nominated commit. Implementing
+one without the other leaves a release able to cite a commit whose Rust lanes
+never ran.
 
-## What will be dispatched, once D5 is settled
-
-Stated here so the shape is visible, not as an instruction to begin.
+## What will be dispatched
 
 - **D1** — a `paths` key per gate in `contracts/gate-inputs.toml`, emitted by
   `scripts/generate-ci-workflow.py`.
