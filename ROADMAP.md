@@ -214,6 +214,46 @@ dependency between them; everything else in a lane is strictly ordered. Item 5
 is deliberately sequenced after the clippy cleanup so a large file move does not
 collide with workspace-wide lint churn.
 
+### Closure backlog — triaged 2026-10-02
+
+**23 RFCs sit in `accepted/` and not one has ever moved to `done/`.** The
+RFC-completion stage `@nabbisen` identified on 2026-10-01 (RFC 131's owner review)
+has never been performed, so work that shipped to users months ago is still
+recorded as in flight. RFC 131 D2 now supplies the gate requirement that was
+missing: **every gate green on the exact commit the closure evidence cites.**
+
+Closing one requires, per RFC 000 and RFC 131 D2: its own `Closure prerequisites`
+demonstrably met; `Closure reviewed on`, `Closure approved by` and a durable
+`Closure evidence` reference; Level B on the cited commit; and **an approver who is
+not the sole implementer** — which is why the architect prepares a batch and
+`@nabbisen` approves it, never the reverse.
+
+**Blocked — substantial work outstanding (5).** Not closure candidates; naming why
+so the backlog is not mistaken for 23 items of paperwork.
+
+| RFC | What is missing |
+|---|---|
+| 094 | M2a and M2b: the Class-A conversion, the AST boundary gate. Cycle C work |
+| 095 | Validate-first single-transaction behaviour is not implemented |
+| 096 | Stages 096-A, B1 and B2: discovery/JOSE/claims, durable attempt state, the Class-A seam for federation commands |
+| 117 | Stages 1–3: the signed decision ledger does not exist. `scripts/check-owner-attributions.py`'s own comments say "ledger once one exists"; only stage 0/0b landed |
+| 130 | **Awaiting an observation, not work.** Its closure prerequisite has two halves — a change that *can* affect the Rust lanes runs them (confirmed in CI 2026-10-01, `rust scope changed: true`), and one that *cannot* does not run them. The second half has not been observed yet: every push since the mechanism landed has touched a scope path. The next documentation-only push closes it |
+
+**Closure candidates (18), in three batches.** Grouped so each batch's verification
+is one coherent kind of work rather than eighteen unrelated checks. Prerequisites
+are verified **at closure**, not here — this triage establishes that the work
+landed, not that every clause is met.
+
+| Batch | RFCs | What verifying them means |
+|---|---|---|
+| 1 | 110, 128, 129, 131, 132 | Documentary and gate properties: run the gates, read the records. Narrowest, and all five were reviewed within the last two days |
+| 2 | 120, 121, 122, 123, 124, 125, 126 | Behavioural security properties shipped in 0.79.0, each with tests to point at |
+| 3 | 105, 112, 115, 116, 118, 127 | Mixed. **115 needs care:** its prerequisite says `must_change` is "enforced or gone", and it is still present in `migrations.rs` and two migrations — so which of the two holds must be established, not assumed |
+
+One Level B run can serve a whole batch, since each RFC's evidence cites the same
+commit. That is what makes 18 closures tractable rather than 18 separate release-
+grade verifications.
+
 ### Planned RFC set and boundaries
 
 | RFC | Working title | Owns | Explicitly does not own | Handoff expectation |
