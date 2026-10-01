@@ -353,6 +353,10 @@ pub struct Strings {
     pub forgot_password_sent_title: &'static str,
     pub forgot_password_sent_lede: &'static str,
     pub forgot_password_sent_lede2: &'static str,
+    /// RFC 124 D7: a route forward for the caller whose address is not
+    /// registered, without revealing which caller that is — equally true
+    /// whether or not the address matched an account.
+    pub forgot_password_sent_lede3: &'static str,
     pub reset_password_title: &'static str,
     pub reset_password_lede: &'static str,
     pub reset_password_new_label: &'static str,

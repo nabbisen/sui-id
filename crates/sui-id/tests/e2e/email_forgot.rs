@@ -97,7 +97,7 @@ async fn forgot_password_post_neutral_response_for_unknown_email() {
     let csrf = extract_set_cookie(resp.headers(), "sui_id_csrf").expect("csrf");
 
     let body = format!("_csrf={csrf}&email=ghost%40nowhere.invalid");
-    let resp = build_router(state)
+    let resp = build_router(state.clone())
         .oneshot(
             Request::builder()
                 .method(Method::POST)
@@ -110,6 +110,31 @@ async fn forgot_password_post_neutral_response_for_unknown_email() {
         .await
         .expect("POST");
     assert_eq!(resp.status(), StatusCode::OK);
+
+    // RFC 124 D1: the response above returns before `request_reset` even
+    // runs. Wait for its one audit event (unknown address: Class-B, no
+    // user) before trusting that no mail was sent — otherwise this would
+    // also pass, for the wrong reason, in the instant before the detached
+    // task has run at all.
+    wait_until(
+        std::time::Duration::from_secs(2),
+        "unknown-address reset_requested event",
+        || async {
+            state
+                .db
+                .with_conn(|c| {
+                    Ok(c.query_row(
+                        "SELECT COUNT(*) FROM audit_log WHERE action = 'auth.password.reset_requested'",
+                        [],
+                        |r| r.get::<_, i64>(0),
+                    )?)
+                })
+                .await
+                .expect("count")
+                == 1
+        },
+    )
+    .await;
 
     // No mail was sent — the email did not match a user.
     assert_eq!(mailer.count().await, 0);
@@ -168,6 +193,14 @@ async fn forgot_password_post_sends_mail_for_known_email() {
         .await
         .expect("POST");
     assert_eq!(resp.status(), StatusCode::OK);
+
+    // RFC 124 D1: the response above returns before the mail is sent.
+    wait_until(
+        std::time::Duration::from_secs(2),
+        "reset-link mail",
+        || async { mailer.count().await == 1 },
+    )
+    .await;
 
     // One mail captured. Subject and body shape pinned so future
     // reword changes are intentional.
@@ -247,6 +280,14 @@ async fn reset_password_full_flow_changes_password_and_sends_notification() {
         .await
         .expect("POST forgot");
     assert_eq!(resp.status(), StatusCode::OK);
+
+    // RFC 124 D1: the response above returns before the mail is sent.
+    wait_until(
+        std::time::Duration::from_secs(2),
+        "reset-link mail",
+        || async { mailer.count().await == 1 },
+    )
+    .await;
 
     // Extract the token from the captured mail.
     let mail = mailer.last().await.expect("reset mail");
@@ -416,6 +457,7 @@ async fn issue_reset_token(
         .expect("GET forgot");
     let csrf = extract_set_cookie(resp.headers(), "sui_id_csrf").expect("csrf");
 
+    let before = mailer.count().await;
     let body = format!("_csrf={csrf}&email={}", urlencode(email));
     let resp = build_router(state.clone())
         .oneshot(
@@ -430,6 +472,14 @@ async fn issue_reset_token(
         .await
         .expect("POST forgot");
     assert_eq!(resp.status(), StatusCode::OK);
+
+    // RFC 124 D1: the response above returns before the mail is sent.
+    wait_until(
+        std::time::Duration::from_secs(2),
+        "reset-link mail",
+        || async { mailer.count().await > before },
+    )
+    .await;
 
     let mail = mailer.last().await.expect("reset mail captured");
     extract_reset_token_from_mail(&mail)

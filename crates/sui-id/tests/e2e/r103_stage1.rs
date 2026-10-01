@@ -206,10 +206,21 @@ pub(super) async fn issue_token(
     state: &AppState,
     mailer: &sui_id_core::mail::InMemoryMailSender,
 ) -> (String, PasswordResetTokenId) {
+    let before = mailer.count().await;
     assert_eq!(
         request_reset(state, "alice@test.invalid").await.status,
         StatusCode::OK
     );
+    // RFC 124 D1: the response above returns before the mail is sent. A
+    // caller may invoke this helper more than once against the same
+    // mailer (e.g. to mint two successive links), so wait for the count to
+    // *increase*, not merely to reach 1.
+    wait_until(
+        std::time::Duration::from_secs(2),
+        "reset-link mail",
+        || async { mailer.count().await > before },
+    )
+    .await;
     let token = token_from_mail(&mailer.last().await.expect("reset mail"));
     let hash = Sha256::digest(token.as_bytes()).to_vec();
     let row = sui_id_store::repos::password_reset_tokens::find_by_hash(&state.db, &hash)
@@ -274,6 +285,18 @@ async fn r103_directory_user_gets_no_token_and_a_minted_one_is_refused() {
     let directory = request_reset(&state, "bob@test.invalid").await;
     assert_eq!(unknown.status, directory.status);
     assert_eq!(unknown.body, directory.body);
+
+    // RFC 124 D1: both responses above return before `request_reset` runs
+    // for either address. Wait for both detached tasks' audit events before
+    // trusting the negative assertions below — otherwise they'd also pass
+    // in the instant before either task has run at all.
+    wait_until(
+        std::time::Duration::from_secs(2),
+        "unknown + directory reset_requested events",
+        || async { events(&state, "auth.password.reset_requested").await == before_requested + 2 },
+    )
+    .await;
+
     assert_eq!(mailer.count().await, 0, "no mail for a directory account");
     assert_eq!(
         scalar(

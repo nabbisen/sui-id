@@ -187,6 +187,10 @@ const MIGRATIONS: &[Migration] = &[
         version: 43,
         sql: include_str!("./migrations/0043_drop_credentials_must_change.sql"),
     },
+    Migration {
+        version: 44,
+        sql: include_str!("./migrations/0044_forgot_password_requests.sql"),
+    },
 ];
 
 /// The highest schema version this build of sui-id-store knows how to

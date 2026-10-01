@@ -12,6 +12,7 @@ pub mod credentials;
 pub mod email_outbox;
 pub mod federation_link;
 pub mod federation_provider;
+pub mod forgot_password_requests;
 pub mod json_util;
 pub mod login_pending_mfa;
 pub mod password_reset_tokens;

@@ -93,5 +93,10 @@ define_id!(
     "Identifier of an RFC 7591 initial access token row (RFC 008). The raw token value is stored hashed; this id is the row's primary key."
 );
 
+define_id!(
+    ForgotPasswordRequestId,
+    "Identifier of a durably recorded `/forgot-password` request row (RFC 124 D1): the request path's only write, before a background worker performs the address-dependent work."
+);
+
 #[cfg(test)]
 mod tests;

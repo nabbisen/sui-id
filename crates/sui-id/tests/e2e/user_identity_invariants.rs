@@ -157,6 +157,13 @@ async fn forgot_password_case_insensitive() {
     let resp = post_forgot_password(&state, "alice@example.com").await;
     assert_eq!(resp.status(), StatusCode::OK);
 
+    // RFC 124 D1: the response above returns before the mail is sent.
+    wait_until(
+        std::time::Duration::from_secs(2),
+        "reset-link mail",
+        || async { mailer.count().await == 1 },
+    )
+    .await;
     assert_eq!(
         mailer.count().await,
         1,

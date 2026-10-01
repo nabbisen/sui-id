@@ -428,6 +428,7 @@ pub fn render_forgot_password_sent(lang: sui_id_i18n::Locale) -> String {
                 <h1>{t.forgot_password_sent_title}</h1>
                 <p class="muted">{t.forgot_password_sent_lede}</p>
                 <p class="muted">{t.forgot_password_sent_lede2}</p>
+                <p class="muted">{t.forgot_password_sent_lede3}</p>
                 <p class="mt-4">
                     <a href="/admin/login" class="button">{t.back_to_login}</a>
                 </p>

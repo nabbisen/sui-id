@@ -334,6 +334,14 @@ async fn forgot_password_email_in_user_preferred_locale() {
     // returns 200; we don't assert on the redirect/body shape.
     let _ = resp.status();
 
+    // RFC 124 D1: the response above returns before the mail is sent.
+    wait_until(
+        std::time::Duration::from_secs(2),
+        "reset-link mail",
+        || async { mailer.count().await == 1 },
+    )
+    .await;
+
     let sent = mailer.drain().await;
     assert_eq!(sent.len(), 1, "expected one email, got {}", sent.len());
     let mail = &sent[0];

@@ -22,11 +22,16 @@
 //!
 //! # What we do not do here
 //!
-//! - **No background queue.** Sends are inline: the HTTP handler
-//!   awaits the result. The SMTP timeout is short (a few seconds);
-//!   on failure we record an audit event and let the user-facing
-//!   response continue. See the v0.22.0 CHANGELOG entry for
-//!   rationale.
+//! - **No background queue of its own** — the persistent outbox
+//!   (`outbox` submodule, RFC 001) is that queue for one call site.
+//!   Most sends are inline: the caller awaits the result (the SMTP
+//!   timeout is short — a few seconds — and on failure we record an
+//!   audit event and let the user-facing response continue; see the
+//!   v0.22.0 CHANGELOG entry). **`/forgot-password`'s send is not one
+//!   of them**: RFC 124 D1 moved that whole call, lookup and all, to
+//!   a task the handler does not await, specifically so a caller
+//!   cannot measure it. Do not assume every `MailSender::send` call
+//!   sits between a request and its response; check the call site.
 //! - **No templating engine.** The two messages we send are
 //!   built with `mail-builder` directly. Adding a templating layer
 //!   would buy nothing for two messages and would complicate the
@@ -85,8 +90,9 @@ pub struct MailSendOutcome {
 /// `Arc<dyn MailSender>` from `AppState`.
 pub trait MailSender: Send + Sync {
     /// Send one email. Implementations must not block longer than
-    /// their internal timeout; the caller is awaiting this and the
-    /// HTTP response is on the other side.
+    /// their internal timeout. Most callers await this with an HTTP
+    /// response on the other side; `/forgot-password`'s does not
+    /// (RFC 124 D1) — check the call site before assuming which.
     fn send<'a>(
         &'a self,
         mail: OutgoingMail,

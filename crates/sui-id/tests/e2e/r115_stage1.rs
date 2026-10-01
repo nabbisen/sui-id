@@ -182,6 +182,13 @@ async fn r115_d1_forgot_password_gives_a_never_activated_account_the_neutral_res
     // silence below is the rule and not a mailer that never sends.
     let control = forgot(&state, "alice@test.invalid").await;
     assert_eq!(control.status, StatusCode::OK);
+    // RFC 124 D1: the response above returns before the mail is sent.
+    wait_until(
+        std::time::Duration::from_secs(2),
+        "control reset-link mail",
+        || async { mailer.count().await == 1 },
+    )
+    .await;
     assert_eq!(
         mailer.count().await,
         1,
@@ -210,6 +217,16 @@ async fn r115_d1_forgot_password_gives_a_never_activated_account_the_neutral_res
         assert_eq!(r.location, unknown.location, "{name}: location");
     }
     assert_eq!(unknown.status, StatusCode::OK);
+
+    // RFC 124 D1: all three responses above return before `request_reset`
+    // runs for any of them. Wait for all three detached tasks' audit events
+    // before trusting the negative assertions below.
+    wait_until(
+        std::time::Duration::from_secs(2),
+        "unknown + non-local + never-activated reset_requested events",
+        || async { events(&state, "auth.password.reset_requested").await == requested_before + 3 },
+    )
+    .await;
 
     assert_eq!(
         mailer.count().await,
@@ -268,6 +285,13 @@ async fn r115_d1_an_account_that_has_held_a_password_is_unaffected() {
         forgot(&state, "carol@test.invalid").await.status,
         StatusCode::OK
     );
+    // RFC 124 D1: the response above returns before the mail is sent.
+    wait_until(
+        std::time::Duration::from_secs(2),
+        "reset-link mail",
+        || async { mailer.count().await == 1 },
+    )
+    .await;
     assert_eq!(mailer.count().await, 1);
 }
 

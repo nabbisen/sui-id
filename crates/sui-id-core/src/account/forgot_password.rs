@@ -29,10 +29,27 @@
 //!
 //! `request_reset` returns `Ok(())` whether the email matched a
 //! user or not (and, since RFC 115 D1, whether the matching local
-//! account has ever held a password or not), takes roughly the same time in both branches, and
-//! emits a `auth.password.reset_requested` event in either case.
-//! The handler always shows a generic "if an account exists, we've
-//! sent the link" page.
+//! account has ever held a password or not), and emits a
+//! `auth.password.reset_requested` event in either case.
+//!
+//! **This function's own branches do not cost the same amount of work**, and
+//! RFC 124 no longer claims they do — six branches, not two, measured in
+//! RFC 124's stage 1
+//! (`rfcs/handoffs/124-the-uniform-response-is-uniform/d1b-measurement.md`):
+//! a known, active, under-cap address costs roughly an order of magnitude
+//! more than any branch that returns early. **That is no longer something a
+//! caller can observe.** `POST /forgot-password`
+//! (`crates/sui-id/src/http/handlers/forgot_password.rs`) does not call this
+//! function before responding at all: RFC 124 D1's stage 2 decision made the
+//! request path's only write a durable, unconditional record of the
+//! request (`sui_id_store::repos::forgot_password_requests::record`) — no
+//! lookup, no branch on the address — and moved this entire function
+//! behind [`ForgotPasswordWorker`], which claims that record afterward. A
+//! process restart between the response and the worker draining the record
+//! does not lose the request (unlike a detached `tokio::spawn`, which the
+//! architect considered and rejected for exactly that reason). No branch
+//! here, however costly, reaches the caller as a timing signal, and none of
+//! them can be lost to an ordinary restart either.
 
 use crate::errors::{CoreError, CoreResult};
 use crate::events::{self, Context, SecurityEvent};
@@ -513,4 +530,140 @@ fn html_escape(s: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&#39;")
+}
+
+/// Background worker that claims `forgot_password_requests` rows and runs
+/// [`request_reset`] for each one (RFC 124 D1's stage 2). Mirrors
+/// `mail::outbox::OutboxWorker`'s shape: claim one, process, continue
+/// immediately if there's more, otherwise sleep a short idle tick.
+pub struct ForgotPasswordWorker {
+    db: Database,
+    clock: SharedClock,
+    mailer: std::sync::Arc<dyn MailSender>,
+    issuer: String,
+    idle_tick: std::time::Duration,
+}
+
+impl ForgotPasswordWorker {
+    /// `idle_tick` (not whole seconds, unlike `OutboxWorker`): this queue
+    /// has no backoff schedule to respect — a row is either claimable now
+    /// or the queue is empty — so how fast it reacts is purely an idle-poll
+    /// cadence, and tests want that much shorter than production does.
+    pub fn new(
+        db: Database,
+        clock: SharedClock,
+        mailer: std::sync::Arc<dyn MailSender>,
+        issuer: String,
+        idle_tick: std::time::Duration,
+    ) -> Self {
+        Self {
+            db,
+            clock,
+            mailer,
+            issuer,
+            idle_tick,
+        }
+    }
+
+    /// Spawn the worker as a Tokio background task. Returns a `JoinHandle`;
+    /// callers typically drop it (fire-and-forget) — the durability this
+    /// worker depends on lives in the `forgot_password_requests` table, not
+    /// in this task surviving.
+    pub fn spawn(self) -> tokio::task::JoinHandle<()> {
+        tokio::spawn(async move {
+            self.run().await;
+        })
+    }
+
+    async fn run(self) {
+        // A row left `processing` means the previous process died
+        // mid-work, not that the work happened — reset it so it is
+        // claimable again (mirrors `requeue_stuck_sending`'s reasoning).
+        if let Err(e) = sui_id_store::repos::forgot_password_requests::requeue_stuck_processing(
+            &self.db,
+            self.clock.now(),
+        )
+        .await
+        {
+            tracing::warn!(
+                error = %e,
+                "forgot-password worker: could not reset stuck rows at startup"
+            );
+        }
+
+        loop {
+            match sui_id_store::repos::forgot_password_requests::claim_one(
+                &self.db,
+                self.clock.now(),
+            )
+            .await
+            {
+                Ok(Some(row)) => {
+                    self.process_row(row).await;
+                    // Continue immediately — there may be more.
+                }
+                Ok(None) => tokio::time::sleep(self.idle_tick).await,
+                Err(e) => {
+                    tracing::error!(error = %e, "forgot-password worker: claim_one failed");
+                    tokio::time::sleep(self.idle_tick).await;
+                }
+            }
+        }
+    }
+
+    /// Process every currently-claimable row, then return — instead of
+    /// `run`'s infinite loop. Public so integration tests can drive exactly
+    /// one drain deterministically, the same idiom `gc::run_once` uses.
+    pub async fn drain_once(&self) {
+        loop {
+            match sui_id_store::repos::forgot_password_requests::claim_one(
+                &self.db,
+                self.clock.now(),
+            )
+            .await
+            {
+                Ok(Some(row)) => self.process_row(row).await,
+                Ok(None) => return,
+                Err(e) => {
+                    tracing::error!(error = %e, "forgot-password worker: claim_one failed");
+                    return;
+                }
+            }
+        }
+    }
+
+    async fn process_row(
+        &self,
+        row: sui_id_store::repos::forgot_password_requests::ForgotPasswordRequestRow,
+    ) {
+        if let Err(e) = request_reset(
+            &self.db,
+            &self.clock,
+            self.mailer.as_ref(),
+            &self.issuer,
+            &row.email,
+            row.requester_ip.as_deref(),
+        )
+        .await
+        {
+            // Matches the pre-RFC-124 handler's own `let _ = request_reset(...)`:
+            // best-effort, no retry. The row is still deleted below — a
+            // request that fails here failed the same way, and as
+            // unretried, as it always has; what changed is that it can no
+            // longer be lost to a restart *before* this point is reached.
+            tracing::warn!(
+                error = %e,
+                "forgot-password worker: request_reset failed for a queued request"
+            );
+        }
+        if let Err(e) =
+            sui_id_store::repos::forgot_password_requests::delete(&self.db, row.id).await
+        {
+            tracing::error!(
+                error = %e,
+                id = %row.id,
+                "forgot-password worker: could not delete a processed row"
+            );
+        }
+    }
 }

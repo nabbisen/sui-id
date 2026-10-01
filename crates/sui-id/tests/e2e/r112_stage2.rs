@@ -138,11 +138,23 @@ fn stderr(o: &Output) -> String {
 
 const RELEASE: &str = env!("CARGO_PKG_VERSION");
 
+/// One above whatever this build's ceiling currently is — "too new" by
+/// construction, immune to the next migration landing. A hardcoded literal
+/// here is exactly the trap RFC 124's migration (0044) sprang on this file
+/// once already: `44` stopped meaning "too new" the moment it became the
+/// real ceiling.
+fn too_new_version() -> i64 {
+    i64::from(sui_id_store::migrations::MAX_SCHEMA_VERSION) + 1
+}
+
 #[test]
 fn a_cli_subcommand_against_a_too_new_database_prints_one_line_and_exits_65() {
     let h = Home::new();
     h.create();
-    h.stamp("UPDATE sui_meta SET value='44' WHERE key='schema_version'");
+    let too_new = too_new_version();
+    h.stamp(&format!(
+        "UPDATE sui_meta SET value='{too_new}' WHERE key='schema_version'"
+    ));
     let cfg = h.config(false);
     let out = run(
         &["admin", "unlock-user", "--username", "nobody", "--config"],
@@ -153,7 +165,7 @@ fn a_cli_subcommand_against_a_too_new_database_prints_one_line_and_exits_65() {
         "{}\n",
         too_new_line(
             &h.db(),
-            44,
+            too_new,
             sui_id_store::migrations::MAX_SCHEMA_VERSION,
             Some(RELEASE)
         )
@@ -161,7 +173,7 @@ fn a_cli_subcommand_against_a_too_new_database_prints_one_line_and_exits_65() {
     assert_eq!(stderr(&out), expected, "first and alone, and nothing else");
     assert!(out.stdout.is_empty());
     assert!(!stderr(&out).contains("Error:") && !stderr(&out).contains("Caused by"));
-    assert_eq!(h.stored(), "44", "nothing was changed");
+    assert_eq!(h.stored(), too_new.to_string(), "nothing was changed");
 }
 
 #[test]
@@ -252,7 +264,10 @@ fn both_refusal_variants_and_every_opener_share_exit_code_65() {
             );
         }
         // Put the true stamp back for the next variant.
-        h.stamp("INSERT OR REPLACE INTO sui_meta(key, value) VALUES('schema_version', '43')");
+        h.stamp(&format!(
+            "INSERT OR REPLACE INTO sui_meta(key, value) VALUES('schema_version', '{}')",
+            sui_id_store::migrations::MAX_SCHEMA_VERSION
+        ));
     }
 }
 
@@ -260,20 +275,23 @@ fn both_refusal_variants_and_every_opener_share_exit_code_65() {
 fn serve_against_a_too_new_database_exits_65_with_the_line_first_and_alone() {
     let h = Home::new();
     h.create();
-    h.stamp("UPDATE sui_meta SET value='44' WHERE key='schema_version'");
+    let too_new = too_new_version();
+    h.stamp(&format!(
+        "UPDATE sui_meta SET value='{too_new}' WHERE key='schema_version'"
+    ));
     let out = serve(&h.config(false));
     assert_eq!(out.status.code(), Some(65));
     let expected = format!(
         "{}\n",
         too_new_line(
             &h.db(),
-            44,
+            too_new,
             sui_id_store::migrations::MAX_SCHEMA_VERSION,
             Some(RELEASE)
         )
     );
     assert_eq!(stderr(&out), expected);
-    assert_eq!(h.stored(), "44");
+    assert_eq!(h.stored(), too_new.to_string());
 }
 
 #[test]
@@ -296,7 +314,10 @@ fn serve_against_a_garbled_stamp_exits_65_too() {
 fn serve_logs_one_tracing_event_with_found_supported_and_the_path() {
     let h = Home::new();
     h.create();
-    h.stamp("UPDATE sui_meta SET value='44' WHERE key='schema_version'");
+    let too_new = too_new_version();
+    h.stamp(&format!(
+        "UPDATE sui_meta SET value='{too_new}' WHERE key='schema_version'"
+    ));
     let out = serve(&h.config(true));
     assert_eq!(out.status.code(), Some(65));
     // The line is first on stderr; with a log file configured, tracing also
@@ -317,7 +338,14 @@ fn serve_logs_one_tracing_event_with_found_supported_and_the_path() {
     assert_eq!(events.len(), 1, "exactly one event: {logged}");
     let e = events[0];
     assert!(e.contains("ERROR"), "{e}");
-    assert!(e.contains("found=44") && e.contains("supported=43"), "{e}");
+    assert!(
+        e.contains(&format!("found={too_new}"))
+            && e.contains(&format!(
+                "supported={}",
+                sui_id_store::migrations::MAX_SCHEMA_VERSION
+            )),
+        "{e}"
+    );
     assert!(e.contains(&h.db().display().to_string()), "{e}");
     assert!(e.contains("schema_too_new"), "{e}");
 }
@@ -353,7 +381,10 @@ fn backup_of_a_database_the_binary_cannot_open_still_works() {
     // file-level snapshot and never calls `Database::open`.
     let h = Home::new();
     h.create();
-    h.stamp("UPDATE sui_meta SET value='44' WHERE key='schema_version'");
+    h.stamp(&format!(
+        "UPDATE sui_meta SET value='{}' WHERE key='schema_version'",
+        too_new_version()
+    ));
     let to = h.dir.path().join("out.tar");
     let out = Command::new(BIN)
         .args(["backup", "--to"])

@@ -33,13 +33,37 @@ pub fn test_app() -> AppState {
 
 /// Like `test_app` but also returns the in-memory mail sender so
 /// the caller can assert on captures.
+///
+/// RFC 124 D1: spawns a `ForgotPasswordWorker` bound to this state's own
+/// mailer, with a short idle tick, so `/forgot-password` tests see the
+/// same eventual processing production does — just faster. A test that
+/// needs a *different* mailer in the loop (for example, one that gates a
+/// send to prove something about ordering) should use [`app_over_db`]
+/// directly instead, which spawns no worker of its own, and spawn its own
+/// `ForgotPasswordWorker` against whatever `AppState` it builds.
 pub fn test_app_with_mailer() -> (
     AppState,
     std::sync::Arc<sui_id_core::mail::InMemoryMailSender>,
 ) {
     let key = MasterKey::generate();
     let db = Database::open_in_memory(key).expect("open db");
-    app_over_db(db)
+    let (state, mailer) = app_over_db(db);
+    spawn_forgot_password_worker(&state);
+    (state, mailer)
+}
+
+/// Spawn a `ForgotPasswordWorker` against `state`'s own db/clock/mailer, at
+/// a test-appropriate idle tick (2ms — fast enough that
+/// [`wait_until`]'s few-second timeouts are pure headroom, not a race).
+pub fn spawn_forgot_password_worker(state: &AppState) -> tokio::task::JoinHandle<()> {
+    sui_id_core::forgot_password::ForgotPasswordWorker::new(
+        state.db.clone(),
+        state.clock.clone(),
+        state.mailer.clone(),
+        state.issuer().to_owned(),
+        std::time::Duration::from_millis(2),
+    )
+    .spawn()
 }
 
 /// The test app over an existing database, for a test that prepared one on
@@ -375,6 +399,34 @@ pub async fn enable_smtp(state: &AppState) {
     )
     .await
     .expect("upsert smtp");
+}
+
+/// Poll `cond` until it returns `true`, or panic with `msg` once `timeout`
+/// elapses.
+///
+/// RFC 124 D1 moved `/forgot-password`'s per-address work (the lookup, the
+/// token, the mail) to a task the handler does not await, so a test
+/// observing that work's effect — a captured mail, a token row, an audit
+/// event — can no longer assume it is already there the instant the HTTP
+/// response returns; it has to wait for it. Keep `timeout` generous: RFC
+/// 124's own stage 1 measurement put the slowest branch at well under a
+/// millisecond in-process, so a multi-second timeout is pure headroom, not
+/// a tuned threshold, and this helper contributes no flakiness of its own.
+pub async fn wait_until<F, Fut>(timeout: std::time::Duration, msg: &str, mut cond: F)
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = bool>,
+{
+    let deadline = tokio::time::Instant::now() + timeout;
+    loop {
+        if cond().await {
+            return;
+        }
+        if tokio::time::Instant::now() >= deadline {
+            panic!("{msg}: condition did not become true within {timeout:?}");
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+    }
 }
 
 /// Extract `_csrf` token from rendered HTML. Used by tests that

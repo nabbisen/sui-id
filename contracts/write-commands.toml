@@ -1145,6 +1145,28 @@ files = ["crates/sui-id-store/src/backup/ops.rs"]
 test_id = "`o_o04_backup_snapshot`"
 
 [[command]]
+id = "O05"
+class = "O"
+status = "implemented"  # implemented | target-absent | target-legacy
+sealed = false
+owner = "Record a forgot-password request"
+rationale = "RFC 124 D1: the request path's only write, unconditional on the address; the originating `auth.password.reset_requested` event is owned by `request_reset` once the worker claims the row, not by this insert"
+mutation_surface = "`forgot_password_requests::record`"
+files = ["crates/sui-id-store/src/repos/forgot_password_requests.rs"]
+test_id = "`o_o05_record_is_durable_and_outstanding_until_claimed`"
+
+[[command]]
+id = "O06"
+class = "O"
+status = "implemented"  # implemented | target-absent | target-legacy
+sealed = false
+owner = "Claim/requeue/delete forgot-password-request work"
+rationale = "worker lifecycle with no audit event of its own, same shape as O02"
+mutation_surface = "`claim_one`, `requeue_stuck_processing`, `delete`"
+files = ["crates/sui-id-store/src/repos/forgot_password_requests.rs"]
+test_id = "`o_o06_claim_marks_processing_and_requeue_resets_it`"
+
+[[command]]
 id = "X01"
 class = "X"
 status = "implemented"  # implemented | target-absent | target-legacy

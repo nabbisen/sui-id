@@ -3,10 +3,13 @@
 //! User-facing flow:
 //!
 //!   GET  /forgot-password           — render request form
-//!   POST /forgot-password           — issue token + send email,
-//!                                       always 200 + neutral
-//!                                       message (user-enumeration
-//!                                       neutral)
+//!   POST /forgot-password           — accepts, hands the per-address work
+//!                                       off to a detached task, and
+//!                                       responds immediately with a fixed
+//!                                       200 + neutral message (RFC 124 D1:
+//!                                       no classification on the request
+//!                                       path, so there is nothing here for
+//!                                       a caller to measure)
 //!   GET  /reset-password            — render new-password form; the token
 //!                                       arrives in the link's fragment
 //!                                       (`#t=<token>`) or is pasted
@@ -93,17 +96,27 @@ pub async fn forgot_password_post(
         crate::handlers::ErrorAs::Html,
     )?;
 
-    // Best-effort. Internal failures audit-logged inside.
+    // RFC 124 D1 (stage 2): the request path performs no classification.
+    // It durably records that a recovery was requested for the submitted
+    // address — unconditionally, with no lookup and no branch on whether
+    // the address belongs to an account — then responds.
+    // `ForgotPasswordWorker` claims this row afterward and does everything
+    // that used to run inline: the source and credential checks, the
+    // outstanding-token throttle, the token, the mail. Recording here,
+    // synchronously, rather than spawning a detached task (considered and
+    // rejected — see the handoff) means a process restart between this
+    // response and the worker draining the row does not lose the request:
+    // the row is still there, `pending`, to claim.
     let ip_str = ip.to_string();
-    let _ = sui_id_core::forgot_password::request_reset(
+    sui_id_store::repos::forgot_password_requests::record(
         &app.db,
-        &app.clock,
-        app.mailer.as_ref(),
-        app.issuer(),
-        &form.email,
-        Some(&ip_str),
+        sui_id_shared::ids::ForgotPasswordRequestId::new(),
+        form.email.clone(),
+        Some(ip_str),
+        app.clock.now(),
     )
-    .await;
+    .await
+    .map_err(|e| HttpError::html(CoreError::from(e)))?;
 
     // Always return the same neutral acknowledgement.
     let token = csrf::ensure_token(&jar);

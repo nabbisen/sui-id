@@ -132,6 +132,19 @@ async fn serve(args: &[String]) -> Result<()> {
         );
         worker.spawn();
     }
+    // RFC 124 D1: spawn the forgot-password-request worker. The handler
+    // only records the request; this is what actually performs the
+    // lookup, the token, and the mail.
+    {
+        let worker = sui_id_core::forgot_password::ForgotPasswordWorker::new(
+            startup.state.db.clone(),
+            startup.state.clock.clone(),
+            startup.state.mailer.clone(),
+            startup.state.issuer().to_owned(),
+            std::time::Duration::from_secs(1),
+        );
+        worker.spawn();
+    }
     // One-shot backfill: populate token_hash for any refresh_token rows
     // that predate migration 0019. Runs in the background; the system is
     // correct before it completes.
@@ -302,6 +315,20 @@ async fn serve_dev(args: &[String]) -> Result<()> {
 
     let router = build_router(state.clone());
     sui_id::gc::spawn(state.clone());
+    // RFC 124 D1: dev mode builds `AppState` directly (not via
+    // `startup::prepare`) and sends mail inline via `SmtpMailSender`
+    // rather than through the persistent outbox — but `/forgot-password`
+    // still only records a request; nothing processes it without this.
+    {
+        let worker = sui_id_core::forgot_password::ForgotPasswordWorker::new(
+            state.db.clone(),
+            state.clock.clone(),
+            state.mailer.clone(),
+            state.issuer().to_owned(),
+            std::time::Duration::from_secs(1),
+        );
+        worker.spawn();
+    }
     {
         let db = state.db.clone();
         tokio::spawn(async move {
