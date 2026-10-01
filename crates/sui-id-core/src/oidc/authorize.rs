@@ -626,10 +626,12 @@ async fn authenticate_client(
         code: ProtocolError::InvalidClient,
         description: "client_secret is required".into(),
     })?;
-    crate::password::verify_password(provided, stored).map_err(|_| CoreError::Protocol {
-        code: ProtocolError::InvalidClient,
-        description: "client authentication failed".into(),
-    })
+    crate::password::verify_password(provided, stored)
+        .await
+        .map_err(|_| CoreError::Protocol {
+            code: ProtocolError::InvalidClient,
+            description: "client authentication failed".into(),
+        })
 }
 
 /// Sign the access/ID-token pair. Shared by initial issuance (T09) and

@@ -385,7 +385,7 @@ pub async fn consume_and_reset_password(
 
     // Hash the new password before entering the transaction so a slow
     // Argon2id derivation doesn't hold the DB mutex longer than necessary.
-    let new_hash = password::hash_password(new_password)?;
+    let new_hash = password::hash_password(new_password).await?;
 
     // RFC 094 U10: credential swap, token consume, session/refresh-token
     // revocation, and the `auth.password.reset_completed` audit append

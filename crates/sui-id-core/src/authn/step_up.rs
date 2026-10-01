@@ -411,7 +411,11 @@ pub async fn verify_current_password(
         Err(sui_id_store::StoreError::NotFound) => return Ok(false),
         Err(e) => return Err(e.into()),
     };
-    Ok(crate::password::verify_password(password, &cred.password_hash).is_ok())
+    Ok(
+        crate::password::verify_password(password, &cred.password_hash)
+            .await
+            .is_ok(),
+    )
 }
 
 #[cfg(test)]
@@ -461,7 +465,9 @@ mod tests {
         )
         .await
         .expect("create user");
-        let phc = password::hash_password("the-tester-password").expect("hash");
+        let phc = password::hash_password("the-tester-password")
+            .await
+            .expect("hash");
         credentials::upsert(
             db,
             &CredentialRow {

@@ -140,7 +140,7 @@ pub async fn login_with_mfa(
         Ok(u) => u,
         Err(sui_id_store::StoreError::NotFound) => {
             // Constant-time-ish dummy verify regardless of branch.
-            let _ = verify_password(password, DUMMY_PHC);
+            let _ = verify_password(password, DUMMY_PHC).await;
             record_login_failure(db, clock, username, "unknown user").await;
             return Err(CoreError::InvalidCredentials);
         }
@@ -148,7 +148,7 @@ pub async fn login_with_mfa(
     };
 
     if user.is_disabled || user.is_deleted {
-        let _ = verify_password(password, DUMMY_PHC);
+        let _ = verify_password(password, DUMMY_PHC).await;
         record_login_failure(db, clock, username, "user disabled or deleted").await;
         return Err(CoreError::InvalidCredentials);
     }
@@ -161,7 +161,7 @@ pub async fn login_with_mfa(
     if let Some(locked_until) = user.locked_until
         && locked_until > clock.now()
     {
-        let _ = verify_password(password, DUMMY_PHC);
+        let _ = verify_password(password, DUMMY_PHC).await;
         // Audit-logged with a different reason so operators can
         // distinguish a brute-force attempt from honest typos.
         // The HTTP response is the same generic 401 either way.
@@ -189,9 +189,9 @@ pub async fn login_with_mfa(
         Err(other) => return Err(other.into()),
     };
     let verdict = match &cred {
-        Some(cred) => verify_password(password, &cred.password_hash),
+        Some(cred) => verify_password(password, &cred.password_hash).await,
         None => {
-            let _ = verify_password(password, DUMMY_PHC);
+            let _ = verify_password(password, DUMMY_PHC).await;
             Err(CoreError::InvalidCredentials)
         }
     };
