@@ -51,3 +51,84 @@ detector's failure modes — not the generator plumbing, which is mechanical. If
 scope can be made too narrow, say so and stop; a silently skipped gate is worse
 than a slow one, and the thirty-one minutes this RFC exists to save is not worth
 one unenforced security property.
+## Dispatched 2026-10-01 — stage 3
+
+**Do stages 1 and 2 first** —
+[`../132-the-files-a-stranger-reads-first/README.md`](../132-the-files-a-stranger-reads-first/README.md).
+Stage 4 follows this one, in
+[`../131-two-gate-levels-and-one-rule/README.md`](../131-two-gate-levels-and-one-rule/README.md),
+and depends on D1 here existing.
+
+All of D1–D4 and D6–D8, as one stage. They are not separable: D4 fails generation
+when a scope is missing, so it only makes sense once D1 gives gates a scope to
+declare; and D7 and D8 are the two properties that keep the whole thing from being
+a silent hole.
+
+### What to build
+
+**D1** — a `paths` key per gate in `contracts/gate-inputs.toml`, emitted by
+`scripts/generate-ci-workflow.py`. The contract stays the source of truth; the
+workflow stays generated and freshness-checked.
+
+**D2** — **only G01–G09b carry a scope.** Every other gate always runs. Do not
+scope G11, G13, G15, G16, G17 or G18 on cost grounds even though some read
+`crates/` — they guard documentary claims and the whole cheap set measures about
+two minutes.
+
+**D3** — the Rust scope: `crates/**`, `Cargo.toml`, `Cargo.lock`,
+`rust-toolchain*`, `scripts/ci-gate.sh`, `contracts/gate-inputs.toml`,
+`contracts/workflow-template.toml`, `.github/workflows/ci.yml`. The last four are
+the ones a careless filter omits: they change what a lane *verifies*, not what it
+compiles.
+
+**D4** — a gate with no declared scope is a **generation error**, exit non-zero.
+`paths = ["**"]` is how a gate says "always", visibly. An omission must never
+default to anything.
+
+**D6** — one workflow with a cheap `changes` job and `if:` conditions. **Not
+separate per-domain workflow files**: a workflow that does not trigger reports
+*nothing*, not success, which would block a pull request permanently under branch
+protection.
+
+**D7** — the detector **fails open**. Any condition where the changed set is not
+known with certainty runs the complete matrix: absent, zero or unresolvable base
+ref; any non-`push` event; any diff error. `workflow_dispatch` must run everything
+— RFC 131 D2 depends on that being reliable.
+
+**D8** — `scripts/check-gate-inputs.sh` asserts no build-affecting file exists
+outside the declared Rust scope. The candidate set, verified absent from the tree
+on 2026-10-01: `.cargo/config.toml`, `rust-toolchain.toml`, `clippy.toml`,
+`rustfmt.toml`, `deny.toml`, any `build.rs`, `.sqlx/`. Adding one of those later
+must break CI loudly rather than quietly narrow a lane's trigger.
+
+### What is most worth attacking
+
+**Can a scope be made too narrow?** That is the whole risk, and the generator
+plumbing is mechanical by comparison. Specifically:
+
+- Try to construct a change that affects a Rust lane but matches no path in D3.
+  If you find one, **stop and report it** — do not widen the list and move on
+  quietly, because the same reasoning gap will produce the next omission.
+- Try to make the detector report an empty changed set. Force-push, first push on
+  a branch, a merge commit, a multi-parent range, `workflow_dispatch`. Each must
+  run the full matrix, not nothing.
+
+**A silently skipped gate is worse than a slow one.** The thirty-one minutes this
+RFC saves is not worth one unenforced security property.
+
+### Expected effect, so you can tell whether it worked
+
+A documentation-only push drops from ~31 minutes to about 2. A push touching
+`crates/**` is unchanged. Measured baseline: 72% of the last 29 pushes touched
+neither `crates/` nor `Cargo.*`.
+
+### Protocol
+
+As in stage 1's dispatch: hand over a working tree, state the **parent** commit as
+baseline, declare every hunk's hash, and run gates through `scripts/ci-gate.sh`.
+
+One more, specific to this stage: **when you check a CI result, assert the
+workflow and the job set, not the conclusion.** A commit can have several runs —
+`756e9f9` had `Security audit` (one job) and `CI` (23 jobs), both reporting
+`success`. A release was nearly tagged on the wrong one. Green is not evidence of
+complete.
