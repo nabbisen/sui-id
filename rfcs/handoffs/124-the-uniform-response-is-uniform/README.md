@@ -74,21 +74,68 @@ the numbers do not carry — **"this claim should simply be deleted" is a
 legitimate outcome**, and so is "the asymmetry is real but unexploitable, and
 here is why".
 
-## Stage 2 — dispatched only after stage 1 is reviewed
+## Stage 2 — dispatched 2026-10-01, on the measurement
 
-Its content depends on stage 1 and is not specified here, deliberately. If it
-runs, RFC 124 D2–D5 govern it: move the unequal work off the request path or
-equalise it, say which and why, write the true statement where a reader meets
-it, and defend it with a test that states its own tolerance and flakiness
-budget.
+Stage 1 landed (`318e33f`). Its numbers decide what this stage is:
+**branch 6 at 234–380 µs against 19–37 µs for the other five** — an order of
+magnitude, trivially distinguishable, separating a healthy actionable account
+from an unknown address, a **disabled** one, and one **already mid-recovery**.
+The five small branches differ by microseconds and are impractical remotely.
 
-## Evidence
+**So the work is structural, not work-matching** — RFC 124 D1 as amended. Five
+matched costs maintained forever is five places a future edit reopens a gap; one
+code path before the response has none.
 
-Stage 1: the measurement file, and confirmation of the four `file:line` claims
-above. Stage 2: the usual package, plus the test and its stated tolerance.
+### The architect's decision, and its cost
 
-## What to return
+**The request path does one thing: it durably records that a recovery was
+requested for the submitted address, then responds.** Everything else — the
+`UserSource` filter, the credentials lookup, the disabled check, the
+outstanding-token throttle, the token mint, the token insert, the SMTP read, the
+outbox insert — happens in a worker, after the response.
 
-Stage 1: a review-request package naming the measurement file, with your reading
-of what it shows and a recommendation — **including "this claim should simply be
-deleted", if that is what the numbers say.**
+**This needs a new durable row, and therefore a migration.** I considered
+spawning a task instead, and rejected it: a spawned task loses the request if the
+process restarts, so a user would be told "request received" and never receive
+mail — **the exact failure D6 and D7 exist to end**, reintroduced by the fix for
+D1. A side-channel fix that creates a silent correctness loss is not a fix.
+
+**State the cost plainly in the package**: RFC 112 made a binary refuse a database
+newer than it understands, so a migration means this release is **not rollback-safe
+with the binary alone**. That is the price, it is known, and it is accepted for a
+gap that distinguishes a healthy account from a disabled one.
+
+**If you find this infeasible or find a third structure, say so rather than
+building around it.** Feasibility is yours; the choice between durability and a
+migration is mine and is made.
+
+### Also in this stage
+
+- **D1's amplification bound**: confirm the per-IP five-per-sixty-seconds limit
+  bounds unconditional recording, rather than assuming it. If it does not, stop
+  and say what bound does.
+- **The hand-off must not be conditional on anything address-derived**, or the
+  ladder returns in a new place. This is the thing to check hardest.
+- **D6 — no screen asserts what may be false.** The title says "Email sent" in
+  all three locales above a body saying "if an account exists". It becomes true
+  for every caller: what happened is that the request was received.
+- **D7 — a route forward.** A user whose address is not registered currently gets
+  "check your spam folder" and nothing else. Say, without revealing which case
+  the reader is in, that if nothing arrives the address may not be the registered
+  one, and what to do then. **This costs no secrecy**: it is equally true for both
+  callers.
+- **D8** — the three locales' new strings join the existing native-review queue;
+  do not start a second one.
+
+### Evidence
+
+- The six branches re-measured after the change, by stage 1's own method and
+  artefact format, showing the request path's cost no longer varies by branch.
+- A test that the response is byte-identical and the status identical across all
+  six.
+- A test that a recovery request survives a restart between the response and the
+  worker draining it — the property the spawned-task alternative would have lost.
+- Mutations: make the recording conditional on the lookup; drop the worker.
+- fmt and clippy **through `scripts/ci-gate.sh`**, not by hand — a hand-run
+  `cargo fmt` passed while the gate's `cargo +stable fmt` failed on 2026-10-01.
+
