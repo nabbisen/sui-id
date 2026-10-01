@@ -213,7 +213,10 @@ CI history: `4f58066` passed, `1b786ed` **failed** at `:502` with *"assertion
 It waits for `mailer.count().await == 1`, then asserts `count_outstanding == 0`.
 But `ForgotPasswordWorker::process_row` calls `request_reset` first — which is
 what enqueues the mail — at `crates/sui-id-core/src/account/forgot_password.rs:639`,
-and only *afterwards* calls `delete` at `:660`. So between those two awaits the
+and only *afterwards* calls `delete` at `:660`. The send is **awaited inside**
+`request_reset`, at `:292` (`mailer.send(mail).await`), not spawned — so the mail
+count has already reached 1 by the time `request_reset` returns, with the row
+still present until `:660` completes. So between those two awaits the
 mail count is already 1 while the row still exists, and the assertion that
 follows the wait can observe exactly that window.
 
