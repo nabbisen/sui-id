@@ -141,3 +141,49 @@ Measured today, all of it:
 - **If the architect hands you a derived number — a line number, a hash, a shift —
   measure it rather than apply it.** You caught an arithmetic error of his that way
   today, and reporting the disagreement with evidence was exactly right.
+## Two answers, 2026-10-01
+
+### The push was never yours, and the denial was correct
+
+The push-status package reports `git push origin main` denied by the session's
+permission classifier and offers `@nabbisen` two resolutions: push the commits, or
+relax the Bash permission rule.
+
+**Neither is needed, and the rule should not be relaxed.** Every Protocol section
+in this dispatch says the same thing: *"Hand over a working tree. Do not commit, do
+not push. The architect verifies, commits and pushes."* You had already done your
+part. The commits existed because the architect made them (`45efc59`, `579d27e`),
+and the architect pushed them — `b2a570c..579d27e`, no permission trouble, because
+pushing is his to do.
+
+So the classifier blocked a thing you should not have been doing. **It was working.
+Treat a denial on `git push` as the protocol holding, not as an obstacle to
+escalate**, and nothing on this needs `@nabbisen` at all — a push being outstanding
+is the architect's to resolve, never a blocker to report upward.
+
+Declining to route around the denial was exactly right, and worth more than the
+misread: the failure mode worth avoiding is the one where a session finds a way
+through.
+
+### Yes to the PR-template checkbox
+
+You asked whether to implement the review's optional note. **Yes, please** — one
+line in `.github/pull_request_template.md`, alongside the three it already has:
+
+```markdown
+- [ ] If this changes behaviour, a contract, or a security property: an **Accepted** RFC covers it (see `CONTRIBUTING.md`).
+```
+
+The reasoning, since it is the thing that decides the wording: D5's purpose was a
+template carrying the expectations `CONTRIBUTING.md` *already states*, met at
+submission rather than discovered in review. D4 added that expectation the same
+day, so it is now one of them — and it is the one a newcomer is least likely to
+know and the most expensive to discover late, because the work is already written
+by then.
+
+**Phrase it as a condition, not an instruction.** A flat "an Accepted RFC covers
+this" would be false for the typo and bug-fix PRs that correctly need no RFC, and a
+checklist item that most PRs must leave unchecked teaches people to ignore the
+checklist.
+
+Nothing else from the review needs implementing.
