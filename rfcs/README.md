@@ -135,6 +135,7 @@ Proposed: the move approved nothing.
 | 129 | [Review is scoped to who exists, and an external reviewer is engaged once, deliberately](./accepted/129-review-scoped-to-who-exists.md) | [129-review-scoped-to-who-exists](./handoffs/129-review-scoped-to-who-exists/README.md) |
 | 130 | [A gate declares the inputs it depends on, and runs when they change](./accepted/130-gates-declare-their-input-scope.md) | [130-gates-declare-their-input-scope](./handoffs/130-gates-declare-their-input-scope/README.md) |
 | 131 | [Two gate levels, and one rule about claims](./accepted/131-two-gate-levels-and-one-rule.md) | [131-two-gate-levels-and-one-rule](./handoffs/131-two-gate-levels-and-one-rule/README.md) |
+| 132 | [The files a stranger reads first](./proposed/132-the-files-a-stranger-reads-first.md) | — not yet; Proposed |
 
 ### Implemented — Mockup Integration epic (Phase 0 → Phase 8)
 

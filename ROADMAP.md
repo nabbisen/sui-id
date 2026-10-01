@@ -484,12 +484,23 @@ trade is visible rather than implied:
 | `CHANGELOG.md` 0.79.0 | **Users who read it** — states both classes, names the affected versions, says what to do |
 | A GHSA advisory | Users who do **not** look, via `cargo audit` |
 
-The architect's reservation: the third row is the only one that reaches someone
-automatically. This project runs `cargo audit` itself
+**His basis, stated 2026-10-01:** *"the app has never been used in production."*
+That is the reason, and it is the right one — an advisory warns deployments, and
+there are none to warn. The architect's framing of it as a trade "for a project of
+this size" was weaker than his own reasoning and is corrected here.
+
+Measured against crates.io the same day, and consistent with it: 2,075 downloads
+in total but **11–29 per version** (0.77.0: 11; 0.76.9: 29) across roughly eighty
+versions — the shape of CI, mirrors and curiosity, not of operators running it.
+
+The architect's one remaining reservation, recorded because it is what would
+change the answer: the third row is the only record that reaches someone
+automatically, and this project runs `cargo audit` itself
 (`.github/workflows/audit.yml`), so it already relies on that channel for *other*
-people's crates; an operator on 0.77.0 running the same tool against sui-id gets
-silence. Accepted as a deliberate trade for a self-hosted project of this size,
-not as an oversight.
+people's crates. A published crate can also be installed without the maintainer
+knowing, so "no production use" is a well-founded judgement rather than an
+observable fact. **If a production deployment is ever known of, this ruling should
+be revisited rather than inherited.**
 
 **The RFCs are not the user-facing record and should not be relied on as one** —
 `CHANGELOG.md` is, and it carries the disclosure. **Consequence to settle:**
