@@ -1,6 +1,11 @@
 # RFC 124 — The uniform response must be uniform, and must be shown to be
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-10-01
+**Approved by.** `@nabbisen`, 2026-10-01: "RFC 124 is accepted." On the text as
+re-reviewed against his standing philosophy and as amended by its security
+review, which replaced D1's "same work in both branches" with "the request path
+performs no classification" after finding six branches rather than two.
 **Security review.** Required
 **Independent design review.** [Security review 2026-10-01](../handoffs/124-the-uniform-response-is-uniform/security-review-2026-10-01.md) — **by the architect, who authored this RFC, and therefore not independent.** `@nabbisen` assigned the review on 2026-10-01. It is recorded as the author's own judgement rather than dressed as a completed independent review; RFC 000's actual constraint, that the implementer cannot be the sole approver, holds because the implementer is the dev team and the approver is `@nabbisen`. **This field's name overstates what the linked document is**, and that is said here rather than left for a reader to assume.
 **Design prerequisites.** None.

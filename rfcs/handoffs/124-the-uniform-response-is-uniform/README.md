@@ -1,6 +1,6 @@
 # The uniform response must be uniform, and must be shown to be
 
-**RFC.** [RFC 124](../../proposed/124-the-uniform-response-is-uniform.md), **Proposed**.
+**RFC.** [RFC 124](../../accepted/124-the-uniform-response-is-uniform.md), **Proposed**.
 **Author.** High-capability model, requirements-architect role.
 **Baseline.** `4ebf0f7` or later.
 **Two stages. Stage 2 does not start until stage 1's measurement is reviewed.**
@@ -16,8 +16,19 @@ person exactly where this one started — with a claim and nothing behind it.
 
 ## Stage 1 — measure, change nothing
 
-**Not dispatched.** RFC 124 is Proposed; this stage is specified so that it is
-ready, not started. It runs when `@nabbisen` accepts the RFC.
+**Dispatched 2026-10-01**, on `@nabbisen`'s acceptance.
+
+**Read RFC 124's security review first** (`security-review-2026-10-01.md`). It
+found **six** branches, not two, and the work increases monotonically across
+them. That changes what this stage measures: not "exists versus not" but **where
+on a six-rung ladder a given address sits**. Three rungs disclose more than
+existence — a never-activated account, a disabled one, and one with reset tokens
+already outstanding.
+
+**So measure the branches that matter, not two.** At minimum: unknown address;
+local account that has never been activated (the extra `credentials::get`);
+active account under the token cap. The never-activated rung is the sharpest,
+because it fingerprints exactly the accounts RFC 115 exists to protect.
 
 ### Confirm first, at the baseline
 

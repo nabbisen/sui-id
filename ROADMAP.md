@@ -431,6 +431,24 @@ act of exception if necessary."*
 | Implementation | The dev team |
 | Design review | **`@nabbisen`, or an external architect he engages. Not the dev team.** |
 
+**The roles that exist.** Recorded here because twelve requirements across
+`ROADMAP.md` and RFCs 094–096 named a role that did not, and survived three
+months. `@nabbisen`, 2026-10-01, on whether a gate should check this: *"I don't
+think it is a kind of what to be verified at regular release security gates. It
+is about something fundamental about team or organization."* He is right — it is a
+fact about the team, not a property of a release artefact, so it lives here and is
+read by a person writing a requirement.
+
+| Role | Who | May review a design? |
+|---|---|---|
+| Owner and approver | `@nabbisen` | **Yes** |
+| Architect | high-capability model | Own work only, carried by the owner under R1 |
+| Implementation | mid-capability model | **No** |
+| External architect | **nobody, unless engaged** | Yes, when engaged — RFC 129 D2 |
+
+**A requirement naming any other reviewing role is unsatisfiable.** That is the
+check, and it is a reading check, not a gate.
+
 **What this ends.** The dev team is not sent designs to review. Measured
 2026-10-01, it had reviewed the architect's design **fifteen times** — RFCs 094,
 095, 096, 102, 103, 110, 112, 115, 116, 117, 118, 121, 122, 123, 126 — eleven of
