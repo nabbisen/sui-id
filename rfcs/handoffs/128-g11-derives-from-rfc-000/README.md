@@ -98,3 +98,64 @@ Whether an author may review their own RFC. RFC 128 D3 says the gate stops
 supplying a definition RFC 000 does not give; it does not supply a different
 one. If the audit turns up an argument either way, **report it — do not settle
 it.**
+
+## D2 and D1/D3 dispatched 2026-10-01 — the condition trace, then the checker
+
+Stage 0 is complete: Part 1 found the twelve load-bearing statements (now
+re-scoped by RFC 129), Part 2 classified the fifteen packages. **Neither did D2's
+trace of G11's own conditions**, which is this dispatch.
+
+**An ordering correction by the architect.** He said he would do D4 — the fifteen
+headers — before dispatching this. That was backwards: D4 corrects what those
+headers *say*, and D1 changes the shape the field may take, so doing D4 first
+means doing it twice. D4 follows this.
+
+### D2 — trace all fourteen live conditions
+
+One row per condition (1–7, 9–15): what it checks, the **live** document that
+requires it, and the `file:line` where that document says so. This is
+enumeration, not judgement — do not argue whether a condition is good, only
+where it comes from.
+
+**A condition whose only source is `rfcs/archive/018-rfc-lifecycle-policy.md`, or
+which has no source at all, is named as such.** Two are already known to need
+looking at:
+
+- **Condition 7** (`RFC-MI-*` identifiers): the token `RFC-MI-` appears in
+  **neither** RFC 000 nor RFC 018. The closed historical list lives in
+  `contracts/rfc-policy.toml`, which is data an RFC may legitimately own — but no
+  owning document has been identified. Find it or report that none exists.
+- **Condition 9**: D1's subject, already traced in the RFC.
+
+Conditions 12 and 13 cite RFC 000 inside the script; **cite them anyway**, because
+the citation is the output.
+
+### D1 and D3 — re-derive condition 9
+
+Record **who reviewed** and a **durable repository-relative reference**. That is
+all RFC 000 asks. Remove, because their only source is a retired RFC:
+
+- the prohibition on `N/A`;
+- **any definition of independence.** RFC 000 requires "a named independent design
+  reviewer" and never says what independence is. **The gate must not supply a
+  definition RFC 000 withholds** — that is a gate legislating, which is RFC 110's
+  fault one layer down. `@nabbisen` has not ruled on whether an author may review
+  their own RFC, and the checker must not decide it for him.
+
+**What the field must then accept**, because all three now exist in the tree: a
+review by the owner (RFC 129), a review by the architect who authored the RFC
+(RFCs 120, 124, 125, 128), and a record that no review occurred (RFC 105). If
+your change rejects any of those, it is still legislating.
+
+### D5 — the RFC 093 amendment
+
+In the same commit as the checker change. Dated, attributed to `@nabbisen`'s
+approval of 2026-10-01, and **not** to the architect or to this RFC's author.
+
+### Two things from today
+
+Run the gates **through `scripts/ci-gate.sh`**, not by hand. And **hand over a
+working tree** — `4f58066` was committed and pushed unreviewed, which is recorded
+in RFC 124's handoff; a change to `check-rfc-integrity.py` is the gate that checks
+every RFC, so it is the last file that should reach `origin/main` unverified.
+
