@@ -23,8 +23,8 @@ soft spots are.
 | Clause | Finding |
 |---|---|
 | The consent flow derives subject and authentication methods **from the session alone** | Implemented via `consent_state.rs`'s signed cookie; the subject is taken from the live session, and the parameters still carried are integrity-protected and bound to it |
-| Every state-changing route reachable after first-run initialization requires an authorized actor, CSRF, a rate limit and an audit row | `crates/sui-id/tests/e2e/r120_routes.rs` (4 tests) holds the route set; `r120.rs` carries 17 more — **21 tests for this RFC** |
-| Each has a test that **fails on the code before this RFC** and passes after | **Verified by reading, not by measurement.** The tests exist and pass; I did not check out the pre-RFC tree and run them to confirm each fails there. The route-set test's own design makes the claim credible — it pins the exact set of routes answering without an authenticated caller, which is the property that was violated — but "fails before" is asserted on the implementer's report, not re-measured here |
+| Every state-changing route reachable after first-run initialization requires an authorized actor, CSRF, a rate limit and an audit row | `crates/sui-id/tests/e2e/r120_routes.rs` holds the route set; `r120.rs` carries 17 more. **RFC 120's own count is 20** — corrected 2026-10-02: this row first said 21, which counts a 4th test in `r120_routes.rs` added later by **RFC 127 D7** (`the_documented_route_table_matches_expected_without_actor`), not by RFC 120. It did not exist at `cd4d137` |
+| Each has a test that **fails on the code before this RFC** and passes after | **Measured 2026-10-02 by the implementation role, after this review flagged it as unmeasured.** They checked out `e1a251d` (parent of the implementing commit `cd4d137`) into a disposable worktree, copied the tests in unchanged, and ran them: **14 of 20 failed pre-fix.** The six that passed test properties that were never broken — two happy paths, `/oauth2/consent`'s CSRF which was already enforced, a pre-initialization guard, a meta-test on the lookup table, and the already-protected route set. The aggregate route-set test failed naming **exactly the five** routes the implementing commit claims. All pass on `fc056df`. **The clause holds, read correctly:** "each" binds to the routes and properties, not to all test functions as a flat set |
 
 **Met, with that one clause carried on the record rather than silently.**
 
@@ -96,11 +96,45 @@ prefix).
 |---|---|
 | **No request-path call to Argon2 runs on a runtime worker thread** | Verified structurally, not by inspection of call sites: `Argon2` is constructed in exactly one place (`password.rs:25`) and used at exactly two (`:87`, `:110`), both inside `hash_password_sync` and `verify_password_sync` — which are **private**. The only public entry points are the async wrappers that `spawn_blocking` behind a semaphore. **The boundary cannot be bypassed by a caller outside the module**, which is stronger than every call site happening to be converted |
 | Every call site is converted | Follows from the above. `backup/ops.rs` also uses Argon2 and is correctly **out of scope** — it derives a backup key, not a request-path credential |
-| A test demonstrates that concurrent authentication attempts do not stall unrelated requests | `r126.rs`, 4 tests, with the deadline calibrated per run from a measured single-hash cost rather than hard-coded — which is why the second implementation held after the first was reverted for a 30 ms deadline against 52.8 ms of CI jitter |
+| A test demonstrates that concurrent authentication attempts do not stall unrelated requests | **`r126.rs`, 3 tests** — corrected 2026-10-02 from 4. The architect's count matched `#[tokio::test` four times, one of which is **line 10, a doc comment quoting the attribute**. The three real tests are `d3_dummy_and_real_verification_pay_the_same_thread_hop_cost`, `d5_a_health_check_is_served_promptly_during_a_burst_of_real_login_attempts` and `d5_the_costliest_call_site_does_not_stall_a_health_check_either`. All pass. The deadline is calibrated per run from a measured single-hash cost rather than hard-coded, which is why the second implementation held after the first was reverted for a 30 ms deadline against 52.8 ms of CI jitter |
 
 **Met.** The privacy of the `_sync` functions is the part worth approving on: it
 turns "we converted the call sites" into "a call site that bypasses the boundary
 will not compile."
+
+## Independent verification by the implementation role
+
+[`closure-verification-batch-2-2026-10-02.md`](./closure-verification-batch-2-2026-10-02.md),
+committed beside this review.
+
+**It measured the clause this review admitted it had not**, which is the best
+possible answer to a stated limitation: RFC 120's "fails before, passes after",
+run against the real pre-fix tree in a disposable worktree. The result holds, and
+their reading of the prerequisite is the correct one — "each" binds to the routes
+and properties, not to every test function, and a reader taking the flat reading
+would wrongly conclude the clause fails.
+
+**It also found two counts of mine wrong**, both corrected above:
+
+- **`r126.rs` is 3 tests, not 4.** I matched `#[tokio::test` four times and one
+  match is a doc comment. **This is the fourth time this session I have counted
+  grep hits instead of reading them** — after the `hibp.rs` `spawn_blocking`
+  citation, the `author` occurrences in batch 1, and RFC 115's `must_change`. The
+  error is not the arithmetic; it is treating a match count as a fact about code.
+- **RFC 120's own test count is 20, not 21.** The 21st is RFC 127 D7's, added later
+  to a file RFC 120 created. Attributing another RFC's test to this one inflates
+  the evidence for a closure, which is exactly the kind of thing closure evidence
+  must not do.
+
+Neither changes a verdict, and both are findings under this project's own
+convention that a wrong declared count is a finding regardless. They also noted
+`r122_routes.rs`'s test is at line 101 where this review said 102 — recorded, and
+left as immaterial.
+
+**What it is not:** approval. They implemented these RFCs, so RFC 000's rule that
+the implementer cannot be the sole approver is satisfied by `@nabbisen`, not by
+them. They correctly declined RFC 124's locale caveat as something they cannot
+supply either.
 
 ## What approval would mean
 
