@@ -191,3 +191,50 @@ under RFC 127's rule, not only in a migration comment. **No pruning mechanism**:
 if the worker is down, account recovery is broken and the operator has a larger
 problem than this table.
 
+## Review fixes reviewed, and one defect dispatched 2026-10-01
+
+Stage 2's two review fixes are **accepted** (`6af817b`). One correction is mine
+to make, not the dev team's: my "undeclared hunk" finding against
+`contracts/write-commands.toml` was **wrong** — the hunk was declared in the
+original package's own hash table with a hash that re-derives correctly. The
+dev team's package said so without arguing the point, and it was right to.
+
+One thing to fix, and it is the test I asked for.
+
+### D6 — the restart test synchronises on a proxy, and is failing intermittently
+
+`crates/sui-id/tests/e2e/r124_stage2.rs:496-505`,
+`rfc124_a_recovery_request_survives_a_restart_before_the_worker_drains_it`.
+
+CI history: `4f58066` passed, `1b786ed` **failed** at `:502` with *"assertion
+`left == right` failed: the row is gone once processed"* (447 passed, 1 failed),
+`22c7519` passed. Intermittent, and the race is visible in the test's own shape.
+
+It waits for `mailer.count().await == 1`, then asserts `count_outstanding == 0`.
+But `ForgotPasswordWorker::process_row` calls `request_reset` first — which is
+what enqueues the mail — at `crates/sui-id-core/src/account/forgot_password.rs:639`,
+and only *afterwards* calls `delete` at `:660`. So between those two awaits the
+mail count is already 1 while the row still exists, and the assertion that
+follows the wait can observe exactly that window.
+
+**The fix: synchronise on the condition being asserted, not on a proxy for it.**
+Wait on `count_outstanding == 0` — the worker's *last* observable effect — and
+then assert `mailer.count().await == 1`. The ordering makes that sound in one
+direction only: if the row is gone, `request_reset` has already returned, so the
+mail must be there. The reverse, which is what the test does today, is not sound.
+
+Do not widen the timeout. A longer wait makes the window rarer without closing
+it, and a test that passes because the race is unlikely is the defect, not the
+fix.
+
+**Scope:** that one `wait_until` and the assertion after it. I checked the other
+`wait_until` in the file (`:206`, the gated-send release) and it waits on
+`gated.count() == 1` and asserts nothing afterwards — the condition itself, so it
+is correct as written. Leave it alone.
+
+**Why I am naming this as a pattern and not just a bug.** This is the third
+test-timing defect in two days — RFC 126's D5 deadline, RFC 112's `schema_item`
+window, and now this — and all three share one root: **synchronising on a proxy
+for the condition instead of the condition.** When a test waits for something, the
+thing it waits for should be the thing it is about to assert. If those differ,
+there is a window, and CI will find it eventually.

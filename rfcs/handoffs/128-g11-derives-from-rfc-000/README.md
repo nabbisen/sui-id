@@ -159,3 +159,88 @@ working tree** — `4f58066` was committed and pushed unreviewed, which is recor
 in RFC 124's handoff; a change to `check-rfc-integrity.py` is the gate that checks
 every RFC, so it is the last file that should reach `origin/main` unverified.
 
+## D2 and D1/D3/D5 reviewed 2026-10-01 — accepted, three corrections
+
+Both packages are **accepted**. D1/D3/D5 landed as `9381347`. D2 is a findings
+package with no tree change.
+
+**The central finding is verified and it corrects this RFC, which is to say it
+corrects me.** `check_accepted_metadata` has never enforced an `N/A` prohibition
+or any definition of independence, in any version since `3f2eace` — confirmed
+three ways: `git log -S"N/A"` returns only `9381347` itself, the logic at
+`3f2eace` is byte-identical to today's, and all twelve `author` hits in the file
+are prose. RFC 018's residue was never in the gate's *behaviour*, only in how
+RFC 093 and this RFC *described* it. That is a smaller and more specific defect
+than the one I suspected, and D2's trace closes the rest: **all fourteen live
+conditions trace to a live document** (RFC 000, RFC 093 or RFC 110), so my
+"unlikely to be the only inheritance" was speculation and it was wrong.
+Condition 7's open question is closed too — RFC 093 introduces the RFC-MI
+scheme, so it owns the historical list.
+
+### D7 — D2's RFC 093 citations point into a superseded file
+
+Every citation into `rfcs/done/093-build-toolchain-release-gates.md` in D2's
+table resolves against `9381347^` and **none resolves against HEAD**, because
+D1/D3's own amendment to that file shifted them (+13 after `@@ -11`, +16 after
+`@@ -256`). The two packages shipped together, so the trace points into a version
+the same delivery replaced: condition 7's `:254-256` now lands on
+`### RFC integrity contract` and a command line. Correct rows 4, 5, 6, 7 and 11
+to `:262`, `:263`, `:264-266`, `:267-269` and `:275-276`, or state the baseline
+commit in the Method section. Either is acceptable; silence is not — line numbers
+are the entire value of a trace.
+
+### D8 — D2's condition 10 citation is wrong under every baseline
+
+`:274-275` is not a shifted reference; it is wrong in both versions. The text it
+means — *"Done security-sensitive RFCs created from 093 onward have dated
+independent closure metadata"* — is pre-amendment `:260-261`, HEAD `:276-277`.
+**The substance is correct and I verified it:** `check_closure_metadata` matches
+on neither `independent`, nor author identity, nor `N/A`, so condition 10's
+description carries the same imprecision condition 9's did.
+
+Fix the pointer. Do **not** fix condition 10's wording — flagging it while
+declining to act, because the dispatch named condition 9, was correct scope
+discipline, and that adjacent imprecision is now mine to schedule.
+
+### D9 — D1/D3's "15 RFCs" sentence, and the test comment's missing hedge
+
+Two edits to `9381347`'s own text.
+
+**The enumeration is wrong three ways.** *"all 15 currently-accepted
+security-sensitive RFCs (094, …, 102, 103, …)"* lists **19** numbers, includes
+**102 and 103** (both in `rfcs/done/`, not `accepted/`), and omits **105 and
+120** — which are precisely the two the package's own new docstring cites as the
+live examples of a recorded absence of review and of self-review. So the prose
+contradicts the comment added in the same commit. The true set is 19: 094 095 096
+105 110 112 115 116 117 118 120 121 122 123 124 125 126 128 129. The underlying
+claim is true — the logic is unchanged and G11 passes — but the evidence offered
+for it is not.
+
+**The test comment drops the docstring's qualifier.** The docstring correctly
+ends *"must stay accepted unless `@nabbisen` rules otherwise — that ruling is not
+this gate's to make."* The comment above the three new tests in
+`scripts/tests/test_rfc_integrity.py` states flatly that *"the gate must accept
+all three."* Those tests are what would block implementing such a ruling: if an
+author may not review their own RFC, then
+`test_independent_design_review_by_the_rfc_author_is_accepted` must go, and a
+reader of only that comment would read its deletion as a regression. Carry the
+qualifier across, so the pin reads as descriptive of today rather than normative
+forever. While there: condition 9's docstring quotes RFC 000's *closure evidence*
+clause, which is condition 10's subject — RFC 000 bundles both at `:37-41`, so it
+is traceable, but tighten it to the design-review half.
+
+### Two things done right, recorded deliberately
+
+The first draft of the RFC 093 amendment cited archived RFC 018 in a header, G11
+caught it, and the package **reported that instead of quietly fixing it** — *"the
+gate working correctly against my own draft is a good sign, not friction to route
+around."* That is the disposition RFC 110 exists to produce. And G16's third
+flagged line was correctly diagnosed as a false positive from a shifted scan
+window, *"confirmed by diff, not assumed."* That phrase is the standard; keep
+working to it.
+
+### D4 stays where it is
+
+The fifteen headers still wait on `@nabbisen`'s ruling on whether an author may
+review their own RFC. Nothing in these two packages decides it, and nothing in
+D7–D9 should either.
