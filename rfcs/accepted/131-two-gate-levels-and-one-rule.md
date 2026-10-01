@@ -10,6 +10,7 @@
 **Closure prerequisites.** There is exactly one answer to "what must pass before this claim", it is the same answer for all three claims that make it, and no document states a weaker one. **A tagged version is either on the registry or recorded as abandoned, and the discrepancy is detected without anyone remembering to look** (D7). A milestone cannot be closed over an RFC that has not been. `docs/src/contributing/release-process.md` cannot drift from the Gate Matrix without a gate failing.
 **Tracks.** Release stability. Raised by `@nabbisen`, 2026-10-01, as a stage model for release cycles.
 **Touches.** `docs/src/contributing/release-process.md`, `scripts/check-gate-inputs.sh`, `ROADMAP.md`, `rfcs/accepted/130-gates-declare-their-input-scope.md` (D5 superseded).
+**Amended on.** 2026-10-01 — D7's mechanism corrected from a weekly cron to a required release step, on finding `.github/workflows/fuzz.yml:3-5` already records that a cron in this repo failed eight consecutive weeks unnoticed. D4's scope is also recorded as too narrow: two further documents state weaker verification commands.
 **Amended on.** 2026-10-01 — D7 added while cutting 0.79.0, on measuring that **four tagged versions were never published** (0.76.10, 0.76.11, 0.76.12, 0.78.0). D2 governed the cut and nothing governed the publish, so a release could satisfy this RFC in full and still never reach a user. The amendment is material.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** High-capability model, requirements-architect role.
@@ -175,16 +176,58 @@ Publishing is the only stage a user experiences. So:
    `User-Agent`: crates.io returns a policy error without one, which reads as
    "not published" for every crate and is not — the trap the release document
    already records.
-3. **It is a scheduled check, not a per-push gate.** It depends on a third-party
-   network call, so making it blocking would fail CI for reasons unrelated to the
-   change under test. Weekly, in the shape `audit.yml` already uses, plus a
-   release-time step. **This adds no gate to Level A or Level B** — a deliberate
-   choice, because `[gates]` must stay offline and deterministic.
+3. **It runs at release time, not on a schedule.** **Corrected 2026-10-01**, the
+   same day it was written: the first draft said "weekly, in the shape `audit.yml`
+   already uses". `.github/workflows/fuzz.yml:3-5` records why that is wrong here
+   — *"Manual only: a weekly schedule failed eight consecutive weeks unnoticed
+   (situation-fit audit, 2026-08-26) — a cron in a solo repo has no subscriber for
+   a red run. Run before a release instead."* This project has already paid for
+   that lesson, and D7 proposed the pattern it abandoned.
+
+   The irony is the point: **the publish gap exists because nobody was looking**,
+   so a mechanism that depends on someone looking cannot be its fix. The check
+   therefore binds to a moment attention is already there — a **required step in
+   the release process**, run at the cut and again after publishing, failing the
+   release rather than a cron nobody reads. A schedule may be added as a redundant
+   second signal, but it is never the primary.
+
+   It is still **not a per-push gate and not in `[gates]`**: it depends on a
+   third-party network call, so making it blocking would fail CI for reasons
+   unrelated to the change under test, and `[gates]` must stay offline and
+   deterministic.
 
 **Why this does not contradict the "don't over-complicate" caution.** It adds no
 stage and no level. The claim in D2 is unchanged; D7 only says that a claim nobody
 can act on is not finished, and puts the detection somewhere that cannot silently
 lapse.
+
+### D4's scope is too narrow — measured 2026-10-01, pending `@nabbisen`
+
+D4 names `docs/src/contributing/release-process.md`. The 2026-10-01
+governance-files audit found **three** documents stating verification commands
+weaker than the gates, not one:
+
+| Document | States | The gate |
+|---|---|---|
+| `release-process.md` | `cargo fmt --all -- --check` | G08: `cargo +stable fmt --all -- --check` |
+| `.github/CONTRIBUTING.md` | `cargo fmt`, `cargo clippy --workspace --all-targets`, `cargo test --workspace` | G08, G07/G07b, four test lanes |
+| `docs/src/contributing/local-dev.md` | `cargo clippy --workspace -- -D warnings`, `cargo fmt --check` | G07 adds `--all-targets --all-features --locked` |
+
+None carries `+stable`; none carries `--locked`. A contributor following
+`CONTRIBUTING.md` passes locally and fails CI — which is exactly how a G08
+failure reached `71bca90`.
+
+**One nuance the assertion must respect:** `local-dev.md` also shows deliberately
+narrow commands for focused iteration (`cargo test -p sui-id-core --lib
+password`). Those are useful and must stay. So the rule cannot be "no `cargo`
+command outside `[gates]`"; it must distinguish **a command presented as the
+verification bar** from **a command shown for focused local work**. The simplest
+honest form: a document may not state a command that *looks like* a gate's
+command but differs from it — same subcommand and `--workspace` scope, different
+flags.
+
+Widening D4 is a scope change to an accepted RFC, so it is recorded here and
+**awaits `@nabbisen`** rather than being folded in silently.
 
 ## What this is not
 

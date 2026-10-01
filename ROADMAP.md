@@ -469,6 +469,36 @@ RFC 128 (carried under R1's residual), RFC 130 (carried under R1's residual, but
 **not individually asked for** — the architect reviewed it on his own initiative
 and records that here rather than claiming the exception).
 
+#### S1d — Disclosure for the 0.79.0 flaw classes, ruled by `@nabbisen` on 2026-10-01
+
+Asked whether the two flaw classes fixed in 0.79.0 warranted a GitHub security
+advisory now that a fixed release exists, his words: *"I don't think it is
+necessary. Just record's existing in RFC(s) may be satisfying ?"*
+
+**Ruled: no advisory.** Recorded with the architect's one reservation, so the
+trade is visible rather than implied:
+
+| Record | Who it reaches |
+|---|---|
+| RFCs 120 and 125 | Us. Internal design record; not where an operator looks |
+| `CHANGELOG.md` 0.79.0 | **Users who read it** — states both classes, names the affected versions, says what to do |
+| A GHSA advisory | Users who do **not** look, via `cargo audit` |
+
+The architect's reservation: the third row is the only one that reaches someone
+automatically. This project runs `cargo audit` itself
+(`.github/workflows/audit.yml`), so it already relies on that channel for *other*
+people's crates; an operator on 0.77.0 running the same tool against sui-id gets
+silence. Accepted as a deliberate trade for a self-hosted project of this size,
+not as an oversight.
+
+**The RFCs are not the user-facing record and should not be relied on as one** —
+`CHANGELOG.md` is, and it carries the disclosure. **Consequence to settle:**
+`.github/SECURITY.md` currently promises a reporter *"credit in the changelog and
+security advisory"*. Under this ruling the second half is not what the project
+does, so that sentence is a promise the project does not keep — the architect's
+proposed correction is in the 2026-10-01 governance-files audit and awaits
+`@nabbisen`.
+
 **The roles that exist.** Recorded here because twelve requirements across
 `ROADMAP.md` and RFCs 094–096 named a role that did not, and survived three
 months. `@nabbisen`, 2026-10-01, on whether a gate should check this: *"I don't

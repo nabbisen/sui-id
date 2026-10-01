@@ -117,10 +117,16 @@ cutting this release, not assumed.
 
 ## [0.78.0] — 2026-09-24
 
-> **Never published to crates.io.** Tagged 2026-09-24; the publish step was not
-> run. The registry went from 0.77.0 to 0.79.0, so the changes below reached
-> users in 0.79.0 rather than in a release of their own. Recorded 2026-10-01 on
-> finding it while cutting 0.79.0.
+> **Never published to crates.io; abandoned.** Tagged 2026-09-24; the publish
+> step was not run. The registry went from 0.77.0 to 0.79.0, so the changes below
+> reached users in 0.79.0 rather than in a release of their own. **Abandoned by
+> `@nabbisen`, 2026-10-01** ("Abandoned.") rather than published late, because its
+> content shipped in 0.79.0. Per RFC 131 D7, an abandoned cut is recorded here
+> with its reason rather than left looking unfinished.
+>
+> **0.76.10, 0.76.11 and 0.76.12 are abandoned on the same ruling and for the same
+> reason.** All three are tagged, none was published, and their content reached
+> users in later releases. The registry's 0.76 line ends at 0.76.9.
 
 **No path in sui-id sets a password on a user's behalf any more, and an audit
 note can no longer be made to read as fields it does not carry.** Minor rather
