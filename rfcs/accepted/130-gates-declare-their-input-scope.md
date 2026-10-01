@@ -1,10 +1,14 @@
 # RFC 130 — A gate declares the inputs it depends on, and runs when they change
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-10-01
+**Approved by.** `@nabbisen`, 2026-10-01: "Accepted."
 **Security review.** Required
+**Independent design review.** [Security review 2026-10-01](../handoffs/130-gates-declare-their-input-scope/security-review-2026-10-01.md) — **by the architect, who authored this RFC, and therefore not independent**; carried by `@nabbisen` under `ROADMAP.md` R1's residual. He approved this RFC; he did not state that he reviewed its design, and this field does not claim he did. **The field's name overstates the document**, which says so in its own first lines.
+**Amended on.** 2026-10-01 — on that review, which returned two required changes: the change detector must fail open (D7) and the scope's completeness must be checked rather than reviewed once (D8). The amendment is material: as accepted, the RFC specified the optimisation without the two properties that keep it from becoming a silent hole.
 **Design prerequisites.** None. This RFC does not depend on RFC 093's prose being correct — see "Why RFC 093 is cited as practice, not as authority".
 **Implementation prerequisites.** Owner acceptance of D5, which is a policy question this RFC deliberately does not answer.
-**Closure prerequisites.** A change that cannot affect the Rust build or test lanes does not run them, and a change that can does — where "can" is declared in a contract, checked, and fails closed. No gate's scope is narrower than the inputs it actually reads. A release or milestone claim can still obtain a complete-matrix green on one nominated commit, by a mechanism that does not depend on which paths that commit touched.
+**Closure prerequisites.** A change that cannot affect the Rust build or test lanes does not run them, and a change that can does — where "can" is declared in a contract, checked, and fails closed. **No gate's scope is narrower than the inputs it actually reads, and that is asserted by a gate rather than by a reading** (D8). **A changed set that cannot be determined runs the complete matrix** (D7), demonstrated for `workflow_dispatch` and for an unresolvable base ref. A release or milestone claim can still obtain a complete-matrix green on one nominated commit, by a mechanism that does not depend on which paths that commit touched.
 **Tracks.** Development throughput. Raised by `@nabbisen`, 2026-10-01, on observing that two runs in one day each took over thirty minutes.
 **Touches.** `contracts/gate-inputs.toml`, `contracts/workflow-template.toml`, `scripts/generate-ci-workflow.py`, `scripts/check-gate-inputs.sh`, `.github/workflows/ci.yml` (generated).
 **Accountable owner and approver.** `@nabbisen`.
@@ -167,6 +171,44 @@ stage. Rejected, for three measured or checkable reasons:
 
 So: a first job computes the changed paths and the scoped lanes condition on its
 output. It adds one `needs:` edge and about ten seconds to the lanes that do run.
+
+### D7 — The change detector fails open; "I could not tell" means run everything
+
+Added on the security review of 2026-10-01.
+
+D6's detector must specify what it does when the changed set cannot be computed,
+because the cases where it cannot are ordinary: `workflow_dispatch` has no base
+ref to diff against, a force-push leaves `github.event.before` unresolvable, a
+first push on a branch gives the all-zeroes SHA, and a multi-parent range can
+report a narrower set than the push introduced.
+
+A detector that read any of those as "nothing relevant changed" would skip every
+Rust lane on a change that may be entirely Rust — and would defeat D5's own
+escape hatch, since `workflow_dispatch` is the mechanism D5 relies on.
+
+**So: any condition under which the changed set is not known with certainty runs
+the complete matrix.** Absent, zero or unresolvable base ref; any non-`push`
+event; any error from the diff. Scoping is an optimisation applied when the inputs
+are known. It is never the fallback.
+
+### D8 — Scope completeness is asserted by a gate, not established by a review
+
+Added on the security review of 2026-10-01.
+
+The review measured D3's list against the tree and found it complete: no
+`.cargo/config.toml`, no `rust-toolchain.toml`, no `clippy.toml`, no
+`rustfmt.toml`, no `deny.toml`, no `build.rs`, no `.sqlx/`. Toolchains are pinned
+in `contracts/gate-inputs.toml`, which D3 already covers.
+
+Complete-by-absence is fragile: any of those files appearing later would sit
+outside the declared scope and silently narrow a lane's trigger. So
+`scripts/check-gate-inputs.sh` (A3.4) asserts that no file in that candidate set
+exists outside the declared Rust scope, failing with the path and the gate it
+would affect. Adding `.cargo/config.toml` must break CI loudly rather than quietly
+shrink what G01–G09b run on.
+
+This is the standing counterpart to D4: D4 makes an absent declaration loud at
+generation time, D8 makes an outgrown declaration loud afterwards.
 
 ## What this is not
 
