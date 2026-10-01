@@ -7,8 +7,29 @@ direction. Dispatching it would repeat the error it exists to measure.
 **Date.** 2026-10-01. **Criterion**, `@nabbisen`'s: *does the statement
 presuppose a skilled architect external to this team?* *"No such a person out of
 our team."*
-**Status.** **Part 1 complete** (the load-bearing statements). **Part 2 scoped,
-not done** (the fifteen packages). Nothing under `rfcs/` was changed.
+**Status.** **Part 1 complete** (the load-bearing statements). **Part 2
+complete** — [stage-0-part-2-2026-10-01.md](stage-0-part-2-2026-10-01.md), with
+the provenance caveat below. Nothing under `rfcs/` was changed by either.
+
+**Part 2's provenance, and the architect's error.** The architect wrote in chat
+that Part 2 was his, then wrote Stage 0 into **this handoff** — which is the dev
+team's dispatch file — phrased as instructions. The file is what gets acted on,
+so the implementation role performed it: **the audited party classified its own
+work.** That is the second instance in one day of the same split, a dispatch in
+a file contradicted by prose outside it.
+
+**It was verified rather than accepted.** The architect spot-checked the
+citations: RFC 102/103's `:427`, `:428`, `:431`, `:433` and the M2 "simpler
+design" passage; RFC 115's §4 heading at `:122`, *"Views on the three open
+questions (`@nabbisen` rules; these are inputs)"*; RFC 116's `:189` table column
+headed literally *"My recommendation"*. All present as cited, one off by a line
+or two, none fabricated. The package is also **self-incriminating** — it finds
+crossings in all twelve of its author's own packages and says so in its first
+line — which is the opposite of a whitewash.
+
+**One imprecision found:** it describes RFC 117's review as carrying *"multiple
+explicit 'my view (not a ruling)' labels"*; a search finds **one**. The cited
+instance at `:262` is real; "multiple" is not established.
 
 ---
 
@@ -93,6 +114,21 @@ decisions:**
 inference. The architect will not estimate what they contain.
 
 ---
+
+## Root cause, measured — and it is the architect's
+
+The finding is not that the implementation role overstepped. **Ten of the
+fifteen `design-review-request.md` files explicitly solicit a view or a
+verdict** — "your view", "recommend accept", "accept as written" — across
+fifteen such lines. The role answered what it was asked, and labelled most of
+its answers correctly as views rather than rulings: *"a view, not a ruling"*,
+*"`@nabbisen` rules; these are inputs"*, alongside genuine declines (*"I cannot
+tell, and I do not decide"*, *"outside this role's adjudication"*).
+
+**So the crossing was built into the dispatches.** The corrective is not to ask
+the role to restrain itself; it is for the architect to stop asking design
+questions of it — which `ROADMAP.md` §S1a now rules, and which the architect
+had already begun doing and then did not do.
 
 ## What this audit does not do
 
