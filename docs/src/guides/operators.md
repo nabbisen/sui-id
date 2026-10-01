@@ -475,7 +475,7 @@ neutral 200 response whether or not delivery later succeeds, so the
 endpoint reveals nothing about the account. A background worker
 started with the server delivers queued mail over SMTP.
 
-`/forgot-password` goes through one more hop first (RFC 124, v0.78.0):
+`/forgot-password` goes through one more hop first (RFC 124, v0.79.0):
 the handler's only write is a durable record of the submitted address
 in `forgot_password_requests`, unconditionally — it does not look the
 address up before responding, so the response cannot leak whether an

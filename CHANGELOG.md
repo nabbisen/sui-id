@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.79.0] — 2026-10-01
+
+**Security release.** Two separate classes of flaw affecting every release up to
+and including 0.78.0 are fixed here. Operators running 0.78.0 or earlier should
+upgrade. **One behaviour change requires reading before upgrading:** see the
+first item under *Changed*.
+
 ### Security
 
 - **The audit hash chain was built but never verified as a chain.** Verification
@@ -34,6 +41,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A test now asserts the exact set of routes that answer without an
   authenticated caller, so adding one is a reviewed change rather than an
   accident. It would have caught both of the above.
+
+- **Account recovery no longer reveals whether an address is registered.**
+  `POST /forgot-password` previously did different work depending on whether the
+  submitted address matched an account, so the response could be distinguished by
+  timing even though its body and status were uniform. The request path now does
+  the same work in both cases by construction — it records the request and
+  returns, and a background worker does the lookup, the throttle check, the token
+  mint and the mail — so no measurement is needed to defend the property and no
+  later change can lose it silently. The screens were also corrected: a user whose
+  address is not registered is given a route forward rather than told something
+  that may be false ([RFC 124](rfcs/accepted/124-the-uniform-response-is-uniform.md)).
+
+- **An endpoint that authenticates a client now costs the caller something.** An
+  unauthenticated caller could make sui-id spend Argon2 password-hashing work
+  without any limit that stopped them. Every endpoint that authenticates a client
+  is now rate limited ([RFC 123](rfcs/accepted/123-authenticating-a-client-costs-the-caller.md)).
+
+- **A secret shown once is no longer carried in a URL, and its response is no
+  longer storable.** Client secrets at creation and at rotation, a dynamically
+  registered client's secret, TOTP secrets and QR codes, and recovery codes are
+  each now reached by a method that does not put the value in a URL — where it
+  would reach browser history, proxy logs and `Referer` headers — and every
+  response carrying one sends `Cache-Control: no-store`
+  ([RFC 122](rfcs/accepted/122-one-time-secrets-do-not-travel-where-they-persist.md)).
+
+- **A failed audit-chain verification is no longer reported as a pass.** A
+  verification that could not complete was indistinguishable from one that
+  completed and found nothing wrong, on the surfaces that show either. The two are
+  now distinguishable on every such surface, the surfaces agree with each other,
+  and a failure is recorded where an operator will meet it
+  ([RFC 121](rfcs/accepted/121-a-verification-failure-is-not-a-pass.md)).
+
+### Changed
+
+- **A binary now refuses to open a database it does not understand, and exits
+  `65`.** If the database's schema version is newer than the build's ceiling, or
+  it carries application tables with no readable version, sui-id refuses **before
+  it writes anything to the file** and prints one line on stderr — first and
+  alone — naming both versions, the path, and the route back. A failed version
+  read is a refusal, not a retry. Previously such a database was opened, which
+  risked a newer schema being written by an older build. **This is the behaviour
+  change to know about before upgrading:** a deployment that has been rolled back
+  to an older binary against an already-migrated database will now stop with exit
+  `65` and an explanatory line instead of starting
+  ([RFC 112](rfcs/accepted/112-schema-version-fail-closed.md)). `65` is
+  `EX_DATAERR`; every other failure still exits `1` and prints as before.
+
+- **Password hashing no longer blocks the request runtime.** Argon2id at 64 MiB
+  ran on Tokio's runtime worker threads, so concurrent authentication attempts
+  could stall unrelated requests. Hashing and verification now run where blocking
+  is expected, with a concurrency bound derived from the available parallelism; a
+  caller that meets the bound queues rather than being refused
+  ([RFC 126](rfcs/accepted/126-password-hashing-must-not-block-the-runtime.md)).
+
+- **A credential change now clears a password lockout, and the user is told.** A
+  lock could outlive the credential change that made it moot. Any path that sets a
+  credential now clears it, without disturbing a lock set by the second-factor
+  lockout, and a holder of a consumed reset token is told what was cleared in the
+  completion's own response. No sign-in response changes for any account
+  ([RFC 118](rfcs/accepted/118-lockout-clears-on-credential-change.md)).
+
+### Housekeeping
+
+- The repository's `ci/` directory is now `contracts/`, with a `contracts/README.md`
+  explaining each file, checked in both directions by a gate
+  ([RFC 116](rfcs/accepted/116-gate-contracts.md)). Contributors referring to
+  `ci/*.toml` paths should use `contracts/*.toml`.
 
 ## [0.78.0] — 2026-09-24
 
