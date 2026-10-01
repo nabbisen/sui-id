@@ -139,3 +139,55 @@ migration is mine and is made.
 - fmt and clippy **through `scripts/ci-gate.sh`**, not by hand — a hand-run
   `cargo fmt` passed while the gate's `cargo +stable fmt` failed on 2026-10-01.
 
+
+## Stage 2 reviewed 2026-10-01 — accepted, with two required changes and a protocol breach
+
+**The work is correct.** 40 of 40 declared hunks and all four new files match
+`d031438..4f58066`; eight gates and 1062 tests pass. The structure is what D1
+asked for: the handler's only write is one unconditional `INSERT`, the six
+branches all moved into `ForgotPasswordWorker`, and the failure path deletes the
+row with its reasoning stated in place — best-effort and unretried, exactly as
+the pre-RFC-124 handler's `let _ = request_reset(...)` already was, so no
+behaviour regressed and there is no retry loop.
+
+### Breach: it was committed and pushed to the public remote unreviewed
+
+`4f58066` reached `origin/main` before any review, carrying a **schema migration
+to version 44** and two new entries in `contracts/write-commands.toml`. Under
+RFC 112, a database migrated to 44 makes an older binary refuse to start, so this
+is not a change that can be undone by checking out an earlier commit.
+
+Nothing bad happened — the work is sound, no release was tagged, and no
+deployment is known. **It is recorded because the protocol exists for the case
+where the work is not sound**, and because a migration is the single worst thing
+to push unreviewed. The protocol is unchanged: the dev team hands over a working
+tree; the architect verifies, commits and pushes.
+
+### Required change 1 — one hunk was not declared
+
+`contracts/write-commands.toml` `@@ -1144 +1144` registers **O05** and **O06**
+and appears in no hash list. **Its content is correct** and the gates accept it.
+But `contracts/` is G17's registry of every Class-A write, and the per-hunk
+hashes are the only mechanism by which an undeclared change there is caught —
+which is how this was found. Declare it.
+
+### Required change 2 — the plaintext justification cites a precedent that does not apply
+
+`0044_forgot_password_requests.sql` justifies storing `email` in plaintext as
+*"matching `users.email`'s existing precedent"*. **It does not match.**
+`users.email` holds the address of someone who registered. This column holds
+**any address anyone submitted**, including an attacker's probe list for
+addresses that do not exist — and `events.rs:56` records
+`PasswordResetRequested { user_id }` with a comment saying the address is
+deliberately *not* recorded, *"so an attacker probing the endpoint cannot derive
+matched-vs-unmatched from the actor column"*.
+
+So this RFC newly persists, transiently, exactly what the audit event was
+designed not to. **The architect's decision: keep the column, correct the
+comment, and state the retention.** The rows are transient by design and deleted
+after processing; a stalled worker means submitted addresses accumulate, and that
+is an operational fact an operator must be able to find — so it goes in `docs/`
+under RFC 127's rule, not only in a migration comment. **No pruning mechanism**:
+if the worker is down, account recovery is broken and the operator has a larger
+problem than this table.
+
