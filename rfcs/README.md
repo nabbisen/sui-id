@@ -134,6 +134,7 @@ Proposed: the move approved nothing.
 | 128 | [G11's conditions derive from RFC 000, not from a retired RFC](./accepted/128-g11-derives-from-rfc-000.md) | [128-g11-derives-from-rfc-000](./handoffs/128-g11-derives-from-rfc-000/README.md) |
 | 129 | [Review is scoped to who exists, and an external reviewer is engaged once, deliberately](./accepted/129-review-scoped-to-who-exists.md) | [129-review-scoped-to-who-exists](./handoffs/129-review-scoped-to-who-exists/README.md) |
 | 130 | [A gate declares the inputs it depends on, and runs when they change](./accepted/130-gates-declare-their-input-scope.md) | [130-gates-declare-their-input-scope](./handoffs/130-gates-declare-their-input-scope/README.md) |
+| 131 | [Two gate levels, and one rule about claims](./proposed/131-two-gate-levels-and-one-rule.md) | — not yet; Proposed |
 
 ### Implemented — Mockup Integration epic (Phase 0 → Phase 8)
 
