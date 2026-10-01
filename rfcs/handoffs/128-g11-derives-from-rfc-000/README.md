@@ -241,6 +241,39 @@ working to it.
 
 ### D4 stays where it is
 
-The fifteen headers still wait on `@nabbisen`'s ruling on whether an author may
-review their own RFC. Nothing in these two packages decides it, and nothing in
-D7–D9 should either.
+The fifteen headers still wait on `@nabbisen`. Nothing in these two packages
+decides anything about them, and nothing in D7–D9 should either. **I first wrote
+here that they wait on his ruling on whether an author may review their own RFC;
+the section below measures that and corrects it.**
+
+### Correction to D4's blocker, measured 2026-10-01 — not the architect's to settle
+
+I wrote above that D4 waits on `@nabbisen`'s ruling on self-review. **That is
+wrong, and the census says so.** Of the 24 RFCs carrying an
+`Independent design review` field, the reviewer recorded is:
+
+| Recorded reviewer | Count | RFCs |
+|---|---|---|
+| the implementation role | **15** | 094, 095, 096, 110, 112, 115, 116, 117, 118, 120, 121, 122, 123, 125, 126 |
+| the architect, self, and **said so in the header** | 2 | 124, 128 |
+| `@nabbisen` | 2 | 098, 129 |
+| none performed, recorded as a gap | 1 | 105 |
+| pre-threshold / other shape | 4 | 018, 093, 102, 103 |
+
+**No RFC in D4's set is a self-review.** The self-review question touches only
+124 and 128 — both of which already state in the header that the field's name
+overstates the document — and the three new acceptance tests. So the ruling I
+said D4 waits on does not gate D4 at all.
+
+**What does gate it is the re-review `@nabbisen` deferred.** Those fifteen are
+*the same fifteen* that stage 0 part 2 classified, and part 2's finding was that
+**every one of the fifteen contains at least one passage that is a judgment about
+whether a design was right** — the category he has since ruled is not the
+implementation role's to carry. So rewriting one of those fifteen headers is not a
+wording choice: it asserts what that review was worth, and that assertion is the
+deferred re-review's output, not this dispatch's.
+
+**D4 therefore stays undispatched**, and for a better-stated reason than the one I
+gave. The architect's recommendation on how to proceed is `@nabbisen`'s to accept
+or reject and is **not recorded here as a decision**; it is in the review result
+for these packages. Nothing in D4 is the dev team's to start.
