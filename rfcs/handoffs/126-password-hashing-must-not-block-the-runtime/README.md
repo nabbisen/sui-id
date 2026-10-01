@@ -1,6 +1,6 @@
 # Password hashing must not block the request runtime
 
-**RFC.** [RFC 126](../../accepted/126-password-hashing-must-not-block-the-runtime.md), **Accepted 2026-09-30**, design reviewed and amended. Implementation dispatched — see below.
+**RFC.** [RFC 126](../../done/126-password-hashing-must-not-block-the-runtime.md), **Accepted 2026-09-30**, design reviewed and amended. Implementation dispatched — see below.
 **Author.** High-capability model, requirements-architect role.
 
 ## Dispatched for implementation 2026-09-30

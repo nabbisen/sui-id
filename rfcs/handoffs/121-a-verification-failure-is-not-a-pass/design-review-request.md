@@ -1,6 +1,6 @@
 # RFC 121 — independent design review request
 
-**RFC.** [RFC 121 — A verification failure is not a pass](../../accepted/121-a-verification-failure-is-not-a-pass.md). **Proposed.**
+**RFC.** [RFC 121 — A verification failure is not a pass](../../done/121-a-verification-failure-is-not-a-pass.md). **Proposed.**
 **Reviewer.** Mid-capability model, implementation role. It authored neither the
 RFC nor its handoff — though it confirmed this finding in the RFC 120 triage,
 which is disclosed here rather than left for someone to notice.

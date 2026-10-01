@@ -1,6 +1,9 @@
 # RFC 125 — The audit chain must be verified as a chain
 
-**Status.** Accepted
+**Status.** Implemented (v0.79.0)
+**Closure reviewed on.** 2026-10-02
+**Closure approved by.** `@nabbisen` (accountable owner), 2026-10-02: "Batch 2 is approved." The closure review was performed by **the architect, which wrote this RFC**, and is therefore **not** independent of it — `@nabbisen` is the approver, which is what RFC 000 requires when no independent role exists. The implementation role measured the review's claims separately, and corrected two of them; that corroboration is recorded beside the review and is not approval.
+**Closure evidence.** [Closure review batch 2, 2026-10-02](../handoffs/120-consent-and-setup-prove-the-caller/closure-review-batch-2-2026-10-02.md), with [independent verification](../handoffs/120-consent-and-setup-prove-the-caller/closure-verification-batch-2-2026-10-02.md)
 **Accepted on.** 2026-09-30
 **Approved by.** `@nabbisen`, 2026-09-30: "Ratified." Ratifying both stages and
 the lifecycle deviation: the fix landed while this RFC was Proposed, under the

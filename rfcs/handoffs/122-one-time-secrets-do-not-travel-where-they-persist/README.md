@@ -1,6 +1,6 @@
 # A one-time secret does not travel where it persists
 
-**RFC.** [RFC 122](../../accepted/122-one-time-secrets-do-not-travel-where-they-persist.md), **Proposed**.
+**RFC.** [RFC 122](../../done/122-one-time-secrets-do-not-travel-where-they-persist.md), **Proposed**.
 **Author.** High-capability model, requirements-architect role.
 **Baseline.** `4ebf0f7` or later.
 

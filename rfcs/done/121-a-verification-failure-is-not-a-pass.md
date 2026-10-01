@@ -1,6 +1,9 @@
 # RFC 121 — A verification failure is not a pass
 
-**Status.** Accepted
+**Status.** Implemented (v0.79.0)
+**Closure reviewed on.** 2026-10-02
+**Closure approved by.** `@nabbisen` (accountable owner), 2026-10-02: "Batch 2 is approved." The closure review was performed by **the architect, which wrote this RFC**, and is therefore **not** independent of it — `@nabbisen` is the approver, which is what RFC 000 requires when no independent role exists. The implementation role measured the review's claims separately, and corrected two of them; that corroboration is recorded beside the review and is not approval.
+**Closure evidence.** [Closure review batch 2, 2026-10-02](../handoffs/120-consent-and-setup-prove-the-caller/closure-review-batch-2-2026-10-02.md), with [independent verification](../handoffs/120-consent-and-setup-prove-the-caller/closure-verification-batch-2-2026-10-02.md)
 **Accepted on.** 2026-09-30
 **Approved by.** `@nabbisen`, 2026-09-30: "RFC 121 is accepted." Accepted on the
 **amended** text — its independent design review returned "accept with changes"
@@ -9,7 +12,7 @@ first. **This acceptance is an ordinary lifecycle act, not a ratification after
 the fact:** unlike RFCs 120 and 125, nothing here was exploitable, so nothing
 justified landing ahead of acceptance.
 **Security review.** Required
-**Independent design review.** [Design review 2026-09-29](../handoffs/121-a-verification-failure-is-not-a-pass/design-review-2026-09-29.md) by the implementation role. Its verdict was **accept with changes**, and it also returned a **blocker outside this RFC's scope** — that `verify_chain_tail` did not verify linkage at all — which became [RFC 125](../accepted/125-the-chain-must-be-verified-as-a-chain.md) and shipped first. Every change it named is folded in below.
+**Independent design review.** [Design review 2026-09-29](../handoffs/121-a-verification-failure-is-not-a-pass/design-review-2026-09-29.md) by the implementation role. Its verdict was **accept with changes**, and it also returned a **blocker outside this RFC's scope** — that `verify_chain_tail` did not verify linkage at all — which became [RFC 125](../done/125-the-chain-must-be-verified-as-a-chain.md) and shipped first. Every change it named is folded in below.
 **Amended 2026-09-30 on that review, and on RFC 125.** The amendment is material: this RFC was written believing the check it displays was sound.
 **Design prerequisites.** None.
 **Implementation prerequisites.** None.

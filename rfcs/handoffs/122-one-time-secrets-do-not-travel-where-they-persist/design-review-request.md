@@ -1,6 +1,6 @@
 # RFC 122 — independent design review request
 
-**RFC.** [RFC 122 — A one-time secret does not travel where it persists](../../accepted/122-one-time-secrets-do-not-travel-where-they-persist.md). **Proposed.**
+**RFC.** [RFC 122 — A one-time secret does not travel where it persists](../../done/122-one-time-secrets-do-not-travel-where-they-persist.md). **Proposed.**
 **Reviewer.** Mid-capability model, implementation role. It authored neither the
 RFC nor its handoff, though it confirmed two of these findings in the RFC 120
 triage — disclosed here rather than left to be noticed.

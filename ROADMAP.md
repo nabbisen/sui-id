@@ -239,15 +239,15 @@ so the backlog is not mistaken for 23 items of paperwork.
 | 117 | Stages 1–3: the signed decision ledger does not exist. `scripts/check-owner-attributions.py`'s own comments say "ledger once one exists"; only stage 0/0b landed |
 | 130 | **Nothing — resolved 2026-10-02, moved to batch 1.** Both halves are now observed in CI: `rust scope changed: true` with all 11 lanes running (run `36878881472`, 24/24), and `rust scope changed: false` with **exactly G01–G09b skipped** (run `36934836767`, 13 success / 11 skipped). **Measured wall clock: 2.2 minutes against 31.1 before** — a 93% reduction on a documentation-only push, against a predicted "about 2 minutes" |
 
-**Closure candidates (18, one of them RFC 130), in three batches.** Grouped so each batch's verification
+**Closure candidates (18, one of them RFC 130), in three batches. Batches 1 and 2 are closed — twelve RFCs moved to `done/` on 2026-10-02, the first closures this project has performed. Batch 3's six remain.** Grouped so each batch's verification
 is one coherent kind of work rather than eighteen unrelated checks. Prerequisites
 are verified **at closure**, not here — this triage establishes that the work
 landed, not that every clause is met.
 
 | Batch | RFCs | What verifying them means |
 |---|---|---|
-| 1 | 110, 128, 129, 130, 132 | Documentary and gate properties: run the gates, read the records. Narrowest, and all were reviewed within the last two days. **131 was withdrawn** (see the batch-1 closure review) and **130 joined** once its measurement landed |
-| 2 | 120, 121, 122, 123, 124, 125, 126 | Behavioural security properties shipped in 0.79.0, each with tests to point at. **Evidence written 2026-10-02**, awaiting approval |
+| 1 **closed** | 110, 128, 129, 130, 132 | Documentary and gate properties: run the gates, read the records. Narrowest, and all were reviewed within the last two days. **131 was withdrawn** (see the batch-1 closure review) and **130 joined** once its measurement landed |
+| 2 **closed** | 120, 121, 122, 123, 124, 125, 126 | Behavioural security properties shipped in 0.79.0, each with tests to point at. **Evidence written 2026-10-02**, awaiting approval |
 | 3 | 105, 112, 115, 116, 118, 127 | Mixed. **115's `must_change` question is settled — it is "gone", and the architect's flag was wrong.** Migration 0043 drops the column (D12); `r115_stage3.rs:167`'s `r115_s3_must_change_is_gone_from_production_code` is a grep-proof test asserting no production file mentions it, and `:146` plus `tests_rfc115.rs:139` assert a fresh database has no such column. The occurrences that prompted the flag are the migration that **removes** it and the historical migrations that necessarily still contain it — a grep read without opening the files, which is the error this project keeps catching |
 
 One Level B run can serve a whole batch, since each RFC's evidence cites the same

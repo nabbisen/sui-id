@@ -1,6 +1,6 @@
 # The uniform response must be uniform, and must be shown to be
 
-**RFC.** [RFC 124](../../accepted/124-the-uniform-response-is-uniform.md), **Proposed**.
+**RFC.** [RFC 124](../../done/124-the-uniform-response-is-uniform.md), **Proposed**.
 **Author.** High-capability model, requirements-architect role.
 **Baseline.** `4ebf0f7` or later.
 **Two stages. Stage 2 does not start until stage 1's measurement is reviewed.**

@@ -1,6 +1,9 @@
 # RFC 126 — Password hashing must not block the request runtime
 
-**Status.** Accepted
+**Status.** Implemented (v0.79.0)
+**Closure reviewed on.** 2026-10-02
+**Closure approved by.** `@nabbisen` (accountable owner), 2026-10-02: "Batch 2 is approved." The closure review was performed by **the architect, which wrote this RFC**, and is therefore **not** independent of it — `@nabbisen` is the approver, which is what RFC 000 requires when no independent role exists. The implementation role measured the review's claims separately, and corrected two of them; that corroboration is recorded beside the review and is not approval.
+**Closure evidence.** [Closure review batch 2, 2026-10-02](../handoffs/120-consent-and-setup-prove-the-caller/closure-review-batch-2-2026-10-02.md), with [independent verification](../handoffs/120-consent-and-setup-prove-the-caller/closure-verification-batch-2-2026-10-02.md)
 **Accepted on.** 2026-09-30
 **Approved by.** `@nabbisen`, 2026-09-30: "Accepted."
 **Design review, held open after acceptance and now closed.** This RFC was
@@ -13,7 +16,7 @@ on 2026-09-30, and this RFC is amended on it.
 **Security review.** Required
 **Independent design review.** [Design review 2026-09-30](../handoffs/126-password-hashing-must-not-block-the-runtime/design-review-2026-09-30.md) by the implementation role — which also **found** the problem, while reviewing RFC 123, a closer involvement disclosed in the review itself. Verdict **accept with the changes named**; all are folded in below. The problem was found by the [RFC 123 design review](../handoffs/123-authenticating-a-client-costs-the-caller/design-review-2026-09-30.md).
 **Design prerequisites.** None.
-**Implementation prerequisites.** None. Independent of [RFC 123](../accepted/123-authenticating-a-client-costs-the-caller.md), which closes a different half of the same exposure.
+**Implementation prerequisites.** None. Independent of [RFC 123](../done/123-authenticating-a-client-costs-the-caller.md), which closes a different half of the same exposure.
 **Closure prerequisites.** No request-path call to Argon2 runs on a runtime worker thread: hashing and verification are executed where blocking is expected, every call site is converted, and a test demonstrates that concurrent authentication attempts do not stall unrelated requests.
 **Tracks.** Availability.
 **Touches.** `crates/sui-id-core/src/authn/password.rs` and every call site of `verify_password` / `hash_password`.

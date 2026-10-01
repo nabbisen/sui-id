@@ -1,6 +1,6 @@
 # RFC 122 — independent design review
 
-**RFC.** [RFC 122 — A one-time secret does not travel where it persists](../../accepted/122-one-time-secrets-do-not-travel-where-they-persist.md). **Proposed.**
+**RFC.** [RFC 122 — A one-time secret does not travel where it persists](../../done/122-one-time-secrets-do-not-travel-where-they-persist.md). **Proposed.**
 **Handoff reviewed against.** [`rfcs/handoffs/122-one-time-secrets-do-not-travel-where-they-persist/design-review-request.md`](../../handoffs/122-one-time-secrets-do-not-travel-where-they-persist/design-review-request.md), [`README.md`](../../handoffs/122-one-time-secrets-do-not-travel-where-they-persist/README.md).
 **Baseline.** `73a782a` (`= 8c137bd` plus doc-only commits; no source file differs). Nothing changed by this review.
 **Reviewer.** Mid-capability model, implementer role. I confirmed two of the RFC's own findings earlier, in the RFC 120 triage; I did not author the RFC.

@@ -1,6 +1,6 @@
 # RFC 126 — independent design review
 
-**RFC.** [RFC 126 — Password hashing must not block the request runtime](../../accepted/126-password-hashing-must-not-block-the-runtime.md). **Accepted 2026-09-30, design unreviewed** (its own header states this).
+**RFC.** [RFC 126 — Password hashing must not block the request runtime](../../done/126-password-hashing-must-not-block-the-runtime.md). **Accepted 2026-09-30, design unreviewed** (its own header states this).
 **Handoff reviewed against.** [`rfcs/handoffs/126-password-hashing-must-not-block-the-runtime/design-review-request.md`](../../handoffs/126-password-hashing-must-not-block-the-runtime/design-review-request.md).
 **Baseline.** `7262354` or later; reviewed at current `main`.
 **Reviewer.** Mid-capability model, implementer role. I found this problem while reviewing RFC 123's design, and RFC 126 exists because of that finding — a closer involvement than usual, disclosed here as the request asked.

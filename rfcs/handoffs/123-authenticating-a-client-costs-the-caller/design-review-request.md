@@ -1,6 +1,6 @@
 # RFC 123 — independent design review request
 
-**RFC.** [RFC 123 — An endpoint that authenticates a client costs the caller something](../../accepted/123-authenticating-a-client-costs-the-caller.md). **Proposed.**
+**RFC.** [RFC 123 — An endpoint that authenticates a client costs the caller something](../../done/123-authenticating-a-client-costs-the-caller.md). **Proposed.**
 **Reviewer.** Mid-capability model, implementation role. It authored neither the
 RFC nor its handoff, and it **narrowed this finding itself** in the RFC 120
 triage — from four endpoints to two — which is disclosed here rather than left

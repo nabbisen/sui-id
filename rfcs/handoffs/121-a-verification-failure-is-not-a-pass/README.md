@@ -1,6 +1,6 @@
 # A verification failure is not a pass
 
-**RFC.** [RFC 121](../../accepted/121-a-verification-failure-is-not-a-pass.md), **Proposed**.
+**RFC.** [RFC 121](../../done/121-a-verification-failure-is-not-a-pass.md), **Proposed**.
 **Author.** High-capability model, requirements-architect role.
 **Baseline.** `4ebf0f7` or later.
 

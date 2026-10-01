@@ -1,6 +1,9 @@
 # RFC 123 — An endpoint that authenticates a client costs the caller something
 
-**Status.** Accepted
+**Status.** Implemented (v0.79.0)
+**Closure reviewed on.** 2026-10-02
+**Closure approved by.** `@nabbisen` (accountable owner), 2026-10-02: "Batch 2 is approved." The closure review was performed by **the architect, which wrote this RFC**, and is therefore **not** independent of it — `@nabbisen` is the approver, which is what RFC 000 requires when no independent role exists. The implementation role measured the review's claims separately, and corrected two of them; that corroboration is recorded beside the review and is not approval.
+**Closure evidence.** [Closure review batch 2, 2026-10-02](../handoffs/120-consent-and-setup-prove-the-caller/closure-review-batch-2-2026-10-02.md), with [independent verification](../handoffs/120-consent-and-setup-prove-the-caller/closure-verification-batch-2-2026-10-02.md)
 **Accepted on.** 2026-09-30
 **Approved by.** `@nabbisen`, 2026-09-30: "Accepted." On the **amended** text.
 Its implementation was built while this RFC was still Proposed, because the
@@ -49,7 +52,7 @@ every other request the service is serving — not only these two endpoints. Thi
 already applies to `/oauth2/token`, which has a limiter.
 
 **That is a separate, larger piece of work and is not folded in here.** It is
-[RFC 126](../accepted/126-password-hashing-must-not-block-the-runtime.md). This RFC closes the
+[RFC 126](../done/126-password-hashing-must-not-block-the-runtime.md). This RFC closes the
 volume-over-time half; a reader must not take "RFC 123 landed" to mean the
 exposure class is closed.
 

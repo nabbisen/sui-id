@@ -1,6 +1,6 @@
 # RFC 121 — independent design review
 
-**RFC.** [RFC 121 — A verification failure is not a pass](../../accepted/121-a-verification-failure-is-not-a-pass.md). **Proposed.**
+**RFC.** [RFC 121 — A verification failure is not a pass](../../done/121-a-verification-failure-is-not-a-pass.md). **Proposed.**
 **Handoff reviewed against.** [`rfcs/handoffs/121-a-verification-failure-is-not-a-pass/design-review-request.md`](../../handoffs/121-a-verification-failure-is-not-a-pass/design-review-request.md), [`README.md`](../../handoffs/121-a-verification-failure-is-not-a-pass/README.md).
 **Baseline.** `5dba3df` (`= 4ebf0f7` plus doc-only commits; no source file differs). Nothing changed by this review.
 **Reviewer.** Mid-capability model, implementer role. I did not author RFC 121; I did confirm its founding defect in the RFC 120 triage.

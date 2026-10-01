@@ -32,7 +32,7 @@ cutting this release, not assumed.
   past the window it was asked about. **Releases up to and including 0.78.0 are
   affected**, and the module documentation, the migration comment, `ROADMAP.md`
   and `docs/threat-model.md` each claimed the property that was missing — those
-  are corrected too ([RFC 125](rfcs/accepted/125-the-chain-must-be-verified-as-a-chain.md)).
+  are corrected too ([RFC 125](rfcs/done/125-the-chain-must-be-verified-as-a-chain.md)).
   One residual is named in those documents and closes in stage 2.
 
 - **Two routes acted without establishing who was asking, and now cannot.** The
@@ -43,7 +43,7 @@ cutting this release, not assumed.
   language and breach-password steps could be reached after first-run
   initialization without an administrator, CSRF, a rate limit or an audit row;
   they now require all four. **Releases up to and including 0.78.0 are
-  affected.** Found by an internal review ([RFC 120](rfcs/accepted/120-consent-and-setup-prove-the-caller.md)).
+  affected.** Found by an internal review ([RFC 120](rfcs/done/120-consent-and-setup-prove-the-caller.md)).
 - A test now asserts the exact set of routes that answer without an
   authenticated caller, so adding one is a reviewed change rather than an
   accident. It would have caught both of the above.
@@ -57,12 +57,12 @@ cutting this release, not assumed.
   mint and the mail — so no measurement is needed to defend the property and no
   later change can lose it silently. The screens were also corrected: a user whose
   address is not registered is given a route forward rather than told something
-  that may be false ([RFC 124](rfcs/accepted/124-the-uniform-response-is-uniform.md)).
+  that may be false ([RFC 124](rfcs/done/124-the-uniform-response-is-uniform.md)).
 
 - **An endpoint that authenticates a client now costs the caller something.** An
   unauthenticated caller could make sui-id spend Argon2 password-hashing work
   without any limit that stopped them. Every endpoint that authenticates a client
-  is now rate limited ([RFC 123](rfcs/accepted/123-authenticating-a-client-costs-the-caller.md)).
+  is now rate limited ([RFC 123](rfcs/done/123-authenticating-a-client-costs-the-caller.md)).
 
 - **A secret shown once is no longer carried in a URL, and its response is no
   longer storable.** Client secrets at creation and at rotation, a dynamically
@@ -70,14 +70,14 @@ cutting this release, not assumed.
   each now reached by a method that does not put the value in a URL — where it
   would reach browser history, proxy logs and `Referer` headers — and every
   response carrying one sends `Cache-Control: no-store`
-  ([RFC 122](rfcs/accepted/122-one-time-secrets-do-not-travel-where-they-persist.md)).
+  ([RFC 122](rfcs/done/122-one-time-secrets-do-not-travel-where-they-persist.md)).
 
 - **A failed audit-chain verification is no longer reported as a pass.** A
   verification that could not complete was indistinguishable from one that
   completed and found nothing wrong, on the surfaces that show either. The two are
   now distinguishable on every such surface, the surfaces agree with each other,
   and a failure is recorded where an operator will meet it
-  ([RFC 121](rfcs/accepted/121-a-verification-failure-is-not-a-pass.md)).
+  ([RFC 121](rfcs/done/121-a-verification-failure-is-not-a-pass.md)).
 
 ### Changed
 
@@ -99,7 +99,7 @@ cutting this release, not assumed.
   could stall unrelated requests. Hashing and verification now run where blocking
   is expected, with a concurrency bound derived from the available parallelism; a
   caller that meets the bound queues rather than being refused
-  ([RFC 126](rfcs/accepted/126-password-hashing-must-not-block-the-runtime.md)).
+  ([RFC 126](rfcs/done/126-password-hashing-must-not-block-the-runtime.md)).
 
 - **A credential change now clears a password lockout, and the user is told.** A
   lock could outlive the credential change that made it moot. Any path that sets a
