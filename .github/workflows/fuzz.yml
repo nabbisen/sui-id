@@ -10,6 +10,10 @@ on:
         description: "Number of fuzz iterations per target (default: 100000)"
         required: false
         default: "100000"
+      proptest_cases:
+        description: "PROPTEST_CASES for the wide proptest run (default: 65536)"
+        required: false
+        default: "65536"
 
 jobs:
   fuzz-run:
@@ -73,3 +77,30 @@ jobs:
         with:
           name: fuzz-artifacts-${{ matrix.target }}
           path: fuzz/artifacts/${{ matrix.target }}/
+
+  proptest-wide:
+    # RFC 132 D6: the narrow per-push case caps (256-512 for the cheap
+    # properties, 4 for Argon2) exist for speed. A wide run reaches inputs
+    # the narrow run cannot; when it finds a counterexample, proptest writes
+    # a regression file, that file is committed, and the counterexample
+    # becomes a permanent case in the fast suite forever -- so this is a
+    # generator of narrow-suite cases, not a parallel test suite. Manual
+    # only, before a release, for the same reason the fuzz job above is:
+    # a scheduled run that can fail on a newly generated input has no
+    # subscriber for a red run in a solo repo (see the comment at the top
+    # of this file). Not a gate: nondeterministic by design, the opposite
+    # of what `[gates]` is for.
+    name: Wide proptest run (manual)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          toolchain: "1.95"
+      - name: Install system deps
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev pkg-config
+      - name: Run the workspace suite with widened proptest case counts
+        env:
+          PROPTEST_CASES: ${{ github.event.inputs.proptest_cases || '65536' }}
+        run: cargo test --workspace

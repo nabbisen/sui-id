@@ -56,9 +56,12 @@ cargo test -p sui-id-store --lib audit
 
 ## Static analysis
 
+Run it the way CI does, rather than a narrower local approximation that can
+pass while the gate fails:
+
 ```bash
-cargo clippy --workspace -- -D warnings
-cargo fmt --check
+bash scripts/ci-gate.sh G07   # clippy, all-features
+bash scripts/ci-gate.sh G08   # fmt
 ```
 
 ## Documentation

@@ -41,17 +41,27 @@ body:
       description: What actually happened?
     validations:
       required: true
+  - type: markdown
+    attributes:
+      value: |
+        **Before pasting logs or environment output below, redact:** session
+        cookies, bearer and refresh tokens, client secrets, signing-key and
+        master-key material, and any address or identifier belonging to a
+        real user. Paste a redacted log, not no log — this helps us
+        reproduce the issue without exposing anyone's credentials.
   - type: textarea
     id: logs
     attributes:
       label: Logs / error messages
-      description: Paste relevant logs, stack traces, or error messages.
+      description: Paste relevant logs, stack traces, or error messages (redacted — see above).
       render: shell
   - type: input
     id: version
     attributes:
       label: Version
-      description: Project version / commit hash / release tag.
+      description: Output of `sui-id --version`.
+    validations:
+      required: true
   - type: textarea
     id: environment
     attributes:

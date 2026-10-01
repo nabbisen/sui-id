@@ -29,7 +29,12 @@ becomes personal, step away.
 
 ## Reporting
 
-If something feels wrong, contact the maintainers privately. We take reports
+If something feels wrong, open a [private security
+advisory](https://github.com/nabbisen/sui-id/security/advisories/new) — the
+same GitHub-native form used for vulnerability reports. It reaches only the
+maintainers and is not publicly visible; a conduct report is not a
+vulnerability, but it is the one private channel this project has, and using
+it for both keeps a report off the public issue tracker. We take reports
 seriously, we keep them confidential where the law and the situation allow,
 and we will tell you what we did about them.
 

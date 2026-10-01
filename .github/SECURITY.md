@@ -11,15 +11,16 @@ If you believe you have found a security issue in sui-id:
 2. **Open a [private security advisory](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing/privately-reporting-a-security-vulnerability)**
    on the repository: https://github.com/nabbisen/sui-id/security/advisories/new
 3. Include enough information for the maintainers to reproduce: version
-   (`sui-id --version` once that flag exists; for now the git SHA),
-   configuration, and a minimal example.
+   (`sui-id --version`), configuration, and a minimal example.
 
 ## What you can expect
 
 - An acknowledgement within a small number of days.
 - A discussion of severity and timeline before any public disclosure.
-- Credit in the changelog and security advisory unless you ask for
-  anonymity.
+- Credit in `CHANGELOG.md` unless you ask for anonymity. A GitHub security
+  advisory may also be published, depending on the finding, but is not
+  issued by default — see `CHANGELOG.md` for how a past finding was
+  disclosed without one.
 
 ## What's in scope
 

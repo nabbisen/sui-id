@@ -68,7 +68,13 @@ ACTION_REPOS = {
     "rust_toolchain": "dtolnay/rust-toolchain",
     "setup_python": "actions/setup-python",
 }
-PROFILE_KEYS = {"title", "setup", "toolchain", "apt", "cache", "mdbook", "tz", "bash", "fetch_depth"}
+PROFILE_KEYS = {"title", "setup", "toolchain", "apt", "cache", "mdbook", "tz", "bash", "fetch_depth", "paths"}
+# RFC 130 D2: exactly these lanes may carry a real scope; every other lane
+# must declare paths = ["**"] (D4 -- an omission is a generation error, on
+# any lane, never an implied "always"). Kept here, not derived from `setup
+# == "rust"`, because G10a is also a Rust-toolchain lane (it `cargo install
+# mdbook`s) but is not in RFC 130's scoped set.
+SCOPED_LANES = {"G01", "G02", "G03", "G04", "G05", "G06", "G07", "G07b", "G08", "G09a", "G09b"}
 TOOLS = ("rust_msrv", "rust_stable", "mdbook", "python")
 
 # What a raw block (or a comment) must not spell out itself.
@@ -175,6 +181,19 @@ def lane_job(lane: str, prof: dict, inp: Inputs) -> str:
     setup = prof.get("setup")
     if setup not in ("rust", "python", "none"):
         inp.fail(f"{where}: `setup` must be rust, python or none")
+
+    # RFC 130 D4: a missing `paths` is a generation error on every lane, not
+    # only the scoped ones -- an omission must never default to anything.
+    paths = prof.get("paths")
+    if not paths or not isinstance(paths, list) or not all(isinstance(p, str) for p in paths):
+        inp.fail(f"{where}: `paths` is required and must be a non-empty list of strings")
+        paths = ["**"]
+    is_always = list(paths) == ["**"]
+    if lane in SCOPED_LANES and is_always:
+        inp.fail(f"{where}: is in RFC 130 D2's scoped set but declares paths = [\"**\"] (always)")
+    if lane not in SCOPED_LANES and not is_always:
+        inp.fail(f"{where}: is not in RFC 130 D2's scoped set, so `paths` must be [\"**\"] (always)")
+
     title = prof.get("title", "")
     if not title:
         inp.fail(f"{where}: no `title`")
@@ -197,6 +216,17 @@ def lane_job(lane: str, prof: dict, inp: Inputs) -> str:
     out += [
         f'    name: "{lane} — {title}"',
         f"    runs-on: {runner['label']}",
+    ]
+    if not is_always:
+        # RFC 130 D6/D7: skip only when the `changes` job knows with
+        # certainty that this lane's inputs did not change. `needs` makes
+        # the dependency explicit in the job graph; the `if` is what
+        # actually skips it.
+        out += [
+            "    needs: changes",
+            "    if: needs.changes.outputs.rust == 'true'",
+        ]
+    out += [
         "    steps:",
         f"      - uses: {uses(inp, 'checkout_v6')}",
     ]

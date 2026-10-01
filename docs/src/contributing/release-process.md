@@ -68,35 +68,62 @@ catches a manifest or dependency-resolution problem while it is still free. A
 publish cannot be undone — `cargo yank` marks a version unusable for new
 dependents but does not remove it.
 
-**Check what the registry actually has before starting.** The published version
-is not necessarily the newest tag: on 2026-08-26 the registry held **0.76.9**
-while the repository carried signed tags through **0.76.12**, so three tagged
-versions had never been published. Verify with an explicit User-Agent, which
-crates.io requires — without one the API returns a policy error for *every*
-crate, which reads as "not published" and is not:
+**Check what the registry actually has before starting, and again after
+publishing (RFC 131 D7).** The published version is not necessarily the
+newest tag: on 2026-08-26 the registry held **0.76.9** while the repository
+carried signed tags through **0.76.12**, and that gap sat undetected for
+three months — the checklist described it as a caution about *how to verify
+the registry*, not as the open defect it was. **0.78.0 repeated it.**
 
 ```bash
-curl -s -H "User-Agent: sui-id-release (you@example.com)" \
-  https://crates.io/api/v1/crates/sui-id | jq -r .crate.max_version
+python3.14 scripts/check-published-versions.py --root .
 ```
+
+This is the detector, run as a required step — not on a schedule. A cron in
+this repo already failed eight consecutive weeks unnoticed
+(`.github/workflows/fuzz.yml:3-5`), and the publish gap exists *because
+nobody was looking*; a mechanism that depends on someone looking cannot be
+its own fix. It is not a `[gates]` lane either: it needs a live network call
+to crates.io (with an explicit `User-Agent` — without one the API returns a
+policy error for *every* crate, which reads as "not published" and is not),
+and `[gates]` stays offline and deterministic.
+
+Run it **before** starting (confirms the previous release is fully out, or
+is recorded in `CHANGELOG.md` as abandoned) and **after** the publish loop
+below (confirms this one reached the registry too). A version it finds
+tagged-but-unpublished is either published late or recorded as abandoned in
+`CHANGELOG.md` with a reason — never left looking unfinished.
 
 After step 6, `cargo install sui-id` works for end users.
 
 ## Pre-publish checklist
 
-Before tagging a release and running the steps above:
+RFC 131 D2/D4: a release cut is one of the three claims that requires
+**Level B** — every gate in `contracts/gate-inputs.toml`'s `[gates]` table,
+green on the exact commit being tagged. Obtain it by dispatching the CI
+workflow manually (`workflow_dispatch`) on that commit and confirming the
+`CI` run — not some other run on the same commit; check the job count
+against `[gates]`, not just that *a* run reports success. RFC 130 D7 makes
+`workflow_dispatch` reliable: it always runs the complete matrix, regardless
+of what changed.
 
-1. `cargo fmt --all -- --check` is clean.
-2. `cargo clippy --workspace --all-targets -- -D warnings` is clean.
-3. `cargo test --workspace` is green.
-4. `cargo package -p sui-id-shared --allow-dirty` produces a package and the
+This document does not restate those commands — a restatement drifts from
+the gate it imitates, which is exactly how a release checklist's bare
+`cargo fmt` passed locally while `cargo +stable fmt --all -- --check` failed
+in CI. `scripts/check-gate-inputs.sh` (A3.4) asserts that this file contains
+no such restatement.
+
+Level B covers compilation, tests and lints; it does not cover packaging.
+Before tagging, in addition to Level B on the commit being tagged:
+
+1. `cargo package -p sui-id-shared --allow-dirty` produces a package and the
    verify build succeeds (the others can only be verified end-to-end after
    `sui-id-shared` is on the index).
-5. The version field in the workspace `[workspace.package]` has been bumped
+2. The version field in the workspace `[workspace.package]` has been bumped
    and `Cargo.lock` has been refreshed. Internal workspace crate dependencies
    are centralized in root `[workspace.dependencies]`.
-6. `CHANGELOG.md` has an entry for the new version.
-7. The git working tree is clean (no `--allow-dirty` for the actual publish).
+3. `CHANGELOG.md` has an entry for the new version.
+4. The git working tree is clean (no `--allow-dirty` for the actual publish).
 
 ## Yanking
 

@@ -19,7 +19,11 @@
 #   3. every [actions] SHA is used by some workflow -- no stale rows;
 #   5. version and gate_matrix_version are both 1;
 #   7. the multi-source lane registry (RFC 094 R10) -- six checks, plus the
-#      rule that every [gate_matrix_exceptions] entry records a reason.
+#      rule that every [gate_matrix_exceptions] entry records a reason;
+#   9. (RFC 130 D8) no candidate build-affecting file exists outside the
+#      declared Rust scope (G01-G09b's shared [lane_profiles] `paths`);
+#  10. (RFC 131 D4, widened) no document under docs/src/ or .github/ states a
+#      command that looks like a [gates] command's but differs from it.
 #
 # Conditions 4, 6 and 8 are gone from this script and were not dropped. RFC 116
 # stage 3 moved them: 6 (every gate job runs on the [runner] label) and 8 (every
@@ -460,6 +464,99 @@ comm -13 "$tmp/source-lane-ids" "$tmp/manifest-exception-ids" >"$tmp/stale-excep
 if [[ -s "$tmp/stale-exceptions" ]]; then
   fail "condition 7 (check 6): [gate_matrix_exceptions] lane(s) not declared by any source RFC:"
   cat "$tmp/stale-exceptions" >&2
+fi
+
+# ---------------------------------------------------------------------------
+# Condition 9 (RFC 130 D8): no candidate build-affecting file exists outside
+# the declared Rust scope (G01-G09b's shared [lane_profiles] `paths`, RFC
+# 130 D3). Complete-by-absence is fragile: if one of these appears later
+# outside the declared scope, a scoped lane would silently stop running on a
+# change that affects it. Read through scripts/rust_scope.py, like
+# scripts/compute-changed-scope.py (the CI `changes` job) does, so there is
+# one copy of "what the Rust scope is" rather than two that can drift apart.
+# Array values are awkward to parse reliably with the awk/sed used above, so
+# this condition is read by Python/tomllib, like the TOML-validity precheck.
+# ---------------------------------------------------------------------------
+
+scripts_dir=$(dirname "$0")
+if ! scope_violation=$(python3.14 - "$policy_path" "$root" "$scripts_dir" <<'SCOPECHECK' 2>&1
+import fnmatch
+import os
+import sys
+
+policy_path, root, scripts_dir = sys.argv[1], sys.argv[2], sys.argv[3]
+sys.path.insert(0, scripts_dir)
+from rust_scope import load_rust_scope
+
+try:
+    rust_scope = load_rust_scope(policy_path)
+except (OSError, ValueError) as exc:
+    print(f"could not read the declared Rust scope: {exc}")
+    raise SystemExit(1)
+
+# Verified absent from the tree on 2026-10-01 (RFC 130 D8); if one of these
+# appears later outside `rust_scope`, that is exactly the silent narrowing
+# this condition exists to catch.
+CANDIDATE_FILES = (
+    ".cargo/config.toml",
+    "rust-toolchain.toml",
+    "rust-toolchain",
+    "clippy.toml",
+    "rustfmt.toml",
+    "deny.toml",
+)
+
+def in_scope(rel: str) -> bool:
+    return any(fnmatch.fnmatch(rel, pattern) for pattern in rust_scope)
+
+violations = []
+for rel in CANDIDATE_FILES:
+    if os.path.exists(os.path.join(root, rel)) and not in_scope(rel):
+        violations.append(f"{rel}: exists but matches no declared Rust-scope pattern")
+
+for dirpath, dirnames, filenames in os.walk(root):
+    dirnames[:] = [d for d in dirnames if d not in (".git", "target", "node_modules")]
+    rel_dir = os.path.relpath(dirpath, root)
+    if os.path.basename(rel_dir) == ".sqlx":
+        rel = rel_dir.replace(os.sep, "/")
+        if not in_scope(rel) and not in_scope(rel + "/x"):
+            violations.append(f"{rel}: directory exists but matches no declared Rust-scope pattern")
+    for fn in filenames:
+        if fn != "build.rs":
+            continue
+        rel = os.path.normpath(os.path.join(rel_dir, fn)).replace(os.sep, "/")
+        if rel.startswith("./"):
+            rel = rel[2:]
+        if not in_scope(rel):
+            violations.append(f"{rel}: exists but matches no declared Rust-scope pattern")
+
+if violations:
+    for v in sorted(violations):
+        print(v)
+    raise SystemExit(1)
+SCOPECHECK
+); then
+  fail "condition 9: candidate build-affecting file(s) outside the declared Rust scope:"
+  echo "$scope_violation" >&2
+fi
+
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Condition 10 (RFC 131 D4, widened): no document restates a gate's command.
+# A restatement drifts from the gate it imitates -- CONTRIBUTING.md said
+# `cargo fmt`, the gate runs `cargo +stable fmt --all -- --check`, and a
+# contributor following the document passed locally while CI failed (G08 on
+# `71bca90`). scripts/check-verification-commands.py has the exact rule for
+# what counts as "looks like a gate's command" (same subcommand, whole-
+# workspace scope, different flags) and what is exempt (a command scoped to
+# one package or one target -- focused local iteration, not a claim about
+# the verification bar).
+# ---------------------------------------------------------------------------
+
+if ! verification_violation=$(python3.14 "$scripts_dir/check-verification-commands.py" --root "$root" --policy "$policy" 2>&1); then
+  fail "condition 10: a document restates a [gates] command:"
+  echo "$verification_violation" >&2
 fi
 
 # ---------------------------------------------------------------------------

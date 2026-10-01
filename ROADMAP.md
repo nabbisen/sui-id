@@ -78,6 +78,38 @@ The programme is complete only when:
 | **M6 — Release-assurance closure and soak entry** | *owner to set* | Runtime file modes; all fuzz targets; package automation and inspection; live LDAP/upstream integration; immutable build/configuration/evidence manifest | **RFC 099** | Full approved clean-tree matrix passes; artifact digest and sanitized configuration recorded; no blocker or high defect remains; **the external review of RFC 129 D2 approves soak entry only** — this is the one point where an outside reviewer is engaged, because M6 is where a public readiness claim is first made |
 | **M7 — Real-environment soak** | *owner to set* | Exercise the exact M6 artifact under representative auth traffic, failure modes, operational cycles, and incident drills | Operational evidence, not a feature RFC | At least four meaningfully exercised weeks and every workload criterion pass; `@nabbisen` and the RFC 129 D2 external reviewer accept the evidence; the earliest outcome is a readiness discussion, never automatic approval or tagging |
 
+**RFC 131 D5 — recorded unenforceable, not approximated.** D5 would gate a
+milestone's closure on every RFC it claims being in `done/`, mechanically.
+The "Planned RFCs" column above cannot drive that check:
+
+- **The column's meaning changes row to row.** M0 is already closed (`Met
+  2026-07-22`) while its own cell, `RFCs 093–099 (design only)`, names five
+  RFCs still in `proposed/`/`accepted/` today (094, 095, 096, 099, 100) and
+  one in `done/` (098). That cell names RFCs *assigned during the design
+  phase*, not RFCs required done before the milestone can close; a later
+  row's cell (e.g. M2a: `RFC 094`) does read as a completion requirement.
+  One column, two incompatible meanings, already contradicted by real data
+  if read uniformly.
+- **A single cell mixes completion states with no sub-scoping.** M5's cell,
+  `RFCs 097–098`, pairs RFC 098 (`done/`) with RFC 097 (`proposed/` as of
+  this writing), with nothing in the row saying which RFC gates which part
+  of M5's exit criteria.
+- **Not every cell names an RFC.** The `prep` row reads `none
+  (preparatory)`; M7 reads `Operational evidence, not a feature RFC` — no
+  RFC to check, in two different, non-parseable shapes.
+
+A checker correct against all of the above would need a hand-written special
+case per milestone — strip "(design only)" here, treat "none" as vacuously
+true there, recognize M7's prose by name — which is a per-row lookup table
+disguised as a parser, not a derivation from the table's structure: exactly
+the guessed mapping RFC 131's handoff warns against ("a guessed
+milestone-to-RFC mapping is worse than an absent one, because it would pass
+a gate while meaning nothing"). No `[gates]`/A3.4 condition implements D5.
+Enforcing it correctly would need this table restructured — e.g. a separate,
+uniform "RFCs required done before close" column distinct from "Planned
+RFCs" — which is a larger change than this dispatch asked for and is left to
+a future RFC/handoff.
+
 Logical review checkpoints may produce internal, versioned source archives,
 but no checkpoint before M7 carries a production-ready or security-reviewed
 designation. Version numbers for implementation checkpoints are assigned only

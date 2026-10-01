@@ -412,6 +412,24 @@ What an attacker might try, and what the design does about it.
 Anything the implementer should bring back before merging.
 ```
 
+### Gate levels (RFC 131 D1/D2)
+
+Two levels, not a stage matrix. **Level A** is whatever a push's declared
+scope touches (RFC 130) plus every always-on governance gate. **Level B** is
+every gate in `contracts/gate-inputs.toml`'s `[gates]` table, green on one
+exact named commit — not a separate list anywhere, so it cannot drift from
+`[gates]`; `workflow_dispatch` obtains it reliably (RFC 130 D7 fails open).
+
+**One rule: a claim about the shipped system requires Level B on the exact
+commit it cites.** Three claims invoke it, and each keeps the evidence
+requirement it already had — this adds no new field, only the gate
+requirement they were all missing:
+
+- **an RFC moving `accepted/` → `done/`** — this template's own `Closure
+  evidence` field names the Level B run, alongside the closure review;
+- **a release cut** — `docs/src/contributing/release-process.md`;
+- **a milestone closing** — `ROADMAP.md`'s exit-gate criteria.
+
 ### When to add the heavier sections
 
 The light template handles small, mechanical items. Anything

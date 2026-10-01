@@ -139,6 +139,41 @@ mdbook_step_comment = '''
 '''
 
 [extra_jobs]
+changes = '''
+  changes:
+    # RFC 130 D1/D6/D7: computes whether this push touched the Rust scope
+    # (G01-G09b's shared `paths`, contracts/gate-inputs.toml) so those lanes
+    # can skip a change they could not have been affected by. Fails open
+    # (scripts/compute-changed-scope.py): any condition under which the
+    # changed set is not known with certainty -- workflow_dispatch above
+    # all, which RFC 130 D5 / RFC 131 D2 rely on for the complete matrix on
+    # a nominated commit -- runs every scoped lane rather than skipping one.
+    # Every other gate (G10a-G18, both jobs below) has no `needs` on this
+    # job and always runs regardless of its output (RFC 130 D2).
+    name: Compute changed scope
+    runs-on: @@runner.label@@
+    outputs:
+      rust: ${{ steps.compute.outputs.rust }}
+    steps:
+      - uses: @@uses.checkout_v6@@
+        with:
+          fetch-depth: 0
+      - name: Install Python @@tools.python@@
+        uses: @@uses.setup_python_v7@@
+        with:
+          python-version: "@@tools.python@@"
+      - id: compute
+        name: Compute whether the Rust scope changed
+        run: |
+          result=$(python3.14 scripts/compute-changed-scope.py \
+            --root . \
+            --policy contracts/gate-inputs.toml \
+            --event-name "${{ github.event_name }}" \
+            --before "${{ github.event.before }}" \
+            --after "${{ github.sha }}")
+          echo "rust=$result" >> "$GITHUB_OUTPUT"
+          echo "rust scope changed: $result"
+'''
 gate-inputs = '''
   gate-inputs:
     # RFC 093 A3.4: contracts/gate-inputs.toml enforcement. Verifies the manifest
@@ -386,11 +421,61 @@ gate-matrix-fixtures = '''
       - name: workflow generator self-tests
         # RFC 116 stage 3. The lane set round-trips: a lane added to the table
         # is a job, a lane with no profile or a job with no table entry fails.
+        # RFC 130 D1-D4: also covers `paths` -- a missing or inconsistent
+        # declaration fails generation, scoped lanes get needs/if, governance
+        # lanes do not.
         run: |
           set +e
           echo "command=python3.14 -m unittest scripts.tests.test_generate_ci_workflow"
           echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           python3.14 -m unittest scripts.tests.test_generate_ci_workflow
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
+      - name: rust_scope.py self-tests
+        # RFC 130 D1/D3/D8: the shared Rust-scope reader both the `changes`
+        # job and A3.4 condition 9 import, so it is tested once rather than
+        # through each caller.
+        run: |
+          set +e
+          echo "command=python3.14 -m unittest scripts.tests.test_rust_scope"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3.14 -m unittest scripts.tests.test_rust_scope
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
+      - name: check-verification-commands.py self-tests (RFC 131 D4)
+        run: |
+          set +e
+          echo "command=python3.14 -m unittest scripts.tests.test_verification_commands"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3.14 -m unittest scripts.tests.test_verification_commands
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
+      - name: check-published-versions.py self-tests (RFC 131 D7)
+        run: |
+          set +e
+          echo "command=python3.14 -m unittest scripts.tests.test_check_published_versions"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3.14 -m unittest scripts.tests.test_check_published_versions
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
+      - name: compute-changed-scope.py self-tests (RFC 130 D6/D7)
+        # Against a real throwaway git repository: the script's correctness
+        # depends on real `git diff`/`git cat-file` behaviour, which a
+        # fixture that only asserts the script's own output could not catch
+        # a mistake in.
+        run: |
+          set +e
+          echo "command=python3.14 -m unittest scripts.tests.test_compute_changed_scope"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3.14 -m unittest scripts.tests.test_compute_changed_scope
           status=$?
           echo "exit_status=$status"
           echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"

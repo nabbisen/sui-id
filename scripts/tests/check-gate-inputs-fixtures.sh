@@ -399,4 +399,52 @@ make_valid_fixture "$dup_owner"
 sed -i 's|^G02 = "093"$|&\nG02 = "093"|' "$dup_owner/contracts/gate-inputs.toml"
 expect_failure registry-duplicate-owner-key "not valid TOML" "line"
 
+# --- Condition 9 (RFC 130 D8): no candidate file outside the Rust scope ---
+scope_candidate="$tmp/scope-candidate-outside-rust-scope"
+make_valid_fixture "$scope_candidate"
+mkdir -p "$scope_candidate/.cargo"
+echo "[build]" >"$scope_candidate/.cargo/config.toml"
+expect_failure scope-candidate-outside-rust-scope \
+  "condition 9:" ".cargo/config.toml: exists but matches no declared Rust-scope pattern"
+
+# A candidate file that exists but *is* in the declared scope (rust-toolchain*
+# already covers it) must not fail -- this is the positive half of the same
+# check, not just its absence.
+scope_candidate_covered="$tmp/scope-candidate-already-covered"
+make_valid_fixture "$scope_candidate_covered"
+echo "1.95" >"$scope_candidate_covered/rust-toolchain.toml"
+expect_success scope-candidate-already-covered
+
+# A scoped lane with no `paths` at all (simulating a hand-edit that dropped
+# it) is condition 9's precondition failing loudly, not silently passing.
+scope_missing="$tmp/scope-lane-missing-paths"
+make_valid_fixture "$scope_missing"
+python3.14 - "$scope_missing/contracts/gate-inputs.toml" <<'STRIP_PATHS'
+import re
+import sys
+path = sys.argv[1]
+text = open(path, encoding="utf-8").read()
+text = re.sub(r', paths = \[[^\]]*\]', '', text, count=1)
+open(path, "w", encoding="utf-8").write(text)
+STRIP_PATHS
+expect_failure scope-lane-missing-paths "condition 9:" "has no \`paths\` declared"
+
+# --- Condition 10 (RFC 131 D4): a document restates a [gates] command -----
+verification_restated="$tmp/verification-command-restated"
+make_valid_fixture "$verification_restated"
+mkdir -p "$verification_restated/docs/src/contributing"
+echo 'Run `cargo clippy --workspace -- -D warnings` before pushing.' \
+  >"$verification_restated/docs/src/contributing/local-dev.md"
+expect_failure verification-command-restated \
+  "condition 10:" "local-dev.md:1:" "states a 'clippy' command"
+
+# A package-scoped command is focused local work, not a restatement, and
+# must not fail.
+verification_scoped="$tmp/verification-command-scoped-ok"
+make_valid_fixture "$verification_scoped"
+mkdir -p "$verification_scoped/docs/src/contributing"
+echo 'Run `cargo test -p sui-id-core --lib password` to check one module.' \
+  >"$verification_scoped/docs/src/contributing/local-dev.md"
+expect_success verification-command-scoped-ok
+
 echo "gate-inputs negative fixtures passed"

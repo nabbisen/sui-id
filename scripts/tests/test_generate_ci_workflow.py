@@ -67,7 +67,7 @@ class GenerateCiWorkflow(unittest.TestCase):
     def test_the_committed_workflow_is_a_fresh_generation(self) -> None:
         r = self.run_gen()
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("23 jobs", r.stdout)
+        self.assertIn("24 jobs", r.stdout)
 
     def test_the_real_repository_is_a_fresh_generation(self) -> None:
         # The check CI runs, on the real tree rather than the copy.
@@ -93,7 +93,7 @@ class GenerateCiWorkflow(unittest.TestCase):
     # ── the lane set round-trips ─────────────────────────────────────────
 
     def add_lane(self, lane: str = "G19") -> None:
-        self.mutate("contracts/gate-inputs.toml", "G18 = { title", f'{lane} = {{ title = "an added lane", setup = "python" }}\nG18 = {{ title', 1)
+        self.mutate("contracts/gate-inputs.toml", "G18 = { title", f'{lane} = {{ title = "an added lane", setup = "python", paths = ["**"] }}\nG18 = {{ title', 1)
         self.mutate(
             "contracts/gate-inputs.toml",
             'G18 = "python3.14 scripts/check-contracts.py --root . --policy contracts/contract-paths.toml"\n',
@@ -141,7 +141,7 @@ class GenerateCiWorkflow(unittest.TestCase):
         # The lane's [gates] entry, owner and profile all go; the job stays.
         self.mutate("contracts/gate-inputs.toml", 'G14 = "python3.14 scripts/check-markdown-links.py --root . rfcs/handoffs"\n', "")
         self.mutate("contracts/gate-inputs.toml", 'G14 = "098"\n', "")
-        self.mutate("contracts/gate-inputs.toml", 'G14 = { title = "markdown links: handoffs and roadmap (Python {python})", setup = "python" }\n', "")
+        self.mutate("contracts/gate-inputs.toml", 'G14 = { title = "markdown links: handoffs and roadmap (Python {python})", setup = "python", paths = ["**"] }\n', "")
         template = self.read("contracts/workflow-template.toml")
         start = template.index("G14 = '''")
         end = template.index("'''", start + 8) + 4
@@ -187,21 +187,21 @@ class GenerateCiWorkflow(unittest.TestCase):
         self.assert_red("[gates] G08: the command runs `cargo +nightly`")
 
     def test_a_tool_nothing_uses_is_a_pin_nothing_reads(self) -> None:
-        self.mutate("contracts/gate-inputs.toml", ", mdbook = true }", " }")
+        self.mutate("contracts/gate-inputs.toml", ", mdbook = true, paths", ", paths")
         self.mutate("contracts/gate-inputs.toml", " / mdBook {mdbook})", ")")
         self.mutate("contracts/workflow-template.toml", "Install mdBook @@tools.mdbook@@", "Install mdBook", 1)
         self.mutate("contracts/workflow-template.toml", "mdbook --version @@tools.mdbook@@", "mdbook", 1)
         self.assert_red("[tools] mdbook is declared but nothing in the generated workflow uses it")
 
     def test_a_raw_block_may_not_spell_a_version_out(self) -> None:
-        self.mutate("contracts/workflow-template.toml", 'python-version: "@@tools.python@@"', 'python-version: "3.13"', 2)
+        self.mutate("contracts/workflow-template.toml", 'python-version: "@@tools.python@@"', 'python-version: "3.13"', 3)
         self.assert_red("a literal Python version")
 
     def test_a_raw_block_may_not_spell_a_runner_or_a_sha_out(self) -> None:
-        self.mutate("contracts/workflow-template.toml", "runs-on: @@runner.label@@", "runs-on: ubuntu-latest", 2)
+        self.mutate("contracts/workflow-template.toml", "runs-on: @@runner.label@@", "runs-on: ubuntu-latest", 3)
         self.assert_red("a literal runner label")
-        self.mutate("contracts/workflow-template.toml", "runs-on: ubuntu-latest", "runs-on: @@runner.label@@", 2)
-        self.mutate("contracts/workflow-template.toml", "@@uses.checkout_v6@@", "actions/checkout@" + "a" * 40, 2)
+        self.mutate("contracts/workflow-template.toml", "runs-on: ubuntu-latest", "runs-on: @@runner.label@@", 3)
+        self.mutate("contracts/workflow-template.toml", "@@uses.checkout_v6@@", "actions/checkout@" + "a" * 40, 3)
         self.assert_red("a literal action SHA")
 
     def test_an_action_pin_is_the_manifests(self) -> None:
@@ -234,9 +234,9 @@ class GenerateCiWorkflow(unittest.TestCase):
     # ── profile hygiene, and the unreadable ──────────────────────────────
 
     def test_an_unknown_profile_key_or_setup_is_caught(self) -> None:
-        self.mutate("contracts/gate-inputs.toml", 'G11 = { title = "RFC integrity (Python {python})", setup = "python" }', 'G11 = { title = "RFC integrity (Python {python})", setup = "python", colour = "red" }')
+        self.mutate("contracts/gate-inputs.toml", 'G11 = { title = "RFC integrity (Python {python})", setup = "python", paths = ["**"] }', 'G11 = { title = "RFC integrity (Python {python})", setup = "python", paths = ["**"], colour = "red" }')
         self.assert_red("[lane_profiles] G11: unknown key `colour`")
-        self.mutate("contracts/gate-inputs.toml", 'setup = "python", colour = "red"', 'setup = "perl"')
+        self.mutate("contracts/gate-inputs.toml", 'setup = "python", paths = ["**"], colour = "red"', 'setup = "perl", paths = ["**"]')
         self.assert_red("`setup` must be rust, python or none")
 
     def test_a_title_may_not_contain_a_quote(self) -> None:
@@ -269,9 +269,9 @@ class GenerateCiWorkflow(unittest.TestCase):
         self.assertEqual(text.count("check-ui-invariants-fixtures.sh\n          status"), 1)
 
     def test_the_custom_job_mechanism_is_gone_and_bash_must_be_true_or_absent(self) -> None:
-        self.mutate("contracts/gate-inputs.toml", 'G12 = { title = "UI invariants v1", setup = "none", bash = true }', 'G12 = { title = "UI invariants v1", setup = "none", job = "x" }')
+        self.mutate("contracts/gate-inputs.toml", 'G12 = { title = "UI invariants v1", setup = "none", bash = true, paths = ["**"] }', 'G12 = { title = "UI invariants v1", setup = "none", job = "x", paths = ["**"] }')
         self.assert_red("[lane_profiles] G12: unknown key `job`")
-        self.mutate("contracts/gate-inputs.toml", 'setup = "none", job = "x" }', 'setup = "none", bash = "yes" }')
+        self.mutate("contracts/gate-inputs.toml", 'setup = "none", job = "x", paths = ["**"] }', 'setup = "none", bash = "yes", paths = ["**"] }')
         self.assert_red("`bash` is either true or absent")
 
     def test_g12_must_have_an_owner_and_no_exception(self) -> None:
@@ -292,6 +292,50 @@ class GenerateCiWorkflow(unittest.TestCase):
         (self.root / "contracts/workflow-template.toml").write_text("this is = not [valid", encoding="utf-8")
         r = self.run_gen()
         self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+
+    # ── RFC 130 D1-D4: scope declarations ────────────────────────────────
+
+    def test_a_lane_with_no_paths_fails(self) -> None:
+        self.mutate("contracts/gate-inputs.toml", ', paths = ["**"] }\nG12', " }\nG12")
+        self.assert_red("[lane_profiles] G11: `paths` is required and must be a non-empty list of strings")
+
+    def test_a_scoped_lane_declaring_always_fails(self) -> None:
+        # G01 is in RFC 130 D2's scoped set; it may not say "always".
+        self.mutate(
+            "contracts/gate-inputs.toml",
+            'G01 = { title = "build ({rust_msrv}, default)", setup = "rust", toolchain = "msrv", apt = true, cache = true, paths = ["crates/**", "Cargo.toml", "Cargo.lock", "rust-toolchain*", "scripts/ci-gate.sh", "contracts/gate-inputs.toml", "contracts/workflow-template.toml", ".github/workflows/ci.yml"] }',
+            'G01 = { title = "build ({rust_msrv}, default)", setup = "rust", toolchain = "msrv", apt = true, cache = true, paths = ["**"] }',
+        )
+        self.assert_red("[lane_profiles] G01: is in RFC 130 D2's scoped set but declares paths = [\"**\"] (always)")
+
+    def test_a_governance_lane_declaring_a_real_scope_fails(self) -> None:
+        # G11 is not in the scoped set; it may only say "always".
+        self.mutate(
+            "contracts/gate-inputs.toml",
+            'G11 = { title = "RFC integrity (Python {python})", setup = "python", paths = ["**"] }',
+            'G11 = { title = "RFC integrity (Python {python})", setup = "python", paths = ["rfcs/**"] }',
+        )
+        self.assert_red("[lane_profiles] G11: is not in RFC 130 D2's scoped set, so `paths` must be [\"**\"] (always)")
+
+    def test_an_empty_paths_list_fails(self) -> None:
+        self.mutate("contracts/gate-inputs.toml", '"RFC integrity (Python {python})", setup = "python", paths = ["**"]', '"RFC integrity (Python {python})", setup = "python", paths = []')
+        self.assert_red("[lane_profiles] G11: `paths` is required and must be a non-empty list of strings")
+
+    def test_scoped_lanes_depend_on_changes_and_governance_lanes_do_not(self) -> None:
+        text = self.read(".github/workflows/ci.yml")
+        g01 = text[text.index("\n  G01:\n") : text.index("\n  G02:\n")]
+        self.assertIn("needs: changes", g01)
+        self.assertIn("if: needs.changes.outputs.rust == 'true'", g01)
+        g11 = text[text.index("\n  G11:\n") : text.index("\n  G12:\n")]
+        self.assertNotIn("needs:", g11)
+        self.assertNotIn("if:", g11)
+
+    def test_the_changes_job_exists_with_the_expected_output(self) -> None:
+        text = self.read(".github/workflows/ci.yml")
+        self.assertIn("\n  changes:\n", text)
+        changes = text[text.index("\n  changes:\n") :]
+        self.assertIn("outputs:\n      rust: ${{ steps.compute.outputs.rust }}", changes)
+        self.assertIn("scripts/compute-changed-scope.py", changes)
 
     def test_the_local_run_property_is_not_touched(self) -> None:
         # D7: `[gates]` is read, never rewritten, and stays single-line values

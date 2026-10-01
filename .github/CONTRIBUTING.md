@@ -10,11 +10,29 @@ want to change and why. This isn't a barrier — most things will get an
 encouraging "yes, please send a PR" — but it saves both sides from writing
 code that won't merge.
 
+**A change to behaviour, a contract, or a security property goes through an
+RFC first.** sui-id runs RFC 000's lifecycle (`rfcs/`): design is written up
+and reviewed in `proposed/` before it moves to `accepted/`, and only an
+Accepted RFC is implementation-eligible. A typo fix or an ordinary bug fix
+doesn't need one — open an issue as above. If you're unsure which your
+change is, open the issue first and ask.
+
 ## Code style
 
-- `cargo fmt` before pushing.
-- `cargo clippy --workspace --all-targets` should be clean.
-- `cargo test --workspace` should pass.
+Before pushing, your change should pass what CI runs. Don't restate the
+commands here — a restated command drifts from the gate it imitates, which
+is exactly how a past version of this file sent CI's fmt lane red while a
+contributor's own local check passed. Run a gate locally the same way CI
+does:
+
+```bash
+bash scripts/ci-gate.sh <GATE_ID>
+```
+
+`contracts/gate-inputs.toml`'s `[gates]` table lists every gate's exact
+command; `docs/src/contributing/local-dev.md` has narrower commands for
+focused local iteration (a single module's tests, for example).
+
 - Workspace-wide lints in `Cargo.toml` are real: `unsafe_code` is forbidden,
   `unwrap_used` and `expect_used` are warnings. The few existing `expect`
   calls have a comment explaining why they cannot fail in practice.
@@ -33,13 +51,18 @@ rule. These run as part of the regular `cargo test` suite under tight
 case caps (`cases: 4` for Argon2-driven tests, `cases: 256–512` for
 cheap ones) so the suite finishes in a reasonable time.
 
-To run the properties under wider coverage — recommended before a
-release, and as a periodic CI job — override the case count from the
-environment:
+To run the properties under wider coverage, override the case count from
+the environment:
 
 ```bash
 PROPTEST_CASES=4096 cargo test --workspace
 ```
+
+Before a release, this runs at a much wider count via the "Wide proptest
+run" job in `.github/workflows/fuzz.yml` — manually dispatched alongside the
+fuzz targets, not on a schedule (a cron in a solo repo has no subscriber for
+a red run; see that file's own comment) and not a `[gates]` lane (it's
+nondeterministic by design, which is the opposite of what a gate is for).
 
 When a property fails, proptest writes a regression file under
 `crates/<crate>/proptest-regressions/`. **Commit it.** The regressed
@@ -78,9 +101,13 @@ number in the body if relevant.
 
 ## Releases
 
-Releases go through `CHANGELOG.md` and a Git tag. There is no release cadence;
-we tag when the unreleased section has accumulated enough that an operator
-would want it.
+Releases go through `CHANGELOG.md` and a Git tag — **and publishing**. A
+release is six crates published to crates.io in dependency order
+(`sui-id-shared`, `sui-id-i18n`, `sui-id-store`, `sui-id-core`, `sui-id-web`,
+`sui-id`); a tag with no publish is not a release, and this project has
+shipped that mistake before (see `docs/src/contributing/release-process.md`,
+which has the full procedure). There is no release cadence; we tag when the
+unreleased section has accumulated enough that an operator would want it.
 
 ## Code of conduct
 
