@@ -1,6 +1,6 @@
 # G11's conditions derive from RFC 000, not from a retired RFC
 
-**RFC.** [RFC 128](../../accepted/128-g11-derives-from-rfc-000.md), **Proposed** — nothing dispatched.
+**RFC.** [RFC 128](../../done/128-g11-derives-from-rfc-000.md), **Proposed** — nothing dispatched.
 **Author.** High-capability model, requirements-architect role.
 
 ## The trace, so it is not re-derived

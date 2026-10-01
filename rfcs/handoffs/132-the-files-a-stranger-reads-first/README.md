@@ -1,6 +1,6 @@
 # RFC 132 — handoff
 
-**RFC.** [`../../accepted/132-the-files-a-stranger-reads-first.md`](../../accepted/132-the-files-a-stranger-reads-first.md)
+**RFC.** [`../../done/132-the-files-a-stranger-reads-first.md`](../../done/132-the-files-a-stranger-reads-first.md)
 **Status of the RFC.** **Accepted** 2026-10-01 by `@nabbisen` ("Accepted."), amended the same day to add D6.
 
 ## Dispatch order

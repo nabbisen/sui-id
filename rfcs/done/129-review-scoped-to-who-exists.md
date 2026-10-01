@@ -1,11 +1,14 @@
 # RFC 129 — Review is scoped to who exists, and an external reviewer is engaged once, deliberately
 
-**Status.** Accepted
+**Status.** Implemented
+**Closure reviewed on.** 2026-10-02
+**Closure approved by.** `@nabbisen` (accountable owner), 2026-10-02: "Batch 1 is approved." The closure review was performed by **the architect, which wrote this RFC**, and is therefore **not** independent of it — `@nabbisen` is the approver, which is what RFC 000 requires when no independent role exists. The implementation role verified the review's measurements separately; that corroboration is recorded beside it and is not approval.
+**Closure evidence.** [Closure review batch 1, 2026-10-02](../handoffs/110-rfc-header-governance-guard/closure-review-batch-1-2026-10-02.md), with [independent verification](../handoffs/110-rfc-header-governance-guard/closure-verification-batch-1-2026-10-02.md)
 **Accepted on.** 2026-10-01
 **Approved by.** `@nabbisen`, 2026-10-01: "RFC 129 was reviewed and accepted." 
 **Security review.** Required
 **Independent design review.** [Owner review 2026-10-01](../handoffs/129-review-scoped-to-who-exists/owner-review-2026-10-01.md) — by `@nabbisen`, who did **not** author this RFC. **This is the first entry in this line that the word "independent" fits in its ordinary sense**, rather than in the sense a retired RFC supplied or the sense R1's residual covers when nobody is available.
-**Design prerequisites.** [RFC 128](../accepted/128-g11-derives-from-rfc-000.md)'s stage 0, complete 2026-10-01. This RFC acts on its Part 1.
+**Design prerequisites.** [RFC 128](../done/128-g11-derives-from-rfc-000.md)'s stage 0, complete 2026-10-01. This RFC acts on its Part 1.
 **Implementation prerequisites.** None.
 **Closure prerequisites.** No milestone exit gate and no RFC closure prerequisite requires a reviewer who does not exist. Every such statement either names a role this project has, or names the one deliberately scheduled external engagement and says why that point and no other.
 **Tracks.** Programme viability.

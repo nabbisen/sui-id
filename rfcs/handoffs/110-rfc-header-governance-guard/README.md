@@ -31,7 +31,7 @@ that vigilance is not what stands between the project and a third occurrence.
 
 **Corrected 2026-09-24.** Everything between here and *Out of scope* described
 the design as first proposed. Its independent design review overturned the
-central mechanism, [RFC 110](../../accepted/110-rfc-header-governance-guard.md)
+central mechanism, [RFC 110](../../done/110-rfc-header-governance-guard.md)
 was amended to match, and **this page was not** — so it went on specifying five
 phrases including RFC 000's own sentence, an exact-regex label rule, a
 `Reviewer-rule exemption` field, nine tests, and no archive scope, all of which

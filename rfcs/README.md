@@ -72,7 +72,7 @@ slot is `104`). One **parallel namespace** also exists:
 | 098 | [Documentation Authority and Reconciliation](./done/098-documentation-authority-reconciliation.md) | M5 | mid-capability model |
 | 102 | [Authentication that cannot be audited does not succeed](./done/102-authentication-fails-closed-without-audit.md) | **Implemented, closed 2026-09-22** | mid-capability model |
 | 103 | [Administrator-issued account recovery](./done/103-administrator-issued-account-recovery.md) | **Implemented, closed 2026-09-24** | mid-capability model |
-| 110 | [An RFC header may not legislate](./accepted/110-rfc-header-governance-guard.md) | cycle A | mid-capability model |
+| 110 | [An RFC header may not legislate](./done/110-rfc-header-governance-guard.md) | cycle A | mid-capability model |
 | 115 | [Creating a user without choosing their password](./accepted/115-user-creation-without-a-password.md) | cycle A | mid-capability model |
 | 116 | [Gate contracts: one source, one gate each](./accepted/116-gate-contracts.md) | cycle B | mid-capability model |
 | 117 | [Owner decisions must be verifiable](./accepted/117-verifiable-owner-decisions.md) | stages 0/0b landed; 1–3 need the key | mid-capability model |
@@ -131,11 +131,11 @@ Proposed: the move approved nothing.
 | 125 | [The audit chain must be verified as a chain](./accepted/125-the-chain-must-be-verified-as-a-chain.md) | [125-the-chain-must-be-verified-as-a-chain](./handoffs/125-the-chain-must-be-verified-as-a-chain/README.md) |
 | 126 | [Password hashing must not block the request runtime](./accepted/126-password-hashing-must-not-block-the-runtime.md) | [126-password-hashing-must-not-block-the-runtime](./handoffs/126-password-hashing-must-not-block-the-runtime/README.md) |
 | 127 | [Documentation carries the truth; a test enforces it](./accepted/127-documentation-carries-the-truth.md) | [127-documentation-carries-the-truth](./handoffs/127-documentation-carries-the-truth/README.md) |
-| 128 | [G11's conditions derive from RFC 000, not from a retired RFC](./accepted/128-g11-derives-from-rfc-000.md) | [128-g11-derives-from-rfc-000](./handoffs/128-g11-derives-from-rfc-000/README.md) |
-| 129 | [Review is scoped to who exists, and an external reviewer is engaged once, deliberately](./accepted/129-review-scoped-to-who-exists.md) | [129-review-scoped-to-who-exists](./handoffs/129-review-scoped-to-who-exists/README.md) |
-| 130 | [A gate declares the inputs it depends on, and runs when they change](./accepted/130-gates-declare-their-input-scope.md) | [130-gates-declare-their-input-scope](./handoffs/130-gates-declare-their-input-scope/README.md) |
+| 128 | [G11's conditions derive from RFC 000, not from a retired RFC](./done/128-g11-derives-from-rfc-000.md) | [128-g11-derives-from-rfc-000](./handoffs/128-g11-derives-from-rfc-000/README.md) |
+| 129 | [Review is scoped to who exists, and an external reviewer is engaged once, deliberately](./done/129-review-scoped-to-who-exists.md) | [129-review-scoped-to-who-exists](./handoffs/129-review-scoped-to-who-exists/README.md) |
+| 130 | [A gate declares the inputs it depends on, and runs when they change](./done/130-gates-declare-their-input-scope.md) | [130-gates-declare-their-input-scope](./handoffs/130-gates-declare-their-input-scope/README.md) |
 | 131 | [Two gate levels, and one rule about claims](./accepted/131-two-gate-levels-and-one-rule.md) | [131-two-gate-levels-and-one-rule](./handoffs/131-two-gate-levels-and-one-rule/README.md) |
-| 132 | [The files a stranger reads first](./accepted/132-the-files-a-stranger-reads-first.md) | [132-the-files-a-stranger-reads-first](./handoffs/132-the-files-a-stranger-reads-first/README.md) |
+| 132 | [The files a stranger reads first](./done/132-the-files-a-stranger-reads-first.md) | [132-the-files-a-stranger-reads-first](./handoffs/132-the-files-a-stranger-reads-first/README.md) |
 
 ### Implemented — Mockup Integration epic (Phase 0 → Phase 8)
 

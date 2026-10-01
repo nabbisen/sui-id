@@ -1,6 +1,9 @@
 # RFC 128 — G11's conditions derive from RFC 000, not from a retired RFC
 
-**Status.** Accepted
+**Status.** Implemented
+**Closure reviewed on.** 2026-10-02
+**Closure approved by.** `@nabbisen` (accountable owner), 2026-10-02: "Batch 1 is approved." The closure review was performed by **the architect, which wrote this RFC**, and is therefore **not** independent of it — `@nabbisen` is the approver, which is what RFC 000 requires when no independent role exists. The implementation role verified the review's measurements separately; that corroboration is recorded beside it and is not approval.
+**Closure evidence.** [Closure review batch 1, 2026-10-02](../handoffs/110-rfc-header-governance-guard/closure-review-batch-1-2026-10-02.md), with [independent verification](../handoffs/110-rfc-header-governance-guard/closure-verification-batch-1-2026-10-02.md)
 **Accepted on.** 2026-10-01
 **Approved by.** `@nabbisen`, 2026-10-01: "RFC 128 is accepted." 
 **Security review.** Required
@@ -103,7 +106,7 @@ not a courtesy. Conditions already known to be sound are still cited, because
 
 **D3 — Where RFC 000 leaves something undefined, the gate leaves it undefined.**
 Independence is the case in hand. A gate that supplies a missing definition is
-legislating, which is what [RFC 110](../accepted/110-rfc-header-governance-guard.md)
+legislating, which is what [RFC 110](../done/110-rfc-header-governance-guard.md)
 forbids a header from doing — the same fault one layer down. **Whether an author
 may review their own RFC is `@nabbisen`'s to decide, and this RFC does not
 decide it.**

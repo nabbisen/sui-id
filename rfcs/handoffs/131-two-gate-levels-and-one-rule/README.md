@@ -2,7 +2,7 @@
 
 **RFC.** [`../../accepted/131-two-gate-levels-and-one-rule.md`](../../accepted/131-two-gate-levels-and-one-rule.md)
 **Status of the RFC.** **Accepted** 2026-10-01 by `@nabbisen` ("Reviewed. Accepted."), on his own design review.
-**Depends on.** [RFC 130](../../accepted/130-gates-declare-their-input-scope.md), whose D5 this RFC supersedes.
+**Depends on.** [RFC 130](../../done/130-gates-declare-their-input-scope.md), whose D5 this RFC supersedes.
 
 ## Not dispatched yet
 

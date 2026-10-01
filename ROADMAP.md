@@ -962,7 +962,7 @@ historical record, not evidence.
 | [107](rfcs/proposed/107-cli-help-completeness.md) | `sui-id --help` names every subcommand the binary accepts |
 | [108](rfcs/proposed/108-client-confirm-screens.md) | Confirm screens for client disable and secret rotation; the secret leaves the URL |
 | [109](rfcs/proposed/109-request-id-span.md) | Request logs keep their request ID across `.await` |
-| [110](rfcs/accepted/110-rfc-header-governance-guard.md) | An RFC header may not legislate |
+| [110](rfcs/done/110-rfc-header-governance-guard.md) | An RFC header may not legislate |
 | [111](rfcs/proposed/111-rfc-template-reconciliation.md) | Reconcile `rfcs/README.md`'s template with what G11 enforces |
 | [112](rfcs/accepted/112-schema-version-fail-closed.md) | Refuse to run against a database this build does not understand |
 | [113](rfcs/proposed/113-test-file-organization.md) | Test modules live in their own files |

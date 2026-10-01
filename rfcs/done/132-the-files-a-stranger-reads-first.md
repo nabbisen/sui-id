@@ -1,6 +1,9 @@
 # RFC 132 — The files a stranger reads first
 
-**Status.** Accepted
+**Status.** Implemented
+**Closure reviewed on.** 2026-10-02
+**Closure approved by.** `@nabbisen` (accountable owner), 2026-10-02: "Batch 1 is approved." The closure review was performed by **the architect, which wrote this RFC**, and is therefore **not** independent of it — `@nabbisen` is the approver, which is what RFC 000 requires when no independent role exists. The implementation role verified the review's measurements separately; that corroboration is recorded beside it and is not approval.
+**Closure evidence.** [Closure review batch 1, 2026-10-02](../handoffs/110-rfc-header-governance-guard/closure-review-batch-1-2026-10-02.md), with [independent verification](../handoffs/110-rfc-header-governance-guard/closure-verification-batch-1-2026-10-02.md)
 **Accepted on.** 2026-10-01
 **Approved by.** `@nabbisen`, 2026-10-01: "Accepted."
 **Security review.** Required

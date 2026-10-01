@@ -1,6 +1,6 @@
 # RFC 130 — handoff
 
-**RFC.** [`../../accepted/130-gates-declare-their-input-scope.md`](../../accepted/130-gates-declare-their-input-scope.md)
+**RFC.** [`../../done/130-gates-declare-their-input-scope.md`](../../done/130-gates-declare-their-input-scope.md)
 **Status of the RFC.** **Accepted** 2026-10-01 by `@nabbisen` ("Accepted."), amended the same day on its security review to add D7 and D8.
 
 ## Not dispatched yet — but no longer blocked
