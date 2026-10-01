@@ -34,7 +34,9 @@ fn schema_item(body: &str) -> String {
     let at = body.find("スキーマバージョン").expect("the schema label");
     let rest = &body[at..];
     let td_open = rest.find("<td>").expect("the schema value cell") + "<td>".len();
-    let td_close = rest[td_open..].find("</td>").expect("the schema value cell's close tag");
+    let td_close = rest[td_open..]
+        .find("</td>")
+        .expect("the schema value cell's close tag");
     rest[td_open..td_open + td_close].to_owned()
 }
 
