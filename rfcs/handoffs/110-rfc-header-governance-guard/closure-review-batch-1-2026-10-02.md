@@ -37,16 +37,28 @@ catches its own author is the demonstration this prerequisite asks for.
 | Clause | Finding |
 |---|---|
 | Every G11 condition traces to a live document — RFC 000, or the RFC that legitimately owns it | Established by D2's fourteen-row trace. **The architect independently re-verified 9 of the 14 rows against the cited files, including every row the conclusion rests on**; all RFC 000, RFC 093 and RFC 110 citations resolve and say what was claimed |
-| No condition enforces a formulation whose only source is an archived RFC | Verified three ways: `git log -S"N/A" -- scripts/check-rfc-integrity.py` returns only the commit that documents the *absence*; condition 9's logic is byte-identical to its introduction at `3f2eace`; all twelve `author` occurrences in the file are prose |
+| No condition enforces a formulation whose only source is an archived RFC | Verified three ways: `git log -S"N/A" -- scripts/check-rfc-integrity.py` returns only the commit that documents the *absence*; condition 9's logic is byte-identical to its introduction at `3f2eace`; and **every `author` occurrence in the file is prose — comment, docstring, or an unrelated word (`authorised`, `authority`) — with none appearing in a comparison, branch or condition.** Re-measured 2026-10-02: `grep -nE 'author' … | grep -E '==|!=|\.author|if .*author'` returns nothing |
 | Where RFC 000 leaves something undefined, the gate does not supply a definition inherited from elsewhere, **and says so** | `scripts/check-rfc-integrity.py`'s condition-9 docstring states explicitly that it checks neither the literal `N/A` nor author-vs-reviewer identity, and why; three acceptance tests pin the three patterns live in the tree |
 
-**Met.** **One durability point `@nabbisen` should know before approving:** D2's
-full fourteen-row trace lives in `.git-exclude/review-requests/`, which is **not
-tracked by git**. The conclusion and the method are recorded in the tracked
-handoff, and this review restates the verified result — so the closure reference is
-durable. But the row-by-row working is not in the repository, and if that matters
-to him, committing the trace is small work that should precede approval rather
-than follow it.
+**Met**, and the durability gap this review originally flagged is now closed: D2's
+full fourteen-row trace is committed at
+[`../128-g11-derives-from-rfc-000/condition-trace-2026-10-01.md`](../128-g11-derives-from-rfc-000/condition-trace-2026-10-01.md),
+so the row-by-row working is in the repository rather than only its conclusion.
+
+**Corrected 2026-10-02, on the dev team's independent verification.** This row
+previously read *"all twelve `author` occurrences in the file are prose."* **The
+count was stale.** It was accurate when measured, and then commits `738c233`
+(RFC 110's conditions 14/15) and `40425d3` added more `author`/`authorised`/
+`authority` prose — today it is 13 by substring and 4 by word boundary, neither of
+which is twelve. They traced the drift to those two commits and read every match by
+hand before concluding the substance held.
+
+They were right to raise it, and right about why: this project treats a wrong
+declared count as a finding even when the conclusion survives, and the architect
+has enforced exactly that on them. **The deeper fault was stating a count at all** —
+a number pinned to a file that keeps changing is a hostage to the next commit,
+where the property ("no occurrence is a comparison") is not. The row now states the
+property and the command that establishes it.
 
 ## RFC 129 — Review is scoped to who exists
 
@@ -132,6 +144,29 @@ rules.
 It is worth saying plainly that this is the RFC's own rule working on its author:
 RFC 131 D2 says a claim requires its gate to be green, and RFC 131 cannot make its
 own claim because one of its gates does not exist.
+
+## Independent verification by the implementation role
+
+[`closure-verification-batch-1-2026-10-02.md`](./closure-verification-batch-1-2026-10-02.md),
+committed alongside this document so the corroboration is as durable as the claim.
+
+The dev team re-measured every checkable assertion here rather than trusting it:
+both CI runs by `gh run view` including the job-level skip detail, G11 live, the
+three RFC 128 checks, the reviewer-existence grep, the email scan, `paths` on all
+21 lane profiles, **D8's plant-and-remove test run themselves**, D7's five fail-open
+conditions through the CLI, and `test_compute_changed_scope` 13/13. They also
+confirmed the negative: none of the five RFCs carries closure metadata and none has
+moved to `done/`, so nothing closed early.
+
+**What it is and is not.** It is corroboration from a different role, and it found
+the one error above. It is **not** approval and does not satisfy RFC 000's rule that
+the implementer cannot be the sole approver — the dev team implemented most of
+these RFCs, so their verification strengthens the evidence `@nabbisen` weighs
+without substituting for his judgement. S1a is also intact: they checked
+measurements, which is fact-finding, not design review.
+
+Two things they correctly declined to do: decide RFC 131's fork, and move their own
+file into the tracked tree. Both were the architect's, and both are now done.
 
 ## What approval would mean
 
