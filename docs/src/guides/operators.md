@@ -469,12 +469,36 @@ saves a lot of time vs poring over logs.
 ### Operational model
 
 Sends go through a **persistent outbox** (RFC 001, v0.33.0). When a
-user submits `/forgot-password`, or a password change triggers a
-notification, the handler writes the message to the `email_outbox`
-table and returns at once — the same neutral 200 response whether or
-not delivery later succeeds, so the endpoint reveals nothing about
-the account. A background worker started with the server delivers
-queued mail over SMTP.
+password change triggers a notification, the handler writes the
+message to the `email_outbox` table and returns at once — the same
+neutral 200 response whether or not delivery later succeeds, so the
+endpoint reveals nothing about the account. A background worker
+started with the server delivers queued mail over SMTP.
+
+`/forgot-password` goes through one more hop first (RFC 124, v0.78.0):
+the handler's only write is a durable record of the submitted address
+in `forgot_password_requests`, unconditionally — it does not look the
+address up before responding, so the response cannot leak whether an
+account matched, by content or by timing. A second background worker,
+`ForgotPasswordWorker`, claims each recorded request, does the actual
+lookup and decides whether to mint a token, and — if it does — enqueues
+the mail into the same `email_outbox` the paragraph above describes.
+
+**`forgot_password_requests` holds, in plaintext, every address anyone
+has submitted to the form — including addresses that match no
+account.** That is a deliberate difference from the audit log, which
+never records which address was tried for a non-match (`events.rs`'s
+`PasswordResetRequested`, by design, so a probe can't derive
+matched-vs-unmatched from the actor column): this table exists only to
+make the request durable across a restart, not to retain it, and a row
+is deleted the moment `ForgotPasswordWorker` finishes processing it.
+**There is no pruning mechanism for this table.** If the worker is not
+running — stopped, crashed, or never started — submitted addresses
+accumulate here, in plaintext, instead of being deleted promptly. By
+the time that matters, account recovery is already broken for every
+caller, which is the larger problem; but an operator investigating a
+table that is unexpectedly non-empty should read it as "the worker
+isn't running," not as a leak in itself.
 
 A failed delivery is retried after 30 seconds, 2 minutes, 10
 minutes, 1 hour and 6 hours. After the fifth failed attempt the

@@ -12,8 +12,20 @@
 -- by the worker's startup sweep) when the worker starts again. This is the
 -- property a spawned, unrecorded background task would not have had.
 --
--- `email` is stored in plaintext, matching `users.email`'s existing
--- precedent — it is an address, not a secret, unlike a reset token.
+-- `email` is stored in plaintext. This does NOT match `users.email`'s
+-- precedent: that column holds the address of someone who registered;
+-- this one holds any address anyone submitted, including an attacker's
+-- probe list for addresses that match no account — exactly what
+-- `events.rs`'s `PasswordResetRequested` deliberately does not record,
+-- so a probe can't derive matched-vs-unmatched from the actor column.
+-- The architect's decision (RFC 124 stage 2 review, 2026-10-01): keep the
+-- column, because the retention is transient by design, not permanent —
+-- a row is deleted the moment the worker finishes processing it, and
+-- there is no pruning mechanism beyond that. If the worker stops running,
+-- submitted addresses accumulate here in plaintext; see
+-- `docs/src/guides/operators.md`'s "Operational model" for the
+-- operator-facing statement of that fact (RFC 127: this is not allowed to
+-- live only in this comment).
 
 CREATE TABLE forgot_password_requests (
     id              TEXT    PRIMARY KEY,
