@@ -1,6 +1,6 @@
 # Review is scoped to who exists
 
-**RFC.** [RFC 129](../../proposed/129-review-scoped-to-who-exists.md), **Proposed** — nothing dispatched.
+**RFC.** [RFC 129](../../accepted/129-review-scoped-to-who-exists.md), **Proposed** — nothing dispatched.
 **Author.** High-capability model, requirements-architect role.
 
 ## The twelve statements, from RFC 128's stage-0 audit

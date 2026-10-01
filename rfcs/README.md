@@ -132,7 +132,7 @@ Proposed: the move approved nothing.
 | 126 | [Password hashing must not block the request runtime](./accepted/126-password-hashing-must-not-block-the-runtime.md) | [126-password-hashing-must-not-block-the-runtime](./handoffs/126-password-hashing-must-not-block-the-runtime/README.md) |
 | 127 | [Documentation carries the truth; a test enforces it](./accepted/127-documentation-carries-the-truth.md) | [127-documentation-carries-the-truth](./handoffs/127-documentation-carries-the-truth/README.md) |
 | 128 | [G11's conditions derive from RFC 000, not from a retired RFC](./accepted/128-g11-derives-from-rfc-000.md) | [128-g11-derives-from-rfc-000](./handoffs/128-g11-derives-from-rfc-000/README.md) |
-| 129 | [Review is scoped to who exists, and an external reviewer is engaged once, deliberately](./proposed/129-review-scoped-to-who-exists.md) | [129-review-scoped-to-who-exists](./handoffs/129-review-scoped-to-who-exists/README.md) |
+| 129 | [Review is scoped to who exists, and an external reviewer is engaged once, deliberately](./accepted/129-review-scoped-to-who-exists.md) | [129-review-scoped-to-who-exists](./handoffs/129-review-scoped-to-who-exists/README.md) |
 
 ### Implemented — Mockup Integration epic (Phase 0 → Phase 8)
 
