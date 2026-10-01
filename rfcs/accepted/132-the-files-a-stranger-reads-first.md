@@ -1,7 +1,11 @@
 # RFC 132 — The files a stranger reads first
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-10-01
+**Approved by.** `@nabbisen`, 2026-10-01: "Accepted."
 **Security review.** Required
+**Independent design review.** [Security review 2026-10-01](../handoffs/132-the-files-a-stranger-reads-first/security-review-2026-10-01.md) — **by the architect, who authored this RFC, and therefore not independent.** `@nabbisen` requested the audit this RFC acts on; he did not ask for a design review of the RFC itself and did not state that he performed one. Carried under `ROADMAP.md` R1's residual. **The field's name overstates the document**, as it does on RFCs 124, 128 and 130.
+**Amended on.** 2026-10-01 — D6 added, resolving the proptest question D4(4) deliberately left open, on `@nabbisen` asking for the reasoning rather than a verdict.
 **Design prerequisites.** None. Acts on `ROADMAP.md` S1d (disclosure, ruled 2026-10-01) and on the governance-files audit of the same day.
 **Implementation prerequisites.** None.
 **Closure prerequisites.** Someone who has found an authentication bypass is told where to report it **at the moment they choose to open an issue**, not only in a file they had no reason to open. No template invites a secret or a third party's personal data without saying not to. No file in `.github/` promises something the project does not do. No contact route anywhere is an email address. And `CONTRIBUTING.md` describes **this** project's process, including that a behaviour change needs an RFC and that a release includes publishing six crates.
@@ -111,9 +115,7 @@ Four changes:
    paraphrasing G07, G08 and the test lanes. A restated command is a command that
    drifts; this is the same principle as RFC 116's one-source rule and RFC 131 D4,
    and the reason RFC 131 D4's scope is recorded there as too narrow.
-4. **The unimplemented proptest job claim goes**, or the job is created. The RFC
-   does not choose: either is honest, and which one is a question about whether
-   wide proptest runs are wanted, not about documentation.
+4. **The proptest claim is resolved by D6**, not by deleting it.
 
 ### D5 — A reachable private channel, and a PR template
 
@@ -123,6 +125,61 @@ private channel, per D0, never an address.
 `.github/pull_request_template.md` is added, carrying the expectations
 `CONTRIBUTING.md` already states, so they are met at submission rather than
 discovered in review.
+
+### D6 — Wide proptest runs are wanted, before a release, inside `fuzz.yml`
+
+`@nabbisen`, 2026-10-01, asked the right question rather than for a verdict:
+*"Whichever yes or no, the reasoning is important. What is the purpose ? When will
+it be run ?"* Both answers are measurable, and were measured.
+
+**The purpose is discovery that feeds the fast suite.** The narrow caps exist for
+speed — seven properties at 256 or 512 cases, the CIDR matcher at 512, Argon2 at
+4. A wide run reaches inputs the narrow run cannot. When it finds a
+counterexample, proptest writes a regression file, that file is committed, and
+**the counterexample becomes a permanent case in the fast suite forever**. So the
+wide run is not a parallel test suite; it is a generator of narrow-suite cases.
+
+**It has already worked here.**
+`crates/sui-id-store/proptest-regressions/tests_state_machine/auth_codes.txt`
+holds a shrunk counterexample — five issues, a purge, then consuming index 0 —
+found by the auth-code state-machine property and replayed on every run since.
+That is the mechanism paying for itself once already.
+
+**The cost is small for the properties that matter.** Measured on the CIDR
+property: about 0.0127 ms per case above a 111 ms fixed cost, so 512 → 65,536
+cases costs that property under a second. The seven cheap properties can be
+widened for seconds, not minutes.
+
+**Argon2 stays at 4 cases, deliberately.** Each case is a 64 MiB hash, so widening
+is expensive; and the property is a hash/verify round-trip, which is not
+input-space-sensitive — a thousand more passwords explore nothing a handful
+doesn't. Widening it would buy cost and no coverage.
+
+**`PROPTEST_CASES` does work**, contrary to the architect's first suspicion that an
+explicit `cases:` would override the environment. Verified by timing the same
+property at three settings — 118 ms, 319 ms, 942 ms for the default, 16,384 and
+65,536 — which fits a linear model through the 512-case baseline. So
+`CONTRIBUTING.md`'s documented command is correct and stays; only the job it
+promises is missing.
+
+**When it runs: before a release, manually dispatched — and in `fuzz.yml`.**
+
+- **Not per-push.** It is slow, and it is *nondeterministic by design*: a lane
+  that can fail on a newly generated input fails for reasons unrelated to the
+  change under test. That is the opposite of what `[gates]` is for, which is why
+  this is a release-time step and not a gate — the same category as RFC 131 D7's
+  publish check.
+- **Not on a schedule.** `.github/workflows/fuzz.yml:3-5` records why: a weekly
+  schedule *"failed eight consecutive weeks unnoticed — a cron in a solo repo has
+  no subscriber for a red run. Run before a release instead."*
+- **So: inside `fuzz.yml`**, as a second job behind the existing
+  `workflow_dispatch` with its own case-count input. It is the same kind of thing
+  as fuzzing — randomised, slow, nondeterministic, valuable, needing a human who
+  is already looking — and that workflow already has the right trigger, the right
+  input knob and the reasoning recorded. **No new workflow**, per the complexity
+  caution.
+
+`CONTRIBUTING.md`'s sentence then becomes true as written, and names the dispatch.
 
 ## What this is not
 
