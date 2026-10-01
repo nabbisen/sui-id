@@ -228,7 +228,7 @@ demonstrably met; `Closure reviewed on`, `Closure approved by` and a durable
 not the sole implementer** — which is why the architect prepares a batch and
 `@nabbisen` approves it, never the reverse.
 
-**Blocked — substantial work outstanding (5).** Not closure candidates; naming why
+**Blocked — substantial work outstanding (4, was 5).** Not closure candidates; naming why
 so the backlog is not mistaken for 23 items of paperwork.
 
 | RFC | What is missing |
@@ -237,16 +237,16 @@ so the backlog is not mistaken for 23 items of paperwork.
 | 095 | Validate-first single-transaction behaviour is not implemented |
 | 096 | Stages 096-A, B1 and B2: discovery/JOSE/claims, durable attempt state, the Class-A seam for federation commands |
 | 117 | Stages 1–3: the signed decision ledger does not exist. `scripts/check-owner-attributions.py`'s own comments say "ledger once one exists"; only stage 0/0b landed |
-| 130 | **Awaiting an observation, not work.** Its closure prerequisite has two halves — a change that *can* affect the Rust lanes runs them (confirmed in CI 2026-10-01, `rust scope changed: true`), and one that *cannot* does not run them. The second half has not been observed yet: every push since the mechanism landed has touched a scope path. The next documentation-only push closes it |
+| 130 | **Nothing — resolved 2026-10-02, moved to batch 1.** Both halves are now observed in CI: `rust scope changed: true` with all 11 lanes running (run `36878881472`, 24/24), and `rust scope changed: false` with **exactly G01–G09b skipped** (run `36934836767`, 13 success / 11 skipped). **Measured wall clock: 2.2 minutes against 31.1 before** — a 93% reduction on a documentation-only push, against a predicted "about 2 minutes" |
 
-**Closure candidates (18), in three batches.** Grouped so each batch's verification
+**Closure candidates (18, one of them RFC 130), in three batches.** Grouped so each batch's verification
 is one coherent kind of work rather than eighteen unrelated checks. Prerequisites
 are verified **at closure**, not here — this triage establishes that the work
 landed, not that every clause is met.
 
 | Batch | RFCs | What verifying them means |
 |---|---|---|
-| 1 | 110, 128, 129, 131, 132 | Documentary and gate properties: run the gates, read the records. Narrowest, and all five were reviewed within the last two days |
+| 1 | 110, 128, 129, 130, 132 | Documentary and gate properties: run the gates, read the records. Narrowest, and all were reviewed within the last two days. **131 was withdrawn** (see the batch-1 closure review) and **130 joined** once its measurement landed |
 | 2 | 120, 121, 122, 123, 124, 125, 126 | Behavioural security properties shipped in 0.79.0, each with tests to point at |
 | 3 | 105, 112, 115, 116, 118, 127 | Mixed. **115 needs care:** its prerequisite says `must_change` is "enforced or gone", and it is still present in `migrations.rs` and two migrations — so which of the two holds must be established, not assumed |
 

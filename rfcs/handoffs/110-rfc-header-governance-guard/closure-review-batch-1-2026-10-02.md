@@ -1,4 +1,4 @@
-# Closure review — batch 1: RFCs 110, 128, 129, 132
+# Closure review — batch 1: RFCs 110, 128, 129, 130, 132
 
 **Date:** 2026-10-02
 **Reviewed by.** The architect (high-capability model, requirements-architect role).
@@ -73,6 +73,34 @@ than follow it.
 **Met**, and the last two clauses are the ones that had been false for months rather
 than merely absent.
 
+## RFC 130 — A gate declares the inputs it depends on
+
+Added to this batch on 2026-10-02, when the measurement its prerequisite needed
+finally arrived. It had been the one candidate blocked on an **observation** rather
+than on work.
+
+| Clause | Finding |
+|---|---|
+| A change that **can** affect the Rust build or test lanes **does** run them | CI run `36878881472` on `fc056df`: `rust scope changed: true`, all 11 scoped lanes ran, 24/24 green. That push touched `Cargo.lock` |
+| A change that **cannot** affect them **does not** run them | CI run `36934836767` on `2262861`: `rust scope changed: false`, **exactly G01–G09b skipped** (11), all 13 governance lanes ran, and the run was green. That push touched `ROADMAP.md`, the G16 baseline and one handoff — no declared scope path |
+| "can" is declared in a contract, checked, and **fails closed** | `paths` on all 21 lanes in `contracts/gate-inputs.toml`, zero without one; generation refuses a lane with no scope (D4); the detector fails open on every unknown-input condition (D7), verified against five of them |
+| No gate's scope is narrower than the inputs it actually reads, **asserted by a gate** | A3.4 condition 9 (D8): verified by planting `.cargo/config.toml`, which failed the gate naming the path, and passed once removed |
+| A changed set that cannot be determined runs the complete matrix, demonstrated for `workflow_dispatch` and an unresolvable base ref | Both demonstrated directly against the real detector, along with `schedule`, an empty base ref and an all-zero base ref |
+
+**Met, and this is the clause that could only ever be closed by observation** — no
+local run can show CI skipping a lane.
+
+**The measured payoff, for the record:** **2.2 minutes against 31.1**, a 93%
+reduction on a documentation-only push, against a predicted "about two minutes".
+The prediction was made from the job timings before the mechanism existed; it held.
+
+Worth noting what the 2.2 minutes is *not*: it is not a faster test suite. Nothing
+was optimised, no cost parameter was lowered, and a push that touches Rust still
+costs the full thirty-one minutes. The saving is entirely in not running eleven
+lanes against a change that could not affect them — which is the whole of what
+`@nabbisen` asked for when he said the question was *"which jobs to run"*, not how
+to make them faster.
+
 ## RFC 131 — withdrawn from this batch: its prerequisite cannot be met as written
 
 Its closure prerequisite contains: *"A milestone cannot be closed over an RFC that
@@ -108,10 +136,12 @@ own claim because one of its gates does not exist.
 ## What approval would mean
 
 On `@nabbisen`'s approval, and not before, the architect adds to each of RFCs 110,
-128, 129 and 132: `Closure reviewed on. 2026-10-02`, `Closure approved by.` his
+128, 129, 130 and 132: `Closure reviewed on. 2026-10-02`, `Closure approved by.` his
 name and words, and `Closure evidence.` a reference to this document; moves them to
 `rfcs/done/`; updates `rfcs/README.md`; and re-runs the gates, since G11's
 folder-versus-`Status` conditions change behaviour when a file moves.
 
-**Four of the eighteen candidates, and the first RFC closures this project has ever
+On approval the same applies to RFC 130.
+
+**Five of the eighteen candidates, and the first RFC closures this project has ever
 performed.**
