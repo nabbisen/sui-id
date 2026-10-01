@@ -11,6 +11,19 @@ per RFC 000, rather than as a completed independent review.
 **Security review.** Required
 **Accepted on.** 2026-07-17
 **Approved by.** `@nabbisen`
+**Amended on.** 2026-10-01 — on `@nabbisen`'s approval of RFC 128 (not the
+requirements-architect's, and not RFC 128's author's): the RFC-integrity
+contract's description of G11 condition 9, below, is corrected from "an
+identifiable independent reviewer" to "a named reviewer and a durable
+repository-relative reference" — what RFC 000 actually asks, word for word.
+"Independent," left undefined by RFC 000, was never enforced by
+`scripts/check-rfc-integrity.py`'s condition 9 in code — no literal `N/A`
+prohibition and no check of who the reviewer is — so no gate behaviour
+changes here; this amendment brings this RFC's own prose into agreement
+with what the gate has always actually done. See RFC 128's own text for
+where the word came from and why it is corrected, not this header. Whether
+an author may review their own RFC remains `@nabbisen`'s decision, not this
+gate's.
 **Amended on.** 2026-07-30 — corrected the **G10a** command from `--dest-dir ../target/mdbook-gate` to `--dest-dir target/mdbook-gate`. mdBook 0.5.4 resolves `--dest-dir` relative to the **current working directory**, not the book root, so the original path wrote the built book one level *above* the repository root — verified by `mdbook build --help` and reproduced in an isolated worktree. `../target/mdbook-gate` is only coherent as a book-root-relative path, where it denotes `<repo>/target/mdbook-gate`; this restores that evident intent rather than changing it. The lane, its toolchain, its blocking status and its exit criterion are unchanged, so **no scope, prerequisite or acceptance criterion is affected and RFC 000's return-for-review rule does not fire**; amended in place accordingly. The `ci/gate-inputs.toml` `[gates]` entry must change in the same commit — A3.4 condition 7 fails if they drift, which was mutation-tested. Raised by the implementer during M1b C0; the defect originates in the original proposal (`ad9bb6d`) and survived design review.
 **Amended on.** 2026-07-28 (second) — added Gate Matrix lane **G07b** (stable, default features, clippy). G07 runs `--all-features` only, so code behind `#[cfg(not(feature = "…"))]` is never linted by it; the workspace has one such site (`crates/sui-id/src/runtime/startup.rs`, the LDAP-absent branch). Without G07b, retiring the legacy `fmt-clippy` job in A3.1 would lose lint coverage on that code. This amendment is purely additive — it adds a lane and weakens nothing — and is applied in place under the same owner ruling that governed the MSRV amendment, because returning this RFC to `proposed/` mid-implementation would halt M1a. Flagged for owner confirmation.
 **Amended on.** 2026-07-28 — MSRV raised from 1.91 to 1.95 under this RFC's own change-control clause (Requirements item 2), and M1 split into M1a (build baseline) and M1b (documentation and lifecycle gates). Approved by `@nabbisen`, who ruled that amendment in place is correct here because this RFC self-provides for an MSRV change and returning it to `proposed/` would invalidate the committed implementation-start authorization.
@@ -256,7 +269,10 @@ ci/rfc-policy.toml` checks all Markdown RFCs and `rfcs/README.md`:
   prospective and requires the current metadata fields;
 - every pre-existing Proposed RFC gains current metadata before acceptance;
 - Accepted RFCs have acceptance metadata and, when security review is
-  required, an identifiable independent reviewer plus durable reference;
+  required, a named reviewer and a durable repository-relative reference
+  (RFC 000's own formulation; see the 2026-10-01 amendment above — this is
+  no longer "independent," a word RFC 000 never defines and this RFC no
+  longer supplies a definition for);
 - Done security-sensitive RFCs created from 093 onward have dated independent
   closure metadata and a resolvable repository-relative evidence link;
 - historical Done/Archive RFCs are checked for number/folder/status/index/link

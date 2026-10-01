@@ -19,7 +19,23 @@ rfcs/README.md against RFC 093's RFC-integrity contract:
      prospective and requires the same full field set as (6);
   9. Accepted RFCs have acceptance metadata, and when Security review is
      Required, an Independent design review field with a durable
-     repository-relative reference;
+     repository-relative reference. That is all RFC 000 asks (its own
+     words: "a named independent design reviewer" and a repository-
+     relative Closure evidence reference), and it is all this condition
+     checks (RFC 128 D1/D3). It does NOT check, because RFC 000 does not
+     supply either: that the value is not the literal text "N/A", or that
+     the reviewer is a different person from the RFC's author -- RFC 000
+     never defines "independent". Both came from the archived, retired
+     RFC 018 (written the same month as this gate, by the same architect)
+     and were never actually enforced here; carrying them in this
+     docstring's prose, even informally, would be the gate supplying a
+     definition RFC 000 withholds -- legislating, the fault RFC 110
+     forbids an RFC header from committing one layer up. A review by the
+     RFC's own author, a review by someone who is not its author, and a
+     recorded absence of review are all accepted today (RFCs 124/120/125/
+     128, 129, and 105, respectively) and must stay accepted unless
+     `@nabbisen` rules otherwise -- that ruling is not this gate's to make;
+
   10. Done RFCs with identifier >= the same threshold and Security review
       Required have dated Closure metadata and a durable repository-
       relative Closure evidence reference;
@@ -662,6 +678,11 @@ def check_accepted_metadata(root: Path, rfcs: list[Rfc], failures: list[str]) ->
                     f"'Independent design review.' is missing"
                 )
             else:
+                # RFC 128 D1/D3: presence plus a durable reference is the
+                # whole check. Deliberately no inspection of *who* reviewed
+                # or whether the value equals "N/A" -- see condition 9's
+                # docstring entry above for why not, and do not add either
+                # check without `@nabbisen` first ruling on self-review.
                 check_evidence_field(root, rfc, "Independent design review", failures)
 
 

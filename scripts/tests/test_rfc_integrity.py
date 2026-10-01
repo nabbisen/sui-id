@@ -333,6 +333,56 @@ class RfcIntegrityTest(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("Independent design review.' is missing", result.stderr)
 
+    # RFC 128 D1/D3: condition 9 is re-derived from RFC 000 alone -- a named
+    # reviewer and a durable reference, nothing inherited from the retired
+    # RFC 018 (no `N/A` prohibition, no definition of independence). These
+    # three patterns all exist in the live tree today (RFC 129, RFCs 120/124/
+    # 125/128, RFC 105) and the gate must accept all three, or it is
+    # supplying a definition RFC 000 withholds -- legislating one layer down,
+    # the exact fault RFC 110 exists to catch in headers themselves.
+
+    def test_independent_design_review_by_the_rfc_owner_is_accepted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_baseline(root)
+            rfc = VALID_RFC.replace(
+                "**Independent design review.** `reviewer`, [Review](../handoffs/100-example/100-review.md)\n",
+                "**Independent design review.** [Owner review](../handoffs/100-example/100-review.md) "
+                "-- by `@owner`, who did not author this RFC.\n",
+            )
+            write(root / "rfcs" / "accepted" / "100-example.md", rfc)
+            git_commit(root)
+            result = run_checker(root)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_independent_design_review_by_the_rfc_author_is_accepted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_baseline(root)
+            rfc = VALID_RFC.replace(
+                "**Independent design review.** `reviewer`, [Review](../handoffs/100-example/100-review.md)\n",
+                "**Independent design review.** [Security review](../handoffs/100-example/100-review.md) "
+                "-- by the architect, who authored this RFC, and therefore not independent.\n",
+            )
+            write(root / "rfcs" / "accepted" / "100-example.md", rfc)
+            git_commit(root)
+            result = run_checker(root)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_a_record_that_no_review_occurred_is_accepted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_baseline(root)
+            rfc = VALID_RFC.replace(
+                "**Independent design review.** `reviewer`, [Review](../handoffs/100-example/100-review.md)\n",
+                "**Independent design review.** [None was performed, and none now can be "
+                "-- the record of the gap](../handoffs/100-example/100-review.md)\n",
+            )
+            write(root / "rfcs" / "accepted" / "100-example.md", rfc)
+            git_commit(root)
+            result = run_checker(root)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_evidence_link_missing_target_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
