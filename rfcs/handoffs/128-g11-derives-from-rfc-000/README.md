@@ -185,7 +185,7 @@ D1/D3's own amendment to that file shifted them (+13 after `@@ -11`, +16 after
 `@@ -256`). The two packages shipped together, so the trace points into a version
 the same delivery replaced: condition 7's `:254-256` now lands on
 `### RFC integrity contract` and a command line. Correct rows 4, 5, 6, 7 and 11
-to `:262`, `:263`, `:264-266`, `:267-269` and `:275-276`, or state the baseline
+to `:262`, `:263`, `:264-266`, `:267-269` and `:278-279`, or state the baseline
 commit in the Method section. Either is acceptable; silence is not — line numbers
 are the entire value of a trace.
 
@@ -258,7 +258,7 @@ wrong, and the census says so.** Of the 24 RFCs carrying an
 | the architect, self, and **said so in the header** | 2 | 124, 128 |
 | `@nabbisen` | 2 | 098, 129 |
 | none performed, recorded as a gap | 1 | 105 |
-| pre-threshold / other shape | 4 | 018, 093, 102, 103 |
+| in `done/` or `archive/`, so condition 9 does not reach them | 4 | 018 (archived), 093, 102, 103 |
 
 **No RFC in D4's set is a self-review.** The self-review question touches only
 124 and 128 — both of which already state in the header that the field's name
@@ -277,3 +277,28 @@ deferred re-review's output, not this dispatch's.
 gave. The architect's recommendation on how to proceed is `@nabbisen`'s to accept
 or reject and is **not recorded here as a decision**; it is in the review result
 for these packages. Nothing in D4 is the dev team's to start.
+### Two corrections to this dispatch's own text, 2026-10-01
+
+Both found downstream, both mine, both fixed above rather than left to stand.
+
+**D7's row 11 was wrong.** I wrote `:275-276`; the correct line is `:278-279`. I
+applied the `+13` shift where `+16` was due — row 11's original `:262-263` falls
+after the second amendment hunk, not before it. The dev team **measured it
+directly instead of following my number**, found the disagreement, and reported it
+rather than silently picking one: *"the independently-measured value and the
+review's own stated shift formula agree with each other and disagree only with the
+review's quoted line numbers."* That is exactly right, it is exactly the right way
+to handle a reviewer's arithmetic, and it is the second time today that reading the
+artifact beat trusting a derived number — the first was my own false "undeclared
+hunk" finding. The lesson is mine in both directions: **state the baseline, then
+measure against it; do not hand someone a computed line number.**
+
+**"Pre-threshold" was the wrong label, and it propagated.** The census table above
+described 018, 093, 102 and 103 as "pre-threshold". The threshold is
+`min_number = 93` (`contracts/rfc-policy.toml:34`), so 093, 102 and 103 are all at
+or **above** it. They are outside condition 9's reach because condition 9 is
+`accepted/`-only and they are in `done/` — condition 10 is what applies to them;
+018 is archived. The table is corrected. The D1/D3/D5 package inherited the wrong
+word from me when applying D9, so it is wrong there too; **not worth a further
+round** — the conclusion it supports is unaffected, and it will be right next time
+it is restated.
