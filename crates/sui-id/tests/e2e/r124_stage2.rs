@@ -493,18 +493,28 @@ async fn rfc124_a_recovery_request_survives_a_restart_before_the_worker_drains_i
     // "Restart": a fresh worker, over the same database, that never
     // existed when the request was accepted.
     spawn_forgot_password_worker(&state);
+    // Synchronise on the worker's *last* observable effect, not a proxy for
+    // it: `process_row` calls `request_reset` (which awaits the send) before
+    // it calls `delete`, so `mailer.count() == 1` can already be true while
+    // the row is still present — a window a wait on the mail count alone
+    // would race. Waiting for the row to be gone is sound in one direction:
+    // once it's gone, `request_reset` has already returned, so the mail is
+    // already there too.
     wait_until(
         Duration::from_secs(2),
         "the restarted worker drains the surviving request",
-        || async { mailer.count().await == 1 },
+        || async {
+            sui_id_store::repos::forgot_password_requests::count_outstanding(&state.db)
+                .await
+                .expect("count")
+                == 0
+        },
     )
     .await;
     assert_eq!(
-        sui_id_store::repos::forgot_password_requests::count_outstanding(&state.db)
-            .await
-            .expect("count"),
-        0,
-        "the row is gone once processed"
+        mailer.count().await,
+        1,
+        "the row's mail was sent before it was deleted"
     );
 }
 

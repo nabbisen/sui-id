@@ -336,10 +336,12 @@ class RfcIntegrityTest(unittest.TestCase):
     # RFC 128 D1/D3: condition 9 is re-derived from RFC 000 alone -- a named
     # reviewer and a durable reference, nothing inherited from the retired
     # RFC 018 (no `N/A` prohibition, no definition of independence). These
-    # three patterns all exist in the live tree today (RFC 129, RFCs 120/124/
-    # 125/128, RFC 105) and the gate must accept all three, or it is
-    # supplying a definition RFC 000 withholds -- legislating one layer down,
-    # the exact fault RFC 110 exists to catch in headers themselves.
+    # three patterns all exist in the live tree today: a review by the RFC's
+    # own author (RFCs 124, 128), a review by someone who is not its author
+    # (RFC 129), and a recorded absence of review (RFC 105). The gate must
+    # accept all three today, unless `@nabbisen` rules otherwise on
+    # self-review -- that ruling is not this gate's to make, so these tests
+    # describe today's accepted set, not a permanent one (RFC 128 D9).
 
     def test_independent_design_review_by_the_rfc_owner_is_accepted(self):
         with tempfile.TemporaryDirectory() as tmp:
