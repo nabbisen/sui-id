@@ -46,6 +46,30 @@ The architect will dispatch both together, with RFC 130 first.
   depends on a third-party network call and `[gates]` must stay offline and
   deterministic.
 
+## A near-miss while cutting 0.79.0 — D2 must name the workflow, not just the commit
+
+Found 2026-10-01 by the architect, cutting the release this RFC governs.
+
+D2 says a claim requires Level B "on the exact commit it cites". **A commit can
+have several workflow runs, and a green from the wrong one is indistinguishable
+at a glance.** `756e9f9` had two: `Security audit` (one job, triggered because
+`Cargo.toml` changed) and `CI` (23 jobs). A lookup matching on commit SHA alone
+returned the audit run first, reporting `completed / success`. Nothing about that
+result says it ran one gate rather than twenty-three.
+
+The release was nearly tagged on it. What caught it was checking the job count,
+not the conclusion.
+
+**So, when implementing D2:** the check asserts the **workflow** and the
+**job set**, not merely a green conclusion on the right SHA. "Every gate in
+`[gates]`" is satisfiable only by the CI run, and "green" is not evidence of
+"complete" — a workflow that runs a subset reports success exactly as one that
+runs everything. Match the gate IDs present against `[gates]` and fail on a
+missing one.
+
+This is the same error shape as the release checklist D4 removes: a weaker check
+that looks like the stronger one from outside.
+
 ## The one thing most worth attacking
 
 D4's assertion is the load-bearing part, and it is the one that found a live
