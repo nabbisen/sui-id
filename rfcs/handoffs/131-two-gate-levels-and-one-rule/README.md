@@ -37,6 +37,15 @@ The architect will dispatch both together, with RFC 130 first.
   guessed milestone-to-RFC mapping is worse than an absent one, because it would
   pass a gate while meaning nothing.
 
+- **D7** — a scheduled check comparing each crate's newest tag against the
+  registry's `max_version`, reporting any tag never published. **It must send an
+  explicit `User-Agent`** — without one crates.io returns a policy error that
+  reads as "not published" for every crate, which is the trap
+  `docs/src/contributing/release-process.md:72` already records. **Weekly, in
+  `audit.yml`'s shape — not a per-push gate and not in `[gates]`**, because it
+  depends on a third-party network call and `[gates]` must stay offline and
+  deterministic.
+
 ## The one thing most worth attacking
 
 D4's assertion is the load-bearing part, and it is the one that found a live

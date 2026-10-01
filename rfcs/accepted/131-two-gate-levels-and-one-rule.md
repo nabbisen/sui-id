@@ -7,9 +7,10 @@
 **Independent design review.** [Owner review 2026-10-01](../handoffs/131-two-gate-levels-and-one-rule/owner-review-2026-10-01.md) — by `@nabbisen`, who did **not** author this RFC. He stated that he reviewed it, and three of his interventions changed the design: he rejected RFC 130 D5's question as one a design should answer, identified RFC completion as a missing stage, and then capped the stage count — which collapsed five gate lists into two levels. **This field's name fits, in the ordinary sense**, unlike RFC 124's, 128's and 130's.
 **Design prerequisites.** [RFC 130](./130-gates-declare-their-input-scope.md), accepted 2026-10-01. This RFC supersedes its D5.
 **Implementation prerequisites.** None. Unlike RFC 130, this RFC answers its own policy question rather than deferring one.
-**Closure prerequisites.** There is exactly one answer to "what must pass before this claim", it is the same answer for all three claims that make it, and no document states a weaker one. A milestone cannot be closed over an RFC that has not been. `docs/src/contributing/release-process.md` cannot drift from the Gate Matrix without a gate failing.
+**Closure prerequisites.** There is exactly one answer to "what must pass before this claim", it is the same answer for all three claims that make it, and no document states a weaker one. **A tagged version is either on the registry or recorded as abandoned, and the discrepancy is detected without anyone remembering to look** (D7). A milestone cannot be closed over an RFC that has not been. `docs/src/contributing/release-process.md` cannot drift from the Gate Matrix without a gate failing.
 **Tracks.** Release stability. Raised by `@nabbisen`, 2026-10-01, as a stage model for release cycles.
 **Touches.** `docs/src/contributing/release-process.md`, `scripts/check-gate-inputs.sh`, `ROADMAP.md`, `rfcs/accepted/130-gates-declare-their-input-scope.md` (D5 superseded).
+**Amended on.** 2026-10-01 — D7 added while cutting 0.79.0, on measuring that **four tagged versions were never published** (0.76.10, 0.76.11, 0.76.12, 0.78.0). D2 governed the cut and nothing governed the publish, so a release could satisfy this RFC in full and still never reach a user. The amendment is material.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** High-capability model, requirements-architect role.
 
@@ -140,6 +141,50 @@ RFC 130's D5 asked whether a release requires the complete matrix, and made itse
 unimplementable until answered. D2 answers it: yes, and so do RFC completion and
 milestone closure. RFC 130 is amended to record D5 as superseded by this RFC, which
 **unblocks RFC 130's implementation**.
+
+### D7 — A cut that is never published is not a release
+
+Added 2026-10-01, while cutting 0.79.0.
+
+D2 says a release cut requires Level B on the exact commit it cites. **It says
+nothing about the cut reaching anyone**, and that turned out to be the gap that
+mattered. Measured against the registry:
+
+| | |
+|---|---|
+| Published, newest first | 0.77.0, 0.76.9, 0.76.8, … |
+| Tagged | … 0.76.10, 0.76.11, 0.76.12, 0.77.0, 0.78.0 |
+
+**Four tagged versions were never published.** The first three are described in
+`docs/src/contributing/release-process.md:72` — as a caution about *how to verify
+the registry*, not as an open defect — and they are still unpublished three months
+later. Then **0.78.0 repeated it**, and that was recorded nowhere until this
+amendment. So a release could pass every gate, carry security fixes, be tagged,
+and leave every user exposed; which is what happened to the RFC 120 and RFC 125
+fixes for a week.
+
+Publishing is the only stage a user experiences. So:
+
+1. **A release cut is incomplete until every crate in the publication order is on
+   the registry at that version**, or until the cut is recorded as abandoned in
+   `CHANGELOG.md` with a reason. 0.78.0 is recorded as abandoned by this RFC's
+   landing commit; 0.76.10–12 remain and are `@nabbisen`'s to abandon or publish.
+2. **The discrepancy is detected without anyone remembering to look.** A check
+   compares each crate's newest tag against the registry's `max_version` and
+   reports any tag with no published counterpart. It **must** send an explicit
+   `User-Agent`: crates.io returns a policy error without one, which reads as
+   "not published" for every crate and is not — the trap the release document
+   already records.
+3. **It is a scheduled check, not a per-push gate.** It depends on a third-party
+   network call, so making it blocking would fail CI for reasons unrelated to the
+   change under test. Weekly, in the shape `audit.yml` already uses, plus a
+   release-time step. **This adds no gate to Level A or Level B** — a deliberate
+   choice, because `[gates]` must stay offline and deterministic.
+
+**Why this does not contradict the "don't over-complicate" caution.** It adds no
+stage and no level. The claim in D2 is unchanged; D7 only says that a claim nobody
+can act on is not finished, and puts the detection somewhere that cannot silently
+lapse.
 
 ## What this is not
 

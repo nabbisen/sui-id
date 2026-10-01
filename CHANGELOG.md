@@ -10,9 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.79.0] — 2026-10-01
 
 **Security release.** Two separate classes of flaw affecting every release up to
-and including 0.78.0 are fixed here. Operators running 0.78.0 or earlier should
-upgrade. **One behaviour change requires reading before upgrading:** see the
-first item under *Changed*.
+and including 0.78.0 are fixed here. **One behaviour change requires reading
+before upgrading:** see the first item under *Changed*.
+
+**If you installed from crates.io, you are on 0.77.0 and both flaws affect you.**
+0.78.0 was tagged on 2026-09-24 but **never published to the registry**, so it is
+not a version anyone can be running and not one to upgrade to — its changes reach
+users here, in 0.79.0. The same thing happened to 0.76.10, 0.76.11 and 0.76.12,
+which are tagged and still unpublished. Verified against the registry while
+cutting this release, not assumed.
 
 ### Security
 
@@ -110,6 +116,11 @@ first item under *Changed*.
   `ci/*.toml` paths should use `contracts/*.toml`.
 
 ## [0.78.0] — 2026-09-24
+
+> **Never published to crates.io.** Tagged 2026-09-24; the publish step was not
+> run. The registry went from 0.77.0 to 0.79.0, so the changes below reached
+> users in 0.79.0 rather than in a release of their own. Recorded 2026-10-01 on
+> finding it while cutting 0.79.0.
 
 **No path in sui-id sets a password on a user's behalf any more, and an audit
 note can no longer be made to read as fields it does not carry.** Minor rather
