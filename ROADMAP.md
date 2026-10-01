@@ -247,7 +247,7 @@ landed, not that every clause is met.
 | Batch | RFCs | What verifying them means |
 |---|---|---|
 | 1 | 110, 128, 129, 130, 132 | Documentary and gate properties: run the gates, read the records. Narrowest, and all were reviewed within the last two days. **131 was withdrawn** (see the batch-1 closure review) and **130 joined** once its measurement landed |
-| 2 | 120, 121, 122, 123, 124, 125, 126 | Behavioural security properties shipped in 0.79.0, each with tests to point at |
+| 2 | 120, 121, 122, 123, 124, 125, 126 | Behavioural security properties shipped in 0.79.0, each with tests to point at. **Evidence written 2026-10-02**, awaiting approval |
 | 3 | 105, 112, 115, 116, 118, 127 | Mixed. **115 needs care:** its prerequisite says `must_change` is "enforced or gone", and it is still present in `migrations.rs` and two migrations — so which of the two holds must be established, not assumed |
 
 One Level B run can serve a whole batch, since each RFC's evidence cites the same
