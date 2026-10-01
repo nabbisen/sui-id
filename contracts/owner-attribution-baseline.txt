@@ -22,6 +22,7 @@ ROADMAP.md	0cc3b4a1f8aa52ae6f4f201fc4520c924b82b64620697ae02b5bc0972c3532eb	1	1 
 ROADMAP.md	1b3a96873972f91e93b530c12e0abaf27e126513785c3b8b0aad49c13972d401	1	Under this ruling the second half is not what the project does, so that sentence is a promise the project does not keep — the architect's pr
 ROADMAP.md	211874c3a846ff839aeff608f419cc7a2cba68b6445fee4b3524302d321db5dd	1	R3 Source-size debt: 28 files over 500 lines (measured 2026-09-16: git ls-files ' .rs' \ xargs wc -l \ awk '$2 != "total" && $1 500' \ wc -l
 ROADMAP.md	25a346cb68d8409c2ad9772051dda7bda7bd1fe3099479b3c1ac26c4d1b32088	1	#### S1d — Disclosure for the 0.79.0 flaw classes, ruled by @nabbisen on 2026-10-01
+ROADMAP.md	2636ad08eb9e597ede73bccdc24e0b3cd3011bd3659d1b66c1144846611b195a	1	R4 MSRV 1.95 leaves four releases of headroom below current stable ( 1.99.0, re-measured 2026-10-01 ; was three against 1.98.1 on 2026-09-16
 ROADMAP.md	26de88e14f6fa11f02c4846c6a1a577eaf8cb96761082e7c37663009ee51ade0	1	The owner and independent reviewer decide whether a narrower change resets a targeted exercise or the complete four-week window.
 ROADMAP.md	2a29ae17a5167459bb933a6e2f0fa114c30c4452df38af543f9ca0f24a9448c0	1	R2 Audit hash chain is unkeyed and unanchored — tamper-evident only within its trust boundary Certain (by design) High if misrepresented; lo
 ROADMAP.md	2d4ab9968741d00b73c18bdf3c32d69f3d6cb9508934906d06fc3574002da5e4	1	On 2026-07-28 the owner authorized the programme to run two lanes : a second implementer was assigned and increased security-review capacity
@@ -52,7 +53,6 @@ ROADMAP.md	831b9986beea7e5a3407a96fb665d91220901ae66ea5285416a15da856e8f4df	1	Ru
 ROADMAP.md	839a76900267fe3c8504b1fe246e9d0758585a4bdddfc6f410549f5d8900dd0e	1	M6 — Release-assurance closure and soak entry owner to set Runtime file modes; all fuzz targets; package automation and inspection; live LDA
 ROADMAP.md	85972bca8cfda9e25847b615a12c3709aae33d07115fcd9c82cad11b804bd37b	1	Owner decision, 2026-08-26. Review is not skipped.
 ROADMAP.md	8f0151094259a8bc85d880cb9104615b5a24981cf3d81397b72d47814e1352a0	1	RFCs 094, 095 and 096 were returned to proposed/ on 2026-07-28 for owner-approved material amendments, and were re-accepted on 2026-08-27.
-ROADMAP.md	9213e0d7d15d0c9b2e9fc267e2026cf46fd06afdd8cf9b8537a22bdd623480e9	1	R4 MSRV 1.95 leaves three releases of headroom below current stable (1.98.1, measured 2026-09-16) Certain (measured) Medium — operators need
 ROADMAP.md	92e87f0d49a150a6963709d59e47d782889e1336a93d3eedfb51fcdb52347651	1	They must: because owner-requested self-review is legitimate, a gate that rejected every self-review would reject work this ruling permits.
 ROADMAP.md	98ceb61a86f24277ce9291924a6e17133bb443462bede8d98ec302a9c90aff71	1	Lane B is authorized to run concurrently with Lane A once the overlap rule's conditions are met: all designs are Accepted or in re-review af
 ROADMAP.md	9ff0dd77fb1198d8f3af66327073695a788b5334736b6a8bbb99dc85baabdbe0	1	[117](rfcs/accepted/117-verifiable-owner-decisions.md) Owner decisions must be verifiable
