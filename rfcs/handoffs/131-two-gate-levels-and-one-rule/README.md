@@ -37,14 +37,20 @@ The architect will dispatch both together, with RFC 130 first.
   guessed milestone-to-RFC mapping is worse than an absent one, because it would
   pass a gate while meaning nothing.
 
-- **D7** — a scheduled check comparing each crate's newest tag against the
-  registry's `max_version`, reporting any tag never published. **It must send an
-  explicit `User-Agent`** — without one crates.io returns a policy error that
-  reads as "not published" for every crate, which is the trap
-  `docs/src/contributing/release-process.md:72` already records. **Weekly, in
-  `audit.yml`'s shape — not a per-push gate and not in `[gates]`**, because it
-  depends on a third-party network call and `[gates]` must stay offline and
-  deterministic.
+- **D7** — a check comparing each crate's newest tag against the registry's
+  `max_version`, reporting any tag never published. **It must send an explicit
+  `User-Agent`** — without one crates.io returns a policy error that reads as
+  "not published" for every crate, which is the trap
+  `docs/src/contributing/release-process.md:72` already records. **A required
+  release step — not a per-push gate, not in `[gates]`, and not a schedule.**
+  Corrected 2026-10-01: this bullet first read "weekly, in `audit.yml`'s shape",
+  which the RFC's own D7 amendment then overturned on finding
+  `.github/workflows/fuzz.yml:3-5` — a cron here *"failed eight consecutive weeks
+  unnoticed"*. The bullet was not updated with the RFC, so for part of a day the
+  handoff contradicted both the RFC and its own stage-4 dispatch below. **The dev
+  team found it, applied RFC 000's rule that the RFC outranks its handoff, and
+  reported the contradiction instead of silently choosing** — which is what to do
+  with a contradiction in instructions.
 
 ## A near-miss while cutting 0.79.0 — D2 must name the workflow, not just the commit
 
