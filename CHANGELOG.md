@@ -17,12 +17,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   client creation and its `registered_via` stamp — only once the whole request
   is known to be well-formed (RFC 094 M2a, C15).
 - **Dynamically registered clients were recorded as `registered_via = 'admin'`,
-  not `'dynamic'`.** `clients::create`'s insert never wrote that column (nor
-  `consent_policy` or the application-identity URIs — those are set by their own
-  dedicated, separately-audited writers), so every client created through
-  `/oauth2/register` silently fell back to the table's default. Sealing the
-  registration path now stamps `registered_via` explicitly, in the same
-  transaction as the rest.
+  not `'dynamic'`.** `clients::create`'s insert never wrote that column, so
+  every client created through `/oauth2/register` silently fell back to the
+  table's default. Sealing the registration path now stamps `registered_via`
+  explicitly, in the same transaction as the rest. `registered_via` is still
+  set only by its own dedicated, separately-audited writer, not by `create`
+  itself — unlike the next item.
+- **`clients::create` dropped `consent_policy` and the four application-identity
+  URIs on every call, admin or dynamic.** The row's values were silently
+  discarded in favor of the table's defaults (`consent_policy` to `'none'`),
+  so a dynamically registered client's intended "ask once" policy was never
+  persisted, and — once an administrator enabled it — its users were never
+  shown the consent screen. **The bound: a dynamically registered client starts
+  disabled (RFC 008 P4, which was not affected), so this could only bite after
+  an administrator explicitly enabled one; no deployment exists where that
+  happened.** `create` now persists both from the row it is given; the
+  separately-audited `update_consent_policy` (C09) and `update_app_identity`
+  (C10) remain the correct path for changing either value after creation.
 
 ## [0.79.0] — 2026-10-01
 

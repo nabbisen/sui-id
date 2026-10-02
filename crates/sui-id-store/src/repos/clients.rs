@@ -63,15 +63,18 @@ pub async fn create(db: &Database, c: &ClientRow) -> StoreResult<()> {
 /// rather than `&Transaction` so it accepts either a bare connection
 /// (`create`'s own use, via deref) or a `WriteTx`'s transaction.
 ///
-/// **Does not set `consent_policy`, `registered_via`, or the application-
-/// identity URIs** (`logo_uri`/`homepage_uri`/`privacy_policy_uri`/
-/// `tos_uri`) — the INSERT below never has; those columns take their table
-/// defaults here and are stamped afterward by their own dedicated,
-/// separately-audited writers (`update_consent_policy` C09,
-/// `update_app_identity` C10, `set_registered_via` C11). A caller that
-/// needs a non-default value for any of them must call the matching
-/// writer in the same transaction — `ClientRow`'s own fields for them are
-/// otherwise silently not persisted at creation.
+/// **Does not set `registered_via`** — that column alone is stamped
+/// afterward by its own dedicated, separately-audited writer
+/// (`set_registered_via`, C11); a caller that needs a non-default value
+/// for it must call that writer in the same transaction. `consent_policy`
+/// and the application-identity URIs (`logo_uri`/`homepage_uri`/
+/// `privacy_policy_uri`/`tos_uri`) **are** written here, from the row —
+/// fixed 2026-10-02 (the "persistence bug"): the `INSERT` previously
+/// silently dropped all five, including these four, falling back to the
+/// table's defaults regardless of what the caller passed. `update_
+/// consent_policy` (C09) and `update_app_identity` (C10) remain the
+/// correct, separately-audited path for changing them *after* creation —
+/// this only fixes the initial value creation itself already claims.
 pub fn create_within_tx(conn: &rusqlite::Connection, c: &ClientRow) -> StoreResult<()> {
     let uris = serde_json::to_string(&c.redirect_uris)?;
     let post_logout = serde_json::to_string(&c.post_logout_redirect_uris)?;
@@ -82,8 +85,10 @@ pub fn create_within_tx(conn: &rusqlite::Connection, c: &ClientRow) -> StoreResu
     conn.execute(
         "INSERT INTO clients(id, name, confidential, secret_hash, redirect_uris, \
                              is_disabled, is_deleted, allowed_scopes, \
-                             post_logout_redirect_uris, created_at, updated_at) \
-         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                             post_logout_redirect_uris, created_at, updated_at, \
+                             consent_policy, logo_uri, homepage_uri, privacy_policy_uri, \
+                             tos_uri) \
+         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
         params![
             c.id.to_string(),
             c.name,
@@ -96,6 +101,11 @@ pub fn create_within_tx(conn: &rusqlite::Connection, c: &ClientRow) -> StoreResu
             post_logout,
             c.created_at,
             c.updated_at,
+            c.consent_policy.as_str(),
+            c.logo_uri,
+            c.homepage_uri,
+            c.privacy_policy_uri,
+            c.tos_uri,
         ],
     )?;
     Ok(())
