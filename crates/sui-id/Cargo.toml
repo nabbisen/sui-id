@@ -79,7 +79,6 @@ hmac                        = { workspace = true }
 subtle                      = { workspace = true }
 qrcode                      = { workspace = true }
 webauthn-rs                 = { workspace = true }
-rusqlite                    = { workspace = true }
 tempfile                    = { workspace = true }
 sha2                        = { workspace = true }
 
@@ -93,6 +92,10 @@ sui-id-core                 = { workspace = true }
 
 proptest                    = { workspace = true }
 tempfile                    = { workspace = true }
+# RFC 094 M2a: raw database access is confined to sui-id-store; this crate's
+# only use of rusqlite is in its own tests (see r094_m2a_db_access_scope.rs,
+# which gate-asserts the scope).
+rusqlite                    = { workspace = true }
 # Test-only `UserSource` implementations (call counting, a source that
 # answers with another identity) in the directory sign-in tests.
 async-trait                 = { workspace = true }
