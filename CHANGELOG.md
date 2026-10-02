@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Dynamic client registration (`POST /oauth2/register`) spent the initial-access
+  token before validating the request body.** A registration carrying a valid
+  token and a malformed body (empty `redirect_uris`, an invalid URI) burned the
+  token and created no client, with no way to recover it. The token is now
+  validated for presence only before the body; it is consumed — atomically with
+  client creation and its `registered_via` stamp — only once the whole request
+  is known to be well-formed (RFC 094 M2a, C15).
+- **Dynamically registered clients were recorded as `registered_via = 'admin'`,
+  not `'dynamic'`.** `clients::create`'s insert never wrote that column (nor
+  `consent_policy` or the application-identity URIs — those are set by their own
+  dedicated, separately-audited writers), so every client created through
+  `/oauth2/register` silently fell back to the table's default. Sealing the
+  registration path now stamps `registered_via` explicitly, in the same
+  transaction as the rest.
+
 ## [0.79.0] — 2026-10-01
 
 **Security release.** Two separate classes of flaw affecting every release up to

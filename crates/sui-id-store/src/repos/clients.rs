@@ -54,36 +54,51 @@ const SELECT: &str = "SELECT id, name, confidential, secret_hash, redirect_uris,
                       FROM clients";
 
 pub async fn create(db: &Database, c: &ClientRow) -> StoreResult<()> {
+    let c = c.clone();
+    db.with_conn(move |conn| create_within_tx(conn, &c)).await
+}
+
+/// Same as [`create`], for a caller that already holds a transaction (RFC
+/// 094 C15: the sealed Class-A capability). Takes `&rusqlite::Connection`
+/// rather than `&Transaction` so it accepts either a bare connection
+/// (`create`'s own use, via deref) or a `WriteTx`'s transaction.
+///
+/// **Does not set `consent_policy`, `registered_via`, or the application-
+/// identity URIs** (`logo_uri`/`homepage_uri`/`privacy_policy_uri`/
+/// `tos_uri`) — the INSERT below never has; those columns take their table
+/// defaults here and are stamped afterward by their own dedicated,
+/// separately-audited writers (`update_consent_policy` C09,
+/// `update_app_identity` C10, `set_registered_via` C11). A caller that
+/// needs a non-default value for any of them must call the matching
+/// writer in the same transaction — `ClientRow`'s own fields for them are
+/// otherwise silently not persisted at creation.
+pub fn create_within_tx(conn: &rusqlite::Connection, c: &ClientRow) -> StoreResult<()> {
     let uris = serde_json::to_string(&c.redirect_uris)?;
     let post_logout = serde_json::to_string(&c.post_logout_redirect_uris)?;
     // Pre-condition: validate that the serialised JSON round-trips correctly
     // before writing, so a future read cannot encounter corrupt JSON.
     require_valid_json::<Vec<String>>(&uris, "clients.redirect_uris")?;
     require_valid_json::<Vec<String>>(&post_logout, "clients.post_logout_redirect_uris")?;
-    let c = c.clone();
-    db.with_conn(move |conn| {
-        conn.execute(
-            "INSERT INTO clients(id, name, confidential, secret_hash, redirect_uris, \
-                                 is_disabled, is_deleted, allowed_scopes, \
-                                 post_logout_redirect_uris, created_at, updated_at) \
-             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
-            params![
-                c.id.to_string(),
-                c.name,
-                c.confidential as i64,
-                c.secret_hash,
-                uris,
-                c.is_disabled as i64,
-                c.is_deleted as i64,
-                c.allowed_scopes,
-                post_logout,
-                c.created_at,
-                c.updated_at,
-            ],
-        )?;
-        Ok(())
-    })
-    .await
+    conn.execute(
+        "INSERT INTO clients(id, name, confidential, secret_hash, redirect_uris, \
+                             is_disabled, is_deleted, allowed_scopes, \
+                             post_logout_redirect_uris, created_at, updated_at) \
+         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        params![
+            c.id.to_string(),
+            c.name,
+            c.confidential as i64,
+            c.secret_hash,
+            uris,
+            c.is_disabled as i64,
+            c.is_deleted as i64,
+            c.allowed_scopes,
+            post_logout,
+            c.created_at,
+            c.updated_at,
+        ],
+    )?;
+    Ok(())
 }
 
 pub async fn get(db: &Database, id: ClientId) -> StoreResult<ClientRow> {
@@ -311,20 +326,27 @@ pub async fn set_registered_via(
     via: crate::models::RegistrationSource,
     now: chrono::DateTime<chrono::Utc>,
 ) -> StoreResult<()> {
-    let id_str = id.to_string();
-    let via_str = via.as_str().to_owned();
-    db.with_conn(move |conn| {
-        let n = conn.execute(
-            "UPDATE clients SET registered_via = ?1, updated_at = ?2 WHERE id = ?3",
-            params![via_str, now, id_str],
-        )?;
-        if n == 0 {
-            Err(StoreError::NotFound)
-        } else {
-            Ok(())
-        }
-    })
-    .await
+    db.with_conn(move |conn| set_registered_via_within_tx(conn, id, via, now))
+        .await
+}
+
+/// Same as [`set_registered_via`], for a caller that already holds a
+/// transaction (RFC 094 C15/C11: the sealed Class-A capability).
+pub fn set_registered_via_within_tx(
+    conn: &rusqlite::Connection,
+    id: ClientId,
+    via: crate::models::RegistrationSource,
+    now: chrono::DateTime<chrono::Utc>,
+) -> StoreResult<()> {
+    let n = conn.execute(
+        "UPDATE clients SET registered_via = ?1, updated_at = ?2 WHERE id = ?3",
+        params![via.as_str(), now, id.to_string()],
+    )?;
+    if n == 0 {
+        Err(StoreError::NotFound)
+    } else {
+        Ok(())
+    }
 }
 
 /// Returns true when the URI is HTTPS or http://localhost (P6).

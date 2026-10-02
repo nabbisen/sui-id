@@ -106,37 +106,24 @@ pub async fn dynamic_register(
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
 
-    // ── P4/P5: validate registration token ───────────────────────────────────
+    // ── P4/P5: the token must be present, but is not spent yet ────────────────
+    //
+    // RFC 094 M2a (2026-10-02): consuming the token here, before the body is
+    // validated, burned a caller's one-time token on a malformed request and
+    // restored nothing. The token is only ever consumed below, inside the
+    // same transaction that creates the client — a request that cannot
+    // succeed must not spend anything.
 
     let raw_token = extract_bearer_token(&headers);
-    match raw_token {
-        None => {
-            return Ok(reg_error(
-                StatusCode::UNAUTHORIZED,
-                "invalid_token",
-                "Authorization: Bearer <token> is required for dynamic client registration",
-            ));
-        }
-        Some(tok) => {
-            // SHA-256 the supplied token for constant-time comparison.
-            let hash = sha256_hex(tok);
-            let valid = sui_id_store::repos::client_registration_token::consume(
-                &app.db,
-                &hash,
-                app.clock.now(),
-            )
-            .await
-            .map_err(|e| HttpError::api(CoreError::from(e)))?;
-
-            if !valid {
-                return Ok(reg_error(
-                    StatusCode::BAD_REQUEST,
-                    "invalid_token",
-                    "Registration token is invalid, expired, or exhausted.",
-                ));
-            }
-        }
-    }
+    let Some(tok) = raw_token else {
+        return Ok(reg_error(
+            StatusCode::UNAUTHORIZED,
+            "invalid_token",
+            "Authorization: Bearer <token> is required for dynamic client registration",
+        ));
+    };
+    // SHA-256 the supplied token for constant-time comparison.
+    let token_hash = sha256_hex(tok);
 
     // ── Validate request body ─────────────────────────────────────────────────
 
@@ -218,23 +205,22 @@ pub async fn dynamic_register(
         updated_at: now,
     };
 
-    sui_id_store::repos::clients::create(&app.db, &row)
-        .await
-        .map_err(|e| HttpError::api(CoreError::from(e)))?;
-
-    // Audit the dynamic registration.
-    let _ = sui_id_store::repos::audit::append(
-        &app.db,
-        &sui_id_store::models::AuditLogRow {
-            at: now,
-            actor: None,
-            action: "client.dynamic_register".into(),
-            target: Some(client_id.to_string()),
-            result: "ok".into(),
-            note: Some(format!("name={client_name}")),
-        },
-    )
-    .await;
+    // RFC 094 C15: the token is consumed, the client row created, and its
+    // `registered_via` stamped, all in one transaction. A token that
+    // turns out invalid, expired, revoked, or exhausted here rolls back
+    // with `NotFound`, the same convention U10 (`consume_and_reset_password`)
+    // established for a token-presenter's "nothing to do" outcome.
+    match sui_id_store::commands::register_client_dynamically(&app.db, token_hash, row, now).await {
+        Ok(_) => {}
+        Err(sui_id_store::StoreError::NotFound) => {
+            return Ok(reg_error(
+                StatusCode::BAD_REQUEST,
+                "invalid_token",
+                "Registration token is invalid, expired, or exhausted.",
+            ));
+        }
+        Err(e) => return Err(HttpError::api(CoreError::from(e))),
+    }
 
     // ── RFC 7591 §3.2.1 response ──────────────────────────────────────────────
 

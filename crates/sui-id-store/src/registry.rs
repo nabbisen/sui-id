@@ -218,6 +218,8 @@ pub enum AuditEventKind {
     AuthMfaFailure,
     /// `auth.mfa.lockout` — L07, threshold-crossing branch.
     AuthMfaLockout,
+    /// `client.dynamic_register` — C15.
+    ClientDynamicRegister,
     /// Proof-only — see [`ProofOnlyForbiddenSystemPrincipalCommand`]. Never
     /// emitted; no command can construct this event because no command can
     /// construct a context for that command in the first place.

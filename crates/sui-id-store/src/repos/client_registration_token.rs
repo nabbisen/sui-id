@@ -126,40 +126,50 @@ pub async fn find_by_hash(
 /// an unknown hash the same as an exhausted token (constant-time, P5).
 pub async fn consume(db: &Database, token_hash: &str, now: DateTime<Utc>) -> StoreResult<bool> {
     let hash = token_hash.to_owned();
-    db.with_tx(move |tx| {
-        // Read
-        let row_opt: Option<RegistrationTokenRow> = {
-            let mut stmt = tx.prepare(&format!("{SELECT} WHERE token_hash = ?1"))?;
-            let mut rows = stmt.query_map([&hash], map)?;
-            match rows.next() {
-                Some(Ok(r)) => Some(r),
-                Some(Err(e)) => return Err(StoreError::from(e)),
-                None => None,
-            }
-        };
-        let row = match row_opt {
-            None => return Ok(false),
-            Some(r) => r,
-        };
-        // Validate
-        if row.revoked_at.is_some() {
-            return Ok(false);
+    db.with_tx(move |tx| consume_within_tx(tx, &hash, now))
+        .await
+}
+
+/// Same as [`consume`], for a caller that already holds a transaction (RFC
+/// 094 C15: the sealed Class-A capability). Takes `&rusqlite::Connection`
+/// rather than `&Transaction` so it accepts either a bare connection
+/// (`consume`'s own use, via deref) or a `WriteTx`'s transaction.
+pub fn consume_within_tx(
+    conn: &rusqlite::Connection,
+    token_hash: &str,
+    now: DateTime<Utc>,
+) -> StoreResult<bool> {
+    // Read
+    let row_opt: Option<RegistrationTokenRow> = {
+        let mut stmt = conn.prepare(&format!("{SELECT} WHERE token_hash = ?1"))?;
+        let mut rows = stmt.query_map([token_hash], map)?;
+        match rows.next() {
+            Some(Ok(r)) => Some(r),
+            Some(Err(e)) => return Err(StoreError::from(e)),
+            None => None,
         }
-        if row.expires_at.is_some_and(|exp| now > exp) {
-            return Ok(false);
-        }
-        if row.max_uses > 0 && row.used_count >= row.max_uses {
-            return Ok(false);
-        }
-        // Consume
-        tx.execute(
-            "UPDATE client_registration_token \
-             SET used_count = used_count + 1, updated_at = ?1 WHERE id = ?2",
-            params![now, row.id.to_string()],
-        )?;
-        Ok(true)
-    })
-    .await
+    };
+    let row = match row_opt {
+        None => return Ok(false),
+        Some(r) => r,
+    };
+    // Validate
+    if row.revoked_at.is_some() {
+        return Ok(false);
+    }
+    if row.expires_at.is_some_and(|exp| now > exp) {
+        return Ok(false);
+    }
+    if row.max_uses > 0 && row.used_count >= row.max_uses {
+        return Ok(false);
+    }
+    // Consume
+    conn.execute(
+        "UPDATE client_registration_token \
+         SET used_count = used_count + 1, updated_at = ?1 WHERE id = ?2",
+        params![now, row.id.to_string()],
+    )?;
+    Ok(true)
 }
 
 /// Revoke a token immediately.  Returns `NotFound` if the id is unknown.

@@ -693,12 +693,14 @@ test_id = "`a_c14_registration_issue`"
 id = "C15"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
+sealed = true
 owner = "Dynamic client registration baseline"
 rationale = "`client.dynamic_register`"
 mutation_surface = "guarded `client_registration_token::consume`, `clients::create`, `set_registered_via` in one RFC 094 transaction"
 files = ["crates/sui-id-store/src/repos/client_registration_token.rs", "crates/sui-id-store/src/repos/clients.rs"]
 test_id = "`a_c15_dynamic_register`"
+event = ["client.dynamic_register"]
+descriptor = ["C15_DYNAMIC_REGISTER"]
 
 [[command]]
 id = "C16"

@@ -2925,6 +2925,111 @@ pub async fn register_passkey(
     .await
 }
 
+// ── C15 — dynamic client registration ────────────────────────────────────
+
+static C15_DYNAMIC_REGISTER: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::ClientDynamicRegister,
+    name: "client.dynamic_register",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::None,
+    target: TargetRequirement::Required,
+    attributes: &[AttributeSpec {
+        name: "client_name",
+        description: "the registered client's self-reported name",
+        // Always populated in practice (the handler validates a non-empty
+        // `client_name` before calling this command), but `required` here
+        // is RFC 102 stage 7's step-up invariant's vocabulary (B4: every
+        // step-up-gated descriptor's `step_up` attribute, and no other
+        // descriptor requires anything else) -- not a general-purpose
+        // presence guarantee `AuditAttributesBuilder::build` enforces.
+        required: false,
+    }],
+};
+
+crate::declare_write_command! {
+    /// C15 — RFC 7591 dynamic client registration. `permitted`,
+    /// `ActorRequirement::None`: the caller is authorized by possession of
+    /// the registration token consumed inside this same transaction, not
+    /// by an authenticated session — the same shape as U10's reset-token
+    /// presenter, not U01-U15's authenticated actor.
+    command C15 = "C15" {
+        system_principal: permitted;
+        enum C15Event {
+            Registered { client_id: ClientId, client_name: String } => &C15_DYNAMIC_REGISTER,
+        }
+    }
+}
+
+impl SealedCommandEvent<C15> for C15Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Registered { client_id, .. } = self;
+        Some(AuditTarget(client_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Registered { client_name, .. } = self;
+        AuditAttributes::builder()
+            .attribute("client_name", client_name.clone())
+            .build()
+    }
+}
+
+/// Run C15 (dynamic client registration) through the Class-A runner.
+///
+/// **The caller must validate the request body before calling this.** The
+/// token consumption inside this transaction is guarded against reuse, but
+/// it is not guarded against a body that turns out malformed — that
+/// ordering (validate first, consume second) is the handler's
+/// responsibility, not this function's, because validation needs no
+/// database access and holding a write transaction open across it would
+/// only widen the lock window for no benefit (RFC 094 M2a, 2026-10-02).
+///
+/// Returns `Err(StoreError::NotFound)` when the token is invalid, expired,
+/// revoked, or exhausted — nothing is written, and the caller maps this to
+/// its own "invalid token" response, the same convention
+/// `consume_and_reset_password` (U10) already established for its
+/// token-presenter shape.
+///
+/// On success: consumes the token, creates the client row, and stamps its
+/// `registered_via`, all in one transaction. `clients::create_within_tx`
+/// leaves `registered_via` at its table default (RFC 094 C11's own reason
+/// to exist as a command distinct from C15's `create` write), so the
+/// `set_registered_via_within_tx` call below is not redundant with the row
+/// just inserted — it is the only place that column is ever actually set
+/// for this path.
+pub async fn register_client_dynamically(
+    db: &crate::Database,
+    token_hash: String,
+    row: crate::models::ClientRow,
+    now: DateTime<Utc>,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<C15>::for_system_actor(None);
+    let client_id = row.id;
+    let client_name = row.name.clone();
+    let via = row.registered_via.clone();
+    db.class_a(context, move |tx: &mut ClassATx<'_, C15>| {
+        let consumed =
+            crate::repos::client_registration_token::consume_within_tx(tx.tx(), &token_hash, now)?;
+        if !consumed {
+            return Err(crate::StoreError::NotFound);
+        }
+        crate::repos::clients::create_within_tx(tx.tx(), &row)?;
+        crate::repos::clients::set_registered_via_within_tx(tx.tx(), client_id, via, now)?;
+        Ok((
+            (),
+            C15Event::Registered {
+                client_id,
+                client_name,
+            },
+        ))
+    })
+    .await
+}
+
 // ── O01 — enqueue email (Operational) ────────────────────────────────────
 
 /// Run O01 (enqueue email) through the `Operational` runner. Same

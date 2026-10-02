@@ -177,7 +177,7 @@ then because `setup.` was not in the hand-written list.
 
 | Event name | Operation | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
-| `client.dynamic_register` | RFC 7591 dynamic client registration | — | new client id | `name=…` | B |
+| `client.dynamic_register` | RFC 7591 dynamic client registration | — | new client id | `client_name=…` | A |
 
 ### External user-source authentication (RFC 005)
 

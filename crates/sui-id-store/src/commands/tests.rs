@@ -14,6 +14,7 @@ const _: fn() = || {
     assert_system_principal_permitted::<U08>();
     assert_system_principal_permitted::<U10>();
     assert_system_principal_permitted::<U37>();
+    assert_system_principal_permitted::<C15>();
     // U01-U07 and U09 are deliberately absent: all eight are
     // `system_principal: forbidden` (an authenticated actor —
     // admin or self-service — is required; U09's self-service actor
@@ -54,6 +55,7 @@ fn all_descriptors() -> Vec<&'static EventDescriptor> {
         &L04_SUCCESS,
         &L07_FAILURE,
         &L07_LOCKOUT,
+        &C15_DYNAMIC_REGISTER,
     ]
 }
 
@@ -284,6 +286,7 @@ fn event_names_match_command_inventory() {
         "auth.federation.signin.success",
         "auth.mfa.failure",
         "auth.mfa.lockout",
+        "client.dynamic_register",
     ];
     let mut actual: Vec<&str> = all_descriptors().iter().map(|d| d.name).collect();
     actual.sort_unstable();
