@@ -232,6 +232,7 @@ What the exercise found is a **record** problem in two shapes:
 | Approval named the deciding change | 1 | 118 |
 | **Visibility gap** — judgment adopted into text, approval names no choice | 5 | 110, 112*, 121*, 122, 123 (*partial) |
 | **Accepted before the design was reviewed** | 2 | 117, 126 |
+| **Sound, but not yet before the owner** — governs work that has not started | **3** | 094, 095, 096 |
 
 RFC 126 caught and disclosed its own; **RFC 117 did not, and is live and
 unbuilt**. Batches and evidence under

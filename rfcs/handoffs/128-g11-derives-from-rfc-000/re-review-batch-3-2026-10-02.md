@@ -98,6 +98,26 @@ end-of-turn file list named the handoff as a dispatch. The work was held
 uncommitted until acceptance, and the implementer's package stated the Proposed
 status correctly throughout.
 
+## Independent verification
+
+[`re-review-batch-3-verification-2026-10-02.md`](./re-review-batch-3-verification-2026-10-02.md),
+committed beside this document.
+
+**They found the close-out table short by three** — see the note under it. A table
+headed "all fifteen" that silently totals twelve is exactly the kind of artefact
+this whole arc exists to catch, and it was mine.
+
+They also did the thing worth doing with a strong, falsifiable claim: **they
+simulated the proposed gate rule** against all 26 RFCs carrying the field rather
+than reasoning about it, and got exactly the three allowlist entries claimed, with
+RFC 126 passing. And they traced RFC 121's self-correction through its commits
+(`d0046fd` introduced the wording, `9c87dd1` removed it at 20:38 on 2026-09-30),
+confirming "before RFC 128 existed" by about eleven hours rather than treating it
+as approximate.
+
+Corroboration, not approval. This is the third batch in which they corrected the
+architect, having been the subject of the re-review throughout.
+
 ## Close-out — all fifteen
 
 | Shape | Count | RFCs |
@@ -106,8 +126,18 @@ status correctly throughout.
 | **Approval named the deciding change** | 1 | 118 |
 | **Visibility gap** — judgment adopted into text, approval names no choice (or names different ones) | 5 | 110, 112*, 121*, 122, 123 (*partial) |
 | **Accepted before the design was reviewed** | 2 | 117, 126 |
+| **Sound, but not yet before the owner** — governs work that has not started | **3** | 094, 095, 096 |
 
-**No design defect was found in any of the fifteen.** Every judgment the
+**The fifth row was missing until 2026-10-02**, found by the implementation role:
+the table was headed "all fifteen" and totalled **twelve**. The first four shapes
+classify *the record of decisions already reached*; 094/095/096 is the opposite
+case and does not collapse into any of them — a judgment that is sound, has
+**never been before `@nabbisen`**, and governs work not yet started. Adding it is
+the correction; it is also the row that most needs his attention, because it is
+the only one where acting early is still free.
+
+
+**All fifteen accounted for. No design defect was found in any of them.** Every judgment the
 implementation role made was right on the merits, and I would make the same call
 again in each. That is the headline, and it was not the expected one.
 
