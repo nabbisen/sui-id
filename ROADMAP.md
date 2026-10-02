@@ -840,6 +840,44 @@ a `roadmap/` directory created by `ee48257`, which justified itself as an
 directory is removed and its nineteen packages are resolved below; see §S1 for
 why an attribution of this shape cannot be taken at face value.
 
+### Dated windows are withdrawn — ruled by `@nabbisen`, 2026-10-02
+
+*"Why do you try to manage date window? It is useless in this project."*
+
+**He is right, and the table below convicts itself.** Measured 2026-10-02:
+
+| Cycle | Window | What happened |
+|---|---|---|
+| A | 2026-09-23 → 10-10 | complete **09-24** — day two of eighteen |
+| B | 2026-10-13 → 10-24 | released **10-01** — **twelve days before the window opened** |
+
+A window that closes before it opens is not a prediction. Both were wrong, in the
+same direction, and neither changed what anyone did.
+
+**Why they were useless here, and not merely inaccurate.** A date window is a
+coordination device for people who cannot talk to each other and must commit in
+advance. This project is one owner and agents in one conversation, with no
+external deadline and no third party waiting. Work is gated on `@nabbisen`'s
+decisions and on prerequisites being met — never on elapsed time. A date adds a
+number that will be wrong and that no one acts on.
+
+**Where the habit came from, measured rather than guessed.** The dated milestone
+schedule is `39d1591`, **2026-07-16** — the ex-architect's week, alongside RFC 000,
+RFC 018 and RFC 093. The release-cycle windows are the architect's own, added
+2026-09-22, built on that inherited framing rather than on anything this project
+needed. **So: partly the July legacy, and propagated by the architect who should
+have asked what the dates were for.**
+
+**What replaces them.** Ordering and readiness, which is what the triage tables and
+the closure backlog already used and what actually worked: what must happen before
+what, what is blocked on whom, and what is measurably done. A cycle ships when its
+contents are ready.
+
+**Still open, and `@nabbisen`'s:** the Milestone schedule above still carries
+July's dates. The architect proposes removing them on the same reasoning, but has
+not, because that table predates him and removing dates from a programme plan is
+a larger act than withdrawing his own.
+
 ### Release cycles — authorized 2026-09-22
 
 Proposed by the architect and authorized by `@nabbisen` on 2026-09-22, in his
@@ -851,7 +889,7 @@ date. The release treatment of each item follows the 2026-08-26 surface test.
 |---|---|---|---|
 | **A — close what is open** | v0.78.0 | 2026-09-23 → 10-10 | **Complete 2026-09-24**, ahead of the window. RFC 115 Implemented; RFC 103 closed; RFC 110 Implemented; RFC 105 Implemented; RFC 117 stages 0/0b landed |
 | **B — make the contracts true** | v0.79.0 | 2026-10-13 → 10-24 | **Released and published 2026-10-01, twelve days ahead of the window, as a security release** — cut early because fixes for two flaw classes affecting every published version were sitting unreleased (RFC 120, RFC 125). Carried cycle B's landed work with it: RFC 116 stages 1–7, RFC 112, RFC 118, plus RFCs 121–127. **RFC 106 did not make it** and moves to cycle C. Level B green on `756e9f9` (CI 23/23); all six crates verified on crates.io |
-| **C — the main line resumes** | v0.80.0 | **proposed 2026-10-27 → 11-21**, awaiting `@nabbisen` | RFC 094 M2a. **Re-read complete 2026-10-02** — [`m2a-re-read-2026-10-02.md`](rfcs/handoffs/094-transactional-audit/m2a-re-read-2026-10-02.md). The condition this row previously set, "re-read against the eight commands RFCs 102 and 103 converted", **named a set of eight that does not exist** — the architect wrote it and cannot reconstruct the figure; 26 identifiers are mentioned by those RFCs and 11 are sealed. Read as intended — re-read against what changed — and discharged. Measured scope: **67 Class-A commands, 23 sealed, 44 remaining**, with **C15 among the remaining** though M2a's prerequisite names it. One clause is actionable now and blocked on nothing: `rusqlite` sits in `crates/sui-id`'s `[dependencies]` while no production file there uses it |
+| **C — the main line resumes** | v0.80.0 | **No window. Ready when M2a's five closure clauses are met** | RFC 094 M2a. **Re-read complete 2026-10-02** — [`m2a-re-read-2026-10-02.md`](rfcs/handoffs/094-transactional-audit/m2a-re-read-2026-10-02.md). The condition this row previously set, "re-read against the eight commands RFCs 102 and 103 converted", **named a set of eight that does not exist** — the architect wrote it and cannot reconstruct the figure; 26 identifiers are mentioned by those RFCs and 11 are sealed. Read as intended — re-read against what changed — and discharged. Measured scope: **67 Class-A commands, 23 sealed, 44 remaining**, with **C15 among the remaining** though M2a's prerequisite names it. One clause is actionable now and blocked on nothing: `rusqlite` sits in `crates/sui-id`'s `[dependencies]` while no production file there uses it |
 
 **Windows moved 2026-09-24, authorized the same day.** RFC 115's independent
 design review returned a blocker — an administrator-typed email address reaches

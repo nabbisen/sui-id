@@ -20,6 +20,7 @@ ROADMAP.md	05d958ac6f5f40dfdf44ceef8aa1c5be49af72608bd5edfeb79e1f5648b4d3ad	1	Th
 ROADMAP.md	0c0300dfd3c18fe4f402b7ae73f174a0c29eb13ea8d8cd5451cb798010259c86	1	The fifteen packages headed Independent design review that RFC 128 stage 0 found had been performed by the implementation role, re-reviewed 
 ROADMAP.md	0c81f3419a775229d96ce56bbf97aa9e8fa871c816f6d3007ff90fb08dd5a202	1	Independence means role independence, defined and routed in RFC 000: a design is reviewed by the role that must build against it; an impleme
 ROADMAP.md	0cc3b4a1f8aa52ae6f4f201fc4520c924b82b64620697ae02b5bc0972c3532eb	1	1 Corrective fixes: ldap3 rustls provider, mdBook icon A none — owner-authorized [093 M1a](rfcs/handoffs/093-build-toolchain-release-gates/m
+ROADMAP.md	143ef4c8c8f193cfee8632e0b6ab9051b75abcf8cdd29bc9337f068598eb529c	1	### Dated windows are withdrawn — ruled by @nabbisen , 2026-10-02
 ROADMAP.md	1b3a96873972f91e93b530c12e0abaf27e126513785c3b8b0aad49c13972d401	1	Under this ruling the second half is not what the project does, so that sentence is a promise the project does not keep — the architect's pr
 ROADMAP.md	211874c3a846ff839aeff608f419cc7a2cba68b6445fee4b3524302d321db5dd	1	R3 Source-size debt: 28 files over 500 lines (measured 2026-09-16: git ls-files ' .rs' \ xargs wc -l \ awk '$2 != "total" && $1 500' \ wc -l
 ROADMAP.md	25a346cb68d8409c2ad9772051dda7bda7bd1fe3099479b3c1ac26c4d1b32088	1	#### S1d — Disclosure for the 0.79.0 flaw classes, ruled by @nabbisen on 2026-10-01
@@ -42,6 +43,7 @@ ROADMAP.md	49dbfcab44b8ec3a2978613ef519cb233fb5c91c5e0ab44211be15c4f749b3bd	1	Re
 ROADMAP.md	4c13be87c9cd301126e224cb8a1f947e693bb723402b21dcd2f85f83df07e5d9	1	This is recorded, not resolved. It reads against the owner decision of 2026-08-26 above, which routes a design to the role that must build a
 ROADMAP.md	51d83c78c92ecb1ab8f6f8bc8b4f55f9eb9186270f7a3d2cd902f480365d5473	1	None of those clauses was an owner decision.
 ROADMAP.md	51ea0e2a365e1b856a68e2567c60b5e7d519f53c504b98b29bffd24913bce8de	1	#### S1c — Self-review, ruled by @nabbisen on 2026-10-01
+ROADMAP.md	55b36a2083ef058286a69ae2ff3c34b65e1801342daa3518c5d7f69327adb269	1	Work is gated on @nabbisen 's decisions and on prerequisites being met — never on elapsed time.
 ROADMAP.md	5aceb88bc92843455c6e08971dae256f5c2e6f2241e83905f10b37dd4c748c4c	1	Required format: description, likelihood, impact, detection, mitigation, residual risk, decision owner.
 ROADMAP.md	61ebd8965b3dd0fcc8e3a9c37355e909fc111ea1976d772bcae5c1fb13d8e7a3	1	It needs @nabbisen 's decision separately, at cycle E, and is not assumed here.
 ROADMAP.md	64cc877e4d1d02b0d8941863c3678848eedd42798cad4f1c031fb80b8eeb2c3c	1	M7 — Real-environment soak owner to set Exercise the exact M6 artifact under representative auth traffic, failure modes, operational cycles,
