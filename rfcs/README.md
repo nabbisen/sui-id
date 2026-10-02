@@ -73,11 +73,11 @@ slot is `104`). One **parallel namespace** also exists:
 | 102 | [Authentication that cannot be audited does not succeed](./done/102-authentication-fails-closed-without-audit.md) | **Implemented, closed 2026-09-22** | mid-capability model |
 | 103 | [Administrator-issued account recovery](./done/103-administrator-issued-account-recovery.md) | **Implemented, closed 2026-09-24** | mid-capability model |
 | 110 | [An RFC header may not legislate](./done/110-rfc-header-governance-guard.md) | cycle A | mid-capability model |
-| 115 | [Creating a user without choosing their password](./accepted/115-user-creation-without-a-password.md) | cycle A | mid-capability model |
-| 116 | [Gate contracts: one source, one gate each](./accepted/116-gate-contracts.md) | cycle B | mid-capability model |
+| 115 | [Creating a user without choosing their password](./done/115-user-creation-without-a-password.md) | cycle A | mid-capability model |
+| 116 | [Gate contracts: one source, one gate each](./done/116-gate-contracts.md) | cycle B | mid-capability model |
 | 117 | [Owner decisions must be verifiable](./accepted/117-verifiable-owner-decisions.md) | stages 0/0b landed; 1–3 need the key | mid-capability model |
-| 118 | [A credential change clears the lockout, and the user is told](./accepted/118-lockout-clears-on-credential-change.md) | cycle B, head | mid-capability model |
-| 105 | [Audit notes: escape attribute values](./accepted/105-audit-note-escaping.md) | cycle A; **no independent design review — see its header** | mid-capability model |
+| 118 | [A credential change clears the lockout, and the user is told](./done/118-lockout-clears-on-credential-change.md) | cycle B, head | mid-capability model |
+| 105 | [Audit notes: escape attribute values](./done/105-audit-note-escaping.md) | cycle A; **no independent design review — see its header** | mid-capability model |
 
 Acceptance makes an RFC implementation-eligible, but coding remains prohibited
 until its declared implementation prerequisites have repository-visible
@@ -119,7 +119,7 @@ Proposed: the move approved nothing.
 | 108 | [Confirm screens for client disable and secret rotation; the secret leaves the URL](./proposed/108-client-confirm-screens.md) | [108-client-confirm-screens](./handoffs/108-client-confirm-screens/README.md) |
 | 109 | [Request logs keep their request ID across `.await`](./proposed/109-request-id-span.md) | [109-request-id-span](./handoffs/109-request-id-span/README.md) |
 | 111 | [Reconcile `rfcs/README.md`'s template with what G11 enforces](./proposed/111-rfc-template-reconciliation.md) | [111-rfc-template-reconciliation](./handoffs/111-rfc-template-reconciliation/README.md) |
-| 112 | [Refuse to run against a database this build does not understand](./accepted/112-schema-version-fail-closed.md) | [112-schema-version-fail-closed](./handoffs/112-schema-version-fail-closed/README.md) |
+| 112 | [Refuse to run against a database this build does not understand](./done/112-schema-version-fail-closed.md) | [112-schema-version-fail-closed](./handoffs/112-schema-version-fail-closed/README.md) |
 | 113 | [Test modules live in their own files](./proposed/113-test-file-organization.md) | [113-test-file-organization](./handoffs/113-test-file-organization/README.md) |
 | 114 | [Reconcile `docs/ui-ux-contracts.md` with the code](./proposed/114-ui-contract-reconciliation.md) | [114-ui-contract-reconciliation](./handoffs/114-ui-contract-reconciliation/README.md) |
 | 119 | [What a host must promise before sui-id can be embedded in it](./proposed/119-embedding-contract.md) | [119-embedding-contract](./handoffs/119-embedding-contract/README.md) |
@@ -130,7 +130,7 @@ Proposed: the move approved nothing.
 | 124 | [The uniform response must be uniform, and must be shown to be](./done/124-the-uniform-response-is-uniform.md) | [124-the-uniform-response-is-uniform](./handoffs/124-the-uniform-response-is-uniform/README.md) |
 | 125 | [The audit chain must be verified as a chain](./done/125-the-chain-must-be-verified-as-a-chain.md) | [125-the-chain-must-be-verified-as-a-chain](./handoffs/125-the-chain-must-be-verified-as-a-chain/README.md) |
 | 126 | [Password hashing must not block the request runtime](./done/126-password-hashing-must-not-block-the-runtime.md) | [126-password-hashing-must-not-block-the-runtime](./handoffs/126-password-hashing-must-not-block-the-runtime/README.md) |
-| 127 | [Documentation carries the truth; a test enforces it](./accepted/127-documentation-carries-the-truth.md) | [127-documentation-carries-the-truth](./handoffs/127-documentation-carries-the-truth/README.md) |
+| 127 | [Documentation carries the truth; a test enforces it](./done/127-documentation-carries-the-truth.md) | [127-documentation-carries-the-truth](./handoffs/127-documentation-carries-the-truth/README.md) |
 | 128 | [G11's conditions derive from RFC 000, not from a retired RFC](./done/128-g11-derives-from-rfc-000.md) | [128-g11-derives-from-rfc-000](./handoffs/128-g11-derives-from-rfc-000/README.md) |
 | 129 | [Review is scoped to who exists, and an external reviewer is engaged once, deliberately](./done/129-review-scoped-to-who-exists.md) | [129-review-scoped-to-who-exists](./handoffs/129-review-scoped-to-who-exists/README.md) |
 | 130 | [A gate declares the inputs it depends on, and runs when they change](./done/130-gates-declare-their-input-scope.md) | [130-gates-declare-their-input-scope](./handoffs/130-gates-declare-their-input-scope/README.md) |

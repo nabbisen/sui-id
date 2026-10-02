@@ -722,7 +722,7 @@ unapproved raw-write module exists, **or `rusqlite` appears in a
 `sui-id-store`**. The generated declaration set must equal the reviewed
 inventory set. Grep is not authoritative.
 
-**Interim gate.** [RFC 116](116-gate-contracts.md) stage 1 landed the part of this that needs no AST as `scripts/check-write-commands.py` (lane G17): every sealed command has a row, every row that says it is sealed names a command, every `files` path exists, and the `event` and `descriptor` fields are derived from the code. `xtask audit-structure` subsumes it and still owns the `syn` boundary and the failure-test presence; when it lands, G17 is retired in the same change so that one file does not have two definitions of true.
+**Interim gate.** [RFC 116](../done/116-gate-contracts.md) stage 1 landed the part of this that needs no AST as `scripts/check-write-commands.py` (lane G17): every sealed command has a row, every row that says it is sealed names a command, every `files` path exists, and the `event` and `descriptor` fields are derived from the code. `xtask audit-structure` subsumes it and still owns the `syn` boundary and the failure-test presence; when it lands, G17 is retired in the same change so that one file does not have two definitions of true.
 
 *The dependency condition is dispatched here, by decision rather than by
 inference (A6 sweep, 2026-08-27). It reads Cargo manifests rather than source,
@@ -914,7 +914,7 @@ authoritative coverage control at M2b. Fourteen dead `SecurityEvent` variants
 log-line behaviour is a design item for the runner, recorded in the migration
 checklist.
 
-*Amended 2026-09-25 ([RFC 116](116-gate-contracts.md) stage 2).* The script gained a
+*Amended 2026-09-25 ([RFC 116](../done/116-gate-contracts.md) stage 2).* The script gained a
 second step, `scripts/check-audit-matrix-columns.py`, so the lane is no longer
 "bash and grep only" and its toolchain cell above now reads Python 3.14; **the
 command is unchanged.** The step reads the matrix's *table rows* (not every

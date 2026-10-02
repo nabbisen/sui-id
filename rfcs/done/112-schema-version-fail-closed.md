@@ -1,6 +1,9 @@
 # RFC 112 — Refuse to run against a database this build does not understand
 
-**Status.** Accepted
+**Status.** Implemented (v0.79.0)
+**Closure reviewed on.** 2026-10-02
+**Closure approved by.** `@nabbisen` (accountable owner), 2026-10-02: "Both approved." — batch 3 and RFC 131's fork together. The closure review was performed by **the architect, which wrote this RFC**, and is therefore **not** independent of it; `@nabbisen` is the approver, which is what RFC 000 requires when no independent role exists. The implementation role verified the review's named tests separately and returned no findings; that corroboration is recorded beside the review and is not approval.
+**Closure evidence.** [Closure review batch 3, 2026-10-02](../handoffs/105-audit-note-escaping/closure-review-batch-3-2026-10-02.md), with [independent verification](../handoffs/105-audit-note-escaping/closure-verification-batch-3-2026-10-02.md)
 **Accepted on.** 2026-09-25
 **Approved by.** `@nabbisen`, 2026-09-25: "RFC 112 is accepted." Accepted on the
 **amended** text: its independent design review returned "accept with changes",

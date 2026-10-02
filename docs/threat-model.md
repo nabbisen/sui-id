@@ -110,7 +110,7 @@ The properties it establishes:
   (`identity::admin::users::reset_user_password`, U06) is removed from the
   tree.
 
-  **Closed for creation too, 2026-09-24 ([RFC 115](../rfcs/accepted/115-user-creation-without-a-password.md), below).**
+  **Closed for creation too, 2026-09-24 ([RFC 115](../rfcs/done/115-user-creation-without-a-password.md), below).**
   This paragraph previously said the property held of recovery but not of the
   product, because creating a user took an administrator-chosen password.
   Creation no longer takes one — it is a compile error — and an account with no
@@ -169,7 +169,7 @@ The properties it establishes:
 
 ### 2026-09-24 — Creating a user without choosing their password (RFC 115)
 
-The decision is [RFC 115](../rfcs/accepted/115-user-creation-without-a-password.md).
+The decision is [RFC 115](../rfcs/done/115-user-creation-without-a-password.md).
 It finishes what RFC 103 began: RFC 103 removed the path that re-set an
 existing user's password and left untouched the one that set every user's
 first.
@@ -219,7 +219,7 @@ first.
   username can make an account refuse sign-in. This is not new with this RFC;
   it is true of every account. What this RFC changes is that it becomes
   reachable for accounts that have never been used.
-  **Narrowed by [RFC 118](../rfcs/accepted/118-lockout-clears-on-credential-change.md),
+  **Narrowed by [RFC 118](../rfcs/done/118-lockout-clears-on-credential-change.md),
   not removed.** Completing a reset (and a self-service password change) now
   clears the password counter and lock in the same transaction, so a lock can
   no longer outlive the credential change that made it moot: before, one burst

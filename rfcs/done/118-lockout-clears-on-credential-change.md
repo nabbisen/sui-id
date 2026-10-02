@@ -1,6 +1,9 @@
 # RFC 118 — A credential change clears the lockout, and the user is told
 
-**Status.** Accepted
+**Status.** Implemented (v0.79.0)
+**Closure reviewed on.** 2026-10-02
+**Closure approved by.** `@nabbisen` (accountable owner), 2026-10-02: "Both approved." — batch 3 and RFC 131's fork together. The closure review was performed by **the architect, which wrote this RFC**, and is therefore **not** independent of it; `@nabbisen` is the approver, which is what RFC 000 requires when no independent role exists. The implementation role verified the review's named tests separately and returned no findings; that corroboration is recorded beside the review and is not approval.
+**Closure evidence.** [Closure review batch 3, 2026-10-02](../handoffs/105-audit-note-escaping/closure-review-batch-3-2026-10-02.md), with [independent verification](../handoffs/105-audit-note-escaping/closure-verification-batch-3-2026-10-02.md)
 **Accepted on.** 2026-09-25
 **Approved by.** `@nabbisen`, 2026-09-25: "RFC 118 is accepted." Accepted on the
 **amended** text: its independent design review returned "accept with changes,
@@ -9,7 +12,7 @@ without it this RFC would have opened a second-factor bypass while closing an
 availability defect.
 **Security review.** Required
 **Independent design review.** [Design review 2026-09-24](../handoffs/118-lockout-clears-on-credential-change/design-review-2026-09-24.md) by the implementation role, which authored neither this RFC nor its handoff. It **reproduced the defect end to end on both paths** in a throwaway worktree, and returned one blocker, two high and four medium findings. **Its verdict was accept with changes, not as written**, and it was right on every one: all are resolved below.
-**Design prerequisites.** None. [RFC 115](../accepted/115-user-creation-without-a-password.md) is Implemented; this closes the residual its threat-model entry states.
+**Design prerequisites.** None. [RFC 115](../done/115-user-creation-without-a-password.md) is Implemented; this closes the residual its threat-model entry states.
 **Implementation prerequisites.** None.
 **Closure prerequisites.** **A lock cannot outlive the credential change that made it moot** — for any path that sets a credential, and without disturbing a lock that the second-factor lockout set; a holder of a consumed reset token is told what was cleared, in the completion's own response, and that message is unreachable without such a token; and no sign-in response changes for any account.
 **Tracks.** Account availability. Found while reviewing RFC 115 stage 1, 2026-09-24, from the implementer's disclosure that they had not checked whether activation clears a lock.

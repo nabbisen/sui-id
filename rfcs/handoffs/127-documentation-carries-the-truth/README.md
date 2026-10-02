@@ -1,6 +1,6 @@
 # Documentation carries the truth; a test enforces it
 
-**RFC.** [RFC 127](../../accepted/127-documentation-carries-the-truth.md), **Accepted 2026-09-30**. Implemented — see the note at the end of this file about the commit that carries it.
+**RFC.** [RFC 127](../../done/127-documentation-carries-the-truth.md), **Accepted 2026-09-30**. Implemented — see the note at the end of this file about the commit that carries it.
 **Author.** High-capability model, requirements-architect role.
 
 ## Where the two facts are today

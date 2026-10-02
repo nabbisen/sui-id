@@ -239,7 +239,7 @@ so the backlog is not mistaken for 23 items of paperwork.
 | 117 | Stages 1–3: the signed decision ledger does not exist. `scripts/check-owner-attributions.py`'s own comments say "ledger once one exists"; only stage 0/0b landed |
 | 130 | **Nothing — resolved 2026-10-02, moved to batch 1.** Both halves are now observed in CI: `rust scope changed: true` with all 11 lanes running (run `36878881472`, 24/24), and `rust scope changed: false` with **exactly G01–G09b skipped** (run `36934836767`, 13 success / 11 skipped). **Measured wall clock: 2.2 minutes against 31.1 before** — a 93% reduction on a documentation-only push, against a predicted "about 2 minutes" |
 
-**Closure candidates (18, one of them RFC 130), in three batches. Batches 1 and 2 are closed — twelve RFCs moved to `done/` on 2026-10-02, the first closures this project has performed. Batch 3's six remain.** Grouped so each batch's verification
+**Closure candidates (18, one of them RFC 130), in three batches. All three are closed — eighteen RFCs moved to `done/` on 2026-10-02, the first closures this project has performed. `accepted/` fell from 23 to 5.** Grouped so each batch's verification
 is one coherent kind of work rather than eighteen unrelated checks. Prerequisites
 are verified **at closure**, not here — this triage establishes that the work
 landed, not that every clause is met.
@@ -248,7 +248,7 @@ landed, not that every clause is met.
 |---|---|---|
 | 1 **closed** | 110, 128, 129, 130, 132 | Documentary and gate properties: run the gates, read the records. Narrowest, and all were reviewed within the last two days. **131 was withdrawn** (see the batch-1 closure review) and **130 joined** once its measurement landed |
 | 2 **closed** | 120, 121, 122, 123, 124, 125, 126 | Behavioural security properties shipped in 0.79.0, each with tests to point at. **Evidence written 2026-10-02**, awaiting approval |
-| 3 **evidence written** | 105, 112, 115, 116, 118, 127 | Mixed. **115's `must_change` question is settled — it is "gone", and the architect's flag was wrong.** Migration 0043 drops the column (D12); `r115_stage3.rs:167`'s `r115_s3_must_change_is_gone_from_production_code` is a grep-proof test asserting no production file mentions it, and `:146` plus `tests_rfc115.rs:139` assert a fresh database has no such column. The occurrences that prompted the flag are the migration that **removes** it and the historical migrations that necessarily still contain it — a grep read without opening the files, which is the error this project keeps catching |
+| 3 **closed** | 105, 112, 115, 116, 118, 127 | Mixed. **115's `must_change` question is settled — it is "gone", and the architect's flag was wrong.** Migration 0043 drops the column (D12); `r115_stage3.rs:167`'s `r115_s3_must_change_is_gone_from_production_code` is a grep-proof test asserting no production file mentions it, and `:146` plus `tests_rfc115.rs:139` assert a fresh database has no such column. The occurrences that prompted the flag are the migration that **removes** it and the historical migrations that necessarily still contain it — a grep read without opening the files, which is the error this project keeps catching |
 
 One Level B run can serve a whole batch, since each RFC's evidence cites the same
 commit. That is what makes 18 closures tractable rather than 18 separate release-
@@ -957,20 +957,20 @@ historical record, not evidence.
 | RFC | Work item |
 |---|---|
 | [104](rfcs/proposed/104-audit-event-labels.md) | Audit event labels shown, and bound to the registered events |
-| [105](rfcs/accepted/105-audit-note-escaping.md) | Audit notes: escape attribute values |
+| [105](rfcs/done/105-audit-note-escaping.md) | Audit notes: escape attribute values |
 | [106](rfcs/proposed/106-backup-restore-hardening.md) | Backup restore fails closed |
 | [107](rfcs/proposed/107-cli-help-completeness.md) | `sui-id --help` names every subcommand the binary accepts |
 | [108](rfcs/proposed/108-client-confirm-screens.md) | Confirm screens for client disable and secret rotation; the secret leaves the URL |
 | [109](rfcs/proposed/109-request-id-span.md) | Request logs keep their request ID across `.await` |
 | [110](rfcs/done/110-rfc-header-governance-guard.md) | An RFC header may not legislate |
 | [111](rfcs/proposed/111-rfc-template-reconciliation.md) | Reconcile `rfcs/README.md`'s template with what G11 enforces |
-| [112](rfcs/accepted/112-schema-version-fail-closed.md) | Refuse to run against a database this build does not understand |
+| [112](rfcs/done/112-schema-version-fail-closed.md) | Refuse to run against a database this build does not understand |
 | [113](rfcs/proposed/113-test-file-organization.md) | Test modules live in their own files |
 | [114](rfcs/proposed/114-ui-contract-reconciliation.md) | Reconcile `docs/ui-ux-contracts.md` with the code |
-| [115](rfcs/accepted/115-user-creation-without-a-password.md) | Creating a user without choosing their password |
-| [116](rfcs/accepted/116-gate-contracts.md) | Gate contracts: one source, one gate each |
+| [115](rfcs/done/115-user-creation-without-a-password.md) | Creating a user without choosing their password |
+| [116](rfcs/done/116-gate-contracts.md) | Gate contracts: one source, one gate each |
 | [117](rfcs/accepted/117-verifiable-owner-decisions.md) | Owner decisions must be verifiable |
-| [118](rfcs/accepted/118-lockout-clears-on-credential-change.md) | A credential change clears the lockout, and the user is told |
+| [118](rfcs/done/118-lockout-clears-on-credential-change.md) | A credential change clears the lockout, and the user is told |
 
 ### Completed and withdrawn before the move
 

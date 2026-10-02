@@ -1,6 +1,6 @@
 # RFC 118 implementation handoff
 
-**Governing RFC.** [RFC 118](../../accepted/118-lockout-clears-on-credential-change.md),
+**Governing RFC.** [RFC 118](../../done/118-lockout-clears-on-credential-change.md),
 **Accepted 2026-09-25.** *(This line said "Proposed" until 2026-09-25: the
 architect rewrote the stage below after the design review and left the header
 saying what it had said before. The implementer caught it and built against the
@@ -26,7 +26,7 @@ Re-run before starting; a disagreement is a blocker.
 **Rewritten 2026-09-25, after the design review.** The version of this section
 written before that review specified a design the accepted RFC now rejects:
 "clear `failed_login_count` and `locked_until`" with no carve-out, and a message
-that could never have fired. **[RFC 118](../../accepted/118-lockout-clears-on-credential-change.md)
+that could never have fired. **[RFC 118](../../done/118-lockout-clears-on-credential-change.md)
 is the authority; build it, not this page's memory of it.** Read D1 and D4 there
 before starting, and the [design review](design-review-2026-09-24.md) for why.
 

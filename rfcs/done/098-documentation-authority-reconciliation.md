@@ -79,7 +79,7 @@ D4, D5 and D6 are settled and enforced: RFC 000 governs D4, and G11's
 invariants 12 and 13 enforce D5's boundary and D6's separation as of
 2026-09-10. **This RFC owns D1, D2 and D3**, which have no boundary today.
 
-*Amended 2026-09-25 ([RFC 116](../accepted/116-gate-contracts.md) stage 7), on
+*Amended 2026-09-25 ([RFC 116](../done/116-gate-contracts.md) stage 7), on
 `@nabbisen`'s ruling of the same day: D3's home is `contracts/`, formerly `ci/`.
 The old name described one of the two callers of these files, and RFC 116 D7 is the
 decision that says CI is not the privileged one. The rows and lines of this RFC that

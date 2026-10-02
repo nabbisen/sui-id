@@ -1,6 +1,6 @@
 # Creating a user without choosing their password
 
-**Governing RFC.** [RFC 115](../../accepted/115-user-creation-without-a-password.md),
+**Governing RFC.** [RFC 115](../../done/115-user-creation-without-a-password.md),
 **Accepted 2026-09-24**, after an independent design review that returned a
 blocker. The RFC is the authority; where this page and the RFC disagree, the
 RFC wins and this page is corrected.
@@ -99,7 +99,7 @@ real fork rather than a detail:
 
 # Stages — dispatched 2026-09-24
 
-**Read [RFC 115](../../accepted/115-user-creation-without-a-password.md) first**,
+**Read [RFC 115](../../done/115-user-creation-without-a-password.md) first**,
 including its *Corrections* section: two of this page's original factual
 premises were wrong, and the RFC records which. Then read the
 [design review](design-review-2026-09-24.md); its findings are why the RFC has

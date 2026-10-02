@@ -91,7 +91,7 @@ cutting this release, not assumed.
   change to know about before upgrading:** a deployment that has been rolled back
   to an older binary against an already-migrated database will now stop with exit
   `65` and an explanatory line instead of starting
-  ([RFC 112](rfcs/accepted/112-schema-version-fail-closed.md)). `65` is
+  ([RFC 112](rfcs/done/112-schema-version-fail-closed.md)). `65` is
   `EX_DATAERR`; every other failure still exits `1` and prints as before.
 
 - **Password hashing no longer blocks the request runtime.** Argon2id at 64 MiB
@@ -106,13 +106,13 @@ cutting this release, not assumed.
   credential now clears it, without disturbing a lock set by the second-factor
   lockout, and a holder of a consumed reset token is told what was cleared in the
   completion's own response. No sign-in response changes for any account
-  ([RFC 118](rfcs/accepted/118-lockout-clears-on-credential-change.md)).
+  ([RFC 118](rfcs/done/118-lockout-clears-on-credential-change.md)).
 
 ### Housekeeping
 
 - The repository's `ci/` directory is now `contracts/`, with a `contracts/README.md`
   explaining each file, checked in both directions by a gate
-  ([RFC 116](rfcs/accepted/116-gate-contracts.md)). Contributors referring to
+  ([RFC 116](rfcs/done/116-gate-contracts.md)). Contributors referring to
   `ci/*.toml` paths should use `contracts/*.toml`.
 
 ## [0.78.0] — 2026-09-24
