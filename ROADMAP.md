@@ -368,19 +368,28 @@ review (withdrawn 2026-08-12; see *Work packages*).
 > **Superseded.** This table is a dated snapshot; the current state is each RFC's folder and metadata.
 
 Required by the multi-agent framework (roadmap item → RFC → Handoff →
-implementation → evidence). Status column is **verified fact** as of 2026-07-29.
+implementation → evidence). Status column is **verified fact** as of 2026-10-02,
+re-measured from `rfcs/` on that date.
+
+> **Corrected 2026-10-02.** This table had carried "verified fact as of
+> 2026-07-29" for two months and called RFCs **094, 095 and 096 `Proposed`**
+> when all three are `Accepted` — 094 and 096 re-accepted 2026-08-27. It also
+> showed 093 and 098 as `Accepted` after both reached `done/`. The date was
+> honest, but a stale table in the document the dev team reads to learn what is
+> buildable is management debt, not a disclaimer. Re-measured by reading the
+> directory each RFC sits in rather than by trusting this table.
 
 | Milestone | RFC | Handoff | Implementation | Evidence |
 |---|---|---|---|---|
-| **M1a — CLOSED 2026-07-30** | 093 (Accepted) | `handoffs/093-…/m1a-implementation.md` | A0, A1, A2, A3.1–A3.5 and the C1/R9 corrections all landed | **Hosted run `30546346612` on commit `474d0f2`: 18/18 jobs success, zero skipped** |
-| **M1b — EXIT GATE MET 2026-08-03** | 093 (Accepted) | `handoffs/093-…/m1b-implementation.md` | C0, C1, C2, C2.1, C3, C4, C5 all closed | **Run 30754447964 on `1d58da2`: 17/17 jobs success, four legacy UI jobs retired, G12 advisory counts unchanged (3 / 18), RFC integrity debt zero with no allowlist.** **RFC 093 remains Accepted** — closure needs independent closure review + closure metadata |
+| **M1a — CLOSED 2026-07-30** | 093 (**Done**) | `handoffs/093-…/m1a-implementation.md` | A0, A1, A2, A3.1–A3.5 and the C1/R9 corrections all landed | **Hosted run `30546346612` on commit `474d0f2`: 18/18 jobs success, zero skipped** |
+| **M1b — EXIT GATE MET 2026-08-03** | 093 (**Done**) | `handoffs/093-…/m1b-implementation.md` | C0, C1, C2, C2.1, C3, C4, C5 all closed | **Run 30754447964 on `1d58da2`: 17/17 jobs success, four legacy UI jobs retired, G12 advisory counts unchanged (3 / 18), RFC integrity debt zero with no allowlist.** **RFC 093 remains Accepted** — closure needs independent closure review + closure metadata |
 | prep | none (preparatory) | `m1a-implementation.md` §Theme B | Not started | — |
-| M2a / M2b | 094 (Proposed) | `handoffs/094-transactional-audit/` | Blocked on re-acceptance | — |
-| M2c | 100 (Proposed) | `handoffs/100-master-key-rotation/` | Blocked on 094 M2a | — |
-| M3 | 095 (Proposed) | `handoffs/095-dynamic-client-registration/` | Blocked on 094 M2a | — |
-| M4-A / M4-B | 096 (Proposed) | `handoffs/096-upstream-oidc-federation/` | Blocked on re-acceptance | — |
-| M5 | 097, 098 (Proposed) | `handoffs/097-threat-model/`, `handoffs/098-documentation-authority/` | Blocked | — |
-| M6 / M7 | 099 (Proposed) | `handoffs/099-operational-hardening/` | Blocked | — |
+| M2a / M2b | 094 (**Accepted**, re-accepted 2026-08-27) | `handoffs/094-transactional-audit/` | **M2a in progress** — two of five closure clauses met (C15 atomic; `rusqlite` confined and gate-asserted). Three open: seam usage not gate-asserted, injected-failure rollback at **13 of 24** sealed commands, structural gate not landed. M2b not started | [`m2a-rollback-coverage-2026-10-02.md`](rfcs/handoffs/094-transactional-audit/m2a-rollback-coverage-2026-10-02.md) |
+| M2c | 100 (Proposed) | `handoffs/100-master-key-rotation/` | Blocked on **its own acceptance** and on 094 M2a. `Proposed` is build-prohibited under RFC 000 | — |
+| M3 | 095 (**Accepted**) | `handoffs/095-dynamic-client-registration/` | Blocked on 094 M2a only | — |
+| M4-A / M4-B | 096 (**Accepted**, re-accepted 2026-08-27) | `handoffs/096-upstream-oidc-federation/` | 096-B blocked on the M2a seam; 096-A and the RFC 102 work for F01/F03 landed | — |
+| M5 | 097 (Proposed), **098 (Done)** | `handoffs/097-threat-model/`, `handoffs/098-documentation-authority/` | 098 closed; 097 blocked on its own acceptance | — |
+| M6 / M7 | 099 (Proposed) | `handoffs/099-operational-hardening/` | Blocked on its own acceptance | — |
 
 Every remediation RFC has a Handoff. No implementation task exists without a
 governing RFC and Handoff.
@@ -912,7 +921,7 @@ date. The release treatment of each item follows the 2026-08-26 surface test.
 |---|---|---|---|
 | **A — close what is open** | v0.78.0 | 2026-09-23 → 10-10 | **Complete 2026-09-24**, ahead of the window. RFC 115 Implemented; RFC 103 closed; RFC 110 Implemented; RFC 105 Implemented; RFC 117 stages 0/0b landed |
 | **B — make the contracts true** | v0.79.0 | 2026-10-13 → 10-24 | **Released and published 2026-10-01, twelve days ahead of the window, as a security release** — cut early because fixes for two flaw classes affecting every published version were sitting unreleased (RFC 120, RFC 125). Carried cycle B's landed work with it: RFC 116 stages 1–7, RFC 112, RFC 118, plus RFCs 121–127. **RFC 106 did not make it** and moves to cycle C. Level B green on `756e9f9` (CI 23/23); all six crates verified on crates.io |
-| **C — the main line resumes** | v0.80.0 | **No window. Ready when M2a's five closure clauses are met** | RFC 094 M2a. **Re-read complete 2026-10-02** — [`m2a-re-read-2026-10-02.md`](rfcs/handoffs/094-transactional-audit/m2a-re-read-2026-10-02.md). The condition this row previously set, "re-read against the eight commands RFCs 102 and 103 converted", **named a set of eight that does not exist** — the architect wrote it and cannot reconstruct the figure; 26 identifiers are mentioned by those RFCs and 11 are sealed. Read as intended — re-read against what changed — and discharged. Measured scope: **67 Class-A commands, 23 sealed, 44 remaining**, with **C15 among the remaining** though M2a's prerequisite names it. One clause is actionable now and blocked on nothing: `rusqlite` sits in `crates/sui-id`'s `[dependencies]` while no production file there uses it |
+| **C — the main line resumes** | v0.80.0 | **No window. Ready when M2a's five closure clauses are met** | RFC 094 M2a. **Re-read complete 2026-10-02** — [`m2a-re-read-2026-10-02.md`](rfcs/handoffs/094-transactional-audit/m2a-re-read-2026-10-02.md). The condition this row previously set, "re-read against the eight commands RFCs 102 and 103 converted", **named a set of eight that does not exist** — the architect wrote it and cannot reconstruct the figure; 26 identifiers are mentioned by those RFCs and 11 are sealed. Read as intended — re-read against what changed — and discharged. Measured scope: **67 Class-A commands, 44 remaining**. **Two of the five clauses are now met** — C15 is atomic (validate-first, rollback proven by injected failure) and `rusqlite` is confined to `sui-id-store` and gate-asserted. **Three remain**, dispatched 2026-10-02 in [`m2a-rollback-coverage-2026-10-02.md`](rfcs/handoffs/094-transactional-audit/m2a-rollback-coverage-2026-10-02.md): every sealed command reaches the Class-A seam **in fact but not in enforcement**; injected-failure rollback stands at **13 of 24** sealed commands, the eleven without one being U03, U05, U12, U22 and L01–L07; and the structural gate is not landed. The gate comes first, so a 25th command cannot be added without a rollback test while the eleven are being written |
 
 **Windows moved 2026-09-24, authorized the same day.** RFC 115's independent
 design review returned a blocker — an administrator-typed email address reaches
