@@ -110,6 +110,42 @@ changed another RFC's evidence. **If `@nabbisen` wants the completeness clause
 established rather than exemplified, that is a measurement I have not done and
 should not be approved as though I had.**
 
+## Independent verification by the implementation role
+
+[`closure-verification-batch-3-2026-10-02.md`](./closure-verification-batch-3-2026-10-02.md),
+committed beside this review as for batches 1 and 2.
+
+**No findings. The first batch of the three where nothing needed correcting**, and
+they say why that is the interesting result: this review adopted "name the test by
+reading it" *after* they caught two grep-count errors in batch 2, so the question
+was whether the corrected method actually produced accurate evidence or merely
+sounded more careful. Every named test across all six RFCs was checked by name and
+run. All exist, all pass.
+
+**They re-checked the one load-bearing reversal.** RFC 115's `must_change` clause
+is the question batch 2's closing note said had to be settled before batch 3 could
+close, and this review reverses my own flag of the same day. They did not take the
+reversal on trust: they traced the column through `0001_initial.sql`,
+`0022_boolean_checks.sql` and `0043_drop_credentials_must_change.sql`, confirmed
+the only other occurrences are test fixtures and the migration filename list, and —
+the part that matters — **read `production_sources()` rather than assuming it**, to
+confirm the grep-proof test walks real production code rather than a scan narrowed
+to pass. It carves out `migrations.rs` with a comment explaining that the list
+names the dropped file by filename, not by using the column.
+
+**They also agreed with a limitation instead of clearing it.** On RFC 127's
+completeness clause: *"a universal negative; I have no way to check it either, for
+the same reason the review states."* Agreeing with a stated limit is worth more
+than a verification that quietly stretches to cover it.
+
+Two small corroborations: G18 reports **10 contract files**, matching the
+nine-plus-README count, and `contracts/contract-paths.toml:25` carries
+`former_directories = ["ci"]`, so the `ci/` → `contracts/` move is a checked fact
+rather than a memory.
+
+As with the other batches: this is corroboration, not approval. They implemented
+these RFCs, so RFC 000's rule is satisfied by `@nabbisen`, not by them.
+
 ## What approval would mean
 
 On approval, and not before: the three closure fields on each of the six, with his
