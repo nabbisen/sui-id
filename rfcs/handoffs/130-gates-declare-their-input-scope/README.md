@@ -6,7 +6,7 @@
 ## Not dispatched yet — but no longer blocked
 
 **Status corrected 2026-10-01.** This file previously said *do not start*, because
-D5 was unanswered. **D5 is superseded** by [RFC 131](../../accepted/131-two-gate-levels-and-one-rule.md)
+D5 was unanswered. **D5 is superseded** by [RFC 131](../../done/131-two-gate-levels-and-one-rule.md)
 D2, which answers it by design rather than by asking the owner. RFC 130 has **no
 unmet implementation prerequisite.**
 

@@ -8,10 +8,10 @@
 **Approved by.** `@nabbisen`, 2026-10-01: "Accepted."
 **Security review.** Required
 **Independent design review.** [Security review 2026-10-01](../handoffs/130-gates-declare-their-input-scope/security-review-2026-10-01.md) — **by the architect, who authored this RFC, and therefore not independent**; carried by `@nabbisen` under `ROADMAP.md` R1's residual. He approved this RFC; he did not state that he reviewed its design, and this field does not claim he did. **The field's name overstates the document**, which says so in its own first lines.
-**Amended on.** 2026-10-01 — D5 superseded by [RFC 131](../accepted/131-two-gate-levels-and-one-rule.md) D2, on `@nabbisen` declining D5's question as one a design should answer. This RFC is now implementable.
+**Amended on.** 2026-10-01 — D5 superseded by [RFC 131](../done/131-two-gate-levels-and-one-rule.md) D2, on `@nabbisen` declining D5's question as one a design should answer. This RFC is now implementable.
 **Amended on.** 2026-10-01 — on that review, which returned two required changes: the change detector must fail open (D7) and the scope's completeness must be checked rather than reviewed once (D8). The amendment is material: as accepted, the RFC specified the optimisation without the two properties that keep it from becoming a silent hole.
 **Design prerequisites.** None. This RFC does not depend on RFC 093's prose being correct — see "Why RFC 093 is cited as practice, not as authority".
-**Implementation prerequisites.** None, as of 2026-10-01: [RFC 131](../accepted/131-two-gate-levels-and-one-rule.md) D2 supersedes D5 and answers it. **RFC 131's D1 is sequenced after this RFC's D1**, so this one is implemented first.
+**Implementation prerequisites.** None, as of 2026-10-01: [RFC 131](../done/131-two-gate-levels-and-one-rule.md) D2 supersedes D5 and answers it. **RFC 131's D1 is sequenced after this RFC's D1**, so this one is implemented first.
 **Closure prerequisites.** A change that cannot affect the Rust build or test lanes does not run them, and a change that can does — where "can" is declared in a contract, checked, and fails closed. **No gate's scope is narrower than the inputs it actually reads, and that is asserted by a gate rather than by a reading** (D8). **A changed set that cannot be determined runs the complete matrix** (D7), demonstrated for `workflow_dispatch` and for an unresolvable base ref. A release or milestone claim can still obtain a complete-matrix green on one nominated commit, by a mechanism that does not depend on which paths that commit touched.
 **Tracks.** Development throughput. Raised by `@nabbisen`, 2026-10-01, on observing that two runs in one day each took over thirty minutes.
 **Touches.** `contracts/gate-inputs.toml`, `contracts/workflow-template.toml`, `scripts/generate-ci-workflow.py`, `scripts/check-gate-inputs.sh`, `.github/workflows/ci.yml` (generated).
@@ -142,7 +142,7 @@ declaration must be loud, because the quiet default is the dangerous one. A gate
 may declare `paths = ["**"]` to mean always, and that is a visible, diffable
 statement rather than an omission.
 
-### D5 — **Superseded 2026-10-01 by [RFC 131](../accepted/131-two-gate-levels-and-one-rule.md) D2.** The question was the wrong shape
+### D5 — **Superseded 2026-10-01 by [RFC 131](../done/131-two-gate-levels-and-one-rule.md) D2.** The question was the wrong shape
 
 D5 asked `@nabbisen` whether a release or milestone claim requires the complete
 matrix on the commit it cites, and made this RFC unimplementable until he

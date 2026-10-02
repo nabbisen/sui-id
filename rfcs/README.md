@@ -134,7 +134,7 @@ Proposed: the move approved nothing.
 | 128 | [G11's conditions derive from RFC 000, not from a retired RFC](./done/128-g11-derives-from-rfc-000.md) | [128-g11-derives-from-rfc-000](./handoffs/128-g11-derives-from-rfc-000/README.md) |
 | 129 | [Review is scoped to who exists, and an external reviewer is engaged once, deliberately](./done/129-review-scoped-to-who-exists.md) | [129-review-scoped-to-who-exists](./handoffs/129-review-scoped-to-who-exists/README.md) |
 | 130 | [A gate declares the inputs it depends on, and runs when they change](./done/130-gates-declare-their-input-scope.md) | [130-gates-declare-their-input-scope](./handoffs/130-gates-declare-their-input-scope/README.md) |
-| 131 | [Two gate levels, and one rule about claims](./accepted/131-two-gate-levels-and-one-rule.md) | [131-two-gate-levels-and-one-rule](./handoffs/131-two-gate-levels-and-one-rule/README.md) |
+| 131 | [Two gate levels, and one rule about claims](./done/131-two-gate-levels-and-one-rule.md) | [131-two-gate-levels-and-one-rule](./handoffs/131-two-gate-levels-and-one-rule/README.md) |
 | 132 | [The files a stranger reads first](./done/132-the-files-a-stranger-reads-first.md) | [132-the-files-a-stranger-reads-first](./handoffs/132-the-files-a-stranger-reads-first/README.md) |
 
 ### Implemented — Mockup Integration epic (Phase 0 → Phase 8)

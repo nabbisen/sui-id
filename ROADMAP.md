@@ -228,7 +228,7 @@ demonstrably met; `Closure reviewed on`, `Closure approved by` and a durable
 not the sole implementer** — which is why the architect prepares a batch and
 `@nabbisen` approves it, never the reverse.
 
-**Blocked — substantial work outstanding (4, was 5).** Not closure candidates; naming why
+**Blocked — substantial work outstanding (4).** RFC 131, listed below as held, **closed 2026-10-02** once `@nabbisen` approved removing the D5 clause its own implementation had measured unbuildable. Not closure candidates; naming why
 so the backlog is not mistaken for 23 items of paperwork.
 
 | RFC | What is missing |

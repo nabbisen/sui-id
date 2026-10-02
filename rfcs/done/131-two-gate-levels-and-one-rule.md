@@ -1,6 +1,9 @@
 # RFC 131 — Two gate levels, and one rule about claims
 
-**Status.** Accepted
+**Status.** Implemented (v0.79.0)
+**Closure reviewed on.** 2026-10-02
+**Closure approved by.** `@nabbisen` (accountable owner), 2026-10-02: "Approved. Write it." — given after he approved the amendment removing the D5 clause, and **before** the closure evidence was written. The architect verified the three remaining clauses before acting on it and would have reported rather than closed had one failed; the evidence records that order plainly. The closure review was performed by the architect, which wrote this RFC, and is **not** independent of it.
+**Closure evidence.** [Closure review 2026-10-02](../handoffs/131-two-gate-levels-and-one-rule/closure-review-2026-10-02.md)
 **Accepted on.** 2026-10-01
 **Approved by.** `@nabbisen`, 2026-10-01: "Reviewed. Accepted."
 **Security review.** Required
