@@ -214,6 +214,31 @@ dependency between them; everything else in a lane is strictly ordered. Item 5
 is deliberately sequenced after the clippy cleanup so a large file move does not
 collide with workspace-wide lint churn.
 
+### Re-review of the fifteen — complete 2026-10-02
+
+The fifteen packages headed `Independent design review` that RFC 128 stage 0 found
+had been performed by the implementation role, re-reviewed in three batches at
+`@nabbisen`'s direction, every verdict, ordered by consequence.
+
+**No design defect was found in any of the fifteen.** Every judgment the
+implementation role made was right on the merits. That was not the expected
+result.
+
+What the exercise found is a **record** problem in two shapes:
+
+| Shape | Count | RFCs |
+|---|---|---|
+| He ruled the judgment explicitly | 4 | 115, 102, 103, 116 |
+| Approval named the deciding change | 1 | 118 |
+| **Visibility gap** — judgment adopted into text, approval names no choice | 5 | 110, 112*, 121*, 122, 123 (*partial) |
+| **Accepted before the design was reviewed** | 2 | 117, 126 |
+
+RFC 126 caught and disclosed its own; **RFC 117 did not, and is live and
+unbuilt**. Batches and evidence under
+[`rfcs/handoffs/128-g11-derives-from-rfc-000/`](rfcs/handoffs/128-g11-derives-from-rfc-000/),
+each with independent verification by the implementation role, which corrected
+the architect twice.
+
 ### Closure backlog — triaged 2026-10-02
 
 **23 RFCs sit in `accepted/` and not one has ever moved to `done/`.** The
