@@ -43,7 +43,7 @@ objection was not deflected — it reshaped the RFC.
 | The RFC's own approval note | *"the architect then amended the RFC and did not walk the folder"* |
 | `Amended on` line | **absent** — there is none, despite a material amendment RFC 000 requires to be recorded |
 | The approval sentence | *"RFC-117 is accepted."* — and, unlike 112, 118 and 122, it does **not** say "accepted on the amended text" |
-| Order on the day | Review committed 08:31, acceptance text committed 20:28, both 2026-09-24 — but the note also says the move *"lagged the acceptance by a day"*, so a reader cannot reconstruct whether he accepted before or after the narrowing |
+| Order on the day | **Reconstructed 2026-10-02, and it is knowable — see the correction below.** Accepted 06:54, *then* rewritten 08:31. No second approval follows |
 
 So **the one RFC in this project dedicated to making owner decisions verifiable
 has an owner decision that cannot be verified from its own record.** I am not
@@ -54,14 +54,39 @@ prospective convention batch 1 raised.
 signed ledger does not exist, which is why it is one of the four RFCs blocked in
 `accepted/`. The text he accepted is the text that will be built against.
 
-**For `@nabbisen`, two things, and neither is a reopening:**
+### Correction — the order **is** reconstructable, and it is worse than I wrote
 
-1. **Confirm the acceptance was of the narrowed text** — the version that
-   separates evidence from enforcement. If it was, an `Amended on` line recording
-   2026-09-24 and what changed closes the gap permanently.
-2. If he cannot recall — which after nine days is entirely reasonable — **say so
-   and let the record say so.** "The order could not be reconstructed" is a better
-   entry than a confident reconstruction by the person who wrote both documents.
+**Found by the implementation role, 2026-10-02.** I wrote that a reader "cannot
+reconstruct whether he accepted before or after the narrowing." That was
+under-evidenced: I compared two file timestamps where the commit history answers
+the question outright. Reconstructed and verified independently:
+
+| Time | Commit | What it did |
+|---|---|---|
+| 06:33 | `8741fa6` | *"five rulings of 2026-09-24; RFC 117 opened"* |
+| **06:54** | `368d278` | *"RFC 117 accepted; design review **requested**, with an objection against it"* — **the acceptance, with the review not yet performed** |
+| **08:31** | `4c3c9e7` | *"design review landed; **the claim narrowed and the work split**"* — the material rewrite |
+| 09:44 | `a887813` | stage 0 implemented |
+| 20:28 | `3dec640` | moved to `accepted/` — narrates the history; **adds no fresh approval** |
+
+So it is not "same day, unclear order." It is **accepted, then substantively
+rewritten, with no second approval recorded for the rewrite.** The text he
+approved at 06:54 is not the text that now stands.
+
+**This makes the finding sharper, not softer**, and it removes one of the two asks
+I had offered.
+
+**For `@nabbisen`, one thing, and it is not a reopening:**
+
+**Confirm that your 2026-09-24 acceptance was intended to cover the narrowing that
+followed it** — the rewrite separating evidence from enforcement. If yes, an
+`Amended on` line recording the date and what changed closes the gap permanently.
+If you would rather look at the narrowed text first, that is the better answer and
+the RFC is unbuilt, so nothing is lost by it.
+
+I had also offered "say you cannot recall and let the record say so." **That option
+is now unnecessary for the order** — the repository establishes it. What only you
+can supply is intent.
 
 ## RFC 094 / 095 / 096 — right, and it governs work not yet built
 
@@ -124,6 +149,24 @@ ruled and when.
 convention batch 1 proposed is not a new burden — it is something this project has
 already done correctly, once, without being asked.
 
+## Independent verification
+
+[`re-review-batch-2-verification-2026-10-02.md`](./re-review-batch-2-verification-2026-10-02.md),
+committed beside this document.
+
+No discrepancy found in the quotes — every cited line exact, including the owner's
+own typo in RFC 110's approval (*"accpepted"*), which they reproduced rather than
+silently tidied. The visibility-gap tally of three was cross-checked against batch
+1's corrected document for consistency.
+
+Their contribution is the RFC 117 timeline above: they reconstructed the full
+commit sequence where I had compared two timestamps, and the result **strengthened
+the finding against their own prior work**. They also declined to second-guess the
+094/095/096 scheduling judgment, saying they had no basis to — the right call,
+and the same restraint they showed on RFC 127's completeness clause.
+
+Corroboration, not approval.
+
 ## Batch 2 verdict
 
 **No design defect found in any of the four.** Every judgment re-reviewed here was
@@ -131,9 +174,9 @@ right on the merits, and I would make the same call again in each case.
 
 What the batch returns is three record defects of increasing seriousness: RFC 110
 has a visibility gap in a closed matter; 094/095/096 has a sound judgment that
-will govern unbuilt work and should be seen before it does; and **RFC 117 has an
-unrecorded material amendment on a live, unbuilt RFC whose entire subject is
-making owner decisions verifiable.**
+will govern unbuilt work and should be seen before it does; and **RFC 117 was accepted at 06:54 and materially rewritten at 08:31 with no
+second approval — on a live, unbuilt RFC whose entire subject is making owner
+decisions verifiable.**
 
 Batch 3 is the last: 121, 123 and 126 — the three judgments the stage-0 audit
 already knew about and that the architect already adopted.
