@@ -42,3 +42,27 @@ min_number = 93
 # it replaces); the RFC 007 it names is `rfcs/archive/007-multi-tenancy.md`.
 [archive_citations]
 "025" = ["007"]
+
+# RFC 133 D2 (G11 condition 9c): an Independent design review field must cite
+# at least one review filed under this RFC's own handoffs/<N>-slug/
+# directory. This is the closed list of exceptions -- a genuine review
+# shared by more than one RFC. Adding an entry is a reviewable act: it is
+# declared in the package that adds it, names the shared review, and every
+# entry requires a non-empty `reason` (checked at startup; a blank one is a
+# policy error, the same rule contracts/contract-paths.toml already applies).
+# Simulated against the whole tree on 2026-10-02: these three are the only
+# RFCs whose field cites no review under their own handoff directory.
+[[review_subject_allowlist]]
+rfc = "095"
+shares_with = "094"
+reason = "one correction review measured 094, 095 and 096 together after the 2026-08-26 re-acceptance (rfcs/handoffs/094-transactional-audit/094-095-096-correction-review-2026-08-26.md); splitting it into three near-identical files would be worse evidence, not better"
+
+[[review_subject_allowlist]]
+rfc = "096"
+shares_with = "094"
+reason = "same shared review as 095 above: the 2026-08-26 correction review covers 094, 095 and 096 together, filed under 094's handoff directory"
+
+[[review_subject_allowlist]]
+rfc = "103"
+shares_with = "102"
+reason = "102 and 103 share one design review (rfcs/handoffs/102-authentication-fails-closed/102-103-design-review-2026-09-16.md), filed under 102's handoff directory because the two were accepted together"

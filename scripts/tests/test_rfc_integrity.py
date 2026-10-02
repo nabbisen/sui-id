@@ -72,6 +72,43 @@ def write(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+RFC_101 = """\
+# RFC 101 — Elsewhere
+
+**Status.** Proposed
+**Security review.** Required
+**Design prerequisites.** None.
+**Implementation prerequisites.** None.
+**Closure prerequisites.** None.
+**Tracks.** Example.
+**Touches.** nothing.
+**Accountable owner and approver.** `@owner`.
+
+## Summary
+
+A second fixture RFC, used only as the subject of a review that RFC 100's
+own review field might (wrongly) cite instead of a review of RFC 100.
+"""
+
+
+def add_rfc_101(root: Path) -> None:
+    """A second, real RFC -- condition 13 requires every handoffs/NNN-slug/
+    directory to resolve to an existing RFC, so a review "elsewhere" needs a
+    real RFC 101 to be filed under, not an arbitrary unused number."""
+    write(root / "rfcs" / "proposed" / "101-elsewhere.md", RFC_101)
+    readme = (root / "rfcs" / "README.md").read_text(encoding="utf-8")
+    readme = readme.replace(
+        "| 100 | [Example](./accepted/100-example.md) |",
+        "| 100 | [Example](./accepted/100-example.md) |\n"
+        "| 101 | [Elsewhere](./proposed/101-elsewhere.md) |",
+    )
+    write(root / "rfcs" / "README.md", readme)
+    write(
+        root / "rfcs" / "handoffs" / "101-elsewhere" / "101-review.md",
+        "# Review of RFC 101\n",
+    )
+
+
 def make_baseline(root: Path) -> None:
     write(root / "contracts" / "rfc-policy.toml", POLICY)
     write(root / "rfcs" / "README.md", VALID_README)
@@ -462,6 +499,125 @@ class RfcIntegrityTest(unittest.TestCase):
             result = run_checker(root)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("external-only", result.stderr)
+
+    # ---- condition 9c (RFC 133 D2): a review must be of this RFC --------
+
+    def test_review_of_a_different_rfc_only_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_baseline(root)
+            add_rfc_101(root)
+            bad = VALID_RFC.replace(
+                "[Review](../handoffs/100-example/100-review.md)",
+                "[Review](../handoffs/101-elsewhere/101-review.md)",
+            )
+            write(root / "rfcs" / "accepted" / "100-example.md", bad)
+            git_commit(root)
+            result = run_checker(root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("cites no review filed under", result.stderr)
+            self.assertIn("condition 9c", result.stderr)
+
+    def test_a_second_citation_of_its_own_handoff_alongside_another_rfcs_is_accepted(self):
+        # RFC 126's real shape: credit another RFC's review *and* cite its own.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_baseline(root)
+            add_rfc_101(root)
+            good = VALID_RFC.replace(
+                "[Review](../handoffs/100-example/100-review.md)",
+                "[Review](../handoffs/100-example/100-review.md), crediting "
+                "[RFC 101's review](../handoffs/101-elsewhere/101-review.md) for finding it",
+            )
+            write(root / "rfcs" / "accepted" / "100-example.md", good)
+            git_commit(root)
+            result = run_checker(root)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_review_subject_allowlist_entry_is_accepted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_baseline(root)
+            add_rfc_101(root)
+            bad = VALID_RFC.replace(
+                "[Review](../handoffs/100-example/100-review.md)",
+                "[Review](../handoffs/101-elsewhere/101-review.md)",
+            )
+            write(root / "rfcs" / "accepted" / "100-example.md", bad)
+            git_commit(root)
+            policy = POLICY + (
+                '\n[[review_subject_allowlist]]\nrfc = "100"\nshares_with = "101"\n'
+                'reason = "one review covers both in this fixture"\n'
+            )
+            write(root / "contracts" / "rfc-policy.toml", policy)
+            result = run_checker(root)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_review_subject_allowlist_entry_for_a_different_rfc_does_not_admit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_baseline(root)
+            add_rfc_101(root)
+            bad = VALID_RFC.replace(
+                "[Review](../handoffs/100-example/100-review.md)",
+                "[Review](../handoffs/101-elsewhere/101-review.md)",
+            )
+            write(root / "rfcs" / "accepted" / "100-example.md", bad)
+            git_commit(root)
+            # An entry keyed to a different RFC than the one being checked
+            # (100) admits nothing, even naming the same shared review.
+            policy = POLICY + (
+                '\n[[review_subject_allowlist]]\nrfc = "102"\nshares_with = "101"\n'
+                'reason = "an entry for a different RFC"\n'
+            )
+            write(root / "contracts" / "rfc-policy.toml", policy)
+            result = run_checker(root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("condition 9c", result.stderr)
+
+    def test_review_subject_allowlist_blank_reason_is_a_policy_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_baseline(root)
+            git_commit(root)
+            policy = POLICY + (
+                '\n[[review_subject_allowlist]]\nrfc = "100"\nshares_with = "101"\n'
+                'reason = ""\n'
+            )
+            write(root / "contracts" / "rfc-policy.toml", policy)
+            result = run_checker(root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("has no reason", result.stderr)
+
+    def test_review_subject_checked_for_done_rfcs_too(self):
+        # The population is Accepted *and* Done, not only Accepted -- a
+        # first implementation attempt mirrored condition 9's own
+        # Accepted-only loop and left every allowlist entry for a Done RFC
+        # unreachable, caught only by mutation-testing the allowlist.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_baseline(root)
+            add_rfc_101(root)
+            done = VALID_RFC.replace("**Status.** Accepted", "**Status.** Implemented").replace(
+                "[Review](../handoffs/100-example/100-review.md)",
+                "[Review](../handoffs/101-elsewhere/101-review.md)",
+            )
+            done += (
+                "\n**Closure reviewed on.** 2026-01-02\n"
+                "**Closure approved by.** `@owner`\n"
+                "**Closure evidence.** [Review](../handoffs/100-example/100-review.md)\n"
+            )
+            write(root / "rfcs" / "done" / "100-example.md", done)
+            (root / "rfcs" / "accepted" / "100-example.md").unlink()
+            readme = (root / "rfcs" / "README.md").read_text(encoding="utf-8").replace(
+                "[Example](./accepted/100-example.md)", "[Example](./done/100-example.md)"
+            )
+            write(root / "rfcs" / "README.md", readme)
+            git_commit(root)
+            result = run_checker(root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("rfcs/done/100-example.md", result.stderr)
+            self.assertIn("condition 9c", result.stderr)
 
     def test_done_security_sensitive_missing_closure_metadata_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:

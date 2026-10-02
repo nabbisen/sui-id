@@ -15,7 +15,9 @@ RFC first.** sui-id runs RFC 000's lifecycle (`rfcs/`): design is written up
 and reviewed in `proposed/` before it moves to `accepted/`, and only an
 Accepted RFC is implementation-eligible. A typo fix or an ordinary bug fix
 doesn't need one — open an issue as above. If you're unsure which your
-change is, open the issue first and ask.
+change is, open the issue first and ask. The template in `rfcs/README.md`
+states what an approval must record once a design review has returned
+changes (RFC 133 D1).
 
 ## Code style
 

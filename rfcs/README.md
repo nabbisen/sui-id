@@ -371,7 +371,7 @@ The standard shape is light:
 
 <!-- Add when moving to accepted/: -->
 **Accepted on.** YYYY-MM-DD
-**Approved by.** NAME
+**Approved by.** NAME — where the independent design review returned changes, name the decision it settles (by number, or by recording that it was decided directly); a plain acceptance with no returned changes needs neither (RFC 133 D1).
 **Independent design review.** Reviewing role, what it checked, and durable review reference
 **Implementation owner.** NAME
 

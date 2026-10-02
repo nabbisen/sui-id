@@ -36,6 +36,19 @@ rfcs/README.md against RFC 093's RFC-integrity contract:
      review (RFC 105) are all accepted, and must stay accepted unless
      `@nabbisen` rules otherwise -- that ruling is not this gate's to make;
 
+  9c. (RFC 133 D2) An Independent design review field names a review *of
+      this RFC*, not only a durable reference: at least one citation in
+      the field resolves to a path under this RFC's own
+      `handoffs/<N>-slug/` directory, unless the RFC carries an entry in
+      --policy's [[review_subject_allowlist]] naming the RFC whose review
+      it shares. **Filing location is a proxy for subject, not proof of
+      it** -- this condition verifies where a review is filed, checked
+      against the RFC's own identifier, not that the document is actually
+      about this RFC's design; a review wrongly filed under the right
+      directory still passes. RFC 126's field cited only RFC 123's review
+      and would have failed this condition before it was corrected to cite
+      its own alongside the credit;
+
   10. Done RFCs with identifier >= the same threshold and Security review
       Required have dated Closure metadata and a durable repository-
       relative Closure evidence reference;
@@ -66,7 +79,11 @@ Items 14 and 15 are RFC 110's, and are not RFC 093's either: they enforce
 that RFC 000 is not *restated* in headers, after two incidents in which a
 governance sentence was written into RFC headers, attributed to an authority
 that does not contain it, and left unchecked. G11 hosts all four because this
-is the RFC-structure gate; RFC 000 remains their source and is not amended.)
+is the RFC-structure gate; RFC 000 remains their source and is not amended.
+Item 9c is RFC 133's, extending condition 9 rather than adding a lane: it is
+the gate's third closed allowlist, beside [historical_rfc_mi] and
+[archive_citations]. Every [[review_subject_allowlist]] entry requires a
+non-empty `reason`; a blank one is a policy error, checked at startup.)
 
 Metadata is recognized only from bold, period-terminated labels
 (`**Label.** value`) in the RFC header -- from the title line up to but
@@ -611,6 +628,77 @@ def extract_evidence_link(value: str) -> str | None:
     return m.group(1).strip() if m else None
 
 
+def extract_all_links(value: str) -> list[str]:
+    """Every Markdown link target in `value`, inline code stripped first so a
+    code span showing a link's own syntax (e.g. a docstring example) is not
+    mistaken for a citation."""
+    return [m.group(1).strip() for m in LINK_RE.finditer(INLINE_CODE_RE.sub("", value))]
+
+
+def check_review_subject(root: Path, rfc: Rfc, policy: dict, failures: list[str]) -> None:
+    """RFC 133 D2 (condition 9c): at least one citation in 'Independent
+    design review' must resolve under this RFC's own handoffs/<N>-slug/
+    directory, unless an entry in [[review_subject_allowlist]] names the RFC
+    it legitimately shares a review with. Filing location is a proxy for
+    subject, not proof of it (see the docstring's condition 9c entry)."""
+    value = rfc.field("Independent design review")
+    if value is None or value.strip() == "":
+        return  # presence is checked by the caller
+    own_dir = re.compile(rf"/handoffs/{re.escape(rfc.identifier)}-[^/]+/")
+    for link in extract_all_links(value):
+        if SCHEME_RE.match(link) or link.startswith("/"):
+            continue
+        target = (rfc.path.parent / link).resolve()
+        try:
+            rel = "/" + str(target.relative_to(root.resolve())).replace("\\", "/")
+        except ValueError:
+            continue
+        if own_dir.search(rel):
+            return  # at least one citation is of this RFC's own handoff
+    allowlist = {
+        entry.get("rfc"): entry
+        for entry in policy.get("review_subject_allowlist", [])
+        if isinstance(entry, dict)
+    }
+    entry = allowlist.get(rfc.identifier)
+    if entry is not None:
+        return  # policy-level reason presence is validated at startup
+    failures.append(
+        f"{rfc.path}: 'Independent design review.' cites no review filed under "
+        f"this RFC's own handoffs/{rfc.identifier}-*/ directory (condition 9c) -- "
+        f"add a review of this RFC, or a [[review_subject_allowlist]] entry naming "
+        f"the RFC it shares a review with and why"
+    )
+
+
+def check_review_subject_allowlist_policy(policy: dict, failures: list[str]) -> None:
+    """Startup validation: every [[review_subject_allowlist]] entry is a
+    well-formed, reasoned policy decision, not a bare exemption (the same
+    rule contracts/contract-paths.toml already applies)."""
+    for entry in policy.get("review_subject_allowlist", []):
+        if not isinstance(entry, dict):
+            failures.append(
+                f"policy: [[review_subject_allowlist]] entry is not a table: {entry!r}"
+            )
+            continue
+        rfc_id = entry.get("rfc")
+        if not isinstance(rfc_id, str) or not rfc_id.strip():
+            failures.append(
+                f"policy: [[review_subject_allowlist]] entry is missing a valid 'rfc': {entry!r}"
+            )
+        shares_with = entry.get("shares_with")
+        if not isinstance(shares_with, str) or not shares_with.strip():
+            failures.append(
+                f"policy: [[review_subject_allowlist]] entry for {rfc_id!r} is missing 'shares_with'"
+            )
+        reason = entry.get("reason")
+        if not isinstance(reason, str) or not reason.strip():
+            failures.append(
+                f"policy: [[review_subject_allowlist]] entry for {rfc_id!r} has no reason; "
+                f"an exemption without a reason is a hiding place, not an allow-list"
+            )
+
+
 def check_evidence_field(root: Path, rfc: Rfc, label: str, failures: list[str]) -> None:
     value = rfc.field(label)
     if value is None or value.strip() == "":
@@ -684,6 +772,29 @@ def check_accepted_metadata(root: Path, rfcs: list[Rfc], failures: list[str]) ->
                 # docstring entry above for why not, and do not add either
                 # check without `@nabbisen` first ruling on self-review.
                 check_evidence_field(root, rfc, "Independent design review", failures)
+
+
+def check_review_subject_population(root: Path, rfcs: list[Rfc], policy: dict, failures: list[str]) -> None:
+    """RFC 133 D2 (condition 9c). Deliberately a wider population than
+    check_accepted_metadata's: condition 9 only re-validates at Accept time
+    and trusts the record afterward, but a citation-of-the-wrong-RFC defect
+    is readable from the field forever, including once the RFC is Done. "The
+    same set condition 9 already governs" (the dispatch's own words) means
+    every RFC condition 9 *or* condition 10 cares about -- folder in
+    {accepted, done} -- not literally condition 9's own Accepted-only loop,
+    which a first attempt at this used and which left every entry for a Done
+    RFC unreachable (caught by mutation-testing the allowlist before trusting
+    it, not by reasoning about the code)."""
+    for rfc in rfcs:
+        if rfc.folder not in ("accepted", "done"):
+            continue
+        security = rfc.field("Security review")
+        if security is None or not security.startswith("Required"):
+            continue
+        value = rfc.field("Independent design review")
+        if value is None or value.strip() == "":
+            continue  # presence is condition 9's to enforce, not this one's
+        check_review_subject(root, rfc, policy, failures)
 
 
 def check_closure_metadata(root: Path, rfcs: list[Rfc], policy: dict, failures: list[str]) -> None:
@@ -851,6 +962,7 @@ def main(argv: list[str]) -> int:
         policy = tomllib.load(f)
 
     failures: list[str] = []
+    check_review_subject_allowlist_policy(policy, failures)
     check_folder_layout(root, failures)
     check_handoff_correspondence(root, failures)
     rfcs = discover_rfcs(root, policy, failures)
@@ -859,6 +971,7 @@ def main(argv: list[str]) -> int:
     check_links(root, rfcs, failures)
     check_required_metadata(rfcs, policy, failures)
     check_accepted_metadata(root, rfcs, failures)
+    check_review_subject_population(root, rfcs, policy, failures)
     check_closure_metadata(root, rfcs, policy, failures)
     check_review_rules(rfcs, failures)
     check_archive_citations(rfcs, policy, failures)
