@@ -23,19 +23,18 @@ ROADMAP.md	0cc3b4a1f8aa52ae6f4f201fc4520c924b82b64620697ae02b5bc0972c3532eb	1	1 
 ROADMAP.md	143ef4c8c8f193cfee8632e0b6ab9051b75abcf8cdd29bc9337f068598eb529c	1	### Dated windows are withdrawn — ruled by @nabbisen , 2026-10-02
 ROADMAP.md	1b3a96873972f91e93b530c12e0abaf27e126513785c3b8b0aad49c13972d401	1	Under this ruling the second half is not what the project does, so that sentence is a promise the project does not keep — the architect's pr
 ROADMAP.md	211874c3a846ff839aeff608f419cc7a2cba68b6445fee4b3524302d321db5dd	1	R3 Source-size debt: 28 files over 500 lines (measured 2026-09-16: git ls-files ' .rs' \ xargs wc -l \ awk '$2 != "total" && $1 500' \ wc -l
+ROADMAP.md	24bdf4f9c976125e22cb9b9d9bfa61d3510616ed278dc71a98658406b7baa976	1	M2b — Remaining conversion and authority switch — Convert settings, pending settings, federation configuration, client metadata; land the sy
 ROADMAP.md	25a346cb68d8409c2ad9772051dda7bda7bd1fe3099479b3c1ac26c4d1b32088	1	#### S1d — Disclosure for the 0.79.0 flaw classes, ruled by @nabbisen on 2026-10-01
 ROADMAP.md	2636ad08eb9e597ede73bccdc24e0b3cd3011bd3659d1b66c1144846611b195a	1	R4 MSRV 1.95 leaves four releases of headroom below current stable ( 1.99.0, re-measured 2026-10-01 ; was three against 1.98.1 on 2026-09-16
 ROADMAP.md	26de88e14f6fa11f02c4846c6a1a577eaf8cb96761082e7c37663009ee51ade0	1	The owner and independent reviewer decide whether a narrower change resets a targeted exercise or the complete four-week window.
 ROADMAP.md	2a29ae17a5167459bb933a6e2f0fa114c30c4452df38af543f9ca0f24a9448c0	1	R2 Audit hash chain is unkeyed and unanchored — tamper-evident only within its trust boundary Certain (by design) High if misrepresented; lo
 ROADMAP.md	2d4ab9968741d00b73c18bdf3c32d69f3d6cb9508934906d06fc3574002da5e4	1	On 2026-07-28 the owner authorized the programme to run two lanes : a second implementer was assigned and increased security-review capacity
-ROADMAP.md	2dbbd1e635d104486b90e8240cf5724728e3246289fc6b09f7c5ffa452e9897d	1	M4-B — Federation mutation and session integration owner to set Federation provider/link commands on the Class-A seam; session establishment
 ROADMAP.md	3020eded07c19c334137809bde2ec4452e08da628c4f96b495921fec478089da	1	Acceptance @nabbisen
 ROADMAP.md	3351aec715f3ba49395145f7af82e742bc1233506da4da1df6facb4916f22f56	1	Every statement in this repository that the owner made that ruling traces to documents written by the architect role that proposed it: this 
 ROADMAP.md	36060284344212921053b00aa09fd5934b9a264236165a241f43611f1ab7e726	1	Like the withdrawn 2026-07-28 attribution above, the 2026-09-09 ruling reaches this repository only through a document written by the archit
 ROADMAP.md	38f8d3a5e52a28d525badaf0268450567f8059782601207d98077667c97b15c4	1	@nabbisen raised two themes on 2026-09-25 — an embeddable (pluggable) auth module , and ZKP as an optional feature with the constraint that 
 ROADMAP.md	392884e1eb83766da2d205ed9de35e2f8930f22c298a692da72804110c3c0f6f	1	What is actually being decided — corrected 2026-09-25. The architect first put this to @nabbisen as three windows and a date.
 ROADMAP.md	39f12d68482659d1745c435af3eb426e697afd7383d1751a002d104edf3f914e	1	And where no reviewer exists , the judgement is carried by @nabbisen under R1's residual rather than labelled a completed independent review
-ROADMAP.md	3e2fd484ea37da4f4c594e8799ad7199eba7b4055d7eb8ad4088398d9f6332f8	1	C v0.80.0 2026-10-27 → 11-14 (proposed; the authorized row leaves C open-ended) [RFC 119](rfcs/proposed/119-embedding-contract.md) — the emb
 ROADMAP.md	3ff17aee5d6f11a9c0b47dbe077c8ede26d6ef622b52bc9aaa7129ab54825d44	1	What this replaced. From 2026-09-10 to 2026-09-22 this work was carried in a roadmap/ directory created by ee48257 , which justified itself 
 ROADMAP.md	40c089706b27d6d15adb13d42149a4f686e2d5c855c703a775cb49719efc16d4	1	R1 Review independence: authoring, implementation and review concentrate in few roles Certain (structural) High — the readiness claim rests 
 ROADMAP.md	4682dafde0a54772dd01c44edfaa1bae0eeb258438b0e65da112a67a074e164a	1	Owner and approver @nabbisen Yes
@@ -46,17 +45,16 @@ ROADMAP.md	51ea0e2a365e1b856a68e2567c60b5e7d519f53c504b98b29bffd24913bce8de	1	##
 ROADMAP.md	55b36a2083ef058286a69ae2ff3c34b65e1801342daa3518c5d7f69327adb269	1	Work is gated on @nabbisen 's decisions and on prerequisites being met — never on elapsed time.
 ROADMAP.md	5aceb88bc92843455c6e08971dae256f5c2e6f2241e83905f10b37dd4c748c4c	1	Required format: description, likelihood, impact, detection, mitigation, residual risk, decision owner.
 ROADMAP.md	61ebd8965b3dd0fcc8e3a9c37355e909fc111ea1976d772bcae5c1fb13d8e7a3	1	It needs @nabbisen 's decision separately, at cycle E, and is not assumed here.
-ROADMAP.md	64cc877e4d1d02b0d8941863c3678848eedd42798cad4f1c031fb80b8eeb2c3c	1	M7 — Real-environment soak owner to set Exercise the exact M6 artifact under representative auth traffic, failure modes, operational cycles,
 ROADMAP.md	66cebadbafa4da26caab4cd9e8f630bba442002ad34dd60ac6e4e9c09a766195	1	23 RFCs sit in accepted/ and not one has ever moved to done/ . The RFC-completion stage @nabbisen identified on 2026-10-01 (RFC 131's owner 
 ROADMAP.md	66ee0dcfa997e967a91d9f0d1db35574fc86300bf75651f760fcb9863f6b9022	1	R7 Pre-RFC-094 dynamic registrations are indistinguishable from admin-created clients Certain (historical) Medium — provenance cannot be pro
 ROADMAP.md	68a3e3ed97de6ca9d6583624727828adfc39a44555bbbb185c9180166cba96e7	1	Where no role other than the author can perform a review, the gap is recorded as unreviewed design judgment and the owner rules on it with t
 ROADMAP.md	766450b57c4bb79e356dfd9ac065f79cbec7c49ef087e3ca6fa8ba0c5afad2b6	1	#### S1a — The workflow, ruled by @nabbisen on 2026-10-01
-ROADMAP.md	781ed1dbaeeb002cf06c123dc3213d3ff04d542ea84164962d1f85f03c6a7cb4	1	M2c — Master-key rotation recovery owner to set Rotation journal, atomic key-file publication, startup crash recovery across every transitio
 ROADMAP.md	7c3b4d73cf9008f591c43f49ceb79d4570fa262c5fa82e72506f9abea4c17ebb	1	All remain Proposed , no schedule, require owner direction + soak.
+ROADMAP.md	803d4a54f32aa511fef898ec6f32230518938d3804a54abb17475d52d4157162	1	M3 — Atomic dynamic registration — Validate all metadata before consuming authorization; atomic use/client/audit transaction; race and retry
 ROADMAP.md	831b9986beea7e5a3407a96fb665d91220901ae66ea5285416a15da856e8f4df	1	Ruled 2026-09-22 ( @nabbisen ): Chinese is necessary but not urgent — it waits until the APIs are stable, and then a native-speaker review, 
-ROADMAP.md	839a76900267fe3c8504b1fe246e9d0758585a4bdddfc6f410549f5d8900dd0e	1	M6 — Release-assurance closure and soak entry owner to set Runtime file modes; all fuzz targets; package automation and inspection; live LDA
 ROADMAP.md	85972bca8cfda9e25847b615a12c3709aae33d07115fcd9c82cad11b804bd37b	1	Owner decision, 2026-08-26. Review is not skipped.
 ROADMAP.md	8f0151094259a8bc85d880cb9104615b5a24981cf3d81397b72d47814e1352a0	1	RFCs 094, 095 and 096 were returned to proposed/ on 2026-07-28 for owner-approved material amendments, and were re-accepted on 2026-08-27.
+ROADMAP.md	90b6f1e7b4eadd09e7bafeb6be564d88feeff7d586d96d4362686f3175202ee8	1	M2c — Master-key rotation recovery — Rotation journal, atomic key-file publication, startup crash recovery across every transition prefix, o
 ROADMAP.md	92e87f0d49a150a6963709d59e47d782889e1336a93d3eedfb51fcdb52347651	1	They must: because owner-requested self-review is legitimate, a gate that rejected every self-review would reject work this ruling permits.
 ROADMAP.md	98ceb61a86f24277ce9291924a6e17133bb443462bede8d98ec302a9c90aff71	1	Lane B is authorized to run concurrently with Lane A once the overlap rule's conditions are met: all designs are Accepted or in re-review af
 ROADMAP.md	9ff0dd77fb1198d8f3af66327073695a788b5334736b6a8bbb99dc85baabdbe0	1	[117](rfcs/accepted/117-verifiable-owner-decisions.md) Owner decisions must be verifiable
@@ -67,11 +65,11 @@ ROADMAP.md	ba516c67d0d3dd1fdb14f601de2a4b446ec1230d87e5baf7c7738d4e0d691338	1	11
 ROADMAP.md	bb235e2112792587a7ec5c03335238612a542d7b027f1b50e0382ea0526d46f6	1	codex-project-architect , codex-developer , and codex-independent-architecture-security-reviewer are agent identities from one vendor, with 
 ROADMAP.md	bd873ea5fa5be8b218d9a441f7a9bb71ffb3d08e288c993dc9fa2b3265676439	1	Owner ruling, 2026-09-22: implementation handoffs live under rfcs/handoffs/ , now and in future. RFC 000 requires every rfcs/handoffs/NNN-sl
 ROADMAP.md	bede9b30c360d8ae13a8e25d699c2e27f9d43d875107eecbfcc6ec1486ede54b	1	The practice this programme already follows satisfies it : the implementation role reviews designs, which RFC 000 permits, and @nabbisen app
+ROADMAP.md	c3a4fe8ad78f540353cc30191f36ec606072e7b40677ba5066502a6f49cebcb6	1	M4-B — Federation mutation and session integration — Federation provider/link commands on the Class-A seam; session establishment from a ver
 ROADMAP.md	c5a4e72e2e7e1266b23b9fcba9c5273fcb9553728ae4358a455b49eb54df2ab0	1	This section holds the reasoning, the owner rulings, and the revisit triggers for the three risks that are not owned by any RFC and would ot
 ROADMAP.md	c7f1e35be50044c487b2b4057e969a72c2f64e1f725cde24c38f7bae20193109	1	What it costs the architect, stated so the decision is not made blind. Dropping workflow means a lane change waits for @nabbisen .
 ROADMAP.md	c85ab670b7b295f5f71a70048e2389912bb49a45e6d38982b6df9d3b6d5139d6	1	@nabbisen states he made no such ruling.
-ROADMAP.md	d099c33c41cdfe4df2cfc75eda8993e6e178f1b540d76434460d4f127c9cbeda	1	M3 — Atomic dynamic registration owner to set Validate all metadata before consuming authorization; atomic use/client/audit transaction; rac
-ROADMAP.md	d7358ca539ffb3a4a52593ac3dced66f0713c82290d03de3e3e19c00e35e99f6	1	M2b — Remaining conversion and authority switch owner to set Convert settings, pending settings, federation configuration, client metadata; 
+ROADMAP.md	d753cbd6f521ea3e29b89c5abe11f14a13b6c316b16716a2182ca374eb2fa80a	1	M7 — Real-environment soak — Exercise the exact M6 artifact under representative auth traffic, failure modes, operational cycles, and incide
 ROADMAP.md	d82c728ed5be7a135227fe87a78f0e113122359b0ae2f2e4ffec0885abd7edb6	1	Blocked — substantial work outstanding (4). RFC 131, listed below as held, closed 2026-10-02 once @nabbisen approved removing the D5 clause 
 ROADMAP.md	dd16e9a10736b78b224f43fe486104fc847e923d1d0f98f9c08e1af1e0990a66	1	The architect's self-reviews to date , each to be confirmed against this ruling rather than assumed compliant: RFC 124 ( @nabbisen assigned 
 ROADMAP.md	e48726a2966498de86bf8216ccf3cd161bf3681500bce35a105c0dfc6ac665e0	1	119 accepted by @nabbisen 2026-09-26; status held — G11 refuses an Accepted RFC whose security review is Required and which cites no review 
