@@ -56,6 +56,26 @@ one 2026-08-26 correction review that measured the three together; 103→102 cit
 the shared 2026-09-16 design review. None is a placeholder, and each names the
 file it relies on.
 
+## Corroboration by the implementation role, 2026-10-03
+
+The implementation role re-derived every measurement above **separately**, and
+reported no discrepancy: each line reference, the quoted failure message, both
+docstring quotations, the two test names and their line numbers (592 and 986),
+the three allowlist reasons, and `68 passed, 26 subtests passed` from its own run
+of `scripts/tests/test_rfc_integrity.py`. It also confirmed that nothing had been
+closed early — `Status. Accepted`, no closure fields present, not in `rfcs/done/`.
+Package: `.git-exclude/review-requests/rfc-133-closure-review-independent-verification-2026-10-03.md`.
+
+I spot-checked its spot-check rather than taking it: lines 592 and 986 resolve to
+the two named tests, the closure fields are absent, the RFC sits in `accepted/`,
+and the tree is clean.
+
+**This corroboration is recorded beside the review and is not approval, and it is
+not independence either.** It establishes that my citations are accurate — that
+the artifacts say what I said they say. It does not establish that my *judgement*
+is right, because the implementation role is not a design-review role and did not
+attempt one. The same wording is recorded on RFC 130, for the same reason.
+
 ## What this review does not establish
 
 **It is not independent.** I wrote the RFC, I wrote the gate it specifies, and I
