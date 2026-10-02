@@ -1,13 +1,15 @@
 # RFC 133 — An approval names what it settles, and a design review is of the RFC that cites it
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-10-02
+**Approved by.** `@nabbisen`, 2026-10-02: "Accepted." — on the text as written, with the security review below already in hand. Its two required changes bind the **implementation**, not this text; neither alters a decision here.
 **Security review.** Required
+**Independent design review.** [Security review 2026-10-02](../handoffs/133-an-approval-names-what-it-settles/security-review-2026-10-02.md) — **by the architect, who authored this RFC, and therefore not independent.** Carried under `ROADMAP.md` R1's residual. **The field's name overstates the document**, as on RFCs 124, 128, 130 and 132. What is unusual, and better: it was written **before** acceptance, so it was input to the decision rather than paperwork after it — and it returned two required changes against its own author's RFC.
 **Design prerequisites.** None. The design is the measured output of the re-review of the fifteen, 2026-10-02, and both decisions were approved by `@nabbisen` that day before this RFC was written — recorded below rather than claimed as novel.
 **Implementation prerequisites.** None.
 **Closure prerequisites.** `rfcs/README.md`'s template states what an `Approved by.` field should contain and why. G11 cannot pass an `Independent design review` field whose only citation is a review of a different RFC. Every allowlist entry carries a reason, and a blank reason fails. The gate's docstring states that it checks filing location as a **proxy** for subject, so no reader mistakes it for a stronger guarantee.
 **Tracks.** Governance integrity. Both decisions arise from the re-review of the fifteen (RFC 128 stage 0).
 **Touches.** `rfcs/README.md` (the template), `scripts/check-rfc-integrity.py` (condition 9), `contracts/rfc-policy.toml` (a third closed allowlist), `scripts/tests/test_rfc_integrity.py`.
-**Security review (architect's own, written before acceptance).** [Security review 2026-10-02](../handoffs/133-an-approval-names-what-it-settles/security-review-2026-10-02.md) — **two required changes to the implementation, neither altering a decision here**: the rule must state its scope explicitly (the review found the architect's own simulation silently skipped RFCs citing outside `handoffs/`, of which exactly one exists and it is archived), and an allowlist entry must be a reviewable act rather than an implementation detail. One recommendation: point `CONTRIBUTING.md`'s RFC paragraph at the template. Written before acceptance so it is input to the decision, not paperwork after it.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** High-capability model, requirements-architect role.
 
