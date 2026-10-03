@@ -45,6 +45,7 @@ ROADMAP.md	51ea0e2a365e1b856a68e2567c60b5e7d519f53c504b98b29bffd24913bce8de	1	##
 ROADMAP.md	55b36a2083ef058286a69ae2ff3c34b65e1801342daa3518c5d7f69327adb269	1	Work is gated on @nabbisen 's decisions and on prerequisites being met — never on elapsed time.
 ROADMAP.md	5aceb88bc92843455c6e08971dae256f5c2e6f2241e83905f10b37dd4c748c4c	1	Required format: description, likelihood, impact, detection, mitigation, residual risk, decision owner.
 ROADMAP.md	61ebd8965b3dd0fcc8e3a9c37355e909fc111ea1976d772bcae5c1fb13d8e7a3	1	It needs @nabbisen 's decision separately, at cycle E, and is not assumed here.
+ROADMAP.md	658706ddbed319e228edf698df963a221a9dca6e3ba4b7ca9a9a2ec92e2d7ac6	1	Closed 2026-10-03 on @nabbisen 's "Approved.", on the architect's [closure review](rfcs/handoffs/094-transactional-audit/m2a-closure-review-
 ROADMAP.md	66cebadbafa4da26caab4cd9e8f630bba442002ad34dd60ac6e4e9c09a766195	1	23 RFCs sit in accepted/ and not one has ever moved to done/ . The RFC-completion stage @nabbisen identified on 2026-10-01 (RFC 131's owner 
 ROADMAP.md	66ee0dcfa997e967a91d9f0d1db35574fc86300bf75651f760fcb9863f6b9022	1	R7 Pre-RFC-094 dynamic registrations are indistinguishable from admin-created clients Certain (historical) Medium — provenance cannot be pro
 ROADMAP.md	68a3e3ed97de6ca9d6583624727828adfc39a44555bbbb185c9180166cba96e7	1	Where no role other than the author can perform a review, the gap is recorded as unreviewed design judgment and the owner rules on it with t
