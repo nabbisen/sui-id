@@ -42,6 +42,8 @@ pub mod ratelimit;
 pub mod request_id;
 #[path = "runtime/resolver.rs"]
 pub mod resolver;
+#[path = "http/response_bounds.rs"]
+pub mod response_bounds;
 #[path = "http/router.rs"]
 pub mod router;
 #[path = "http/security_headers.rs"]

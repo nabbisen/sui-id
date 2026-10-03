@@ -78,6 +78,11 @@ zeroize                     = { workspace = true }
 base64ct                    = { workspace = true }
 reqwest                     = { workspace = true }
 rustls                      = { workspace = true }
+# RFC 134 D5 Tier 3 (steps 4/6 handoff): no code here imports `hyper`
+# directly -- it reaches our egress client transitively via reqwest. This
+# is a floor pin, not a code dependency; see the workspace manifest entry
+# for what upstream behaviour the pin evidences.
+hyper                        = { workspace = true }
 include_dir                 = { workspace = true }
 percent-encoding            = { workspace = true }
 hmac                        = { workspace = true }

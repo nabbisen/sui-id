@@ -144,13 +144,33 @@ reqwest                     = { version = "0.13", default-features = false, feat
 # which one startup actually installs (aws_lc_rs, matching reqwest's
 # default — see runtime::startup::install_rustls_crypto_provider) is a
 # deliberate choice, not an accident of dependency resolution.
-rustls                       = { version = "0.23", default-features = false, features = ["ring", "aws_lc_rs"] }
+#
+# Floor tightened to 0.23.45 for RFC 134 D5 Tier 3 (steps 4/6 handoff): the
+# amendment's handshake-size row ("declared length read exactly then
+# one-use connection dropped without EOF wait") relies on this version's
+# MAX_HANDSHAKE_SIZE = 0xffff (64 KiB) constant in
+# src/msgs/deframer/{handshake,buffers}.rs — checked directly against the
+# vendored source, not asserted. A version bump that changes that constant
+# is a real finding, not a routine upgrade; re-verify before raising the
+# floor.
+rustls                       = { version = ">=0.23.45, <0.24", default-features = false, features = ["ring", "aws_lc_rs"] }
 # Test-only: a local self-signed TLS mock upstream for RFC 134 D3's
 # federation e2e tests, now that discovery and its endpoints must be
 # `https`. tokio-rustls was already pulled in transitively (reqwest's
 # rustls backend); rcgen is new.
 rcgen                        = "0.14"
 tokio-rustls                 = { version = "0.26", default-features = false, features = ["ring"] }
+# Floor pin only, RFC 134 D5 Tier 3: no Rust code in this workspace imports
+# `hyper` directly (it reaches our egress client transitively via
+# reqwest). Pinned here so the version whose header-slot and buffer-sizing
+# behaviour was checked (DEFAULT_MAX_HEADERS = 100 slots in
+# src/proto/h1/role.rs; INIT_BUFFER_SIZE = 8 KiB, adaptively growing to
+# DEFAULT_MAX_BUFFER_SIZE ≈ 407 KiB in src/proto/h1/io.rs; exact-length
+# read without EOF wait in src/proto/h1/decode.rs's Kind::Length branch)
+# cannot silently drift underneath that evidence. reqwest exposes none of
+# these as configurable knobs, so these are hyper's unconditional
+# defaults reaching our egress client.
+hyper                        = { version = ">=1.10.1, <2", default-features = false }
 
 # UI (Leptos used in SSR-only mode for the admin panel; no WASM/JS bundle is shipped
 #  in line with the project's minimal-runtime philosophy).

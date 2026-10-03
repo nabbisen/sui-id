@@ -149,14 +149,13 @@ async fn fetch_discovery(
         .send()
         .await
         .map_err(|e| FetchDiscoveryError::Network(format!("discovery fetch failed: {e}")))?;
-    if !resp.status().is_success() {
-        return Err(FetchDiscoveryError::Network(format!(
-            "discovery returned {}",
-            resp.status()
-        )));
-    }
-    let raw = resp
-        .json::<RawDiscovery>()
+    // RFC 134 D5 Tier 1: status (200 only -- see response_bounds's own
+    // doc comment for why "304 under the cache rules" reduces to that
+    // here), media type, a byte cap honored on bytes actually read, and
+    // member/array/string caps, all before this ever reaches `RawDiscovery`.
+    // Supersedes the old bare `is_success()` check (2xx was looser than
+    // intended; a discovery document on 201/204 was never a real case).
+    let raw = crate::response_bounds::read_bounded_json::<RawDiscovery>(resp)
         .await
         .map_err(|e| FetchDiscoveryError::Network(format!("discovery parse failed: {e}")))?;
     ValidatedDiscovery::validate(raw, issuer, allowed_origins).map_err(FetchDiscoveryError::Invalid)
@@ -463,7 +462,8 @@ pub async fn federated_callback(
         }
     };
 
-    let tokens: TokenResponse = match token_resp.json().await {
+    // RFC 134 D5 Tier 1: the same bounded pipeline as discovery.
+    let tokens: TokenResponse = match crate::response_bounds::read_bounded_json(token_resp).await {
         Ok(t) => t,
         Err(e) => {
             tracing::warn!(error = %e, "federation token parse failed");
@@ -875,7 +875,11 @@ async fn fetch_userinfo(
         .send()
         .await
         .map_err(|e| e.to_string())?;
-    resp.json::<IdTokenClaims>()
+    // RFC 134 D5 Tier 1: the same bounded pipeline as discovery and the
+    // token response. This site previously had no status check at all
+    // before deserializing -- `read_bounded_json`'s 200-only requirement
+    // closes that, not only adds the size/shape caps.
+    crate::response_bounds::read_bounded_json(resp)
         .await
         .map_err(|e| e.to_string())
 }

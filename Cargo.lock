@@ -3341,6 +3341,7 @@ dependencies = [
  "cookie",
  "getrandom 0.4.3",
  "hmac",
+ "hyper",
  "include_dir",
  "percent-encoding",
  "prometheus",
