@@ -7,8 +7,9 @@ approved in the same message. It was accepted, returned to `proposed/` for a
 material improvement to D5, and re-accepted, all on 2026-10-03; the lifecycle
 history in the RFC records each step.
 
-**Steps 1 and 2 are dispatched.** Steps 3, 4 and 6 are not. Step 5 is answered by
-the architect and needs no implementation.
+**Steps 1, 2 and 3 are dispatched.** Steps 4 and 6 are not. Step 5 is answered by
+the architect and needs no implementation. Steps 1 (`981b228`) and 2 (`842b75b`)
+have landed.
 
 ## Contents
 
@@ -29,3 +30,9 @@ the architect and needs no implementation.
   `ValidatedDiscovery` newtype that makes an unchecked discovery endpoint
   impossible to use. Carries a correction to RFC 134 D3's "admin UI", which does
   not exist — providers are seeded from config at startup.
+- [`step3-validating-resolver-2026-10-03.md`](step3-validating-resolver-2026-10-03.md)
+  — **dispatched.** D2: the vendored IANA prefix table and a
+  `reqwest::dns::Resolve` implementation that rejects the whole answer on any
+  bad address and returns exactly one. Carries four verified facts the
+  implementation would otherwise have to rediscover — chiefly that resolvers
+  return port `0`, and that `is_global()` is still unstable on 1.99.0.
