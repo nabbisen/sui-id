@@ -190,6 +190,58 @@ async fn u07_injected_failure_before_append_rolls_back_totp_and_passkey_removal(
         "the passkey delete rolled back too"
     );
     assert_eq!(latest_audit_action(&db).await, before_audit);
+    record_rollback_coverage("U07");
+}
+
+// ── U12 — confirm TOTP enrollment, store-level rollback ─────────────────
+// A different mechanism from the same prerequisite's e2e counterpart
+// (`r102_factor_added_rolls_back_with_its_write`, which forces the audit
+// insert to fail via a real SQL trigger at the HTTP layer): this is the
+// `fault_injector`-based proof RFC 094 M2a asks for, reachable only from
+// inside this crate.
+
+#[tokio::test]
+async fn u12_injected_failure_before_append_leaves_enrollment_unconfirmed() {
+    let db = fresh_db();
+    let user = a_user();
+    repos::users::create(&db, &user).await.expect("create user");
+    repos::user_totp::upsert_pending(&db, user.id, b"totp-secret-placeholder")
+        .await
+        .expect("seed pending totp");
+    let sealed = repos::user_totp::seal_recovery_codes(&db, br#"["code-1","code-2"]"#)
+        .expect("seal recovery codes");
+    let before_audit = latest_audit_action(&db).await;
+
+    db.fault_injector().fail_before_next_append();
+    let result = confirm_totp_enrollment(&db, user.id, sealed.clone(), 0).await;
+    assert!(result.is_err(), "injected failure must surface as Err");
+
+    let row = repos::user_totp::get(&db, user.id)
+        .await
+        .expect("get totp")
+        .expect("row still exists");
+    assert!(!row.enabled, "the confirm rolled back: still unconfirmed");
+    assert!(
+        row.recovery_codes_enc.is_none(),
+        "the recovery codes write rolled back too"
+    );
+    assert_eq!(latest_audit_action(&db).await, before_audit, "no event");
+
+    // Control: the same call, with no failure injected, confirms the
+    // enrollment and writes the event.
+    confirm_totp_enrollment(&db, user.id, sealed, 0)
+        .await
+        .expect("the control succeeds");
+    let row = repos::user_totp::get(&db, user.id)
+        .await
+        .expect("get totp")
+        .expect("row");
+    assert!(row.enabled);
+    assert_eq!(
+        latest_audit_action(&db).await.as_deref(),
+        Some("auth.mfa.factor_added")
+    );
+    record_rollback_coverage("U12");
 }
 
 // ── U14, U15 — an injected append failure leaves the factor unchanged ───
@@ -247,6 +299,7 @@ async fn u14_injected_failure_before_append_leaves_the_recovery_codes_unchanged(
         latest_audit_action(&db).await.as_deref(),
         Some("auth.mfa.factor_added")
     );
+    record_rollback_coverage("U14");
 }
 
 #[tokio::test]
@@ -289,4 +342,5 @@ async fn u15_injected_failure_before_append_registers_no_passkey() {
         latest_audit_action(&db).await.as_deref(),
         Some("auth.mfa.factor_added")
     );
+    record_rollback_coverage("U15");
 }

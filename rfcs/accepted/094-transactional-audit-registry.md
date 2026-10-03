@@ -12,6 +12,14 @@ findings verified, `ReadConn` sufficiency measured rather than argued. Also
 — found two checks the resolving design silently dropped, both restored.
 **Security review.** Required
 **Lifecycle history.** Base design accepted 2026-07-17 after [independent review](../handoffs/094-transactional-audit/094-design-review-2026-07-17.md); material amendment returned to Proposed in commit `43085e38219e5eb1bfe11cc698b18f1fa5f5e4d7`; complete amended RFC accepted by `@nabbisen` on 2026-07-21 after [independent review](../handoffs/094-transactional-audit/094-federation-command-amendment-review-2026-07-21.md); **returned to Proposed on 2026-07-28** for the scope amendment described below, per RFC 000's return-for-review rule for material changes to scope, prerequisites, and acceptance criteria. The 2026-07-21 acceptance is preserved in history and is superseded, not withdrawn.
+**Amendment summary (2026-10-03).** Added **G20** to §Gate Matrix lanes owned by
+RFC 094 — an M2a closure-prerequisite-4 structural gate (dispatched in
+`rfcs/handoffs/094-transactional-audit/m2a-rollback-coverage-2026-10-02.md`)
+asserting that every write command `commands.rs` declares either reaches the
+Class-A seam with a registered rollback test, or is named on an explicit,
+shrink-only exemption list that cannot be satisfied by a test's name or a
+comment. The list is empty at introduction: all 24 declared commands carry a
+registered rollback test as of this change.
 **Amendment summary (2026-09-12).** Added §Gate Matrix lanes owned by RFC 094 with
 one row: **G13**, an interim lane running the M1 string script
 `scripts/check-audit-matrix.sh`, which had never run in CI despite RFC 085 closing
@@ -886,10 +894,16 @@ table so one parser reads both.
 | ID | Toolchain | Features | Blocking command / assertion |
 |---|---|---|---|
 | G13 | Python 3.14 | n/a | `bash scripts/check-audit-matrix.sh` |
+| G20 | stable | default | `rm -f target/rfc094-rollback-coverage.txt` and `cargo +stable test -p sui-id-store --lib --locked` and `bash scripts/check-m2a-rollback-coverage.sh --root .` |
 
 *Registered `1ec5dad`, 2026-09-12 — the first time this script ran in CI. The
 desync fixture RFC 085 promised is in the A3.2 set, both directions pinned by
 message.*
+
+*G20 registered 2026-10-03, dispatched by `rfcs/handoffs/094-transactional-audit/
+m2a-rollback-coverage-2026-10-02.md`. A bash script, not Python: its job runs the
+Rust toolchain to produce the coverage file it reads, and `generate-ci-workflow.py`
+provisions exactly one of {rust, python} per lane.*
 
 **G13 is interim.** It runs the M1 string script — the bidirectional check that
 every audit event literal in `crates/` has a row in the coverage matrix and every

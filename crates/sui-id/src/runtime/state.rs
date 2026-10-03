@@ -89,14 +89,10 @@ impl AppState {
             // return; a TLS-backend init failure here means the process
             // cannot serve federation at all, so failing fast here (rather
             // than threading a Result through every call site) is the
-            // intended behavior, not a routine failure mode.
-            #[allow(clippy::expect_used)]
-            http_client: Arc::new(
-                reqwest::Client::builder()
-                    .timeout(std::time::Duration::from_secs(10))
-                    .build()
-                    .expect("failed to build federation HTTP client"),
-            ),
+            // intended behavior, not a routine failure mode. RFC 134 D1:
+            // the client's policy lives in `crate::egress`, the one place
+            // it is set.
+            http_client: Arc::new(crate::egress::build_federation_client()),
         }
     }
 

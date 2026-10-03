@@ -179,6 +179,7 @@ async fn t04_injected_failure_before_append_rolls_back_revoke_and_successor_inse
         "successor must not have been inserted"
     );
     assert_eq!(latest_audit_action(&db).await, before_audit);
+    record_rollback_coverage("T04");
 }
 
 #[tokio::test]

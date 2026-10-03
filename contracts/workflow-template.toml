@@ -480,4 +480,29 @@ gate-matrix-fixtures = '''
           echo "exit_status=$status"
           echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           exit "$status"
+      - name: check-federation-egress.py self-tests (RFC 134 D4)
+        run: |
+          set +e
+          echo "command=python3.14 -m unittest scripts.tests.test_check_federation_egress"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3.14 -m unittest scripts.tests.test_check_federation_egress
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
+      - name: check-m2a-rollback-coverage.sh self-tests (RFC 094 M2a, G20)
+        # This job has no Rust toolchain, so the one test here that reads
+        # the real target/rfc094-rollback-coverage.txt (written by G20's
+        # own `cargo test` step) skips rather than fails -- the fixture
+        # tests, which drive the bash checker with a synthetic tree, do
+        # not need Rust and run here regardless.
+        run: |
+          set +e
+          echo "command=python3.14 -m unittest scripts.tests.test_check_m2a_rollback_coverage"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3.14 -m unittest scripts.tests.test_check_m2a_rollback_coverage
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
 '''

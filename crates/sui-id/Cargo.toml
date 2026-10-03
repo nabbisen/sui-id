@@ -96,6 +96,12 @@ tempfile                    = { workspace = true }
 # only use of rusqlite is in its own tests (see r094_m2a_db_access_scope.rs,
 # which gate-asserts the scope).
 rusqlite                    = { workspace = true }
+# RFC 134 D4: a compile-fail proof that the `cookies` feature (a
+# transitive dependency's, not this crate's own -- there is no `cfg` that
+# can see a dependency's feature flags from outside it) stays off the
+# federation egress client. See tests/compile_fail.rs.
+trybuild                    = { workspace = true }
+rustversion                 = { workspace = true }
 # Test-only `UserSource` implementations (call counting, a source that
 # answers with another identity) in the directory sign-in tests.
 async-trait                 = { workspace = true }

@@ -71,6 +71,7 @@ async fn k01_injected_failure_before_append_rolls_back_the_mutation() {
             .map(|e| e.to_string())
     );
     assert_eq!(latest_audit_action(&db).await, before_audit);
+    record_rollback_coverage("K01");
 }
 
 #[tokio::test]

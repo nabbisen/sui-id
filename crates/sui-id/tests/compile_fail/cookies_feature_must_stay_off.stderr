@@ -1,0 +1,5 @@
+error[E0599]: no method named `cookie_store` found for struct `ClientBuilder` in the current scope
+  --> tests/compile_fail/cookies_feature_must_stay_off.rs:12:40
+   |
+12 |     let _ = reqwest::Client::builder().cookie_store(true);
+   |                                        ^^^^^^^^^^^^ method not found in `ClientBuilder`

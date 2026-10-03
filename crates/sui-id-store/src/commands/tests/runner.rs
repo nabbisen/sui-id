@@ -106,12 +106,39 @@ async fn an_admin_session(db: &Database) -> (UserId, sui_id_shared::ids::Session
     (admin.id, session)
 }
 
+/// RFC 094 M2a's structural gate (`scripts/check-m2a-rollback-coverage.py`,
+/// gate G20) reads this file after the test run completes: a command id
+/// lands here only when the rollback test written for it calls this,
+/// which every test below does only *after* its own assertions (the
+/// mutation is absent, and no audit row was appended) have already
+/// passed. An id that merely appears in a test's name or a comment proves
+/// nothing and is not what the gate reads — see the dispatch this closes,
+/// `rfcs/handoffs/094-transactional-audit/
+/// m2a-rollback-coverage-2026-10-02.md`.
+pub(crate) fn record_rollback_coverage(command_id: &str) {
+    use std::io::Write as _;
+    use std::sync::Mutex;
+    static LOCK: Mutex<()> = Mutex::new(());
+    let _guard = LOCK.lock().expect("coverage lock");
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../target/rfc094-rollback-coverage.txt"
+    );
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .expect("open rollback coverage file");
+    writeln!(f, "{command_id}").expect("write rollback coverage");
+}
+
 mod chain_integrity;
 mod client_persistence;
 mod credential_lockout;
 mod dynamic_registration;
 mod key_rotation;
 mod lockout;
+mod login;
 mod mfa;
 mod passwords;
 mod policy_markers;

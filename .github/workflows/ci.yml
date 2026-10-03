@@ -526,6 +526,43 @@ jobs:
       - name: G18
         run: bash scripts/ci-gate.sh G18
 
+  G19:
+    name: "G19 — federation egress is one client (Python 3.14)"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Install Python 3.14
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14"
+      - name: G19
+        run: bash scripts/ci-gate.sh G19
+
+  G20:
+    name: "G20 — M2a rollback coverage (stable)"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          toolchain: stable
+      - name: Cache cargo registry
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-gate-input-v1-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      - name: G20
+        run: bash scripts/ci-gate.sh G20
+
   changes:
     # RFC 130 D1/D6/D7: computes whether this push touched the Rust scope
     # (G01-G09b's shared `paths`, contracts/gate-inputs.toml) so those lanes
@@ -860,6 +897,31 @@ jobs:
           echo "command=python3.14 -m unittest scripts.tests.test_compute_changed_scope"
           echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           python3.14 -m unittest scripts.tests.test_compute_changed_scope
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
+      - name: check-federation-egress.py self-tests (RFC 134 D4)
+        run: |
+          set +e
+          echo "command=python3.14 -m unittest scripts.tests.test_check_federation_egress"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3.14 -m unittest scripts.tests.test_check_federation_egress
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
+      - name: check-m2a-rollback-coverage.sh self-tests (RFC 094 M2a, G20)
+        # This job has no Rust toolchain, so the one test here that reads
+        # the real target/rfc094-rollback-coverage.txt (written by G20's
+        # own `cargo test` step) skips rather than fails -- the fixture
+        # tests, which drive the bash checker with a synthetic tree, do
+        # not need Rust and run here regardless.
+        run: |
+          set +e
+          echo "command=python3.14 -m unittest scripts.tests.test_check_m2a_rollback_coverage"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3.14 -m unittest scripts.tests.test_check_m2a_rollback_coverage
           status=$?
           echo "exit_status=$status"
           echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"

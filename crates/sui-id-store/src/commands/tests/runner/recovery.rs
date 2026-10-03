@@ -658,6 +658,7 @@ async fn u37_injected_append_failure_leaves_no_token_and_no_revocation() {
         "the earlier link was not revoked"
     );
     assert_eq!(audit_rows(&db).await, events);
+    record_rollback_coverage("U37");
 }
 
 // ── D3: the other transactions invalidate too ─────────────────────────

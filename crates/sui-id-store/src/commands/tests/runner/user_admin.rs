@@ -73,6 +73,7 @@ async fn u01_injected_failure_before_append_rolls_back_the_user_insert() {
         "no user row: the insert rolled back"
     );
     assert_eq!(latest_audit_action(&db).await, before_audit);
+    record_rollback_coverage("U01");
 }
 
 #[tokio::test]
@@ -90,6 +91,7 @@ async fn u01_injected_failure_after_append_rolls_back_the_user_insert_and_the_ap
         "no user row: the insert rolled back with the audit row"
     );
     assert_eq!(latest_audit_action(&db).await, before_audit);
+    record_rollback_coverage("U01");
 }
 
 // ── U02-U05 — user administration wave (disable/enable/delete/role) ─
@@ -184,6 +186,7 @@ async fn u02_injected_failure_before_append_rolls_back_disable_and_session_revok
         "the session revoke rolled back too"
     );
     assert_eq!(latest_audit_action(&db).await, before_audit);
+    record_rollback_coverage("U02");
 }
 
 #[tokio::test]
@@ -213,6 +216,34 @@ async fn u03_enable_clears_disabled_flag_and_appends_event() {
         tail.note.as_deref(),
         Some("step_up=not_required:no_second_factor")
     );
+}
+
+#[tokio::test]
+async fn u03_injected_failure_before_append_rolls_back_the_enable() {
+    let db = fresh_db();
+    let (admin, session) = an_admin_session(&db).await;
+    let mut user = a_user();
+    user.is_disabled = true;
+    repos::users::create(&db, &user).await.expect("create user");
+    let before_audit = latest_audit_action(&db).await;
+
+    db.fault_injector().fail_before_next_append();
+    let result = enable_user(&db, admin, session, user.id, Utc::now()).await;
+    assert!(result.is_err(), "injected failure must surface as Err");
+
+    let row = repos::users::get(&db, user.id).await.expect("get");
+    assert!(row.is_disabled, "the flag flip rolled back");
+    assert_eq!(latest_audit_action(&db).await, before_audit);
+
+    // Control: the same call, with no failure injected, really does flip
+    // the flag -- without this, the assertions above would pass just as
+    // well if the mutation never ran at all.
+    enable_user(&db, admin, session, user.id, Utc::now())
+        .await
+        .expect("the control succeeds");
+    let row = repos::users::get(&db, user.id).await.expect("get");
+    assert!(!row.is_disabled);
+    record_rollback_coverage("U03");
 }
 
 #[tokio::test]
@@ -280,6 +311,7 @@ async fn u04_injected_failure_before_append_rolls_back_delete_and_session_revoke
         "the session revoke rolled back too"
     );
     assert_eq!(latest_audit_action(&db).await, before_audit);
+    record_rollback_coverage("U04");
 }
 
 #[tokio::test]
@@ -435,4 +467,40 @@ async fn u05_concurrent_demotions_of_the_last_two_admins_leave_exactly_one() {
         1,
         "the last admin must never be reachable via a race the pre-check missed"
     );
+}
+
+#[tokio::test]
+async fn u05_injected_failure_before_append_rolls_back_the_role_change() {
+    let db = fresh_db();
+    let mut admin_a = a_user();
+    admin_a.role = crate::models::Role::Admin;
+    admin_a.is_admin = true;
+    let mut admin_b = a_user();
+    admin_b.role = crate::models::Role::Admin;
+    admin_b.is_admin = true;
+    repos::users::create(&db, &admin_a).await.expect("create a");
+    repos::users::create(&db, &admin_b).await.expect("create b");
+    let before_audit = latest_audit_action(&db).await;
+
+    db.fault_injector().fail_before_next_append();
+    let result = change_user_role(&db, an_admin(), admin_a.id, crate::models::Role::User).await;
+    assert!(result.is_err(), "injected failure must surface as Err");
+
+    let row = repos::users::get(&db, admin_a.id).await.expect("get");
+    assert_eq!(
+        row.role,
+        crate::models::Role::Admin,
+        "the role change rolled back"
+    );
+    assert_eq!(latest_audit_action(&db).await, before_audit);
+
+    // Control: the same call, with no failure injected, really does
+    // demote -- without this, the assertions above would pass just as
+    // well if the mutation never ran at all.
+    change_user_role(&db, an_admin(), admin_a.id, crate::models::Role::User)
+        .await
+        .expect("the control succeeds");
+    let row = repos::users::get(&db, admin_a.id).await.expect("get");
+    assert_eq!(row.role, crate::models::Role::User);
+    record_rollback_coverage("U05");
 }

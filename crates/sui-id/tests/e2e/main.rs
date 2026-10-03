@@ -81,6 +81,7 @@ mod r122_routes;
 mod r123;
 mod r124_stage2;
 mod r126;
+mod r134_step1_egress_client;
 mod refresh_theft;
 mod request_id;
 mod rfc030_033_035;

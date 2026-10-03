@@ -107,9 +107,12 @@ async fn fetch_discovery(client: &reqwest::Client, issuer: &str) -> Result<OidcD
         "{}/.well-known/openid-configuration",
         issuer.trim_end_matches('/')
     );
+    // RFC 134 D1: no per-request timeout override. `RequestBuilder::timeout`
+    // overrides the client's, which would make the egress client's bound
+    // dead code on this path; the client policy is the only source of
+    // timeouts for federation traffic.
     let resp = client
         .get(&url)
-        .timeout(std::time::Duration::from_secs(10))
         .send()
         .await
         .map_err(|e| format!("discovery fetch failed: {e}"))?;

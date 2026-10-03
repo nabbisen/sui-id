@@ -318,6 +318,18 @@ provider's, which is what D3 establishes. The two are safe together and should b
 reasoned about together; if D3 is ever relaxed, this shortcut stops being
 permissible and JWKS verification becomes mandatory.
 
+## Gate Matrix lane owned by RFC 134
+
+Registered through the multi-source lane registry (RFC 094 R10), as RFC 098,
+116 and 117 do. The heading above is the recorded source heading and is
+matched by plain equality; do not rename it without changing the manifest in
+the same commit. Column layout mirrors RFC 093's table so one parser reads
+both. Added with step 1 (D4).
+
+| ID | Toolchain | Features | Blocking command / assertion |
+|---|---|---|---|
+| G19 | Python 3.14 | n/a | `python3.14 scripts/check-federation-egress.py --root .` |
+
 ## Open questions
 
 **Q2 is withdrawn** — it asked whether D3 could be built before acceptance, and

@@ -131,4 +131,5 @@ async fn c15_injected_append_failure_leaves_the_token_unspent_and_no_client_row(
         0,
         "no audit row was written"
     );
+    record_rollback_coverage("C15");
 }

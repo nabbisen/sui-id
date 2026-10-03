@@ -246,6 +246,7 @@ async fn u10_injected_failure_leaves_the_counter_and_the_lock_exactly_as_they_we
         "old-hash-placeholder",
         "and so did the credential: they commit or roll back together"
     );
+    record_rollback_coverage("U10");
 }
 
 #[tokio::test]
@@ -264,6 +265,7 @@ async fn u09_injected_failure_leaves_the_counter_and_the_lock_exactly_as_they_we
             .password_hash,
         "old-hash-placeholder"
     );
+    record_rollback_coverage("U09");
 }
 
 // ── D5 — the operator keeps a signal ──

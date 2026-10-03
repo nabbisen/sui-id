@@ -88,6 +88,39 @@ async fn u22_lockout_and_counter_update_are_the_same_transaction() {
     assert!(row.locked_until.is_some());
 }
 
+#[tokio::test]
+async fn u22_injected_failure_before_append_rolls_back_the_counter_and_the_lock() {
+    let db = fresh_db();
+    let user = a_user();
+    repos::users::create(&db, &user).await.expect("create user");
+    let before_audit = latest_audit_action(&db).await;
+
+    db.fault_injector().fail_before_next_append();
+    let result = record_login_failure(&db, user.id, |count| {
+        (count >= 1).then_some(TimeDelta::seconds(60))
+    })
+    .await;
+    assert!(result.is_err(), "injected failure must surface as Err");
+
+    let row = repos::users::get(&db, user.id).await.expect("get");
+    assert_eq!(row.failed_login_count, 0, "the counter bump rolled back");
+    assert!(row.locked_until.is_none(), "the lock set rolled back too");
+    assert_eq!(latest_audit_action(&db).await, before_audit);
+
+    // Control: the same call, with no failure injected, really does bump
+    // the counter and set the lock -- without this, the assertions above
+    // would pass just as well if the mutation never ran at all.
+    record_login_failure(&db, user.id, |count| {
+        (count >= 1).then_some(TimeDelta::seconds(60))
+    })
+    .await
+    .expect("the control succeeds");
+    let row = repos::users::get(&db, user.id).await.expect("get");
+    assert_eq!(row.failed_login_count, 1);
+    assert!(row.locked_until.is_some());
+    record_rollback_coverage("U22");
+}
+
 // ── U08 — CLI operator unlock ──────────────────────────────────
 
 #[tokio::test]
@@ -211,4 +244,5 @@ async fn u08_injected_failure_before_append_rolls_back_the_unlock() {
     assert_eq!(row.failed_login_count, 5, "the counter reset rolled back");
     assert!(row.locked_until.is_some(), "the lock clear rolled back too");
     assert_eq!(latest_audit_action(&db).await, before_audit);
+    record_rollback_coverage("U08");
 }

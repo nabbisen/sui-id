@@ -25,6 +25,7 @@ G07b = ["clippy"]
 G08 = ["rustfmt"]
 G09a = []
 G09b = []
+G20 = []
 
 # RFC 094 R10: the lane registry. An RFC number maps to the heading of the
 # section in that RFC holding its lane table. Ownership is declared by number,
@@ -40,6 +41,7 @@ G09b = []
 "098" = "Gate Matrix lanes owned by RFC 098"
 "117" = "Gate Matrix lanes owned by RFC 117"
 "116" = "Gate Matrix lanes owned by RFC 116"
+"134" = "Gate Matrix lane owned by RFC 134"
 
 # RFC 094 R10: lane -> owning RFC number. Exactly one owner per lane; two
 # owners for one lane is a TOML parse error rather than a condition to detect.
@@ -67,6 +69,8 @@ G15 = "098"
 G16 = "117"
 G17 = "116"
 G18 = "116"
+G19 = "134"
+G20 = "094"
 
 # RFC 093 Gate Matrix v1 (rfcs/done/093-build-toolchain-release-gates.md),
 # machine-readable expansion. scripts/ci-gate.sh executes these commands
@@ -95,6 +99,8 @@ G15 = "python3.14 scripts/check-doc-authority.py --root . --policy contracts/doc
 G16 = "python3.14 scripts/check-owner-attributions.py --root . --policy contracts/owner-attributions.toml"
 G17 = "python3.14 scripts/check-write-commands.py --root . --inventory contracts/write-commands.toml"
 G18 = "python3.14 scripts/check-contracts.py --root . --policy contracts/contract-paths.toml"
+G19 = "python3.14 scripts/check-federation-egress.py --root ."
+G20 = "rm -f target/rfc094-rollback-coverage.txt && cargo +stable test -p sui-id-store --lib --locked && bash scripts/check-m2a-rollback-coverage.sh --root ."
 
 # RFC 093 M1b C2.1: the lane-completeness rule (scripts/check-gate-inputs.sh
 # condition 7) requires every lane declared by any source RFC to be
@@ -169,6 +175,8 @@ G15 = { title = "documentation authority (Python {python})", setup = "python", p
 G16 = { title = "owner attributions (Python {python})", setup = "python", fetch_depth = 0, paths = ["**"] }
 G17 = { title = "write-command inventory (Python {python})", setup = "python", paths = ["**"] }
 G18 = { title = "contract paths and README (Python {python})", setup = "python", paths = ["**"] }
+G19 = { title = "federation egress is one client (Python {python})", setup = "python", paths = ["**"] }
+G20 = { title = "M2a rollback coverage ({rust_stable})", setup = "rust", toolchain = "stable", apt = true, cache = true, tz = "UTC", paths = ["**"] }
 
 [actions]
 checkout_v6 = "d23441a48e516b6c34aea4fa41551a30e30af803"

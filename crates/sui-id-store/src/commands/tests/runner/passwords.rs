@@ -142,6 +142,7 @@ async fn u09_injected_failure_before_append_rolls_back_credential_and_revocation
         .expect("get session");
     assert!(session.revoked_at.is_none(), "the sweep rolled back too");
     assert_eq!(latest_audit_action(&db).await, before_audit);
+    record_rollback_coverage("U09");
 }
 
 // ── U10 — forgot-password completion ───────────────────────────
@@ -283,4 +284,5 @@ async fn u10_injected_failure_before_append_rolls_back_everything() {
         "the revocation rolled back too"
     );
     assert_eq!(latest_audit_action(&db).await, before_audit);
+    record_rollback_coverage("U10");
 }
