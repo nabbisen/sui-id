@@ -7,18 +7,18 @@ approved in the same message. It was accepted, returned to `proposed/` for a
 material improvement to D5, and re-accepted, all on 2026-10-03; the lifecycle
 history in the RFC records each step.
 
-**Step 3 is the open dispatch.** Steps 1 and 2 have **landed** — do not rebuild
-them. Steps 4 and 6 are **not dispatched**. Step 5 needed no implementation; the
+**Steps 4 and 6 are the open dispatch**, and are the last dispatchable work in
+RFC 134. Steps 1, 2 and 3 have **landed** — do not rebuild them. Step 5 needed no implementation; the
 architect answered it.
 
 | Step | State |
 |---|---|
 | 1 — D1, D4, D5 Tier 2 | **landed** `981b228` |
 | 2 — D3 | **landed** `842b75b` |
-| **3 — D2** | **dispatched, open** |
-| 4 — D5 Tier 1 | not dispatched |
+| 3 — D2 | **landed** `2425374` |
+| 4 — D5 Tier 1 | **dispatched, open** |
 | 5 — chain-row determination | answered, no work |
-| 6 — D5 Tier 3 | not dispatched |
+| 6 — D5 Tier 3 | **dispatched, open** |
 
 ## Contents
 
@@ -40,8 +40,15 @@ architect answered it.
   impossible to use. Carries a correction to RFC 134 D3's "admin UI", which does
   not exist — providers are seeded from config at startup.
 - [`step3-validating-resolver-2026-10-03.md`](step3-validating-resolver-2026-10-03.md)
-  — **DISPATCHED — this is the open work.** D2: the vendored IANA prefix table and a
+  — **landed `2425374`.** D2: the vendored IANA prefix table and a
   `reqwest::dns::Resolve` implementation that rejects the whole answer on any
   bad address and returns exactly one. Carries four verified facts the
   implementation would otherwise have to rediscover — chiefly that resolvers
   return port `0`, and that `is_global()` is still unstable on 1.99.0.
+- [`steps4-6-response-bounds-2026-10-03.md`](steps4-6-response-bounds-2026-10-03.md)
+  — **DISPATCHED — this is the open work.** D5 Tier 1 (response bounds derived
+  from a measured provider corpus) and Tier 3 (the approved three-row
+  amendment's evidence). Records that two of the matrix's four JSON caps — depth
+  and duplicate keys — already hold in `serde_json`/`serde` and should be
+  evidenced rather than built. **The certificate-chain row is excluded**; its
+  tier is still open.
