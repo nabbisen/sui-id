@@ -94,18 +94,51 @@ fn hmac_state(app: &AppState, data: &[u8]) -> String {
 
 // ── Upstream discovery ────────────────────────────────────────────────────────
 
-#[derive(Deserialize)]
-struct OidcDiscovery {
-    authorization_endpoint: String,
-    token_endpoint: String,
-    #[serde(default)]
-    userinfo_endpoint: Option<String>,
+use crate::discovery::{DiscoveryError, RawDiscovery, ValidatedDiscovery};
+
+/// Everything that can go wrong fetching and validating discovery. Kept
+/// distinct from [`DiscoveryError`] because callers must react
+/// differently: a network/parse failure is "the upstream is unreachable",
+/// unchanged from before RFC 134 D3; [`FetchDiscoveryError::Invalid`] is
+/// "the upstream named an endpoint we must not use" and gets its own
+/// handling (RFC 134 D3 §2c) — logged with the provider slug and the
+/// offending origin, audited, and surfaced to the browser as a generic
+/// `fed_error`, never the offending URL.
+enum FetchDiscoveryError {
+    Network(String),
+    Invalid(DiscoveryError),
 }
 
-async fn fetch_discovery(client: &reqwest::Client, issuer: &str) -> Result<OidcDiscovery, String> {
+impl std::fmt::Display for FetchDiscoveryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Network(e) => write!(f, "{e}"),
+            Self::Invalid(e) => write!(f, "{e}"),
+        }
+    }
+}
+
+impl FetchDiscoveryError {
+    fn is_invalid(&self) -> bool {
+        matches!(self, Self::Invalid(_))
+    }
+}
+
+/// Fetch and validate the provider's discovery document. The issuer is
+/// checked as canonical `https` *before* any request is made (RFC 134 D3);
+/// every endpoint the document names is checked against `allowed_origins`
+/// (space-separated, empty meaning "the issuer's origin alone") before
+/// this can return `Ok` — see [`ValidatedDiscovery`].
+async fn fetch_discovery(
+    client: &reqwest::Client,
+    issuer: &str,
+    allowed_origins: &str,
+) -> Result<ValidatedDiscovery, FetchDiscoveryError> {
+    let issuer_url =
+        crate::discovery::validate_issuer(issuer).map_err(FetchDiscoveryError::Invalid)?;
     let url = format!(
         "{}/.well-known/openid-configuration",
-        issuer.trim_end_matches('/')
+        issuer_url.as_str().trim_end_matches('/')
     );
     // RFC 134 D1: no per-request timeout override. `RequestBuilder::timeout`
     // overrides the client's, which would make the egress client's bound
@@ -115,13 +148,18 @@ async fn fetch_discovery(client: &reqwest::Client, issuer: &str) -> Result<OidcD
         .get(&url)
         .send()
         .await
-        .map_err(|e| format!("discovery fetch failed: {e}"))?;
+        .map_err(|e| FetchDiscoveryError::Network(format!("discovery fetch failed: {e}")))?;
     if !resp.status().is_success() {
-        return Err(format!("discovery returned {}", resp.status()));
+        return Err(FetchDiscoveryError::Network(format!(
+            "discovery returned {}",
+            resp.status()
+        )));
     }
-    resp.json::<OidcDiscovery>()
+    let raw = resp
+        .json::<RawDiscovery>()
         .await
-        .map_err(|e| format!("discovery parse failed: {e}"))
+        .map_err(|e| FetchDiscoveryError::Network(format!("discovery parse failed: {e}")))?;
+    ValidatedDiscovery::validate(raw, issuer, allowed_origins).map_err(FetchDiscoveryError::Invalid)
 }
 
 // ── GET /auth/federated/{slug}/start ─────────────────────────────────────────
@@ -154,14 +192,38 @@ pub async fn federated_start(
     }
 
     // Fetch upstream discovery.
-    let discovery = fetch_discovery(&app.http_client, &provider.issuer)
-        .await
-        .map_err(|e| {
+    let discovery = match fetch_discovery(
+        &app.http_client,
+        &provider.issuer,
+        &provider.allowed_origins,
+    )
+    .await
+    {
+        Ok(d) => d,
+        // RFC 134 D3 §2c: a rejected endpoint is a provider configuration
+        // failure, not a user error. Reject before any request is made
+        // (already true here — `fetch_discovery` never reaches the
+        // request that would use the bad endpoint), log with the slug
+        // and the offending origin, audit, and redirect — never echo the
+        // offending URL to the browser.
+        Err(e) if e.is_invalid() => {
+            tracing::warn!(slug = %slug, error = %e, "federation discovery endpoint rejected");
+            #[allow(clippy::let_underscore_future)]
+            let _ = emit_audit_soon(
+                app.db.clone(),
+                app.clock.now(),
+                sui_id_store::repos::federation_provider::AUDIT_SIGNIN_UPSTREAM_FAILURE,
+                Some(format!("provider={} error={e}", provider.slug)),
+            );
+            return Ok(Redirect::to("/admin/login?fed_error=discovery_origin").into_response());
+        }
+        Err(e) => {
             tracing::warn!(slug = %slug, error = %e, "federation discovery failed");
-            HttpError::html(CoreError::BadRequest(
+            return Err(HttpError::html(CoreError::BadRequest(
                 "upstream identity provider is unavailable; try again later".into(),
-            ))
-        })?;
+            )));
+        }
+    };
 
     // Build PKCE (S256).
     let pkce_verifier = sui_id_core::tokens::random_token(32);
@@ -212,7 +274,7 @@ pub async fn federated_start(
     let _upstream_url = format!(
         "{}?response_type=code&client_id={}&redirect_uri={}&scope={}&state={}&nonce={}\
          &code_challenge={}&code_challenge_method=S256",
-        discovery.authorization_endpoint,
+        discovery.authorization_endpoint(),
         enc(&provider.client_id),
         enc(&redirect_uri),
         enc(&provider.scopes),
@@ -317,20 +379,43 @@ pub async fn federated_callback(
     }
 
     // Fetch upstream discovery for token_endpoint.
-    let discovery = fetch_discovery(&app.http_client, &provider.issuer)
-        .await
-        .map_err(|e| {
-            tracing::warn!(slug = %provider.slug, error = %e, "federation token exchange: discovery failed");
+    let discovery = match fetch_discovery(
+        &app.http_client,
+        &provider.issuer,
+        &provider.allowed_origins,
+    )
+    .await
+    {
+        Ok(d) => d,
+        Err(e) => {
+            let log_msg = if e.is_invalid() {
+                "federation token exchange: discovery endpoint rejected"
+            } else {
+                "federation token exchange: discovery failed"
+            };
+            tracing::warn!(slug = %provider.slug, error = %e, "{log_msg}");
             // Audit upstream failure. emit_audit_soon already tokio::spawn()s
             // before returning; the JoinHandle is fire-and-forget by design.
             #[allow(clippy::let_underscore_future)]
             let _ = emit_audit_soon(
-                app.db.clone(), app.clock.now(),
+                app.db.clone(),
+                app.clock.now(),
                 sui_id_store::repos::federation_provider::AUDIT_SIGNIN_UPSTREAM_FAILURE,
                 Some(format!("provider={} error={e}", provider.slug)),
             );
-            HttpError::html(CoreError::BadRequest("upstream IdP unavailable".into()))
-        })?;
+            // RFC 134 D3 §2c: a rejected endpoint redirects with the same
+            // fed_error shape every other callback failure uses, not the
+            // generic bad-request page the pre-existing network/parse
+            // failure path used (unchanged below for that case, since it
+            // predates this control and isn't what's dispatched here).
+            if e.is_invalid() {
+                return Ok(Redirect::to("/admin/login?fed_error=discovery_origin").into_response());
+            }
+            return Err(HttpError::html(CoreError::BadRequest(
+                "upstream IdP unavailable".into(),
+            )));
+        }
+    };
 
     // Decrypt client secret (P6 — used for token exchange only, not stored).
     let client_secret =
@@ -355,7 +440,7 @@ pub async fn federated_callback(
 
     let token_resp = app
         .http_client
-        .post(&discovery.token_endpoint)
+        .post(discovery.token_endpoint())
         .form(&form_params)
         .send()
         .await
@@ -399,7 +484,7 @@ pub async fn federated_callback(
         },
         None => {
             // No id_token: fall back to userinfo endpoint if available.
-            if let Some(ref ui_url) = discovery.userinfo_endpoint {
+            if let Some(ui_url) = discovery.userinfo_endpoint() {
                 match fetch_userinfo(&app.http_client, ui_url, &tokens.access_token).await {
                     Ok(claims) => claims,
                     Err(e) => {

@@ -31,13 +31,14 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<FederationProviderRow> {
         scopes: row.get(6)?,
         provision_mode: ProvisionMode::parse(&row.get::<_, String>(7)?),
         enabled: row.get::<_, i64>(8)? != 0,
-        created_at: row.get(9)?,
-        updated_at: row.get(10)?,
+        allowed_origins: row.get(9)?,
+        created_at: row.get(10)?,
+        updated_at: row.get(11)?,
     })
 }
 
 const SELECT: &str = "SELECT id, slug, display_name, issuer, client_id, client_secret_enc, \
-     scopes, provision_mode, enabled, created_at, updated_at \
+     scopes, provision_mode, enabled, allowed_origins, created_at, updated_at \
      FROM federation_provider";
 
 /// List all providers ordered by slug.
@@ -119,8 +120,8 @@ pub async fn create(
         conn.execute(
             "INSERT INTO federation_provider \
              (id, slug, display_name, issuer, client_id, client_secret_enc, \
-              scopes, provision_mode, enabled, created_at, updated_at) \
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
+              scopes, provision_mode, enabled, allowed_origins, created_at, updated_at) \
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)",
             params![
                 row.id.to_string(),
                 row.slug,
@@ -131,6 +132,7 @@ pub async fn create(
                 row.scopes,
                 row.provision_mode.as_str(),
                 row.enabled as i64,
+                row.allowed_origins,
                 row.created_at,
                 row.updated_at,
             ],
@@ -222,6 +224,7 @@ mod tests {
             scopes: "openid email".into(),
             provision_mode: ProvisionMode::LinkOnly,
             enabled: false,
+            allowed_origins: String::new(),
             created_at: now,
             updated_at: now,
         }

@@ -461,8 +461,9 @@ async fn r102_l03_rereads_the_user_and_rolls_back_when_inactive() {
 // ── L04 ──────────────────────────────────────────────────────────────
 
 async fn federation_app() -> (AppState, UserId) {
-    let state = test_app();
+    let mut state = test_app();
     complete_setup_and_login(&state).await;
+    state.http_client = std::sync::Arc::new(super::tls_mock::insecure_test_client());
     let issuer = mock_upstream().await;
     let user = linked_user(&state, &issuer).await;
     (state, user)

@@ -274,6 +274,32 @@ impl Config {
                 anyhow::anyhow!("invalid CIDR in server.trusted_proxies: {cidr:?} ({e})")
             })?;
         }
+        for provider in &self.federation_providers {
+            if provider.allowed_origins.len() > MAX_ALLOWED_ORIGINS {
+                anyhow::bail!(
+                    "federation_provider[{}]: allowed_origins has {} entries, more than the \
+                     maximum of {MAX_ALLOWED_ORIGINS} (RFC 096's Origins row)",
+                    provider.slug,
+                    provider.allowed_origins.len(),
+                );
+            }
+            for origin in &provider.allowed_origins {
+                let url = url::Url::parse(origin).map_err(|e| {
+                    anyhow::anyhow!(
+                        "federation_provider[{}]: allowed_origins entry {origin:?} is not a \
+                         valid URL ({e})",
+                        provider.slug,
+                    )
+                })?;
+                if url.scheme() != "https" {
+                    anyhow::bail!(
+                        "federation_provider[{}]: allowed_origins entry {origin:?} must be \
+                         https (RFC 134 D3)",
+                        provider.slug,
+                    );
+                }
+            }
+        }
         Ok(())
     }
 }
@@ -396,7 +422,16 @@ pub struct FederationProviderConfig {
     /// Whether the button is shown on the login screen.
     #[serde(default)]
     pub enabled: bool,
+    /// Canonical HTTPS origins this provider's discovery document may name,
+    /// e.g. `["https://accounts.google.com", "https://oauth2.googleapis.com"]`.
+    /// Omitted or empty means the issuer's origin alone (RFC 134 D3).
+    #[serde(default)]
+    pub allowed_origins: Vec<String>,
 }
+
+/// RFC 096's matrix, Origins row: at most 8 explicit canonical origins
+/// including the issuer.
+pub const MAX_ALLOWED_ORIGINS: usize = 8;
 
 fn default_fed_scopes() -> String {
     "openid email".into()

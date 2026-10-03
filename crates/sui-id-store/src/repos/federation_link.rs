@@ -170,6 +170,7 @@ mod tests {
             scopes: "openid".into(),
             provision_mode: ProvisionMode::LinkOnly,
             enabled: true,
+            allowed_origins: String::new(),
             created_at: now,
             updated_at: now,
         };

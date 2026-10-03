@@ -24,6 +24,7 @@
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
 mod common;
+mod tls_mock;
 
 mod acr_amr;
 mod auth_flow_integrity;
@@ -82,6 +83,7 @@ mod r123;
 mod r124_stage2;
 mod r126;
 mod r134_step1_egress_client;
+mod r134_step2_endpoint_origins;
 mod refresh_theft;
 mod request_id;
 mod rfc030_033_035;

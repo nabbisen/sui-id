@@ -1,0 +1,14 @@
+-- RFC 134 D3: the provider's canonical origin set, seeded at startup like
+-- every other provider attribute (there is no admin UI for federation
+-- providers -- see rfcs/handoffs/134-federation-egress-is-a-policy/
+-- step2-endpoint-origin-validation-2026-10-03.md's correction).
+--
+-- Space-separated HTTPS origins the provider's discovery document may
+-- name for authorization_endpoint, token_endpoint and userinfo_endpoint.
+-- The empty string (the default, and every pre-existing row's value) is
+-- not a sentinel requiring special-case parsing: splitting an empty
+-- string on whitespace already yields zero entries, which is exactly
+-- "no explicit origins configured" -- the strictest correct default,
+-- deliberately, rather than a permissive one. At that point validation
+-- falls back to the issuer's own origin alone.
+ALTER TABLE federation_provider ADD COLUMN allowed_origins TEXT NOT NULL DEFAULT '';

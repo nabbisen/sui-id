@@ -182,6 +182,9 @@ pub struct FederationProviderRow {
     pub scopes: String,
     pub provision_mode: ProvisionMode,
     pub enabled: bool,
+    /// RFC 134 D3: space-separated HTTPS origins the provider's discovery
+    /// document may name. Empty means the issuer's origin alone.
+    pub allowed_origins: String,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }

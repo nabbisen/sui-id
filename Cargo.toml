@@ -145,6 +145,12 @@ reqwest                     = { version = "0.13", default-features = false, feat
 # default — see runtime::startup::install_rustls_crypto_provider) is a
 # deliberate choice, not an accident of dependency resolution.
 rustls                       = { version = "0.23", default-features = false, features = ["ring", "aws_lc_rs"] }
+# Test-only: a local self-signed TLS mock upstream for RFC 134 D3's
+# federation e2e tests, now that discovery and its endpoints must be
+# `https`. tokio-rustls was already pulled in transitively (reqwest's
+# rustls backend); rcgen is new.
+rcgen                        = "0.14"
+tokio-rustls                 = { version = "0.26", default-features = false, features = ["ring"] }
 
 # UI (Leptos used in SSR-only mode for the admin panel; no WASM/JS bundle is shipped
 #  in line with the project's minimal-runtime philosophy).

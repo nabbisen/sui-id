@@ -242,6 +242,7 @@ providers for federated sign-in (the "Sign in with X" flow).
 | `scopes` | string | no | `"openid email"` | Space-separated scopes to request from the upstream. |
 | `provision_mode` | string | no | `"link_only"` | `"link_only"` — user must authenticate locally to link; `"provision_on_first_login"` — a password-less local account is created on first sign-in (requires `email_verified = true` from the upstream). |
 | `enabled` | bool | no | `false` | Whether the "Sign in with X" button is shown and callbacks are accepted. |
+| `allowed_origins` | array of strings | no | `[]` | Canonical HTTPS origins (scheme, host, and port) this provider's discovery document may name for `authorization_endpoint`, `token_endpoint` and `userinfo_endpoint`. Empty means the issuer's own origin alone — if you set this, list every origin you want allowed, including the issuer's if it uses one of them. At most 8 entries; rejected at startup if exceeded. |
 
 > **Security note.** New providers start with `enabled = false` and with
 > `is_disabled = true` on the first locally-provisioned user. An administrator

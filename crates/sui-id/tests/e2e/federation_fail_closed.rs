@@ -16,37 +16,39 @@ use tower::ServiceExt;
 const SUB: &str = "fed-sub-1";
 const SIGNIN_FAILED: &str = "/admin/login?fed_error=signin_failed";
 
-/// Start a mock upstream IdP and return its issuer URL.
+/// Start a mock upstream IdP (over self-signed HTTPS, RFC 134 D3 requires
+/// it) and return its issuer URL. Callers must also point `state.
+/// http_client` at [`super::tls_mock::insecure_test_client`] — the real
+/// egress client has no reason to trust a cert generated fresh per test.
 pub(super) async fn mock_upstream() -> String {
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-        .await
-        .expect("bind");
-    let issuer = format!("http://{}", listener.local_addr().expect("addr"));
-    let discovery = serde_json::json!({
-        "authorization_endpoint": format!("{issuer}/authorize"),
-        "token_endpoint": format!("{issuer}/token"),
-    });
     let claims = serde_json::json!({ "sub": SUB });
     let id_token = format!(
         "{}.{}.sig",
         Base64UrlUnpadded::encode_string(br#"{"alg":"none"}"#),
         Base64UrlUnpadded::encode_string(claims.to_string().as_bytes())
     );
-    let app = axum::Router::new()
-        .route(
-            "/.well-known/openid-configuration",
-            axum::routing::get(move || async move { axum::Json(discovery) }),
-        )
-        .route(
-            "/token",
-            axum::routing::post(move || async move {
-                axum::Json(serde_json::json!({ "access_token": "at", "id_token": id_token }))
-            }),
-        );
-    tokio::spawn(async move {
-        axum::serve(listener, app).await.expect("mock upstream");
-    });
-    issuer
+    super::tls_mock::serve_https(move |issuer| {
+        axum::Router::new()
+            .route(
+                "/.well-known/openid-configuration",
+                axum::routing::get(move || {
+                    let issuer = issuer.clone();
+                    async move {
+                        axum::Json(serde_json::json!({
+                            "authorization_endpoint": format!("{issuer}/authorize"),
+                            "token_endpoint": format!("{issuer}/token"),
+                        }))
+                    }
+                }),
+            )
+            .route(
+                "/token",
+                axum::routing::post(move || async move {
+                    axum::Json(serde_json::json!({ "access_token": "at", "id_token": id_token }))
+                }),
+            )
+    })
+    .await
 }
 
 async fn exec(state: &AppState, sql: String) {
@@ -187,8 +189,9 @@ fn assert_refused(o: &Outcome) {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn fed_active_linked_user_signs_in() {
-    let state = test_app();
+    let mut state = test_app();
     complete_setup_and_login(&state).await;
+    state.http_client = std::sync::Arc::new(super::tls_mock::insecure_test_client());
     let issuer = mock_upstream().await;
     let user = linked_user(&state, &issuer).await;
 
@@ -200,8 +203,9 @@ async fn fed_active_linked_user_signs_in() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn fed_user_with_mfa_gets_the_mfa_step_not_a_session() {
-    let state = test_app();
+    let mut state = test_app();
     complete_setup_and_login(&state).await;
+    state.http_client = std::sync::Arc::new(super::tls_mock::insecure_test_client());
     let issuer = mock_upstream().await;
     let user = linked_user(&state, &issuer).await;
     exec(
@@ -224,8 +228,9 @@ async fn fed_user_with_mfa_gets_the_mfa_step_not_a_session() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn fed_mfa_read_error_gives_no_session() {
-    let state = test_app();
+    let mut state = test_app();
     complete_setup_and_login(&state).await;
+    state.http_client = std::sync::Arc::new(super::tls_mock::insecure_test_client());
     let issuer = mock_upstream().await;
     let user = linked_user(&state, &issuer).await;
     // Inject a storage failure into the MFA state read only.
@@ -242,8 +247,9 @@ async fn fed_mfa_read_error_gives_no_session() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn fed_disabled_user_gets_no_session() {
-    let state = test_app();
+    let mut state = test_app();
     complete_setup_and_login(&state).await;
+    state.http_client = std::sync::Arc::new(super::tls_mock::insecure_test_client());
     let issuer = mock_upstream().await;
     let user = linked_user(&state, &issuer).await;
     exec(
@@ -259,8 +265,9 @@ async fn fed_disabled_user_gets_no_session() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn fed_deleted_user_gets_no_session() {
-    let state = test_app();
+    let mut state = test_app();
     complete_setup_and_login(&state).await;
+    state.http_client = std::sync::Arc::new(super::tls_mock::insecure_test_client());
     let issuer = mock_upstream().await;
     let user = linked_user(&state, &issuer).await;
     exec(
@@ -309,8 +316,9 @@ async fn refused_after(state: &AppState, session: &str, uri: &str, column: &str)
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn fed_existing_session_of_a_user_disabled_afterwards_is_refused_on_me_security() {
-    let state = test_app();
+    let mut state = test_app();
     complete_setup_and_login(&state).await;
+    state.http_client = std::sync::Arc::new(super::tls_mock::insecure_test_client());
     let issuer = mock_upstream().await;
     linked_user(&state, &issuer).await;
     let session = federated_signin(&state)
@@ -337,8 +345,9 @@ async fn fed_existing_session_of_a_user_disabled_afterwards_is_refused_on_me_sec
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn fed_existing_session_of_a_user_deleted_afterwards_is_refused_on_me_security() {
-    let state = test_app();
+    let mut state = test_app();
     complete_setup_and_login(&state).await;
+    state.http_client = std::sync::Arc::new(super::tls_mock::insecure_test_client());
     let issuer = mock_upstream().await;
     linked_user(&state, &issuer).await;
     let session = federated_signin(&state)

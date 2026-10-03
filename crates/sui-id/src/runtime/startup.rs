@@ -314,6 +314,7 @@ pub async fn prepare(cfg: Config) -> Result<Startup> {
                     scopes: cfg.scopes.clone(),
                     provision_mode: ProvisionMode::parse(&cfg.provision_mode),
                     enabled: cfg.enabled,
+                    allowed_origins: cfg.allowed_origins.join(" "),
                     created_at: now,
                     updated_at: now,
                 };

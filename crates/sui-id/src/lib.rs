@@ -22,6 +22,8 @@ pub mod csrf;
 pub mod database;
 #[path = "runtime/dev_mode.rs"]
 pub mod dev_mode;
+#[path = "http/discovery.rs"]
+pub mod discovery;
 #[path = "runtime/egress.rs"]
 pub mod egress;
 #[path = "http/errors.rs"]

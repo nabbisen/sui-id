@@ -102,6 +102,10 @@ rusqlite                    = { workspace = true }
 # federation egress client. See tests/compile_fail.rs.
 trybuild                    = { workspace = true }
 rustversion                 = { workspace = true }
+# RFC 134 D3: a self-signed TLS mock upstream for the federation e2e
+# tests, now that discovery and its endpoints must be `https`.
+rcgen                        = { workspace = true }
+tokio-rustls                 = { workspace = true }
 # Test-only `UserSource` implementations (call counting, a source that
 # answers with another identity) in the directory sign-in tests.
 async-trait                 = { workspace = true }

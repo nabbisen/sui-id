@@ -1,0 +1,11 @@
+error[E0451]: fields `authorization_endpoint`, `token_endpoint` and `userinfo_endpoint` of struct `ValidatedDiscovery` are private
+  --> tests/compile_fail/validated_discovery_cannot_be_constructed_directly.rs:13:9
+   |
+12 |     ValidatedDiscovery {
+   |     ------------------ in this type
+13 |         authorization_endpoint: "https://evil.example.com/authorize".into(),
+   |         ^^^^^^^^^^^^^^^^^^^^^^ private field
+14 |         token_endpoint: "https://evil.example.com/token".into(),
+   |         ^^^^^^^^^^^^^^ private field
+15 |         userinfo_endpoint: None,
+   |         ^^^^^^^^^^^^^^^^^ private field
