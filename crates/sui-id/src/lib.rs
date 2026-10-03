@@ -40,6 +40,8 @@ pub mod keyring;
 pub mod ratelimit;
 #[path = "http/request_id.rs"]
 pub mod request_id;
+#[path = "runtime/resolver.rs"]
+pub mod resolver;
 #[path = "http/router.rs"]
 pub mod router;
 #[path = "http/security_headers.rs"]

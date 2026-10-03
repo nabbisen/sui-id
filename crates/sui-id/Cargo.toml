@@ -47,7 +47,12 @@ sui-id-store                = { workspace = true }
 sui-id-core                 = { workspace = true, features = ["test-support"] }
 sui-id-web                  = { workspace = true }
 
-tokio                       = { workspace = true }
+# RFC 134 D2: `features = ["net"]` declared explicitly because this crate
+# now calls `tokio::net::lookup_host` directly -- `net` was already
+# reachable through workspace feature unification (sui-id-core and
+# sui-id-store each enable it), which is exactly the dependency the
+# handoff's own fact 4 says not to rely on implicitly.
+tokio                       = { workspace = true, features = ["net"] }
 axum                        = { workspace = true }
 axum-extra                  = { workspace = true }
 tower-http                  = { workspace = true }

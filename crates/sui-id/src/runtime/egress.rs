@@ -9,10 +9,11 @@
 //! crosses, so its policy is set here, once, rather than left to whatever
 //! `reqwest`'s defaults happen to be on a given release.
 //!
-//! This module owns the *construction* of the client. It does not touch DNS
-//! resolution (step 3) or per-connection header/chain-size bounds (steps 2
-//! and the Tier-3 residual RFC 134 D5 records separately) — those are later
-//! steps of the same RFC, dispatched separately.
+//! This module owns the *construction* of the client, including the
+//! validating DNS resolver (RFC 134 D2, `crate::resolver::ValidatingResolver`)
+//! wired in below. Per-connection header/chain-size bounds (the Tier-3
+//! residual RFC 134 D5 records separately) are a later step of the same
+//! RFC, dispatched separately.
 
 use std::time::Duration;
 
@@ -60,6 +61,12 @@ pub fn build_federation_client() -> reqwest::Client {
         .http1_allow_obsolete_multiline_headers_in_responses(false)
         .http1_ignore_invalid_headers_in_responses(false)
         .http1_allow_spaces_after_header_name_in_responses(false)
+        // RFC 134 D2: the only resolver allowed to answer for federation
+        // traffic. It validates every address against the vendored
+        // IANA/explicit prefix table and returns exactly one surviving
+        // address — the connector dials what it returns, so there is no
+        // window for a second, unvalidated lookup to slip in.
+        .dns_resolver(crate::resolver::ValidatingResolver)
         .build()
         .expect("failed to build federation HTTP client")
 }

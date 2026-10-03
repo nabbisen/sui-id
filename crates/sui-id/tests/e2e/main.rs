@@ -84,6 +84,7 @@ mod r124_stage2;
 mod r126;
 mod r134_step1_egress_client;
 mod r134_step2_endpoint_origins;
+mod r134_step3_validating_resolver;
 mod refresh_theft;
 mod request_id;
 mod rfc030_033_035;
