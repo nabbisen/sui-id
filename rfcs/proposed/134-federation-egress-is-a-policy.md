@@ -1,7 +1,8 @@
 # RFC 134 — Federation egress is a policy, not a client
 
 **Status.** Proposed
-**Security review.** Required
+**Security review.** Required — [security review 2026-10-03](../handoffs/134-federation-egress-is-a-policy/security-review-2026-10-03.md), **by the architect, which authored this RFC, and therefore not independent.** Carried under `ROADMAP.md` R1's residual. It returned **three required changes** (R1 the missing origins column, R2 the `resolve()` bypass, R3 the per-request timeout override), all folded into the text below.
+**Independent design review.** [Security review 2026-10-03](../handoffs/134-federation-egress-is-a-policy/security-review-2026-10-03.md) — same document, same limitation. **The field's name overstates it**, as on RFCs 124, 128, 130, 132 and 133.
 
 **Design prerequisites.** None. RFC 096 is Accepted and its normative validation
 matrix already states the required behaviour; this RFC decides *how* that
@@ -10,14 +11,18 @@ behaviour is obtained and which of its rows survive scrutiny.
 M2a** — nothing here is a Class-A durable mutation, so this work can run beside
 M2a rather than behind it.
 **Closure prerequisites.** Every control in D1–D4 is enforced at a single
-construction site; the resolver rejects both edges of every vendored prefix; a
-gate fails if a second egress client appears in the federation path; and the
+construction site; the resolver rejects both edges of every vendored prefix; the
+gate fails on a second egress client, on any `resolve`/`resolve_to_addrs`, and on
+any per-request timeout in the federation path; every discovery-supplied endpoint
+is checked against the provider's origin set; and the
 hostile-provider corpus in RFC 096's matrix passes. D5's matrix amendment is
 settled either way — whichever answer comes back, those rows stop being
 ambiguous.
 **Tracks.** ROADMAP M4-A — Federation validation and transport.
 **Touches.** `crates/sui-id/src/runtime/state.rs`, a new egress module,
-`crates/sui-id/src/http/handlers/federation.rs`, `contracts/`, CI.
+`crates/sui-id/src/http/handlers/federation.rs`, a `federation_provider` migration
+and its admin UI (D3's origin set), `contracts/`, CI.
+**Handoff.** [`../handoffs/134-federation-egress-is-a-policy/README.md`](../handoffs/134-federation-egress-is-a-policy/README.md)
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** High-capability model, requirements-architect role.
 
@@ -92,7 +97,9 @@ registry source, so a change to it is a reviewable diff.
 
 ### D3 — Discovery is untrusted input
 
-**This is the highest-value control in this RFC and the cheapest.**
+**This is the highest-value control in this RFC. It is not the cheapest** — the
+security review (R1) found that `federation_provider` has an `issuer` column and
+**no origins column**, so there is currently nothing to validate against.
 
 A discovery document is fetched from the provider but is not *from* the provider
 in any sense the type system knows. Every URL taken from it — `token_endpoint`,
@@ -100,8 +107,18 @@ in any sense the type system knows. Every URL taken from it — `token_endpoint`
 use:
 
 - it is canonical HTTPS;
-- its **origin and port are in the provider's configured policy**. A discovery
+- its **origin and port are in the provider's configured origin set**. A discovery
   document may not introduce an origin the administrator did not configure.
+
+**D3 therefore carries a schema change:** a migration adding the origin set (RFC
+096's matrix, Origins row: *1–8 explicit canonical origins including issuer*),
+admin UI to maintain it, and a documented default for existing rows.
+
+**Deriving the set from `issuer` alone is rejected, not deferred.** Real providers
+serve endpoints from a second origin — Google's issuer is
+`https://accounts.google.com` while its token endpoint is on
+`https://oauth2.googleapis.com` — so an issuer-only rule would reject correct
+configurations, and the pressure would then be to weaken the check.
 
 The matrix already requires this (§"Configuration and URLs", Endpoint row:
 *Reject: discovery-added origin*). It is stated separately here because it is the
@@ -111,8 +128,25 @@ decided entirely by this check.
 
 ### D4 — One client, enforced structurally
 
-A gate asserts that `reqwest::Client::builder()` appears in the federation egress
-module and nowhere else under the federation path. Controls that live in a
+A gate asserts three things about the federation path. The first is obvious; the
+other two are the ones the security review caught, and both bypass the policy
+**without** constructing a second client:
+
+1. `reqwest::Client::builder()` appears in the federation egress module and
+   nowhere else;
+2. **`resolve(` and `resolve_to_addrs(` appear nowhere at all**, including in the
+   egress module. reqwest documents that per-name overrides are applied *on top
+   of* a custom `dns_resolver`, so one such line pins a hostname to a chosen
+   address and D2's resolver never runs for that name;
+3. **no per-request `.timeout(` on the federation path.** `RequestBuilder::timeout`
+   overrides the client's, and `federation.rs:112` already sets one — so D1's
+   total bound would be dead code on the discovery path from the day it lands,
+   invisibly, because the two values happen to agree today.
+
+**R2 and R3 are the same mistake as the one this RFC exists to fix:** a control
+placed in a constructor is worth only as much as the guarantee that nothing
+overrides it, and reasoning about the constructor is not the same as reasoning
+about everything that can override it. Controls that live in a
 constructor are only as good as the guarantee that nothing else constructs one,
 and that guarantee is mechanical or it is nothing.
 
@@ -152,9 +186,13 @@ to be absent, that row returns as real work rather than being waved through.
 
 ## Multiple implementation steps
 
-1. **D3 alone.** Endpoint-origin validation. Smallest, highest value, no new
-   dependency. Shippable by itself.
-2. **D1 + D4.** The constructor and the gate that keeps it singular.
+1. **D1 + D4.** The constructor and the gate that keeps it the only way in,
+   including the `resolve`/`resolve_to_addrs` and per-request-timeout
+   prohibitions. Now first because it is genuinely the smallest and it closes
+   redirects, proxy, ALPN and the TLS floor immediately.
+2. **D3.** Endpoint-origin validation, with its migration and admin UI. Highest
+   value, and larger than step 1 — this ordering was reversed in the first draft
+   on a cost claim the security review falsified.
 3. **D2.** The validating resolver and its vendored prefix table — the largest
    piece, and the one whose tests are the matrix's resolver corpus.
 4. **D5.** Only after the amendment question is answered.
