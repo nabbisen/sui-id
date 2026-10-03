@@ -19,7 +19,7 @@ construction site; the resolver rejects both edges of every vendored prefix; the
 gate fails on a second egress client, on any `resolve`/`resolve_to_addrs`, and on
 any per-request timeout in the federation path; every discovery-supplied endpoint
 is checked against the provider's origin set; and the
-hostile-provider corpus in RFC 096's matrix passes. every Tier 1 bound in D5 is a recorded
+hostile-provider corpus in RFC 096's matrix passes; every Tier 1 bound in D5 is a recorded
 measurement with its corpus and headroom, not a chosen number; D5's three Tier 2
 toggles are set explicitly rather than inherited; the chain-size row is filed in
 a tier with evidence; and the Tier 3 amendment is settled either way.

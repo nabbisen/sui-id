@@ -7,8 +7,10 @@ approved in the same message. It was accepted, returned to `proposed/` for a
 material improvement to D5, and re-accepted, all on 2026-10-03; the lifecycle
 history in the RFC records each step.
 
-**Steps 4 and 6 are the open dispatch**, and are the last dispatchable work in
-RFC 134. Steps 1, 2 and 3 have **landed** — do not rebuild them. Step 5 needed no implementation; the
+**Every step has landed. Nothing here is dispatched.** RFC 134 has no
+implementation work outstanding. Closure is blocked on two items, neither of
+them the dev team's — see
+[`closure-readiness-2026-10-04.md`](closure-readiness-2026-10-04.md). Step 5 needed no implementation; the
 architect answered it.
 
 | Step | State |
@@ -16,9 +18,9 @@ architect answered it.
 | 1 — D1, D4, D5 Tier 2 | **landed** `981b228` |
 | 2 — D3 | **landed** `842b75b` |
 | 3 — D2 | **landed** `2425374` |
-| 4 — D5 Tier 1 | **dispatched, open** |
+| 4 — D5 Tier 1 | **landed** `a89ea83` |
 | 5 — chain-row determination | answered, no work |
-| 6 — D5 Tier 3 | **dispatched, open** |
+| 6 — D5 Tier 3 | **landed** `a89ea83` |
 
 ## Contents
 
@@ -46,7 +48,7 @@ architect answered it.
   implementation would otherwise have to rediscover — chiefly that resolvers
   return port `0`, and that `is_global()` is still unstable on 1.99.0.
 - [`steps4-6-response-bounds-2026-10-03.md`](steps4-6-response-bounds-2026-10-03.md)
-  — **DISPATCHED — this is the open work.** D5 Tier 1 (response bounds derived
+  — **landed `a89ea83`.** D5 Tier 1 (response bounds derived
   from a measured provider corpus) and Tier 3 (the approved three-row
   amendment's evidence). Records that two of the matrix's four JSON caps — depth
   and duplicate keys — already hold in `serde_json`/`serde` and should be
