@@ -1,6 +1,9 @@
 # RFC 133 — An approval names what it settles, and a design review is of the RFC that cites it
 
-**Status.** Accepted
+**Status.** Implemented
+**Closure reviewed on.** 2026-10-03
+**Closure approved by.** `@nabbisen` (accountable owner), 2026-10-03: "Approved." The closure review was performed by **the architect, which wrote this RFC**, and is therefore **not** independent of it — `@nabbisen` is the approver, which is what RFC 000 requires when no independent role exists. The implementation role re-derived the review's measurements separately; that corroboration is recorded beside it and is **not** approval and **not** independence.
+**Closure evidence.** [Closure review 2026-10-03](../handoffs/133-an-approval-names-what-it-settles/closure-review-2026-10-03.md), with the implementation role's independent verification recorded inside it. **Level B:** `3d9d0161`, `workflow_dispatch` run `37096998769` — 26 jobs, 0 skipped, all green (RFC 131's one rule). That commit postdates this RFC's implementation and carries it unchanged.
 **Accepted on.** 2026-10-02
 **Approved by.** `@nabbisen`, 2026-10-02: "Accepted." — on the text as written, with the security review below already in hand. Its two required changes bind the **implementation**, not this text; neither alters a decision here.
 **Security review.** Required

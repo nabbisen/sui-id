@@ -1,7 +1,7 @@
 # RFC 133 — handoff
 
-**RFC.** [`../../accepted/133-an-approval-names-what-it-settles.md`](../../accepted/133-an-approval-names-what-it-settles.md)
-**Status.** **Accepted** 2026-10-02 by `@nabbisen` ("Accepted."), with the
+**RFC.** [`../../done/133-an-approval-names-what-it-settles.md`](../../done/133-an-approval-names-what-it-settles.md)
+**Status.** **Implemented — closed to `done/` 2026-10-03**, approved by `@nabbisen` ("Approved."), on the closure review below plus the implementation role's independent re-derivation of its measurements. Previously: **Accepted** 2026-10-02 by `@nabbisen` ("Accepted."), with the
 security review already in hand.
 **Security review.** [`security-review-2026-10-02.md`](./security-review-2026-10-02.md)
 — the architect's own, written before acceptance, returning two required changes
