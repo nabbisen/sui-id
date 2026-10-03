@@ -67,7 +67,10 @@ class GenerateCiWorkflow(unittest.TestCase):
     def test_the_committed_workflow_is_a_fresh_generation(self) -> None:
         r = self.run_gen()
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("24 jobs", r.stdout)
+        # Bump when a gate lane is added (G19/G20 took this 24 -> 26). A new
+        # lane turning this red is the intended signal, not a nuisance: it is
+        # how a lane added to [gates] without a regenerated ci.yml is caught.
+        self.assertIn("26 jobs", r.stdout)
 
     def test_the_real_repository_is_a_fresh_generation(self) -> None:
         # The check CI runs, on the real tree rather than the copy.
@@ -92,7 +95,11 @@ class GenerateCiWorkflow(unittest.TestCase):
 
     # ── the lane set round-trips ─────────────────────────────────────────
 
-    def add_lane(self, lane: str = "G19") -> None:
+    # G99 deliberately: a synthetic id far outside the real sequence. This
+    # fixture used "G19", which collided the day G19 became a real lane --
+    # appending it a second time made the TOML unparseable ("Cannot overwrite
+    # a value") and the test failed for a reason unrelated to what it checks.
+    def add_lane(self, lane: str = "G99") -> None:
         self.mutate("contracts/gate-inputs.toml", "G18 = { title", f'{lane} = {{ title = "an added lane", setup = "python", paths = ["**"] }}\nG18 = {{ title', 1)
         self.mutate(
             "contracts/gate-inputs.toml",
@@ -103,11 +110,11 @@ class GenerateCiWorkflow(unittest.TestCase):
 
     def test_a_lane_added_to_the_table_appears_as_a_job(self) -> None:
         self.add_lane()
-        self.assert_red("job G19 is generated but missing")
+        self.assert_red("job G99 is generated but missing")
         self.assertEqual(self.run_gen("--write").returncode, 0)
         text = self.read(".github/workflows/ci.yml")
-        self.assertIn('  G19:\n    name: "G19 — an added lane"', text)
-        self.assertIn("run: bash scripts/ci-gate.sh G19", text)
+        self.assertIn('  G99:\n    name: "G99 — an added lane"', text)
+        self.assertIn("run: bash scripts/ci-gate.sh G99", text)
         self.assert_green()
 
     def test_a_lane_in_gates_with_no_profile_has_no_job_and_fails(self) -> None:
@@ -115,9 +122,9 @@ class GenerateCiWorkflow(unittest.TestCase):
             "contracts/gate-inputs.toml",
             'G18 = "python3.14 scripts/check-contracts.py --root . --policy contracts/contract-paths.toml"\n',
             'G18 = "python3.14 scripts/check-contracts.py --root . --policy contracts/contract-paths.toml"\n'
-            'G19 = "python3.14 scripts/added.py"\n',
+            'G99 = "python3.14 scripts/added.py"\n',
         )
-        self.assert_red("lane G19 is in [gates] or [gate_matrix_exceptions] but has no [lane_profiles] entry")
+        self.assert_red("lane G99 is in [gates] or [gate_matrix_exceptions] but has no [lane_profiles] entry")
 
     def test_a_profile_for_no_lane_fails(self) -> None:
         self.mutate("contracts/gate-inputs.toml", "G18 = { title", 'G99 = { title = "ghost", setup = "python" }\nG18 = { title')
@@ -248,7 +255,8 @@ class GenerateCiWorkflow(unittest.TestCase):
         # Stage 3b: ci-gate.sh exports `tz` from [lane_profiles]; the workflow's
         # per-job env is gone, so the fact lives in one place.
         self.assertNotIn("TZ:", self.read(".github/workflows/ci.yml"))
-        self.assertEqual(self.read("contracts/gate-inputs.toml").count('tz = "UTC"'), 4)
+        # Bump when a lane profile declaring tz is added (G20 took this 4 -> 5).
+        self.assertEqual(self.read("contracts/gate-inputs.toml").count('tz = "UTC"'), 5)
         self.assertEqual(self.run_gen("--write").returncode, 0)
         self.assertNotIn("TZ:", self.read(".github/workflows/ci.yml"))
 
