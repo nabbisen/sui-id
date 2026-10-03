@@ -1,6 +1,8 @@
 # RFC 134 — Federation egress is a policy, not a client
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-10-03
+**Approved by.** `@nabbisen`, 2026-10-03: "Confirmed. Accepted." — **on the amended text**, which incorporates the three required changes the security review returned (R1 the missing origins column, R2 the `resolve()` bypass, R3 the per-request timeout override). He had said "RFC 134 is accepted" earlier the same day, before that review existed; this second approval is the one that settles the amended text, and it settles the design only — the three open questions below remain open (RFC 133 D1).
 **Security review.** Required — [security review 2026-10-03](../handoffs/134-federation-egress-is-a-policy/security-review-2026-10-03.md), **by the architect, which authored this RFC, and therefore not independent.** Carried under `ROADMAP.md` R1's residual. It returned **three required changes** (R1 the missing origins column, R2 the `resolve()` bypass, R3 the per-request timeout override), all folded into the text below.
 **Independent design review.** [Security review 2026-10-03](../handoffs/134-federation-egress-is-a-policy/security-review-2026-10-03.md) — same document, same limitation. **The field's name overstates it**, as on RFCs 124, 128, 130, 132 and 133.
 
@@ -230,13 +232,50 @@ permissible and JWKS verification becomes mandatory.
 
 ## Open questions
 
-1. **D5's amendment** — amend the five rows to state properties, or require
-   literal compliance and accept a bespoke HTTP client? My recommendation is to
-   amend. This one is not mine to settle, because it changes an accepted RFC's
-   normative matrix.
-2. **Should D3 ship ahead of this RFC's acceptance?** It is small and closes the
-   most. I am *not* proposing that — RFC 000 prohibits building from `proposed/`,
-   and I would rather ask than carve an exception.
-3. **Is the 8-address answer limit right**, or should it be 1? Nothing in this
-   design needs more than one surviving address, and a lower cap is a smaller
-   attack surface. The matrix says 8; I see no reason for 8.
+**Q2 is withdrawn** — it asked whether D3 could be built before acceptance, and
+the RFC is now Accepted, so the question has no content. **Q3 is withdrawn by me
+as mistaken**, with the reasoning kept below because the mistake is instructive.
+**Q1 is the only one still open, and it is not mine to settle.**
+
+### Q1 — D5's amendment. **Recommendation: amend.** Still open.
+
+Amend the five rows to state the property (*bounded header and body allocation;
+strict framing; no request smuggling*) rather than the parser internals that
+realise it, and satisfy them by a dependency floor plus a recorded statement of
+what is relied upon.
+
+**Why.** Literal compliance means replacing `hyper` and `rustls` with our own
+HTTP/1.1 parser and TLS bounds, to match numbers whose security value lies in a
+bound existing rather than in its being exactly 32 KiB. Hand-written HTTP parsers
+are a classic source of request-smuggling and memory-safety defects. Trading a
+widely reviewed implementation for an unreviewed one, for literal compliance with
+a row written by the previous architect, makes the system less safe while making
+the matrix look satisfied.
+
+**The cost of amending**, stated so it is not hidden: we rely on an upstream
+guarantee rather than owning it, and if `hyper` relaxes a default we inherit that
+silently. The dependency floor plus the recorded statement of what is relied upon
+is what makes that reviewable, and D5 requires the implementation to **evidence**
+each guarantee rather than assert it. If a guarantee turns out to be absent, the
+row returns as real work.
+
+**This is not mine to settle** because it amends RFC 096's normative matrix, and
+RFC 096 is Accepted.
+
+### Q3 — the 8-address answer limit. **Withdrawn: my question was wrong.**
+
+I asked whether the limit should be 1, on the grounds that nothing in the design
+needs more than one surviving address. **That conflated two different numbers.**
+
+- **8 is the cap on the DNS *answer set*** — how many records may come back.
+- **1 is the *dial* count** — how many we connect to, which D2 step 4 already
+  fixes at exactly one.
+
+Requiring the answer *set* to be 1 would reject ordinary round-robin DNS, which
+nearly every real provider uses, and the pressure would then be to weaken the
+check — the same failure mode D3's issuer-only shortcut would have had.
+
+**Keep 8.** The security property does not come from the cap. It comes from D2
+step 3: **every** returned address must validate, and the whole answer is rejected
+if any one of them fails. That is what defeats an answer mixing public and private
+addresses, and it is already specified. The cap is only a bound on work.
