@@ -7,6 +7,7 @@ async fn u01_creates_the_user_and_no_credential() {
     // holder sets a password through a recovery link.
     let db = fresh_db();
     let user = a_user();
+    let before = audit_rows(&db).await;
 
     let audited = create_user(&db, an_admin(), user.clone())
         .await
@@ -26,6 +27,8 @@ async fn u01_creates_the_user_and_no_credential() {
         latest_audit_action(&db).await.as_deref(),
         Some("user.create")
     );
+    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
+    record_exactly_once_coverage("U01");
 }
 
 #[tokio::test]
@@ -103,6 +106,7 @@ async fn u02_disable_flips_flag_revokes_session_and_records_reason() {
     let user = a_user();
     repos::users::create(&db, &user).await.expect("create user");
     let session_id = seed_active_session(&db, user.id).await;
+    let before = audit_rows(&db).await;
 
     let audited = disable_user(
         &db,
@@ -138,6 +142,8 @@ async fn u02_disable_flips_flag_revokes_session_and_records_reason() {
         tail.note.as_deref(),
         Some("reason=policy%20violation step_up=not_required:no_second_factor")
     );
+    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
+    record_exactly_once_coverage("U02");
 }
 
 #[tokio::test]
@@ -196,6 +202,7 @@ async fn u03_enable_clears_disabled_flag_and_appends_event() {
     let mut user = a_user();
     user.is_disabled = true;
     repos::users::create(&db, &user).await.expect("create user");
+    let before = audit_rows(&db).await;
 
     let audited = enable_user(&db, admin, session, user.id, Utc::now())
         .await
@@ -216,6 +223,8 @@ async fn u03_enable_clears_disabled_flag_and_appends_event() {
         tail.note.as_deref(),
         Some("step_up=not_required:no_second_factor")
     );
+    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
+    record_exactly_once_coverage("U03");
 }
 
 #[tokio::test]
@@ -253,6 +262,7 @@ async fn u04_delete_soft_deletes_revokes_session_and_records_reason() {
     let user = a_user();
     repos::users::create(&db, &user).await.expect("create user");
     let session_id = seed_active_session(&db, user.id).await;
+    let before = audit_rows(&db).await;
 
     let audited = delete_user(
         &db,
@@ -286,6 +296,8 @@ async fn u04_delete_soft_deletes_revokes_session_and_records_reason() {
         tail.note.as_deref(),
         Some("reason=gdpr%20request step_up=not_required:no_second_factor")
     );
+    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
+    record_exactly_once_coverage("U04");
 }
 
 #[tokio::test]
@@ -325,6 +337,7 @@ async fn u05_role_change_updates_role_and_records_old_and_new_role() {
     admin_b.is_admin = true;
     repos::users::create(&db, &admin_a).await.expect("create a");
     repos::users::create(&db, &admin_b).await.expect("create b");
+    let before = audit_rows(&db).await;
 
     // Two admins exist, so demoting one leaves one behind — the
     // guard must not fire.
@@ -344,6 +357,8 @@ async fn u05_role_change_updates_role_and_records_old_and_new_role() {
         .expect("row");
     assert_eq!(tail.action, "user.role_change");
     assert_eq!(tail.note.as_deref(), Some("old_role=admin new_role=user"));
+    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
+    record_exactly_once_coverage("U05");
 }
 
 #[tokio::test]

@@ -74,6 +74,7 @@ async fn t09_protocol_issues_initial_token_with_no_audit_row() {
 async fn t04_normal_rotation_revokes_old_inserts_successor_and_appends_rotated() {
     let db = fresh_db();
     let (user_id, client_id, family, hash) = seed_family(&db).await;
+    let before = audit_rows(&db).await;
 
     let successor = a_successor(user_id, client_id, family.clone());
     let successor_id = successor.id.clone();
@@ -93,6 +94,8 @@ async fn t04_normal_rotation_revokes_old_inserts_successor_and_appends_rotated()
         latest_audit_action(&db).await.as_deref(),
         Some("auth.refresh.rotated")
     );
+    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
+    record_exactly_once_coverage("T04");
 }
 
 #[tokio::test]

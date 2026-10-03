@@ -57,6 +57,7 @@ async fn c15_registers_consumes_the_token_once_and_stamps_registered_via() {
     let mut row = a_client();
     row.registered_via = crate::models::RegistrationSource::Dynamic;
     let client_id = row.id;
+    let before = audit_rows(&db).await;
 
     let hash = sha256_hex(&plaintext);
     let result = crate::commands::register_client_dynamically(&db, hash, row, Utc::now()).await;
@@ -74,6 +75,8 @@ async fn c15_registers_consumes_the_token_once_and_stamps_registered_via() {
         latest_audit_action(&db).await.as_deref(),
         Some("client.dynamic_register")
     );
+    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
+    record_exactly_once_coverage("C15");
 }
 
 #[tokio::test]

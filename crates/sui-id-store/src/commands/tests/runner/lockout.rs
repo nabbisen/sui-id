@@ -5,6 +5,7 @@ async fn u22_below_threshold_emits_failure_not_lockout() {
     let db = fresh_db();
     let user = a_user();
     repos::users::create(&db, &user).await.expect("create user");
+    let before = audit_rows(&db).await;
 
     let audited = record_login_failure(&db, user.id, |_count| None)
         .await
@@ -18,6 +19,8 @@ async fn u22_below_threshold_emits_failure_not_lockout() {
     let row = repos::users::get(&db, user.id).await.expect("get");
     assert_eq!(row.failed_login_count, 1);
     assert!(row.locked_until.is_none());
+    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
+    record_exactly_once_coverage("U22");
 }
 
 #[tokio::test]
@@ -130,6 +133,7 @@ async fn u08_unlock_clears_lockout_and_appends_actorless_event() {
     user.failed_login_count = 5;
     user.locked_until = Some(Utc::now() + TimeDelta::hours(1));
     repos::users::create(&db, &user).await.expect("create user");
+    let before = audit_rows(&db).await;
 
     let audited = admin_unlock_user(&db, user.id).await.expect("unlock");
     audited.into_inner();
@@ -150,6 +154,8 @@ async fn u08_unlock_clears_lockout_and_appends_actorless_event() {
         "the CLI operator authenticates no user; the row must carry no actor"
     );
     assert_eq!(tail.target.as_deref(), Some(user.id.to_string().as_str()));
+    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
+    record_exactly_once_coverage("U08");
 }
 
 /// RFC 102 stage 9c: after `auth.mfa.lockout` the second-factor count is at

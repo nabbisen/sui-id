@@ -31,6 +31,7 @@ async fn u07_reset_removes_totp_and_passkeys_and_appends_event() {
         .expect("seed totp");
     seed_passkey(&db, user.id).await;
     seed_passkey(&db, user.id).await;
+    let before = audit_rows(&db).await;
 
     let audited = admin_reset_mfa(
         &db,
@@ -74,6 +75,8 @@ async fn u07_reset_removes_totp_and_passkeys_and_appends_event() {
             "totp=removed passkeys=2 reason=lost%20authenticator step_up=not_required:no_second_factor"
         )
     );
+    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
+    record_exactly_once_coverage("U07");
 }
 
 #[tokio::test]
@@ -229,6 +232,7 @@ async fn u12_injected_failure_before_append_leaves_enrollment_unconfirmed() {
 
     // Control: the same call, with no failure injected, confirms the
     // enrollment and writes the event.
+    let before = audit_rows(&db).await;
     confirm_totp_enrollment(&db, user.id, sealed, 0)
         .await
         .expect("the control succeeds");
@@ -241,7 +245,9 @@ async fn u12_injected_failure_before_append_leaves_enrollment_unconfirmed() {
         latest_audit_action(&db).await.as_deref(),
         Some("auth.mfa.factor_added")
     );
+    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
     record_rollback_coverage("U12");
+    record_exactly_once_coverage("U12");
 }
 
 // ── U14, U15 — an injected append failure leaves the factor unchanged ───
@@ -291,6 +297,7 @@ async fn u14_injected_failure_before_append_leaves_the_recovery_codes_unchanged(
 
     // Control: the same call, with no failure injected, replaces the codes
     // and writes the event.
+    let before_count = audit_rows(&db).await;
     regenerate_recovery_codes(&db, user, sealed.clone())
         .await
         .expect("the control succeeds");
@@ -299,7 +306,9 @@ async fn u14_injected_failure_before_append_leaves_the_recovery_codes_unchanged(
         latest_audit_action(&db).await.as_deref(),
         Some("auth.mfa.factor_added")
     );
+    assert_eq!(audit_rows(&db).await, before_count + 1, "exactly one event");
     record_rollback_coverage("U14");
+    record_exactly_once_coverage("U14");
 }
 
 #[tokio::test]
@@ -334,6 +343,7 @@ async fn u15_injected_failure_before_append_registers_no_passkey() {
     assert_eq!(latest_audit_action(&db).await, before_audit, "no event");
 
     // Control: with no failure injected the same registration lands.
+    let before_count = audit_rows(&db).await;
     register_passkey(&db, row())
         .await
         .expect("the control succeeds");
@@ -342,5 +352,7 @@ async fn u15_injected_failure_before_append_registers_no_passkey() {
         latest_audit_action(&db).await.as_deref(),
         Some("auth.mfa.factor_added")
     );
+    assert_eq!(audit_rows(&db).await, before_count + 1, "exactly one event");
     record_rollback_coverage("U15");
+    record_exactly_once_coverage("U15");
 }

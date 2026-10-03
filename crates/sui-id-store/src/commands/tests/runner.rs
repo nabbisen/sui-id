@@ -72,6 +72,16 @@ async fn latest_audit_action(db: &Database) -> Option<String> {
         .map(|row| row.action)
 }
 
+/// RFC 094 M2a criterion 3 (exactly-once evidence): the full audit-log row
+/// count, so a happy-path test can assert the count grows by exactly one,
+/// not merely that the latest row's action matches -- two rows with the
+/// same action would pass the latter check and should not pass this one.
+async fn audit_rows(db: &Database) -> i64 {
+    db.with_conn(|c| Ok(c.query_row("SELECT COUNT(*) FROM audit_log", [], |r| r.get(0))?))
+        .await
+        .expect("count")
+}
+
 async fn seed_active_session(db: &Database, user_id: UserId) -> sui_id_shared::ids::SessionId {
     let id = sui_id_shared::ids::SessionId::new();
     repos::sessions::insert(
@@ -106,7 +116,7 @@ async fn an_admin_session(db: &Database) -> (UserId, sui_id_shared::ids::Session
     (admin.id, session)
 }
 
-/// RFC 094 M2a's structural gate (`scripts/check-m2a-rollback-coverage.py`,
+/// RFC 094 M2a's structural gate (`scripts/check-m2a-rollback-coverage.sh`,
 /// gate G20) reads this file after the test run completes: a command id
 /// lands here only when the rollback test written for it calls this,
 /// which every test below does only *after* its own assertions (the
@@ -116,20 +126,35 @@ async fn an_admin_session(db: &Database) -> (UserId, sui_id_shared::ids::Session
 /// `rfcs/handoffs/094-transactional-audit/
 /// m2a-rollback-coverage-2026-10-02.md`.
 pub(crate) fn record_rollback_coverage(command_id: &str) {
+    record_coverage(command_id, "rfc094-rollback-coverage.txt");
+}
+
+/// RFC 094 M2a criterion 3 (exactly-once evidence, the gate's second
+/// registry — same shrink-only exemption discipline as the rollback one,
+/// extended by `rfcs/handoffs/094-transactional-audit/
+/// m2a-exit-criteria-divergence-2026-10-03.md` §3). A command id lands
+/// here only when its happy-path test asserts the audit tail grew by
+/// exactly one row and calls this afterward — never from a name or a
+/// comment.
+pub(crate) fn record_exactly_once_coverage(command_id: &str) {
+    record_coverage(command_id, "rfc094-exactly-once-coverage.txt");
+}
+
+fn record_coverage(command_id: &str, file_name: &str) {
     use std::io::Write as _;
     use std::sync::Mutex;
     static LOCK: Mutex<()> = Mutex::new(());
     let _guard = LOCK.lock().expect("coverage lock");
-    let path = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../target/rfc094-rollback-coverage.txt"
+    let path = format!(
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/{}"),
+        file_name
     );
     let mut f = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(path)
-        .expect("open rollback coverage file");
-    writeln!(f, "{command_id}").expect("write rollback coverage");
+        .expect("open coverage file");
+    writeln!(f, "{command_id}").expect("write coverage");
 }
 
 mod chain_integrity;

@@ -94,13 +94,16 @@ async fn l01_injected_failure_before_append_rolls_back_everything() {
     // at all.
     let control_session = a_pending_session(user.id);
     let control_id = control_session.id;
+    let before_count = audit_rows(&db).await;
     sign_in_with_password(&db, control_session)
         .await
         .expect("the control succeeds");
     let row = repos::users::get(&db, user.id).await.expect("get");
     assert_eq!(row.failed_login_count, 0);
     assert!(repos::sessions::get(&db, control_id).await.is_ok());
+    assert_eq!(audit_rows(&db).await, before_count + 1, "exactly one event");
     record_rollback_coverage("L01");
+    record_exactly_once_coverage("L01");
 }
 
 // ── L02 — second-factor sign-in ──────────────────────────────────────
@@ -154,6 +157,7 @@ async fn l02_injected_failure_before_append_rolls_back_everything() {
     // at all.
     let control_session = a_pending_session(user_id);
     let control_id = control_session.id;
+    let before_count = audit_rows(&db).await;
     complete_second_factor(
         &db,
         pending_id,
@@ -170,7 +174,9 @@ async fn l02_injected_failure_before_append_rolls_back_everything() {
         "the control really consumed the pending row"
     );
     assert!(repos::sessions::get(&db, control_id).await.is_ok());
+    assert_eq!(audit_rows(&db).await, before_count + 1, "exactly one event");
     record_rollback_coverage("L02");
+    record_exactly_once_coverage("L02");
 }
 
 // ── L03 — directory sign-in ──────────────────────────────────────────
@@ -204,12 +210,15 @@ async fn l03_injected_failure_before_append_rolls_back_everything() {
     // at all.
     let control_session = a_pending_session(user_id);
     let control_id = control_session.id;
+    let before_count = audit_rows(&db).await;
     sign_in_from_directory(&db, a_shadow(), "corp-ldap".into(), control_session)
         .await
         .expect("the control succeeds");
     assert!(repos::users::get(&db, user_id).await.is_ok());
     assert!(repos::sessions::get(&db, control_id).await.is_ok());
+    assert_eq!(audit_rows(&db).await, before_count + 1, "exactly one event");
     record_rollback_coverage("L03");
+    record_exactly_once_coverage("L03");
 }
 
 // ── L04 — federated sign-in ───────────────────────────────────────────
@@ -249,6 +258,7 @@ async fn l04_injected_failure_before_append_rolls_back_everything() {
     // above would pass just as well if the mutation never ran at all.
     let control_session = a_pending_session(user.id);
     let control_id = control_session.id;
+    let before_count = audit_rows(&db).await;
     sign_in_federated(
         &db,
         "upstream-provider".into(),
@@ -260,7 +270,9 @@ async fn l04_injected_failure_before_append_rolls_back_everything() {
     let row = repos::users::get(&db, user.id).await.expect("get");
     assert!(row.last_login_at.is_some());
     assert!(repos::sessions::get(&db, control_id).await.is_ok());
+    assert_eq!(audit_rows(&db).await, before_count + 1, "exactly one event");
     record_rollback_coverage("L04");
+    record_exactly_once_coverage("L04");
 }
 
 // ── L05 — step-up success ────────────────────────────────────────────
@@ -296,6 +308,7 @@ async fn l05_injected_failure_before_append_rolls_back_everything() {
     // Control: the same call, with no failure injected, really does
     // stamp last_step_up_at -- without this, the assertion above would
     // pass just as well if the mutation never ran at all.
+    let before_count = audit_rows(&db).await;
     complete_step_up(
         &db,
         user_id,
@@ -310,7 +323,9 @@ async fn l05_injected_failure_before_append_rolls_back_everything() {
         .await
         .expect("get session");
     assert!(session.last_step_up_at.is_some());
+    assert_eq!(audit_rows(&db).await, before_count + 1, "exactly one event");
     record_rollback_coverage("L05");
+    record_exactly_once_coverage("L05");
 }
 
 // ── L06 — step-up failure ────────────────────────────────────────────
@@ -341,11 +356,14 @@ async fn l06_injected_failure_before_append_rolls_back_the_counter() {
     // Control: the same call, with no failure injected, really does
     // bump the counter -- without this, the assertion above would pass
     // just as well if the mutation never ran at all.
+    let before_count = audit_rows(&db).await;
     record_step_up_failure(&db, user.id, session_id, Utc::now())
         .await
         .expect("the control succeeds");
     assert_eq!(step_up_failure_count(&db, session_id).await, 1);
+    assert_eq!(audit_rows(&db).await, before_count + 1, "exactly one event");
     record_rollback_coverage("L06");
+    record_exactly_once_coverage("L06");
 }
 
 // ── L07 — second-factor failure ──────────────────────────────────────
@@ -373,9 +391,12 @@ async fn l07_injected_failure_before_append_rolls_back_the_counter() {
     // Control: the same call, with no failure injected, really does
     // bump the counter -- without this, the assertion above would pass
     // just as well if the mutation never ran at all.
+    let before_count = audit_rows(&db).await;
     record_second_factor_failure(&db, user.id, |_count| None)
         .await
         .expect("the control succeeds");
     assert_eq!(mfa_failure_count(&db, user.id).await, 1);
+    assert_eq!(audit_rows(&db).await, before_count + 1, "exactly one event");
     record_rollback_coverage("L07");
+    record_exactly_once_coverage("L07");
 }

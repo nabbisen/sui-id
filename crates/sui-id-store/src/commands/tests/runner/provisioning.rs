@@ -1,5 +1,5 @@
 use super::recovery::{
-    REASON, audit_rows, give_credential, issue_cli, issue_web, last_event, refused,
+    REASON, give_credential, issue_cli, issue_web, last_event, refused,
     seed_admin_with_fresh_step_up, seed_live_user, seed_user, token_rows,
 };
 use super::*;

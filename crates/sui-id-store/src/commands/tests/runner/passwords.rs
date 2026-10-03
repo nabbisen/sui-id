@@ -20,6 +20,7 @@ async fn u09_change_with_sweep_revokes_others_keeps_current_and_appends_counts()
 
     let keep_id = seed_active_session(&db, user.id).await;
     let other_id = seed_active_session(&db, user.id).await;
+    let before = audit_rows(&db).await;
 
     let new_credential = crate::models::CredentialRow {
         user_id: user.id,
@@ -62,6 +63,8 @@ async fn u09_change_with_sweep_revokes_others_keeps_current_and_appends_counts()
         tail.note.as_deref(),
         Some("sessions_revoked=1 refresh_tokens_revoked=0")
     );
+    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
+    record_exactly_once_coverage("U09");
 }
 
 #[tokio::test]
@@ -189,6 +192,7 @@ async fn u10_completion_swaps_credential_consumes_token_and_revokes_everything()
     .expect("seed old credential");
     let token_id = seed_reset_token(&db, user.id).await;
     let session_id = seed_active_session(&db, user.id).await;
+    let before = audit_rows(&db).await;
 
     let new_credential = crate::models::CredentialRow {
         user_id: user.id,
@@ -233,6 +237,8 @@ async fn u10_completion_swaps_credential_consumes_token_and_revokes_everything()
         "the token presenter is not an authenticated actor"
     );
     assert_eq!(tail.target.as_deref(), Some(user.id.to_string().as_str()));
+    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
+    record_exactly_once_coverage("U10");
 }
 
 #[tokio::test]

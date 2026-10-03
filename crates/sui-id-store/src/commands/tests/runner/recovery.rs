@@ -114,12 +114,6 @@ pub(super) async fn token_rows(db: &Database) -> i64 {
     .expect("count")
 }
 
-pub(super) async fn audit_rows(db: &Database) -> i64 {
-    db.with_conn(|c| Ok(c.query_row("SELECT COUNT(*) FROM audit_log", [], |r| r.get(0))?))
-        .await
-        .expect("count")
-}
-
 pub(super) async fn last_event(db: &Database) -> crate::models::AuditLogRow {
     repos::audit::recent(db, 1)
         .await
@@ -213,6 +207,7 @@ async fn u37_web_issues_a_link_and_writes_one_event() {
         "{note}"
     );
     assert_eq!(audit_rows(&db).await, 1, "exactly one event");
+    record_exactly_once_coverage("U37");
 }
 
 #[tokio::test]

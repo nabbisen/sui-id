@@ -5,6 +5,7 @@ async fn k01_rotates_key_and_appends_audit_row() {
     let db = fresh_db();
     let (admin, session) = an_admin_session(&db).await;
     let new_id = SigningKeyId::new();
+    let before = audit_rows(&db).await;
     let audited = rotate_signing_key(
         &db,
         admin,
@@ -27,6 +28,8 @@ async fn k01_rotates_key_and_appends_audit_row() {
         latest_audit_action(&db).await.as_deref(),
         Some("signing_key.rotate")
     );
+    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
+    record_exactly_once_coverage("K01");
 }
 
 // ── Stage 2 items 2-3: injected-failure rollback proofs ──────────
