@@ -1,8 +1,8 @@
 # RFC 134 — Federation egress is a policy, not a client
 
-**Status.** Accepted
-**Accepted on.** 2026-10-03
-**Approved by.** `@nabbisen`, 2026-10-03: "Confirmed. Accepted." — **on the amended text**, which incorporates the three required changes the security review returned (R1 the missing origins column, R2 the `resolve()` bypass, R3 the per-request timeout override). He had said "RFC 134 is accepted" earlier the same day, before that review existed; this second approval is the one that settles the amended text, and it settles the design only — the three open questions below remain open (RFC 133 D1).
+**Status.** Proposed
+**Lifecycle history.** Accepted 2026-10-03 by `@nabbisen` ("Confirmed. Accepted.") on the text carrying the security review's three required changes. **Returned to `proposed/` the same day**, 2026-10-03, under RFC 000's return-for-review rule, following an owner-approved material change to D5's scope and to the closure prerequisites. The prior acceptance is preserved here; the design it approved was not found wrong, it was found improvable.
+**Amended on.** 2026-10-03 — D5 restructured. The five rows are now split by **enforceability** rather than by difficulty, after `@nabbisen` asked whether they could be derived from measured reality. Three of the five stop requiring a matrix amendment: see [`../handoffs/134-federation-egress-is-a-policy/d5-can-the-rows-be-measured-2026-10-03.md`](../handoffs/134-federation-egress-is-a-policy/d5-can-the-rows-be-measured-2026-10-03.md). Closure prerequisites updated accordingly.
 **Security review.** Required — [security review 2026-10-03](../handoffs/134-federation-egress-is-a-policy/security-review-2026-10-03.md), **by the architect, which authored this RFC, and therefore not independent.** Carried under `ROADMAP.md` R1's residual. It returned **three required changes** (R1 the missing origins column, R2 the `resolve()` bypass, R3 the per-request timeout override), all folded into the text below.
 **Independent design review.** [Security review 2026-10-03](../handoffs/134-federation-egress-is-a-policy/security-review-2026-10-03.md) — same document, same limitation. **The field's name overstates it**, as on RFCs 124, 128, 130, 132 and 133.
 
@@ -17,9 +17,10 @@ construction site; the resolver rejects both edges of every vendored prefix; the
 gate fails on a second egress client, on any `resolve`/`resolve_to_addrs`, and on
 any per-request timeout in the federation path; every discovery-supplied endpoint
 is checked against the provider's origin set; and the
-hostile-provider corpus in RFC 096's matrix passes. D5's matrix amendment is
-settled either way — whichever answer comes back, those rows stop being
-ambiguous.
+hostile-provider corpus in RFC 096's matrix passes. every Tier 1 bound in D5 is a recorded
+measurement with its corpus and headroom, not a chosen number; D5's three Tier 2
+toggles are set explicitly rather than inherited; the chain-size row is filed in
+a tier with evidence; and the Tier 3 amendment is settled either way.
 **Tracks.** ROADMAP M4-A — Federation validation and transport.
 **Touches.** `crates/sui-id/src/runtime/state.rs`, a new egress module,
 `crates/sui-id/src/http/handlers/federation.rs`, a `federation_provider` migration
@@ -158,46 +159,90 @@ attacker-influenced URL, so the threat model differs. The gate must **name** tha
 exemption rather than pattern-match around it, so a third client cannot appear by
 resembling the exempt one.
 
-### D5 — Five matrix rows specify a parser, not a property
+### D5 — The five rows, split by enforceability
 
-These rows cannot be met through configuration of the current stack:
+The first draft of this RFC said these five rows "cannot be met through
+configuration of the current stack" and proposed amending all of them. **That was
+wrong for three of the five**, and the error was splitting them by how hard they
+looked instead of by where they can be enforced. Enforceability is a property of
+the stack; difficulty was an opinion.
 
-| Row | What it specifies |
+#### Tier 1 — ours already. Derive each bound from a measured corpus
+
+| Row | Where it is enforced |
 |---|---|
-| HTTP allocation | fixed 32 KiB header buffer, 64 slots, 8 KiB scratch |
-| Connection | handshake ≤256 KiB inbound, chain ≤16/128 KiB |
-| Header envelope | bare LF / obs-fold rejection, duplicate singleton |
-| Body framing | sole chunked, empty trailer, "dropped without EOF wait" |
-| Body | chunk extension/line >128 |
+| Body: endpoint byte cap, depth/member/string/array caps, duplicate keys | our reader and deserializer |
+| Media/status: 200 with JSON or `+json`, conditional 304 under cache rules | our code, after the response returns |
 
-Meeting them literally means replacing `hyper` and `rustls` with our own HTTP/1.1
-parser and TLS bounds. **I recommend against it.** A hand-written HTTP parser is
-a classic source of request-smuggling and memory-safety defects, and we would be
-trading a widely reviewed implementation for an unreviewed one in order to match
-specific numbers whose security value is in the *bound existing*, not in its
-being 32 KiB.
+These need no amendment and no library cooperation. Each numeric bound is
+**measured, not chosen**: fetch the discovery document, JWKS and userinfo
+response from a corpus of real providers — Google, Microsoft Entra, Okta, Auth0,
+Keycloak, GitLab, Authentik — record the observed maxima, and set the bound at
+observed maximum times a stated headroom.
 
-**Proposal:** amend these rows to state the property (*bounded header and body
-allocation; strict framing; no request smuggling*) and satisfy them by a
-dependency floor plus a recorded statement of what is relied upon.
+**The corpus, its date, and each number's derivation are recorded beside the
+constant.** A bound nobody can justify is the one that gets raised the first time
+something legitimate trips it.
 
-**What I have not done:** verified `hyper` 1.10.1's exact defaults for each of
-these. The implementation must *evidence* the guarantee it relies on — version,
-and the upstream behaviour relied upon — not assert it. If a guarantee turns out
-to be absent, that row returns as real work rather than being waved through.
+#### Tier 2 — strict by default; make it a requirement instead of an inheritance
+
+`reqwest` 0.13.4 exposes three opt-in laxity toggles:
+
+- `http1_allow_obsolete_multiline_headers_in_responses`
+- `http1_ignore_invalid_headers_in_responses`
+- `http1_allow_spaces_after_header_name_in_responses`
+
+**All three are called explicitly with `false` in D1's constructor.** They are
+named to be opted into, so the defaults are already strict — but calling them
+states the requirement *in our source* rather than inheriting it. A future
+release that relaxes a default then cannot reach us silently, and no one has to
+verify what the default was.
+
+**This removes the one cost the first draft recorded for amending.** The header
+envelope row (bare LF, obs-fold, invalid header lines) needs no amendment.
+
+#### Tier 3 — genuinely unreachable. Only these need an amendment
+
+`reqwest` does not expose `hyper`'s header-slot or buffer sizing, and nothing
+exposes the handshake byte bound or connection-close behaviour:
+
+- fixed 32 KiB header buffer, 64 slots, 8 KiB scratch;
+- handshake ≤256 KiB inbound;
+- "declared length read exactly then one-use connection dropped without EOF wait".
+
+For these, and only these, the proposal stands: amend the rows to state the
+property — *bounded header allocation; strict framing; no request smuggling* —
+and satisfy them by a dependency floor plus a recorded statement of the upstream
+behaviour relied upon, **evidenced rather than asserted**. If a guarantee turns
+out to be absent, that row returns as real work.
+
+#### Unresolved: certificate chain ≤16/128 KiB
+
+**I do not know which tier this belongs in.** `reqwest`'s `tls_info` may expose
+enough of the peer chain to check it after the handshake. I have not verified
+that and am not guessing. **The implementation's first task on this row is to
+find out**, and to file it in Tier 1 or Tier 3 with the evidence — not to assume
+either.
 
 ## Multiple implementation steps
 
-1. **D1 + D4.** The constructor and the gate that keeps it the only way in,
-   including the `resolve`/`resolve_to_addrs` and per-request-timeout
-   prohibitions. Now first because it is genuinely the smallest and it closes
-   redirects, proxy, ALPN and the TLS floor immediately.
+1. **D1 + D4, including D5 Tier 2.** The constructor and the gate that keeps it
+   the only way in, with the `resolve`/`resolve_to_addrs` and
+   per-request-timeout prohibitions, and the three `http1_*` strictness toggles
+   set explicitly. Smallest step, and it closes redirects, proxy, ALPN, the TLS
+   floor and the header-envelope row at once.
 2. **D3.** Endpoint-origin validation, with its migration and admin UI. Highest
    value, and larger than step 1 — this ordering was reversed in the first draft
    on a cost claim the security review falsified.
 3. **D2.** The validating resolver and its vendored prefix table — the largest
    piece, and the one whose tests are the matrix's resolver corpus.
-4. **D5.** Only after the amendment question is answered.
+4. **D5 Tier 1.** The provider corpus measurement, and the body and media/status
+   bounds derived from it. Independent of the amendment question, so it does not
+   wait on anything.
+5. **The chain-size row.** Determine whether `tls_info` can evidence it, and file
+   it in Tier 1 or Tier 3 with that evidence.
+6. **D5 Tier 3.** Only after the amendment question is answered — the only step
+   that waits.
 
 ## Tests
 
@@ -237,27 +282,30 @@ the RFC is now Accepted, so the question has no content. **Q3 is withdrawn by me
 as mistaken**, with the reasoning kept below because the mistake is instructive.
 **Q1 is the only one still open, and it is not mine to settle.**
 
-### Q1 — D5's amendment. **Recommendation: amend.** Still open.
+### Q1 — D5 **Tier 3** only. **Recommendation: amend.** Still open.
 
-Amend the five rows to state the property (*bounded header and body allocation;
-strict framing; no request smuggling*) rather than the parser internals that
-realise it, and satisfy them by a dependency floor plus a recorded statement of
-what is relied upon.
+**Narrowed.** This question first covered five rows. After the enforceability
+split it covers three: the header buffer and slot sizing, the handshake byte
+bound, and dropping without EOF wait. Tier 1 and Tier 2 need no amendment, and
+the chain-size row is unresolved rather than in scope here.
+
+Amend those three to state the property — *bounded header allocation; strict
+framing; no request smuggling* — and satisfy them by a dependency floor plus a
+recorded statement of the upstream behaviour relied upon.
 
 **Why.** Literal compliance means replacing `hyper` and `rustls` with our own
 HTTP/1.1 parser and TLS bounds, to match numbers whose security value lies in a
 bound existing rather than in its being exactly 32 KiB. Hand-written HTTP parsers
 are a classic source of request-smuggling and memory-safety defects. Trading a
-widely reviewed implementation for an unreviewed one, for literal compliance with
-a row written by the previous architect, makes the system less safe while making
-the matrix look satisfied.
+widely reviewed implementation for an unreviewed one makes the system less safe
+while making the matrix look satisfied.
 
-**The cost of amending**, stated so it is not hidden: we rely on an upstream
-guarantee rather than owning it, and if `hyper` relaxes a default we inherit that
-silently. The dependency floor plus the recorded statement of what is relied upon
-is what makes that reviewable, and D5 requires the implementation to **evidence**
-each guarantee rather than assert it. If a guarantee turns out to be absent, the
-row returns as real work.
+**The cost of amending is now much smaller than the first draft claimed.** That
+draft recorded the risk as "we rely on an upstream guarantee, and a relaxed
+default reaches us silently". Tier 2 removes that for every row where a setter
+exists, because the requirement is stated in our own source. What remains is
+genuine but narrow: for three rows with no setter, we rely on upstream behaviour
+and must evidence it at a pinned floor rather than assert it.
 
 **This is not mine to settle** because it amends RFC 096's normative matrix, and
 RFC 096 is Accepted.
