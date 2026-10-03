@@ -7,8 +7,8 @@ approved in the same message. It was accepted, returned to `proposed/` for a
 material improvement to D5, and re-accepted, all on 2026-10-03; the lifecycle
 history in the RFC records each step.
 
-**Not dispatched.** Implementation is permitted under RFC 000, but no dispatch
-exists yet, so nothing here is work for the dev team.
+**Step 1 is dispatched** — see below. Steps 2, 3, 4 and 6 are not. Step 5 is
+answered by the architect and needs no implementation.
 
 ## Contents
 
@@ -20,3 +20,7 @@ exists yet, so nothing here is work for the dev team.
   rows can be derived from measured reality. They largely can: three stop needing
   an amendment. **Adopted 2026-10-03** — the return was approved and D5 is now
   split by enforceability into Tiers 1–3 plus one unresolved row.
+- [`step1-constructor-and-gate-2026-10-03.md`](step1-constructor-and-gate-2026-10-03.md)
+  — **dispatched.** D1, D4 and D5 Tier 2: the single egress constructor, the G19
+  gate over the three bypass routes, and the `http1_*` strictness toggles set
+  explicitly. Carries the architect's answer to step 5 as information only.

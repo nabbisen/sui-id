@@ -245,13 +245,27 @@ relaxed requirement and no account of who relaxed it or why.
 rows. The pointer is what pays it, and it is the whole reason the pointer is
 mandatory rather than courteous.
 
-#### Unresolved: certificate chain ≤16/128 KiB
+#### Certificate chain ≤16/128 KiB — evidence filed 2026-10-03; its tier is not yet settled
 
-**I do not know which tier this belongs in.** `reqwest`'s `tls_info` may expose
-enough of the peer chain to check it after the handshake. I have not verified
-that and am not guessing. **The implementation's first task on this row is to
-find out**, and to file it in Tier 1 or Tier 3 with the evidence — not to assume
-either.
+The RFC asked the implementation to determine whether `reqwest`'s `tls_info`
+could evidence this bound. **The architect determined it on 2026-10-03; no
+implementation work is needed and none is dispatched.**
+
+**`tls_info` cannot.** `TlsInfo::peer_certificate()` returns `Option<&[u8]>` —
+**the leaf certificate only, not the chain** — so it cannot measure a
+16-certificate / 128 KiB chain. The row cannot be Tier 1.
+
+**A `rustls` `ServerCertVerifier` could**, by measuring the intermediates and
+then delegating to the real verifier. **The recommendation is not to.** It puts
+our code in the certificate-verification path in order to enforce a byte bound,
+and the cost of a mistake there is accepting a bad certificate — far worse than
+this bound being absent.
+
+**Why this row is not simply moved to Tier 3.** `@nabbisen` approved "amend" on
+2026-10-03 for a Tier 3 of **three** rows. Filing this one there would make the
+approved amendment cover four, which is more than he approved. **The evidence is
+filed; the tier is his to settle.** Until he does, the row is neither amended nor
+implemented, and nothing depends on it.
 
 ## Multiple implementation steps
 
