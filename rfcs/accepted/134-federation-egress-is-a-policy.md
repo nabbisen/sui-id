@@ -26,7 +26,7 @@ a tier with evidence; and the Tier 3 amendment is settled either way.
 **Tracks.** ROADMAP M4-A — Federation validation and transport.
 **Touches.** `crates/sui-id/src/runtime/state.rs`, a new egress module,
 `crates/sui-id/src/http/handlers/federation.rs`, a `federation_provider` migration
-and its admin UI (D3's origin set), `contracts/`, CI.
+and the matching `FederationProviderConfig` field (D3's origin set), `contracts/`, CI.
 **Handoff.** [`../handoffs/134-federation-egress-is-a-policy/README.md`](../handoffs/134-federation-egress-is-a-policy/README.md)
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** High-capability model, requirements-architect role.
@@ -116,8 +116,26 @@ use:
   document may not introduce an origin the administrator did not configure.
 
 **D3 therefore carries a schema change:** a migration adding the origin set (RFC
-096's matrix, Origins row: *1–8 explicit canonical origins including issuer*),
-admin UI to maintain it, and a documented default for existing rows.
+096's matrix, Origins row: *1–8 explicit canonical origins including issuer*), the
+`FederationProviderConfig` field an administrator sets it from, and a documented
+default for existing rows.
+
+> **Corrected 2026-10-03, by the architect.** This sentence said "admin UI to
+> maintain it". **There is no admin UI for federation providers** —
+> `FederationProvider` appears nowhere in `crates/sui-id-web/src`,
+> `crates/sui-id/src/http/router.rs` has no provider routes, and
+> `crates/sui-id/src/runtime/startup.rs:303-333` seeds providers from
+> `cfg.federation_providers` on boot. I wrote "admin UI" without checking how
+> providers are configured.
+>
+> **Recorded as correcting a factual error about the system, not as changing
+> scope:** the requirement was that an administrator can maintain the set, the
+> config file is how an administrator maintains a provider, and nothing is added
+> to or removed from what must hold. **That reading is mine and `@nabbisen` may
+> overrule it**, in which case this is a material change and the RFC returns to
+> `proposed/` under RFC 000. The shipped implementation (`842b75b`) already
+> follows the corrected text; the dev team flagged the contradiction rather than
+> amending this RFC themselves, which is the right boundary.
 
 **Deriving the set from `issuer` alone is rejected, not deferred.** Real providers
 serve endpoints from a second origin — Google's issuer is
@@ -274,9 +292,10 @@ implemented, and nothing depends on it.
    per-request-timeout prohibitions, and the three `http1_*` strictness toggles
    set explicitly. Smallest step, and it closes redirects, proxy, ALPN, the TLS
    floor and the header-envelope row at once.
-2. **D3.** Endpoint-origin validation, with its migration and admin UI. Highest
-   value, and larger than step 1 — this ordering was reversed in the first draft
-   on a cost claim the security review falsified.
+2. **D3.** Endpoint-origin validation, with its migration and config field.
+   Highest value, and larger than step 1 — this ordering was reversed in the
+   first draft on a cost claim the security review falsified. **Landed
+   `842b75b`.**
 3. **D2.** The validating resolver and its vendored prefix table — the largest
    piece, and the one whose tests are the matrix's resolver corpus.
 4. **D5 Tier 1.** The provider corpus measurement, and the body and media/status
