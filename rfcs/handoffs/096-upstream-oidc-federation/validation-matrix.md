@@ -23,6 +23,24 @@ escapes. Tests assert the exact accept/reject value, not merely parser success.
 
 ## DNS, TLS, HTTP, and JSON
 
+> **Three rows below are superseded by RFC 134 (accepted 2026-10-03).** The
+> *HTTP version/allocation* row's fixed buffer and slot sizes, the *Connection*
+> row's handshake byte bound, and the *Body framing* row's "dropped without EOF
+> wait" are **no longer normative as written**. RFC 134 D5 Tier 3 replaces them
+> with the property they exist to secure — bounded header allocation, strict
+> framing, no request smuggling — satisfied by a pinned dependency floor plus an
+> evidenced statement of the upstream behaviour relied upon.
+>
+> **Nothing else on this page is affected.** The remaining rows stand as written,
+> and RFC 134 D5 Tiers 1 and 2 enforce several of them directly rather than
+> relaxing them. The certificate-chain size bound is **unresolved**, not
+> superseded: RFC 134 requires it to be filed with evidence either way.
+>
+> This note records a supersession; it does not itself make the change. The
+> decision, its reasoning and its approval are in
+> [`../../accepted/134-federation-egress-is-a-policy.md`](../../accepted/134-federation-egress-is-a-policy.md).
+
+
 | Boundary | Accept | Reject |
 |---|---|---|
 | DNS answers | 1–8; every normalized address ordinary public unicast outside all IANA-special and explicit deny prefixes | empty/over-limit; any IANA special row regardless of global flag; NAT64/6to4/Teredo/mapped/compatible/anycast/other explicit deny |

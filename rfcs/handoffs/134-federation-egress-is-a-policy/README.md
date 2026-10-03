@@ -1,12 +1,14 @@
 # RFC 134 — handoff
 
-**RFC.** [`../../proposed/134-federation-egress-is-a-policy.md`](../../proposed/134-federation-egress-is-a-policy.md)
+**RFC.** [`../../accepted/134-federation-egress-is-a-policy.md`](../../accepted/134-federation-egress-is-a-policy.md)
 
-**Status: returned to `proposed/` on 2026-10-03** under RFC 000's
-return-for-review rule, after an owner-approved material change to D5. It was
-Accepted earlier the same day; the design was not found wrong, it was found
-improvable. **Implementation is prohibited while it sits in `proposed/`**, and
-nothing here is work for the dev team.
+**Status: Accepted 2026-10-03** on the returned text, with the Tier 3 amendment
+approved in the same message. It was accepted, returned to `proposed/` for a
+material improvement to D5, and re-accepted, all on 2026-10-03; the lifecycle
+history in the RFC records each step.
+
+**Not dispatched.** Implementation is permitted under RFC 000, but no dispatch
+exists yet, so nothing here is work for the dev team.
 
 ## Contents
 

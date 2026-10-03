@@ -1,6 +1,8 @@
 # RFC 134 — Federation egress is a policy, not a client
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-10-03
+**Approved by.** `@nabbisen`, 2026-10-03: "RFC 134 is accepted." — on the returned text, whose change from the earlier acceptance is D5's split by enforceability. The same message settled the one open question: **"amend"**, which approves the Tier 3 amendment (D5, Q1). Recorded per RFC 133 D1 because the security review had returned changes.
 **Lifecycle history.** Accepted 2026-10-03 by `@nabbisen` ("Confirmed. Accepted.") on the text carrying the security review's three required changes. **Returned to `proposed/` the same day**, 2026-10-03, under RFC 000's return-for-review rule, following an owner-approved material change to D5's scope and to the closure prerequisites. The prior acceptance is preserved here; the design it approved was not found wrong, it was found improvable.
 **Amended on.** 2026-10-03 — D5 restructured. The five rows are now split by **enforceability** rather than by difficulty, after `@nabbisen` asked whether they could be derived from measured reality. Three of the five stop requiring a matrix amendment: see [`../handoffs/134-federation-egress-is-a-policy/d5-can-the-rows-be-measured-2026-10-03.md`](../handoffs/134-federation-egress-is-a-policy/d5-can-the-rows-be-measured-2026-10-03.md). Closure prerequisites updated accordingly.
 **Security review.** Required — [security review 2026-10-03](../handoffs/134-federation-egress-is-a-policy/security-review-2026-10-03.md), **by the architect, which authored this RFC, and therefore not independent.** Carried under `ROADMAP.md` R1's residual. It returned **three required changes** (R1 the missing origins column, R2 the `resolve()` bypass, R3 the per-request timeout override), all folded into the text below.
@@ -210,11 +212,38 @@ exposes the handshake byte bound or connection-close behaviour:
 - handshake ≤256 KiB inbound;
 - "declared length read exactly then one-use connection dropped without EOF wait".
 
-For these, and only these, the proposal stands: amend the rows to state the
-property — *bounded header allocation; strict framing; no request smuggling* —
-and satisfy them by a dependency floor plus a recorded statement of the upstream
-behaviour relied upon, **evidenced rather than asserted**. If a guarantee turns
-out to be absent, that row returns as real work.
+For these, and only these, the rows are amended to state the property —
+*bounded header allocation; strict framing; no request smuggling* — satisfied by
+a dependency floor plus a recorded statement of the upstream behaviour relied
+upon, **evidenced rather than asserted**. If a guarantee turns out to be absent,
+that row returns as real work.
+
+**Approved by `@nabbisen`, 2026-10-03: "amend".**
+
+#### How the amendment takes effect: RFC 134 supersedes, RFC 096's matrix is not edited
+
+**This RFC supersedes those three rows of RFC 096's validation matrix. The matrix
+file is not edited**, beyond a pointer added to it that makes the supersession
+visible to anyone reading it.
+
+**Why, and this is a judgement `@nabbisen` should overrule if he meant otherwise.**
+RFC 000 states that handoffs "remain companions whose state is inherited from
+their RFC". The validation matrix is RFC 096's handoff, so **rewriting a normative
+requirement inside it is a material change to RFC 096** — and RFC 096 is Accepted,
+so under the same rule just applied to this RFC it would return **RFC 096** to
+`proposed/`. That would block M4-A and M4-B outright and require a fresh
+independent design review of a large RFC, as a side effect of a narrow transport
+decision.
+
+Supersession avoids that, and is better on its own terms rather than merely
+cheaper: it keeps the change attached to the RFC and the security review that
+produced it, with its date and reasoning. Editing the matrix in place would land
+the same words with none of that provenance, and a later reader would find a
+relaxed requirement and no account of who relaxed it or why.
+
+**The cost, stated:** the matrix no longer reads as self-contained for those three
+rows. The pointer is what pays it, and it is the whole reason the pointer is
+mandatory rather than courteous.
 
 #### Unresolved: certificate chain ≤16/128 KiB
 
