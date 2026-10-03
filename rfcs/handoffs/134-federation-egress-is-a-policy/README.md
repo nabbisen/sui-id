@@ -7,8 +7,8 @@ approved in the same message. It was accepted, returned to `proposed/` for a
 material improvement to D5, and re-accepted, all on 2026-10-03; the lifecycle
 history in the RFC records each step.
 
-**Step 1 is dispatched** — see below. Steps 2, 3, 4 and 6 are not. Step 5 is
-answered by the architect and needs no implementation.
+**Steps 1 and 2 are dispatched.** Steps 3, 4 and 6 are not. Step 5 is answered by
+the architect and needs no implementation.
 
 ## Contents
 
@@ -24,3 +24,8 @@ answered by the architect and needs no implementation.
   — **dispatched.** D1, D4 and D5 Tier 2: the single egress constructor, the G19
   gate over the three bypass routes, and the `http1_*` strictness toggles set
   explicitly. Carries the architect's answer to step 5 as information only.
+- [`step2-endpoint-origin-validation-2026-10-03.md`](step2-endpoint-origin-validation-2026-10-03.md)
+  — **dispatched.** D3: the provider's allowed-origin set, and a
+  `ValidatedDiscovery` newtype that makes an unchecked discovery endpoint
+  impossible to use. Carries a correction to RFC 134 D3's "admin UI", which does
+  not exist — providers are seeded from config at startup.
