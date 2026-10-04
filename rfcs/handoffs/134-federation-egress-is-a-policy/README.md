@@ -1,14 +1,14 @@
 # RFC 134 — handoff
 
-**RFC.** [`../../proposed/134-federation-egress-is-a-policy.md`](../../proposed/134-federation-egress-is-a-policy.md)
+**RFC.** [`../../accepted/134-federation-egress-is-a-policy.md`](../../accepted/134-federation-egress-is-a-policy.md)
 
-**Status: returned to `proposed/` 2026-10-04**, on `@nabbisen`'s approval of the
-architect's recommendation, to narrow closure criterion 5. **The implementation
-is complete and shipped** — the return is about a closure criterion the architect
-wrote, not about the design or the code. Lifecycle, all within 2026-10-03/04:
+**Status: Accepted 2026-10-04**, re-accepted on the narrowed closure criterion 5
+after a one-day return. The implementation was already complete and shipped when
+that approval was given — the return was about a closure criterion the architect
+wrote, not about the design or the code. Full lifecycle, all within 2026-10-03/04:
 accepted, returned for a D5 improvement, re-accepted with the Tier 3 amendment,
-and now returned again for criterion 5. The RFC's own `Lifecycle history` records
-each step.
+returned for criterion 5, re-accepted. The RFC's `Lifecycle history` records each
+step.
 
 **Every step has landed. Nothing here is dispatched.** RFC 134 has no
 implementation work outstanding. Closure is blocked on two items, neither of

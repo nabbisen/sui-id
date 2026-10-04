@@ -137,7 +137,7 @@ Proposed: the move approved nothing.
 | 131 | [Two gate levels, and one rule about claims](./done/131-two-gate-levels-and-one-rule.md) | [131-two-gate-levels-and-one-rule](./handoffs/131-two-gate-levels-and-one-rule/README.md) |
 | 132 | [The files a stranger reads first](./done/132-the-files-a-stranger-reads-first.md) | [132-the-files-a-stranger-reads-first](./handoffs/132-the-files-a-stranger-reads-first/README.md) |
 | 133 | [An approval names what it settles, and a design review is of the RFC that cites it](./done/133-an-approval-names-what-it-settles.md) | [133-an-approval-names-what-it-settles](./handoffs/133-an-approval-names-what-it-settles/README.md) |
-| 134 | [Federation egress is a policy, not a client](./proposed/134-federation-egress-is-a-policy.md) | [134-federation-egress-is-a-policy](./handoffs/134-federation-egress-is-a-policy/README.md) |
+| 134 | [Federation egress is a policy, not a client](./accepted/134-federation-egress-is-a-policy.md) | [134-federation-egress-is-a-policy](./handoffs/134-federation-egress-is-a-policy/README.md) |
 
 ### Implemented — Mockup Integration epic (Phase 0 → Phase 8)
 

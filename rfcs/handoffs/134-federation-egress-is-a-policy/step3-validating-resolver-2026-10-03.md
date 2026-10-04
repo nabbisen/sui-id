@@ -1,6 +1,6 @@
 # RFC 134 step 3 — D2: a resolver that validates, and returns exactly one address
 
-**RFC status: Accepted** (`rfcs/proposed/134-federation-egress-is-a-policy.md`).
+**RFC status: Accepted** (`rfcs/accepted/134-federation-egress-is-a-policy.md`).
 
 **Dispatched: step 3 only (D2).** Steps 4 and 6 are **not** dispatched. Steps 1
 and 2 landed (`981b228`, `842b75b`); step 5 was answered by the architect.

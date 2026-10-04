@@ -38,7 +38,7 @@ escapes. Tests assert the exact accept/reject value, not merely parser success.
 >
 > This note records a supersession; it does not itself make the change. The
 > decision, its reasoning and its approval are in
-> [`../../proposed/134-federation-egress-is-a-policy.md`](../../proposed/134-federation-egress-is-a-policy.md).
+> [`../../accepted/134-federation-egress-is-a-policy.md`](../../accepted/134-federation-egress-is-a-policy.md).
 
 
 | Boundary | Accept | Reject |
