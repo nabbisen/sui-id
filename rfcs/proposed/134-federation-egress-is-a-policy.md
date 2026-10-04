@@ -1,9 +1,8 @@
 # RFC 134 — Federation egress is a policy, not a client
 
-**Status.** Accepted
-**Accepted on.** 2026-10-03
-**Approved by.** `@nabbisen`, 2026-10-03: "RFC 134 is accepted." — on the returned text, whose change from the earlier acceptance is D5's split by enforceability. The same message settled the one open question: **"amend"**, which approves the Tier 3 amendment (D5, Q1). Recorded per RFC 133 D1 because the security review had returned changes.
-**Lifecycle history.** Accepted 2026-10-03 by `@nabbisen` ("Confirmed. Accepted.") on the text carrying the security review's three required changes. **Returned to `proposed/` the same day**, 2026-10-03, under RFC 000's return-for-review rule, following an owner-approved material change to D5's scope and to the closure prerequisites. The prior acceptance is preserved here; the design it approved was not found wrong, it was found improvable.
+**Status.** Proposed
+**Lifecycle history.** **Returned to `proposed/` 2026-10-04**, under RFC 000's return-for-review rule, for a material narrowing of closure criterion 5 — approved by `@nabbisen` 2026-10-04 ("Accepted.") on the architect's recommendation. The implementation is **complete and shipped** (steps 1–6, `981b228`/`842b75b`/`2425374`/`a89ea83`); nothing in the design was found wrong. What was wrong was a closure criterion the architect wrote, which imported RFC 096's unbuilt hostile-provider corpus into this RFC's bar — see [`../handoffs/134-federation-egress-is-a-policy/closure-readiness-2026-10-04.md`](../handoffs/134-federation-egress-is-a-policy/closure-readiness-2026-10-04.md). Previously: Accepted 2026-10-03 by `@nabbisen` ("Confirmed. Accepted.") on the text carrying the security review's three required changes. **Returned to `proposed/` the same day**, 2026-10-03, under RFC 000's return-for-review rule, following an owner-approved material change to D5's scope and to the closure prerequisites. The prior acceptance is preserved here; the design it approved was not found wrong, it was found improvable.
+**Amended on.** 2026-10-04 — closure criterion 5 narrowed from "the hostile-provider corpus in RFC 096's matrix passes" to this RFC's own transport scope. The corpus is RFC 096's deliverable (096-A and 096-C), spanning JOSE, claims and state/nonce, none of which RFC 134 built or was dispatched for; as written the criterion could never be met by the RFC carrying it.
 **Amended on.** 2026-10-03 — D5 restructured. The five rows are now split by **enforceability** rather than by difficulty, after `@nabbisen` asked whether they could be derived from measured reality. Three of the five stop requiring a matrix amendment: see [`../handoffs/134-federation-egress-is-a-policy/d5-can-the-rows-be-measured-2026-10-03.md`](../handoffs/134-federation-egress-is-a-policy/d5-can-the-rows-be-measured-2026-10-03.md). Closure prerequisites updated accordingly.
 **Security review.** Required — [security review 2026-10-03](../handoffs/134-federation-egress-is-a-policy/security-review-2026-10-03.md), **by the architect, which authored this RFC, and therefore not independent.** Carried under `ROADMAP.md` R1's residual. It returned **three required changes** (R1 the missing origins column, R2 the `resolve()` bypass, R3 the per-request timeout override), all folded into the text below.
 **Independent design review.** [Security review 2026-10-03](../handoffs/134-federation-egress-is-a-policy/security-review-2026-10-03.md) — same document, same limitation. **The field's name overstates it**, as on RFCs 124, 128, 130, 132 and 133.
@@ -18,8 +17,10 @@ M2a rather than behind it.
 construction site; the resolver rejects both edges of every vendored prefix; the
 gate fails on a second egress client, on any `resolve`/`resolve_to_addrs`, and on
 any per-request timeout in the federation path; every discovery-supplied endpoint
-is checked against the provider's origin set; and the
-hostile-provider corpus in RFC 096's matrix passes; every Tier 1 bound in D5 is a recorded
+is checked against the provider's origin set; **the transport rows of RFC 096's
+matrix pass — the resolver corpus, which D2 satisfies** (narrowed 2026-10-04 from
+"the hostile-provider corpus in RFC 096's matrix passes", which named a
+deliverable of RFC 096 rather than of this RFC); every Tier 1 bound in D5 is a recorded
 measurement with its corpus and headroom, not a chosen number; D5's three Tier 2
 toggles are set explicitly rather than inherited; the chain-size row is filed in
 a tier with evidence; and the Tier 3 amendment is settled either way.

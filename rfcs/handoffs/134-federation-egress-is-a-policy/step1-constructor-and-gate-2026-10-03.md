@@ -1,6 +1,6 @@
 # RFC 134 step 1 — the egress constructor, G19, and D5 Tier 2
 
-**RFC status: Accepted** (`rfcs/accepted/134-federation-egress-is-a-policy.md`,
+**RFC status: Accepted** (`rfcs/proposed/134-federation-egress-is-a-policy.md`,
 accepted 2026-10-03), so implementation is permitted under RFC 000.
 
 **Dispatched: step 1 only** — D1, D4 and D5 Tier 2. **Steps 2, 3, 4 and 6 are not
