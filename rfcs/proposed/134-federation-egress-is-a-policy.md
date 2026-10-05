@@ -1,9 +1,8 @@
 # RFC 134 — Federation egress is a policy, not a client
 
-**Status.** Accepted
-**Accepted on.** 2026-10-04
-**Approved by.** `@nabbisen`, 2026-10-04: "RFC 134 is re-accepted." — **on the narrowed closure criterion 5, which is the only thing that changed** since the 2026-10-03 acceptance. Named per RFC 133 D1 because the security review returned changes: those three (R1 the missing origins column, R2 the `resolve()` bypass, R3 the per-request timeout override) were settled by the 2026-10-03 approval and are not reopened here. The implementation was already complete and shipped when this approval was given.
-**Lifecycle history.** **Returned to `proposed/` 2026-10-04**, under RFC 000's return-for-review rule, for a material narrowing of closure criterion 5 — approved by `@nabbisen` 2026-10-04 ("Accepted.") on the architect's recommendation. The implementation is **complete and shipped** (steps 1–6, `981b228`/`842b75b`/`2425374`/`a89ea83`); nothing in the design was found wrong. What was wrong was a closure criterion the architect wrote, which imported RFC 096's unbuilt hostile-provider corpus into this RFC's bar — see [`../handoffs/134-federation-egress-is-a-policy/closure-readiness-2026-10-04.md`](../handoffs/134-federation-egress-is-a-policy/closure-readiness-2026-10-04.md). Previously: Accepted 2026-10-03 by `@nabbisen` ("Confirmed. Accepted.") on the text carrying the security review's three required changes. **Returned to `proposed/` the same day**, 2026-10-03, under RFC 000's return-for-review rule, following an owner-approved material change to D5's scope and to the closure prerequisites. The prior acceptance is preserved here; the design it approved was not found wrong, it was found improvable.
+**Status.** Proposed
+**Lifecycle history.** **Returned to `proposed/` 2026-10-05**, under RFC 000's return-for-review rule, for a material re-scope of D3 — pre-approved by `@nabbisen` 2026-10-05 ("If re-scope is more reasonable, it will be approved"), on the architect's re-review finding the shipped D3 has no administrator-maintainable origin set. Previously: **Returned to `proposed/` 2026-10-04**, under RFC 000's return-for-review rule, for a material narrowing of closure criterion 5 — approved by `@nabbisen` 2026-10-04 ("Accepted.") on the architect's recommendation. The implementation is **complete and shipped** (steps 1–6, `981b228`/`842b75b`/`2425374`/`a89ea83`); nothing in the design was found wrong. What was wrong was a closure criterion the architect wrote, which imported RFC 096's unbuilt hostile-provider corpus into this RFC's bar — see [`../handoffs/134-federation-egress-is-a-policy/closure-readiness-2026-10-04.md`](../handoffs/134-federation-egress-is-a-policy/closure-readiness-2026-10-04.md). Previously: Accepted 2026-10-03 by `@nabbisen` ("Confirmed. Accepted.") on the text carrying the security review's three required changes. **Returned to `proposed/` the same day**, 2026-10-03, under RFC 000's return-for-review rule, following an owner-approved material change to D5's scope and to the closure prerequisites. The prior acceptance is preserved here; the design it approved was not found wrong, it was found improvable.
+**Amended on.** 2026-10-05 — D3 re-scoped. The origin set it introduced is **write-once at provider creation**: `startup.rs:303-304` seeds only when the slug is absent, `repos/federation_provider.rs` has no `update`, and the only way to change the set is to delete the provider, which cascades (`0038_federation_link.sql:22`) and destroys every federation link to it. D3 now requires a maintenance path. The architect's earlier "admin UI → config field" edit was recorded as correcting a factual error; that was wrong, because a config file does not maintain an existing provider.
 **Amended on.** 2026-10-04 — closure criterion 5 narrowed from "the hostile-provider corpus in RFC 096's matrix passes" to this RFC's own transport scope. The corpus is RFC 096's deliverable (096-A and 096-C), spanning JOSE, claims and state/nonce, none of which RFC 134 built or was dispatched for; as written the criterion could never be met by the RFC carrying it.
 **Amended on.** 2026-10-03 — D5 restructured. The five rows are now split by **enforceability** rather than by difficulty, after `@nabbisen` asked whether they could be derived from measured reality. Three of the five stop requiring a matrix amendment: see [`../handoffs/134-federation-egress-is-a-policy/d5-can-the-rows-be-measured-2026-10-03.md`](../handoffs/134-federation-egress-is-a-policy/d5-can-the-rows-be-measured-2026-10-03.md). Closure prerequisites updated accordingly.
 **Security review.** Required — [security review 2026-10-03](../handoffs/134-federation-egress-is-a-policy/security-review-2026-10-03.md), **by the architect, which authored this RFC, and therefore not independent.** Carried under `ROADMAP.md` R1's residual. It returned **three required changes** (R1 the missing origins column, R2 the `resolve()` bypass, R3 the per-request timeout override), all folded into the text below.
@@ -120,8 +119,22 @@ use:
 
 **D3 therefore carries a schema change:** a migration adding the origin set (RFC
 096's matrix, Origins row: *1–8 explicit canonical origins including issuer*), the
-`FederationProviderConfig` field an administrator sets it from, and a documented
-default for existing rows.
+`FederationProviderConfig` field an administrator sets it from, a documented
+default for existing rows, **and a path by which an administrator can change the
+set on a provider that already exists.**
+
+> **The maintenance path is required, not optional (added 2026-10-05).** Without
+> it the origin set is **write-once at provider creation**, and an administrator
+> who needs to add a second origin — the Google case this very section cites —
+> has only one option: delete the provider and recreate it. That cascades
+> (`crates/sui-id-store/src/migrations/0038_federation_link.sql:22`,
+> `ON DELETE CASCADE`) and **destroys every federation link to that provider**,
+> so every federated user loses their account linkage.
+>
+> An administrator editing the config file sees no error and nothing happens
+> (`crates/sui-id/src/runtime/startup.rs:303-304` is `Ok(_) => {}`), and the
+> workaround that does work is destructive in a way nothing warns about. That is
+> the confusion this project's standard explicitly rules out.
 
 > **Corrected 2026-10-03, by the architect.** This sentence said "admin UI to
 > maintain it". **There is no admin UI for federation providers** —

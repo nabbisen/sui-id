@@ -1,17 +1,17 @@
 # RFC 134 — handoff
 
-**RFC.** [`../../accepted/134-federation-egress-is-a-policy.md`](../../accepted/134-federation-egress-is-a-policy.md)
+**RFC.** [`../../proposed/134-federation-egress-is-a-policy.md`](../../proposed/134-federation-egress-is-a-policy.md)
 
-**Status: Accepted 2026-10-04**, re-accepted on the narrowed closure criterion 5
-after a one-day return. The implementation was already complete and shipped when
-that approval was given — the return was about a closure criterion the architect
-wrote, not about the design or the code. Full lifecycle, all within 2026-10-03/04:
-accepted, returned for a D5 improvement, re-accepted with the Tier 3 amendment,
-returned for criterion 5, re-accepted. The RFC's `Lifecycle history` records each
-step.
+**Status: returned to `proposed/` 2026-10-05** for a material re-scope of D3,
+pre-approved by `@nabbisen`. **This return is different from the previous two:**
+they were about wording the architect got wrong, and this one is about a
+**usability defect in shipped code** — the origin set D3 introduced is
+write-once at provider creation, and the only way to change it destroys every
+federation link to the provider. D3 now requires a maintenance path, which is
+**new implementation work, not yet dispatched**.
 
-**Every step has landed. Nothing here is dispatched.** RFC 134 has no
-implementation work outstanding. Closure is blocked on two items, neither of
+**Steps 1–6 have landed, but RFC 134 is no longer complete.** D3's re-scope adds
+a maintenance path that is not built and not dispatched. Closure is blocked on two items, neither of
 them the dev team's — see
 [`closure-readiness-2026-10-04.md`](closure-readiness-2026-10-04.md). Step 5 needed no implementation; the
 architect answered it.
