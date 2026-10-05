@@ -1,6 +1,6 @@
 # RFC 134 step 2 — D3: discovery is untrusted input
 
-**RFC status: Accepted** (`rfcs/accepted/134-federation-egress-is-a-policy.md`),
+**RFC status: Accepted** (`rfcs/done/134-federation-egress-is-a-policy.md`),
 so implementation is permitted under RFC 000.
 
 **Dispatched: step 2 only (D3).** Steps 3, 4 and 6 are **not** dispatched. Step 1

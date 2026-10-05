@@ -1,21 +1,10 @@
 # RFC 134 — handoff
 
-**RFC.** [`../../accepted/134-federation-egress-is-a-policy.md`](../../accepted/134-federation-egress-is-a-policy.md)
+**RFC.** [`../../done/134-federation-egress-is-a-policy.md`](../../done/134-federation-egress-is-a-policy.md)
 
-**Status: Accepted 2026-10-05** on D3's re-scope. **D3's maintenance path is
-**landed** in `78a2dec`
-([`step7-origin-set-maintenance-2026-10-05.md`](step7-origin-set-maintenance-2026-10-05.md)).
-**All implementation is complete and all nine closure criteria are met**;
-[`closure-review-2026-10-05.md`](closure-review-2026-10-05.md) recommends
-closure. **Closure has not been granted**, so the RFC stays in `accepted/`. Before step 7 — the origin set is still write-once at provider
-creation, and changing it still means deleting the provider, which cascades away
-every federation link to it.
-
-**Steps 1–6 have landed, but RFC 134 is no longer complete.** D3's re-scope adds
-a maintenance path that is not built and not dispatched. Closure is blocked on two items, neither of
-them the dev team's — see
-[`closure-readiness-2026-10-04.md`](closure-readiness-2026-10-04.md). Step 5 needed no implementation; the
-architect answered it.
+**Status: Implemented — closed to `done/` 2026-10-05**, approved by `@nabbisen`
+("Approved.") on the closure review. All six steps landed; all nine closure
+criteria met; Level B on `78a2decb`.
 
 | Step | State |
 |---|---|
