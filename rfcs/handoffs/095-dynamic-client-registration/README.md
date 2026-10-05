@@ -58,9 +58,9 @@ Implementation may start only when all are true:
 > commit the closure evidence names, and a baseline recorded before coding
 > cannot contribute to it, because the commit that matters is the final one.
 >
-> **All six conditions are therefore met and the entry gate needs no owner
-> action.** That is the architect's reading and `@nabbisen` may overrule it, in
-> which case the baseline is simply named and the gate clears that way instead.
+> **All six conditions are met and the entry gate needs no owner action.**
+> **Approved by `@nabbisen`, 2026-10-05: "OK. Approved."** The entry gate is
+> open; RFC 095 implementation may be dispatched.
 
 ## File ownership
 

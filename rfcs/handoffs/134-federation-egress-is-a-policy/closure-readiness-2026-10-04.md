@@ -17,12 +17,13 @@ will not be independent, as on RFCs 124, 128, 130, 132, 133. `ROADMAP.md` R1.
 | 5 | ~~the hostile-provider corpus in RFC 096's matrix passes~~ → **the transport rows pass** | **met** — narrowed 2026-10-04 on `@nabbisen`'s approval; D2's resolver corpus satisfies it |
 | 6 | every Tier 1 bound is a recorded measurement with corpus and headroom | **met** — 5 providers reached, 2 recorded unreachable, derivations beside the constants |
 | 7 | D5's three Tier 2 toggles set explicitly, not inherited | **met** |
-| 8 | **the chain-size row filed in a tier with evidence** | **open — the owner's** |
+| 8 | the chain-size row filed in a tier with evidence | **met** — filed in Tier 3, approved 2026-10-05 |
 | 9 | the Tier 3 amendment settled either way | **met** — "amend", 2026-10-03 |
 
-**Eight of nine met as of 2026-10-04.** Criterion 5 was narrowed and is now
-satisfied; **criterion 8, the chain-size row's tier, is the only thing left**,
-and it is the owner's. The analysis of criterion 5's defect is kept below
+**All nine criteria met as of 2026-10-05**, criterion 8 having been filed in
+Tier 3 on `@nabbisen`'s approval. **But RFC 134 still cannot close:** its D3
+re-scope of 2026-10-05 added a maintenance path for the origin set, and that is
+**not built**. Closure waits on implementation, not on a decision. The analysis of criterion 5's defect is kept below
 unchanged, because it is the record of why the narrowing happened.
 
 ## Criterion 5 is a defect in a prerequisite I wrote

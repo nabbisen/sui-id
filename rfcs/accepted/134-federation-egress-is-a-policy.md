@@ -281,27 +281,25 @@ relaxed requirement and no account of who relaxed it or why.
 rows. The pointer is what pays it, and it is the whole reason the pointer is
 mandatory rather than courteous.
 
-#### Certificate chain ≤16/128 KiB — evidence filed 2026-10-03; its tier is not yet settled
+#### Certificate chain ≤16/128 KiB — **filed in Tier 3, 2026-10-05**
 
-The RFC asked the implementation to determine whether `reqwest`'s `tls_info`
-could evidence this bound. **The architect determined it on 2026-10-03; no
-implementation work is needed and none is dispatched.**
+**Approved by `@nabbisen`, 2026-10-05**, on the architect's recommendation. The
+Tier 3 amendment therefore covers **four** rows, not the three approved on
+2026-10-03.
 
-**`tls_info` cannot.** `TlsInfo::peer_certificate()` returns `Option<&[u8]>` —
-**the leaf certificate only, not the chain** — so it cannot measure a
-16-certificate / 128 KiB chain. The row cannot be Tier 1.
+**Why it cannot be Tier 1.** `reqwest`'s `TlsInfo::peer_certificate()` returns
+`Option<&[u8]>` — **the leaf certificate only, not the chain** — so nothing we
+can reach measures a 16-certificate / 128 KiB chain.
 
-**A `rustls` `ServerCertVerifier` could**, by measuring the intermediates and
-then delegating to the real verifier. **The recommendation is not to.** It puts
-our code in the certificate-verification path in order to enforce a byte bound,
-and the cost of a mistake there is accepting a bad certificate — far worse than
-this bound being absent.
+**Why the alternative was rejected.** A `rustls` `ServerCertVerifier` does see
+the intermediates and could measure them before delegating to the real verifier.
+**That puts our code in the certificate-verification path to enforce a byte
+bound, and the cost of a mistake there is accepting a bad certificate** — far
+worse than this bound being absent.
 
-**Why this row is not simply moved to Tier 3.** `@nabbisen` approved "amend" on
-2026-10-03 for a Tier 3 of **three** rows. Filing this one there would make the
-approved amendment cover four, which is more than he approved. **The evidence is
-filed; the tier is his to settle.** Until he does, the row is neither amended nor
-implemented, and nothing depends on it.
+So the row joins the other three: amended to the property it exists to secure,
+satisfied by the pinned dependency floor and the recorded statement of upstream
+behaviour, evidenced rather than asserted.
 
 ## Multiple implementation steps
 

@@ -1,7 +1,11 @@
 # RFC 136 — Dynamic client registration is legible
 
-**Status.** Proposed
-**Security review.** Required
+**Status.** Accepted
+**Accepted on.** 2026-10-05
+**Approved by.** `@nabbisen`, 2026-10-05: "On both, your recommendations are accepted." — accepting this RFC **and settling its one open question in favour of a marker on the exception** rather than a sortable column.
+**Security review.** Required — [security review 2026-10-05](../handoffs/136-dynamic-registration-is-legible/security-review-2026-10-05.md), **by the architect, which authored this RFC, and therefore not independent.** No required changes; it verified that C15 actually stamps `registered_via`, without which D2's marker would never appear.
+**Independent design review.** [Security review 2026-10-05](../handoffs/136-dynamic-registration-is-legible/security-review-2026-10-05.md) — same document, same limitation. **The field's name overstates it**, as on RFCs 124, 128, 130, 132, 133, 134 and 135.
+**Handoff.** [`../handoffs/136-dynamic-registration-is-legible/README.md`](../handoffs/136-dynamic-registration-is-legible/README.md)
 
 **Design prerequisites.** None.
 **Implementation prerequisites.** This RFC Accepted.
@@ -104,7 +108,9 @@ confirmation step, not a substitute for it.
 
 ## Open questions
 
-1. **Marker or column?** I recommend a marker on the exception, for the reason
-   above. If you would rather have a sortable column, say so — it is a wider
-   change and a worse default, but it is a legitimate preference and the
-   implementation differs.
+**None. Settled at acceptance.**
+
+*Marker or column?* — **marker on the exception**, approved by `@nabbisen` on
+2026-10-05. A fifth data column reading "admin" on nearly every row would cost
+width on every screen to tell the reader something they already know; marking
+only the self-registered clients puts the ink where the information is.
