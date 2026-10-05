@@ -1,7 +1,11 @@
 # RFC 096-A prerequisite — the hostile-provider harness
 
 **Date:** 2026-10-05
-**Status: design, for approval. Not dispatched.** RFC 096-A's implementation
+**Status: APPROVED by `@nabbisen`, 2026-10-05 ("Approved."), and dispatched** —
+see [`harness-build-2026-10-05.md`](harness-build-2026-10-05.md). **All four of
+096-A's implementation prerequisites are now clear.**
+
+**Originally written as: design, for approval, not dispatched.** RFC 096-A's implementation
 prerequisites name *"the hostile-provider harness approved"* as one of four, so
 this waits on his sign-off before any dispatch.
 **By:** the architect. **This is the last of 096-A's four prerequisites** — the

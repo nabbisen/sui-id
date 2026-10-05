@@ -198,10 +198,14 @@ the shared three-RFC records, held under
 ## Open work
 
 - [`hostile-provider-harness-2026-10-05.md`](hostile-provider-harness-2026-10-05.md)
-  — **design, awaiting sign-off. Not dispatched.** The last of 096-A's four
+  — **approved 2026-10-05.** The last of 096-A's four
   implementation prerequisites. Transport injected beneath policy via
   `connector_layer`, through a `#[cfg(test)]` constructor in the egress module,
   complementing rather than replacing `tls_mock.rs`.
+- [`harness-build-2026-10-05.md`](harness-build-2026-10-05.md) —
+  **DISPATCHED — this is the open work.** Builds the harness the design above
+  approves. Step 1 settles whether TLS-level abuse is reachable at
+  `connector_layer`'s altitude before anything is built.
 - [`federation-split-2026-10-05.md`](federation-split-2026-10-05.md) —
   **landed `2f07862`.** Was dispatched as: The preparatory `federation.rs` split, one of 096-A's four
   implementation prerequisites, named since 2026-07 and specified nowhere until
