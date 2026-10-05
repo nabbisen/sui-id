@@ -1,14 +1,11 @@
 # RFC 134 — handoff
 
-**RFC.** [`../../proposed/134-federation-egress-is-a-policy.md`](../../proposed/134-federation-egress-is-a-policy.md)
+**RFC.** [`../../accepted/134-federation-egress-is-a-policy.md`](../../accepted/134-federation-egress-is-a-policy.md)
 
-**Status: returned to `proposed/` 2026-10-05** for a material re-scope of D3,
-pre-approved by `@nabbisen`. **This return is different from the previous two:**
-they were about wording the architect got wrong, and this one is about a
-**usability defect in shipped code** — the origin set D3 introduced is
-write-once at provider creation, and the only way to change it destroys every
-federation link to the provider. D3 now requires a maintenance path, which is
-**new implementation work, not yet dispatched**.
+**Status: Accepted 2026-10-05** on D3's re-scope. **D3's maintenance path is now
+dispatchable and is not built** — the origin set is still write-once at provider
+creation, and changing it still means deleting the provider, which cascades away
+every federation link to it.
 
 **Steps 1–6 have landed, but RFC 134 is no longer complete.** D3's re-scope adds
 a maintenance path that is not built and not dispatched. Closure is blocked on two items, neither of
