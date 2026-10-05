@@ -85,6 +85,16 @@ signature. The mitigation is the baseline file's own rule — *"Do not add a lin
 for an attribution you cannot point to the owner's own words for"* — which is a
 discipline, not a control, and depends on the architect's good faith.
 
+**D3a — This RFC added nine lines to the baseline, which is the drift it
+describes.** Writing a document *about* the attribution gate trips the gate on
+nearly every paragraph: two of the nine are `@nabbisen`'s actual words, one is
+the required `Accountable owner and approver` field, and **six are this RFC
+quoting the gate, the script's docstring, or the baseline file's own rule**. All
+nine are legitimate and all nine were baselined. **The demonstration is the
+point:** a control whose baseline grows when you document the control is one
+whose growth is not, by itself, a signal. That is why D3 accepts the drift
+rather than proposing a volume check for it — see the open question.
+
 **D4 — No residual claim of verifiability.** `ROADMAP.md` §S1's R1 residual
 keeps carrying review-independence risk. Nothing in the repository may say owner
 decisions are *verifiable*; they are *visible*.
