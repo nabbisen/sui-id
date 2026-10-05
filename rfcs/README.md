@@ -75,7 +75,7 @@ slot is `104`). One **parallel namespace** also exists:
 | 110 | [An RFC header may not legislate](./done/110-rfc-header-governance-guard.md) | cycle A | mid-capability model |
 | 115 | [Creating a user without choosing their password](./done/115-user-creation-without-a-password.md) | cycle A | mid-capability model |
 | 116 | [Gate contracts: one source, one gate each](./done/116-gate-contracts.md) | cycle B | mid-capability model |
-| 117 | [Owner decisions must be verifiable](./accepted/117-verifiable-owner-decisions.md) | stages 0/0b landed; 1–3 need the key | mid-capability model |
+| 117 | [Owner decisions must be verifiable](./archive/117-verifiable-owner-decisions.md) | stages 0/0b landed; 1–3 need the key | mid-capability model |
 | 118 | [A credential change clears the lockout, and the user is told](./done/118-lockout-clears-on-credential-change.md) | cycle B, head | mid-capability model |
 | 105 | [Audit notes: escape attribute values](./done/105-audit-note-escaping.md) | cycle A; **no independent design review — see its header** | mid-capability model |
 
@@ -138,7 +138,7 @@ Proposed: the move approved nothing.
 | 132 | [The files a stranger reads first](./done/132-the-files-a-stranger-reads-first.md) | [132-the-files-a-stranger-reads-first](./handoffs/132-the-files-a-stranger-reads-first/README.md) |
 | 133 | [An approval names what it settles, and a design review is of the RFC that cites it](./done/133-an-approval-names-what-it-settles.md) | [133-an-approval-names-what-it-settles](./handoffs/133-an-approval-names-what-it-settles/README.md) |
 | 134 | [Federation egress is a policy, not a client](./proposed/134-federation-egress-is-a-policy.md) | [134-federation-egress-is-a-policy](./handoffs/134-federation-egress-is-a-policy/README.md) |
-| 135 | [Owner attributions are visible](./proposed/135-owner-attributions-are-visible.md) | — |
+| 135 | [Owner attributions are visible](./accepted/135-owner-attributions-are-visible.md) | — |
 
 ### Implemented — Mockup Integration epic (Phase 0 → Phase 8)
 

@@ -1,15 +1,20 @@
 # RFC 117 — Owner decisions must be verifiable
 
-**Status.** Accepted
-**Accepted on.** 2026-09-24
-**Approved by.** `@nabbisen`, 2026-09-24: "RFC-117 is accepted." The move to
-`accepted/` lagged the acceptance by a day: it waited on the independent design
-review, which landed the same day, and the architect then amended the RFC and
-did not walk the folder. Stages 0 and 0b were implemented after the acceptance
-and before the move.
-**Amended on.** 2026-09-24 — **material, and recorded 2026-10-02 after the re-review of the fifteen found it missing.** On the independent design review of the same day, the RFC's central claim was split: *"the owner's decisions become verifiable"* had covered two properties of different strength, and only **evidence** survives the objection — **enforcement does not**, against an agent that will edit the gate. The work was also split into stages. Commit `4c3c9e7`.
-**Acceptance sequence, reconstructed 2026-10-02 and stated rather than inferred.** `@nabbisen` accepted this RFC at **06:54** (`368d278`), with the design review *requested* and not yet performed. The narrowing above landed at **08:31** (`4c3c9e7`). The 20:28 move to `accepted/` (`3dec640`) narrates that history and **adds no second approval**. So the text approved at 06:54 is not the text that now stands, and **no acceptance of the narrowed text is on record**. The architect's recommendation, which `@nabbisen` accepted on 2026-10-02, was that the narrowed text be read and accepted rather than the earlier approval be treated as covering it — because reconstructing an owner decision by inference is the defect this RFC exists to remove.
-**Approved by (the narrowed text).** `@nabbisen`, **2026-10-02: "Accepted."** — given on the narrowing itself, after reading it, and **not** by inference from the 06:54 approval of the superseded text. This is the acceptance that was missing, and it is the one that stands. The 2026-09-24 approval remains on record above as what it was: an acceptance of a claim this RFC no longer makes.
+**Status.** Superseded by [RFC 135 — Owner attributions are visible](../accepted/135-owner-attributions-are-visible.md)
+
+> **Archived 2026-10-05.** `@nabbisen` ruled that this design "does not match the
+> project reality (the team organization etc.) at all". **Its first stage had
+> already shipped as G16 and is kept**, re-homed under RFC 135; what is disposed
+> of is the unbuilt half — the hardware signing key (D1), per-decision
+> signatures (D2), the ledger (D3) and the pre-adoption labelling (D6).
+>
+> **Retained rather than deleted** because its measurement is accurate and worth
+> keeping: 411 commits under a shared signing key with `commit.gpgsign = true`,
+> so an agent's commit reports the same `%G?` status as the owner's; and the
+> agents' credential holding `admin: true` on a repository with no branch
+> protection and no `CODEOWNERS`. **Nothing in `proposed/`, `accepted/` or
+> `done/` may cite this RFC as authority** (G11 condition 15).
+
 **Security review.** Required
 **Independent design review.** [Design review 2026-09-24](../handoffs/117-verifiable-owner-decisions/design-review-2026-09-24.md) by the implementation role, which authored neither this RFC nor its handoff. Two blockers, four high, four medium; all resolved in this text. It measured the objection below and found it **stronger** than stated, and it disproved D1's central property as written (B2).
 **Design prerequisites.** None. RFC 000 is not amended by this RFC; it adds a way to evidence decisions, not a new rule about who may make them.

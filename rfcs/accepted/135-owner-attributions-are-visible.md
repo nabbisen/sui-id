@@ -1,6 +1,8 @@
 # RFC 135 — Owner attributions are visible
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-10-05
+**Approved by.** `@nabbisen`, 2026-10-05: "Accepted." — settling that RFC 117's unbuilt signing-key half is disposed of and G16 is kept and re-homed here. His ruling the same day was that RFC 117 "does not match the project reality (the team organization etc.) at all. Dispose it if no concern and risk"; the concern found was that disposing of it wholesale would orphan a live gate, and this RFC is how it is disposed of without that.
 **Security review.** Not required — this RFC adds no application behaviour and touches no crate. It re-homes an existing governance gate and narrows the design it came from. The exemption reason stands or falls with this RFC's acceptance.
 
 **Design prerequisites.** None.
@@ -101,9 +103,15 @@ decisions are *verifiable*; they are *visible*.
 
 ## Gate Matrix lane owned by RFC 135
 
-| Gate | Command |
-|---|---|
-| G16 | `python3.14 scripts/check-owner-attributions.py --root . --policy contracts/owner-attributions.toml` |
+Registered through the multi-source lane registry (RFC 094 R10), as RFC 098,
+116 and 134 do. The heading above is the recorded source heading and is matched
+by plain equality; do not rename it without changing the manifest in the same
+commit. Column layout mirrors RFC 093's table so one parser reads both. This
+lane is not new — it transfers from RFC 117, which is archived.
+
+| ID | Toolchain | Features | Blocking command / assertion |
+|---|---|---|---|
+| G16 | Python 3.14 | n/a | `python3.14 scripts/check-owner-attributions.py --root . --policy contracts/owner-attributions.toml` |
 
 ## Open questions
 

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3.14
-"""RFC 117 stage 0 (G16): the owner-attribution census and its closed baseline.
+"""RFC 135 (G16): the owner-attribution census and its closed baseline.
 
 This repository has recorded decisions as `@nabbisen`'s that he did not make,
-three times (RFC 117 §Summary). Each was one commit that nobody looked at. This
+three times (recorded in the archived RFC 117 §Summary, which measured them).
+Each was one commit that nobody looked at. This
 gate makes such a sentence impossible to add *unseen*:
 
   1. **Census.** It finds every sentence, in every tracked text file, that
@@ -25,18 +26,21 @@ gate makes such a sentence impossible to add *unseen*:
      baseline file, which shows up in the diff, not a marker an author types
      into their own paragraph.
 
-What this does not do (stated because RFC 117 exists to stop overclaiming):
+What this does not do (stated because overclaiming is the failure to avoid):
 
-  * It does not verify that an owner decision is real. Nothing here can; that is
-    what the ledger and its signatures (stages 1-3) are for.
-  * **Citations are not honoured yet.** RFC 117 lets a sentence cite a ledger
-    entry instead of being baselined. There is no ledger until stage 1, and a
-    citation checked against an unsigned file would be a hole, so stage 0 has no
-    citation path at all: a new attribution is baselined by a visible edit, or
-    it fails.
+  * It does not verify that an owner decision is real. **Nothing here can, and
+    nothing is planned that will.** RFC 117 proposed signatures from a key no
+    agent can use; `@nabbisen` disposed of that on 2026-10-05 as not matching
+    this project, and RFC 135 accepts the gap instead of closing it.
+  * **There is no citation path and there will not be one.** RFC 117 would have
+    let a sentence cite a signed ledger entry instead of being baselined; with
+    no ledger, a new attribution is baselined by a visible edit, or it fails.
+    RFC 135 D3 records what that costs: the baseline grows instead of staying
+    closed, 455 lines at adoption to 671 on 2026-10-05.
   * It does not stop an agent that edits this script, its policy or the
     baseline in the same commit. The verifier lives in the tree it verifies;
-    only review of changes to those paths closes that (RFC 117 §The claim).
+    only review of changes to those paths closes that. This gate is a speed bump
+    that makes a writer notice, not a proof (RFC 135).
   * It matches text. An attribution phrased with no owner token, or in an image,
     is not seen.
 
@@ -283,7 +287,7 @@ def read_rev(root: str, rev: str) -> dict[str, str]:
 # ── the baseline ──────────────────────────────────────────────────────────
 
 _BASELINE_HEADER = """\
-# RFC 117 stage 0: the closed baseline of owner attributions.
+# RFC 135 (was RFC 117 stage 0): the closed baseline of owner attributions.
 #
 # One line per (path, sentence): PATH <TAB> SHA-256 of the normalised sentence
 # <TAB> how many times it occurs <TAB> the sentence's first characters, for
@@ -389,7 +393,7 @@ def render_baseline_section(root: str, baseline_rel: str, base: str | None, how:
     """The `## Baseline changes` section: the diff of the baseline file against
     the base, an explicit 'unchanged' when there is none, or a stated reason when
     there is no base."""
-    head = ["## Baseline changes (RFC 117 stage 0b)", ""]
+    head = ["## Baseline changes (RFC 135)", ""]
     if base is None:
         return "\n".join(
             head
@@ -450,7 +454,7 @@ def classify(hits, baseline):
 
 def render(new, known, stale: int, excerpt: int) -> str:
     out = [
-        "## Owner attributions (RFC 117 stage 0, G16)",
+        "## Owner attributions (RFC 135, G16)",
         "",
         f"{len(new) + len(known)} attributions found: **{len(new)} new**, "
         f"{len(known)} in the closed baseline"

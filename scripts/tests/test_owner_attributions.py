@@ -390,7 +390,7 @@ class BaselineDiff(unittest.TestCase):
         r = self.repo.check("--base", "HEAD^")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)  # the gate itself passes
         out = r.stdout
-        self.assertIn("## Baseline changes (RFC 117 stage 0b)", out)
+        self.assertIn("## Baseline changes (RFC 135)", out)
         self.assertIn("**changed**", out)
         self.assertIn("1 line(s) added", out)
         self.assertRegex(out, r"\+new\.md\t[0-9a-f]{64}\t1\t" + self.NEW[:40])
@@ -404,7 +404,7 @@ class BaselineDiff(unittest.TestCase):
         self.repo.commit("unrelated")
         r = self.repo.check("--base", "HEAD^")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        self.assertIn("## Baseline changes (RFC 117 stage 0b)", r.stdout)
+        self.assertIn("## Baseline changes (RFC 135)", r.stdout)
         self.assertIn("is unchanged since", r.stdout)
         self.assertNotIn("```diff", r.stdout)
 

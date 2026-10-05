@@ -42,6 +42,10 @@ min_number = 93
 # it replaces); the RFC 007 it names is `rfcs/archive/007-multi-tenancy.md`.
 [archive_citations]
 "025" = ["007"]
+# RFC 135 supersedes RFC 117 and its header must name it: a supersession
+# that cannot cite what it supersedes records nothing. The archived RFC is
+# named as the thing replaced, not relied on as authority.
+"135" = ["117"]
 
 # RFC 133 D2 (G11 condition 9c): an Independent design review field must cite
 # at least one review filed under this RFC's own handoffs/<N>-slug/

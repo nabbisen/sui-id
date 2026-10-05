@@ -1000,12 +1000,21 @@ class ReviewRuleGuardTest(unittest.TestCase):
         self.assertNotIn("condition 14", result.stderr)
         self.assertNotIn("condition 15", result.stderr)
 
-    def test_the_real_policy_names_the_one_legitimate_citation(self):
+    def test_the_real_policy_names_only_the_legitimate_citations(self):
+        """The allow-list stays small and every entry is deliberate.
+
+        This test exists to make adding an entry a reviewable act, so it pins
+        the exact contents rather than a count. Two entries today:
+        025 -> 007 (the original multi-tenancy sketch), and 135 -> 117, where
+        RFC 135 supersedes RFC 117 and its header must name what it replaces.
+        """
         import tomllib
 
         with (REPO_ROOT / "contracts" / "rfc-policy.toml").open("rb") as f:
             policy = tomllib.load(f)
-        self.assertEqual(policy["archive_citations"], {"025": ["007"]})
+        self.assertEqual(
+            policy["archive_citations"], {"025": ["007"], "135": ["117"]}
+        )
 
 
 if __name__ == "__main__":
