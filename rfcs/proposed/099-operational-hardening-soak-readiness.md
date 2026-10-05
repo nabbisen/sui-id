@@ -11,7 +11,7 @@
 **Touches.** Runtime file creation, fuzz harnesses, package/release automation, integration fixtures, operational procedures, evidence manifests and soak records.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** `codex-project-architect` (OpenAI Codex).
-**Implementation owner.** `codex-developer` (OpenAI Codex), after acceptance and prerequisites.
+**Implementation owner.** The mid-capability model (implementation and testing agent), after acceptance and prerequisites.
 
 ## Summary
 

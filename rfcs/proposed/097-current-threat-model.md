@@ -11,7 +11,7 @@
 **Touches.** `docs/threat-model.md`, security assurance documentation, boundary diagrams and evidence references.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** `codex-project-architect` (OpenAI Codex).
-**Implementation owner.** `codex-developer` (OpenAI Codex), after acceptance and prerequisites.
+**Implementation owner.** The mid-capability model (implementation and testing agent), after acceptance and prerequisites.
 
 ## Summary
 

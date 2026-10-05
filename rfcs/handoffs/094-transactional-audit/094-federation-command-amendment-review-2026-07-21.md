@@ -7,7 +7,7 @@
 **Approved on.** 2026-07-21 (Asia/Tokyo)
 **Approved by.** `@nabbisen`
 **RFC author / architect.** `codex-project-architect` (OpenAI Codex)
-**Implementation owner.** `codex-developer` (OpenAI Codex), subject to the RFC entry gates
+**Implementation owner.** The mid-capability model (implementation and testing agent), subject to the RFC entry gates
 
 ## Artifact identity and provenance
 

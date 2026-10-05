@@ -7,7 +7,7 @@
 **Accepted on.** 2026-07-21 (Asia/Tokyo)
 **Approved by.** `@nabbisen`
 **RFC author / architect.** `codex-project-architect` (OpenAI Codex)
-**Implementation owner.** `codex-developer` (OpenAI Codex), subject to every entry gate
+**Implementation owner.** The mid-capability model (implementation and testing agent), subject to every entry gate
 
 ## Owner decision scope
 

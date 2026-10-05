@@ -6,7 +6,7 @@
 **Independent reviewer.** `codex-independent-architecture-security-reviewer` (OpenAI Codex)
 **Accountable project owner.** `@nabbisen`
 **RFC author / architect.** `codex-project-architect` (OpenAI Codex)
-**Implementation owner.** `codex-developer` (OpenAI Codex)
+**Implementation owner.** The mid-capability model (implementation and testing agent)
 
 ## Reviewed artifact identity
 

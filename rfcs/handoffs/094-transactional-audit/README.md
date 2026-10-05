@@ -1,7 +1,7 @@
 # RFC 094 developer handoff
 
 **Governing RFC:** [RFC 094](../../accepted/094-transactional-audit-registry.md)
-**Audience:** `codex-developer` after RFC re-acceptance and prerequisite evidence
+**Audience:** the mid-capability model after RFC re-acceptance and prerequisite evidence
 **Status:** Planning companion; inherits the governing RFC's current status — **Accepted 2026-08-27**, the 2026-07-28 return for review having closed after independent design review by the implementation role. Implementation remains gated on the entry gate below.
 
 This handoff translates RFC 094 into bounded implementation stages. It does
@@ -35,7 +35,7 @@ Implementation may begin only when all are true:
   both readings and made the question moot.*
 - the exact durable-write command inventory, generated write-site
   reconciliation, and threat delta have durable independent approval;
-- `@nabbisen` confirms `codex-developer` as implementation owner;
+- `@nabbisen` confirms the mid-capability model as implementation owner;
 - no competing change owns the same transaction/audit files.
 
 ## Stop conditions

@@ -3,7 +3,7 @@
 ## Summary
 
 On 2026-07-21 (Asia/Tokyo), `@nabbisen` explicitly authorized
-`codex-developer` (OpenAI Codex) to begin RFC 093 implementation preparation on
+the mid-capability model (implementation and testing agent) to begin RFC 093 implementation preparation on
 clean baseline commit `959f089983ce51e53ca403a422a1fe308c276036`.
 
 The authorization was given in direct response to a request that named the
@@ -19,7 +19,7 @@ The authorized design and evidence contract is:
 - independent design review: [`093-design-review-2026-07-17.md`](093-design-review-2026-07-17.md);
 - implementation-start review: [`093-implementation-start-authorization-review-2026-07-21.md`](093-implementation-start-authorization-review-2026-07-21.md);
 - roadmap milestone: M1 — Trustworthy build baseline in [`ROADMAP.md`](../../../ROADMAP.md); and
-- implementation owner: `codex-developer` (OpenAI Codex).
+- implementation owner: the mid-capability model (implementation and testing agent).
 
 The exclusive authorized touch set is RFC 093's declared metadata scope plus
 the following owner-approved interpretation of its normative body:
@@ -64,7 +64,7 @@ gate artifact is changed by this authorization record.
   `959f089983ce51e53ca403a422a1fe308c276036` (`Accept RFC 096 federation
   validation design`). The worktree was observed clean before this record was
   authored.
-- Authorization names `codex-developer`; it does not delegate architecture
+- Authorization names the mid-capability model; it does not delegate architecture
   approval, closure approval, commit/tag/push authority, or permission to
   weaken a blocking lane.
 - Gate Matrix v1, G01–G12 commands, negative self-tests, tool/input versions,
@@ -119,7 +119,7 @@ documentation output, manifests, packages, logs, credentials, or test fixtures.
 ## Recommended next step
 
 Obtain focused amendment review of this authorization package and commit all
-three files atomically by the owner. Only then may `codex-developer` inventory
+three files atomically by the owner. Only then may the mid-capability model inventory
 the exact RFC 093 implementation file list, confirm ownership still has no
 conflict, and begin
 the first small implementation wave. Each implementation review request must

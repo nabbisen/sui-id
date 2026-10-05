@@ -1,7 +1,7 @@
 # RFC 095 developer handoff
 
 **Governing RFC:** [RFC 095](../../accepted/095-dynamic-client-registration-transaction.md)
-**Audience:** `codex-developer` only after RFC re-acceptance and prerequisite evidence
+**Audience:** the mid-capability model only after RFC re-acceptance and prerequisite evidence
 **Status:** Planning companion; inherits the governing RFC's current status — **Accepted 2026-08-27**, the 2026-07-28 return to `proposed/` for a material prerequisite amendment having closed. Implementation remains blocked on the entry gate below.
 
 This handoff decomposes RFC 095 without authorizing coding or weakening RFC
@@ -30,8 +30,16 @@ Implementation may start only when all are true:
   "RFC 094 is Implemented", which contradicted the RFC's amended prerequisite and
   would have made this work wait for M2b unnecessarily.*
 - RFC 093's current clean-tree matrix passes;
-- the owner records `codex-developer`, the full clean baseline commit, and
-  non-overlapping ownership of the files below;
+- **the owner records the clean baseline commit** this work starts from
+  (RFC 095's [verification.md](verification.md) forbids assembling closure
+  evidence from different commits, so the baseline must be named before coding);
+  *Corrected 2026-10-05: this condition previously also required recording
+  "`codex-developer`" as implementation owner and "non-overlapping ownership of
+  the files below". Both are withdrawn. `codex-developer` was a name the former
+  architect invented; this team's implementation role is the mid-capability
+  model, per `.git-exclude/roles/`, so recording it each time is vacuous. The
+  ownership clause dates from the two-lane period when a second implementer was
+  assigned; with one implementation role the collision it guarded cannot occur.*
 - the metadata/URI/adversarial design has durable independent approval; and
 - the frozen logout parser/confirmation constants and atomic consumption
   contract in [architecture.md](architecture.md) remain unchanged; and

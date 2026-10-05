@@ -32,7 +32,7 @@ amended. No scope, prerequisite or acceptance criterion changes.
 **Touches.** `README.md`, `ROADMAP.md`, `docs/`, RFC links/metadata not mechanically closed by RFC 093, public package metadata and source-path references.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** `codex-project-architect` (OpenAI Codex).
-**Implementation owner.** `codex-developer` (OpenAI Codex), after acceptance and prerequisites.
+**Implementation owner.** The mid-capability model (implementation and testing agent), after acceptance and prerequisites.
 
 ## Summary
 

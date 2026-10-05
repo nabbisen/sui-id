@@ -5,7 +5,7 @@
 **Verdict.** Accept with notes; implementation start GO after the complete authorization package is owner-committed
 **Independent reviewer.** Independent architecture and security reviewer (external vendor; not the design reviewer)
 **Accountable project owner.** `@nabbisen`
-**Authorized implementer.** `codex-developer` (OpenAI Codex)
+**Authorized implementer.** The mid-capability model (implementation and testing agent)
 **Authorized clean baseline.** `959f089983ce51e53ca403a422a1fe308c276036`
 
 ## Reviewed authority and evidence

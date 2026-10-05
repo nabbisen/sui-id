@@ -1,7 +1,7 @@
 # RFC 096 developer handoff
 
 **Governing RFC:** [RFC 096](../../accepted/096-upstream-oidc-federation-validation.md)
-**Audience:** `codex-developer` only after the applicable entry gate
+**Audience:** the mid-capability model only after the applicable entry gate
 **Status:** Planning companion; inherits the governing RFC's current status — **Accepted 2026-08-27**, the 2026-07-28 return to `proposed/` for a material prerequisite and staging amendment having closed. Implementation remains blocked on the entry gates below.
 
 This package decomposes the federation trust completion without reopening RFC

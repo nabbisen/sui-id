@@ -4,7 +4,7 @@
 **Accepted on.** 2026-08-27
 **Approved by.** `@nabbisen`
 **Independent design review.** [Correction review 2026-08-26](../handoffs/094-transactional-audit/094-095-096-correction-review-2026-08-26.md), by the implementation role
-(`codex-developer`), which authored neither this RFC nor its corrections — the
+(the mid-capability model), which authored neither this RFC nor its corrections — the
 B1/B2 split inference checked against RFC 094's command inventory and its stale
 justification found. Also
 [A6 implementability sweep 2026-08-27](../handoffs/094-transactional-audit/094-095-096-a6-sweep-2026-08-27.md)
@@ -25,7 +25,7 @@ justification found. Also
 **Validation matrix.** [`../handoffs/096-upstream-oidc-federation/validation-matrix.md`](../handoffs/096-upstream-oidc-federation/validation-matrix.md)
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** `codex-project-architect` (OpenAI Codex).
-**Implementation owner.** `codex-developer` (OpenAI Codex); implementation start remains gated below.
+**Implementation owner.** The mid-capability model (implementation and testing agent); implementation start remains gated below.
 
 ## Summary
 
