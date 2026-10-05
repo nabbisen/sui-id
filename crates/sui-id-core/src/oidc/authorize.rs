@@ -28,7 +28,7 @@ use ed25519_dalek::SigningKey;
 use sui_id_shared::ids::{ClientId, UserId};
 use sui_id_shared::{CodeHash, FamilyId, RawRefreshToken, RefreshTokenHash, RefreshTokenId};
 use sui_id_store::Database;
-use sui_id_store::models::{AuditLogRow, AuthorizationCodeRow, RefreshTokenRow};
+use sui_id_store::models::{AuditLogRow, AuthorizationCodeRow, ClientRow, RefreshTokenRow};
 use sui_id_store::repos::{audit, auth_codes, clients, refresh_tokens, signing_keys, users};
 
 /// Lifetime of an authorization code (kept very short by design).
@@ -83,14 +83,15 @@ pub async fn validate_client_and_redirect_uri(
             description: "client is not allowed to use the authorization endpoint".into(),
         });
     }
-    if !is_redirect_uri_registered(&client.redirect_uris, redirect_uri) {
+    if !redirect_uri_matches(&client, redirect_uri) {
         return Err(CoreError::Protocol {
             code: ProtocolError::InvalidRequest,
             description: format!(
                 "redirect_uri does not match any registered URI for this client. \
                  Submitted: \"{redirect_uri}\". Registered URIs: [{}]. \
-                 The comparison is exact — check for trailing slashes, \
-                 http vs https, and port numbers.",
+                 The comparison is exact (port-flexible only for a \
+                 PublicNativeLoopback client, RFC 8252) — check for \
+                 trailing slashes, http vs https, and other port numbers.",
                 client
                     .redirect_uris
                     .iter()
@@ -145,14 +146,15 @@ pub async fn begin_authorization(
             description: "client is not allowed to use the authorization endpoint".into(),
         });
     }
-    if !is_redirect_uri_registered(&client.redirect_uris, &params.redirect_uri) {
+    if !redirect_uri_matches(&client, &params.redirect_uri) {
         return Err(CoreError::Protocol {
             code: ProtocolError::InvalidRequest,
             description: format!(
                 "redirect_uri does not match any registered URI for this client. \
                  Submitted: \"{}\". Registered URIs: [{}]. \
-                 The comparison is exact — check for trailing slashes, \
-                 http vs https, and port numbers.",
+                 The comparison is exact (port-flexible only for a \
+                 PublicNativeLoopback client, RFC 8252) — check for \
+                 trailing slashes, http vs https, and other port numbers.",
                 params.redirect_uri,
                 client
                     .redirect_uris
@@ -188,6 +190,75 @@ pub async fn begin_authorization(
 /// in here.
 pub fn is_redirect_uri_registered(registered: &[String], submitted: &str) -> bool {
     registered.iter().any(|u| u == submitted)
+}
+
+/// RFC 095 M3 stage 1b / RFC 8252: the one exception to exact matching, and
+/// no other. For a `PublicNativeLoopback` client — public auth
+/// (`!confidential`) with every registered redirect a numeric loopback
+/// `http` address — the *port* may differ between registration and the
+/// request, because the OS assigns an ephemeral port at launch and the
+/// client cannot know it in advance. Scheme, host, path, query and
+/// fragment still must match exactly; a difference in any of those is
+/// still a rejection, same as [`is_redirect_uri_registered`].
+///
+/// `RedirectProfile` is never persisted (`sui-id`'s own
+/// `dynamic_registration_validation` module owns that enum, at
+/// registration time only) — this re-derives just enough of it from
+/// `ClientRow.redirect_uris` and `ClientRow.confidential`, already stored,
+/// per the handoff's explicit "no migration, no new column." A client
+/// whose stored redirects are HTTPS can never reach the loopback branch at
+/// all, so `ConfidentialHttps` and `PublicHttps` clients get exactly
+/// [`is_redirect_uri_registered`]'s behaviour, unchanged.
+///
+/// Deliberately not used for `post_logout_redirect_uris` matching or CORS
+/// origin comparison — RFC 095's own architecture document draws this
+/// exception's scope at authorization-redirect matching for this one
+/// profile and nowhere else; neither of those call sites calls this
+/// function, and this function does not call `is_redirect_uri_registered`
+/// in a way that would make it reachable from them by accident.
+pub fn redirect_uri_matches(client: &ClientRow, submitted: &str) -> bool {
+    if is_redirect_uri_registered(&client.redirect_uris, submitted) {
+        return true;
+    }
+    if client.confidential {
+        return false;
+    }
+    let Ok(submitted_url) = url::Url::parse(submitted) else {
+        return false;
+    };
+    if !is_numeric_loopback_http(&submitted_url) {
+        return false;
+    }
+    client
+        .redirect_uris
+        .iter()
+        .all(|u| is_numeric_loopback_http_str(u))
+        && client.redirect_uris.iter().any(|registered| {
+            let Ok(registered_url) = url::Url::parse(registered) else {
+                return false;
+            };
+            registered_url.host() == submitted_url.host()
+                && registered_url.path() == submitted_url.path()
+                && registered_url.query() == submitted_url.query()
+                && registered_url.fragment() == submitted_url.fragment()
+            // Port is deliberately excluded from this comparison -- the
+            // one and only difference from `is_redirect_uri_registered`.
+        })
+}
+
+fn is_numeric_loopback_http(url: &url::Url) -> bool {
+    url.scheme() == "http"
+        && (matches!(
+            url.host(),
+            Some(url::Host::Ipv4(ip)) if ip.is_loopback()
+        ) || matches!(
+            url.host(),
+            Some(url::Host::Ipv6(ip)) if ip.is_loopback()
+        ))
+}
+
+fn is_numeric_loopback_http_str(uri: &str) -> bool {
+    url::Url::parse(uri).is_ok_and(|u| is_numeric_loopback_http(&u))
 }
 
 /// Check the requested scope string against the client's `allowed_scopes`
@@ -847,5 +918,110 @@ mod redirect_uri_tests {
             }
             prop_assert!(!is_redirect_uri_registered(&uris, &outsider));
         }
+    }
+}
+
+#[cfg(test)]
+mod redirect_uri_matches_tests {
+    //! RFC 095 M3 stage 1b / RFC 8252: [`redirect_uri_matches`]'s one
+    //! exception to [`is_redirect_uri_registered`]'s exact match -- the
+    //! port, for a `PublicNativeLoopback` client only.
+
+    use super::{ClientRow, redirect_uri_matches};
+    use sui_id_shared::ids::ClientId;
+    use sui_id_store::models::{ConsentPolicy, RegistrationSource};
+
+    fn client(confidential: bool, redirect_uris: &[&str]) -> ClientRow {
+        let now = chrono::Utc::now();
+        ClientRow {
+            id: ClientId::new(),
+            name: "test".into(),
+            confidential,
+            secret_hash: None,
+            redirect_uris: redirect_uris.iter().map(|s| s.to_string()).collect(),
+            allowed_scopes: String::new(),
+            post_logout_redirect_uris: vec![],
+            is_disabled: false,
+            is_deleted: false,
+            consent_policy: ConsentPolicy::None,
+            registered_via: RegistrationSource::Dynamic,
+            logo_uri: None,
+            homepage_uri: None,
+            privacy_policy_uri: None,
+            tos_uri: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    #[test]
+    fn a_differing_port_matches_for_a_public_native_loopback_client() {
+        let c = client(false, &["http://127.0.0.1:49152/cb"]);
+        assert!(redirect_uri_matches(&c, "http://127.0.0.1:51234/cb"));
+    }
+
+    #[test]
+    fn a_differing_path_does_not_match_even_with_the_right_port() {
+        let c = client(false, &["http://127.0.0.1:49152/cb"]);
+        assert!(!redirect_uri_matches(&c, "http://127.0.0.1:49152/other"));
+    }
+
+    #[test]
+    fn a_differing_query_does_not_match() {
+        let c = client(false, &["http://127.0.0.1:49152/cb"]);
+        assert!(!redirect_uri_matches(&c, "http://127.0.0.1:49152/cb?x=1"));
+    }
+
+    #[test]
+    fn a_differing_host_family_does_not_match() {
+        let c = client(false, &["http://127.0.0.1:49152/cb"]);
+        assert!(!redirect_uri_matches(&c, "http://[::1]:49152/cb"));
+    }
+
+    #[test]
+    fn a_differing_scheme_does_not_match() {
+        let c = client(false, &["http://127.0.0.1:49152/cb"]);
+        assert!(!redirect_uri_matches(&c, "https://127.0.0.1:49152/cb"));
+    }
+
+    /// Pins the fix for a real operator-precedence bug caught while
+    /// writing this: `scheme == "http" && ipv4_loopback || ipv6_loopback`
+    /// (without the explicit grouping now in the source) would accept an
+    /// IPv6-loopback host on *any* scheme, including `https`, since `&&`
+    /// binds tighter than `||`.
+    #[test]
+    fn an_ipv6_loopback_host_on_https_does_not_match_via_the_loopback_exception() {
+        let c = client(false, &["http://[::1]:49152/cb"]);
+        assert!(!redirect_uri_matches(&c, "https://[::1]:49152/cb"));
+    }
+
+    #[test]
+    fn a_confidential_client_gets_exact_port_matching_not_the_exception() {
+        // A confidential client cannot derive the loopback profile at
+        // all, even though its stored redirect happens to be
+        // loopback-shaped -- `derive_closed_profile` would have rejected
+        // this combination at registration time, but this function must
+        // not assume that and must still refuse the exception on its own
+        // terms.
+        let c = client(true, &["http://127.0.0.1:49152/cb"]);
+        assert!(!redirect_uri_matches(&c, "http://127.0.0.1:51234/cb"));
+    }
+
+    #[test]
+    fn a_public_https_client_gets_exact_port_matching_not_the_exception() {
+        let c = client(false, &["https://rp.example:8443/cb"]);
+        assert!(!redirect_uri_matches(&c, "https://rp.example:9443/cb"));
+    }
+
+    #[test]
+    fn an_exact_match_still_works_for_every_profile() {
+        assert!(redirect_uri_matches(
+            &client(true, &["https://rp.example/cb"]),
+            "https://rp.example/cb"
+        ));
+        assert!(redirect_uri_matches(
+            &client(false, &["http://127.0.0.1:49152/cb"]),
+            "http://127.0.0.1:49152/cb"
+        ));
     }
 }

@@ -236,33 +236,9 @@ async fn a_public_native_profile_accepts_an_independent_https_logout_uri() {
     assert_eq!(r.status, StatusCode::CREATED, "{}", r.json);
 }
 
-/// Documents the one Redirect-corpus row this stage does not build: a
-/// registered numeric-loopback redirect does not yet match a request-time
-/// redirect differing only in port, even for `PublicNativeLoopback`. See
-/// this package's "Not built" section -- `is_redirect_uri_registered`
-/// carries an explicit "resist any urge to add normalisation" directive
-/// and the handoff's own body text never names `authorize.rs`, so this is
-/// flagged rather than built. This test pins *today's* behaviour so a
-/// future stage that changes it does so knowingly, not by accident.
-#[tokio::test]
-async fn port_flexible_matching_for_native_loopback_is_not_yet_built() {
-    let state = test_app();
-    let token = seed_token(&state).await;
-    let body = r#"{"client_name":"Example Native","token_endpoint_auth_method":"none","redirect_uris":["http://127.0.0.1:49152/cb"]}"#;
-    let r = register_raw(&state, &token, body).await;
-    assert_eq!(r.status, StatusCode::CREATED, "{}", r.json);
-    let client_id = r.json["client_id"].as_str().unwrap().to_owned();
-
-    // A request-time redirect_uri differing only by port does NOT match
-    // today -- this is the gap, pinned rather than silently left
-    // undiscovered.
-    use sui_id_core::authorize::validate_client_and_redirect_uri;
-    use sui_id_shared::ids::ClientId;
-    let cid: ClientId = client_id.parse().unwrap();
-    let different_port =
-        validate_client_and_redirect_uri(&state.db, cid, "http://127.0.0.1:60000/cb").await;
-    assert!(
-        different_port.is_err(),
-        "today, a different ephemeral port does not match -- this is the known, flagged gap"
-    );
-}
+// Port-flexible matching for `PublicNativeLoopback` (the Redirect-corpus
+// row this stage originally flagged as not built) is now built, by stage
+// 1b (2026-10-05) -- see `r095_m3_stage1b_loopback_port_matching.rs`. The
+// test that used to pin the (now closed) gap lived here; it is gone, not
+// left behind with a stale assertion, since stage 1b's own file covers
+// the real behaviour this one could only describe as absent.
