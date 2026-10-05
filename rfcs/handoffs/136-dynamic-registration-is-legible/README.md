@@ -3,8 +3,9 @@
 **RFC.** [`../../accepted/136-dynamic-registration-is-legible.md`](../../accepted/136-dynamic-registration-is-legible.md)
 
 **Status: Accepted 2026-10-05**, with its one open question settled at
-acceptance in favour of a marker on the exception. **Not dispatched** — no
-implementation package has been written yet.
+acceptance in favour of a marker on the exception. **Dispatched** —
+[`step1-defaults-and-marker-2026-10-05.md`](step1-defaults-and-marker-2026-10-05.md)
+is the whole of RFC 136; there is no stage 2.
 
 ## Contents
 
