@@ -1,6 +1,8 @@
 # RFC 137 — Tests live beside the module, not inside it
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-10-06
+**Approved by.** `@nabbisen`, 2026-10-06: "RFC 137 is accepted." — and, on the one open question, "Your recommendation on direction is accepted", settling that **G21 is scoped to `crates/*/src/` only**; `crates/*/tests/` is measured separately afterwards rather than widening a 77-file change mid-flight.
 **Security review.** Not required — no application behaviour changes and no crate's public surface moves. This RFC relocates test code and adds a gate over file layout. Reason subject to acceptance.
 
 **Design prerequisites.** None. The rule already exists in
@@ -104,8 +106,9 @@ pattern works at all. Rust 2018+ allows `foo.rs` and `foo/` to coexist with no
 
 ## Open questions
 
-1. **Should G21 also cover `crates/*/tests/`?** The project rule applies the
-   same splitting logic there. I have **not** measured that directory and will
-   not guess at the count. My recommendation is to scope this RFC to `src/`,
-   finish it, then measure `tests/` separately rather than widen a 77-file
-   change mid-flight.
+**None. Settled at acceptance.**
+
+*Should G21 also cover `crates/*/tests/`?* — **No. Scoped to `crates/*/src/`**,
+approved 2026-10-06. `crates/*/tests/` is measured separately once this is
+finished; the directory has **not** been measured and no count for it is
+claimed.
