@@ -297,7 +297,7 @@ async fn dynamic_registration_response_is_no_store_and_never_a_url() {
     let state = test_app();
     let _ = complete_setup_and_login(&state).await;
 
-    let raw_token = "test-registration-token-r122";
+    let raw_token = random_registration_token_plaintext();
     let hash: String = Sha256::digest(raw_token.as_bytes())
         .iter()
         .map(|b| format!("{b:02x}"))

@@ -241,6 +241,22 @@ pub fn pkce_pair() -> (String, String) {
     (verifier.to_owned(), challenge)
 }
 
+/// A plaintext dynamic-client-registration bearer token in the real,
+/// production shape: 32 random bytes, lowercase hex -- exactly what
+/// `sui-id admin issue-registration-token` (`cli.rs`) generates. RFC 095
+/// M3 stage 1 validates this shape at `POST /oauth2/register`
+/// (`dynamic_registration_validation::extract_registration_bearer_token`),
+/// so a test fixture in any other shape (the pre-stage-1 convention here
+/// was `format!("regtoken-{}", Uuid::new_v4())`) is now rejected before
+/// ever reaching the registration-token store, not because the store
+/// doesn't have it, but because it never looks like a token the matrix
+/// allows a caller to present at all.
+pub fn random_registration_token_plaintext() -> String {
+    let mut raw = [0u8; 32];
+    getrandom::fill(&mut raw).expect("system RNG unavailable");
+    raw.iter().map(|b| format!("{b:02x}")).collect()
+}
+
 pub async fn complete_setup_and_login(state: &AppState) -> String {
     let router = build_router(state.clone());
     // The 3-step wizard's form lives at /setup/admin and now

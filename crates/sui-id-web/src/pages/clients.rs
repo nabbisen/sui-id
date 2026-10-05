@@ -31,6 +31,11 @@ fn client_row_view(
     } else {
         crate::components::status_badge(t, crate::components::StatusKind::Active).into_any()
     };
+    // RFC 136 D2: a marker on `registered_via = 'dynamic'` only. An
+    // administrator-created client gets nothing here -- the administrator
+    // created it, so it is not news.
+    let self_registered_badge = (c.registered_via == "dynamic")
+        .then(|| crate::components::status_badge(t, crate::components::StatusKind::SelfRegistered));
 
     let edit_url = format!("/admin/clients/{id_str}/edit");
     let actions = if is_deleted {
@@ -60,7 +65,12 @@ fn client_row_view(
     let id_for_copy = id_str.clone();
     view! {
         <tr>
-            <td>{c.name}</td>
+            <td>
+                <div class="row gap-1">
+                    <span>{c.name}</span>
+                    {self_registered_badge}
+                </div>
+            </td>
             <td>
                 <span class="code">{id_str}</span>
                 {copy_btn(t, id_for_copy, t.copy_noun_client_id)}
@@ -237,6 +247,9 @@ pub struct ClientEditData {
     pub is_disabled: bool,
     /// RFC 038: "none", "first_time", or "always"
     pub consent_policy: String,
+    /// RFC 065: "admin" or "dynamic". RFC 136 D2: drives the
+    /// self-registered marker; "admin" renders no marker at all.
+    pub registered_via: String,
     /// RFC 047, RFC 122 D2: populated only by the handler that just rotated
     /// the secret, from the value that operation produced — never from a
     /// caller-supplied value. Shown once.
@@ -261,8 +274,12 @@ pub fn render_client_edit(
             confidential,
             is_disabled,
             consent_policy,
+            registered_via,
             freshly_rotated_secret,
         } = data;
+        let self_registered_badge = (registered_via == "dynamic").then(|| {
+            crate::components::status_badge(t, crate::components::StatusKind::SelfRegistered)
+        });
         let post_url = format!("/admin/clients/{id}/edit");
         let kind = if confidential {
             "confidential"
@@ -307,6 +324,7 @@ pub fn render_client_edit(
                             <span class="badge badge--accent">{kind}</span>
                             <span>{t.client_edit_label_status}":"</span>
                             {status_view}
+                            {self_registered_badge}
                         </div>
                     </div>
                     <p class="muted mt-3">

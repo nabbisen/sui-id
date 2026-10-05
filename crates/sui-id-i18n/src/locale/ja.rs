@@ -124,6 +124,7 @@ pub static STRINGS_JA: Strings = Strings {
     status_healthy: "正常",
     status_unhealthy: "異常",
     status_unknown: "不明",
+    status_self_registered: "自己登録",
 
     // Empty placeholders (RFC 052)
     empty_dash: "—",

@@ -127,6 +127,7 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     status_healthy: "正常",
     status_unhealthy: "异常",
     status_unknown: "未知",
+    status_self_registered: "自行注册",
 
     // Empty placeholders (RFC 052)
     empty_dash: "—",

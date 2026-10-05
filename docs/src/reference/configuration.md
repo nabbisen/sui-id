@@ -248,6 +248,28 @@ providers for federated sign-in (the "Sign in with X" flow).
 > `is_disabled = true` on the first locally-provisioned user. An administrator
 > must explicitly enable the provider after verifying the configuration.
 
+> **Which fields take effect after the provider already exists.**
+> `allowed_origins` is reconciled from this file on every boot, so editing
+> it (for example to add a second origin) takes effect on the next restart
+> without re-creating the provider. Every other field — `display_name`,
+> `issuer`, `client_id`, `client_secret_env`, `scopes`, `provision_mode`,
+> and `enabled` — is read from this file only when the provider is first
+> created; editing one of these in the config afterward has no effect on
+> the stored provider, and the server logs a warning naming the field and
+> both values on every boot while they disagree (except `enabled` and the
+> secret, which are never compared or warned about — see below). There is
+> currently no admin UI or CLI for editing a provider's other fields; the
+> only way to change one today is to edit the database row directly, or to
+> delete and re-create the provider, which cascades to every federation
+> link to it and unlinks every federated user.
+>
+> `enabled` is meant to be managed independently of this file once a
+> provider exists (so that, for example, disabling a provider does not
+> require a config edit and restart) — but no admin UI or CLI currently
+> implements that either, so in practice it is also fixed at whatever this
+> file said when the provider was first created, with no warning if you
+> later change it here.
+
 ```toml
 [[federation_providers]]
 slug               = "google"

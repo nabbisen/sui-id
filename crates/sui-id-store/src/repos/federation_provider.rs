@@ -172,6 +172,32 @@ pub async fn set_enabled(
     .await
 }
 
+/// Update `allowed_origins` only (RFC 134 step 7a). Deliberately not a
+/// general `update`: one column, so a future caller reconciling the origin
+/// set at boot cannot reach `issuer`, `client_id` or any other
+/// config-managed field by accident.
+pub async fn update_allowed_origins(
+    db: &Database,
+    id: FederationProviderId,
+    allowed_origins: &str,
+    now: DateTime<Utc>,
+) -> StoreResult<()> {
+    let id_str = id.to_string();
+    let allowed_origins = allowed_origins.to_owned();
+    db.with_conn(move |conn| {
+        let n = conn.execute(
+            "UPDATE federation_provider SET allowed_origins = ?1, updated_at = ?2 WHERE id = ?3",
+            params![allowed_origins, now, id_str],
+        )?;
+        if n == 0 {
+            Err(StoreError::NotFound)
+        } else {
+            Ok(())
+        }
+    })
+    .await
+}
+
 /// Delete a provider (cascades to federation_link rows).
 pub async fn delete(db: &Database, id: FederationProviderId) -> StoreResult<()> {
     let id_str = id.to_string();
@@ -252,6 +278,39 @@ mod tests {
         let enabled = list_enabled(&db).await.unwrap();
         assert_eq!(enabled.len(), 1);
         assert_eq!(enabled[0].slug, "g2");
+    }
+
+    #[tokio::test]
+    async fn update_allowed_origins_touches_only_that_column() {
+        let db = fresh_db();
+        let row = sample("origin-test");
+        let id = row.id;
+        create(&db, &row, None).await.unwrap();
+        update_allowed_origins(&db, id, "https://a.example https://b.example", Utc::now())
+            .await
+            .unwrap();
+        let fetched = get(&db, id).await.unwrap();
+        assert_eq!(
+            fetched.allowed_origins,
+            "https://a.example https://b.example"
+        );
+        // Every other column is unchanged from what `create` wrote.
+        assert_eq!(fetched.display_name, row.display_name);
+        assert_eq!(fetched.issuer, row.issuer);
+        assert_eq!(fetched.client_id, row.client_id);
+        assert_eq!(fetched.scopes, row.scopes);
+        assert_eq!(fetched.provision_mode, row.provision_mode);
+        assert_eq!(fetched.enabled, row.enabled);
+    }
+
+    #[tokio::test]
+    async fn update_allowed_origins_on_missing_id_is_not_found() {
+        let db = fresh_db();
+        let bogus = FederationProviderId::new();
+        assert!(matches!(
+            update_allowed_origins(&db, bogus, "https://a.example", Utc::now()).await,
+            Err(StoreError::NotFound)
+        ));
     }
 
     #[tokio::test]

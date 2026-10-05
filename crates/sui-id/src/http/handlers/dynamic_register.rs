@@ -20,12 +20,14 @@
 //!   consciously enable them before they can obtain tokens (P4).
 
 use axum::Json;
+use axum::body::Bytes;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+use crate::dynamic_registration_validation::{self as validation, EnvelopeError};
 use crate::errors::HttpError;
 use crate::handlers::AppStateExt;
 use sui_id_core::errors::CoreError;
@@ -102,7 +104,7 @@ fn reg_error(status: StatusCode, error: &str, description: &str) -> Response {
 pub async fn dynamic_register(
     state_ext: AppStateExt,
     headers: HeaderMap,
-    Json(body): Json<RegistrationRequest>,
+    body_bytes: Bytes,
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
 
@@ -113,9 +115,12 @@ pub async fn dynamic_register(
     // restored nothing. The token is only ever consumed below, inside the
     // same transaction that creates the client — a request that cannot
     // succeed must not spend anything.
-
-    let raw_token = extract_bearer_token(&headers);
-    let Some(tok) = raw_token else {
+    //
+    // RFC 095 M3 stage 1: a present-but-malformed token (wrong length,
+    // non-hex, uppercase, more than one `Authorization` header, a scheme
+    // other than `Bearer`) takes this exact same path as no token at all —
+    // the matrix requires the two be indistinguishable to the caller.
+    let Some(tok) = validation::extract_registration_bearer_token(&headers) else {
         return Ok(reg_error(
             StatusCode::UNAUTHORIZED,
             "invalid_token",
@@ -123,7 +128,42 @@ pub async fn dynamic_register(
         ));
     };
     // SHA-256 the supplied token for constant-time comparison.
-    let token_hash = sha256_hex(tok);
+    let token_hash = sha256_hex(&tok);
+
+    // ── RFC 095 M3 stage 1, 1b: the envelope ───────────────────────────────────
+    //
+    // Bounded, duplicate-member-checked, and member-policy-checked *before*
+    // this ever becomes a typed `RegistrationRequest` -- see
+    // `dynamic_registration_validation`'s own doc comment for why none of
+    // this can happen after a plain `Json<RegistrationRequest>` extraction.
+    let envelope = match validation::parse_envelope(&body_bytes) {
+        Ok(map) => map,
+        Err(EnvelopeError::UnapprovedSoftwareStatement) => {
+            return Ok(reg_error(
+                StatusCode::BAD_REQUEST,
+                "unapproved_software_statement",
+                "software_statement is not approved by this deployment",
+            ));
+        }
+        Err(e) => {
+            return Ok(reg_error(
+                StatusCode::BAD_REQUEST,
+                "invalid_client_metadata",
+                &e.to_string(),
+            ));
+        }
+    };
+    let body: RegistrationRequest =
+        match serde_json::from_value(serde_json::Value::Object(envelope)) {
+            Ok(b) => b,
+            Err(e) => {
+                return Ok(reg_error(
+                    StatusCode::BAD_REQUEST,
+                    "invalid_client_metadata",
+                    &format!("invalid client metadata: {e}"),
+                ));
+            }
+        };
 
     // ── Validate request body ─────────────────────────────────────────────────
 
@@ -134,8 +174,42 @@ pub async fn dynamic_register(
             "redirect_uris must contain at least one URI",
         ));
     }
-    for uri in &body.redirect_uris {
-        sui_id_core::admin::clients::validate_redirect_uri(uri).map_err(HttpError::api)?;
+    // Determine confidentiality from token_endpoint_auth_method, moved up
+    // from below: the closed-profile derivation needs it too, and this is
+    // the one place that decides what the raw string means.
+    let auth_method = body
+        .token_endpoint_auth_method
+        .as_deref()
+        .unwrap_or("client_secret_post");
+    let confidential = auth_method != "none";
+
+    // RFC 095 M3 stage 1, 1a: the derived closed profile. Replaces the old
+    // per-URI `validate_redirect_uri` loop -- that function is the
+    // administrator-client validator (looser: accepts `localhost` by
+    // name, no profile concept) and must not be tightened for this path.
+    // PKCE is already mandatory for every client regardless of profile
+    // (`sui_id_core::oidc::authorize::begin_authorization`), so the
+    // matrix's "PKCE required" for the two public profiles needs nothing
+    // further here.
+    let profile = match validation::derive_closed_profile(auth_method, &body.redirect_uris) {
+        Ok(p) => p,
+        Err(e) => {
+            return Ok(reg_error(
+                StatusCode::BAD_REQUEST,
+                "invalid_redirect_uri",
+                &e.to_string(),
+            ));
+        }
+    };
+    tracing::debug!(?profile, "dynamic registration: redirect profile derived");
+    if let Some(post_logout) = body.post_logout_redirect_uris.as_ref()
+        && let Err(bad_uri) = validation::reject_http_post_logout_uris(post_logout)
+    {
+        return Ok(reg_error(
+            StatusCode::BAD_REQUEST,
+            "invalid_client_metadata",
+            &format!("post_logout_redirect_uris: {bad_uri}: must be https"),
+        ));
     }
 
     let client_name = match body.client_name.as_deref().filter(|s| !s.is_empty()) {
@@ -154,13 +228,6 @@ pub async fn dynamic_register(
     let homepage_uri = validated_uri(body.client_uri, "client_uri")?;
     let privacy_policy_uri = validated_uri(body.policy_uri, "policy_uri")?;
     let tos_uri = validated_uri(body.tos_uri, "tos_uri")?;
-
-    // Determine confidentiality from token_endpoint_auth_method.
-    let auth_method = body
-        .token_endpoint_auth_method
-        .as_deref()
-        .unwrap_or("client_secret_post");
-    let confidential = auth_method != "none";
 
     // ── Create client row ─────────────────────────────────────────────────────
 
@@ -194,7 +261,16 @@ pub async fn dynamic_register(
         // Dynamically registered clients start DISABLED — admin must enable.
         is_disabled: true,
         is_deleted: false,
-        // Sensible default for third-party clients.
+        // RFC 136 D1: `FirstTime`, not `ConsentPolicy::default()`. A
+        // client that registered itself through this protocol endpoint
+        // is, by construction, not first-party -- no administrator ever
+        // looked at it -- so it must not get the no-consent default that
+        // exists for the administrator-created case
+        // (`admin/clients.rs`'s own use of that default). Keep this set
+        // explicit even though it looks redundant next to the enum's
+        // `#[default]`: that default is for a different call site's
+        // different, legitimate case, not a fallback this one should
+        // ever fall into silently.
         consent_policy: ConsentPolicy::FirstTime,
         registered_via: RegistrationSource::Dynamic,
         logo_uri: logo_uri.clone(),
@@ -247,15 +323,6 @@ pub async fn dynamic_register(
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-fn extract_bearer_token(headers: &HeaderMap) -> Option<&str> {
-    headers
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.strip_prefix("Bearer "))
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-}
 
 fn sha256_hex(input: &str) -> String {
     let hash = Sha256::digest(input.as_bytes());

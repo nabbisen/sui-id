@@ -24,6 +24,8 @@ pub mod database;
 pub mod dev_mode;
 #[path = "http/discovery.rs"]
 pub mod discovery;
+#[path = "http/dynamic_registration_validation.rs"]
+pub mod dynamic_registration_validation;
 #[path = "runtime/egress.rs"]
 pub mod egress;
 #[path = "http/errors.rs"]

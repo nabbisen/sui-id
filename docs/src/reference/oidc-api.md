@@ -106,7 +106,30 @@ Supported fields: `redirect_uris` (required), `client_name` (required),
 `scope`, `grant_types`, `token_endpoint_auth_method` (`"client_secret_post"`
 or `"none"` for public clients), `logo_uri`, `client_uri`, `policy_uri`,
 `tos_uri`, `post_logout_redirect_uris`.
-All `*_uri` fields must be HTTPS (or `http://localhost` for development).
+
+**`redirect_uris` must form one closed profile** (RFC 095): every entry in
+the list must be the same one of —
+
+- **HTTPS**, with any `token_endpoint_auth_method` — `ConfidentialHttps`
+  when confidential, `PublicHttps` (PKCE required) when `"none"`;
+- **a numeric loopback address with an explicit port** —
+  `http://127.0.0.1:PORT/...` or `http://[::1]:PORT/...`, only with
+  `token_endpoint_auth_method: "none"` (`PublicNativeLoopback`, PKCE
+  required). **`http://localhost/...` is rejected** — `localhost` is a
+  name, resolved through DNS, not the numeric literal this profile
+  requires.
+
+A request mixing HTTPS and loopback entries, or using loopback with any
+confidential auth method, is rejected. `logo_uri`, `client_uri`,
+`policy_uri`, `tos_uri` and `post_logout_redirect_uris` must be HTTPS —
+loopback, including numeric loopback, is not accepted for any of these.
+
+The request body itself is bounded (64 KiB, 16 levels deep, 128 top-level
+members) and rejects a duplicate member, an RFC 7591/OIDC field this
+deployment recognises but does not support, and `software_statement`
+(`unapproved_software_statement`) before any of the above is checked. An
+unrecognised extension member is accepted and silently ignored — it is
+never persisted or echoed back.
 
 Errors follow the RFC 7591 `{"error": ..., "error_description": ...}` shape.
 

@@ -147,6 +147,12 @@ pub struct Strings {
     pub status_healthy: &'static str,
     pub status_unhealthy: &'static str,
     pub status_unknown: &'static str,
+    /// RFC 136 D2: marks a client whose `registered_via` is `'dynamic'` —
+    /// it registered itself through a protocol endpoint, not an
+    /// administrator. Shown only on that marker; an administrator-created
+    /// client gets no badge at all (its creation is not news to the
+    /// administrator who did it).
+    pub status_self_registered: &'static str,
 
     // ---- Empty placeholders (RFC 052) ----
     // For rendering "no value" / "any" / "fallback" cells consistently.

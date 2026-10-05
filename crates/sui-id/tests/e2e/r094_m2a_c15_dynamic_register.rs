@@ -20,7 +20,7 @@ fn sha256_hex(input: &str) -> String {
 
 /// Seed a usable registration token and return its plaintext bearer value.
 async fn seed_token(state: &AppState, max_uses: i64) -> String {
-    let plaintext = format!("regtoken-{}", uuid::Uuid::new_v4());
+    let plaintext = random_registration_token_plaintext();
     let row = RegistrationTokenRow {
         id: RegistrationTokenId::new(),
         token_hash: sha256_hex(&plaintext),

@@ -88,6 +88,11 @@ pub async fn create_client(
         post_logout_redirect_uris: spec.post_logout_redirect_uris.to_vec(),
         is_disabled: false,
         is_deleted: false,
+        // RFC 136 D1: `ConsentPolicy::default()` (-> `None`, no consent
+        // screen) is right here specifically because this function is
+        // the administrator-created-client path -- an administrator
+        // deciding to register a client *is* the first-party case this
+        // default is for, not a fallback standing in for a real choice.
         consent_policy: sui_id_store::models::ConsentPolicy::default(),
         registered_via: sui_id_store::models::RegistrationSource::Admin,
         logo_uri: None,

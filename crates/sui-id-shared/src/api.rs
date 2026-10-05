@@ -89,6 +89,10 @@ pub struct ClientSummary {
     /// Consent policy as a string tag (RFC 038): "none", "first_time", "always".
     #[serde(default)]
     pub consent_policy: String,
+    /// Registration source as a string tag (RFC 065): "admin", "dynamic".
+    /// RFC 136 D2: drives the self-registered marker in the admin UI.
+    #[serde(default)]
+    pub registered_via: String,
     pub created_at: DateTime<Utc>,
 }
 

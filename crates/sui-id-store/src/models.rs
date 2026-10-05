@@ -213,12 +213,36 @@ pub struct CredentialRow {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum ConsentPolicy {
     /// No consent screen — first-party default. Existing behaviour.
+    ///
+    /// RFC 136 D1: correct when the client actually is first-party (an
+    /// administrator created it and already decided to trust it), but
+    /// wrong as this enum's own derived default for anyone else — a
+    /// self-registered client is, by construction, not first-party, and
+    /// `#[default]` here exists for `Default::default()` call sites that
+    /// genuinely mean the administrator case, not as a fallback a
+    /// dynamic-registration code path should ever reach silently. See
+    /// `FirstTime` below and `dynamic_register.rs`'s explicit set of it —
+    /// this is the comment that should stop a future reader from
+    /// "simplifying" that explicit set into relying on this default
+    /// because the two enum values happen to sit next to each other.
     #[default]
     None,
     /// Show consent on first authorization; skip if prior grant covers
     /// the requested scopes.
+    ///
+    /// RFC 136 D1: the right default for a self-registered client. A
+    /// client that registered itself through a protocol endpoint
+    /// (`dynamic_register.rs`) is not first-party by construction — the
+    /// administrator never looked at it — so showing consent once, before
+    /// any token is issued to it, is the floor for a user to see and
+    /// approve what it can do.
     FirstTime,
     /// Always show the consent screen regardless of stored grants.
+    ///
+    /// RFC 136 D1: rejected as a default for anything, at acceptance.
+    /// Asking the user again after they have already decided trains
+    /// people to click through the screen that exists to make them stop
+    /// and read — the opposite of what a consent screen is for.
     Always,
 }
 

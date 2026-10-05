@@ -124,6 +124,7 @@ pub static STRINGS_EN: Strings = Strings {
     status_healthy: "Healthy",
     status_unhealthy: "Unhealthy",
     status_unknown: "Unknown",
+    status_self_registered: "Self-registered",
 
     // Empty placeholders (RFC 052)
     empty_dash: "—",

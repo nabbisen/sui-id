@@ -89,6 +89,12 @@ pub enum StatusKind {
     /// mistake RFC 121 fixed in the words, just done again in the colour.
     /// → `badge badge--warn`
     Unknown,
+    /// RFC 136 D2: a client whose `registered_via` is `'dynamic'` — it
+    /// registered itself through a protocol endpoint, not an
+    /// administrator. There is no corresponding variant for an
+    /// administrator-created client; it gets no badge at all. →
+    /// `badge badge--info`
+    SelfRegistered,
 }
 
 /// Render a status badge with localised text and the matching CSS
@@ -109,6 +115,7 @@ pub fn status_badge(t: &'static sui_id_i18n::Strings, kind: StatusKind) -> impl 
         StatusKind::Healthy => ("badge badge--ok", t.status_healthy),
         StatusKind::Unhealthy => ("badge badge--danger", t.status_unhealthy),
         StatusKind::Unknown => ("badge badge--warn", t.status_unknown),
+        StatusKind::SelfRegistered => ("badge badge--info", t.status_self_registered),
     };
     view! { <span class=class>{text}</span> }
 }
