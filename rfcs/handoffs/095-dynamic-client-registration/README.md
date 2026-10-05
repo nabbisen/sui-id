@@ -2,7 +2,11 @@
 
 **Governing RFC:** [RFC 095](../../accepted/095-dynamic-client-registration-transaction.md)
 **Audience:** the mid-capability model only after RFC re-acceptance and prerequisite evidence
-**Stage 1 is dispatched** —
+**Stages 1 and 1b are dispatched.** Stage 1 has **landed** (`78a2dec`); stage 1b
+— [`stage1b-loopback-port-matching-2026-10-05.md`](stage1b-loopback-port-matching-2026-10-05.md)
+— completes the one redirect-corpus row stage 1 deferred, and is open.
+
+Stage 1 was dispatched as —
 [`stage1-envelope-and-redirect-profile-2026-10-05.md`](stage1-envelope-and-redirect-profile-2026-10-05.md):
 the request envelope and the derived closed redirect profile. **Stages 2 and 3
 are not dispatched.** The entry gate below is **open** — all six conditions met,
