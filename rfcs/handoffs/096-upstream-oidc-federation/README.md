@@ -194,3 +194,10 @@ companion documents, not a sixth lifecycle.
 RFC 096's current **Independent design review** and A6 sweep evidence are
 the shared three-RFC records, held under
 [`../094-transactional-audit/`](../094-transactional-audit/README.md#review-records).
+
+## Open work
+
+- [`federation-split-2026-10-05.md`](federation-split-2026-10-05.md) —
+  **dispatched.** The preparatory `federation.rs` split, one of 096-A's four
+  implementation prerequisites, named since 2026-07 and specified nowhere until
+  now. **096-A itself is not dispatched** and this does not start it.
