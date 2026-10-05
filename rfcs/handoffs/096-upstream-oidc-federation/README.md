@@ -202,8 +202,12 @@ the shared three-RFC records, held under
   implementation prerequisites. Transport injected beneath policy via
   `connector_layer`, through a `#[cfg(test)]` constructor in the egress module,
   complementing rather than replacing `tls_mock.rs`.
+- [`harness-build-v3-2026-10-06.md`](harness-build-v3-2026-10-06.md) —
+  **DISPATCHED — this is the open work.** Two named differences (resolver and
+  one extra trusted root), `insecure_test_client()` replaced, and G19 extended
+  to the test tree.
 - [`harness-build-v2-2026-10-06.md`](harness-build-v2-2026-10-06.md) —
-  **DISPATCHED — this is the open work.** The corrected mechanism: a raw-byte
+  **superseded; its "exactly one difference" was not achievable.** The corrected mechanism: a raw-byte
   TLS fixture reached by a client from the shared production constructor with
   only the resolver replaced.
 - [`harness-build-2026-10-05.md`](harness-build-2026-10-05.md) — **superseded;
