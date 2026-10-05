@@ -197,7 +197,12 @@ the shared three-RFC records, held under
 
 ## Open work
 
+- [`hostile-provider-harness-2026-10-05.md`](hostile-provider-harness-2026-10-05.md)
+  — **design, awaiting sign-off. Not dispatched.** The last of 096-A's four
+  implementation prerequisites. Transport injected beneath policy via
+  `connector_layer`, through a `#[cfg(test)]` constructor in the egress module,
+  complementing rather than replacing `tls_mock.rs`.
 - [`federation-split-2026-10-05.md`](federation-split-2026-10-05.md) —
-  **dispatched.** The preparatory `federation.rs` split, one of 096-A's four
+  **landed `2f07862`.** Was dispatched as: The preparatory `federation.rs` split, one of 096-A's four
   implementation prerequisites, named since 2026-07 and specified nowhere until
   now. **096-A itself is not dispatched** and this does not start it.
