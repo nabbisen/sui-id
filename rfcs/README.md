@@ -138,6 +138,7 @@ Proposed: the move approved nothing.
 | 132 | [The files a stranger reads first](./done/132-the-files-a-stranger-reads-first.md) | [132-the-files-a-stranger-reads-first](./handoffs/132-the-files-a-stranger-reads-first/README.md) |
 | 133 | [An approval names what it settles, and a design review is of the RFC that cites it](./done/133-an-approval-names-what-it-settles.md) | [133-an-approval-names-what-it-settles](./handoffs/133-an-approval-names-what-it-settles/README.md) |
 | 134 | [Federation egress is a policy, not a client](./proposed/134-federation-egress-is-a-policy.md) | [134-federation-egress-is-a-policy](./handoffs/134-federation-egress-is-a-policy/README.md) |
+| 135 | [Owner attributions are visible](./proposed/135-owner-attributions-are-visible.md) | — |
 
 ### Implemented — Mockup Integration epic (Phase 0 → Phase 8)
 
