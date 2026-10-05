@@ -30,20 +30,37 @@ Implementation may start only when all are true:
   "RFC 094 is Implemented", which contradicted the RFC's amended prerequisite and
   would have made this work wait for M2b unnecessarily.*
 - RFC 093's current clean-tree matrix passes;
-- **the owner records the clean baseline commit** this work starts from
-  (RFC 095's [verification.md](verification.md) forbids assembling closure
-  evidence from different commits, so the baseline must be named before coding);
-  *Corrected 2026-10-05: this condition previously also required recording
-  "`codex-developer`" as implementation owner and "non-overlapping ownership of
-  the files below". Both are withdrawn. `codex-developer` was a name the former
-  architect invented; this team's implementation role is the mid-capability
-  model, per `.git-exclude/roles/`, so recording it each time is vacuous. The
-  ownership clause dates from the two-lane period when a second implementer was
-  assigned; with one implementation role the collision it guarded cannot occur.*
+- *(withdrawn 2026-10-05 — this condition is discharged, see below);*
 - the metadata/URI/adversarial design has durable independent approval; and
 - the frozen logout parser/confirmation constants and atomic consumption
   contract in [architecture.md](architecture.md) remain unchanged; and
 - no competing migration claims the next schema number.
+
+> **Condition 4 is fully discharged, 2026-10-05.** It originally read: *"the
+> owner records `codex-developer`, the full clean baseline commit, and
+> non-overlapping ownership of the files below."* All three parts are withdrawn.
+>
+> **`codex-developer`** was a name the former architect invented;
+> `@nabbisen` ruled on 2026-10-05, *"No `codex-developer` now or never"*, and
+> this team's implementation role is the mid-capability model
+> (`.git-exclude/roles/`). Recording it per-RFC records nothing.
+>
+> **Non-overlapping ownership** dates from the two-lane period when a second
+> implementer was assigned; with one implementation role the collision it
+> guarded cannot occur.
+>
+> **The baseline commit** was kept on 2026-10-05 and is now withdrawn too. It
+> existed to serve [verification.md](verification.md)'s rule that *"results from
+> different commits cannot be assembled into a passing closure package"* — which
+> is correct, and is the same rule **RFC 131 D2** states as *"a claim about the
+> shipped system requires Level B on the exact commit it cites"*. **But that
+> binds at closure, not at start.** RFC 131 D2 enforces it mechanically on the
+> commit the closure evidence names, and a baseline recorded before coding
+> cannot contribute to it, because the commit that matters is the final one.
+>
+> **All six conditions are therefore met and the entry gate needs no owner
+> action.** That is the architect's reading and `@nabbisen` may overrule it, in
+> which case the baseline is simply named and the gate clears that way instead.
 
 ## File ownership
 

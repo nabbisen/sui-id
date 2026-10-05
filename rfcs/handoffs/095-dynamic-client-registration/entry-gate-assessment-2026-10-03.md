@@ -13,7 +13,7 @@ action.** Nothing here is work for the dev team yet.
 | 1 | RFC 095 in `rfcs/accepted/` with complete approval metadata | **met** — G11 passes on it |
 | 2 | RFC 094 **M2a** Implemented, C15's transaction having observed rollback **and exactly-once** evidence | **met** — M2a closed 2026-10-03; `C15` appears in **both** of G20's registries |
 | 3 | RFC 093's current clean-tree matrix passes | **met** — Level B on `842b75b`, 26 jobs, 0 skipped |
-| 4 | ~~the owner records `codex-developer`, the baseline commit, and non-overlapping ownership~~ → **the owner records the clean baseline commit** | **re-scoped 2026-10-05, see below; still NOT met — owner action** |
+| 4 | ~~the owner records `codex-developer`, the baseline commit, and non-overlapping ownership~~ → **the owner records the clean baseline commit** | **fully discharged 2026-10-05 — no owner action; see the note in [README.md](README.md)** |
 | 5 | the metadata/URI/adversarial design has durable independent approval | **met** — [`095-design-review-2026-07-18.md`](095-design-review-2026-07-18.md), by `codex-independent-architecture-security-reviewer`, a role genuinely outside this team |
 | 6 | the frozen logout parser/confirmation constants and atomic consumption contract in [`architecture.md`](architecture.md) unchanged | **met** — `git log --since=2026-08-27` on that file is empty |
 | 7 | no competing migration claims the next schema number | **met** — see the note below |
@@ -44,7 +44,16 @@ assigned; with one implementation role the collision it guarded cannot occur.
 cannot be assembled into a passing closure package, so the baseline must be
 named before coding starts.
 
-**Still an owner action**, and now a smaller one: name the commit.
+**Withdrawn too, 2026-10-05.** It existed to serve
+[verification.md](verification.md)'s rule that results from different commits
+cannot be assembled into a passing closure package. That rule is correct — it is
+**RFC 131 D2** in different words — but it **binds at closure, not at start**.
+RFC 131 D2 enforces it on the commit the closure evidence names, and a baseline
+recorded before coding cannot contribute, because the commit that matters is the
+final one.
+
+**All six entry-gate conditions are met. RFC 095 needs no owner action to
+start.**
 
 ## Two things to know before the work starts
 
