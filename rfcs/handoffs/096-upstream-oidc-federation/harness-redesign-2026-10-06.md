@@ -3,7 +3,11 @@
 **Date:** 2026-10-06. **Supersedes the mechanism in
 [`hostile-provider-harness-2026-10-05.md`](hostile-provider-harness-2026-10-05.md),
 which `@nabbisen` approved on my evidence. That evidence was wrong.**
-**Not dispatched. Needs a decision.**
+**Option A approved by `@nabbisen`, 2026-10-06 ("A. Your recommendation is
+accepted"), and dispatched** — see
+[`harness-build-v2-2026-10-06.md`](harness-build-v2-2026-10-06.md). RFC 096
+`:496` is amended in place; the reasoning for treating that as non-material is
+recorded there.
 
 ## What is now known
 

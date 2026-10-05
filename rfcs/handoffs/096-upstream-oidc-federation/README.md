@@ -202,7 +202,12 @@ the shared three-RFC records, held under
   implementation prerequisites. Transport injected beneath policy via
   `connector_layer`, through a `#[cfg(test)]` constructor in the egress module,
   complementing rather than replacing `tls_mock.rs`.
-- [`harness-build-2026-10-05.md`](harness-build-2026-10-05.md) —
+- [`harness-build-v2-2026-10-06.md`](harness-build-v2-2026-10-06.md) —
+  **DISPATCHED — this is the open work.** The corrected mechanism: a raw-byte
+  TLS fixture reached by a client from the shared production constructor with
+  only the resolver replaced.
+- [`harness-build-2026-10-05.md`](harness-build-2026-10-05.md) — **superseded;
+  its mechanism does not exist.**
   **DISPATCHED — this is the open work.** Builds the harness the design above
   approves. Step 1 settles whether TLS-level abuse is reachable at
   `connector_layer`'s altitude before anything is built.

@@ -492,8 +492,31 @@ retaining the original hostname for TLS SNI and certificate validation. The
 HTTP stack must not perform a second unvalidated DNS lookup. Failure of all
 validated addresses fails the request. DNS is re-resolved and revalidated for
 every network fetch; cache entries cache documents, never permission to reuse
-an old address. Production code has no test-only private-address switch. The
-hostile fixture injects a transport trait beneath policy instead.
+an old address. Production code has no test-only private-address switch. **That
+invariant is unchanged and is the load-bearing half of this sentence.**
+
+> **Amended 2026-10-06.** This previously read "The hostile fixture injects a
+> transport trait beneath policy instead." **`reqwest` provides no such seam.**
+> Measured by the implementation role in a compiled external probe:
+> `ClientBuilder::connector_layer`'s response type `Conn` is sealed in
+> `pub(crate) mod sealed` inside a private module, so an external layer can only
+> forward, refuse, delay or count — no bytes in, none observable, at any
+> altitude. And RFC 134 D2's resolver denies loopback, so the production client
+> cannot reach a local fixture at all.
+>
+> **The hostile fixture is instead a raw-byte TLS server** — a real rustls
+> handshake followed by hand-built bytes — reached by a test client built from
+> the **same constructor as production**, differing only in its resolver.
+> Approved by `@nabbisen` 2026-10-06 ("A. Your recommendation is accepted").
+>
+> **Recorded as not material under RFC 000 line 43**, which tests security
+> invariants, public behaviour, scope and prerequisites. The invariant above is
+> preserved exactly — **production code still gains no branch and no switch**,
+> because the difference lives entirely in test construction. Behaviour, scope
+> and the "harness approved" prerequisite are unchanged; only the mechanism note
+> changes. **If `@nabbisen` reads a prescribed mechanism as scope, this is
+> material and RFC 096 returns to `proposed/`** — flagged rather than assumed.
+> Details: [`../handoffs/096-upstream-oidc-federation/harness-redesign-2026-10-06.md`](../handoffs/096-upstream-oidc-federation/harness-redesign-2026-10-06.md).
 
 ## Discovery profile
 
