@@ -11,7 +11,7 @@ crash-injection harness approved.
 **Closure prerequisites.** Every transition prefix in the recovery table either
 resumes idempotently or returns cleanly to `OldReady`; no prefix yields mixed
 ciphertext, a missing active key, or an overstated audit record; independent
-adversarial closure review accepts the durable evidence.
+adversarial closure review accepts the durable evidence. **Consolidated 2026-10-06 with `ROADMAP.md`'s M2c row**, which required that **no prefix yields mixed ciphertext, a missing active key, or an overstated audit record** — stated there and not here. The ROADMAP row now points at this field.
 **Tracks.** ROADMAP M2c — Master-key rotation recovery. Begins after RFC 094 M2a (it consumes that Class-A seam) and runs in parallel with M2b/M3/M4. **Required before M6 entry**, because the M7 workload contract requires a master-key rotation exercise and RFC 099 requires zero blocker-severity defects; rotating a key that is not crash-safe against the immutable soak artifact is not an acceptable exercise.
 **Handoff.** [`../handoffs/100-master-key-rotation/README.md`](../handoffs/100-master-key-rotation/README.md)
 **Touches.** Master-key loading and rotation CLI, key-file handling, startup
