@@ -139,6 +139,7 @@ Proposed: the move approved nothing.
 | 133 | [An approval names what it settles, and a design review is of the RFC that cites it](./done/133-an-approval-names-what-it-settles.md) | [133-an-approval-names-what-it-settles](./handoffs/133-an-approval-names-what-it-settles/README.md) |
 | 134 | [Federation egress is a policy, not a client](./proposed/134-federation-egress-is-a-policy.md) | [134-federation-egress-is-a-policy](./handoffs/134-federation-egress-is-a-policy/README.md) |
 | 135 | [Owner attributions are visible](./accepted/135-owner-attributions-are-visible.md) | — |
+| 136 | [Dynamic client registration is legible](./proposed/136-dynamic-registration-is-legible.md) | — |
 
 ### Implemented — Mockup Integration epic (Phase 0 → Phase 8)
 
