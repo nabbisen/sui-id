@@ -2,6 +2,12 @@
 
 **Governing RFC:** [RFC 095](../../accepted/095-dynamic-client-registration-transaction.md)
 **Audience:** the mid-capability model only after RFC re-acceptance and prerequisite evidence
+**Stage 1 is dispatched** —
+[`stage1-envelope-and-redirect-profile-2026-10-05.md`](stage1-envelope-and-redirect-profile-2026-10-05.md):
+the request envelope and the derived closed redirect profile. **Stages 2 and 3
+are not dispatched.** The entry gate below is **open** — all six conditions met,
+condition 4 discharged and the discharge approved 2026-10-05.
+
 **Status:** Planning companion; inherits the governing RFC's current status — **Accepted 2026-08-27**, the 2026-07-28 return to `proposed/` for a material prerequisite amendment having closed. Implementation remains blocked on the entry gate below.
 
 This handoff decomposes RFC 095 without authorizing coding or weakening RFC
