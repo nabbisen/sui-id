@@ -563,6 +563,18 @@ jobs:
       - name: G20
         run: bash scripts/ci-gate.sh G20
 
+  G21:
+    name: "G21 — tests live beside the module (Python 3.14)"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Install Python 3.14
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14"
+      - name: G21
+        run: bash scripts/ci-gate.sh G21
+
   changes:
     # RFC 130 D1/D6/D7: computes whether this push touched the Rust scope
     # (G01-G09b's shared `paths`, contracts/gate-inputs.toml) so those lanes

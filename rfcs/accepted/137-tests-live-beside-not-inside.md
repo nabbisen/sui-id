@@ -104,6 +104,18 @@ pattern works at all. Rust 2018+ allows `foo.rs` and `foo/` to coexist with no
 - **`tests/` directory files are out of scope** for this RFC, though the same
   splitting logic applies to them under the project rules.
 
+## Gate Matrix lane owned by RFC 137
+
+Registered through the multi-source lane registry (RFC 094 R10), as RFC 098,
+116, 134 and 135 do. The heading above is the recorded source heading and is
+matched by plain equality; do not rename it without changing the manifest in
+the same commit. Column layout mirrors RFC 093's table so one parser reads
+both. Added with step 1 (D1), before any file moves.
+
+| ID | Toolchain | Features | Blocking command / assertion |
+|---|---|---|---|
+| G21 | Python 3.14 | n/a | `python3.14 scripts/check-inline-tests.py --root .` |
+
 ## Open questions
 
 **None. Settled at acceptance.**

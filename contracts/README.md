@@ -25,6 +25,7 @@ one that still names `ci/<file>` is a violation that says where the file moved.
 | `audit-coverage-matrix.md` | registry | G13, G15 | RFC 094, RFC 098 |
 | `contract-paths.toml` | policy | G18 | RFC 116 |
 | `doc-authority.toml` | policy | G15 | RFC 098 |
+| `inline-test-exemptions.toml` | policy | G21 | RFC 137 |
 | `gate-inputs.toml` | registry, generator input | `scripts/ci-gate.sh`, `scripts/check-gate-inputs.sh`, `scripts/generate-ci-workflow.py` | RFC 093, RFC 094, RFC 116 |
 | `owner-attribution-baseline.txt` | baseline | G16 | RFC 117 |
 | `owner-attributions.toml` | policy | G16 | RFC 117 |
