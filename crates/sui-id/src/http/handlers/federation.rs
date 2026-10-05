@@ -18,79 +18,16 @@ use axum::extract::{Path, Query, State};
 use axum::response::{IntoResponse, Redirect, Response};
 use axum_extra::extract::cookie::{Cookie, CookieJar};
 use chrono::Duration;
-use hmac::{Hmac, KeyInit, Mac};
-use serde::{Deserialize, Serialize};
-use sha2::Sha256;
+use serde::Deserialize;
 
 use crate::errors::HttpError;
+use crate::federation_identity::{derive_username, resolve_shadow_username};
+use crate::federation_state::{FedState, STATE_COOKIE, STATE_TTL_SECS, seal_state, unseal_state};
 use crate::handlers::{AppState, AppStateExt, session_cookie};
+use crate::id_token::{IdTokenClaims, decode_id_token_claims};
 use sui_id_core::errors::CoreError;
 use sui_id_shared::ids::{SessionId, UserId};
 use sui_id_store::models::{AuditLogRow, FederationLinkRow, ProvisionMode, SessionRow};
-// ── State cookie ──────────────────────────────────────────────────────────────
-
-const STATE_COOKIE: &str = "sui_id_fed_state";
-const STATE_TTL_SECS: i64 = 600; // 10 minutes (P5)
-const HMAC_KEY_SUFFIX: &[u8] = b":federation-state-v1";
-
-/// Contents of the signed state cookie.
-#[derive(Serialize, Deserialize)]
-struct FedState {
-    /// Random nonce (also sent to upstream as `nonce` parameter).
-    nonce: String,
-    /// PKCE code verifier (raw, never sent to upstream).
-    pkce_verifier: String,
-    /// Provider slug for the callback to look up the provider.
-    provider_slug: String,
-    /// Unix timestamp at which this state expires (P5).
-    expires_at: i64,
-    /// Optional `next` URL to redirect to after sign-in.
-    next: Option<String>,
-    /// The `state` parameter sent to the upstream — verified in callback (P5 CSRF).
-    upstream_state: String,
-}
-
-/// Seal the state as `{json}.{hmac_hex}`.
-fn seal_state(app: &AppState, state: &FedState) -> anyhow::Result<String> {
-    let json = serde_json::to_string(state)?;
-    let mac = hmac_state(app, json.as_bytes());
-    Ok(format!("{json}.{mac}"))
-}
-
-/// Verify and unseal a state value from the cookie (P5).
-fn unseal_state(app: &AppState, raw: &str) -> Option<FedState> {
-    let dot = raw.rfind('.')?;
-    let (json_part, mac_part) = (&raw[..dot], &raw[dot + 1..]);
-    let expected = hmac_state(app, json_part.as_bytes());
-    // Constant-time comparison
-    use subtle::ConstantTimeEq;
-    let ok: bool = expected.as_bytes().ct_eq(mac_part.as_bytes()).into();
-    if !ok {
-        return None;
-    }
-    let state: FedState = serde_json::from_str(json_part).ok()?;
-    let now = chrono::Utc::now().timestamp();
-    if now > state.expires_at {
-        return None; // expired
-    }
-    Some(state)
-}
-
-fn hmac_state(app: &AppState, data: &[u8]) -> String {
-    let raw_key = app.db.key();
-    // Derive a per-use subkey by mixing the master key with a purpose suffix.
-    let mut key_material = Vec::with_capacity(32 + HMAC_KEY_SUFFIX.len());
-    key_material.extend_from_slice(raw_key.as_bytes());
-    key_material.extend_from_slice(HMAC_KEY_SUFFIX);
-    // HMAC-SHA256 has no fixed key-size requirement (RFC 2104); new_from_slice
-    // only fails for algorithms that do, so this cannot fail here.
-    #[allow(clippy::expect_used)]
-    let mut mac =
-        Hmac::<Sha256>::new_from_slice(&key_material).expect("HMAC accepts any key length");
-    mac.update(data);
-    let result = mac.finalize().into_bytes();
-    result.iter().map(|b| format!("{b:02x}")).collect()
-}
 
 // ── Upstream discovery ────────────────────────────────────────────────────────
 
@@ -312,17 +249,6 @@ pub struct CallbackQuery {
 struct TokenResponse {
     access_token: String,
     id_token: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct IdTokenClaims {
-    sub: String,
-    email: Option<String>,
-    #[serde(default)]
-    email_verified: bool,
-    preferred_username: Option<String>,
-    name: Option<String>,
-    nonce: Option<String>,
 }
 
 /// Handle the upstream callback: exchange code, validate ID token, resolve link.
@@ -804,66 +730,6 @@ async fn complete_federated_signin(
     Ok((jar, Redirect::to("/admin")).into_response())
 }
 
-/// Derive a candidate username from upstream ID token claims (P7).
-fn derive_username(claims: &IdTokenClaims) -> String {
-    // Priority: preferred_username → email local-part → sub (truncated)
-    if let Some(ref pu) = claims.preferred_username {
-        let clean: String = pu
-            .chars()
-            .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_' || *c == '.')
-            .take(32)
-            .collect();
-        if !clean.is_empty() {
-            return clean;
-        }
-    }
-    if let Some(ref email) = claims.email
-        && let Some(local) = email.split('@').next()
-    {
-        let clean: String = local
-            .chars()
-            .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
-            .take(32)
-            .collect();
-        if !clean.is_empty() {
-            return clean;
-        }
-    }
-    // Final fallback: first 16 chars of sub
-    claims.sub.chars().take(16).collect()
-}
-
-/// Conflict-resolve a proposed username (P7): append numeric suffix until free.
-async fn resolve_shadow_username(db: &sui_id_store::Database, proposed: &str) -> String {
-    if sui_id_store::repos::users::find_by_username(db, proposed)
-        .await
-        .is_err()
-    {
-        return proposed.to_owned();
-    }
-    for n in 2u32..=1000 {
-        let candidate = format!("{proposed}{n}");
-        if sui_id_store::repos::users::find_by_username(db, &candidate)
-            .await
-            .is_err()
-        {
-            return candidate;
-        }
-    }
-    format!("{proposed}-{}", sui_id_shared::ids::UserId::new())
-}
-
-/// Decode JWT claims without verifying signature (we trust the upstream's
-/// token_endpoint over TLS; full JWKS validation is a future hardening step).
-fn decode_id_token_claims(jwt: &str) -> Option<IdTokenClaims> {
-    use base64ct::{Base64UrlUnpadded, Encoding};
-    let parts: Vec<&str> = jwt.split('.').collect();
-    let payload = parts.get(1)?;
-    // JWT compact serialization uses unpadded base64url.
-    let decoded = Base64UrlUnpadded::decode_vec(payload).ok()?;
-    serde_json::from_slice(&decoded).ok()
-}
-
 async fn fetch_userinfo(
     client: &reqwest::Client,
     url: &str,
@@ -902,36 +768,4 @@ fn emit_audit_soon(
     tokio::spawn(async move {
         let _ = sui_id_store::repos::audit::append(&db, &row).await;
     })
-}
-
-#[cfg(test)]
-#[allow(clippy::expect_used, clippy::unwrap_used)]
-mod tests {
-    use super::decode_id_token_claims;
-    use base64ct::{Base64UrlUnpadded, Encoding};
-
-    fn jwt_with_payload(payload: &[u8]) -> String {
-        let header = Base64UrlUnpadded::encode_string(br#"{"alg":"none"}"#);
-        let payload = Base64UrlUnpadded::encode_string(payload);
-        format!("{header}.{payload}.")
-    }
-
-    #[test]
-    fn decode_id_token_claims_accepts_unpadded_jwt_payload() {
-        let jwt = jwt_with_payload(
-            br#"{"sub":"upstream-123","email":"alice@example.com","email_verified":true,"nonce":"n"}"#,
-        );
-
-        let claims = decode_id_token_claims(&jwt).expect("claims should decode");
-
-        assert_eq!(claims.sub, "upstream-123");
-        assert_eq!(claims.email.as_deref(), Some("alice@example.com"));
-        assert!(claims.email_verified);
-        assert_eq!(claims.nonce.as_deref(), Some("n"));
-    }
-
-    #[test]
-    fn decode_id_token_claims_rejects_malformed_payload() {
-        assert!(decode_id_token_claims("header.not-base64url.signature").is_none());
-    }
 }

@@ -30,10 +30,16 @@ pub mod dynamic_registration_validation;
 pub mod egress;
 #[path = "http/errors.rs"]
 pub mod errors;
+#[path = "http/federation_identity.rs"]
+pub mod federation_identity;
+#[path = "http/federation_state.rs"]
+pub mod federation_state;
 #[path = "runtime/gc.rs"]
 pub mod gc;
 #[path = "http/handlers.rs"]
 pub mod handlers;
+#[path = "http/id_token.rs"]
+pub mod id_token;
 #[path = "runtime/ipnet.rs"]
 pub mod ipnet;
 #[path = "runtime/keyring.rs"]
