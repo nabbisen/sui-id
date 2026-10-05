@@ -140,6 +140,7 @@ Proposed: the move approved nothing.
 | 134 | [Federation egress is a policy, not a client](./done/134-federation-egress-is-a-policy.md) | [134-federation-egress-is-a-policy](./handoffs/134-federation-egress-is-a-policy/README.md) |
 | 135 | [Owner attributions are visible](./accepted/135-owner-attributions-are-visible.md) | — |
 | 136 | [Dynamic client registration is legible](./accepted/136-dynamic-registration-is-legible.md) | — |
+| 137 | [Tests live beside the module, not inside it](./proposed/137-tests-live-beside-not-inside.md) | — |
 
 ### Implemented — Mockup Integration epic (Phase 0 → Phase 8)
 
