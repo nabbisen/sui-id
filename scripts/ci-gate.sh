@@ -156,6 +156,35 @@ if [[ -n "$porcelain" ]]; then
   exit 1
 fi
 
+# A gate's evidence must be produced by, and read from, this tree. Cargo bakes
+# CARGO_MANIFEST_DIR into test binaries at compile time (`env!`), and lanes such
+# as G20 read an artefact the test run writes under `target/`. A
+# CARGO_TARGET_DIR shared with a second source tree therefore lets one tree's
+# binary write the other tree's artefact, and lets a stale file -- G20's
+# registries are opened with O_APPEND and accumulate across runs, which is why
+# its command begins by deleting one -- satisfy a lane that proved nothing about
+# this commit.
+#
+# Measured 2026-10-06 on RFC 137 stage 4: a throwaway gate clone inherited this
+# repository's target/, so its compilation deposited test binaries here carrying
+# the clone's baked-in path. A later run here reused one without rebuilding and
+# wrote target/rfc094-rollback-coverage.txt into the clone. G20 failed in this
+# tree and passed in the clone, on the same commit. CI never sets the variable,
+# so this costs a hosted run nothing.
+if [[ -n "${CARGO_TARGET_DIR:-}" ]]; then
+  root_real=$(pwd -P)
+  if ! ctd_real=$(cd "$CARGO_TARGET_DIR" 2>/dev/null && pwd -P); then
+    ctd_real="$CARGO_TARGET_DIR"
+  fi
+  case "$ctd_real" in
+    "$root_real" | "$root_real"/*) ;;
+    *)
+      echo "::error::ci-gate $gate: CARGO_TARGET_DIR ($CARGO_TARGET_DIR) is outside --root ($root_real); a target directory shared with another source tree lets that tree's artefacts satisfy this gate. Unset it, or point it inside --root, and run the gate again" >&2
+      exit 1
+      ;;
+  esac
+fi
+
 echo "runner_image=${ImageOS:-unknown} ${ImageVersion:-unknown}"
 if command -v rustc >/dev/null 2>&1; then
   echo "rustc_version=$(rustc -Vv 2>&1 | tr '\n' ';')"

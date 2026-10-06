@@ -207,4 +207,63 @@ else
   echo "the shipped G12 profile did not make the dispatcher assert Bash" >&2; cat "$output" >&2; exit 1
 fi
 
+# --- Case 10: a CARGO_TARGET_DIR outside --root must be refused ----------
+# RFC 137 stage 4 review, 2026-10-06. Cargo bakes CARGO_MANIFEST_DIR into test
+# binaries at compile time, and G20 reads an artefact written under target/, so
+# a target directory shared with a second source tree lets that tree's binary
+# write -- or its stale, O_APPEND-accumulated file satisfy -- this tree's gate.
+# Observed live: G20 failed in the repository and passed in a gate clone that
+# had inherited the repository's target/, on the same commit.
+ctd_repo="$tmp/ctd-repo"
+mkdir -p "$ctd_repo"
+git -C "$ctd_repo" init -q
+git -C "$ctd_repo" -c user.email=t@e -c user.name=t commit -q --allow-empty -m init
+cat >"$tmp/ctd-manifest.toml" <<'TOML'
+[runner]
+bash_minimum = "3.0"
+bash_maximum_exclusive = "99"
+[gates]
+GC1 = "echo ran-the-lane"
+[lane_profiles]
+GC1 = { title = "ctd", setup = "none" }
+TOML
+
+# Outside the root: refused, and the lane's command must not run.
+output="$tmp/ctd-outside.output"
+if CARGO_TARGET_DIR="$tmp/elsewhere-target" \
+  bash "$ci_gate" GC1 --root "$ctd_repo" --manifest "$tmp/ctd-manifest.toml" \
+  >"$output" 2>&1; then
+  echo "ci-gate accepted a CARGO_TARGET_DIR outside --root" >&2; cat "$output" >&2; exit 1
+fi
+if ! grep -Fq "is outside --root" "$output"; then
+  echo "ci-gate refused an outside CARGO_TARGET_DIR for the wrong reason" >&2
+  cat "$output" >&2; exit 1
+fi
+if grep -Fq "ran-the-lane" "$output"; then
+  echo "ci-gate ran the lane despite refusing the target directory" >&2
+  cat "$output" >&2; exit 1
+fi
+echo "cargo-target-dir-outside: refused before the command ran"
+
+# Inside the root: accepted, and the lane runs.
+output="$tmp/ctd-inside.output"
+CARGO_TARGET_DIR="$ctd_repo/target" \
+  bash "$ci_gate" GC1 --root "$ctd_repo" --manifest "$tmp/ctd-manifest.toml" \
+  >"$output" 2>&1 || true
+if ! grep -Fq "ran-the-lane" "$output"; then
+  echo "ci-gate refused a CARGO_TARGET_DIR inside --root" >&2; cat "$output" >&2; exit 1
+fi
+echo "cargo-target-dir-inside: accepted"
+
+# Unset: unchanged behaviour, the lane runs.
+output="$tmp/ctd-unset.output"
+env -u CARGO_TARGET_DIR \
+  bash "$ci_gate" GC1 --root "$ctd_repo" --manifest "$tmp/ctd-manifest.toml" \
+  >"$output" 2>&1 || true
+if ! grep -Fq "ran-the-lane" "$output"; then
+  echo "ci-gate changed behaviour when CARGO_TARGET_DIR is unset" >&2
+  cat "$output" >&2; exit 1
+fi
+echo "cargo-target-dir-unset: accepted"
+
 echo "ci-gate evidence-contract fixtures passed"
