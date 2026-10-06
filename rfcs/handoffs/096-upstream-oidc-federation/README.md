@@ -197,6 +197,12 @@ the shared three-RFC records, held under
 
 ## Open work
 
+- [`jose-strategy-2026-10-06.md`](jose-strategy-2026-10-06.md) — **decision
+  request, blocking 096-A.** All four prerequisites are clear, but RFC 096's
+  matrix requires RS256/PS256/ES256/EdDSA and this project can verify only
+  EdDSA; `oidc/jwt.rs` is deliberately restricted to it. **096-A cannot be
+  staged until the JOSE strategy is settled.**
+
 - [`hostile-provider-harness-2026-10-05.md`](hostile-provider-harness-2026-10-05.md)
   — **approved 2026-10-05.** The last of 096-A's four
   implementation prerequisites. Transport injected beneath policy via
