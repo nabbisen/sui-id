@@ -72,9 +72,10 @@ project that stuck — G16, G19, G20 — shipped with the gate that holds it.
 | 1 | `sui-id-web` | 1 | done, `134e93b` |
 | 1 | `sui-id-shared` | 4 | done, `134e93b` |
 | 1 | `sui-id-i18n` | 5 | done, `134e93b` |
-| 2 | `sui-id` | **13** (+1 deferred) | ready |
-| 3 | `sui-id-core` | **18** | blocked on stage 2 |
-| 4 | `sui-id-store` | **18** | blocked on stage 3 |
+| 2 | `sui-id` | **13** (+1, deferred then recovered as stage 5) | done, `7af2174` |
+| 3 | `sui-id-core` | **18** | done, `d69b400` |
+| 4 | `sui-id-store` | **18** | done, `6bfc45b` |
+| 5 | `sui-id` — `id_token.rs` | **1** | dispatched 2026-10-07 |
 
 **Stage 1 is three small crates together** — enough to prove the method and the
 gate without a large diff. Stages 2–4 are one crate each.
@@ -93,11 +94,15 @@ the table's numbers describe that set, they do not define it. The set is
 unchanged. The ordering rationale ("smallest first") also survives the
 correction: 13 < 18 = 18.
 
-**The "+1 deferred" is `crates/sui-id/src/http/id_token.rs`.** RFC 096-A
-rewrites that file, so migrating it now would collide with a dispatch that is
-waiting only on an unanswered question. It keeps its exemption line until 096-A
-lands and writes its tests in a sibling file natively. The line is not stale —
-the violation is real — so the shrink-only rule is satisfied.
+**The deferred file was `crates/sui-id/src/http/id_token.rs`, and the deferral
+was withdrawn on 2026-10-07 as stage 5.** Stage 2 held it back because RFC 096-A
+rewrites that file and a migration was thought to collide. **That reason did not
+hold:** 096-A is waiting on an unanswered question and has not started, nothing
+is in flight on the file, and the deferral left this RFC's own closure
+prerequisite — *"the gate's exemption list is empty"* — unmet by exactly one
+entry. Amending that prerequisite would have been a material change to a
+prerequisite, which returns an Accepted RFC to `proposed/`; migrating two tests
+meets it as written instead.
 
 ### D3 — The proof is the test count, per crate, unchanged
 
