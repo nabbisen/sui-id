@@ -1,0 +1,8 @@
+# RFC 096-A: these two calls disable jsonwebtoken's validation. Listing them
+# makes G07/G07b's -D warnings turn any use into a build failure. The first
+# returns the claims with no signature check; the second switches off the
+# signature, the algorithm allowlist and the key-family binding together.
+disallowed-methods = [
+  "jsonwebtoken::dangerous::insecure_decode",
+  "jsonwebtoken::Validation::insecure_disable_signature_validation",
+]

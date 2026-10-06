@@ -92,6 +92,10 @@ ldap3                       = { version = "0.12", default-features = false, feat
 zeroize                     = { version = "1.8", features = ["derive"] }
 secrecy                     = { version = "0.10", features = ["serde"] }
 base64ct                    = { version = "1.6", features = ["alloc"] }
+# RFC 096-A upstream JOSE. Feature set is load-bearing: the default set pulls
+# `use_pem` (pem, simple_asn1), and `rust_crypto` pulls `rsa` (RUSTSEC-2023-0071,
+# unpatched). `aws_lc_rs` binds the provider rustls already compiles in.
+jsonwebtoken                = { version = "10.3", default-features = false, features = ["aws_lc_rs"] }
 
 # Logging / errors
 tracing                     = "0.1"

@@ -7,6 +7,7 @@
 //! spec's prohibition on plaintext secrets in config) and an optional setup
 //! token override.
 
+use jsonwebtoken::Algorithm;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -299,6 +300,7 @@ impl Config {
                     );
                 }
             }
+            validate_id_token_algs(provider)?;
         }
         Ok(())
     }
@@ -427,17 +429,93 @@ pub struct FederationProviderConfig {
     /// Omitted or empty means the issuer's origin alone (RFC 134 D3).
     #[serde(default)]
     pub allowed_origins: Vec<String>,
+    /// RFC 096 Provider trust configuration: the ID-token signature algorithms
+    /// this provider is trusted to use. Never learned from discovery — discovery
+    /// may only narrow this set, never widen it.
+    #[serde(default = "default_id_token_algs")]
+    pub id_token_algs: Vec<String>,
 }
 
 /// RFC 096's matrix, Origins row: at most 8 explicit canonical origins
 /// including the issuer.
 pub const MAX_ALLOWED_ORIGINS: usize = 8;
 
+/// RFC 096's Provider trust configuration, `id_token_algs` row: at most four
+/// signature algorithms, a subset of RS256, PS256, ES256, EdDSA.
+pub const MAX_ID_TOKEN_ALGS: usize = 4;
+
 fn default_fed_scopes() -> String {
     "openid email".into()
 }
 fn default_provision_mode() -> String {
     "link_only".into()
+}
+fn default_id_token_algs() -> Vec<String> {
+    vec!["RS256".into()]
+}
+
+/// RFC 096 Provider trust configuration, `id_token_algs` row. Every refusal
+/// here is deliberate: a bad list stops the service from starting rather than
+/// falling back to the default, so a config file that looks accepted can never
+/// verify something other than what it says. Ruled in
+/// `rfcs/handoffs/096-upstream-oidc-federation/jose-strategy-2026-10-06.md`.
+fn validate_id_token_algs(provider: &FederationProviderConfig) -> anyhow::Result<()> {
+    const PERMITTED: [Algorithm; 4] = [
+        Algorithm::RS256,
+        Algorithm::PS256,
+        Algorithm::ES256,
+        Algorithm::EdDSA,
+    ];
+    let slug = &provider.slug;
+    let algs = &provider.id_token_algs;
+    if algs.is_empty() {
+        anyhow::bail!(
+            "federation_provider[{slug}]: id_token_algs is empty. An empty list is a \
+             configuration error, not \"trust nothing by default\"; omit the key to get \
+             the default RS256 (RFC 096 Provider trust configuration)"
+        );
+    }
+    if algs.len() > MAX_ID_TOKEN_ALGS {
+        anyhow::bail!(
+            "federation_provider[{slug}]: id_token_algs has {} entries, more than the \
+             maximum of {MAX_ID_TOKEN_ALGS} (RFC 096 Provider trust configuration)",
+            algs.len(),
+        );
+    }
+    for (i, entry) in algs.iter().enumerate() {
+        if entry == "none" {
+            anyhow::bail!(
+                "federation_provider[{slug}]: id_token_algs entry \"none\" is never \
+                 acceptable: an unsigned token cannot be verified against a key \
+                 (RFC 096 Provider trust configuration)"
+            );
+        }
+        match entry.parse::<Algorithm>() {
+            Ok(Algorithm::HS256 | Algorithm::HS384 | Algorithm::HS512) => {
+                anyhow::bail!(
+                    "federation_provider[{slug}]: id_token_algs entry {entry:?} is a \
+                     symmetric HS* algorithm. It has no meaning against a public JWKS, \
+                     and accepting it is the classic algorithm-confusion attack. \
+                     Permitted: RS256, PS256, ES256, EdDSA (RFC 096)"
+                );
+            }
+            Ok(alg) if PERMITTED.contains(&alg) => {}
+            _ => {
+                anyhow::bail!(
+                    "federation_provider[{slug}]: id_token_algs entry {entry:?} is not \
+                     permitted. Permitted: RS256, PS256, ES256, EdDSA \
+                     (RFC 096 Provider trust configuration)"
+                );
+            }
+        }
+        if algs[..i].contains(entry) {
+            anyhow::bail!(
+                "federation_provider[{slug}]: id_token_algs lists {entry:?} twice. \
+                 It is a set, a subset of the four permitted algorithms (RFC 096)"
+            );
+        }
+    }
+    Ok(())
 }
 
 impl FederationProviderConfig {

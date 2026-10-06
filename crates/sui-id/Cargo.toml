@@ -80,6 +80,7 @@ getrandom                   = { workspace = true }
 prometheus                  = { workspace = true }
 zeroize                     = { workspace = true }
 base64ct                    = { workspace = true }
+jsonwebtoken                = { workspace = true }
 reqwest                     = { workspace = true }
 rustls                      = { workspace = true }
 # RFC 134 D5 Tier 3 (steps 4/6 handoff): no code here imports `hyper`

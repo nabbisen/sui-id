@@ -47,6 +47,7 @@ fn matching_cfg(row: &FederationProviderRow) -> FederationProviderConfig {
             .split_whitespace()
             .map(String::from)
             .collect(),
+        id_token_algs: vec!["RS256".into()],
     }
 }
 
