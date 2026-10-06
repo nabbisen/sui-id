@@ -237,30 +237,49 @@ non-negotiable.** Added 2026-10-06 after the dev team's verification pass.
 
 **All four of `jsonwebtoken`'s protections hang on one flag.**
 `decoding.rs:335-348` guards the empty-set error, the key-family binding **and**
-the `alg` allowlist with the same `if validation.validate_signature`. A future
-reader who believes they are switching off one check switches off four. The
-call site therefore constructs `Validation` in **one function, with a comment
-saying exactly this**, and never flips that flag.
+the `alg` allowlist with the same `if validation.validate_signature`. A reader
+who believes they are switching off one check switches off four. The call site
+therefore constructs `Validation` in **one function, with a comment saying
+exactly this**.
+
+**Downgraded 2026-10-06, by my own re-check:** `validate_signature` is
+`pub(crate)`, and its only public mutator,
+`Validation::insecure_disable_signature_validation()` (`validation.rs:163`), is
+**`#[deprecated]` in 10.3.0** — *"Use `jsonwebtoken::dangerous::insecure_decode`
+if you require this functionality."* Under G07/G07b's existing `-D warnings`,
+**nobody in our tree can switch those four checks off today without an explicit
+`#[allow]`.** What survives is narrow: do not write that `#[allow]`, and do not
+assume the deprecation is still there when the pin moves. I overstated this
+hazard and am recording the correction rather than quietly softening it.
 
 **The crate ships two explicitly dangerous entry points:**
 `Validation::insecure_disable_signature_validation()` (`validation.rs:163`) and
-`jsonwebtoken::dangerous::insecure_decode` (`tests/dangerous.rs`).
+`jsonwebtoken::dangerous::insecure_decode` — **defined at `decoding.rs:299` and
+re-exported by `pub mod dangerous` at `lib.rs:16-17`**. (An earlier draft cited
+`tests/dangerous.rs`, which only imports it; the dev team caught that. `mod
+decoding` is private, so the re-export is the only public path.)
 
-**Both are made unreachable by the build, and I verified the mechanism rather
-than proposing it.** There is no `clippy.toml` in this workspace today. A
-throwaway crate with a `disallowed-methods` entry, run under
-`cargo +stable clippy`, reports:
+**Both are made unreachable by the build, and the mechanism is verified against
+the real crate.** There is no `clippy.toml` in this workspace today. A throwaway
+crate depending on `jsonwebtoken` 10.3.0, with both paths in
+`disallowed-methods`, run under `cargo +stable clippy`:
 
 ```
-warning: use of a disallowed method `std::fs::remove_dir_all`
+warning: use of a disallowed method `jsonwebtoken::dangerous::insecure_decode`
+warning: use of a disallowed method `jsonwebtoken::Validation::insecure_disable_signature_validation`
   = note: `#[warn(clippy::disallowed_methods)]` on by default
 ```
 
-**On by default.** So a new `clippy.toml` listing those two paths, under
-G07/G07b's existing `-D warnings`, turns reaching for either into a build
-failure. A rule a developer cannot accidentally break is worth more than a rule
-written in a doc comment, and that is this half of the philosophy applied to
-the people who maintain the code.
+**On by default, and it resolves through the private-module re-export** — which
+had to be checked, because an entry that failed to resolve would have given us
+a gate that passes vacuously, the exact failure I required self-tests for on
+G21. Under `-D warnings` both become build failures. A rule a developer cannot
+accidentally break is worth more than one written in a doc comment, and that is
+this half of the philosophy applied to the people who maintain the code.
+
+**One feasibility fact from the same run:** the proposed dependency line
+compiles, offline, against what is already cached —
+`jsonwebtoken = { version = "10.3", default-features = false, features = ["aws_lc_rs"] }`.
 
 ## What I need
 
