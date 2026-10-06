@@ -1,11 +1,13 @@
 # RFC 096-A — the JOSE strategy, before any dispatch
 
 **Date:** 2026-10-06. **A decision request, not a dispatch.**
-**Revised 2026-10-06, same day, after you asked whether I remembered the
-project's fundamental philosophy. You were right. The first version of this
-document recommended B. It now recommends C, and §"The correction" says why the
-first answer was wrong — including that I had already reasoned the opposite way,
-correctly, two days earlier.**
+**Revised 2026-10-06, same day, against both halves of the project's fundamental
+philosophy — *"finally clean, safe and secure, and robust and sophisticated
+design"* **and** *"APIs and UI/UX for users not to be confused or misunderstand
+are also very important"*. The first version of this document recommended B and
+said nothing at all about the second half. It now recommends C; §"The correction"
+says why the first answer was wrong, and §"The operator-facing half" supplies what
+was missing.**
 
 **Why this exists:** all four of 096-A's prerequisites are clear and I went to
 stage it. **This is the blocker I found instead.**
@@ -168,8 +170,56 @@ also add that field and the JWKS fetch — on the RFC 134 federation client, und
 the validating resolver, with the response bounds already in place. Neither
 changes the recommendation; both belong in the first stage's scope.
 
+## The operator-facing half
+
+The first version of this document weighed only safety. *"APIs and UI/UX for
+users not to be confused or misunderstand"* is the other half of the standard,
+and for this decision "users" means the **operator of a self-hosted IdP**, who
+configures an upstream provider and then has to understand why a login failed.
+Three things follow, and they are part of the recommendation, not commentary on
+it.
+
+**1. The allowed-algorithm set is configuration, and its defaults decide
+whether an operator can be fooled.**
+
+| | Behaviour, and why |
+|---|---|
+| Key name | Use the spec's own words — `id_token_signing_algs`, next to the provider's `id_token_signing_alg_values_supported`. An operator comparing our config to their provider's discovery document should see the same vocabulary, not a synonym. |
+| Omitted | A documented default of the four the matrix permits. Safe and predictable. |
+| **Never** | **Do not take the allowed set from the provider's own discovery document.** That lets the party being verified choose the verification policy. It would look convenient and read as reasonable, which is what makes it the dangerous default. |
+| Empty list | **Refuse to start**, naming the key and the provider. An operator who wrote `[]` meant something; silently substituting the default is exactly the misunderstanding this half of the philosophy forbids. The library agrees — `decoding.rs:335` makes an empty allowed set an error — but the operator must hear it at startup, not at the first login. |
+| Contains `HS*` or `none` | **Refuse to start**, saying why: symmetric and unsigned algorithms have no meaning against a public JWKS. Rejecting it silently at verification time would leave a config file that looks accepted. |
+
+**2. A rejected federated login needs one operator-readable reason.** The
+matrix's negative rows are not just test cases; each is something an operator
+will hit in production and must be able to tell apart: unknown `kid` (usually
+rotation), `alg` not in the allowed set (log the alg **and** the allowed set),
+signature invalid, `iss`/`aud`/`nonce` mismatch, expired or not-yet-valid (log
+the skew used). **`jsonwebtoken`'s `ErrorKind` is mapped to our own taxonomy,
+not surfaced raw** — a library's wording is written for its callers, not for
+our operators, and it changes between versions. The **end user** sees a generic
+failure; the detail goes to the operator log only, so the error is not an
+oracle.
+
+**3. After this change the codebase has two JWT verifiers, and a reader must
+not confuse them.** `oidc/jwt.rs` verifies **tokens we issued** and is
+EdDSA-only on purpose; the new code in `id_token.rs` verifies **tokens an
+upstream provider issued**. Each module's first doc line states which direction
+it serves, and the upstream one states explicitly that **it is not the issuer's
+verifier and widening it does not widen that**. The whole reason C beats A is
+that these two policies stay separate — a future reader who cannot tell them
+apart is how they get merged back together.
+
 ## What I need
 
-**A direction on C in the form above.** With it I can stage 096-A immediately.
-Dependency changes are yours, not mine, which is why this is still a decision
-request and not a dispatch.
+**Two things.**
+
+1. **A direction on C in the form above** — the dependency change is yours, not
+   mine, which is why this is still a decision request and not a dispatch.
+2. **A nod to the five configuration behaviours in the table**, in particular
+   *refuse to start* rather than *fall back to the default* on an empty or
+   symmetric-containing list. Refusing to start is the safer reading and the
+   clearer one, but it is a behaviour an operator meets at upgrade time, so I am
+   not going to choose it on your behalf.
+
+With both I can stage 096-A immediately.
