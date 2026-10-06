@@ -3,23 +3,5 @@
 # listed file that no longer declares an inline module is an error (stale).
 # Do not add to this list. Built from the real tree (scripts/check-inline-tests.py).
 files = [
-  "crates/sui-id-store/src/backend.rs",
-  "crates/sui-id-store/src/ldap_source.rs",
-  "crates/sui-id-store/src/metrics.rs",
-  "crates/sui-id-store/src/registry.rs",
-  "crates/sui-id-store/src/repos/audit.rs",
-  "crates/sui-id-store/src/repos/client_registration_token.rs",
-  "crates/sui-id-store/src/repos/email_outbox.rs",
-  "crates/sui-id-store/src/repos/federation_link.rs",
-  "crates/sui-id-store/src/repos/federation_provider.rs",
-  "crates/sui-id-store/src/repos/forgot_password_requests.rs",
-  "crates/sui-id-store/src/repos/scope_definition.rs",
-  "crates/sui-id-store/src/repos/user_consent.rs",
-  "crates/sui-id-store/src/repos/users.rs",
-  "crates/sui-id-store/src/tests_rfc021.rs",
-  "crates/sui-id-store/src/tests_rfc103.rs",
-  "crates/sui-id-store/src/tests_rfc105.rs",
-  "crates/sui-id-store/src/tests_rfc115.rs",
-  "crates/sui-id-store/src/user_source.rs",
   "crates/sui-id/src/http/id_token.rs",
 ]
