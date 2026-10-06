@@ -218,6 +218,11 @@ ctd_repo="$tmp/ctd-repo"
 mkdir -p "$ctd_repo"
 git -C "$ctd_repo" init -q
 git -C "$ctd_repo" -c user.email=t@e -c user.name=t commit -q --allow-empty -m init
+# The dispatcher refuses a HEAD that disagrees with GITHUB_SHA, and CI sets that
+# variable, so each case below pins it to this throwaway repo's own HEAD -- the
+# same thing run_bash_case does above. Without it these cases pass on a laptop,
+# where GITHUB_SHA is unset, and fail on a runner for the wrong reason.
+ctd_sha=$(git -C "$ctd_repo" rev-parse HEAD)
 cat >"$tmp/ctd-manifest.toml" <<'TOML'
 [runner]
 bash_minimum = "3.0"
@@ -230,7 +235,7 @@ TOML
 
 # Outside the root: refused, and the lane's command must not run.
 output="$tmp/ctd-outside.output"
-if CARGO_TARGET_DIR="$tmp/elsewhere-target" \
+if CARGO_TARGET_DIR="$tmp/elsewhere-target" GITHUB_SHA="$ctd_sha" \
   bash "$ci_gate" GC1 --root "$ctd_repo" --manifest "$tmp/ctd-manifest.toml" \
   >"$output" 2>&1; then
   echo "ci-gate accepted a CARGO_TARGET_DIR outside --root" >&2; cat "$output" >&2; exit 1
@@ -247,7 +252,7 @@ echo "cargo-target-dir-outside: refused before the command ran"
 
 # Inside the root: accepted, and the lane runs.
 output="$tmp/ctd-inside.output"
-CARGO_TARGET_DIR="$ctd_repo/target" \
+CARGO_TARGET_DIR="$ctd_repo/target" GITHUB_SHA="$ctd_sha" \
   bash "$ci_gate" GC1 --root "$ctd_repo" --manifest "$tmp/ctd-manifest.toml" \
   >"$output" 2>&1 || true
 if ! grep -Fq "ran-the-lane" "$output"; then
@@ -257,7 +262,7 @@ echo "cargo-target-dir-inside: accepted"
 
 # Unset: unchanged behaviour, the lane runs.
 output="$tmp/ctd-unset.output"
-env -u CARGO_TARGET_DIR \
+env -u CARGO_TARGET_DIR GITHUB_SHA="$ctd_sha" \
   bash "$ci_gate" GC1 --root "$ctd_repo" --manifest "$tmp/ctd-manifest.toml" \
   >"$output" 2>&1 || true
 if ! grep -Fq "ran-the-lane" "$output"; then
