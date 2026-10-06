@@ -88,20 +88,42 @@ option B's foundation, and it disqualifies B on its own.**
 
 **2. We already ship two reviewed implementations of all four algorithms.**
 `ring` 0.17.14 and `aws-lc-rs` 1.18.1 are both already in `Cargo.lock` and
-already compiled into the binary — `ring` via `ldap3`'s `tls-rustls-ring`,
-`aws-lc-rs` as reqwest/rustls's default provider, both of which
-`Cargo.toml:138-145` already documents. `ring/src/signature.rs:290-292,273,263`
+already compiled into the binary. **Route corrected 2026-10-06** after the dev
+team's verification: both arrive via `rustls → hyper-rustls → reqwest` and the
+workspace's own direct `rustls` dependency. An earlier draft of this document
+said `ring` came via `ldap3`'s `tls-rustls-ring`; `ldap` is **not** a default
+feature (`crates/sui-id/Cargo.toml:26`), so that route does not exist in a
+default build. The fact was right and the attribution was invented. `ring/src/signature.rs:290-292,273,263`
 publicly exports `RSA_PKCS1_2048_8192_SHA256`, `RSA_PSS_2048_8192_SHA256`,
 `ECDSA_P256_SHA256_FIXED` and `ED25519` — **exactly the matrix's four rows.**
 Adding `rsa` and `p256` would therefore add a *third* implementation of
 primitives we already have, which is the reverse of clean.
 
-**3. `josekit` is out on deployment grounds, not preference.** Measured at
-docs.rs: josekit 0.10.3 (released 2025-05-20) has `openssl ^0.10.68` as a normal
-dependency and states *"This library depends on OpenSSL 1.1.1 or above DLL."*
-For a self-hosted product that ships a binary, that is a **third native crypto
-stack plus an external system library**. It fails the same test that eliminated
-option B.
+**3. `josekit` is out on how its API places the algorithm decision — and on
+nothing else. Corrected 2026-10-06; the first two versions of this document had
+this wrong.** I rejected josekit as *"a third native crypto stack plus an
+external system library"*. **That is false, and the dev team caught it.**
+`cargo tree -p sui-id -i openssl -e normal` shows `openssl` 0.10.81 already in
+the default binary via `webauthn-rs → webauthn-rs-core →
+webauthn-attestation-ca`. josekit would add **no new system library**, and this
+binary already carries **three** native crypto stacks. Nor is there a
+supply-chain argument underneath: `flate2`, `regex`, `anyhow` and `time` — the
+rest of josekit's dependencies — are **all already in the tree** (via
+`tower-http`, `leptos`, `leptos_hot_reload` and `webauthn-rs-core`).
+
+**The ground that does hold, and it now carries the decision alone:** josekit
+verifies through `deserialize_compact_with_selector` — the selector receives the
+header and returns a `JwsVerifier` for one algorithm. **Nothing in josekit
+enforces "`header.alg` is in the operator's configured allowlist" or "the key's
+family matches the algorithm"; we would write both, inside the selector.** That
+is precisely the hand-written policy glue that decided B against C, so rejecting
+josekit for it is the same argument applied consistently. In josekit's favour,
+recorded: it has **no `none` algorithm** either, so that pitfall is closed by
+both candidates.
+
+**This leaves the recommendation standing on one true reason instead of three,
+two of which were false. That is a weaker position than I first presented, and
+it is the honest one.**
 
 **4. `jsonwebtoken` 10.3.0 can be taken with no new cryptographic
 implementation at all, and it enforces the matrix in its types.** With
@@ -210,6 +232,36 @@ verifier and widening it does not widen that**. The whole reason C beats A is
 that these two policies stay separate — a future reader who cannot tell them
 apart is how they get merged back together.
 
+**4. Three hazards in the chosen library that the operator half makes
+non-negotiable.** Added 2026-10-06 after the dev team's verification pass.
+
+**All four of `jsonwebtoken`'s protections hang on one flag.**
+`decoding.rs:335-348` guards the empty-set error, the key-family binding **and**
+the `alg` allowlist with the same `if validation.validate_signature`. A future
+reader who believes they are switching off one check switches off four. The
+call site therefore constructs `Validation` in **one function, with a comment
+saying exactly this**, and never flips that flag.
+
+**The crate ships two explicitly dangerous entry points:**
+`Validation::insecure_disable_signature_validation()` (`validation.rs:163`) and
+`jsonwebtoken::dangerous::insecure_decode` (`tests/dangerous.rs`).
+
+**Both are made unreachable by the build, and I verified the mechanism rather
+than proposing it.** There is no `clippy.toml` in this workspace today. A
+throwaway crate with a `disallowed-methods` entry, run under
+`cargo +stable clippy`, reports:
+
+```
+warning: use of a disallowed method `std::fs::remove_dir_all`
+  = note: `#[warn(clippy::disallowed_methods)]` on by default
+```
+
+**On by default.** So a new `clippy.toml` listing those two paths, under
+G07/G07b's existing `-D warnings`, turns reaching for either into a build
+failure. A rule a developer cannot accidentally break is worth more than a rule
+written in a doc comment, and that is this half of the philosophy applied to
+the people who maintain the code.
+
 ## What I need
 
 **Two things.**
@@ -222,4 +274,11 @@ apart is how they get merged back together.
    clearer one, but it is a behaviour an operator meets at upgrade time, so I am
    not going to choose it on your behalf.
 
-With both I can stage 096-A immediately.
+3. **Separately, and not blocking: this binary already links three native crypto
+   stacks** — `aws-lc-sys`, `ring` and `openssl`, the last via `webauthn-rs`.
+   Nothing in the repository records that. It is outside 096-A and I attach no
+   recommendation to it yet; I am raising it because it is a real statement
+   about attack surface, build time and supply chain, and I only found it
+   because a false claim of mine was checked.
+
+With 1 and 2 I can stage 096-A immediately.
