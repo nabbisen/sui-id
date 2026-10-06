@@ -115,6 +115,46 @@ access to the parent's private items through `super::`**, which is why this
 pattern works at all. Rust 2018+ allows `foo.rs` and `foo/` to coexist with no
 `mod.rs`, and the project's own rules say so.
 
+### The `#[path]` interaction — added 2026-10-06, after stage 2 hit it
+
+**The paragraph above is true only when the parent module is declared
+plainly.** When a module is declared with `#[path = "…"]`, rustc resolves *its*
+children relative to the directory holding that file, not to a directory named
+after it. So inside a `#[path]`-declared `src/http/cors.rs`, a bare
+`mod tests;` searches `src/http/tests.rs` — **not** `src/http/cors/tests.rs` —
+and the build fails with `error[E0583]: file not found for module 'tests'`.
+
+Stage 2 met this on **all 13 files at once**: `crates/sui-id/src/lib.rs`
+declares every one of them with `#[path]`, because this crate deliberately
+keeps a flat module tree (`crate::cors`) over a nested filesystem
+(`src/http/cors.rs`). Stage 1's three crates have no `#[path]` declarations, so
+the method had never met it.
+
+**The rule, which is per module and not per crate:**
+
+> **A test module is declared the same way the module it belongs to is
+> declared.** If the parent carries `#[path]`, the test module carries
+> `#[path = "<stem>/tests.rs"]`. If the parent is declared plainly, so is the
+> test module.
+
+This is mechanical and locally checkable — a reader looks at how the sibling
+module is declared and does the same thing — rather than two idioms with no
+stated reason.
+
+**Measured exposure for the remaining stages:**
+
+| Crate | `#[path]` declarations in `lib.rs` | Files in that stage needing `#[path]` |
+|---|---|---|
+| `sui-id` (stage 2) | 26 | **13 of 13** |
+| `sui-id-core` (stage 3) | 22 | **11 of 18** — mixed within the crate |
+| `sui-id-store` (stage 4) | 0 | **0 of 18** |
+
+**This corrects the method, not the scope**, so the RFC does not return to
+`proposed/`: the set of files to migrate, the proof required by D3 and the
+non-goals are all unchanged. What changed is one false claim about how the
+move compiles, which the stage-2 handoff repeated and which cost the
+implementer a failed build before it was diagnosed.
+
 ## Non-goals
 
 - **No test is rewritten, renamed, added or deleted.** Pure relocation.
