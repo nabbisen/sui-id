@@ -143,11 +143,19 @@ stated reason.
 
 **Measured exposure for the remaining stages:**
 
-| Crate | `#[path]` declarations in `lib.rs` | Files in that stage needing `#[path]` |
-|---|---|---|
-| `sui-id` (stage 2) | 26 | **13 of 13** |
-| `sui-id-core` (stage 3) | 22 | **11 of 18** — mixed within the crate |
-| `sui-id-store` (stage 4) | 0 | **0 of 18** |
+| Crate | Files in that stage needing `#[path]` |
+|---|---|
+| `sui-id` (stage 2) | **13 of 13** |
+| `sui-id-core` (stage 3) | **13 of 18** — mixed within the crate |
+| `sui-id-store` (stage 4) | **0 of 18** |
+
+**The stage-3 figure was first recorded as 11 of 18 and is corrected here to 13
+of 18.** The first number came from grepping `lib.rs` alone, and
+`identity/admin/clients.rs` and `identity/admin/users.rs` are declared in
+`crates/sui-id-core/src/identity/admin.rs`, not in `lib.rs`. **The
+determination is per declaration site, wherever that site is**, which is why
+the counting method matters: a module's declaration can live in any ancestor
+module file, so the search must cover the whole crate.
 
 **This corrects the method, not the scope**, so the RFC does not return to
 `proposed/`: the set of files to migrate, the proof required by D3 and the
