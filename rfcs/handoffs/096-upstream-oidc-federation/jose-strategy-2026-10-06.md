@@ -283,7 +283,7 @@ compiles, offline, against what is already cached —
 
 ## What I need
 
-**Two things.**
+**Three things — the first two blocking, the third only to be aware of.**
 
 1. **A direction on C in the form above** — the dependency change is yours, not
    mine, which is why this is still a decision request and not a dispatch.
@@ -292,8 +292,7 @@ compiles, offline, against what is already cached —
    symmetric-containing list. Refusing to start is the safer reading and the
    clearer one, but it is a behaviour an operator meets at upgrade time, so I am
    not going to choose it on your behalf.
-
-3. **Separately, and not blocking: this binary already links three native crypto
+3. **Not blocking: this binary already links three native crypto
    stacks** — `aws-lc-sys`, `ring` and `openssl`, the last via `webauthn-rs`.
    Nothing in the repository records that. It is outside 096-A and I attach no
    recommendation to it yet; I am raising it because it is a real statement
