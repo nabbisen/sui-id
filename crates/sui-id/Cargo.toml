@@ -25,6 +25,10 @@ include = [
 [features]
 default = []
 ldap    = ["sui-id-store/ldap"]
+# RFC 096-A harness: the test-support federation client constructor
+# (runtime::egress::build_federation_client_for_tests). Off by default; enabled
+# only for tests by the dev-dependency below, so no release build has the seam.
+test-support = []
 
 [[bin]]
 name = "sui-id"
@@ -94,6 +98,8 @@ sha2                        = { workspace = true }
 
 [dev-dependencies]
 sui-id-store                = { workspace = true }
+# Self dev-dependency: enables the test-support feature for this crate's tests only.
+sui-id                     = { path = ".", features = ["test-support"] }
 # Re-pull the core crate as a dev-dep with the `test-support`
 # feature so e2e tests can construct `InMemoryHibpClient` /
 # `InMemoryMailSender` from `core::test_support`. The library

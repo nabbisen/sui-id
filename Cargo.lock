@@ -3358,6 +3358,7 @@ dependencies = [
  "serde_json",
  "sha2 0.11.0",
  "subtle",
+ "sui-id",
  "sui-id-core",
  "sui-id-i18n",
  "sui-id-shared",

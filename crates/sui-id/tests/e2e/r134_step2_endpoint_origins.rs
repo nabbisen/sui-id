@@ -11,7 +11,7 @@
 
 use super::common::{complete_setup_and_login, extract_set_cookie, test_app};
 use super::federation_fail_closed::federated_signin;
-use super::tls_mock::{insecure_test_client, serve_https};
+use super::tls_mock::{federation_test_client, serve_https};
 use axum::body::Body;
 use axum::http::{Method, Request, header};
 use base64ct::Encoding;
@@ -67,7 +67,7 @@ async fn seed_provider(state: &AppState, issuer: &str, allowed_origins: &str) {
 async fn token_endpoint_outside_the_allowed_set_receives_no_request() {
     let mut state = test_app();
     complete_setup_and_login(&state).await;
-    state.http_client = Arc::new(insecure_test_client());
+    state.http_client = Arc::new(federation_test_client(sui_id::resolver::ValidatingResolver));
 
     let token_hits = Arc::new(AtomicUsize::new(0));
     let hits_for_route = token_hits.clone();
@@ -143,7 +143,7 @@ async fn token_endpoint_outside_the_allowed_set_receives_no_request() {
 async fn authorization_endpoint_outside_the_allowed_set_is_rejected_at_start() {
     let mut state = test_app();
     complete_setup_and_login(&state).await;
-    state.http_client = Arc::new(insecure_test_client());
+    state.http_client = Arc::new(federation_test_client(sui_id::resolver::ValidatingResolver));
 
     let discovery_issuer = serve_https(move |_base| {
         axum::Router::new().route(
@@ -190,7 +190,7 @@ async fn authorization_endpoint_outside_the_allowed_set_is_rejected_at_start() {
 async fn a_second_configured_origin_is_accepted_end_to_end() {
     let mut state = test_app();
     complete_setup_and_login(&state).await;
-    state.http_client = Arc::new(insecure_test_client());
+    state.http_client = Arc::new(federation_test_client(sui_id::resolver::ValidatingResolver));
 
     let token_hits = Arc::new(AtomicUsize::new(0));
     let hits_for_route = token_hits.clone();

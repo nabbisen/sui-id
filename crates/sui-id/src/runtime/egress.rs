@@ -15,6 +15,7 @@
 //! residual RFC 134 D5 records separately) are a later step of the same
 //! RFC, dispatched separately.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 /// Build the federation-only outbound HTTP client. The only caller is
@@ -29,7 +30,24 @@ use std::time::Duration;
 // reason).
 #[allow(clippy::expect_used)]
 pub fn build_federation_client() -> reqwest::Client {
-    reqwest::Client::builder()
+    federation_client_builder(Arc::new(crate::resolver::ValidatingResolver), None)
+        .build()
+        .expect("failed to build federation HTTP client")
+}
+
+/// The one list of federation client settings. Production and the test-support
+/// constructor below both call it, so they cannot drift apart: the only inputs
+/// that differ between them are the two parameters here.
+///
+/// The `resolver` parameter is the DNS policy (production: the RFC 134 D2
+/// validating resolver). `extra_root` adds one trusted certificate on top of
+/// the platform roots; production passes `None`, so the platform verifier is
+/// selected exactly as before, and verification is never switched off.
+fn federation_client_builder(
+    resolver: Arc<dyn reqwest::dns::Resolve>,
+    extra_root: Option<reqwest::Certificate>,
+) -> reqwest::ClientBuilder {
+    let builder = reqwest::Client::builder()
         // D1's three bounds. `timeout` is the total deadline; a per-request
         // override on top of it would make this dead code on that request
         // (see `http/handlers/federation.rs`'s fetch functions, which no
@@ -66,7 +84,27 @@ pub fn build_federation_client() -> reqwest::Client {
         // IANA/explicit prefix table and returns exactly one surviving
         // address — the connector dials what it returns, so there is no
         // window for a second, unvalidated lookup to slip in.
-        .dns_resolver(crate::resolver::ValidatingResolver)
+        .dns_resolver(resolver);
+    match extra_root {
+        Some(root) => builder.tls_certs_merge([root]),
+        None => builder,
+    }
+}
+
+/// Test-support twin of [`build_federation_client`]: the same settings, built by
+/// the same [`federation_client_builder`], differing only in its two named
+/// parameters. Integration tests reach it through the `test-support` feature;
+/// a `#[cfg(test)]` item would not be visible to them, since the library is
+/// compiled without `cfg(test)` for the integration-test binary. The feature
+/// is off by default and is enabled only as a dev-dependency, so the release
+/// build contains no seam.
+#[cfg(feature = "test-support")]
+#[allow(clippy::expect_used)]
+pub fn build_federation_client_for_tests(
+    resolver: Arc<dyn reqwest::dns::Resolve>,
+    extra_root: reqwest::Certificate,
+) -> reqwest::Client {
+    federation_client_builder(resolver, Some(extra_root))
         .build()
-        .expect("failed to build federation HTTP client")
+        .expect("failed to build test-support federation HTTP client")
 }

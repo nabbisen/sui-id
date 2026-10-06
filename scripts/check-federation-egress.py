@@ -16,6 +16,10 @@ client's policy without constructing a second client:
   3. no per-request `.timeout(` call on the federation path outside the
      egress module. `RequestBuilder::timeout` overrides the client's,
      silently making the client's own bound dead code on that request.
+  4. (RFC 096-A harness v3) no `reqwest::Client::builder()` anywhere under
+     `crates/sui-id/tests/`, except the one compile-fail fixture named below.
+     A hand-rolled client in the test tree is a second, unreviewed federation
+     client; the shared constructor is the single permitted site.
 
 **This is a textual scan, a proxy, not a proof.** It catches each
 construct spelled the obvious way; a call reached through a type alias, a
@@ -44,6 +48,13 @@ FEDERATION_PATH = (
     "crates/sui-id-store/src/repos/federation_provider.rs",
 )
 EGRESS_MODULE = "crates/sui-id/src/runtime/egress.rs"
+# Condition 4: the test tree builds no client of its own. The one exception is a
+# compile-fail fixture whose whole point is to name a builder method that must
+# stay unavailable (RFC 134 D1: no ambient cookie jar); it never sends a request.
+TESTS_ROOT = "crates/sui-id/tests"
+ALLOWED_TEST_BUILDERS = (
+    "crates/sui-id/tests/compile_fail/cookies_feature_must_stay_off.rs",
+)
 
 BUILDER_RE = re.compile(r"\bClient::builder\s*\(\s*\)")
 RESOLVE_RE = re.compile(r"\.resolve(?:_to_addrs)?\s*\(")
@@ -119,6 +130,19 @@ def main(argv: list[str]) -> int:
             failures,
             "per-request .timeout( on the federation path (condition 3) -- "
             "RequestBuilder::timeout overrides the client's own bound",
+        )
+
+    # Condition 4: the test tree builds no client of its own (RFC 096-A harness v3).
+    for path in sorted((root / TESTS_ROOT).rglob("*.rs")):
+        rel = path.relative_to(root).as_posix()
+        if rel in ALLOWED_TEST_BUILDERS:
+            continue
+        scan_file(
+            path,
+            BUILDER_RE,
+            failures,
+            "reqwest::Client::builder() in the test tree (condition 4) -- tests "
+            "reach federation through the shared constructor only",
         )
 
     if failures:
