@@ -32,7 +32,8 @@ fn decode_id_token_claims_rejects_malformed_payload() {
 // a claim: those are stage 4's, and `decode_id_token_claims` is untouched.
 
 use super::{
-    CompactJws, CompactJwsError, MAX_DECODED_HEADER_AND_PAYLOAD, Segment, parse_compact_jws,
+    CompactJws, CompactJwsError, MAX_DECODED_HEADER_AND_PAYLOAD, MAX_ENCODED_JWS_LEN, Segment,
+    parse_compact_jws,
 };
 
 const GOOD: &str = r#"{"alg":"RS256","kid":"k1","typ":"JWT"}"#;
@@ -384,4 +385,40 @@ fn padding_in_the_signature_is_refused() {
         refused(&input),
         CompactJwsError::NotBase64Url(Segment::Signature)
     );
+}
+
+/// The first check: the whole input, on its length, before the `{` test. Thirty
+/// thousand `{` is also a JSON serialization, and is refused as oversized.
+#[test]
+fn a_token_over_the_total_bound_is_refused_before_anything_else() {
+    let input = "{".repeat(MAX_ENCODED_JWS_LEN + 1);
+    assert_eq!(refused(&input), CompactJwsError::Oversized);
+}
+
+/// A token whose total encoded length is exactly `MAX_ENCODED_JWS_LEN`: the
+/// largest the RFC's 16 KiB decoded header plus payload can produce, plus a
+/// signature sized to fill the rest. Accepted. One more character is refused.
+#[test]
+fn the_total_bound_is_exact_and_accepts_the_rfc_decoded_limit() {
+    let mut header_len = GOOD.len();
+    let (at_limit, signature_len) = loop {
+        let mut header = GOOD.to_string();
+        header.push_str(&" ".repeat(header_len - GOOD.len()));
+        let payload = vec![b' '; MAX_DECODED_HEADER_AND_PAYLOAD - header.len()];
+        let hb = enc(header.as_bytes());
+        let pb = enc(&payload);
+        let rest = MAX_ENCODED_JWS_LEN - hb.len() - pb.len() - 2;
+        if rest % 4 != 1 && rest >= 2 {
+            let sig = "A".repeat(rest);
+            break (format!("{hb}.{pb}.{sig}"), rest);
+        }
+        header_len += 1;
+    };
+    assert_eq!(at_limit.len(), MAX_ENCODED_JWS_LEN);
+    assert!(
+        signature_len > 684,
+        "the signature allowance must exceed an RSA-4096 signature"
+    );
+    accepted(&at_limit);
+    assert_eq!(refused(&format!("{at_limit}A")), CompactJwsError::Oversized);
 }

@@ -13,6 +13,7 @@ fn attempt() -> ValidatedDiscovery {
         authorization_endpoint: "https://evil.example.com/authorize".into(),
         token_endpoint: "https://evil.example.com/token".into(),
         userinfo_endpoint: None,
+        jwks_uri: None,
     }
 }
 

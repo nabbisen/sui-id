@@ -42,6 +42,8 @@ pub mod handlers;
 pub mod id_token;
 #[path = "runtime/ipnet.rs"]
 pub mod ipnet;
+#[path = "http/jwks.rs"]
+pub mod jwks;
 #[path = "runtime/keyring.rs"]
 pub mod keyring;
 #[path = "runtime/ratelimit.rs"]

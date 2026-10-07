@@ -17,10 +17,12 @@
 //! reasoning as RFC 134 D2's resolver placement: put the control where
 //! bypassing it is impossible, not where a checker notices.
 //!
-//! `jwks_uri` is deliberately out of scope: [`RawDiscovery`] does not
-//! carry it, nothing fetches it today, and adding it now would be
-//! speculative. When JWKS verification arrives it inherits this same
-//! validation by construction.
+//! `jwks_uri` is validated by the same rules as every other endpoint, when it
+//! is present. It is **optional here**, although OIDC Discovery requires it:
+//! [`RawDiscovery`] is deserialized on the live federation path, and a required
+//! field would fail every provider whose document omits it. Refusing a provider
+//! with no `jwks_uri` belongs to the stage that verifies signatures, where it
+//! changes nothing that works today.
 
 use serde::Deserialize;
 
@@ -34,6 +36,8 @@ pub struct RawDiscovery {
     pub token_endpoint: String,
     #[serde(default)]
     pub userinfo_endpoint: Option<String>,
+    #[serde(default)]
+    pub jwks_uri: Option<String>,
 }
 
 /// Why an issuer or an endpoint was rejected. Carries enough detail for a
@@ -81,6 +85,7 @@ pub struct ValidatedDiscovery {
     authorization_endpoint: String,
     token_endpoint: String,
     userinfo_endpoint: Option<String>,
+    jwks_uri: Option<String>,
 }
 
 impl ValidatedDiscovery {
@@ -94,6 +99,11 @@ impl ValidatedDiscovery {
 
     pub fn userinfo_endpoint(&self) -> Option<&str> {
         self.userinfo_endpoint.as_deref()
+    }
+
+    /// The validated `jwks_uri`, when the document names one.
+    pub fn jwks_uri(&self) -> Option<&str> {
+        self.jwks_uri.as_deref()
     }
 
     /// The only constructor. `issuer` must already be known canonical
@@ -129,11 +139,16 @@ impl ValidatedDiscovery {
             Some(u) => Some(check_endpoint("userinfo_endpoint", u, &allowed)?),
             None => None,
         };
+        let jwks_uri = match raw.jwks_uri {
+            Some(u) => Some(check_endpoint("jwks_uri", u, &allowed)?),
+            None => None,
+        };
 
         Ok(Self {
             authorization_endpoint,
             token_endpoint,
             userinfo_endpoint,
+            jwks_uri,
         })
     }
 }

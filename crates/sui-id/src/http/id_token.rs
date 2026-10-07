@@ -43,6 +43,16 @@ pub fn decode_id_token_claims(jwt: &str) -> Option<IdTokenClaims> {
 #[allow(dead_code)]
 pub(crate) const MAX_DECODED_HEADER_AND_PAYLOAD: usize = 16 * 1024;
 
+/// The largest encoded compact JWS accepted, in bytes. Sized to admit the RFC's
+/// 16 KiB decoded header plus payload at their largest encoding (21,848 base64url
+/// characters), an RSA-4096 signature (684 characters), and the two dots, with
+/// room to spare. It is far larger than `response_bounds::MAX_STRING_LEN` (8 KiB),
+/// the bound the live transport puts on this same string today. That bound binds
+/// first on the production path; this one exists so the RFC's own decoded limit
+/// is reachable by the function itself, and so the function bounds its own input.
+#[allow(dead_code)]
+pub(crate) const MAX_ENCODED_JWS_LEN: usize = 24 * 1024;
+
 /// The largest base64url text that can decode to `MAX_DECODED_HEADER_AND_PAYLOAD`
 /// bytes. A segment longer than this is refused before any decoding allocates.
 #[allow(dead_code)]
@@ -153,6 +163,7 @@ impl<'de> Deserialize<'de> for MemberNames {
 
 /// Structural checks on a compact JWS. The order is part of the contract:
 ///
+/// 0. The whole input is refused if longer than `MAX_ENCODED_JWS_LEN`.
 /// 1. A JSON serialization (leading `{`) is refused before anything else.
 /// 2. The segment count and emptiness are checked on the text.
 /// 3. Each header and payload segment is checked for length against the size
@@ -165,6 +176,12 @@ impl<'de> Deserialize<'de> for MemberNames {
 #[allow(dead_code)]
 pub(crate) fn parse_compact_jws(token: &str) -> Result<CompactJws, CompactJwsError> {
     use base64ct::{Base64UrlUnpadded, Encoding};
+
+    // Before anything else: the whole input, on its encoded length, so that no
+    // later step runs on an unbounded string.
+    if token.len() > MAX_ENCODED_JWS_LEN {
+        return Err(CompactJwsError::Oversized);
+    }
 
     if token.starts_with('{') {
         return Err(CompactJwsError::JsonSerialization);

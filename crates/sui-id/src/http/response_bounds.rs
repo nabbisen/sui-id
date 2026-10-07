@@ -181,7 +181,7 @@ async fn read_bounded_bytes(
 /// Depth is `serde_json`'s own job (pinned, see the module doc comment);
 /// this walks the already-depth-bounded `Value` for the two caps
 /// `serde_json` does not itself impose.
-fn check_caps(value: &serde_json::Value) -> Result<(), BoundsError> {
+pub fn check_caps(value: &serde_json::Value) -> Result<(), BoundsError> {
     match value {
         serde_json::Value::Object(map) => {
             if map.len() > MAX_MEMBERS {
@@ -226,14 +226,21 @@ fn check_caps(value: &serde_json::Value) -> Result<(), BoundsError> {
 pub async fn read_bounded_json<T: DeserializeOwned>(
     resp: reqwest::Response,
 ) -> Result<T, BoundsError> {
+    let bytes = read_bounded_body(resp).await?;
+    let value: serde_json::Value = serde_json::from_slice(&bytes).map_err(BoundsError::Json)?;
+    check_caps(&value)?;
+    serde_json::from_value(value).map_err(BoundsError::Json)
+}
+
+/// The status, media type and byte cap of [`read_bounded_json`], without the
+/// parse. For a caller that must see the bytes themselves: the JWKS duplicate-
+/// member rule cannot run on a `Value`, which has already lost the duplicates.
+pub async fn read_bounded_body(resp: reqwest::Response) -> Result<Vec<u8>, BoundsError> {
     if resp.status() != reqwest::StatusCode::OK {
         return Err(BoundsError::WrongStatus(resp.status()));
     }
     content_type_is_json(&resp)?;
-    let bytes = read_bounded_bytes(resp, MAX_RESPONSE_BYTES).await?;
-    let value: serde_json::Value = serde_json::from_slice(&bytes).map_err(BoundsError::Json)?;
-    check_caps(&value)?;
-    serde_json::from_value(value).map_err(BoundsError::Json)
+    read_bounded_bytes(resp, MAX_RESPONSE_BYTES).await
 }
 
 #[cfg(test)]

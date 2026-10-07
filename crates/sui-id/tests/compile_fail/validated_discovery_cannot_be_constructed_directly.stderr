@@ -1,4 +1,4 @@
-error[E0451]: fields `authorization_endpoint`, `token_endpoint` and `userinfo_endpoint` of struct `ValidatedDiscovery` are private
+error[E0451]: fields `authorization_endpoint`, `token_endpoint`, `userinfo_endpoint` and `jwks_uri` of struct `ValidatedDiscovery` are private
   --> tests/compile_fail/validated_discovery_cannot_be_constructed_directly.rs:13:9
    |
 12 |     ValidatedDiscovery {
@@ -9,3 +9,5 @@ error[E0451]: fields `authorization_endpoint`, `token_endpoint` and `userinfo_en
    |         ^^^^^^^^^^^^^^ private field
 15 |         userinfo_endpoint: None,
    |         ^^^^^^^^^^^^^^^^^ private field
+16 |         jwks_uri: None,
+   |         ^^^^^^^^ private field

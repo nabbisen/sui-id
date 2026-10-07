@@ -5,6 +5,7 @@ fn raw(auth: &str, token: &str, userinfo: Option<&str>) -> RawDiscovery {
         authorization_endpoint: auth.into(),
         token_endpoint: token.into(),
         userinfo_endpoint: userinfo.map(str::to_owned),
+        jwks_uri: None,
     }
 }
 
@@ -184,4 +185,79 @@ fn validate_issuer_rejects_http() {
 #[test]
 fn validate_issuer_rejects_garbage() {
     assert!(validate_issuer("not a url").is_err());
+}
+
+// ---- RFC 096-A stage 3a: jwks_uri ------------------------------------------
+
+fn with_jwks(jwks: Option<&str>) -> RawDiscovery {
+    let mut doc = raw(
+        "https://idp.example.com/authorize",
+        "https://idp.example.com/token",
+        None,
+    );
+    doc.jwks_uri = jwks.map(str::to_owned);
+    doc
+}
+
+/// Production guard: a document without `jwks_uri` must still deserialize and
+/// validate. Making the field required would fail every provider that omits it,
+/// on the live path, which RFC 096-A is not allowed to change.
+#[test]
+fn a_document_without_jwks_uri_still_deserializes_and_validates() {
+    let body = r#"{
+        "authorization_endpoint": "https://idp.example.com/authorize",
+        "token_endpoint": "https://idp.example.com/token"
+    }"#;
+    let raw: RawDiscovery = serde_json::from_str(body).expect("absent jwks_uri must deserialize");
+    let doc = ValidatedDiscovery::validate(raw, ISSUER, "").expect("and validate");
+    assert_eq!(doc.jwks_uri(), None);
+}
+
+#[test]
+fn a_valid_https_jwks_uri_in_the_issuer_origin_is_accepted() {
+    let doc =
+        ValidatedDiscovery::validate(with_jwks(Some("https://idp.example.com/jwks")), ISSUER, "")
+            .expect("a valid jwks_uri");
+    assert_eq!(doc.jwks_uri(), Some("https://idp.example.com/jwks"));
+}
+
+#[test]
+fn a_jwks_uri_that_is_not_https_is_rejected() {
+    let result =
+        ValidatedDiscovery::validate(with_jwks(Some("http://idp.example.com/jwks")), ISSUER, "");
+    assert!(matches!(
+        result,
+        Err(DiscoveryError::NotHttps {
+            field: "jwks_uri",
+            ..
+        })
+    ));
+}
+
+#[test]
+fn a_jwks_uri_outside_the_allowed_origins_is_rejected() {
+    let result = ValidatedDiscovery::validate(
+        with_jwks(Some("https://keys.evil.example/jwks")),
+        ISSUER,
+        "",
+    );
+    assert!(matches!(
+        result,
+        Err(DiscoveryError::OriginNotAllowed {
+            field: "jwks_uri",
+            ..
+        })
+    ));
+}
+
+#[test]
+fn a_relative_jwks_uri_is_rejected_as_not_absolute() {
+    let result = ValidatedDiscovery::validate(with_jwks(Some("/jwks")), ISSUER, "");
+    assert!(matches!(
+        result,
+        Err(DiscoveryError::NotAbsolute {
+            field: "jwks_uri",
+            ..
+        })
+    ));
 }

@@ -57,6 +57,7 @@ mod r094_m2a_db_access_scope;
 mod r095_m3_stage1_registration_validation;
 mod r095_m3_stage1b_loopback_port_matching;
 mod r096_a_harness;
+mod r096_a_stage3a_jwks;
 mod r102_stage1;
 mod r102_stage2;
 mod r102_stage3;
