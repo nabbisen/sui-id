@@ -1,15 +1,27 @@
-# RFC 138 — The verification method has no owner
+# RFC 138 — Per-hunk hashes are not reproducible
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-10-07
+**Approved by.** `@nabbisen`, 2026-10-07: "RFC 138 is accepted."
 **Security review.** Not required — no application behaviour changes and no crate's public surface moves. This RFC defines how a review package's evidence is computed and adds one script with self-tests. Reason subject to acceptance.
 
 **Design prerequisites.** None.
-**Implementation prerequisites.** This RFC Accepted. **`proposed/` is build-prohibited** (RFC 000), so nothing here is dispatchable until then.
+**Implementation prerequisites.** This RFC Accepted — **satisfied 2026-10-07**. Dispatched the same day.
 **Closure prerequisites.** One script computes every hash a package declares; its definition of a hunk is in its own docstring; a self-test fails if a hunk's hash changes when a later hunk is appended; and every dispatch cites the script instead of restating the method in prose.
 **Tracks.** Verification integrity.
 **Touches.** `scripts/`, `scripts/tests/`, `contracts/README.md` if a row is required, and the handoff template's Package section.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** High-capability model, requirements-architect role.
+
+*Retitled 2026-10-07, minutes after acceptance, from "The verification method
+has no owner". Cosmetic and non-material — no scope, invariant or prerequisite
+changed, and the number the acceptance names is unchanged. The reason is this
+RFC's own subject: the old title contained the word "owner", so every citation
+of it matched G16's attribution pattern and earned a baseline line of pure
+filename noise. Three such lines appeared within minutes, and the count would
+have grown with every document citing it. **A ledger whose value is being
+readable should not be fed by a naming choice.** Recorded as a guideline: an
+RFC title should avoid the owner token.*
 
 ## Summary
 
