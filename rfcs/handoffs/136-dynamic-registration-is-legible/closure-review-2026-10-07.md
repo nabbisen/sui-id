@@ -3,6 +3,10 @@
 **Date:** 2026-10-07. **Recommends closure. Does not close it.** The decision
 lives in RFC 136's `Closure approved by.` field, not here.
 
+**Closed 2026-10-07**, Status Implemented, on the approval that field records.
+This line is maintenance, not a change of position: the sentence above is still
+exactly what this document does.
+
 *Framed this way deliberately. RFC 135's closure review opened by declaring
 itself to be awaiting a sign-off — true when written, false once that arrived.
 Its RFC's `Closure evidence.` field pointed at it, so the implementation role

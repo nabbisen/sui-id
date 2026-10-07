@@ -1,6 +1,10 @@
 # RFC 136 — Dynamic client registration is legible
 
-**Status.** Accepted
+**Status.** Implemented
+**Closure reviewed on.** 2026-10-07
+**Closure approved by.** `@nabbisen`, 2026-10-07: "Approved." The closure review was written by **the architect, which wrote this RFC, both its dispatches and the closure criteria**, and is therefore **not** independent of it — `@nabbisen` is the approver, which is what RFC 000 requires when no independent role exists. The implementation role verified its own measurements and ran prerequisite 3's mutations independently before submitting; that is corroboration, not independence.
+**Closure evidence.** [Closure review 2026-10-07](../handoffs/136-dynamic-registration-is-legible/closure-review-2026-10-07.md). **Level B:** `7cd3298`, run `37593404727` — 27 jobs, 0 skipped, all green; verified to cover all 24 entries in `contracts/gate-inputs.toml`'s `[gates]` (RFC 131 D2). Unlike RFC 135, this RFC's closing commit evidences itself: step 2 touches `crates/**`, so its own run is the full matrix rather than a path-filtered subset.
+**Implemented in.** Two steps: `b35adc0`-era step 1 (the two recorded defaults and the self-registered marker, reviewed 2026-10-05) and **`7cd3298`** (step 2, the test that holds the marker). Prerequisite 3 was never dispatched with step 1 and was found by a prerequisite sweep on 2026-10-07; the handoff index had asserted step 1 *"is the whole of RFC 136"*, which is what stopped anyone looking.
 **Accepted on.** 2026-10-05
 **Approved by.** `@nabbisen`, 2026-10-05: "On both, your recommendations are accepted." — accepting this RFC **and settling its one open question in favour of a marker on the exception** rather than a sortable column.
 **Security review.** Required — [security review 2026-10-05](../handoffs/136-dynamic-registration-is-legible/security-review-2026-10-05.md), **by the architect, which authored this RFC, and therefore not independent.** No required changes; it verified that C15 actually stamps `registered_via`, without which D2's marker would never appear.

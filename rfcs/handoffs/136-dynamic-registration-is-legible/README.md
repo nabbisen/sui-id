@@ -1,9 +1,11 @@
 # RFC 136 — handoff
 
-**RFC.** [`../../accepted/136-dynamic-registration-is-legible.md`](../../accepted/136-dynamic-registration-is-legible.md)
+**RFC.** [`../../done/136-dynamic-registration-is-legible.md`](../../done/136-dynamic-registration-is-legible.md)
 
-**Status: Accepted 2026-10-05.** Its one open question was settled at
-acceptance in favour of a marker on the exception.
+**Status: Implemented, closed 2026-10-07** — the RFC header carries the
+approval and the Level B evidence. Its
+one open question was settled at acceptance in favour of a marker on the
+exception.
 
 **Corrected 2026-10-07.** This file previously said step 1 *"is the whole of
 RFC 136; there is no stage 2"*. **That was wrong.** RFC 136 has three closure
