@@ -206,13 +206,18 @@ implementation role reads.
 
 ### Dispatched and open
 
-- [`stage3a-jwks-transport-and-bounds-2026-10-07.md`](stage3a-jwks-transport-and-bounds-2026-10-07.md)
-  — **DISPATCHED, this is the open work.** `parse_compact_jws`'s own input
-  bound, `jwks_uri` in discovery (optional, because a required field would
-  change live deserialization), the JWKS fetch on the RFC 134 federation
-  client, and the four JWKS limits `response_bounds` does not already provide.
+- [`stage3b-jwks-key-selection-2026-10-07.md`](stage3b-jwks-key-selection-2026-10-07.md)
+  — **DISPATCHED, this is the open work.** RFC 096 `:641-646`'s selection
+  rules: `kid`, family, curve, size, `alg`, `use`, `key_ops`, private-key
+  members, and exactly one survivor. The library converts; every rule is ours.
 
 ### Landed
+
+- [`stage3a-jwks-transport-and-bounds-2026-10-07.md`](stage3a-jwks-transport-and-bounds-2026-10-07.md)
+  — **landed `2526313`.** `parse_compact_jws`'s own 24 KiB input bound,
+  `jwks_uri` in discovery (optional, because a required field would change
+  live deserialization), the JWKS fetch on the RFC 134 federation client, and
+  the four JWKS limits `response_bounds` does not already provide.
 
 - [`stage2-compact-jws-and-header-2026-10-07.md`](stage2-compact-jws-and-header-2026-10-07.md)
   — **landed `5ed86e9`.** Compact-JWS structural rules and header hygiene, 35
@@ -234,10 +239,6 @@ implementation role reads.
 
 ### Planned, not yet dispatched
 
-- **Stage 3b** — JWKS key selection: `kid`, algorithm family, curve and size,
-  optional `alg`, `use=sig`, `key_ops` containing `verify`, RSA ≥ 2048 with a
-  valid exponent, P-256 for ES256, Ed25519 OKP for EdDSA, private-key members
-  and multi-use keys rejected, exactly one compatible key surviving.
 - **Stage 4** — signature verification wired into `http/id_token.rs`, the
   error taxonomy's crypto variants, and the bounded cache with key rotation.
   **This is the stage that routes nothing to production**; 096-B1 does that.
