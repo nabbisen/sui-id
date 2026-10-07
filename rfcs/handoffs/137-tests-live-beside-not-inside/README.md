@@ -1,6 +1,6 @@
 # RFC 137 — handoff
 
-**RFC.** [`../../accepted/137-tests-live-beside-not-inside.md`](../../accepted/137-tests-live-beside-not-inside.md)
+**RFC.** [`../../done/137-tests-live-beside-not-inside.md`](../../done/137-tests-live-beside-not-inside.md)
 
 **Status: Accepted 2026-10-06**, scoped to `crates/*/src/`.
 

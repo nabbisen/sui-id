@@ -1,6 +1,10 @@
 # RFC 137 — Tests live beside the module, not inside it
 
-**Status.** Accepted
+**Status.** Implemented
+**Closure reviewed on.** 2026-10-07
+**Closure approved by.** `@nabbisen`, 2026-10-07: "Approved." The closure review was performed by **the architect, which wrote this RFC, all five of its dispatches, and the closure criteria themselves**, and is therefore **not** independent of it — `@nabbisen` is the approver, which is what RFC 000 requires when no independent role exists. The implementation role verified each package's measurements separately; that corroboration is recorded beside them and is neither approval nor independence.
+**Closure evidence.** [Closure review 2026-10-07](../handoffs/137-tests-live-beside-not-inside/closure-review-2026-10-07.md). **Level B:** `5ed86e9`, run `37557473108` — 27 jobs, 0 skipped, all green; verified to cover all 24 entries in `contracts/gate-inputs.toml`'s `[gates]` (RFC 131 D2). An earlier green run on `4f93823` was **rejected** for this purpose: 11 jobs skipped under RFC 130's path filtering, which is Level A.
+**Implemented in.** Five stages: `134e93b` (stage 1, three small crates, with G21), `7af2174` (stage 2, `sui-id`), `d69b400` (stage 3, `sui-id-core`), `6bfc45b` (stage 4, `sui-id-store`), `add4797` (stage 5, `id_token.rs`). G21's self-tests landed in `f418540`.
 **Accepted on.** 2026-10-06
 **Approved by.** `@nabbisen`, 2026-10-06: "RFC 137 is accepted." — and, on the one open question, "Your recommendation on direction is accepted", settling that **G21 is scoped to `crates/*/src/` only**; `crates/*/tests/` is measured separately afterwards rather than widening a 77-file change mid-flight.
 **Security review.** Not required — no application behaviour changes and no crate's public surface moves. This RFC relocates test code and adds a gate over file layout. Reason subject to acceptance.
