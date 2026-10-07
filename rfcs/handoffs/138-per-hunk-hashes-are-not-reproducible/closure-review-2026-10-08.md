@@ -3,6 +3,10 @@
 **Date:** 2026-10-08. **Recommends closure. Does not close it.** The decision
 lives in RFC 138's `Closure approved by.` field, not here.
 
+**Closed 2026-10-08**, Status Implemented, on the approval that field records.
+This line is maintenance; the sentence above is still exactly what this
+document does.
+
 **Independence.** Written by the architect, which wrote RFC 138, its dispatch
 and its closure criteria. **Not independent.** RFC 000 provides for that: the
 accountable owner signs off. The implementation role built the tool and ran its

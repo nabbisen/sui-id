@@ -13,7 +13,7 @@ uncommitted.
 
 ## RFC
 
-**`rfcs/accepted/138-per-hunk-hashes-are-not-reproducible.md` — Accepted
+**`rfcs/done/138-per-hunk-hashes-are-not-reproducible.md` — Accepted
 2026-10-07.** Read it first; it carries the measurement and the reasoning. This
 handoff builds D1 and D2 and respects D3.
 

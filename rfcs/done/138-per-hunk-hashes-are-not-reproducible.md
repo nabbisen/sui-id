@@ -1,6 +1,10 @@
 # RFC 138 — Per-hunk hashes are not reproducible
 
-**Status.** Accepted
+**Status.** Implemented
+**Closure reviewed on.** 2026-10-08
+**Closure approved by.** `@nabbisen`, 2026-10-08: "Approved." The closure review was written by **the architect, which wrote this RFC, its dispatch and its closure criteria**, and is therefore **not** independent of it — `@nabbisen` is the approver, which is what RFC 000 requires when no independent role exists. The implementation role built the tool and ran its own two-method comparison; that is corroboration, not independence.
+**Closure evidence.** [Closure review 2026-10-08](../handoffs/138-per-hunk-hashes-are-not-reproducible/closure-review-2026-10-08.md). **Level B:** `8a697b1`, run `37630784768` — 27 jobs, 0 skipped, all green; verified to cover all 24 entries in `contracts/gate-inputs.toml`'s `[gates]` (RFC 131 D2). **This RFC could not evidence itself**: its own commit `606704a` touches no file under `crates/`, so its run was path-filtered to Level A; the stage-4a commit pushed immediately after carried the change into a full matrix.
+**Implemented in.** `606704a` — `scripts/hunk-hashes.py`, 14 self-tests in `scripts/tests/test_hunk_hashes.py`, the three `check-rfc-integrity.py` messages that pointed at the retired `roadmap/`, and four handoff READMEs citing the tool instead of restating the method.
 **Accepted on.** 2026-10-07
 **Approved by.** `@nabbisen`, 2026-10-07: "RFC 138 is accepted."
 **Security review.** Not required — no application behaviour changes and no crate's public surface moves. This RFC defines how a review package's evidence is computed and adds one script with self-tests. Reason subject to acceptance.

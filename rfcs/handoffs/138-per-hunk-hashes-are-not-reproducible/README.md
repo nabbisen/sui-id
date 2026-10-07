@@ -1,15 +1,21 @@
 # RFC 138 — handoff
 
-**RFC.** [`../../accepted/138-per-hunk-hashes-are-not-reproducible.md`](../../accepted/138-per-hunk-hashes-are-not-reproducible.md)
+**RFC.** [`../../done/138-per-hunk-hashes-are-not-reproducible.md`](../../done/138-per-hunk-hashes-are-not-reproducible.md)
 
-**Status: Accepted 2026-10-07**, dispatched the same day. One stage.
+**Status: Implemented, closed 2026-10-08** — the RFC header carries the
+approval and the Level B evidence. One stage, landed `606704a`.
 
 ## Open work
 
+**None.**
+
+## Landed
+
 - [`hunk-hashes-tool-2026-10-07.md`](hunk-hashes-tool-2026-10-07.md) —
-  **DISPATCHED, this is the open work.** `scripts/hunk-hashes.py` plus its
-  self-tests, and the dispatch template citing the tool instead of restating
-  the method in prose.
+  **landed `606704a`.** `scripts/hunk-hashes.py`, 14 self-tests, and four
+  handoff READMEs citing the tool instead of restating the method.
+- [`closure-review-2026-10-08.md`](closure-review-2026-10-08.md) — the closure
+  record.
 
 ## Why this RFC exists
 
