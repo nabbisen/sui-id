@@ -206,12 +206,19 @@ implementation role reads.
 
 ### Dispatched and open
 
-- [`stage4c-revalidation-and-version-binding-2026-10-08.md`](stage4c-revalidation-and-version-binding-2026-10-08.md)
-  — **DISPATCHED, this is the open work.** RFC 096 `:873-896`: 200/304
-  revalidation, the 304 metadata rules, and binding every entry to provider,
-  version and activation generation. Opens with 4b's required change.
+- [`stage4d-flights-and-cooldowns-2026-10-08.md`](stage4d-flights-and-cooldowns-2026-10-08.md)
+  — **DISPATCHED, this is the open work.** RFC 096 `:897-924`: the closed
+  request/cache state table, single flight, the 30-second cooldown, the
+  60-second forced-refresh window, unknown-`kid` handling, and rotation's
+  no-fallback rule. **The only cache stage with concurrency.**
 
 ### Landed
+
+- [`stage4c-revalidation-and-version-binding-2026-10-08.md`](stage4c-revalidation-and-version-binding-2026-10-08.md)
+  — **landed.** 200/304 revalidation, the 304 metadata rules, and `CacheKey`
+  binding provider, version and activation generation — with `RetainedEntry`
+  unconstructible outside the success paths, and `apply_304` taking no body
+  parameter so it cannot validate a different one. 55 tests.
 
 - [`stage4b-cache-directives-and-freshness-2026-10-07.md`](stage4b-cache-directives-and-freshness-2026-10-07.md)
   — **landed, with one required change carried into 4c.** The closed directive
@@ -254,9 +261,6 @@ implementation role reads.
 
 ### Planned, not yet dispatched
 
-- **Stage 4d** — the request/cache state table: single flight, the 30-second
-  failure cooldown, the 60-second forced-refresh window, and unknown-`kid`
-  handling.
 
   *Stage 4's cache work was split into 4b/4c/4d on 2026-10-07, after reading
   `:823-924` line by line rather than by its heading. It is three separable
