@@ -206,13 +206,17 @@ implementation role reads.
 
 ### Dispatched and open
 
-- [`stage4a-signature-verification-2026-10-07.md`](stage4a-signature-verification-2026-10-07.md)
-  — **DISPATCHED, this is the open work.** Signature verification joining
-  stages 2 and 3b, the crypto error variants, and the two refusals earlier
-  stages deferred: a provider with no `jwks_uri`, and `alg` membership in the
-  configured `id_token_algs`.
+- [`stage4b-cache-directives-and-freshness-2026-10-07.md`](stage4b-cache-directives-and-freshness-2026-10-07.md)
+  — **DISPATCHED, this is the open work.** RFC 096 `:841-872`: the closed
+  directive set, `Age`/`Date`/`ETag` validation, and freshness arithmetic.
+  Pure functions, no state or network.
 
 ### Landed
+
+- [`stage4a-signature-verification-2026-10-07.md`](stage4a-signature-verification-2026-10-07.md)
+  — **landed `8a697b1`.** Signature verification, the crypto error variants,
+  and the two deferred refusals. `VerifiedIdTokenClaims` is unconstructible
+  outside the verifying functions, proven by a compile-fail fixture.
 
 - [`stage3b-jwks-key-selection-2026-10-07.md`](stage3b-jwks-key-selection-2026-10-07.md)
   — **landed `911dfed`.** RFC 096 `:641-646`'s selection rules, 13 refusal
@@ -245,14 +249,17 @@ implementation role reads.
 
 ### Planned, not yet dispatched
 
-- **Stage 4b** — the cache and rotation profile, RFC 096 `:823-924`: ETag-only
-  revalidation, closed directives, no stale use, custom 304 metadata, cache
-  keys carrying provider ID and config version, per-cache freshness defaults
-  and maxima, invalidation on configuration mutation with post-commit
-  eviction, and bounded provider-wide unknown-`kid` refresh. **Split out of
-  stage 4 on 2026-10-07**: 102 lines of normative requirements is not a tail
-  on another stage. **Nothing in 096-A routes to production**; 096-B1 does
-  that.
+- **Stage 4c** — 200/304 revalidation semantics, and binding to provider
+  version and activation generation.
+- **Stage 4d** — the request/cache state table: single flight, the 30-second
+  failure cooldown, the 60-second forced-refresh window, and unknown-`kid`
+  handling.
+
+  *Stage 4's cache work was split into 4b/4c/4d on 2026-10-07, after reading
+  `:823-924` line by line rather than by its heading. It is three separable
+  concerns, and one dispatch covering all of them would be the largest of this
+  RFC and effectively unreviewable. **096-A is nine stages, not six.**
+  **Nothing in 096-A routes to production**; 096-B1 does that.*
 - **Stage 5** — the hostile-provider corpus driving every negative row of the
   validation matrix.
 
