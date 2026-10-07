@@ -1,4 +1,4 @@
-# RFC 117 stage 0 (G16): the owner-attribution census.
+# RFC 135 (was RFC 117 stage 0) (G16): the owner-attribution census.
 #
 # A machine-consumed contract, read by scripts/check-owner-attributions.py and
 # nothing else (RFC 116 D2: a file in contracts/ is read by a gate that fails when it
