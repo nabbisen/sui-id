@@ -2,10 +2,32 @@
 
 **RFC.** [`../../accepted/136-dynamic-registration-is-legible.md`](../../accepted/136-dynamic-registration-is-legible.md)
 
-**Status: Accepted 2026-10-05**, with its one open question settled at
-acceptance in favour of a marker on the exception. **Dispatched** —
-[`step1-defaults-and-marker-2026-10-05.md`](step1-defaults-and-marker-2026-10-05.md)
-is the whole of RFC 136; there is no stage 2.
+**Status: Accepted 2026-10-05.** Its one open question was settled at
+acceptance in favour of a marker on the exception.
+
+**Corrected 2026-10-07.** This file previously said step 1 *"is the whole of
+RFC 136; there is no stage 2"*. **That was wrong.** RFC 136 has three closure
+prerequisites and step 1 delivered two: the recorded defaults and the marker.
+The third — *"a test fails if the distinction stops being shown"* — was never
+dispatched, and a sweep of the code found no such test anywhere.
+`sui-id-web` has three tests in the whole crate, all about colour contrast.
+**A line asserting completeness is what stops anyone looking**, which is why
+the correction is recorded here rather than the sentence simply deleted.
+
+## Open work
+
+- [`step2-the-marker-test-2026-10-07.md`](step2-the-marker-test-2026-10-07.md)
+  — **DISPATCHED, this is the open work.** The missing test, at both render
+  sites (`pages/clients.rs:37` and `:280`), asserted against the i18n string
+  rather than a literal. It is the only thing between RFC 136 and closure.
+
+## Landed
+
+- [`step1-defaults-and-marker-2026-10-05.md`](step1-defaults-and-marker-2026-10-05.md)
+  — prerequisites 1 and 2: both consent-policy defaults recorded with their
+  reasoning, and the self-registered marker in the administrator-facing list.
+  Reviewed 2026-10-05, accepted with no required changes — correctly, **for
+  what it was dispatched to do**.
 
 ## Contents
 
