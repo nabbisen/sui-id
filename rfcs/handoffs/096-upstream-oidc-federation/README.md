@@ -206,12 +206,17 @@ implementation role reads.
 
 ### Dispatched and open
 
-- [`stage4b-cache-directives-and-freshness-2026-10-07.md`](stage4b-cache-directives-and-freshness-2026-10-07.md)
-  — **DISPATCHED, this is the open work.** RFC 096 `:841-872`: the closed
-  directive set, `Age`/`Date`/`ETag` validation, and freshness arithmetic.
-  Pure functions, no state or network.
+- [`stage4c-revalidation-and-version-binding-2026-10-08.md`](stage4c-revalidation-and-version-binding-2026-10-08.md)
+  — **DISPATCHED, this is the open work.** RFC 096 `:873-896`: 200/304
+  revalidation, the 304 metadata rules, and binding every entry to provider,
+  version and activation generation. Opens with 4b's required change.
 
 ### Landed
+
+- [`stage4b-cache-directives-and-freshness-2026-10-07.md`](stage4b-cache-directives-and-freshness-2026-10-07.md)
+  — **landed, with one required change carried into 4c.** The closed directive
+  set, `Age`/`Date`/`ETag` validation and freshness arithmetic, as pure
+  functions reusing `sui_id_core::time::Clock` rather than a new abstraction.
 
 - [`stage4a-signature-verification-2026-10-07.md`](stage4a-signature-verification-2026-10-07.md)
   — **landed `8a697b1`.** Signature verification, the crypto error variants,
@@ -249,8 +254,6 @@ implementation role reads.
 
 ### Planned, not yet dispatched
 
-- **Stage 4c** — 200/304 revalidation semantics, and binding to provider
-  version and activation generation.
 - **Stage 4d** — the request/cache state table: single flight, the 30-second
   failure cooldown, the 60-second forced-refresh window, and unknown-`kid`
   handling.
