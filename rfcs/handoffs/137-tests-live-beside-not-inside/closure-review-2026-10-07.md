@@ -1,6 +1,18 @@
 # RFC 137 — closure review
 
-**Date:** 2026-10-07. **Recommendation: close to `done/`, Status Implemented.**
+**Date:** 2026-10-07. **Recommends closure. Does not close it.** The decision
+lives in RFC 137's `Closure approved by.` field, not here.
+
+**Closed 2026-10-07 in `f61c2cd`**, Status Implemented, on the approval that
+field records.
+
+*Both lines above were added after the fact. This document originally opened
+*"Recommendation: close to `done/`, Status Implemented"* — no false claim, but
+no way for a reader to tell from the evidence document that the decision had
+happened, and no pointer to where it lives. Found by applying the
+post-closure verification pass to all three of today's closures; the pass is
+the implementation role's invention, and this is the defect it caught on its
+first use against a document written before it existed.*
 
 **Independence.** This review was performed by **the architect, which wrote
 RFC 137, all five of its dispatches, and the closure criteria it is being
