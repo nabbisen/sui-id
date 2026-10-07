@@ -2,7 +2,7 @@
 
 **Governing RFC:** [RFC 096](../../accepted/096-upstream-oidc-federation-validation.md)
 **Audience:** the mid-capability model only after the applicable entry gate
-**Status:** Planning companion; inherits the governing RFC's current status — **Accepted 2026-08-27**, the 2026-07-28 return to `proposed/` for a material prerequisite and staging amendment having closed. Implementation remains blocked on the entry gates below.
+**Status:** Planning companion; inherits the governing RFC's current status — **Accepted 2026-08-27**, the 2026-07-28 return to `proposed/` for a material prerequisite and staging amendment having closed. **096-A is under way as of 2026-10-07**: all four entry gates are satisfied and stages 1 and 2 have landed. See **Open work** below, which is the current index.
 
 This package decomposes the federation trust completion without reopening RFC
 004's stable mapping policy or RFC 094's atomic-audit architecture.
@@ -197,31 +197,60 @@ the shared three-RFC records, held under
 
 ## Open work
 
-- [`jose-strategy-2026-10-06.md`](jose-strategy-2026-10-06.md) — **decision
-  request, blocking 096-A.** All four prerequisites are clear, but RFC 096's
-  matrix requires RS256/PS256/ES256/EdDSA and this project can verify only
-  EdDSA; `oidc/jwt.rs` is deliberately restricted to it. **096-A cannot be
-  staged until the JOSE strategy is settled.**
+**Updated 2026-10-07.** This section was stale: it still described 096-A as
+blocked on the JOSE decision and named harness v3 as the open work, both of
+which were overtaken days ago, and it did not mention stages 1, 2 or 3a at all.
+A reader of this file would have concluded that 096-A had not started. **That
+was my omission** — three dispatches written without updating the index the
+implementation role reads.
 
-- [`hostile-provider-harness-2026-10-05.md`](hostile-provider-harness-2026-10-05.md)
-  — **approved 2026-10-05.** The last of 096-A's four
-  implementation prerequisites. Transport injected beneath policy via
-  `connector_layer`, through a `#[cfg(test)]` constructor in the egress module,
-  complementing rather than replacing `tls_mock.rs`.
+### Dispatched and open
+
+- [`stage3a-jwks-transport-and-bounds-2026-10-07.md`](stage3a-jwks-transport-and-bounds-2026-10-07.md)
+  — **DISPATCHED, this is the open work.** `parse_compact_jws`'s own input
+  bound, `jwks_uri` in discovery (optional, because a required field would
+  change live deserialization), the JWKS fetch on the RFC 134 federation
+  client, and the four JWKS limits `response_bounds` does not already provide.
+
+### Landed
+
+- [`stage2-compact-jws-and-header-2026-10-07.md`](stage2-compact-jws-and-header-2026-10-07.md)
+  — **landed `5ed86e9`.** Compact-JWS structural rules and header hygiene, 35
+  tests, reachable only by tests.
+- [`stage1-id-token-algs-config-2026-10-07.md`](stage1-id-token-algs-config-2026-10-07.md)
+  — **landed `9baf106`.** The `jsonwebtoken` dependency with the `aws_lc_rs`
+  backend, `clippy.toml` barring the two unsafe entry points, and
+  `id_token_algs` with six refusals at config load.
+- [`jose-strategy-2026-10-06.md`](jose-strategy-2026-10-06.md) — **settled
+  2026-10-07, no longer blocking.** `jsonwebtoken` with the `aws_lc_rs`
+  backend for the upstream path only; `oidc/jwt.rs` stays EdDSA-only and
+  untouched. Kept for the reasoning and the three rejected alternatives.
 - [`harness-build-v3-2026-10-06.md`](harness-build-v3-2026-10-06.md) —
-  **DISPATCHED — this is the open work.** Two named differences (resolver and
-  one extra trusted root), `insecure_test_client()` replaced, and G19 extended
-  to the test tree.
-- [`harness-build-v2-2026-10-06.md`](harness-build-v2-2026-10-06.md) —
-  **superseded; its "exactly one difference" was not achievable.** The corrected mechanism: a raw-byte
-  TLS fixture reached by a client from the shared production constructor with
-  only the resolver replaced.
-- [`harness-build-2026-10-05.md`](harness-build-2026-10-05.md) — **superseded;
-  its mechanism does not exist.**
-  **DISPATCHED — this is the open work.** Builds the harness the design above
-  approves. Step 1 settles whether TLS-level abuse is reachable at
-  `connector_layer`'s altitude before anything is built.
+  **landed `7c068f8`.** Two named differences (resolver and one extra trusted
+  root), `insecure_test_client()` replaced, G19 extended to the test tree.
 - [`federation-split-2026-10-05.md`](federation-split-2026-10-05.md) —
-  **landed `2f07862`.** Was dispatched as: The preparatory `federation.rs` split, one of 096-A's four
-  implementation prerequisites, named since 2026-07 and specified nowhere until
-  now. **096-A itself is not dispatched** and this does not start it.
+  **landed `2f07862`.** The preparatory `federation.rs` split, one of 096-A's
+  four implementation prerequisites.
+
+### Planned, not yet dispatched
+
+- **Stage 3b** — JWKS key selection: `kid`, algorithm family, curve and size,
+  optional `alg`, `use=sig`, `key_ops` containing `verify`, RSA ≥ 2048 with a
+  valid exponent, P-256 for ES256, Ed25519 OKP for EdDSA, private-key members
+  and multi-use keys rejected, exactly one compatible key surviving.
+- **Stage 4** — signature verification wired into `http/id_token.rs`, the
+  error taxonomy's crypto variants, and the bounded cache with key rotation.
+  **This is the stage that routes nothing to production**; 096-B1 does that.
+- **Stage 5** — the hostile-provider corpus driving every negative row of the
+  validation matrix.
+
+### Superseded, kept for the record
+
+- [`harness-build-v2-2026-10-06.md`](harness-build-v2-2026-10-06.md) — its
+  "exactly one difference" was not achievable; TLS trust is a second.
+- [`harness-build-2026-10-05.md`](harness-build-2026-10-05.md) — its mechanism
+  does not exist. (This entry previously carried a contradictory "DISPATCHED —
+  this is the open work" line left behind by an earlier edit; removed.)
+- [`harness-redesign-2026-10-06.md`](harness-redesign-2026-10-06.md),
+  [`hostile-provider-harness-2026-10-05.md`](hostile-provider-harness-2026-10-05.md)
+  — the design these builds implement, approved 2026-10-05.
