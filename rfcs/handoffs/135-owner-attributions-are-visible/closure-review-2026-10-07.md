@@ -1,7 +1,17 @@
 # RFC 135 — closure review
 
-**Date:** 2026-10-07. **Recommendation: close to `done/`, Status Implemented.
-Awaiting the owner's sign-off, which RFC 135's header reserves.**
+**Date:** 2026-10-07. **Recommends closure. Does not close it.** The decision
+lives in RFC 135's `Closure approved by.` field, not here.
+
+**Closed 2026-10-07 in `fa4b598`**, Status Implemented, on the approval that
+field records. This line was added after the fact: the document first read
+*"Awaiting the owner's sign-off"*, which was true when written and false
+fifteen minutes later, and the RFC's `Closure evidence.` field points here —
+so a reader following the evidence from a closed RFC found a document saying
+the closure had not happened. **The implementation role read it exactly that
+way and reported the closure as still pending.** RFC 134's closure review had
+the right shape all along: say what the document *is*, not what is currently
+outstanding, because "outstanding" dates the moment it stops being true.
 
 **Independence.** Written by the architect, which wrote RFC 135 and its one
 fix. Not independent. RFC 000 provides for that case: the accountable owner
@@ -89,4 +99,5 @@ three-file change had been complete.
 
 ## Recommendation
 
-**Close to `done/`, Status Implemented**, on the owner's sign-off.
+**Close to `done/`, Status Implemented.** Recorded as approved and closed in
+`fa4b598`; the `Closure approved by.` field in the RFC is the record.
