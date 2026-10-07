@@ -1,6 +1,6 @@
 # RFC 117 — Owner decisions must be verifiable
 
-**Status.** Superseded by [RFC 135 — Owner attributions are visible](../accepted/135-owner-attributions-are-visible.md)
+**Status.** Superseded by [RFC 135 — Owner attributions are visible](../done/135-owner-attributions-are-visible.md)
 
 > **Archived 2026-10-05.** `@nabbisen` ruled that this design "does not match the
 > project reality (the team organization etc.) at all". **Its first stage had

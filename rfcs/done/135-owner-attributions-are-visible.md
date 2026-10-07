@@ -1,6 +1,10 @@
 # RFC 135 — Owner attributions are visible
 
-**Status.** Accepted
+**Status.** Implemented
+**Closure reviewed on.** 2026-10-07
+**Closure approved by.** `@nabbisen`, 2026-10-07: "Approved." The closure review was written by **the architect, which wrote this RFC and the one fix closing it**, and is therefore **not** independent of it — `@nabbisen` is the approver, which is what RFC 000 requires when no independent role exists. The implementation role verified the four prerequisites separately; that corroboration is recorded beside them and is neither approval nor independence.
+**Closure evidence.** [Closure review 2026-10-07](../handoffs/135-owner-attributions-are-visible/closure-review-2026-10-07.md). **Level B:** `2526313`, run `37582343136` — 27 jobs, 0 skipped, all green; verified to cover all 24 entries in `contracts/gate-inputs.toml`'s `[gates]` (RFC 131 D2). The fix closing prerequisite 4 is in that commit. **It could not evidence itself**: the fix touches `contracts/owner-attributions.toml`, outside the Rust lanes' `paths`, so its own run was path-filtered and Level A; RFC 096-A stage 3a carried it into a full-matrix run.
+**Implemented in.** `6eea94b` — `contracts/owner-attributions.toml` line 1 re-homed from RFC 117 to RFC 135, the last of the four prerequisites. The rest of this RFC was already true when it was accepted: its own implementation prerequisite says **"No new code — G16 already exists and passes; the work is re-homing."**
 **Accepted on.** 2026-10-05
 **Approved by.** `@nabbisen`, 2026-10-05: "Accepted." — settling that RFC 117's unbuilt signing-key half is disposed of and G16 is kept and re-homed here. His ruling the same day was that RFC 117 "does not match the project reality (the team organization etc.) at all. Dispose it if no concern and risk"; the concern found was that disposing of it wholesale would orphan a live gate, and this RFC is how it is disposed of without that.
 **Security review.** Not required — this RFC adds no application behaviour and touches no crate. It re-homes an existing governance gate and narrows the design it came from. The exemption reason stands or falls with this RFC's acceptance.
