@@ -4,9 +4,16 @@
 //!
 //! Pure functions over parsed header *values* (the caller has already
 //! split a response into its field-line strings) and a wall clock reading
-//! taken once. No storage, no network, no concurrency -- stage 4c (200/304
-//! semantics) and stage 4d (the request/cache state table) are what wire
-//! this into an actual cache. Reachable only by tests until then.
+//! taken once. No network, no concurrency -- stage 4d (the request/cache
+//! state table: flights, cooldowns, unknown-`kid` handling) is what wires
+//! this into an actual network call. Reachable only by tests until then.
+//!
+//! Stage 4c (RFC 096 `:873-896`) continues this module rather than starting
+//! a new one: [`RetainedEntry`], [`store_fresh`], and [`apply_304`] are what
+//! turn stage 4b's pure header/freshness rules into an actual stored,
+//! version-bound entry -- still no network and no concurrency of its own,
+//! just the first functions here that take a document body or a prior
+//! entry as input.
 //!
 //! This is a federation security-document cache profile, not a general
 //! RFC 9111 cache: only ETag revalidation and the five directives below are
@@ -42,6 +49,7 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use sui_id_core::time::SharedClock;
+use sui_id_shared::ids::FederationProviderId;
 
 /// RFC 096 `:841-872`'s two per-cache freshness tables.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -100,13 +108,6 @@ pub enum CacheValidationError {
     ObsoleteLineFolding,
     InvalidListSyntax,
     DuplicateDirective(&'static str),
-    /// `no_store` together with `max-age`, `s-maxage`, or
-    /// `must-revalidate`: directives whose entire purpose is describing a
-    /// retained entry's lifetime, present alongside a directive that
-    /// forbids retaining one at all. My reading of "conflicting" --
-    /// flagged for the architect in the package, the same way stage 3b's
-    /// "disagree" reading was.
-    ConflictingDirectives,
     DirectiveMissingValue(&'static str),
     DirectiveHasUnexpectedValue(&'static str),
     QuotedDeltaSeconds(&'static str),
@@ -128,9 +129,6 @@ impl std::fmt::Display for CacheValidationError {
             Self::ObsoleteLineFolding => write!(f, "header value carries obsolete line folding"),
             Self::InvalidListSyntax => write!(f, "Cache-Control is not a valid HTTP list"),
             Self::DuplicateDirective(name) => write!(f, "directive {name:?} occurs more than once"),
-            Self::ConflictingDirectives => {
-                write!(f, "no-store conflicts with a retention directive")
-            }
             Self::DirectiveMissingValue(name) => write!(f, "directive {name:?} requires a value"),
             Self::DirectiveHasUnexpectedValue(name) => {
                 write!(f, "directive {name:?} does not take a value")
@@ -334,14 +332,17 @@ pub fn parse_cache_control(field_values: &[&str]) -> Result<CacheDirectives, Cac
         }
     }
 
-    if directives.no_store
-        && (directives.max_age.is_some()
-            || directives.s_maxage.is_some()
-            || directives.must_revalidate)
-    {
-        return Err(CacheValidationError::ConflictingDirectives);
-    }
-
+    // RFC 096's "conflicting/duplicate recognized directives... reject the
+    // response" is ONE condition, not two: duplicates. There is no pair in
+    // {no-store, no-cache, must-revalidate, max-age, s-maxage} that is
+    // unsatisfiable -- all five are restrictive, so any combination can be
+    // honoured by applying the strictest one (`no_store` first, then
+    // `no_cache`, then `max_age`/the default -- see `lifetime`). Stage 4b
+    // read "conflicting" as its own rejection and rejected `no-store,
+    // max-age=60`; stage 4b's review overruled that: honouring `no-store`
+    // there already retains nothing, which is exactly what rejecting would
+    // achieve, so rejection bought no safety and cost availability against a
+    // documented belt-and-braces pattern. Do not re-add a conflict check.
     Ok(directives)
 }
 
@@ -516,6 +517,400 @@ pub fn validate_response(
         directives,
         etag,
     })
+}
+
+// ---- RFC 096-A stage 4c: 200/304 revalidation and version binding --------
+
+/// A provider's configuration version: bumped on any configuration
+/// mutation. A distinct type from [`ActivationGeneration`] rather than a
+/// second bare `u64` -- the two are both monotonic per-provider counters,
+/// easy to transpose positionally, and [`CacheKey::new`] cannot be called
+/// with one in the other's place without a compile error.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ProviderVersion(pub u64);
+
+/// Bumped specifically on enable/disable, distinct from an ordinary
+/// configuration edit -- RFC 096 `:873-896`: "disable/re-enable cannot
+/// revive documents fetched in an older activation even when the trust
+/// policy is unchanged." See [`ProviderVersion`] for why this is its own
+/// type rather than a second `u64`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ActivationGeneration(pub u64);
+
+/// The three values an entry, and stage 4d's single-flight keys, are bound
+/// to. Built here even though 4d owns the flights, because the binding
+/// rule belongs with the entry it governs: private fields, and
+/// [`CacheKey::new`] is the only constructor, so a caller cannot assemble
+/// one from a loose tuple and cannot transpose `version` and
+/// `activation_generation` (different types) even by accident.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CacheKey {
+    provider_id: FederationProviderId,
+    version: ProviderVersion,
+    activation_generation: ActivationGeneration,
+}
+
+impl CacheKey {
+    pub fn new(
+        provider_id: FederationProviderId,
+        version: ProviderVersion,
+        activation_generation: ActivationGeneration,
+    ) -> Self {
+        Self {
+            provider_id,
+            version,
+            activation_generation,
+        }
+    }
+
+    pub fn provider_id(&self) -> FederationProviderId {
+        self.provider_id
+    }
+
+    pub fn version(&self) -> ProviderVersion {
+        self.version
+    }
+
+    pub fn activation_generation(&self) -> ActivationGeneration {
+        self.activation_generation
+    }
+}
+
+/// What a caller may do with the body returned alongside this outcome, and
+/// for how long. Shared between [`store_fresh`] (a 200) and [`apply_304`]
+/// (a 304) because the same three outcomes govern both: this profile does
+/// not treat "freshly fetched" and "revalidated" differently once the
+/// metadata has been resolved.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CacheOutcome {
+    /// Retained normally; usable while fresh per the entry's own
+    /// `lifetime`/`current_age`.
+    Retain,
+    /// `no-store`: usable for this one operation only. The caller must not
+    /// persist this entry or its ETag past it -- RFC 096 `:841-872`: "the
+    /// validated 200 may be used for the current operation only; retain no
+    /// entry and no ETag", carried forward unchanged for a 304 that
+    /// replaces the retained directives with its own `no-store`.
+    UseOnceThenEvict,
+    /// `no-cache` or `max-age=0`: usable for this one operation; the entry
+    /// is retained but immediately stale, so the next lookup must
+    /// revalidate or refetch.
+    UseAndExpire,
+    /// A wall-clock rollback detected since this entry's metadata was last
+    /// set (304 only -- a fresh 200 stands entirely on its own and never
+    /// compares against a prior receipt time, so this variant cannot come
+    /// from [`store_fresh`]). Usable for this one operation; the entry is
+    /// retained but forced immediately stale, the same way `UseAndExpire`
+    /// is, rather than trusting arithmetic built on a clock reading that
+    /// moved backwards. See [`apply_304`]'s doc comment for how this is
+    /// detected.
+    ClockRegressedExpired,
+}
+
+fn outcome_for(directives: &CacheDirectives, lifetime: Option<Duration>) -> CacheOutcome {
+    if directives.no_store {
+        CacheOutcome::UseOnceThenEvict
+    } else if lifetime == Some(Duration::ZERO) {
+        CacheOutcome::UseAndExpire
+    } else {
+        CacheOutcome::Retain
+    }
+}
+
+/// A stored, fully-validated response, bound to the exact
+/// (provider, version, activation generation) it was fetched or
+/// revalidated for. RFC 096 `:873-896`: "an entry is usable only while
+/// fresh and for the exact enabled provider/version/activation
+/// generation" -- this struct has no public field and no public
+/// constructor, the same shape as stage 4a's `VerifiedIdTokenClaims`, so
+/// the only ways to hold one are [`store_fresh`]'s and [`apply_304`]'s
+/// success paths. A test (or any other caller) that could build one by
+/// hand, with a key it chose and a document it did not validate, would
+/// mean the type had failed at the one job it exists to do; the
+/// `retained_cache_entry_cannot_be_constructed_directly` compile-fail
+/// fixture proves it cannot.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetainedEntry<T> {
+    key: CacheKey,
+    document: T,
+    etag: Option<String>,
+    directives: CacheDirectives,
+    lifetime: Option<Duration>,
+    initial_current_age: Duration,
+    received_at: DateTime<Utc>,
+}
+
+impl<T> RetainedEntry<T> {
+    pub fn key(&self) -> CacheKey {
+        self.key
+    }
+
+    pub fn document(&self) -> &T {
+        &self.document
+    }
+
+    pub fn etag(&self) -> Option<&str> {
+        self.etag.as_deref()
+    }
+
+    pub fn directives(&self) -> &CacheDirectives {
+        &self.directives
+    }
+
+    pub fn lifetime(&self) -> Option<Duration> {
+        self.lifetime
+    }
+
+    pub fn initial_current_age(&self) -> Duration {
+        self.initial_current_age
+    }
+
+    pub fn received_at(&self) -> DateTime<Utc> {
+        self.received_at
+    }
+
+    /// `is_fresh` ([`current_age`] of `resident`), reusing stage 4b's own
+    /// pure functions over this entry's stored state.
+    pub fn is_fresh_after(&self, resident: Duration) -> bool {
+        is_fresh(
+            self.lifetime,
+            current_age(self.initial_current_age, resident),
+        )
+    }
+}
+
+/// Why [`store_fresh`] refused a 200. Header/metadata failures and the
+/// body's own semantic validation are kept as distinct variants because
+/// they come from different layers -- this stage's own rules, versus
+/// whatever `T`'s validator (discovery's, JWKS's) decided.
+#[derive(Debug)]
+pub enum Store200Error<E> {
+    Header(CacheValidationError),
+    Semantic(E),
+}
+
+impl<E: std::fmt::Debug> std::fmt::Display for Store200Error<E> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Header(e) => write!(f, "{e}"),
+            Self::Semantic(e) => write!(f, "body failed semantic validation: {e:?}"),
+        }
+    }
+}
+
+impl<E: std::fmt::Debug> std::error::Error for Store200Error<E> {}
+
+/// The header *values* [`store_fresh`] needs, bundled into one parameter
+/// rather than five -- the same values [`validate_response`] takes, with
+/// the same meaning.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ResponseHeaders<'a> {
+    pub cache_control: &'a [&'a str],
+    pub age: &'a [&'a str],
+    pub date: &'a [&'a str],
+    pub etag: &'a [&'a str],
+    pub content_type: &'a [&'a str],
+}
+
+/// Validates a 200's headers and body and, only on success, returns a new
+/// [`RetainedEntry`] to atomically replace whatever was retained before.
+///
+/// **The trap this closes:** there is no etag-equality shortcut anywhere
+/// in this function. It does not even take the prior entry as a
+/// parameter, so there is no code path where a matching `ETag` could skip
+/// `validate_body` -- the body is bounded, parsed, and semantically
+/// validated unconditionally, exactly as RFC 096 `:873-896` requires ("even
+/// when its ETag equals the retained validator"). On `Err`, nothing here
+/// has touched the caller's existing entry; "an invalid 200 never
+/// refreshes or preserves fresh authority beyond the old entry's
+/// independent original expiry" is automatic, because this function was
+/// never given that entry to extend.
+pub fn store_fresh<T, E>(
+    key: CacheKey,
+    headers: ResponseHeaders<'_>,
+    kind: CacheKind,
+    body: &[u8],
+    validate_body: impl FnOnce(&[u8]) -> Result<T, E>,
+    clock: &SharedClock,
+) -> Result<(RetainedEntry<T>, CacheOutcome), Store200Error<E>> {
+    let trusted_now = clock.now();
+    let directives = parse_cache_control(headers.cache_control).map_err(Store200Error::Header)?;
+    let age = validate_age(headers.age).map_err(Store200Error::Header)?;
+    let date = validate_date(headers.date, trusted_now).map_err(Store200Error::Header)?;
+    let etag = validate_etag(headers.etag).map_err(Store200Error::Header)?;
+    validate_content_type_multiplicity(headers.content_type).map_err(Store200Error::Header)?;
+
+    let document = validate_body(body).map_err(Store200Error::Semantic)?;
+
+    let lifetime = lifetime(&directives, kind);
+    let outcome = outcome_for(&directives, lifetime);
+    // "retain no entry and no ETag" -- `no-store` forces the validator
+    // itself out of the returned entry, not just its freshness, so a
+    // caller cannot accidentally revalidate against it later even if it
+    // ignores `outcome`.
+    let etag = if directives.no_store { None } else { etag };
+    let entry = RetainedEntry {
+        key,
+        document,
+        etag,
+        directives,
+        lifetime,
+        initial_current_age: initial_current_age(age, date, trusted_now),
+        received_at: trusted_now,
+    };
+    Ok((entry, outcome))
+}
+
+/// Why [`apply_304`] refused a 304.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RevalidationError {
+    /// The entry was fetched for a different provider version or
+    /// activation generation than the one being requested now.
+    KeyMismatch,
+    /// The retained entry has no ETag to revalidate against (a `no-store`
+    /// entry retains none, by construction -- see [`store_fresh`]) or, per
+    /// this profile, should already have been evicted after its one use
+    /// and must not be revalidated at all.
+    EntryAlreadyNoStore,
+    NoValidatorToRevalidate,
+    /// The 304's own `ETag`, when it returned one, did not equal the
+    /// retained validator byte-for-byte.
+    EtagMismatch,
+    Header(CacheValidationError),
+}
+
+impl std::fmt::Display for RevalidationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::KeyMismatch => {
+                write!(f, "304 is for a different version or activation generation")
+            }
+            Self::EntryAlreadyNoStore => {
+                write!(f, "retained entry is no-store and must not be revalidated")
+            }
+            Self::NoValidatorToRevalidate => {
+                write!(f, "retained entry has no ETag to revalidate against")
+            }
+            Self::EtagMismatch => write!(f, "304's ETag does not match the requested validator"),
+            Self::Header(e) => write!(f, "{e}"),
+        }
+    }
+}
+
+impl std::error::Error for RevalidationError {}
+
+/// Applies a 304 to a retained entry, returning the updated entry and what
+/// the caller may do with it.
+///
+/// **Rejections, in order:** a different `(provider, version, activation
+/// generation)` than `entry`'s own (`KeyMismatch` -- RFC 096 `:873-896`:
+/// "for a different version or generation" is rejected); an `entry` that
+/// is already `no-store` (`EntryAlreadyNoStore` -- it should have been
+/// evicted after its one permitted use, so revalidating it again is this
+/// profile's own invariant failing, not the server's); no retained
+/// validator at all (`NoValidatorToRevalidate`); and a 304 that names its
+/// own `ETag` but it does not equal the retained one byte-for-byte
+/// (`EtagMismatch`).
+///
+/// **The metadata-update table** (RFC 096 `:873-896`): `Cache-Control`
+/// present on the 304 *replaces* the retained directive set; absent,
+/// the retained set is inherited unchanged. `Age` present replaces;
+/// absent becomes **zero** (never inherited). `Date` present replaces;
+/// absent becomes **this 304's own trusted receipt time**, not the old
+/// `Date` -- "so prior freshness age is not silently reused." The
+/// retained `document` and `etag` are never replaced; a 304 has no body,
+/// so there is no parameter here through which a different one could
+/// enter.
+///
+/// **Clock regression, now that there is an entry to expire:** detected as
+/// `trusted_now < entry.received_at()` -- this 304's own wall-clock
+/// reading is earlier than the wall-clock reading this entry's metadata
+/// was last set from. When that happens, the metadata table above still
+/// runs (so `Age`/`Date`/`Cache-Control` updates are not silently
+/// dropped), but the computed `lifetime` is forced to `Duration::ZERO`
+/// regardless of what the directives said, and the outcome is
+/// [`CacheOutcome::ClockRegressedExpired`] rather than whatever the
+/// directives alone would have produced. This is forced *after* the
+/// no-store/lifetime precedence check, so a regressed 304 that also
+/// carries `no-store` still reports `UseOnceThenEvict` -- evicting the
+/// whole entry is a stronger instruction than merely expiring it, and
+/// nothing is lost by honouring the stronger one.
+/// The header *values* [`apply_304`] needs: a 304 carries no `ETag` list or
+/// `Content-Type` of its own in this profile's sense -- its one `ETag` is
+/// `returned_etag`, a separate parameter, and its `Content-Type` is not
+/// re-checked (a 304 has no body for one to describe).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RevalidationHeaders<'a> {
+    pub cache_control: &'a [&'a str],
+    pub age: &'a [&'a str],
+    pub date: &'a [&'a str],
+}
+
+pub fn apply_304<T: Clone>(
+    entry: &RetainedEntry<T>,
+    key: CacheKey,
+    returned_etag: Option<&str>,
+    headers: RevalidationHeaders<'_>,
+    kind: CacheKind,
+    clock: &SharedClock,
+) -> Result<(RetainedEntry<T>, CacheOutcome), RevalidationError> {
+    if entry.key != key {
+        return Err(RevalidationError::KeyMismatch);
+    }
+    if entry.directives.no_store {
+        return Err(RevalidationError::EntryAlreadyNoStore);
+    }
+    let Some(retained_etag) = entry.etag.as_deref() else {
+        return Err(RevalidationError::NoValidatorToRevalidate);
+    };
+    if let Some(returned) = returned_etag
+        && returned != retained_etag
+    {
+        return Err(RevalidationError::EtagMismatch);
+    }
+
+    let trusted_now = clock.now();
+    let regressed = trusted_now < entry.received_at;
+
+    let directives = if headers.cache_control.is_empty() {
+        entry.directives
+    } else {
+        parse_cache_control(headers.cache_control).map_err(RevalidationError::Header)?
+    };
+    let age = validate_age(headers.age).map_err(RevalidationError::Header)?;
+    let date = match validate_date(headers.date, trusted_now).map_err(RevalidationError::Header)? {
+        Some(d) => Some(d),
+        None => Some(trusted_now),
+    };
+
+    let mut lifetime = lifetime(&directives, kind);
+    let mut outcome = outcome_for(&directives, lifetime);
+    if regressed {
+        lifetime = Some(Duration::ZERO);
+        if outcome == CacheOutcome::Retain || outcome == CacheOutcome::UseAndExpire {
+            outcome = CacheOutcome::ClockRegressedExpired;
+        }
+    }
+
+    // Same rule as `store_fresh`: a 304 whose (possibly replaced)
+    // directives now say `no-store` retains no validator either, even
+    // though the body/etag it is confirming came from the entry we
+    // already held.
+    let etag = if directives.no_store {
+        None
+    } else {
+        entry.etag.clone()
+    };
+    let updated = RetainedEntry {
+        key: entry.key,
+        document: entry.document.clone(),
+        etag,
+        directives,
+        lifetime,
+        initial_current_age: initial_current_age(age, date, trusted_now),
+        received_at: trusted_now,
+    };
+    Ok((updated, outcome))
 }
 
 #[cfg(test)]

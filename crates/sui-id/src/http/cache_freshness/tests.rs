@@ -2,6 +2,7 @@ use super::*;
 use chrono::TimeZone;
 use std::sync::Arc;
 use sui_id_core::time::MockClock;
+use sui_id_shared::ids::FederationProviderId;
 
 fn at(y: i32, mo: u32, d: u32, h: u32, mi: u32, s: u32) -> DateTime<Utc> {
     Utc.with_ymd_and_hms(y, mo, d, h, mi, s).unwrap()
@@ -247,20 +248,29 @@ fn a_recognised_directive_occurring_twice_rejects() {
 }
 
 #[test]
-fn no_store_conflicts_with_max_age_s_maxage_and_must_revalidate() {
-    assert_eq!(
-        parse_cache_control(&["no-store, max-age=60"]),
-        Err(CacheValidationError::ConflictingDirectives)
+fn no_store_with_max_age_parses_and_no_store_governs() {
+    // RFC 096's review (4b -> 4c): no pair in this closed set is
+    // unsatisfiable, so there is no "conflicting directives" rejection --
+    // only duplicates reject. `no-store` alongside `max-age` parses fine;
+    // `no-store` is simply the strictest directive present and governs,
+    // which `lifetime()` already guarantees by checking it first.
+    let d = parse_cache_control(&["no-store, max-age=60"]).unwrap();
+    assert!(d.no_store);
+    assert_eq!(d.max_age, Some(Duration::from_secs(60)));
+    assert_eq!(lifetime(&d, CacheKind::Discovery), None);
+
+    // Also true of s-maxage and must-revalidate alongside no-store.
+    assert!(
+        parse_cache_control(&["no-store, s-maxage=60"])
+            .unwrap()
+            .no_store
     );
-    assert_eq!(
-        parse_cache_control(&["no-store, s-maxage=60"]),
-        Err(CacheValidationError::ConflictingDirectives)
+    assert!(
+        parse_cache_control(&["no-store, must-revalidate"])
+            .unwrap()
+            .no_store
     );
-    assert_eq!(
-        parse_cache_control(&["no-store, must-revalidate"]),
-        Err(CacheValidationError::ConflictingDirectives)
-    );
-    // no-store alone, or with no-cache, is not a conflict.
+    // no-store alone, or with no-cache, parses too.
     assert!(parse_cache_control(&["no-store"]).unwrap().no_store);
     assert!(
         parse_cache_control(&["no-store, no-cache"])
@@ -454,4 +464,438 @@ fn validate_response_rejects_a_date_the_mock_clock_says_is_too_far_ahead() {
     );
 
     assert_eq!(result, Err(CacheValidationError::DateInFuture));
+}
+
+// ---- stage 4c: store_fresh / RetainedEntry / apply_304 ----
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ToyDoc(String);
+
+fn validate_toy(body: &[u8]) -> Result<ToyDoc, &'static str> {
+    let s = std::str::from_utf8(body).map_err(|_| "not utf8")?;
+    if s == "invalid" {
+        return Err("rejected for test purposes");
+    }
+    Ok(ToyDoc(s.to_string()))
+}
+
+fn key(provider: FederationProviderId, version: u64, generation: u64) -> CacheKey {
+    CacheKey::new(
+        provider,
+        ProviderVersion(version),
+        ActivationGeneration(generation),
+    )
+}
+
+fn store_toy(
+    k: CacheKey,
+    headers: ResponseHeaders<'_>,
+    body: &[u8],
+    clock: &SharedClock,
+) -> Result<(RetainedEntry<ToyDoc>, CacheOutcome), Store200Error<&'static str>> {
+    store_fresh(k, headers, CacheKind::Jwks, body, validate_toy, clock)
+}
+
+fn base_entry(clock: &SharedClock, provider: FederationProviderId) -> RetainedEntry<ToyDoc> {
+    let (entry, _) = store_toy(
+        key(provider, 1, 1),
+        ResponseHeaders {
+            cache_control: &["max-age=60"],
+            etag: &["\"v1\""],
+            content_type: &["application/json"],
+            ..Default::default()
+        },
+        b"good",
+        clock,
+    )
+    .unwrap();
+    entry
+}
+
+#[test]
+fn an_unchanged_etag_does_not_exempt_an_invalid_body_from_validation() {
+    let clock: SharedClock = Arc::new(MockClock::at(at(2026, 1, 1, 0, 0, 0)));
+    let provider = FederationProviderId::new();
+
+    let (old, _) = store_toy(
+        key(provider, 1, 1),
+        ResponseHeaders {
+            cache_control: &["max-age=60"],
+            etag: &["\"v1\""],
+            content_type: &["application/json"],
+            ..Default::default()
+        },
+        b"good",
+        &clock,
+    )
+    .unwrap();
+    assert_eq!(old.document(), &ToyDoc("good".to_string()));
+
+    // Same ETag "v1", but a now-invalid body: the matching ETag is not a
+    // licence to skip validation, so this must still be rejected.
+    let result = store_toy(
+        key(provider, 1, 1),
+        ResponseHeaders {
+            cache_control: &["max-age=60"],
+            etag: &["\"v1\""],
+            content_type: &["application/json"],
+            ..Default::default()
+        },
+        b"invalid",
+        &clock,
+    );
+    assert!(matches!(result, Err(Store200Error::Semantic(_))));
+    // `old` was never passed to the failing call, so there is no code
+    // path through which it could have been touched.
+    assert_eq!(old.document(), &ToyDoc("good".to_string()));
+}
+
+#[test]
+fn store_fresh_header_failure_is_reported_distinctly_from_a_semantic_one() {
+    let clock: SharedClock = Arc::new(MockClock::at(at(2026, 1, 1, 0, 0, 0)));
+    let provider = FederationProviderId::new();
+    let result = store_toy(
+        key(provider, 1, 1),
+        ResponseHeaders {
+            cache_control: &["max-age=abc"],
+            ..Default::default()
+        },
+        b"good",
+        &clock,
+    );
+    assert!(matches!(result, Err(Store200Error::Header(_))));
+}
+
+#[test]
+fn store_fresh_no_store_outcome_is_use_once_then_evict_and_retains_no_etag() {
+    let clock: SharedClock = Arc::new(MockClock::at(at(2026, 1, 1, 0, 0, 0)));
+    let provider = FederationProviderId::new();
+    let (entry, outcome) = store_toy(
+        key(provider, 1, 1),
+        ResponseHeaders {
+            cache_control: &["no-store"],
+            etag: &["\"v1\""],
+            content_type: &["application/json"],
+            ..Default::default()
+        },
+        b"good",
+        &clock,
+    )
+    .unwrap();
+    assert_eq!(outcome, CacheOutcome::UseOnceThenEvict);
+    assert_eq!(entry.lifetime(), None);
+    assert_eq!(entry.etag(), None);
+}
+
+#[test]
+fn a_304_with_a_returned_etag_differing_by_one_byte_rejects() {
+    let clock: SharedClock = Arc::new(MockClock::at(at(2026, 1, 1, 0, 0, 0)));
+    let entry = base_entry(&clock, FederationProviderId::new());
+    let result = apply_304(
+        &entry,
+        entry.key(),
+        Some("\"v2\""),
+        RevalidationHeaders::default(),
+        CacheKind::Jwks,
+        &clock,
+    );
+    assert_eq!(result, Err(RevalidationError::EtagMismatch));
+}
+
+#[test]
+fn a_304_for_a_different_provider_version_rejects() {
+    let clock: SharedClock = Arc::new(MockClock::at(at(2026, 1, 1, 0, 0, 0)));
+    let provider = FederationProviderId::new();
+    let entry = base_entry(&clock, provider);
+    let result = apply_304(
+        &entry,
+        key(provider, 2, 1),
+        Some("\"v1\""),
+        RevalidationHeaders::default(),
+        CacheKind::Jwks,
+        &clock,
+    );
+    assert_eq!(result, Err(RevalidationError::KeyMismatch));
+}
+
+#[test]
+fn a_304_for_a_different_activation_generation_rejects() {
+    let clock: SharedClock = Arc::new(MockClock::at(at(2026, 1, 1, 0, 0, 0)));
+    let provider = FederationProviderId::new();
+    let entry = base_entry(&clock, provider);
+    let result = apply_304(
+        &entry,
+        key(provider, 1, 2),
+        Some("\"v1\""),
+        RevalidationHeaders::default(),
+        CacheKind::Jwks,
+        &clock,
+    );
+    assert_eq!(result, Err(RevalidationError::KeyMismatch));
+}
+
+#[test]
+fn a_304_after_no_store_rejects() {
+    let clock: SharedClock = Arc::new(MockClock::at(at(2026, 1, 1, 0, 0, 0)));
+    let provider = FederationProviderId::new();
+    let (entry, outcome) = store_toy(
+        key(provider, 1, 1),
+        ResponseHeaders {
+            cache_control: &["no-store"],
+            etag: &["\"v1\""],
+            content_type: &["application/json"],
+            ..Default::default()
+        },
+        b"good",
+        &clock,
+    )
+    .unwrap();
+    assert_eq!(outcome, CacheOutcome::UseOnceThenEvict);
+
+    let result = apply_304(
+        &entry,
+        entry.key(),
+        Some("\"v1\""),
+        RevalidationHeaders::default(),
+        CacheKind::Jwks,
+        &clock,
+    );
+    assert_eq!(result, Err(RevalidationError::EntryAlreadyNoStore));
+}
+
+#[test]
+fn a_304_against_an_entry_with_no_etag_at_all_rejects() {
+    let clock: SharedClock = Arc::new(MockClock::at(at(2026, 1, 1, 0, 0, 0)));
+    let provider = FederationProviderId::new();
+    let (entry, _) = store_toy(
+        key(provider, 1, 1),
+        ResponseHeaders {
+            cache_control: &["max-age=60"],
+            content_type: &["application/json"],
+            ..Default::default()
+        },
+        b"good",
+        &clock,
+    )
+    .unwrap();
+    assert_eq!(entry.etag(), None);
+
+    let result = apply_304(
+        &entry,
+        entry.key(),
+        None,
+        RevalidationHeaders::default(),
+        CacheKind::Jwks,
+        &clock,
+    );
+    assert_eq!(result, Err(RevalidationError::NoValidatorToRevalidate));
+}
+
+#[test]
+fn a_304_omitting_age_becomes_zero_rather_than_inheriting() {
+    let clock: SharedClock = Arc::new(MockClock::at(at(2026, 1, 1, 0, 0, 0)));
+    let provider = FederationProviderId::new();
+    let (entry, _) = store_toy(
+        key(provider, 1, 1),
+        ResponseHeaders {
+            cache_control: &["max-age=60"],
+            age: &["50"],
+            etag: &["\"v1\""],
+            content_type: &["application/json"],
+            ..Default::default()
+        },
+        b"good",
+        &clock,
+    )
+    .unwrap();
+    assert_eq!(entry.initial_current_age(), Duration::from_secs(50));
+
+    let (updated, outcome) = apply_304(
+        &entry,
+        entry.key(),
+        Some("\"v1\""),
+        RevalidationHeaders::default(),
+        CacheKind::Jwks,
+        &clock,
+    )
+    .unwrap();
+    assert_eq!(outcome, CacheOutcome::Retain);
+    // Age absent on the 304 -> zero, not the retained 50s.
+    assert_eq!(updated.initial_current_age(), Duration::ZERO);
+}
+
+#[test]
+fn a_304_omitting_date_becomes_the_receipt_time() {
+    let clock: SharedClock = Arc::new(MockClock::at(at(2026, 1, 1, 0, 0, 0)));
+    let provider = FederationProviderId::new();
+    let old_date = imf_fixdate(at(2025, 1, 1, 0, 0, 0));
+    let (entry, _) = store_toy(
+        key(provider, 1, 1),
+        ResponseHeaders {
+            cache_control: &["max-age=60"],
+            date: &[&old_date],
+            etag: &["\"v1\""],
+            content_type: &["application/json"],
+            ..Default::default()
+        },
+        b"good",
+        &clock,
+    )
+    .unwrap();
+    assert!(entry.initial_current_age() > Duration::ZERO);
+
+    let (updated, _) = apply_304(
+        &entry,
+        entry.key(),
+        Some("\"v1\""),
+        RevalidationHeaders::default(),
+        CacheKind::Jwks,
+        &clock,
+    )
+    .unwrap();
+    // Date absent on the 304 -> this 304's own receipt time, so its gap
+    // against trusted_now is zero -- not the old Date's now-large gap.
+    assert_eq!(updated.initial_current_age(), Duration::ZERO);
+}
+
+#[test]
+fn no_store_on_a_304_permits_one_operation_then_signals_eviction() {
+    let clock: SharedClock = Arc::new(MockClock::at(at(2026, 1, 1, 0, 0, 0)));
+    let entry = base_entry(&clock, FederationProviderId::new());
+    let (updated, outcome) = apply_304(
+        &entry,
+        entry.key(),
+        Some("\"v1\""),
+        RevalidationHeaders {
+            cache_control: &["no-store"],
+            ..Default::default()
+        },
+        CacheKind::Jwks,
+        &clock,
+    )
+    .unwrap();
+    assert_eq!(outcome, CacheOutcome::UseOnceThenEvict);
+    assert_eq!(updated.document(), entry.document());
+    assert_eq!(updated.etag(), None);
+}
+
+#[test]
+fn no_cache_or_max_age_zero_on_a_304_allows_the_operation_but_expires_immediately() {
+    let clock: SharedClock = Arc::new(MockClock::at(at(2026, 1, 1, 0, 0, 0)));
+    let entry = base_entry(&clock, FederationProviderId::new());
+    let (updated, outcome) = apply_304(
+        &entry,
+        entry.key(),
+        Some("\"v1\""),
+        RevalidationHeaders {
+            cache_control: &["no-cache"],
+            ..Default::default()
+        },
+        CacheKind::Jwks,
+        &clock,
+    )
+    .unwrap();
+    assert_eq!(outcome, CacheOutcome::UseAndExpire);
+    assert_eq!(updated.lifetime(), Some(Duration::ZERO));
+}
+
+#[test]
+fn cache_control_present_on_304_replaces_absent_inherits() {
+    let clock: SharedClock = Arc::new(MockClock::at(at(2026, 1, 1, 0, 0, 0)));
+    let entry = base_entry(&clock, FederationProviderId::new()); // max-age=60
+    assert_eq!(entry.directives().max_age, Some(Duration::from_secs(60)));
+
+    let (inherited, _) = apply_304(
+        &entry,
+        entry.key(),
+        Some("\"v1\""),
+        RevalidationHeaders::default(),
+        CacheKind::Jwks,
+        &clock,
+    )
+    .unwrap();
+    assert_eq!(
+        inherited.directives().max_age,
+        Some(Duration::from_secs(60))
+    );
+
+    let (replaced, _) = apply_304(
+        &entry,
+        entry.key(),
+        Some("\"v1\""),
+        RevalidationHeaders {
+            cache_control: &["max-age=10"],
+            ..Default::default()
+        },
+        CacheKind::Jwks,
+        &clock,
+    )
+    .unwrap();
+    assert_eq!(replaced.directives().max_age, Some(Duration::from_secs(10)));
+}
+
+#[test]
+fn clock_regression_since_the_entrys_last_receipt_forces_it_stale() {
+    let later: SharedClock = Arc::new(MockClock::at(at(2026, 1, 2, 0, 0, 0)));
+    let entry = base_entry(&later, FederationProviderId::new());
+
+    // The 304's own clock reading is *before* the entry's last receipt.
+    let rolled_back: SharedClock = Arc::new(MockClock::at(at(2026, 1, 1, 0, 0, 0)));
+    let (updated, outcome) = apply_304(
+        &entry,
+        entry.key(),
+        Some("\"v1\""),
+        RevalidationHeaders {
+            cache_control: &["max-age=600"],
+            ..Default::default()
+        },
+        CacheKind::Jwks,
+        &rolled_back,
+    )
+    .unwrap();
+
+    assert_eq!(outcome, CacheOutcome::ClockRegressedExpired);
+    // Forced to zero regardless of the otherwise-generous max-age=600 the
+    // 304 itself presented.
+    assert_eq!(updated.lifetime(), Some(Duration::ZERO));
+}
+
+#[test]
+fn clock_regression_with_a_no_store_304_still_reports_the_stronger_eviction() {
+    let later: SharedClock = Arc::new(MockClock::at(at(2026, 1, 2, 0, 0, 0)));
+    let entry = base_entry(&later, FederationProviderId::new());
+
+    let rolled_back: SharedClock = Arc::new(MockClock::at(at(2026, 1, 1, 0, 0, 0)));
+    let (_, outcome) = apply_304(
+        &entry,
+        entry.key(),
+        Some("\"v1\""),
+        RevalidationHeaders {
+            cache_control: &["no-store"],
+            ..Default::default()
+        },
+        CacheKind::Jwks,
+        &rolled_back,
+    )
+    .unwrap();
+    assert_eq!(outcome, CacheOutcome::UseOnceThenEvict);
+}
+
+#[test]
+fn a_304_never_takes_a_body_parameter_so_it_cannot_validate_a_different_one() {
+    // Structural, not behavioural: `apply_304`'s signature has no body
+    // parameter at all, so there is no argument through which a 304
+    // could supply a different document than the one already retained.
+    let clock: SharedClock = Arc::new(MockClock::at(at(2026, 1, 1, 0, 0, 0)));
+    let entry = base_entry(&clock, FederationProviderId::new());
+    let (updated, _) = apply_304(
+        &entry,
+        entry.key(),
+        Some("\"v1\""),
+        RevalidationHeaders::default(),
+        CacheKind::Jwks,
+        &clock,
+    )
+    .unwrap();
+    assert_eq!(updated.document(), entry.document());
 }

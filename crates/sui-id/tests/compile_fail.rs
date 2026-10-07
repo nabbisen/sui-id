@@ -22,3 +22,10 @@ fn compile_fail_verified_id_token_claims_cannot_be_constructed_directly() {
     let t = trybuild::TestCases::new();
     t.compile_fail("tests/compile_fail/verified_id_token_claims_cannot_be_constructed_directly.rs");
 }
+
+/// RFC 096 :873-896 (stage 4c): see the fixture's own comment.
+#[test]
+fn compile_fail_retained_cache_entry_cannot_be_constructed_directly() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compile_fail/retained_cache_entry_cannot_be_constructed_directly.rs");
+}

@@ -1,0 +1,20 @@
+error[E0451]: fields `key`, `document`, `etag`, `directives`, `lifetime`, `initial_current_age` and `received_at` of struct `RetainedEntry` are private
+  --> tests/compile_fail/retained_cache_entry_cannot_be_constructed_directly.rs:18:9
+   |
+17 |     RetainedEntry {
+   |     ------------- in this type
+18 |         key: CacheKey::new(
+   |         ^^^ private field
+...
+23 |         document: (),
+   |         ^^^^^^^^ private field
+24 |         etag: None,
+   |         ^^^^ private field
+25 |         directives: CacheDirectives::default(),
+   |         ^^^^^^^^^^ private field
+26 |         lifetime: None,
+   |         ^^^^^^^^ private field
+27 |         initial_current_age: Duration::ZERO,
+   |         ^^^^^^^^^^^^^^^^^^^ private field
+28 |         received_at: Utc::now(),
+   |         ^^^^^^^^^^^ private field
