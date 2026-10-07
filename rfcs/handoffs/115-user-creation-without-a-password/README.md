@@ -108,8 +108,8 @@ twelve decisions instead of three.
 **Baseline.** `368d278` or later. **Return** a review-request package per stage
 under `.git-exclude/review-requests/`, in the form the RFC 102 and 103 stages
 used: what was built, the evidence table, the mutations with their results, the
-gates on the final tree, and per-hunk SHA-256 hashes against the stated
-baseline.
+gates on the final tree, and the Hashes section `python3.14
+scripts/hunk-hashes.py --baseline <baseline>` prints.
 
 | Stage | Decisions | Why this order |
 |---|---|---|

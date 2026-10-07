@@ -451,5 +451,5 @@ hash and G16 will call it new.
 
 A review-request package under `.git-exclude/review-requests/`, in the form the
 RFC 102 and 103 stages used: what was built, the evidence table, the mutations
-with their results, the gates run on the final tree, and per-hunk SHA-256
-hashes against the stated baseline.
+with their results, the gates run on the final tree, and the Hashes section
+`python3.14 scripts/hunk-hashes.py --baseline <baseline>` prints.

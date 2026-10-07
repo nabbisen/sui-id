@@ -59,7 +59,7 @@ rfcs/README.md against RFC 093's RFC-integrity contract:
       companion folder, and README.md;
   13. every rfcs/handoffs/NNN-slug/ directory resolves to exactly one
       existing RFC -- a handoff is a companion to an RFC, and work no RFC
-      governs belongs in roadmap/ instead.
+      governs needs an RFC, not a handoff directory of its own.
 
   14. no RFC header in proposed/, accepted/ or done/ states a rule about who
       may review: (a) every header field label that mentions review,
@@ -456,8 +456,10 @@ def check_handoff_correspondence(root: Path, failures: list[str]) -> None:
 
     Six such directories accumulated before 2026-09-10. Nothing could see
     them -- discover_rfcs ignores handoffs/ by design, and invariant 12 checks
-    only the top level of rfcs/. Non-RFC work packages now live in roadmap/,
-    authorised by a ROADMAP.md entry.
+    only the top level of rfcs/. Those six moved to a now-retired roadmap/
+    directory and then into rfcs/handoffs/ itself on 2026-09-22
+    (rfcs/README.md:107-109); work no RFC governs needs an RFC today, not a
+    directory outside rfcs/.
     """
     handoffs = root / "rfcs" / "handoffs"
     if not handoffs.is_dir():
@@ -476,7 +478,8 @@ def check_handoff_correspondence(root: Path, failures: list[str]) -> None:
                 f"handoff directory does not name an RFC: "
                 f"rfcs/handoffs/{entry.name}/ -- RFC 000 requires "
                 f"NNN-slug/ corresponding to an existing RFC. Work no RFC "
-                f"governs belongs in roadmap/, authorised by ROADMAP.md"
+                f"governs needs an RFC; roadmap/ was retired 2026-09-22 "
+                f"(rfcs/README.md)"
             )
             continue
         number = m.group(1)

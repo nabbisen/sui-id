@@ -161,4 +161,5 @@ so in the review package and leave it to the owner.
 A review-request package under `.git-exclude/review-requests/`, in the form the
 RFC 102, 103 and design-review packages used: what was built, the evidence
 table, the mutations with their results, the gates run on the final tree, and
-per-hunk SHA-256 hashes against the stated baseline.
+the Hashes section `python3.14 scripts/hunk-hashes.py --baseline
+<baseline>` prints.

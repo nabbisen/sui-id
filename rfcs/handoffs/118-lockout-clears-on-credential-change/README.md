@@ -115,4 +115,5 @@ is unaffected (no new event).
 
 A review-request package under `.git-exclude/review-requests/`, in the usual
 form: what was built, the evidence table, mutations with results, gates on the
-final tree, and per-hunk SHA-256 hashes against the stated baseline.
+final tree, and the Hashes section `python3.14 scripts/hunk-hashes.py
+--baseline <baseline>` prints.
