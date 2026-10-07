@@ -420,3 +420,6 @@ pub fn render_client_edit(
         }
     })
 }
+
+#[cfg(test)]
+mod tests;
