@@ -141,6 +141,7 @@ Proposed: the move approved nothing.
 | 135 | [Owner attributions are visible](./done/135-owner-attributions-are-visible.md) | [135-owner-attributions-are-visible](./handoffs/135-owner-attributions-are-visible/README.md) |
 | 136 | [Dynamic client registration is legible](./done/136-dynamic-registration-is-legible.md) | [136-dynamic-registration-is-legible](./handoffs/136-dynamic-registration-is-legible/README.md) |
 | 137 | [Tests live beside the module, not inside it](./done/137-tests-live-beside-not-inside.md) | [137-tests-live-beside-not-inside](./handoffs/137-tests-live-beside-not-inside/README.md) |
+| 138 | [The verification method has no owner](./proposed/138-the-verification-method-has-no-owner.md) | — |
 
 ### Implemented — Mockup Integration epic (Phase 0 → Phase 8)
 

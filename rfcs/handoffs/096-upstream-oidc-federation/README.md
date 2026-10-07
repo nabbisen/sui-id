@@ -206,12 +206,18 @@ implementation role reads.
 
 ### Dispatched and open
 
-- [`stage3b-jwks-key-selection-2026-10-07.md`](stage3b-jwks-key-selection-2026-10-07.md)
-  — **DISPATCHED, this is the open work.** RFC 096 `:641-646`'s selection
-  rules: `kid`, family, curve, size, `alg`, `use`, `key_ops`, private-key
-  members, and exactly one survivor. The library converts; every rule is ours.
+- [`stage4a-signature-verification-2026-10-07.md`](stage4a-signature-verification-2026-10-07.md)
+  — **DISPATCHED, this is the open work.** Signature verification joining
+  stages 2 and 3b, the crypto error variants, and the two refusals earlier
+  stages deferred: a provider with no `jwks_uri`, and `alg` membership in the
+  configured `id_token_algs`.
 
 ### Landed
+
+- [`stage3b-jwks-key-selection-2026-10-07.md`](stage3b-jwks-key-selection-2026-10-07.md)
+  — **landed `911dfed`.** RFC 096 `:641-646`'s selection rules, 13 refusal
+  variants, 28 new tests. The private-key rule reads the raw JSON, because the
+  library's typed struct silently drops `d`/`p`/`q`; proven by mutation.
 
 - [`stage3a-jwks-transport-and-bounds-2026-10-07.md`](stage3a-jwks-transport-and-bounds-2026-10-07.md)
   — **landed `2526313`.** `parse_compact_jws`'s own 24 KiB input bound,
@@ -239,9 +245,14 @@ implementation role reads.
 
 ### Planned, not yet dispatched
 
-- **Stage 4** — signature verification wired into `http/id_token.rs`, the
-  error taxonomy's crypto variants, and the bounded cache with key rotation.
-  **This is the stage that routes nothing to production**; 096-B1 does that.
+- **Stage 4b** — the cache and rotation profile, RFC 096 `:823-924`: ETag-only
+  revalidation, closed directives, no stale use, custom 304 metadata, cache
+  keys carrying provider ID and config version, per-cache freshness defaults
+  and maxima, invalidation on configuration mutation with post-commit
+  eviction, and bounded provider-wide unknown-`kid` refresh. **Split out of
+  stage 4 on 2026-10-07**: 102 lines of normative requirements is not a tail
+  on another stage. **Nothing in 096-A routes to production**; 096-B1 does
+  that.
 - **Stage 5** — the hostile-provider corpus driving every negative row of the
   validation matrix.
 
