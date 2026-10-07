@@ -33,7 +33,7 @@ fn decode_id_token_claims_rejects_malformed_payload() {
 
 use super::{
     CompactJws, CompactJwsError, MAX_DECODED_HEADER_AND_PAYLOAD, MAX_ENCODED_JWS_LEN, Segment,
-    parse_compact_jws,
+    VerificationError, parse_compact_jws, verify_id_token, verify_id_token_against_jwks,
 };
 
 const GOOD: &str = r#"{"alg":"RS256","kid":"k1","typ":"JWT"}"#;
@@ -421,4 +421,245 @@ fn the_total_bound_is_exact_and_accepts_the_rfc_decoded_limit() {
     );
     accepted(&at_limit);
     assert_eq!(refused(&format!("{at_limit}A")), CompactJwsError::Oversized);
+}
+
+// ---- RFC 096-A stage 4a: signature verification ----------------------------
+//
+// `verify_id_token_against_jwks` joins stage 2's structural parse and stage
+// 3b's key selection into a real signature check, with `jsonwebtoken` doing
+// the cryptographic work. The sealing of `VerifiedIdTokenClaims` (RFC 096
+// :648) is proven by a compile-fail fixture, not by a test here -- a test
+// alone cannot establish that a type is not constructible; see
+// `tests/compile_fail/verified_id_token_claims_cannot_be_constructed_directly.rs`.
+//
+// Key material: real RSA-2048, EC P-256 and Ed25519 keys, generated once with
+// `openssl` and embedded as DER literals, because `jsonwebtoken::decode` does
+// its own cryptographic check -- a hand-built or structurally-plausible
+// signature would not exercise it.
+
+use crate::jwks::{Jwks, KeySelectionError};
+use jsonwebtoken::{Algorithm as JwtAlgorithm, EncodingKey, Header as JwtHeader, encode};
+
+/// PKCS#1 DER. `aws-lc-rs`'s `RsaKeyPair::from_der` wants this, not the
+/// PKCS#8 that `openssl rsa -outform DER` emits by default in this OpenSSL
+/// version -- confirmed by reading `jsonwebtoken`'s `crypto/aws_lc/rsa.rs`,
+/// which calls `RsaKeyPair::from_der` directly, and by `openssl rsa
+/// -traditional -outform DER`, which forces the older PKCS#1 form.
+const RSA_DER: &str = "MIIEowIBAAKCAQEA7QJIwRyNWtEBgb7B0dIy5t7ucLXgsuoLIx5b6k8oh2DBXVwNq9Gg+R86BmwZ+3m99zrkOLFgGmrXghksq6veRof0OyjYjzk9jxWR6+bvgQsosJM9EHpPgcebr/nbD/OVlA/VV2QoTClUhjhpdx2Ip7tXtKDNx9F7wZUOGeRr0kjtmAteekgaUHlfHReeeZ0ez4znk4ANtGHNFp/iujUqwbe1ntsnEFhEBMBGKgHAWp/DkmtKt1ex0VUAQBlpMJcGUhGi2vkjFrUKsuWoXUytAXlfOoyzPxHbKt5gWyzNgBCryeVxfMD+lcQjBxmdhcV0NhDTNxik7ptDlXM3iXevlQIDAQABAoIBAGOUa5wTkoKfQSpRyx6M2g0tinI5wKR7eF1zgnvycV1b9jJzHF1eEOvKxnbvUYVa08l96Wi2geHnlQ+Y4y9n4VayBZgbo82dZ7NoBSzgFS4bUafK3UPAmAo3oz6vVG6h0e1pL6Jttw606MoSBqHg+0s6B/IhBATaC8y8gzW2xuSNJ6HEgSw601s62it2rZ97NHxkwh84h29mUmVp91tbskqxdo6V6oXLqMq2Ua2Y+MJEf4268pqJIg3ZlPtS3H8zgbsJYanCseHUD54acbV4JIne+6dcOp7YmsTjbzXzgoB4jCOSaZMYl/aJuUzp/OqnbrI+Kl5OcZllEAYZGrvCgqsCgYEA+U/c0ZON56s5ktA8vCe4OHkUyhLiQQW4fNvuW6uhWJ2pm4nCyof/Gc26CKm7wHSzZtiXThkMD/Z668A9hXHdSmb0kNwxVzxdGbCmHUndwQ2JNfktvwis7u6Gd/PmracNDVn4n7S1w9PCHiLK6xY2uynI8FIQkk7q84HK6DyYmD8CgYEA813uXSUEkbBq7/5S7DEh/vI9WlQsxyymA8uzkgZFHW4Ac5EBy+HC6MAsi5aNccV0mUj2HjHnMxlMlafOKzYO61VKOEGO4NFP2n1dRb+R/YBCRwfemAf4xfk+kVPz2HlhEUwHTjV81bJ/pJPNHaJxH09G4/bN/qVVz6Bv/COaoysCgYEAvSZESJUEYrHbunFWwwH3mJD0nuN42RA4CjLqQo6SmSL1HVaFfRd1CeS1sgDku31O50aIdO434pyEYfy2MFpVJC+8eXM11BOuJuGJBkuWfPOCGHr2pCs22QgK6VMYvsMw+eI66SA3j11Ht4l6HqX53EI1e28nt3k8dIcSpOPkeg0CgYA5iS1/a+8GmpTNpGzqVjtZUN/caSYk+JNPNmt/zGeuq4ED0XaBQyCXckeVwMQz76C/VJaLUPT+Ca8neoKtiJxCWumvHyCuWg3s89KHWOEk85u3u06O1uOjumdmaFiwBxJByp23icG3q/mtaRwHM45W/qEd6A2PdHszGRUgoTI//QKBgGdwL/X9/tYbnMYbybQ40KaJY5D3iuxSR47OnA8U1yyY/hUtYOihuqSawH6v2ISOScDiOcQgc+Cny7JQYI6DLzhYw7DhOiSEeQru6hfmSrumkObpztRDTAANpt+CiqLD8k22ljVB6yyFH9DDgeW9sENEfEVeY+N0k32Q0+suXZWW";
+const RSA_N: &str = "7QJIwRyNWtEBgb7B0dIy5t7ucLXgsuoLIx5b6k8oh2DBXVwNq9Gg-R86BmwZ-3m99zrkOLFgGmrXghksq6veRof0OyjYjzk9jxWR6-bvgQsosJM9EHpPgcebr_nbD_OVlA_VV2QoTClUhjhpdx2Ip7tXtKDNx9F7wZUOGeRr0kjtmAteekgaUHlfHReeeZ0ez4znk4ANtGHNFp_iujUqwbe1ntsnEFhEBMBGKgHAWp_DkmtKt1ex0VUAQBlpMJcGUhGi2vkjFrUKsuWoXUytAXlfOoyzPxHbKt5gWyzNgBCryeVxfMD-lcQjBxmdhcV0NhDTNxik7ptDlXM3iXevlQ";
+const RSA_E: &str = "AQAB";
+
+/// A different RSA key, same JWK shape, for the "signed by a key in the set
+/// but under the wrong kid" case: this key's public JWK, not `RSA_N`/`RSA_E`'s.
+const RSA2_N: &str = "r1sA8H6OY5dOF4BqP2hE9DehYvf9d4lxhE3KODkk96Tlg-YQvIAnALeKgsjYjAEl0p-JaiCITm5QKu1UBviFD_12cFD-chG9XaAVYqpVyqniVGtHeQADvg1Lax-QV39uyAryDqPL1c5cYRYOtV8ovehJC_bJC_C_PZbUw-DPilLqp6tU8I0WazreHMqMiStCIh08ey2fm1Ac_CQKWKwwKMr30MKtqHPVa-cK4NyCuGs3vvahfjE86evWGqCwl4qTGCsSbs5X6I5wKHtWN6YZmg6s4e-5S6kWD2wyeefwbpovOuywKnOgtmWME9uPi_7MQanLDqrR8NAtk9iD2e8yOw";
+
+/// PKCS#8 DER. `jsonwebtoken`'s `aws_lc_rs` backend uses
+/// `EcdsaKeyPair::from_pkcs8` for EC, which this format matches directly.
+const EC_DER: &str = "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgSH/6RF7od9bPppu0TDTUTFTAbZWcLXrlwYsk0fZWNIChRANCAAT0Ng0YT36e4gG+i7JSRyf/uLHDP2oY8xpCd4AYIrkSzSX9SQ6d3X0ZeElMUeU9L2/vxvpKpIHC/21D1fvDXydR";
+const EC_X: &str = "9DYNGE9-nuIBvouyUkcn_7ixwz9qGPMaQneAGCK5Es0";
+const EC_Y: &str = "Jf1JDp3dfRl4SUxR5T0vb-_G-kqkgcL_bUPV-8NfJ1E";
+
+/// PKCS#8 DER, same reason as `EC_DER`: `Ed25519KeyPair::from_pkcs8`.
+const ED_DER: &str = "MC4CAQAwBQYDK2VwBCIEIB6kTFrMoy5I8bzWvDj0pioYjECAsuYY7G9wMxfdte+8";
+const ED_X: &str = "QHhsQNftLqLhlfW3-Ipr_F57dCfpR_VinEDkVeLILMs";
+
+fn der(b64_std: &str) -> Vec<u8> {
+    base64ct::Base64::decode_vec(b64_std).expect("valid standard base64 DER")
+}
+
+#[derive(serde::Serialize)]
+struct FutureClaims {
+    sub: String,
+    // A real OIDC ID token always has one (it is REQUIRED): present on
+    // purpose, to exercise `validate_aud = false` rather than a fixture
+    // that happens not to need it.
+    aud: String,
+    // Far future: `validate_exp` defaults on, and a token that was already
+    // expired would be refused for a reason this suite is not testing.
+    exp: i64,
+}
+
+fn future_claims() -> FutureClaims {
+    FutureClaims {
+        sub: "upstream-user".into(),
+        aud: "this-rp-client-id".into(),
+        exp: 9_999_999_999,
+    }
+}
+
+fn sign(algorithm: JwtAlgorithm, kid: &str, key: &EncodingKey) -> String {
+    let mut header = JwtHeader::new(algorithm);
+    header.kid = Some(kid.into());
+    encode(&header, &future_claims(), key)
+        .expect("signing with a freshly generated key must succeed")
+}
+
+fn rsa_jwk(kid: &str, n: &str) -> serde_json::Value {
+    serde_json::json!({"kty": "RSA", "kid": kid, "n": n, "e": RSA_E})
+}
+
+fn ec_jwk(kid: &str) -> serde_json::Value {
+    serde_json::json!({"kty": "EC", "kid": kid, "crv": "P-256", "x": EC_X, "y": EC_Y})
+}
+
+fn okp_jwk(kid: &str) -> serde_json::Value {
+    serde_json::json!({"kty": "OKP", "kid": kid, "crv": "Ed25519", "x": ED_X})
+}
+
+fn jwks_of(keys: Vec<serde_json::Value>) -> Jwks {
+    Jwks { keys }
+}
+
+// ---- the happy path, one per accepted algorithm ------------------------------
+
+#[test]
+fn rs256_verifies_end_to_end_against_a_matching_jwks() {
+    let key = EncodingKey::from_rsa_der(&der(RSA_DER));
+    let token = sign(JwtAlgorithm::RS256, "k1", &key);
+    let jwks = jwks_of(vec![rsa_jwk("k1", RSA_N)]);
+    let claims = verify_id_token_against_jwks(&token, &["RS256".into()], &jwks)
+        .expect("a correctly signed RS256 token must verify");
+    assert_eq!(claims.sub(), Some("upstream-user"));
+}
+
+#[test]
+fn ps256_verifies_end_to_end_against_a_matching_jwks() {
+    let key = EncodingKey::from_rsa_der(&der(RSA_DER));
+    let token = sign(JwtAlgorithm::PS256, "k1", &key);
+    let jwks = jwks_of(vec![rsa_jwk("k1", RSA_N)]);
+    verify_id_token_against_jwks(&token, &["PS256".into()], &jwks)
+        .expect("a correctly signed PS256 token must verify");
+}
+
+#[test]
+fn es256_verifies_end_to_end_against_a_matching_jwks() {
+    let key = EncodingKey::from_ec_der(&der(EC_DER));
+    let token = sign(JwtAlgorithm::ES256, "k1", &key);
+    let jwks = jwks_of(vec![ec_jwk("k1")]);
+    verify_id_token_against_jwks(&token, &["ES256".into()], &jwks)
+        .expect("a correctly signed ES256 token must verify");
+}
+
+#[test]
+fn eddsa_verifies_end_to_end_against_a_matching_jwks() {
+    let key = EncodingKey::from_ed_der(&der(ED_DER));
+    let token = sign(JwtAlgorithm::EdDSA, "k1", &key);
+    let jwks = jwks_of(vec![okp_jwk("k1")]);
+    let claims = verify_id_token_against_jwks(&token, &["EdDSA".into()], &jwks)
+        .expect("a correctly signed EdDSA token must verify");
+    assert_eq!(claims.sub(), Some("upstream-user"));
+}
+
+// ---- the signature itself ----------------------------------------------------
+
+#[test]
+fn a_signature_altered_by_one_byte_is_refused() {
+    let key = EncodingKey::from_rsa_der(&der(RSA_DER));
+    let mut token = sign(JwtAlgorithm::RS256, "k1", &key);
+    // Flip one base64url character in the signature segment -- a byte-level
+    // change, not a structural one, so stage 2's parse still accepts it.
+    let last = token.pop().expect("token has a final character");
+    let flipped = if last == 'A' { 'B' } else { 'A' };
+    token.push(flipped);
+    let jwks = jwks_of(vec![rsa_jwk("k1", RSA_N)]);
+    assert!(matches!(
+        verify_id_token_against_jwks(&token, &["RS256".into()], &jwks),
+        Err(VerificationError::SignatureInvalid)
+    ));
+}
+
+/// The signing key really is in the set -- just not under the `kid` the
+/// header names. `select_key` finds *a* key of the right family under that
+/// `kid`, so selection itself succeeds; `jsonwebtoken::decode`'s actual
+/// cryptographic check is what catches that it is the wrong one. Proves the
+/// `kid` lookup is not mistaken for proof of authenticity.
+#[test]
+fn a_key_present_under_the_wrong_kid_is_refused_by_the_signature_check_not_by_selection() {
+    let signing_key = EncodingKey::from_rsa_der(&der(RSA_DER)); // RSA_N's key
+    let token = sign(JwtAlgorithm::RS256, "wrong-slot", &signing_key);
+    // The JWKS has a key under "wrong-slot", but it is RSA2_N's key, not the
+    // one that actually signed the token.
+    let jwks = jwks_of(vec![rsa_jwk("wrong-slot", RSA2_N)]);
+    assert!(matches!(
+        verify_id_token_against_jwks(&token, &["RS256".into()], &jwks),
+        Err(VerificationError::SignatureInvalid)
+    ));
+}
+
+#[test]
+fn a_kid_absent_from_the_set_is_refused_at_selection() {
+    let key = EncodingKey::from_rsa_der(&der(RSA_DER));
+    let token = sign(JwtAlgorithm::RS256, "k1", &key);
+    let jwks = jwks_of(vec![rsa_jwk("other", RSA2_N)]);
+    assert!(matches!(
+        verify_id_token_against_jwks(&token, &["RS256".into()], &jwks),
+        Err(VerificationError::KeySelection(
+            KeySelectionError::KidNotFound
+        ))
+    ));
+}
+
+// ---- the outer gate: id_token_algs, before key selection ----------------------
+
+/// `alg: "HS256"` with a configured set that excludes it. Refused as **not
+/// permitted**, proven by passing an *empty* `Jwks`: if the alg check ran
+/// after key selection, this would be `KidNotFound` instead, because nothing
+/// in an empty set could ever match. Getting `AlgNotPermitted` here is what
+/// proves the gate runs first.
+#[test]
+fn hs256_excluded_from_the_configured_set_is_refused_as_not_permitted() {
+    let token = token_with_header(r#"{"alg":"HS256","kid":"k1"}"#);
+    let jwks = jwks_of(vec![]);
+    assert!(matches!(
+        verify_id_token_against_jwks(&token, &["RS256".into()], &jwks),
+        Err(VerificationError::AlgNotPermitted)
+    ));
+}
+
+/// The same proof with a *real, matching* key present: if the gate did not
+/// run first, `select_key` would happily find this RSA key for `RS256` and
+/// `jsonwebtoken` would happily verify a correctly signed token. The
+/// configured set excludes `RS256` anyway, and the refusal must still be
+/// `AlgNotPermitted`, not a successful verification.
+#[test]
+fn a_disallowed_alg_is_refused_even_when_a_valid_matching_key_exists() {
+    let key = EncodingKey::from_rsa_der(&der(RSA_DER));
+    let token = sign(JwtAlgorithm::RS256, "k1", &key);
+    let jwks = jwks_of(vec![rsa_jwk("k1", RSA_N)]);
+    assert!(matches!(
+        verify_id_token_against_jwks(&token, &["ES256".into()], &jwks),
+        Err(VerificationError::AlgNotPermitted)
+    ));
+}
+
+#[test]
+fn an_allowed_alg_among_several_configured_is_accepted() {
+    let key = EncodingKey::from_rsa_der(&der(RSA_DER));
+    let token = sign(JwtAlgorithm::RS256, "k1", &key);
+    let jwks = jwks_of(vec![rsa_jwk("k1", RSA_N)]);
+    verify_id_token_against_jwks(&token, &["ES256".into(), "RS256".into()], &jwks)
+        .expect("RS256 is in the configured set");
+}
+
+// ---- structural refusals pass through, wrapped, not re-described -------------
+
+#[test]
+fn a_structurally_invalid_token_is_refused_through_the_wrapped_stage_2_error() {
+    assert!(matches!(
+        verify_id_token_against_jwks("not-a-jws", &["RS256".into()], &jwks_of(vec![])),
+        Err(VerificationError::Structure(
+            CompactJwsError::WrongSegmentCount { found: 1 }
+        ))
+    ));
+}
+
+// ---- the provider-level refusal, which only the async wrapper can make --------
+
+#[tokio::test]
+async fn no_jwks_uri_is_refused_before_any_network_access() {
+    // An unroutable address: if this refusal required a network attempt, the
+    // call would hang or error from the attempt itself, not return cleanly.
+    let client = reqwest::Client::new();
+    let result = verify_id_token(&client, "irrelevant", &["RS256".into()], None).await;
+    assert!(matches!(result, Err(VerificationError::NoJwksUri)));
 }

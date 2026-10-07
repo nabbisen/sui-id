@@ -1,17 +1,18 @@
-//! RFC 096-A prerequisite: moved verbatim out of `handlers/federation.rs`
-//! (the preparatory split).
+//! RFC 096-A: moved verbatim out of `handlers/federation.rs` (the preparatory
+//! split), then built on, stage by stage, beside what was there.
 //!
-//! **This is the point of the exercise.** Today this module only decodes
-//! ID token claims without verifying the signature (`federation.rs` trusts
-//! the upstream's `token_endpoint` over TLS instead — see
-//! [`decode_id_token_claims`]'s own doc comment). RFC 096-A — not
-//! dispatched by this split, which only prepares a module for it to land
-//! in — replaces this with JOSE signature verification, a JWKS cache with
-//! rotation, full claims validation, and one-time nonce consumption. That
-//! code belongs here, not in `handlers/federation.rs`.
+//! **`decode_id_token_claims` is still what production calls, and it still
+//! verifies nothing** (`federation.rs` trusts the upstream's `token_endpoint`
+//! over TLS instead — see its own doc comment). [`verify_id_token`] and
+//! [`verify_id_token_against_jwks`] (stage 4a) join stage 2's structural
+//! parse and stage 3b's key selection into real signature verification, and
+//! are reached only by tests until 096-B1 routes live traffic through them.
+//! The JWKS cache and rotation (stage 4b) are not here yet.
 
 use serde::Deserialize;
 use serde::de::{IgnoredAny, MapAccess, Visitor};
+
+use crate::jwks;
 
 #[derive(Deserialize)]
 pub struct IdTokenClaims {
@@ -35,12 +36,7 @@ pub fn decode_id_token_claims(jwt: &str) -> Option<IdTokenClaims> {
     serde_json::from_slice(&decoded).ok()
 }
 
-// Reached only by tests until RFC 096-A stage 4 calls `parse_compact_jws` from
-// the verification path. Each item below carries `allow(dead_code)` for that
-// reason; stage 4 removes them.
-
 /// RFC 096-A stage 2: the largest decoded header plus payload accepted, in bytes.
-#[allow(dead_code)]
 pub(crate) const MAX_DECODED_HEADER_AND_PAYLOAD: usize = 16 * 1024;
 
 /// The largest encoded compact JWS accepted, in bytes. Sized to admit the RFC's
@@ -50,28 +46,25 @@ pub(crate) const MAX_DECODED_HEADER_AND_PAYLOAD: usize = 16 * 1024;
 /// the bound the live transport puts on this same string today. That bound binds
 /// first on the production path; this one exists so the RFC's own decoded limit
 /// is reachable by the function itself, and so the function bounds its own input.
-#[allow(dead_code)]
 pub(crate) const MAX_ENCODED_JWS_LEN: usize = 24 * 1024;
 
 /// The largest base64url text that can decode to `MAX_DECODED_HEADER_AND_PAYLOAD`
 /// bytes. A segment longer than this is refused before any decoding allocates.
-#[allow(dead_code)]
 const MAX_ENCODED_SEGMENT: usize = MAX_DECODED_HEADER_AND_PAYLOAD.div_ceil(3) * 4;
 
 /// Which of the three compact-JWS segments a rule refers to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
-pub(crate) enum Segment {
+pub enum Segment {
     Header,
     Payload,
     Signature,
 }
 
 /// Why a compact JWS was refused. One variant per rule, so an operator can tell
-/// which rule fired. Stage 4 adds the signature and claim failures.
+/// which rule fired. `VerificationError` carries stage 4a's signature and
+/// claim failures; this enum is wrapped inside it, not merged into it.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)]
-pub(crate) enum CompactJwsError {
+pub enum CompactJwsError {
     /// The input starts with `{`: a JSON serialization, not a compact token.
     JsonSerialization,
     /// Not exactly three segments. A compact JWE has five, so it lands here.
@@ -105,10 +98,36 @@ pub(crate) enum CompactJwsError {
     KidInvalid,
 }
 
+impl std::fmt::Display for CompactJwsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::JsonSerialization => {
+                write!(f, "input is a JSON serialization, not a compact token")
+            }
+            Self::WrongSegmentCount { found } => write!(f, "{found} segments, not three"),
+            Self::EmptySegment(s) => write!(f, "{s:?} segment is empty"),
+            Self::Oversized => write!(f, "token exceeds the size limit"),
+            Self::NotBase64Url(s) => write!(f, "{s:?} segment is not base64url"),
+            Self::HeaderNotJson => write!(f, "header is not JSON"),
+            Self::HeaderNotObject => write!(f, "header is JSON but not an object"),
+            Self::DuplicateMember(name) => write!(f, "header repeats member {name:?}"),
+            Self::AlgMissing => write!(f, "header has no alg"),
+            Self::AlgNotString => write!(f, "header's alg is not a string"),
+            Self::ForbiddenMember(name) => write!(f, "header carries forbidden member {name:?}"),
+            Self::CtyPresent => write!(f, "header carries cty"),
+            Self::TypNotJwt => write!(f, "header's typ is present and is not exactly JWT"),
+            Self::KidMissing => write!(f, "header has no kid"),
+            Self::KidInvalid => write!(f, "header's kid is not 1-128 visible ASCII bytes"),
+        }
+    }
+}
+
+impl std::error::Error for CompactJwsError {}
+
 /// A compact JWS that passed every structural rule. Nothing here is verified:
-/// no signature, no algorithm allowlist, no claims. Stage 4 does those.
+/// no signature, no algorithm allowlist, no claims. `verify_id_token_against_jwks`
+/// does those.
 #[derive(Debug, PartialEq, Eq)]
-#[allow(dead_code)]
 pub(crate) struct CompactJws {
     pub(crate) header: ValidatedHeader,
     /// The bytes the signature covers: the undecoded `header.payload` text.
@@ -123,7 +142,6 @@ pub(crate) struct CompactJws {
 /// string, but its value is not checked: the allowlist belongs to config and
 /// to stage 4.
 #[derive(Debug, PartialEq, Eq)]
-#[allow(dead_code)]
 pub(crate) struct ValidatedHeader {
     pub(crate) alg: String,
     pub(crate) kid: String,
@@ -133,7 +151,6 @@ pub(crate) struct ValidatedHeader {
 /// The member names of a JSON object, in order, repeats included. `serde_json`
 /// collapses a repeated key before a caller can see it, so this reads the names
 /// directly.
-#[allow(dead_code)]
 struct MemberNames(Vec<String>);
 
 impl<'de> Deserialize<'de> for MemberNames {
@@ -173,7 +190,6 @@ impl<'de> Deserialize<'de> for MemberNames {
 ///    **before any JSON parsing**.
 /// 6. The header must be a JSON object with no member name repeated.
 /// 7. Header members, in a fixed order: `alg`, forbidden members, `cty`, `typ`, `kid`.
-#[allow(dead_code)]
 pub(crate) fn parse_compact_jws(token: &str) -> Result<CompactJws, CompactJwsError> {
     use base64ct::{Base64UrlUnpadded, Encoding};
 
@@ -268,6 +284,182 @@ pub(crate) fn parse_compact_jws(token: &str) -> Result<CompactJws, CompactJwsErr
         payload,
         signature,
     })
+}
+
+// ---- RFC 096-A stage 4a: signature verification -----------------------------
+//
+// Joins `parse_compact_jws` (stage 2) and `select_key` (stage 3b), and enforces
+// the two refusals those stages deferred. Reachable only by tests:
+// `decode_id_token_claims` is unchanged and `handlers/federation.rs` is
+// untouched; 096-B1 is what routes live traffic through this.
+
+/// Why a token did not verify. One variant per rule, as in stages 2, 3a and
+/// 3b. Where a failure is one of theirs, it is wrapped, not re-described; the
+/// new variants are the ones stage 4a adds.
+#[derive(Debug)]
+pub enum VerificationError {
+    /// Stage 2's structural rules, run on the raw token before anything else.
+    Structure(CompactJwsError),
+    /// The header's `alg` is not in the provider's configured `id_token_algs`.
+    /// This is the outer gate: it runs before key selection, not after, so a
+    /// disallowed algorithm is refused for that reason, never for a family
+    /// mismatch it happens to also have.
+    AlgNotPermitted,
+    /// The provider's discovery document has no `jwks_uri`. Stage 3a made the
+    /// field optional so a document without one would still deserialize on
+    /// the live path; this is the stage that needs one to verify against, so
+    /// this is where its absence becomes a refusal.
+    NoJwksUri,
+    /// Fetching or structurally checking the JWKS (stage 3a).
+    Jwks(jwks::JwksError),
+    /// Selecting a key from the JWKS (stage 3b), including the key material
+    /// being rejected at the point it is converted.
+    KeySelection(jwks::KeySelectionError),
+    /// The signature itself did not verify, the token's claims failed a
+    /// temporal check (`exp`), or `jsonwebtoken` rejected the token for a
+    /// reason none of the above already names. One bucket, deliberately:
+    /// `jsonwebtoken::errors::ErrorKind`'s wording is written for its own
+    /// callers and changes between versions, so this taxonomy does not
+    /// branch on it. The specific `ErrorKind` is for the operator log; the
+    /// caller gets only that verification failed.
+    SignatureInvalid,
+}
+
+impl std::fmt::Display for VerificationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Structure(e) => write!(f, "{e}"),
+            Self::AlgNotPermitted => {
+                write!(f, "alg is not permitted by this provider's configuration")
+            }
+            Self::NoJwksUri => write!(f, "provider has no jwks_uri to verify against"),
+            Self::Jwks(e) => write!(f, "{e}"),
+            Self::KeySelection(e) => write!(f, "{e}"),
+            Self::SignatureInvalid => write!(f, "signature verification failed"),
+        }
+    }
+}
+
+impl std::error::Error for VerificationError {}
+
+/// RFC 096 `:648`: claims are exposed only once signature verification has
+/// completed. There is no public constructor and no public field: the only
+/// way to have one of these is this module's own verifying functions, which
+/// is why they live in this module rather than behind an accessor that could
+/// be called on an unverified payload — see `ValidatedDiscovery` for the same
+/// shape used the same way.
+#[derive(Debug, PartialEq, Eq)]
+pub struct VerifiedIdTokenClaims {
+    payload: serde_json::Value,
+}
+
+impl VerifiedIdTokenClaims {
+    pub fn sub(&self) -> Option<&str> {
+        self.payload.get("sub").and_then(serde_json::Value::as_str)
+    }
+
+    pub fn email(&self) -> Option<&str> {
+        self.payload
+            .get("email")
+            .and_then(serde_json::Value::as_str)
+    }
+
+    pub fn email_verified(&self) -> bool {
+        self.payload
+            .get("email_verified")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+    }
+
+    pub fn nonce(&self) -> Option<&str> {
+        self.payload
+            .get("nonce")
+            .and_then(serde_json::Value::as_str)
+    }
+}
+
+/// Built in this one function so the reason is stated once: `decoding.rs:335-348`
+/// guards the empty-algorithm error, the key-family binding and the `alg`
+/// allowlist all behind the single `validation.validate_signature` flag, so
+/// nothing here ever sets it to anything but its default `true`.
+///
+/// `validate_aud` is turned off, deliberately rather than by omission. Left at
+/// its default `true` with no expected audience configured, `jsonwebtoken`'s
+/// own validation rejects *every* token that carries an `aud` claim at all —
+/// which every real OIDC ID token does, since `aud` is required by the spec.
+/// Verified by reading `validation.rs`'s own match on `(Audience::Parsed(_),
+/// None)`, not assumed. Checking that this provider's `client_id` is in `aud`
+/// is claims matching, not signature verification, and is out of this
+/// stage's scope; disabling the check here is the only way that does not
+/// reject every valid token by accident. `exp` is left at the library's
+/// default (required, checked): a stale signature is a freshness property of
+/// the token itself, not a per-provider value to match.
+fn validation_for(algorithm: jsonwebtoken::Algorithm) -> jsonwebtoken::Validation {
+    let mut validation = jsonwebtoken::Validation::new(algorithm);
+    validation.validate_aud = false;
+    validation
+}
+
+/// The pure core: verify `token` against an already-fetched `jwks`, given the
+/// provider's configured `id_token_algs`. No network, no decision about
+/// whether to fetch — that is [`verify_id_token`]'s job, because the
+/// "no `jwks_uri`" refusal can only be made by whatever decides there is
+/// nothing to fetch from.
+pub fn verify_id_token_against_jwks(
+    token: &str,
+    id_token_algs: &[String],
+    jwks: &jwks::Jwks,
+) -> Result<VerifiedIdTokenClaims, VerificationError> {
+    let compact = parse_compact_jws(token).map_err(VerificationError::Structure)?;
+
+    // The outer gate: before key selection, not after, so a disallowed `alg`
+    // is refused for that reason even when a key for it exists in the set.
+    if !id_token_algs
+        .iter()
+        .any(|allowed| allowed == &compact.header.alg)
+    {
+        return Err(VerificationError::AlgNotPermitted);
+    }
+
+    let decoding_key = jwks::select_key(jwks, &compact.header.kid, &compact.header.alg)
+        .map_err(VerificationError::KeySelection)?;
+
+    // `compact.header.alg` is already one of the four strings stage 1
+    // validated into the provider's configuration and the membership check
+    // above just confirmed it is in that set, so this always parses.
+    let algorithm = compact
+        .header
+        .alg
+        .parse::<jsonwebtoken::Algorithm>()
+        .map_err(|_| VerificationError::AlgNotPermitted)?;
+    let validation = validation_for(algorithm);
+
+    let token_data: jsonwebtoken::TokenData<serde_json::Value> =
+        jsonwebtoken::decode(token, &decoding_key, &validation)
+            .map_err(|_| VerificationError::SignatureInvalid)?;
+
+    Ok(VerifiedIdTokenClaims {
+        payload: token_data.claims,
+    })
+}
+
+/// Verify `token` for a provider whose discovery named `jwks_uri` and whose
+/// configuration allows `id_token_algs`. Fetches the JWKS itself, on `client`,
+/// which must be the RFC 134 federation client. Refuses immediately, before
+/// any network access, if `jwks_uri` is `None`.
+pub async fn verify_id_token(
+    client: &reqwest::Client,
+    token: &str,
+    id_token_algs: &[String],
+    jwks_uri: Option<&str>,
+) -> Result<VerifiedIdTokenClaims, VerificationError> {
+    let Some(jwks_uri) = jwks_uri else {
+        return Err(VerificationError::NoJwksUri);
+    };
+    let jwks = jwks::fetch_jwks(client, jwks_uri)
+        .await
+        .map_err(VerificationError::Jwks)?;
+    verify_id_token_against_jwks(token, id_token_algs, &jwks)
 }
 
 #[cfg(test)]

@@ -15,3 +15,10 @@ fn compile_fail_validated_discovery_cannot_be_constructed_directly() {
     let t = trybuild::TestCases::new();
     t.compile_fail("tests/compile_fail/validated_discovery_cannot_be_constructed_directly.rs");
 }
+
+/// RFC 096 :648 (stage 4a): see the fixture's own comment.
+#[test]
+fn compile_fail_verified_id_token_claims_cannot_be_constructed_directly() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compile_fail/verified_id_token_claims_cannot_be_constructed_directly.rs");
+}
