@@ -16,12 +16,18 @@ the correction is recorded here rather than the sentence simply deleted.
 
 ## Open work
 
-- [`step2-the-marker-test-2026-10-07.md`](step2-the-marker-test-2026-10-07.md)
-  — **DISPATCHED, this is the open work.** The missing test, at both render
-  sites (`pages/clients.rs:37` and `:280`), asserted against the i18n string
-  rather than a literal. It is the only thing between RFC 136 and closure.
+**None.** All three closure prerequisites are met;
+[`closure-review-2026-10-07.md`](closure-review-2026-10-07.md) recommends
+closure and awaits nothing from the implementation role.
 
 ## Landed
+
+- [`step2-the-marker-test-2026-10-07.md`](step2-the-marker-test-2026-10-07.md)
+  — **landed `7cd3298`.** The missing test, at both render sites
+  (`pages/clients.rs:37` and `:280`), asserted against the i18n string rather
+  than a literal, and proven by mutation: removing the badge from either site
+  fails that site's test and only that one. `sui-id-web` went from 3 tests
+  to 7.
 
 - [`step1-defaults-and-marker-2026-10-05.md`](step1-defaults-and-marker-2026-10-05.md)
   — prerequisites 1 and 2: both consent-policy defaults recorded with their
