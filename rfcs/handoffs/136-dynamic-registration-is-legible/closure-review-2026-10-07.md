@@ -59,6 +59,30 @@ landed in `7cd3298`.
 the expression `(registered_via == "dynamic")` is written out at both sites —
 duplication that two tests would have left half-covered.
 
+**Run twice, independently.** The implementation role performed the same two
+mutations before submitting and recorded the same two results; the architect
+repeated them at review without having read that section. Two independent runs
+agreeing is the strongest form this evidence takes.
+
+### The duplication itself — ruled, not left hanging
+
+The step-2 dispatch invited an opinion and the implementation role gave one:
+extract `fn self_registered_badge(t, registered_via: &str) -> impl IntoView`
+and call it from both sites. **I agree it is worth doing, and it is
+deliberately not part of RFC 136.**
+
+- RFC 136's scope is legibility, and its prerequisite asked for a **test**,
+  which is met.
+- **The duplication is now covered rather than removed**, and the mutation
+  table is what makes deferring it safe: if the two sites ever disagree, a test
+  fails.
+- Opening a refactor inside a closing RFC would reopen it for a six-line
+  extraction.
+
+**Recorded here rather than in a new RFC**, because an RFC for a six-line
+extraction is heavier than the thing it governs. The next change to
+`pages/clients.rs` should take it, and the tests already protect the move.
+
 `sui-id-web` went from **3 tests to 7**. The assertions use
 `lang.strings().status_self_registered` rather than a literal, so a translation
 change cannot raise a false alarm.
