@@ -311,7 +311,7 @@ class GenerateCiWorkflow(unittest.TestCase):
         # G01 is in RFC 130 D2's scoped set; it may not say "always".
         self.mutate(
             "contracts/gate-inputs.toml",
-            'G01 = { title = "build ({rust_msrv}, default)", setup = "rust", toolchain = "msrv", apt = true, cache = true, paths = ["crates/**", "Cargo.toml", "Cargo.lock", "rust-toolchain*", "scripts/ci-gate.sh", "contracts/gate-inputs.toml", "contracts/workflow-template.toml", ".github/workflows/ci.yml"] }',
+            'G01 = { title = "build ({rust_msrv}, default)", setup = "rust", toolchain = "msrv", apt = true, cache = true, paths = ["crates/**", "Cargo.toml", "Cargo.lock", "clippy.toml", "rust-toolchain*", "scripts/ci-gate.sh", "contracts/gate-inputs.toml", "contracts/workflow-template.toml", ".github/workflows/ci.yml"] }',
             'G01 = { title = "build ({rust_msrv}, default)", setup = "rust", toolchain = "msrv", apt = true, cache = true, paths = ["**"] }',
         )
         self.assert_red("[lane_profiles] G01: is in RFC 130 D2's scoped set but declares paths = [\"**\"] (always)")
