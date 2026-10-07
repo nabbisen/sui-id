@@ -42,7 +42,27 @@ compliant sibling not being flagged, an exempted module, a stale exemption, an
 exemption naming a missing file, an unsorted list, and the real tree.
 
 **The gate was shown non-vacuous by mutation**, not by inspection: breaking
-`INLINE_MOD_RE` to match nothing fails 4 of the 8.
+`INLINE_MOD_RE` to match nothing fails **3 of the 8** —
+`test_an_inline_test_module_is_detected`,
+`test_an_inline_module_with_intervening_attributes_is_detected` and
+`test_an_exempted_inline_module_passes`.
+
+**Corrected 2026-10-07, and the reason is worth more than the number.** This
+review first said *4 of the 8*, which was the figure measured on 2026-10-06
+when the exemption list held 50 entries. **Re-running the mutation today gives
+3, and the test that stopped detecting it is `test_a_real_tree_passes`.**
+
+The cause is this RFC's own success. With 50 exempted inline modules in the
+tree, a detector that finds nothing makes all 50 exemptions **stale**, and the
+stale-entry rule fails the run — so the real-tree test caught the mutation.
+**With the list empty, a blind detector and a correct one give the same answer
+on the real tree**, and that test can no longer tell them apart.
+
+**G21 is still non-vacuous**: the three fixture-based tests detect the mutation
+decisively, and they are the ones that matter, because G21's job from here is
+to catch a *new* inline module rather than to re-prove the migration. But the
+real-tree test is now a tautology under mutation, permanently, and anyone
+reading it as evidence of the detector working should know that.
 
 ### 3. The exemption list is empty — **met, and without amendment**
 
