@@ -170,6 +170,47 @@ async fn a_failed_flight_starts_cooldown_and_a_second_caller_fails_without_a_req
     assert_eq!(result, Err(LookupError::Cooldown));
 }
 
+/// RFC 096 `:897-924`'s cache-and-telemetry matrix: *"Expired + network
+/// failure: Reject; no stale acceptance."* The existing cooldown test never
+/// had a prior entry to begin with; this one seeds one, lets it expire by
+/// its own `max-age`, and only then fails a refresh -- proving the *stale*
+/// entry is never served, not merely that a lookup with nothing cached
+/// fails.
+#[tokio::test]
+async fn an_expired_entry_is_never_served_when_its_refresh_fails() {
+    let clock = Arc::new(MockMonotonicClock::new());
+    let cache = FederationDocumentCache::<ToyJwks>::new(clock.clone());
+    let provider = FederationProviderId::new();
+    let key = make_key(provider, 1, 1);
+
+    let (seeded, outcome) = cache
+        .lookup(provider, || Some(key), |_current| fetch_success(key, "a"))
+        .await
+        .expect("seed succeeds");
+    assert_eq!(outcome, CacheOutcome::Retain);
+    assert!(has_kid(seeded.document(), "a"));
+
+    // Past `max-age=60`: the entry is now stale.
+    clock.advance(Duration::from_secs(61));
+
+    let failed: Result<(RetainedEntry<ToyJwks>, CacheOutcome), LookupError<&'static str>> = cache
+        .lookup(
+            provider,
+            || Some(key),
+            |_current| async { Err("network down") },
+        )
+        .await;
+    assert_eq!(failed, Err(LookupError::Fetch("network down")));
+
+    // The stale entry is still physically in the slot (failure does not
+    // evict it), but nothing may serve it: cooldown blocks the next
+    // attempt before freshness is even re-examined.
+    let result = cache
+        .lookup(provider, || Some(key), must_not_dispatch)
+        .await;
+    assert_eq!(result, Err(LookupError::Cooldown));
+}
+
 #[tokio::test]
 async fn unknown_kid_during_cooldown_fails_without_spending_the_forced_budget() {
     let clock = Arc::new(MockMonotonicClock::new());
