@@ -206,11 +206,23 @@ implementation role reads.
 
 ### Dispatched and open
 
+- [`stage6c-fix-bound-boundaries-and-mailbox-shape-2026-10-09.md`](stage6c-fix-bound-boundaries-and-mailbox-shape-2026-10-09.md)
+  — **DISPATCHED, this is the open work.** Two items on an otherwise accepted
+  stage 6c. Seven accepting-side tests: every numeric bound in
+  `optional_claims.rs` could be tightened by one with all 487 tests still
+  passing, and because `:679-681` makes a malformed optional claim reject the
+  whole token, a bound one too tight fails the login rather than truncating a
+  hint. And the mandatory dot comes out of the mailbox shape — `user@intranet`
+  must not lose a user their login over a claim that is metadata only, never a
+  lookup key, and which the RFC is content to see absent.
 - [`stage6c-optional-claims-and-the-capability-2026-10-08.md`](stage6c-optional-claims-and-the-capability-2026-10-08.md)
-  — **DISPATCHED, this is the open work.** The eight bounded optional claims,
-  and the construction capability of RFC 096 `:687-689` — non-cloneable,
-  carrying no raw token, nonce or access token. The capability is why stage 6a's
-  review insisted on deleting `raw_payload` rather than letting it ride.
+  — **RETURNED**, everything but those two items accepted: the two-module split,
+  the capability's fields and sealing, the hand-written `Debug` redacting `sub`
+  and `verified_email` under `:712`, `verified_email` as `Option<String>` per
+  `:709-710`, and the deletion of two superseded accessors. Its
+  byte-before-scalar ordering is derived rather than guessed: both limit pairs
+  are exactly `4 × scalar_limit` and UTF-8 caps a scalar at 4 bytes, so
+  checking scalars first would leave the byte branch unreachable.
 
 ### Open with the owner
 
