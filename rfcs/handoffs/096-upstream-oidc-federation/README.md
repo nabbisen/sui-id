@@ -2,7 +2,7 @@
 
 **Governing RFC:** [RFC 096](../../accepted/096-upstream-oidc-federation-validation.md)
 **Audience:** the mid-capability model only after the applicable entry gate
-**Status:** Planning companion; inherits the governing RFC's current status — **Accepted 2026-08-27**, the 2026-07-28 return to `proposed/` for a material prerequisite and staging amendment having closed. **096-A is under way as of 2026-10-07**: all four entry gates are satisfied. Stages 1–5 have landed (stage 5 at `2a6c35d`, Level B); stage 6a is the open work, and **096-A does not close until stages 6a–8 land** — see **Open work** below, which is the current index. See **Open work** below, which is the current index.
+**Status:** Planning companion; inherits the governing RFC's current status — **Accepted 2026-08-27**, the 2026-07-28 return to `proposed/` for a material prerequisite and staging amendment having closed. **096-A is under way as of 2026-10-07**: all four entry gates are satisfied. Stages 1–5 have landed (stage 5 at `2a6c35d`, Level B); stage 6a is the open work, and **096-A does not close until stages 6a–9 land** — see **Open work** below, which is the current index. See **Open work** below, which is the current index.
 
 This package decomposes the federation trust completion without reopening RFC
 004's stable mapping policy or RFC 094's atomic-audit architecture.
@@ -211,17 +211,29 @@ implementation role reads.
   byte-exact issuer binding, client-ID containment, the multi-audience `azp`
   rule — and taking the `aud` check that stage 4a deliberately deferred.
 
-**096-A is fourteen stages, not nine.** Stage 5's closure assessment
+**096-A is fifteen stages, not nine.** Stage 5's closure assessment
 (`.git-exclude/reviewed/rfc-096-a-stage5-hostile-provider-corpus-2026-10-08.md`)
-checked 096-A against RFC 096 `:21`'s nine attack categories rather than
-against the stage plan, and found four unimplemented — token substitution,
-nonce, issuer and audience — because **the nine-stage plan had no claims
-stage**, although 096-A's scope sentence (`:59-61`) names *"required ID-token
-claim validation; the mandatory one-time nonce"*. That omission was the
-architect's. No RFC amendment is needed: the RFC always required this work.
+checked 096-A against RFC 096 `:21`'s closure prerequisite rather than against
+the stage plan, and found two whole areas of its scope sentence (`:57-61`)
+unimplemented:
+
+- **Claim validation and the nonce rule.** Four of the prerequisite's nine
+  attack categories are open — token substitution, nonce, issuer and audience.
+  `validate_aud = false` at `id_token.rs:399`, no issuer comparison anywhere,
+  and `nonce()` at `:376` exposes the claim without comparing it.
+- **The upstream discovery profile.** `discovery.rs` validates the configured
+  issuer and every endpoint origin (RFC 134), but the metadata table at
+  `:537-549` requires twelve members and `RawDiscovery` deserializes four. The
+  document's own `issuer` is never read, and nor are
+  `code_challenge_methods_supported`,
+  `authorization_response_iss_parameter_supported` or
+  `id_token_signing_alg_values_supported`.
+
+**Both omissions were the architect's stage plan, not the RFC**, which required
+this work throughout — so no amendment is needed, only the missing stages.
 Remaining after 6a — **6b** time claims, **6c** bounded optional claims and the
-construction capability, **7** the nonce rule, **8** the corpus rows stage 5
-could not cover.
+construction capability, **7** the nonce rule, **8** the discovery profile,
+**9** the corpus rows stage 5 could not cover.
 
 ### Landed
 
@@ -307,12 +319,16 @@ could not cover.
 - **Stage 7** — the nonce validation *rule*: constant-time digest comparison
   against a supplied expected digest. The durable attempt state that makes a
   nonce genuinely one-time is 096-B1, per RFC 096 `:65-66`.
-- **Stage 8** — the corpus rows stage 5 could not cover because nothing
-  implemented them: substitution, nonce, issuer, audience, time.
+- **Stage 8** — the upstream discovery profile: the twelve-member metadata
+  table at RFC 096 `:537-549`, the document bounds at `:530-533`, and the
+  `id_token_signing_alg_values_supported` intersection that constrains the
+  runtime algorithm set.
+- **Stage 9** — the corpus rows stage 5 could not cover because nothing
+  implemented them: substitution, nonce, issuer, audience, time, discovery.
 
   *Added 2026-10-08. The stage plan was checked against 096-A's closure
-  prerequisite and found four of its nine attack categories unimplemented. The
-  plan was short a claims stage, not the RFC.*
+  prerequisite and its scope sentence term by term, and was found short a
+  claims stage and a discovery stage. The plan was short, not the RFC.*
 
 ### Superseded, kept for the record
 
