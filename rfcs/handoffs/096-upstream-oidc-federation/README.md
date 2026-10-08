@@ -2,7 +2,7 @@
 
 **Governing RFC:** [RFC 096](../../accepted/096-upstream-oidc-federation-validation.md)
 **Audience:** the mid-capability model only after the applicable entry gate
-**Status:** Planning companion; inherits the governing RFC's current status — **Accepted 2026-08-27**, the 2026-07-28 return to `proposed/` for a material prerequisite and staging amendment having closed. **096-A is under way as of 2026-10-07**: all four entry gates are satisfied and stages 1 and 2 have landed. See **Open work** below, which is the current index.
+**Status:** Planning companion; inherits the governing RFC's current status — **Accepted 2026-08-27**, the 2026-07-28 return to `proposed/` for a material prerequisite and staging amendment having closed. **096-A is under way as of 2026-10-07**: all four entry gates are satisfied. Stages 1–5 have landed (stage 5 at `2a6c35d`, Level B); stage 6a is the open work, and **096-A does not close until stages 6a–8 land** — see **Open work** below, which is the current index. See **Open work** below, which is the current index.
 
 This package decomposes the federation trust completion without reopening RFC
 004's stable mapping policy or RFC 094's atomic-audit architecture.
@@ -206,12 +206,33 @@ implementation role reads.
 
 ### Dispatched and open
 
-- [`stage5-hostile-provider-corpus-2026-10-08.md`](stage5-hostile-provider-corpus-2026-10-08.md)
-  — **DISPATCHED, this is the open work, and the last stage of 096-A.** Drives
-  every negative row of `validation-matrix.md` through stages 1–4 and proves
-  each refusal, on the harness that landed in `7c068f8`.
+- [`stage6a-required-identity-claims-2026-10-08.md`](stage6a-required-identity-claims-2026-10-08.md)
+  — **DISPATCHED, this is the open work.** `iss`, `sub`, `aud`, `azp`:
+  byte-exact issuer binding, client-ID containment, the multi-audience `azp`
+  rule — and taking the `aud` check that stage 4a deliberately deferred.
+
+**096-A is fourteen stages, not nine.** Stage 5's closure assessment
+(`.git-exclude/reviewed/rfc-096-a-stage5-hostile-provider-corpus-2026-10-08.md`)
+checked 096-A against RFC 096 `:21`'s nine attack categories rather than
+against the stage plan, and found four unimplemented — token substitution,
+nonce, issuer and audience — because **the nine-stage plan had no claims
+stage**, although 096-A's scope sentence (`:59-61`) names *"required ID-token
+claim validation; the mandatory one-time nonce"*. That omission was the
+architect's. No RFC amendment is needed: the RFC always required this work.
+Remaining after 6a — **6b** time claims, **6c** bounded optional claims and the
+construction capability, **7** the nonce rule, **8** the corpus rows stage 5
+could not cover.
 
 ### Landed
+
+- [`stage5-hostile-provider-corpus-2026-10-08.md`](stage5-hostile-provider-corpus-2026-10-08.md)
+  — **landed `2a6c35d`, Level B, 24/24 gates green.** The audit found the corpus
+  already built by the per-stage mutation discipline: 101 tests mapped to the
+  matrix rows in a checkable table, every name verified to exist in the module
+  claimed. One real gap closed — RFC 096's *"Expired + network failure: Reject;
+  no stale acceptance"* had only a cooldown test with nothing in the slot. The
+  new `an_expired_entry_is_never_served_when_its_refresh_fails` is the sole
+  test of the fourteen that catches removal of the freshness guard.
 
 - [`stage4d-flights-and-cooldowns-2026-10-08.md`](stage4d-flights-and-cooldowns-2026-10-08.md)
   and
@@ -276,10 +297,22 @@ implementation role reads.
   *Stage 4's cache work was split into 4b/4c/4d on 2026-10-07, after reading
   `:823-924` line by line rather than by its heading. It is three separable
   concerns, and one dispatch covering all of them would be the largest of this
-  RFC and effectively unreviewable. **096-A is nine stages, not six.**
-  **Nothing in 096-A routes to production**; 096-B1 does that.*
+  RFC and effectively unreviewable. **Nothing in 096-A routes to production**;
+  096-B1 does that.*
 - **Stage 5** — the hostile-provider corpus driving every negative row of the
   validation matrix.
+- **Stages 6a, 6b, 6c** — the required claim matrix (RFC 096 `:652-688`):
+  identity claims, time claims, then the bounded optional claims and the
+  construction capability that carries no raw token or nonce.
+- **Stage 7** — the nonce validation *rule*: constant-time digest comparison
+  against a supplied expected digest. The durable attempt state that makes a
+  nonce genuinely one-time is 096-B1, per RFC 096 `:65-66`.
+- **Stage 8** — the corpus rows stage 5 could not cover because nothing
+  implemented them: substitution, nonce, issuer, audience, time.
+
+  *Added 2026-10-08. The stage plan was checked against 096-A's closure
+  prerequisite and found four of its nine attack categories unimplemented. The
+  plan was short a claims stage, not the RFC.*
 
 ### Superseded, kept for the record
 
