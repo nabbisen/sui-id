@@ -220,7 +220,7 @@ implementation role reads.
 - [`stage6a-required-identity-claims-2026-10-08.md`](stage6a-required-identity-claims-2026-10-08.md)
   and
   [`stage6a-fix-duplicate-members-2026-10-08.md`](stage6a-fix-duplicate-members-2026-10-08.md)
-  — **landed together as `0e26b05`, Level B, 24/24 gates green.** `iss`, `sub`,
+  — **landed together as `259e1fc`, Level B confirmed on the tip `78a223d`, 24/24 gates green.** `iss`, `sub`,
   `aud`, `azp`: byte-exact issuer binding, client-ID containment, the
   multi-audience `azp` rule, and the `aud` check stage 4a deferred — kept in our
   own validator because `jsonwebtoken`'s `Validation::aud` is an intersection

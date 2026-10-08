@@ -2,10 +2,11 @@
 
 **Dispatched.** 2026-10-08, by the architect.
 **RFC.** 096 — Upstream OIDC Federation Validation. **Status: Accepted.**
-**Baseline.** `0e26b05` (stage 6a complete, Level B, 24/24). **Hash against
-this commit**, and if the tip has moved when you start, hash against the tip
-and say so — the 6a fix's hash report picked up two of my own docs files
-because I named a stale baseline.
+**Baseline.** `259e1fc` is stage 6a's code; `78a223d` is the tip, adding this
+dispatch and the index. **Hash against the tip at the moment you start**, and
+name it — not against a commit I wrote down earlier. The 6a fix's hash report
+picked up two of my own docs files because I named a stale baseline, and the
+first version of this line named a commit that did not exist at all.
 **Prior stages.** 1, 2, 3a, 3b, 4a, 4b, 4c, 4d, 5, 6a (+fix) — all landed.
 **Remaining after this one.** 6c, 7, 8, 9.
 
