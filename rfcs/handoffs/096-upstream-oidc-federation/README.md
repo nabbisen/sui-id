@@ -206,10 +206,19 @@ implementation role reads.
 
 ### Dispatched and open
 
+- [`stage6a-fix-duplicate-members-2026-10-08.md`](stage6a-fix-duplicate-members-2026-10-08.md)
+  — **DISPATCHED, this is the open work.** Stage 6a returned for one change: a
+  repeated `iss`/`sub`/`aud` is refused as `SignatureInvalid` on a token whose
+  signature is valid. The scan moves into `verify_id_token_against_jwks` before
+  `decode`, gains its own error variant, and the move deletes `raw_payload` and
+  four other things — the fix is net-negative in lines.
 - [`stage6a-required-identity-claims-2026-10-08.md`](stage6a-required-identity-claims-2026-10-08.md)
-  — **DISPATCHED, this is the open work.** `iss`, `sub`, `aud`, `azp`:
-  byte-exact issuer binding, client-ID containment, the multi-audience `azp`
-  rule — and taking the `aud` check that stage 4a deliberately deferred.
+  — **RETURNED**, the four claim validators accepted. `iss`, `sub`, `aud`,
+  `azp`: byte-exact issuer binding, client-ID containment, the multi-audience
+  `azp` rule, and the `aud` check that stage 4a deferred — all correct against
+  RFC 096 `:656-659`, with `aud` deliberately kept in our own validator because
+  `jsonwebtoken`'s `Validation::aud` cannot express a count bound, uniqueness,
+  or `azp` at all.
 
 **096-A is fifteen stages, not nine.** Stage 5's closure assessment
 (`.git-exclude/reviewed/rfc-096-a-stage5-hostile-provider-corpus-2026-10-08.md`)
