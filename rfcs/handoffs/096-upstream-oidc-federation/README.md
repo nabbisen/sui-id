@@ -206,11 +206,15 @@ implementation role reads.
 
 ### Dispatched and open
 
+- [`stage4d-fix-authority-on-the-read-paths-2026-10-08.md`](stage4d-fix-authority-on-the-read-paths-2026-10-08.md)
+  — **DISPATCHED, this is the open work.** 4d was **returned** with one required
+  change: neither read path compares the entry's key to the current
+  `(provider, version, activation generation)`, so a superseded activation's
+  document can be served or joined. Nothing else in 4d is reopened.
 - [`stage4d-flights-and-cooldowns-2026-10-08.md`](stage4d-flights-and-cooldowns-2026-10-08.md)
-  — **DISPATCHED, this is the open work.** RFC 096 `:897-924`: the closed
-  request/cache state table, single flight, the 30-second cooldown, the
-  60-second forced-refresh window, unknown-`kid` handling, and rotation's
-  no-fallback rule. **The only cache stage with concurrency.**
+  — RFC 096 `:897-924`: the state table, single flight, cooldown, forced-refresh
+  window, unknown-`kid` handling, rotation. **Returned, not landed** — see the
+  fix above.
 
 ### Landed
 
