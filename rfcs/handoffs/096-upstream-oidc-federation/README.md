@@ -206,14 +206,37 @@ implementation role reads.
 
 ### Dispatched and open
 
+- [`stage6c-optional-claims-and-the-capability-2026-10-08.md`](stage6c-optional-claims-and-the-capability-2026-10-08.md)
+  — **DISPATCHED, this is the open work.** The eight bounded optional claims,
+  and the construction capability of RFC 096 `:687-689` — non-cloneable,
+  carrying no raw token, nonce or access token. The capability is why stage 6a's
+  review insisted on deleting `raw_payload` rather than letting it ride.
+
+### Open with the owner
+
+- [`exp-boundary-strictness-2026-10-08.md`](exp-boundary-strictness-2026-10-08.md)
+  — **DECISION REQUEST, blocking nothing.** RFC 096 `:660` states `exp`'s rule
+  as the strict `now < exp + 60s`, while `:661` and `:662` state `iat`'s and
+  `nbf`'s non-strictly. `jsonwebtoken` accepts at `now <= exp + 60`, so the RFC
+  refuses one instant that the implementation accepts. Recommendation: amend
+  `:660` to non-strict, matching its own two siblings and what has always been
+  built. Enforcing it in our own code instead would put one rule in two places,
+  which is the reasoning this RFC's `aud` design already rejected.
+
+### Landed
+
 - [`stage6b-time-claims-2026-10-08.md`](stage6b-time-claims-2026-10-08.md)
-  — **DISPATCHED, this is the open work.** `exp`, `iat`, `nbf`. Smaller than it
-  looks: `jsonwebtoken`'s defaults already implement the RFC's `exp` and `nbf`
-  rules verbatim (`leeway = 60`), so `exp` changes nothing, `nbf` is one flag,
-  and only `iat` — with its attempt binding, the substitution defence — is ours
-  to write. Carries one open question: whether an expired token currently
-  reports as `SignatureInvalid`, which would be stage 6a's defect one claim
-  over.
+  — **landed, Level B.** `nbf` turned on, `iat` written with `created_at` as a
+  parameter so its lower bound refuses a token minted before the attempt began,
+  and a NumericDate shape pre-check for `exp`/`nbf` before `decode` — because
+  `jsonwebtoken`'s `numeric_type` *rounds* a float into an accepted integer and
+  degrades a string to "not present". An expired token is now `Expired` rather
+  than `SignatureInvalid`, closing stage 6a's defect one claim over. Corrected
+  two assertions in my dispatch: the library's `exp` boundary is non-strict, not
+  "exactly the rule", and "`exp` is done" held for the window but not the shape.
+  Their own mutation also found a hole in their own tests — the `chrono`-range
+  branch was unreachable from both existing tests, which used `u64::MAX` and
+  failed earlier at `i64::try_from`.
 
 ### Landed
 
