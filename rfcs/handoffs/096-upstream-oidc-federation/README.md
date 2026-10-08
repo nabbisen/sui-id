@@ -206,19 +206,33 @@ implementation role reads.
 
 ### Dispatched and open
 
-- [`stage6a-fix-duplicate-members-2026-10-08.md`](stage6a-fix-duplicate-members-2026-10-08.md)
-  — **DISPATCHED, this is the open work.** Stage 6a returned for one change: a
-  repeated `iss`/`sub`/`aud` is refused as `SignatureInvalid` on a token whose
-  signature is valid. The scan moves into `verify_id_token_against_jwks` before
-  `decode`, gains its own error variant, and the move deletes `raw_payload` and
-  four other things — the fix is net-negative in lines.
+- [`stage6b-time-claims-2026-10-08.md`](stage6b-time-claims-2026-10-08.md)
+  — **DISPATCHED, this is the open work.** `exp`, `iat`, `nbf`. Smaller than it
+  looks: `jsonwebtoken`'s defaults already implement the RFC's `exp` and `nbf`
+  rules verbatim (`leeway = 60`), so `exp` changes nothing, `nbf` is one flag,
+  and only `iat` — with its attempt binding, the substitution defence — is ours
+  to write. Carries one open question: whether an expired token currently
+  reports as `SignatureInvalid`, which would be stage 6a's defect one claim
+  over.
+
+### Landed
+
 - [`stage6a-required-identity-claims-2026-10-08.md`](stage6a-required-identity-claims-2026-10-08.md)
-  — **RETURNED**, the four claim validators accepted. `iss`, `sub`, `aud`,
-  `azp`: byte-exact issuer binding, client-ID containment, the multi-audience
-  `azp` rule, and the `aud` check that stage 4a deferred — all correct against
-  RFC 096 `:656-659`, with `aud` deliberately kept in our own validator because
-  `jsonwebtoken`'s `Validation::aud` cannot express a count bound, uniqueness,
-  or `azp` at all.
+  and
+  [`stage6a-fix-duplicate-members-2026-10-08.md`](stage6a-fix-duplicate-members-2026-10-08.md)
+  — **landed together as `0e26b05`, Level B, 24/24 gates green.** `iss`, `sub`,
+  `aud`, `azp`: byte-exact issuer binding, client-ID containment, the
+  multi-audience `azp` rule, and the `aud` check stage 4a deferred — kept in our
+  own validator because `jsonwebtoken`'s `Validation::aud` is an intersection
+  test with no count bound, no uniqueness check and no concept of `azp`.
+  Returned once: a repeated `iss`/`sub`/`aud` was refused as `SignatureInvalid`
+  on a token whose signature was valid, because `jsonwebtoken` parses the
+  payload a second time into a struct that rejects those three duplicates
+  itself. The scan moved into `verify_id_token_against_jwks` before `decode`
+  with its own error variant, which deleted `raw_payload` and four other things
+  — the fix was net-negative in lines, and stopped retaining nonce-bearing
+  bytes that RFC 096 `:687-689` forbids the capability to hold.
+  **One of 096-A's four open attack categories closes: issuer.**
 
 **096-A is fifteen stages, not nine.** Stage 5's closure assessment
 (`.git-exclude/reviewed/rfc-096-a-stage5-hostile-provider-corpus-2026-10-08.md`)
