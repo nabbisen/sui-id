@@ -44,6 +44,8 @@ pub mod gc;
 pub mod handlers;
 #[path = "http/id_token.rs"]
 pub mod id_token;
+#[path = "http/identity_claims.rs"]
+pub mod identity_claims;
 #[path = "runtime/ipnet.rs"]
 pub mod ipnet;
 #[path = "http/jwks.rs"]

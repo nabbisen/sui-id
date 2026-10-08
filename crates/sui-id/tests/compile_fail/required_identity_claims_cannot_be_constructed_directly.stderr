@@ -1,0 +1,7 @@
+error[E0451]: field `sub` of struct `RequiredIdentityClaims` is private
+  --> tests/compile_fail/required_identity_claims_cannot_be_constructed_directly.rs:12:9
+   |
+11 |     RequiredIdentityClaims {
+   |     ---------------------- in this type
+12 |         sub: "not-validated".to_string(),
+   |         ^^^ private field

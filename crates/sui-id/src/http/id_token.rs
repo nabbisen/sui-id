@@ -300,6 +300,15 @@ pub(crate) fn parse_compact_jws(token: &str) -> Result<CompactJws, CompactJwsErr
 pub enum VerificationError {
     /// Stage 2's structural rules, run on the raw token before anything else.
     Structure(CompactJwsError),
+    /// A top-level payload member (`iss`, `sub`, `aud`, `azp`, or any other)
+    /// appears more than once. The name is the repeated one. Checked here,
+    /// over `compact.payload`, before `jsonwebtoken::decode` ever runs: that
+    /// function deserializes the same bytes a second time, internally, into
+    /// a struct that already rejects a duplicate `iss`/`sub`/`aud` on its
+    /// own -- but collapsed into `SignatureInvalid`, which is false on a
+    /// token whose signature is in fact valid. Scanning first, and naming
+    /// the real fault, is stage 6a's fix for that.
+    DuplicatePayloadMember(String),
     /// The header's `alg` is not in the provider's configured `id_token_algs`.
     /// This is the outer gate: it runs before key selection, not after, so a
     /// disallowed algorithm is refused for that reason, never for a family
@@ -329,6 +338,7 @@ impl std::fmt::Display for VerificationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Structure(e) => write!(f, "{e}"),
+            Self::DuplicatePayloadMember(name) => write!(f, "payload repeats member {name:?}"),
             Self::AlgNotPermitted => {
                 write!(f, "alg is not permitted by this provider's configuration")
             }
@@ -376,6 +386,13 @@ impl VerifiedIdTokenClaims {
             .get("nonce")
             .and_then(serde_json::Value::as_str)
     }
+
+    /// Any top-level payload member by name, for a claim this module itself
+    /// has no accessor for. `pub(crate)`: a sibling claims-validation module
+    /// reads through this; nothing outside the crate gets a `Value` back.
+    pub(crate) fn claim(&self, name: &str) -> Option<&serde_json::Value> {
+        self.payload.get(name)
+    }
 }
 
 /// Built in this one function so the reason is stated once: `decoding.rs:335-348`
@@ -383,21 +400,46 @@ impl VerifiedIdTokenClaims {
 /// allowlist all behind the single `validation.validate_signature` flag, so
 /// nothing here ever sets it to anything but its default `true`.
 ///
-/// `validate_aud` is turned off, deliberately rather than by omission. Left at
-/// its default `true` with no expected audience configured, `jsonwebtoken`'s
-/// own validation rejects *every* token that carries an `aud` claim at all —
-/// which every real OIDC ID token does, since `aud` is required by the spec.
-/// Verified by reading `validation.rs`'s own match on `(Audience::Parsed(_),
-/// None)`, not assumed. Checking that this provider's `client_id` is in `aud`
-/// is claims matching, not signature verification, and is out of this
-/// stage's scope; disabling the check here is the only way that does not
-/// reject every valid token by accident. `exp` is left at the library's
-/// default (required, checked): a stale signature is a freshness property of
-/// the token itself, not a per-provider value to match.
+/// `validate_aud` stays off, and stays a deliberate choice rather than an
+/// omission now that stage 6a's `identity_claims::validate_identity_claims`
+/// is what checks `aud` -- not a gap stage 6a still has to fill. Two reasons
+/// it is ours rather than the library's: `jsonwebtoken::Validation::aud` can
+/// only express "the token's `aud` overlaps this set" (`validation.rs`'s
+/// `is_subset`, read directly, is actually an intersection check, not a true
+/// subset test), with no concept of a count bound, no uniqueness check, and
+/// no `azp` at all -- RFC 096's `aud` rule needs all three, so splitting it
+/// across the library's config and our own code would mean one rule reasoned
+/// about in two places. Separately, left at its default `true` with no
+/// expected audience configured, `jsonwebtoken`'s own validation rejects
+/// *every* token that carries an `aud` claim at all -- which every real OIDC
+/// ID token does. Verified by reading `validation.rs`'s own match on
+/// `(Audience::Parsed(_), None)`, not assumed; that landmine is what stage 4a
+/// found and is why this was already off before stage 6a existed. `exp` is
+/// left at the library's default (required, checked): a stale signature is a
+/// freshness property of the token itself, not a per-provider value to match,
+/// and 6b owns `exp`/`iat`/`nbf` deliberately, not this function.
 fn validation_for(algorithm: jsonwebtoken::Algorithm) -> jsonwebtoken::Validation {
     let mut validation = jsonwebtoken::Validation::new(algorithm);
     validation.validate_aud = false;
     validation
+}
+
+/// The first top-level member name that occurs more than once in a JSON
+/// object's bytes, scanned the same way `parse_compact_jws` scans the
+/// header -- positional, so a non-adjacent repeat (`{"iss":"a","sub":"s",
+/// "iss":"b"}`) is still caught, not just a repeated-neighbour case. A
+/// payload that is not a JSON object at all yields no names and so no
+/// duplicate; `jsonwebtoken::decode`'s own parsing is what reports that.
+fn first_duplicate_member(payload: &[u8]) -> Option<String> {
+    let names = serde_json::from_slice::<MemberNames>(payload)
+        .map(|m| m.0)
+        .unwrap_or_default();
+    for (i, name) in names.iter().enumerate() {
+        if names[..i].contains(name) {
+            return Some(name.clone());
+        }
+    }
+    None
 }
 
 /// The pure core: verify `token` against an already-fetched `jwks`, given the
@@ -411,6 +453,16 @@ pub fn verify_id_token_against_jwks(
     jwks: &jwks::Jwks,
 ) -> Result<VerifiedIdTokenClaims, VerificationError> {
     let compact = parse_compact_jws(token).map_err(VerificationError::Structure)?;
+
+    // Scanned over the already-decoded, already-bounded payload bytes,
+    // before `jsonwebtoken::decode` runs -- it deserializes the same bytes
+    // a second time, internally, into a struct that already rejects a
+    // duplicate `iss`/`sub`/`aud` on its own, but collapsed into
+    // `SignatureInvalid`, a false statement about a token whose signature
+    // is in fact valid. Checking here, first, names the real fault instead.
+    if let Some(name) = first_duplicate_member(&compact.payload) {
+        return Err(VerificationError::DuplicatePayloadMember(name));
+    }
 
     // The outer gate: before key selection, not after, so a disallowed `alg`
     // is refused for that reason even when a key for it exists in the set.

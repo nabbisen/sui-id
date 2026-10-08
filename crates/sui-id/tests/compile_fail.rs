@@ -29,3 +29,10 @@ fn compile_fail_retained_cache_entry_cannot_be_constructed_directly() {
     let t = trybuild::TestCases::new();
     t.compile_fail("tests/compile_fail/retained_cache_entry_cannot_be_constructed_directly.rs");
 }
+
+/// RFC 096 :656-659 (stage 6a): see the fixture's own comment.
+#[test]
+fn compile_fail_required_identity_claims_cannot_be_constructed_directly() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compile_fail/required_identity_claims_cannot_be_constructed_directly.rs");
+}
