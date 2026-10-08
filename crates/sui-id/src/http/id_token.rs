@@ -309,6 +309,15 @@ pub enum VerificationError {
     /// token whose signature is in fact valid. Scanning first, and naming
     /// the real fault, is stage 6a's fix for that.
     DuplicatePayloadMember(String),
+    /// `exp` or `nbf` is present but is not a canonical non-negative JSON
+    /// integer within the range the application clock can represent --
+    /// `jsonwebtoken`'s own `numeric_type` deserializer *rounds* a float
+    /// into an accepted integer instead of refusing it (confirmed
+    /// empirically: a literal `exp` of `1700000000.5` decodes and verifies
+    /// successfully against the real library), so this is checked before
+    /// `decode` runs, over the raw payload value, the same reason and the
+    /// same placement as `DuplicatePayloadMember`. The name is which claim.
+    MalformedTimeClaim(&'static str),
     /// The header's `alg` is not in the provider's configured `id_token_algs`.
     /// This is the outer gate: it runs before key selection, not after, so a
     /// disallowed algorithm is refused for that reason, never for a family
@@ -324,13 +333,23 @@ pub enum VerificationError {
     /// Selecting a key from the JWKS (stage 3b), including the key material
     /// being rejected at the point it is converted.
     KeySelection(jwks::KeySelectionError),
-    /// The signature itself did not verify, the token's claims failed a
-    /// temporal check (`exp`), or `jsonwebtoken` rejected the token for a
-    /// reason none of the above already names. One bucket, deliberately:
-    /// `jsonwebtoken::errors::ErrorKind`'s wording is written for its own
-    /// callers and changes between versions, so this taxonomy does not
-    /// branch on it. The specific `ErrorKind` is for the operator log; the
-    /// caller gets only that verification failed.
+    /// `exp` has passed (`jsonwebtoken`'s own `ErrorKind::ExpiredSignature`),
+    /// named for the same reason stage 6a named `DuplicatePayloadMember`
+    /// instead of leaving it in `SignatureInvalid`: the signature on an
+    /// expired token did verify, so reporting it as a signature failure is
+    /// false, not merely imprecise.
+    Expired,
+    /// `nbf` is in the future (`ErrorKind::ImmatureSignature`), named for
+    /// the identical reason as `Expired`, one claim over.
+    NotYetValid,
+    /// The signature itself did not verify, or `jsonwebtoken` rejected the
+    /// token for a reason none of the above already names. Still one
+    /// bucket, deliberately, for whatever is left: `ErrorKind`'s wording is
+    /// written for its own callers and changes between versions, so this
+    /// taxonomy does not branch on all of it -- only on the two kinds above,
+    /// which are false statements under their old name, not merely vague
+    /// ones. The specific `ErrorKind` is for the operator log; the caller
+    /// gets only that verification failed.
     SignatureInvalid,
 }
 
@@ -339,12 +358,17 @@ impl std::fmt::Display for VerificationError {
         match self {
             Self::Structure(e) => write!(f, "{e}"),
             Self::DuplicatePayloadMember(name) => write!(f, "payload repeats member {name:?}"),
+            Self::MalformedTimeClaim(name) => {
+                write!(f, "{name} is not a canonical in-range integer")
+            }
             Self::AlgNotPermitted => {
                 write!(f, "alg is not permitted by this provider's configuration")
             }
             Self::NoJwksUri => write!(f, "provider has no jwks_uri to verify against"),
             Self::Jwks(e) => write!(f, "{e}"),
             Self::KeySelection(e) => write!(f, "{e}"),
+            Self::Expired => write!(f, "exp has passed"),
+            Self::NotYetValid => write!(f, "nbf is in the future"),
             Self::SignatureInvalid => write!(f, "signature verification failed"),
         }
     }
@@ -414,14 +438,74 @@ impl VerifiedIdTokenClaims {
 /// *every* token that carries an `aud` claim at all -- which every real OIDC
 /// ID token does. Verified by reading `validation.rs`'s own match on
 /// `(Audience::Parsed(_), None)`, not assumed; that landmine is what stage 4a
-/// found and is why this was already off before stage 6a existed. `exp` is
-/// left at the library's default (required, checked): a stale signature is a
-/// freshness property of the token itself, not a per-provider value to match,
-/// and 6b owns `exp`/`iat`/`nbf` deliberately, not this function.
+/// found and is why this was already off before stage 6a existed.
+///
+/// `exp` is left at the library's own window check (`validate_exp = true`,
+/// `leeway = 60`, `required_spec_claims = {"exp"}`, none of them touched):
+/// `exp - 0 < now - 60` rejects, which holds while `now <= exp + 60` --
+/// confirmed against the real library, not the RFC's own paraphrase, which
+/// states the boundary as the strict `now < exp + 60`. The library accepts
+/// one second the RFC's literal wording would not (`now == exp + 60`); both
+/// reject at `now == exp + 61`. Stated as a finding in stage 6b's package,
+/// not patched here: the dispatch was explicit that `exp`'s window logic is
+/// not this function's to change.
+///
+/// `validate_nbf` is turned **on** (stage 6b): the library's own check,
+/// `nbf > now + leeway` rejects, is RFC 096's `nbf <= now + 60s` rule
+/// verbatim. `nbf` stays out of `required_spec_claims` -- the RFC marks it
+/// optional, and adding it there would make it required instead.
+///
+/// `iat` has no library support at all and is validated entirely by
+/// `time_claims::validate_time_claims`, against `VerifiedIdTokenClaims`,
+/// after this function's checks have already passed.
 fn validation_for(algorithm: jsonwebtoken::Algorithm) -> jsonwebtoken::Validation {
     let mut validation = jsonwebtoken::Validation::new(algorithm);
     validation.validate_aud = false;
+    validation.validate_nbf = true;
     validation
+}
+
+/// Why a raw JSON value is not usable as a NumericDate (RFC 096 `:673-676`):
+/// not a number at all, a float (including one with a zero fraction --
+/// `serde_json` tracks the literal's own syntax, so `1700000000.0` is
+/// `is_f64`, not `is_u64`, confirmed empirically), a negative integer, or an
+/// integer too large for the application clock to represent at all (an
+/// overflow past `i64`/`u64` falls back to `serde_json`'s float
+/// representation too, landing in the same bucket as a genuine float).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum NumericDateError {
+    WrongType,
+    NotAnInteger,
+    Negative,
+    OutOfRange,
+}
+
+/// Parses a raw JSON value as a canonical NumericDate: a JSON integer,
+/// non-negative, within the range `chrono::DateTime::from_timestamp` can
+/// represent -- which is also how "representable by the application clock"
+/// is given a concrete boundary rather than an arbitrary one. Returns the
+/// value as epoch seconds; callers needing a `DateTime<Utc>` can construct
+/// one from it without a second fallibility check, since representability
+/// was already confirmed here.
+pub(crate) fn numeric_date(value: &serde_json::Value) -> Result<i64, NumericDateError> {
+    if let Some(n) = value.as_u64() {
+        let secs = i64::try_from(n).map_err(|_| NumericDateError::OutOfRange)?;
+        if chrono::DateTime::from_timestamp(secs, 0).is_none() {
+            return Err(NumericDateError::OutOfRange);
+        }
+        return Ok(secs);
+    }
+    if value.as_i64().is_some() {
+        // `as_u64` already failed, so a value `as_i64` can represent is
+        // necessarily negative.
+        return Err(NumericDateError::Negative);
+    }
+    if value.is_number() {
+        // Not representable as `u64` or `i64`: a float (any fraction,
+        // including none) or an integer past both ranges.
+        return Err(NumericDateError::NotAnInteger);
+    }
+    Err(NumericDateError::WrongType)
 }
 
 /// The first top-level member name that occurs more than once in a JSON
@@ -464,6 +548,23 @@ pub fn verify_id_token_against_jwks(
         return Err(VerificationError::DuplicatePayloadMember(name));
     }
 
+    // `jsonwebtoken`'s own `numeric_type` deserializer rounds a float `exp`/
+    // `nbf` into an accepted integer rather than refusing it -- see
+    // `MalformedTimeClaim`'s doc comment. Checked over the raw payload
+    // value, before `decode` runs, the same placement as the scan above,
+    // for the same reason: by the time `decode` would reject a malformed
+    // shape itself (if it did at all), it is too late to not have already
+    // rounded a float into something that looks valid.
+    let raw_payload: serde_json::Value =
+        serde_json::from_slice(&compact.payload).unwrap_or(serde_json::Value::Null);
+    for claim in ["exp", "nbf"] {
+        if let Some(value) = raw_payload.get(claim)
+            && numeric_date(value).is_err()
+        {
+            return Err(VerificationError::MalformedTimeClaim(claim));
+        }
+    }
+
     // The outer gate: before key selection, not after, so a disallowed `alg`
     // is refused for that reason even when a key for it exists in the set.
     if !id_token_algs
@@ -487,8 +588,11 @@ pub fn verify_id_token_against_jwks(
     let validation = validation_for(algorithm);
 
     let token_data: jsonwebtoken::TokenData<serde_json::Value> =
-        jsonwebtoken::decode(token, &decoding_key, &validation)
-            .map_err(|_| VerificationError::SignatureInvalid)?;
+        jsonwebtoken::decode(token, &decoding_key, &validation).map_err(|e| match e.kind() {
+            jsonwebtoken::errors::ErrorKind::ExpiredSignature => VerificationError::Expired,
+            jsonwebtoken::errors::ErrorKind::ImmatureSignature => VerificationError::NotYetValid,
+            _ => VerificationError::SignatureInvalid,
+        })?;
 
     Ok(VerifiedIdTokenClaims {
         payload: token_data.claims,

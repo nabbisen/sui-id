@@ -68,6 +68,8 @@ pub mod security_headers;
 pub mod startup;
 #[path = "runtime/state.rs"]
 pub mod state;
+#[path = "http/time_claims.rs"]
+pub mod time_claims;
 
 pub use config::Config;
 pub use router::build_router;

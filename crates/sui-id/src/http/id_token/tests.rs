@@ -663,3 +663,211 @@ async fn no_jwks_uri_is_refused_before_any_network_access() {
     let result = verify_id_token(&client, "irrelevant", &["RS256".into()], None).await;
     assert!(matches!(result, Err(VerificationError::NoJwksUri)));
 }
+
+// ---- RFC 096-A stage 6b: the time claims ------------------------------------
+//
+// `exp` and `nbf`'s window arithmetic is `jsonwebtoken`'s own
+// (`validation_for`'s doc comment has the full reasoning, including the
+// one-second boundary finding); what these tests exercise is everything
+// stage 6b actually added: the canonical-shape pre-check
+// (`VerificationError::MalformedTimeClaim`), the two renamed error
+// variants (`Expired`, `NotYetValid`), and `nbf`'s own window now that it
+// is switched on. `iat`, which has no library support at all, is tested in
+// `time_claims/tests.rs`.
+
+fn sign_raw_payload(payload_json: &str) -> String {
+    let header_json = r#"{"alg":"RS256","kid":"k1"}"#;
+    let encoded_header = Base64UrlUnpadded::encode_string(header_json.as_bytes());
+    let encoded_payload = Base64UrlUnpadded::encode_string(payload_json.as_bytes());
+    let message = format!("{encoded_header}.{encoded_payload}");
+    let key = EncodingKey::from_rsa_der(&der(RSA_DER));
+    let signature = jsonwebtoken::crypto::sign(message.as_bytes(), &key, JwtAlgorithm::RS256)
+        .expect("signing with a freshly generated key must succeed");
+    format!("{message}.{signature}")
+}
+
+fn verify_raw(payload_json: &str) -> Result<super::VerifiedIdTokenClaims, VerificationError> {
+    let token = sign_raw_payload(payload_json);
+    verify_id_token_against_jwks(
+        &token,
+        &["RS256".into()],
+        &jwks_of(vec![rsa_jwk("k1", RSA_N)]),
+    )
+}
+
+// ---- exp: the library's window, re-verified rather than cited --------------
+
+/// RFC 096 `:660`'s own wording is the strict `now < exp + 60s`. The
+/// library's actual accept condition, read from `validation.rs:291` and
+/// confirmed here rather than assumed, is `now <= exp + 60s` -- one second
+/// more permissive than the RFC's literal boundary. Both forms agree at
+/// `now == exp + 61` (refused either way); they disagree only at the exact
+/// second `now == exp + 60`, which this library accepts and the RFC's own
+/// sentence, read literally, would not. Not patched here -- the dispatch is
+/// explicit that `exp`'s window is not this stage's to change -- stated as
+/// the finding the dispatch asked this stage to either confirm or correct.
+#[test]
+fn exp_boundary_now_equals_exp_plus_60_is_accepted_by_the_library_one_second_more_than_the_rfcs_own_wording()
+ {
+    // The accept case races the real clock: `now` is read here, then read
+    // again inside `jsonwebtoken::decode` during `verify_raw`. A second
+    // ticking over in that gap turns the exact boundary into one second
+    // past it, which the library correctly rejects -- an environment
+    // timing flake (caught by a gate run during this stage, not assumed),
+    // not a defect in the boundary claim. Resampling `now` fresh on
+    // failure, rather than widening the margin, keeps the assertion about
+    // the real exact boundary while closing the race; five attempts makes
+    // a false failure astronomically unlikely.
+    let mut last_result = None;
+    for _ in 0..5 {
+        let now = jsonwebtoken::get_current_timestamp();
+        let exp_at_60 = now - 60;
+        let p60 = format!(r#"{{"exp":{exp_at_60}}}"#);
+        let result = verify_raw(&p60);
+        let accepted = result.is_ok();
+        last_result = Some(result);
+        if accepted {
+            break;
+        }
+    }
+    assert!(
+        matches!(last_result, Some(Ok(_))),
+        "the library accepts the exact boundary, one second past the RFC's strict <: {last_result:?}"
+    );
+
+    let now = jsonwebtoken::get_current_timestamp();
+    let exp_at_61 = now - 61;
+    let p61 = format!(r#"{{"exp":{exp_at_61}}}"#);
+    assert!(matches!(verify_raw(&p61), Err(VerificationError::Expired)));
+}
+
+#[test]
+fn an_expired_token_is_refused_as_expired_not_as_a_signature_failure() {
+    let now = jsonwebtoken::get_current_timestamp();
+    let long_expired = now - 10_000;
+    let p = format!(r#"{{"exp":{long_expired}}}"#);
+    assert!(matches!(verify_raw(&p), Err(VerificationError::Expired)));
+}
+
+// ---- nbf: switched on by stage 6b -------------------------------------------
+
+#[test]
+fn an_nbf_within_the_60_second_skew_is_accepted() {
+    let now = jsonwebtoken::get_current_timestamp();
+    let exp = now + 10_000;
+    let nbf = now - 10;
+    let p = format!(r#"{{"exp":{exp},"nbf":{nbf}}}"#);
+    assert!(verify_raw(&p).is_ok());
+}
+
+#[test]
+fn an_nbf_in_the_future_beyond_the_skew_is_refused_as_not_yet_valid_not_as_a_signature_failure() {
+    let now = jsonwebtoken::get_current_timestamp();
+    let exp = now + 10_000;
+    let nbf = now + 10_000;
+    let p = format!(r#"{{"exp":{exp},"nbf":{nbf}}}"#);
+    assert!(matches!(
+        verify_raw(&p),
+        Err(VerificationError::NotYetValid)
+    ));
+}
+
+// ---- MalformedTimeClaim: the shape check jsonwebtoken does not make --------
+//
+// `jsonwebtoken`'s own `numeric_type` deserializer rounds a float into an
+// accepted integer instead of refusing it; these prove the pre-check this
+// stage added catches what the library, left alone, would silently accept.
+
+#[test]
+fn a_float_exp_is_refused_despite_the_librarys_own_leniency() {
+    let now = jsonwebtoken::get_current_timestamp();
+    let exp = now as f64 + 10_000.5;
+    let p = format!(r#"{{"exp":{exp}}}"#);
+    assert!(matches!(
+        verify_raw(&p),
+        Err(VerificationError::MalformedTimeClaim("exp"))
+    ));
+}
+
+#[test]
+fn a_whole_number_float_exp_is_also_refused() {
+    // `serde_json` tracks the literal's own syntax: `1700000000.0` is
+    // `is_f64`, not `is_u64`, even though its value is a whole number.
+    // `{:.1}` is deliberate, not cosmetic: Rust's plain `{}` Display for a
+    // whole-number `f64` prints no decimal point at all (`1700000000`, not
+    // `1700000000.0`), which would silently turn this into the canonical-
+    // integer case this test exists to distinguish from -- confirmed by
+    // running it before trusting the format string.
+    let now = jsonwebtoken::get_current_timestamp();
+    let exp = now as f64 + 10_000.0;
+    let p = format!(r#"{{"exp":{exp:.1}}}"#);
+    assert!(p.contains('.'), "the literal must actually be a float: {p}");
+    assert!(matches!(
+        verify_raw(&p),
+        Err(VerificationError::MalformedTimeClaim("exp"))
+    ));
+}
+
+#[test]
+fn a_string_exp_is_refused_by_name_not_as_a_missing_claim() {
+    let now = jsonwebtoken::get_current_timestamp();
+    let exp = now + 10_000;
+    let p = format!(r#"{{"exp":"{exp}"}}"#);
+    assert!(matches!(
+        verify_raw(&p),
+        Err(VerificationError::MalformedTimeClaim("exp"))
+    ));
+}
+
+#[test]
+fn a_negative_exp_is_refused() {
+    assert!(matches!(
+        verify_raw(r#"{"exp":-5}"#),
+        Err(VerificationError::MalformedTimeClaim("exp"))
+    ));
+}
+
+#[test]
+fn an_exp_past_u64_is_refused() {
+    let p = format!(r#"{{"exp":{}}}"#, u64::MAX);
+    assert!(matches!(
+        verify_raw(&p),
+        Err(VerificationError::MalformedTimeClaim("exp"))
+    ));
+}
+
+/// Distinct from `an_exp_past_u64_is_refused`: `u64::MAX` is rejected
+/// earlier, by `i64::try_from` failing, never reaching
+/// `chrono::DateTime::from_timestamp`'s own range check at all. `i64::MAX`
+/// is representable as `i64` (so `try_from` succeeds) but is still far
+/// past `chrono`'s own representable range -- this is the only value in
+/// the suite that actually exercises that second check. Confirmed by
+/// mutation: disabling the `from_timestamp(..).is_none()` branch leaves
+/// every other test in this file passing and only this one fails.
+#[test]
+fn an_exp_within_i64_but_past_chronos_range_is_refused() {
+    let p = format!(r#"{{"exp":{}}}"#, i64::MAX);
+    assert!(matches!(
+        verify_raw(&p),
+        Err(VerificationError::MalformedTimeClaim("exp"))
+    ));
+}
+
+#[test]
+fn a_malformed_nbf_is_refused_by_its_own_name() {
+    let now = jsonwebtoken::get_current_timestamp();
+    let exp = now + 10_000;
+    let p = format!(r#"{{"exp":{exp},"nbf":"{now}"}}"#);
+    assert!(matches!(
+        verify_raw(&p),
+        Err(VerificationError::MalformedTimeClaim("nbf"))
+    ));
+}
+
+#[test]
+fn an_absent_nbf_is_not_an_error() {
+    let now = jsonwebtoken::get_current_timestamp();
+    let exp = now + 10_000;
+    let p = format!(r#"{{"exp":{exp}}}"#);
+    assert!(verify_raw(&p).is_ok());
+}
