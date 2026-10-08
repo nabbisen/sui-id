@@ -27,7 +27,7 @@ corpus rows stage 5 could not cover). **Do not attempt more than 6a.**
 
 ## Scope — four claims, no more
 
-RFC 096 `:654-658`, verbatim:
+RFC 096 `:656-659`, verbatim:
 
 | Claim | Rule |
 |---|---|
@@ -66,14 +66,23 @@ error variant per rule, not a boolean. Tests assert the specific variant, never
 the test for each row.
 
 **`sub` is preserved exactly.** Validate its bounds; do not normalise, trim or
-case-fold it. RFC 096 `:694` makes `(provider_id, sub)` the sole lookup key, so
+case-fold it. RFC 096 `:693` makes `(provider_id, sub)` the sole lookup key, so
 any transformation here silently changes identity.
 
-**Duplicate and type discipline.** RFC 096 `:681-684`: a claim present with the
-wrong type, a duplicate member, an invalid character or an exceeded bound is a
-rejection, not a partial ignore. `aud` as a JSON number, `aud` as an empty
-array, `aud` as 9 strings, a repeated `iss` member — each refused by its own
-name.
+**Duplicate and type discipline.** A claim present with the wrong type, a
+duplicate member, an invalid character or an exceeded bound is a rejection, not
+a partial ignore. `aud` as a JSON number, `aud` as an empty array, `aud` as 9
+strings, a repeated `iss` member — each refused by its own name.
+
+Note the citation carefully: RFC 096 states this rule explicitly at `:679-681`
+for the **optional** claims, and at `:673-676` for NumericDate values. Neither
+sentence is about the four required claims in this stage. I am asking you to
+apply the same discipline here on consistency grounds — stages 2 and 3a already
+refuse a repeated member by its own name
+(`a_repeated_declared_member_is_refused` in both the header and JWKS modules),
+and a required claim cannot sensibly be *less* strict than an optional one. If
+you think that inference is wrong, say so rather than implementing it; it is
+mine, not the RFC's.
 
 **Byte-exact means byte-exact.** No URL normalisation on `iss`: no trailing-slash
 tolerance, no case folding on the host, no percent-decoding. If the configured
