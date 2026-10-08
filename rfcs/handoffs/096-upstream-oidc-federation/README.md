@@ -206,15 +206,22 @@ implementation role reads.
 
 ### Dispatched and open
 
-- [`stage4d-fix-authority-on-the-read-paths-2026-10-08.md`](stage4d-fix-authority-on-the-read-paths-2026-10-08.md)
-  — **DISPATCHED, this is the open work.** 4d was **returned** with one required
-  change: neither read path compares the entry's key to the current
-  `(provider, version, activation generation)`, so a superseded activation's
-  document can be served or joined. Nothing else in 4d is reopened.
+- [`stage5-hostile-provider-corpus-2026-10-08.md`](stage5-hostile-provider-corpus-2026-10-08.md)
+  — **DISPATCHED, this is the open work, and the last stage of 096-A.** Drives
+  every negative row of `validation-matrix.md` through stages 1–4 and proves
+  each refusal, on the harness that landed in `7c068f8`.
+
+### Landed
+
 - [`stage4d-flights-and-cooldowns-2026-10-08.md`](stage4d-flights-and-cooldowns-2026-10-08.md)
-  — RFC 096 `:897-924`: the state table, single flight, cooldown, forced-refresh
-  window, unknown-`kid` handling, rotation. **Returned, not landed** — see the
-  fix above.
+  and
+  [`stage4d-fix-authority-on-the-read-paths-2026-10-08.md`](stage4d-fix-authority-on-the-read-paths-2026-10-08.md)
+  — **landed together.** The eight-row state table, single flight, the 30-second
+  cooldown, the 60-second forced window measured from dispatch, rotation's
+  no-fallback rule — plus the returned-and-fixed authority check on both read
+  paths, and a `flight_generation` counter closing the ABA case where a
+  recurring `CacheKey` would let a superseded flight clobber a newer one.
+  **096-A's cache work is complete.**
 
 ### Landed
 
