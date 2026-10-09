@@ -44,6 +44,8 @@ pub mod gc;
 pub mod handlers;
 #[path = "http/id_token.rs"]
 pub mod id_token;
+#[path = "http/identity_capability.rs"]
+pub mod identity_capability;
 #[path = "http/identity_claims.rs"]
 pub mod identity_claims;
 #[path = "runtime/ipnet.rs"]
@@ -52,6 +54,8 @@ pub mod ipnet;
 pub mod jwks;
 #[path = "runtime/keyring.rs"]
 pub mod keyring;
+#[path = "http/optional_claims.rs"]
+pub mod optional_claims;
 #[path = "runtime/ratelimit.rs"]
 pub mod ratelimit;
 #[path = "http/request_id.rs"]

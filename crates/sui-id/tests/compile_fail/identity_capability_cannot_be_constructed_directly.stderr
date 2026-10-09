@@ -1,0 +1,18 @@
+error[E0451]: fields `provider`, `sub`, `verified_email`, `preferred_username`, `name` and `validated_at` of struct `IdentityCapability` are private
+  --> tests/compile_fail/identity_capability_cannot_be_constructed_directly.rs:15:9
+   |
+14 |     IdentityCapability {
+   |     ------------------ in this type
+15 |         provider: CacheKey::new(
+   |         ^^^^^^^^ private field
+...
+20 |         sub: "not-validated".to_string(),
+   |         ^^^ private field
+21 |         verified_email: None,
+   |         ^^^^^^^^^^^^^^ private field
+22 |         preferred_username: None,
+   |         ^^^^^^^^^^^^^^^^^^ private field
+23 |         name: None,
+   |         ^^^^ private field
+24 |         validated_at: Utc::now(),
+   |         ^^^^^^^^^^^^ private field

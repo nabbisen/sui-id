@@ -36,3 +36,10 @@ fn compile_fail_required_identity_claims_cannot_be_constructed_directly() {
     let t = trybuild::TestCases::new();
     t.compile_fail("tests/compile_fail/required_identity_claims_cannot_be_constructed_directly.rs");
 }
+
+/// RFC 096 :687-689 (stage 6c): see the fixture's own comment.
+#[test]
+fn compile_fail_identity_capability_cannot_be_constructed_directly() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compile_fail/identity_capability_cannot_be_constructed_directly.rs");
+}

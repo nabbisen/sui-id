@@ -392,19 +392,6 @@ impl VerifiedIdTokenClaims {
         self.payload.get("sub").and_then(serde_json::Value::as_str)
     }
 
-    pub fn email(&self) -> Option<&str> {
-        self.payload
-            .get("email")
-            .and_then(serde_json::Value::as_str)
-    }
-
-    pub fn email_verified(&self) -> bool {
-        self.payload
-            .get("email_verified")
-            .and_then(serde_json::Value::as_bool)
-            .unwrap_or(false)
-    }
-
     pub fn nonce(&self) -> Option<&str> {
         self.payload
             .get("nonce")
