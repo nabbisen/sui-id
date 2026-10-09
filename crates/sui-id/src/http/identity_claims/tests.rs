@@ -192,6 +192,23 @@ fn a_subject_of_256_bytes_is_refused_255_is_accepted() {
     );
 }
 
+/// RFC 096-A stage 9: `validation-matrix.md:152-153`'s corpus requires
+/// "Unicode/control subjects" -- 6a tested the control character and
+/// both length bounds, but nothing asserted that a legitimate multi-byte
+/// `sub` is *accepted* and returned byte-identical. RFC 096 `:657` says
+/// `sub` is "preserved exactly", and `:693` makes `(provider_id, sub)`
+/// the sole identity key, so a silent normalisation here would silently
+/// change who a user is -- this asserts the exact bytes, not merely that
+/// validation succeeded.
+#[test]
+fn a_multi_byte_unicode_subject_is_accepted_and_preserved_exactly() {
+    let sub = "用户-ユーザー-123";
+    let p = format!(r#"{{"iss":"{ISSUER}","sub":"{sub}","aud":"{CLIENT_ID}"}}"#);
+    let result = validate_identity_claims(&verified(&p), ISSUER, CLIENT_ID)
+        .expect("a legitimate multi-byte sub must be accepted");
+    assert_eq!(result.sub(), sub);
+}
+
 #[test]
 fn a_subject_with_a_control_character_is_refused() {
     let p = format!(r#"{{"iss":"{ISSUER}","sub":"user\u0007","aud":"{CLIENT_ID}"}}"#);

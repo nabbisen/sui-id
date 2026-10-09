@@ -808,6 +808,25 @@ fn a_whole_number_float_exp_is_also_refused() {
     ));
 }
 
+/// RFC 096-A stage 9: `validation-matrix.md:152-153`'s corpus requires
+/// test claims to include "string/floating/exponential NumericDates" --
+/// 6b covered string and floating, not the exponential *literal syntax*
+/// itself (`1.7e9`, no decimal point, distinct from
+/// `a_whole_number_float_exp_is_also_refused`'s `1700000000.0`). Confirmed
+/// empirically first, not assumed: `serde_json::Value`'s own classifier
+/// marks *any* exponential-syntax number `is_f64`/`as_u64() == None`
+/// regardless of whether it has a fractional part, so this reaches
+/// `numeric_date`'s identical `NotAnInteger` path as a plain float -- this
+/// test closes a corpus-coverage gap, not a production-code one.
+#[test]
+fn an_exponential_literal_exp_is_refused() {
+    let p = r#"{"exp":1.7e9}"#;
+    assert!(matches!(
+        verify_raw(p),
+        Err(VerificationError::MalformedTimeClaim("exp"))
+    ));
+}
+
 #[test]
 fn a_string_exp_is_refused_by_name_not_as_a_missing_claim() {
     let now = jsonwebtoken::get_current_timestamp();

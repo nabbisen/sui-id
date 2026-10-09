@@ -59,6 +59,7 @@ mod r095_m3_stage1b_loopback_port_matching;
 mod r096_a_harness;
 mod r096_a_stage3a_jwks;
 mod r096_a_stage4a_verify;
+mod r096_a_stage9_well_known;
 mod r102_stage1;
 mod r102_stage2;
 mod r102_stage3;
