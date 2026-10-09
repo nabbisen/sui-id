@@ -206,23 +206,17 @@ implementation role reads.
 
 ### Dispatched and open
 
-- [`stage6c-fix-bound-boundaries-and-mailbox-shape-2026-10-09.md`](stage6c-fix-bound-boundaries-and-mailbox-shape-2026-10-09.md)
-  — **DISPATCHED, this is the open work.** Two items on an otherwise accepted
-  stage 6c. Seven accepting-side tests: every numeric bound in
-  `optional_claims.rs` could be tightened by one with all 487 tests still
-  passing, and because `:679-681` makes a malformed optional claim reject the
-  whole token, a bound one too tight fails the login rather than truncating a
-  hint. And the mandatory dot comes out of the mailbox shape — `user@intranet`
-  must not lose a user their login over a claim that is metadata only, never a
-  lookup key, and which the RFC is content to see absent.
-- [`stage6c-optional-claims-and-the-capability-2026-10-08.md`](stage6c-optional-claims-and-the-capability-2026-10-08.md)
-  — **RETURNED**, everything but those two items accepted: the two-module split,
-  the capability's fields and sealing, the hand-written `Debug` redacting `sub`
-  and `verified_email` under `:712`, `verified_email` as `Option<String>` per
-  `:709-710`, and the deletion of two superseded accessors. Its
-  byte-before-scalar ordering is derived rather than guessed: both limit pairs
-  are exactly `4 × scalar_limit` and UTF-8 caps a scalar at 4 bytes, so
-  checking scalars first would leave the byte branch unreachable.
+- [`stage7-the-nonce-rule-2026-10-09.md`](stage7-the-nonce-rule-2026-10-09.md)
+  — **DISPATCHED, this is the open work.** The nonce validation *rule* only:
+  hash the claim and compare in constant time to a supplied digest, with the
+  expected digest as a parameter, since what makes a nonce genuinely one-time is
+  a mutation and belongs to 096-B1 (`:65-66`). Dispatched with the three
+  primitives already in the tree measured, so a third copy of none of them gets
+  written: SHA-256 settled by `:579`'s `nonce_sha256` column,
+  `sui_id_core::oidc::tokens::sha256_hex` already public and vector-tested, and
+  `subtle::ConstantTimeEq` already used at five call sites.
+  **When this lands, token substitution closes** — `aud`, `iss` and the nonce
+  are then all bound.
 
 ### Open with the owner
 
@@ -236,6 +230,24 @@ implementation role reads.
   which is the reasoning this RFC's `aud` design already rejected.
 
 ### Landed
+
+- [`stage6c-optional-claims-and-the-capability-2026-10-08.md`](stage6c-optional-claims-and-the-capability-2026-10-08.md)
+  and
+  [`stage6c-fix-bound-boundaries-and-mailbox-shape-2026-10-09.md`](stage6c-fix-bound-boundaries-and-mailbox-shape-2026-10-09.md)
+  — **landed together, Level B.** The eight bounded optional claims and the
+  sealed construction capability of RFC 096 `:687-689`, which carries no raw
+  token, nonce or access token. Returned once: every numeric bound could be
+  tightened by one with all 487 tests passing, and because `:679-681` rejects
+  the whole token for a malformed optional claim, a bound one too tight fails
+  the login rather than truncating a hint. Nine accepting-side tests now pin
+  each bound at its limit — nine rather than the seven I asked for, because
+  `preferred_username` and `name` are different constants and one test would
+  have killed the mutation while proving nothing about the other. The mandatory
+  dot also came out of the mailbox shape: `user@intranet` must not cost a user
+  their login over a claim that is metadata only and never a lookup key.
+  Its byte-before-scalar check order is derived, not guessed — both limit pairs
+  are exactly `4 x scalar_limit` and UTF-8 caps a scalar at four bytes, so
+  checking scalars first would leave the byte branch unreachable.
 
 - [`stage6b-time-claims-2026-10-08.md`](stage6b-time-claims-2026-10-08.md)
   — **landed, Level B.** `nbf` turned on, `iat` written with `created_at` as a
