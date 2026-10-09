@@ -54,6 +54,8 @@ pub mod ipnet;
 pub mod jwks;
 #[path = "runtime/keyring.rs"]
 pub mod keyring;
+#[path = "http/nonce_claim.rs"]
+pub mod nonce_claim;
 #[path = "http/optional_claims.rs"]
 pub mod optional_claims;
 #[path = "runtime/ratelimit.rs"]
