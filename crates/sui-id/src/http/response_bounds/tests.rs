@@ -132,7 +132,11 @@ fn too_many_members_is_rejected() {
     for i in 0..(MAX_MEMBERS + 1) {
         obj.insert(format!("k{i}"), serde_json::Value::Bool(true));
     }
-    let err = check_caps(&serde_json::Value::Object(obj)).expect_err("must reject");
+    let err = check_caps(
+        &serde_json::Value::Object(obj),
+        &ResponseCaps::JWKS_AND_TRANSPORT,
+    )
+    .expect_err("must reject");
     assert!(matches!(err, BoundsError::TooManyMembers { .. }));
 }
 
@@ -142,33 +146,59 @@ fn exactly_the_member_limit_is_accepted() {
     for i in 0..MAX_MEMBERS {
         obj.insert(format!("k{i}"), serde_json::Value::Bool(true));
     }
-    assert!(check_caps(&serde_json::Value::Object(obj)).is_ok());
+    assert!(
+        check_caps(
+            &serde_json::Value::Object(obj),
+            &ResponseCaps::JWKS_AND_TRANSPORT
+        )
+        .is_ok()
+    );
 }
 
 #[test]
 fn too_long_an_array_is_rejected() {
     let arr = vec![serde_json::Value::Bool(true); MAX_ARRAY_LEN + 1];
-    let err = check_caps(&serde_json::Value::Array(arr)).expect_err("must reject");
+    let err = check_caps(
+        &serde_json::Value::Array(arr),
+        &ResponseCaps::JWKS_AND_TRANSPORT,
+    )
+    .expect_err("must reject");
     assert!(matches!(err, BoundsError::ArrayTooLong { .. }));
 }
 
 #[test]
 fn exactly_the_array_limit_is_accepted() {
     let arr = vec![serde_json::Value::Bool(true); MAX_ARRAY_LEN];
-    assert!(check_caps(&serde_json::Value::Array(arr)).is_ok());
+    assert!(
+        check_caps(
+            &serde_json::Value::Array(arr),
+            &ResponseCaps::JWKS_AND_TRANSPORT
+        )
+        .is_ok()
+    );
 }
 
 #[test]
 fn too_long_a_string_is_rejected() {
     let s = "x".repeat(MAX_STRING_LEN + 1);
-    let err = check_caps(&serde_json::Value::String(s)).expect_err("must reject");
+    let err = check_caps(
+        &serde_json::Value::String(s),
+        &ResponseCaps::JWKS_AND_TRANSPORT,
+    )
+    .expect_err("must reject");
     assert!(matches!(err, BoundsError::StringTooLong { .. }));
 }
 
 #[test]
 fn exactly_the_string_limit_is_accepted() {
     let s = "x".repeat(MAX_STRING_LEN);
-    assert!(check_caps(&serde_json::Value::String(s)).is_ok());
+    assert!(
+        check_caps(
+            &serde_json::Value::String(s),
+            &ResponseCaps::JWKS_AND_TRANSPORT
+        )
+        .is_ok()
+    );
 }
 
 #[tokio::test]
@@ -229,6 +259,48 @@ fn a_long_string_nested_inside_an_object_is_still_caught() {
             "x".repeat(MAX_STRING_LEN + 1),
         )]),
     );
-    let err = check_caps(&serde_json::Value::Object(obj)).expect_err("must reject");
+    let err = check_caps(
+        &serde_json::Value::Object(obj),
+        &ResponseCaps::JWKS_AND_TRANSPORT,
+    )
+    .expect_err("must reject");
     assert!(matches!(err, BoundsError::StringTooLong { .. }));
+}
+
+// ---- RFC 096-A stage 8 (fix): pinning `read_bounded_json` to the shared
+// transport caps, not discovery's -- the live token-response and userinfo
+// paths carry an `id_token` string that RFC 096's own claim matrix permits
+// up to 1,024/512 bytes per optional claim, comfortably over discovery's
+// tighter 2,048-byte cap once a real signed token is built. These two
+// tests fail if `read_bounded_json`'s internal `check_caps` call is ever
+// pointed at `ResponseCaps::DISCOVERY` instead of `JWKS_AND_TRANSPORT`.
+
+#[tokio::test]
+async fn read_bounded_json_accepts_a_string_over_discoverys_bound_but_under_the_shared_one() {
+    let s = "x".repeat(2_049);
+    assert!(s.len() > 2_048 && s.len() < MAX_STRING_LEN);
+    let body = serde_json::json!({ "a": s }).to_string();
+    let resp = serve_once(
+        "HTTP/1.1 200 OK",
+        "Content-Type: application/json\r\n",
+        &body,
+    )
+    .await;
+    let result: Result<Doc, BoundsError> = read_bounded_json(resp).await;
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[tokio::test]
+async fn read_bounded_json_accepts_an_array_over_discoverys_bound_but_under_the_shared_one() {
+    let extra = vec![serde_json::Value::Bool(true); 33];
+    assert!(extra.len() > 32 && extra.len() < MAX_ARRAY_LEN);
+    let body = serde_json::json!({ "a": "x", "extra": extra }).to_string();
+    let resp = serve_once(
+        "HTTP/1.1 200 OK",
+        "Content-Type: application/json\r\n",
+        &body,
+    )
+    .await;
+    let result: Result<Doc, BoundsError> = read_bounded_json(resp).await;
+    assert!(result.is_ok(), "{result:?}");
 }

@@ -35,8 +35,15 @@ pub(super) async fn mock_upstream() -> String {
                     let issuer = issuer.clone();
                     async move {
                         axum::Json(serde_json::json!({
+                            "issuer": issuer,
                             "authorization_endpoint": format!("{issuer}/authorize"),
                             "token_endpoint": format!("{issuer}/token"),
+                            "response_types_supported": ["code"],
+                            "code_challenge_methods_supported": ["S256"],
+                            "authorization_response_iss_parameter_supported": true,
+                            "token_endpoint_auth_methods_supported": ["client_secret_basic"],
+                            "id_token_signing_alg_values_supported": ["RS256"],
+                            "subject_types_supported": ["public"],
                         }))
                     }
                 }),

@@ -112,7 +112,8 @@ pub fn parse_jwks(bytes: &[u8]) -> Result<Jwks, JwksError> {
     if !value.is_object() {
         return Err(JwksError::NotObject);
     }
-    response_bounds::check_caps(&value).map_err(JwksError::Bounds)?;
+    response_bounds::check_caps(&value, &response_bounds::ResponseCaps::JWKS_AND_TRANSPORT)
+        .map_err(JwksError::Bounds)?;
 
     let depth = nesting_depth(&value);
     if depth > MAX_JWKS_DEPTH {
@@ -156,7 +157,17 @@ pub fn parse_jwks(bytes: &[u8]) -> Result<Jwks, JwksError> {
 
 /// The nesting depth of a parsed document. A scalar is 0; a container is one more
 /// than its deepest child. The root object of `{"keys":[{}]}` is 3.
-fn nesting_depth(value: &serde_json::Value) -> usize {
+///
+/// `pub(crate)` since RFC 096-A stage 8: discovery's own depth bound
+/// (RFC 096 `:531`, 16, identical to [`MAX_JWKS_DEPTH`]) needs this exact
+/// walker. Promoted in place rather than moved to `response_bounds.rs` --
+/// both this and [`first_repeated_member`] are generic JSON-structure
+/// utilities with nothing JWKS-specific in them, so moving them would be
+/// the more architecturally tidy choice, but it is also a larger, riskier
+/// footprint on an already-accepted, tested module than a visibility
+/// change alone; promoting in place is the lower-risk option the dispatch
+/// offered, stated here as a deliberate choice, not an oversight.
+pub(crate) fn nesting_depth(value: &serde_json::Value) -> usize {
     match value {
         serde_json::Value::Object(map) => 1 + map.values().map(nesting_depth).max().unwrap_or(0),
         serde_json::Value::Array(items) => 1 + items.iter().map(nesting_depth).max().unwrap_or(0),
@@ -169,7 +180,14 @@ fn nesting_depth(value: &serde_json::Value) -> usize {
 /// Reads the bytes, not a `Value`, because `serde_json::Value` keeps only the last
 /// of two equal names. The bytes already passed `serde_json`'s own parse, so the
 /// `Err` branch below is unreachable in practice; it is reported as `NotJson`.
-fn first_repeated_member(bytes: &[u8]) -> Result<Option<String>, JwksError> {
+///
+/// `pub(crate)` since stage 8 -- see [`nesting_depth`]'s doc comment for
+/// why this is promoted in place rather than relocated. Its `Result` stays
+/// tied to [`JwksError`]; a discovery caller maps the one reachable
+/// variant (`JwksError::NotJson`) into its own error, the same translation
+/// `VerificationError::Jwks(JwksError)` already does in the other
+/// direction.
+pub(crate) fn first_repeated_member(bytes: &[u8]) -> Result<Option<String>, JwksError> {
     let mut found: Option<String> = None;
     let mut de = serde_json::Deserializer::from_slice(bytes);
     match (NoRepeats { found: &mut found }).deserialize(&mut de) {

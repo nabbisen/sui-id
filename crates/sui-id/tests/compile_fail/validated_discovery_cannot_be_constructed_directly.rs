@@ -14,6 +14,8 @@ fn attempt() -> ValidatedDiscovery {
         token_endpoint: "https://evil.example.com/token".into(),
         userinfo_endpoint: None,
         jwks_uri: None,
+        token_endpoint_auth_methods_supported: Vec::new(),
+        id_token_signing_alg_values_supported: Vec::new(),
     }
 }
 

@@ -104,6 +104,46 @@ pub const MAX_ARRAY_LEN: usize = 128;
 /// headroom, rounded to a KiB boundary.
 pub const MAX_STRING_LEN: usize = 8 * 1024;
 
+/// RFC 096-A stage 8: [`check_caps`]'s member/array/string bounds,
+/// parameterized rather than hardcoded. Added when discovery's own RFC
+/// 096 `:531-532` bounds (32 array members, 2,048 bytes per string) turned
+/// out to be four times tighter than this module's `MAX_ARRAY_LEN`/
+/// `MAX_STRING_LEN` — those two constants are JWKS's and the shared
+/// transport's, measured from a real provider corpus (see the module doc
+/// comment) and explicitly not to be tightened for every caller, since
+/// that would silently re-scope stage 3a. Two near-identical bounds
+/// walkers would be the duplication this RFC keeps rejecting (6a's `aud`
+/// reasoning, 6c's bound-pinning fix), so the walker itself
+/// ([`check_caps`]) stays one function; only the numbers it compares
+/// against vary per caller.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ResponseCaps {
+    pub max_members: usize,
+    pub max_array_len: usize,
+    pub max_string_len: usize,
+}
+
+impl ResponseCaps {
+    /// JWKS's and the shared transport's own bounds -- [`read_bounded_json`]'s
+    /// default, unchanged from before this stage, so every existing caller
+    /// (JWKS, and federation.rs's three live `read_bounded_json` call
+    /// sites, including its own discovery fetch) sees identical behaviour.
+    pub const JWKS_AND_TRANSPORT: Self = Self {
+        max_members: MAX_MEMBERS,
+        max_array_len: MAX_ARRAY_LEN,
+        max_string_len: MAX_STRING_LEN,
+    };
+
+    /// RFC 096 `:531-532`'s own discovery bounds, verbatim: 128 object
+    /// members (same as [`Self::JWKS_AND_TRANSPORT`]), 32 array members,
+    /// 2,048 bytes per string.
+    pub const DISCOVERY: Self = Self {
+        max_members: MAX_MEMBERS,
+        max_array_len: 32,
+        max_string_len: 2_048,
+    };
+}
+
 /// Why a response was rejected. `Display` is safe for a server log; the
 /// detail must never reach the browser — every call site here maps this
 /// into whatever its own existing "the fetch failed" surface already is
@@ -179,34 +219,38 @@ async fn read_bounded_bytes(
 }
 
 /// Depth is `serde_json`'s own job (pinned, see the module doc comment);
-/// this walks the already-depth-bounded `Value` for the two caps
-/// `serde_json` does not itself impose.
-pub fn check_caps(value: &serde_json::Value) -> Result<(), BoundsError> {
+/// this walks the already-depth-bounded `Value` for the three caps
+/// `serde_json` does not itself impose. `caps` lets JWKS and discovery
+/// share this one walker while comparing against their own numbers --
+/// see [`ResponseCaps`].
+pub fn check_caps(value: &serde_json::Value, caps: &ResponseCaps) -> Result<(), BoundsError> {
     match value {
         serde_json::Value::Object(map) => {
-            if map.len() > MAX_MEMBERS {
-                return Err(BoundsError::TooManyMembers { limit: MAX_MEMBERS });
+            if map.len() > caps.max_members {
+                return Err(BoundsError::TooManyMembers {
+                    limit: caps.max_members,
+                });
             }
             for v in map.values() {
-                check_caps(v)?;
+                check_caps(v, caps)?;
             }
             Ok(())
         }
         serde_json::Value::Array(items) => {
-            if items.len() > MAX_ARRAY_LEN {
+            if items.len() > caps.max_array_len {
                 return Err(BoundsError::ArrayTooLong {
-                    limit: MAX_ARRAY_LEN,
+                    limit: caps.max_array_len,
                 });
             }
             for v in items {
-                check_caps(v)?;
+                check_caps(v, caps)?;
             }
             Ok(())
         }
         serde_json::Value::String(s) => {
-            if s.len() > MAX_STRING_LEN {
+            if s.len() > caps.max_string_len {
                 return Err(BoundsError::StringTooLong {
-                    limit: MAX_STRING_LEN,
+                    limit: caps.max_string_len,
                 });
             }
             Ok(())
@@ -228,7 +272,7 @@ pub async fn read_bounded_json<T: DeserializeOwned>(
 ) -> Result<T, BoundsError> {
     let bytes = read_bounded_body(resp).await?;
     let value: serde_json::Value = serde_json::from_slice(&bytes).map_err(BoundsError::Json)?;
-    check_caps(&value)?;
+    check_caps(&value, &ResponseCaps::JWKS_AND_TRANSPORT)?;
     serde_json::from_value(value).map_err(BoundsError::Json)
 }
 

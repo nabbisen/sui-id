@@ -97,8 +97,15 @@ async fn token_endpoint_outside_the_allowed_set_receives_no_request() {
                 let token_endpoint = token_endpoint.clone();
                 async move {
                     axum::Json(serde_json::json!({
+                        "issuer": base,
                         "authorization_endpoint": format!("{base}/authorize"),
                         "token_endpoint": token_endpoint,
+                        "response_types_supported": ["code"],
+                        "code_challenge_methods_supported": ["S256"],
+                        "authorization_response_iss_parameter_supported": true,
+                        "token_endpoint_auth_methods_supported": ["client_secret_basic"],
+                        "id_token_signing_alg_values_supported": ["RS256"],
+                        "subject_types_supported": ["public"],
                     }))
                 }
             }),
@@ -145,14 +152,24 @@ async fn authorization_endpoint_outside_the_allowed_set_is_rejected_at_start() {
     complete_setup_and_login(&state).await;
     state.http_client = Arc::new(federation_test_client(sui_id::resolver::ValidatingResolver));
 
-    let discovery_issuer = serve_https(move |_base| {
+    let discovery_issuer = serve_https(move |base| {
         axum::Router::new().route(
             "/.well-known/openid-configuration",
-            axum::routing::get(|| async move {
-                axum::Json(serde_json::json!({
-                    "authorization_endpoint": "https://evil.example.com/authorize",
-                    "token_endpoint": "https://evil.example.com/token",
-                }))
+            axum::routing::get(move || {
+                let base = base.clone();
+                async move {
+                    axum::Json(serde_json::json!({
+                        "issuer": base,
+                        "authorization_endpoint": "https://evil.example.com/authorize",
+                        "token_endpoint": "https://evil.example.com/token",
+                        "response_types_supported": ["code"],
+                        "code_challenge_methods_supported": ["S256"],
+                        "authorization_response_iss_parameter_supported": true,
+                        "token_endpoint_auth_methods_supported": ["client_secret_basic"],
+                        "id_token_signing_alg_values_supported": ["RS256"],
+                        "subject_types_supported": ["public"],
+                    }))
+                }
             }),
         )
     })
@@ -225,8 +242,15 @@ async fn a_second_configured_origin_is_accepted_end_to_end() {
                 let token_endpoint = token_endpoint.clone();
                 async move {
                     axum::Json(serde_json::json!({
+                        "issuer": base,
                         "authorization_endpoint": format!("{base}/authorize"),
                         "token_endpoint": token_endpoint,
+                        "response_types_supported": ["code"],
+                        "code_challenge_methods_supported": ["S256"],
+                        "authorization_response_iss_parameter_supported": true,
+                        "token_endpoint_auth_methods_supported": ["client_secret_basic"],
+                        "id_token_signing_alg_values_supported": ["RS256"],
+                        "subject_types_supported": ["public"],
                     }))
                 }
             }),

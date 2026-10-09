@@ -24,8 +24,15 @@ use sui_id::build_router;
 /// The fixture's discovery document, naming its own endpoints under `base`.
 fn discovery_body(base: &str) -> String {
     serde_json::json!({
+        "issuer": base,
         "authorization_endpoint": format!("{base}/authorize"),
         "token_endpoint": format!("{base}/token"),
+        "response_types_supported": ["code"],
+        "code_challenge_methods_supported": ["S256"],
+        "authorization_response_iss_parameter_supported": true,
+        "token_endpoint_auth_methods_supported": ["client_secret_basic"],
+        "id_token_signing_alg_values_supported": ["RS256"],
+        "subject_types_supported": ["public"],
     })
     .to_string()
 }
