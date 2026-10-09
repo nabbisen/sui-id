@@ -231,6 +231,18 @@ close the shipped defect.
   well-known derivation vectors driven end to end through real TLS — including
   the RFC 8414 insert-before-path form, which must never be requested.
 
+### Dispatched and open
+
+- [`read-path-audit-2026-10-09.md`](read-path-audit-2026-10-09.md)
+  — **DISPATCHED, this is the open work.** Authorized as its own task and
+  sequenced **before** 096-B1 stage 0, because its output is what stage 0
+  converts. The question is whether anything reached from a read-shaped call
+  site actually writes: `with_conn` hands out `&Connection` and
+  `rusqlite::Connection::execute` takes `&self`, so a write is *reachable* from
+  all 332 call sites with nothing in the type to stop it. 184 are in non-test
+  `src`. An audit only — no behaviour changes — and a real write found on a read
+  path stays out of git per `SECURITY.md`.
+
 ### Next: 096-B1
 
 - [`096-b1-stage-plan-2026-10-09.md`](096-b1-stage-plan-2026-10-09.md)
