@@ -206,17 +206,16 @@ implementation role reads.
 
 ### Dispatched and open
 
-- [`stage7-the-nonce-rule-2026-10-09.md`](stage7-the-nonce-rule-2026-10-09.md)
-  — **DISPATCHED, this is the open work.** The nonce validation *rule* only:
-  hash the claim and compare in constant time to a supplied digest, with the
-  expected digest as a parameter, since what makes a nonce genuinely one-time is
-  a mutation and belongs to 096-B1 (`:65-66`). Dispatched with the three
-  primitives already in the tree measured, so a third copy of none of them gets
-  written: SHA-256 settled by `:579`'s `nonce_sha256` column,
-  `sui_id_core::oidc::tokens::sha256_hex` already public and vector-tested, and
-  `subtle::ConstantTimeEq` already used at five call sites.
-  **When this lands, token substitution closes** — `aud`, `iss` and the nonce
-  are then all bound.
+- [`stage8-the-discovery-profile-2026-10-09.md`](stage8-the-discovery-profile-2026-10-09.md)
+  — **DISPATCHED, this is the open work.** The twelve-member metadata table at
+  RFC 096 `:537-549` and the document bounds at `:530-533`. `RawDiscovery`
+  deserializes four of the twelve; the document's own `issuer` is never read, so
+  an upstream issuer is compared at neither level. Carries a measured conflict
+  to resolve rather than a instruction: `response_bounds` matches the RFC on
+  body bytes and object members but is **4x too loose** on array members (128 vs
+  32) and strings (8 KiB vs 2,048), and its constants belong to JWKS and the
+  shared transport, so they cannot simply be tightened.
+  **This is the last of `:21`'s nine attack categories still open.**
 
 ### Open with the owner
 
@@ -230,6 +229,17 @@ implementation role reads.
   which is the reasoning this RFC's `aud` design already rejected.
 
 ### Landed
+
+- [`stage7-the-nonce-rule-2026-10-09.md`](stage7-the-nonce-rule-2026-10-09.md)
+  — **landed, Level B. Token substitution closes with it:** `aud`, `iss` and the
+  nonce are all bound now, which is what defeats a substituted token. The rule
+  only — the expected digest is a parameter, since what makes a nonce genuinely
+  one-time is a mutation and belongs to 096-B1 (`:65-66`). It corrected this
+  dispatch's own import path: `tokens` is declared `#[path = "oidc/tokens.rs"]
+  pub mod tokens` off `sui-id-core`'s root, so `oidc` is a directory, not a
+  module segment. The `ct_eq` -> `==` mutation survives and is reported as
+  surviving: a constant-time property is not observable from a return value, and
+  a test contrived to appear to catch it would be worse than the honest report.
 
 - [`stage6c-optional-claims-and-the-capability-2026-10-08.md`](stage6c-optional-claims-and-the-capability-2026-10-08.md)
   and
