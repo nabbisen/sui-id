@@ -206,31 +206,17 @@ implementation role reads.
 
 ### Dispatched and open
 
-- [`stage8-fix-pin-the-shared-caps-and-canonical-urls-2026-10-09.md`](stage8-fix-pin-the-shared-caps-and-canonical-urls-2026-10-09.md)
-  — **DISPATCHED, this is the open work.** Two narrow items on an otherwise
-  accepted stage 8. The `check_caps` parameterisation is kept, but nothing pins
-  which caps the *shared* path passes: swapping them for discovery's leaves the
-  whole workspace green, and a conforming ID token at RFC 096's own claim bounds
-  (`name` 1,024 B, `preferred_username` 512 B) is 3,023 bytes, so the mix-up
-  would reject tokens the RFC declares valid. And `:553`'s *"noncanonical URL"*
-  is still unenforced — `check_endpoint` returns the raw string, so
-  `https://host:443/token`, `https://HOST/token` and `https://host/a/../token`
-  all pass and are kept unnormalised.
-- [`stage8-the-discovery-profile-2026-10-09.md`](stage8-the-discovery-profile-2026-10-09.md)
-  — **RETURNED**, substance accepted. The eleven metadata rows (not twelve —
-  `userinfo_endpoint` is not one of the RFC's own), the parameterised
-  `check_caps` with JWKS's numbers provably unchanged, and the deferred
-  cross-checks. Its IP-literal/reserved-hostname reversal is **confirmed**: an
-  IP-literal URL is perfectly canonical, `:294`'s reserved-host rule guards the
-  operator's own configured issuer rather than an upstream's claim, and loopback
-  is already denied by RFC 134 D2's resolver where it belongs.
-
-  **It also corrected the dispatch's closure claim, and was right.**
-  `ValidatedDiscovery::validate` has exactly one non-test caller, in a file
-  096-A may not touch, so nine of eleven rows go live with this stage while the
-  two cross-checks and the tightened document bounds do not. **Discovery's
-  category closes at the validation layer, not on the live path** — recorded
-  here because the closure assessment has to say so.
+- [`stage9-the-remaining-corpus-rows-2026-10-09.md`](stage9-the-remaining-corpus-rows-2026-10-09.md)
+  — **DISPATCHED, this is the open work, and the last stage of 096-A.** Collects
+  `validation-matrix.md`'s Claims (sixteen rows) and Discovery (five plus the
+  well-known vectors) sections, which stage 5 could not cover because nothing
+  implemented them. Not pure collection: three things the matrix explicitly
+  requires are measured as untested — the **exponential** NumericDate form, a
+  valid multi-byte Unicode `sub` **accepted** and preserved byte-identically,
+  and the well-known derivation vectors for a root versus a path issuer with
+  the RFC 8414 insert form rejected. Every row must also name **which layer**
+  proves it, because stage 8's two cross-checks and tightened bounds are
+  implemented and not live.
 
 ### Open with the owner
 
@@ -244,6 +230,29 @@ implementation role reads.
   which is the reasoning this RFC's `aud` design already rejected.
 
 ### Landed
+
+- [`stage8-the-discovery-profile-2026-10-09.md`](stage8-the-discovery-profile-2026-10-09.md)
+  and
+  [`stage8-fix-pin-the-shared-caps-and-canonical-urls-2026-10-09.md`](stage8-fix-pin-the-shared-caps-and-canonical-urls-2026-10-09.md)
+  — **landed together, Level B.** The eleven metadata rows, the document bounds,
+  the canonical-URL rule, and `check_caps` parameterised so one walker serves
+  two sets of numbers with JWKS's provably unchanged. Returned once: nothing
+  pinned which caps the *shared* path passed, and a conforming ID token at RFC
+  096's own claim bounds is 3,023 bytes, so a mix-up would have rejected tokens
+  the RFC declares valid. `:553`'s *"noncanonical URL"* was also unenforced —
+  `check_endpoint` returned the raw string, so an explicit `:443`, an uppercase
+  host and a `/a/../token` path all survived unnormalised.
+  The IP-literal/reserved-hostname reversal is **confirmed**: an IP-literal URL
+  is canonical, `:294`'s reserved-host rule guards the operator's own issuer
+  rather than an upstream's claim, and loopback is already denied by RFC 134
+  D2's resolver. Probing the canonical predicate found only one divergence, an
+  IDN host, where refusal is correct — a non-ASCII host is an IRI and the
+  A-label is the canonical URI.
+
+  **Discovery's attack category closes at the validation layer, not on the live
+  path.** `validate` has one non-test caller, in a file 096-A may not touch, so
+  nine of eleven rows are live and the two cross-checks plus the tightened
+  bounds are not. A standing limitation for the closure assessment.
 
 - [`stage7-the-nonce-rule-2026-10-09.md`](stage7-the-nonce-rule-2026-10-09.md)
   — **landed, Level B. Token substitution closes with it:** `aud`, `iss` and the
