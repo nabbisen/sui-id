@@ -210,13 +210,13 @@ implementation role reads.
 [`096-a-completion-assessment-2026-10-09.md`](096-a-completion-assessment-2026-10-09.md)
 — Level B on CI run `37911563157` (commit `56c91de`, 27 jobs, 0 skipped,
 covering all 24 `[gate_owners]` entries). It **recommends** acceptance and does
-not grant it. `:21` reserves that to `@nabbisen`, *"on the architect's
+not grant it. `:23` reserves that to `@nabbisen`, *"on the architect's
 assessment"*. **RFC 096 does not
 close here** — closure is per stage, 096-B1/B2/C remain, and the RFC stays
 Accepted.
 
 Three limitations are part of what is being accepted, not caveats to it: stages
-6a–7 are **entirely dormant** (zero production callers, which is `:72-73`
+6a–7 are **entirely dormant** (zero production callers, which is `:74-75`
 working as written); discovery is live for nine of eleven metadata rules while
 the two cross-checks and the tightened bounds are inert; and 096-A does not
 close the shipped defect.
@@ -234,11 +234,11 @@ close the shipped defect.
 ### Open with the owner
 
 - [`exp-boundary-strictness-2026-10-08.md`](exp-boundary-strictness-2026-10-08.md)
-  — **DECISION REQUEST, blocking nothing.** RFC 096 `:660` states `exp`'s rule
-  as the strict `now < exp + 60s`, while `:661` and `:662` state `iat`'s and
+  — **DECISION REQUEST, blocking nothing.** RFC 096 `:662` states `exp`'s rule
+  as the strict `now < exp + 60s`, while `:663` and `:664` state `iat`'s and
   `nbf`'s non-strictly. `jsonwebtoken` accepts at `now <= exp + 60`, so the RFC
   refuses one instant that the implementation accepts. Recommendation: amend
-  `:660` to non-strict, matching its own two siblings and what has always been
+  `:662` to non-strict, matching its own two siblings and what has always been
   built. Enforcing it in our own code instead would put one rule in two places,
   which is the reasoning this RFC's `aud` design already rejected.
 
@@ -252,11 +252,11 @@ close the shipped defect.
   two sets of numbers with JWKS's provably unchanged. Returned once: nothing
   pinned which caps the *shared* path passed, and a conforming ID token at RFC
   096's own claim bounds is 3,023 bytes, so a mix-up would have rejected tokens
-  the RFC declares valid. `:553`'s *"noncanonical URL"* was also unenforced —
-  `check_endpoint` returned the raw string, so an explicit `:443`, an uppercase
+  the RFC declares valid. `:555`'s *"noncanonical URL"* was also unenforced —
+  `check_endpoint` returned the raw string, so an explicit `:445`, an uppercase
   host and a `/a/../token` path all survived unnormalised.
   The IP-literal/reserved-hostname reversal is **confirmed**: an IP-literal URL
-  is canonical, `:294`'s reserved-host rule guards the operator's own issuer
+  is canonical, `:296`'s reserved-host rule guards the operator's own issuer
   rather than an upstream's claim, and loopback is already denied by RFC 134
   D2's resolver. Probing the canonical predicate found only one divergence, an
   IDN host, where refusal is correct — a non-ASCII host is an IRI and the
@@ -271,7 +271,7 @@ close the shipped defect.
   — **landed, Level B. Token substitution closes with it:** `aud`, `iss` and the
   nonce are all bound now, which is what defeats a substituted token. The rule
   only — the expected digest is a parameter, since what makes a nonce genuinely
-  one-time is a mutation and belongs to 096-B1 (`:65-66`). It corrected this
+  one-time is a mutation and belongs to 096-B1 (`:67-68`). It corrected this
   dispatch's own import path: `tokens` is declared `#[path = "oidc/tokens.rs"]
   pub mod tokens` off `sui-id-core`'s root, so `oidc` is a directory, not a
   module segment. The `ct_eq` -> `==` mutation survives and is reported as
@@ -282,9 +282,9 @@ close the shipped defect.
   and
   [`stage6c-fix-bound-boundaries-and-mailbox-shape-2026-10-09.md`](stage6c-fix-bound-boundaries-and-mailbox-shape-2026-10-09.md)
   — **landed together, Level B.** The eight bounded optional claims and the
-  sealed construction capability of RFC 096 `:687-689`, which carries no raw
+  sealed construction capability of RFC 096 `:689-691`, which carries no raw
   token, nonce or access token. Returned once: every numeric bound could be
-  tightened by one with all 487 tests passing, and because `:679-681` rejects
+  tightened by one with all 487 tests passing, and because `:681-683` rejects
   the whole token for a malformed optional claim, a bound one too tight fails
   the login rather than truncating a hint. Nine accepting-side tests now pin
   each bound at its limit — nine rather than the seven I asked for, because
@@ -325,22 +325,22 @@ close the shipped defect.
   itself. The scan moved into `verify_id_token_against_jwks` before `decode`
   with its own error variant, which deleted `raw_payload` and four other things
   — the fix was net-negative in lines, and stopped retaining nonce-bearing
-  bytes that RFC 096 `:687-689` forbids the capability to hold.
+  bytes that RFC 096 `:689-691` forbids the capability to hold.
   **One of 096-A's four open attack categories closes: issuer.**
 
 **096-A is fifteen stages, not nine.** Stage 5's closure assessment
 (`.git-exclude/reviewed/rfc-096-a-stage5-hostile-provider-corpus-2026-10-08.md`)
-checked 096-A against RFC 096 `:21`'s closure prerequisite rather than against
-the stage plan, and found two whole areas of its scope sentence (`:57-61`)
+checked 096-A against RFC 096 `:23`'s closure prerequisite rather than against
+the stage plan, and found two whole areas of its scope sentence (`:59-63`)
 unimplemented:
 
 - **Claim validation and the nonce rule.** Four of the prerequisite's nine
   attack categories are open — token substitution, nonce, issuer and audience.
   `validate_aud = false` at `id_token.rs:399`, no issuer comparison anywhere,
-  and `nonce()` at `:376` exposes the claim without comparing it.
+  and `nonce()` at `:378` exposes the claim without comparing it.
 - **The upstream discovery profile.** `discovery.rs` validates the configured
   issuer and every endpoint origin (RFC 134), but the metadata table at
-  `:537-549` requires twelve members and `RawDiscovery` deserializes four. The
+  `:539-551` requires twelve members and `RawDiscovery` deserializes four. The
   document's own `issuer` is never read, and nor are
   `code_challenge_methods_supported`,
   `authorization_response_iss_parameter_supported` or
@@ -392,7 +392,7 @@ construction capability, **7** the nonce rule, **8** the discovery profile,
   outside the verifying functions, proven by a compile-fail fixture.
 
 - [`stage3b-jwks-key-selection-2026-10-07.md`](stage3b-jwks-key-selection-2026-10-07.md)
-  — **landed `911dfed`.** RFC 096 `:641-646`'s selection rules, 13 refusal
+  — **landed `911dfed`.** RFC 096 `:643-648`'s selection rules, 13 refusal
   variants, 28 new tests. The private-key rule reads the raw JSON, because the
   library's typed struct silently drops `d`/`p`/`q`; proven by mutation.
 
@@ -424,20 +424,20 @@ construction capability, **7** the nonce rule, **8** the discovery profile,
 
 
   *Stage 4's cache work was split into 4b/4c/4d on 2026-10-07, after reading
-  `:823-924` line by line rather than by its heading. It is three separable
+  `:825-926` line by line rather than by its heading. It is three separable
   concerns, and one dispatch covering all of them would be the largest of this
   RFC and effectively unreviewable. **Nothing in 096-A routes to production**;
   096-B1 does that.*
 - **Stage 5** — the hostile-provider corpus driving every negative row of the
   validation matrix.
-- **Stages 6a, 6b, 6c** — the required claim matrix (RFC 096 `:652-688`):
+- **Stages 6a, 6b, 6c** — the required claim matrix (RFC 096 `:654-690`):
   identity claims, time claims, then the bounded optional claims and the
   construction capability that carries no raw token or nonce.
 - **Stage 7** — the nonce validation *rule*: constant-time digest comparison
   against a supplied expected digest. The durable attempt state that makes a
-  nonce genuinely one-time is 096-B1, per RFC 096 `:65-66`.
+  nonce genuinely one-time is 096-B1, per RFC 096 `:67-68`.
 - **Stage 8** — the upstream discovery profile: the twelve-member metadata
-  table at RFC 096 `:537-549`, the document bounds at `:530-533`, and the
+  table at RFC 096 `:539-551`, the document bounds at `:532-535`, and the
   `id_token_signing_alg_values_supported` intersection that constrains the
   runtime algorithm set.
 - **Stage 9** — the corpus rows stage 5 could not cover because nothing
