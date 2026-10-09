@@ -246,7 +246,7 @@ close the shipped defect.
 ### Next: 096-B1
 
 - [`096-b1-stage-plan-2026-10-09.md`](096-b1-stage-plan-2026-10-09.md)
-  — **awaiting authorization; nothing dispatched.** Nine stages, checked against
+  — **AUTHORIZED 2026-10-09.** Nine stages, checked against
   `:23` and `:83-85` **before** stage 1 rather than after stage 9, which is how
   096-A's plan came to be nine stages for fifteen stages of work.
   **096-B1 is the stage that closes the shipped defect** (`:87`): everything
