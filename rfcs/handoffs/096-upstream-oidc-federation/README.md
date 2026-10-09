@@ -231,6 +231,25 @@ close the shipped defect.
   well-known derivation vectors driven end to end through real TLS — including
   the RFC 8414 insert-before-path form, which must never be requested.
 
+### Next: 096-B1
+
+- [`096-b1-stage-plan-2026-10-09.md`](096-b1-stage-plan-2026-10-09.md)
+  — **awaiting authorization; nothing dispatched.** Nine stages, checked against
+  `:23` and `:83-85` **before** stage 1 rather than after stage 9, which is how
+  096-A's plan came to be nine stages for fifteen stages of work.
+  **096-B1 is the stage that closes the shipped defect** (`:87`): everything
+  096-A built in stages 6a–7 has zero production callers, and stage 4 is where
+  every validator gains its first.
+  `:104-105`'s open question is resolved in M2a's favour — `Database::protocol()`
+  is a complete runner — so 096-B1 does **not** move to M2b.
+- [`readconn-prerequisite-decision-2026-10-09.md`](readconn-prerequisite-decision-2026-10-09.md)
+  — **settled.** `ReadConn`, one of the four M2a foundation pieces `:89-93` names
+  as required, did not exist; reads go through an untyped connection and neither
+  control RFC 094's amendments attach to it was built. M2a closed legitimately
+  against its seven criteria, which never mention it — the second instance of a
+  prose-versus-criteria divergence in that RFC. **Building it is 096-B1's stage
+  0.**
+
 ### Open with the owner
 
 - [`exp-boundary-strictness-2026-10-08.md`](exp-boundary-strictness-2026-10-08.md)
