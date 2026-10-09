@@ -233,15 +233,27 @@ close the shipped defect.
 
 ### Dispatched and open
 
-- [`read-path-audit-2026-10-09.md`](read-path-audit-2026-10-09.md)
-  — **DISPATCHED, this is the open work.** Authorized as its own task and
-  sequenced **before** 096-B1 stage 0, because its output is what stage 0
-  converts. The question is whether anything reached from a read-shaped call
-  site actually writes: `with_conn` hands out `&Connection` and
-  `rusqlite::Connection::execute` takes `&self`, so a write is *reachable* from
-  all 332 call sites with nothing in the type to stop it. 184 are in non-test
-  `src`. An audit only — no behaviour changes — and a real write found on a read
-  path stays out of git per `SECURITY.md`.
+- [`stage0-readconn-2026-10-09.md`](stage0-readconn-2026-10-09.md)
+  — **DISPATCHED, this is the open work.** 096-B1's stage 0: `ReadConn` as a
+  typed read-only handle, the per-statement `sqlite3_stmt_readonly`
+  interrogation, the `functions`/`vtab`/`load_extension` feature assertion, and
+  the conversion of the 77 READ sites the audit identified. The 86 WRITE sites
+  are not candidates and stay as they are.
+
+### Landed
+
+- [`read-path-audit-result-2026-10-09.md`](read-path-audit-result-2026-10-09.md)
+  — **answered: no.** No non-test call site reached through
+  `with_conn`/`with_conn_sync` whose name signals a read also writes. Recorded in
+  git because it is not a security finding, per its dispatch's own rule. The
+  verdict survived an independent check: a mechanical hunt for the defect shape
+  across every lookup-named non-test function produced two candidates, both
+  false positives of the architect's own regex. The audit's own unreconciled
+  count was the architect's error — the dispatch's 332/184 was inflated by 19
+  non-call-sites, and 313 is correct. Two of its observations went into stage 0:
+  the `sqlite3_stmt_readonly` check must run continuously rather than be an
+  audit result, and every WRITE site is a single-statement `with_conn` write, so
+  stage 0 converts only the READ list.
 
 ### Next: 096-B1
 
