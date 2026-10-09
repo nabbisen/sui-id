@@ -233,6 +233,44 @@ close the shipped defect.
 
 ### Dispatched and open
 
+- [`stage0-fix-side-effecting-readonly-statements-2026-10-10.md`](stage0-fix-side-effecting-readonly-statements-2026-10-10.md)
+  — **DISPATCHED, this is the open work.** One item on an otherwise accepted
+  stage 0. `ReadConn` accepts a class of statements `sqlite3_stmt_readonly`
+  reports read-only that nonetheless have effects — `ATTACH`, `DETACH`, `BEGIN`,
+  `COMMIT`, `ROLLBACK`, `SAVEPOINT`, `RELEASE`. Proven by executing `ATTACH`
+  through a legitimate `&ReadConn` and watching the file appear. Transaction
+  control is the sharper half: a `BEGIN` inside a `with_read` closure outlives
+  the closure on a pooled connection. The fix is the first-token refusal the
+  stage already built for `PRAGMA`, extended to the class — their reasoning one
+  step further, not a correction of it.
+- [`stage0-readconn-2026-10-09.md`](stage0-readconn-2026-10-09.md)
+  — **RETURNED**, everything but that item accepted: the `ReadConn`/`ReadStatement`
+  types with `execute` absent from the type rather than refused at runtime, the
+  `sqlite3_stmt_readonly` interrogation, the unconditional `PRAGMA` refusal
+  (found by reading `rusqlite`'s own `// does not work for PRAGMA` at
+  `raw_statement.rs:239`), five `compile_fail` fixtures, three feature
+  assertions that probe the *resolved* feature set rather than the declared one —
+  stronger than manifest parsing, because Cargo's unification can enable a
+  feature from anywhere in the graph — and 67 of 68 READ sites converted with
+  the one exception reported.
+
+  **It also corrected the dispatch's site count**, which had repeated a figure
+  the audit's own review had flagged as unreliable: 68 READ across 26 files, not
+  77 across 23. The audit's WRITE figure was wrong too, 95 rather than 86, and
+  68 + 95 = 163 reconciles exactly to its own non-test total.
+
+### Landed
+
+- [`stage9-the-remaining-corpus-rows-2026-10-09.md`](stage9-the-remaining-corpus-rows-2026-10-09.md)
+  — **landed `56c91de`, Level B.** The Claims and Discovery sections of
+  `validation-matrix.md`, each row carrying the layer that proves it, plus the
+  three rows the matrix demanded and nothing tested: the exponential NumericDate
+  spelling, a multi-byte Unicode `sub` proven to return byte-identical, and the
+  well-known derivation vectors driven end to end through real TLS — including
+  the RFC 8414 insert-before-path form, which must never be requested.
+
+### Dispatched and open
+
 - [`stage0-readconn-2026-10-09.md`](stage0-readconn-2026-10-09.md)
   — **DISPATCHED, this is the open work.** 096-B1's stage 0: `ReadConn` as a
   typed read-only handle, the per-statement `sqlite3_stmt_readonly`
