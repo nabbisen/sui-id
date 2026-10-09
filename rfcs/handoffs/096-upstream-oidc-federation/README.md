@@ -206,16 +206,31 @@ implementation role reads.
 
 ### Dispatched and open
 
+- [`stage8-fix-pin-the-shared-caps-and-canonical-urls-2026-10-09.md`](stage8-fix-pin-the-shared-caps-and-canonical-urls-2026-10-09.md)
+  — **DISPATCHED, this is the open work.** Two narrow items on an otherwise
+  accepted stage 8. The `check_caps` parameterisation is kept, but nothing pins
+  which caps the *shared* path passes: swapping them for discovery's leaves the
+  whole workspace green, and a conforming ID token at RFC 096's own claim bounds
+  (`name` 1,024 B, `preferred_username` 512 B) is 3,023 bytes, so the mix-up
+  would reject tokens the RFC declares valid. And `:553`'s *"noncanonical URL"*
+  is still unenforced — `check_endpoint` returns the raw string, so
+  `https://host:443/token`, `https://HOST/token` and `https://host/a/../token`
+  all pass and are kept unnormalised.
 - [`stage8-the-discovery-profile-2026-10-09.md`](stage8-the-discovery-profile-2026-10-09.md)
-  — **DISPATCHED, this is the open work.** The twelve-member metadata table at
-  RFC 096 `:537-549` and the document bounds at `:530-533`. `RawDiscovery`
-  deserializes four of the twelve; the document's own `issuer` is never read, so
-  an upstream issuer is compared at neither level. Carries a measured conflict
-  to resolve rather than a instruction: `response_bounds` matches the RFC on
-  body bytes and object members but is **4x too loose** on array members (128 vs
-  32) and strings (8 KiB vs 2,048), and its constants belong to JWKS and the
-  shared transport, so they cannot simply be tightened.
-  **This is the last of `:21`'s nine attack categories still open.**
+  — **RETURNED**, substance accepted. The eleven metadata rows (not twelve —
+  `userinfo_endpoint` is not one of the RFC's own), the parameterised
+  `check_caps` with JWKS's numbers provably unchanged, and the deferred
+  cross-checks. Its IP-literal/reserved-hostname reversal is **confirmed**: an
+  IP-literal URL is perfectly canonical, `:294`'s reserved-host rule guards the
+  operator's own configured issuer rather than an upstream's claim, and loopback
+  is already denied by RFC 134 D2's resolver where it belongs.
+
+  **It also corrected the dispatch's closure claim, and was right.**
+  `ValidatedDiscovery::validate` has exactly one non-test caller, in a file
+  096-A may not touch, so nine of eleven rows go live with this stage while the
+  two cross-checks and the tightened document bounds do not. **Discovery's
+  category closes at the validation layer, not on the live path** — recorded
+  here because the closure assessment has to say so.
 
 ### Open with the owner
 
