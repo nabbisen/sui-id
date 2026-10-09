@@ -7,13 +7,10 @@ const META_KEY_INITIALIZED: &str = "initialized";
 
 /// Returns true once the initial admin has been created and setup is closed.
 pub fn is_initialized(db: &Database) -> StoreResult<bool> {
-    db.with_conn_sync(|conn| {
+    db.with_read_sync(|conn| {
         let v: Option<String> = conn
-            .query_row(
-                "SELECT value FROM sui_meta WHERE key = ?1",
-                [META_KEY_INITIALIZED],
-                |r| r.get(0),
-            )
+            .prepare("SELECT value FROM sui_meta WHERE key = ?1")?
+            .query_row([META_KEY_INITIALIZED], |r| r.get(0))
             .ok();
         Ok(v.as_deref() == Some("true"))
     })
@@ -33,8 +30,10 @@ pub fn mark_initialized(db: &Database) -> StoreResult<()> {
 /// Number of users currently present (including disabled/deleted) — used for
 /// safe-fail on initialization checks.
 pub fn user_count(db: &Database) -> StoreResult<i64> {
-    db.with_conn_sync(|conn| {
-        let n: i64 = conn.query_row("SELECT COUNT(*) FROM users", [], |r| r.get(0))?;
+    db.with_read_sync(|conn| {
+        let n: i64 = conn
+            .prepare("SELECT COUNT(*) FROM users")?
+            .query_row([], |r| r.get(0))?;
         Ok(n)
     })
 }

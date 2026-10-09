@@ -69,9 +69,10 @@ pub async fn insert(db: &Database, row: &WebauthnPendingRow) -> StoreResult<()> 
 }
 
 pub async fn get(db: &Database, id: WebauthnPendingId) -> StoreResult<Option<WebauthnPendingRow>> {
-    db.with_conn(move |conn| {
+    db.with_read(move |conn| {
         Ok(conn
-            .query_row(&format!("{SELECT} WHERE id = ?1"), [id.to_string()], map)
+            .prepare(&format!("{SELECT} WHERE id = ?1"))?
+            .query_row([id.to_string()], map)
             .optional()?)
     })
     .await

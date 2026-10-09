@@ -1,0 +1,5 @@
+error[E0599]: no method named `execute` found for struct `ReadStatement<'a>` in the current scope
+  --> tests/compile_fail/write_cannot_be_expressed_through_read_conn.rs:11:10
+   |
+11 |     stmt.execute([]).unwrap();
+   |          ^^^^^^^ method not found in `ReadStatement<'_>`

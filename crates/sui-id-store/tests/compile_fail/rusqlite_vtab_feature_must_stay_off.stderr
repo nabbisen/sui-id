@@ -1,0 +1,27 @@
+error[E0433]: cannot find `vtab` in `rusqlite`
+ --> tests/compile_fail/rusqlite_vtab_feature_must_stay_off.rs:6:28
+  |
+6 | fn attempt(kind: rusqlite::vtab::VTabKind) -> rusqlite::vtab::VTabKind {
+  |                            ^^^^ could not find `vtab` in `rusqlite`
+  |
+note: found an item that was configured out
+ --> $CARGO/rusqlite-$VERSION/src/lib.rs
+  |
+  | #[cfg(feature = "vtab")]
+  |       ---------------- the item is gated behind the `vtab` feature
+  | pub mod vtab;
+  |         ^^^^
+
+error[E0433]: cannot find `vtab` in `rusqlite`
+ --> tests/compile_fail/rusqlite_vtab_feature_must_stay_off.rs:6:57
+  |
+6 | fn attempt(kind: rusqlite::vtab::VTabKind) -> rusqlite::vtab::VTabKind {
+  |                                                         ^^^^ could not find `vtab` in `rusqlite`
+  |
+note: found an item that was configured out
+ --> $CARGO/rusqlite-$VERSION/src/lib.rs
+  |
+  | #[cfg(feature = "vtab")]
+  |       ---------------- the item is gated behind the `vtab` feature
+  | pub mod vtab;
+  |         ^^^^

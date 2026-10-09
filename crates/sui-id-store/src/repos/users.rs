@@ -156,32 +156,26 @@ pub async fn set_preferred_lang(
 }
 
 pub async fn get(db: &Database, id: UserId) -> StoreResult<UserRow> {
-    db.with_conn(move |conn| {
-        conn.query_row(
-            &format!("{SELECT_USER} WHERE id = ?1"),
-            [id.to_string()],
-            map_row,
-        )
-        .map_err(|e| match e {
-            rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
-            other => StoreError::from(other),
-        })
+    db.with_read(move |conn| {
+        conn.prepare(&format!("{SELECT_USER} WHERE id = ?1"))?
+            .query_row([id.to_string()], map_row)
+            .map_err(|e| match e {
+                rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
+                other => StoreError::from(other),
+            })
     })
     .await
 }
 
 pub async fn find_by_username(db: &Database, username: &str) -> StoreResult<UserRow> {
     let username = username.to_owned();
-    db.with_conn(move |conn| {
-        conn.query_row(
-            &format!("{SELECT_USER} WHERE username = ?1"),
-            [username],
-            map_row,
-        )
-        .map_err(|e| match e {
-            rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
-            other => StoreError::from(other),
-        })
+    db.with_read(move |conn| {
+        conn.prepare(&format!("{SELECT_USER} WHERE username = ?1"))?
+            .query_row([username], map_row)
+            .map_err(|e| match e {
+                rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
+                other => StoreError::from(other),
+            })
     })
     .await
 }
@@ -197,7 +191,7 @@ pub async fn find_by_email_normalized(
     normalized: &str,
 ) -> StoreResult<Option<UserRow>> {
     let normalized = normalized.to_owned();
-    db.with_conn(move |conn| {
+    db.with_read(move |conn| {
         let mut stmt = conn.prepare(&format!("{SELECT_USER} WHERE email_normalized = ?1"))?;
         let res = stmt.query_row([normalized], map_row);
         match res {
@@ -221,7 +215,7 @@ pub async fn find_by_email(db: &Database, email: &str) -> StoreResult<Option<Use
 /// notification path) that legitimately want to no-op on a missing
 /// row instead of treating it as an error.
 pub async fn find_by_id_opt(db: &Database, id: UserId) -> StoreResult<Option<UserRow>> {
-    db.with_conn(move |conn| {
+    db.with_read(move |conn| {
         let mut stmt = conn.prepare(&format!("{SELECT_USER} WHERE id = ?1"))?;
         let res = stmt.query_row([id.to_string()], map_row);
         match res {
@@ -234,7 +228,7 @@ pub async fn find_by_id_opt(db: &Database, id: UserId) -> StoreResult<Option<Use
 }
 
 pub async fn list(db: &Database) -> StoreResult<Vec<UserRow>> {
-    db.with_conn(move |conn| {
+    db.with_read(move |conn| {
         let mut stmt = conn.prepare(&format!("{SELECT_USER} ORDER BY created_at ASC"))?;
         let rows = stmt
             .query_map([], map_row)?
@@ -603,7 +597,7 @@ pub async fn resolve_usernames(
         placeholders.join(", ")
     );
     let id_strings: Vec<String> = ids.iter().map(|id| id.to_string()).collect();
-    db.with_conn(move |conn| {
+    db.with_read(move |conn| {
         let mut stmt = conn.prepare(&sql)?;
         let params: Vec<rusqlite::types::Value> = id_strings
             .iter()
@@ -632,9 +626,10 @@ pub async fn resolve_usernames(
 /// NOR any WebAuthn credential. A user with no MFA factor at all is the
 /// one we want to surface in the dashboard action items.
 pub async fn count_admins_without_mfa(db: &Database) -> StoreResult<usize> {
-    db.with_conn(move |conn| {
-        let n: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM users u \
+    db.with_read(move |conn| {
+        let n: i64 = conn
+            .prepare(
+                "SELECT COUNT(*) FROM users u \
              WHERE u.is_admin = 1 \
                AND u.is_disabled = 0 \
                AND u.is_deleted = 0 \
@@ -646,9 +641,8 @@ pub async fn count_admins_without_mfa(db: &Database) -> StoreResult<usize> {
                    SELECT 1 FROM user_webauthn_credentials c \
                    WHERE c.user_id = u.id\
                )",
-            [],
-            |row| row.get(0),
-        )?;
+            )?
+            .query_row([], |row| row.get(0))?;
         Ok(n as usize)
     })
     .await
@@ -658,14 +652,14 @@ pub async fn count_admins_without_mfa(db: &Database) -> StoreResult<usize> {
 /// (enabled TOTP secret OR any WebAuthn credential).
 pub async fn has_mfa(db: &Database, user_id: &UserId) -> StoreResult<bool> {
     let uid = user_id.to_string();
-    db.with_conn(move |conn| {
-        let n: i64 = conn.query_row(
-            "SELECT \
+    db.with_read(move |conn| {
+        let n: i64 = conn
+            .prepare(
+                "SELECT \
                 (SELECT COUNT(*) FROM user_totp WHERE user_id = ?1 AND enabled = 1) \
               + (SELECT COUNT(*) FROM user_webauthn_credentials WHERE user_id = ?1)",
-            params![uid],
-            |row| row.get(0),
-        )?;
+            )?
+            .query_row(params![uid], |row| row.get(0))?;
         Ok(n > 0)
     })
     .await
@@ -839,12 +833,10 @@ pub fn get_role_within_tx(
 /// RFC 071: Count non-deleted users whose role = 'admin'.
 /// Used by the last-admin safeguard before a demotion is permitted.
 pub async fn count_admins(db: &Database) -> StoreResult<usize> {
-    db.with_conn(move |conn| {
-        let n: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM users WHERE role = 'admin' AND is_deleted = 0",
-            [],
-            |row| row.get(0),
-        )?;
+    db.with_read(move |conn| {
+        let n: i64 = conn
+            .prepare("SELECT COUNT(*) FROM users WHERE role = 'admin' AND is_deleted = 0")?
+            .query_row([], |row| row.get(0))?;
         Ok(n as usize)
     })
     .await
@@ -895,12 +887,11 @@ pub async fn find_by_external_stable_id(
 ) -> StoreResult<UserRow> {
     let source_str = source.as_str().to_owned();
     let eid = external_stable_id.to_owned();
-    db.with_conn(move |conn| {
-        conn.query_row(
-            &format!("{SELECT_USER} WHERE source = ?1 AND external_stable_id = ?2"),
-            rusqlite::params![source_str, eid],
-            map_row,
-        )
+    db.with_read(move |conn| {
+        conn.prepare(&format!(
+            "{SELECT_USER} WHERE source = ?1 AND external_stable_id = ?2"
+        ))?
+        .query_row(rusqlite::params![source_str, eid], map_row)
         .map_err(|e| match e {
             rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
             other => StoreError::from(other),

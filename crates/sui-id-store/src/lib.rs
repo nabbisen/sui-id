@@ -51,11 +51,13 @@ pub mod errors;
 pub mod metrics;
 pub mod migrations;
 pub mod models;
+pub mod read_conn;
 pub mod registry;
 pub mod repos;
 
 pub use db::Database;
 pub use errors::{StoreError, StoreResult};
+pub use read_conn::{ReadConn, ReadStatement};
 
 #[cfg(test)]
 mod tests_rfc021;

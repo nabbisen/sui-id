@@ -1,0 +1,5 @@
+error[E0599]: no method named `load_extension_disable` found for reference `&Connection` in the current scope
+  --> tests/compile_fail/rusqlite_load_extension_feature_must_stay_off.rs:10:10
+   |
+10 |     conn.load_extension_disable().unwrap();
+   |          ^^^^^^^^^^^^^^^^^^^^^^ method not found in `&Connection`

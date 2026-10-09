@@ -38,7 +38,7 @@ pub struct ConsentGrantView {
 /// client display name. Excludes soft-deleted clients.
 pub async fn list_for_user(db: &Database, user_id: UserId) -> StoreResult<Vec<ConsentGrantView>> {
     let uid = user_id.to_string();
-    db.with_conn(move |conn| {
+    db.with_read(move |conn| {
         let mut stmt = conn.prepare(
             "SELECT uc.client_id, c.name, uc.granted_scopes, uc.granted_at, uc.last_used_at \
              FROM user_consent uc \
@@ -134,13 +134,16 @@ pub async fn get(
     user_id: UserId,
     client_id: ClientId,
 ) -> StoreResult<Option<UserConsentRow>> {
-    db.with_conn(move |conn| {
-        let r = conn.query_row(
-            "SELECT user_id, client_id, granted_scopes, granted_at \
-             FROM user_consent WHERE user_id = ?1 AND client_id = ?2",
-            rusqlite::params![user_id.to_string(), client_id.to_string()],
-            map,
-        );
+    db.with_read(move |conn| {
+        let r = conn
+            .prepare(
+                "SELECT user_id, client_id, granted_scopes, granted_at \
+                 FROM user_consent WHERE user_id = ?1 AND client_id = ?2",
+            )?
+            .query_row(
+                rusqlite::params![user_id.to_string(), client_id.to_string()],
+                map,
+            );
         match r {
             Ok(row) => Ok(Some(row)),
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),

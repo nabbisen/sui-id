@@ -1,0 +1,27 @@
+error[E0433]: cannot find `functions` in `rusqlite`
+  --> tests/compile_fail/rusqlite_functions_feature_must_stay_off.rs:14:27
+   |
+14 | fn attempt() -> rusqlite::functions::FunctionFlags {
+   |                           ^^^^^^^^^ could not find `functions` in `rusqlite`
+   |
+note: found an item that was configured out
+  --> $CARGO/rusqlite-$VERSION/src/lib.rs
+   |
+   | #[cfg(feature = "functions")]
+   |       --------------------- the item is gated behind the `functions` feature
+   | pub mod functions;
+   |         ^^^^^^^^^
+
+error[E0433]: cannot find `functions` in `rusqlite`
+  --> tests/compile_fail/rusqlite_functions_feature_must_stay_off.rs:15:15
+   |
+15 |     rusqlite::functions::FunctionFlags::SQLITE_UTF8
+   |               ^^^^^^^^^ could not find `functions` in `rusqlite`
+   |
+note: found an item that was configured out
+  --> $CARGO/rusqlite-$VERSION/src/lib.rs
+   |
+   | #[cfg(feature = "functions")]
+   |       --------------------- the item is gated behind the `functions` feature
+   | pub mod functions;
+   |         ^^^^^^^^^

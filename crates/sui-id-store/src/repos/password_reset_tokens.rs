@@ -114,7 +114,7 @@ pub async fn find_by_hash(
     token_hash: &[u8],
 ) -> StoreResult<Option<PasswordResetTokenRow>> {
     let token_hash = token_hash.to_vec();
-    db.with_conn(move |conn| {
+    db.with_read(move |conn| {
         let mut stmt = conn.prepare(&format!(
             "SELECT {SELECT_COLUMNS} FROM password_reset_tokens WHERE token_hash = ?1"
         ))?;
@@ -270,14 +270,14 @@ pub async fn count_active_for_user(
     user_id: UserId,
     now: DateTime<Utc>,
 ) -> StoreResult<i64> {
-    db.with_conn(move |conn| {
-        let n: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM password_reset_tokens \
+    db.with_read(move |conn| {
+        let n: i64 = conn
+            .prepare(
+                "SELECT COUNT(*) FROM password_reset_tokens \
              WHERE user_id = ?1 AND consumed_at IS NULL AND revoked_at IS NULL \
                AND expires_at > ?2",
-            params![user_id.to_string(), now],
-            |row| row.get(0),
-        )?;
+            )?
+            .query_row(params![user_id.to_string(), now], |row| row.get(0))?;
         Ok(n)
     })
     .await
@@ -291,13 +291,13 @@ pub async fn count_outstanding(
     now: chrono::DateTime<chrono::Utc>,
 ) -> StoreResult<usize> {
     let now_str = now.to_rfc3339();
-    db.with_conn(move |conn| {
-        let n: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM password_reset_tokens \
+    db.with_read(move |conn| {
+        let n: i64 = conn
+            .prepare(
+                "SELECT COUNT(*) FROM password_reset_tokens \
              WHERE consumed_at IS NULL AND revoked_at IS NULL AND expires_at > ?1",
-            params![now_str],
-            |row| row.get(0),
-        )?;
+            )?
+            .query_row(params![now_str], |row| row.get(0))?;
         Ok(n as usize)
     })
     .await

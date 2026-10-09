@@ -51,7 +51,7 @@ const SELECT_COLUMNS: &str = "id, enabled, host, tls_mode, port, username, \
 
 /// Fetch the current SMTP configuration, if any.
 pub async fn get(db: &Database) -> StoreResult<Option<SmtpConfigRow>> {
-    db.with_conn(move |conn| {
+    db.with_read(move |conn| {
         let mut stmt = conn.prepare(&format!(
             "SELECT {SELECT_COLUMNS} FROM smtp_config WHERE id = ?1"
         ))?;

@@ -41,12 +41,10 @@ pub async fn insert(db: &Database, row: &RevokedAccessTokenRow) -> StoreResult<(
 
 pub async fn is_revoked(db: &Database, jti: &str) -> StoreResult<bool> {
     let jti = jti.to_owned();
-    db.with_conn(move |conn| {
-        let n: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM revoked_access_tokens WHERE jti = ?1",
-            [jti],
-            |r| r.get(0),
-        )?;
+    db.with_read(move |conn| {
+        let n: i64 = conn
+            .prepare("SELECT COUNT(*) FROM revoked_access_tokens WHERE jti = ?1")?
+            .query_row([jti], |r| r.get(0))?;
         Ok(n > 0)
     })
     .await

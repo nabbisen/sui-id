@@ -43,7 +43,7 @@ pub async fn list_for_user(
     db: &Database,
     user_id: UserId,
 ) -> StoreResult<Vec<UserWebauthnCredentialRow>> {
-    db.with_conn(move |conn| {
+    db.with_read(move |conn| {
         let mut stmt = conn.prepare(&format!(
             "{SELECT} WHERE user_id = ?1 ORDER BY created_at ASC"
         ))?;
@@ -71,12 +71,10 @@ pub fn list_for_user_within_tx(
 }
 
 pub async fn count_for_user(db: &Database, user_id: UserId) -> StoreResult<usize> {
-    db.with_conn(move |conn| {
-        let n: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM user_webauthn_credentials WHERE user_id = ?1",
-            [user_id.to_string()],
-            |r| r.get(0),
-        )?;
+    db.with_read(move |conn| {
+        let n: i64 = conn
+            .prepare("SELECT COUNT(*) FROM user_webauthn_credentials WHERE user_id = ?1")?
+            .query_row([user_id.to_string()], |r| r.get(0))?;
         Ok(n as usize)
     })
     .await
@@ -87,13 +85,10 @@ pub async fn find_by_credential_id(
     credential_id: &[u8],
 ) -> StoreResult<Option<UserWebauthnCredentialRow>> {
     let credential_id = credential_id.to_vec();
-    db.with_conn(move |conn| {
+    db.with_read(move |conn| {
         Ok(conn
-            .query_row(
-                &format!("{SELECT} WHERE credential_id = ?1"),
-                [credential_id],
-                map,
-            )
+            .prepare(&format!("{SELECT} WHERE credential_id = ?1"))?
+            .query_row([credential_id], map)
             .optional()?)
     })
     .await

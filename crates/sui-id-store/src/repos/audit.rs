@@ -195,7 +195,7 @@ pub fn append_within_tx(tx: &rusqlite::Transaction<'_>, row: &AuditLogRow) -> St
 }
 
 pub async fn recent(db: &Database, limit: i64) -> StoreResult<Vec<AuditLogRow>> {
-    db.with_conn(move |conn| {
+    db.with_read(move |conn| {
         let mut stmt = conn.prepare(
             "SELECT at, actor, action, target, result, note FROM audit_log ORDER BY seq DESC LIMIT ?1",
         )?;
@@ -215,7 +215,7 @@ pub async fn recent_filtered(
     limit: i64,
     filter: Option<String>,
 ) -> StoreResult<Vec<AuditLogRow>> {
-    db.with_conn(move |conn| {
+    db.with_read(move |conn| {
         match filter.as_deref().filter(|s| !s.is_empty()) {
             None => {
                 let mut stmt = conn.prepare(
@@ -289,7 +289,7 @@ pub async fn verify_chain_tail(db: &Database, limit: i64) -> StoreResult<ChainVe
     type ChainBoundary = Option<(i64, String)>;
 
     let (rows, boundary): (ChainRows, ChainBoundary) = db
-        .with_conn(move |conn| {
+        .with_read(move |conn| {
             let mut stmt = conn.prepare(
                 "SELECT seq, at, actor, action, target, result, note, prev_hash, hash \
              FROM audit_log ORDER BY seq DESC LIMIT ?1",
@@ -325,12 +325,11 @@ pub async fn verify_chain_tail(db: &Database, limit: i64) -> StoreResult<ChainVe
             // of silently treated as verified.
             let boundary = match collected.last() {
                 Some((oldest_seq, ..)) => conn
-                    .query_row(
+                    .prepare(
                         "SELECT seq, hash FROM audit_log WHERE seq < ?1 \
                          ORDER BY seq DESC LIMIT 1",
-                        [oldest_seq],
-                        |r| Ok((r.get(0)?, r.get(1)?)),
-                    )
+                    )?
+                    .query_row([oldest_seq], |r| Ok((r.get(0)?, r.get(1)?)))
                     .optional()?,
                 None => None,
             };
@@ -432,7 +431,7 @@ pub async fn recent_for_user(
     limit: i64,
 ) -> StoreResult<Vec<AuditLogRow>> {
     let uid = user_id.to_string();
-    db.with_conn(move |conn| {
+    db.with_read(move |conn| {
         let mut stmt = conn.prepare(
             "SELECT at, actor, action, target, result, note FROM audit_log \
              WHERE actor = ?1 OR target = ?1 \
@@ -460,16 +459,15 @@ pub async fn most_recent_recovery_event_for_user(
 ) -> StoreResult<Option<AuditLogRow>> {
     use rusqlite::OptionalExtension;
     let uid = user_id.to_string();
-    db.with_conn(move |conn| {
+    db.with_read(move |conn| {
         Ok(conn
-            .query_row(
+            .prepare(
                 "SELECT at, actor, action, target, result, note FROM audit_log \
                  WHERE target = ?1 \
                    AND action IN ('user.recovery_link.issued', 'auth.password.reset_completed') \
                  ORDER BY seq DESC LIMIT 1",
-                [uid],
-                map,
-            )
+            )?
+            .query_row([uid], map)
             .optional()?)
     })
     .await
@@ -544,7 +542,7 @@ pub async fn count_by_action_in_window(
          ORDER BY bucket_unix ASC, action ASC"
     );
     let actions: Vec<String> = actions.iter().map(|s| s.to_string()).collect();
-    db.with_conn(move |conn| {
+    db.with_read(move |conn| {
         let mut stmt = conn.prepare(&sql)?;
         // rusqlite's params! macro doesn't take a slice directly;
         // we build a Vec<&dyn ToSql> by hand.
@@ -613,7 +611,7 @@ pub async fn recent_important(db: &Database, n: usize) -> StoreResult<Vec<AuditL
          ORDER BY seq DESC LIMIT ?1",
         clauses.join(" OR ")
     );
-    db.with_conn(move |conn| {
+    db.with_read(move |conn| {
         let mut stmt = conn.prepare(&sql)?;
         let mut params: Vec<rusqlite::types::Value> = vec![rusqlite::types::Value::Integer(n_i64)];
         for p in DASHBOARD_IMPORTANT_PREFIXES {

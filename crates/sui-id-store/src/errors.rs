@@ -86,6 +86,47 @@ pub enum StoreError {
         #[source]
         source: rusqlite::Error,
     },
+
+    /// RFC 096-B1 stage 0 / RFC 094's 2026-08-12 amendment: `ReadConn`
+    /// refused to prepare a statement because `sqlite3_stmt_readonly`
+    /// did not call it read-only. Nothing was read or written through
+    /// it — see `read_conn.rs`'s module doc.
+    #[error("ReadConn refused a non-read-only statement: {sql}")]
+    NotReadOnly { sql: String },
+
+    /// RFC 096-B1 stage 0: `ReadConn` refuses every `PRAGMA`
+    /// unconditionally, because `sqlite3_stmt_readonly` is documented as
+    /// unreliable for `PRAGMA` specifically — see `read_conn.rs`'s module
+    /// doc for why this is a zero-cost refusal today.
+    #[error("ReadConn refuses PRAGMA unconditionally: {sql}")]
+    PragmaRefused { sql: String },
+
+    /// RFC 096-B1 stage 0 (fix): `ReadConn` refuses every transaction-control
+    /// or connection-config statement unconditionally, by leading keyword,
+    /// because `sqlite3_stmt_readonly` reports all of them read-only despite
+    /// their effect on connection, transaction, or filesystem state (SQLite's
+    /// own documentation for `sqlite3_stmt_readonly` names this class
+    /// explicitly). `keyword` is the matched keyword, upper-cased, so an
+    /// operator reading the error knows which rule fired and why.
+    #[error(
+        "ReadConn refuses {keyword} unconditionally: it changes connection, \
+         transaction, or filesystem state even though sqlite3_stmt_readonly \
+         reports it read-only ({sql})"
+    )]
+    NonContentEffectRefused { keyword: String, sql: String },
+
+    /// RFC 096-B1 stage 0 (fix): `ReadConn` refuses every `EXPLAIN` /
+    /// `EXPLAIN QUERY PLAN` statement unconditionally. Not independently
+    /// exploitable — SQLite never executes the explained statement's own
+    /// side effects, only lists its bytecode (checked directly: an
+    /// `EXPLAIN ATTACH ...` does not create the attached file) — but an
+    /// `EXPLAIN`-prefixed statement reports the same `sqlite3_stmt_readonly`
+    /// value as its unprefixed form and defeats a first-keyword check
+    /// looking for the unprefixed form, so it is refused rather than relied
+    /// on to stay harmless by an undocumented-as-a-guarantee accident of how
+    /// `EXPLAIN` happens to behave today.
+    #[error("ReadConn refuses EXPLAIN unconditionally: {sql}")]
+    ExplainRefused { sql: String },
 }
 
 /// Why U37 refused to issue a recovery link (RFC 103 D5, D6, D8).

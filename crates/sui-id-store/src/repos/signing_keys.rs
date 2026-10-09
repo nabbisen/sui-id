@@ -101,13 +101,12 @@ pub fn insert_sealed_on_conn(
 /// during a rotation transaction), the **most recently created** one wins.
 /// This is the key newly issued tokens should be signed with.
 pub async fn active(db: &Database) -> StoreResult<SigningKeyRow> {
-    db.with_conn(move |conn| {
-        conn.query_row(
+    db.with_read(move |conn| {
+        conn.prepare(
             "SELECT id, algorithm, private_key_enc, public_key, is_active, created_at, rotated_at FROM signing_keys \
              WHERE is_active = 1 ORDER BY created_at DESC LIMIT 1",
-            [],
-            map,
-        )
+        )?
+        .query_row([], map)
         .map_err(|e| match e {
             rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
             other => StoreError::from(other),
@@ -177,7 +176,7 @@ pub async fn unseal_private(db: &Database, row: &SigningKeyRow) -> StoreResult<V
 
 /// All currently active and recently retired keys, useful for JWKS.
 pub async fn list_published(db: &Database) -> StoreResult<Vec<SigningKeyRow>> {
-    db.with_conn(move |conn| {
+    db.with_read(move |conn| {
         let mut stmt = conn.prepare(
             "SELECT id, algorithm, private_key_enc, public_key, is_active, created_at, rotated_at FROM signing_keys \
              ORDER BY created_at DESC",
@@ -191,7 +190,7 @@ pub async fn list_published(db: &Database) -> StoreResult<Vec<SigningKeyRow>> {
 
 /// Active signing keys only (is_active = 1).
 pub async fn list_active(db: &Database) -> StoreResult<Vec<SigningKeyRow>> {
-    db.with_conn(move |conn| {
+    db.with_read(move |conn| {
         let mut stmt = conn.prepare(
             "SELECT id, algorithm, private_key_enc, public_key, is_active, created_at, rotated_at              FROM signing_keys WHERE is_active = 1 ORDER BY created_at DESC",
         )?;

@@ -241,13 +241,13 @@ pub async fn count_stuck_pending(
     now: chrono::DateTime<chrono::Utc>,
 ) -> StoreResult<usize> {
     let cutoff = (now - stuck_threshold).to_rfc3339();
-    db.with_conn(move |conn| {
-        let n: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM email_outbox \
-             WHERE state = 'queued' AND created_at < ?1",
-            rusqlite::params![cutoff],
-            |row| row.get(0),
-        )?;
+    db.with_read(move |conn| {
+        let n: i64 = conn
+            .prepare(
+                "SELECT COUNT(*) FROM email_outbox \
+                 WHERE state = 'queued' AND created_at < ?1",
+            )?
+            .query_row(rusqlite::params![cutoff], |row| row.get(0))?;
         Ok(n as usize)
     })
     .await

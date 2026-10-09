@@ -139,3 +139,46 @@ fn compile_fail_step_up_touch_is_private() {
     let t = trybuild::TestCases::new();
     t.compile_fail("tests/compile_fail/step_up_touch_is_private.rs");
 }
+
+/// RFC 096-B1 stage 0: see the fixture's own comment. Raises E0599, same
+/// family as the two gated fixtures above — checked directly, not assumed;
+/// see this test's `#[rustversion::attr]` (or its absence) for what that
+/// check found.
+#[test]
+fn compile_fail_write_cannot_be_expressed_through_read_conn() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compile_fail/write_cannot_be_expressed_through_read_conn.rs");
+}
+
+/// RFC 096-B1 stage 0: see the fixture's own comment. Raises E0451, same
+/// family and same reason as `identity_capability_cannot_be_constructed_
+/// directly.rs` in `sui-id`.
+#[test]
+fn compile_fail_read_conn_cannot_be_constructed_directly() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compile_fail/read_conn_cannot_be_constructed_directly.rs");
+}
+
+/// RFC 096-B1 stage 0 / RFC 094's 2026-08-26 amendment: see the fixture's
+/// own comment.
+#[test]
+fn compile_fail_rusqlite_functions_feature_must_stay_off() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compile_fail/rusqlite_functions_feature_must_stay_off.rs");
+}
+
+/// RFC 096-B1 stage 0 / RFC 094's 2026-08-26 amendment: see the fixture's
+/// own comment.
+#[test]
+fn compile_fail_rusqlite_vtab_feature_must_stay_off() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compile_fail/rusqlite_vtab_feature_must_stay_off.rs");
+}
+
+/// RFC 096-B1 stage 0 / RFC 094's 2026-08-26 amendment: see the fixture's
+/// own comment.
+#[test]
+fn compile_fail_rusqlite_load_extension_feature_must_stay_off() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compile_fail/rusqlite_load_extension_feature_must_stay_off.rs");
+}

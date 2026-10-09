@@ -13,6 +13,7 @@ use crate::backend::{Backend, SqliteBackend};
 use crate::crypto::MasterKey;
 use crate::errors::StoreResult;
 use crate::migrations;
+use crate::read_conn::ReadConn;
 use rusqlite::Connection;
 use std::path::Path;
 use std::sync::Arc;
@@ -104,6 +105,19 @@ impl Database {
             .expect("with_tx: type mismatch — internal error"))
     }
 
+    /// Like [`Self::with_conn`], but the closure receives a [`ReadConn`]
+    /// rather than a raw `&Connection` — see RFC 096-B1 stage 0 /
+    /// `read_conn.rs`'s module doc. Built on `with_conn` itself: no new
+    /// dispatch path, no backend trait change, just a narrower view of the
+    /// same connection `with_conn` already hands out.
+    pub async fn with_read<F, R>(&self, f: F) -> StoreResult<R>
+    where
+        F: FnOnce(&ReadConn<'_>) -> StoreResult<R> + Send + 'static,
+        R: Send + 'static,
+    {
+        self.with_conn(move |conn| f(&ReadConn::new(conn))).await
+    }
+
     // ── Synchronous interface (migration runner + blocking tests) ─────────────
 
     /// Synchronous `with_conn` — use only in the migration runner and in
@@ -113,6 +127,15 @@ impl Database {
         f: impl FnOnce(&Connection) -> StoreResult<R>,
     ) -> StoreResult<R> {
         self.sqlite_backend().with_conn_sync(f)
+    }
+
+    /// Synchronous `with_read` — same restrictions as `with_conn_sync`, and
+    /// built on it the same way `with_read` is built on `with_conn`.
+    pub fn with_read_sync<R: 'static>(
+        &self,
+        f: impl FnOnce(&ReadConn<'_>) -> StoreResult<R>,
+    ) -> StoreResult<R> {
+        self.with_conn_sync(|conn| f(&ReadConn::new(conn)))
     }
 
     /// Synchronous `with_tx` — same restrictions as `with_conn_sync`.

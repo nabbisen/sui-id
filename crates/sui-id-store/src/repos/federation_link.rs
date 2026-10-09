@@ -43,7 +43,7 @@ pub async fn find_by_sub(
 ) -> StoreResult<Option<FederationLinkRow>> {
     let pid = provider_id.to_string();
     let sub = upstream_sub.to_owned();
-    db.with_conn(move |conn| {
+    db.with_read(move |conn| {
         let mut stmt = conn.prepare(&format!(
             "{SELECT} WHERE provider_id = ?1 AND upstream_sub = ?2"
         ))?;
@@ -67,7 +67,7 @@ pub async fn find_any_by_email(
 ) -> StoreResult<Option<FederationLinkRow>> {
     let pid = provider_id.to_string();
     let em = email.to_lowercase();
-    db.with_conn(move |conn| {
+    db.with_read(move |conn| {
         let mut stmt = conn.prepare(&format!(
             "{SELECT} WHERE provider_id = ?1 AND lower(upstream_email) = ?2 LIMIT 1"
         ))?;
@@ -84,7 +84,7 @@ pub async fn find_any_by_email(
 /// List all links for a local user (for `/me/security` future use).
 pub async fn list_for_user(db: &Database, user_id: UserId) -> StoreResult<Vec<FederationLinkRow>> {
     let uid = user_id.to_string();
-    db.with_conn(move |conn| {
+    db.with_read(move |conn| {
         let mut stmt = conn.prepare(&format!("{SELECT} WHERE user_id = ?1"))?;
         let rows = stmt.query_map([uid], map)?;
         rows.collect::<rusqlite::Result<Vec<_>>>()

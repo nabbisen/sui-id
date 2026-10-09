@@ -36,13 +36,10 @@ const SELECT: &str = "SELECT user_id, secret_enc, enabled, recovery_codes_enc, \
                       last_used_step, created_at, confirmed_at FROM user_totp";
 
 pub async fn get(db: &Database, user_id: UserId) -> StoreResult<Option<UserTotpRow>> {
-    db.with_conn(move |conn| {
+    db.with_read(move |conn| {
         Ok(conn
-            .query_row(
-                &format!("{SELECT} WHERE user_id = ?1"),
-                [user_id.to_string()],
-                map,
-            )
+            .prepare(&format!("{SELECT} WHERE user_id = ?1"))?
+            .query_row([user_id.to_string()], map)
             .optional()?)
     })
     .await

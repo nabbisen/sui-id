@@ -64,16 +64,13 @@ pub(crate) fn insert_within_tx(conn: &rusqlite::Connection, s: &SessionRow) -> S
 }
 
 pub async fn get(db: &Database, id: SessionId) -> StoreResult<SessionRow> {
-    db.with_conn(move |conn| {
-        conn.query_row(
-            &format!("SELECT {SELECT_COLS} FROM sessions WHERE id = ?1"),
-            [id.to_string()],
-            map,
-        )
-        .map_err(|e| match e {
-            rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
-            other => StoreError::from(other),
-        })
+    db.with_read(move |conn| {
+        conn.prepare(&format!("SELECT {SELECT_COLS} FROM sessions WHERE id = ?1"))?
+            .query_row([id.to_string()], map)
+            .map_err(|e| match e {
+                rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
+                other => StoreError::from(other),
+            })
     })
     .await
 }
@@ -83,15 +80,16 @@ pub async fn get(db: &Database, id: SessionId) -> StoreResult<SessionRow> {
 /// this so refusing an inactive user's session costs no extra round trip.
 /// A session whose user row is missing is `NotFound`.
 pub async fn get_with_user_active(db: &Database, id: SessionId) -> StoreResult<(SessionRow, bool)> {
-    db.with_conn(move |conn| {
-        conn.query_row(
+    db.with_read(move |conn| {
+        conn.prepare(
             "SELECT s.id, s.user_id, s.expires_at, s.created_at, s.revoked_at, \
              s.auth_methods, s.last_step_up_at, s.last_used_at, \
              u.is_disabled = 0 AND u.is_deleted = 0 \
              FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.id = ?1",
-            [id.to_string()],
-            |row| Ok((map(row)?, row.get::<_, bool>(8)?)),
-        )
+        )?
+        .query_row([id.to_string()], |row| {
+            Ok((map(row)?, row.get::<_, bool>(8)?))
+        })
         .map_err(|e| match e {
             rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
             other => StoreError::from(other),
@@ -187,7 +185,7 @@ pub async fn purge_expired(db: &Database) -> StoreResult<usize> {
 /// List every currently-active session belonging to a given user, newest first.
 pub async fn list_active_for_user(db: &Database, user_id: UserId) -> StoreResult<Vec<SessionRow>> {
     let now = Utc::now();
-    db.with_conn(move |conn| {
+    db.with_read(move |conn| {
         let mut stmt = conn.prepare(&format!(
             "SELECT {SELECT_COLS} FROM sessions \
                       WHERE user_id = ?1 AND revoked_at IS NULL AND expires_at > ?2 \
@@ -322,13 +320,25 @@ pub async fn touch_last_used(db: &Database, id: SessionId, at: DateTime<Utc>) ->
 /// Count the active (un-expired, un-revoked) sessions for a user
 /// at the given moment. Used by the concurrent-session-cap check
 /// at login time.
+/// `count_active_for_user_within_tx` below is also called from
+/// `commands.rs`'s in-transaction eviction path with a `&Transaction`, so
+/// its signature stays on a plain `&Connection` rather than `&ReadConn` —
+/// this wrapper reads the same query directly instead of delegating to it.
 pub async fn count_active_for_user(
     db: &Database,
     user_id: UserId,
     now: DateTime<Utc>,
 ) -> StoreResult<i64> {
-    db.with_conn(move |conn| count_active_for_user_within_tx(conn, user_id, now))
-        .await
+    db.with_read(move |conn| {
+        let n: i64 = conn
+            .prepare(
+                "SELECT COUNT(*) FROM sessions \
+                 WHERE user_id = ?1 AND revoked_at IS NULL AND expires_at > ?2",
+            )?
+            .query_row(params![user_id.to_string(), now], |row| row.get(0))?;
+        Ok(n)
+    })
+    .await
 }
 
 /// Same as [`count_active_for_user`], on a caller-held connection or
@@ -352,14 +362,28 @@ pub fn count_active_for_user_within_tx(
 /// path: at login time, when the post-insert active count would
 /// exceed the cap by `k`, the application revokes the `k` oldest
 /// rows returned here.
+/// `oldest_active_for_user_within_tx` below is also called from
+/// `commands.rs`'s in-transaction eviction path with a `&Transaction`, so
+/// its signature stays on a plain `&Connection` rather than `&ReadConn` —
+/// same reason and same shape as `count_active_for_user` above.
 pub async fn oldest_active_for_user(
     db: &Database,
     user_id: UserId,
     now: DateTime<Utc>,
     limit: i64,
 ) -> StoreResult<Vec<SessionRow>> {
-    db.with_conn(move |conn| oldest_active_for_user_within_tx(conn, user_id, now, limit))
-        .await
+    db.with_read(move |conn| {
+        let mut stmt = conn.prepare(&format!(
+            "SELECT {SELECT_COLS} FROM sessions \
+             WHERE user_id = ?1 AND revoked_at IS NULL AND expires_at > ?2 \
+             ORDER BY created_at ASC LIMIT ?3"
+        ))?;
+        let rows = stmt
+            .query_map(params![user_id.to_string(), now, limit], map)?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    })
+    .await
 }
 
 /// Same as [`oldest_active_for_user`], on a caller-held connection or
@@ -384,12 +408,12 @@ pub fn oldest_active_for_user_within_tx(
 /// Count all non-revoked, non-expired sessions across all users.
 /// Used by the admin dashboard to display the active-session stat card.
 pub async fn count_active_total(db: &Database) -> StoreResult<usize> {
-    db.with_conn(move |conn| {
-        let n: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM sessions              WHERE revoked = 0 AND expires_at > unixepoch('now')",
-            [],
-            |row| row.get(0),
-        )?;
+    db.with_read(move |conn| {
+        let n: i64 = conn
+            .prepare(
+                "SELECT COUNT(*) FROM sessions              WHERE revoked = 0 AND expires_at > unixepoch('now')",
+            )?
+            .query_row([], |row| row.get(0))?;
         Ok(n as usize)
     }).await
 }

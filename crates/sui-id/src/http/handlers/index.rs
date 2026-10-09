@@ -26,8 +26,8 @@ pub async fn healthz(state_ext: AppStateExt) -> Result<axum::response::Response,
     let axum::extract::State(app) = state_ext;
     // Touch the database with a trivial query so we surface storage problems.
     app.db
-        .with_conn(|conn| {
-            let _: i64 = conn.query_row("SELECT 1", [], |r| r.get(0))?;
+        .with_read(|conn| {
+            let _: i64 = conn.prepare("SELECT 1")?.query_row([], |r| r.get(0))?;
             Ok(())
         })
         .await

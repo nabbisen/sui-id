@@ -112,8 +112,9 @@ pub fn create_within_tx(conn: &rusqlite::Connection, c: &ClientRow) -> StoreResu
 }
 
 pub async fn get(db: &Database, id: ClientId) -> StoreResult<ClientRow> {
-    db.with_conn(move |conn| {
-        conn.query_row(&format!("{SELECT} WHERE id = ?1"), [id.to_string()], map)
+    db.with_read(move |conn| {
+        conn.prepare(&format!("{SELECT} WHERE id = ?1"))?
+            .query_row([id.to_string()], map)
             .map_err(|e| match e {
                 rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
                 other => StoreError::from(other),
@@ -123,7 +124,7 @@ pub async fn get(db: &Database, id: ClientId) -> StoreResult<ClientRow> {
 }
 
 pub async fn list(db: &Database) -> StoreResult<Vec<ClientRow>> {
-    db.with_conn(move |conn| {
+    db.with_read(move |conn| {
         let mut stmt = conn.prepare(&format!("{SELECT} ORDER BY created_at ASC"))?;
         let rows = stmt.query_map([], map)?.collect::<Result<Vec<_>, _>>()?;
         Ok(rows)

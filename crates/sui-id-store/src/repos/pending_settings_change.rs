@@ -107,12 +107,10 @@ pub async fn get_summary(
     now: DateTime<Utc>,
 ) -> StoreResult<String> {
     let id_str = id.to_string();
-    db.with_conn(move |conn| {
-        let result: Result<(String, DateTime<Utc>), _> = conn.query_row(
-            "SELECT summary, expires_at FROM pending_settings_change WHERE id = ?1",
-            [id_str.as_str()],
-            |r| Ok((r.get(0)?, r.get(1)?)),
-        );
+    db.with_read(move |conn| {
+        let result: Result<(String, DateTime<Utc>), _> = conn
+            .prepare("SELECT summary, expires_at FROM pending_settings_change WHERE id = ?1")?
+            .query_row([id_str.as_str()], |r| Ok((r.get(0)?, r.get(1)?)));
         match result {
             Ok((summary, expires_at)) => {
                 if expires_at <= now {

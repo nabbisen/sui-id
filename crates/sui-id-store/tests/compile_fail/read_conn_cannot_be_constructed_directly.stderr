@@ -1,0 +1,5 @@
+error[E0451]: field `conn` of struct `ReadConn` is private
+  --> tests/compile_fail/read_conn_cannot_be_constructed_directly.rs:13:16
+   |
+13 |     ReadConn { conn }
+   |                ^^^^ private field

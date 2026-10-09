@@ -122,12 +122,12 @@ pub async fn requeue_stuck_processing(db: &Database, now: DateTime<Utc>) -> Stor
 /// simulated restart, until the worker actually drains it, is the whole
 /// property RFC 124 D1's decision was chosen for.
 pub async fn count_outstanding(db: &Database) -> StoreResult<i64> {
-    db.with_conn(|conn| {
-        Ok(conn.query_row(
-            "SELECT COUNT(*) FROM forgot_password_requests WHERE state IN ('pending', 'processing')",
-            [],
-            |r| r.get(0),
-        )?)
+    db.with_read(|conn| {
+        Ok(conn
+            .prepare(
+                "SELECT COUNT(*) FROM forgot_password_requests WHERE state IN ('pending', 'processing')",
+            )?
+            .query_row([], |r| r.get(0))?)
     })
     .await
 }

@@ -43,7 +43,7 @@ const SELECT: &str = "SELECT id, slug, display_name, issuer, client_id, client_s
 
 /// List all providers ordered by slug.
 pub async fn list(db: &Database) -> StoreResult<Vec<FederationProviderRow>> {
-    db.with_conn(|conn| {
+    db.with_read(|conn| {
         let mut stmt = conn.prepare(&format!("{SELECT} ORDER BY slug ASC"))?;
         let rows = stmt.query_map([], map)?;
         rows.collect::<rusqlite::Result<Vec<_>>>()
@@ -54,7 +54,7 @@ pub async fn list(db: &Database) -> StoreResult<Vec<FederationProviderRow>> {
 
 /// List only enabled providers (for the login screen).
 pub async fn list_enabled(db: &Database) -> StoreResult<Vec<FederationProviderRow>> {
-    db.with_conn(|conn| {
+    db.with_read(|conn| {
         let mut stmt = conn.prepare(&format!("{SELECT} WHERE enabled = 1 ORDER BY slug ASC"))?;
         let rows = stmt.query_map([], map)?;
         rows.collect::<rusqlite::Result<Vec<_>>>()
@@ -66,8 +66,9 @@ pub async fn list_enabled(db: &Database) -> StoreResult<Vec<FederationProviderRo
 /// Fetch a provider by id.
 pub async fn get(db: &Database, id: FederationProviderId) -> StoreResult<FederationProviderRow> {
     let id_str = id.to_string();
-    db.with_conn(move |conn| {
-        conn.query_row(&format!("{SELECT} WHERE id = ?1"), [&id_str], map)
+    db.with_read(move |conn| {
+        conn.prepare(&format!("{SELECT} WHERE id = ?1"))?
+            .query_row([&id_str], map)
             .map_err(|e| match e {
                 rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
                 other => StoreError::from(other),
@@ -79,8 +80,9 @@ pub async fn get(db: &Database, id: FederationProviderId) -> StoreResult<Federat
 /// Fetch a provider by slug.
 pub async fn get_by_slug(db: &Database, slug: &str) -> StoreResult<FederationProviderRow> {
     let slug = slug.to_owned();
-    db.with_conn(move |conn| {
-        conn.query_row(&format!("{SELECT} WHERE slug = ?1"), [&slug], map)
+    db.with_read(move |conn| {
+        conn.prepare(&format!("{SELECT} WHERE slug = ?1"))?
+            .query_row([&slug], map)
             .map_err(|e| match e {
                 rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
                 other => StoreError::from(other),

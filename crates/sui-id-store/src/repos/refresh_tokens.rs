@@ -103,7 +103,7 @@ pub async fn find_active(db: &Database, token: &RawRefreshToken) -> StoreResult<
 
     // --- fast path: indexed lookup ---
     let fast: Option<RefreshTokenRow> = db
-        .with_conn(move |conn| {
+        .with_read(move |conn| {
             let mut stmt = conn.prepare(
                 "SELECT id, token_enc, user_id, client_id, scope, expires_at, revoked_at, \
              created_at, auth_methods, family_id \
@@ -123,7 +123,7 @@ pub async fn find_active(db: &Database, token: &RawRefreshToken) -> StoreResult<
 
     // --- fallback: decrypt-scan for NULL token_hash rows (backfill pending) ---
     let candidates: Vec<(RefreshTokenRow, Vec<u8>)> = db
-        .with_conn(move |conn| {
+        .with_read(move |conn| {
             let mut stmt = conn.prepare(
                 "SELECT id, token_enc, user_id, client_id, scope, expires_at, revoked_at, \
              created_at, auth_methods, family_id \
@@ -241,7 +241,7 @@ pub async fn find_any(db: &Database, token: &RawRefreshToken) -> StoreResult<Ref
 
     // --- fast path: indexed lookup (includes revoked rows) ---
     let fast: Option<RefreshTokenRow> = db
-        .with_conn(move |conn| {
+        .with_read(move |conn| {
             let mut stmt = conn.prepare(
                 "SELECT id, token_enc, user_id, client_id, scope, expires_at, revoked_at, \
              created_at, auth_methods, family_id \
@@ -261,7 +261,7 @@ pub async fn find_any(db: &Database, token: &RawRefreshToken) -> StoreResult<Ref
 
     // --- fallback: decrypt-scan for NULL token_hash rows (backfill pending) ---
     let candidates: Vec<(RefreshTokenRow, Vec<u8>)> = db
-        .with_conn(move |conn| {
+        .with_read(move |conn| {
             let mut stmt = conn.prepare(
                 "SELECT id, token_enc, user_id, client_id, scope, expires_at, revoked_at, \
              created_at, auth_methods, family_id \
@@ -565,7 +565,7 @@ pub fn reseal_all(
 /// Returns the number of rows successfully backfilled.
 pub async fn backfill_token_hashes(db: &Database) -> StoreResult<usize> {
     let rows_to_fill: Vec<(String, Vec<u8>)> = db
-        .with_conn(move |conn| {
+        .with_read(move |conn| {
             let mut stmt =
                 conn.prepare("SELECT id, token_enc FROM refresh_tokens WHERE token_hash IS NULL")?;
             let rows = stmt

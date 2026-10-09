@@ -76,7 +76,7 @@ pub async fn create(db: &Database, row: &RegistrationTokenRow) -> StoreResult<()
 
 /// Fetch all tokens ordered by creation date, newest first.
 pub async fn list(db: &Database) -> StoreResult<Vec<RegistrationTokenRow>> {
-    db.with_conn(|conn| {
+    db.with_read(|conn| {
         let mut stmt = conn.prepare(&format!("{SELECT} ORDER BY created_at DESC"))?;
         let rows = stmt.query_map([], map)?;
         rows.collect::<rusqlite::Result<Vec<_>>>()
@@ -88,8 +88,9 @@ pub async fn list(db: &Database) -> StoreResult<Vec<RegistrationTokenRow>> {
 /// Fetch a single token by id.
 pub async fn get(db: &Database, id: RegistrationTokenId) -> StoreResult<RegistrationTokenRow> {
     let id_str = id.to_string();
-    db.with_conn(move |conn| {
-        conn.query_row(&format!("{SELECT} WHERE id = ?1"), [&id_str], map)
+    db.with_read(move |conn| {
+        conn.prepare(&format!("{SELECT} WHERE id = ?1"))?
+            .query_row([&id_str], map)
             .map_err(|e| match e {
                 rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
                 other => StoreError::from(other),
@@ -106,7 +107,7 @@ pub async fn find_by_hash(
     token_hash: &str,
 ) -> StoreResult<Option<RegistrationTokenRow>> {
     let hash = token_hash.to_owned();
-    db.with_conn(move |conn| {
+    db.with_read(move |conn| {
         let mut stmt = conn.prepare(&format!("{SELECT} WHERE token_hash = ?1"))?;
         let mut rows = stmt.query_map([&hash], map)?;
         match rows.next() {

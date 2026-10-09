@@ -56,12 +56,11 @@ pub fn upsert_within_tx(tx: &rusqlite::Transaction<'_>, cred: &CredentialRow) ->
 }
 
 pub async fn get(db: &Database, user_id: UserId) -> StoreResult<CredentialRow> {
-    db.with_conn(move |conn| {
-        conn.query_row(
+    db.with_read(move |conn| {
+        conn.prepare(
             "SELECT user_id, password_hash, updated_at FROM credentials WHERE user_id = ?1",
-            [user_id.to_string()],
-            map,
-        )
+        )?
+        .query_row([user_id.to_string()], map)
         .map_err(|e| match e {
             rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
             other => StoreError::from(other),
