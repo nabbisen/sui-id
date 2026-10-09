@@ -206,17 +206,30 @@ implementation role reads.
 
 ### Dispatched and open
 
+**096-A's fifteen stages are complete.** The architect's assessment is
+[`096-a-completion-assessment-2026-10-09.md`](096-a-completion-assessment-2026-10-09.md)
+— Level B on CI run `37911563157` (commit `56c91de`, 27 jobs, 0 skipped,
+covering all 24 `[gate_owners]` entries). It **recommends** that `@nabbisen`
+accept 096-A's evidence and does not grant it: `:21` makes the evidence
+*"accepted by `@nabbisen`, on the architect's assessment"*. **RFC 096 does not
+close here** — closure is per stage, 096-B1/B2/C remain, and the RFC stays
+Accepted.
+
+Three limitations are part of what is being accepted, not caveats to it: stages
+6a–7 are **entirely dormant** (zero production callers, which is `:72-73`
+working as written); discovery is live for nine of eleven metadata rules while
+the two cross-checks and the tightened bounds are inert; and 096-A does not
+close the shipped defect.
+
+### Landed
+
 - [`stage9-the-remaining-corpus-rows-2026-10-09.md`](stage9-the-remaining-corpus-rows-2026-10-09.md)
-  — **DISPATCHED, this is the open work, and the last stage of 096-A.** Collects
-  `validation-matrix.md`'s Claims (sixteen rows) and Discovery (five plus the
-  well-known vectors) sections, which stage 5 could not cover because nothing
-  implemented them. Not pure collection: three things the matrix explicitly
-  requires are measured as untested — the **exponential** NumericDate form, a
-  valid multi-byte Unicode `sub` **accepted** and preserved byte-identically,
-  and the well-known derivation vectors for a root versus a path issuer with
-  the RFC 8414 insert form rejected. Every row must also name **which layer**
-  proves it, because stage 8's two cross-checks and tightened bounds are
-  implemented and not live.
+  — **landed `56c91de`, Level B.** The Claims and Discovery sections of
+  `validation-matrix.md`, each row carrying the layer that proves it, plus the
+  three rows the matrix demanded and nothing tested: the exponential NumericDate
+  spelling, a multi-byte Unicode `sub` proven to return byte-identical, and the
+  well-known derivation vectors driven end to end through real TLS — including
+  the RFC 8414 insert-before-path form, which must never be requested.
 
 ### Open with the owner
 
