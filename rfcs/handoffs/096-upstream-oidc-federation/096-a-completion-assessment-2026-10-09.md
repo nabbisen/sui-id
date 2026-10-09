@@ -2,18 +2,19 @@
 
 **Written.** 2026-10-09 JST, by the architect.
 **Subject.** RFC 096's stage **096-A** only — validation and transport.
-**What this is.** The architect's assessment that 096-A's evidence is complete,
-which RFC 096 `:21` makes the input to `@nabbisen`'s acceptance:
-*"…are accepted by `@nabbisen`, on the architect's assessment."*
+**What this is.** The architect's assessment that 096-A's evidence is complete.
+RFC 096 `:21` names `@nabbisen` as the one who signs 096-A's evidence off, and
+makes such an assessment the input to it. Its words: "…are accepted … on the
+architect's assessment".
 **What this is not.** It does **not** accept 096-A, and it does **not** close
 RFC 096. Closure in this RFC is **per stage**; 096-B1, 096-B2 and 096-C remain,
 and the RFC stays **Accepted** in `rfcs/accepted/`. Nothing here moves it.
 
 **Not independent, and that is on the record.** The architect wrote this RFC's
 fifteen dispatches, its stage plan, and the criteria assessed below. This
-assessment is therefore **not** independent of the work it judges, and
-`@nabbisen` is the approver — which is what RFC 000 requires when no independent
-role exists. The implementation role verified each package's own measurements
+assessment is therefore **not** independent of the work it judges. RFC 000
+requires the sign-off to come from outside that work when no independent role
+exists, and here it comes from `@nabbisen`. The implementation role verified each package's own measurements
 and corrected the architect in **six consecutive stages**; that is corroboration,
 recorded beside the findings, and it is neither approval nor independence.
 
@@ -100,7 +101,7 @@ Routing is 096-B1's, by the RFC's own construction.
 | Issuer errors | **Handled, at both levels.** Stage 6a byte-exact on the ID token's `iss` with no normalisation; stage 8 byte-exact on the discovery document's own `issuer`, which was previously never read at all |
 | Audience errors | **Handled.** Stage 6a: `aud` as string or 1–8 unique strings containing the client ID, with the multi-audience `azp` rule |
 | Token substitution | **Handled.** Defeated by binding all three of `aud`, `iss` and the nonce — complete as of stage 7 — plus stage 6b's `iat` lower bound, which refuses a token minted before this attempt began even when everything else is valid |
-| Time errors | **Handled, with one divergence pending the owner's decision.** `exp`, `iat`, `nbf`, NumericDate integer discipline including the exponential form, the fixed symmetric 60-second skew, and both boundary sides tested. **The divergence:** `jsonwebtoken` accepts at `now <= exp + 60` while `:660` states the strict `now < exp + 60s`, so the RFC refuses one instant that the implementation accepts. `:661` and `:662` state `iat`'s and `nbf`'s bounds non-strictly, so `exp` is the only one of the three written strictly. Raised as a decision request, recommendation to amend `:660`; see `exp-boundary-strictness-2026-10-08.md`. **It does not block this assessment** — the divergence is one instant inside a 60-second skew the RFC deliberately grants — but the category is not *literally* satisfied until `:660` and the code agree |
+| Time errors | **Handled, with one divergence still open upstairs.** `exp`, `iat`, `nbf`, NumericDate integer discipline including the exponential form, the fixed symmetric 60-second skew, and both boundary sides tested. **The divergence:** `jsonwebtoken` accepts at `now <= exp + 60` while `:660` states the strict `now < exp + 60s`, so the RFC refuses one instant that the implementation accepts. `:661` and `:662` state `iat`'s and `nbf`'s bounds non-strictly, so `exp` is the only one of the three written strictly. Raised as a decision request, recommendation to amend `:660`; see `exp-boundary-strictness-2026-10-08.md`. **It does not block this assessment** — the divergence is one instant inside a 60-second skew the RFC deliberately grants — but the category is not *literally* satisfied until `:660` and the code agree |
 
 ## Limitations, stated rather than footnoted
 
@@ -157,10 +158,10 @@ both are corrected above.
 
 ## Recommendation
 
-**096-A's evidence is complete and I recommend `@nabbisen` accept it**, with the
-three limitations above recorded as part of what is being accepted rather than
-as caveats to it, and with the `exp` boundary question settled either way at his
-convenience. The alternative — settling `:660` first and then accepting — is
+**096-A's evidence is complete and this assessment recommends acceptance**,
+with the three limitations above recorded as part of what is being accepted
+rather than as caveats to it. The `exp` boundary question can be settled
+either way, at whatever point suits. Granting it is `@nabbisen`'s. The alternative — settling `:660` first and then accepting — is
 equally sound and costs only the ordering.
 
 This document recommends acceptance. It does not grant it. `:21` reserves that

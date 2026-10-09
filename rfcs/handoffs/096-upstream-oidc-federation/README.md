@@ -209,9 +209,9 @@ implementation role reads.
 **096-A's fifteen stages are complete.** The architect's assessment is
 [`096-a-completion-assessment-2026-10-09.md`](096-a-completion-assessment-2026-10-09.md)
 — Level B on CI run `37911563157` (commit `56c91de`, 27 jobs, 0 skipped,
-covering all 24 `[gate_owners]` entries). It **recommends** that `@nabbisen`
-accept 096-A's evidence and does not grant it: `:21` makes the evidence
-*"accepted by `@nabbisen`, on the architect's assessment"*. **RFC 096 does not
+covering all 24 `[gate_owners]` entries). It **recommends** acceptance and does
+not grant it. `:21` reserves that to `@nabbisen`, *"on the architect's
+assessment"*. **RFC 096 does not
 close here** — closure is per stage, 096-B1/B2/C remain, and the RFC stays
 Accepted.
 
