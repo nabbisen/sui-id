@@ -18,7 +18,9 @@ use axum::extract::{Path, Query, State};
 use axum::response::{IntoResponse, Redirect, Response};
 use axum_extra::extract::cookie::{Cookie, CookieJar};
 use chrono::Duration;
+use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 
 use crate::errors::HttpError;
 use crate::federation_identity::{derive_username, resolve_shadow_username};
@@ -27,7 +29,21 @@ use crate::handlers::{AppState, AppStateExt, session_cookie};
 use crate::id_token::{IdTokenClaims, decode_id_token_claims};
 use sui_id_core::errors::CoreError;
 use sui_id_shared::ids::{SessionId, UserId};
-use sui_id_store::models::{AuditLogRow, FederationLinkRow, ProvisionMode, SessionRow};
+use sui_id_store::models::{
+    AuditLogRow, FederationLinkRow, FederationProviderRow, ProvisionMode, SessionRow,
+};
+
+// ── RFC 096-B1 stage 4: 096-A's validators, their first production callers ──
+
+use crate::cache_freshness::{ActivationGeneration, CacheKey, ProviderVersion};
+use crate::federation_attempt_claim::{ClaimAndNonceError, claim_and_consume_nonce};
+use crate::id_token::verify_id_token;
+use crate::identity_capability::construct_identity_capability;
+use crate::identity_claims::validate_identity_claims;
+use crate::optional_claims::validate_optional_claims;
+use crate::time_claims::validate_iat;
+use sui_id_store::StoreError;
+use sui_id_store::repos::federation_login_attempt;
 
 // ── Upstream discovery ────────────────────────────────────────────────────────
 
@@ -98,6 +114,98 @@ async fn fetch_discovery(
     ValidatedDiscovery::validate(raw, issuer, allowed_origins).map_err(FetchDiscoveryError::Invalid)
 }
 
+// ── RFC 096-B1 stage 4: shared helpers for the attempt row ──────────────────
+
+/// RFC 096 `:584-585`: the browser-held opaque binding cookie, scoped the
+/// same way `STATE_COOKIE` is.
+const BROWSER_BINDING_COOKIE: &str = "sui_id_fed_browser_binding";
+
+/// Raw SHA-256 digest, 32 bytes -- what `federation_login_attempt`'s three
+/// hash columns store (RFC 096 `:587-588`: "raw fixed-size values", not hex
+/// `TEXT`). `Sha256::digest`'s own output is already exactly 32 bytes, so
+/// the `try_into` here cannot fail; it exists to produce a plain `[u8; 32]`
+/// rather than carry the `GenericArray` type into every caller.
+fn sha256_32(bytes: &[u8]) -> [u8; 32] {
+    Sha256::digest(bytes).into()
+}
+
+/// RFC 096 `:580-581`, `:305-306`: the provider's current, durably checked
+/// `config_version`/`activation_generation` pair.
+///
+/// **Placeholder, not a design choice this stage is making.** Those are
+/// RFC 096-B2/M2b's own durable monotonic counters on `federation_provider`
+/// -- confirmed, not a guess: `contracts/write-commands.toml`'s `C23`
+/// ("Replace federation-provider trust policy") is `status =
+/// "target-absent"`, `files = []`, "no current function implements
+/// provider trust-policy replacement at all. Wholly new, RFC 096-B2 (M2b)."
+/// `federation_provider`'s own migrations (`0037`-`0045`) have no version
+/// or generation column either -- checked directly, not assumed from the
+/// manifest alone.
+///
+/// Until M2b adds the real columns, every provider's version/generation is
+/// fixed at `(0, 0)`. That makes the superseded-attempt comparison this
+/// stage wires (`federated_callback`, via [`attempt_is_superseded`])
+/// trivially satisfied in production today — there is only one value in
+/// play, so it can never disagree with itself — and, more than that,
+/// *unreachable end-to-end by any test either*: the one column that could
+/// be made to disagree with this constant is the row's own
+/// `provider_config_version`/`provider_activation_generation`, and those
+/// are AAD-bound by stage 2's `insert`/`claim` seal (`:583`'s own PKCE
+/// binding) — tampering them after insert is caught by that *earlier*
+/// tamper check (`StoreError::Crypto`), not by this comparison. Confirmed
+/// empirically, not assumed: an end-to-end attempt to do exactly that
+/// surfaced `fed_error=tamper_detected`, never `fed_error=superseded`.
+///
+/// That is why [`attempt_is_superseded`] is tested at the comparison level
+/// (`tests::` below) rather than end-to-end — it is genuinely wired into
+/// `federated_callback`, but what makes it *reachable* with real data is
+/// M2b's own work, not this stage's. When M2b lands the real columns,
+/// this is the one function that changes — most likely into two field
+/// reads on `FederationProviderRow` — not every call site that compares
+/// against it.
+fn current_provider_version_and_generation(_provider: &FederationProviderRow) -> (i64, i64) {
+    (0, 0)
+}
+
+/// RFC 096 `:580-581`: an attempt whose recorded provider trust generation
+/// no longer matches "current" is superseded and must fail, not silently
+/// validate against whatever the live config says now. Extracted from
+/// `federated_callback` so the comparison itself has a test independent of
+/// whether production data can reach a mismatch today (see
+/// [`current_provider_version_and_generation`]'s doc comment for why it
+/// cannot, yet).
+fn attempt_is_superseded(
+    claimed_version: i64,
+    claimed_generation: i64,
+    current_version: i64,
+    current_generation: i64,
+) -> bool {
+    claimed_version != current_version || claimed_generation != current_generation
+}
+
+/// Maps a claim/nonce failure to the `fed_error` query value the callback
+/// redirects with. Grouped by user-facing outcome, not by Rust variant:
+/// every [`NonceError`] variant means "this token's nonce does not match
+/// this attempt's," so all four collapse to the one value the *old*
+/// nonce check already uses (`nonce_mismatch`) -- the new path enforces
+/// the same user-facing condition by the real mechanism, not a different
+/// one. `StoreError::Conflict` (not `pending`) really is a replay of an
+/// already-claimed attempt, so it gets its own, more specific value
+/// rather than sharing one of the others.
+fn claim_and_nonce_fed_error(e: &ClaimAndNonceError) -> &'static str {
+    match e {
+        ClaimAndNonceError::Nonce(_) => "nonce_mismatch",
+        ClaimAndNonceError::Claim(store_err) => match store_err {
+            StoreError::Conflict => "replay",
+            StoreError::AttemptExpired => "expired",
+            StoreError::ClockRegression => "clock_regression",
+            StoreError::Crypto => "tamper_detected",
+            StoreError::NotFound => "attempt_not_found",
+            _ => "attempt_claim_failed",
+        },
+    }
+}
+
 // ── GET /auth/federated/{slug}/start ─────────────────────────────────────────
 
 #[derive(Deserialize)]
@@ -166,10 +274,7 @@ pub async fn federated_start(
     // base64url-encode the SHA-256 digest bytes (PKCE uses raw bytes, not hex).
     use base64ct::{Base64UrlUnpadded, Encoding};
     let verifier_bytes = pkce_verifier.as_bytes();
-    let challenge_bytes = {
-        use sha2::{Digest, Sha256};
-        Sha256::digest(verifier_bytes).to_vec()
-    };
+    let challenge_bytes = Sha256::digest(verifier_bytes).to_vec();
     let pkce_challenge_b64 = {
         let mut out = vec![0u8; 64];
         let n = Base64UrlUnpadded::encode(&challenge_bytes, &mut out)
@@ -179,11 +284,28 @@ pub async fn federated_start(
         String::from_utf8(out).unwrap_or_default()
     };
 
-    // Random nonce (P5 single-use replay protection).
-    let nonce = sui_id_core::tokens::random_token(16);
+    // Random nonce (P5 single-use replay protection). RFC 096 `:583-584`:
+    // 32 bytes, like the other three independent CSPRNG values below --
+    // bumped from the legacy 16 here (the one place this stage touches the
+    // old cookie-state code, since it already generates the value the new
+    // attempt row's `nonce_sha256` must hash).
+    let nonce = sui_id_core::tokens::random_token(32);
 
-    // Random state parameter for open-redirect guard (CSRF).
-    let state_param = sui_id_core::tokens::random_token(16);
+    // Random state parameter for open-redirect guard (CSRF). Same RFC 096
+    // `:583-584` bump as `nonce`, same reason.
+    let state_param = sui_id_core::tokens::random_token(32);
+
+    // RFC 096 `:583-584`: the fourth independent CSPRNG value, bound into
+    // the sealed verifier's AAD by `federation_login_attempt::insert` via
+    // the attempt row it creates below, and (RFC 096 `:584-585`) carried to
+    // the browser in its own cookie. **Not yet compared to anything at
+    // claim time** -- stage 3's `claim` (already accepted) checks status,
+    // clock regression and expiry, and this stage's own new validation
+    // block (below) does not add a browser-binding comparison either,
+    // since neither dispatch named one. Generated and stored so the value
+    // exists for whichever stage does add that check, not a decision this
+    // stage is making about whether to enforce it.
+    let browser_binding = sui_id_core::tokens::random_token(32);
 
     let fed_state = FedState {
         nonce: nonce.clone(),
@@ -199,11 +321,58 @@ pub async fn federated_start(
     };
     let sealed = seal_state(&app, &fed_state).map_err(|_| HttpError::html(CoreError::Internal))?;
 
-    // Build the upstream authorization URL.
+    // RFC 096-B1 stage 4: the durable attempt row the callback claims and
+    // validates against. Created here, alongside the legacy sealed-state
+    // cookie above, not in place of it -- "do not remove the old paths"
+    // (this stage's own scope boundary; stage 7 removes it). Both carry
+    // the *same* `nonce`/`state_param`/`pkce_verifier` values generated
+    // above: one real OAuth request goes out below, so both records of it
+    // must agree on what was actually sent.
+    let now = app.clock.now();
+    let (provider_config_version, provider_activation_generation) =
+        current_provider_version_and_generation(&provider);
     let redirect_uri = format!(
         "{}/auth/federated/callback",
         app.config.server.issuer.trim_end_matches('/')
     );
+    let attempt = federation_login_attempt::insert(
+        &app.db,
+        provider.id,
+        provider_config_version,
+        provider_activation_generation,
+        sha256_32(state_param.as_bytes()),
+        sha256_32(nonce.as_bytes()),
+        sha256_32(browser_binding.as_bytes()),
+        fed_state.pkce_verifier.as_bytes(),
+        redirect_uri.clone(),
+        fed_state.next.clone(),
+        now,
+    )
+    .await
+    .map_err(|e| {
+        tracing::error!(slug = %slug, error = %e, "federation: attempt row insert failed");
+        HttpError::html(CoreError::Internal)
+    })?;
+    let _ = attempt; // held only for its side effect here; the callback re-finds it by state hash.
+
+    // RFC 096 `:584-585`: the browser receives only the opaque binding, in
+    // a Secure, HttpOnly, SameSite=Lax cookie scoped to the provider
+    // callback -- the same scoping as the state cookie below.
+    let browser_binding_cookie = {
+        let mut c = Cookie::new(BROWSER_BINDING_COOKIE, browser_binding);
+        c.set_http_only(true);
+        c.set_same_site(axum_extra::extract::cookie::SameSite::Lax);
+        c.set_max_age(time::Duration::seconds(STATE_TTL_SECS));
+        c.set_path("/auth/federated");
+        if app.config.server.cookie_secure {
+            c.set_secure(true);
+        }
+        c
+    };
+
+    // Build the upstream authorization URL. `redirect_uri` is the one
+    // computed above, alongside the attempt row -- the same request uses
+    // it both places.
     use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
     let enc = |s: &str| utf8_percent_encode(s, NON_ALPHANUMERIC).to_string();
 
@@ -233,7 +402,11 @@ pub async fn federated_start(
         c
     };
 
-    Ok((jar.add(state_cookie), Redirect::to(&upstream_url)).into_response())
+    Ok((
+        jar.add(state_cookie).add(browser_binding_cookie),
+        Redirect::to(&upstream_url),
+    )
+        .into_response())
 }
 
 // ── GET /auth/federated/callback ─────────────────────────────────────────────
@@ -247,7 +420,14 @@ pub struct CallbackQuery {
 
 #[derive(Deserialize)]
 struct TokenResponse {
-    access_token: String,
+    // RFC 096 `:593-595`: held only in a zeroize-on-drop value until the
+    // response is discarded; never persisted (P6). A `refresh_token`, if
+    // the upstream returns one despite the request not asking for it, is
+    // not a field of this struct at all -- `serde`'s default struct
+    // deserialization never retains a JSON member it has no field for, so
+    // it is dropped at parse time, not read into memory as a named value
+    // to then have to remember to ignore.
+    access_token: SecretString,
     id_token: Option<String>,
 }
 
@@ -397,6 +577,172 @@ pub async fn federated_callback(
         }
     };
 
+    // ── RFC 096-B1 stage 4: the attempt claim and 096-A's validators ─────────
+    //
+    // Everything below runs *before* the legacy trust-on-TLS decode a few
+    // lines down, and fails the request closed on any error -- this is
+    // "096-A stops being dormant" (the dispatch's own title for this
+    // stage): a forged signature, wrong issuer, stale `iat`, replayed or
+    // mismatched nonce, or a superseded attempt is refused *here*, by the
+    // validators that have had zero production callers until now, not by
+    // the old code a few lines below (which still runs afterward, on the
+    // *same* token, redundantly and unchanged -- "do not remove the old
+    // paths," stage 7's job). A success here changes nothing about what
+    // the old code does with its own, separately-decoded claims: "no
+    // identity mapping and no session... hold [the capability], and let
+    // stage 5 consume it."
+    //
+    // RFC 096's own requirement (`:593-594`): the ID token is mandatory.
+    // The pre-existing userinfo-fallback branch a few lines down, for a
+    // response with no `id_token` at all, is unreachable once this refuses
+    // first -- not deleted (same "do not remove" reasoning), but dead in
+    // practice from this stage on.
+    let id_token_jwt = match tokens.id_token.as_deref() {
+        Some(jwt) => jwt,
+        None => {
+            tracing::warn!(slug = %provider.slug, "federation: id_token absent (mandatory, RFC 096 :593-594)");
+            return Ok(Redirect::to("/admin/login?fed_error=missing_id_token").into_response());
+        }
+    };
+
+    // The provider's startup-configured trust: `id_token_algs` is never
+    // learned from discovery, only narrowed by it (`id_token_algs_
+    // intersection`'s own doc comment) -- looked up by slug since this is
+    // `[[federation_providers]]` config, not a `federation_provider` DB
+    // column.
+    let Some(provider_config) = app
+        .config
+        .federation_providers
+        .iter()
+        .find(|p| p.slug == provider.slug)
+    else {
+        // Measured, not assumed: a provider enabled in the database with
+        // no matching `[[federation_providers]]` block is a startup
+        // configuration drift this handler cannot resolve on its own.
+        tracing::error!(slug = %provider.slug, "federation: enabled provider has no matching config block");
+        return Ok(Redirect::to("/admin/login?fed_error=config_drift").into_response());
+    };
+    let allowed_algs = discovery.id_token_algs_intersection(&provider_config.id_token_algs);
+
+    let verified_claims = match verify_id_token(
+        &app.http_client,
+        id_token_jwt,
+        &allowed_algs,
+        discovery.jwks_uri(),
+    )
+    .await
+    {
+        Ok(claims) => claims,
+        Err(e) => {
+            tracing::warn!(slug = %provider.slug, error = ?e, "federation: id_token signature/structure verification failed");
+            return Ok(Redirect::to("/admin/login?fed_error=signature_invalid").into_response());
+        }
+    };
+
+    // The attempt row, found by the hash of the `state` value this exact
+    // request already proved (above, by `ct_eq`) matches what `federated_
+    // start` sent -- the same value `federated_start` hashed into
+    // `state_sha256` when it created this row.
+    let state_hash = sha256_32(fed_state.upstream_state.as_bytes());
+    let attempt = match federation_login_attempt::find_by_state_sha256(&app.db, state_hash).await {
+        Ok(a) => a,
+        Err(e) => {
+            tracing::warn!(slug = %provider.slug, error = %e, "federation: no attempt row for this state");
+            return Ok(Redirect::to("/admin/login?fed_error=attempt_not_found").into_response());
+        }
+    };
+
+    // One clock sample for everything below: the claim, `iat`'s lower/upper
+    // bound, and the capability's `validated_at` -- not `app.clock.now()`
+    // called three separate times.
+    let validation_now = app.clock.now();
+
+    let claimed = match claim_and_consume_nonce(
+        &app.db,
+        attempt.id,
+        &verified_claims,
+        validation_now,
+    )
+    .await
+    {
+        Ok(row) => row,
+        Err(e) => {
+            tracing::warn!(slug = %provider.slug, error = ?e, "federation: attempt claim or nonce consumption failed");
+            return Ok(Redirect::to(&format!(
+                "/admin/login?fed_error={}",
+                claim_and_nonce_fed_error(&e)
+            ))
+            .into_response());
+        }
+    };
+
+    // RFC 096 `:580-581`: if the provider's trust config has moved on
+    // since this attempt started, it is superseded and must fail -- not
+    // silently validate against whatever the config says now. Re-reading
+    // `provider.issuer`/`provider.client_id` below (live config) is only
+    // safe because this check has just proven nothing has moved.
+    let (current_version, current_generation) = current_provider_version_and_generation(&provider);
+    if attempt_is_superseded(
+        claimed.provider_config_version,
+        claimed.provider_activation_generation,
+        current_version,
+        current_generation,
+    ) {
+        tracing::warn!(slug = %provider.slug, "federation: attempt superseded (provider config/activation moved on)");
+        return Ok(Redirect::to("/admin/login?fed_error=superseded").into_response());
+    }
+
+    let identity = match validate_identity_claims(
+        &verified_claims,
+        &provider.issuer,
+        &provider.client_id,
+    ) {
+        Ok(i) => i,
+        Err(e) => {
+            tracing::warn!(slug = %provider.slug, error = ?e, "federation: identity claims rejected");
+            return Ok(
+                Redirect::to("/admin/login?fed_error=identity_claims_invalid").into_response(),
+            );
+        }
+    };
+
+    // RFC 096 `:676`: `iat`'s lower bound is the attempt's own `created_at`
+    // -- the attempt-binding defence against a token minted long before
+    // this attempt existed.
+    if let Err(e) = validate_iat(&verified_claims, claimed.created_at, validation_now) {
+        tracing::warn!(slug = %provider.slug, error = ?e, "federation: iat rejected");
+        return Ok(Redirect::to("/admin/login?fed_error=time_claims_invalid").into_response());
+    }
+
+    let optional = match validate_optional_claims(&verified_claims) {
+        Ok(o) => o,
+        Err(e) => {
+            tracing::warn!(slug = %provider.slug, error = ?e, "federation: optional claims rejected");
+            return Ok(
+                Redirect::to("/admin/login?fed_error=optional_claims_invalid").into_response(),
+            );
+        }
+    };
+
+    let _capability = construct_identity_capability(
+        &identity,
+        &optional,
+        CacheKey::new(
+            provider.id,
+            ProviderVersion(claimed.provider_config_version as u64),
+            ActivationGeneration(claimed.provider_activation_generation as u64),
+        ),
+        validation_now,
+    );
+    // "What it does with the capability is: nothing yet -- hold it, and
+    // let stage 5 consume it." Constructed, proven well-formed by every
+    // check above, and deliberately unused past this point.
+
+    // ── End of stage 4's new validation. The legacy path below is
+    // unchanged and still authoritative for identity mapping and session
+    // establishment (stages 5/6) -- it re-decodes the same token itself,
+    // without signature verification, exactly as it always has. ──────────
+
     // Decode the ID token claims (light validation — nonce check + sub extraction).
     // We trust the token_endpoint over TLS; full signature verification would
     // require fetching the upstream JWKS — out of scope for Step 1.
@@ -411,7 +757,13 @@ pub async fn federated_callback(
         None => {
             // No id_token: fall back to userinfo endpoint if available.
             if let Some(ui_url) = discovery.userinfo_endpoint() {
-                match fetch_userinfo(&app.http_client, ui_url, &tokens.access_token).await {
+                match fetch_userinfo(
+                    &app.http_client,
+                    ui_url,
+                    tokens.access_token.expose_secret(),
+                )
+                .await
+                {
                     Ok(claims) => claims,
                     Err(e) => {
                         tracing::warn!(error = %e, "userinfo fetch failed");
@@ -769,3 +1121,7 @@ fn emit_audit_soon(
         let _ = sui_id_store::repos::audit::append(&db, &row).await;
     })
 }
+
+#[cfg(test)]
+#[path = "federation/tests.rs"]
+mod tests;

@@ -5,7 +5,9 @@
 //! and gets the uniform response (A9).
 
 use super::common::*;
-use super::federation_fail_closed::{federated_signin, linked_user, mock_upstream};
+use super::federation_fail_closed::{
+    add_federation_provider_config, federated_signin, linked_user, mock_upstream,
+};
 use axum::body::Body;
 use axum::http::{Method, Request, StatusCode, header};
 use std::io::Write;
@@ -460,21 +462,22 @@ async fn r102_l03_rereads_the_user_and_rolls_back_when_inactive() {
 
 // ── L04 ──────────────────────────────────────────────────────────────
 
-async fn federation_app() -> (AppState, UserId) {
+async fn federation_app() -> (AppState, UserId, super::federation_fail_closed::NonceSlot) {
     let mut state = test_app();
     complete_setup_and_login(&state).await;
     state.http_client = std::sync::Arc::new(super::tls_mock::federation_test_client(
         sui_id::resolver::ValidatingResolver,
     ));
-    let issuer = mock_upstream().await;
+    let (issuer, nonce_slot) = mock_upstream().await;
+    add_federation_provider_config(&mut state, &issuer);
     let user = linked_user(&state, &issuer).await;
-    (state, user)
+    (state, user, nonce_slot)
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn r102_l04_federated_sign_in_commits_session_event_and_last_login() {
-    let (state, user) = federation_app().await;
-    let o = federated_signin(&state).await;
+    let (state, user, nonce_slot) = federation_app().await;
+    let o = federated_signin(&state, &nonce_slot).await;
     assert_eq!(o.location, "/admin");
     let session = o.session_cookie.expect("session");
     assert_eq!(all_sessions(&state, user).await, 1);
@@ -513,17 +516,17 @@ async fn r102_l04_federated_sign_in_commits_session_event_and_last_login() {
 // thread-local capturing subscriber sees its log line.
 #[tokio::test]
 async fn r102_l04_append_failure_commits_nothing_and_redirects_uniformly() {
-    let (state, user) = federation_app().await;
+    let (state, user, nonce_slot) = federation_app().await;
     break_audit_log(&state).await;
     let (captured, _guard) = capture();
     // Repeatable for the same reason as the L03 case: nothing is written.
-    let mut o = federated_signin(&state).await;
+    let mut o = federated_signin(&state, &nonce_slot).await;
     for _ in 0..4 {
         if logged(&captured).contains("federation: sign-in transaction failed") {
             break;
         }
         tracing::callsite::rebuild_interest_cache();
-        o = federated_signin(&state).await;
+        o = federated_signin(&state, &nonce_slot).await;
     }
     assert!(o.status.is_redirection());
     assert_eq!(o.location, "/admin/login?fed_error=signin_failed");
@@ -553,10 +556,15 @@ async fn r102_l04_append_failure_commits_nothing_and_redirects_uniformly() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn r102_l04_federated_sign_in_evicts_over_the_cap() {
-    let (state, user) = federation_app().await;
+    let (state, user, nonce_slot) = federation_app().await;
     set_cap(&state, 1).await;
-    assert!(federated_signin(&state).await.session_cookie.is_some());
-    let newest = federated_signin(&state)
+    assert!(
+        federated_signin(&state, &nonce_slot)
+            .await
+            .session_cookie
+            .is_some()
+    );
+    let newest = federated_signin(&state, &nonce_slot)
         .await
         .session_cookie
         .expect("second");

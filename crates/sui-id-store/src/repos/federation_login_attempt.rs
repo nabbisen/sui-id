@@ -186,6 +186,29 @@ pub async fn insert(
     Ok(row)
 }
 
+/// RFC 096-B1 stage 4: look up an attempt by its `state_sha256` — the only
+/// value the callback actually has (the OAuth `state` parameter, echoed
+/// back by the upstream; the caller hashes it before calling this). Read
+/// path, not a write: this is the first caller of `federation_login_attempt`
+/// that only reads, so it goes through [`crate::ReadConn`] like every other
+/// read site in this crate, not `with_conn`.
+pub async fn find_by_state_sha256(
+    db: &Database,
+    state_sha256: [u8; 32],
+) -> StoreResult<FederationLoginAttemptRow> {
+    db.with_read(move |read| {
+        read.prepare(&format!(
+            "SELECT {SELECT_COLUMNS} FROM federation_login_attempt WHERE state_sha256 = ?1"
+        ))?
+        .query_row([state_sha256.as_slice()], map_row)
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
+            other => StoreError::from(other),
+        })
+    })
+    .await
+}
+
 /// RFC 096-B1 stage 3: claim a `pending` attempt, `pending -> exchanging`,
 /// single-use (RFC 096 `:590-592`).
 ///

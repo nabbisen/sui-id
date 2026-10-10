@@ -460,3 +460,80 @@ async fn exactly_one_of_two_concurrent_claims_wins() {
         }
     }
 }
+
+// ── Stage 4: lookup by state_sha256 ────────────────────────────────────────
+
+#[tokio::test]
+async fn an_attempt_is_found_by_its_own_state_hash() {
+    let db = open_test_db();
+    let provider_id = seed_provider(&db).await;
+    let now = fixed_now();
+    let state = hash32(42);
+    let attempt = insert(
+        &db,
+        provider_id,
+        1,
+        1,
+        state,
+        hash32(2),
+        hash32(3),
+        b"v",
+        "https://rp.example/cb".to_owned(),
+        None,
+        now,
+    )
+    .await
+    .unwrap();
+
+    let found = find_by_state_sha256(&db, state).await.unwrap();
+    assert_eq!(found.id, attempt.id);
+}
+
+#[tokio::test]
+async fn an_unknown_state_hash_is_not_found() {
+    let db = open_test_db();
+    let result = find_by_state_sha256(&db, hash32(99)).await;
+    assert!(matches!(result, Err(StoreError::NotFound)));
+}
+
+/// `state_sha256 UNIQUE` (migration 0046) is what makes this lookup
+/// well-defined at all -- two attempts can never share a state hash, so
+/// "found by state" never has to pick among candidates.
+#[tokio::test]
+async fn a_second_attempt_cannot_reuse_a_state_hash_already_in_use() {
+    let db = open_test_db();
+    let provider_id = seed_provider(&db).await;
+    let now = fixed_now();
+    let state = hash32(7);
+    insert(
+        &db,
+        provider_id,
+        1,
+        1,
+        state,
+        hash32(2),
+        hash32(3),
+        b"v",
+        "https://rp.example/cb".to_owned(),
+        None,
+        now,
+    )
+    .await
+    .unwrap();
+
+    let result = insert(
+        &db,
+        provider_id,
+        1,
+        1,
+        state,
+        hash32(20),
+        hash32(30),
+        b"v2",
+        "https://rp.example/cb".to_owned(),
+        None,
+        now,
+    )
+    .await;
+    assert!(result.is_err());
+}
