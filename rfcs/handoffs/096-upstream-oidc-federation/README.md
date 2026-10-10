@@ -233,6 +233,47 @@ close the shipped defect.
 
 ### Dispatched and open
 
+- [`stage4-code-exchange-and-validation-2026-10-10.md`](stage4-code-exchange-and-validation-2026-10-10.md)
+  — **DISPATCHED, this is the open work.** **The stage where 096-A stops being
+  dormant**: `identity_claims`, `time_claims`, `optional_claims` and
+  `identity_capability` have zero non-test callers today and all gain their first
+  here. Expected values come from the claimed attempt row, not live config —
+  `:580-581` is why. Also the token-response envelope row the 096-A corpus left
+  to this stage. *(It also corrects a wrong reason in stages 1–3's dispatches:
+  `handlers/federation.rs` was withheld from **096-A**, not until stage 7, so
+  this stage edits it.)*
+
+### Landed
+
+- [`stage3-claim-and-nonce-consumption-2026-10-10.md`](stage3-claim-and-nonce-consumption-2026-10-10.md)
+  — **landed `d8e10d4`, Level B, 24/24 gates green.** `F08`: `pending ->
+  exchanging` in one conditional `UPDATE` whose affected-row count is the sole
+  authority — dropping the condition fails the concurrent-claim test 29 of 30
+  runs with both callers winning, reproduced independently. Clock regression
+  checked before expiry, because `expires_at <= now` alone fails *open* under a
+  backward clock. **096-A's `validate_nonce` gained its first production
+  caller**, so the nonce is genuinely one-time (`:67-68`), with the digest
+  converted to lowercase hex at the boundary — which closes by construction the
+  uppercase gap 096-A's review deferred.
+
+  One mutation survived the first pass and was handled properly: disabling the
+  early `status` check killed no test, because the conditional `UPDATE`
+  independently refuses the same rows. It is not redundant for a row that is
+  both non-`pending` *and* clock-regressed, where it decides which error wins;
+  the test added for that priority now catches it, and nothing else does.
+
+### Landed
+
+- [`stage9-the-remaining-corpus-rows-2026-10-09.md`](stage9-the-remaining-corpus-rows-2026-10-09.md)
+  — **landed `56c91de`, Level B.** The Claims and Discovery sections of
+  `validation-matrix.md`, each row carrying the layer that proves it, plus the
+  three rows the matrix demanded and nothing tested: the exponential NumericDate
+  spelling, a multi-byte Unicode `sub` proven to return byte-identical, and the
+  well-known derivation vectors driven end to end through real TLS — including
+  the RFC 8414 insert-before-path form, which must never be requested.
+
+### Dispatched and open
+
 - [`stage3-claim-and-nonce-consumption-2026-10-10.md`](stage3-claim-and-nonce-consumption-2026-10-10.md)
   — **DISPATCHED, this is the open work.** `pending -> exchanging` as a single
   conditional `UPDATE` whose affected-row count is the authority, the fail-closed
