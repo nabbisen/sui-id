@@ -233,6 +233,47 @@ close the shipped defect.
 
 ### Dispatched and open
 
+- [`stage2-durable-attempt-start-2026-10-10.md`](stage2-durable-attempt-start-2026-10-10.md)
+  — **DISPATCHED, this is the open work.** The `pending` attempt row, the PKCE
+  verifier sealed with AAD binding the four values that are already columns on
+  it, the 600-second lifetime and an injected clock that fails closed on
+  regression. **It carries two corrections to the authorized plan**, both the
+  architect's: four of five F-command assignments were wrong, and **none of the
+  101 registered write commands creates an attempt row or performs the claim**,
+  so this stage needs a manifest row that does not exist or G17 fails. Whether
+  extending RFC 094's F-numbering is the implementer's to do is left open rather
+  than assumed.
+
+### Landed
+
+- [`stage1-attempt-state-migration-2026-10-10.md`](stage1-attempt-state-migration-2026-10-10.md)
+  — **landed `0ed0db5`, Level B, 24/24 gates green.** Migration `0046`,
+  `federation_login_attempt`. Hashes are `BLOB` in a `STRICT` table, which does
+  more than the length `CHECK` alone: a 32-character hex string cannot
+  masquerade as 32 raw bytes, because `STRICT` refuses `TEXT` in a `BLOB`
+  column. `provider_id` carries no `FOREIGN KEY`, argued from `:580-581` — the
+  version and generation columns exist so a superseded attempt stays
+  *identifiable*, and a `CASCADE` would make it vanish.
+
+  **One property is not schema-enforced and stage 3 must carry it:** a claimed
+  row can be walked back to `pending` by `UPDATE`. The table `CHECK` makes
+  `status` and `claimed_at` *agree*; it cannot make the transition one-way,
+  because a row `CHECK` never sees where a row came from. Single-use is a
+  security property, so stage 3 enforces it with a conditional
+  `UPDATE ... WHERE status='pending'`.
+
+### Landed
+
+- [`stage9-the-remaining-corpus-rows-2026-10-09.md`](stage9-the-remaining-corpus-rows-2026-10-09.md)
+  — **landed `56c91de`, Level B.** The Claims and Discovery sections of
+  `validation-matrix.md`, each row carrying the layer that proves it, plus the
+  three rows the matrix demanded and nothing tested: the exponential NumericDate
+  spelling, a multi-byte Unicode `sub` proven to return byte-identical, and the
+  well-known derivation vectors driven end to end through real TLS — including
+  the RFC 8414 insert-before-path form, which must never be requested.
+
+### Dispatched and open
+
 - [`stage1-attempt-state-migration-2026-10-10.md`](stage1-attempt-state-migration-2026-10-10.md)
   — **DISPATCHED, this is the open work.** Migration `0046` and the
   `federation_login_attempt` schema of RFC 096 `:577-589`. Schema only: creating
