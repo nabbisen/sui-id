@@ -857,6 +857,17 @@ files = []  # UNRESOLVED, deliberately: no federated WebAuthn ceremony exists to
 test_id = "`p_f06_webauthn_begin`, `p_f06_webauthn_replace`"
 
 [[command]]
+id = "F07"
+class = "P"
+status = "implemented"  # implemented | target-absent | target-legacy
+sealed = false
+owner = "Federated login attempt start / RFC 096 federation login"
+rationale = "short-lived one-time protocol state, the same shape as U32/U33/T01 (sealed = false, Class P): precedes any authentication outcome, so there is no login event to chain yet. F01-F06 are RFC 094's own closed design of the six post-claim transitions on an *existing* attempt row (guarded exchanging -> completed/failed, MFA continuation, WebAuthn ceremony); this is the CREATE that precedes all of them, a different operation shape within the same family -- numbered into it the way RFC 102 added U30-U33 to the existing U family without reopening RFC 094, not an owner-only extension of a closed six"
+mutation_surface = "`federation_login_attempt::insert`"
+files = ["crates/sui-id-store/src/repos/federation_login_attempt.rs"]
+test_id = "`p_f07_attempt_start`"
+
+[[command]]
 id = "T01"
 class = "P"
 status = "implemented"  # implemented | target-absent | target-legacy

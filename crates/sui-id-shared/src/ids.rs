@@ -98,5 +98,10 @@ define_id!(
     "Identifier of a durably recorded `/forgot-password` request row (RFC 124 D1): the request path's only write, before a background worker performs the address-dependent work."
 );
 
+define_id!(
+    FederationLoginAttemptId,
+    "Identifier of an upstream OIDC federation login attempt row (RFC 096 :577-589)."
+);
+
 #[cfg(test)]
 mod tests;

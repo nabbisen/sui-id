@@ -771,3 +771,67 @@ pub struct EmailOutboxRow {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
+
+/// `federation_login_attempt.status` (RFC 096 :577-589, migration 0046).
+/// Forward-only by protocol rule (RFC 096's own text), not by anything the
+/// schema enforces: migration 0046's table `CHECK` only requires `status`
+/// and `claimed_at` to *agree*, not that a row never returns to `pending`
+/// (stage 1's review measured this directly). Single-use is stage 3's job,
+/// with a conditional `UPDATE ... WHERE status = 'pending'`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FederationLoginAttemptStatus {
+    Pending,
+    Exchanging,
+    Completed,
+    Failed,
+}
+
+impl FederationLoginAttemptStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Exchanging => "exchanging",
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+        }
+    }
+}
+
+impl std::str::FromStr for FederationLoginAttemptStatus {
+    type Err = crate::errors::StoreError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "pending" => Ok(Self::Pending),
+            "exchanging" => Ok(Self::Exchanging),
+            "completed" => Ok(Self::Completed),
+            "failed" => Ok(Self::Failed),
+            other => Err(crate::errors::StoreError::InvalidData(format!(
+                "unknown federation_login_attempt status: {other:?}"
+            ))),
+        }
+    }
+}
+
+/// A row in the `federation_login_attempt` table (RFC 096 :577-589, migration
+/// 0046). `pkce_verifier_sealed` is AAD-bound to `id`, `provider_id`,
+/// `provider_config_version` and `provider_activation_generation` — all four
+/// are columns on this same row, so the AAD is reconstructed from the row
+/// rather than stored a second time (`repos::federation_login_attempt::
+/// build_aad`).
+#[derive(Debug, Clone)]
+pub struct FederationLoginAttemptRow {
+    pub id: sui_id_shared::ids::FederationLoginAttemptId,
+    pub provider_id: sui_id_shared::ids::FederationProviderId,
+    pub provider_config_version: i64,
+    pub provider_activation_generation: i64,
+    pub state_sha256: [u8; 32],
+    pub nonce_sha256: [u8; 32],
+    pub browser_binding_sha256: [u8; 32],
+    pub pkce_verifier_sealed: Vec<u8>,
+    pub exact_redirect_uri: String,
+    pub next_path: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub expires_at: DateTime<Utc>,
+    pub status: FederationLoginAttemptStatus,
+    pub claimed_at: Option<DateTime<Utc>>,
+}
