@@ -233,6 +233,42 @@ close the shipped defect.
 
 ### Dispatched and open
 
+- [`stage3-claim-and-nonce-consumption-2026-10-10.md`](stage3-claim-and-nonce-consumption-2026-10-10.md)
+  — **DISPATCHED, this is the open work.** `pending -> exchanging` as a single
+  conditional `UPDATE` whose affected-row count is the authority, the fail-closed
+  `now_at_claim < created_at` check, and 096-A's `validate_nonce` given its first
+  production caller. **This is where "the nonce rule" becomes "genuinely
+  one-time"** (`:67-68`).
+
+### Landed
+
+- [`stage2-durable-attempt-start-2026-10-10.md`](stage2-durable-attempt-start-2026-10-10.md)
+  — **landed `226d1a6`, Level B, 24/24 gates green.** `F07`, Class P: the
+  `pending` row with its PKCE verifier sealed under an AAD binding attempt id,
+  provider id, config version and activation generation. The AAD separators are
+  load-bearing — unseparated, version 1/generation 23 and version 12/generation 3
+  both concatenate to `"123"`, making two attempts' verifiers interchangeable.
+  That binding also buys tamper-evidence that fails closed: altering any of the
+  four bound columns makes the verifier unopenable, so a superseded attempt stops
+  being claimable by construction.
+
+  Extending RFC 094's numbering is established practice — `U37` by RFC 103 stage
+  3, `O05`/`O06` by RFC 124, the whole `L` family by RFC 102 stage 2. *(Stage 2's
+  own citation for this was wrong: `U30`–`U33` are RFC 094's own, added in
+  `d70ead3`; RFC 102 only corrected their rationales.)*
+
+### Landed
+
+- [`stage9-the-remaining-corpus-rows-2026-10-09.md`](stage9-the-remaining-corpus-rows-2026-10-09.md)
+  — **landed `56c91de`, Level B.** The Claims and Discovery sections of
+  `validation-matrix.md`, each row carrying the layer that proves it, plus the
+  three rows the matrix demanded and nothing tested: the exponential NumericDate
+  spelling, a multi-byte Unicode `sub` proven to return byte-identical, and the
+  well-known derivation vectors driven end to end through real TLS — including
+  the RFC 8414 insert-before-path form, which must never be requested.
+
+### Dispatched and open
+
 - [`stage2-durable-attempt-start-2026-10-10.md`](stage2-durable-attempt-start-2026-10-10.md)
   — **DISPATCHED, this is the open work.** The `pending` attempt row, the PKCE
   verifier sealed with AAD binding the four values that are already columns on
