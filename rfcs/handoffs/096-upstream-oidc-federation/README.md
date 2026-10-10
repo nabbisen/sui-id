@@ -233,6 +233,45 @@ close the shipped defect.
 
 ### Dispatched and open
 
+- [`stage5-verified-identity-mapping-2026-10-10.md`](stage5-verified-identity-mapping-2026-10-10.md)
+  — **DISPATCHED, this is the open work.** `(provider_id, sub)` as the sole
+  lookup key, the generic `link_only` result, and `provision_on_first_login`'s
+  takeover-collision denial. Resolves and decides; stage 6 acts. Carries one
+  required rename from stage 4's review.
+
+### Landed
+
+- [`stage4-code-exchange-and-validation-2026-10-10.md`](stage4-code-exchange-and-validation-2026-10-10.md)
+  — **landed `d16b4c3`, Level B, 24/24 gates green. 096-A is no longer dormant:**
+  each of its five validators now has exactly one non-test caller, all on the
+  live callback, verified by grep. An ID token is mandatory; `MAX_STRING_LEN` at
+  8 KiB is the cap that actually binds, tighter than the RFC's own 16 KiB.
+
+  **Two limitations on the standing list.** The superseded-attempt comparison is
+  wired and unit-tested but **tautological**: `/start` and the callback both read
+  the version from one placeholder returning `(0,0)`, because
+  `federation_provider` has no such columns and `C23` is `target-absent` M2b
+  work. So an operator changing a provider's `issuer` or `client_id` mid-flight
+  is **not** detected today, which is what `:580-581` exists to prevent —
+  096-B1's closure must not claim otherwise. And `browser_binding` is generated
+  and cookied per the RFC's design but nothing compares it yet.
+
+  Two fixes found while in the area, neither asked for: nonce and state were
+  `random_token(16)` where `:564` requires independent 32-byte CSPRNG values —
+  two of four under-sized — and `access_token` is now `SecretString` per P6.
+
+### Landed
+
+- [`stage9-the-remaining-corpus-rows-2026-10-09.md`](stage9-the-remaining-corpus-rows-2026-10-09.md)
+  — **landed `56c91de`, Level B.** The Claims and Discovery sections of
+  `validation-matrix.md`, each row carrying the layer that proves it, plus the
+  three rows the matrix demanded and nothing tested: the exponential NumericDate
+  spelling, a multi-byte Unicode `sub` proven to return byte-identical, and the
+  well-known derivation vectors driven end to end through real TLS — including
+  the RFC 8414 insert-before-path form, which must never be requested.
+
+### Dispatched and open
+
 - [`stage4-code-exchange-and-validation-2026-10-10.md`](stage4-code-exchange-and-validation-2026-10-10.md)
   — **DISPATCHED, this is the open work.** **The stage where 096-A stops being
   dormant**: `identity_claims`, `time_claims`, `optional_claims` and
