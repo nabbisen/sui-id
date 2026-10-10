@@ -868,6 +868,17 @@ files = ["crates/sui-id-store/src/repos/federation_login_attempt.rs"]
 test_id = "`p_f07_attempt_start`"
 
 [[command]]
+id = "F08"
+class = "P"
+status = "implemented"  # implemented | target-absent | target-legacy
+sealed = false
+owner = "Federated login attempt claim / RFC 096 federation login"
+rationale = "short-lived one-time protocol state, same shape as F07/U32/U33/T01: the guarded pending -> exchanging transition precedes any authentication outcome, so there is no login event to chain yet; nonce consumption alongside it is a pure comparison against the claimed row, not a second write. Extends the F family the way U37 (RFC 103 stage 3), O05/O06 (RFC 124) and the L family (RFC 102 stage 2) extended or created families after the registry's own founding RFC -- the precedent stage 2's review corrected, not the one it first cited"
+mutation_surface = "`federation_login_attempt::claim`"
+files = ["crates/sui-id-store/src/repos/federation_login_attempt.rs"]
+test_id = "`p_f08_attempt_claim`"
+
+[[command]]
 id = "T01"
 class = "P"
 status = "implemented"  # implemented | target-absent | target-legacy

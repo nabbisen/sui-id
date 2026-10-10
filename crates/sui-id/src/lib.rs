@@ -32,6 +32,8 @@ pub mod dynamic_registration_validation;
 pub mod egress;
 #[path = "http/errors.rs"]
 pub mod errors;
+#[path = "http/federation_attempt_claim.rs"]
+pub mod federation_attempt_claim;
 #[path = "http/federation_cache.rs"]
 pub mod federation_cache;
 #[path = "http/federation_identity.rs"]

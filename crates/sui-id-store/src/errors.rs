@@ -127,6 +127,25 @@ pub enum StoreError {
     /// `EXPLAIN` happens to behave today.
     #[error("ReadConn refuses EXPLAIN unconditionally: {sql}")]
     ExplainRefused { sql: String },
+
+    /// RFC 096-B1 stage 3: a `federation_login_attempt` claim was refused
+    /// because `expires_at <= now_at_claim` (RFC 096 `:587-588`). Distinct
+    /// from [`Self::ClockRegression`], which is the *other* time-based
+    /// refusal and must not be confused with this one — a backward clock
+    /// makes a row look less elapsed, not more, so it cannot be detected by
+    /// this check and needs its own.
+    #[error("the attempt expired before it was claimed")]
+    AttemptExpired,
+
+    /// RFC 096-B1 stage 3: a `federation_login_attempt` claim was refused
+    /// because the wall clock read at claim time is earlier than the row's
+    /// own `created_at` — RFC 096 `:589`'s "clock regression fails closed."
+    /// `expires_at <= now_at_claim` alone is the wrong test under a backward
+    /// clock (it makes the window look less elapsed, not more), so this is
+    /// checked independently rather than folded into
+    /// [`Self::AttemptExpired`].
+    #[error("the wall clock read at claim time precedes the attempt's created_at")]
+    ClockRegression,
 }
 
 /// Why U37 refused to issue a recovery link (RFC 103 D5, D6, D8).
