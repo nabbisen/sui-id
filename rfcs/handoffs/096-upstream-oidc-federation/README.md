@@ -233,6 +233,49 @@ close the shipped defect.
 
 ### Dispatched and open
 
+- [`stage1-attempt-state-migration-2026-10-10.md`](stage1-attempt-state-migration-2026-10-10.md)
+  — **DISPATCHED, this is the open work.** Migration `0046` and the
+  `federation_login_attempt` schema of RFC 096 `:577-589`. Schema only: creating
+  an attempt is stage 2, claiming it stage 3. `:23` names migration evidence as
+  a closure item, so it is produced here rather than reconstructed later.
+
+### Landed
+
+- [`stage0-readconn-2026-10-09.md`](stage0-readconn-2026-10-09.md)
+  and
+  [`stage0-fix-side-effecting-readonly-statements-2026-10-10.md`](stage0-fix-side-effecting-readonly-statements-2026-10-10.md)
+  — **landed together as `e3ccb76`, Level B, 24/24 gates green.**
+  **RFC 094's `ReadConn` — declared a required M2a control and absent for weeks
+  — is now built.** The write surface is absent from `ReadStatement`'s type
+  rather than refused at runtime; three `compile_fail` fixtures assert the
+  `functions`/`vtab`/`load_extension` features stay off by probing the
+  *resolved* feature set, which manifest parsing cannot do because Cargo's
+  unification can enable a feature from anywhere in the graph; and 67 of 68 read
+  sites are converted, the one exception reported.
+
+  Returned once, because `sqlite3_stmt_readonly` is insufficient on its own —
+  rusqlite's own source says so above the binding. SQLite's documentation names
+  seven statements it reports read-only; the transaction grammar adds `END`;
+  `EXPLAIN` reports whatever it wraps. **The returned fix also closed a hole in
+  the part already accepted:** the original check trimmed whitespace but not
+  comments, and twelve state-changing assignment PRAGMAs report read-only, so
+  `/* x */ PRAGMA foreign_keys = OFF` was bypassed by the comment, passed by the
+  interrogation, and would have disabled foreign-key enforcement on a pooled
+  connection. Nothing vulnerable reached the repository — the holed check existed
+  only in an uncommitted tree.
+
+### Landed
+
+- [`stage9-the-remaining-corpus-rows-2026-10-09.md`](stage9-the-remaining-corpus-rows-2026-10-09.md)
+  — **landed `56c91de`, Level B.** The Claims and Discovery sections of
+  `validation-matrix.md`, each row carrying the layer that proves it, plus the
+  three rows the matrix demanded and nothing tested: the exponential NumericDate
+  spelling, a multi-byte Unicode `sub` proven to return byte-identical, and the
+  well-known derivation vectors driven end to end through real TLS — including
+  the RFC 8414 insert-before-path form, which must never be requested.
+
+### Dispatched and open
+
 - [`stage0-fix-side-effecting-readonly-statements-2026-10-10.md`](stage0-fix-side-effecting-readonly-statements-2026-10-10.md)
   — **DISPATCHED, this is the open work.** One item on an otherwise accepted
   stage 0. `ReadConn` accepts a class of statements `sqlite3_stmt_readonly`
