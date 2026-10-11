@@ -204,6 +204,55 @@ A reader of this file would have concluded that 096-A had not started. **That
 was my omission** — three dispatches written without updating the index the
 implementation role reads.
 
+**Updated 2026-10-11.** 096-B1 stage 5 landed; **no stage is dispatched**, and
+the reason is the next section.
+
+### Open with the owner
+
+- [`096-b1-stage-plan-revision-proposal-2026-10-11.md`](096-b1-stage-plan-revision-proposal-2026-10-11.md)
+  — **PROPOSAL, and stage 6 waits on it.** The authorized plan under-scoped
+  096-B1: `:89-93` assigns **F01–F06** to this phase and the plan's stage 6
+  names F01, F02 and F04, so **F03, F05 and F06 are in no stage** — and with
+  them the `federation_mfa_pending` / `federation_webauthn_ceremony` migrations
+  (`:728-738`), `FederatedMfaVerifier` (`:752-765`), `:605`'s 24-hour purge of
+  completed/failed/expired attempts, and `:600-601`'s *"the callback cookie is
+  expired on every terminal path"*. **096-B1 is seven stages from closing, not
+  two.** Stage 6 as authorized would commission F02, whose only output is a
+  pending row in a table that does not exist, read by a command in no stage —
+  so the dispatch waits rather than going out in a form already known to be
+  wrong. **The architect's error**, found before dispatching rather than after
+  stage 8; the plan's own `:23` check was real and `:23` is not the whole scope.
+  The document also proposes a release checkpoint. Neither the revised order
+  nor the checkpoint is in effect.
+
+### Landed
+
+- [`stage5-verified-identity-mapping-2026-10-10.md`](stage5-verified-identity-mapping-2026-10-10.md)
+  — **landed `8a8dec4`, Level B, 24/24 gates green**, plus A3.2 (347 fixture
+  tests) and A3.4. `identity_resolution::resolve_verified_identity` resolves a
+  stage-4 capability to one of five named states; `(provider_id, sub)` is the
+  sole lookup key and an existing link authenticates without email. A decision,
+  not a mutation — stage 6 acts on it.
+
+  **It took a fix round, and the finding was not in the module.** The module
+  returned one generic state for `link_only` as `:699` requires; the live
+  callback did not, because the legacy collision block sat before the
+  `provision_mode` match. It now sits inside the
+  `provision_on_first_login` arm, where `:707-708` puts collision denial, and
+  `tests/e2e/r096_b1_stage5.rs` pins the generic result against the live router
+  rather than the module. `:714-715` is satisfied on this path in the same
+  round — no raw email, `sub` or upstream error text in a log field or an audit
+  note — and the fourth such site was found by the implementation role doing
+  the full grep rather than the three the review named.
+
+  `/auth/federated/link` and its unsigned pending-link cookie are removed, not
+  reused (`:700-701`), and `configuration.md` and `operators.md` now say what
+  `link_only` does: no self-service linking in this release, an administrator
+  creates the link record. **Two items go to stage 7** — `L04`'s audit event
+  carries the upstream `sub`, and `operators.md`'s
+  `provision_on_first_login` sentence becomes true only when the new
+  resolution is authoritative.
+
 ### Dispatched and open
 
 **096-A's fifteen stages are complete.** The architect's assessment is
@@ -230,14 +279,6 @@ close the shipped defect.
   spelling, a multi-byte Unicode `sub` proven to return byte-identical, and the
   well-known derivation vectors driven end to end through real TLS — including
   the RFC 8414 insert-before-path form, which must never be requested.
-
-### Dispatched and open
-
-- [`stage5-verified-identity-mapping-2026-10-10.md`](stage5-verified-identity-mapping-2026-10-10.md)
-  — **DISPATCHED, this is the open work.** `(provider_id, sub)` as the sole
-  lookup key, the generic `link_only` result, and `provision_on_first_login`'s
-  takeover-collision denial. Resolves and decides; stage 6 acts. Carries one
-  required rename from stage 4's review.
 
 ### Landed
 
@@ -496,9 +537,15 @@ close the shipped defect.
 ### Next: 096-B1
 
 - [`096-b1-stage-plan-2026-10-09.md`](096-b1-stage-plan-2026-10-09.md)
-  — **AUTHORIZED 2026-10-09.** Nine stages, checked against
+  — **AUTHORIZED 2026-10-09**, and **its stage 6 onward is superseded by a
+  proposal** —
+  [`096-b1-stage-plan-revision-proposal-2026-10-11.md`](096-b1-stage-plan-revision-proposal-2026-10-11.md),
+  which is not in effect. Read both: stages 0–5 ran from this document and are
+  complete; what remains was under-scoped here by three commands, two
+  migrations and four requirements. Nine stages, checked against
   `:23` and `:83-85` **before** stage 1 rather than after stage 9, which is how
-  096-A's plan came to be nine stages for fifteen stages of work.
+  096-A's plan came to be nine stages for fifteen stages of work. **That check
+  was not sufficient**: `:89-93`'s F01–F06 assignment is not in `:23`.
   **096-B1 is the stage that closes the shipped defect** (`:87`): everything
   096-A built in stages 6a–7 has zero production callers, and stage 4 is where
   every validator gains its first.
@@ -512,16 +559,22 @@ close the shipped defect.
   prose-versus-criteria divergence in that RFC. **Building it is 096-B1's stage
   0.**
 
-### Open with the owner
+### Settled
+
+*(This entry was still filed under "Open with the owner" until 2026-10-11,
+eight days after it was answered. Index staleness of exactly the kind the
+2026-10-07 note above apologises for.)*
 
 - [`exp-boundary-strictness-2026-10-08.md`](exp-boundary-strictness-2026-10-08.md)
-  — **DECISION REQUEST, blocking nothing.** RFC 096 `:662` states `exp`'s rule
-  as the strict `now < exp + 60s`, while `:663` and `:664` state `iat`'s and
-  `nbf`'s non-strictly. `jsonwebtoken` accepts at `now <= exp + 60`, so the RFC
-  refuses one instant that the implementation accepts. Recommendation: amend
-  `:662` to non-strict, matching its own two siblings and what has always been
-  built. Enforcing it in our own code instead would put one rule in two places,
-  which is the reasoning this RFC's `aud` design already rejected.
+  — **SETTLED 2026-10-09; the amendment landed.** RFC 096 `:662` stated
+  `exp`'s rule as the strict `now < exp + 60s`, while `:663` and `:664` state
+  `iat`'s and `nbf`'s non-strictly, and `jsonwebtoken` accepts at
+  `now <= exp + 60` — so the RFC refused one instant the implementation
+  accepts. `:662` now reads non-strictly, matching its own two siblings and
+  what has always been built; see the RFC's 2026-10-09 amendment summary.
+  Enforcing the strict bound in our own code was the rejected alternative: one
+  rule in two places, which is the reasoning this RFC's `aud` design had
+  already rejected.
 
 ### Landed
 
