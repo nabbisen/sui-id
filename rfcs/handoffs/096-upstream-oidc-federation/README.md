@@ -204,23 +204,59 @@ A reader of this file would have concluded that 096-A had not started. **That
 was my omission** — three dispatches written without updating the index the
 implementation role reads.
 
-**Updated 2026-10-11.** 096-B1 stage 5 landed; the stage plan's remaining
-scope was corrected and the correction is authorized; **stage 6a is the open
-dispatch**, and the rest of stage 6 waits on one decision.
+**Updated 2026-10-11 (third entry of the day).** Stage 6a landed; stage 6b is
+the open dispatch; stage 6 is now four dispatches rather than two, because the
+Class-B emission path F05 needs does not exist.
 
 ### Dispatched and open
 
+- [`stage6b-class-b-emission-2026-10-11.md`](stage6b-class-b-emission-2026-10-11.md)
+  — **DISPATCHED, this is the open work.** RFC 094 `:292-298`'s
+  `emit_must_attempt`: a named API in the audit subsystem returning an outcome,
+  structured telemetry on every failure, injectable failure with a test that
+  asserts the signal fired, and registry-declared events rather than free
+  strings. The mechanism plus **one** converted call site; the other 20
+  best-effort `let _ = audit::append(…)` sites are M2b's and are to be returned
+  as a measured list. Two gates will bite and the dispatch says where:
+  `commands/tests.rs:162`'s `every_descriptor_is_atomic_class`, which must be
+  replaced rather than weakened, and G13's column check, whose rule was
+  measured — a Class-B matrix row conflicts only with a sealed ***Atomic***
+  descriptor, so `MustAttempt` is compatible.
+
+### Settled, and one half reopened
+
+- [`emit-must-attempt-prerequisite-decision-2026-10-11.md`](emit-must-attempt-prerequisite-decision-2026-10-11.md)
+  — **the decision taken, and the cost I failed to name.** `emit_must_attempt`
+  is built as stage 6b; F05 then uses it, because A6 (`RFC 094 :120`) is the
+  reason the Class-B shape is right there — failure to log a denial must never
+  prevent the denial, and an atomic F05 would roll the terminalization back on
+  exactly the path that most needs the record. F01 goes the other way, Class A
+  folded into L04, because `auth.federation.signin.success` is **already**
+  atomic in production. **§4 reopens the third item:** amending RFC 094 now may
+  be a material change under RFC 000 `:43-47`, which returns an Accepted RFC to
+  `proposed/` — build-prohibited, and RFC 094 gates every registry-dependent
+  lane. Measured facts that narrow it: no gate ties the manifest's class to RFC
+  094's prose, and F01 is two dispatches out. Revised recommendation inside;
+  the other two items stand as accepted.
+- [`class-b-emission-and-f01-class-2026-10-11.md`](class-b-emission-and-f01-class-2026-10-11.md)
+  — the finding and the argument that produced that decision. Kept as the
+  record.
+
+### Landed, this round
+
 - [`stage6a-attempt-retention-and-terminal-cookies-2026-10-11.md`](stage6a-attempt-retention-and-terminal-cookies-2026-10-11.md)
-  — **DISPATCHED, this is the open work.** The two items of stage 6 that depend
-  on nothing open: `:604-605`'s 24-hour purge of completed/failed/expired
-  attempts, and `:600-601`'s cookie expiry on every terminal path. Measured
-  before dispatching — `federation_login_attempt` has `insert`,
-  `find_by_state_sha256` and `claim` and **no delete of any kind**, and
-  `runtime/gc.rs` purges six tables and not this one, so rows have accumulated
-  since stage 2 (no released version: stages 1 and 2 landed after `0.79.0`);
-  and the callback expires `STATE_COOKIE` on **2 of its 23** terminal paths and
-  `BROWSER_BINDING_COOKIE` on none. No command, no event, no manifest row —
-  wanting one is the signal that F05 has been crossed into.
+  — **landed `3c76c6c`, Level B 24/24** plus A3.2 (347 fixture tests) and A3.4.
+  `:604-605`'s 24-hour purge, registered in `runtime/gc.rs` beside the existing
+  six — the predicate derived against the schema's actual columns, since the
+  table has no terminal-transition timestamp, and the serialization checked on
+  both sides of what is a `TEXT` comparison. `:600-601`'s cookie expiry made
+  **structural**: `federated_callback` and `complete_federated_signin` return a
+  `Terminal` newtype whose only constructor removes both federation cookies, so
+  a terminal path that forgets them does not compile. Before it, the state
+  cookie was expired on 2 of 23 terminal paths and the browser-binding cookie
+  on none. One hardening item carried to the next dispatch: the removal cookies
+  carry no `Path`, and work today only because every terminal response is
+  emitted from `/auth/federated/callback`.
 
 ### Open with the owner
 
@@ -249,8 +285,8 @@ dispatch**, and the rest of stage 6 waits on one decision.
   along with the `federation_mfa_pending` / `federation_webauthn_ceremony`
   migrations (`:728-738`), `FederatedMfaVerifier` (`:752-765`), `:604-605`'s
   purge and `:600-601`'s terminal-path cookie expiry. 096-B1 is **nine stages
-  from closing, not two** — 6 through 14, and **ten dispatches**, since stage 6
-  splits into 6a and 6b. **The architect's error**, found
+  from closing, not two** — 6 through 14, and **twelve dispatches**, since
+  stage 6 runs as 6a–6d. **The architect's error**, found
   before dispatching rather than after stage 8; the plan's own `:23` check was
   real, and `:23` is not the whole scope. The release checkpoint authorized
   with it: cut `0.80.0` after stage 6, then continue toward `0.81.0`.

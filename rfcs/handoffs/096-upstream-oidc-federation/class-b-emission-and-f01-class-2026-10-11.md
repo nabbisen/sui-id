@@ -3,8 +3,16 @@
 **Raised.** 2026-10-11 JST, by the architect.
 **Found.** Writing stage 6's dispatch, reading the two commands' recorded
 shapes against the code they would use.
-**Status.** **Open.** Stage 6's two retention items are dispatched as stage 6a
-and depend on nothing here; **F05 and F01 wait on this.**
+**Status.** **Settled on items 1 and 2; item 3 reopened by me.** `@nabbisen`,
+2026-10-11: "Your recommendation is accepted." So: F01 Class A folded into L04,
+and `emit_must_attempt` built before F05. **Item 3 — the RFC 094 amendment now
+— I have asked to be reconsidered**, because RFC 000 `:43-47` may make it a
+material change that returns RFC 094 to `proposed/`, which is build-prohibited
+and would halt every lane the command registry gates. I did not name that cost
+when I recommended it. The reasoning and the revised sequencing are in §4 of
+[`emit-must-attempt-prerequisite-decision-2026-10-11.md`](emit-must-attempt-prerequisite-decision-2026-10-11.md).
+**This document is the record of the finding and the argument, not an open
+item** — except that one half of item 3.
 **Blocks.** F01, F05 — and, by the same mechanism, F03 at stage 10.
 
 ## 1. The measured facts

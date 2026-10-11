@@ -138,10 +138,11 @@ revised order rather than going out in a form already known to be wrong.
 ## 5. Release schedule
 
 The authorized plan assumed one release at the end of 096-B1. With nine stages
-remaining rather than two — 6 through 14; **ten dispatches**, since stage 6
-splits into 6a and 6b (*count corrected 2026-10-11: this read "seven", carried
-over from an earlier twelve-stage draft of §2 and not recounted against the
-fourteen-stage order actually written below it*) — that is a long runway, and stage 5's fix round
+remaining rather than two — 6 through 14; **twelve dispatches**, since stage 6
+runs as 6a–6d (*count corrected twice on 2026-10-11: it first read "seven",
+carried over from an earlier twelve-stage draft of §2 and not recounted against
+the fourteen-stage order written below it; then "ten dispatches", before the
+Class-B emission finding split stage 6 into four rather than two*) — that is a long runway, and stage 5's fix round
 landed corrections in `main` (`8a8dec4`) that are worth operators' hands sooner
 than that. The findings behind them are recorded in this round's review result
 under `.git-exclude/`, which is also where the severity and disclosure
