@@ -204,24 +204,29 @@ A reader of this file would have concluded that 096-A had not started. **That
 was my omission** — three dispatches written without updating the index the
 implementation role reads.
 
-**Updated 2026-10-11 (third entry of the day).** Stage 6a landed; stage 6b is
-the open dispatch; stage 6 is now four dispatches rather than two, because the
-Class-B emission path F05 needs does not exist.
+**Updated 2026-10-11 (fourth entry of the day).** Stages 6a and 6b landed;
+**stage 6c is the open dispatch**, and it is wider than the plan said because
+`:597-599` turned out to require two things of the claim that the code does not
+do.
 
 ### Dispatched and open
 
-- [`stage6b-class-b-emission-2026-10-11.md`](stage6b-class-b-emission-2026-10-11.md)
-  — **DISPATCHED, this is the open work.** RFC 094 `:292-298`'s
-  `emit_must_attempt`: a named API in the audit subsystem returning an outcome,
-  structured telemetry on every failure, injectable failure with a test that
-  asserts the signal fired, and registry-declared events rather than free
-  strings. The mechanism plus **one** converted call site; the other 20
-  best-effort `let _ = audit::append(…)` sites are M2b's and are to be returned
-  as a measured list. Two gates will bite and the dispatch says where:
-  `commands/tests.rs:162`'s `every_descriptor_is_atomic_class`, which must be
-  replaced rather than weakened, and G13's column check, whose rule was
-  measured — a Class-B matrix row conflicts only with a sealed ***Atomic***
-  descriptor, so `MustAttempt` is compatible.
+- [`stage6c-attempt-state-machine-and-f05-2026-10-11.md`](stage6c-attempt-state-machine-and-f05-2026-10-11.md)
+  — **DISPATCHED, this is the open work.** Three divergences from
+  `:597-599`/`:603-604`, found by checking the callback's actual order of
+  operations before dispatching, **all from the architect's own stage 3 and 4
+  dispatches**: the claim is bundled with nonce consumption so it waits for the
+  ID token and the code is exchanged *first*, where `:597-599` puts the
+  `pending -> exchanging` transition **before** the exchange; `:598`'s
+  constant-time **browser binding** comparison is absent, so
+  `browser_binding_sha256` has been stored since stage 1 and compared against
+  nothing; and `:603-604`'s error response does not consume the matching
+  attempt. F05 lands with them rather than after, because moving the claim
+  earlier widens the window in which a failure leaves a row `exchanging`.
+  Carries stage 6b's review item: a descriptor whose declaration drifts from
+  the parser's expected shape is dropped silently and its matrix row goes back
+  to being checked for nothing — this stage adds four more of them, so it adds
+  the guard.
 
 ### Settled, and one half reopened
 
@@ -243,6 +248,22 @@ Class-B emission path F05 needs does not exist.
   record.
 
 ### Landed, this round
+
+- [`stage6b-class-b-emission-2026-10-11.md`](stage6b-class-b-emission-2026-10-11.md)
+  — **landed `2c92e46`, Level B 24/24** plus A3.2 and A3.4. RFC 094
+  `:292-298`'s `emit_must_attempt`, with A6 (`:120`) proven end to end: with
+  the audit log broken by a real `BEFORE INSERT … RAISE(ABORT)` trigger, the
+  takeover denial still happens and the failure is logged. Class-B events got
+  their own descriptor type rather than being forced through
+  `declare_write_command!`, whose seal exists to prove membership in a
+  transaction a Class-B emission does not have; `AuditClass::MustAttempt` was
+  removed rather than left unimplemented, which makes *"every
+  `EventDescriptor` is Atomic"* a fact with no other value to write, proven by
+  a compile-fail fixture. **It took a fix round**: the new descriptor type was
+  invisible to `scripts/rust_registry.py`, so the matrix row it was meant to
+  bind was still checked for nothing. Rows actor-checked: 25 → 26. The fix
+  round also caught a G16 failure the architect introduced and reported as
+  clean — a `contracts/` edit checked against G13 only.
 
 - [`stage6a-attempt-retention-and-terminal-cookies-2026-10-11.md`](stage6a-attempt-retention-and-terminal-cookies-2026-10-11.md)
   — **landed `3c76c6c`, Level B 24/24** plus A3.2 (347 fixture tests) and A3.4.
