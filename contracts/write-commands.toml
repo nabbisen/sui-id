@@ -837,13 +837,17 @@ test_id = "`a_f04_provision`"
 [[command]]
 id = "F05"
 class = "P"
-status = "target-legacy"  # implemented | target-absent | target-legacy
+status = "implemented"  # implemented | target-absent | target-legacy
 sealed = false
 owner = "Terminal federation attempt failure/denial / RFC 096 federation login"
 rationale = "one-time terminalization; exact Class-B sum: `auth.federation.signin.upstream_failure`, `takeover_blocked`, `link_required`, or `signin.denied` with closed reason enum"
-mutation_surface = "guarded pending/exchanging attempt to failed; no link/user/session/last-seen mutation"
-files = ["crates/sui-id/src/http/handlers/federation.rs"]  # legacy failure paths inside `federated_callback`; not the closed Class-B reason enum this row describes. Depends on RFC 096-B1. Target-state row.
-test_id = "`p_f05_upstream`, `p_f05_takeover`, `p_f05_link_required`, `p_f05_denied`"
+mutation_surface = "`federation_login_attempt::terminalize_failed` (guarded pending/exchanging attempt to failed; no link/user/session/last-seen mutation), called alongside `emit_must_attempt` by `federation_attempt_terminalize::terminalize_and_audit`, which the closed `TerminalFailureReason` enum selects the one of four registry-declared descriptors for"
+files = [
+  "crates/sui-id-store/src/repos/federation_login_attempt.rs",
+  "crates/sui-id/src/http/federation_attempt_terminalize.rs",
+  "crates/sui-id/src/http/handlers/federation.rs",
+]  # RFC 096-B1 stage 6c: implemented. federated_callback's own 30+ call sites (every post-claim failure path, plus the :603-604 error-response path) are what invoke it; not themselves the command.
+test_id = "`federation_attempt_terminalize::tests::each_reason_terminalizes_and_records_its_own_event_name`, `::the_state_transition_survives_a_broken_audit_log`; `federation_login_attempt::tests::a_terminalized_attempt_cannot_be_terminalized_twice`, `::a_completed_attempt_cannot_be_moved_to_failed`; `tests/e2e/r096_b1_stage6c.rs` end to end"
 
 [[command]]
 id = "F06"

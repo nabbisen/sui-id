@@ -260,6 +260,101 @@ pub static AUDIT_TAKEOVER_BLOCKED_DESCRIPTOR: MustAttemptDescriptor = MustAttemp
     ],
 };
 
+/// RFC 096-B1 stage 6c, F05: a transport/token-level failure talking to the
+/// upstream IdP, discovered *after* the attempt was found (and, once
+/// claimed, while it is `exchanging`) -- discovery fetch, token exchange,
+/// or token response parsing. `federated_start`'s own discovery failure
+/// (no attempt row exists yet at that point) is unrelated and keeps using
+/// `AUDIT_SIGNIN_UPSTREAM_FAILURE`'s existing best-effort `audit::append`
+/// path; this descriptor is for the post-claim case F05 owns.
+/// `actor`/`target` both `None`, matching
+/// [`AUDIT_TAKEOVER_BLOCKED_DESCRIPTOR`]'s own reasoning: nothing about a
+/// transport failure identifies a local actor.
+pub static AUDIT_SIGNIN_UPSTREAM_FAILURE_DESCRIPTOR: MustAttemptDescriptor =
+    MustAttemptDescriptor {
+        kind: AuditEventKind::AuthFederationSigninUpstreamFailure,
+        name: "auth.federation.signin.upstream_failure",
+        actor: ActorRequirement::None,
+        target: TargetRequirement::None,
+        attributes: &[
+            AttributeSpec {
+                name: "provider_id",
+                description: "internal id of the federation provider the attempt was for",
+                required: true,
+            },
+            AttributeSpec {
+                name: "reason",
+                description: "bounded reason token naming which transport/token step failed",
+                required: true,
+            },
+        ],
+    };
+
+/// RFC 096-B1 stage 6c, F05: the generic `link_only` denial (RFC 096
+/// `:699-701`) for any unlinked upstream identity -- deliberately the same
+/// event regardless of whether the identity's email collides with a local
+/// account, since `:699` requires `link_only` to return one generic result
+/// either way (`identity_resolution`'s own `LinkRequired` state, and
+/// `tests/e2e/r096_b1_stage5.rs`'s `link_only_gives_the_same_result_
+/// whether_or_not_the_email_collides`, already pin this on the live path).
+pub static AUDIT_LINK_REQUIRED_DESCRIPTOR: MustAttemptDescriptor = MustAttemptDescriptor {
+    kind: AuditEventKind::AuthFederationLinkRequired,
+    name: "auth.federation.link_required",
+    actor: ActorRequirement::None,
+    target: TargetRequirement::None,
+    attributes: &[
+        AttributeSpec {
+            name: "provider_id",
+            description: "internal id of the federation provider the unlinked identity came from",
+            required: true,
+        },
+        AttributeSpec {
+            name: "reason",
+            description: "bounded reason token; always \"unlinked_identity\" for this event -- \
+                           kept required rather than omitted for the same reason \
+                           AUDIT_TAKEOVER_BLOCKED_DESCRIPTOR's own `reason` is, despite also \
+                           never varying: a uniform shape across all four F05 descriptors",
+            required: true,
+        },
+    ],
+};
+
+/// RFC 096-B1 stage 6c, F05: every other post-claim denial -- a
+/// validation, mapping, disabled-provider, disabled-user, MFA-state-read,
+/// or sign-in commit failure that is none of
+/// [`AUDIT_SIGNIN_UPSTREAM_FAILURE_DESCRIPTOR`],
+/// [`AUDIT_TAKEOVER_BLOCKED_DESCRIPTOR`] or
+/// [`AUDIT_LINK_REQUIRED_DESCRIPTOR`]'s own, more specific case. The
+/// `reason` attribute is what makes this one bucket diagnosable: see
+/// `crates/sui-id/src/http/federation_attempt_terminalize.rs`'s own
+/// enumeration of every call site and the `reason` token each one passes.
+///
+/// `actor`/`target` both `Optional`, unlike the three descriptors above:
+/// this bucket spans call sites both before and after a local user is
+/// resolved (every pre-link-resolution validation failure has no user_id
+/// at all; `complete_federated_signin`'s own checks do) -- `Optional` is
+/// the one `ActorRequirement`/`TargetRequirement` value that is correct at
+/// every one of them, matching `MfaAdminReset`'s own precedent for a
+/// sometimes-known actor.
+pub static AUDIT_SIGNIN_DENIED_DESCRIPTOR: MustAttemptDescriptor = MustAttemptDescriptor {
+    kind: AuditEventKind::AuthFederationSigninDenied,
+    name: "auth.federation.signin.denied",
+    actor: ActorRequirement::Optional,
+    target: TargetRequirement::Optional,
+    attributes: &[
+        AttributeSpec {
+            name: "provider_id",
+            description: "internal id of the federation provider the attempt was for",
+            required: true,
+        },
+        AttributeSpec {
+            name: "reason",
+            description: "bounded reason token naming which post-claim check refused",
+            required: true,
+        },
+    ],
+};
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests;

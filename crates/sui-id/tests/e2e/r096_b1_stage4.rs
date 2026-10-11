@@ -130,6 +130,7 @@ async fn custom_mock_upstream(
 
 struct Started {
     fed_state_cookie: String,
+    browser_binding_cookie: String,
     state_param: String,
 }
 
@@ -149,6 +150,11 @@ async fn start(state: &AppState, nonce_slot: &super::federation_fail_closed::Non
     assert!(resp.status().is_redirection(), "start: {}", resp.status());
     let fed_state_cookie =
         extract_set_cookie(resp.headers(), "sui_id_fed_state").expect("state cookie");
+    // RFC 096-B1 stage 6c: the claim now compares this digest in constant
+    // time; without round-tripping it, every callback here refuses as
+    // `fed_error=binding_mismatch` before reaching this file's own point.
+    let browser_binding_cookie =
+        extract_set_cookie(resp.headers(), "sui_id_fed_browser_binding").expect("binding cookie");
     let location = resp
         .headers()
         .get(header::LOCATION)
@@ -171,6 +177,7 @@ async fn start(state: &AppState, nonce_slot: &super::federation_fail_closed::Non
     *nonce_slot.lock().expect("lock") = Some(nonce_param);
     Started {
         fed_state_cookie,
+        browser_binding_cookie,
         state_param,
     }
 }
@@ -188,7 +195,10 @@ async fn callback(state: &AppState, started: &Started) -> String {
                 ))
                 .header(
                     header::COOKIE,
-                    format!("sui_id_fed_state={}", started.fed_state_cookie),
+                    format!(
+                        "sui_id_fed_state={}; sui_id_fed_browser_binding={}",
+                        started.fed_state_cookie, started.browser_binding_cookie
+                    ),
                 )
                 .body(Body::empty())
                 .expect("req"),
@@ -216,22 +226,30 @@ async fn base_state() -> AppState {
     state
 }
 
-/// **Not a demonstration of `fed_error=superseded`.** The obvious way to
-/// manufacture a row whose recorded provider trust generation disagrees
-/// with "current" — tamper the row's own `provider_config_version` after
-/// `/start` — does not reach the superseded check at all: that column is
-/// AAD-bound by stage 2's seal (`insert`/`claim`, RFC 096 `:586-587`'s PKCE
-/// binding), so altering it is caught by the *earlier* tamper check
-/// instead. This test pins that finding directly, so it is recorded as a
-/// property rather than left as a surprise the next reader has to
-/// rediscover: with today's placeholder (every provider's version/
-/// generation fixed at `(0, 0)`, RFC 096-B2/M2b not yet landed), the
-/// superseded check is wired into `federated_callback` but not reachable
-/// end-to-end by any input, tampered or genuine — `attempt_is_superseded`
-/// is unit-tested directly instead (`handlers::federation::tests`), and
-/// *that* is what proves the comparison itself is correct.
+/// **Now a demonstration of `fed_error=superseded`, corrected from stage
+/// 4's own original finding here.** Before RFC 096-B1 stage 6c, the
+/// obvious way to manufacture a row whose recorded provider trust
+/// generation disagrees with "current" — tamper the row's own
+/// `provider_config_version` after `/start` — reached only the *earlier*
+/// AAD tamper check (stage 2's seal, RFC 096 `:586-587`'s PKCE binding),
+/// never the superseded comparison itself: with the placeholder (every
+/// provider's version/generation fixed at `(0, 0)`, RFC 096-B2/M2b not yet
+/// landed) the two checks could not be told apart by any input, so this
+/// test used to pin `fed_error=tamper_detected` and record the superseded
+/// check as reachable only through its own unit tests.
+///
+/// Stage 6c moved the provider id/version/generation match (RFC 096
+/// `:597-598`) *inside* `federation_login_attempt::claim` itself, ahead of
+/// the AAD/crypto check, which already ran there — not a new divergence,
+/// the two checks were simply never orderable relative to each other
+/// before, since the comparison lived in a separate, later function. Now
+/// that both are in the same function, the mismatch check (reading the
+/// row's current columns, which is all tampering changes) runs first and
+/// wins: this scenario is reachable end-to-end as `superseded` after all,
+/// and the AAD check still exists for whatever it alone can still catch
+/// (an `id`-level forgery, not a version/generation edit).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn tampering_the_rows_own_provider_generation_is_caught_as_tampering_not_as_superseded() {
+async fn tampering_the_rows_own_provider_generation_is_caught_as_superseded_not_tampering() {
     let (issuer, nonce_slot) = mock_upstream().await;
     let mut state = base_state().await;
     add_federation_provider_config(&mut state, &issuer);
@@ -245,7 +263,7 @@ async fn tampering_the_rows_own_provider_generation_is_caught_as_tampering_not_a
     .await;
     let location = callback(&state, &started).await;
 
-    assert_eq!(location, "/admin/login?fed_error=tamper_detected");
+    assert_eq!(location, "/admin/login?fed_error=superseded");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

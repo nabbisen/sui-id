@@ -187,6 +187,9 @@ class MatrixColumns(unittest.TestCase):
         r = self.run_checker()
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("7 table rows, 4 sealed Class-A events; 5 rows checked", r.stdout)
+        self.assertIn(
+            "declarations seen/found: EventDescriptor 4/4, MustAttemptDescriptor 1/1", r.stdout
+        )
 
     def test_an_escaped_pipe_does_not_shift_the_columns(self) -> None:
         # The mfa.admin_reset row carries `\\|` in its Operation cell; if the
@@ -319,6 +322,51 @@ class MatrixColumns(unittest.TestCase):
         )
         self.write("crates/sui-id-store/src/commands.rs", src)
         self.assert_red("user.role_change is a sealed Class-A event")
+
+    # ── RFC 096-B1 stage 6c, item 4 (carried from stage 6b's review S6) ──
+
+    def test_a_drifted_must_attempt_descriptor_declaration_is_caught(self) -> None:
+        # The exact shape that made `AUDIT_TAKEOVER_BLOCKED_DESCRIPTOR`
+        # invisible even after stage 6b's own parser fix: a path-qualified
+        # type, split across two lines. The strict parser never sees it;
+        # the loose one, deliberately, does.
+        src = COMMANDS_RS + (
+            "\nstatic F99_DRIFTED: crate::registry::MustAttemptDescriptor =\n"
+            "    crate::registry::MustAttemptDescriptor {\n"
+            "        kind: AuditEventKind::AuthFederationLinkRequired,\n"
+            '        name: "auth.federation.drifted_example",\n'
+            "        actor: ActorRequirement::None,\n"
+            "        target: TargetRequirement::None,\n"
+            "        attributes: &[],\n"
+            "    };\n"
+        )
+        self.write("crates/sui-id-store/src/commands.rs", src)
+        self.assert_red(
+            "(declarations)",
+            "MustAttemptDescriptor",
+            "but the parser only recognised",
+        )
+
+    def test_a_drifted_event_descriptor_declaration_is_caught(self) -> None:
+        # The same drift, on the `EventDescriptor` side: a path-qualified
+        # type on its own line is enough, even without the split the
+        # `MustAttemptDescriptor` case above also has.
+        src = COMMANDS_RS + (
+            "\nstatic U06_DRIFTED: crate::registry::EventDescriptor = crate::registry::EventDescriptor {\n"
+            "    kind: AuditEventKind::UserRoleChange,\n"
+            '    name: "user.drifted_example",\n'
+            "    class: AuditClass::Atomic,\n"
+            "    actor: ActorRequirement::Required,\n"
+            "    target: TargetRequirement::Required,\n"
+            "    attributes: &[],\n"
+            "};\n"
+        )
+        self.write("crates/sui-id-store/src/commands.rs", src)
+        self.assert_red(
+            "(declarations)",
+            "EventDescriptor",
+            "but the parser only recognised",
+        )
 
 
 if __name__ == "__main__":

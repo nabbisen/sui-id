@@ -209,24 +209,28 @@ pub async fn find_by_state_sha256(
     .await
 }
 
-/// RFC 096-B1 stage 3: claim a `pending` attempt, `pending -> exchanging`,
-/// single-use (RFC 096 `:590-592`).
+/// RFC 096-B1 stage 3/6c: claim a `pending` attempt, `pending -> exchanging`,
+/// single-use (RFC 096 `:590-592`, `:597-598`).
 ///
 /// **Why this is a read, then a guarded check, then a conditional `UPDATE`
 /// — not one statement folding every condition into the `WHERE` clause.**
 /// `status`, `expires_at` and `created_at` are read once because the
 /// dispatch asks for *distinguishable* refusals (`NotFound` / `Conflict` /
-/// [`StoreError::AttemptExpired`] / [`StoreError::ClockRegression`]), and a
-/// single `UPDATE ... WHERE status = 'pending' AND expires_at > ?3` would
-/// collapse all of "never existed," "already claimed," and "expired" into
-/// one indistinguishable zero-rows-affected outcome — correct for
+/// [`StoreError::AttemptExpired`] / [`StoreError::ClockRegression`] /
+/// [`StoreError::AttemptProviderMismatch`] /
+/// [`StoreError::AttemptBrowserBindingMismatch`]), and a single
+/// `UPDATE ... WHERE status = 'pending' AND expires_at > ?3` would collapse
+/// all of "never existed," "already claimed," and "expired" into one
+/// indistinguishable zero-rows-affected outcome — correct for
 /// `login_pending_mfa::consume_within_tx`'s single generic outcome, wrong
-/// here. `expires_at` and `created_at` are immutable once inserted (never
-/// written anywhere outside `insert`), so reading them separately from the
-/// one thing that *does* change concurrently — `status` — introduces no
-/// race: only the final `UPDATE`'s own `WHERE status = 'pending'` clause
-/// needs to be atomic, because `status` is the one value two concurrent
-/// callers could disagree about.
+/// here. `expires_at`, `created_at`, `provider_id`,
+/// `provider_config_version`, `provider_activation_generation` and
+/// `browser_binding_sha256` are all immutable once inserted (never written
+/// anywhere outside `insert`), so reading them separately from the one
+/// thing that *does* change concurrently — `status` — introduces no race:
+/// only the final `UPDATE`'s own `WHERE status = 'pending'` clause needs to
+/// be atomic, because `status` is the one value two concurrent callers
+/// could disagree about.
 ///
 /// **The affected-row count is the authority for the claim itself**, exactly
 /// as the dispatch states: if the `UPDATE` affects zero rows, this caller
@@ -235,10 +239,30 @@ pub async fn find_by_state_sha256(
 /// [`StoreError::Conflict`], the same variant the read-time "not pending"
 /// check above also uses, since both mean the same thing to a caller: this
 /// attempt is not available to claim, right now, by you.
+///
+/// **RFC 096 `:597-598`'s match set, checked here rather than by a separate
+/// post-claim step.** `expected_provider_id`/`expected_provider_config_
+/// version`/`expected_provider_activation_generation` are the values the
+/// caller already resolved (from the state cookie, independently of this
+/// row) before calling; a mismatch against the row's own stored values
+/// means this attempt does not belong to the provider/trust-generation the
+/// caller is proceeding with, and the claim must refuse before it mutates
+/// anything. `presented_browser_binding_sha256` is compared to the row's
+/// own `browser_binding_sha256` in constant time
+/// (`subtle::ConstantTimeEq`) — `:598`'s own requirement — and the one
+/// variant covers both "wrong" and "absent" (the caller passes some 32-byte
+/// value either way; see [`StoreError::AttemptBrowserBindingMismatch`]).
+/// `ct_eq` on fixed-size 32-byte digests does not leak length, since both
+/// sides are always exactly 32 bytes — there is no length to leak.
+#[allow(clippy::too_many_arguments)]
 pub async fn claim(
     db: &Database,
     id: FederationLoginAttemptId,
     now_at_claim: DateTime<Utc>,
+    expected_provider_id: FederationProviderId,
+    expected_provider_config_version: i64,
+    expected_provider_activation_generation: i64,
+    presented_browser_binding_sha256: [u8; 32],
 ) -> StoreResult<FederationLoginAttemptRow> {
     let id_str = id.to_string();
     let row = db
@@ -270,6 +294,22 @@ pub async fn claim(
     }
     if row.expires_at <= now_at_claim {
         return Err(StoreError::AttemptExpired);
+    }
+    if row.provider_id != expected_provider_id
+        || row.provider_config_version != expected_provider_config_version
+        || row.provider_activation_generation != expected_provider_activation_generation
+    {
+        return Err(StoreError::AttemptProviderMismatch);
+    }
+    {
+        use subtle::ConstantTimeEq;
+        let binding_ok: bool = row
+            .browser_binding_sha256
+            .ct_eq(&presented_browser_binding_sha256)
+            .into();
+        if !binding_ok {
+            return Err(StoreError::AttemptBrowserBindingMismatch);
+        }
     }
 
     let affected = db
@@ -375,6 +415,48 @@ pub async fn purge_expired(db: &Database, now: DateTime<Utc>) -> StoreResult<usi
         Ok(n)
     })
     .await
+}
+
+/// RFC 096-B1 stage 6c, F05: guarded `pending|exchanging -> failed`,
+/// one-time (RFC 096 `:601-605`). No link, user, session or last-seen
+/// mutation — that is the property F05's own manifest row names, and this
+/// function's entire body is the one `UPDATE`, so there is nothing else in
+/// it that could touch any of those.
+///
+/// One statement, unlike [`claim`]: F05 does not need [`claim`]'s
+/// distinguishable refusals (`NotFound` vs "already terminal" vs
+/// "expired"). Every state this `WHERE` excludes — `completed`, already
+/// `failed`, or no such row at all — means the same thing to a caller
+/// here: this attempt cannot be moved to `failed` by this call, right now.
+/// `affected == 0` reports that uniformly as [`StoreError::Conflict`].
+///
+/// `now` exists only to satisfy the table's own `CHECK` — *"exactly one of
+/// 'pending and never claimed' or 'non-pending and claimed' is a valid
+/// row"* (migration 0046's own comment) — for the direct `pending ->
+/// failed` transition (RFC 096 `:603-604`'s error-response path, which
+/// never calls [`claim`] at all). `COALESCE(claimed_at, ?1)` leaves an
+/// already-`exchanging` row's real claim time untouched and only fills the
+/// column in for a row moving straight from `pending`.
+pub async fn terminalize_failed(
+    db: &Database,
+    id: FederationLoginAttemptId,
+    now: DateTime<Utc>,
+) -> StoreResult<()> {
+    let id_str = id.to_string();
+    let affected = db
+        .with_conn(move |conn| {
+            Ok(conn.execute(
+                "UPDATE federation_login_attempt \
+                 SET status = 'failed', claimed_at = COALESCE(claimed_at, ?1) \
+                 WHERE id = ?2 AND status IN ('pending', 'exchanging')",
+                params![now, id_str],
+            )?)
+        })
+        .await?;
+    if affected == 0 {
+        return Err(StoreError::Conflict);
+    }
+    Ok(())
 }
 
 #[cfg(test)]

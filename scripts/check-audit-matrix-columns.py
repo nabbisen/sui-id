@@ -201,6 +201,32 @@ def check(root: Path, matrix: Path) -> tuple[list[str], str]:
     failures += [f"(source) {f}" for f in src_failures]
     sealed_atomic = {n for n, d in descriptors.items() if d.klass == "Atomic"}
 
+    # RFC 096-B1 stage 6c (carried from stage 6b's review, S6): a
+    # declaration the strict parser cannot see fails open -- its matrix
+    # row goes back to being checked for nothing, the same way
+    # `AUDIT_TAKEOVER_BLOCKED_DESCRIPTOR` was invisible even after stage
+    # 6b's own parser fix landed. The loose count tolerates a path-
+    # qualified type and a declaration spanning several lines; the strict
+    # count is what `read_file` actually parsed. Lower strict than loose,
+    # in either category, means something was silently dropped.
+    decl_failures: list[str] = []
+    strict_event, strict_must_attempt, loose_event, loose_must_attempt = (
+        rust_registry.count_declarations(root, decl_failures)
+    )
+    failures += [f"(source) {f}" for f in decl_failures]
+    if strict_event < loose_event:
+        failures.append(
+            f"(declarations) {loose_event} `EventDescriptor` declaration(s) found in source, "
+            f"but the parser only recognised {strict_event} -- one is written in a shape it "
+            "cannot see"
+        )
+    if strict_must_attempt < loose_must_attempt:
+        failures.append(
+            f"(declarations) {loose_must_attempt} `MustAttemptDescriptor` declaration(s) found "
+            f"in source, but the parser only recognised {strict_must_attempt} -- one is written "
+            "in a shape it cannot see"
+        )
+
     by_event = {r.event: r for r in rows}
     for row in rows:
         claim = claimed_class(row.klass)
@@ -255,7 +281,9 @@ def check(root: Path, matrix: Path) -> tuple[list[str], str]:
 
     summary = (
         f"{len(rows)} table rows, {len(sealed_atomic)} sealed Class-A events; "
-        f"{sum(1 for r in rows if r.event in descriptors)} rows checked for actor and step_up"
+        f"{sum(1 for r in rows if r.event in descriptors)} rows checked for actor and step_up; "
+        f"declarations seen/found: EventDescriptor {strict_event}/{loose_event}, "
+        f"MustAttemptDescriptor {strict_must_attempt}/{loose_must_attempt}"
     )
     return failures, summary
 

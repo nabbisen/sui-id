@@ -146,6 +146,27 @@ pub enum StoreError {
     /// [`Self::AttemptExpired`].
     #[error("the wall clock read at claim time precedes the attempt's created_at")]
     ClockRegression,
+
+    /// RFC 096-B1 stage 6c, RFC 096 `:597-598`: a `federation_login_attempt`
+    /// claim was refused because the row's own `provider_id`,
+    /// `provider_config_version` or `provider_activation_generation` does
+    /// not match what the caller (which already resolved the provider from
+    /// the state cookie) expected. Distinct from the superseded-provider
+    /// check this replaces as a *separate* post-claim step: `:597` puts
+    /// this match inside the claim's own transaction, atomic with the
+    /// `pending -> exchanging` write, not after it.
+    #[error("the attempt's provider identity/version/generation does not match the caller's")]
+    AttemptProviderMismatch,
+
+    /// RFC 096-B1 stage 6c, RFC 096 `:598`: the presented browser-binding
+    /// cookie digest did not match the attempt's own `browser_binding_sha256`
+    /// in a constant-time comparison. A missing cookie is represented the
+    /// same way a wrong one is — the caller passes some 32-byte value either
+    /// way — so this variant alone does not distinguish "absent" from
+    /// "wrong," by design (RFC 096 `:598`'s own requirement that a missing
+    /// cookie must not become a bypass with a different observable shape).
+    #[error("the presented browser-binding digest does not match the attempt's own")]
+    AttemptBrowserBindingMismatch,
 }
 
 /// Why U37 refused to issue a recovery link (RFC 103 D5, D6, D8).

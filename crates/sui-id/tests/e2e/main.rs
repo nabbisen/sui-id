@@ -64,6 +64,7 @@ mod r096_b1_stage4;
 mod r096_b1_stage5;
 mod r096_b1_stage6a;
 mod r096_b1_stage6b;
+mod r096_b1_stage6c;
 mod r102_stage1;
 mod r102_stage2;
 mod r102_stage3;

@@ -31,7 +31,7 @@ use crate::federation_state::{FedState, STATE_COOKIE, STATE_TTL_SECS, seal_state
 use crate::handlers::{AppState, AppStateExt, session_cookie};
 use crate::id_token::{IdTokenClaims, decode_id_token_claims};
 use sui_id_core::errors::CoreError;
-use sui_id_shared::ids::{SessionId, UserId};
+use sui_id_shared::ids::{FederationLoginAttemptId, FederationProviderId, SessionId, UserId};
 use sui_id_store::models::{
     AuditLogRow, FederationLinkRow, FederationProviderRow, ProvisionMode, SessionRow,
 };
@@ -39,11 +39,14 @@ use sui_id_store::models::{
 // ── RFC 096-B1 stage 4: 096-A's validators, their first production callers ──
 
 use crate::cache_freshness::{ActivationGeneration, CacheKey, ProviderVersion};
-use crate::federation_attempt_claim::{ClaimAndNonceError, claim_and_consume_nonce};
+use crate::federation_attempt_terminalize::{
+    DeniedDetail, TerminalFailureReason, UpstreamFailureDetail, terminalize_and_audit,
+};
 use crate::id_token::verify_id_token;
 use crate::identity_capability::construct_identity_capability;
 use crate::identity_claims::validate_identity_claims;
 use crate::identity_resolution::resolve_verified_identity;
+use crate::nonce_claim::validate_nonce;
 use crate::optional_claims::validate_optional_claims;
 use crate::time_claims::validate_iat;
 use sui_id_store::StoreError;
@@ -187,6 +190,21 @@ fn sha256_32(bytes: &[u8]) -> [u8; 32] {
     Sha256::digest(bytes).into()
 }
 
+/// Lowercase hex, matching `sui_id_core::tokens::sha256_hex`'s own output
+/// shape exactly -- `validate_nonce` compares digests, not nonces, and
+/// `nonce_sha256` is a 32-byte `BLOB`, not hex `TEXT` (RFC 096
+/// `:587-588`). Moved here from the now-retired `federation_attempt_claim`
+/// module (stage 3), unchanged: RFC 096-B1 stage 6c splits the claim from
+/// the nonce comparison (item 1), not this conversion.
+fn hex_lower(bytes: &[u8; 32]) -> String {
+    use std::fmt::Write;
+    let mut out = String::with_capacity(64);
+    for b in bytes {
+        let _ = write!(&mut out, "{b:02x}");
+    }
+    out
+}
+
 /// RFC 096 `:580-581`, `:305-306`: the provider's current, durably checked
 /// `config_version`/`activation_generation` pair.
 ///
@@ -201,66 +219,53 @@ fn sha256_32(bytes: &[u8]) -> [u8; 32] {
 /// manifest alone.
 ///
 /// Until M2b adds the real columns, every provider's version/generation is
-/// fixed at `(0, 0)`. That makes the superseded-attempt comparison this
-/// stage wires (`federated_callback`, via [`attempt_is_superseded`])
-/// trivially satisfied in production today — there is only one value in
-/// play, so it can never disagree with itself — and, more than that,
-/// *unreachable end-to-end by any test either*: the one column that could
-/// be made to disagree with this constant is the row's own
-/// `provider_config_version`/`provider_activation_generation`, and those
-/// are AAD-bound by stage 2's `insert`/`claim` seal (`:586-587`'s own PKCE
-/// binding) — tampering them after insert is caught by that *earlier*
-/// tamper check (`StoreError::Crypto`), not by this comparison. Confirmed
-/// empirically, not assumed: an end-to-end attempt to do exactly that
-/// surfaced `fed_error=tamper_detected`, never `fed_error=superseded`.
+/// fixed at `(0, 0)`. That makes the provider id/version/generation match
+/// `federation_login_attempt::claim` now checks (RFC 096-B1 stage 6c, RFC
+/// 096 `:597-598`) trivially satisfied in production today — there is
+/// only one value in play, so it can never disagree with itself on a
+/// genuine request.
 ///
-/// That is why [`attempt_is_superseded`] is tested at the comparison level
-/// (`tests::` below) rather than end-to-end — it is genuinely wired into
-/// `federated_callback`, but what makes it *reachable* with real data is
-/// M2b's own work, not this stage's. When M2b lands the real columns,
-/// this is the one function that changes — most likely into two field
-/// reads on `FederationProviderRow` — not every call site that compares
-/// against it.
+/// **It is still reachable end-to-end by a tampered row, though — stage
+/// 6c changed this, and it is worth being precise about why.** Before
+/// stage 6c, the one way to make `provider_config_version`/`provider_
+/// activation_generation` disagree with this constant (direct SQL against
+/// the row after `/start`) was caught by a *different* mechanism first:
+/// those two columns are AAD-bound by stage 2's `insert`/`claim` seal
+/// (`:586-587`'s own PKCE binding), and that tamper check ran before the
+/// then-separate, post-claim superseded comparison ever got a chance —
+/// `fed_error=tamper_detected`, confirmed empirically, never `fed_error=
+/// superseded`. Stage 6c moved the match into `claim` itself, ahead of
+/// the AAD check (which still runs, after the `UPDATE`, for whatever only
+/// it can still catch). The same tampering now reaches the *match* check
+/// first and reports `superseded` — `tests/e2e/r096_b1_stage4.rs`'s own
+/// `tampering_the_rows_own_provider_generation_is_caught_as_superseded_
+/// not_tampering` pins this directly, corrected from what stage 4
+/// originally found and recorded there.
+///
+/// When M2b lands the real columns, this is the one function that
+/// changes — most likely into two field reads on `FederationProviderRow`
+/// — not every call site that compares against it.
 fn placeholder_provider_version_and_generation(_provider: &FederationProviderRow) -> (i64, i64) {
     (0, 0)
 }
 
-/// RFC 096 `:580-581`: an attempt whose recorded provider trust generation
-/// no longer matches "current" is superseded and must fail, not silently
-/// validate against whatever the live config says now. Extracted from
-/// `federated_callback` so the comparison itself has a test independent of
-/// whether production data can reach a mismatch today (see
-/// [`placeholder_provider_version_and_generation`]'s doc comment for why it
-/// cannot, yet).
-fn attempt_is_superseded(
-    claimed_version: i64,
-    claimed_generation: i64,
-    current_version: i64,
-    current_generation: i64,
-) -> bool {
-    claimed_version != current_version || claimed_generation != current_generation
-}
-
-/// Maps a claim/nonce failure to the `fed_error` query value the callback
-/// redirects with. Grouped by user-facing outcome, not by Rust variant:
-/// every [`NonceError`] variant means "this token's nonce does not match
-/// this attempt's," so all four collapse to the one value the *old*
-/// nonce check already uses (`nonce_mismatch`) -- the new path enforces
-/// the same user-facing condition by the real mechanism, not a different
-/// one. `StoreError::Conflict` (not `pending`) really is a replay of an
-/// already-claimed attempt, so it gets its own, more specific value
-/// rather than sharing one of the others.
-fn claim_and_nonce_fed_error(e: &ClaimAndNonceError) -> &'static str {
+/// Maps a claim failure to the `fed_error` query value the callback
+/// redirects with. `StoreError::Conflict` (not `pending`) really is a
+/// replay of an already-claimed attempt. `AttemptProviderMismatch`
+/// (RFC 096-B1 stage 6c) keeps the `superseded` value stage 4's own
+/// separate post-claim check used to produce -- the external contract is
+/// unchanged even though the check moved inside [`federation_login_attempt::claim`]
+/// itself. `AttemptBrowserBindingMismatch` (also stage 6c) is new.
+fn claim_fed_error(e: &StoreError) -> &'static str {
     match e {
-        ClaimAndNonceError::Nonce(_) => "nonce_mismatch",
-        ClaimAndNonceError::Claim(store_err) => match store_err {
-            StoreError::Conflict => "replay",
-            StoreError::AttemptExpired => "expired",
-            StoreError::ClockRegression => "clock_regression",
-            StoreError::Crypto => "tamper_detected",
-            StoreError::NotFound => "attempt_not_found",
-            _ => "attempt_claim_failed",
-        },
+        StoreError::Conflict => "replay",
+        StoreError::AttemptExpired => "expired",
+        StoreError::ClockRegression => "clock_regression",
+        StoreError::Crypto => "tamper_detected",
+        StoreError::NotFound => "attempt_not_found",
+        StoreError::AttemptProviderMismatch => "superseded",
+        StoreError::AttemptBrowserBindingMismatch => "binding_mismatch",
+        _ => "attempt_claim_failed",
     }
 }
 
@@ -506,6 +511,33 @@ pub async fn federated_callback(
     // instead.
     if q.error.is_some() {
         tracing::warn!("federation callback: upstream returned an error response");
+        // RFC 096 `:603-604`: error responses consume the matching attempt
+        // without token exchange. The attempt is findable from the `state`
+        // the error response itself carries -- not the sealed cookie, which
+        // this path never reads -- hashed and looked up the same way a
+        // genuine callback finds its own attempt. Best-effort and silent
+        // either way: whether `state` is absent, matches no row, or finds
+        // one, the response is identical, so this can never become an
+        // oracle for which state digests exist (an unauthenticated caller
+        // controls this entire request).
+        if let Some(state_param) = q.state.as_deref() {
+            let state_hash = sha256_32(state_param.as_bytes());
+            if let Ok(attempt) =
+                federation_login_attempt::find_by_state_sha256(&app.db, state_hash).await
+            {
+                terminalize_and_audit(
+                    &app.db,
+                    attempt.id,
+                    TerminalFailureReason::UpstreamFailure(
+                        UpstreamFailureDetail::UpstreamErrorResponse,
+                    ),
+                    app.clock.now(),
+                    attempt.provider_id,
+                    None,
+                )
+                .await;
+            }
+        }
         return Ok(terminal(
             jar,
             Redirect::to("/admin/login?fed_error=upstream"),
@@ -554,6 +586,83 @@ pub async fn federated_callback(
         ));
     }
 
+    // ── RFC 096-B1 stage 6c, RFC 096 `:597-599`: the claim, moved here ───────
+    //
+    // *"One immediate database transaction matches state digest, provider
+    // ID/version/generation, pending state, unexpired time, and constant-
+    // time browser binding; it changes pending to exchanging before token
+    // exchange."* Everything below this point runs with the attempt
+    // `exchanging`, and every failure from here on terminalizes it via F05
+    // (`terminalize_and_audit`) rather than leaving it to expire.
+    //
+    // State digest: by `find_by_state_sha256` below, then claiming by id --
+    // kept in this two-step shape (stage 4's own), not folded into one
+    // statement, since a wrong state can never find a row to begin with.
+    // Provider id/version/generation and the browser binding are the two
+    // elements `:597-598` added to the match set this stage; pending state,
+    // unexpired time and clock-regression were already checked by `claim`
+    // (stage 3) and are unchanged here, only moved earlier.
+    let state_hash = sha256_32(fed_state.upstream_state.as_bytes());
+    let pre_claim_attempt = match federation_login_attempt::find_by_state_sha256(
+        &app.db, state_hash,
+    )
+    .await
+    {
+        Ok(a) => a,
+        Err(e) => {
+            tracing::warn!(slug = %provider.slug, error = %e, "federation: no attempt row for this state");
+            return Ok(terminal(
+                jar,
+                Redirect::to("/admin/login?fed_error=attempt_not_found"),
+            ));
+        }
+    };
+
+    // RFC 096 `:564-566`: the opaque browser-binding cookie, read here
+    // rather than at claim time in the old code (there was no comparison
+    // at all before this stage). A missing cookie is represented as a
+    // fixed sentinel rather than skipping the comparison -- `:598`
+    // requires it to refuse the same way a wrong one does, not take a
+    // different path through this function that an absent cookie could
+    // otherwise be used to distinguish.
+    let presented_browser_binding = jar
+        .get(BROWSER_BINDING_COOKIE)
+        .map(|c| sha256_32(c.value().as_bytes()))
+        .unwrap_or([0u8; 32]);
+
+    let (current_version, current_generation) =
+        placeholder_provider_version_and_generation(&provider);
+    let claim_time = app.clock.now();
+    let claimed = match federation_login_attempt::claim(
+        &app.db,
+        pre_claim_attempt.id,
+        claim_time,
+        provider.id,
+        current_version,
+        current_generation,
+        presented_browser_binding,
+    )
+    .await
+    {
+        Ok(row) => row,
+        Err(e) => {
+            // Refused before any mutation: the row is exactly as it was
+            // (still `pending`, or already terminal) -- RFC 096 `:601-605`'s
+            // own "or leaves it safely reconcilable as failed" clause is
+            // what covers this case, via the 24-hour purge
+            // (`federation_login_attempt::purge_expired`), not an explicit
+            // F05 call here. There is nothing yet to terminalize: F05
+            // guards `pending|exchanging -> failed`, and a claim this
+            // request lost (`Conflict`) may already be owned by a
+            // concurrent winner this request must not disturb.
+            tracing::warn!(slug = %provider.slug, error = ?e, "federation: attempt claim failed");
+            return Ok(terminal(
+                jar,
+                Redirect::to(&format!("/admin/login?fed_error={}", claim_fed_error(&e))),
+            ));
+        }
+    };
+
     // Fetch upstream discovery for token_endpoint.
     let discovery = match fetch_discovery(
         &app.http_client,
@@ -570,15 +679,27 @@ pub async fn federated_callback(
                 "federation token exchange: discovery failed"
             };
             tracing::warn!(slug = %provider.slug, error = %e, "{log_msg}");
-            // Audit upstream failure. emit_audit_soon already tokio::spawn()s
-            // before returning; the JoinHandle is fire-and-forget by design.
-            #[allow(clippy::let_underscore_future)]
-            let _ = emit_audit_soon(
-                app.db.clone(),
+            // RFC 096-B1 stage 6c, F05: a post-claim transport failure --
+            // the attempt is now `exchanging` (claimed above), so this is
+            // F05's own job, through `terminalize_and_audit` rather than
+            // the old fire-and-forget `emit_audit_soon`/`AUDIT_SIGNIN_
+            // UPSTREAM_FAILURE` best-effort append. (`federated_start`'s
+            // own discovery failure keeps that old path: no attempt row
+            // exists yet at that point, so there is nothing for F05 to
+            // terminalize.)
+            terminalize_and_audit(
+                &app.db,
+                claimed.id,
+                TerminalFailureReason::UpstreamFailure(if e.is_invalid() {
+                    UpstreamFailureDetail::DiscoveryRejected
+                } else {
+                    UpstreamFailureDetail::DiscoveryFailed
+                }),
                 app.clock.now(),
-                sui_id_store::repos::federation_provider::AUDIT_SIGNIN_UPSTREAM_FAILURE,
-                Some(format!("provider={} error={e}", provider.slug)),
-            );
+                provider.id,
+                None,
+            )
+            .await;
             // RFC 134 D3 §2c: a rejected endpoint redirects with the same
             // fed_error shape every other callback failure uses, not the
             // generic bad-request page the pre-existing network/parse
@@ -597,9 +718,25 @@ pub async fn federated_callback(
     };
 
     // Decrypt client secret (P6 — used for token exchange only, not stored).
-    let client_secret =
-        sui_id_store::repos::federation_provider::decrypt_secret(app.db.key(), &provider)
-            .map_err(|e| HttpError::html(CoreError::from(e)))?;
+    let client_secret = match sui_id_store::repos::federation_provider::decrypt_secret(
+        app.db.key(),
+        &provider,
+    ) {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::error!(slug = %provider.slug, error = %e, "federation: client secret decrypt failed");
+            terminalize_and_audit(
+                &app.db,
+                claimed.id,
+                TerminalFailureReason::Denied(DeniedDetail::ClientSecretDecryptFailed),
+                app.clock.now(),
+                provider.id,
+                None,
+            )
+            .await;
+            return Err(HttpError::html(CoreError::from(e)));
+        }
+    };
 
     // Exchange the code for tokens at the upstream token_endpoint.
     let redirect_uri = format!(
@@ -629,15 +766,15 @@ pub async fn federated_callback(
         Ok(r) => r,
         Err(e) => {
             tracing::warn!(error = %e, slug = %provider.slug, "token exchange failed");
-            // emit_audit_soon already tokio::spawn()s before returning; the
-            // JoinHandle is fire-and-forget by design.
-            #[allow(clippy::let_underscore_future)]
-            let _ = emit_audit_soon(
-                app.db.clone(),
+            terminalize_and_audit(
+                &app.db,
+                claimed.id,
+                TerminalFailureReason::UpstreamFailure(UpstreamFailureDetail::TokenExchangeFailed),
                 app.clock.now(),
-                sui_id_store::repos::federation_provider::AUDIT_SIGNIN_UPSTREAM_FAILURE,
-                Some(format!("provider={} error={e}", provider.slug)),
-            );
+                provider.id,
+                None,
+            )
+            .await;
             return Ok(terminal(
                 jar,
                 Redirect::to("/admin/login?fed_error=token_exchange"),
@@ -650,6 +787,15 @@ pub async fn federated_callback(
         Ok(t) => t,
         Err(e) => {
             tracing::warn!(error = %e, "federation token parse failed");
+            terminalize_and_audit(
+                &app.db,
+                claimed.id,
+                TerminalFailureReason::UpstreamFailure(UpstreamFailureDetail::TokenParseFailed),
+                app.clock.now(),
+                provider.id,
+                None,
+            )
+            .await;
             return Ok(terminal(
                 jar,
                 Redirect::to("/admin/login?fed_error=token_parse"),
@@ -681,6 +827,15 @@ pub async fn federated_callback(
         Some(jwt) => jwt,
         None => {
             tracing::warn!(slug = %provider.slug, "federation: id_token absent (mandatory, RFC 096 :593-594)");
+            terminalize_and_audit(
+                &app.db,
+                claimed.id,
+                TerminalFailureReason::Denied(DeniedDetail::MissingIdToken),
+                app.clock.now(),
+                provider.id,
+                None,
+            )
+            .await;
             return Ok(terminal(
                 jar,
                 Redirect::to("/admin/login?fed_error=missing_id_token"),
@@ -703,6 +858,15 @@ pub async fn federated_callback(
         // no matching `[[federation_providers]]` block is a startup
         // configuration drift this handler cannot resolve on its own.
         tracing::error!(slug = %provider.slug, "federation: enabled provider has no matching config block");
+        terminalize_and_audit(
+            &app.db,
+            claimed.id,
+            TerminalFailureReason::Denied(DeniedDetail::ConfigDrift),
+            app.clock.now(),
+            provider.id,
+            None,
+        )
+        .await;
         return Ok(terminal(
             jar,
             Redirect::to("/admin/login?fed_error=config_drift"),
@@ -721,6 +885,15 @@ pub async fn federated_callback(
         Ok(claims) => claims,
         Err(e) => {
             tracing::warn!(slug = %provider.slug, error = ?e, "federation: id_token signature/structure verification failed");
+            terminalize_and_audit(
+                &app.db,
+                claimed.id,
+                TerminalFailureReason::Denied(DeniedDetail::SignatureInvalid),
+                app.clock.now(),
+                provider.id,
+                None,
+            )
+            .await;
             return Ok(terminal(
                 jar,
                 Redirect::to("/admin/login?fed_error=signature_invalid"),
@@ -728,65 +901,37 @@ pub async fn federated_callback(
         }
     };
 
-    // The attempt row, found by the hash of the `state` value this exact
-    // request already proved (above, by `ct_eq`) matches what `federated_
-    // start` sent -- the same value `federated_start` hashed into
-    // `state_sha256` when it created this row.
-    let state_hash = sha256_32(fed_state.upstream_state.as_bytes());
-    let attempt = match federation_login_attempt::find_by_state_sha256(&app.db, state_hash).await {
-        Ok(a) => a,
-        Err(e) => {
-            tracing::warn!(slug = %provider.slug, error = %e, "federation: no attempt row for this state");
-            return Ok(terminal(
-                jar,
-                Redirect::to("/admin/login?fed_error=attempt_not_found"),
-            ));
-        }
-    };
-
-    // One clock sample for everything below: the claim, `iat`'s lower/upper
-    // bound, and the capability's `validated_at` -- not `app.clock.now()`
-    // called three separate times.
+    // One clock sample for everything below: `iat`'s lower/upper bound and
+    // the capability's `validated_at` -- not `app.clock.now()` called
+    // several separate times. `claim_time` (above, at the claim itself) is
+    // deliberately a separate, earlier sample: RFC 096-B1 stage 6c moved
+    // the claim before token exchange, so it is no longer the same instant
+    // as the checks below it.
     let validation_now = app.clock.now();
 
-    let claimed = match claim_and_consume_nonce(
-        &app.db,
-        attempt.id,
-        &verified_claims,
-        validation_now,
-    )
-    .await
-    {
-        Ok(row) => row,
-        Err(e) => {
-            tracing::warn!(slug = %provider.slug, error = ?e, "federation: attempt claim or nonce consumption failed");
-            return Ok(terminal(
-                jar,
-                Redirect::to(&format!(
-                    "/admin/login?fed_error={}",
-                    claim_and_nonce_fed_error(&e)
-                )),
-            ));
-        }
-    };
-
-    // RFC 096 `:580-581`: if the provider's trust config has moved on
-    // since this attempt started, it is superseded and must fail -- not
-    // silently validate against whatever the config says now. Re-reading
-    // `provider.issuer`/`provider.client_id` below (live config) is only
-    // safe because this check has just proven nothing has moved.
-    let (current_version, current_generation) =
-        placeholder_provider_version_and_generation(&provider);
-    if attempt_is_superseded(
-        claimed.provider_config_version,
-        claimed.provider_activation_generation,
-        current_version,
-        current_generation,
-    ) {
-        tracing::warn!(slug = %provider.slug, "federation: attempt superseded (provider config/activation moved on)");
+    // RFC 096-B1 stage 6c, item 1: the nonce comparison, split from the
+    // claim (RFC 096 `:65-68` -- 096-A's validation rule, applied to
+    // `claimed`'s own `nonce_sha256` now that the ID token exists to
+    // compare against it). Unlike the claim itself, a nonce mismatch does
+    // not roll back `claimed`'s `pending -> exchanging` transition --
+    // matching stage 3's own original decision, carried forward rather
+    // than revisited by this stage -- so this is F05's job, not a second
+    // path back to `pending`.
+    let expected_nonce_hex = hex_lower(&claimed.nonce_sha256);
+    if let Err(e) = validate_nonce(&verified_claims, &expected_nonce_hex) {
+        tracing::warn!(slug = %provider.slug, error = ?e, "federation: nonce mismatch");
+        terminalize_and_audit(
+            &app.db,
+            claimed.id,
+            TerminalFailureReason::Denied(DeniedDetail::NonceMismatch),
+            validation_now,
+            provider.id,
+            None,
+        )
+        .await;
         return Ok(terminal(
             jar,
-            Redirect::to("/admin/login?fed_error=superseded"),
+            Redirect::to("/admin/login?fed_error=nonce_mismatch"),
         ));
     }
 
@@ -798,6 +943,15 @@ pub async fn federated_callback(
         Ok(i) => i,
         Err(e) => {
             tracing::warn!(slug = %provider.slug, error = ?e, "federation: identity claims rejected");
+            terminalize_and_audit(
+                &app.db,
+                claimed.id,
+                TerminalFailureReason::Denied(DeniedDetail::IdentityClaimsInvalid),
+                validation_now,
+                provider.id,
+                None,
+            )
+            .await;
             return Ok(terminal(
                 jar,
                 Redirect::to("/admin/login?fed_error=identity_claims_invalid"),
@@ -810,6 +964,15 @@ pub async fn federated_callback(
     // this attempt existed.
     if let Err(e) = validate_iat(&verified_claims, claimed.created_at, validation_now) {
         tracing::warn!(slug = %provider.slug, error = ?e, "federation: iat rejected");
+        terminalize_and_audit(
+            &app.db,
+            claimed.id,
+            TerminalFailureReason::Denied(DeniedDetail::TimeClaimsInvalid),
+            validation_now,
+            provider.id,
+            None,
+        )
+        .await;
         return Ok(terminal(
             jar,
             Redirect::to("/admin/login?fed_error=time_claims_invalid"),
@@ -820,6 +983,15 @@ pub async fn federated_callback(
         Ok(o) => o,
         Err(e) => {
             tracing::warn!(slug = %provider.slug, error = ?e, "federation: optional claims rejected");
+            terminalize_and_audit(
+                &app.db,
+                claimed.id,
+                TerminalFailureReason::Denied(DeniedDetail::OptionalClaimsInvalid),
+                validation_now,
+                provider.id,
+                None,
+            )
+            .await;
             return Ok(terminal(
                 jar,
                 Redirect::to("/admin/login?fed_error=optional_claims_invalid"),
@@ -849,10 +1021,27 @@ pub async fn federated_callback(
     // this resolution the one that acts; the `link_only`-is-generic
     // property specifically is proven against that live path by this
     // file's own e2e tests, not by the unit suite.
-    let _resolution =
-        resolve_verified_identity(&app.db, &capability, provider.provision_mode.clone())
-            .await
-            .map_err(|e| HttpError::html(CoreError::from(e)))?;
+    let _resolution = match resolve_verified_identity(
+        &app.db,
+        &capability,
+        provider.provision_mode.clone(),
+    )
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            terminalize_and_audit(
+                &app.db,
+                claimed.id,
+                TerminalFailureReason::Denied(DeniedDetail::IdentityResolutionDbError),
+                validation_now,
+                provider.id,
+                None,
+            )
+            .await;
+            return Err(HttpError::html(CoreError::from(e)));
+        }
+    };
 
     // ── End of stage 4/5's new validation and resolution. The legacy path
     // below is unchanged (except RFC 096 `:700-701`'s removal of the
@@ -868,7 +1057,20 @@ pub async fn federated_callback(
         Some(jwt) => match decode_id_token_claims(jwt) {
             Some(claims) => claims,
             None => {
+                // Dead in practice (module doc, above): the mandatory
+                // id_token check earlier already refused a response this
+                // legacy decode could fail to parse. Still terminalized,
+                // for defense in depth rather than left exchanging.
                 tracing::warn!("federation ID token claims parse failed");
+                terminalize_and_audit(
+                    &app.db,
+                    claimed.id,
+                    TerminalFailureReason::Denied(DeniedDetail::LegacyTokenParseFailed),
+                    validation_now,
+                    provider.id,
+                    None,
+                )
+                .await;
                 return Ok(terminal(
                     jar,
                     Redirect::to("/admin/login?fed_error=token_parse"),
@@ -876,6 +1078,8 @@ pub async fn federated_callback(
             }
         },
         None => {
+            // Dead in practice, same reason: no_id_token's own branch
+            // above already refuses a response with no id_token.
             // No id_token: fall back to userinfo endpoint if available.
             if let Some(ui_url) = discovery.userinfo_endpoint() {
                 match fetch_userinfo(
@@ -888,6 +1092,17 @@ pub async fn federated_callback(
                     Ok(claims) => claims,
                     Err(e) => {
                         tracing::warn!(error = %e, "userinfo fetch failed");
+                        terminalize_and_audit(
+                            &app.db,
+                            claimed.id,
+                            TerminalFailureReason::UpstreamFailure(
+                                UpstreamFailureDetail::UserinfoFetchFailed,
+                            ),
+                            validation_now,
+                            provider.id,
+                            None,
+                        )
+                        .await;
                         return Ok(terminal(
                             jar,
                             Redirect::to("/admin/login?fed_error=userinfo"),
@@ -895,6 +1110,15 @@ pub async fn federated_callback(
                     }
                 }
             } else {
+                terminalize_and_audit(
+                    &app.db,
+                    claimed.id,
+                    TerminalFailureReason::Denied(DeniedDetail::LegacyNoIdToken),
+                    validation_now,
+                    provider.id,
+                    None,
+                )
+                .await;
                 return Ok(terminal(
                     jar,
                     Redirect::to("/admin/login?fed_error=no_id_token"),
@@ -903,18 +1127,39 @@ pub async fn federated_callback(
         }
     };
 
-    // Nonce check (P5 replay protection).
+    // Nonce check (P5 replay protection). Dead in practice, same reason:
+    // the new, split nonce comparison (item 1, above) already refuses a
+    // mismatch before this point is ever reached.
     if let Some(ref token_nonce) = id_claims.nonce
         && token_nonce != &fed_state.nonce
     {
         tracing::warn!(slug = %provider.slug, "federation nonce mismatch");
+        terminalize_and_audit(
+            &app.db,
+            claimed.id,
+            TerminalFailureReason::Denied(DeniedDetail::LegacyNonceMismatch),
+            validation_now,
+            provider.id,
+            None,
+        )
+        .await;
         return Ok(terminal(
             jar,
             Redirect::to("/admin/login?fed_error=nonce_mismatch"),
         ));
     }
 
+    // Still reachable: nothing above validates that `sub` is non-empty.
     if id_claims.sub.is_empty() {
+        terminalize_and_audit(
+            &app.db,
+            claimed.id,
+            TerminalFailureReason::Denied(DeniedDetail::EmptySub),
+            validation_now,
+            provider.id,
+            None,
+        )
+        .await;
         return Ok(terminal(jar, Redirect::to("/admin/login?fed_error=no_sub")));
     }
 
@@ -922,15 +1167,32 @@ pub async fn federated_callback(
 
     // Resolve the federation link by (provider_id, upstream_sub) — P1.
     let now = app.clock.now();
-    let link_opt =
-        sui_id_store::repos::federation_link::find_by_sub(&app.db, provider.id, &id_claims.sub)
-            .await
-            .map_err(|e| HttpError::html(CoreError::from(e)))?;
+    let link_opt = match sui_id_store::repos::federation_link::find_by_sub(
+        &app.db,
+        provider.id,
+        &id_claims.sub,
+    )
+    .await
+    {
+        Ok(l) => l,
+        Err(e) => {
+            terminalize_and_audit(
+                &app.db,
+                claimed.id,
+                TerminalFailureReason::Denied(DeniedDetail::LinkLookupDbError),
+                now,
+                provider.id,
+                None,
+            )
+            .await;
+            return Err(HttpError::html(CoreError::from(e)));
+        }
+    };
 
     let user_id: UserId = match link_opt {
         // ── Known user: update last_seen and proceed to MFA gate ─────────────
         Some(existing_link) => {
-            sui_id_store::repos::federation_link::upsert(
+            if let Err(e) = sui_id_store::repos::federation_link::upsert(
                 &app.db,
                 FederationLinkRow {
                     user_id: existing_link.user_id,
@@ -942,7 +1204,18 @@ pub async fn federated_callback(
                 },
             )
             .await
-            .map_err(|e| HttpError::html(CoreError::from(e)))?;
+            {
+                terminalize_and_audit(
+                    &app.db,
+                    claimed.id,
+                    TerminalFailureReason::Denied(DeniedDetail::LinkUpsertDbError),
+                    now,
+                    provider.id,
+                    Some(existing_link.user_id),
+                )
+                .await;
+                return Err(HttpError::html(CoreError::from(e)));
+            }
             existing_link.user_id
         }
 
@@ -976,30 +1249,30 @@ pub async fn federated_callback(
                         // internal `provider_id` and a bounded reason token
                         // only.
                         //
-                        // RFC 096-B1 stage 6b: this is the one converted
-                        // Class-B site. `emit_must_attempt`'s own failure
-                        // (attribute build, or the append itself) is
-                        // guaranteed to log structured telemetry
-                        // internally, whether or not this `let _ =`
-                        // inspects the outcome -- RFC 094 `:120` A6: the
-                        // denial below must happen regardless of whether
-                        // the audit write succeeded.
+                        // RFC 096-B1 stage 6b built this as the one
+                        // converted Class-B site, calling `emit_must_
+                        // attempt` directly; stage 6c's F05 subsumes that
+                        // emission rather than sitting beside it -- the
+                        // event (`takeover_blocked`) and its one-line
+                        // reason token are unchanged, but the call now also
+                        // terminalizes the attempt, which the 6b version
+                        // never did. `terminalize_and_audit`'s own module
+                        // doc restates why this `let _`-equivalent discard
+                        // (its return is `()`, nothing to discard) is still
+                        // correct here: A6 (RFC 094 `:120`) requires the
+                        // denial below to happen regardless of whether
+                        // either internal step succeeded.
                         tracing::warn!(
                             provider_id = %provider.id,
                             "federation: email collision — potential takeover attempt blocked (P2)"
                         );
-                        let attributes = sui_id_store::registry::AuditAttributes::builder()
-                            .attribute("provider_id", provider.id.to_string())
-                            .attribute("reason", "email_collision")
-                            .build();
-                        let _ = sui_id_store::repos::audit::emit_must_attempt(
+                        terminalize_and_audit(
                             &app.db,
-                            &sui_id_store::repos::federation_provider::AUDIT_TAKEOVER_BLOCKED_DESCRIPTOR,
+                            claimed.id,
+                            TerminalFailureReason::TakeoverBlocked,
                             now,
+                            provider.id,
                             None,
-                            None,
-                            "denied",
-                            attributes,
                         )
                         .await;
                         return Ok(terminal(
@@ -1016,6 +1289,15 @@ pub async fn federated_callback(
                     // Block only when email is present but unverified.
                     if id_claims.email.is_some() && !id_claims.email_verified {
                         tracing::info!(slug = %provider.slug, "provision held: unverified email");
+                        terminalize_and_audit(
+                            &app.db,
+                            claimed.id,
+                            TerminalFailureReason::Denied(DeniedDetail::UnverifiedEmail),
+                            now,
+                            provider.id,
+                            None,
+                        )
+                        .await;
                         return Ok(terminal(
                             jar,
                             Redirect::to("/admin/login?fed_error=unverified_email"),
@@ -1031,12 +1313,29 @@ pub async fn federated_callback(
                         email: id_claims.email.clone(),
                         external_stable_id: format!("{}:{}", provider.id, id_claims.sub),
                     };
-                    let uid = sui_id_store::repos::users::upsert_ldap_shadow(&app.db, shadow, now)
-                        .await
-                        .map_err(|e| HttpError::html(CoreError::from(e)))?;
+                    let uid =
+                        match sui_id_store::repos::users::upsert_ldap_shadow(&app.db, shadow, now)
+                            .await
+                        {
+                            Ok(uid) => uid,
+                            Err(e) => {
+                                terminalize_and_audit(
+                                    &app.db,
+                                    claimed.id,
+                                    TerminalFailureReason::Denied(
+                                        DeniedDetail::ProvisionShadowUserDbError,
+                                    ),
+                                    now,
+                                    provider.id,
+                                    None,
+                                )
+                                .await;
+                                return Err(HttpError::html(CoreError::from(e)));
+                            }
+                        };
 
                     // Insert federation link.
-                    sui_id_store::repos::federation_link::upsert(
+                    if let Err(e) = sui_id_store::repos::federation_link::upsert(
                         &app.db,
                         FederationLinkRow {
                             user_id: uid,
@@ -1048,7 +1347,18 @@ pub async fn federated_callback(
                         },
                     )
                     .await
-                    .map_err(|e| HttpError::html(CoreError::from(e)))?;
+                    {
+                        terminalize_and_audit(
+                            &app.db,
+                            claimed.id,
+                            TerminalFailureReason::Denied(DeniedDetail::ProvisionLinkDbError),
+                            now,
+                            provider.id,
+                            Some(uid),
+                        )
+                        .await;
+                        return Err(HttpError::html(CoreError::from(e)));
+                    }
 
                     // RFC 096 `:714-715` (review R2): no raw `sub` in the
                     // audit note -- internal `provider_id` and a bounded
@@ -1097,6 +1407,22 @@ pub async fn federated_callback(
                     // design may restore self-service linking with fresh
                     // local authentication, local MFA, CSRF, a single-use
                     // durable intent, explicit approval, and C19 atomicity.
+                    //
+                    // RFC 096-B1 stage 6c, F05: `link_required`'s own
+                    // registry-declared descriptor. No email/collision
+                    // detail in the `reason` token either, matching the
+                    // generic-result requirement above: this call site is
+                    // one of the things that must not distinguish a
+                    // collision from any other unlinked identity.
+                    terminalize_and_audit(
+                        &app.db,
+                        claimed.id,
+                        TerminalFailureReason::LinkRequired,
+                        now,
+                        provider.id,
+                        None,
+                    )
+                    .await;
                     return Ok(terminal(
                         jar,
                         Redirect::to("/admin/login?fed_error=link_required"),
@@ -1107,16 +1433,36 @@ pub async fn federated_callback(
     };
 
     // ── P4: enforce local MFA ─────────────────────────────────────────────────
-    complete_federated_signin(app, jar, user_id, &provider.slug, &id_claims.sub, now).await
+    complete_federated_signin(
+        app,
+        jar,
+        user_id,
+        claimed.id,
+        provider.id,
+        &provider.slug,
+        &id_claims.sub,
+        now,
+    )
+    .await
 }
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
 /// Complete a federated sign-in: enforce local MFA then issue a session.
+///
+/// `attempt_id`/`provider_id` (RFC 096-B1 stage 6c) are for F05 alone: a
+/// successful sign-in or a pending-MFA continuation does *not* terminalize
+/// the attempt here -- that is F01's/F02's own `exchanging -> completed`
+/// transition (stage 6d, not yet implemented), and this function is not
+/// where that boundary is decided. Only this function's own *failure*
+/// paths call `terminalize_and_audit`.
+#[allow(clippy::too_many_arguments)]
 async fn complete_federated_signin(
     app: AppState,
     jar: CookieJar,
     user_id: UserId,
+    attempt_id: FederationLoginAttemptId,
+    provider_id: FederationProviderId,
     provider_slug: &str,
     upstream_sub: &str,
     now: chrono::DateTime<chrono::Utc>,
@@ -1138,6 +1484,15 @@ async fn complete_federated_signin(
                 user_id = %user_id,
                 "federation: sign-in refused for a disabled or deleted user"
             );
+            terminalize_and_audit(
+                &app.db,
+                attempt_id,
+                TerminalFailureReason::Denied(DeniedDetail::AccountDisabledOrDeleted),
+                now,
+                provider_id,
+                Some(user_id),
+            )
+            .await;
             return signin_failed(jar);
         }
         Err(e) => {
@@ -1147,6 +1502,15 @@ async fn complete_federated_signin(
                 error = %e,
                 "federation: user read failed; sign-in refused"
             );
+            terminalize_and_audit(
+                &app.db,
+                attempt_id,
+                TerminalFailureReason::Denied(DeniedDetail::UserReadDbError),
+                now,
+                provider_id,
+                Some(user_id),
+            )
+            .await;
             return signin_failed(jar);
         }
     }
@@ -1162,14 +1526,36 @@ async fn complete_federated_signin(
                 error = %e,
                 "federation: MFA state read failed; sign-in refused"
             );
+            terminalize_and_audit(
+                &app.db,
+                attempt_id,
+                TerminalFailureReason::Denied(DeniedDetail::MfaStateReadDbError),
+                now,
+                provider_id,
+                Some(user_id),
+            )
+            .await;
             return signin_failed(jar);
         }
     };
 
     if mfa_enabled {
-        let pending = sui_id_core::mfa::issue_pending_mfa(&app.db, &app.clock, user_id)
-            .await
-            .map_err(HttpError::html)?;
+        let pending = match sui_id_core::mfa::issue_pending_mfa(&app.db, &app.clock, user_id).await
+        {
+            Ok(p) => p,
+            Err(e) => {
+                terminalize_and_audit(
+                    &app.db,
+                    attempt_id,
+                    TerminalFailureReason::Denied(DeniedDetail::PendingMfaIssueFailed),
+                    now,
+                    provider_id,
+                    Some(user_id),
+                )
+                .await;
+                return Err(HttpError::html(e));
+            }
+        };
         let cookie = crate::handlers::pending_mfa_cookie(
             pending.id.to_string(),
             app.config.server.cookie_secure,
@@ -1228,6 +1614,15 @@ async fn complete_federated_signin(
                 "federation: sign-in transaction failed; sign-in refused"
             );
         }
+        terminalize_and_audit(
+            &app.db,
+            attempt_id,
+            TerminalFailureReason::Denied(DeniedDetail::SigninCommitFailed),
+            now,
+            provider_id,
+            Some(user_id),
+        )
+        .await;
         return signin_failed(jar);
     }
 
@@ -1280,7 +1675,3 @@ fn emit_audit_soon(
         let _ = sui_id_store::repos::audit::append(&db, &row).await;
     })
 }
-
-#[cfg(test)]
-#[path = "federation/tests.rs"]
-mod tests;

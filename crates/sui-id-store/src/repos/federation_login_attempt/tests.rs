@@ -262,6 +262,27 @@ fn distinct_version_generation_pairs_that_would_collide_unseparated_do_not() {
 
 // ── Stage 3: the claim ─────────────────────────────────────────────────────
 
+/// Claim with the exact values `attempt` itself holds — the success case
+/// every pre-existing test below wants, now that `claim` also checks
+/// provider id/version/generation and the browser binding. A test that
+/// wants a mismatch calls `claim` directly instead.
+async fn claim_matching(
+    db: &Database,
+    attempt: &FederationLoginAttemptRow,
+    now_at_claim: DateTime<Utc>,
+) -> StoreResult<FederationLoginAttemptRow> {
+    claim(
+        db,
+        attempt.id,
+        now_at_claim,
+        attempt.provider_id,
+        attempt.provider_config_version,
+        attempt.provider_activation_generation,
+        attempt.browser_binding_sha256,
+    )
+    .await
+}
+
 #[tokio::test]
 async fn a_pending_row_is_claimed_and_becomes_exchanging() {
     let db = open_test_db();
@@ -270,7 +291,7 @@ async fn a_pending_row_is_claimed_and_becomes_exchanging() {
     let attempt = insert_attempt(&db, provider_id, now).await;
 
     let claim_time = now + Duration::seconds(1);
-    let claimed = claim(&db, attempt.id, claim_time).await.unwrap();
+    let claimed = claim_matching(&db, &attempt, claim_time).await.unwrap();
     assert_eq!(claimed.status, FederationLoginAttemptStatus::Exchanging);
     assert_eq!(claimed.claimed_at, Some(claim_time));
 
@@ -282,7 +303,16 @@ async fn a_pending_row_is_claimed_and_becomes_exchanging() {
 #[tokio::test]
 async fn claiming_a_nonexistent_attempt_is_not_found() {
     let db = open_test_db();
-    let result = claim(&db, FederationLoginAttemptId::new(), fixed_now()).await;
+    let result = claim(
+        &db,
+        FederationLoginAttemptId::new(),
+        fixed_now(),
+        FederationProviderId::new(),
+        0,
+        0,
+        hash32(0),
+    )
+    .await;
     assert!(matches!(result, Err(StoreError::NotFound)));
 }
 
@@ -293,11 +323,11 @@ async fn an_already_claimed_row_cannot_be_reclaimed() {
     let provider_id = seed_provider(&db).await;
     let now = fixed_now();
     let attempt = insert_attempt(&db, provider_id, now).await;
-    claim(&db, attempt.id, now + Duration::seconds(1))
+    claim_matching(&db, &attempt, now + Duration::seconds(1))
         .await
         .unwrap();
 
-    let result = claim(&db, attempt.id, now + Duration::seconds(2)).await;
+    let result = claim_matching(&db, &attempt, now + Duration::seconds(2)).await;
     assert!(matches!(result, Err(StoreError::Conflict)));
 }
 
@@ -321,7 +351,7 @@ async fn a_non_pending_row_cannot_be_claimed() {
     .await
     .unwrap();
 
-    let result = claim(&db, attempt.id, now + Duration::seconds(1)).await;
+    let result = claim_matching(&db, &attempt, now + Duration::seconds(1)).await;
     assert!(matches!(result, Err(StoreError::Conflict)));
 }
 
@@ -334,12 +364,12 @@ async fn a_claim_before_created_at_is_refused_as_clock_regression_not_expiry() {
     let now = fixed_now();
     let attempt = insert_attempt(&db, provider_id, now).await;
 
-    let result = claim(&db, attempt.id, now - Duration::seconds(1)).await;
+    let result = claim_matching(&db, &attempt, now - Duration::seconds(1)).await;
     assert!(matches!(result, Err(StoreError::ClockRegression)));
 
     // The row must still be claimable afterward -- the refused attempt must
     // not have been consumed by the regression check.
-    let claimed = claim(&db, attempt.id, now + Duration::seconds(1)).await;
+    let claimed = claim_matching(&db, &attempt, now + Duration::seconds(1)).await;
     assert!(claimed.is_ok());
 }
 
@@ -350,7 +380,7 @@ async fn a_claim_at_or_after_expires_at_is_refused_as_expired() {
     let now = fixed_now();
     let attempt = insert_attempt(&db, provider_id, now).await;
 
-    let result = claim(&db, attempt.id, attempt.expires_at).await;
+    let result = claim_matching(&db, &attempt, attempt.expires_at).await;
     assert!(matches!(result, Err(StoreError::AttemptExpired)));
 }
 
@@ -361,7 +391,7 @@ async fn a_claim_just_before_expires_at_succeeds() {
     let now = fixed_now();
     let attempt = insert_attempt(&db, provider_id, now).await;
 
-    let result = claim(&db, attempt.id, attempt.expires_at - Duration::seconds(1)).await;
+    let result = claim_matching(&db, &attempt, attempt.expires_at - Duration::seconds(1)).await;
     assert!(result.is_ok());
 }
 
@@ -388,7 +418,21 @@ async fn claim_fails_if_a_bound_column_is_altered_after_insert() {
     .await
     .unwrap();
 
-    let result = claim(&db, attempt.id, now + Duration::seconds(1)).await;
+    // The expected version passed here is the row's *current* (mutated)
+    // value, so the new provider-match check (stage 6c) agrees with it and
+    // lets control reach the AAD/crypto check this test actually exercises
+    // -- a mismatch against the stale, pre-mutation value would report
+    // `AttemptProviderMismatch` instead, proving nothing about the AAD.
+    let result = claim(
+        &db,
+        attempt.id,
+        now + Duration::seconds(1),
+        attempt.provider_id,
+        attempt.provider_config_version + 1,
+        attempt.provider_activation_generation,
+        attempt.browser_binding_sha256,
+    )
+    .await;
     assert!(matches!(result, Err(StoreError::Crypto)));
 }
 
@@ -421,7 +465,7 @@ async fn a_non_pending_row_reports_conflict_even_if_also_clock_regressed() {
 
     // A claim time *before* created_at: would be ClockRegression on its
     // own, were the row still pending.
-    let result = claim(&db, attempt.id, now - Duration::seconds(1)).await;
+    let result = claim_matching(&db, &attempt, now - Duration::seconds(1)).await;
     assert!(matches!(result, Err(StoreError::Conflict)));
 }
 
@@ -442,8 +486,8 @@ async fn exactly_one_of_two_concurrent_claims_wins() {
 
     let claim_time = now + Duration::seconds(1);
     let (a, b) = tokio::join!(
-        claim(&db, attempt.id, claim_time),
-        claim(&db, attempt.id, claim_time),
+        claim_matching(&db, &attempt, claim_time),
+        claim_matching(&db, &attempt, claim_time),
     );
     let outcomes = [a.is_ok(), b.is_ok()];
     assert_eq!(
@@ -459,6 +503,250 @@ async fn exactly_one_of_two_concurrent_claims_wins() {
             );
         }
     }
+}
+
+// ── Stage 6c: the claim's extended match set (RFC 096 `:597-598`) ──────────
+
+/// A match for every element of `:597-598`'s set except `provider_id`
+/// itself: wrong version alone must refuse the same way.
+#[tokio::test]
+async fn a_claim_whose_expected_version_disagrees_is_refused_as_provider_mismatch() {
+    let db = open_test_db();
+    let provider_id = seed_provider(&db).await;
+    let now = fixed_now();
+    let attempt = insert_attempt(&db, provider_id, now).await;
+
+    let result = claim(
+        &db,
+        attempt.id,
+        now + Duration::seconds(1),
+        attempt.provider_id,
+        attempt.provider_config_version + 1,
+        attempt.provider_activation_generation,
+        attempt.browser_binding_sha256,
+    )
+    .await;
+    assert!(matches!(result, Err(StoreError::AttemptProviderMismatch)));
+
+    // Refused, not consumed: the row must still be claimable with the
+    // correct values afterward.
+    assert!(
+        claim_matching(&db, &attempt, now + Duration::seconds(2))
+            .await
+            .is_ok()
+    );
+}
+
+#[tokio::test]
+async fn a_claim_whose_expected_generation_disagrees_is_refused_as_provider_mismatch() {
+    let db = open_test_db();
+    let provider_id = seed_provider(&db).await;
+    let now = fixed_now();
+    let attempt = insert_attempt(&db, provider_id, now).await;
+
+    let result = claim(
+        &db,
+        attempt.id,
+        now + Duration::seconds(1),
+        attempt.provider_id,
+        attempt.provider_config_version,
+        attempt.provider_activation_generation + 1,
+        attempt.browser_binding_sha256,
+    )
+    .await;
+    assert!(matches!(result, Err(StoreError::AttemptProviderMismatch)));
+}
+
+#[tokio::test]
+async fn a_claim_whose_expected_provider_id_disagrees_is_refused_as_provider_mismatch() {
+    let db = open_test_db();
+    let provider_id = seed_provider(&db).await;
+    let now = fixed_now();
+    let attempt = insert_attempt(&db, provider_id, now).await;
+
+    let result = claim(
+        &db,
+        attempt.id,
+        now + Duration::seconds(1),
+        FederationProviderId::new(),
+        attempt.provider_config_version,
+        attempt.provider_activation_generation,
+        attempt.browser_binding_sha256,
+    )
+    .await;
+    assert!(matches!(result, Err(StoreError::AttemptProviderMismatch)));
+}
+
+/// RFC 096 `:598`: a wrong browser-binding digest refuses the claim.
+#[tokio::test]
+async fn a_claim_with_the_wrong_browser_binding_is_refused() {
+    let db = open_test_db();
+    let provider_id = seed_provider(&db).await;
+    let now = fixed_now();
+    let attempt = insert_attempt(&db, provider_id, now).await;
+
+    let wrong = {
+        let mut b = attempt.browser_binding_sha256;
+        b[0] ^= 0xff;
+        b
+    };
+    let result = claim(
+        &db,
+        attempt.id,
+        now + Duration::seconds(1),
+        attempt.provider_id,
+        attempt.provider_config_version,
+        attempt.provider_activation_generation,
+        wrong,
+    )
+    .await;
+    assert!(matches!(
+        result,
+        Err(StoreError::AttemptBrowserBindingMismatch)
+    ));
+
+    // Refused, not consumed.
+    assert!(
+        claim_matching(&db, &attempt, now + Duration::seconds(2))
+            .await
+            .is_ok()
+    );
+}
+
+/// RFC 096 `:598`: a missing cookie is represented the same way as a wrong
+/// one by the caller (some 32-byte value either way) and refuses with the
+/// *same* variant — there is nothing in `claim`'s own return value that
+/// would let a caller tell "absent" from "wrong" apart.
+#[tokio::test]
+async fn a_claim_with_an_absent_browser_binding_is_refused_the_same_way_as_a_wrong_one() {
+    let db = open_test_db();
+    let provider_id = seed_provider(&db).await;
+    let now = fixed_now();
+    let attempt = insert_attempt(&db, provider_id, now).await;
+
+    // "Absent" is represented by the caller as a fixed sentinel (all-zero)
+    // rather than the real digest -- this test's own stand-in for what the
+    // web crate's cookie-read-failure path passes.
+    let absent_sentinel = [0u8; 32];
+    assert_ne!(absent_sentinel, attempt.browser_binding_sha256);
+    let result = claim(
+        &db,
+        attempt.id,
+        now + Duration::seconds(1),
+        attempt.provider_id,
+        attempt.provider_config_version,
+        attempt.provider_activation_generation,
+        absent_sentinel,
+    )
+    .await;
+    assert!(matches!(
+        result,
+        Err(StoreError::AttemptBrowserBindingMismatch)
+    ));
+}
+
+/// The matching-value case this whole set exists to let through: every
+/// element of `:597-598` agreeing still succeeds. (`claim_matching` is
+/// exactly this, but spelled out once here rather than only implicitly via
+/// every pre-existing test's reuse of it.)
+#[tokio::test]
+async fn a_claim_whose_full_match_set_agrees_succeeds() {
+    let db = open_test_db();
+    let provider_id = seed_provider(&db).await;
+    let now = fixed_now();
+    let attempt = insert_attempt(&db, provider_id, now).await;
+
+    let result = claim(
+        &db,
+        attempt.id,
+        now + Duration::seconds(1),
+        attempt.provider_id,
+        attempt.provider_config_version,
+        attempt.provider_activation_generation,
+        attempt.browser_binding_sha256,
+    )
+    .await;
+    assert!(result.is_ok());
+}
+
+// ── Stage 6c, F05: terminalize_failed ───────────────────────────────────────
+
+#[tokio::test]
+async fn a_pending_attempt_can_be_terminalized_to_failed() {
+    let db = open_test_db();
+    let provider_id = seed_provider(&db).await;
+    let now = fixed_now();
+    let attempt = insert_attempt(&db, provider_id, now).await;
+
+    terminalize_failed(&db, attempt.id, now).await.unwrap();
+
+    // The table's own CHECK (migration 0046) requires claimed_at IS NOT
+    // NULL for any non-pending row -- this is what proves `terminalize_
+    // failed` satisfies it for the direct pending -> failed transition,
+    // not merely that the UPDATE didn't error.
+    let (status, claimed_at, ..) = stored_row(&db, attempt.id).await;
+    assert_eq!(status, "failed");
+    assert!(!claimed_at.is_empty());
+}
+
+#[tokio::test]
+async fn an_exchanging_attempt_can_be_terminalized_to_failed() {
+    let db = open_test_db();
+    let provider_id = seed_provider(&db).await;
+    let now = fixed_now();
+    let attempt = insert_attempt(&db, provider_id, now).await;
+    let claim_time = now + Duration::seconds(1);
+    claim_matching(&db, &attempt, claim_time).await.unwrap();
+
+    // A later `now` here must not overwrite the real claim time --
+    // `COALESCE(claimed_at, ?1)` leaves an already-set column alone.
+    terminalize_failed(&db, attempt.id, now + Duration::seconds(99))
+        .await
+        .unwrap();
+
+    let (status, claimed_at, ..) = stored_row(&db, attempt.id).await;
+    assert_eq!(status, "failed");
+    let stored: DateTime<Utc> = claimed_at.parse().expect("a stored timestamp");
+    assert_eq!(stored, claim_time);
+}
+
+/// Dispatch item 7: a terminalized attempt cannot be terminalized twice.
+#[tokio::test]
+async fn a_terminalized_attempt_cannot_be_terminalized_twice() {
+    let db = open_test_db();
+    let provider_id = seed_provider(&db).await;
+    let now = fixed_now();
+    let attempt = insert_attempt(&db, provider_id, now).await;
+    terminalize_failed(&db, attempt.id, now).await.unwrap();
+
+    let result = terminalize_failed(&db, attempt.id, now).await;
+    assert!(matches!(result, Err(StoreError::Conflict)));
+}
+
+/// Dispatch item 7: a `completed` attempt cannot be moved to `failed`.
+#[tokio::test]
+async fn a_completed_attempt_cannot_be_moved_to_failed() {
+    let db = open_test_db();
+    let provider_id = seed_provider(&db).await;
+    let now = fixed_now();
+    let attempt = insert_attempt(&db, provider_id, now).await;
+    set_status(&db, attempt.id, "completed", now).await;
+
+    let result = terminalize_failed(&db, attempt.id, now).await;
+    assert!(matches!(result, Err(StoreError::Conflict)));
+
+    let (status, ..) = stored_row(&db, attempt.id).await;
+    assert_eq!(
+        status, "completed",
+        "a refused terminalize must not have changed it"
+    );
+}
+
+#[tokio::test]
+async fn terminalizing_a_nonexistent_attempt_is_a_conflict() {
+    let db = open_test_db();
+    let result = terminalize_failed(&db, FederationLoginAttemptId::new(), fixed_now()).await;
+    assert!(matches!(result, Err(StoreError::Conflict)));
 }
 
 // ── Stage 4: lookup by state_sha256 ────────────────────────────────────────

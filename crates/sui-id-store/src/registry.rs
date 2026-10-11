@@ -239,6 +239,19 @@ pub enum AuditEventKind {
     /// converted Class-B site: an upstream identity's email collides with
     /// a local account already linked to a different provider.
     AuthFederationTakeoverBlocked,
+    /// `auth.federation.signin.upstream_failure` — RFC 096-B1 stage 6c, F05:
+    /// a transport/token-level failure talking to the upstream IdP
+    /// (discovery fetch, token exchange, or token response parsing).
+    AuthFederationSigninUpstreamFailure,
+    /// `auth.federation.link_required` — RFC 096-B1 stage 6c, F05: the
+    /// generic `link_only` denial for any unlinked upstream identity
+    /// (RFC 096 `:699-701`).
+    AuthFederationLinkRequired,
+    /// `auth.federation.signin.denied` — RFC 096-B1 stage 6c, F05: every
+    /// other post-claim denial this attempt can reach — a validation,
+    /// mapping, disabled-provider, disabled-user or commit failure that
+    /// isn't one of the three more specific events above.
+    AuthFederationSigninDenied,
 }
 
 /// The registry entry for one [`AuditEventKind`]. `descriptor()` on a

@@ -250,6 +250,13 @@ pub(super) async fn federated_signin(state: &AppState, nonce_slot: &NonceSlot) -
         .expect("start");
     assert!(start.status().is_redirection(), "start: {}", start.status());
     let fed_state = extract_set_cookie(start.headers(), "sui_id_fed_state").expect("state cookie");
+    // RFC 096-B1 stage 6c: the claim now compares this cookie's digest in
+    // constant time, so it must round-trip to the callback the same way
+    // the state cookie already does -- without it, every callback this
+    // helper drives would refuse as `fed_error=binding_mismatch` before
+    // reaching whatever this test is actually about.
+    let browser_binding =
+        extract_set_cookie(start.headers(), "sui_id_fed_browser_binding").expect("binding cookie");
     let location = start
         .headers()
         .get(header::LOCATION)
@@ -285,7 +292,12 @@ pub(super) async fn federated_signin(state: &AppState, nonce_slot: &NonceSlot) -
                 .uri(format!(
                     "/auth/federated/callback?code=the-code&state={state_param}"
                 ))
-                .header(header::COOKIE, format!("sui_id_fed_state={fed_state}"))
+                .header(
+                    header::COOKIE,
+                    format!(
+                        "sui_id_fed_state={fed_state}; sui_id_fed_browser_binding={browser_binding}"
+                    ),
+                )
                 .body(Body::empty())
                 .expect("req"),
         )

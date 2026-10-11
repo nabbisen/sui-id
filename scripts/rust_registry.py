@@ -311,3 +311,50 @@ def read_registry(root: Path, failures: list[str]) -> tuple[dict[str, Descriptor
                     failures.append(f"{rel}: event {name} is declared by two descriptors")
                 reachable[name] = by_name[name]
     return reachable, commands
+
+
+# RFC 096-B1 stage 6c, carried from stage 6b's review (S6): a declaration
+# that drifts from the one shape `DESCRIPTOR_STATIC`/`DESCRIPTOR_STATIC_
+# MUST_ATTEMPT` recognise -- an unqualified type, on one line, with an
+# inlined literal name -- is dropped silently, exactly how `AUDIT_TAKEOVER_
+# BLOCKED_DESCRIPTOR` went unseen even after stage 6b's own fix landed
+# (stage 6b's fix round). This pattern is deliberately *looser*: it allows a
+# path-qualified type and tolerates the declaration spanning more than one
+# line, so it still matches a mis-shaped declaration the strict patterns
+# above would miss. Comparing its count against the strict parser's own is
+# what turns "silently dropped" into "loudly reported".
+DECL_LOOSE = re.compile(
+    r"\bstatic\s+[A-Z][A-Z0-9_]*\s*:\s*(?:[A-Za-z_][A-Za-z0-9_]*::)*"
+    r"(EventDescriptor|MustAttemptDescriptor)\b"
+)
+
+
+def count_declarations(root: Path, failures: list[str]) -> tuple[int, int, int, int]:
+    """`(strict_event, strict_must_attempt, loose_event, loose_must_attempt)`
+    tallies across every production `.rs` file under `crates/`. The strict
+    counts are every descriptor `read_file` actually parsed (regardless of
+    whether a command reaches it, unlike [`read_registry`]'s own return);
+    the loose counts are every `static X: Y` whose type names either struct
+    at all, however it is spelled. A strict count lower than the matching
+    loose one means a declaration was silently dropped by the real parser.
+    """
+    base = root / SRC_ROOT
+    strict_event = strict_must_attempt = loose_event = loose_must_attempt = 0
+    if not base.is_dir():
+        return (0, 0, 0, 0)
+    for path in sorted(p for p in base.rglob("*.rs") if not is_test_file(p.relative_to(root))):
+        rel = path.relative_to(root)
+        raw = (root / rel).read_text(encoding="utf-8")
+        text = blank(raw)
+        descriptors, _cmds = read_file(root, rel, failures)
+        for d in descriptors.values():
+            if d.klass == "MustAttempt":
+                strict_must_attempt += 1
+            else:
+                strict_event += 1
+        for m in DECL_LOOSE.finditer(text):
+            if m.group(1) == "MustAttemptDescriptor":
+                loose_must_attempt += 1
+            else:
+                loose_event += 1
+    return (strict_event, strict_must_attempt, loose_event, loose_must_attempt)

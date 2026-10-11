@@ -124,6 +124,7 @@ async fn break_audit_log(state: &AppState) {
 
 struct Started {
     fed_state_cookie: String,
+    browser_binding_cookie: String,
     state_param: String,
 }
 
@@ -141,6 +142,10 @@ async fn start(state: &AppState, slot: &super::federation_fail_closed::NonceSlot
     assert!(resp.status().is_redirection(), "start: {}", resp.status());
     let fed_state_cookie =
         extract_set_cookie(resp.headers(), "sui_id_fed_state").expect("state cookie");
+    // RFC 096-B1 stage 6c: round-tripped the same way as the state cookie,
+    // or every callback here refuses as `fed_error=binding_mismatch`.
+    let browser_binding_cookie =
+        extract_set_cookie(resp.headers(), "sui_id_fed_browser_binding").expect("binding cookie");
     let location = resp
         .headers()
         .get(header::LOCATION)
@@ -163,6 +168,7 @@ async fn start(state: &AppState, slot: &super::federation_fail_closed::NonceSlot
     *slot.lock().expect("lock") = Some(nonce_param);
     Started {
         fed_state_cookie,
+        browser_binding_cookie,
         state_param,
     }
 }
@@ -178,7 +184,10 @@ async fn callback(state: &AppState, started: &Started) -> String {
                 ))
                 .header(
                     header::COOKIE,
-                    format!("sui_id_fed_state={}", started.fed_state_cookie),
+                    format!(
+                        "sui_id_fed_state={}; sui_id_fed_browser_binding={}",
+                        started.fed_state_cookie, started.browser_binding_cookie
+                    ),
                 )
                 .body(Body::empty())
                 .expect("req"),
