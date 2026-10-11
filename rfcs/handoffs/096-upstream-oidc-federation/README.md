@@ -204,26 +204,56 @@ A reader of this file would have concluded that 096-A had not started. **That
 was my omission** — three dispatches written without updating the index the
 implementation role reads.
 
-**Updated 2026-10-11.** 096-B1 stage 5 landed; **no stage is dispatched**, and
-the reason is the next section.
+**Updated 2026-10-11.** 096-B1 stage 5 landed; the stage plan's remaining
+scope was corrected and the correction is authorized; **stage 6a is the open
+dispatch**, and the rest of stage 6 waits on one decision.
+
+### Dispatched and open
+
+- [`stage6a-attempt-retention-and-terminal-cookies-2026-10-11.md`](stage6a-attempt-retention-and-terminal-cookies-2026-10-11.md)
+  — **DISPATCHED, this is the open work.** The two items of stage 6 that depend
+  on nothing open: `:604-605`'s 24-hour purge of completed/failed/expired
+  attempts, and `:600-601`'s cookie expiry on every terminal path. Measured
+  before dispatching — `federation_login_attempt` has `insert`,
+  `find_by_state_sha256` and `claim` and **no delete of any kind**, and
+  `runtime/gc.rs` purges six tables and not this one, so rows have accumulated
+  since stage 2 (no released version: stages 1 and 2 landed after `0.79.0`);
+  and the callback expires `STATE_COOKIE` on **2 of its 23** terminal paths and
+  `BROWSER_BINDING_COOKIE` on none. No command, no event, no manifest row —
+  wanting one is the signal that F05 has been crossed into.
 
 ### Open with the owner
 
+- [`class-b-emission-and-f01-class-2026-10-11.md`](class-b-emission-and-f01-class-2026-10-11.md)
+  — **DECISION REQUEST; F05 and F01 wait on it.** Both specify a post-commit
+  Class-B `emit_must_attempt` event and **that API does not exist**:
+  `registry.rs:118-124` records `AuditClass::MustAttempt` as *"not implemented
+  in this Stage-1 slice"*, nothing uses it, `commands/tests.rs:162` asserts no
+  descriptor does, and it is in neither RFC 094's M2a foundation list (`:575-579`)
+  nor M2a's seven closure criteria — **the third instance** of RFC 094's prose
+  declaring a control its criteria do not require, after the M2a exit-criteria
+  divergence and `ReadConn`. And a second fact cuts the other way for F01:
+  `auth.federation.signin.success` is **already atomic** in production
+  (`commands.rs:2144-2148`, L04 on `db.class_a`), so building F01 as recorded
+  would downgrade RFC 102's achieved property. Recommendation: F01 Class A
+  folded into L04; `emit_must_attempt` built first as stage 6b, then F05 on it;
+  both carried by one RFC 094 amendment.
+
+### Authorized
+
 - [`096-b1-stage-plan-revision-proposal-2026-10-11.md`](096-b1-stage-plan-revision-proposal-2026-10-11.md)
-  — **PROPOSAL, and stage 6 waits on it.** The authorized plan under-scoped
-  096-B1: `:89-93` assigns **F01–F06** to this phase and the plan's stage 6
-  names F01, F02 and F04, so **F03, F05 and F06 are in no stage** — and with
-  them the `federation_mfa_pending` / `federation_webauthn_ceremony` migrations
-  (`:728-738`), `FederatedMfaVerifier` (`:752-765`), `:605`'s 24-hour purge of
-  completed/failed/expired attempts, and `:600-601`'s *"the callback cookie is
-  expired on every terminal path"*. **096-B1 is seven stages from closing, not
-  two.** Stage 6 as authorized would commission F02, whose only output is a
-  pending row in a table that does not exist, read by a command in no stage —
-  so the dispatch waits rather than going out in a form already known to be
-  wrong. **The architect's error**, found before dispatching rather than after
-  stage 8; the plan's own `:23` check was real and `:23` is not the whole scope.
-  The document also proposes a release checkpoint. Neither the revised order
-  nor the checkpoint is in effect.
+  — **AUTHORIZED 2026-10-11** and **folded into the stage plan**, which remains
+  the one authoritative order. Kept as the record of the argument: the plan
+  under-scoped 096-B1, because `:89-93` assigns **F01–F06** to this phase and
+  its stage 6 named F01, F02 and F04 — so F03, F05 and F06 were in no stage,
+  along with the `federation_mfa_pending` / `federation_webauthn_ceremony`
+  migrations (`:728-738`), `FederatedMfaVerifier` (`:752-765`), `:604-605`'s
+  purge and `:600-601`'s terminal-path cookie expiry. 096-B1 is **nine stages
+  from closing, not two** — 6 through 14, and **ten dispatches**, since stage 6
+  splits into 6a and 6b. **The architect's error**, found
+  before dispatching rather than after stage 8; the plan's own `:23` check was
+  real, and `:23` is not the whole scope. The release checkpoint authorized
+  with it: cut `0.80.0` after stage 6, then continue toward `0.81.0`.
 
 ### Landed
 

@@ -33,7 +33,7 @@ commands live in rather than the command list:
 |---|---|---|
 | `:728-738` | the `federation_mfa_pending` and `federation_webauthn_ceremony` migrations, with the 0–5 failure constraint, the four-state status, `expires_at = created_at + 300`, the unique parent-pending key and the no-later-expiry rule | nowhere |
 | `:752-765` | `FederatedMfaVerifier` — binding before anything else, sealed non-cloneable method candidates, closed rejection reasons selectable only by the verifier | nowhere |
-| `:605` | *"Completed/failed/expired attempts are periodically deleted after 24 hours."* | nowhere |
+| `:604-605` | *"Completed/failed/expired attempts are periodically deleted after 24 hours."* | nowhere |
 | `:600-601` | *"The callback cookie is expired on every terminal path."* | nowhere |
 
 This is the same class of error as 096-A's: a stage list checked against the
@@ -41,7 +41,7 @@ closure sentence rather than against every clause the stage owns. It is the
 architect's, found before dispatching stage 6 rather than after stage 8 — which
 is the only part of it that went right.
 
-**`:605` has a consequence in `main` today.** `federation_login_attempt` has
+**`:604-605` has a consequence in `main` today.** `federation_login_attempt` has
 `insert`, `find_by_state_sha256` and `claim`, and no delete of any kind;
 `runtime/gc.rs` purges six tables every fifteen minutes and that is not one of
 them. Rows therefore accumulate without bound from stage 2 onward. **No
@@ -54,12 +54,12 @@ happens to reach it.
 Stages 0–5 are complete and unchanged. From stage 6:
 
 **Stage 6 — F05, F01, and the two retention items.** Terminal attempt failure
-first, because `:602-604` requires every failure path to leave the row
+first, because `:601-603` requires every failure path to leave the row
 reconcilable as `failed` and today none of them does; then F01, the
 existing-link, no-local-MFA completion — guarded `exchanging -> completed`,
 observe last-seen and bounded verified email, login bookkeeping, `[Fed]`
 session, session cap. With them, the two retention requirements that belong to
-the attempt row rather than to a command: `:605`'s 24-hour purge, registered in
+the attempt row rather than to a command: `:604-605`'s 24-hour purge, registered in
 `runtime/gc.rs` beside the existing six, and `:600-601`'s cookie expiry on
 every terminal path. Both Class P. **This is the stage after which `main` is
 releasable** (§5).
@@ -137,8 +137,11 @@ revised order rather than going out in a form already known to be wrong.
 
 ## 5. Release schedule
 
-The authorized plan assumed one release at the end of 096-B1. With seven stages
-remaining rather than two, that is a long runway, and stage 5's fix round
+The authorized plan assumed one release at the end of 096-B1. With nine stages
+remaining rather than two — 6 through 14; **ten dispatches**, since stage 6
+splits into 6a and 6b (*count corrected 2026-10-11: this read "seven", carried
+over from an earlier twelve-stage draft of §2 and not recounted against the
+fourteen-stage order actually written below it*) — that is a long runway, and stage 5's fix round
 landed corrections in `main` (`8a8dec4`) that are worth operators' hands sooner
 than that. The findings behind them are recorded in this round's review result
 under `.git-exclude/`, which is also where the severity and disclosure
@@ -148,7 +151,7 @@ discussion belongs until `0.80.0` ships (`.github/SECURITY.md`).
 `0.81.0`.
 
 - Stage 6 is the point at which `main` stops accumulating attempt rows
-  (`:605`), which is the one thing in `main` that should not ship.
+  (`:604-605`), which is the one thing in `main` that should not ship.
 - Everything stage 5 and its fix round landed — the generic `link_only`
   result (`:699`), `:714-715`'s log and audit changes, the configuration and
   operator guide corrections — reaches operators then rather than after the MFA
