@@ -3,7 +3,7 @@
 //! sui-id is correct without these — the read paths already filter out
 //! expired entries. The GC keeps the on-disk representation tidy and
 //! prevents unbounded growth of single-use tables (`auth_codes`, `sessions`,
-//! `refresh_tokens`).
+//! `refresh_tokens`, `federation_login_attempt`).
 //!
 //! The interval is fixed at 15 minutes to avoid one more configuration knob;
 //! the operator can shut down the binary if they need different behaviour.
@@ -11,8 +11,8 @@
 use crate::AppState;
 use std::time::Duration;
 use sui_id_store::repos::{
-    auth_codes, login_pending_mfa, refresh_tokens, revoked_access_tokens, sessions,
-    webauthn_pending,
+    auth_codes, federation_login_attempt, login_pending_mfa, refresh_tokens, revoked_access_tokens,
+    sessions, webauthn_pending,
 };
 
 const GC_INTERVAL: Duration = Duration::from_secs(15 * 60);
@@ -64,5 +64,17 @@ pub async fn run_once(state: &AppState) {
         }
         Ok(_) => {}
         Err(e) => tracing::warn!(error = %e, "gc: revoked_access_tokens purge failed"),
+    }
+    // RFC 096-B1 stage 6a, RFC 096 `:604-605`. `purge_expired` takes `now`
+    // as a parameter (its own doc comment explains why, against a seventh
+    // precedent the other six don't follow) -- this is the one call site
+    // that samples the clock, same discipline as `insert`/`claim`'s own
+    // callers.
+    match federation_login_attempt::purge_expired(db, state.clock.now()).await {
+        Ok(n) if n > 0 => {
+            tracing::info!(deleted = n, "gc: removed expired federation login attempts")
+        }
+        Ok(_) => {}
+        Err(e) => tracing::warn!(error = %e, "gc: federation_login_attempt purge failed"),
     }
 }

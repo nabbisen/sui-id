@@ -124,6 +124,49 @@ async fn fetch_discovery(
 /// same way `STATE_COOKIE` is.
 const BROWSER_BINDING_COOKIE: &str = "sui_id_fed_browser_binding";
 
+/// RFC 096-B1 stage 6a, RFC 096 `:600-601`: *"The callback cookie is
+/// expired on every terminal path."* -- both of them, `STATE_COOKIE` and
+/// [`BROWSER_BINDING_COOKIE`], not only the one the RFC names.
+///
+/// **What this is, and what it is not.** `federated_callback` and
+/// `complete_federated_signin` both return `Result<Terminal, HttpError>`
+/// instead of `Result<Response, HttpError>` -- `Terminal` is the only
+/// value either function can wrap in `Ok(...)`, and the only way to build
+/// one is [`terminal`], which always removes both cookies first. A
+/// `return Ok(some_other_response.into_response())` is a type error, not
+/// a reviewable omission: the compiler, not a convention, is what a
+/// twenty-fourth terminal path would have to get past.
+///
+/// **What would bypass it.** Building a `Response` *without* going
+/// through `terminal()` and smuggling it out some other way `Result<
+/// Terminal, HttpError>` still accepts -- there is no such way from
+/// inside these two functions, since `Terminal`'s only field is private
+/// to this module and its only constructor is `terminal()` itself. The
+/// `Err(HttpError)` side is a genuinely different path (axum's generic
+/// error rendering, not a federation redirect) and is not claimed to be
+/// covered by this -- the dispatch's own count, *"23 `return Ok(...)`
+/// terminal paths,"* already scopes to the `Ok` side, and `Err` returns
+/// in this file are pre-existing, unrelated to `:600-601`, and left
+/// alone.
+pub struct Terminal(Response);
+
+impl IntoResponse for Terminal {
+    fn into_response(self) -> Response {
+        self.0
+    }
+}
+
+/// The one constructor for [`Terminal`]. `jar` is taken last-known-state
+/// (already carrying whatever the caller added -- a session cookie, a
+/// pending-MFA cookie, nothing) and both federation cookies are removed
+/// from it before the response is built, unconditionally.
+fn terminal(jar: CookieJar, redirect: Redirect) -> Terminal {
+    let jar = jar
+        .remove(Cookie::build(STATE_COOKIE))
+        .remove(Cookie::build(BROWSER_BINDING_COOKIE));
+    Terminal((jar, redirect).into_response())
+}
+
 /// Raw SHA-256 digest, 32 bytes -- what `federation_login_attempt`'s three
 /// hash columns store (RFC 096 `:587-588`: "raw fixed-size values", not hex
 /// `TEXT`). `Sha256::digest`'s own output is already exactly 32 bytes, so
@@ -440,7 +483,7 @@ pub async fn federated_callback(
     state_ext: AppStateExt,
     Query(q): Query<CallbackQuery>,
     jar: CookieJar,
-) -> Result<Response, HttpError> {
+) -> Result<Terminal, HttpError> {
     let State(app) = state_ext;
 
     // Reject upstream errors. RFC 096 `:714-715` (review R2's full-path
@@ -452,8 +495,10 @@ pub async fn federated_callback(
     // instead.
     if q.error.is_some() {
         tracing::warn!("federation callback: upstream returned an error response");
-        let jar = jar.remove(Cookie::build(STATE_COOKIE));
-        return Ok((jar, Redirect::to("/admin/login?fed_error=upstream")).into_response());
+        return Ok(terminal(
+            jar,
+            Redirect::to("/admin/login?fed_error=upstream"),
+        ));
     }
 
     let code = q
@@ -479,8 +524,10 @@ pub async fn federated_callback(
         .into();
     if !state_ok {
         tracing::warn!(slug = %fed_state.provider_slug, "federation: state mismatch — possible CSRF");
-        let jar = jar.remove(Cookie::build(STATE_COOKIE));
-        return Ok((jar, Redirect::to("/admin/login?fed_error=state_mismatch")).into_response());
+        return Ok(terminal(
+            jar,
+            Redirect::to("/admin/login?fed_error=state_mismatch"),
+        ));
     }
 
     // Load the provider.
@@ -490,7 +537,10 @@ pub async fn federated_callback(
             .map_err(|_| HttpError::html(CoreError::NotFound))?;
 
     if !provider.enabled {
-        return Ok(Redirect::to("/admin/login?fed_error=disabled").into_response());
+        return Ok(terminal(
+            jar,
+            Redirect::to("/admin/login?fed_error=disabled"),
+        ));
     }
 
     // Fetch upstream discovery for token_endpoint.
@@ -524,7 +574,10 @@ pub async fn federated_callback(
             // failure path used (unchanged below for that case, since it
             // predates this control and isn't what's dispatched here).
             if e.is_invalid() {
-                return Ok(Redirect::to("/admin/login?fed_error=discovery_origin").into_response());
+                return Ok(terminal(
+                    jar,
+                    Redirect::to("/admin/login?fed_error=discovery_origin"),
+                ));
             }
             return Err(HttpError::html(CoreError::BadRequest(
                 "upstream IdP unavailable".into(),
@@ -574,7 +627,10 @@ pub async fn federated_callback(
                 sui_id_store::repos::federation_provider::AUDIT_SIGNIN_UPSTREAM_FAILURE,
                 Some(format!("provider={} error={e}", provider.slug)),
             );
-            return Ok(Redirect::to("/admin/login?fed_error=token_exchange").into_response());
+            return Ok(terminal(
+                jar,
+                Redirect::to("/admin/login?fed_error=token_exchange"),
+            ));
         }
     };
 
@@ -583,7 +639,10 @@ pub async fn federated_callback(
         Ok(t) => t,
         Err(e) => {
             tracing::warn!(error = %e, "federation token parse failed");
-            return Ok(Redirect::to("/admin/login?fed_error=token_parse").into_response());
+            return Ok(terminal(
+                jar,
+                Redirect::to("/admin/login?fed_error=token_parse"),
+            ));
         }
     };
 
@@ -611,7 +670,10 @@ pub async fn federated_callback(
         Some(jwt) => jwt,
         None => {
             tracing::warn!(slug = %provider.slug, "federation: id_token absent (mandatory, RFC 096 :593-594)");
-            return Ok(Redirect::to("/admin/login?fed_error=missing_id_token").into_response());
+            return Ok(terminal(
+                jar,
+                Redirect::to("/admin/login?fed_error=missing_id_token"),
+            ));
         }
     };
 
@@ -630,7 +692,10 @@ pub async fn federated_callback(
         // no matching `[[federation_providers]]` block is a startup
         // configuration drift this handler cannot resolve on its own.
         tracing::error!(slug = %provider.slug, "federation: enabled provider has no matching config block");
-        return Ok(Redirect::to("/admin/login?fed_error=config_drift").into_response());
+        return Ok(terminal(
+            jar,
+            Redirect::to("/admin/login?fed_error=config_drift"),
+        ));
     };
     let allowed_algs = discovery.id_token_algs_intersection(&provider_config.id_token_algs);
 
@@ -645,7 +710,10 @@ pub async fn federated_callback(
         Ok(claims) => claims,
         Err(e) => {
             tracing::warn!(slug = %provider.slug, error = ?e, "federation: id_token signature/structure verification failed");
-            return Ok(Redirect::to("/admin/login?fed_error=signature_invalid").into_response());
+            return Ok(terminal(
+                jar,
+                Redirect::to("/admin/login?fed_error=signature_invalid"),
+            ));
         }
     };
 
@@ -658,7 +726,10 @@ pub async fn federated_callback(
         Ok(a) => a,
         Err(e) => {
             tracing::warn!(slug = %provider.slug, error = %e, "federation: no attempt row for this state");
-            return Ok(Redirect::to("/admin/login?fed_error=attempt_not_found").into_response());
+            return Ok(terminal(
+                jar,
+                Redirect::to("/admin/login?fed_error=attempt_not_found"),
+            ));
         }
     };
 
@@ -678,11 +749,13 @@ pub async fn federated_callback(
         Ok(row) => row,
         Err(e) => {
             tracing::warn!(slug = %provider.slug, error = ?e, "federation: attempt claim or nonce consumption failed");
-            return Ok(Redirect::to(&format!(
-                "/admin/login?fed_error={}",
-                claim_and_nonce_fed_error(&e)
-            ))
-            .into_response());
+            return Ok(terminal(
+                jar,
+                Redirect::to(&format!(
+                    "/admin/login?fed_error={}",
+                    claim_and_nonce_fed_error(&e)
+                )),
+            ));
         }
     };
 
@@ -700,7 +773,10 @@ pub async fn federated_callback(
         current_generation,
     ) {
         tracing::warn!(slug = %provider.slug, "federation: attempt superseded (provider config/activation moved on)");
-        return Ok(Redirect::to("/admin/login?fed_error=superseded").into_response());
+        return Ok(terminal(
+            jar,
+            Redirect::to("/admin/login?fed_error=superseded"),
+        ));
     }
 
     let identity = match validate_identity_claims(
@@ -711,9 +787,10 @@ pub async fn federated_callback(
         Ok(i) => i,
         Err(e) => {
             tracing::warn!(slug = %provider.slug, error = ?e, "federation: identity claims rejected");
-            return Ok(
-                Redirect::to("/admin/login?fed_error=identity_claims_invalid").into_response(),
-            );
+            return Ok(terminal(
+                jar,
+                Redirect::to("/admin/login?fed_error=identity_claims_invalid"),
+            ));
         }
     };
 
@@ -722,16 +799,20 @@ pub async fn federated_callback(
     // this attempt existed.
     if let Err(e) = validate_iat(&verified_claims, claimed.created_at, validation_now) {
         tracing::warn!(slug = %provider.slug, error = ?e, "federation: iat rejected");
-        return Ok(Redirect::to("/admin/login?fed_error=time_claims_invalid").into_response());
+        return Ok(terminal(
+            jar,
+            Redirect::to("/admin/login?fed_error=time_claims_invalid"),
+        ));
     }
 
     let optional = match validate_optional_claims(&verified_claims) {
         Ok(o) => o,
         Err(e) => {
             tracing::warn!(slug = %provider.slug, error = ?e, "federation: optional claims rejected");
-            return Ok(
-                Redirect::to("/admin/login?fed_error=optional_claims_invalid").into_response(),
-            );
+            return Ok(terminal(
+                jar,
+                Redirect::to("/admin/login?fed_error=optional_claims_invalid"),
+            ));
         }
     };
 
@@ -777,7 +858,10 @@ pub async fn federated_callback(
             Some(claims) => claims,
             None => {
                 tracing::warn!("federation ID token claims parse failed");
-                return Ok(Redirect::to("/admin/login?fed_error=token_parse").into_response());
+                return Ok(terminal(
+                    jar,
+                    Redirect::to("/admin/login?fed_error=token_parse"),
+                ));
             }
         },
         None => {
@@ -793,11 +877,17 @@ pub async fn federated_callback(
                     Ok(claims) => claims,
                     Err(e) => {
                         tracing::warn!(error = %e, "userinfo fetch failed");
-                        return Ok(Redirect::to("/admin/login?fed_error=userinfo").into_response());
+                        return Ok(terminal(
+                            jar,
+                            Redirect::to("/admin/login?fed_error=userinfo"),
+                        ));
                     }
                 }
             } else {
-                return Ok(Redirect::to("/admin/login?fed_error=no_id_token").into_response());
+                return Ok(terminal(
+                    jar,
+                    Redirect::to("/admin/login?fed_error=no_id_token"),
+                ));
             }
         }
     };
@@ -807,11 +897,14 @@ pub async fn federated_callback(
         && token_nonce != &fed_state.nonce
     {
         tracing::warn!(slug = %provider.slug, "federation nonce mismatch");
-        return Ok(Redirect::to("/admin/login?fed_error=nonce_mismatch").into_response());
+        return Ok(terminal(
+            jar,
+            Redirect::to("/admin/login?fed_error=nonce_mismatch"),
+        ));
     }
 
     if id_claims.sub.is_empty() {
-        return Ok(Redirect::to("/admin/login?fed_error=no_sub").into_response());
+        return Ok(terminal(jar, Redirect::to("/admin/login?fed_error=no_sub")));
     }
 
     // P6: upstream access token is used above and then dropped — never persisted.
@@ -892,9 +985,10 @@ pub async fn federated_callback(
                             },
                         )
                         .await;
-                        return Ok(
-                            Redirect::to("/admin/login?fed_error=email_collision").into_response()
-                        );
+                        return Ok(terminal(
+                            jar,
+                            Redirect::to("/admin/login?fed_error=email_collision"),
+                        ));
                     }
 
                     // P3: provision on first login requires either:
@@ -905,9 +999,10 @@ pub async fn federated_callback(
                     // Block only when email is present but unverified.
                     if id_claims.email.is_some() && !id_claims.email_verified {
                         tracing::info!(slug = %provider.slug, "provision held: unverified email");
-                        return Ok(
-                            Redirect::to("/admin/login?fed_error=unverified_email").into_response()
-                        );
+                        return Ok(terminal(
+                            jar,
+                            Redirect::to("/admin/login?fed_error=unverified_email"),
+                        ));
                     }
                     // P7: derive username, never trust upstream directly.
                     let proposed = derive_username(&id_claims);
@@ -985,7 +1080,10 @@ pub async fn federated_callback(
                     // design may restore self-service linking with fresh
                     // local authentication, local MFA, CSRF, a single-use
                     // durable intent, explicit approval, and C19 atomicity.
-                    return Ok(Redirect::to("/admin/login?fed_error=link_required").into_response());
+                    return Ok(terminal(
+                        jar,
+                        Redirect::to("/admin/login?fed_error=link_required"),
+                    ));
                 }
             }
         }
@@ -1005,13 +1103,15 @@ async fn complete_federated_signin(
     provider_slug: &str,
     upstream_sub: &str,
     now: chrono::DateTime<chrono::Utc>,
-) -> Result<Response, HttpError> {
+) -> Result<Terminal, HttpError> {
     // Refuse an inactive user before any pending-MFA or session row. The
     // user is re-read here: the link may belong to an account disabled or
     // deleted since it was created.
     let signin_failed = |jar: CookieJar| {
-        let jar = jar.remove(Cookie::build(STATE_COOKIE));
-        Ok((jar, Redirect::to("/admin/login?fed_error=signin_failed")).into_response())
+        Ok(terminal(
+            jar,
+            Redirect::to("/admin/login?fed_error=signin_failed"),
+        ))
     };
     match sui_id_store::repos::users::get(&app.db, user_id).await {
         Ok(user) if !user.is_disabled && !user.is_deleted => {}
@@ -1070,7 +1170,7 @@ async fn complete_federated_signin(
             },
         )
         .await;
-        return Ok((jar, Redirect::to("/admin/login/mfa")).into_response());
+        return Ok(terminal(jar, Redirect::to("/admin/login/mfa")));
     }
 
     // No MFA — create session directly.
@@ -1120,8 +1220,8 @@ async fn complete_federated_signin(
     }
 
     let cookie = session_cookie(session_row.id.to_string(), app.config.server.cookie_secure);
-    let jar = jar.add(cookie).remove(Cookie::build(STATE_COOKIE));
-    Ok((jar, Redirect::to("/admin")).into_response())
+    let jar = jar.add(cookie);
+    Ok(terminal(jar, Redirect::to("/admin")))
 }
 
 async fn fetch_userinfo(

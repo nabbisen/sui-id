@@ -537,3 +537,202 @@ async fn a_second_attempt_cannot_reuse_a_state_hash_already_in_use() {
     .await;
     assert!(result.is_err());
 }
+
+// ── RFC 096-B1 stage 6a: `purge_expired` ────────────────────────────────────
+//
+// `now` is a fixed value in every test here, passed to both
+// `insert_with_expires_at` (to place a row's `expires_at` at a chosen
+// offset) and to `purge_expired` itself (the same `now`, so the boundary
+// tests are exact rather than racing a second, slightly later clock
+// read).
+
+async fn set_status(
+    db: &Database,
+    id: FederationLoginAttemptId,
+    status: &str,
+    claimed_at: DateTime<Utc>,
+) {
+    let id_str = id.to_string();
+    let status = status.to_owned();
+    db.with_conn(move |conn| {
+        conn.execute(
+            "UPDATE federation_login_attempt SET status = ?1, claimed_at = ?2 WHERE id = ?3",
+            params![status, claimed_at, id_str],
+        )?;
+        Ok(())
+    })
+    .await
+    .unwrap();
+}
+
+async fn row_exists(db: &Database, id: FederationLoginAttemptId) -> bool {
+    let id_str = id.to_string();
+    db.with_read(move |read| {
+        let n: i64 = read
+            .prepare("SELECT COUNT(*) FROM federation_login_attempt WHERE id = ?1")?
+            .query_row([id_str], |r| r.get(0))?;
+        Ok(n)
+    })
+    .await
+    .unwrap()
+        == 1
+}
+
+/// `insert`'s only lever on `expires_at` is `now`, since `expires_at =
+/// now + ATTEMPT_LIFETIME_SECS` always. To land a row's `expires_at` at a
+/// chosen point relative to the test's own fixed `now`, back-date the
+/// `now` passed to `insert` by that same offset. `tag` distinguishes the
+/// row's `state_sha256` (`UNIQUE`) from any other row the same test
+/// inserts -- `insert_attempt`'s own fixed `hash32(1)` collides the
+/// moment a test needs more than one row.
+async fn insert_with_expires_at(
+    db: &Database,
+    provider_id: FederationProviderId,
+    expires_at: DateTime<Utc>,
+    tag: u8,
+) -> FederationLoginAttemptRow {
+    let created_at = expires_at - Duration::seconds(ATTEMPT_LIFETIME_SECS);
+    insert(
+        db,
+        provider_id,
+        1,
+        1,
+        hash32(tag),
+        hash32(tag.wrapping_add(100)),
+        hash32(tag.wrapping_add(200)),
+        b"the-pkce-verifier",
+        "https://rp.example/cb".to_owned(),
+        None,
+        created_at,
+    )
+    .await
+    .unwrap()
+}
+
+#[tokio::test]
+async fn a_row_well_inside_the_retention_window_survives_purge() {
+    let db = open_test_db();
+    let provider_id = seed_provider(&db).await;
+    let now = fixed_now();
+    // expires_at = 1 hour before `now` -- long expired as an attempt,
+    // nowhere near the 24-hour retention cutoff.
+    let attempt = insert_with_expires_at(&db, provider_id, now - Duration::hours(1), 1).await;
+
+    let deleted = purge_expired(&db, now).await.unwrap();
+
+    assert_eq!(deleted, 0);
+    assert!(row_exists(&db, attempt.id).await);
+}
+
+#[tokio::test]
+async fn a_pending_row_past_the_window_is_deleted() {
+    let db = open_test_db();
+    let provider_id = seed_provider(&db).await;
+    let now = fixed_now();
+    // Left `pending`: RFC 096 `:587-588` already calls this expired by
+    // `expires_at`; the retention sweep must not special-case it into
+    // surviving indefinitely.
+    let attempt = insert_with_expires_at(&db, provider_id, now - Duration::hours(25), 1).await;
+    assert_eq!(attempt.status, FederationLoginAttemptStatus::Pending);
+
+    let deleted = purge_expired(&db, now).await.unwrap();
+
+    assert_eq!(deleted, 1);
+    assert!(!row_exists(&db, attempt.id).await);
+}
+
+#[tokio::test]
+async fn an_exchanging_row_past_the_window_is_deleted() {
+    let db = open_test_db();
+    let provider_id = seed_provider(&db).await;
+    let now = fixed_now();
+    let attempt = insert_with_expires_at(&db, provider_id, now - Duration::hours(25), 1).await;
+    set_status(&db, attempt.id, "exchanging", now).await;
+
+    let deleted = purge_expired(&db, now).await.unwrap();
+
+    assert_eq!(deleted, 1);
+    assert!(!row_exists(&db, attempt.id).await);
+}
+
+#[tokio::test]
+async fn a_completed_row_past_the_window_is_deleted() {
+    let db = open_test_db();
+    let provider_id = seed_provider(&db).await;
+    let now = fixed_now();
+    let attempt = insert_with_expires_at(&db, provider_id, now - Duration::hours(25), 1).await;
+    set_status(&db, attempt.id, "completed", now).await;
+
+    let deleted = purge_expired(&db, now).await.unwrap();
+
+    assert_eq!(deleted, 1);
+    assert!(!row_exists(&db, attempt.id).await);
+}
+
+#[tokio::test]
+async fn a_failed_row_past_the_window_is_deleted() {
+    let db = open_test_db();
+    let provider_id = seed_provider(&db).await;
+    let now = fixed_now();
+    let attempt = insert_with_expires_at(&db, provider_id, now - Duration::hours(25), 1).await;
+    set_status(&db, attempt.id, "failed", now).await;
+
+    let deleted = purge_expired(&db, now).await.unwrap();
+
+    assert_eq!(deleted, 1);
+    assert!(!row_exists(&db, attempt.id).await);
+}
+
+/// A predicate that deletes the right *number* of the wrong rows must
+/// fail: one old row of each status, one fresh row, purge once, and
+/// check *which* rows survive by id/status rather than only the count.
+#[tokio::test]
+async fn purge_deletes_exactly_the_old_rows_of_every_status_and_counts_them() {
+    let db = open_test_db();
+    let provider_id = seed_provider(&db).await;
+    let now = fixed_now();
+    let old_pending = insert_with_expires_at(&db, provider_id, now - Duration::hours(25), 1).await;
+    let old_exchanging =
+        insert_with_expires_at(&db, provider_id, now - Duration::hours(30), 2).await;
+    set_status(&db, old_exchanging.id, "exchanging", now).await;
+    let old_failed = insert_with_expires_at(&db, provider_id, now - Duration::hours(48), 3).await;
+    set_status(&db, old_failed.id, "failed", now).await;
+    let fresh = insert_with_expires_at(&db, provider_id, now + Duration::minutes(5), 4).await;
+
+    let deleted = purge_expired(&db, now).await.unwrap();
+
+    assert_eq!(deleted, 3);
+    assert!(!row_exists(&db, old_pending.id).await);
+    assert!(!row_exists(&db, old_exchanging.id).await);
+    assert!(!row_exists(&db, old_failed.id).await);
+    assert!(row_exists(&db, fresh.id).await);
+}
+
+/// The boundary, in the shape stage 3's claim boundary got: exactly 24
+/// hours past `expires_at` survives (the predicate is strict `<`), one
+/// tick further does not. Deterministic because `now` is fixed and fed
+/// to both the row's placement and `purge_expired` itself, not a second,
+/// later clock read.
+#[tokio::test]
+async fn the_24_hour_boundary_is_strict() {
+    let db = open_test_db();
+    let provider_id = seed_provider(&db).await;
+    let now = fixed_now();
+    let at_boundary = insert_with_expires_at(&db, provider_id, now - Duration::hours(24), 1).await;
+    let one_second_past = insert_with_expires_at(
+        &db,
+        provider_id,
+        now - Duration::hours(24) - Duration::seconds(1),
+        2,
+    )
+    .await;
+
+    let deleted = purge_expired(&db, now).await.unwrap();
+
+    assert_eq!(deleted, 1);
+    assert!(
+        row_exists(&db, at_boundary.id).await,
+        "exactly 24 hours past expiry is not yet \"after 24 hours\""
+    );
+    assert!(!row_exists(&db, one_second_past.id).await);
+}

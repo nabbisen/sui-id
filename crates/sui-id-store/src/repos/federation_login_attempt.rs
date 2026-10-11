@@ -262,7 +262,7 @@ pub async fn claim(
     }
     // Clock regression checked before expiry, and independently of it:
     // `expires_at <= now_at_claim` alone would be the wrong test under a
-    // backward clock (RFC 096 `:589`) -- it makes the window look *less*
+    // backward clock (RFC 096 `:588-589`) -- it makes the window look *less*
     // elapsed, not more, so a regressed clock could pass it when it must
     // not.
     if now_at_claim < row.created_at {
@@ -314,6 +314,67 @@ pub async fn claim(
         claimed_at: Some(now_at_claim),
         ..row
     })
+}
+
+/// RFC 096-B1 stage 6a, RFC 096 `:604-605`: hygiene, called from the GC
+/// task.
+///
+/// **`now` is a parameter, not read inside — checked against a seventh
+/// precedent the dispatch's own survey did not name.** `sessions`,
+/// `auth_codes`, `refresh_tokens`, `login_pending_mfa`, `webauthn_pending`
+/// and `revoked_access_tokens` all read `Utc::now()` inside the function.
+/// But `pending_settings_change::purge_expired(db, now: DateTime<Utc>)`
+/// does not — it takes `now` as a parameter, the same convention this
+/// module's own `insert`/`claim` already use. That seventh precedent, not
+/// the six, is the one this function matches, for a reason specific to
+/// this dispatch rather than a style preference: it asks for "an
+/// `expires_at = now - 24h` exact-boundary case... in the shape stage 3's
+/// claim boundary got," and stage 3's boundary test is deterministic only
+/// because `claim` takes `now_at_claim` as a parameter. A function that
+/// reads its own clock cannot be pinned to a boundary with microsecond
+/// precision from a test that runs on a separate clock read, milliseconds
+/// later — `gc.rs`'s own call site samples `Utc::now()` once, same
+/// discipline as `insert`/`claim`'s callers.
+///
+/// **The predicate, derived against the actual columns, not asserted.**
+/// This table has no terminal-transition timestamp — `status` changes in
+/// place with no "when" recorded — so "24 hours after becoming terminal"
+/// cannot be expressed directly. What the table *does* give: `expires_at`,
+/// fixed at `created_at + 600s` by [`insert`] and never written again by
+/// anything in this file, for every status alike. `expires_at < now - 24h`
+/// is therefore a uniform rule reachable from the one timestamp that
+/// exists on every row, regardless of `status`:
+///
+/// - `completed`/`failed`: deleted roughly 24h after the attempt's own
+///   600-second window closed — not exactly 24h after the transition (no
+///   such timestamp exists to measure from), but within 10 minutes of it,
+///   which is the closest this schema can state the RFC's rule.
+/// - `pending`/`exchanging` still around 24h later: **caught by the same
+///   rule**, deliberately — RFC 096 `:587-588` already calls
+///   `expires_at <= now` "expired" regardless of `status`, so a `pending`
+///   or `exchanging` row this old is expired by that definition and
+///   leaving it around indefinitely is not an option (the dispatch's own
+///   framing). The predicate does not inspect `status` at all, so it
+///   reaches every row the same way, including these.
+///
+/// **Boundary, matching the six neighbours' own strict `<`:**
+/// `expires_at < now - 24h` — a row at *exactly* `now - 24h` survives this
+/// sweep (not yet "after 24 hours", `:605`'s own wording), and is deleted
+/// the next time this runs once the clock has moved past it even by one
+/// tick. Mirrors `claim`'s own `expires_at <= now_at_claim` being the
+/// *expired* test while this function's boundary is the *retention* test
+/// — different questions, so a different inequality is not an
+/// inconsistency between them.
+pub async fn purge_expired(db: &Database, now: DateTime<Utc>) -> StoreResult<usize> {
+    let cutoff = now - Duration::hours(24);
+    db.with_conn(move |conn| {
+        let n = conn.execute(
+            "DELETE FROM federation_login_attempt WHERE expires_at < ?1",
+            [cutoff],
+        )?;
+        Ok(n)
+    })
+    .await
 }
 
 #[cfg(test)]
