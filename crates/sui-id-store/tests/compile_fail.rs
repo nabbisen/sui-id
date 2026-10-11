@@ -97,6 +97,17 @@ fn compile_fail_admin_command_forbidden_cannot_use_system_actor() {
     t.compile_fail("tests/compile_fail/admin_command_forbidden_cannot_use_system_actor.rs");
 }
 
+/// RFC 096-B1 stage 6b: the replacement for the runtime
+/// `every_descriptor_is_atomic_class` test (removed in the same change).
+/// Same E0599-wording-drift family as `arbitrary_event_kind_does_not_
+/// exist` above, gated the same way for the same reason.
+#[rustversion::attr(before(1.96), ignore)]
+#[test]
+fn compile_fail_audit_class_must_attempt_does_not_exist() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compile_fail/audit_class_must_attempt_does_not_exist.rs");
+}
+
 /// RFC 102 A4: no session without its audit event. Nothing outside
 /// `sui-id-store` can name the raw session insert: `insert_within_tx` is
 /// `pub(crate)` (E0603, private function), and `insert` is `pub(crate)` and

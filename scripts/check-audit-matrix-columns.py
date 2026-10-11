@@ -35,8 +35,13 @@ descriptor's `TargetRequirement` cannot contradict), and attribute *names* in th
 note column, which is free prose whose backticks yield values rather than
 names. A check that is right most of the time teaches people to ignore it.
 
-Rows whose event is not sealed are not checked for `actor`: there is no
-descriptor to check them against, and saying so is better than approximating.
+Rows with no descriptor at all are not checked for `actor`: there is nothing to
+check them against, and saying so is better than approximating. A row *is*
+checked when any descriptor carries its name -- a sealed Class-A
+`EventDescriptor`, or (since RFC 096-B1 stage 6b) a `MustAttemptDescriptor`,
+which `rust_registry.py` reads too and reports with `klass = "MustAttempt"`.
+Only the `class` check distinguishes the two: an A claim needs an `Atomic`
+descriptor, a B claim must not have one.
 
 Exit 0 = pass, 1 = any violation (each on stderr, prefixed
 `check-audit-matrix-columns:` and naming its check and the row's line), 2 = the

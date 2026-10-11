@@ -109,18 +109,29 @@ impl<'tx, P> WriteTx<'tx, P> {
 
 // ── Registry data model ─────────────────────────────────────────────────
 
-/// Audit semantics for an event. Distinct from the command inventory's
-/// A/P/O/I/X classification (which runner a command uses) — this is about
-/// how the *event*, if any, is recorded. Only Class-A commands have an
-/// `AuditClass::Atomic` event in this registry; Class-P/O commands don't
-/// register an event here at all (see module docs).
+/// Audit semantics for a [`CommandSpec`] event. Distinct from the command
+/// inventory's A/P/O/I/X classification (which runner a command uses) —
+/// this is about how the *event*, if any, is recorded. Only Class-A
+/// commands have an `EventDescriptor` in this registry at all; Class-P/O
+/// commands don't register one here (see module docs).
+///
+/// **One variant, deliberately — RFC 096-B1 stage 6b.** This used to carry
+/// a second, `MustAttempt`, for a Class-B emission mechanism that did not
+/// exist yet ("not implemented in this Stage-1 slice"). Now that
+/// [`crate::repos::audit::emit_must_attempt`] exists, it has its own
+/// descriptor type, [`MustAttemptDescriptor`], which has no `class` field
+/// at all — the *type* says which kind of event it is, not a runtime enum
+/// value living on a type ([`EventDescriptor`]) that only [`CommandSpec`]
+/// uses. That is what makes "every `EventDescriptor` is Atomic" a
+/// structural fact rather than a runtime-tested one now: there is no other
+/// value this field could hold. See `tests/compile_fail/audit_class_must_
+/// attempt_does_not_exist.rs` for the compile-time proof, and
+/// `commands/tests.rs`'s own comment at the site the old runtime test
+/// occupied for why that test is gone rather than weakened.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AuditClass {
     /// Mutation and event commit in one transaction ([`Database::class_a`]).
     Atomic,
-    /// Best-effort, tracked emission (RFC 094 Class-B `emit_must_attempt`,
-    /// not implemented in this Stage-1 slice — no slice command needs it).
-    MustAttempt,
 }
 
 /// Whether an event variant's payload must, may, or must not carry an
@@ -224,6 +235,10 @@ pub enum AuditEventKind {
     /// emitted; no command can construct this event because no command can
     /// construct a context for that command in the first place.
     ProofOnlySystemPrincipalForbidden,
+    /// `auth.federation.takeover_blocked` — RFC 096-B1 stage 6b, the one
+    /// converted Class-B site: an upstream identity's email collides with
+    /// a local account already linked to a different provider.
+    AuthFederationTakeoverBlocked,
 }
 
 /// The registry entry for one [`AuditEventKind`]. `descriptor()` on a
@@ -234,6 +249,38 @@ pub struct EventDescriptor {
     pub kind: AuditEventKind,
     pub name: &'static str,
     pub class: AuditClass,
+    pub actor: ActorRequirement,
+    pub target: TargetRequirement,
+    pub attributes: &'static [AttributeSpec],
+}
+
+/// The registry entry for a [`crate::repos::audit::emit_must_attempt`]
+/// emission — RFC 094 `:292-298`'s Class-B mechanism, RFC 096-B1 stage 6b.
+///
+/// **Not an `EventDescriptor`, deliberately — this is the design decision
+/// stage 6b's dispatch asked to have named.** `declare_write_command!`'s
+/// sealed shape (a zero-sized `CommandSpec` marker plus a closed event
+/// enum) is built around [`Database::class_a`]'s own transaction: the
+/// descriptor exists to tell the Class-A runner what to append *inside*
+/// the mutation's own transaction, and sealing it matters because a
+/// forged command type must not be able to claim atomicity it never ran
+/// under. A Class-B emission runs *outside* any mutation's transaction —
+/// it has no `WriteTx`, no `ClassATx`, nothing for a command marker to
+/// prove membership in. Forcing it through `declare_write_command!` would
+/// mean inventing a zero-sized command struct, a closed event enum, and a
+/// context that no transaction ever consumes — ceremony with nothing
+/// underneath it. A plain `&'static` struct, with no `class` field at all
+/// (the type itself is the class), says exactly as much as is true and no
+/// more. The cost of this choice: `MustAttemptDescriptor` and
+/// `EventDescriptor` are two separate types a reader must learn, rather
+/// than one type with a field that happens to vary — accepted because the
+/// alternative (one type, two meanings) is exactly what made the old
+/// runtime-tested invariant necessary in the first place (see
+/// [`AuditClass`]'s own doc comment).
+#[derive(Debug, Clone, Copy)]
+pub struct MustAttemptDescriptor {
+    pub kind: AuditEventKind,
+    pub name: &'static str,
     pub actor: ActorRequirement,
     pub target: TargetRequirement,
     pub attributes: &'static [AttributeSpec],
@@ -258,7 +305,6 @@ pub fn generate_reference_markdown(descriptors: &[&EventDescriptor]) -> String {
     for d in descriptors {
         let class = match d.class {
             AuditClass::Atomic => "Atomic",
-            AuditClass::MustAttempt => "MustAttempt",
         };
         let actor = match d.actor {
             ActorRequirement::Required => "required",

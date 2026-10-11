@@ -158,15 +158,22 @@ fn actor_requirement_agrees_with_system_principal_for_every_command() {
     check("L07", false, &[&L07_FAILURE, &L07_LOCKOUT]);
 }
 
-#[test]
-fn every_descriptor_is_atomic_class() {
-    // Every command in this slice's Class-A set must register
-    // AuditClass::Atomic — a MustAttempt descriptor here would be a
-    // class mismatch (no Class-B command is in this slice).
-    for d in all_descriptors() {
-        assert_eq!(d.class, AuditClass::Atomic, "{} is not Atomic", d.name);
-    }
-}
+// `every_descriptor_is_atomic_class` lived here through RFC 096-B1 stage
+// 6a: a runtime loop asserting `d.class == AuditClass::Atomic` for every
+// sealed `EventDescriptor`, because `AuditClass` had a second variant,
+// `MustAttempt`, for a Class-B mechanism that did not exist yet. Stage 6b
+// built that mechanism (`repos::audit::emit_must_attempt`) with its own
+// descriptor type, `MustAttemptDescriptor` — which has no `class` field
+// at all, so it cannot be confused with an `EventDescriptor` the way a
+// stray `class: AuditClass::MustAttempt` on the latter could have been.
+// `AuditClass` was narrowed to its one real variant in the same change.
+// The property this test checked — "every `EventDescriptor` a sealed
+// Class-A command carries is Atomic" — is now true because there is no
+// other value `class` could hold, not because nothing has tried the
+// other one yet. `tests/compile_fail/audit_class_must_attempt_does_not_
+// exist.rs` is the replacement: the old assertion proved a runtime fact
+// about today's descriptors; this one proves the fact can never stop
+// holding, by showing the variant it would need does not exist to name.
 
 #[test]
 fn k01_descriptor_maps_are_exhaustive_and_correct() {

@@ -99,6 +99,18 @@ crate::declare_write_command! {
         enum U08Event { Unlocked => &U08_UNLOCK, }
     }
 }
+
+// RFC 096-B1 stage 6b: a `MustAttemptDescriptor`. Deliberately not named by
+// any `declare_write_command!` event above -- that absence is what makes it
+// Class B rather than Class A, and is the shape `rust_registry.read_registry`
+// must include unconditionally rather than through command-reachability.
+static F99_TAKEOVER: MustAttemptDescriptor = MustAttemptDescriptor {
+    kind: AuditEventKind::AuthFederationTakeoverBlocked,
+    name: "auth.federation.takeover_blocked",
+    actor: ActorRequirement::None,
+    target: TargetRequirement::None,
+    attributes: &[],
+};
 """
 
 MATRIX = """\
@@ -128,6 +140,7 @@ Prose that mentions `user.create`, `user.disable`, `mfa.admin_reset` and
 | Event name | Trigger | Actor | Class |
 |---|---|---|---|
 | `auth.login.failure` | A refused attempt | — | B |
+| `auth.federation.takeover_blocked` | Collision rejected | — | B |
 """
 
 
@@ -173,7 +186,7 @@ class MatrixColumns(unittest.TestCase):
     def test_baseline_is_green_and_says_what_it_read(self) -> None:
         r = self.run_checker()
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("6 table rows, 4 sealed Class-A events; 4 rows checked", r.stdout)
+        self.assertIn("7 table rows, 4 sealed Class-A events; 5 rows checked", r.stdout)
 
     def test_an_escaped_pipe_does_not_shift_the_columns(self) -> None:
         # The mfa.admin_reset row carries `\\|` in its Operation cell; if the
@@ -212,6 +225,15 @@ class MatrixColumns(unittest.TestCase):
         self.assert_red("(class)", "admin.user.unlock claims Class B but a sealed Class-A descriptor")
         self.matrix("| admin user id | client id | — | B *(A required)* |", "| admin user id | client id | — | A |")
         self.assert_red("client.create claims Class A but no sealed")
+        # RFC 096-B1 stage 6b fix round (R1): a `MustAttemptDescriptor` is
+        # never in `sealed_atomic` (it is never command-reachable, which is
+        # what makes it Class B), so a row claiming A on its strength alone
+        # must fail exactly like client.create's case above.
+        self.matrix(
+            "| `auth.federation.takeover_blocked` | Collision rejected | — | B |",
+            "| `auth.federation.takeover_blocked` | Collision rejected | — | A |",
+        )
+        self.assert_red("(class)", "auth.federation.takeover_blocked claims Class A but no sealed")
 
     def test_a_changed_actor_is_caught_for_each_requirement(self) -> None:
         # Required, but the cell says none.
@@ -223,6 +245,14 @@ class MatrixColumns(unittest.TestCase):
         # Optional, but the cell names one actor only.
         self.matrix("admin user id; none for the CLI", "admin user id")
         self.assert_red("mfa.admin_reset", "ActorRequirement::Optional", "reads as Required")
+        # RFC 096-B1 stage 6b fix round (R1): the Actor check applies to any
+        # descriptor the matrix names, `MustAttemptDescriptor` included --
+        # None, but the cell names an actor.
+        self.matrix(
+            "| `auth.federation.takeover_blocked` | Collision rejected | — | B |",
+            "| `auth.federation.takeover_blocked` | Collision rejected | admin user id | B |",
+        )
+        self.assert_red("auth.federation.takeover_blocked", "ActorRequirement::None", "reads as Required")
 
     def test_a_dropped_step_up_marker_is_caught(self) -> None:
         self.matrix("reason (optional), `step_up` (required)", "reason (optional)")

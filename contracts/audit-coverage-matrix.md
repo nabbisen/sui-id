@@ -171,7 +171,7 @@ then because `setup.` was not in the hand-written list.
 | `auth.federation.signin.success` | Federated sign-in completed for a user with no second factor (command `L04`, with the in-transaction re-read, `last_login_at`, the session and cap eviction) | user id | user id | `provider=… sub=… evicted=…` (`sub` truncated to 255 bytes) | **A** |
 | `auth.federation.signin.upstream_failure` | Upstream IdP returned an error | — | — | `provider=… error=…` | B |
 | `auth.federation.link.created` | Federation link created (first sign-in or explicit link) | user id | user id | `provider=… sub=…` | B |
-| `auth.federation.takeover_blocked` | Email collision rejected as potential takeover | — | — | `provider=… email=…` | B *(A required)* |
+| `auth.federation.takeover_blocked` | Email collision rejected as potential takeover (RFC 096-B1 stage 6b: emitted via `emit_must_attempt`, RFC 094 `:292-298`, so a failed append is now logged rather than dropped — still Class B in fact, and **still `(A required)`** per the 2026-09-24 ruling, unchanged by this stage) | — | — | `provider_id=… reason=…` | B *(A required)* |
 
 ### Dynamic client registration (`client.dynamic_register`, RFC 008)
 

@@ -107,6 +107,12 @@ DESCRIPTOR_REF = re.compile(r"=>\s*&\s*([A-Z][A-Z0-9_]*)\b")
 DESCRIPTOR_STATIC = re.compile(
     r"\bstatic\s+([A-Z][A-Z0-9_]*)\s*:\s*EventDescriptor\s*=\s*EventDescriptor\s*\{"
 )
+# RFC 096-B1 stage 6b: the Class-B counterpart. `MustAttemptDescriptor` has no
+# `class` field at all -- the type itself is the marker -- so `klass` is
+# synthesized as `"MustAttempt"` below rather than read with `FIELD_CLASS`.
+DESCRIPTOR_STATIC_MUST_ATTEMPT = re.compile(
+    r"\bstatic\s+([A-Z][A-Z0-9_]*)\s*:\s*MustAttemptDescriptor\s*=\s*MustAttemptDescriptor\s*\{"
+)
 ATTRIBUTE_CONST = re.compile(
     r"\bconst\s+([A-Z][A-Z0-9_]*)\s*:\s*AttributeSpec\s*=\s*AttributeSpec\s*\{"
 )
@@ -124,6 +130,47 @@ def _attribute_from_body(raw: str, body_start: int, body_end: int, text: str) ->
         return None
     name = raw[body_start + m.start(1) : body_start + m.end(1)]
     return name, r.group(1) == "true"
+
+
+def _parse_attributes(
+    d: Descriptor,
+    body: str,
+    open_at: int,
+    text: str,
+    raw: str,
+    consts: dict[str, tuple[str, bool]],
+    where: str,
+    line: int,
+    failures: list[str],
+) -> None:
+    am = re.search(r"\battributes\s*:\s*&\s*\[", body)
+    if not am:
+        return
+    a_open = open_at + am.end() - 1
+    a_end = match_close(text, a_open, "[", "]")
+    pos = a_open + 1
+    while a_end > 0 and pos < a_end:
+        b = re.compile(r"AttributeSpec\s*\{").search(text, pos, a_end)
+        i = re.compile(r"\b([A-Z][A-Z0-9_]*)\b").search(text, pos, a_end)
+        if b and (not i or b.start() <= i.start()):
+            b_open = b.end() - 1
+            b_end = match_close(text, b_open, "{", "}")
+            got = _attribute_from_body(raw, b_open, b_end, text)
+            if got:
+                d.attributes[got[0]] = got[1]
+            pos = b_end + 1
+        elif i:
+            ident = i.group(1)
+            if ident in consts:
+                d.attributes[consts[ident][0]] = consts[ident][1]
+            else:
+                failures.append(
+                    f"{where}:{line}: descriptor {d.name} names attribute `{ident}`, "
+                    "which is not an `AttributeSpec` const in this file"
+                )
+            pos = i.end()
+        else:
+            break
 
 
 def read_file(root: Path, rel: Path, failures: list[str]) -> tuple[dict[str, Descriptor], list[Command]]:
@@ -164,34 +211,39 @@ def read_file(root: Path, rel: Path, failures: list[str]) -> tuple[dict[str, Des
             file=where,
             line=line,
         )
-        am = re.search(r"\battributes\s*:\s*&\s*\[", body)
-        if am:
-            a_open = open_at + am.end() - 1
-            a_end = match_close(text, a_open, "[", "]")
-            inner_start = a_open + 1
-            pos = inner_start
-            while a_end > 0 and pos < a_end:
-                b = re.compile(r"AttributeSpec\s*\{").search(text, pos, a_end)
-                i = re.compile(r"\b([A-Z][A-Z0-9_]*)\b").search(text, pos, a_end)
-                if b and (not i or b.start() <= i.start()):
-                    b_open = b.end() - 1
-                    b_end = match_close(text, b_open, "{", "}")
-                    got = _attribute_from_body(raw, b_open, b_end, text)
-                    if got:
-                        d.attributes[got[0]] = got[1]
-                    pos = b_end + 1
-                elif i:
-                    ident = i.group(1)
-                    if ident in consts:
-                        d.attributes[consts[ident][0]] = consts[ident][1]
-                    else:
-                        failures.append(
-                            f"{where}:{line}: descriptor {d.name} names attribute `{ident}`, "
-                            "which is not an `AttributeSpec` const in this file"
-                        )
-                    pos = i.end()
-                else:
-                    break
+        _parse_attributes(d, body, open_at, text, raw, consts, where, line, failures)
+        descriptors[d.static] = d
+
+    # RFC 096-B1 stage 6b: a `MustAttemptDescriptor` static. Never named by a
+    # `declare_write_command!` event (that is what makes it Class B rather
+    # than Class A), so it is never reached by the command-mapping loop below
+    # -- it is added here directly, with `klass` synthesized as
+    # `"MustAttempt"` since the type has no `class` field to read.
+    for m in DESCRIPTOR_STATIC_MUST_ATTEMPT.finditer(text):
+        open_at = m.end() - 1
+        end = match_close(text, open_at, "{", "}")
+        line = raw.count("\n", 0, m.start()) + 1
+        if end < 0:
+            failures.append(f"{where}:{line}: unbalanced descriptor {m.group(1)}")
+            continue
+        body = text[open_at : end + 1]
+        head = re.match(r"\{\s*kind\s*:[^,]+,\s*name\s*:\s*\"( *)\"", body)
+        actor = FIELD_ACTOR.search(body)
+        if not head or not actor:
+            failures.append(
+                f"{where}:{line}: descriptor {m.group(1)} is not in the shape "
+                "`kind, name, actor, …` this reader understands"
+            )
+            continue
+        d = Descriptor(
+            name=raw[open_at + head.start(1) : open_at + head.end(1)],
+            static=m.group(1),
+            klass="MustAttempt",
+            actor=actor.group(1),
+            file=where,
+            line=line,
+        )
+        _parse_attributes(d, body, open_at, text, raw, consts, where, line, failures)
         descriptors[d.static] = d
 
     commands: list[Command] = []
@@ -221,11 +273,16 @@ def read_file(root: Path, rel: Path, failures: list[str]) -> tuple[dict[str, Des
 
 
 def read_registry(root: Path, failures: list[str]) -> tuple[dict[str, Descriptor], list[Command]]:
-    """Every descriptor **reachable from a sealed command** in a production
-    source file under `crates/`, keyed by event name, and every command.
+    """Every descriptor **reachable from a sealed command**, plus every
+    `MustAttemptDescriptor` (RFC 096-B1 stage 6b), in a production source file
+    under `crates/`, keyed by event name, and every command.
 
-    A descriptor no command maps to is not on the Class-A seam and is not
-    returned: registry.rs's proof-only descriptor is one.
+    An `EventDescriptor` no command maps to is not on the Class-A seam and is
+    not returned: registry.rs's proof-only descriptor is one. A
+    `MustAttemptDescriptor` is never mapped by a command -- that is what makes
+    it Class B -- so "reachable from a command" does not apply to it; it is
+    always included, which is what lets the audit matrix's Class and Actor
+    columns bind a Class-B row the same way they bind a Class-A one.
     """
     base = root / SRC_ROOT
     reachable: dict[str, Descriptor] = {}
@@ -236,6 +293,12 @@ def read_registry(root: Path, failures: list[str]) -> tuple[dict[str, Descriptor
         rel = path.relative_to(root)
         descriptors, cmds = read_file(root, rel, failures)
         by_name = {d.name: d for d in descriptors.values()}
+        for name, d in by_name.items():
+            if d.klass != "MustAttempt":
+                continue
+            if name in reachable and reachable[name].static != d.static:
+                failures.append(f"{rel}: event {name} is declared by two descriptors")
+            reachable[name] = d
         for cmd in cmds:
             # registry.rs's proof-only command has an id that is deliberately
             # not an inventory code (`check-write-commands.py` tolerates it

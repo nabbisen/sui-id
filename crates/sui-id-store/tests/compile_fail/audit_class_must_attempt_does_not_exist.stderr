@@ -1,0 +1,5 @@
+error[E0599]: no variant, associated function, or constant named `MustAttempt` found for enum `AuditClass` in the current scope
+  --> tests/compile_fail/audit_class_must_attempt_does_not_exist.rs:21:17
+   |
+21 |     AuditClass::MustAttempt
+   |                 ^^^^^^^^^^^ variant, associated function, or constant not found in `AuditClass`

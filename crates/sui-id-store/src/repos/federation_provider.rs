@@ -9,6 +9,9 @@ use crate::{
     crypto::{self, MasterKey},
     errors::{StoreError, StoreResult},
     models::{FederationProviderRow, ProvisionMode},
+    registry::{
+        ActorRequirement, AttributeSpec, AuditEventKind, MustAttemptDescriptor, TargetRequirement,
+    },
 };
 use chrono::{DateTime, Utc};
 use rusqlite::params;
@@ -226,8 +229,36 @@ pub const AUDIT_SIGNIN_SUCCESS: &str = "auth.federation.signin.success";
 pub const AUDIT_SIGNIN_UPSTREAM_FAILURE: &str = "auth.federation.signin.upstream_failure";
 /// Audit event emitted when a federation link is created (first sign-in or link flow).
 pub const AUDIT_LINK_CREATED: &str = "auth.federation.link.created";
-/// Audit event emitted when an email collision is detected and blocked (P2).
-pub const AUDIT_TAKEOVER_BLOCKED: &str = "auth.federation.takeover_blocked";
+
+/// RFC 096-B1 stage 6b: the registry-declared descriptor for
+/// `auth.federation.takeover_blocked` (an email collision detected and
+/// blocked, P2), emitted via [`crate::repos::audit::emit_must_attempt`]
+/// rather than a free-string `audit::append` call -- unlike the three
+/// anchors above, this event has no separate string constant: the literal
+/// lives once, in `name` below, which is itself what the audit-matrix gate
+/// reads. `actor`/`target` both `None`: the request that
+/// reaches this check has no verified local identity to attribute it to
+/// (P2 fires before any local user is resolved from the upstream
+/// identity), matching the pre-conversion call site's own `actor: None,
+/// target: None`.
+pub static AUDIT_TAKEOVER_BLOCKED_DESCRIPTOR: MustAttemptDescriptor = MustAttemptDescriptor {
+    kind: AuditEventKind::AuthFederationTakeoverBlocked,
+    name: "auth.federation.takeover_blocked",
+    actor: ActorRequirement::None,
+    target: TargetRequirement::None,
+    attributes: &[
+        AttributeSpec {
+            name: "provider_id",
+            description: "internal id of the federation provider the colliding identity came from",
+            required: true,
+        },
+        AttributeSpec {
+            name: "reason",
+            description: "bounded reason token; always \"email_collision\" for this event",
+            required: true,
+        },
+    ],
+};
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]

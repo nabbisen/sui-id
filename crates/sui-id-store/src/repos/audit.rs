@@ -37,6 +37,7 @@
 use crate::db::Database;
 use crate::errors::StoreResult;
 use crate::models::AuditLogRow;
+use crate::registry::{AuditAttributes, AuditBuildError, AuditTarget, MustAttemptDescriptor};
 use chrono::{DateTime, Utc};
 use rusqlite::OptionalExtension;
 use rusqlite::params;
@@ -148,6 +149,96 @@ pub async fn append(db: &Database, row: &AuditLogRow) -> StoreResult<()> {
         Ok(())
     })
     .await
+}
+
+/// Outcome of a Class-B ([`emit_must_attempt`]) emission attempt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[must_use = "a MustAttempt emission's outcome must be acknowledged, even if only with `let _ =` — silently dropping it is exactly the pattern this API replaces"]
+pub enum MustAttemptOutcome {
+    /// The row reached the audit log.
+    Recorded,
+    /// The attempt failed — a bad attribute set, a missing required one,
+    /// or the append itself. `emit_must_attempt` has already logged the
+    /// failure via `tracing::error!` before returning this; the caller's
+    /// own response must not depend on which variant comes back (RFC 094
+    /// `:120`, A6).
+    Failed,
+}
+
+/// RFC 094 `:292-298`'s Class-B emission mechanism. Unlike a sealed
+/// Class-A command, which [`append_within_tx`] commits atomically with
+/// the state change inside the same transaction, a `MustAttempt` emission
+/// has no such transaction to join — A6 (`:120`) requires that a failure
+/// to log never blocks the primary denial/detection response, so there is
+/// nothing for this to be atomic *with*. [`MustAttemptDescriptor`]
+/// (`registry.rs`) is a separate type from a sealed `EventDescriptor` for
+/// the same reason: forcing this through `declare_write_command!`'s
+/// sealed shape would be ceremony with nothing underneath it.
+///
+/// Every failure path — a bad attribute set, a missing required
+/// attribute, or the append itself — logs via `tracing::error!` before
+/// returning, unconditionally. This is the one behavioural difference
+/// from today's `let _ = audit::append(...)` sites: those drop a failing
+/// [`StoreError`](crate::errors::StoreError) with **zero** record of it
+/// anywhere. This function cannot do that; the telemetry fires whether or
+/// not the caller ever looks at the return value.
+pub async fn emit_must_attempt(
+    db: &Database,
+    descriptor: &'static MustAttemptDescriptor,
+    at: DateTime<Utc>,
+    actor: Option<sui_id_shared::ids::UserId>,
+    target: Option<AuditTarget>,
+    result: &'static str,
+    attributes: Result<AuditAttributes, AuditBuildError>,
+) -> MustAttemptOutcome {
+    let attributes = match attributes {
+        Ok(a) => a,
+        Err(e) => {
+            tracing::error!(
+                event = descriptor.name,
+                error = %e,
+                "must-attempt emission: attribute build failed"
+            );
+            return MustAttemptOutcome::Failed;
+        }
+    };
+    // Same cross-check `Database::class_a` runs against a Class-A event's
+    // own `descriptor.attributes` (registry.rs, the `MissingRequiredAttribute`
+    // site) — `AuditAttributesBuilder::build()` itself only catches
+    // duplicates/too-many/too-long, not "a required one was never added",
+    // because it has no descriptor to check against; this is the caller's
+    // own job, same as it is there.
+    if let Some(missing) = descriptor
+        .attributes
+        .iter()
+        .find(|spec| spec.required && !attributes.iter().any(|(k, _)| k == spec.name))
+    {
+        tracing::error!(
+            event = descriptor.name,
+            missing = missing.name,
+            "must-attempt emission: required attribute missing"
+        );
+        return MustAttemptOutcome::Failed;
+    }
+    let row = AuditLogRow {
+        at,
+        actor,
+        action: descriptor.name.to_owned(),
+        target: target.map(|t| t.0),
+        result: result.to_owned(),
+        note: crate::registry::render_note(&attributes),
+    };
+    match append(db, &row).await {
+        Ok(()) => MustAttemptOutcome::Recorded,
+        Err(e) => {
+            tracing::error!(
+                event = descriptor.name,
+                error = %e,
+                "must-attempt emission: audit append failed"
+            );
+            MustAttemptOutcome::Failed
+        }
+    }
 }
 
 /// Append an audit row *within an existing transaction* (RFC 085 Class-A atomicity).

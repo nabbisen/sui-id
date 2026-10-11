@@ -110,6 +110,14 @@ async fn callback_with_cookies(
         .expect("callback")
 }
 
+/// Stage 6a review C1, carried into stage 6b: `Max-Age=0` alone proves
+/// the cookie is expired, but not *which* cookie a browser treats this as
+/// -- that is `Path` (plus `Domain`, unused here), not the name or value.
+/// A removal with no `Path` at all relies on the browser's default path
+/// (derived from the request path) coincidentally matching the cookie's
+/// own explicit `Path=/auth/federated`; asserting the explicit attribute
+/// is what actually pins the requirement RFC 096-B1 F04 depends on,
+/// rather than today's accidental agreement between the two.
 fn assert_cookie_expired(headers: &axum::http::HeaderMap, name: &str) {
     let set_cookie = headers
         .get_all(header::SET_COOKIE)
@@ -120,6 +128,10 @@ fn assert_cookie_expired(headers: &axum::http::HeaderMap, name: &str) {
     assert!(
         set_cookie.contains("Max-Age=0"),
         "{name} not expired: {set_cookie}"
+    );
+    assert!(
+        set_cookie.contains("Path=/auth/federated"),
+        "{name} removal carries no explicit Path=/auth/federated: {set_cookie}"
     );
 }
 

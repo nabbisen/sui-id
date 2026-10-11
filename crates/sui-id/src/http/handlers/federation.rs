@@ -160,10 +160,21 @@ impl IntoResponse for Terminal {
 /// (already carrying whatever the caller added -- a session cookie, a
 /// pending-MFA cookie, nothing) and both federation cookies are removed
 /// from it before the response is built, unconditionally.
+///
+/// Both removals carry an explicit `Path=/auth/federated`, matching the
+/// path both cookies are actually set with (see the two `set_path` calls
+/// above). Without it, removal relies on the browser's *default* path --
+/// derived from the request path, not from the cookie's own `Path` --
+/// which coincides with `/auth/federated` only because every `Terminal`
+/// today is built from `/auth/federated/callback`. **The old form was not
+/// broken**: when the computed path matches, the browser treats it as the
+/// same cookie and the removal works. What the explicit path removes is
+/// the coincidence -- a terminal response served from any other depth
+/// would silently stop matching (carried from stage 6a's review, C1).
 fn terminal(jar: CookieJar, redirect: Redirect) -> Terminal {
     let jar = jar
-        .remove(Cookie::build(STATE_COOKIE))
-        .remove(Cookie::build(BROWSER_BINDING_COOKIE));
+        .remove(Cookie::build(STATE_COOKIE).path("/auth/federated"))
+        .remove(Cookie::build(BROWSER_BINDING_COOKIE).path("/auth/federated"));
     Terminal((jar, redirect).into_response())
 }
 
@@ -964,25 +975,31 @@ pub async fn federated_callback(
                         // email in the log field or the audit note --
                         // internal `provider_id` and a bounded reason token
                         // only.
+                        //
+                        // RFC 096-B1 stage 6b: this is the one converted
+                        // Class-B site. `emit_must_attempt`'s own failure
+                        // (attribute build, or the append itself) is
+                        // guaranteed to log structured telemetry
+                        // internally, whether or not this `let _ =`
+                        // inspects the outcome -- RFC 094 `:120` A6: the
+                        // denial below must happen regardless of whether
+                        // the audit write succeeded.
                         tracing::warn!(
                             provider_id = %provider.id,
                             "federation: email collision — potential takeover attempt blocked (P2)"
                         );
-                        let _ = sui_id_store::repos::audit::append(
+                        let attributes = sui_id_store::registry::AuditAttributes::builder()
+                            .attribute("provider_id", provider.id.to_string())
+                            .attribute("reason", "email_collision")
+                            .build();
+                        let _ = sui_id_store::repos::audit::emit_must_attempt(
                             &app.db,
-                            &AuditLogRow {
-                                at: now,
-                                actor: None,
-                                action:
-                                    sui_id_store::repos::federation_provider::AUDIT_TAKEOVER_BLOCKED
-                                        .into(),
-                                target: None,
-                                result: "denied".into(),
-                                note: Some(format!(
-                                    "provider_id={} reason=email_collision",
-                                    provider.id
-                                )),
-                            },
+                            &sui_id_store::repos::federation_provider::AUDIT_TAKEOVER_BLOCKED_DESCRIPTOR,
+                            now,
+                            None,
+                            None,
+                            "denied",
+                            attributes,
                         )
                         .await;
                         return Ok(terminal(

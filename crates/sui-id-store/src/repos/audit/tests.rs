@@ -423,3 +423,153 @@ async fn canonical_bytes_distinguishes_field_boundaries() {
     };
     assert_ne!(canonical_bytes(&r1), canonical_bytes(&r2));
 }
+
+// ── RFC 096-B1 stage 6b: `emit_must_attempt` ────────────────────────────────
+
+use crate::registry::{ActorRequirement, AttributeSpec, AuditEventKind, TargetRequirement};
+
+static TEST_MUST_ATTEMPT: crate::registry::MustAttemptDescriptor =
+    crate::registry::MustAttemptDescriptor {
+        kind: AuditEventKind::AuthFederationTakeoverBlocked,
+        name: "test.must_attempt",
+        actor: ActorRequirement::None,
+        target: TargetRequirement::None,
+        attributes: &[AttributeSpec {
+            name: "reason",
+            description: "test attribute",
+            required: true,
+        }],
+    };
+
+/// Real DB-level failure, the same mechanism `tests/e2e/r102_stage4.rs`'s
+/// `break_audit_log` already uses: a trigger that rejects every insert,
+/// rather than a simulated flag. `emit_must_attempt`'s own `audit::append`
+/// call runs inside this, so there is nothing `emit_must_attempt` could
+/// special-case to tell a genuine failure from an injected one.
+async fn break_audit_log(db: &Database) {
+    db.with_conn(|conn| {
+        conn.execute_batch(
+            "CREATE TRIGGER stage6b_reject_audit BEFORE INSERT ON audit_log \
+             BEGIN SELECT RAISE(ABORT, 'stage6b test: audit_log insert rejected'); END;",
+        )?;
+        Ok(())
+    })
+    .await
+    .expect("install trigger");
+}
+
+#[tokio::test]
+async fn emit_must_attempt_records_a_successful_emission() {
+    let db = fresh_db();
+    let attributes = AuditAttributes::builder()
+        .attribute("reason", "test_reason")
+        .build();
+
+    let outcome = emit_must_attempt(
+        &db,
+        &TEST_MUST_ATTEMPT,
+        Utc::now(),
+        None,
+        None,
+        "denied",
+        attributes,
+    )
+    .await;
+
+    assert_eq!(outcome, MustAttemptOutcome::Recorded);
+    let rows = recent(&db, 1).await.expect("recent");
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].action, "test.must_attempt");
+    assert_eq!(rows[0].result, "denied");
+    assert_eq!(rows[0].note.as_deref(), Some("reason=test_reason"));
+}
+
+/// The failure-injection test item 3/4 of the dispatch ask for: a genuine
+/// append failure reports `Failed`, and (checked at the e2e level,
+/// `tests/e2e/r096_b1_stage6b.rs`) still emits structured telemetry and
+/// still lets the caller's own primary response proceed.
+#[tokio::test]
+async fn emit_must_attempt_reports_failed_when_the_append_itself_fails() {
+    let db = fresh_db();
+    break_audit_log(&db).await;
+    let attributes = AuditAttributes::builder()
+        .attribute("reason", "test_reason")
+        .build();
+
+    let outcome = emit_must_attempt(
+        &db,
+        &TEST_MUST_ATTEMPT,
+        Utc::now(),
+        None,
+        None,
+        "denied",
+        attributes,
+    )
+    .await;
+
+    assert_eq!(outcome, MustAttemptOutcome::Failed);
+}
+
+/// `AuditAttributesBuilder::build()` itself catches duplicates, too many
+/// entries, and an over-long value — not "a required one was never
+/// added", since the builder alone has no descriptor to check against.
+/// `break_audit_log` is not installed: if this reported `Recorded`
+/// anyway, that would mean the builder's own error was silently ignored
+/// rather than propagated, not that the database happened to cooperate.
+#[tokio::test]
+async fn emit_must_attempt_reports_failed_when_the_builder_itself_errors() {
+    let db = fresh_db();
+    let attributes = AuditAttributes::builder()
+        .attribute("reason", "first")
+        .attribute("reason", "second")
+        .build();
+    assert!(matches!(
+        attributes,
+        Err(AuditBuildError::DuplicateAttribute("reason"))
+    ));
+
+    let outcome = emit_must_attempt(
+        &db,
+        &TEST_MUST_ATTEMPT,
+        Utc::now(),
+        None,
+        None,
+        "denied",
+        attributes,
+    )
+    .await;
+
+    assert_eq!(outcome, MustAttemptOutcome::Failed);
+}
+
+/// The cross-check `emit_must_attempt` itself runs: the builder succeeds
+/// (nothing wrong with the *entries present*), but `TEST_MUST_ATTEMPT`
+/// declares `reason` required and none was added. Same check
+/// `Database::class_a` runs against a Class-A event's own descriptor
+/// (`registry.rs`'s `MissingRequiredAttribute` site) — this proves
+/// `emit_must_attempt` runs the equivalent for a `MustAttemptDescriptor`,
+/// which the builder alone cannot do.
+#[tokio::test]
+async fn emit_must_attempt_reports_failed_when_a_required_attribute_is_missing() {
+    let db = fresh_db();
+    let attributes = AuditAttributes::builder().build();
+    assert!(attributes.is_ok(), "nothing wrong with zero entries alone");
+
+    let outcome = emit_must_attempt(
+        &db,
+        &TEST_MUST_ATTEMPT,
+        Utc::now(),
+        None,
+        None,
+        "denied",
+        attributes,
+    )
+    .await;
+
+    assert_eq!(outcome, MustAttemptOutcome::Failed);
+    assert_eq!(
+        recent(&db, 1).await.expect("recent").len(),
+        0,
+        "a missing required attribute must not reach the audit log at all"
+    );
+}
