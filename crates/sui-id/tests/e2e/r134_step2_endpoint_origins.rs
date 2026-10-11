@@ -330,10 +330,11 @@ async fn a_second_configured_origin_is_accepted_end_to_end() {
     );
     // No federation_link row was seeded for this sub, so this is an
     // unknown upstream identity under the default link_only provision
-    // mode -- the link flow, not a session. The property this test is
-    // for is that discovery validation *passed* (unlike the central
-    // test's rejection), proven by reaching the real token_endpoint and
-    // not landing on a fed_error redirect.
-    assert_eq!(outcome.location, "/auth/federated/link");
+    // mode -- the generic "local account link required" result (RFC
+    // 096-B1 stage 5, RFC 096 `:699-701`), not a session. The property
+    // this test is for is that discovery validation *passed* (unlike the
+    // central test's rejection), proven by reaching the real
+    // token_endpoint and not landing on a *different* fed_error redirect.
+    assert_eq!(outcome.location, "/admin/login?fed_error=link_required");
     assert!(outcome.session_cookie.is_none());
 }

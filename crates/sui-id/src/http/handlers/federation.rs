@@ -1,6 +1,9 @@
 //! `GET /auth/federated/{slug}/start`  — redirect to upstream IdP
 //! `GET /auth/federated/callback`       — exchange code, resolve link
-//! `GET|POST /auth/federated/link`      — link-only approval flow
+//!
+//! RFC 096-B1 stage 5, RFC 096 `:700-701`: `GET /auth/federated/link` and
+//! its unsigned pending-link cookie are removed, not reused -- "M4 does
+//! not create a link."
 //!
 //! RFC 004: upstream OIDC relying-party federation.
 //!
@@ -40,6 +43,7 @@ use crate::federation_attempt_claim::{ClaimAndNonceError, claim_and_consume_nonc
 use crate::id_token::verify_id_token;
 use crate::identity_capability::construct_identity_capability;
 use crate::identity_claims::validate_identity_claims;
+use crate::identity_resolution::resolve_verified_identity;
 use crate::optional_claims::validate_optional_claims;
 use crate::time_claims::validate_iat;
 use sui_id_store::StoreError;
@@ -116,7 +120,7 @@ async fn fetch_discovery(
 
 // ── RFC 096-B1 stage 4: shared helpers for the attempt row ──────────────────
 
-/// RFC 096 `:584-585`: the browser-held opaque binding cookie, scoped the
+/// RFC 096 `:564-566`: the browser-held opaque binding cookie, scoped the
 /// same way `STATE_COOKIE` is.
 const BROWSER_BINDING_COOKIE: &str = "sui_id_fed_browser_binding";
 
@@ -150,7 +154,7 @@ fn sha256_32(bytes: &[u8]) -> [u8; 32] {
 /// *unreachable end-to-end by any test either*: the one column that could
 /// be made to disagree with this constant is the row's own
 /// `provider_config_version`/`provider_activation_generation`, and those
-/// are AAD-bound by stage 2's `insert`/`claim` seal (`:583`'s own PKCE
+/// are AAD-bound by stage 2's `insert`/`claim` seal (`:586-587`'s own PKCE
 /// binding) — tampering them after insert is caught by that *earlier*
 /// tamper check (`StoreError::Crypto`), not by this comparison. Confirmed
 /// empirically, not assumed: an end-to-end attempt to do exactly that
@@ -163,7 +167,7 @@ fn sha256_32(bytes: &[u8]) -> [u8; 32] {
 /// this is the one function that changes — most likely into two field
 /// reads on `FederationProviderRow` — not every call site that compares
 /// against it.
-fn current_provider_version_and_generation(_provider: &FederationProviderRow) -> (i64, i64) {
+fn placeholder_provider_version_and_generation(_provider: &FederationProviderRow) -> (i64, i64) {
     (0, 0)
 }
 
@@ -172,7 +176,7 @@ fn current_provider_version_and_generation(_provider: &FederationProviderRow) ->
 /// validate against whatever the live config says now. Extracted from
 /// `federated_callback` so the comparison itself has a test independent of
 /// whether production data can reach a mismatch today (see
-/// [`current_provider_version_and_generation`]'s doc comment for why it
+/// [`placeholder_provider_version_and_generation`]'s doc comment for why it
 /// cannot, yet).
 fn attempt_is_superseded(
     claimed_version: i64,
@@ -284,7 +288,7 @@ pub async fn federated_start(
         String::from_utf8(out).unwrap_or_default()
     };
 
-    // Random nonce (P5 single-use replay protection). RFC 096 `:583-584`:
+    // Random nonce (P5 single-use replay protection). RFC 096 `:564`:
     // 32 bytes, like the other three independent CSPRNG values below --
     // bumped from the legacy 16 here (the one place this stage touches the
     // old cookie-state code, since it already generates the value the new
@@ -292,12 +296,12 @@ pub async fn federated_start(
     let nonce = sui_id_core::tokens::random_token(32);
 
     // Random state parameter for open-redirect guard (CSRF). Same RFC 096
-    // `:583-584` bump as `nonce`, same reason.
+    // `:564` bump as `nonce`, same reason.
     let state_param = sui_id_core::tokens::random_token(32);
 
-    // RFC 096 `:583-584`: the fourth independent CSPRNG value, bound into
+    // RFC 096 `:564`: the fourth independent CSPRNG value, bound into
     // the sealed verifier's AAD by `federation_login_attempt::insert` via
-    // the attempt row it creates below, and (RFC 096 `:584-585`) carried to
+    // the attempt row it creates below, and (RFC 096 `:564-566`) carried to
     // the browser in its own cookie. **Not yet compared to anything at
     // claim time** -- stage 3's `claim` (already accepted) checks status,
     // clock regression and expiry, and this stage's own new validation
@@ -330,7 +334,7 @@ pub async fn federated_start(
     // must agree on what was actually sent.
     let now = app.clock.now();
     let (provider_config_version, provider_activation_generation) =
-        current_provider_version_and_generation(&provider);
+        placeholder_provider_version_and_generation(&provider);
     let redirect_uri = format!(
         "{}/auth/federated/callback",
         app.config.server.issuer.trim_end_matches('/')
@@ -355,7 +359,7 @@ pub async fn federated_start(
     })?;
     let _ = attempt; // held only for its side effect here; the callback re-finds it by state hash.
 
-    // RFC 096 `:584-585`: the browser receives only the opaque binding, in
+    // RFC 096 `:564-566`: the browser receives only the opaque binding, in
     // a Secure, HttpOnly, SameSite=Lax cookie scoped to the provider
     // callback -- the same scoping as the state cookie below.
     let browser_binding_cookie = {
@@ -439,9 +443,15 @@ pub async fn federated_callback(
 ) -> Result<Response, HttpError> {
     let State(app) = state_ext;
 
-    // Reject upstream errors.
-    if let Some(err) = q.error {
-        tracing::warn!(upstream_error = %err, "federation callback: upstream returned error");
+    // Reject upstream errors. RFC 096 `:714-715` (review R2's full-path
+    // grep): the `error` query parameter is attacker-controlled upstream
+    // text (RFC 096's own threat model treats the upstream as potentially
+    // hostile or compromised) -- it is never logged, not even truncated or
+    // allowlisted, which is also why it is dropped here before `fed_state`
+    // is even unsealed and no provider identity is available to log
+    // instead.
+    if q.error.is_some() {
+        tracing::warn!("federation callback: upstream returned an error response");
         let jar = jar.remove(Cookie::build(STATE_COOKIE));
         return Ok((jar, Redirect::to("/admin/login?fed_error=upstream")).into_response());
     }
@@ -681,7 +691,8 @@ pub async fn federated_callback(
     // silently validate against whatever the config says now. Re-reading
     // `provider.issuer`/`provider.client_id` below (live config) is only
     // safe because this check has just proven nothing has moved.
-    let (current_version, current_generation) = current_provider_version_and_generation(&provider);
+    let (current_version, current_generation) =
+        placeholder_provider_version_and_generation(&provider);
     if attempt_is_superseded(
         claimed.provider_config_version,
         claimed.provider_activation_generation,
@@ -724,7 +735,7 @@ pub async fn federated_callback(
         }
     };
 
-    let _capability = construct_identity_capability(
+    let capability = construct_identity_capability(
         &identity,
         &optional,
         CacheKey::new(
@@ -734,14 +745,29 @@ pub async fn federated_callback(
         ),
         validation_now,
     );
-    // "What it does with the capability is: nothing yet -- hold it, and
-    // let stage 5 consume it." Constructed, proven well-formed by every
-    // check above, and deliberately unused past this point.
 
-    // ── End of stage 4's new validation. The legacy path below is
-    // unchanged and still authoritative for identity mapping and session
-    // establishment (stages 5/6) -- it re-decodes the same token itself,
-    // without signature verification, exactly as it always has. ──────────
+    // RFC 096-B1 stage 5: resolve the capability to one of the five named
+    // states (RFC 096 `:693-711`) -- a decision, not a mutation. "What it
+    // does with the decision is: nothing yet -- hold it, and let stage 6
+    // consume it." Computed on every real request, so it is exercised
+    // rather than dead code; each state is unit-tested on its own
+    // (`identity_resolution::tests`). What a unit suite cannot prove is
+    // what a caller observes on the live path -- that authority still
+    // belongs to the legacy code below, unchanged, until stage 6 makes
+    // this resolution the one that acts; the `link_only`-is-generic
+    // property specifically is proven against that live path by this
+    // file's own e2e tests, not by the unit suite.
+    let _resolution =
+        resolve_verified_identity(&app.db, &capability, provider.provision_mode.clone())
+            .await
+            .map_err(|e| HttpError::html(CoreError::from(e)))?;
+
+    // ── End of stage 4/5's new validation and resolution. The legacy path
+    // below is unchanged (except RFC 096 `:700-701`'s removal of the
+    // pending-link cookie and skeleton, below) and still authoritative for
+    // identity mapping and session establishment (stage 6) -- it re-
+    // decodes the same token itself, without signature verification,
+    // exactly as it always has. ───────────────────────────────────────────
 
     // Decode the ID token claims (light validation — nonce check + sub extraction).
     // We trust the token_endpoint over TLS; full signature verification would
@@ -818,40 +844,59 @@ pub async fn federated_callback(
 
         // ── Unknown: provision or link-only ─────────────────────────────────
         None => {
-            // P2: check for email collision with an existing user that has a
-            // different provider link (attempted account takeover).
-            if let Some(ref email) = id_claims.email
-                && let Ok(Some(_collision)) = sui_id_store::repos::users::find_by_email_normalized(
-                    &app.db,
-                    &sui_id_shared::normalize_email(email),
-                )
-                .await
-            {
-                // An existing local user has this email but is NOT linked
-                // to this provider. Treat as attempted takeover.
-                tracing::warn!(
-                    provider = %provider.slug,
-                    email = %email,
-                    "federation: email collision — potential takeover attempt blocked (P2)"
-                );
-                let _ = sui_id_store::repos::audit::append(
-                    &app.db,
-                    &AuditLogRow {
-                        at: now,
-                        actor: None,
-                        action: sui_id_store::repos::federation_provider::AUDIT_TAKEOVER_BLOCKED
-                            .into(),
-                        target: None,
-                        result: "denied".into(),
-                        note: Some(format!("provider={} email={email}", provider.slug)),
-                    },
-                )
-                .await;
-                return Ok(Redirect::to("/admin/login?fed_error=email_collision").into_response());
-            }
-
             match provider.provision_mode {
                 ProvisionMode::ProvisionOnFirstLogin => {
+                    // P2. RFC 096 `:707-708`: collision denial is specific
+                    // to `provision_on_first_login` -- under `link_only`
+                    // nothing is created and nothing is linked, so there is
+                    // no takeover to block. It lives *inside* this arm, and
+                    // must stay inside it: `:699` requires `link_only` to
+                    // return one generic result for every unlinked upstream
+                    // identity, and any read of local state on that path
+                    // is a way for the result to stop being generic. Inside
+                    // the arm rather than guarded in place, so a reader of
+                    // the `LinkOnly` arm can see directly that nothing
+                    // about local accounts is consulted there at all.
+                    if let Some(ref email) = id_claims.email
+                        && let Ok(Some(_collision)) =
+                            sui_id_store::repos::users::find_by_email_normalized(
+                                &app.db,
+                                &sui_id_shared::normalize_email(email),
+                            )
+                            .await
+                    {
+                        // An existing local user has this email but is NOT
+                        // linked to this provider. Treat as attempted
+                        // takeover. RFC 096 `:714-715` (review R2): no raw
+                        // email in the log field or the audit note --
+                        // internal `provider_id` and a bounded reason token
+                        // only.
+                        tracing::warn!(
+                            provider_id = %provider.id,
+                            "federation: email collision — potential takeover attempt blocked (P2)"
+                        );
+                        let _ = sui_id_store::repos::audit::append(
+                            &app.db,
+                            &AuditLogRow {
+                                at: now,
+                                actor: None,
+                                action:
+                                    sui_id_store::repos::federation_provider::AUDIT_TAKEOVER_BLOCKED
+                                        .into(),
+                                target: None,
+                                result: "denied".into(),
+                                note: Some(format!(
+                                    "provider_id={} reason=email_collision",
+                                    provider.id
+                                )),
+                            },
+                        )
+                        .await;
+                        return Ok(
+                            Redirect::to("/admin/login?fed_error=email_collision").into_response()
+                        );
+                    }
+
                     // P3: provision on first login requires either:
                     //   - email present AND email_verified = true, OR
                     //   - email entirely absent (no email claim → no email
@@ -893,6 +938,14 @@ pub async fn federated_callback(
                     .await
                     .map_err(|e| HttpError::html(CoreError::from(e)))?;
 
+                    // RFC 096 `:714-715` (review R2): no raw `sub` in the
+                    // audit note -- internal `provider_id` and a bounded
+                    // reason token only. Nothing is lost: the user id
+                    // already travels in `actor`/`target`, and the
+                    // upstream `sub` is durably held on the
+                    // `federation_link` row just inserted above, so the
+                    // audit trail stays reconstructible from internal IDs
+                    // alone.
                     let _ = sui_id_store::repos::audit::append(
                         &app.db,
                         &AuditLogRow {
@@ -902,7 +955,10 @@ pub async fn federated_callback(
                                 .into(),
                             target: Some(uid.to_string()),
                             result: "ok".into(),
-                            note: Some(format!("provider={} sub={}", provider.slug, id_claims.sub)),
+                            note: Some(format!(
+                                "provider_id={} reason=first_login_provisioned",
+                                provider.id
+                            )),
                         },
                     )
                     .await;
@@ -911,26 +967,25 @@ pub async fn federated_callback(
                 }
 
                 ProvisionMode::LinkOnly => {
-                    // Store the upstream claims in a short-lived cookie so the
-                    // link confirmation page can complete the link.
-                    let pending = serde_json::json!({
-                        "provider_id": provider.id.to_string(),
-                        "provider_slug": provider.slug,
-                        "upstream_sub": id_claims.sub,
-                        "upstream_email": id_claims.email,
-                        "upstream_name": id_claims.name,
-                    });
-                    let pending_str = pending.to_string();
-                    let mut c = Cookie::new("sui_id_fed_pending", pending_str);
-                    c.set_http_only(true);
-                    c.set_same_site(axum_extra::extract::cookie::SameSite::Lax);
-                    c.set_max_age(time::Duration::seconds(600));
-                    c.set_path("/auth/federated");
-                    if app.config.server.cookie_secure {
-                        c.set_secure(true);
-                    }
-                    let jar = jar.add(c);
-                    return Ok((jar, Redirect::to("/auth/federated/link")).into_response());
+                    // RFC 096-B1 stage 5, RFC 096 `:699-701`: one generic
+                    // "local account link required" result for every
+                    // unlinked upstream identity under `link_only` --
+                    // generic is load-bearing, since it must not reveal
+                    // whether the upstream identity is known locally
+                    // (`identity_resolution::IdentityResolution::
+                    // LinkRequired` is unit-tested to be the same state
+                    // whether or not the email collides, and
+                    // `tests/e2e/r096_b1_stage5.rs` pins the same property
+                    // on this live path, which is where it counts). The
+                    // unsigned
+                    // `sui_id_fed_pending` cookie and the incomplete
+                    // `/auth/federated/link` confirmation skeleton this
+                    // branch used to redirect to are removed, not reused
+                    // (`:700-701`) -- "M4 does not create a link." A later
+                    // design may restore self-service linking with fresh
+                    // local authentication, local MFA, CSRF, a single-use
+                    // durable intent, explicit approval, and C19 atomicity.
+                    return Ok(Redirect::to("/admin/login?fed_error=link_required").into_response());
                 }
             }
         }
@@ -938,19 +993,6 @@ pub async fn federated_callback(
 
     // ── P4: enforce local MFA ─────────────────────────────────────────────────
     complete_federated_signin(app, jar, user_id, &provider.slug, &id_claims.sub, now).await
-}
-
-// ── GET /auth/federated/link — link-only approval ────────────────────────────
-
-pub async fn federated_link_get(jar: CookieJar) -> Result<Response, HttpError> {
-    // If no pending cookie, redirect to login.
-    if jar.get("sui_id_fed_pending").is_none() {
-        return Ok(Redirect::to("/admin/login").into_response());
-    }
-    // Render the "confirm link" page — for now a simple redirect with a query
-    // param to the regular login page which will POST back to /auth/federated/link.
-    // Full UI page is a future iteration; this wires the flow skeleton.
-    Ok(Redirect::to("/admin/login?fed_link=pending").into_response())
 }
 
 // ── Shared helpers ────────────────────────────────────────────────────────────

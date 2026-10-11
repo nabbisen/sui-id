@@ -220,7 +220,7 @@ async fn base_state() -> AppState {
 /// manufacture a row whose recorded provider trust generation disagrees
 /// with "current" — tamper the row's own `provider_config_version` after
 /// `/start` — does not reach the superseded check at all: that column is
-/// AAD-bound by stage 2's seal (`insert`/`claim`, RFC 096 `:583`'s PKCE
+/// AAD-bound by stage 2's seal (`insert`/`claim`, RFC 096 `:586-587`'s PKCE
 /// binding), so altering it is caught by the *earlier* tamper check
 /// instead. This test pins that finding directly, so it is recorded as a
 /// property rather than left as a surprise the next reader has to

@@ -67,7 +67,6 @@ caller away rather than trusting the classification alone.
 | `POST` | `/reset-password` | a one-time reset token |
 | `GET` | `/auth/federated/{slug}/start` | upstream sign-in start |
 | `GET` | `/auth/federated/callback` | upstream sign-in callback; a signed state cookie |
-| `GET` | `/auth/federated/link` | link-only sign-in |
 | `GET` | `/metrics` | a bearer token or an administrator session, inline; mounted only when enabled |
 
 ## Surfaces that show a secret once

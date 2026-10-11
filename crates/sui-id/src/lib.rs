@@ -50,6 +50,8 @@ pub mod id_token;
 pub mod identity_capability;
 #[path = "http/identity_claims.rs"]
 pub mod identity_claims;
+#[path = "http/identity_resolution.rs"]
+pub mod identity_resolution;
 #[path = "runtime/ipnet.rs"]
 pub mod ipnet;
 #[path = "http/jwks.rs"]

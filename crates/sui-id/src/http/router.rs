@@ -91,10 +91,8 @@ pub fn build_router(app: AppState) -> Router {
             "/auth/federated/callback",
             get(crate::handlers::federation::federated_callback),
         )
-        .route(
-            "/auth/federated/link",
-            get(crate::handlers::federation::federated_link_get),
-        )
+        // RFC 096-B1 stage 5, RFC 096 `:700-701`: `/auth/federated/link`
+        // and its unsigned pending-link cookie are removed, not reused.
         // ---------- forgot-password (since v0.22.0) ----------
         // Forgot-password lives under the public path, not /admin/*,
         // because the user is by definition not signed in. Both the

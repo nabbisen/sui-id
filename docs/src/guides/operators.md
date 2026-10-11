@@ -1581,8 +1581,12 @@ buttons on the login page. See [configuration reference](../reference/configurat
 
 **Provision modes:**
 
-- `link_only` (default) — users must log in locally first to link their account.
-  On first federated sign-in, they are redirected to the link-approval page.
+- `link_only` (default) — an upstream identity with no existing local link
+  is refused with a generic "local account link required" result.
+  Self-service linking is not available in this release; a later design may
+  restore it with fresh local authentication, local MFA, CSRF, a single-use
+  durable intent, and explicit approval. Today, an administrator links an
+  account by creating the link record directly.
 - `provision_on_first_login` — a local account is created automatically on the
   user's first successful federated sign-in (requires `email_verified = true`
   from the upstream; otherwise the sign-in is rejected).

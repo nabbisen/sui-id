@@ -4,8 +4,8 @@
 //! Federation talks to an administrator-configured upstream provider, which
 //! RFC 096's threat model already treats as potentially hostile or
 //! compromised (the user-facing federation routes take no caller-supplied
-//! URL — see `http/router.rs`'s `federated_start`/`federated_callback`/
-//! `federated_link_get`). This client is the one boundary that traffic
+//! URL — see `http/router.rs`'s `federated_start`/`federated_callback`).
+//! This client is the one boundary that traffic
 //! crosses, so its policy is set here, once, rather than left to whatever
 //! `reqwest`'s defaults happen to be on a given release.
 //!
