@@ -248,10 +248,11 @@ the reason is the next section.
   `/auth/federated/link` and its unsigned pending-link cookie are removed, not
   reused (`:700-701`), and `configuration.md` and `operators.md` now say what
   `link_only` does: no self-service linking in this release, an administrator
-  creates the link record. **Two items go to stage 7** — `L04`'s audit event
-  carries the upstream `sub`, and `operators.md`'s
-  `provision_on_first_login` sentence becomes true only when the new
-  resolution is authoritative.
+  creates the link record. **Two items go to whichever stage carries F04** —
+  named that way because the numbering is what the proposal above puts in
+  question: `L04`'s audit event carries the upstream `sub`, and
+  `operators.md`'s `provision_on_first_login` sentence becomes true only when
+  the new resolution is authoritative.
 
 ### Dispatched and open
 
