@@ -204,9 +204,39 @@ A reader of this file would have concluded that 096-A had not started. **That
 was my omission** — three dispatches written without updating the index the
 implementation role reads.
 
-**Updated 2026-10-12.** Stages 6a, 6b and 6c have landed. **Nothing is
-dispatched**: stage 6d is next and its RFC 094 record question is still open —
-see *Open with the owner* below.
+**Updated 2026-10-13.** **`0.80.0` is released** and **stage 7 is the open
+dispatch.** Stage 6d is deferred to after stage 11 by the 2026-10-12
+authorization. Its RFC 094 record question is taken in the gap before stage
+12; the section further down carries it.
+
+### Dispatched and open
+
+- [`stage7-f04-first-provisioning-2026-10-13.md`](stage7-f04-first-provisioning-2026-10-13.md)
+  — **DISPATCHED, this is the open work.** F04: first federated provisioning
+  in **one** `WriteTx<AtomicAudit>` transaction — attempt completion, the
+  passwordless non-admin user, the link, the `[Fed]` session and cap, and the
+  sole `auth.federation.provisioned` event, per `:706-711`. Today that path is
+  **three separate untransacted writes** (`handlers/federation.rs:1344-1400`),
+  so a crash between any two leaves a user with no link or a link with no
+  audit row. Federation's first use of the Class-A runner; the stage is judged
+  on rollback and exactly-once evidence. The event exists nowhere yet —
+  descriptor, matrix row and reader reference are all created here, and G13,
+  G15 and G17 are all owed. Carries three items assigned to "whichever stage
+  carries F04": `L04`'s upstream-`sub` attribute, the duplicate
+  `federation_link::find_by_sub`, and the operator guide's
+  `provision_on_first_login` sentence, which becomes true when the
+  absent-email denial lands.
+
+### Released
+
+- **`0.80.0`, 2026-10-13, from `7aecd98`** — CI run `38313796878`, 27 jobs, 0
+  skipped. Federation stops trusting the transport: the callback verifies the
+  ID token's signature and claims, and an attempt is a durable row claimed
+  once before the code is exchanged. One security disclosure (the callback
+  revealed whether an email was already registered, by two routes, both
+  closed), at Low–Medium with no advisory. `target/` cleared at the boundary —
+  422 GB apparent, **161 GB actually reclaimed**, `/home` 83% → 75%.
+
 
 ### Landed, 2026-10-12
 
@@ -298,11 +328,10 @@ see *Open with the owner* below.
   carry no `Path`, and work today only because every terminal response is
   emitted from `/auth/federated/callback`.
 
-### Dispatched and open
+### Landed, and released in `0.80.0`
 
 - [`stage6e-federation-failure-surfacing-2026-10-12.md`](stage6e-federation-failure-surfacing-2026-10-12.md)
-  — **DISPATCHED, this is the open work, and it is `0.80.0`'s last
-  precondition.** Nothing reads the `fed_error` query parameter
+  — **landed `92b903e`, Level B 24/24, and released in `0.80.0`.** Nothing reads the `fed_error` query parameter
   (`handlers/admin/auth.rs:37-40` has one field, `next`), so every federation
   failure — including the default `link_only`'s own `link_required` — lands a
   user on a login page that says nothing. A **bounded map** onto a small set of
