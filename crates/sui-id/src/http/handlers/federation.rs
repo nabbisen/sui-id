@@ -1223,6 +1223,60 @@ pub async fn federated_callback(
         None => {
             match provider.provision_mode {
                 ProvisionMode::ProvisionOnFirstLogin => {
+                    // P3: provision on first login requires either:
+                    //   - email present AND email_verified = true, OR
+                    //   - email entirely absent (no email claim → no email
+                    //     verification requirement, no takeover risk via
+                    //     email, provisioning is permitted).
+                    // Block only when email is present but unverified.
+                    //
+                    // RFC 096-B1 stage 6e fix round (R1): this check now
+                    // runs BEFORE P2's collision check below, not after.
+                    // RFC 096 `:706-712` requires `email_verified = true`
+                    // before an email is even eligible for the collision
+                    // comparison ("if any local user already has *that
+                    // normalized email*" -- the verified one): the
+                    // verification requirement precedes the collision rule
+                    // in the RFC's own sequence, and the code must too.
+                    // Checking collision before verification let an
+                    // attacker who can only present an address, never
+                    // verify one they don't own, learn whether an
+                    // *unverified* copy of a victim's email collides with
+                    // a local account -- `email_collision` vs
+                    // `unverified_email` differ by exactly that, which is
+                    // the same local-account-enumeration oracle stage 5
+                    // closed, reached by a different route. Running this
+                    // check first means no unverified email ever reaches
+                    // the collision comparison: every unverified email
+                    // gets `unverified_email`, full stop, carrying no
+                    // information about whether any local account matches
+                    // it.
+                    //
+                    // The absent-email case is unchanged by this reorder:
+                    // an absent email still falls through this check (no
+                    // verification requirement applies to an absent claim)
+                    // to provisioning below, exactly as it did before this
+                    // fix round. That is legacy behaviour RFC 096
+                    // `:710-711`'s `DeniedUnverified` would deny, but that
+                    // resolution is not yet authoritative (stage 12) and a
+                    // check-order fix is not where to change it.
+                    if id_claims.email.is_some() && !id_claims.email_verified {
+                        tracing::info!(slug = %provider.slug, "provision held: unverified email");
+                        terminalize_and_audit(
+                            &app.db,
+                            claimed.id,
+                            TerminalFailureReason::Denied(DeniedDetail::UnverifiedEmail),
+                            now,
+                            provider.id,
+                            None,
+                        )
+                        .await;
+                        return Ok(terminal(
+                            jar,
+                            Redirect::to("/admin/login?fed_error=unverified_email"),
+                        ));
+                    }
+
                     // P2. RFC 096 `:707-708`: collision denial is specific
                     // to `provision_on_first_login` -- under `link_only`
                     // nothing is created and nothing is linked, so there is
@@ -1234,6 +1288,13 @@ pub async fn federated_callback(
                     // the arm rather than guarded in place, so a reader of
                     // the `LinkOnly` arm can see directly that nothing
                     // about local accounts is consulted there at all.
+                    //
+                    // Reached only with a verified email (P3 above denied
+                    // every unverified one) or an absent one (P3 does not
+                    // apply, and `find_by_email_normalized` is never
+                    // called when `id_claims.email` is `None`): by the
+                    // time this runs, the only email this comparison can
+                    // see is one the upstream has already vouched for.
                     if let Some(ref email) = id_claims.email
                         && let Ok(Some(_collision)) =
                             sui_id_store::repos::users::find_by_email_normalized(
@@ -1278,29 +1339,6 @@ pub async fn federated_callback(
                         return Ok(terminal(
                             jar,
                             Redirect::to("/admin/login?fed_error=email_collision"),
-                        ));
-                    }
-
-                    // P3: provision on first login requires either:
-                    //   - email present AND email_verified = true, OR
-                    //   - email entirely absent (no email claim → no email
-                    //     verification requirement, no takeover risk via
-                    //     email, provisioning is permitted).
-                    // Block only when email is present but unverified.
-                    if id_claims.email.is_some() && !id_claims.email_verified {
-                        tracing::info!(slug = %provider.slug, "provision held: unverified email");
-                        terminalize_and_audit(
-                            &app.db,
-                            claimed.id,
-                            TerminalFailureReason::Denied(DeniedDetail::UnverifiedEmail),
-                            now,
-                            provider.id,
-                            None,
-                        )
-                        .await;
-                        return Ok(terminal(
-                            jar,
-                            Redirect::to("/admin/login?fed_error=unverified_email"),
                         ));
                     }
                     // P7: derive username, never trust upstream directly.
@@ -1656,6 +1694,94 @@ async fn fetch_userinfo(
         .map_err(|e| e.to_string())
 }
 
+// ── RFC 096-B1 stage 6e: the `fed_error` surfacing map ───────────────────────
+//
+// `:714-716`'s rule applies to rendered output at least as strongly as to
+// audit: no raw email, `sub`, ID token or upstream error text reaches the
+// login page, and no distinction this file's own handlers do not already
+// make in the open is reintroduced here either. `fed_error` is caller-
+// supplied as far as the login page is concerned -- anyone can visit
+// `/admin/login?fed_error=anything` -- so this map, not the raw value, is
+// what reaches the template, and an unrecognised value is never
+// distinguished from a known one.
+
+/// Every distinct `fed_error` value this module's handlers can produce, as
+/// measured directly against this file (not assumed): 28 values, 21 of
+/// them collapsing into [`Self::Retry`] below. `claim_fed_error`'s own six
+/// named `StoreError` arms plus its wildcard account for seven of the
+/// twenty-one; the rest are this file's static `Redirect::to(...)`
+/// literals.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FedErrorBucket {
+    /// Every transport, token, signature, claims, or validation failure
+    /// during the federation handshake, plus an unrecognised value:
+    /// `upstream`, `state_mismatch`, `attempt_not_found`, `replay`,
+    /// `expired`, `clock_regression`, `tamper_detected`, `superseded`,
+    /// `binding_mismatch`, `attempt_claim_failed`, `token_exchange`,
+    /// `token_parse`, `missing_id_token`, `signature_invalid`,
+    /// `nonce_mismatch`, `identity_claims_invalid`, `time_claims_invalid`,
+    /// `optional_claims_invalid`, `userinfo`, `no_id_token`, `no_sub`, and
+    /// anything not in the other three buckets. None of these distinguish
+    /// one local account from another -- each is about this one request's
+    /// own protocol state, not about whether some other upstream identity
+    /// would have succeeded -- so lumping them together costs nothing and
+    /// keeps the message set small.
+    Retry,
+    /// A provider- or account-level issue only an administrator can act
+    /// on: `disabled` (provider disabled), `config_drift` (startup config
+    /// missing its DB-enabled provider), `discovery_origin` (the
+    /// provider's own discovery document names a disallowed origin), and
+    /// `signin_failed` (RFC 102 L04's own uniform post-identification
+    /// failure -- disabled/deleted user, a DB error, or a commit
+    /// failure, already indistinguishable from each other upstream of
+    /// this map).
+    ContactAdmin,
+    /// RFC 096 `:699-701`/`:707-708`'s own pairing, carried into the
+    /// message: `email_collision` (P2, a local account exists and was not
+    /// linked) and `link_required` (`link_only`, no local account was
+    /// even consulted) must render identically, or the message itself
+    /// becomes the oracle stage 5's generic *decision* was built to
+    /// close. This is the one bucket whose membership is the security-
+    /// relevant fact about this map, not an editorial grouping.
+    LinkRequired,
+    /// `unverified_email` (P3) alone: the one value whose remedy the end
+    /// user can act on without an administrator, by verifying their
+    /// address with the upstream identity provider rather than with
+    /// sui-id.
+    UnverifiedEmail,
+}
+
+impl FedErrorBucket {
+    fn classify(fed_error: &str) -> Self {
+        match fed_error {
+            "email_collision" | "link_required" => Self::LinkRequired,
+            "unverified_email" => Self::UnverifiedEmail,
+            "disabled" | "config_drift" | "discovery_origin" | "signin_failed" => {
+                Self::ContactAdmin
+            }
+            _ => Self::Retry,
+        }
+    }
+}
+
+/// The one bounded map `/admin/login`'s own `GET` handler calls: a
+/// `fed_error` value in, one of exactly four localized [`Flash`](sui_id_web::Flash)es
+/// out. The raw value itself never reaches the returned `Flash` -- only a
+/// `&'static str` selected by [`FedErrorBucket::classify`], so there is
+/// nothing here for a caller-supplied value to be reflected into.
+pub fn fed_error_message(fed_error: &str, t: &'static sui_id_i18n::Strings) -> sui_id_web::Flash {
+    let text = match FedErrorBucket::classify(fed_error) {
+        FedErrorBucket::Retry => t.login_fed_retry,
+        FedErrorBucket::ContactAdmin => t.login_fed_contact_admin,
+        FedErrorBucket::LinkRequired => t.login_fed_link_required,
+        FedErrorBucket::UnverifiedEmail => t.login_fed_unverified_email,
+    };
+    sui_id_web::Flash {
+        kind: sui_id_web::FlashKind::Error,
+        text: text.to_owned(),
+    }
+}
+
 /// Fire-and-forget audit append (for paths where we can't await).
 fn emit_audit_soon(
     db: sui_id_store::Database,
@@ -1675,3 +1801,7 @@ fn emit_audit_soon(
         let _ = sui_id_store::repos::audit::append(&db, &row).await;
     })
 }
+
+#[cfg(test)]
+#[path = "federation/tests.rs"]
+mod tests;

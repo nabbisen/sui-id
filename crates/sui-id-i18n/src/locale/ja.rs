@@ -160,6 +160,10 @@ pub static STRINGS_JA: Strings = Strings {
     login_invalid_credentials: "ユーザー名またはパスワードが正しくありません。",
     login_account_locked: "アカウントは一時的にロックされています。しばらく待ってから再度お試しください。",
     login_reset_ok_banner: "パスワードを再設定しました。新しいパスワードでサインインしてください。",
+    login_fed_retry: "サインインを完了できませんでした。もう一度お試しください。",
+    login_fed_contact_admin: "このアカウントまたはプロバイダーでサインインを完了できませんでした。管理者にお問い合わせください。",
+    login_fed_link_required: "このサインインをローカルアカウントに自動的にリンクできませんでした。管理者にお問い合わせください。",
+    login_fed_unverified_email: "ID プロバイダーによると、メールアドレスが確認されていません。ID プロバイダー側でメールアドレスを確認してから、再度お試しください。",
 
     // Setup wizard
     setup_step_welcome: "ようこそ",

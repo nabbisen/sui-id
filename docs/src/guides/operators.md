@@ -1582,14 +1582,26 @@ buttons on the login page. See [configuration reference](../reference/configurat
 **Provision modes:**
 
 - `link_only` (default) — an upstream identity with no existing local link
-  is refused with a generic "local account link required" result.
-  Self-service linking is not available in this release; a later design may
-  restore it with fresh local authentication, local MFA, CSRF, a single-use
-  durable intent, and explicit approval. Today, an administrator links an
-  account by creating the link record directly.
+  is refused with a generic "local account link required" result, now shown
+  to the user as a plain message on the login page (RFC 096-B1 stage 6e) —
+  but **this release has no self-service linking**: the user cannot create
+  that link themselves no matter what they do next. The only way a first
+  link comes to exist is an administrator creating the `federation_link` row
+  directly, or switching this provider to `provision_on_first_login`. A
+  later design may restore self-service linking, with fresh local
+  authentication, local MFA, CSRF, a single-use durable intent, and explicit
+  approval — no date is set for that.
 - `provision_on_first_login` — a local account is created automatically on the
   user's first successful federated sign-in (requires `email_verified = true`
   from the upstream; otherwise the sign-in is rejected).
+
+**Which to choose.** Use `provision_on_first_login` unless you specifically
+need every federated user approved by an administrator before they can sign
+in at all: `link_only`'s lack of self-service in this release means an
+administrator inserts one database row per user before that user's first
+sign-in can succeed, which does not scale past a handful of people. Choose
+`link_only` only when that per-user approval step is a requirement you want,
+not a cost you are accepting by taking the default.
 
 **Enabling a provider:**
 

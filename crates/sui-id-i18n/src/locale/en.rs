@@ -160,6 +160,10 @@ pub static STRINGS_EN: Strings = Strings {
     login_invalid_credentials: "The username or password is incorrect.",
     login_account_locked: "Your account is temporarily locked. Please try again later.",
     login_reset_ok_banner: "Your password has been reset. Please sign in with the new password.",
+    login_fed_retry: "Sign-in could not be completed. Please try again.",
+    login_fed_contact_admin: "Sign-in could not be completed for this account or provider. Contact an administrator.",
+    login_fed_link_required: "This sign-in could not be linked to a local account automatically. Contact an administrator.",
+    login_fed_unverified_email: "Your identity provider reports that your email address is not verified. Verify it with your identity provider, then try again.",
 
     // Setup wizard
     setup_step_welcome: "Welcome",

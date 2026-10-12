@@ -33,10 +33,18 @@ pub struct LoginForm {
 /// Query parameters accepted by `GET /admin/login`.
 /// The `next` value is URL-encoded by the `/oauth2/authorize` endpoint
 /// so the login form can redirect back after a successful sign-in.
+///
+/// `fed_error` (RFC 096-B1 stage 6e) is caller-supplied, exactly like
+/// `next` already is -- anyone can visit `/admin/login?fed_error=anything`.
+/// It is never rendered itself; `login_get` passes it through
+/// `crate::handlers::federation::fed_error_message`'s bounded map, which
+/// is the only thing that reaches the page.
 #[derive(Debug, Deserialize, Default)]
 pub struct LoginGetQuery {
     #[serde(default)]
     pub next: String,
+    #[serde(default)]
+    pub fed_error: Option<String>,
 }
 
 /// Derive the `LoginContext` from the `?next=` parameter (RFC 091).
@@ -103,7 +111,14 @@ pub async fn login_get(
     };
     // RFC 091: derive LoginContext from `next` for context-aware copy.
     let login_ctx = derive_login_context(&app.db, &q.next).await;
-    Ok(Html(render_login(None, next, lang, false, Some(login_ctx))).into_response())
+    // RFC 096-B1 stage 6e: `fed_error`, mapped to one of four bounded
+    // messages -- never the raw value itself (see `LoginGetQuery`'s own
+    // doc comment and `fed_error_message`'s).
+    let flash = q
+        .fed_error
+        .as_deref()
+        .map(|v| crate::handlers::federation::fed_error_message(v, lang.strings()));
+    Ok(Html(render_login(flash, next, lang, false, Some(login_ctx))).into_response())
 }
 
 /// Attempt to sign in, trying the local credential store first, then any

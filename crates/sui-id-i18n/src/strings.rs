@@ -200,6 +200,48 @@ pub struct Strings {
     pub login_invalid_credentials: &'static str,
     pub login_account_locked: &'static str,
     pub login_reset_ok_banner: &'static str,
+    /// RFC 096-B1 stage 6e: the bounded map's generic bucket, for every
+    /// `fed_error` value — known or unrecognised — that is not one of the
+    /// three more specific messages below. By far the largest bucket (a
+    /// transport, token, signature, claims, or validation failure during
+    /// the federation handshake): see `handlers::federation::fed_error_
+    /// message`'s own doc comment for the full membership and why each
+    /// value lands here rather than getting its own message.
+    pub login_fed_retry: &'static str,
+    /// A provider- or account-level issue only an administrator can act
+    /// on: the provider is disabled, its configuration has drifted, its
+    /// discovery document names a disallowed origin, or the sign-in
+    /// commit itself failed for a reason already uniform with every other
+    /// post-identification failure (RFC 102 L04). Fix round R1 (2026-10-12
+    /// review): worded as "this account or provider" rather than "right
+    /// now", because `signin_failed` can mean the user's own account is
+    /// disabled or deleted, not merely that the provider is temporarily
+    /// unavailable -- the old wording's "right now" implied a transient,
+    /// external condition that is not true for every member.
+    pub login_fed_contact_admin: &'static str,
+    /// RFC 096 `:714-715`'s oracle concern, directly: shown for both
+    /// `email_collision` and `link_required` alike, so a caller cannot
+    /// tell "this upstream identity collided with a local account" apart
+    /// from "this upstream identity simply has no link yet" — the pair
+    /// stage 5 already made the *decision* generic for; this is the
+    /// matching *message*. Fix round R1 (2026-10-12 review): reworded to
+    /// say nothing about whether a local account exists. The prior
+    /// wording ("your account could not be automatically linked")
+    /// asserted an account that `link_required` does not have -- true
+    /// for `email_collision` (an account exists, unlinked) but false for
+    /// `link_required` (no account was ever matched), which is the
+    /// second half of the project's own philosophy failing in the one
+    /// string this stage exists to add. The new wording ("this sign-in
+    /// could not be linked to a local account automatically") is true of
+    /// both: an existing account that was not auto-linked, and no
+    /// account to link to at all, read the same sentence without either
+    /// being told something false about their own case.
+    pub login_fed_link_required: &'static str,
+    /// The one `fed_error` value the end user themselves can act on
+    /// without an administrator: `unverified_email` (RFC 096 P3), where
+    /// the remedy is verifying the address with the upstream identity
+    /// provider, not with sui-id.
+    pub login_fed_unverified_email: &'static str,
 
     // ---- Setup wizard ----
     pub setup_step_welcome: &'static str,
