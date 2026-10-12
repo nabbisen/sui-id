@@ -156,7 +156,7 @@ const EXPECTED_WITHOUT_ACTOR: &[(&str, &str, &str)] = &[
     (
         "GET",
         "/auth/federated/callback",
-        "upstream sign-in callback; a signed state cookie",
+        "upstream sign-in callback; a signed state cookie, a browser-binding cookie compared in constant time, and a one-time attempt row",
     ),
     // ---- optional
     (

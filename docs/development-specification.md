@@ -5,6 +5,21 @@
 principle, not a source: inventories were removed in v4 and each section
 that held one now names where the authoritative copy lives.*
 
+> **Stale as of v0.80.0 (2026-10-13).** This document reflects the v0.77.0
+> codebase and the workspace is three minor versions past it, which is one
+> more than `contracts/doc-authority.toml`'s tolerance allows — RFC 098 rule 5
+> makes this banner the sanctioned state for a lagging document, and it is
+> preferred here to re-dating a synthesis nobody has re-verified section by
+> section. **Known divergences, so a reader knows where not to trust it:**
+> §13's principal entities predate `federation_login_attempt` (migration
+> `0046`, RFC 096-B1) and its 24-hour retention, which §14 therefore does not
+> describe either; §15's logging and audit account predates the sealed
+> command registry's Class-B `emit_must_attempt` path and the bounded reason
+> enums that go with it; and §7 points at a threat model that does not exist
+> yet — RFC 097 owns it and is blocked on RFC 096-B completing. Everything
+> else is unverified against v0.80.0 rather than known wrong. **Re-synthesis
+> is scheduled, not forgotten.**
+
 ---
 
 ## 0. Project name

@@ -148,10 +148,16 @@ The flow is fully server-side from the RP perspective:
    `authorization_endpoint`.
 3. After the user authenticates upstream, the browser returns to
    `GET /auth/federated/callback`.
-4. sui-id exchanges the code at the upstream `token_endpoint` (PKCE),
-   validates the nonce, maps `(provider_id, upstream_sub)` → local user
-   (provisioning or link-only depending on `provision_mode`), enforces
-   local MFA if enrolled, and issues a sui-id session.
+4. sui-id claims the attempt — a durable, one-time row matched on the state
+   digest, the provider, an unexpired window and a constant-time browser
+   binding — then exchanges the code at the upstream `token_endpoint` (PKCE),
+   **verifies the ID token's signature against the provider's JWKS** and
+   validates its issuer, audience, time and nonce claims, maps
+   `(provider_id, upstream_sub)` → local user (provisioning or link-only
+   depending on `provision_mode`), enforces local MFA if enrolled, and issues
+   a sui-id session. Under `link_only` an identity with no existing link is
+   refused: see the operator guide for what that mode does and does not do in
+   this release.
 
 The upstream access token is used only during step 4 and is never persisted.
 See `[[federation_providers]]` in the configuration reference for setup.

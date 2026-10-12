@@ -7,7 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.80.0] — 2026-10-13
+
+**Federation stops trusting the transport.** Until this release the federated
+callback decoded the upstream ID token without verifying its signature, and
+the one-time-ness of a sign-in attempt lived in a cookie. RFC 096-B1 replaces
+both: a durable attempt row, claimed once before the code is exchanged, and a
+callback routed through the signature, issuer, audience, time and nonce checks
+RFC 096-A built. The work is not finished — the legacy mapping path still
+decides the outcome and is removed in a later release — but every federated
+request now passes through the verification first.
+
 ### Security
+
+- **The federated callback revealed whether an email address was already
+  registered.** *Severity: Low–Medium.* Exploiting it needed federation
+  configured and `enabled = true` (the default is `false`), a configured
+  provider, and the ability to obtain an upstream identity whose `email` claim
+  the caller controls. With those, the callback answered one question per
+  attempt: *does a local account already hold this address?* The answer was
+  visible in the redirect's own URL; no rendered page was needed.
+
+  **Mechanism.** The takeover-collision check that `provision_on_first_login`
+  needs ran **before** the provision-mode branch, and never consulted
+  `email_verified`. That left two routes to the same answer. Under
+  `link_only` — which RFC 096 requires to return one generic "local account
+  link required" result for every unlinked identity — a colliding email was
+  refused with `fed_error=email_collision` while a non-colliding one took the
+  pending-link path. Under `provision_on_first_login`, an **unverified** email
+  that collided was refused with `fed_error=email_collision` while an
+  unverified one that collided with nothing was refused with
+  `fed_error=unverified_email`; a verified address was never required, so the
+  caller needed no cooperation from the upstream beyond obtaining any identity
+  at all.
+
+  **Fix.** The collision check now lives inside the `provision_on_first_login`
+  arm, so `link_only` consults no local state whatsoever. Within that arm the
+  absent/unverified-email denial runs **ahead** of the collision check — RFC
+  096's own sequence — so a collision is reachable only with an address the
+  upstream has verified, where the outcome is already implied by whether
+  provisioning happens. The two `fed_error` values that remain distinguishable
+  in the URL now render the same user-visible message.
+
+  **Found by** this project's own architect review of RFC 096-B1, by driving
+  both cases through the real router rather than reading the module: the
+  module's unit tests had the generic-result property right and the live path
+  did not.
+
+**Three findings from RFC 094 M2a's dynamic-registration work, carried from
+the unreleased section — they landed after `0.79.0` and ship here.**
 
 - **Dynamic client registration (`POST /oauth2/register`) spent the initial-access
   token before validating the request body.** A registration carrying a valid
@@ -34,6 +82,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   happened.** `create` now persists both from the row it is given; the
   separately-audited `update_consent_policy` (C09) and `update_app_identity`
   (C10) remain the correct path for changing either value after creation.
+
+### Added
+
+- **A durable federated login attempt.** `federation_login_attempt` (migration
+  `0046`) stores the state, nonce and browser-binding digests, the sealed PKCE
+  verifier and the exact redirect URI, with a 600-second lifetime and a
+  four-state status. The attempt is claimed exactly once — matched on the state
+  digest, the provider, an unexpired window and a **constant-time browser
+  binding** — **before** the authorization code is exchanged, so a replayed
+  callback cannot reach the upstream twice. Completed, failed and expired
+  attempts are deleted 24 hours later by the existing GC task.
+- **ID-token verification on the live callback.** The signature is checked
+  against the provider's JWKS with a constrained algorithm set, and the
+  issuer, audience, time and nonce claims are validated, before anything
+  downstream reads the token.
+- **Terminal attempt failure.** Every failure path after the claim moves the
+  attempt to `failed` and records one of four audit events with a bounded
+  reason, through a new must-attempt emission path that logs a failed audit
+  write instead of dropping it. An upstream error response consumes the
+  matching attempt without exchanging anything.
+- **Federation failures are explained to the user.** All twenty-eight internal
+  `fed_error` values now map onto four localized messages (`en`, `ja`,
+  `zh_hans`). Previously the login page said nothing at all. The mapping is
+  deliberately lossy: values that would distinguish one local account from
+  another share a single message.
+
+### Changed
+
+- **`link_only` is documented for what it is.** This release has no
+  self-service linking: an upstream identity with no existing link is refused,
+  and the user cannot create that link themselves no matter what they do next.
+  The operator guide and the configuration reference now say so, and recommend
+  which provision mode to choose. The incomplete `/auth/federated/link`
+  skeleton and its unsigned pending-link cookie are **removed**, not reused.
+- Both federation cookies are expired on every terminal path out of the
+  callback, with an explicit `Path`, rather than on two paths out of
+  twenty-three.
+- The upstream `error` query parameter is no longer written to the log.
+
+### Fixed
+
+- Audit notes and log fields on the federation path no longer carry a raw
+  email address or upstream subject; they carry internal provider ids and
+  bounded reason tokens.
 
 ## [0.79.0] — 2026-10-01
 
