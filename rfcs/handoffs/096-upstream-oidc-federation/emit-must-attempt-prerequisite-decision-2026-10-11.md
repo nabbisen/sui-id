@@ -86,6 +86,17 @@ does**, and §4 is about what that costs.
 
 ## 4. The consequence I did not name when I recommended the amendment
 
+> **Superseded 2026-10-12** by
+> [`five-open-decisions-reviewed-2026-10-12.md`](five-open-decisions-reviewed-2026-10-12.md).
+> This section's recommendation — build F01 now, record the divergence, amend
+> RFC 094 later — rested on *"no gate ties the manifest's class to RFC 094's
+> prose"*, which is a statement about what is checked and not about what is
+> true. Measuring the round-trip also found it blocks far less than claimed
+> (M2b only, which is unstarted) and one thing not claimed at all (RFC 096's
+> own *Design prerequisites* line becomes false while RFC 094 sits in
+> `proposed/`). The replacement sequences the amendment into a gap with nothing
+> in flight. The text below is kept as the original reasoning.
+
 The decision document recommended that one RFC 094 amendment carry F01's class
 and `emit_must_attempt`'s milestone. **I did not say what amending RFC 094 may
 cost, and it may cost a great deal.** RFC 000 (`rfcs/done/000-rfc-lifecycle-policy.md:43-47`,

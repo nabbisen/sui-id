@@ -300,6 +300,21 @@ see *Open with the owner* below.
 
 ### Open with the owner
 
+- [`five-open-decisions-reviewed-2026-10-12.md`](five-open-decisions-reviewed-2026-10-12.md)
+  — **the five open decisions, reviewed against the fundamental philosophy, and
+  two of the architect's own recommendations withdrawn.** Read this before the
+  four documents below it: it supersedes the release-timing recommendation in
+  the stage-plan revision proposal (§5) and the sequencing recommendation in
+  the `emit_must_attempt` prerequisite decision (§4). **The release
+  precondition is not "stage 6c landed"** — it is that a user reaching the
+  federation path either signs in or is told, in the product, what to do, which
+  makes the `fed_error` surfacing stage a precondition rather than a later
+  tidy. **And F01 is not to be built against a record that says something
+  else** — the RFC 094 amendment is sequenced into a gap where nothing is in
+  flight, with stage 6d moved after stage 11, rather than parked behind a
+  gate's silence. Measured costs for both, including what a `proposed/`
+  round-trip does and does not block.
+
 - [`class-b-emission-and-f01-class-2026-10-11.md`](class-b-emission-and-f01-class-2026-10-11.md)
   — **DECISION REQUEST; F05 and F01 wait on it.** Both specify a post-commit
   Class-B `emit_must_attempt` event and **that API does not exist**:

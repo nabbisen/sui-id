@@ -137,6 +137,14 @@ revised order rather than going out in a form already known to be wrong.
 
 ## 5. Release schedule
 
+> **Superseded 2026-10-12** by
+> [`five-open-decisions-reviewed-2026-10-12.md`](five-open-decisions-reviewed-2026-10-12.md).
+> "Cut `0.80.0` after stage 6" weighed the release on code readiness and left
+> the user-facing half to a later stage: under the **default** `link_only`, a
+> user is refused with a `fed_error` nothing renders, and no self-service
+> linking exists to send them to. The release precondition is now the
+> surfacing stage. The paragraphs below are kept as the original reasoning.
+
 The authorized plan assumed one release at the end of 096-B1. With nine stages
 remaining rather than two — 6 through 14; **twelve dispatches**, since stage 6
 runs as 6a–6d (*count corrected twice on 2026-10-11: it first read "seven",
