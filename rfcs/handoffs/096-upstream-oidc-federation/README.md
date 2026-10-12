@@ -204,12 +204,31 @@ A reader of this file would have concluded that 096-A had not started. **That
 was my omission** — three dispatches written without updating the index the
 implementation role reads.
 
-**Updated 2026-10-11 (fourth entry of the day).** Stages 6a and 6b landed;
-**stage 6c is the open dispatch**, and it is wider than the plan said because
-`:597-599` turned out to require two things of the claim that the code does not
-do.
+**Updated 2026-10-12.** Stages 6a, 6b and 6c have landed. **Nothing is
+dispatched**: stage 6d is next and its RFC 094 record question is still open —
+see *Open with the owner* below.
 
-### Dispatched and open
+### Landed, 2026-10-12
+
+- [`stage6c-attempt-state-machine-and-f05-2026-10-11.md`](stage6c-attempt-state-machine-and-f05-2026-10-11.md)
+  — **landed `87a52aa`, Level B 24/24** plus A3.2 and A3.4, after one fix
+  round. The three `:597-599`/`:603-604` divergences are closed: the claim is
+  **split** from nonce consumption and runs before discovery and the token
+  exchange (moving it back no longer compiles — every terminalization in
+  between references a `claimed` that would not yet exist); `:598`'s
+  **constant-time browser binding** is compared for the first time, closing a
+  limitation carried since stage 4, with an absent cookie reaching the same
+  comparison a wrong one does; and `:603-604`'s error response consumes the
+  matching attempt without a claim or an exchange, identically whether the
+  state is absent, unmatched or found. **F05** terminalizes on all 28
+  post-claim failure paths, with `:715`'s *"bounded reason enums"* closed on
+  both halves by construction — a new reason cannot be invented without
+  extending an exhaustive match, and a `Denied` site cannot carry an
+  `UpstreamFailure` detail. **Two standing closure limitations close here**;
+  two remain (the tautological superseded comparison, and the legacy mapping
+  path until stage 12).
+
+### Previously dispatched, now closed
 
 - [`stage6c-attempt-state-machine-and-f05-2026-10-11.md`](stage6c-attempt-state-machine-and-f05-2026-10-11.md)
   — **DISPATCHED, this is the open work.** Three divergences from
