@@ -298,6 +298,34 @@ see *Open with the owner* below.
   carry no `Path`, and work today only because every terminal response is
   emitted from `/auth/federated/callback`.
 
+### Dispatched and open
+
+- [`stage6e-federation-failure-surfacing-2026-10-12.md`](stage6e-federation-failure-surfacing-2026-10-12.md)
+  — **DISPATCHED, this is the open work, and it is `0.80.0`'s last
+  precondition.** Nothing reads the `fed_error` query parameter
+  (`handlers/admin/auth.rs:37-40` has one field, `next`), so every federation
+  failure — including the default `link_only`'s own `link_required` — lands a
+  user on a login page that says nothing. A **bounded map** onto a small set of
+  user-visible messages, never a rendering of the internal value: collapsing
+  the collision-adjacent values onto one message is the security-relevant part,
+  since `email_collision` versus `link_required` is the pair whose observable
+  difference was the enumeration oracle stage 5 closed. Plus the operator guide
+  saying which provision mode to choose and what `link_only` costs in this
+  release. Was stage 13; moved to the front on 2026-10-12.
+
+### Authorized 2026-10-12
+
+- [`five-open-decisions-reviewed-2026-10-12.md`](five-open-decisions-reviewed-2026-10-12.md)
+  — **APPROVED.** `@nabbisen`, 2026-10-12: "Approved." Three effects, all now
+  in the stage plan: the surfacing work became **stage 6e** and is dispatched
+  ahead of stage 7, because it is a release precondition rather than a later
+  tidy; **stage 6d (F01) moves to after stage 11**, with the RFC 094 amendment
+  taken in the gap before stage 12 so no stage is implemented against a
+  prerequisite the repository contradicts; and **`0.80.0` is cut after stage
+  6e**. The `(A required)` marking on `auth.federation.takeover_blocked` is
+  carved out of the 2026-09-24 ruling's twelve — eleven remain for M2b.
+  **096-A's acceptance is not part of this** and remains outstanding.
+
 ### Open with the owner
 
 - [`five-open-decisions-reviewed-2026-10-12.md`](five-open-decisions-reviewed-2026-10-12.md)

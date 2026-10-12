@@ -45,6 +45,21 @@ configuration and client metadata. This is the same treatment the auth-flow
 section already gives its own unconverted rows; these twelve simply never
 received it. Ruled by `@nabbisen`, 2026-09-24.
 
+**One of the twelve is carved out — `auth.federation.takeover_blocked`,
+2026-10-12.** `@nabbisen` approved the architect's recommendation to amend the
+ruling above for this row alone: "Approved." The other eleven each accompany a
+real state change, so Class A has something to be atomic with; this one
+accompanies none — the collision path mutates nothing, so a transaction would
+be atomic with nothing, and RFC 094 `:120`'s A6 (*"failure to log a
+denial/detection never"* prevents the denial) argues against making the denial
+depend on the append. It is Class B **by design** rather than pending
+conversion, emitted through RFC 094 `:292-298`'s `emit_must_attempt` since RFC
+096-B1 stage 6b and owned by F05 since stage 6c, so a failed append is logged
+rather than dropped. **M2b's scope is otherwise unchanged: eleven rows, not
+twelve.** Reasoning in
+[`five-open-decisions-reviewed-2026-10-12.md`](../rfcs/handoffs/096-upstream-oidc-federation/five-open-decisions-reviewed-2026-10-12.md),
+item 2.
+
 **One actor cell was also wrong.** `auth.refresh.theft_detected` said `user id`;
 its descriptor is `ActorRequirement::None` and its command runs under
 `for_system_actor(None)`. Corrected to `—`, matching `auth.refresh.rotated`.
@@ -171,7 +186,7 @@ then because `setup.` was not in the hand-written list.
 | `auth.federation.signin.success` | Federated sign-in completed for a user with no second factor (command `L04`, with the in-transaction re-read, `last_login_at`, the session and cap eviction) | user id | user id | `provider=… sub=… evicted=…` (`sub` truncated to 255 bytes) | **A** |
 | `auth.federation.signin.upstream_failure` | Upstream IdP returned an error, or (RFC 096-B1 stage 6c, F05) a post-claim transport/token failure — two call sites, two note shapes: `federated_start`'s own pre-attempt failure still uses the original best-effort `audit::append`; everything after an attempt is claimed goes through F05's `emit_must_attempt` instead | — | — | `provider=… error=…` (pre-attempt) or `provider_id=… reason=…` (post-claim, F05; `reason`'s bounded set is `federation_attempt_terminalize::UpstreamFailureDetail`) | B |
 | `auth.federation.link.created` | Federation link created (first sign-in or explicit link) | user id | user id | `provider=… sub=…` | B |
-| `auth.federation.takeover_blocked` | Email collision rejected as potential takeover (RFC 096-B1 stage 6b: emitted via `emit_must_attempt`, RFC 094 `:292-298`, so a failed append is now logged rather than dropped — still Class B in fact, and **still `(A required)`** per the 2026-09-24 ruling, unchanged by this stage; RFC 096-B1 stage 6c: F05 subsumes this emission, replacing the 6b call site rather than sitting beside it) | — | — | `provider_id=… reason=…` (`reason` is always `email_collision` — the only value `TerminalFailureReason::TakeoverBlocked` can carry) | B *(A required)* |
+| `auth.federation.takeover_blocked` | Email collision rejected as potential takeover (RFC 096-B1 stage 6b: emitted via `emit_must_attempt`, RFC 094 `:292-298`, so a failed append is now logged rather than dropped — **Class B by design**, carved out of the 2026-09-24 ruling's twelve on 2026-10-12 (see the note above); RFC 096-B1 stage 6c: F05 subsumes this emission, replacing the 6b call site rather than sitting beside it) | — | — | `provider_id=… reason=…` (`reason` is always `email_collision` — the only value `TerminalFailureReason::TakeoverBlocked` can carry) | B |
 | `auth.federation.link_required` | RFC 096-B1 stage 6c, F05: the generic `link_only` denial (RFC 096 `:699-701`) for any unlinked upstream identity, collision or not | — | — | `provider_id=… reason=…` (`reason` is always `unlinked_identity` — the only value `TerminalFailureReason::LinkRequired` can carry) | B |
 | `auth.federation.signin.denied` | RFC 096-B1 stage 6c, F05: every other post-claim denial — validation, mapping, disabled provider/user, or sign-in commit failure | user id; none before a local account is resolved | user id; none before a local account is resolved | `provider_id=… reason=…` (`reason`'s bounded set is `federation_attempt_terminalize::DeniedDetail`) | B |
 
