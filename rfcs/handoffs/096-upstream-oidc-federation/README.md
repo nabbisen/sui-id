@@ -204,16 +204,39 @@ A reader of this file would have concluded that 096-A had not started. **That
 was my omission** — three dispatches written without updating the index the
 implementation role reads.
 
-**Updated 2026-10-13.** **`0.80.0` is released**, **stage 7 landed `e9d5001`**,
-and **stage 8's fix round is the open dispatch.** Stage 6d is deferred to
-after stage 11 by the 2026-10-12 authorization. Its RFC 094 record question is
-taken in the gap before stage 12; the section further down carries it.
+**Updated 2026-10-14.** **`0.80.0` is released**, **stage 8 landed
+`d7d5523`** (2026-10-13 JST, one fix round), and **stage 9 is the open
+dispatch.** Stage 6d is
+deferred to after stage 11 by the 2026-10-12 authorization. Its RFC 094 record
+question is taken in the gap before stage 12; the section further down carries
+it.
 
 ### Dispatched and open
 
+- [`stage9-f02-first-mfa-continuation-and-the-purge-2026-10-14.md`](stage9-f02-first-mfa-continuation-and-the-purge-2026-10-14.md)
+  — **DISPATCHED, this is the open work.** F02, the first writer of stage 8's
+  two tables: one `db.protocol` transaction holding the guarded attempt
+  completion (`exchanging -> completed`) and exactly one
+  `federation_mfa_pending` row. Three things beyond the transaction. **The
+  purge** `:734` requires is this stage's, with the first writer, and the
+  dispatch asks where it is *called from* — a purge nobody calls is the growth
+  leak with extra steps. **The rechecks RFC 094 `:625-627` requires** are not
+  absorbed by stage 8's new link `FOREIGN KEY`, which gives link existence and
+  nothing else — not an active user, not an enabled provider at the attempt's
+  exact version and activation generation. And **the audit record is currently
+  false**: the legacy branch writes `auth.login.password_ok_mfa_required` for a
+  federated sign-in, which for an F04-provisioned user asserts a password that
+  does not exist. The replacement is argued, not dictated; the architect leans
+  to a federation-specific must-attempt observation and says why. **G20 does
+  not apply** — F02 is Class P, so no gate will ask for rollback evidence,
+  which is why the dispatch asks for it by hand, with a control.
+
+### Landed, 2026-10-13
+
 - [`stage8-fix-bind-the-link-and-the-parent-row-2026-10-13.md`](stage8-fix-bind-the-link-and-the-parent-row-2026-10-13.md)
-  — **DISPATCHED, this is the open work.** The returned migration is sound and
-  nothing in it is wrong; the round exists because **three obligations its
+  — **landed `d7d5523`, Level B 24/24** plus A3.2 and A3.4, **CI run
+  `38418809623`, 27 jobs, 0 skipped.** The returned migration was sound and
+  nothing in it was wrong; the round existed because **three obligations its
   clause table assigned to later stages' code are enforceable in the schema**,
   established by building and running them rather than by reasoning. A
   composite `FOREIGN KEY` compares two tables where a `CHECK` cannot, so
@@ -223,8 +246,14 @@ taken in the gap before stage 12; the section further down carries it.
   was stored but not held — a pending row was valid for a pair that had never
   been linked, and survived an unlink. Also: an unparseable timestamp silently
   disables the `expires_at = created_at + 300` `CHECK`, because `strftime`
-  returns `NULL` and a `CHECK` passes on `NULL`. The migration is edited in
-  place — `0047` has never been committed.
+  returns `NULL` and a `CHECK` passes on `NULL`. The migration was edited in
+  place: `0047` had never been committed. *Returned and accepted the same day,
+  with two cascade tests added by the architect — the package's own evidence
+  table claimed the ceremony was removed "transitively" by a user or provider
+  delete, but the two tests it named create no ceremony at all. Both
+  replacements seed two full chains and assert the survivors by joining the
+  three tables, so removing too much and removing too little fail
+  differently.*
 
 - [`stage8-migration-0047-mfa-pending-and-ceremony-2026-10-13.md`](stage8-migration-0047-mfa-pending-and-ceremony-2026-10-13.md)
   — **returned, fix round open** (above). Migration `0047`:
@@ -245,8 +274,6 @@ taken in the gap before stage 12; the section further down carries it.
   dispatch's **"G19 is the one to watch — migrations are its subject" was
   false**. G19 is federation egress (RFC 134); no gate in the manifest checks
   a migration structurally, and the architect has recorded that.*
-
-### Landed, 2026-10-13
 
 - [`stage7-f04-first-provisioning-2026-10-13.md`](stage7-f04-first-provisioning-2026-10-13.md)
   — **landed `e9d5001`, Level B 24/24** plus A3.2 and A3.4, **CI run
