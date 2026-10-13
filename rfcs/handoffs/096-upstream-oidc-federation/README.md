@@ -205,19 +205,35 @@ was my omission** — three dispatches written without updating the index the
 implementation role reads.
 
 **Updated 2026-10-14.** **`0.80.0` is released**, **stage 8 landed
-`d7d5523`** (2026-10-13 JST, one fix round), and **stage 9 is the open
-dispatch.** Stage 6d is
+`d7d5523`** (2026-10-13 JST, one fix round), and **stage 9's fix round is the
+open dispatch** — stage 9 returned the same day it was dispatched and is in a
+fix round, not landed. Stage 6d is
 deferred to after stage 11 by the 2026-10-12 authorization. Its RFC 094 record
 question is taken in the gap before stage 12; the section further down carries
 it.
 
 ### Dispatched and open
 
+- [`stage9-fix-a-binding-the-browser-can-still-present-2026-10-14.md`](stage9-fix-a-binding-the-browser-can-still-present-2026-10-14.md)
+  — **DISPATCHED, this is the open work.** Stage 9's fix round, six changes
+  on the returned working tree. The transaction, the purge, the audit
+  replacement and the returned package's own `Database::protocol`/
+  `operational` fix (a two-write Protocol transaction committed its first
+  write when the second failed — `Ok(Err(e))` never fired `with_tx`'s `?`)
+  are all **accepted as returned**. The one defect is the binding:
+  `browser_binding_sha256` stores a digest of `sui_id_fed_browser_binding`,
+  and the same response expires that cookie — measured off the real
+  router's `Set-Cookie` headers — so no later request can present the value
+  the column commits to. The rest are a missing sentence on how each binding
+  reaches its consumer, two missing assertions (the three columns the insert
+  leaves to `DEFAULT`, and the 24-hour purge boundary the sibling table
+  already pins), the absent per-hunk hash table, and two prose sites this
+  change falsifies, which are the architect's own omission.
 - [`stage9-f02-first-mfa-continuation-and-the-purge-2026-10-14.md`](stage9-f02-first-mfa-continuation-and-the-purge-2026-10-14.md)
-  — **DISPATCHED, this is the open work.** F02, the first writer of stage 8's
-  two tables: one `db.protocol` transaction holding the guarded attempt
-  completion (`exchanging -> completed`) and exactly one
-  `federation_mfa_pending` row. Three things beyond the transaction. **The
+  — **returned 2026-10-14, superseded by the fix round above.** F02, the
+  first writer of stage 8's two tables: one `db.protocol` transaction
+  holding the guarded attempt completion (`exchanging -> completed`) and
+  exactly one `federation_mfa_pending` row. Three things beyond the transaction. **The
   purge** `:734` requires is this stage's, with the first writer, and the
   dispatch asks where it is *called from* — a purge nobody calls is the growth
   leak with extra steps. **The rechecks RFC 094 `:625-627` requires** are not
