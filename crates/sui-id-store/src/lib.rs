@@ -65,6 +65,8 @@ mod tests_rfc021;
 #[cfg(test)]
 mod tests_rfc096_b1_stage1;
 #[cfg(test)]
+mod tests_rfc096_b1_stage8;
+#[cfg(test)]
 mod tests_rfc103;
 #[cfg(test)]
 mod tests_rfc105;

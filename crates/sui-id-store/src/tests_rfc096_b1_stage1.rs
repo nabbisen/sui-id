@@ -290,7 +290,8 @@ fn schema_dump_for_evidence() {
     eprintln!("--- idx_federation_login_attempt_expires_at, as applied ---\n{index_sql}");
 }
 
-#[test]
-fn max_schema_version_is_46() {
-    assert_eq!(migrations::MAX_SCHEMA_VERSION, 46);
-}
+// A `max_schema_version_is_46` canary lived here through stage 7; removed
+// rather than bumped, because asserting a fixed value under that name
+// would be a stale fact as soon as a later migration landed (which stage
+// 8's migration 0047 now has) -- `tests_rfc096_b1_stage8::
+// max_schema_version_is_47` is this same sanity check, current.
