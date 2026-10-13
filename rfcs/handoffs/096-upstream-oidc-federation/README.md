@@ -211,21 +211,38 @@ authorization. Its RFC 094 record question is taken in the gap before stage
 
 ### Dispatched and open
 
+- [`stage8-migration-0047-mfa-pending-and-ceremony-2026-10-13.md`](stage8-migration-0047-mfa-pending-and-ceremony-2026-10-13.md)
+  — **DISPATCHED, this is the open work.** Migration `0047`:
+  `federation_mfa_pending` and `federation_webauthn_ceremony`, **schema
+  only**, the way stage 1 was. What the dispatch asks for beyond the DDL is a
+  **clause-by-clause table of `:728-738`** saying, for each obligation,
+  whether the schema enforces it or which stage's code must — because "the
+  code will check it" is how a constraint becomes nobody's. Four clauses need
+  judgement rather than transcription: whether a `CHECK` can express
+  `expires_at = created_at + 300`, whether a one-valued `primary_method`
+  column should exist, where the ceremony's no-later-expiry rule can live
+  given a `CHECK` cannot see another table, and `:738`'s negative requirement
+  about two *other* tables, which may not be schema-enforceable at all — the
+  architect said so and invited the finding. **The purge is recorded as stage
+  9's**, with the first writer.
+
+### Landed, 2026-10-13
+
 - [`stage7-f04-first-provisioning-2026-10-13.md`](stage7-f04-first-provisioning-2026-10-13.md)
-  — **DISPATCHED, this is the open work.** F04: first federated provisioning
-  in **one** `WriteTx<AtomicAudit>` transaction — attempt completion, the
-  passwordless non-admin user, the link, the `[Fed]` session and cap, and the
-  sole `auth.federation.provisioned` event, per `:706-711`. Today that path is
-  **three separate untransacted writes** (`handlers/federation.rs:1344-1400`),
-  so a crash between any two leaves a user with no link or a link with no
-  audit row. Federation's first use of the Class-A runner; the stage is judged
-  on rollback and exactly-once evidence. The event exists nowhere yet —
-  descriptor, matrix row and reader reference are all created here, and G13,
-  G15 and G17 are all owed. Carries three items assigned to "whichever stage
-  carries F04": `L04`'s upstream-`sub` attribute, the duplicate
-  `federation_link::find_by_sub`, and the operator guide's
-  `provision_on_first_login` sentence, which becomes true when the
-  absent-email denial lands.
+  — **landed `e9d5001`, Level B 24/24** plus A3.2 and A3.4, **CI run
+  `38378360118`, 27 jobs, 0 skipped.** Federation's first Class-A
+  transaction: attempt completion, the passwordless non-admin user, exactly
+  one provider/sub link, the `[Fed]` session, the cap and the sole
+  `auth.federation.provisioned` event, all on `tx.tx()`. It replaced **three
+  separate untransacted writes**. The three rechecks are the writes' own
+  `UNIQUE` constraints rather than a second `SELECT` that could lose the same
+  race, and the rollback test carries a control. The LDAP shadow upsert was
+  deliberately not reused — its key is a different row shape and on conflict
+  it *updates*, so a concurrent provisioning would have been absorbed rather
+  than refused. An absent email claim now denies (`:710-711`), which makes
+  the operator guide's sentence true for the first time and is a behaviour
+  change owed a release note. `L04`'s upstream-`sub` attribute is gone,
+  closing an item carried since stage 6b.
 
 ### Released
 
