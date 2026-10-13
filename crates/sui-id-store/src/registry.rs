@@ -252,6 +252,10 @@ pub enum AuditEventKind {
     /// mapping, disabled-provider, disabled-user or commit failure that
     /// isn't one of the three more specific events above.
     AuthFederationSigninDenied,
+    /// `auth.federation.provisioned` — RFC 096-B1 stage 7, F04: a brand new
+    /// local user, created and linked on an upstream identity's first
+    /// successful sign-in under `provision_on_first_login`.
+    AuthFederationProvisioned,
 }
 
 /// The registry entry for one [`AuditEventKind`]. `descriptor()` on a

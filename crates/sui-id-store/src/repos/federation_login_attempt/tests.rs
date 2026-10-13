@@ -749,6 +749,98 @@ async fn terminalizing_a_nonexistent_attempt_is_a_conflict() {
     assert!(matches!(result, Err(StoreError::Conflict)));
 }
 
+// ── Stage 7: F04's completion ───────────────────────────────────────────────
+
+async fn complete(db: &Database, id: FederationLoginAttemptId) -> StoreResult<()> {
+    db.with_conn(move |conn| complete_within_tx(conn, id)).await
+}
+
+#[tokio::test]
+async fn an_exchanging_attempt_can_be_completed() {
+    let db = open_test_db();
+    let provider_id = seed_provider(&db).await;
+    let now = fixed_now();
+    let attempt = insert_attempt(&db, provider_id, now).await;
+    claim_matching(&db, &attempt, now + Duration::seconds(1))
+        .await
+        .unwrap();
+
+    complete(&db, attempt.id).await.unwrap();
+
+    let (status, claimed_at, ..) = stored_row(&db, attempt.id).await;
+    assert_eq!(status, "completed");
+    // The table's own CHECK (migration 0046) requires claimed_at IS NOT
+    // NULL for any non-pending row -- already true from `claim`, and
+    // `complete_within_tx` does not touch the column, so this is simply
+    // confirming it did not clear it.
+    assert!(!claimed_at.is_empty());
+}
+
+/// Dispatch item 6: the direct `pending -> completed` jump this table's
+/// forward-only sequence (migration 0046's own comment) does not permit.
+#[tokio::test]
+async fn a_pending_attempt_cannot_be_completed_directly() {
+    let db = open_test_db();
+    let provider_id = seed_provider(&db).await;
+    let now = fixed_now();
+    let attempt = insert_attempt(&db, provider_id, now).await;
+
+    let result = complete(&db, attempt.id).await;
+    assert!(matches!(result, Err(StoreError::Conflict)));
+
+    let (status, ..) = stored_row(&db, attempt.id).await;
+    assert_eq!(
+        status, "pending",
+        "a refused complete must not have changed it"
+    );
+}
+
+#[tokio::test]
+async fn a_completed_attempt_cannot_be_completed_twice() {
+    let db = open_test_db();
+    let provider_id = seed_provider(&db).await;
+    let now = fixed_now();
+    let attempt = insert_attempt(&db, provider_id, now).await;
+    claim_matching(&db, &attempt, now + Duration::seconds(1))
+        .await
+        .unwrap();
+    complete(&db, attempt.id).await.unwrap();
+
+    let result = complete(&db, attempt.id).await;
+    assert!(matches!(result, Err(StoreError::Conflict)));
+}
+
+/// The mirror image of `a_completed_attempt_cannot_be_moved_to_failed`
+/// above: F05 winning the race means F04 must not then be able to
+/// complete the same attempt.
+#[tokio::test]
+async fn a_failed_attempt_cannot_be_completed() {
+    let db = open_test_db();
+    let provider_id = seed_provider(&db).await;
+    let now = fixed_now();
+    let attempt = insert_attempt(&db, provider_id, now).await;
+    claim_matching(&db, &attempt, now + Duration::seconds(1))
+        .await
+        .unwrap();
+    terminalize_failed(&db, attempt.id, now).await.unwrap();
+
+    let result = complete(&db, attempt.id).await;
+    assert!(matches!(result, Err(StoreError::Conflict)));
+
+    let (status, ..) = stored_row(&db, attempt.id).await;
+    assert_eq!(
+        status, "failed",
+        "a refused complete must not have changed it"
+    );
+}
+
+#[tokio::test]
+async fn completing_a_nonexistent_attempt_is_a_conflict() {
+    let db = open_test_db();
+    let result = complete(&db, FederationLoginAttemptId::new()).await;
+    assert!(matches!(result, Err(StoreError::Conflict)));
+}
+
 // ── Stage 4: lookup by state_sha256 ────────────────────────────────────────
 
 #[tokio::test]

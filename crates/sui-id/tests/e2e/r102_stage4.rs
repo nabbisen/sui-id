@@ -495,7 +495,7 @@ async fn r102_l04_federated_sign_in_commits_session_event_and_last_login() {
             &state,
             format!(
                 "SELECT COUNT(*) FROM audit_log WHERE action = 'auth.federation.signin.success' \
-                 AND actor = '{user}' AND target = '{user}' AND note = 'provider=up sub=fed-sub-1 evicted=0'"
+                 AND actor = '{user}' AND target = '{user}' AND note = 'provider=up evicted=0'"
             )
         )
         .await,
@@ -581,7 +581,7 @@ async fn r102_l04_federated_sign_in_evicts_over_the_cap() {
         scalar(
             &state,
             "SELECT COUNT(*) FROM audit_log WHERE action = 'auth.federation.signin.success' \
-             AND note = 'provider=up sub=fed-sub-1 evicted=1'"
+             AND note = 'provider=up evicted=1'"
                 .into()
         )
         .await,
@@ -614,7 +614,6 @@ async fn r102_l04_rereads_the_user_and_rolls_back_when_inactive() {
         let result = sui_id_store::commands::sign_in_federated(
             &state.db,
             "up".into(),
-            "fed-sub-1".into(),
             sui_id_store::models::SessionRow {
                 id: SessionId::new(),
                 user_id: user,

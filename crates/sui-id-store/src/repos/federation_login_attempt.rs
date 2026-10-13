@@ -459,6 +459,36 @@ pub async fn terminalize_failed(
     Ok(())
 }
 
+/// RFC 096-B1 stage 7, F04: guarded `exchanging -> completed`, on the
+/// caller's own transaction. Unlike [`terminalize_failed`], this is never
+/// reached from `pending` directly — [`claim`] is the only path into
+/// `exchanging`, and `claimed_at` is already set by the time this runs, so
+/// there is no `now`/`COALESCE` here: the column is left exactly as
+/// `claim` set it, and the table's own `CHECK` (claimed_at agrees with
+/// status) is already satisfied before this `UPDATE` runs.
+///
+/// `affected == 0` means the row is not currently `exchanging` — already
+/// `completed` (a second commit attempt for the same attempt), already
+/// `failed` (F05 raced ahead of this transaction), or no such row at all.
+/// Every one of those is the same fact to this call: this attempt cannot be
+/// moved to `completed` by it, right now. Reported uniformly as
+/// [`StoreError::Conflict`], the same shape `terminalize_failed` already
+/// uses for its own "cannot be moved" cases.
+pub fn complete_within_tx(
+    conn: &rusqlite::Connection,
+    id: FederationLoginAttemptId,
+) -> StoreResult<()> {
+    let affected = conn.execute(
+        "UPDATE federation_login_attempt SET status = 'completed' \
+         WHERE id = ?1 AND status = 'exchanging'",
+        params![id.to_string()],
+    )?;
+    if affected == 0 {
+        return Err(StoreError::Conflict);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests;

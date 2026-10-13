@@ -120,6 +120,44 @@ pub async fn upsert(db: &Database, row: FederationLinkRow) -> StoreResult<()> {
     .await
 }
 
+/// Create exactly one federation link, on the caller's own transaction
+/// (RFC 096-B1 stage 7, F04). **Insert, never upsert** — unlike
+/// [`upsert`], a conflict is refused rather than silently absorbed,
+/// because the manifest's own recheck exists to catch exactly the race an
+/// upsert would hide: a concurrent callback for the same upstream identity
+/// already creating the first link. Either `UNIQUE` constraint on this
+/// table can fire here — `(user_id, provider_id)` (this `user_id` already
+/// linked to this provider, which should not happen for a freshly
+/// generated id, but is reported the same way regardless) or
+/// `(provider_id, upstream_sub)` (another user already linked to this
+/// exact upstream identity, the race F04's recheck is for) — both map to
+/// [`StoreError::Conflict`], since the caller's response to either is the
+/// same: the write it had planned is no longer safe to make.
+pub fn insert_within_tx(conn: &rusqlite::Connection, row: &FederationLinkRow) -> StoreResult<()> {
+    conn.execute(
+        "INSERT INTO federation_link \
+         (user_id, provider_id, upstream_sub, upstream_email, linked_at, last_seen_at) \
+         VALUES (?1,?2,?3,?4,?5,?6)",
+        params![
+            row.user_id.to_string(),
+            row.provider_id.to_string(),
+            row.upstream_sub,
+            row.upstream_email,
+            row.linked_at,
+            row.last_seen_at,
+        ],
+    )
+    .map_err(|e| match e {
+        rusqlite::Error::SqliteFailure(err, _)
+            if err.code == rusqlite::ErrorCode::ConstraintViolation =>
+        {
+            StoreError::Conflict
+        }
+        other => StoreError::from(other),
+    })?;
+    Ok(())
+}
+
 /// Remove a single link (user revokes one provider connection).
 pub async fn delete(
     db: &Database,

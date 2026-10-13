@@ -183,12 +183,19 @@ then because `setup.` was not in the hand-written list.
 
 | Event name | Operation | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
-| `auth.federation.signin.success` | Federated sign-in completed for a user with no second factor (command `L04`, with the in-transaction re-read, `last_login_at`, the session and cap eviction) | user id | user id | `provider=… sub=… evicted=…` (`sub` truncated to 255 bytes) | **A** |
+| `auth.federation.signin.success` | Federated sign-in completed for a user with no second factor (command `L04`, with the in-transaction re-read, `last_login_at`, the session and cap eviction) | user id | user id | `provider=… evicted=…` | **A** |
+| `auth.federation.provisioned` | RFC 096-B1 stage 7, F04: a new local user created and linked on an upstream identity's first successful sign-in under `provision_on_first_login` — attempt completion, the passwordless user, the link, the `[Fed]` session and cap eviction, all in one transaction | user id (the new user) | user id (the new user) | `provider_id=… mode=…` (`mode` is always `provision_on_first_login`, the only mode F04 runs under) | **A** |
 | `auth.federation.signin.upstream_failure` | Upstream IdP returned an error, or (RFC 096-B1 stage 6c, F05) a post-claim transport/token failure — two call sites, two note shapes: `federated_start`'s own pre-attempt failure still uses the original best-effort `audit::append`; everything after an attempt is claimed goes through F05's `emit_must_attempt` instead | — | — | `provider=… error=…` (pre-attempt) or `provider_id=… reason=…` (post-claim, F05; `reason`'s bounded set is `federation_attempt_terminalize::UpstreamFailureDetail`) | B |
-| `auth.federation.link.created` | Federation link created (first sign-in or explicit link) | user id | user id | `provider=… sub=…` | B |
 | `auth.federation.takeover_blocked` | Email collision rejected as potential takeover (RFC 096-B1 stage 6b: emitted via `emit_must_attempt`, RFC 094 `:292-298`, so a failed append is now logged rather than dropped — **Class B by design**, carved out of the 2026-09-24 ruling's twelve on 2026-10-12 (see the note above); RFC 096-B1 stage 6c: F05 subsumes this emission, replacing the 6b call site rather than sitting beside it) | — | — | `provider_id=… reason=…` (`reason` is always `email_collision` — the only value `TerminalFailureReason::TakeoverBlocked` can carry) | B |
 | `auth.federation.link_required` | RFC 096-B1 stage 6c, F05: the generic `link_only` denial (RFC 096 `:699-701`) for any unlinked upstream identity, collision or not | — | — | `provider_id=… reason=…` (`reason` is always `unlinked_identity` — the only value `TerminalFailureReason::LinkRequired` can carry) | B |
 | `auth.federation.signin.denied` | RFC 096-B1 stage 6c, F05: every other post-claim denial — validation, mapping, disabled provider/user, or sign-in commit failure | user id; none before a local account is resolved | user id; none before a local account is resolved | `provider_id=… reason=…` (`reason`'s bounded set is `federation_attempt_terminalize::DeniedDetail`) | B |
+
+*Retired 2026-10-13 (RFC 096-B1 stage 7): the federation-link-created event is
+no longer written. Its one call site was the legacy two-write provisioning
+path's own best-effort append, replaced by F04's single transaction and its
+`auth.federation.provisioned` event, above — the "known user" branch's link
+upsert (returning users, unchanged by this stage) never wrote this event
+either.*
 
 ### Dynamic client registration (`client.dynamic_register`, RFC 008)
 

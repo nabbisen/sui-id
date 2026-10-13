@@ -146,9 +146,9 @@ like a field. In such a row the real field is the *last* occurrence of its key.
 
 | Event name | Label | Description |
 |---|---|---|
-| `auth.federation.signin.success` | Federated sign-in | User authenticated via an upstream OIDC provider and a local session was issued. Note fields: `provider` (the provider slug), `sub` (the upstream subject, truncated to 255 bytes), `evicted`. |
+| `auth.federation.signin.success` | Federated sign-in | User authenticated via an upstream OIDC provider and a local session was issued. Note fields: `provider` (the provider slug), `evicted`. |
+| `auth.federation.provisioned` | Federated user provisioned | A new local user was created and linked on an upstream identity's first successful sign-in under `provision_on_first_login` — the user, the link, the `[Fed]` session and cap eviction all committed in one transaction. Note fields: `provider_id`, `mode` (always `provision_on_first_login`). |
 | `auth.federation.signin.upstream_failure` | Federation upstream error | The upstream identity provider returned an error during code exchange or discovery. |
-| `auth.federation.link.created` | Federation link created | A new link between a local user account and an upstream identity was established (on first sign-in with `provision_on_first_login`, or via the explicit link flow). |
 | `auth.federation.takeover_blocked` | Account takeover blocked | A federated sign-in was rejected because the upstream email matched an existing local user who is not linked to this provider (P2 — potential account takeover attempt). |
 | `auth.federation.link_required` | Local account link required | An upstream identity with no existing link was refused under a provider configured for link-only sign-in; the user must link their account first. Recorded whether or not the identity's email would also have collided with a local account — the result is deliberately generic either way. |
 | `auth.federation.signin.denied` | Federated sign-in denied | A federated sign-in was refused after the attempt was claimed, for a reason other than the three above: a token or signature check, a claims or mapping check, a disabled provider or account, or a failure committing the session. |

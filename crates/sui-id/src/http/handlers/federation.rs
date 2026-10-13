@@ -33,7 +33,8 @@ use crate::id_token::{IdTokenClaims, decode_id_token_claims};
 use sui_id_core::errors::CoreError;
 use sui_id_shared::ids::{FederationLoginAttemptId, FederationProviderId, SessionId, UserId};
 use sui_id_store::models::{
-    AuditLogRow, FederationLinkRow, FederationProviderRow, ProvisionMode, SessionRow,
+    AuditLogRow, FederationLinkRow, FederationProviderRow, ProvisionMode, Role, SessionRow,
+    UserRow, UserSource,
 };
 
 // ── RFC 096-B1 stage 4: 096-A's validators, their first production callers ──
@@ -1223,14 +1224,22 @@ pub async fn federated_callback(
         None => {
             match provider.provision_mode {
                 ProvisionMode::ProvisionOnFirstLogin => {
-                    // P3: provision on first login requires either:
-                    //   - email present AND email_verified = true, OR
-                    //   - email entirely absent (no email claim → no email
-                    //     verification requirement, no takeover risk via
-                    //     email, provisioning is permitted).
-                    // Block only when email is present but unverified.
+                    // P3: RFC 096 `:710-711`, "an absent or unverified email
+                    // denies" -- both conditions, not only the unverified
+                    // one. Before RFC 096-B1 stage 7 this checked
+                    // `email.is_some() && !email_verified`, which let an
+                    // absent email fall through to provisioning: that was
+                    // legacy behaviour stage 6c's own fix round deliberately
+                    // left alone ("that resolution is not yet authoritative
+                    // ... a check-order fix is not where to change it"),
+                    // and stage 7 -- F04's own stage -- is where it changes.
+                    // `docs/src/guides/operators.md`'s "requires
+                    // `email_verified = true` ... otherwise the sign-in is
+                    // rejected" becomes true for the first time with this
+                    // change; confirmed, not merely asserted, in this
+                    // stage's own review package.
                     //
-                    // RFC 096-B1 stage 6e fix round (R1): this check now
+                    // RFC 096-B1 stage 6e fix round (R1): this check still
                     // runs BEFORE P2's collision check below, not after.
                     // RFC 096 `:706-712` requires `email_verified = true`
                     // before an email is even eligible for the collision
@@ -1246,22 +1255,13 @@ pub async fn federated_callback(
                     // `unverified_email` differ by exactly that, which is
                     // the same local-account-enumeration oracle stage 5
                     // closed, reached by a different route. Running this
-                    // check first means no unverified email ever reaches
-                    // the collision comparison: every unverified email
+                    // check first means no unverified or absent email ever
+                    // reaches the collision comparison: every one of them
                     // gets `unverified_email`, full stop, carrying no
                     // information about whether any local account matches
                     // it.
-                    //
-                    // The absent-email case is unchanged by this reorder:
-                    // an absent email still falls through this check (no
-                    // verification requirement applies to an absent claim)
-                    // to provisioning below, exactly as it did before this
-                    // fix round. That is legacy behaviour RFC 096
-                    // `:710-711`'s `DeniedUnverified` would deny, but that
-                    // resolution is not yet authoritative (stage 12) and a
-                    // check-order fix is not where to change it.
-                    if id_claims.email.is_some() && !id_claims.email_verified {
-                        tracing::info!(slug = %provider.slug, "provision held: unverified email");
+                    if id_claims.email.is_none() || !id_claims.email_verified {
+                        tracing::info!(slug = %provider.slug, "provision held: absent or unverified email");
                         terminalize_and_audit(
                             &app.db,
                             claimed.id,
@@ -1289,11 +1289,12 @@ pub async fn federated_callback(
                     // the `LinkOnly` arm can see directly that nothing
                     // about local accounts is consulted there at all.
                     //
-                    // Reached only with a verified email (P3 above denied
-                    // every unverified one) or an absent one (P3 does not
-                    // apply, and `find_by_email_normalized` is never
-                    // called when `id_claims.email` is `None`): by the
-                    // time this runs, the only email this comparison can
+                    // Reached only with a present, verified email: P3 above
+                    // now denies both the absent and the unverified case
+                    // (RFC 096-B1 stage 7), so `id_claims.email` is always
+                    // `Some` here and `find_by_email_normalized` is never
+                    // called on an email the upstream has not vouched for.
+                    // By the time this runs, the only email this comparison can
                     // see is one the upstream has already vouched for.
                     if let Some(ref email) = id_claims.email
                         && let Ok(Some(_collision)) =
@@ -1345,85 +1346,116 @@ pub async fn federated_callback(
                     let proposed = derive_username(&id_claims);
                     let username = resolve_shadow_username(&app.db, &proposed).await;
 
-                    let shadow = sui_id_store::repos::users::LdapShadowData {
+                    // RFC 096-B1 stage 7, F04: attempt completion,
+                    // passwordless non-admin user, link, `[Fed]` session/
+                    // cap, and the `auth.federation.provisioned` commit,
+                    // all in one Class-A transaction (RFC 096 `:706-711`).
+                    // The id is generated here, before the transaction,
+                    // and used identically on the user, link and session
+                    // rows -- the three rows the transaction creates must
+                    // already agree on who they are about.
+                    let uid = UserId::new();
+                    let user = UserRow {
+                        id: uid,
                         username,
                         display_name: id_claims.name.clone(),
+                        is_admin: false,
+                        role: Role::User,
+                        is_disabled: false,
+                        is_deleted: false,
+                        user_uuid: uuid::Uuid::new_v4(),
+                        created_at: now,
+                        updated_at: now,
+                        failed_login_count: 0,
+                        locked_until: None,
                         email: id_claims.email.clone(),
-                        external_stable_id: format!("{}:{}", provider.id, id_claims.sub),
+                        preferred_lang: None,
+                        email_normalized: None,
+                        email_verified_at: None,
+                        last_login_at: None,
+                        // This stage's own decision (review package §2):
+                        // `source` stays the plain default, not
+                        // `UserSource::Ldap` the legacy writer used.
+                        // `sui_id_core::authn::step_up::first_factor_
+                        // proof` -- the one place a federated user's
+                        // `source` could matter -- already checks
+                        // `federation_link` existence first (this row's
+                        // own link, created below, in the same
+                        // transaction), so nothing reads `source` to
+                        // decide federation status. `forgot_password`'s
+                        // `source == Local` filter and
+                        // `try_login_with_cascade`'s `source == Ldap`
+                        // directory-bind routing both stay correct for a
+                        // `Local`-tagged federated user too: it has no
+                        // `credentials` row, so RFC 115 D8's existing
+                        // passwordless-local-account refusal already
+                        // handles it safely either way.
+                        source: UserSource::Local,
+                        external_stable_id: None,
                     };
-                    let uid =
-                        match sui_id_store::repos::users::upsert_ldap_shadow(&app.db, shadow, now)
-                            .await
-                        {
-                            Ok(uid) => uid,
-                            Err(e) => {
-                                terminalize_and_audit(
-                                    &app.db,
-                                    claimed.id,
-                                    TerminalFailureReason::Denied(
-                                        DeniedDetail::ProvisionShadowUserDbError,
-                                    ),
-                                    now,
-                                    provider.id,
-                                    None,
-                                )
-                                .await;
-                                return Err(HttpError::html(CoreError::from(e)));
-                            }
-                        };
-
-                    // Insert federation link.
-                    if let Err(e) = sui_id_store::repos::federation_link::upsert(
+                    let link = FederationLinkRow {
+                        user_id: uid,
+                        provider_id: provider.id,
+                        upstream_sub: id_claims.sub.clone(),
+                        upstream_email: id_claims.email.clone(),
+                        linked_at: now,
+                        last_seen_at: now,
+                    };
+                    let session_row = SessionRow {
+                        id: SessionId::new(),
+                        user_id: uid,
+                        expires_at: now + chrono::Duration::hours(24),
+                        created_at: now,
+                        revoked_at: None,
+                        auth_methods: vec![sui_id_shared::AuthMethod::Fed],
+                        last_step_up_at: None,
+                        last_used_at: None,
+                    };
+                    let session_id = session_row.id;
+                    return match sui_id_store::commands::provision_federated_user(
                         &app.db,
-                        FederationLinkRow {
-                            user_id: uid,
-                            provider_id: provider.id,
-                            upstream_sub: id_claims.sub.clone(),
-                            upstream_email: id_claims.email.clone(),
-                            linked_at: now,
-                            last_seen_at: now,
-                        },
+                        claimed.id,
+                        provider.id,
+                        user,
+                        link,
+                        session_row,
                     )
                     .await
                     {
-                        terminalize_and_audit(
-                            &app.db,
-                            claimed.id,
-                            TerminalFailureReason::Denied(DeniedDetail::ProvisionLinkDbError),
-                            now,
-                            provider.id,
-                            Some(uid),
-                        )
-                        .await;
-                        return Err(HttpError::html(CoreError::from(e)));
-                    }
-
-                    // RFC 096 `:714-715` (review R2): no raw `sub` in the
-                    // audit note -- internal `provider_id` and a bounded
-                    // reason token only. Nothing is lost: the user id
-                    // already travels in `actor`/`target`, and the
-                    // upstream `sub` is durably held on the
-                    // `federation_link` row just inserted above, so the
-                    // audit trail stays reconstructible from internal IDs
-                    // alone.
-                    let _ = sui_id_store::repos::audit::append(
-                        &app.db,
-                        &AuditLogRow {
-                            at: now,
-                            actor: Some(uid),
-                            action: sui_id_store::repos::federation_provider::AUDIT_LINK_CREATED
-                                .into(),
-                            target: Some(uid.to_string()),
-                            result: "ok".into(),
-                            note: Some(format!(
-                                "provider_id={} reason=first_login_provisioned",
-                                provider.id
-                            )),
-                        },
-                    )
-                    .await;
-
-                    uid
+                        Ok(_audited) => {
+                            if let Some(m) = app.metric() {
+                                m.signin(sui_id_store::metrics::signin_result::SUCCESS);
+                            }
+                            let cookie = session_cookie(
+                                session_id.to_string(),
+                                app.config.server.cookie_secure,
+                            );
+                            let jar = jar.add(cookie);
+                            Ok(terminal(jar, Redirect::to("/admin")))
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                provider_id = %provider.id,
+                                error = %e,
+                                "federation: first-login provisioning failed"
+                            );
+                            terminalize_and_audit(
+                                &app.db,
+                                claimed.id,
+                                TerminalFailureReason::Denied(
+                                    DeniedDetail::ProvisionTransactionFailed,
+                                ),
+                                now,
+                                provider.id,
+                                None,
+                            )
+                            .await;
+                            Ok(terminal(
+                                jar,
+                                Redirect::to("/admin/login?fed_error=attempt_claim_failed"),
+                            ))
+                        }
+                    };
                 }
 
                 ProvisionMode::LinkOnly => {
@@ -1478,7 +1510,6 @@ pub async fn federated_callback(
         claimed.id,
         provider.id,
         &provider.slug,
-        &id_claims.sub,
         now,
     )
     .await
@@ -1502,7 +1533,6 @@ async fn complete_federated_signin(
     attempt_id: FederationLoginAttemptId,
     provider_id: FederationProviderId,
     provider_slug: &str,
-    upstream_sub: &str,
     now: chrono::DateTime<chrono::Utc>,
 ) -> Result<Terminal, HttpError> {
     // Refuse an inactive user before any pending-MFA or session row. The
@@ -1632,7 +1662,6 @@ async fn complete_federated_signin(
     if let Err(e) = sui_id_store::commands::sign_in_federated(
         &app.db,
         provider_slug.to_owned(),
-        upstream_sub.to_owned(),
         session_row.clone(),
     )
     .await

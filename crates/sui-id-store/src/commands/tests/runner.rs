@@ -161,6 +161,7 @@ mod chain_integrity;
 mod client_persistence;
 mod credential_lockout;
 mod dynamic_registration;
+mod federation;
 mod key_rotation;
 mod lockout;
 mod login;

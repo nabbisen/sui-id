@@ -826,13 +826,20 @@ test_id = "`p_f03_promoted`, `p_f03_rejected`, `p_f03_exhausted`, `p_f03_invalid
 [[command]]
 id = "F04"
 class = "A"
-status = "target-legacy"  # implemented | target-absent | target-legacy
-sealed = false
+status = "implemented"  # implemented | target-absent | target-legacy
+sealed = true
 owner = "First federated provisioning and direct login / RFC 096 federation login"
 rationale = "`auth.federation.provisioned`; new-user sealed-federated actor/target, internal provider/link IDs, fixed mode"
 mutation_surface = "require enabled exact-version/generation provider; guard attempt `exchanging -> completed`; recheck absent link + verified unique email + username uniqueness; create passwordless non-admin user; create exactly one provider/sub link; insert `[Fed]` session; enforce cap; append sole intent event"
-files = ["crates/sui-id/src/http/handlers/federation.rs"]  # `federated_callback` currently does first-provision inline, insecurely (the shipped trust-on-TLS defect RFC 096 exists to close); not the F04 this row describes. Depends on RFC 096-B1. Target-state row.
-test_id = "`a_f04_provision`"
+files = [
+  "crates/sui-id-store/src/commands.rs",
+  "crates/sui-id-store/src/repos/federation_login_attempt.rs",
+  "crates/sui-id-store/src/repos/federation_link.rs",
+  "crates/sui-id/src/http/handlers/federation.rs",
+]  # RFC 096-B1 stage 7: implemented. `provision_federated_user` is the command (commands.rs); `federation_login_attempt::complete_within_tx` and `federation_link::insert_within_tx` are its two new in-transaction primitives; `federated_callback`'s `ProvisionOnFirstLogin` arm is the one caller. "Enabled + exact-version/generation provider" is satisfied by the callback's own fresh reads shortly before (`provider.enabled` at :583, `claim()`'s own match set) -- the same shape `claim()` itself already relies on, not a second in-transaction read.
+test_id = "`commands::tests::f04_provisioned_records_only_provider_id_and_mode`; `commands::tests::runner::federation::f04_provisions_a_new_user_link_session_and_completes_the_attempt`, `::f04_injected_failure_before_append_rolls_back_everything`, `::f04_refuses_when_a_link_for_the_same_upstream_identity_already_exists`, `::f04_refuses_when_the_email_has_already_been_taken`, `::f04_refuses_when_the_username_has_already_been_taken`, `::f04_refuses_when_the_attempt_is_no_longer_exchanging`; `tests/e2e/r096_b1_stage7.rs` end to end"
+event = ["auth.federation.provisioned"]
+descriptor = ["F04_PROVISIONED"]
 
 [[command]]
 id = "F05"

@@ -380,8 +380,11 @@ pub enum FirstFactorProof {
 }
 
 /// Decide which [`FirstFactorProof`] applies to `user_id`. A user with a
-/// federation link is federated, whatever `source` says: federation
-/// provisioning stores its users with `source = ldap`.
+/// federation link is federated, **whatever `source` says** — which is why
+/// this reads the link first. RFC 096-B1 stage 7's F04 stores a provisioned
+/// federated user with `source = local` (the legacy path it replaced used
+/// `ldap`, borrowing the directory-shadow writer), so `source` has named two
+/// different things for the same kind of user and is not the thing to key on.
 pub async fn first_factor_proof(db: &Database, user_id: UserId) -> CoreResult<FirstFactorProof> {
     use sui_id_store::models::UserSource;
     use sui_id_store::repos::{federation_link, users};

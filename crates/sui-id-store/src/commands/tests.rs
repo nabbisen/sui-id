@@ -56,6 +56,7 @@ fn all_descriptors() -> Vec<&'static EventDescriptor> {
         &L07_FAILURE,
         &L07_LOCKOUT,
         &C15_DYNAMIC_REGISTER,
+        &F04_PROVISIONED,
     ]
 }
 
@@ -156,6 +157,7 @@ fn actor_requirement_agrees_with_system_principal_for_every_command() {
     check("L03", false, &[&L01_SUCCESS]);
     check("L04", false, &[&L04_SUCCESS]);
     check("L07", false, &[&L07_FAILURE, &L07_LOCKOUT]);
+    check("F04", false, &[&F04_PROVISIONED]);
 }
 
 // `every_descriptor_is_atomic_class` lived here through RFC 096-B1 stage
@@ -294,6 +296,7 @@ fn event_names_match_command_inventory() {
         "auth.mfa.failure",
         "auth.mfa.lockout",
         "client.dynamic_register",
+        "auth.federation.provisioned",
     ];
     let mut actual: Vec<&str> = all_descriptors().iter().map(|d| d.name).collect();
     actual.sort_unstable();
@@ -358,12 +361,18 @@ fn l03_stable_id_is_truncated_to_255_bytes() {
     assert_eq!(stable_id, long[..EXTERNAL_ID_ATTRIBUTE_BYTES]);
 }
 
+/// RFC 096 `:714-715` (stage 7's own carried-in item): L04 no longer
+/// carries the upstream `sub` as an attribute at all -- it already lives
+/// durably on the `federation_link` row, so the audit trail stays
+/// reconstructible from internal ids without it. Unlike
+/// [`l03_stable_id_is_truncated_to_255_bytes`], there is no corresponding
+/// "L04's sub is truncated" test any more: that behaviour no longer
+/// exists, not merely untested.
 #[test]
-fn l04_success_records_provider_and_sub() {
+fn l04_success_records_provider() {
     let event = L04Event::Success {
         user_id: UserId::new(),
         provider: "up".into(),
-        sub: "248289761001".into(),
         evicted: 1,
     };
     assert_eq!(
@@ -374,30 +383,30 @@ fn l04_success_records_provider_and_sub() {
         attribute_map(&event.attributes().expect("attributes")),
         vec![
             ("provider".to_owned(), "up".to_owned()),
-            ("sub".to_owned(), "248289761001".to_owned()),
             ("evicted".to_owned(), "1".to_owned()),
         ]
     );
 }
 
+/// RFC 096 `:714-715`: F04's attributes carry only internal ids and the
+/// fixed mode literal -- never the upstream `sub` the handler resolved
+/// this user by. Mutation evidence (stage 7's own package): adding `sub`
+/// as a third attribute here is exactly what this test exists to catch.
 #[test]
-fn l04_sub_is_truncated_to_255_bytes_on_a_char_boundary() {
-    // 254 ASCII bytes, then a 3-byte character straddling the bound.
-    let sub = format!("{}€tail", "s".repeat(254));
-    let event = L04Event::Success {
+fn f04_provisioned_records_only_provider_id_and_mode() {
+    let provider_id = FederationProviderId::new();
+    let event = F04Event::Provisioned {
         user_id: UserId::new(),
-        provider: "up".into(),
-        sub,
-        evicted: 0,
+        provider_id,
     };
-    let attributes = event.attributes().expect("attributes");
-    let recorded = attributes
-        .iter()
-        .find(|(k, _)| *k == "sub")
-        .map(|(_, v)| v.to_owned())
-        .expect("sub");
-    assert_eq!(recorded, "s".repeat(254), "cut before the split character");
-    assert!(recorded.len() <= EXTERNAL_ID_ATTRIBUTE_BYTES);
+    assert_eq!(F04::descriptor(&event).name, "auth.federation.provisioned");
+    assert_eq!(
+        attribute_map(&event.attributes().expect("attributes")),
+        vec![
+            ("provider_id".to_owned(), provider_id.to_string()),
+            ("mode".to_owned(), "provision_on_first_login".to_owned()),
+        ]
+    );
 }
 
 #[test]

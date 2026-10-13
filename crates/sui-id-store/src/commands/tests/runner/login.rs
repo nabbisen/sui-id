@@ -233,13 +233,7 @@ async fn l04_injected_failure_before_append_rolls_back_everything() {
     let before_audit = latest_audit_action(&db).await;
 
     db.fault_injector().fail_before_next_append();
-    let result = sign_in_federated(
-        &db,
-        "upstream-provider".into(),
-        "upstream-sub".into(),
-        session,
-    )
-    .await;
+    let result = sign_in_federated(&db, "upstream-provider".into(), session).await;
     assert!(result.is_err(), "injected failure must surface as Err");
 
     let row = repos::users::get(&db, user.id).await.expect("get");
@@ -259,14 +253,9 @@ async fn l04_injected_failure_before_append_rolls_back_everything() {
     let control_session = a_pending_session(user.id);
     let control_id = control_session.id;
     let before_count = audit_rows(&db).await;
-    sign_in_federated(
-        &db,
-        "upstream-provider".into(),
-        "upstream-sub".into(),
-        control_session,
-    )
-    .await
-    .expect("the control succeeds");
+    sign_in_federated(&db, "upstream-provider".into(), control_session)
+        .await
+        .expect("the control succeeds");
     let row = repos::users::get(&db, user.id).await.expect("get");
     assert!(row.last_login_at.is_some());
     assert!(repos::sessions::get(&db, control_id).await.is_ok());

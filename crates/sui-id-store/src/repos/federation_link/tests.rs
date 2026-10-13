@@ -124,3 +124,108 @@ async fn upsert_updates_email_on_second_call() {
     let found = find_by_sub(&db, pid, "sub-xyz").await.unwrap().unwrap();
     assert_eq!(found.upstream_email.as_deref(), Some("new@example.com"));
 }
+
+// ── Stage 7, F04: insert_within_tx ───────────────────────────────────────
+
+async fn seed_user(db: &Database, uid: UserId, username: &str) {
+    let now = Utc::now();
+    let username = username.to_owned();
+    db.with_conn(move |conn| {
+        conn.execute(
+            "INSERT INTO users (id, username, is_admin, role, is_disabled, is_deleted, \
+             user_uuid, failed_login_count, source, created_at, updated_at) \
+             VALUES (?1,?2,0,'user',0,0,?3,0,'local',?4,?4)",
+            params![
+                uid.to_string(),
+                username,
+                uuid::Uuid::new_v4().to_string(),
+                now
+            ],
+        )
+        .map(|_| ())
+        .map_err(crate::errors::StoreError::from)
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn insert_within_tx_creates_a_findable_link() {
+    let db = fresh_db();
+    let pid = seed_provider(&db).await;
+    let uid = new_user_id();
+    seed_user(&db, uid, "f04-user").await;
+    let now = Utc::now();
+
+    db.with_conn(move |conn| {
+        insert_within_tx(
+            conn,
+            &FederationLinkRow {
+                user_id: uid,
+                provider_id: pid,
+                upstream_sub: "sub-f04".into(),
+                upstream_email: Some("f04@example.com".into()),
+                linked_at: now,
+                last_seen_at: now,
+            },
+        )
+    })
+    .await
+    .unwrap();
+
+    let found = find_by_sub(&db, pid, "sub-f04").await.unwrap();
+    assert!(found.is_some());
+}
+
+/// Dispatch item 2 (the recheck tests), the link half: a concurrent
+/// callback for the *same upstream identity* that already created the
+/// first link, between the handler's own check and this insert, must
+/// refuse rather than silently absorb -- the exact race `insert_within_tx`
+/// exists to catch, unlike [`upsert`] above which would update it.
+#[tokio::test]
+async fn insert_within_tx_refuses_a_second_link_for_the_same_upstream_identity() {
+    let db = fresh_db();
+    let pid = seed_provider(&db).await;
+    let first_user = new_user_id();
+    let second_user = new_user_id();
+    seed_user(&db, first_user, "f04-first").await;
+    seed_user(&db, second_user, "f04-second").await;
+    let now = Utc::now();
+
+    db.with_conn(move |conn| {
+        insert_within_tx(
+            conn,
+            &FederationLinkRow {
+                user_id: first_user,
+                provider_id: pid,
+                upstream_sub: "sub-race".into(),
+                upstream_email: None,
+                linked_at: now,
+                last_seen_at: now,
+            },
+        )
+    })
+    .await
+    .unwrap();
+
+    let result = db
+        .with_conn(move |conn| {
+            insert_within_tx(
+                conn,
+                &FederationLinkRow {
+                    user_id: second_user,
+                    provider_id: pid,
+                    upstream_sub: "sub-race".into(),
+                    upstream_email: None,
+                    linked_at: now,
+                    last_seen_at: now,
+                },
+            )
+        })
+        .await;
+    assert!(matches!(result, Err(StoreError::Conflict)));
+
+    // The first link is unaffected -- refused, not absorbed into it.
+    let found = find_by_sub(&db, pid, "sub-race").await.unwrap().unwrap();
+    assert_eq!(found.user_id, first_user);
+}

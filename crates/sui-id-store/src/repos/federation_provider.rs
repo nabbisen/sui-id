@@ -227,8 +227,6 @@ pub async fn delete(db: &Database, id: FederationProviderId) -> StoreResult<()> 
 pub const AUDIT_SIGNIN_SUCCESS: &str = "auth.federation.signin.success";
 /// Audit event emitted when the upstream IdP returns an error during callback.
 pub const AUDIT_SIGNIN_UPSTREAM_FAILURE: &str = "auth.federation.signin.upstream_failure";
-/// Audit event emitted when a federation link is created (first sign-in or link flow).
-pub const AUDIT_LINK_CREATED: &str = "auth.federation.link.created";
 
 /// RFC 096-B1 stage 6b: the registry-declared descriptor for
 /// `auth.federation.takeover_blocked` (an email collision detected and

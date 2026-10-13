@@ -34,7 +34,7 @@ use crate::registry::{
 use chrono::{DateTime, Utc};
 use sui_id_shared::{
     FamilyId, RefreshTokenHash,
-    ids::{ClientId, SigningKeyId, UserId},
+    ids::{ClientId, FederationLoginAttemptId, FederationProviderId, SigningKeyId, UserId},
 };
 
 // ── RFC 102 B4 — the gated action carries its authorization ─────────────
@@ -2154,11 +2154,6 @@ static L04_SUCCESS: EventDescriptor = EventDescriptor {
             required: false,
         },
         AttributeSpec {
-            name: "sub",
-            description: "the upstream subject, truncated to 255 bytes",
-            required: false,
-        },
-        AttributeSpec {
             name: "evicted",
             description: "older sessions revoked to keep the user within the concurrent-session cap",
             required: false,
@@ -2173,7 +2168,7 @@ crate::declare_write_command! {
     command L04 = "L04" {
         system_principal: forbidden;
         enum L04Event {
-            Success { user_id: UserId, provider: String, sub: String, evicted: i64 } => &L04_SUCCESS,
+            Success { user_id: UserId, provider: String, evicted: i64 } => &L04_SUCCESS,
         }
     }
 }
@@ -2190,14 +2185,10 @@ impl SealedCommandEvent<L04> for L04Event {
 
     fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
         let Self::Success {
-            provider,
-            sub,
-            evicted,
-            ..
+            provider, evicted, ..
         } = self;
         AuditAttributes::builder()
             .attribute("provider", provider.clone())
-            .attribute("sub", truncate_utf8(sub, EXTERNAL_ID_ATTRIBUTE_BYTES))
             .attribute("evicted", evicted.to_string())
             .build()
     }
@@ -2206,10 +2197,16 @@ impl SealedCommandEvent<L04> for L04Event {
 /// Run L04. In one transaction: re-read the user as active (not disabled,
 /// not deleted), set `last_login_at`, insert the session and evict over-cap
 /// sessions. A user no longer active rolls back with `NotFound`.
+///
+/// No `upstream_sub` parameter: RFC 096 `:714-715`'s review (stage 7's own
+/// carried-in item) removed the `sub` audit attribute this event used to
+/// carry truncated — the upstream subject already lives durably on the
+/// `federation_link` row, so the audit trail stays reconstructible from
+/// internal ids alone without it here either, and there is nothing left
+/// for a caller to pass.
 pub async fn sign_in_federated(
     db: &crate::Database,
     provider_slug: String,
-    upstream_sub: String,
     session: crate::models::SessionRow,
 ) -> StoreResult<crate::registry::Audited<i64>> {
     let user_id = session.user_id;
@@ -2224,8 +2221,116 @@ pub async fn sign_in_federated(
             L04Event::Success {
                 user_id,
                 provider: provider_slug,
-                sub: upstream_sub,
                 evicted,
+            },
+        ))
+    })
+    .await
+}
+
+// ── F04 — first federated provisioning (RFC 096-B1 stage 7) ────────────
+
+static F04_PROVISIONED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::AuthFederationProvisioned,
+    name: "auth.federation.provisioned",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[
+        AttributeSpec {
+            name: "provider_id",
+            description: "internal id of the upstream federation provider",
+            required: false,
+        },
+        AttributeSpec {
+            name: "mode",
+            description: "the provision mode that ran this command -- always \"provision_on_first_login\", the only mode F04 ever runs under",
+            required: false,
+        },
+    ],
+};
+
+crate::declare_write_command! {
+    /// F04 — first federated provisioning (RFC 096 `:706-711`, amended RFC
+    /// 094). The actor is the newly created user; `:714-715` is why its
+    /// attributes carry only internal ids and the fixed mode literal,
+    /// never the upstream `sub` or email that identified them.
+    command F04 = "F04" {
+        system_principal: forbidden;
+        enum F04Event {
+            Provisioned { user_id: UserId, provider_id: FederationProviderId } => &F04_PROVISIONED,
+        }
+    }
+}
+
+impl SealedCommandEvent<F04> for F04Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Provisioned { user_id, .. } = self;
+        Some(AuditTarget(user_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Provisioned { provider_id, .. } = self;
+        AuditAttributes::builder()
+            .attribute("provider_id", provider_id.to_string())
+            .attribute("mode", "provision_on_first_login")
+            .build()
+    }
+}
+
+/// Run F04. In one transaction: complete the attempt (guarded `exchanging
+/// -> completed`), create the passwordless non-admin user, create exactly
+/// one provider/sub link, insert the `[Fed]` session and evict over-cap
+/// sessions. Every write re-asks, inside this transaction, the question
+/// the handler already asked outside it:
+///
+/// - **the attempt is still `exchanging`** — [`crate::repos::
+///   federation_login_attempt::complete_within_tx`]; a lost race (F05 beat
+///   this transaction to `failed`, or a concurrent commit already reached
+///   `completed`) is `StoreError::Conflict`.
+/// - **the username and the normalized email are each still free** —
+///   [`crate::repos::users::create_within_tx`]'s own `UNIQUE` constraints
+///   on `username` and `email_normalized` (migrations 0001, 0020/0022).
+///   Enforced by the insert itself, not a duplicate `SELECT` the insert
+///   could still race past — a constraint violation is `StoreError::
+///   Conflict`.
+/// - **no link to this upstream identity exists yet** —
+///   [`crate::repos::federation_link::insert_within_tx`]'s own `UNIQUE
+///   (provider_id, upstream_sub)` (migration for `federation_link`). Also
+///   a plain insert, never an upsert, for the same reason: an upsert would
+///   absorb the exact race this recheck exists to catch. A constraint
+///   violation is `StoreError::Conflict`.
+///
+/// `user`, `link` and `session` must already agree on the same freshly
+/// generated `UserId` — the caller resolves that id, the username, and
+/// the link's upstream identity before opening this transaction; nothing
+/// in here invents or overrides any of them.
+pub async fn provision_federated_user(
+    db: &crate::Database,
+    attempt_id: FederationLoginAttemptId,
+    provider_id: FederationProviderId,
+    user: crate::models::UserRow,
+    link: crate::models::FederationLinkRow,
+    session: crate::models::SessionRow,
+) -> StoreResult<crate::registry::Audited<i64>> {
+    let user_id = session.user_id;
+    let context = AuthorizedCommandContext::<F04>::for_authorized_actor(user_id, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, F04>| {
+        let now = session.created_at;
+        crate::repos::federation_login_attempt::complete_within_tx(tx.tx(), attempt_id)?;
+        crate::repos::users::create_within_tx(tx.tx(), &user)?;
+        crate::repos::federation_link::insert_within_tx(tx.tx(), &link)?;
+        crate::repos::sessions::insert_within_tx(tx.tx(), &session)?;
+        let evicted = evict_over_cap_within_tx(tx.tx(), user_id, now)?;
+        Ok((
+            evicted,
+            F04Event::Provisioned {
+                user_id,
+                provider_id,
             },
         ))
     })

@@ -118,8 +118,14 @@ pub enum DeniedDetail {
     LinkLookupDbError,
     LinkUpsertDbError,
     UnverifiedEmail,
-    ProvisionShadowUserDbError,
-    ProvisionLinkDbError,
+    /// RFC 096-B1 stage 7, F04: the provisioning transaction refused the
+    /// write — a lost race against a concurrent provisioning of the same
+    /// upstream identity, username or email (`StoreError::Conflict`), or
+    /// any other failure committing it. Replaces the two separate,
+    /// untransacted DB-error reasons (`provision_shadow_user_db_error`,
+    /// `provision_link_db_error`) the inline two-write legacy code used —
+    /// one transaction now fails as one thing.
+    ProvisionTransactionFailed,
     AccountDisabledOrDeleted,
     UserReadDbError,
     MfaStateReadDbError,
@@ -146,8 +152,7 @@ impl DeniedDetail {
             Self::LinkLookupDbError => "link_lookup_db_error",
             Self::LinkUpsertDbError => "link_upsert_db_error",
             Self::UnverifiedEmail => "unverified_email",
-            Self::ProvisionShadowUserDbError => "provision_shadow_user_db_error",
-            Self::ProvisionLinkDbError => "provision_link_db_error",
+            Self::ProvisionTransactionFailed => "provision_transaction_failed",
             Self::AccountDisabledOrDeleted => "account_disabled_or_deleted",
             Self::UserReadDbError => "user_read_db_error",
             Self::MfaStateReadDbError => "mfa_state_read_db_error",
