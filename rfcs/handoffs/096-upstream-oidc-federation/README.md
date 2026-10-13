@@ -204,15 +204,30 @@ A reader of this file would have concluded that 096-A had not started. **That
 was my omission** — three dispatches written without updating the index the
 implementation role reads.
 
-**Updated 2026-10-13.** **`0.80.0` is released** and **stage 7 is the open
-dispatch.** Stage 6d is deferred to after stage 11 by the 2026-10-12
-authorization. Its RFC 094 record question is taken in the gap before stage
-12; the section further down carries it.
+**Updated 2026-10-13.** **`0.80.0` is released**, **stage 7 landed `e9d5001`**,
+and **stage 8's fix round is the open dispatch.** Stage 6d is deferred to
+after stage 11 by the 2026-10-12 authorization. Its RFC 094 record question is
+taken in the gap before stage 12; the section further down carries it.
 
 ### Dispatched and open
 
+- [`stage8-fix-bind-the-link-and-the-parent-row-2026-10-13.md`](stage8-fix-bind-the-link-and-the-parent-row-2026-10-13.md)
+  — **DISPATCHED, this is the open work.** The returned migration is sound and
+  nothing in it is wrong; the round exists because **three obligations its
+  clause table assigned to later stages' code are enforceable in the schema**,
+  established by building and running them rather than by reasoning. A
+  composite `FOREIGN KEY` compares two tables where a `CHECK` cannot, so
+  `:736-737`'s exact ceremony/parent binding agreement and `:737-738`'s
+  no-later expiry both become constraints; `federation_link`'s own
+  `PRIMARY KEY (user_id, provider_id)` binds `:722`'s *link* element, which
+  was stored but not held — a pending row was valid for a pair that had never
+  been linked, and survived an unlink. Also: an unparseable timestamp silently
+  disables the `expires_at = created_at + 300` `CHECK`, because `strftime`
+  returns `NULL` and a `CHECK` passes on `NULL`. The migration is edited in
+  place — `0047` has never been committed.
+
 - [`stage8-migration-0047-mfa-pending-and-ceremony-2026-10-13.md`](stage8-migration-0047-mfa-pending-and-ceremony-2026-10-13.md)
-  — **DISPATCHED, this is the open work.** Migration `0047`:
+  — **returned, fix round open** (above). Migration `0047`:
   `federation_mfa_pending` and `federation_webauthn_ceremony`, **schema
   only**, the way stage 1 was. What the dispatch asks for beyond the DDL is a
   **clause-by-clause table of `:728-738`** saying, for each obligation,
@@ -224,7 +239,12 @@ authorization. Its RFC 094 record question is taken in the gap before stage
   given a `CHECK` cannot see another table, and `:738`'s negative requirement
   about two *other* tables, which may not be schema-enforceable at all — the
   architect said so and invited the finding. **The purge is recorded as stage
-  9's**, with the first writer.
+  9's**, with the first writer. *Returned 2026-10-13: the clause table, the
+  `STRICT` demonstration and the fresh-vs-forward identity evidence are all
+  sound, and both findings it raised are accepted — including that this
+  dispatch's **"G19 is the one to watch — migrations are its subject" was
+  false**. G19 is federation egress (RFC 134); no gate in the manifest checks
+  a migration structurally, and the architect has recorded that.*
 
 ### Landed, 2026-10-13
 
