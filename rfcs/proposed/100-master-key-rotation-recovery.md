@@ -75,6 +75,8 @@ manual procedure that is **not crash-safe**.
   025](./025-multi-tenant-expansion.md)'s open question 7, and it is **not**
   a requirement on this RFC. Stated here only so a later reader knows the
   single-key assumption was made knowingly rather than overlooked.
+  Accepted by `@nabbisen` on 2026-10-14, in his word: *"Both accepted."* —
+  as this RFC's own assumption, and not as a direction on tenancy.
 
 ## Security invariants
 

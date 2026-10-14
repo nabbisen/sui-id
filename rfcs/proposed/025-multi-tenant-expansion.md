@@ -336,6 +336,15 @@ designation without owner direction and soak.
 
 ## Open questions
 
+Questions 6 and 7 were written by the architect on 2026-10-14 and accepted
+by `@nabbisen` the same day, in his word: *"Both accepted."* The architect
+wrote both the finding and the record, so this is not an independent
+review; `@nabbisen` is the approver, which is what RFC 000 requires when no
+independent role exists. What was accepted is the **record** — that these
+two questions are open and belong here. It is not agreement to
+multi-tenancy, to any schedule, or to any particular answer. The freeze in
+`ROADMAP.md` is unchanged and this RFC stays `Proposed`.
+
 1. **Slug case-sensitivity** — lowercase per §1; confirm.
 2. **`_global` literal vs an uncollidable path segment** (e.g.
    `/$global`) — reserved-literal is simpler and matches this design;

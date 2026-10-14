@@ -681,6 +681,7 @@ rfcs/proposed/009-sql-backends.md	71bcda199dd7a9e7b4d32577425dd85cea7613eb17d006
 rfcs/proposed/009-sql-backends.md	deca24718bfe0e0e869e69bbc850d2c1ad5c9ccb19ad62ea5bfb0e49c168ef1d	1	No version designation without owner direction and soak.
 rfcs/proposed/025-multi-tenant-expansion.md	0cc20e476f66f4f49426328e287924dccec9a9d6083964e83f23b106f4b201e5	1	If the owner later decides not to pursue multi-tenancy, this RFC moves to archive/ with status Withdrawn .
 rfcs/proposed/025-multi-tenant-expansion.md	0f82fdc78f51cbf208aced26e6a702f1e37f96b44cf757412f81592babe43fd8	1	A schedule requires explicit owner direction.
+rfcs/proposed/025-multi-tenant-expansion.md	2cb5eb2e5063ab8e1c6a86aada5f621760985598622b18eee7504c70fc931766	1	Questions 6 and 7 were written by the architect on 2026-10-14 and accepted by @nabbisen the same day, in his word: "Both accepted." The arch
 rfcs/proposed/025-multi-tenant-expansion.md	deca24718bfe0e0e869e69bbc850d2c1ad5c9ccb19ad62ea5bfb0e49c168ef1d	1	No version designation without owner direction and soak.
 rfcs/proposed/097-current-threat-model.md	5f5107709c8dbc89f639ea80d3e3e25b897138c8aab931585ef07f3344b7ae25	1	Implementation owner. The mid-capability model (implementation and testing agent), after acceptance and prerequisites.
 rfcs/proposed/097-current-threat-model.md	6c276297073d3f75bb28c113756b233e5285faa868b4756b04d43de898ccee53	1	Record residual risk, risk owner, detection/recovery, and review decision.
@@ -691,6 +692,7 @@ rfcs/proposed/099-operational-hardening-soak-readiness.md	5f5107709c8dbc89f639ea
 rfcs/proposed/099-operational-hardening-soak-readiness.md	874edb9b41d7b7c8d1211a597c52d7ff33065d66fdd53f677f49116f0f63ba9d	1	Accountable owner and approver. @nabbisen .
 rfcs/proposed/099-operational-hardening-soak-readiness.md	d87eba550cc6d138fc4d3dbdcd6c322ffc90711964e558b1176122fe697fc1a1	1	If the owner instead elects to defer RFC 100 past M6, the master-key rotation exercise must be struck from the M7 workload by an explicit re
 rfcs/proposed/100-master-key-rotation-recovery.md	5db373b6ced6a0e7db9598fa234710d4c81694c1bf533ac39e282614c238e5c3	1	Implementation owner. To be named after acceptance.
+rfcs/proposed/100-master-key-rotation-recovery.md	76f2e8b896195d29451405ec5b438b8f087587ad7d8060ca706917142932bdb2	1	Accepted by @nabbisen on 2026-10-14, in his word: "Both accepted." — as this RFC's own assumption, and not as a direction on tenancy.
 rfcs/proposed/100-master-key-rotation-recovery.md	874edb9b41d7b7c8d1211a597c52d7ff33065d66fdd53f677f49116f0f63ba9d	1	Accountable owner and approver. @nabbisen .
 rfcs/proposed/101-email-lifecycle-verification-and-change.md	25732e1384d6780bae1d2140d5a0c5f2f1ae20caa90ab8c17c87f401209ea029	1	Ruled 2026-09-16 ( @nabbisen ): build it , with the web version's security
 rfcs/proposed/101-email-lifecycle-verification-and-change.md	27d959cff4c47f27da126f33d6bdada1b9a2d94224ec81eeb99277b51ae33494	1	Implementation prerequisites. RFC 103 (administrator-issued account recovery, Accepted 2026-09-17) Implemented — owner ruling 2026-09-16, se
