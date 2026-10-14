@@ -103,5 +103,10 @@ define_id!(
     "Identifier of an upstream OIDC federation login attempt row (RFC 096 :577-589)."
 );
 
+define_id!(
+    FederationMfaPendingId,
+    "Identifier of a federated local-MFA continuation row (RFC 096 :728-734, migration 0047)."
+);
+
 #[cfg(test)]
 mod tests;

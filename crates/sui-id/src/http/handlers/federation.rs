@@ -31,7 +31,7 @@ use crate::federation_state::{FedState, STATE_COOKIE, STATE_TTL_SECS, seal_state
 use crate::handlers::{AppState, AppStateExt, session_cookie};
 use crate::id_token::{IdTokenClaims, decode_id_token_claims};
 use sui_id_core::errors::CoreError;
-use sui_id_shared::ids::{FederationLoginAttemptId, FederationProviderId, SessionId, UserId};
+use sui_id_shared::ids::{FederationProviderId, SessionId, UserId};
 use sui_id_store::models::{
     AuditLogRow, FederationLinkRow, FederationProviderRow, ProvisionMode, Role, SessionRow,
     UserRow, UserSource,
@@ -127,6 +127,41 @@ async fn fetch_discovery(
 /// RFC 096 `:564-566`: the browser-held opaque binding cookie, scoped the
 /// same way `STATE_COOKIE` is.
 const BROWSER_BINDING_COOKIE: &str = "sui_id_fed_browser_binding";
+
+/// RFC 096-B1 stage 9, F02: the `federation_mfa_pending` row's own id,
+/// so a future consumer (stage 10/11) can find which row belongs to this
+/// browser without a session already established. Scoped site-wide
+/// (`/`), not to `/auth/federated`: unlike `STATE_COOKIE`/
+/// `BROWSER_BINDING_COOKIE`, which only the callback itself ever reads,
+/// this cookie's eventual reader is `/admin/login/mfa` (stage 12).
+const FED_MFA_PENDING_COOKIE: &str = "sui_id_fed_mfa_pending";
+
+/// RFC 096-B1 stage 9, F02: the raw CSRF-binding value, CSPRNG-minted the
+/// same way `browser_binding`/`nonce`/`state_param` already are (`:564`'s
+/// own precedent) — never the browser-binding value itself, a *second*,
+/// independent opaque value, so a party holding one binding cannot drive
+/// the other. Only `csrf_binding_sha256` (the digest) is stored in the
+/// row; this is what the digest is a hash of.
+const FED_MFA_CSRF_COOKIE: &str = "sui_id_fed_mfa_csrf";
+
+/// RFC 096-B1 stage 9 fix round, R1: the continuation's **own**
+/// browser-binding value, CSPRNG-minted the same way as
+/// [`FED_MFA_CSRF_COOKIE`]'s and never the attempt's own
+/// [`BROWSER_BINDING_COOKIE`] value. It cannot be: `terminal()` (above)
+/// expires `BROWSER_BINDING_COOKIE` on every `Ok` path, this one
+/// included (RFC 096-B1 stage 6a, `:600-601`'s own "expired on every
+/// terminal path"), and it is scoped `Path=/auth/federated`, so
+/// `/admin/login/mfa` — this binding's eventual reader — would never be
+/// sent it even if it survived. A row whose `browser_binding_sha256`
+/// committed to that cookie's value would be a `NOT NULL` column
+/// committing to a secret already revoked and out of the reader's path —
+/// measured directly (a `Set-Cookie` probe on this exact response caught
+/// it, see `federation_fail_closed.rs`'s own test), not assumed safe
+/// because the attempt's own binding exists. Minting a second value
+/// rather than widening `BROWSER_BINDING_COOKIE` to `Path=/` keeps the
+/// OAuth-callback secret's lifetime and scope exactly as narrow as
+/// `:600-601` already requires.
+const FED_MFA_BROWSER_BINDING_COOKIE: &str = "sui_id_fed_mfa_browser_binding";
 
 /// RFC 096-B1 stage 6a, RFC 096 `:600-601`: *"The callback cookie is
 /// expired on every terminal path."* -- both of them, `STATE_COOKIE` and
@@ -1507,7 +1542,7 @@ pub async fn federated_callback(
         app,
         jar,
         user_id,
-        claimed.id,
+        &claimed,
         provider.id,
         &provider.slug,
         now,
@@ -1530,11 +1565,12 @@ async fn complete_federated_signin(
     app: AppState,
     jar: CookieJar,
     user_id: UserId,
-    attempt_id: FederationLoginAttemptId,
+    claimed: &sui_id_store::models::FederationLoginAttemptRow,
     provider_id: FederationProviderId,
     provider_slug: &str,
     now: chrono::DateTime<chrono::Utc>,
 ) -> Result<Terminal, HttpError> {
+    let attempt_id = claimed.id;
     // Refuse an inactive user before any pending-MFA or session row. The
     // user is re-read here: the link may belong to an account disabled or
     // deleted since it was created.
@@ -1608,19 +1644,80 @@ async fn complete_federated_signin(
     };
 
     if mfa_enabled {
-        let pending = match sui_id_core::mfa::issue_pending_mfa(&app.db, &app.clock, user_id).await
+        // RFC 096-B1 stage 9, F02: complete the attempt and record the
+        // durable, federation-shaped continuation (migration 0047) in one
+        // transaction -- fixing the status-quo bug this branch had before
+        // F02 existed: the attempt was left `exchanging` forever (collected
+        // only by the 24-hour purge), because nothing on this branch ever
+        // completed it.
+        //
+        // The generic `login_pending_mfa` row immediately below is
+        // UNCHANGED and is still what the user actually completes MFA
+        // through -- nothing consumes `federation_mfa_pending` yet
+        // (`FederatedMfaVerifier` is stage 10/11; stage 12 switches
+        // `/admin/login/mfa`'s federated branch over to it). The two rows
+        // exist side by side, deliberately, until then: ripping out the
+        // generic row now would break federated sign-in for every user
+        // with local MFA enabled, for no consumer yet able to replace it.
+        let csrf_raw = sui_id_core::tokens::random_token(32);
+        // RFC 096-B1 stage 9 fix round, R1: a browser-binding value of
+        // this continuation's own, not the attempt's -- see
+        // `FED_MFA_BROWSER_BINDING_COOKIE`'s own doc for why reusing
+        // `claimed.browser_binding_sha256` is unsound (its cookie is
+        // revoked by `terminal()` on this very response, and scoped away
+        // from the reader regardless).
+        let fed_browser_binding_raw = sui_id_core::tokens::random_token(32);
+        let fed_pending_id = match sui_id_store::commands::issue_federated_mfa_pending(
+            &app.db,
+            attempt_id,
+            provider_id,
+            claimed.provider_config_version,
+            claimed.provider_activation_generation,
+            user_id,
+            claimed.next_path.clone(),
+            sha256_32(fed_browser_binding_raw.as_bytes()),
+            sha256_32(csrf_raw.as_bytes()),
+            now,
+        )
+        .await
         {
-            Ok(p) => p,
+            Ok(id) => id,
             Err(e) => {
+                tracing::error!(
+                    provider = %provider_slug,
+                    user_id = %user_id,
+                    error = %e,
+                    "federation: F02 (attempt completion + MFA continuation) failed"
+                );
                 terminalize_and_audit(
                     &app.db,
                     attempt_id,
-                    TerminalFailureReason::Denied(DeniedDetail::PendingMfaIssueFailed),
+                    TerminalFailureReason::Denied(DeniedDetail::MfaPendingTransactionFailed),
                     now,
                     provider_id,
                     Some(user_id),
                 )
                 .await;
+                return signin_failed(jar);
+            }
+        };
+
+        let pending = match sui_id_core::mfa::issue_pending_mfa(&app.db, &app.clock, user_id).await
+        {
+            Ok(p) => p,
+            Err(e) => {
+                // F02 already completed the attempt above; this is only
+                // the generic row the *current* MFA-prompt page still
+                // reads. Nothing to terminalize a second time -- the
+                // attempt is already `completed`, not `exchanging`, so
+                // `terminalize_and_audit`'s own `UPDATE ... WHERE status
+                // IN ('pending', 'exchanging')` would no-op anyway.
+                tracing::error!(
+                    provider = %provider_slug,
+                    user_id = %user_id,
+                    error = %e,
+                    "federation: generic pending-MFA issue failed"
+                );
                 return Err(HttpError::html(e));
             }
         };
@@ -1628,17 +1725,61 @@ async fn complete_federated_signin(
             pending.id.to_string(),
             app.config.server.cookie_secure,
         );
-        let jar = jar.add(cookie);
-        let _ = sui_id_store::repos::audit::append(
+        let fed_pending_cookie = {
+            let mut c = Cookie::new(FED_MFA_PENDING_COOKIE, fed_pending_id.to_string());
+            c.set_http_only(true);
+            c.set_same_site(axum_extra::extract::cookie::SameSite::Lax);
+            c.set_max_age(time::Duration::seconds(
+                sui_id_store::repos::federation_mfa_pending::PENDING_LIFETIME_SECS,
+            ));
+            c.set_path("/");
+            if app.config.server.cookie_secure {
+                c.set_secure(true);
+            }
+            c
+        };
+        let fed_csrf_cookie = {
+            let mut c = Cookie::new(FED_MFA_CSRF_COOKIE, csrf_raw);
+            c.set_http_only(true);
+            c.set_same_site(axum_extra::extract::cookie::SameSite::Lax);
+            c.set_max_age(time::Duration::seconds(
+                sui_id_store::repos::federation_mfa_pending::PENDING_LIFETIME_SECS,
+            ));
+            c.set_path("/");
+            if app.config.server.cookie_secure {
+                c.set_secure(true);
+            }
+            c
+        };
+        let fed_browser_binding_cookie = {
+            let mut c = Cookie::new(FED_MFA_BROWSER_BINDING_COOKIE, fed_browser_binding_raw);
+            c.set_http_only(true);
+            c.set_same_site(axum_extra::extract::cookie::SameSite::Lax);
+            c.set_max_age(time::Duration::seconds(
+                sui_id_store::repos::federation_mfa_pending::PENDING_LIFETIME_SECS,
+            ));
+            c.set_path("/");
+            if app.config.server.cookie_secure {
+                c.set_secure(true);
+            }
+            c
+        };
+        let jar = jar
+            .add(cookie)
+            .add(fed_pending_cookie)
+            .add(fed_csrf_cookie)
+            .add(fed_browser_binding_cookie);
+        let attributes = sui_id_store::registry::AuditAttributes::builder()
+            .attribute("provider_id", provider_id.to_string())
+            .build();
+        let _ = sui_id_store::repos::audit::emit_must_attempt(
             &app.db,
-            &AuditLogRow {
-                at: now,
-                actor: Some(user_id),
-                action: "auth.login.password_ok_mfa_required".into(),
-                target: Some(user_id.to_string()),
-                result: "ok".into(),
-                note: Some(format!("via federation provider={provider_slug}")),
-            },
+            &sui_id_store::repos::federation_mfa_pending::AUDIT_MFA_REQUIRED_DESCRIPTOR,
+            now,
+            Some(user_id),
+            Some(sui_id_store::registry::AuditTarget(user_id.to_string())),
+            "ok",
+            attributes,
         )
         .await;
         return Ok(terminal(jar, Redirect::to("/admin/login/mfa")));

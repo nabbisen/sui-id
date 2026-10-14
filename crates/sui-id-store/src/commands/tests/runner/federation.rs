@@ -9,7 +9,9 @@
 use super::*;
 use crate::models::{FederationLinkRow, FederationProviderRow, ProvisionMode};
 use crate::repos::federation_login_attempt;
-use sui_id_shared::ids::{FederationLoginAttemptId, FederationProviderId, SessionId};
+use sui_id_shared::ids::{
+    FederationLoginAttemptId, FederationMfaPendingId, FederationProviderId, SessionId,
+};
 
 async fn seed_provider(db: &Database) -> FederationProviderId {
     let now = Utc::now();
@@ -367,4 +369,188 @@ async fn f04_refuses_when_the_attempt_is_no_longer_exchanging() {
     assert!(matches!(result, Err(StoreError::Conflict)));
     assert!(repos::users::get(&db, user_id).await.is_err());
     assert_eq!(attempt_status(&db, attempt_id).await, "failed");
+}
+
+// ── RFC 096-B1 stage 9 — F02: existing link, local MFA required ────────
+
+/// `provider_config_version`/`provider_activation_generation` fixed at 1/1
+/// to match `an_exchanging_attempt`'s own hardcoded values — the row's
+/// identity columns must agree with the attempt they belong to, the same
+/// way F04's `link`/`session` already have to agree with `user`.
+/// `issue_federated_mfa_pending` builds and seals the row itself, so every
+/// call site here just supplies the raw pieces.
+#[allow(clippy::too_many_arguments)]
+async fn call_f02(
+    db: &Database,
+    attempt_id: FederationLoginAttemptId,
+    provider_id: FederationProviderId,
+    user_id: UserId,
+    now: DateTime<Utc>,
+) -> StoreResult<FederationMfaPendingId> {
+    issue_federated_mfa_pending(
+        db,
+        attempt_id,
+        provider_id,
+        1,
+        1,
+        user_id,
+        None,
+        [9; 32],
+        [10; 32],
+        now,
+    )
+    .await
+}
+
+async fn pending_count(db: &Database) -> i64 {
+    db.with_conn(|c| {
+        Ok(
+            c.query_row("SELECT COUNT(*) FROM federation_mfa_pending", [], |r| {
+                r.get(0)
+            })?,
+        )
+    })
+    .await
+    .expect("count")
+}
+
+#[tokio::test]
+async fn f02_completes_the_attempt_and_creates_exactly_one_pending_row() {
+    let db = fresh_db();
+    let provider_id = seed_provider(&db).await;
+    let attempt_id = an_exchanging_attempt(&db, provider_id, 10).await;
+    let user = a_federated_user("f02-happy", None);
+    let user_id = user.id;
+    repos::users::create(&db, &user).await.expect("seed user");
+    repos::federation_link::upsert(&db, a_federated_link(user_id, provider_id, "sub-f02-happy"))
+        .await
+        .expect("seed link");
+
+    let pending_id = call_f02(&db, attempt_id, provider_id, user_id, Utc::now())
+        .await
+        .expect("F02 succeeds");
+
+    assert_eq!(attempt_status(&db, attempt_id).await, "completed");
+    assert_eq!(pending_count(&db).await, 1);
+    let stored_id: String = db
+        .with_conn(|c| Ok(c.query_row("SELECT id FROM federation_mfa_pending", [], |r| r.get(0))?))
+        .await
+        .expect("stored id");
+    assert_eq!(stored_id, pending_id.to_string());
+    record_exactly_once_coverage("F02");
+}
+
+/// RFC 094 M2a criterion 2, by hand (dispatch item 4: G20 does not cover
+/// Class-P commands, so no gate asks for this). `fail_next_commit_for_test`
+/// rejects the real SQLite commit regardless of what ran inside it —
+/// unlike `fail_before_next_append`, which only fires on an audit append
+/// F02 never makes (Class P has none by construction) — so this is the
+/// mechanism that actually reaches a Protocol transaction's own commit.
+#[tokio::test]
+async fn f02_injected_commit_failure_rolls_back_everything() {
+    let db = fresh_db();
+    let provider_id = seed_provider(&db).await;
+    let attempt_id = an_exchanging_attempt(&db, provider_id, 11).await;
+    let user = a_federated_user("f02-rollback", None);
+    let user_id = user.id;
+    repos::users::create(&db, &user).await.expect("seed user");
+    repos::federation_link::upsert(
+        &db,
+        a_federated_link(user_id, provider_id, "sub-f02-rollback"),
+    )
+    .await
+    .expect("seed link");
+
+    db.fail_next_commit_for_test();
+    let result = call_f02(&db, attempt_id, provider_id, user_id, Utc::now()).await;
+    assert!(
+        result.is_err(),
+        "a rejected commit must surface as Err, not a silently-empty Ok"
+    );
+    assert_eq!(
+        attempt_status(&db, attempt_id).await,
+        "exchanging",
+        "the attempt must not have been completed either"
+    );
+    assert_eq!(pending_count(&db).await, 0, "no pending row was created");
+
+    // Control: the same call, no failure injected, for a second untouched
+    // identity, really does write both rows -- without this, the
+    // assertions above would pass just as well if the injection never ran.
+    let control_attempt_id = an_exchanging_attempt(&db, provider_id, 12).await;
+    let control_user = a_federated_user("f02-rollback-control", None);
+    let control_user_id = control_user.id;
+    repos::users::create(&db, &control_user)
+        .await
+        .expect("seed control user");
+    repos::federation_link::upsert(
+        &db,
+        a_federated_link(control_user_id, provider_id, "sub-f02-rollback-control"),
+    )
+    .await
+    .expect("seed control link");
+    call_f02(
+        &db,
+        control_attempt_id,
+        provider_id,
+        control_user_id,
+        Utc::now(),
+    )
+    .await
+    .expect("the control succeeds");
+    assert_eq!(attempt_status(&db, control_attempt_id).await, "completed");
+    assert_eq!(pending_count(&db).await, 1);
+    record_rollback_coverage("F02");
+}
+
+#[tokio::test]
+async fn f02_refuses_when_the_attempt_is_no_longer_exchanging() {
+    let db = fresh_db();
+    let provider_id = seed_provider(&db).await;
+    let attempt_id = an_exchanging_attempt(&db, provider_id, 13).await;
+    federation_login_attempt::terminalize_failed(&db, attempt_id, Utc::now())
+        .await
+        .expect("F05 wins the race first");
+    let user = a_federated_user("f02-attempt-lost-race", None);
+    let user_id = user.id;
+    repos::users::create(&db, &user).await.expect("seed user");
+    repos::federation_link::upsert(
+        &db,
+        a_federated_link(user_id, provider_id, "sub-f02-attempt-race"),
+    )
+    .await
+    .expect("seed link");
+
+    let result = call_f02(&db, attempt_id, provider_id, user_id, Utc::now()).await;
+    assert!(matches!(result, Err(StoreError::Conflict)));
+    assert_eq!(pending_count(&db).await, 0);
+    assert_eq!(attempt_status(&db, attempt_id).await, "failed");
+}
+
+/// Stage 9's own "active link" recheck, exercised through the command
+/// (not only the repo-level test in `repos::federation_mfa_pending::
+/// tests`): a link that existed when the caller resolved `user_id`, but is
+/// gone by the time this transaction runs, refuses rather than creating a
+/// pending row for an identity no longer linked.
+#[tokio::test]
+async fn f02_refuses_when_the_link_has_been_removed() {
+    let db = fresh_db();
+    let provider_id = seed_provider(&db).await;
+    let attempt_id = an_exchanging_attempt(&db, provider_id, 14).await;
+    let user = a_federated_user("f02-unlinked-race", None);
+    let user_id = user.id;
+    repos::users::create(&db, &user).await.expect("seed user");
+    // Deliberately no federation_link row.
+
+    let result = call_f02(&db, attempt_id, provider_id, user_id, Utc::now()).await;
+    assert!(
+        matches!(result, Err(StoreError::Conflict)),
+        "a pending row for an unlinked pair must refuse"
+    );
+    assert_eq!(pending_count(&db).await, 0);
+    assert_eq!(
+        attempt_status(&db, attempt_id).await,
+        "exchanging",
+        "the attempt completion rolled back with the refused insert"
+    );
 }

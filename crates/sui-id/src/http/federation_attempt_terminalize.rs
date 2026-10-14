@@ -131,6 +131,13 @@ pub enum DeniedDetail {
     MfaStateReadDbError,
     PendingMfaIssueFailed,
     SigninCommitFailed,
+    /// RFC 096-B1 stage 9, F02: the guarded attempt-completion-plus-
+    /// pending-row transaction refused the write — a lost race (the
+    /// attempt no longer `exchanging`, or the link gone since it was
+    /// resolved — `StoreError::Conflict`), or any other failure
+    /// committing it. The same one-transaction-fails-as-one-thing shape
+    /// `ProvisionTransactionFailed` already uses for F04.
+    MfaPendingTransactionFailed,
 }
 
 impl DeniedDetail {
@@ -158,6 +165,7 @@ impl DeniedDetail {
             Self::MfaStateReadDbError => "mfa_state_read_db_error",
             Self::PendingMfaIssueFailed => "pending_mfa_issue_failed",
             Self::SigninCommitFailed => "signin_commit_failed",
+            Self::MfaPendingTransactionFailed => "mfa_pending_transaction_failed",
         }
     }
 }

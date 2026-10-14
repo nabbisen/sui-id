@@ -178,6 +178,16 @@ async fn scalar(state: &AppState, sql: String) -> i64 {
         .expect("scalar")
 }
 
+/// [`scalar`] for a `TEXT` result -- used to read a `BLOB` column back as
+/// `lower(hex(...))` and compare it with a digest computed here.
+async fn scalar_text(state: &AppState, sql: String) -> String {
+    state
+        .db
+        .with_conn(move |c| Ok(c.query_row(&sql, [], |r| r.get(0))?))
+        .await
+        .expect("scalar_text")
+}
+
 /// A local user linked to the mock upstream's `SUB`.
 pub(super) async fn linked_user(state: &AppState, issuer: &str) -> UserId {
     let now = chrono::Utc::now();
@@ -229,6 +239,13 @@ pub(super) struct Outcome {
     pub(super) location: String,
     pub(super) session_cookie: Option<String>,
     pub(super) pending_mfa_cookie: Option<String>,
+    /// RFC 096-B1 stage 9 fix round, R1: the full response headers, so a
+    /// test can inspect a `Set-Cookie` line's attributes (`Path`,
+    /// `Max-Age`) directly rather than only the extracted value —
+    /// `extract_set_cookie` strips everything after the first `;`, which
+    /// is exactly what let a column committing to an already-expired,
+    /// wrongly-scoped cookie pass every existing assertion.
+    pub(super) headers: axum::http::HeaderMap,
 }
 
 /// Run `/auth/federated/up/start` and then the callback. `nonce_slot` must
@@ -315,7 +332,70 @@ pub(super) async fn federated_signin(state: &AppState, nonce_slot: &NonceSlot) -
             .filter(|v| !v.is_empty()),
         pending_mfa_cookie: extract_set_cookie(cb.headers(), "sui_id_pending_mfa")
             .filter(|v| !v.is_empty()),
+        headers: cb.headers().clone(),
     }
+}
+
+/// RFC 096-B1 stage 9 fix round, R1: the exact assertion that would have
+/// caught the returned shape — a continuation cookie is present, scoped
+/// `Path=/` (not `/auth/federated`, which `/admin/login/mfa` would never
+/// receive), and alive (`Max-Age` present and not `0`).
+fn assert_continuation_cookie_live(headers: &axum::http::HeaderMap, name: &str) {
+    let set_cookie = headers
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .find(|s| s.starts_with(&format!("{name}=")))
+        .unwrap_or_else(|| panic!("no Set-Cookie for {name} at all"));
+    assert!(
+        set_cookie.contains("Path=/;") || set_cookie.ends_with("Path=/"),
+        "{name} not scoped Path=/: {set_cookie}"
+    );
+    assert!(
+        !set_cookie.contains("Max-Age=0"),
+        "{name} is expired, not live: {set_cookie}"
+    );
+    let value = set_cookie
+        .strip_prefix(&format!("{name}="))
+        .and_then(|rest| rest.split(';').next())
+        .unwrap_or("");
+    assert!(!value.is_empty(), "{name} has an empty value: {set_cookie}");
+}
+
+/// The raw value of a `Set-Cookie` line, for comparing against what the
+/// row stored. Separate from `extract_set_cookie` only because this one
+/// panics with the cookie's name rather than returning `None`, so a
+/// missing cookie fails as a missing cookie and not as a digest mismatch.
+fn continuation_cookie_value(headers: &axum::http::HeaderMap, name: &str) -> String {
+    headers
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .find_map(|s| s.strip_prefix(&format!("{name}=")))
+        .and_then(|rest| rest.split(';').next())
+        .unwrap_or_else(|| panic!("no Set-Cookie for {name} at all"))
+        .to_owned()
+}
+
+/// The converse: the attempt's own callback-scoped cookies are expired on
+/// this response, the same way every other terminal path already expires
+/// them (`terminal()`, stage 6a) — included here so the test states both
+/// halves of R1's finding: the old binding is gone, the new ones are live.
+fn assert_attempt_cookie_expired(headers: &axum::http::HeaderMap, name: &str) {
+    let set_cookie = headers
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .find(|s| s.starts_with(&format!("{name}=")))
+        .unwrap_or_else(|| panic!("no Set-Cookie for {name} at all"));
+    assert!(
+        set_cookie.contains("Max-Age=0"),
+        "{name} not expired: {set_cookie}"
+    );
+    assert!(
+        set_cookie.contains("Path=/auth/federated"),
+        "{name} removal carries no explicit Path=/auth/federated: {set_cookie}"
+    );
 }
 
 async fn sessions_of(state: &AppState, user: UserId) -> i64 {
@@ -376,6 +456,85 @@ async fn fed_user_with_mfa_gets_the_mfa_step_not_a_session() {
     assert!(o.session_cookie.is_none());
     assert!(o.pending_mfa_cookie.is_some());
     assert_eq!(sessions_of(&state, user).await, 0);
+
+    // RFC 096-B1 stage 9, F02: fixes the status-quo bug on this exact
+    // branch -- the attempt used to sit `exchanging` forever, since
+    // nothing completed it. Now it completes, and exactly one durable
+    // `federation_mfa_pending` row is recorded alongside the generic
+    // pending-MFA row the harness's own `pending_mfa_cookie` assertion
+    // above already covers.
+    assert_eq!(
+        scalar(&state, "SELECT COUNT(*) FROM federation_mfa_pending".into()).await,
+        1,
+        "exactly one federated MFA continuation row"
+    );
+    assert_eq!(
+        scalar(
+            &state,
+            "SELECT COUNT(*) FROM federation_login_attempt WHERE status = 'completed'".into()
+        )
+        .await,
+        1,
+        "the attempt completes instead of being left exchanging"
+    );
+
+    // RFC 096-B1 stage 9, item 7: the legacy password event is replaced,
+    // not duplicated -- no password was presented on this path.
+    assert_eq!(
+        scalar(
+            &state,
+            "SELECT COUNT(*) FROM audit_log WHERE action = 'auth.federation.mfa_required'".into()
+        )
+        .await,
+        1,
+        "the new, honest observation is recorded"
+    );
+    assert_eq!(
+        scalar(
+            &state,
+            "SELECT COUNT(*) FROM audit_log WHERE action = 'auth.login.password_ok_mfa_required'"
+                .into()
+        )
+        .await,
+        0,
+        "the legacy, factually wrong event is not"
+    );
+
+    // RFC 096-B1 stage 9 fix round, R1: the exact assertion that would
+    // have caught the returned shape -- `browser_binding_sha256` must
+    // commit to a value this response actually leaves the browser able
+    // to present, not to `sui_id_fed_browser_binding`, which this same
+    // response expires (and which is scoped away from the eventual
+    // reader regardless).
+    assert_continuation_cookie_live(&o.headers, "sui_id_fed_mfa_pending");
+    assert_continuation_cookie_live(&o.headers, "sui_id_fed_mfa_csrf");
+    assert_continuation_cookie_live(&o.headers, "sui_id_fed_mfa_browser_binding");
+    assert_attempt_cookie_expired(&o.headers, "sui_id_fed_state");
+    assert_attempt_cookie_expired(&o.headers, "sui_id_fed_browser_binding");
+
+    // The *commitment*, which presentability alone does not give: each
+    // binding column must hold the digest of the value this very response
+    // hands the browser. The five assertions above prove a live, correctly
+    // scoped cookie exists and a row exists -- separately. A handler that
+    // minted one value for the cookie and passed a different one (or the
+    // attempt's old digest) to F02 would satisfy every one of them and
+    // still leave stage 10 unable to verify anything.
+    for (cookie, column) in [
+        ("sui_id_fed_mfa_browser_binding", "browser_binding_sha256"),
+        ("sui_id_fed_mfa_csrf", "csrf_binding_sha256"),
+    ] {
+        let raw = continuation_cookie_value(&o.headers, cookie);
+        let stored = scalar_text(
+            &state,
+            format!("SELECT lower(hex({column})) FROM federation_mfa_pending"),
+        )
+        .await;
+        assert_eq!(
+            stored,
+            sui_id_core::tokens::sha256_hex(&raw),
+            "{column} must be the SHA-256 of {cookie}'s own value"
+        );
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

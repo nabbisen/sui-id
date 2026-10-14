@@ -3,7 +3,7 @@
 //! sui-id is correct without these — the read paths already filter out
 //! expired entries. The GC keeps the on-disk representation tidy and
 //! prevents unbounded growth of single-use tables (`auth_codes`, `sessions`,
-//! `refresh_tokens`, `federation_login_attempt`).
+//! `refresh_tokens`, `federation_login_attempt`, `federation_mfa_pending`).
 //!
 //! The interval is fixed at 15 minutes to avoid one more configuration knob;
 //! the operator can shut down the binary if they need different behaviour.
@@ -11,8 +11,8 @@
 use crate::AppState;
 use std::time::Duration;
 use sui_id_store::repos::{
-    auth_codes, federation_login_attempt, login_pending_mfa, refresh_tokens, revoked_access_tokens,
-    sessions, webauthn_pending,
+    auth_codes, federation_login_attempt, federation_mfa_pending, login_pending_mfa,
+    refresh_tokens, revoked_access_tokens, sessions, webauthn_pending,
 };
 
 const GC_INTERVAL: Duration = Duration::from_secs(15 * 60);
@@ -76,5 +76,21 @@ pub async fn run_once(state: &AppState) {
         }
         Ok(_) => {}
         Err(e) => tracing::warn!(error = %e, "gc: federation_login_attempt purge failed"),
+    }
+    // RFC 096-B1 stage 9, RFC 096 `:734`: the row this stage's F02 first
+    // writes. Not filtered on `status` (`federation_mfa_pending::
+    // purge_expired`'s own doc explains why) and needs no separate
+    // ceremony-table purge: `federation_webauthn_ceremony`'s composite
+    // `FOREIGN KEY ... ON DELETE CASCADE` (migration 0047's fix round)
+    // collects any ceremony this `DELETE` removes the parent of.
+    match federation_mfa_pending::purge_expired(db, state.clock.now()).await {
+        Ok(n) if n > 0 => {
+            tracing::info!(
+                deleted = n,
+                "gc: removed expired federated MFA continuations"
+            )
+        }
+        Ok(_) => {}
+        Err(e) => tracing::warn!(error = %e, "gc: federation_mfa_pending purge failed"),
     }
 }

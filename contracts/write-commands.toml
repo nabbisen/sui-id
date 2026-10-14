@@ -804,13 +804,13 @@ test_id = "`p_f01_linked_direct`"
 [[command]]
 id = "F02"
 class = "P"
-status = "target-legacy"  # implemented | target-absent | target-legacy
+status = "implemented"  # implemented | target-absent | target-legacy
 sealed = false
 owner = "Existing federation link, local MFA required / RFC 096 federation login"
 rationale = "short-lived continuation under U32; no login-success event before MFA"
 mutation_surface = "require enabled exact-version/generation provider + same active link/user; guarded attempt `exchanging -> completed`; insert one pending MFA row sealed as `Fed` primary and bound to provider/version/generation/link/user/continuation"
-files = ["crates/sui-id/src/http/handlers/federation.rs"]  # same as F01: legacy `federated_callback` is what F02 replaces, not what implements it. Depends on RFC 096-B1. Target-state row.
-test_id = "`p_f02_linked_mfa_begin`"
+files = ["crates/sui-id-store/src/commands.rs", "crates/sui-id-store/src/repos/federation_mfa_pending.rs", "crates/sui-id-store/src/registry.rs", "crates/sui-id/src/http/handlers/federation.rs"]
+test_id = "`f02_completes_the_attempt_and_creates_exactly_one_pending_row`, `f02_injected_commit_failure_rolls_back_everything`, `f02_refuses_when_the_attempt_is_no_longer_exchanging`, `f02_refuses_when_the_link_has_been_removed`"
 
 [[command]]
 id = "F03"

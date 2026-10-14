@@ -2337,6 +2337,109 @@ pub async fn provision_federated_user(
     .await
 }
 
+// ── F02 — existing federated link, local MFA required (Protocol) ───────
+
+/// Run F02 (RFC 094 `:549`, RFC 096 `:719-722`) through the `Protocol`
+/// runner. No event, no audit row is possible here by construction — the
+/// same reasoning as T09 (`insert_initial_refresh_token`, above): F02 is
+/// Class P (`contracts/write-commands.toml`), and a Class-P command has no
+/// path to `Audited<T>` by construction (`registry.rs`'s own
+/// "Non-atomic runners" section). The Class-B observation that replaces
+/// the legacy `auth.login.password_ok_mfa_required` append on this branch
+/// (RFC 096-B1 stage 9, item 7) is emitted by the caller, through
+/// `repos::audit::emit_must_attempt` and
+/// `repos::federation_mfa_pending::AUDIT_MFA_REQUIRED_DESCRIPTOR` — outside
+/// this transaction, the same way every other `emit_must_attempt` call
+/// site in this codebase sits outside its own Class-A/Class-P boundary
+/// (RFC 094 A6: a failure to log never blocks the write this stage's own
+/// two writes already committed).
+///
+/// Exactly two writes, both or neither: the guarded attempt completion
+/// (`federation_login_attempt::complete_within_tx`, the same function F04
+/// already uses) and exactly one `federation_mfa_pending` row
+/// (`federation_mfa_pending::insert_within_tx`). `pending.user_id` and
+/// `pending.provider_id` must already agree with `attempt_id`'s own
+/// resolved identity — the caller resolves all three before opening this
+/// transaction, the same division `provision_federated_user` (F04) already
+/// uses for `attempt_id`/`provider_id`/`user`/`link`/`session`.
+///
+/// **The "active link" recheck is the row's own `FOREIGN KEY`,** atomic
+/// with the insert (migration 0047's fix round: `FOREIGN KEY (user_id,
+/// provider_id) REFERENCES federation_link`) — not a separate `SELECT`
+/// this write could race past. A lost race on either write (the attempt
+/// no longer `exchanging`, or the link gone) is `StoreError::Conflict`.
+///
+/// **The provider-enabled/version/generation recheck and the "active
+/// user" recheck are not repeated here.** Both already run, fresh, in the
+/// caller's own request before this function is reached:
+/// `federated_callback`'s single `provider.enabled` check plus `claim`'s
+/// own provider-triple match (RFC 096 `:597-598`) cover the provider;
+/// `complete_federated_signin`'s own re-read of the user
+/// (`!is_disabled && !is_deleted`) covers the user, a few lines before the
+/// branch that calls this function. Neither is this stage's own new
+/// mechanism — both are named here, not reimplemented, so the recheck
+/// this stage *does* add (the link `FOREIGN KEY`) is not mistaken for
+/// covering all three.
+///
+/// Builds and seals the row itself from its raw pieces, rather than
+/// taking a pre-built `FederationMfaPendingRow` — the same "crypto is
+/// sync, seal before entering `with_conn`" shape
+/// `federation_login_attempt::insert` already uses, and it keeps
+/// `continuation_sealed`'s AAD construction (`build_aad`, five columns,
+/// all resolved here) out of the caller's crate entirely: the HTTP
+/// handler never needs to know the sealed column exists, only that this
+/// function returns the new row's id for the cookie it does need to set.
+/// `now` is sampled once by the caller and used for both `created_at` and
+/// `expires_at` here, not read twice — the schema's own `expires_at =
+/// created_at + 300s` `CHECK` would refuse a row straddling a clock tick
+/// between two reads.
+#[allow(clippy::too_many_arguments)]
+pub async fn issue_federated_mfa_pending(
+    db: &crate::Database,
+    attempt_id: FederationLoginAttemptId,
+    provider_id: FederationProviderId,
+    provider_config_version: i64,
+    provider_activation_generation: i64,
+    user_id: UserId,
+    next_path: Option<String>,
+    browser_binding_sha256: [u8; 32],
+    csrf_binding_sha256: [u8; 32],
+    now: DateTime<Utc>,
+) -> StoreResult<sui_id_shared::ids::FederationMfaPendingId> {
+    let id = sui_id_shared::ids::FederationMfaPendingId::new();
+    let aad = crate::repos::federation_mfa_pending::build_aad(
+        id,
+        provider_id,
+        provider_config_version,
+        provider_activation_generation,
+        user_id,
+    );
+    let continuation_sealed = crate::crypto::seal(db.key(), &[], &aad)?;
+    let pending = crate::models::FederationMfaPendingRow {
+        id,
+        provider_id,
+        provider_config_version,
+        provider_activation_generation,
+        user_id,
+        continuation_sealed,
+        next_path,
+        browser_binding_sha256,
+        csrf_binding_sha256,
+        created_at: now,
+        expires_at: now
+            + chrono::Duration::seconds(
+                crate::repos::federation_mfa_pending::PENDING_LIFETIME_SECS,
+            ),
+    };
+    db.protocol(move |write| -> StoreResult<()> {
+        crate::repos::federation_login_attempt::complete_within_tx(write.tx(), attempt_id)?;
+        crate::repos::federation_mfa_pending::insert_within_tx(write.tx(), &pending)?;
+        Ok(())
+    })
+    .await?;
+    Ok(id)
+}
+
 // ── L02 — second-factor sign-in (RFC 102 Part A) ────────────────────────
 
 static L02_SUCCESS: EventDescriptor = EventDescriptor {

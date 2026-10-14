@@ -835,3 +835,35 @@ pub struct FederationLoginAttemptRow {
     pub status: FederationLoginAttemptStatus,
     pub claimed_at: Option<DateTime<Utc>>,
 }
+
+/// A newly-created `pending` row in the `federation_mfa_pending` table (RFC
+/// 096 :719-734, migration 0047). Stage 9 (F02) is the only writer this
+/// crate has; there is no `status`/`failure_count`/`primary_method` field
+/// here because every one of those columns has a `DEFAULT` the table itself
+/// supplies ('pending', 0, 'fed') and this row is never constructed in any
+/// other state — `repos::federation_mfa_pending::insert_within_tx` does not
+/// name them in its `INSERT`, and SQLite fills them in. A future stage that
+/// needs to represent a *promoted* or *exhausted* row (stage 10, F03) adds
+/// its own fields/enum then, the same way `FederationLoginAttemptStatus`
+/// was added only once something needed to read a non-`pending` status back.
+///
+/// `continuation_sealed` is AAD-bound to `id`, `provider_id`,
+/// `provider_config_version`, `provider_activation_generation` and
+/// `user_id` — all five are columns on this same row
+/// (`repos::federation_mfa_pending::build_aad`), the same reconstruct-
+/// from-the-row convention `FederationLoginAttemptRow::pkce_verifier_sealed`
+/// already uses.
+#[derive(Debug, Clone)]
+pub struct FederationMfaPendingRow {
+    pub id: sui_id_shared::ids::FederationMfaPendingId,
+    pub provider_id: sui_id_shared::ids::FederationProviderId,
+    pub provider_config_version: i64,
+    pub provider_activation_generation: i64,
+    pub user_id: UserId,
+    pub continuation_sealed: Vec<u8>,
+    pub next_path: Option<String>,
+    pub browser_binding_sha256: [u8; 32],
+    pub csrf_binding_sha256: [u8; 32],
+    pub created_at: DateTime<Utc>,
+    pub expires_at: DateTime<Utc>,
+}

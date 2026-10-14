@@ -256,6 +256,12 @@ pub enum AuditEventKind {
     /// local user, created and linked on an upstream identity's first
     /// successful sign-in under `provision_on_first_login`.
     AuthFederationProvisioned,
+    /// `auth.federation.mfa_required` — RFC 096-B1 stage 9, F02: a
+    /// federated sign-in for an existing, already-linked user whose local
+    /// account requires a second factor. Replaces the legacy
+    /// `auth.login.password_ok_mfa_required` append on this branch, which
+    /// asserted a password was presented when none was.
+    AuthFederationMfaRequired,
 }
 
 /// The registry entry for one [`AuditEventKind`]. `descriptor()` on a
@@ -957,43 +963,102 @@ impl Database {
     /// Run `build` inside a transaction under the `Protocol` policy. No
     /// event, no audit row, no `Audited<T>` — Class-P commands are not the
     /// tamper-evident chain (RFC 094 Requirements).
+    ///
+    /// RFC 096-B1 stage 9: a domain error (`E`) can't cross `with_tx`'s
+    /// `StoreResult<R>` boundary directly — this closure used to return
+    /// `Ok(build(&mut write))` unconditionally, which is a
+    /// `StoreResult::Ok` as far as `with_tx`/`with_tx_erased` are
+    /// concerned whether `build`'s own `Result` was `Ok` or `Err`, so `?`
+    /// never fired and `tx.commit()` ran regardless — found by F02's own
+    /// `f02_refuses_when_the_link_has_been_removed` (a two-write Protocol
+    /// command whose second write fails: the first write committed
+    /// anyway). [`Database::class_a`] carries an identical comment citing
+    /// the same bug, fixed there in RFC 094 Stage 2 but never ported to
+    /// this function or [`Database::operational`] below, which share its
+    /// exact shape. Fixed the same way: stash the real `E` and return a
+    /// genuine `StoreResult::Err` instead, so `with_tx`'s own `?` rolls
+    /// back, then recover the stashed `E` below rather than re-deriving
+    /// one from the generic `StoreError` that forced the rollback.
     pub async fn protocol<T, E, F>(&self, build: F) -> Result<T, E>
     where
         T: Send + 'static,
         E: From<StoreError> + Send + 'static,
         F: FnOnce(&mut WriteTx<'_, Protocol>) -> Result<T, E> + Send + 'static,
     {
+        let domain_error: std::sync::Arc<std::sync::Mutex<Option<E>>> =
+            std::sync::Arc::new(std::sync::Mutex::new(None));
+        let domain_error_for_closure = domain_error.clone();
         let result = self
-            .with_tx(move |tx| -> StoreResult<Result<T, E>> {
+            .with_tx(move |tx| -> StoreResult<T> {
                 let mut write = WriteTx::new(tx);
-                Ok(build(&mut write))
+                match build(&mut write) {
+                    Ok(v) => Ok(v),
+                    Err(e) => {
+                        #[allow(clippy::expect_used)]
+                        domain_error_for_closure
+                            .lock()
+                            .expect("domain_error mutex poisoned")
+                            .replace(e);
+                        Err(StoreError::Integrity(
+                            "protocol: build failed, rolling back".into(),
+                        ))
+                    }
+                }
             })
             .await;
         match result {
-            Ok(Ok(v)) => Ok(v),
-            Ok(Err(e)) => Err(e),
-            Err(store_err) => Err(E::from(store_err)),
+            Ok(v) => Ok(v),
+            Err(store_err) => {
+                #[allow(clippy::expect_used)]
+                let stashed = domain_error
+                    .lock()
+                    .expect("domain_error mutex poisoned")
+                    .take();
+                Err(stashed.unwrap_or_else(|| E::from(store_err)))
+            }
         }
     }
 
     /// Same shape as [`Database::protocol`], under the `Operational`
-    /// policy.
+    /// policy — including the same RFC 096-B1 stage 9 fix, for the same
+    /// reason: this function shared `protocol`'s original bug exactly.
     pub async fn operational<T, E, F>(&self, build: F) -> Result<T, E>
     where
         T: Send + 'static,
         E: From<StoreError> + Send + 'static,
         F: FnOnce(&mut WriteTx<'_, Operational>) -> Result<T, E> + Send + 'static,
     {
+        let domain_error: std::sync::Arc<std::sync::Mutex<Option<E>>> =
+            std::sync::Arc::new(std::sync::Mutex::new(None));
+        let domain_error_for_closure = domain_error.clone();
         let result = self
-            .with_tx(move |tx| -> StoreResult<Result<T, E>> {
+            .with_tx(move |tx| -> StoreResult<T> {
                 let mut write = WriteTx::new(tx);
-                Ok(build(&mut write))
+                match build(&mut write) {
+                    Ok(v) => Ok(v),
+                    Err(e) => {
+                        #[allow(clippy::expect_used)]
+                        domain_error_for_closure
+                            .lock()
+                            .expect("domain_error mutex poisoned")
+                            .replace(e);
+                        Err(StoreError::Integrity(
+                            "operational: build failed, rolling back".into(),
+                        ))
+                    }
+                }
             })
             .await;
         match result {
-            Ok(Ok(v)) => Ok(v),
-            Ok(Err(e)) => Err(e),
-            Err(store_err) => Err(E::from(store_err)),
+            Ok(v) => Ok(v),
+            Err(store_err) => {
+                #[allow(clippy::expect_used)]
+                let stashed = domain_error
+                    .lock()
+                    .expect("domain_error mutex poisoned")
+                    .take();
+                Err(stashed.unwrap_or_else(|| E::from(store_err)))
+            }
         }
     }
 }
