@@ -48,6 +48,7 @@ ROADMAP.md	658706ddbed319e228edf698df963a221a9dca6e3ba4b7ca9a9a2ec92e2d7ac6	1	Cl
 ROADMAP.md	66cebadbafa4da26caab4cd9e8f630bba442002ad34dd60ac6e4e9c09a766195	1	23 RFCs sit in accepted/ and not one has ever moved to done/ . The RFC-completion stage @nabbisen identified on 2026-10-01 (RFC 131's owner 
 ROADMAP.md	66ee0dcfa997e967a91d9f0d1db35574fc86300bf75651f760fcb9863f6b9022	1	R7 Pre-RFC-094 dynamic registrations are indistinguishable from admin-created clients Certain (historical) Medium — provenance cannot be pro
 ROADMAP.md	68a3e3ed97de6ca9d6583624727828adfc39a44555bbbb185c9180166cba96e7	1	Where no role other than the author can perform a review, the gap is recorded as unreviewed design judgment and the owner rules on it with t
+ROADMAP.md	6e364cabaa11522c5c854bd5ae883cd048fd57c65b877741fc33ee0d474451fd	1	Cycle D proposed by the architect and authorized by @nabbisen on 2026-10-15, in his words: "Your recommendation is accepted." He also restat
 ROADMAP.md	766450b57c4bb79e356dfd9ac065f79cbec7c49ef087e3ca6fa8ba0c5afad2b6	1	#### S1a — The workflow, ruled by @nabbisen on 2026-10-01
 ROADMAP.md	7c3b4d73cf9008f591c43f49ceb79d4570fa262c5fa82e72506f9abea4c17ebb	1	All remain Proposed , no schedule, require owner direction + soak.
 ROADMAP.md	831b9986beea7e5a3407a96fb665d91220901ae66ea5285416a15da856e8f4df	1	Ruled 2026-09-22 ( @nabbisen ): Chinese is necessary but not urgent — it waits until the APIs are stable, and then a native-speaker review, 

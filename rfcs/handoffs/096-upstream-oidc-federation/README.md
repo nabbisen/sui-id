@@ -211,8 +211,10 @@ round. The F03 seam question is **answered** — option A-plus-four, in
 — and its amendment has **landed**: RFC 096 returned to `proposed/` and was
 re-accepted the same day, in one pass, on `@nabbisen`'s approval. `:759-760`
 now says which half of "handlers can neither" the compiler holds and which a
-source-scope test does. **Stage 10b is unblocked and not yet dispatched**; its
-scope gains the gate.
+source-scope test does. **Stage 10b is dispatched**, carrying that test in its
+own scope. A second dispatch, the CHANGELOG catch-up, is open alongside it:
+cycle D is gated on stage 12, so the entries for stages 7–10a are written now
+while what each one does and does not deliver is still easy to say honestly.
 Stage 10
 is split into **10a** (the `FederatedMfaVerifier`, its binding gate and its
 candidates, no writes) and **10b** (F03's four guarded outcomes), a
@@ -222,7 +224,22 @@ deferred to after stage 11 by the 2026-10-12 authorization. Its RFC 094 record
 question is taken in the gap before stage 12; the section further down carries
 it.
 
-### Waiting on the owner — nothing dispatched
+### Dispatched and open
+
+- [`stage10b-f03-the-four-guarded-outcomes-2026-10-15.md`](stage10b-f03-the-four-guarded-outcomes-2026-10-15.md)
+  — **the open work.** F03's four guarded Protocol outcomes, the failure-count
+  machine at `:766-772` including the equality boundary when a wrong and a
+  correct proof race at count 4, the three new Class-B events (none of which
+  exists in either the matrix or the reference yet), and the source-scope test
+  the seam decision made part of this stage. No WebAuthn branch — F06 is stage
+  11's — and no handler; stage 12 wires it.
+- [`changelog-catch-up-2026-10-15.md`](changelog-catch-up-2026-10-15.md) —
+  the `Unreleased` section is empty after four feature commits. Stage 7 is the
+  only one of them an operator gains anything from; the entries have to say
+  that, and the audit-event change has to be unmissable because it is the only
+  one that can break something already relied on.
+
+### Settled — the F03 seam
 
 - [`f03-seam-decision-request-2026-10-14.md`](f03-seam-decision-request-2026-10-14.md)
   — **answered 2026-10-14: option A-plus-four.** What is still open is the

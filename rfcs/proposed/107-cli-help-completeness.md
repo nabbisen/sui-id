@@ -13,7 +13,7 @@
 
 ## Summary
 
-`print_help` omits three subcommands the binary dispatches — `setup`, `admin rotate-metrics-token` and `admin issue-registration-token` — and the admin dispatcher's own error message lists the admin subactions a third time. Three hand-written lists have drifted apart. The same drift breaks dev mode: `find_subcommand` skips a flag's value only for `--config`, `--to` and `--from`, so the value after `--dev-seed` or `--dev-bind` is read as a subcommand.
+`print_help` omits two subactions the binary dispatches — `admin rotate-metrics-token` and `admin issue-registration-token` — and the admin dispatcher's own error message lists the admin subactions a third time. *(Corrected 2026-10-15: this sentence also named `setup`, which is not omitted — `cli.rs:680` carries it, and so did `9f6acdb`, the commit this RFC names as its own measurement point. Found by the implementation role's independent design review, which checked the claim against both trees rather than taking it. Two subactions and the `find_subcommand` defect below are still worth this RFC.)* Three hand-written lists have drifted apart. The same drift breaks dev mode: `find_subcommand` skips a flag's value only for `--config`, `--to` and `--from`, so the value after `--dev-seed` or `--dev-bind` is read as a subcommand.
 
 ## Why this is an RFC
 

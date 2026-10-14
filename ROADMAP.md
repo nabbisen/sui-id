@@ -922,6 +922,7 @@ date. The release treatment of each item follows the 2026-08-26 surface test.
 | **A — close what is open** | v0.78.0 | 2026-09-23 → 10-10 | **Complete 2026-09-24**, ahead of the window. RFC 115 Implemented; RFC 103 closed; RFC 110 Implemented; RFC 105 Implemented; RFC 117 stages 0/0b landed |
 | **B — make the contracts true** | v0.79.0 | 2026-10-13 → 10-24 | **Released and published 2026-10-01, twelve days ahead of the window, as a security release** — cut early because fixes for two flaw classes affecting every published version were sitting unreleased (RFC 120, RFC 125). Carried cycle B's landed work with it: RFC 116 stages 1–7, RFC 112, RFC 118, plus RFCs 121–127. **RFC 106 did not make it** and moves to cycle C. Level B green on `756e9f9` (CI 23/23); all six crates verified on crates.io |
 | **C — the main line resumes** | v0.80.0 | **No window. M2a closed 2026-10-03; the gate on this cycle is cleared** | RFC 094 M2a. **Re-read complete 2026-10-02** — [`m2a-re-read-2026-10-02.md`](rfcs/handoffs/094-transactional-audit/m2a-re-read-2026-10-02.md). The condition this row previously set, "re-read against the eight commands RFCs 102 and 103 converted", **named a set of eight that does not exist** — the architect wrote it and cannot reconstruct the figure; 26 identifiers are mentioned by those RFCs and 11 are sealed. Read as intended — re-read against what changed — and discharged. Measured scope: **67 Class-A commands, 44 remaining**. **Two of the five clauses are now met** — C15 is atomic (validate-first, rollback proven by injected failure) and `rusqlite` is confined to `sui-id-store` and gate-asserted. **Three remain**, dispatched 2026-10-02 in [`m2a-rollback-coverage-2026-10-02.md`](rfcs/handoffs/094-transactional-audit/m2a-rollback-coverage-2026-10-02.md): every sealed command reaches the Class-A seam **in fact but not in enforcement**; injected-failure rollback stands at **13 of 24** sealed commands, the eleven without one being U03, U05, U12, U22 and L01–L07; and the structural gate is not landed. The gate comes first, so a 25th command cannot be added without a rollback test while the eleven are being written |
+| **D — the federated path becomes real** | v0.81.0 | **No window. Gated on 096-B1 stage 12, not on a date** | 096-B1 stages 7–12 and RFC 139. **Deliberately not cut at stage 10a**, 2026-10-15: of the four feature commits since v0.80.0, only stage 7 (F04) delivers anything an operator can use. The stage-10a verifier has zero callers; `federation_mfa_pending` is touched outside `sui-id-store` only by the handler that writes it and the GC that purges it, so every federated MFA sign-in writes a row and sets three cookies that nothing reads, while MFA still completes through the generic `login_pending_mfa` path. Worse than inert: stage 9 replaced `auth.login.password_ok_mfa_required` with `auth.federation.mfa_required` on the federated path, so an operator alerting on the old event loses their federated signal on upgrade and gets nothing back until stage 12. Stage 12 makes it one coherent change instead of a monitoring break followed later by a feature. RFC 107 joins this cycle if it is Accepted in time; it does not gate it |
 
 **Windows moved 2026-09-24, authorized the same day.** RFC 115's independent
 design review returned a blocker — an administrator-typed email address reaches
@@ -929,6 +930,14 @@ the unauthenticated `/forgot-password` form, so removing the password field
 alone would not have closed the hole — and the RFC grew by five decisions in
 consequence. Cycles A, B and C each move one week. Scope was not cut to hold
 the date, per the rule of 2026-07-16.
+
+**Cycle D proposed by the architect and authorized by `@nabbisen` on
+2026-10-15, in his words: *"Your recommendation is accepted."*** He also
+restated the division it falls under — making the schedule and managing
+release cycles is the architect's; authorizing them is his. The measurements
+behind the row are in the architect's assessment of the same day; nothing in
+these four stages is a security fix, and v0.80.0 shipped two days before, so
+neither urgency test in the 2026-08-26 rule applies.
 
 RFC 117 is not scheduled into a cycle: it cannot start until `@nabbisen` holds
 a signing key no agent can use, which is its own prerequisite. It was accepted
