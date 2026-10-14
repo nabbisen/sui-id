@@ -1,6 +1,6 @@
 # RFC 096 developer handoff
 
-**Governing RFC:** [RFC 096](../../proposed/096-upstream-oidc-federation-validation.md)
+**Governing RFC:** [RFC 096](../../accepted/096-upstream-oidc-federation-validation.md)
 **Audience:** the mid-capability model only after the applicable entry gate
 **Status:** Planning companion; inherits the governing RFC's current status — **Accepted 2026-08-27**, the 2026-07-28 return to `proposed/` for a material prerequisite and staging amendment having closed. **096-A is under way as of 2026-10-07**: all four entry gates are satisfied. Stages 1–5 have landed (stage 5 at `2a6c35d`, Level B); stage 6a is the open work, and **096-A does not close until stages 6a–9 land** — see **Open work** below, which is the current index. See **Open work** below, which is the current index.
 

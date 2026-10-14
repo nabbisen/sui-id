@@ -68,6 +68,7 @@ slot is `104`). One **parallel namespace** also exists:
 | 093 | [Build, Toolchain, and Release-Gate Contract](./done/093-build-toolchain-release-gates.md) | M1a, M1b | the mid-capability model |
 | 094 | [Transactional Audit Completeness and Typed Event Registry](./accepted/094-transactional-audit-registry.md) | M2a, M2b | the mid-capability model (implementation and testing agent) |
 | 095 | [Dynamic Client Registration Transaction and Validation](./accepted/095-dynamic-client-registration-transaction.md) | M3 | the mid-capability model (implementation and testing agent) |
+| 096 | [Upstream OIDC Federation Validation](./accepted/096-upstream-oidc-federation-validation.md) | M4-A, M4-B | the mid-capability model (implementation and testing agent) |
 | 098 | [Documentation Authority and Reconciliation](./done/098-documentation-authority-reconciliation.md) | M5 | mid-capability model |
 | 102 | [Authentication that cannot be audited does not succeed](./done/102-authentication-fails-closed-without-audit.md) | **Implemented, closed 2026-09-22** | mid-capability model |
 | 103 | [Administrator-issued account recovery](./done/103-administrator-issued-account-recovery.md) | **Implemented, closed 2026-09-24** | mid-capability model |
@@ -97,7 +98,6 @@ and permits design review only; it does not authorize implementation.
 
 | RFC | Title | Milestone |
 |---|---|---|
-| 096 | [Upstream OIDC Federation Validation](./proposed/096-upstream-oidc-federation-validation.md) | M4-A, M4-B — **returned 2026-10-14 for the F03-seam amendment; re-acceptance pending** |
 | 097 | [Current Threat Model and Security-Assurance Baseline](./proposed/097-current-threat-model.md) | M5 |
 | 099 | [Operational Hardening and Soak Readiness](./proposed/099-operational-hardening-soak-readiness.md) | M6–M7 |
 | 101 | [Email lifecycle: verification and change](./proposed/101-email-lifecycle-verification-and-change.md) | sequenced at owner discretion |

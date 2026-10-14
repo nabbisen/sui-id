@@ -22,7 +22,7 @@ directory.
 
 ## RFC
 
-**`rfcs/proposed/096-upstream-oidc-federation-validation.md` — Status:
+**`rfcs/accepted/096-upstream-oidc-federation-validation.md` — Status:
 Accepted.** This is **096-A stage 1 of a planned five**; the stage map is at the
 end.
 

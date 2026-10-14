@@ -30,7 +30,7 @@ This is the strongest form of the finding available from the repository alone, a
 ## RFC 094/095/096 — quotes confirmed
 
 - `rfcs/handoffs/094-transactional-audit/094-095-096-correction-review-2026-08-26.md:255-257` — *"the 2026-08-26 correction (re-pointing 096-B1's prerequisite to 'M2a's runner foundation' instead) is the right fix for what this question actually found"* — confirmed, reading the full surrounding paragraph for context rather than the fragment alone.
-- `rfcs/proposed/096-upstream-oidc-federation-validation.md:14` carries exactly **"Amendment summary (2026-08-26)"**, matching the claim that this amendment (unlike RFC 117's) is recorded.
+- `rfcs/accepted/096-upstream-oidc-federation-validation.md:14` carries exactly **"Amendment summary (2026-08-26)"**, matching the claim that this amendment (unlike RFC 117's) is recorded.
 
 ## RFC 110 — quotes and the approval's exact wording confirmed, typo included
 

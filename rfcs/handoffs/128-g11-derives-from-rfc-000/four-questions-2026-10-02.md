@@ -11,7 +11,7 @@ sophisticated design."*
 ## Q2 — the 094/095/096 scheduling judgment: approved, recorded
 
 *"Approved."*, 2026-10-02, **before M2a starts**. Recorded in
-`rfcs/proposed/096-upstream-oidc-federation-validation.md` above the amendment it
+`rfcs/accepted/096-upstream-oidc-federation-validation.md` above the amendment it
 governs, naming that the judgment was the implementation role's, endorsed by the
 architect, and had never been before him until now.
 

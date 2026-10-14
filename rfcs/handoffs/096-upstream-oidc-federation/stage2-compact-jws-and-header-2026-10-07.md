@@ -20,7 +20,7 @@ cost you a gate run in stage 5, and the cause was my guard, not your method.
 
 ## RFC
 
-**`rfcs/proposed/096-upstream-oidc-federation-validation.md` — Accepted.**
+**`rfcs/accepted/096-upstream-oidc-federation-validation.md` — Accepted.**
 Stage 1 landed in `9baf106`. **This is stage 2 of five.**
 
 ## The constraint that shapes this whole stage
