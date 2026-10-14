@@ -205,22 +205,37 @@ was my omission** — three dispatches written without updating the index the
 implementation role reads.
 
 **Updated 2026-10-14.** **`0.80.0` is released**, **stage 9 landed
-`f5b4035`** (one fix round), and **stage 10a is in its fix round** — its first
-package was reviewed and returned. Stage 10
+`f5b4035`** (one fix round), and **stage 10a has landed** after one fix
+round. **Nothing is dispatched**: stage 10b waits on a written request for
+`@nabbisen`. It is
+[`f03-seam-decision-request-2026-10-14.md`](f03-seam-decision-request-2026-10-14.md).
+Stage 10
 is split into **10a** (the `FederatedMfaVerifier`, its binding gate and its
 candidates, no writes) and **10b** (F03's four guarded outcomes), a
 scheduling change the architect proposed and the stage plan records as
-awaiting authorization. **Stage 10b is additionally blocked on a design
-question 10a's own placement decision raised** — see the fix dispatch's
-closing section. Stage 6d is
+awaiting authorization. Stage 6d is
 deferred to after stage 11 by the 2026-10-12 authorization. Its RFC 094 record
 question is taken in the gap before stage 12; the section further down carries
 it.
 
-### Dispatched and open
+### Waiting on the owner — nothing dispatched
+
+- [`f03-seam-decision-request-2026-10-14.md`](f03-seam-decision-request-2026-10-14.md)
+  — **this is what the next dispatch waits on.** F03 is Class P and must live
+  in `sui-id-store`, which cannot name a `sui-id-core` type, so it will be a
+  `pub` command taking plain primitives — and `sui-id` handlers already call
+  `sui_id_store::commands::*` directly in eight places. RFC 096 `:758-762`'s
+  "handlers can neither construct a candidate nor supply a row-touching
+  reason" therefore holds at the `sui-id-core` → `sui-id` boundary and not at
+  the store one. Two options, a recommendation (hold the seam with a contract
+  and a gate rather than moving argon2 into the database crate, because the
+  move breaks again at stage 11's WebAuthn), and one question. Stage 10b is
+  not dispatched until it is answered.
+
+### Landed, 2026-10-14 (second)
 
 - [`stage10a-fix-a-row-the-verifier-can-actually-read-2026-10-14.md`](stage10a-fix-a-row-the-verifier-can-actually-read-2026-10-14.md)
-  — **DISPATCHED, this is the open work.** Stage 10a's fix round, seven items,
+  — **accepted and landed.** Stage 10a's fix round, seven items,
   three blocking. The package is accepted in substance — the placement
   argument, the candidate family, the two binding properties, the four
   `trybuild` fixtures and a self-found `Malformed` fix all stand. What does
@@ -232,8 +247,12 @@ it.
   R3 was also reversed without mention, leaving its defaults test true for one
   of the three columns it names. And seven `map_err(|_| BindingFailure)` turn
   a database outage into the same value as a wrong cookie — which is why the
-  first defect was invisible. Result:
-  `.git-exclude/reviewed/rfc-096-b1-stage10a-the-verifier-reads-a-row-it-cannot-read-2026-10-14.md`.
+  first defect was invisible. All seven returned correct, with one test folded
+  in by the architect at acceptance: collapsing `classify_store_error` so
+  every store error became a binding refusal — the defect the round existed
+  to remove — left all twelve tests passing, and a corrupted `secret_enc` now
+  fails exactly that mutation. Result:
+  `.git-exclude/reviewed/rfc-096-b1-stage10a-fix-a-row-the-verifier-can-actually-read-2026-10-14.md`.
 
 ### Reviewed and returned, 2026-10-14
 
