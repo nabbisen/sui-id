@@ -33,6 +33,8 @@ pub mod dashboard;
 pub mod discovery;
 pub mod errors;
 pub mod events;
+#[path = "authn/federated_mfa.rs"]
+pub mod federated_mfa;
 #[path = "account/forgot_password.rs"]
 pub mod forgot_password;
 #[path = "authn/hibp.rs"]

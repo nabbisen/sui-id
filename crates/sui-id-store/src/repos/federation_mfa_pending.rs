@@ -69,6 +69,55 @@ use chrono::{DateTime, Duration, Utc};
 use rusqlite::params;
 use sui_id_shared::ids::{FederationMfaPendingId, FederationProviderId, UserId};
 
+const SELECT_COLUMNS: &str = "id, provider_id, provider_config_version, \
+    provider_activation_generation, user_id, continuation_sealed, next_path, \
+    browser_binding_sha256, csrf_binding_sha256, failure_count, status, created_at, expires_at";
+
+fn map_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<FederationMfaPendingRow> {
+    let id_str: String = row.get(0)?;
+    let provider_id_str: String = row.get(1)?;
+    let user_id_str: String = row.get(4)?;
+    let browser_binding_sha256: Vec<u8> = row.get(7)?;
+    let csrf_binding_sha256: Vec<u8> = row.get(8)?;
+    let status_str: String = row.get(10)?;
+    let fixed = |v: Vec<u8>, col: usize| -> rusqlite::Result<[u8; 32]> {
+        v.try_into().map_err(|_| {
+            rusqlite::Error::FromSqlConversionFailure(
+                col,
+                rusqlite::types::Type::Blob,
+                "not 32 bytes".into(),
+            )
+        })
+    };
+    Ok(FederationMfaPendingRow {
+        id: id_str.parse().map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
+        })?,
+        provider_id: provider_id_str.parse().map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(1, rusqlite::types::Type::Text, Box::new(e))
+        })?,
+        provider_config_version: row.get(2)?,
+        provider_activation_generation: row.get(3)?,
+        user_id: user_id_str.parse().map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(4, rusqlite::types::Type::Text, Box::new(e))
+        })?,
+        continuation_sealed: row.get(5)?,
+        next_path: row.get(6)?,
+        browser_binding_sha256: fixed(browser_binding_sha256, 7)?,
+        csrf_binding_sha256: fixed(csrf_binding_sha256, 8)?,
+        failure_count: row.get(9)?,
+        status: status_str.parse().map_err(|_: StoreError| {
+            rusqlite::Error::FromSqlConversionFailure(
+                10,
+                rusqlite::types::Type::Text,
+                "unknown federation_mfa_pending status".into(),
+            )
+        })?,
+        created_at: row.get(11)?,
+        expires_at: row.get(12)?,
+    })
+}
+
 /// RFC 096 `:732-733`: 300 seconds from `created_at`.
 pub const PENDING_LIFETIME_SECS: i64 = 300;
 
@@ -98,11 +147,12 @@ pub fn build_aad(
 }
 
 /// Insert exactly one `pending` `federation_mfa_pending` row, on the
-/// caller's own transaction. `status`, `failure_count` and
-/// `primary_method` are not named in the column list — the table's own
-/// `DEFAULT`s ('pending', 0, 'fed') supply them, and this function never
-/// constructs a row in any other state (`models::FederationMfaPendingRow`'s
-/// own doc explains why there is no field for them to disagree about).
+/// caller's own transaction. `status` and `failure_count` are named
+/// explicitly now (stage 10a: `models::FederationMfaPendingRow`'s own
+/// doc explains why) — always `'pending'`/`0`, the only state this
+/// function ever constructs a row in. `primary_method` is still left to
+/// the table's own `DEFAULT` ('fed'): nothing reads it back yet, and the
+/// table's own `CHECK` pins it to that one value regardless.
 ///
 /// A `FOREIGN KEY (user_id, provider_id) REFERENCES federation_link`
 /// violation here (migration 0047's fix round) is this stage's "active
@@ -118,8 +168,8 @@ pub fn insert_within_tx(
         "INSERT INTO federation_mfa_pending( \
             id, provider_id, provider_config_version, provider_activation_generation, user_id, \
             continuation_sealed, next_path, browser_binding_sha256, csrf_binding_sha256, \
-            created_at, expires_at \
-        ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
+            failure_count, status, created_at, expires_at \
+        ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)",
         params![
             row.id.to_string(),
             row.provider_id.to_string(),
@@ -130,6 +180,8 @@ pub fn insert_within_tx(
             row.next_path,
             row.browser_binding_sha256.as_slice(),
             row.csrf_binding_sha256.as_slice(),
+            row.failure_count,
+            row.status.as_str(),
             row.created_at,
             row.expires_at,
         ],
@@ -143,6 +195,35 @@ pub fn insert_within_tx(
         other => StoreError::from(other),
     })?;
     Ok(())
+}
+
+/// RFC 096-B1 stage 10a: the first read of a `federation_mfa_pending` row
+/// by its own id — the `FederatedMfaVerifier`'s binding gate needs the
+/// full row (bindings, status, failure_count, expiry) to validate a
+/// submission against. Returns `Ok(None)` for an unknown id rather than
+/// an error: "no such row" and "a row that fails every other check" must
+/// be indistinguishable to the verifier's own caller, and folding a
+/// missing row into the same `Option::None` the verifier already has to
+/// handle for other refusals is what makes that natural rather than
+/// another case to remember.
+pub async fn find_by_id(
+    db: &crate::Database,
+    id: FederationMfaPendingId,
+) -> StoreResult<Option<FederationMfaPendingRow>> {
+    let id_str = id.to_string();
+    db.with_read(move |read| {
+        match read
+            .prepare(&format!(
+                "SELECT {SELECT_COLUMNS} FROM federation_mfa_pending WHERE id = ?1"
+            ))?
+            .query_row([id_str], map_row)
+        {
+            Ok(row) => Ok(Some(row)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(StoreError::from(e)),
+        }
+    })
+    .await
 }
 
 /// RFC 096 `:734`: terminal rows are purged after 24 hours. **Not filtered

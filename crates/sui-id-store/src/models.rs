@@ -836,16 +836,58 @@ pub struct FederationLoginAttemptRow {
     pub claimed_at: Option<DateTime<Utc>>,
 }
 
-/// A newly-created `pending` row in the `federation_mfa_pending` table (RFC
-/// 096 :719-734, migration 0047). Stage 9 (F02) is the only writer this
-/// crate has; there is no `status`/`failure_count`/`primary_method` field
-/// here because every one of those columns has a `DEFAULT` the table itself
-/// supplies ('pending', 0, 'fed') and this row is never constructed in any
-/// other state — `repos::federation_mfa_pending::insert_within_tx` does not
-/// name them in its `INSERT`, and SQLite fills them in. A future stage that
-/// needs to represent a *promoted* or *exhausted* row (stage 10, F03) adds
-/// its own fields/enum then, the same way `FederationLoginAttemptStatus`
-/// was added only once something needed to read a non-`pending` status back.
+/// `federation_mfa_pending.status` (RFC 096 :731-732, migration 0047).
+/// Added in stage 10a, the first reader: stage 9's own row type omitted
+/// `status`/`failure_count` because nothing read a non-`pending` value
+/// back yet (its doc said so explicitly, the same reasoning
+/// `FederationLoginAttemptStatus`'s own addition followed). The
+/// `FederatedMfaVerifier`'s binding gate (stage 10a) is that reader: it
+/// must refuse a row that is no longer `pending` the same way it refuses
+/// a wrong binding, so it needs to see which status a row is actually
+/// in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FederationMfaPendingStatus {
+    Pending,
+    Completed,
+    Exhausted,
+    Invalidated,
+}
+
+impl FederationMfaPendingStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Completed => "completed",
+            Self::Exhausted => "exhausted",
+            Self::Invalidated => "invalidated",
+        }
+    }
+}
+
+impl std::str::FromStr for FederationMfaPendingStatus {
+    type Err = crate::errors::StoreError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "pending" => Ok(Self::Pending),
+            "completed" => Ok(Self::Completed),
+            "exhausted" => Ok(Self::Exhausted),
+            "invalidated" => Ok(Self::Invalidated),
+            other => Err(crate::errors::StoreError::InvalidData(format!(
+                "unknown federation_mfa_pending status: {other:?}"
+            ))),
+        }
+    }
+}
+
+/// A row in the `federation_mfa_pending` table (RFC 096 :719-734,
+/// migration 0047). `status` and `failure_count` are now full fields
+/// (stage 10a) — previously omitted because `insert_within_tx` relied on
+/// the table's own `DEFAULT`s ('pending', 0) and nothing read them back;
+/// `insert_within_tx` now names them explicitly in its `INSERT` instead
+/// of leaning on the `DEFAULT`s, the same way `FederationLoginAttemptRow`
+/// always has for its own `status`. `primary_method` still has no field:
+/// nothing reads it back yet, and it is pinned to a single value by the
+/// table's own `CHECK` regardless of who writes it.
 ///
 /// `continuation_sealed` is AAD-bound to `id`, `provider_id`,
 /// `provider_config_version`, `provider_activation_generation` and
@@ -853,6 +895,16 @@ pub struct FederationLoginAttemptRow {
 /// (`repos::federation_mfa_pending::build_aad`), the same reconstruct-
 /// from-the-row convention `FederationLoginAttemptRow::pkce_verifier_sealed`
 /// already uses.
+///
+/// `continuation_sealed` is `Option`, not `Vec<u8>` (stage 10a fix
+/// round, R1): migration 0047's own table `CHECK` forces it `NULL` once
+/// `status` leaves `'pending'` (":733-734 terminal rows retain no
+/// usable continuation"), so a row type that cannot hold `None` cannot
+/// represent a terminal row at all — `find_by_id` (stage 10a's own
+/// first reader of a non-`pending` row) failed on every one, measured
+/// directly: `Err(Db(InvalidColumnType(5, "continuation_sealed",
+/// Null)))`. `insert_within_tx` still writes it `Some(..)` — that is
+/// the only state it ever constructs.
 #[derive(Debug, Clone)]
 pub struct FederationMfaPendingRow {
     pub id: sui_id_shared::ids::FederationMfaPendingId,
@@ -860,10 +912,12 @@ pub struct FederationMfaPendingRow {
     pub provider_config_version: i64,
     pub provider_activation_generation: i64,
     pub user_id: UserId,
-    pub continuation_sealed: Vec<u8>,
+    pub continuation_sealed: Option<Vec<u8>>,
     pub next_path: Option<String>,
     pub browser_binding_sha256: [u8; 32],
     pub csrf_binding_sha256: [u8; 32],
+    pub failure_count: i64,
+    pub status: FederationMfaPendingStatus,
     pub created_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
 }

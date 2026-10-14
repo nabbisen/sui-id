@@ -107,10 +107,12 @@ fn seed_pending_row(
         provider_config_version,
         provider_activation_generation,
         user_id,
-        continuation_sealed,
+        continuation_sealed: Some(continuation_sealed),
         next_path: None,
         browser_binding_sha256: hash32(1),
         csrf_binding_sha256: hash32(2),
+        failure_count: 0,
+        status: crate::models::FederationMfaPendingStatus::Pending,
         created_at: now,
         expires_at: now + Duration::seconds(PENDING_LIFETIME_SECS),
     }
@@ -143,17 +145,69 @@ async fn a_valid_row_is_stored() {
     assert_eq!(stored_pending_count(&db).await, 1);
 }
 
-/// RFC 096-B1 stage 9 fix round, R3: `insert_within_tx` deliberately
-/// omits `status`, `failure_count` and `primary_method` and leans on
-/// migration 0047's own `DEFAULT`s — and the module doc's entire
-/// argument for an empty sealed plaintext is that RFC 096 `:721-722`'s
-/// items (`primary_method=Fed` among them) "are already their own
-/// column." Read all three back directly, rather than trusting the
-/// `DEFAULT`s are still there: this is what would fail if a later table
-/// rebuild dropped one while every other test in this file went on
-/// passing (none of them reads these three columns).
+/// RFC 096-B1 stage 10a: `find_by_id` is the `FederatedMfaVerifier`'s
+/// own read of the full row — asserted here against every field it
+/// added or newly exposes (`status`, `failure_count`), not only that a
+/// row comes back.
 #[tokio::test]
-async fn a_valid_row_defaults_status_failure_count_and_primary_method() {
+async fn find_by_id_returns_the_full_row() {
+    let db = open_test_db();
+    let provider_id = seed_provider(&db).await;
+    let user_id = seed_user(&db).await;
+    seed_link(&db, user_id, provider_id).await;
+    let row = seed_pending_row(&db, provider_id, user_id, fixed_now());
+    let id = row.id;
+    db.with_conn({
+        let row = row.clone();
+        move |conn| insert_within_tx(conn, &row)
+    })
+    .await
+    .expect("valid row");
+
+    let found = find_by_id(&db, id)
+        .await
+        .expect("read")
+        .expect("row exists");
+    assert_eq!(found.id, id);
+    assert_eq!(found.user_id, user_id);
+    assert_eq!(found.provider_id, provider_id);
+    assert_eq!(
+        found.status,
+        crate::models::FederationMfaPendingStatus::Pending
+    );
+    assert_eq!(found.failure_count, 0);
+    assert_eq!(found.browser_binding_sha256, row.browser_binding_sha256);
+    assert_eq!(found.csrf_binding_sha256, row.csrf_binding_sha256);
+}
+
+/// The unknown-id case `find_by_id`'s own doc names: `Ok(None)`, not an
+/// error — what makes "no such row" foldable into the same refusal path
+/// as every other binding mismatch.
+#[tokio::test]
+async fn find_by_id_returns_none_for_an_unknown_id() {
+    let db = open_test_db();
+    let found = find_by_id(&db, FederationMfaPendingId::new())
+        .await
+        .expect("read");
+    assert!(found.is_none());
+}
+
+/// RFC 096-B1 stage 9 fix round, R3, **narrowed by stage 10a's own fix
+/// round, R2**: this test originally protected all three of `status`,
+/// `failure_count` and `primary_method` against a later table rebuild
+/// silently dropping one of migration 0047's own `DEFAULT`s. Stage 10a
+/// changed `insert_within_tx` to name `status` and `failure_count`
+/// explicitly (`models::FederationMfaPendingRow`'s own doc explains
+/// why — the verifier needs to read a non-`pending` value back), which
+/// reverses the premise for those two: this test now reads back values
+/// it itself supplied through `seed_pending_row`, so dropping either
+/// `DEFAULT` would not make it fail. Only `primary_method` is still
+/// left to the table's own `DEFAULT` and still genuinely protected
+/// here. `status`/`failure_count` are still read back below as an
+/// ordinary round-trip check, not as a claim that this test would
+/// catch a missing `DEFAULT` on either of them.
+#[tokio::test]
+async fn a_valid_row_leaves_primary_method_to_its_default() {
     let db = open_test_db();
     let provider_id = seed_provider(&db).await;
     let user_id = seed_user(&db).await;
@@ -226,6 +280,13 @@ async fn opening_the_continuation_fails_if_any_bound_column_changes() {
     .expect("valid row");
 
     let key = db.key();
+    // `continuation_sealed` is `Option` (stage 10a fix round, R1) --
+    // this row is always the freshly-built, still-`pending` one, so it
+    // is always `Some`.
+    let sealed = row
+        .continuation_sealed
+        .as_deref()
+        .expect("a freshly-built row is pending and has a sealed continuation");
     let correct_aad = build_aad(
         id,
         row.provider_id,
@@ -233,7 +294,7 @@ async fn opening_the_continuation_fails_if_any_bound_column_changes() {
         row.provider_activation_generation,
         row.user_id,
     );
-    assert!(crate::crypto::open(key, &row.continuation_sealed, &correct_aad).is_ok());
+    assert!(crate::crypto::open(key, sealed, &correct_aad).is_ok());
 
     let wrong_id_aad = build_aad(
         FederationMfaPendingId::new(),
@@ -242,7 +303,7 @@ async fn opening_the_continuation_fails_if_any_bound_column_changes() {
         row.provider_activation_generation,
         row.user_id,
     );
-    assert!(crate::crypto::open(key, &row.continuation_sealed, &wrong_id_aad).is_err());
+    assert!(crate::crypto::open(key, sealed, &wrong_id_aad).is_err());
 
     let wrong_provider_aad = build_aad(
         id,
@@ -251,7 +312,7 @@ async fn opening_the_continuation_fails_if_any_bound_column_changes() {
         row.provider_activation_generation,
         row.user_id,
     );
-    assert!(crate::crypto::open(key, &row.continuation_sealed, &wrong_provider_aad).is_err());
+    assert!(crate::crypto::open(key, sealed, &wrong_provider_aad).is_err());
 
     let wrong_version_aad = build_aad(
         id,
@@ -260,7 +321,7 @@ async fn opening_the_continuation_fails_if_any_bound_column_changes() {
         row.provider_activation_generation,
         row.user_id,
     );
-    assert!(crate::crypto::open(key, &row.continuation_sealed, &wrong_version_aad).is_err());
+    assert!(crate::crypto::open(key, sealed, &wrong_version_aad).is_err());
 
     let wrong_generation_aad = build_aad(
         id,
@@ -269,7 +330,7 @@ async fn opening_the_continuation_fails_if_any_bound_column_changes() {
         row.provider_activation_generation + 1,
         row.user_id,
     );
-    assert!(crate::crypto::open(key, &row.continuation_sealed, &wrong_generation_aad).is_err());
+    assert!(crate::crypto::open(key, sealed, &wrong_generation_aad).is_err());
 
     let wrong_user_aad = build_aad(
         id,
@@ -278,7 +339,7 @@ async fn opening_the_continuation_fails_if_any_bound_column_changes() {
         row.provider_activation_generation,
         other_user_id,
     );
-    assert!(crate::crypto::open(key, &row.continuation_sealed, &wrong_user_aad).is_err());
+    assert!(crate::crypto::open(key, sealed, &wrong_user_aad).is_err());
 }
 
 #[tokio::test]

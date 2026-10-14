@@ -2421,10 +2421,12 @@ pub async fn issue_federated_mfa_pending(
         provider_config_version,
         provider_activation_generation,
         user_id,
-        continuation_sealed,
+        continuation_sealed: Some(continuation_sealed),
         next_path,
         browser_binding_sha256,
         csrf_binding_sha256,
+        failure_count: 0,
+        status: crate::models::FederationMfaPendingStatus::Pending,
         created_at: now,
         expires_at: now
             + chrono::Duration::seconds(

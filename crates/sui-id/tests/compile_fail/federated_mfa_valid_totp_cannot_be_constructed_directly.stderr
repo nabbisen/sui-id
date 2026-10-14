@@ -1,0 +1,5 @@
+error[E0451]: field `step` of struct `ValidTotp` is private
+  --> tests/compile_fail/federated_mfa_valid_totp_cannot_be_constructed_directly.rs:10:17
+   |
+10 |     ValidTotp { step: 0 }
+   |                 ^^^^ private field

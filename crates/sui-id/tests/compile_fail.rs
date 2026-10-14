@@ -43,3 +43,41 @@ fn compile_fail_identity_capability_cannot_be_constructed_directly() {
     let t = trybuild::TestCases::new();
     t.compile_fail("tests/compile_fail/identity_capability_cannot_be_constructed_directly.rs");
 }
+
+/// RFC 096 :757-762 (stage 10a): see the fixture's own comment.
+#[test]
+fn compile_fail_federated_mfa_valid_totp_cannot_be_constructed_directly() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compile_fail/federated_mfa_valid_totp_cannot_be_constructed_directly.rs");
+}
+
+/// RFC 096 :759 (stage 10a): see the fixture's own comment.
+#[test]
+fn compile_fail_federated_mfa_bound_rejected_cannot_choose_its_own_reason() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail(
+        "tests/compile_fail/federated_mfa_bound_rejected_cannot_choose_its_own_reason.rs",
+    );
+}
+
+/// RFC 096 :757-758 (stage 10a): see the fixture's own comment.
+#[test]
+fn compile_fail_federated_mfa_valid_totp_cannot_be_debug_printed() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compile_fail/federated_mfa_valid_totp_cannot_be_debug_printed.rs");
+}
+
+/// RFC 096 :757-758 (stage 10a): see the fixture's own comment.
+#[test]
+fn compile_fail_federated_mfa_valid_totp_cannot_be_cloned() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compile_fail/federated_mfa_valid_totp_cannot_be_cloned.rs");
+}
+
+/// RFC 096 :757-758 (stage 10a fix round, R6): see the fixture's own
+/// comment.
+#[test]
+fn compile_fail_federated_mfa_valid_totp_cannot_be_serialized() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compile_fail/federated_mfa_valid_totp_cannot_be_serialized.rs");
+}
