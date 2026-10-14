@@ -3,6 +3,10 @@
 > A self-hosted, single-binary OpenID Connect provider written in Rust.
 > Quiet, careful, and small enough to read end to end.
 
+Pre-1.0, under active development, not yet recommended for production — see
+the [FAQ](docs/src/getting-started/faq.md#is-sui-id-production-ready) for
+what that does and does not mean.
+
 [![License](https://img.shields.io/github/license/nabbisen/sui-id)](LICENSE)
 
 ![logo](https://raw.githubusercontent.com/nabbisen/sui-id/main/docs/assets/logo.png)
@@ -15,6 +19,8 @@ sui-id is an Identity-as-a-Service you run yourself. It speaks OpenID Connect
 on the front end, stores its data in a single SQLite file, and ships
 as one binary. There is no separate database service, no
 embedded JavaScript runtime, and no ambient cloud dependency.
+
+![The admin sign-in page](https://raw.githubusercontent.com/nabbisen/sui-id/main/docs/src/assets/screenshot-admin-login.png)
 
 The name "sui" is "翠" in Japanese: the kingfisher,
 their blue-green, and also jade in several colors. Purple among them.
@@ -68,6 +74,13 @@ that's a feature.
 
 ## Quick start
 
+Both commands below compile from source: you need Rust 1.95 (MSRV) — newer
+than most distribution-packaged toolchains, so use
+[`rustup`](https://rustup.rs/) rather than your distro's `rustc` — and the
+build packages `build-essential pkg-config libssl-dev` (`libssl.so.3` is also
+needed at runtime). See the
+[Deployment guide](docs/src/guides/deployment.md) for the full package list.
+
 ```bash
 # Install the binary from crates.io
 cargo install sui-id
@@ -79,9 +92,7 @@ sui-id --print-sample-config > sui-id.toml
 sui-id --config sui-id.toml
 ```
 
-If you'd rather build from source, note that the MSRV (1.95) is newer than
-most distribution-packaged Rust toolchains, so you will generally need
-[`rustup`](https://rustup.rs/) rather than your distro's `rustc`:
+Or build from source:
 
 ```bash
 git clone https://github.com/nabbisen/sui-id && cd sui-id

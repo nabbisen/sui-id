@@ -2,11 +2,15 @@
 
 ## Is sui-id production-ready?
 
-sui-id is under active development and has not reached v1.0. No interface
-carries a compatibility guarantee yet — not the HTTP API, the admin UI, the
-CLI or the configuration file. The OIDC endpoints implement the standards
-listed in the [OIDC API reference](../reference/oidc-api.md). Run it in
-non-critical environments first and review the CHANGELOG before upgrading.
+sui-id is pre-1.0 and under active development. It has not completed its
+security-assurance programme, so the project makes no "security-reviewed"
+claim and no compatibility guarantee on any interface — not the HTTP API,
+the admin UI, the CLI or the configuration file. The OIDC endpoints do
+implement the standards listed in the [OIDC API reference](../reference/oidc-api.md);
+what is not finished is the assurance around them. Run it in non-critical
+environments, and read the CHANGELOG before upgrading. The programme that
+must finish before any production-readiness claim is in
+[`ROADMAP.md`](https://github.com/nabbisen/sui-id/blob/main/ROADMAP.md).
 
 ## How do I back up sui-id?
 
