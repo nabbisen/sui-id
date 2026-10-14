@@ -43,6 +43,77 @@ Rust offers no way out of this. A witness type would have to live in
 constructor `pub(crate)` locks `sui-id-core` out as well. A sealed trait
 fails for the same reason. I checked both before writing this.
 
+## Revised 2026-10-14, before any answer
+
+`@nabbisen` asked whether the recommendation below satisfies his
+fundamental philosophy, and told me to review it carefully. It did not,
+and the re-examination changed three things. The option is unchanged; the
+argument for it and the shape of it are not.
+
+**1. The enforcement is not a new gate. It is an existing idiom.** I wrote
+"a contract file plus a gate", which undersells it and would have had
+someone build something new. `crates/sui-id/tests/e2e/r094_m2a_db_access_scope.rs`
+already does exactly this job for RFC 094 M2a: it reads every crate's
+`Cargo.toml` and asserts that `rusqlite` appears outside `sui-id-store`
+nowhere but `[dev-dependencies]`, with a failure message naming the rule and
+the RFC it comes from. It is an ordinary test under `cargo test --workspace`,
+so G02/G04/G05/G06 run it; no new gate, no new contract file. The F03 seam is
+the same shape one level down — a source scan rather than a manifest scan.
+
+**2. Option B's cost is bigger than I said, and measurably so.** I relayed
+"already-reviewed, security-sensitive code" from the implementation role's
+package without measuring it. Measured: `verify_password`
+(`authn/password.rs:96-113`) takes a permit from `HASH_SEMAPHORE`, a
+`static OnceLock<Semaphore>` bounded at `min(cores * 2, 16)` and shared with
+`hash_password` — its own doc calls it "the live, process-wide semaphore".
+Duplicating the primitive into `sui-id-store` gives the process **two
+independent bounds**, so the cap silently becomes up to 32 concurrent Argon2
+operations instead of 16 — at the costliest call site in the codebase, since
+one recovery-code guess runs up to `RECOVERY_CODE_COUNT` sequential
+verifications (`mfa.rs:366-372`). Moving the semaphore down instead means
+`sui-id-store` owns password hashing, which is not "move a primitive" at all.
+That is a robustness argument against B, not a sentiment about touching
+reviewed code.
+
+**3. The recommendation failed half 2 of the philosophy, and that is the
+real correction.** Under A there are two ways to promote a federated second
+factor that both compile: through the verifier, or by calling F03 directly
+with primitives of one's own choosing. A developer reading `commands.rs`
+sees F03 in a list of 103 commands, three of which (F02,
+`provision_federated_user`, `sign_in_federated`) *are* called straight from
+handlers, and nothing in F03's shape says it is the exception. "APIs and
+UI/UX for users not to be confused or misunderstand" covers the next
+developer, and a public function whose wrong use is as easy to write as its
+right use is the failure that half names. A scope test catches it after the
+fact; it does not stop the misunderstanding.
+
+**So option A is now A-plus-four**, each part an idiom this project already
+uses rather than anything invented:
+
+- **the scope test**, in the shape of `r094_m2a_db_access_scope.rs`, with a
+  failure message that names the rule, the RFC clause and what to call
+  instead — teaching, not just refusing;
+- **F03's own doc, at the signature**, stating that it trusts its caller,
+  naming the one legitimate caller and naming the test that enforces it —
+  exactly what stage 10a's `verify` already does for
+  `presented_csrf_body_value`, which documents at the parameter that the
+  caller must source it from the request body because the function "has no
+  way to enforce that itself, and says so rather than silently assuming it";
+- **a note on F03's row in `contracts/write-commands.toml`**, where someone
+  auditing commands actually looks — the inventory already carries this kind
+  of note in `rationale` (see U-row `:363`, which records that
+  `sessions::insert` is crate-private so "nothing outside `sui-id-store` can
+  name them", and `:839`);
+- **the RFC 096 amendment, which is not optional.** Without it the RFC says
+  handlers cannot and the code says they can, and "finally clean" forbids
+  parking a known contradiction. With it, the document is true.
+
+Half 1 is then satisfied by the seam being enforced on every commit by an
+existing mechanism; half 2 by the wrong path being documented as wrong at
+the three places a developer actually reads — the signature, the inventory
+and the failure message — rather than only in a test they meet after writing
+the bug.
+
 ## The two real options
 
 **A — accept the seam, and make it mechanical rather than conventional.**
@@ -89,9 +160,18 @@ seam. Recording that honestly is part of the choice — RFC 096 would want a
 sentence saying so, which is an amendment to an Accepted RFC and yours under
 RFC 000.
 
-**The question, in one line:** A with the gate and an RFC 096 sentence
-recording the seam, or B with the primitive move and the stage 11
+**The question, in one line:** A-plus-four — the scope test, the
+signature doc, the inventory note and the RFC 096 amendment — or B with the
+primitive move, the doubled Argon2 bound to solve, and the stage 11
 dependency question brought forward?
+
+**One thing I checked and will not offer as a third option.** Removing
+`sui-id-store` from `sui-id`'s `[dependencies]` would make F03 unreachable
+from handlers by the compiler, which is what both halves would most like.
+`sui-id` names `sui_id_store` **272** times across thirteen module paths
+(147 `repos`, 46 `models`), so that is its own RFC and not a thing stage 10b
+can carry. Measured, not assumed, because the honesty of a two-option
+framing depends on it.
 
 Nothing is built either way until this is answered. If A, stage 10b's
 dispatch carries the gate as part of its own scope.
