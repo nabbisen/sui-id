@@ -70,6 +70,7 @@ slot is `104`). One **parallel namespace** also exists:
 | 095 | [Dynamic Client Registration Transaction and Validation](./accepted/095-dynamic-client-registration-transaction.md) | M3 | the mid-capability model (implementation and testing agent) |
 | 096 | [Upstream OIDC Federation Validation](./accepted/096-upstream-oidc-federation-validation.md) | M4-A, M4-B | the mid-capability model (implementation and testing agent) |
 | 098 | [Documentation Authority and Reconciliation](./done/098-documentation-authority-reconciliation.md) | M5 | mid-capability model |
+| 139 | [Getting Started leaves its warnings in other documents](./accepted/139-getting-started-leaves-its-warnings-elsewhere.md) | cycle C — documentation only | the mid-capability model (implementation and testing agent) |
 | 102 | [Authentication that cannot be audited does not succeed](./done/102-authentication-fails-closed-without-audit.md) | **Implemented, closed 2026-09-22** | mid-capability model |
 | 103 | [Administrator-issued account recovery](./done/103-administrator-issued-account-recovery.md) | **Implemented, closed 2026-09-24** | mid-capability model |
 | 110 | [An RFC header may not legislate](./done/110-rfc-header-governance-guard.md) | cycle A | mid-capability model |

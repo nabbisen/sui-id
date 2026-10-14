@@ -206,15 +206,13 @@ implementation role reads.
 
 **Updated 2026-10-14.** **`0.80.0` is released**, **stage 9 landed
 `f5b4035`** (one fix round), and **stage 10a has landed** after one fix
-round. **Nothing is dispatched.** The F03 seam question is **answered** —
-option A-plus-four, in
+round. The F03 seam question is **answered** — option A-plus-four, in
 [`f03-seam-decision-request-2026-10-14.md`](f03-seam-decision-request-2026-10-14.md)
-— and stage 10b now waits on something else the answer brought with it: its
-fourth part is an amendment to RFC 096 `:759-760`, a material change to a
-security invariant, which RFC 000 `:43-47` makes a round-trip through
-`proposed/`. No 096-B1 implementation is eligible between the move and the
-re-acceptance, so the move is a scheduling act rather than an edit, and the
-drafted sentence is waiting at the end of that same document.
+— and its amendment has **landed**: RFC 096 returned to `proposed/` and was
+re-accepted the same day, in one pass, on `@nabbisen`'s approval. `:759-760`
+now says which half of "handlers can neither" the compiler holds and which a
+source-scope test does. **Stage 10b is unblocked and not yet dispatched**; its
+scope gains the gate.
 Stage 10
 is split into **10a** (the `FederatedMfaVerifier`, its binding gate and its
 candidates, no writes) and **10b** (F03's four guarded outcomes), a
