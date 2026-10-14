@@ -39,7 +39,7 @@ site the M2a exit condition has to account for.
 ## The observational-equivalence record — RFC 096's bar, applied here
 
 Required by the migration checklist for this move, and defined in
-[RFC 096](../../accepted/096-upstream-oidc-federation-validation.md) (the
+[RFC 096](../../proposed/096-upstream-oidc-federation-validation.md) (the
 preparatory change record, strengthened by owner decision 2026-08-27, Part B,
 B2). Relocating code is exactly where a check gets silently dropped.
 

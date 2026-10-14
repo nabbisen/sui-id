@@ -31,7 +31,7 @@ the later Accepted transition.
 | `rfcs/handoffs/094-transactional-audit/command-inventory.md` | `eb05b8333127a33014f315a52ec4b071cb6ba38f80844db8718570cc8a9a8dac` |
 | `rfcs/handoffs/094-transactional-audit/migration-checklist.md` | `7dcf78ea7fa9a03dcf1847fe585e470c6f897841fc94f257740455e1ae996b99` |
 | `rfcs/handoffs/094-transactional-audit/verification.md` | `03d38e9d2a49374ad2d93ff8a6dccd4d15426003e2e5d3d75344c473660b8599` |
-| `rfcs/accepted/096-upstream-oidc-federation-validation.md` | `acce0992b103cab7a2d09826cc27a19306c6456ab36ad66eefd8e52b3dab150d` |
+| `rfcs/proposed/096-upstream-oidc-federation-validation.md` | `acce0992b103cab7a2d09826cc27a19306c6456ab36ad66eefd8e52b3dab150d` |
 | `rfcs/handoffs/096-upstream-oidc-federation/README.md` | `90700f5e1018ed6c46be695e06f1cfcfbe538e89e6ac782adb2e7afe8ee7efef` |
 | `rfcs/handoffs/096-upstream-oidc-federation/architecture.md` | `abc9dcf4a79a5613290dea46e2fe9bb83f38192a89c7df90d933a14985f7ad28` |
 | `rfcs/handoffs/096-upstream-oidc-federation/validation-matrix.md` | `a05dc97f36559d66ce3e7b1eb0918c4dfda34e2644ae96d85bd826028d38b8c0` |
@@ -50,7 +50,7 @@ reviewer must independently recalculate them.
 | `rfcs/handoffs/094-transactional-audit/command-inventory.md` | `b4d505f0d591ac7e6ec45ec7b5cde4b173fdc4a58b7275a39cb3c84ddb50e718` |
 | `rfcs/handoffs/094-transactional-audit/migration-checklist.md` | `0df6c2f71a6eeaa307795c0ed60d1a8b9b9f7e0889b2436e4a19732c6deb9b16` |
 | `rfcs/handoffs/094-transactional-audit/verification.md` | `4855b331d49e86aef955bc13d4729ec9addab06c4cb5191a3f16bccb53b001b2` |
-| `rfcs/accepted/096-upstream-oidc-federation-validation.md` | `bdcf3fbe1e395c0d904339c39a790735f94a41eea26739e38b729fc19274abda` |
+| `rfcs/proposed/096-upstream-oidc-federation-validation.md` | `bdcf3fbe1e395c0d904339c39a790735f94a41eea26739e38b729fc19274abda` |
 | `rfcs/handoffs/096-upstream-oidc-federation/README.md` | `5c88f98403837934a672b94f653184237055b59dada9f1faebe55e8c535412f2` |
 | `rfcs/handoffs/096-upstream-oidc-federation/architecture.md` | `d68d3c8d4e7fb15efc2ab81c33833307e4f95c9f9563858212f1a3507bbfa9a8` |
 | `rfcs/handoffs/096-upstream-oidc-federation/validation-matrix.md` | `a05dc97f36559d66ce3e7b1eb0918c4dfda34e2644ae96d85bd826028d38b8c0` |

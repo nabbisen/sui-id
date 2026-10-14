@@ -31,7 +31,7 @@ unchanged, because it is the record of why the narrowing happened.
 **RFC 134 cannot satisfy it, because it is not RFC 134's work.**
 
 The hostile-provider corpus is **RFC 096's** deliverable. Measured in
-`rfcs/accepted/096-upstream-oidc-federation-validation.md`:
+`rfcs/proposed/096-upstream-oidc-federation-validation.md`:
 
 - line 961 assigns "hostile-provider and token-substitution corpus" to **096-A**;
 - line 964 assigns the "Hostile-provider matrix" to **096-C**;

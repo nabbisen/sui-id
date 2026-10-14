@@ -1,8 +1,6 @@
 # RFC 096 — Upstream OIDC Federation Validation
 
-**Status.** Accepted
-**Accepted on.** 2026-08-27
-**Approved by.** `@nabbisen`
+**Status.** Proposed
 **Independent design review.** [Correction review 2026-08-26](../handoffs/094-transactional-audit/094-095-096-correction-review-2026-08-26.md), by the implementation role
 (the mid-capability model), which authored neither this RFC nor its corrections — the
 B1/B2 split inference checked against RFC 094's command inventory and its stale
@@ -10,8 +8,28 @@ justification found. Also
 [A6 implementability sweep 2026-08-27](../handoffs/094-transactional-audit/094-095-096-a6-sweep-2026-08-27.md)
 — `validation-matrix.md` read in full, no findings.
 **Security review.** Required
-**Lifecycle history.** Accepted 2026-07-21 after [independent review](../handoffs/096-upstream-oidc-federation/096-design-review-2026-07-21.md); **returned to Proposed on 2026-07-28** for the prerequisite and staging amendment below, per RFC 000's return-for-review rule for material prerequisite changes. The 2026-07-21 acceptance is preserved in history and is superseded, not withdrawn. No validation, transport, JOSE, or claim-handling design is reopened.
+**Lifecycle history.** **Returned to Proposed on 2026-10-14** for the F03-seam amendment below, per RFC 000's return-for-review rule: the change states that one half of `:759-760`'s "handlers can neither" is held by a source-scope test rather than by the type system, and a type-system guarantee and a test-enforced one are not the same assurance, so it is a material change to a security invariant rather than a clarification. The 2026-08-27 acceptance (approved by `@nabbisen`) is preserved in history and is superseded, not withdrawn. No validation, transport, JOSE, claim-handling or staging design is reopened. Accepted 2026-07-21 after [independent review](../handoffs/096-upstream-oidc-federation/096-design-review-2026-07-21.md); **returned to Proposed on 2026-07-28** for the prerequisite and staging amendment below, per RFC 000's return-for-review rule for material prerequisite changes. The 2026-07-21 acceptance is preserved in history and is superseded, not withdrawn. No validation, transport, JOSE, or claim-handling design is reopened.
 **Approved by `@nabbisen`, 2026-10-02**, on the re-review of the fifteen: *"Approved."* — the 2026-08-26 scheduling judgment below was made by the implementation role and endorsed by the architect, and had never been before him. He approved it **before M2a starts**, which is the point at which correcting it would still have been free. Recorded here because this is the prerequisite it governs.
+**Amendment summary (2026-10-14).** The F03 seam. `:759-760` said handlers "can
+neither construct a candidate nor supply a row-touching reason" without saying how
+either half is held. Stage 10a built the first half by the compiler — private
+fields, no public constructor, five `trybuild` fixtures. The second half cannot be:
+F03 is Class P and must live in `sui-id-store`, which cannot name a `sui-id-core`
+type, so F03 takes plain primitives and `sui-id` already calls
+`sui_id_store::commands::*` directly in eight places. A witness type and a sealed
+trait were both checked and both fail for the same reason. The amendment records
+that the second half is held by a source-scope test in the shape of RFC 094 M2a's
+`r094_m2a_db_access_scope.rs`, and the gate becomes part of stage 10b's scope.
+**Material, not a clarification** — the assurance a reader may rely on changes —
+so this RFC returns to `proposed/` and is re-accepted, unlike the immaterial
+2026-10-09 amendment below. The alternative, moving the proof primitives into
+`sui-id-store` so `pub(crate)` could hold both halves, was rejected on a measured
+cost: `verify_password` takes a permit from a `static OnceLock<Semaphore>` bounded
+at `min(cores * 2, 16)` and shared with `hash_password`, so duplicating it gives
+the process two independent bounds — up to 32 concurrent Argon2 operations instead
+of 16, at the costliest call site there is — and it would break again at stage 11,
+where WebAuthn would drag `webauthn-rs` into the crate that owns the database.
+
 **Amendment summary (2026-10-09).** `exp`'s bound at the required claim matrix changed from the strict `now < exp + 60s` to the non-strict `now <= exp + 60s`, and the skew paragraph now states that all three time bounds are non-strict at the boundary instant. **No behaviour changes in either direction**: `jsonwebtoken`'s own check has always accepted `now <= exp + 60`, proven by a test signing tokens at `exp = now - 60` (accepted) and `exp = now - 61` (refused), so this aligns the RFC with what is built rather than the reverse. `iat` and `nbf` were already stated non-strictly, so `exp` was the only one of the three written strictly, and all three now admit the exact boundary instant and no rationale for the asymmetry appears anywhere in this RFC. Immaterial under RFC 000 — no scope, prerequisite or behaviour moves, and the divergence was one instant inside a skew this RFC deliberately grants — so this RFC does not return to `proposed/`. Found by the implementation role during 096-A stage 6b, which re-derived the inequality the architect's dispatch had restated loosely and escalated rather than patching the window logic it was told not to touch. `@nabbisen` authorized the amendment on 2026-10-09: "All authorized." Rejected alternative: enforcing the strict bound with our own comparison on top of the library's, which would put one rule in two places — the shape this RFC's own `aud` design already rejected.
 
 **Amendment summary (2026-08-26).** 096-B1's prerequisite re-pointed from M2a's session-security conversion wave to M2a's **runner foundation** plus the F01–F06 federation login commands this stage implements. The external correction review found RFC 094 assigns F01–F06 to no wave, so the previous justification was unsupported; the inference was the amendment author's and had been flagged as unconfirmed. Whether the Protocol runner is complete at M2a foundation remains unconfirmed.
@@ -756,8 +774,16 @@ returns only an unbound generic error and cannot construct an F03 input or touch
 the row. After binding, the verifier consumes bounded raw input and returns a
 sealed, non-cloneable, non-debuggable, non-serializable method-specific
 `ValidTotp`, `ValidRecovery`, `ValidWebAuthn`, or `BoundRejected` candidate.
-Only the verifier selects the closed rejection reason; handlers can neither
-construct a candidate nor supply a row-touching reason. Raw proofs are
+Only the verifier selects the closed rejection reason, and **no handler can
+construct a candidate**: the candidate types are `sui-id-core`'s, with private
+fields and no public constructor, which `crates/sui-id/tests/compile_fail/`
+pins. A handler also **cannot supply a row-touching reason, but that half is
+not held by the type system**: F03 is Class P and must live in
+`sui-id-store`, which cannot name a `sui-id-core` type, so F03 is a `pub`
+command taking plain primitives, and the rule that only the verifier's own
+promotion path may call it is asserted by a source-scope test in the shape of
+RFC 094 M2a's `r094_m2a_db_access_scope.rs`. The distinction is recorded here
+rather than left for a reader to infer from the crate graph. Raw proofs are
 zeroized/dropped before the candidate crosses into F03.
 
 Authoritative consumption remains inside F03. TOTP promotion requires a step

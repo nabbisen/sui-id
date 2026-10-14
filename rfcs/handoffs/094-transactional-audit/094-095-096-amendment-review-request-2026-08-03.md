@@ -36,7 +36,7 @@ it first would defeat the purpose of asking you.
 |---|---|
 | `rfcs/accepted/094-transactional-audit-registry.md` | Amended RFC |
 | `rfcs/accepted/095-dynamic-client-registration-transaction.md` | Amended RFC |
-| `rfcs/accepted/096-upstream-oidc-federation-validation.md` | Amended RFC |
+| `rfcs/proposed/096-upstream-oidc-federation-validation.md` | Amended RFC |
 | `rfcs/handoffs/094-transactional-audit/094-design-review-2026-07-17.md` | Original independent review |
 | `rfcs/handoffs/094-transactional-audit/094-federation-command-amendment-review-2026-07-21.md` | Prior amendment review |
 | `rfcs/handoffs/096-upstream-oidc-federation/096-design-review-2026-07-21.md` | Original independent review |
