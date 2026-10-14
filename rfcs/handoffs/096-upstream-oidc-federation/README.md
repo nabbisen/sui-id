@@ -204,19 +204,43 @@ A reader of this file would have concluded that 096-A had not started. **That
 was my omission** — three dispatches written without updating the index the
 implementation role reads.
 
-**Updated 2026-10-14.** **`0.80.0` is released**, **stage 8 landed
-`d7d5523`** (2026-10-13 JST, one fix round), and **stage 9's fix round is the
-open dispatch** — stage 9 returned the same day it was dispatched and is in a
-fix round, not landed. Stage 6d is
+**Updated 2026-10-14.** **`0.80.0` is released**, **stage 9 landed
+`f5b4035`** (one fix round), and **stage 10a is the open dispatch** — stage 10
+is split into **10a** (the `FederatedMfaVerifier`, its binding gate and its
+candidates, no writes) and **10b** (F03's four guarded outcomes), a
+scheduling change the architect proposed and the stage plan records as
+awaiting authorization. Stage 6d is
 deferred to after stage 11 by the 2026-10-12 authorization. Its RFC 094 record
 question is taken in the gap before stage 12; the section further down carries
 it.
 
 ### Dispatched and open
 
+- [`stage10a-the-federated-mfa-verifier-and-its-candidates-2026-10-14.md`](stage10a-the-federated-mfa-verifier-and-its-candidates-2026-10-14.md)
+  — **DISPATCHED, this is the open work.** The gate in front of every
+  federated second-factor submission (RFC 096 `:752-762`), and **it writes
+  nothing**. Three things the dispatch asks for before code. **Where the
+  verifier can live is decided by the crate graph, not by taste**:
+  `sui-id-core` depends on `sui-id-store` and not the reverse, `webauthn-rs`
+  is core's, and F03 must be in the store crate because `WriteTx::tx()` is
+  `pub(crate)` — so a candidate constructible only by the verifier and not by
+  a handler needs an answer, and three are offered. **The binding gate must
+  fail indistinguishably** — the same error value for a wrong cookie, a wrong
+  CSRF token, an unknown pending id and someone else's pending id — and must
+  leave the row untouched, both proven with a control. **The candidate family
+  earns a compile-fail test**: `:758-762` says handlers can neither construct
+  a candidate nor supply a row-touching reason, and the existing `trybuild`
+  harness is how this project states "by construction". The contrast to name
+  is `SecondFactorProof`, L02's own analogue, which is a `pub enum` anything
+  can build.
+
+### Landed, 2026-10-14
+
 - [`stage9-fix-a-binding-the-browser-can-still-present-2026-10-14.md`](stage9-fix-a-binding-the-browser-can-still-present-2026-10-14.md)
-  — **DISPATCHED, this is the open work.** Stage 9's fix round, six changes
-  on the returned working tree. The transaction, the purge, the audit
+  — **landed `f5b4035`, Level B 24/24** plus A3.2, A3.4, the four fixture
+  suites and a fresh workflow check, **CI run `38491673983`, 27 jobs, 0
+  skipped**, all 24 `[gate_owners]` entries matched both ways. Stage 9's fix
+  round, six changes on the returned working tree. The transaction, the purge, the audit
   replacement and the returned package's own `Database::protocol`/
   `operational` fix (a two-write Protocol transaction committed its first
   write when the second failed — `Ok(Err(e))` never fired `with_tx`'s `?`)
@@ -230,10 +254,11 @@ it.
   already pins), the absent per-hunk hash table, and two prose sites this
   change falsifies, which are the architect's own omission.
 - [`stage9-f02-first-mfa-continuation-and-the-purge-2026-10-14.md`](stage9-f02-first-mfa-continuation-and-the-purge-2026-10-14.md)
-  — **returned 2026-10-14, superseded by the fix round above.** F02, the
-  first writer of stage 8's two tables: one `db.protocol` transaction
-  holding the guarded attempt completion (`exchanging -> completed`) and
-  exactly one `federation_mfa_pending` row. Three things beyond the transaction. **The
+  — **returned 2026-10-14, superseded by the fix round above; landed with it
+  in `f5b4035`.** F02, the first writer of stage 8's two tables: one
+  `db.protocol` transaction holding the guarded attempt completion
+  (`exchanging -> completed`) and exactly one `federation_mfa_pending` row.
+  Three things beyond the transaction. **The
   purge** `:734` requires is this stage's, with the first writer, and the
   dispatch asks where it is *called from* — a purge nobody calls is the growth
   leak with extra steps. **The rechecks RFC 094 `:625-627` requires** are not
