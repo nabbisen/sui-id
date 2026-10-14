@@ -119,6 +119,12 @@ Explicitly deferred to subsequent RFCs even if multi-tenant ships:
 
 ## Proposed design
 
+Every section below specifies mechanism. **None specifies the
+operator-facing or developer-facing surface** — what an admin sees and
+understands in §4, §6 and §7, and what a rejected cross-tenant request
+*tells* its caller as distinct from what P2 makes it *do*. That half of
+the design is absent, not deferred by choice; see open question 6.
+
 ### §1 The `tenants` table
 
 ```sql
@@ -343,3 +349,45 @@ designation without owner direction and soak.
 5. **Future organisation-within-tenant** — out of scope, but the FK
    propagation and `tenant_settings` shape must not preclude adding an
    `organization_id` later; by construction they do not.
+
+6. **The user-facing half of this design is missing.** §§1–10 settle
+   schema, routing, authorisation, audit and limits; nothing settles what a
+   human reads. Recorded here as questions, deliberately unanswered — an
+   answer written now would be written against a tree that will have moved,
+   and a stale UX design in an RFC is worse than a declared gap because an
+   implementer trusts it. Unanswered:
+   - **Realm identity.** How does an admin know, on every page, which tenant
+     they are acting in? §6's slug is in the URL; a URL is not an answer.
+   - **`/_global` vs `/{slug}`.** §4 gives a global admin two distinct
+     authorities. What distinguishes the two surfaces so an operator cannot
+     believe they are editing one tenant while editing the deployment?
+   - **The assumption boundary.** P4 audits a global admin assuming a
+     tenant. What does entering and leaving an assumed tenant *look* like,
+     and can it be left by accident?
+   - **Two-stage setup.** §7 splits bootstrap into deployment and first
+     tenant. What does the wizard call these so an operator does not read
+     stage 1 as the whole installation?
+   - **Cross-tenant rejection copy.** P2, P5 and §3 reject by design. What
+     does an integrating developer read — bearing in mind P5 requires a
+     suspended tenant and a real outage to be indistinguishable, so the
+     honest message and the safe message are in tension here.
+   - **Single-tenant deployments.** Open question 4 wants a one-tenant
+     deployment to "feel as light as single-realm". Nothing states what the
+     operator of such a deployment should ever see of tenancy — ideally
+     nothing, which is itself a design constraint on all of the above.
+
+7. **Per-tenant *master* keys — a question this RFC lost in supersession.**
+   §5 settles per-tenant *signing* keys; the **master key** that protects
+   data at rest is not discussed anywhere in this RFC. [RFC
+   007](../archive/007-multi-tenancy.md) carried it explicitly — *"Per-tenant
+   master keys would isolate cryptographic blast radius across tenants but
+   multiply the rotation story. Defer."* — and 007's archive note claims this
+   RFC "explicitly absorbed this one's intent". For this question it did not.
+   Restated so it is not lost twice: a shared master key means one
+   compromised deployment key exposes every tenant's data at rest, which
+   undercuts the isolation §5 buys on the signing side. Per-tenant master
+   keys multiply the rotation and custody story that [RFC
+   100](./100-master-key-rotation-recovery.md) is settling for a single key;
+   RFC 100's Non-goals records that it assumes one key per deployment. This
+   is a question for whoever schedules tenancy, and **not** a requirement on
+   RFC 100.

@@ -67,6 +67,14 @@ manual procedure that is **not crash-safe**.
 - No change to the encryption algorithm, key derivation, or column set.
 - No rotation support when a key provider other than the configured file is
   authoritative — that path refuses before starting.
+- No per-tenant keys. This RFC assumes **one master key per deployment**,
+  which is what sui-id has (single-realm, [RFC
+  022](../done/022-single-realm-scope-statement.md)). If multi-tenancy is
+  ever adopted, whether each tenant gets its own master key is a question
+  for that work — it is recorded in [RFC
+  025](./025-multi-tenant-expansion.md)'s open question 7, and it is **not**
+  a requirement on this RFC. Stated here only so a later reader knows the
+  single-key assumption was made knowingly rather than overlooked.
 
 ## Security invariants
 
