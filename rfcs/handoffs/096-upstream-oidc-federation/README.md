@@ -205,16 +205,37 @@ was my omission** — three dispatches written without updating the index the
 implementation role reads.
 
 **Updated 2026-10-14.** **`0.80.0` is released**, **stage 9 landed
-`f5b4035`** (one fix round), and **stage 10a is the open dispatch** — stage 10
+`f5b4035`** (one fix round), and **stage 10a is in its fix round** — its first
+package was reviewed and returned. Stage 10
 is split into **10a** (the `FederatedMfaVerifier`, its binding gate and its
 candidates, no writes) and **10b** (F03's four guarded outcomes), a
 scheduling change the architect proposed and the stage plan records as
-awaiting authorization. Stage 6d is
+awaiting authorization. **Stage 10b is additionally blocked on a design
+question 10a's own placement decision raised** — see the fix dispatch's
+closing section. Stage 6d is
 deferred to after stage 11 by the 2026-10-12 authorization. Its RFC 094 record
 question is taken in the gap before stage 12; the section further down carries
 it.
 
 ### Dispatched and open
+
+- [`stage10a-fix-a-row-the-verifier-can-actually-read-2026-10-14.md`](stage10a-fix-a-row-the-verifier-can-actually-read-2026-10-14.md)
+  — **DISPATCHED, this is the open work.** Stage 10a's fix round, seven items,
+  three blocking. The package is accepted in substance — the placement
+  argument, the candidate family, the two binding properties, the four
+  `trybuild` fixtures and a self-found `Malformed` fix all stand. What does
+  not: migration 0047's own CHECK forces `continuation_sealed IS NULL` once
+  `status` leaves `'pending'`, while the row type holds a `Vec<u8>`, so
+  **`find_by_id` cannot read a terminal row at all** — measured
+  (`InvalidColumnType(5, "continuation_sealed", Null)`), which makes the
+  verifier's status guard unreachable and blocks stage 10b. Stage 9's accepted
+  R3 was also reversed without mention, leaving its defaults test true for one
+  of the three columns it names. And seven `map_err(|_| BindingFailure)` turn
+  a database outage into the same value as a wrong cookie — which is why the
+  first defect was invisible. Result:
+  `.git-exclude/reviewed/rfc-096-b1-stage10a-the-verifier-reads-a-row-it-cannot-read-2026-10-14.md`.
+
+### Reviewed and returned, 2026-10-14
 
 - [`stage10a-the-federated-mfa-verifier-and-its-candidates-2026-10-14.md`](stage10a-the-federated-mfa-verifier-and-its-candidates-2026-10-14.md)
   — **DISPATCHED, this is the open work.** The gate in front of every
@@ -232,7 +253,10 @@ it.
   a candidate nor supply a row-touching reason, and the existing `trybuild`
   harness is how this project states "by construction". The contrast to name
   is `SecondFactorProof`, L02's own analogue, which is a `pub enum` anything
-  can build.
+  can build. **Returned for a fix round** — two of the round's items were the
+  architect's own errors: the dispatch named `sui-id-store`'s `trybuild`
+  harness, which cannot name a `sui-id-core` type at all, and gave
+  `totp::verify`'s signature without its `async`.
 
 ### Landed, 2026-10-14
 
