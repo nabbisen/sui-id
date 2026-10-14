@@ -1,5 +1,22 @@
 # RFC 096-B1 — the F03 seam: a decision request, before stage 10b
 
+> **Answered 2026-10-14.** `@nabbisen` approved option A-plus-four on
+> 2026-10-14, in his own words: *"OK. Approved."* The approval is on the revised
+> recommendation below (option **A-plus-four**: the scope test, F03's own
+> signature doc, the `write-commands.toml` note, and the RFC 096 amendment),
+> not on the first draft, which he returned by asking whether it satisfied
+> his fundamental philosophy. It did not: half 2 was unaddressed, and the
+> four parts are what answer it. The architect wrote both the recommendation
+> and this record, so this is not an independent review; `@nabbisen` is the
+> approver, which is what RFC 000 requires when no independent role exists.
+>
+> **What this does not yet settle, raised after the approval and not covered
+> by it — see "The lifecycle consequence" at the end of this document.** The
+> amendment this approval contains is a material change to a security
+> invariant, and RFC 000 `:43-47` makes that a round-trip through
+> `proposed/` for RFC 096. Stage 10b's dispatch waits on it.
+
+
 **Raised.** 2026-10-14 JST, by the architect, for `@nabbisen`.
 **Why it is here and not in a dispatch.** The answer changes how an
 **Accepted** RFC's sentence is satisfied. That is not the implementation
@@ -175,3 +192,63 @@ framing depends on it.
 
 Nothing is built either way until this is answered. If A, stage 10b's
 dispatch carries the gate as part of its own scope.
+
+## The lifecycle consequence, found after the approval
+
+I checked RFC 000 before dispatching stage 10b, and the approval has a cost
+neither of us named while deciding. It does not change the decision; it
+changes when anything can be built on it.
+
+**RFC 000 `:43-47`** (and again at `:398-401`):
+
+> A material change to security invariants, public behavior, scope, or
+> prerequisites **atomically returns an Accepted RFC to `proposed/`**, removes
+> active-looking acceptance metadata, updates the index and inbound links, and
+> preserves the old decision in history or a superseded-review note.
+
+and `:49-50`: "Only `accepted/` makes implementation eligible."
+
+RFC 096 `:759-760` currently reads "handlers can neither construct a candidate
+nor supply a row-touching reason." Stage 10a holds the first half by the
+compiler. The amendment records that the second half is held, at the
+`sui-id-store` seam, by a scope test rather than by construction. **A
+type-system guarantee and a test-enforced one are not the same assurance, so
+this is a material change to a security invariant, not a clarification** — and
+I would rather say so than argue it down to avoid the round-trip, which is the
+same instinct as parking the contradiction.
+
+So, in order:
+
+1. RFC 096 moves to `proposed/`, atomically with the amendment, its acceptance
+   metadata removed and the 2026-08-27 decision preserved as a superseded-review
+   note. Index and inbound links in the same change.
+2. It is reviewed and re-accepted in its amended form.
+3. Only then is stage 10b dispatched, carrying the four parts in its scope.
+
+**Between 1 and 2, no 096-B1 implementation is eligible** — not stage 10b,
+and not 11, 12, 14 or 6d either, since all of them build against this RFC.
+Stage 10a is already landed and unaffected.
+
+**There is precedent and it is this RFC's own.** `ROADMAP.md`: "RFCs 094, 095
+and 096 were returned to `proposed/` on 2026-07-28 for owner-approved material
+amendments, and were re-accepted on 2026-08-27."
+
+**The amendment text, drafted so the round-trip is one review rather than an
+open gap.** Replacing the second half of `:759-760`:
+
+> Only the verifier selects the closed rejection reason, and no handler can
+> construct a candidate: the candidate types are `sui-id-core`'s with private
+> fields and no public constructor, which `crates/sui-id/tests/compile_fail/`
+> pins. A handler also cannot supply a row-touching reason, but that half is
+> not held by the type system: F03 is Class P and must live in `sui-id-store`,
+> which cannot name a `sui-id-core` type, so F03 is a `pub` command taking
+> plain primitives and the rule that only the verifier's own promotion path
+> may call it is asserted by a source-scope test in the shape of RFC 094 M2a's
+> `r094_m2a_db_access_scope.rs`. The distinction is recorded here rather than
+> left for a reader to infer from the crate graph.
+
+**What I have not done.** I have not moved the file or edited the RFC. Doing
+either makes every remaining 096-B1 stage build-ineligible the moment it
+happens, which is a scheduling act, and scheduling is proposed here and
+settled by `@nabbisen`. Say when, and whether the drafted sentence is the
+one to carry.

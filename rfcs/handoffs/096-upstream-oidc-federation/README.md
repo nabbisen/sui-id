@@ -206,9 +206,15 @@ implementation role reads.
 
 **Updated 2026-10-14.** **`0.80.0` is released**, **stage 9 landed
 `f5b4035`** (one fix round), and **stage 10a has landed** after one fix
-round. **Nothing is dispatched**: stage 10b waits on a written request for
-`@nabbisen`. It is
-[`f03-seam-decision-request-2026-10-14.md`](f03-seam-decision-request-2026-10-14.md).
+round. **Nothing is dispatched.** The F03 seam question is **answered** —
+option A-plus-four, in
+[`f03-seam-decision-request-2026-10-14.md`](f03-seam-decision-request-2026-10-14.md)
+— and stage 10b now waits on something else the answer brought with it: its
+fourth part is an amendment to RFC 096 `:759-760`, a material change to a
+security invariant, which RFC 000 `:43-47` makes a round-trip through
+`proposed/`. No 096-B1 implementation is eligible between the move and the
+re-acceptance, so the move is a scheduling act rather than an edit, and the
+drafted sentence is waiting at the end of that same document.
 Stage 10
 is split into **10a** (the `FederatedMfaVerifier`, its binding gate and its
 candidates, no writes) and **10b** (F03's four guarded outcomes), a
@@ -221,7 +227,12 @@ it.
 ### Waiting on the owner — nothing dispatched
 
 - [`f03-seam-decision-request-2026-10-14.md`](f03-seam-decision-request-2026-10-14.md)
-  — **this is what the next dispatch waits on.** F03 is Class P and must live
+  — **answered 2026-10-14: option A-plus-four.** What is still open is the
+  lifecycle step the answer entails, drafted at the end of the same file: the
+  RFC 096 amendment is material under RFC 000 `:43-47`, so RFC 096 returns to
+  `proposed/` and is re-accepted before stage 10b, 11, 12, 14 or 6d can be
+  built. Stage 10a is landed and unaffected. The question the document
+  originally asked: F03 is Class P and must live
   in `sui-id-store`, which cannot name a `sui-id-core` type, so it will be a
   `pub` command taking plain primitives — and `sui-id` handlers already call
   `sui_id_store::commands::*` directly in eight places. RFC 096 `:758-762`'s
