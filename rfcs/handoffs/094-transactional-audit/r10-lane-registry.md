@@ -1,6 +1,6 @@
 # R10 — multi-source Gate Matrix lane registry
 
-**Governing RFC.** [RFC 094](../../accepted/094-transactional-audit-registry.md)
+**Governing RFC.** [RFC 094](../../proposed/094-transactional-audit-registry.md)
 §Structural coverage gate, from *"Registering it requires a mechanism that does
 not exist yet"* through §Migration (lines 738–866 at `c97027c`). The design is
 complete there; this handoff adds nothing to it and must not.

@@ -1,8 +1,6 @@
 # RFC 094 — Transactional Audit Completeness and Typed Event Registry
 
-**Status.** Accepted
-**Accepted on.** 2026-08-27
-**Approved by.** `@nabbisen`
+**Status.** Proposed
 **Independent design review.** [Correction review 2026-08-26](../handoffs/094-transactional-audit/094-095-096-correction-review-2026-08-26.md), by the implementation role
 (the mid-capability model), which authored neither this RFC nor its corrections — six
 findings verified, `ReadConn` sufficiency measured rather than argued. Also
@@ -11,7 +9,18 @@ findings verified, `ReadConn` sufficiency measured rather than argued. Also
 [lane-ownership design review 2026-08-27](../handoffs/094-transactional-audit/094-lane-ownership-design-review-2026-08-27.md)
 — found two checks the resolving design silently dropped, both restored.
 **Security review.** Required
-**Lifecycle history.** Base design accepted 2026-07-17 after [independent review](../handoffs/094-transactional-audit/094-design-review-2026-07-17.md); material amendment returned to Proposed in commit `43085e38219e5eb1bfe11cc698b18f1fa5f5e4d7`; complete amended RFC accepted by `@nabbisen` on 2026-07-21 after [independent review](../handoffs/094-transactional-audit/094-federation-command-amendment-review-2026-07-21.md); **returned to Proposed on 2026-07-28** for the scope amendment described below, per RFC 000's return-for-review rule for material changes to scope, prerequisites, and acceptance criteria. The 2026-07-21 acceptance is preserved in history and is superseded, not withdrawn.
+**Lifecycle history.** **Returned to Proposed on 2026-10-15** for the F01 class amendment below, per RFC 000 `:43-47`: F01's class decides whether the sign-in audit record commits atomically with the session it authorises, which is a security invariant, so the change is material rather than a clarification. The 2026-08-27 acceptance (approved by `@nabbisen`) is preserved in history and is superseded, not withdrawn. No other command's class, no conversion wave, and no gate lane is reopened. Base design accepted 2026-07-17 after [independent review](../handoffs/094-transactional-audit/094-design-review-2026-07-17.md); material amendment returned to Proposed in commit `43085e38219e5eb1bfe11cc698b18f1fa5f5e4d7`; complete amended RFC accepted by `@nabbisen` on 2026-07-21 after [independent review](../handoffs/094-transactional-audit/094-federation-command-amendment-review-2026-07-21.md); **returned to Proposed on 2026-07-28** for the scope amendment described below, per RFC 000's return-for-review rule for material changes to scope, prerequisites, and acceptance criteria. The 2026-07-21 acceptance is preserved in history and is superseded, not withdrawn.
+**Amendment summary (2026-10-15).** F01's class, corrected from Protocol to
+Class A folded into RFC 102's L04. The RFC and the approved design had disagreed
+since 2026-10-11, when `@nabbisen` accepted the architect's recommendation that
+F01 go Class A rather than downgrade an audit that is already atomic; this
+records it. **Material** — the atomicity of a sign-in audit with the session it
+authorises is a security invariant — so this RFC returns to `proposed/` and is
+re-accepted, and the stage plan parked a deliberate gap with nothing in flight
+so the window costs nothing: it blocks RFC 094 M2b, which is unstarted, and
+RFC 096's own *Design prerequisites* line, and nothing else. Stage 6d (F01) is
+built against this amended record, not against the text it replaces.
+
 **Amendment summary (2026-10-03).** Added **G20** to §Gate Matrix lanes owned by
 RFC 094 — an M2a closure-prerequisite-4 structural gate (dispatched in
 `rfcs/handoffs/094-transactional-audit/m2a-rollback-coverage-2026-10-02.md`)
@@ -545,7 +554,15 @@ one provider row must change.
 Federated authentication then uses exact commands F01–F06 from the attached
 inventory:
 
-- F01 is the Protocol-class existing-link/no-MFA promotion transaction;
+- F01 is **Class A, folded into RFC 102's L04** rather than a separate
+  Protocol-class transaction: the existing-link/no-MFA promotion's guarded
+  `exchanging → completed` transition and its enabled-provider and
+  same-active-link/user authority checks run *inside* L04's own `db.class_a`
+  transaction, so the attempt completion commits atomically with the session
+  it authorises and `auth.federation.signin.success` stays the Class-A event
+  it already is. *(Amended 2026-10-15; the original text classified F01 as
+  Protocol, which would have separated the sign-in audit from the session it
+  records. Approved by `@nabbisen` 2026-10-11 as a design; this records it.)*
 - F02 is the Protocol-class existing-link/local-MFA-pending transaction;
 - F03 is the Protocol-class local-MFA completion transaction;
 - F04 is the Class-A first-provision transaction and emits exactly

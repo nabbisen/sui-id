@@ -1,6 +1,6 @@
 # R11 — login failures: what is observable, and what goes uncounted
 
-**Governing.** [RFC 094](../../accepted/094-transactional-audit-registry.md) U22
+**Governing.** [RFC 094](../../proposed/094-transactional-audit-registry.md) U22
 (login failure accounting, Class A); `ROADMAP.md` risk register row R11.
 **Implementer.** Mid-capability model. **Baseline.** `49a2897` or later.
 

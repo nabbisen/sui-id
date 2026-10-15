@@ -12,7 +12,7 @@
 **Implementation prerequisites.** None for stages 1 and 2. Stage 3 waits until stages 1 and 2 have landed, so that a change to how every lane is defined happens on a tree whose contracts are already true.
 **Closure prerequisites.** No fact stated in `contracts/` exists in a second hand-maintained place; every surviving file in `contracts/` is read by a gate that fails when the file stops being true; the audit matrix's `class` and `actor` columns are checked against the code, keyed on table rows rather than on names anywhere in the file; every lane runs through one dispatcher or its exception is a dated decision; and the placement of what survives is settled.
 **Tracks.** Gate integrity. Raised by `@nabbisen` on 2026-09-22: "`ci/` seems also messy and dirty because partially duplicate of `.github/workflows/`."
-**Touches.** `contracts/`, `.github/workflows/ci.yml`, `scripts/check-audit-matrix.sh`, `scripts/check-gate-inputs.sh`, `scripts/ci-gate.sh`, `scripts/check-ui-invariants.sh`, `scripts/tests/`, `rfcs/handoffs/094-transactional-audit/command-inventory.md`, and a one-line pointer in `rfcs/accepted/094-transactional-audit-registry.md` (D6).
+**Touches.** `contracts/`, `.github/workflows/ci.yml`, `scripts/check-audit-matrix.sh`, `scripts/check-gate-inputs.sh`, `scripts/ci-gate.sh`, `scripts/check-ui-invariants.sh`, `scripts/tests/`, `rfcs/handoffs/094-transactional-audit/command-inventory.md`, and a one-line pointer in `rfcs/proposed/094-transactional-audit-registry.md` (D6).
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** High-capability model, requirements-architect role.
 **Handoff.** [`../handoffs/116-gate-contracts/README.md`](../handoffs/116-gate-contracts/README.md)

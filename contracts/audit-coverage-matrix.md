@@ -39,7 +39,7 @@ Class B in fact:
 `auth.smtp_config.changed`.
 
 Their cells now read **`B *(A required)*`**: Class B is what the code does
-today, Class A is what this document requires, and **[RFC 094](../rfcs/accepted/094-transactional-audit-registry.md)
+today, Class A is what this document requires, and **[RFC 094](../rfcs/proposed/094-transactional-audit-registry.md)
 M2b converts them** — its scope is settings, pending settings, federation
 configuration and client metadata. This is the same treatment the auth-flow
 section already gives its own unconverted rows; these twelve simply never
