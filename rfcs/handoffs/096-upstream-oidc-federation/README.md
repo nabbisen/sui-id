@@ -226,15 +226,30 @@ it.
 
 ### Dispatched and open
 
+- [`stage10b-fix-a-name-of-its-own-2026-10-15.md`](stage10b-fix-a-name-of-its-own-2026-10-15.md)
+  — **the open work.** Stage 10b's fix round, four items, two blocking. F03's
+  `Promoted` success needs a name of its own — the architect's dispatch told
+  them to reuse `auth.federation.signin.success`, which cannot carry both a
+  Class-A and a Class-B guarantee, and the local path has answered this all
+  along with `auth.mfa.success` beside `auth.login.success`. And `LinkChanged`
+  is declared but unproducible because nothing checks the link, so an
+  administrator who unlinks inside the 300-second window still gets a session.
+  Three of the round's findings were the architect's.
+
+### Returned, 2026-10-15
+
 - [`stage10b-f03-the-four-guarded-outcomes-2026-10-15.md`](stage10b-f03-the-four-guarded-outcomes-2026-10-15.md)
-  — **the open work.** F03's four guarded Protocol outcomes, the failure-count
+  — **returned.** F03's four guarded Protocol outcomes, the failure-count
   machine at `:766-772` including the equality boundary when a wrong and a
   correct proof race at count 4, the three new Class-B events (none of which
   exists in either the matrix or the reference yet), and the source-scope test
   the seam decision made part of this stage. No WebAuthn branch — F06 is stage
   11's — and no handler; stage 12 wires it.
 - [`changelog-catch-up-2026-10-15.md`](changelog-catch-up-2026-10-15.md) —
-  the `Unreleased` section is empty after four feature commits. Stage 7 is the
+  **accepted and landed `b33f5d5`.** It also struck one of the three release
+  notes the architect had been carrying as owed: the directory-bind guard
+  resolves to a pre-federation LDAP fix, so nothing changed and there is no
+  note to write. Originally: Stage 7 is the
   only one of them an operator gains anything from; the entries have to say
   that, and the audit-event change has to be unmissable because it is the only
   one that can break something already relied on.
