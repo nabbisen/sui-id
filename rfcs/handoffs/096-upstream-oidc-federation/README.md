@@ -226,15 +226,24 @@ it.
 
 ### Dispatched and open
 
+### Landed, 2026-10-15
+
 - [`stage10b-fix-a-name-of-its-own-2026-10-15.md`](stage10b-fix-a-name-of-its-own-2026-10-15.md)
-  — **the open work.** Stage 10b's fix round, four items, two blocking. F03's
+  — **accepted and landed `f3e6925`, nothing folded in. Level B: 24/24 locally, CI run `38665382301`, 27 jobs, 0 skipped**, all 24 `[gate_owners]` entries matched both ways. Stage 10b's fix round, four items, two blocking. F03's
   `Promoted` success needs a name of its own — the architect's dispatch told
   them to reuse `auth.federation.signin.success`, which cannot carry both a
   Class-A and a Class-B guarantee, and the local path has answered this all
   along with `auth.mfa.success` beside `auth.login.success`. And `LinkChanged`
   is declared but unproducible because nothing checks the link, so an
   administrator who unlinks inside the 300-second window still gets a session.
-  Three of the round's findings were the architect's.
+  Three of the round's findings were the architect's. **The second of those two
+  was itself half wrong**: the unlink scenario does not reproduce, because
+  migration 0047's composite foreign key cascades the pending row away with the
+  link. The gap was real and the check earns its place, but for the narrower
+  case the fix round measured — a link missing without a cascade propagates a
+  raw store error instead of a clean `Invalidated`.
+
+**Nothing is dispatched.** Stage 11 (F06 and the WebAuthn branch) is next.
 
 ### Returned, 2026-10-15
 
