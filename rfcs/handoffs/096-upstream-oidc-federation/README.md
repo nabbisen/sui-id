@@ -259,13 +259,22 @@ is dispatched to close it first.
 
 ### Dispatched and open
 
+### Landed, 2026-10-15
+
 - [`stage11b-fix-the-update-direction-2026-10-15.md`](stage11b-fix-the-update-direction-2026-10-15.md)
-  — **the open work.** One item. The reuse path updates the parent columns a
+  — **accepted and landed `63e0e09`**, Level B, 24/24 locally, CI run
+  `38740033631`, 27 jobs, 0 skipped, all 24 `[gate_owners]` entries matched
+  both ways. One item. The reuse path updates the parent columns a
   live WebAuthn ceremony's composite key references, and that key has
   `ON DELETE CASCADE` but no `ON UPDATE` clause — measured, a restart through a
   second linked provider is refused with `FOREIGN KEY constraint failed`. The
   first round reasoned about the delete direction of that key and chose reuse
   partly because of it; the update direction is the one it missed.
+
+**Nothing is dispatched.** Stage 12 is next. Two things are recorded for it:
+the federated path feeds no account-level lockout (`record_second_factor_failure`
+is called only from the local `verify_pending`), and the pending cookie's flat
+300-second `max_age` can outlive the row it names after a late restart.
 
 ### Returned, 2026-10-15
 
