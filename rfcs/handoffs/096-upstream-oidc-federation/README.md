@@ -276,7 +276,7 @@ idle moment.** Stage 6d's move put the RFC 094 amendment "in the gap between
 stage 11 landing and stage 12 being dispatched — a deliberate pause with
 nothing in flight". Stage 11 has landed, so **the RFC 094 amendment is next**,
 then 6d, then 12. The full order is in
-[`schedule-2026-10-15.md`](schedule-2026-10-15.md). Three things are recorded
+[`schedule-2026-10-15.md`](schedule-2026-10-15.md); the amendment itself is drafted and waiting for `@nabbisen` in [`rfc-094-f01-class-amendment-2026-10-15.md`](rfc-094-f01-class-amendment-2026-10-15.md). Three things are recorded
 for stage 12 when it comes:
 the federated path feeds no account-level lockout (`record_second_factor_failure`
 is called only from the local `verify_pending`), and the pending cookie's flat
