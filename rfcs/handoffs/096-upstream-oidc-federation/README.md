@@ -259,13 +259,29 @@ is dispatched to close it first.
 
 ### Dispatched and open
 
+- [`stage11b-fix-the-update-direction-2026-10-15.md`](stage11b-fix-the-update-direction-2026-10-15.md)
+  — **the open work.** One item. The reuse path updates the parent columns a
+  live WebAuthn ceremony's composite key references, and that key has
+  `ON DELETE CASCADE` but no `ON UPDATE` clause — measured, a restart through a
+  second linked provider is refused with `FOREIGN KEY constraint failed`. The
+  first round reasoned about the delete direction of that key and chose reuse
+  partly because of it; the update direction is the one it missed.
+
+### Returned, 2026-10-15
+
 - [`stage11b-a-restart-grants-no-reset-2026-10-15.md`](stage11b-a-restart-grants-no-reset-2026-10-15.md)
-  — **the open work.** The five-attempt cap on a federated second factor is
+  — **returned, one blocking item.** The five-attempt cap on a federated second factor is
   bypassable by restarting the upstream sign-in, once stage 12 makes the path
   reachable. `:756` fixes the requirement and leaves the mechanism open; three
   shapes are offered, and the exhausted-row case is the one to be careful with.
   Two of us missed this: stage 10b's package answered that the RFC states no
-  cross-row limit, and the architect accepted it without checking.
+  cross-row limit, and the architect accepted it without checking. The returned
+  package corrected the architect twice more — F02 is reachable in production
+  today (`handlers/federation.rs:1671`, stage 9's own wiring), so only the
+  *exploit* waits on stage 12; and `:756`'s scope is `pending`/`exhausted`,
+  not all four statuses, because making `completed` or `invalidated` sticky
+  would turn a timeout or a past success into a lockout until the 24-hour
+  purge. Both corrections stand.
 
 ### Returned, 2026-10-15
 
