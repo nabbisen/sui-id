@@ -271,8 +271,17 @@ is dispatched to close it first.
   first round reasoned about the delete direction of that key and chose reuse
   partly because of it; the update direction is the one it missed.
 
-**Nothing is dispatched, and that is the plan's own instruction, not an
-idle moment.** Stage 6d's move put the RFC 094 amendment "in the gap between
+**Stage 6d is dispatched** —
+[`stage6d-f01-folded-into-l04-2026-10-15.md`](stage6d-f01-folded-into-l04-2026-10-15.md).
+The gap below is closed: `@nabbisen` accepted the RFC 094 F01 class amendment
+on 2026-10-15, RFC 094 round-tripped through `proposed/` and back in one pass
+(`a9198f4`, `93b4b3e`), and F01 is now Class A folded into RFC 102's L04 in the
+record as well as in the design. After 6d: stage 12, then cycle D, then stage
+14.
+
+*(Kept for the record, since it is what the gap was for.)*
+**Nothing was dispatched during the amendment, and that was the plan's own
+instruction, not an idle moment.** Stage 6d's move put the RFC 094 amendment "in the gap between
 stage 11 landing and stage 12 being dispatched — a deliberate pause with
 nothing in flight". Stage 11 has landed, so **the RFC 094 amendment is next**,
 then 6d, then 12. The full order is in
