@@ -27,6 +27,30 @@ Its row was `A`, event `user.reset_password`, mutation surface
 `credentials::upsert` plus token and session invalidation, test
 `a_u06_password`. The TOML has no `U06` row; this paragraph is its record.
 
+**Retired: `F01`, existing federation link, no local MFA.** It was folded
+into RFC 102's L04 by the RFC 094 `:548` F01-class amendment
+(design approved 2026-07-21/2026-10-11, text approved and RFC 094
+re-accepted 2026-10-15) and built by RFC 096-B1 stage 6d: the guarded
+`federation_login_attempt` `exchanging -> completed` transition and the
+enabled-provider/same-active-link/user authority checks now run *inside*
+L04's own `db.class_a` transaction (`commands::sign_in_federated`),
+atomic with the session it authorises, rather than as a separate
+Protocol-class transaction a legacy handler ran some of, stale, outside
+any transaction at all. `auth.federation.signin.success` is unchanged --
+same name, same Class A, same descriptor, same attributes -- the whole
+point of the amendment was that this event must not be downgraded from
+one already-atomic commit to two. Its row was `P`, `target-legacy`,
+mutation surface "require enabled exact-version/generation provider +
+same active link/user; guarded `federation_login_attempt exchanging ->
+completed`; observe existing link last-seen/bounded verified email;
+login bookkeeping; insert session with `[Fed]`; enforce session cap",
+test `p_f01_linked_direct` (a planning-time placeholder, never a real
+test name -- stage 6d's own tests are `l04_injected_failure_before_
+append_rolls_back_everything`,
+`l04_refuses_when_the_provider_is_disabled_at_commit_time`, and
+`l04_refuses_when_the_link_no_longer_exists_at_commit_time`, all under
+L04). The TOML has no `F01` row; this paragraph is its record.
+
 ## Classes
 
 | Class | Meaning |

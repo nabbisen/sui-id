@@ -30,6 +30,12 @@
 #
 # U06 (admin password reset) has no row: RFC 103 D1 retired it, and U37 replaced
 # it. The retirement is recorded in command-inventory.md.
+#
+# F01 (existing federation link, no local MFA) has no row: RFC 094 `:548`'s
+# F01-class amendment (2026-10-15) folded it into L04, so it is no longer a
+# separately `declare_write_command!`-declared command for a row to describe --
+# its own mutation surface now runs inside L04's own transaction. The
+# retirement is recorded in command-inventory.md.
 
 [[command]]
 id = "U01"
@@ -789,17 +795,6 @@ rationale = "`federation.provider.policy_updated`; sealed `StartupConfiguration`
 mutation_surface = "guarded full policy replace on exact non-deleted old version/generation, checked-increment both, force disabled/review-required, clear evidence, invalidate old flows; cache eviction post-commit"
 files = []  # UNRESOLVED, deliberately: no current function implements provider trust-policy replacement at all. Wholly new, RFC 096-B2 (M2b). Target-state row, not a reconciliation gap.
 test_id = "`a_c23_provider_policy_update`, `a_c23_generation_overflow`"
-
-[[command]]
-id = "F01"
-class = "P"
-status = "target-legacy"  # implemented | target-absent | target-legacy
-sealed = false
-owner = "Existing federation link, no local MFA / RFC 096 federation login"
-rationale = "one authentication protocol promotion; post-commit `auth.federation.signin.success` is Class B under U24/U30 policy"
-mutation_surface = "require enabled exact-version/generation provider + same active link/user; guarded `federation_login_attempt exchanging -> completed`; observe existing link last-seen/bounded verified email; login bookkeeping; insert session with `[Fed]`; enforce session cap"
-files = ["crates/sui-id/src/http/handlers/federation.rs"]  # `federated_callback` is the CURRENT (pre-RFC-096) legacy implementation this command replaces, not an implementation of F01 itself -- F01 depends on RFC 096-B1 (M2a foundation + F01-F06), not yet started. Target-state row.
-test_id = "`p_f01_linked_direct`"
 
 [[command]]
 id = "F02"

@@ -597,6 +597,57 @@ async fn r102_l04_rereads_the_user_and_rolls_back_when_inactive() {
         .await
         .expect("admin")
         .id;
+
+    // RFC 094 `:548`, amended 2026-10-15 (stage 6d): L04 now re-reads
+    // provider/link authority inside the same transaction, durably,
+    // before the user-active recheck runs -- so this call needs a real,
+    // enabled provider and a real link for `user`, not only the user
+    // row itself the pre-amendment version needed. Raw SQL for the
+    // provider/link, the same shape `federation_fail_closed::linked_user`
+    // already uses, rather than a full OIDC round trip this test has no
+    // other use for.
+    let provider_id = sui_id_shared::ids::FederationProviderId::new();
+    exec(
+        &state,
+        format!(
+            "INSERT INTO federation_provider (id, slug, display_name, issuer, client_id, \
+             enabled, created_at, updated_at) VALUES ('{provider_id}', 'l04-rereads', 'L04', \
+             'https://idp.example', 'client', 1, '2026-01-01T00:00:00Z', \
+             '2026-01-01T00:00:00Z'); \
+             INSERT INTO federation_link (user_id, provider_id, upstream_sub, linked_at, \
+             last_seen_at) VALUES ('{user}', '{provider_id}', 'l04-rereads-sub', \
+             '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');"
+        ),
+    )
+    .await;
+    let inserted = sui_id_store::repos::federation_login_attempt::insert(
+        &state.db,
+        provider_id,
+        0,
+        0,
+        [1; 32],
+        [2; 32],
+        [3; 32],
+        b"verifier",
+        "https://example.com/cb".into(),
+        None,
+        chrono::Utc::now(),
+    )
+    .await
+    .expect("insert attempt");
+    let attempt_id = sui_id_store::repos::federation_login_attempt::claim(
+        &state.db,
+        inserted.id,
+        chrono::Utc::now(),
+        provider_id,
+        0,
+        0,
+        [3; 32],
+    )
+    .await
+    .expect("claim attempt")
+    .id;
+
     for (label, sql) in [
         ("disabled", "is_disabled = 1"),
         ("deleted", "is_deleted = 1"),
@@ -613,6 +664,8 @@ async fn r102_l04_rereads_the_user_and_rolls_back_when_inactive() {
         let now = chrono::Utc::now();
         let result = sui_id_store::commands::sign_in_federated(
             &state.db,
+            attempt_id,
+            provider_id,
             "up".into(),
             sui_id_store::models::SessionRow {
                 id: SessionId::new(),
@@ -626,14 +679,37 @@ async fn r102_l04_rereads_the_user_and_rolls_back_when_inactive() {
             },
         )
         .await;
+        // RFC 094 `:548`'s amendment folded the same-active-link/user
+        // authority recheck (`authority_drift_within_tx`, shared with
+        // F03/F06) into this same transaction, ahead of
+        // `record_federated_login_within_tx`'s own guard -- so a
+        // disabled/deleted user is now caught there first, as
+        // `Conflict`, not `NotFound`. `:548` itself does not promise a
+        // particular error *type*, only that the write never commits;
+        // the handler's own caller already treats every non-`NotFound`
+        // error here identically (uniform redirect, error-level log
+        // instead of a quiet warn) and needed no change to keep doing
+        // so.
         assert!(
-            matches!(result, Err(sui_id_store::StoreError::NotFound)),
-            "{label}: rolled back"
+            matches!(result, Err(sui_id_store::StoreError::Conflict)),
+            "{label}: expected Err(Conflict), the commit must have rolled back"
         );
         assert_eq!(
             all_sessions(&state, user).await,
             before,
             "{label}: no session"
+        );
+        assert_eq!(
+            scalar(
+                &state,
+                format!(
+                    "SELECT status = 'exchanging' FROM federation_login_attempt \
+                     WHERE id = '{attempt_id}'"
+                )
+            )
+            .await,
+            1,
+            "{label}: the attempt's own completion rolled back too"
         );
     }
     assert_eq!(events(&state, "auth.federation.signin.success").await, 0);

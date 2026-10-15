@@ -2195,9 +2195,55 @@ impl SealedCommandEvent<L04> for L04Event {
     }
 }
 
-/// Run L04. In one transaction: re-read the user as active (not disabled,
-/// not deleted), set `last_login_at`, insert the session and evict over-cap
-/// sessions. A user no longer active rolls back with `NotFound`.
+/// Run L04. In one transaction (RFC 094 `:548`, amended 2026-10-15 — F01
+/// folded in, not a separate Protocol transaction): the guarded
+/// `federation_login_attempt` `exchanging -> completed` transition, the
+/// enabled-provider and same-active-link/user authority checks F01 named
+/// but the legacy handler never ran at commit time, re-read the user as
+/// active (not disabled, not deleted), set `last_login_at`, insert the
+/// session, and evict over-cap sessions — all or nothing. Before this
+/// amendment a crash between the attempt's own completion and the
+/// session insert could leave an attempt `completed` with no session, or
+/// a session with the attempt still `exchanging`; one transaction now
+/// either commits every one of these writes or none of them.
+///
+/// **Authority, re-read here rather than trusted from the caller's own,
+/// now-stale read**: `authority_drift_within_tx` (shared with F03/F06) —
+/// provider still enabled, the link still exists for this exact
+/// `(user_id, provider_id)` pair — is the fresh recheck the legacy
+/// handler's own `provider.enabled` check could not be, since that
+/// variable is read once, long before the upstream round trip, and never
+/// re-fetched before this commit. Its third check (`users::
+/// is_active_within_tx`) duplicates this function's own guarded
+/// `record_federated_login_within_tx`, deliberately: the handler's own
+/// early user-disabled/deleted check (`complete_federated_signin`) is a
+/// cheap UX filter *before* the OIDC exchange even starts, not a
+/// substitute for the durable, atomic recheck this transaction performs
+/// at the only point that actually matters — immediately before the
+/// session it would authorise commits. Any drift found here rolls back
+/// the whole transaction as `StoreError::Conflict`, the same outcome
+/// shape the attempt-completion guard already uses.
+///
+/// **This changes which error a disabled/deleted user rolls back with**,
+/// stated here rather than left for a reader to assume "unchanged":
+/// before this amendment, `record_federated_login_within_tx`'s own
+/// guarded `UPDATE` (`WHERE is_disabled = 0 AND is_deleted = 0`) was the
+/// only place that caught it, and a zero-rows-affected result there is
+/// `NotFound`. Now `authority_drift_within_tx` runs first and reaches
+/// the identical user row with `users::is_active_within_tx` — a plain
+/// `SELECT`, not a guarded `UPDATE` — which returns `Ok(false)` for a
+/// disabled/deleted *flag*, turned into `Err(Conflict)` here, the same
+/// outcome every other authority-drift case and the attempt-completion
+/// guard already produce. Only a user row absent from the table
+/// entirely (not merely flagged — `is_active_within_tx`'s own `Err(
+/// NotFound)` for that case) still reaches this function as `NotFound`,
+/// propagated untouched before `Conflict` is ever considered. The
+/// handler's own caller already treats every non-`NotFound` error here
+/// identically (the same redirect; only the log level differs) and
+/// needed no change to keep doing so — but a caller that specifically
+/// branches on `NotFound` to mean "disabled or deleted" would now be
+/// wrong, which is exactly the distinction worth stating rather than
+/// letting the type alone imply.
 ///
 /// No `upstream_sub` parameter: RFC 096 `:714-715`'s review (stage 7's own
 /// carried-in item) removed the `sub` audit attribute this event used to
@@ -2207,6 +2253,8 @@ impl SealedCommandEvent<L04> for L04Event {
 /// for a caller to pass.
 pub async fn sign_in_federated(
     db: &crate::Database,
+    attempt_id: FederationLoginAttemptId,
+    provider_id: FederationProviderId,
     provider_slug: String,
     session: crate::models::SessionRow,
 ) -> StoreResult<crate::registry::Audited<i64>> {
@@ -2214,6 +2262,10 @@ pub async fn sign_in_federated(
     let context = AuthorizedCommandContext::<L04>::for_authorized_actor(user_id, None);
     db.class_a(context, move |tx: &mut ClassATx<'_, L04>| {
         let now = session.created_at;
+        crate::repos::federation_login_attempt::complete_within_tx(tx.tx(), attempt_id)?;
+        if authority_drift_within_tx(tx.tx(), provider_id, user_id)?.is_some() {
+            return Err(StoreError::Conflict);
+        }
         crate::repos::users::record_federated_login_within_tx(tx.tx(), user_id, now)?;
         crate::repos::sessions::insert_within_tx(tx.tx(), &session)?;
         let evicted = evict_over_cap_within_tx(tx.tx(), user_id, now)?;

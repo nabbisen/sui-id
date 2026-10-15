@@ -318,14 +318,16 @@ async fn the_real_browser_binding_cookie_lets_the_claim_succeed() {
 
     assert_eq!(location_of(&resp), "/admin");
     let _ = user_id;
-    // RFC 096-B1 stage 6c: the claim now runs before token exchange, so a
-    // successful callback leaves the row `exchanging` (F01's own
-    // `exchanging -> completed` transition is stage 6d's, not yet
-    // implemented) -- not `pending`, which would mean the claim never ran
-    // at all.
+    // RFC 096-B1 stage 6c: the claim runs before token exchange, leaving
+    // the row `exchanging` -- not `pending`, which would mean the claim
+    // never ran at all. RFC 094 `:548`, amended 2026-10-15 (stage 6d):
+    // F01's own `exchanging -> completed` transition now runs inside
+    // L04's own transaction, atomic with the session this successful,
+    // no-local-MFA callback just created -- so by the time this redirect
+    // is observed, the row has already moved past `exchanging` too.
     assert_eq!(
         attempt_status(&state, &started.state_param).await,
-        "exchanging"
+        "completed"
     );
 }
 

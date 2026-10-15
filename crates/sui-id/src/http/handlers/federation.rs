@@ -1555,12 +1555,15 @@ pub async fn federated_callback(
 
 /// Complete a federated sign-in: enforce local MFA then issue a session.
 ///
-/// `attempt_id`/`provider_id` (RFC 096-B1 stage 6c) are for F05 alone: a
-/// successful sign-in or a pending-MFA continuation does *not* terminalize
-/// the attempt here -- that is F01's/F02's own `exchanging -> completed`
-/// transition (stage 6d, not yet implemented), and this function is not
-/// where that boundary is decided. Only this function's own *failure*
-/// paths call `terminalize_and_audit`.
+/// `attempt_id`/`provider_id` (RFC 096-B1 stage 6c) are for F05 and this
+/// function's own failure paths only: a successful sign-in or a
+/// pending-MFA continuation does *not* terminalize the attempt here --
+/// that is F01's (RFC 096-B1 stage 6d, inside `commands::
+/// sign_in_federated`'s own transaction) or F02's (stage 9, inside
+/// `commands::issue_federated_mfa_pending`'s) own guarded
+/// `exchanging -> completed` transition, each atomic with the write it
+/// gates rather than a step this function takes on their behalf. Only
+/// this function's own *failure* paths call `terminalize_and_audit`.
 #[allow(clippy::too_many_arguments)]
 async fn complete_federated_signin(
     app: AppState,
@@ -1797,12 +1800,16 @@ async fn complete_federated_signin(
         last_step_up_at: None,
         last_used_at: None,
     };
-    // RFC 102 L04: `last_login_at`, the session, eviction and
-    // `auth.federation.signin.success` commit together, after an
-    // in-transaction re-read of the user. A failure is never counted (A9)
-    // and gets the uniform redirect; the cause is logged.
+    // RFC 102 L04 (RFC 094 `:548`, amended 2026-10-15 -- F01 folded in):
+    // the attempt's own `exchanging -> completed` transition, the
+    // enabled-provider/active-link/user authority recheck, `last_login_at`,
+    // the session, eviction, and `auth.federation.signin.success` all
+    // commit together, atomically. A failure is never counted (A9) and
+    // gets the uniform redirect; the cause is logged.
     if let Err(e) = sui_id_store::commands::sign_in_federated(
         &app.db,
+        attempt_id,
+        provider_id,
         provider_slug.to_owned(),
         session_row.clone(),
     )
