@@ -26,6 +26,7 @@
 //! the Protocol/Operational proofs remain unwired.
 
 use crate::StoreResult;
+use crate::errors::StoreError;
 use crate::registry::{
     ActorRequirement, AttributeSpec, AuditAttributes, AuditBuildError, AuditClass, AuditEventKind,
     AuditResult, AuditTarget, AuthorizedCommandContext, ClassATx, EventDescriptor,
@@ -2440,6 +2441,399 @@ pub async fn issue_federated_mfa_pending(
     })
     .await?;
     Ok(id)
+}
+
+// ── F03 — submit/complete federated local MFA (Protocol) ───────────────
+
+use crate::repos::federation_mfa_pending::{
+    FailureIncrement, InvalidatedReason, MfaRejectionReason,
+};
+
+/// What stage 10a's `FederatedMfaVerifier` already checked, reduced to
+/// the plain primitives F03 needs — RFC 096 `:784-789`'s F03 seam:
+/// `sui-id-store` cannot name `sui_id_core::federated_mfa`'s own
+/// candidate types, so the promotion logic (also `sui-id-core`, beside
+/// the verifier) converts its sealed `ValidTotp`/`ValidRecovery`/
+/// `BoundRejected` into exactly this before calling F03. `None` is for
+/// the one case the verifier itself already decided without a proof at
+/// all: `FederatedMfaOutcome::Expired`. F03 re-derives expiry durably on
+/// every call regardless of which variant is passed (RFC 096 `:792-793`:
+/// "authoritative consumption remains inside F03"), so `None` reaches
+/// exactly the same `Invalidated` outcome the verifier's own read-only
+/// check already anticipated — there is no proof to launder into one of
+/// the other three outcomes in this case, and inventing one would be
+/// pretending a submission was evaluated when it was not.
+#[derive(Debug)]
+pub enum F03Proof {
+    /// A TOTP code the verifier already matched to `step`, strictly
+    /// after the row's own `last_used_step` at verification time —
+    /// re-checked here against the *current* durable value, inside the
+    /// same transaction that then advances it, so there is no gap for a
+    /// concurrent consumer of the same step.
+    Totp { step: i64 },
+    /// A recovery code the verifier already matched; `expected_sealed`
+    /// is the blob it matched against and `new_sealed` is that blob
+    /// with the matched hash removed — re-checked that `expected_sealed`
+    /// is still the row's current blob before swapping it in, same
+    /// reason as `Totp`.
+    Recovery {
+        expected_sealed: Vec<u8>,
+        new_sealed: Vec<u8>,
+    },
+    /// The verifier bound the submission to the row but the proof itself
+    /// was wrong, malformed, unsupported, or substituted a different
+    /// method/ceremony — RFC 096 `:741-743`. `reason` is the verifier's
+    /// own closed selection, already converted to this crate's plain
+    /// enum by the caller.
+    Rejected { reason: MfaRejectionReason },
+}
+
+/// F03's own four guarded outcomes, RFC 096 `:812-818`.
+#[derive(Debug)]
+pub enum F03Outcome {
+    /// Method-specific anti-replay/pending consumption, link
+    /// observation/bookkeeping, and `[Fed, local_method]` session/cap
+    /// already committed. `session` is the row as inserted;
+    /// `evicted` is how many older sessions the cap eviction revoked.
+    Promoted {
+        session: crate::models::SessionRow,
+        evicted: i64,
+        /// `"totp"` or `"recovery_code"` — the same vocabulary L02's own
+        /// `auth.mfa.success` attribute uses, not the RFC 8176 `amr` token.
+        method: &'static str,
+    },
+    /// A wrong/unsupported proof, counted to 1–4. The row is still
+    /// `pending`.
+    RejectedStillPending {
+        failure_count: i64,
+        reason: MfaRejectionReason,
+    },
+    /// The fifth wrong/unsupported proof. The row is now `exhausted`.
+    AttemptsExhausted { reason: MfaRejectionReason },
+    /// Authority drift or expiry, found by F03's own durable recheck —
+    /// independent of whatever proof (if any) was submitted. The row is
+    /// now `invalidated`.
+    Invalidated { reason: InvalidatedReason },
+}
+
+/// F03 itself. One Protocol transaction: durably re-reads the row,
+/// opens `continuation_sealed` with the row's own current values as AAD
+/// (stage 9's tamper check, exercised here for the first time — RFC
+/// 096-B1 stage 10b dispatch `:64-70`), re-checks authority (provider
+/// enabled, link still exists, user active, factor enabled) and expiry
+/// independently of
+/// whatever the verifier found earlier, then evaluates `proof` only if
+/// every one of those holds. Each binding (browser/CSRF cookie) is
+/// **not** re-compared here — that is the verifier's own job, done once,
+/// already (RFC 096-B1 stage 10b dispatch `:72-74`); F03 trusts its
+/// caller reached it only through a successful `verify()`, exactly the
+/// way the source-scope test (`r096_b1_stage10b_f03_scope.rs`) is the
+/// only thing that makes that true, the type system cannot (RFC 096
+/// `:784-789`).
+///
+/// Returns `Err(StoreError::NotFound)`, with no audit emission at all,
+/// if the row cannot be durably re-read (an unknown id, or one whose
+/// parent link was removed and cascaded it away) — there is no actor or
+/// target to attribute an event to once the row itself is gone, so this
+/// is folded into the same indistinguishable-failure shape the verifier
+/// already uses for "no such row," not one of the four tracked outcomes.
+pub async fn complete_federated_mfa(
+    db: &crate::Database,
+    pending_id: sui_id_shared::ids::FederationMfaPendingId,
+    proof: Option<F03Proof>,
+    now: DateTime<Utc>,
+) -> StoreResult<F03Outcome> {
+    // `Database` is a cheap `Clone` handle (unlike `MasterKey`, which
+    // deliberately is not): the closure below must be `'static`, so it
+    // owns its own handle rather than borrowing `db`, and reads the key
+    // back off it once the row's own current AAD is known durably,
+    // inside the same transaction that read it.
+    let db_for_tx = db.clone();
+    let outcome = db
+        .protocol(move |write| -> StoreResult<F03Outcome> {
+            let tx = write.tx();
+            let row = crate::repos::federation_mfa_pending::get_within_tx(tx, pending_id)?
+                .ok_or(StoreError::NotFound)?;
+
+            // The tamper check stage 9 sealed for: a row edited in place
+            // out of band (e.g. `user_id` repointed by a direct `UPDATE`
+            // bypassing this crate's own write paths) fails to open.
+            // Only meaningful while the row is still `pending` — a
+            // terminal row's own `continuation_sealed` is `None` by the
+            // table's own `CHECK` (stage 10a's R1), and this function
+            // only reaches a terminal row via the early-return branches
+            // below, before this open would run.
+            if row.status == crate::models::FederationMfaPendingStatus::Pending {
+                let sealed = row.continuation_sealed.as_deref().ok_or_else(|| {
+                    StoreError::Integrity("pending row has no continuation".into())
+                })?;
+                let aad = crate::repos::federation_mfa_pending::build_aad(
+                    row.id,
+                    row.provider_id,
+                    row.provider_config_version,
+                    row.provider_activation_generation,
+                    row.user_id,
+                );
+                crate::crypto::open(db_for_tx.key(), sealed, &aad)
+                    .map_err(|_| StoreError::Integrity("continuation failed to open".into()))?;
+            }
+
+            if row.status != crate::models::FederationMfaPendingStatus::Pending {
+                return Err(StoreError::Conflict);
+            }
+            if row.expires_at <= now {
+                let invalidated =
+                    crate::repos::federation_mfa_pending::invalidate_within_tx(tx, pending_id)?;
+                if !invalidated {
+                    return Err(StoreError::Conflict);
+                }
+                return Ok(F03Outcome::Invalidated {
+                    reason: InvalidatedReason::Expired,
+                });
+            }
+            if !crate::repos::federation_provider::is_enabled_within_tx(tx, row.provider_id)? {
+                let invalidated =
+                    crate::repos::federation_mfa_pending::invalidate_within_tx(tx, pending_id)?;
+                if !invalidated {
+                    return Err(StoreError::Conflict);
+                }
+                return Ok(F03Outcome::Invalidated {
+                    reason: InvalidatedReason::ProviderDisabled,
+                });
+            }
+            if !crate::repos::federation_link::exists_within_tx(tx, row.user_id, row.provider_id)? {
+                let invalidated =
+                    crate::repos::federation_mfa_pending::invalidate_within_tx(tx, pending_id)?;
+                if !invalidated {
+                    return Err(StoreError::Conflict);
+                }
+                return Ok(F03Outcome::Invalidated {
+                    reason: InvalidatedReason::LinkChanged,
+                });
+            }
+            if !crate::repos::users::is_active_within_tx(tx, row.user_id)? {
+                let invalidated =
+                    crate::repos::federation_mfa_pending::invalidate_within_tx(tx, pending_id)?;
+                if !invalidated {
+                    return Err(StoreError::Conflict);
+                }
+                return Ok(F03Outcome::Invalidated {
+                    reason: InvalidatedReason::UserInactive,
+                });
+            }
+            let totp_row =
+                crate::repos::user_totp::get_within_tx(tx, row.user_id)?.filter(|t| t.enabled);
+            let Some(totp_row) = totp_row else {
+                let invalidated =
+                    crate::repos::federation_mfa_pending::invalidate_within_tx(tx, pending_id)?;
+                if !invalidated {
+                    return Err(StoreError::Conflict);
+                }
+                return Ok(F03Outcome::Invalidated {
+                    reason: InvalidatedReason::FactorChanged,
+                });
+            };
+
+            match proof {
+                None => {
+                    // The verifier already found this expired; the
+                    // durable recheck above did not (a clock cannot run
+                    // backward), so there is nothing left to do but
+                    // report the same mismatch as a store-level
+                    // integrity problem rather than silently no-op.
+                    Err(StoreError::Integrity(
+                        "F03 called with no proof on a row the durable recheck still finds pending"
+                            .into(),
+                    ))
+                }
+                Some(F03Proof::Rejected { reason }) => reject_or_exhaust(tx, pending_id, reason),
+                Some(F03Proof::Totp { step }) => {
+                    if step <= totp_row.last_used_step {
+                        // Stale/replayed: functionally a wrong proof.
+                        reject_or_exhaust(tx, pending_id, MfaRejectionReason::Totp)
+                    } else if crate::repos::federation_mfa_pending::complete_within_tx(
+                        tx, pending_id,
+                    )? {
+                        crate::repos::user_totp::advance_last_used_step_within_tx(
+                            tx,
+                            row.user_id,
+                            step,
+                        )?;
+                        promote(tx, &row, now, sui_id_shared::AuthMethod::Totp)
+                    } else {
+                        Err(StoreError::Conflict)
+                    }
+                }
+                Some(F03Proof::Recovery {
+                    expected_sealed,
+                    new_sealed,
+                }) => {
+                    if totp_row.recovery_codes_enc.as_deref() != Some(expected_sealed.as_slice()) {
+                        // Stale/already consumed: functionally wrong.
+                        reject_or_exhaust(tx, pending_id, MfaRejectionReason::Recovery)
+                    } else if crate::repos::federation_mfa_pending::complete_within_tx(
+                        tx, pending_id,
+                    )? {
+                        crate::repos::user_totp::swap_recovery_codes_within_tx(
+                            tx,
+                            row.user_id,
+                            &expected_sealed,
+                            &new_sealed,
+                        )?;
+                        promote(tx, &row, now, sui_id_shared::AuthMethod::RecoveryCode)
+                    } else {
+                        Err(StoreError::Conflict)
+                    }
+                }
+            }
+        })
+        .await?;
+
+    emit_f03_event(db, &outcome, now).await;
+    Ok(outcome)
+}
+
+/// The shared tail of [`complete_federated_mfa`]'s `Promoted` branch —
+/// link observation/bookkeeping, session insert, cap eviction — common
+/// to both methods once the row's own guarded `status -> completed`
+/// write and the method-specific anti-replay consumption have both
+/// already succeeded.
+fn promote(
+    tx: &rusqlite::Transaction<'_>,
+    row: &crate::models::FederationMfaPendingRow,
+    now: DateTime<Utc>,
+    method: sui_id_shared::AuthMethod,
+) -> StoreResult<F03Outcome> {
+    crate::repos::federation_link::touch_last_seen_within_tx(
+        tx,
+        row.user_id,
+        row.provider_id,
+        now,
+    )?;
+    crate::repos::users::record_federated_login_within_tx(tx, row.user_id, now)?;
+    let session = crate::models::SessionRow {
+        id: sui_id_shared::ids::SessionId::new(),
+        user_id: row.user_id,
+        expires_at: now + chrono::Duration::hours(12),
+        created_at: now,
+        revoked_at: None,
+        auth_methods: vec![sui_id_shared::AuthMethod::Fed, method],
+        last_step_up_at: (method != sui_id_shared::AuthMethod::RecoveryCode).then_some(now),
+        last_used_at: None,
+    };
+    crate::repos::sessions::insert_within_tx(tx, &session)?;
+    // The same vocabulary `SecondFactorProof::method()` (L02) already
+    // writes here — "totp"/"recovery_code", not the RFC 8176 `amr`
+    // token (`as_amr()` gives "otp" for both, which would collapse
+    // the distinction this column exists to keep).
+    let method_str = match method {
+        sui_id_shared::AuthMethod::Totp => "totp",
+        sui_id_shared::AuthMethod::RecoveryCode => "recovery_code",
+        _ => unreachable!("promote is only called with Totp or RecoveryCode"),
+    };
+    if method != sui_id_shared::AuthMethod::RecoveryCode {
+        crate::repos::sessions::set_step_up_method_within_tx(tx, session.id, method_str)?;
+    }
+    let evicted = evict_over_cap_within_tx(tx, row.user_id, now)?;
+    Ok(F03Outcome::Promoted {
+        session,
+        evicted,
+        method: method_str,
+    })
+}
+
+/// The shared guarded-increment step for a wrong/unsupported proof,
+/// whichever method it came from.
+fn reject_or_exhaust(
+    tx: &rusqlite::Transaction<'_>,
+    pending_id: sui_id_shared::ids::FederationMfaPendingId,
+    reason: MfaRejectionReason,
+) -> StoreResult<F03Outcome> {
+    match crate::repos::federation_mfa_pending::increment_failure_within_tx(tx, pending_id)? {
+        Some(FailureIncrement::StillPending { failure_count }) => {
+            Ok(F03Outcome::RejectedStillPending {
+                failure_count,
+                reason,
+            })
+        }
+        Some(FailureIncrement::Exhausted) => Ok(F03Outcome::AttemptsExhausted { reason }),
+        None => Err(StoreError::Conflict),
+    }
+}
+
+async fn emit_f03_event(db: &crate::Database, outcome: &F03Outcome, at: DateTime<Utc>) {
+    use crate::repos::audit::emit_must_attempt;
+    use crate::repos::federation_mfa_pending::{
+        AUDIT_MFA_EXHAUSTED_DESCRIPTOR, AUDIT_MFA_INVALIDATED_DESCRIPTOR,
+        AUDIT_MFA_REJECTED_DESCRIPTOR, AUDIT_MFA_SUCCESS_DESCRIPTOR,
+    };
+    match outcome {
+        F03Outcome::Promoted {
+            session,
+            evicted,
+            method,
+        } => {
+            let attributes = AuditAttributes::builder()
+                .attribute("method", *method)
+                .attribute("evicted", evicted.to_string())
+                .build();
+            let _ = emit_must_attempt(
+                db,
+                &AUDIT_MFA_SUCCESS_DESCRIPTOR,
+                at,
+                Some(session.user_id),
+                Some(AuditTarget(session.user_id.to_string())),
+                "ok",
+                attributes,
+            )
+            .await;
+        }
+        F03Outcome::RejectedStillPending { reason, .. } => {
+            let attributes = AuditAttributes::builder()
+                .attribute("reason", reason.as_str())
+                .build();
+            let _ = emit_must_attempt(
+                db,
+                &AUDIT_MFA_REJECTED_DESCRIPTOR,
+                at,
+                None,
+                None,
+                "denied",
+                attributes,
+            )
+            .await;
+        }
+        F03Outcome::AttemptsExhausted { reason } => {
+            let attributes = AuditAttributes::builder()
+                .attribute("reason", reason.as_str())
+                .build();
+            let _ = emit_must_attempt(
+                db,
+                &AUDIT_MFA_EXHAUSTED_DESCRIPTOR,
+                at,
+                None,
+                None,
+                "denied",
+                attributes,
+            )
+            .await;
+        }
+        F03Outcome::Invalidated { reason } => {
+            let attributes = AuditAttributes::builder()
+                .attribute("reason", reason.as_str())
+                .build();
+            let _ = emit_must_attempt(
+                db,
+                &AUDIT_MFA_INVALIDATED_DESCRIPTOR,
+                at,
+                None,
+                None,
+                "denied",
+                attributes,
+            )
+            .await;
+        }
+    }
 }
 
 // ── L02 — second-factor sign-in (RFC 102 Part A) ────────────────────────

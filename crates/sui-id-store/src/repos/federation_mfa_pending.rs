@@ -226,6 +226,122 @@ pub async fn find_by_id(
     .await
 }
 
+/// Same as [`find_by_id`], on the caller's own transaction (RFC 096-B1
+/// stage 10b, F03's own durable, authoritative re-read — the row
+/// `verify`'s own earlier, read-only check is never trusted a second
+/// time; F03 re-derives status/count/expiry/authority itself, inside
+/// the same transaction that then writes, so there is no gap between
+/// this read and F03's own guarded write for a concurrent F03 call to
+/// land in).
+pub fn get_within_tx(
+    conn: &rusqlite::Connection,
+    id: FederationMfaPendingId,
+) -> StoreResult<Option<FederationMfaPendingRow>> {
+    match conn
+        .prepare(&format!(
+            "SELECT {SELECT_COLUMNS} FROM federation_mfa_pending WHERE id = ?1"
+        ))?
+        .query_row([id.to_string()], map_row)
+    {
+        Ok(row) => Ok(Some(row)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(StoreError::from(e)),
+    }
+}
+
+/// What [`increment_failure_within_tx`] found and did — RFC 096 `:765-771`'s
+/// own two cases for a wrong proof.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FailureIncrement {
+    /// New count 1–4: still pending.
+    StillPending { failure_count: i64 },
+    /// New count exactly 5: terminalized to `exhausted`,
+    /// `continuation_sealed` cleared by the same guarded `UPDATE`.
+    Exhausted,
+}
+
+/// RFC 096 `:765-767`: "a wrong proof guarded on `status=pending`,
+/// `failure_count < 5`, and unexpired unchanged authority increments by
+/// one. New count 1–4 returns `RejectedStillPending`; new count exactly
+/// 5 sets `status=exhausted`, destroys the continuation... and returns
+/// `AttemptsExhausted`." One guarded `UPDATE`, not a read then a
+/// separate write: the `WHERE status = 'pending' AND failure_count < 5`
+/// clause is what makes "no sixth increment exists" true under a
+/// concurrent second F03 call racing the same row (RFC 096-B1 stage 10b
+/// dispatch `:55-58`'s equality-boundary test), not merely under a
+/// single caller. `Ok(None)` means the guard did not hold — the row was
+/// not `pending` or count was already 5 by the time this call's own
+/// transaction ran; the caller re-reads to learn why (expiry/authority
+/// drift already caught it, another call already exhausted it, or it
+/// already promoted).
+///
+/// Deleting bound method ceremonies on exhaustion (RFC 096 `:768`) is
+/// not done here: no code path creates a `federation_webauthn_ceremony`
+/// row yet (F06, stage 11), so there is nothing to delete — stated
+/// rather than silently omitted.
+pub fn increment_failure_within_tx(
+    conn: &rusqlite::Connection,
+    id: FederationMfaPendingId,
+) -> StoreResult<Option<FailureIncrement>> {
+    let result = conn.query_row(
+        "UPDATE federation_mfa_pending \
+         SET failure_count = failure_count + 1, \
+             status = CASE WHEN failure_count + 1 >= 5 THEN 'exhausted' ELSE status END, \
+             continuation_sealed = CASE WHEN failure_count + 1 >= 5 THEN NULL ELSE continuation_sealed END \
+         WHERE id = ?1 AND status = 'pending' AND failure_count < 5 \
+         RETURNING failure_count",
+        [id.to_string()],
+        |r| r.get::<_, i64>(0),
+    );
+    match result {
+        Ok(new_count) if new_count >= 5 => Ok(Some(FailureIncrement::Exhausted)),
+        Ok(new_count) => Ok(Some(FailureIncrement::StillPending {
+            failure_count: new_count,
+        })),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(StoreError::from(e)),
+    }
+}
+
+/// RFC 096 `:769-770`: "A correct proof may promote only while count is
+/// 0–4." The same guard shape as [`increment_failure_within_tx`] —
+/// `WHERE status = 'pending' AND failure_count < 5` — so the equality
+/// boundary binds both directions identically: whichever of a wrong or
+/// a correct proof's own guarded `UPDATE` serializes first wins, and
+/// the loser's guard fails here exactly as it would have failed above.
+/// `Ok(false)` means the guard did not hold; the caller re-reads to
+/// learn why, the same as [`increment_failure_within_tx`].
+pub fn complete_within_tx(
+    conn: &rusqlite::Connection,
+    id: FederationMfaPendingId,
+) -> StoreResult<bool> {
+    let n = conn.execute(
+        "UPDATE federation_mfa_pending SET status = 'completed', continuation_sealed = NULL \
+         WHERE id = ?1 AND status = 'pending' AND failure_count < 5",
+        [id.to_string()],
+    )?;
+    Ok(n == 1)
+}
+
+/// RFC 096 `:740-741`, `:816`: "`Invalidated` terminalizes on authority
+/// drift/expiry." Guarded on `status = 'pending'` alone — unlike the two
+/// above, authority/expiry are checked by the caller *before* this is
+/// reached (they are not part of the wrong/correct-proof equality
+/// boundary; a drifted/expired row is invalidated regardless of
+/// `failure_count`), so the only race this one guards against is a
+/// concurrent call that already terminalized the row some other way.
+pub fn invalidate_within_tx(
+    conn: &rusqlite::Connection,
+    id: FederationMfaPendingId,
+) -> StoreResult<bool> {
+    let n = conn.execute(
+        "UPDATE federation_mfa_pending SET status = 'invalidated', continuation_sealed = NULL \
+         WHERE id = ?1 AND status = 'pending'",
+        [id.to_string()],
+    )?;
+    Ok(n == 1)
+}
+
 /// RFC 096 `:734`: terminal rows are purged after 24 hours. **Not filtered
 /// on `status`**, the same choice `federation_login_attempt::purge_expired`
 /// already made and for the same reason restated for this table rather
@@ -275,6 +391,149 @@ pub static AUDIT_MFA_REQUIRED_DESCRIPTOR: MustAttemptDescriptor = MustAttemptDes
         description: "internal id of the federation provider this sign-in was for",
         required: false,
     }],
+};
+
+/// RFC 096 `:826-828`'s closed reason vocabulary for
+/// `auth.federation.mfa_rejected`/`auth.federation.mfa_exhausted`. A
+/// plain, store-level enum rather than `sui_id_core::federated_mfa::
+/// RejectedReason` — F03 lives in `sui-id-store`, which cannot name a
+/// `sui-id-core` type (RFC 096 `:784-789`, the F03 seam) — but it is
+/// still closed: the only caller today is stage 10b's own promotion
+/// logic, converting exhaustively from the verifier's own closed enum,
+/// so nothing upstream of that conversion can select a value this one
+/// does not already mirror. `Webauthn` and `MethodMismatch` are
+/// unreachable this stage, the same way the verifier's own
+/// `RejectedReason::Webauthn`/`MethodMismatch` are (stage 10a's own
+/// doc) — F06 (stage 11) is what gives either a producer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MfaRejectionReason {
+    Totp,
+    Recovery,
+    Webauthn,
+    Malformed,
+    MethodMismatch,
+}
+
+impl MfaRejectionReason {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Totp => "totp",
+            Self::Recovery => "recovery",
+            Self::Webauthn => "webauthn",
+            Self::Malformed => "malformed",
+            Self::MethodMismatch => "method_mismatch",
+        }
+    }
+}
+
+/// RFC 096 `:830-831`'s closed reason vocabulary for
+/// `auth.federation.mfa_invalidated`. Three of the seven are
+/// unreachable this stage, named rather than silently unused:
+/// `ProviderChanged` needs RFC 096-B2/M2b's durable provider version/
+/// generation columns (stage 10a's own verifier already states this
+/// limitation; F03 inherits it). `CeremonyInvalid` needs F06's ceremony
+/// table (stage 11). `LinkChanged` has no path at all with the current
+/// schema: the only way a link changes out from under a pending row is
+/// `federation_mfa_pending`'s own `FOREIGN KEY ... REFERENCES
+/// federation_link ON DELETE CASCADE` (migration 0047) firing on an
+/// unlink — which deletes the *row itself*, not just the link, so F03's
+/// own durable re-read finds no row at all (`StoreError::NotFound`,
+/// outside the four outcomes entirely) rather than a row it could
+/// invalidate with this reason.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InvalidatedReason {
+    Expired,
+    ProviderChanged,
+    ProviderDisabled,
+    LinkChanged,
+    UserInactive,
+    FactorChanged,
+    CeremonyInvalid,
+}
+
+impl InvalidatedReason {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Expired => "expired",
+            Self::ProviderChanged => "provider_changed",
+            Self::ProviderDisabled => "provider_disabled",
+            Self::LinkChanged => "link_changed",
+            Self::UserInactive => "user_inactive",
+            Self::FactorChanged => "factor_changed",
+            Self::CeremonyInvalid => "ceremony_invalid",
+        }
+    }
+}
+
+/// RFC 096-B1 stage 10b, F03: a wrong/unsupported proof against a still-
+/// pending row, 1–4. `:826-828`.
+pub static AUDIT_MFA_REJECTED_DESCRIPTOR: MustAttemptDescriptor = MustAttemptDescriptor {
+    kind: AuditEventKind::AuthFederationMfaRejected,
+    name: "auth.federation.mfa_rejected",
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[AttributeSpec {
+        name: "reason",
+        description: "which closed proof-rejection reason this was: totp, recovery, webauthn, malformed, or method_mismatch",
+        required: true,
+    }],
+};
+
+/// RFC 096-B1 stage 10b, F03: the fifth wrong proof — the row
+/// terminalizes to `exhausted` in the same transaction. `:826-828`.
+pub static AUDIT_MFA_EXHAUSTED_DESCRIPTOR: MustAttemptDescriptor = MustAttemptDescriptor {
+    kind: AuditEventKind::AuthFederationMfaExhausted,
+    name: "auth.federation.mfa_exhausted",
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[AttributeSpec {
+        name: "attempt_limit",
+        description: "the fixed cap reached (always 5 — RFC 096 :731)",
+        required: true,
+    }],
+};
+
+/// RFC 096-B1 stage 10b, F03: authority drift or expiry terminalizes the
+/// row without counting a wrong proof. `:826-831`.
+pub static AUDIT_MFA_INVALIDATED_DESCRIPTOR: MustAttemptDescriptor = MustAttemptDescriptor {
+    kind: AuditEventKind::AuthFederationMfaInvalidated,
+    name: "auth.federation.mfa_invalidated",
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[AttributeSpec {
+        name: "reason",
+        description: "which closed invalidation reason this was: expired, provider_changed, provider_disabled, link_changed, user_inactive, factor_changed, or ceremony_invalid",
+        required: true,
+    }],
+};
+
+/// RFC 096-B1 stage 10b fix round, R1: F03's `Promoted` outcome, its own
+/// name rather than a reuse of `auth.federation.signin.success` (L04/F01
+/// — no second factor needed). The same split the local path already
+/// has between `auth.login.success` (L01/L03) and `auth.mfa.success`
+/// (L02): the class is a property of the guarantee (Class A cannot be
+/// missing if the mutation happened; Class B can), so one name cannot
+/// carry both without leaving an operator unable to tell which assurance
+/// a row carries. `:816-817` separates "post-commit Class-B sign-in
+/// success" from F03's own observations without naming the success
+/// event — naming it is this fix, not an RFC amendment.
+pub static AUDIT_MFA_SUCCESS_DESCRIPTOR: MustAttemptDescriptor = MustAttemptDescriptor {
+    kind: AuditEventKind::AuthFederationMfaSuccess,
+    name: "auth.federation.mfa_success",
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[
+        AttributeSpec {
+            name: "method",
+            description: "the second factor: \"totp\" or \"recovery_code\"",
+            required: false,
+        },
+        AttributeSpec {
+            name: "evicted",
+            description: "older sessions revoked to keep the user within the concurrent-session cap",
+            required: false,
+        },
+    ],
 };
 
 #[cfg(test)]

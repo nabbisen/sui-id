@@ -269,6 +269,94 @@ async fn a_correct_totp_code_is_a_valid_candidate() {
     assert!(matches!(outcome, FederatedMfaOutcome::Totp(_)));
 }
 
+// ── Stage 10b: `promote`, the seam-side caller of F03 ───────────────────
+
+#[tokio::test]
+async fn promote_with_a_correct_totp_code_promotes_through_f03() {
+    let f = fixture().await;
+    let verify_clock = clock_at(fixed_now() + ChronoDuration::seconds(30));
+    let step = verify_clock.now().timestamp().div_euclid(30);
+    let totp_row = user_totp::get(&f.db, f.user_id).await.unwrap().unwrap();
+    let secret = user_totp::decrypt_secret(&f.db, &totp_row).await.unwrap();
+    let code = totp::code_for_step(&secret, step).await;
+
+    let outcome = promote(
+        &f.db,
+        &verify_clock,
+        &f.pending_id.to_string(),
+        &f.browser_binding_raw,
+        &f.csrf_raw,
+        &code.to_string(),
+    )
+    .await
+    .expect("verify and F03 both succeed");
+    assert!(matches!(
+        outcome,
+        sui_id_store::commands::F03Outcome::Promoted { .. }
+    ));
+}
+
+#[tokio::test]
+async fn promote_with_a_wrong_totp_code_is_rejected_still_pending_through_f03() {
+    let f = fixture().await;
+    let outcome = promote(
+        &f.db,
+        &f.clock,
+        &f.pending_id.to_string(),
+        &f.browser_binding_raw,
+        &f.csrf_raw,
+        "000000",
+    )
+    .await
+    .expect("verify succeeds; F03 counts the wrong proof");
+    match outcome {
+        sui_id_store::commands::F03Outcome::RejectedStillPending { failure_count, .. } => {
+            assert_eq!(failure_count, 1)
+        }
+        other => panic!("expected RejectedStillPending(1), got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn promote_on_an_unknown_pending_id_is_a_binding_failure() {
+    let f = fixture().await;
+    let result = promote(
+        &f.db,
+        &f.clock,
+        &FederationMfaPendingId::new().to_string(),
+        &f.browser_binding_raw,
+        &f.csrf_raw,
+        "123456",
+    )
+    .await;
+    match result {
+        Err(VerifyError::Binding(b)) => assert_eq!(b, BindingFailure),
+        other => panic!("expected a binding failure, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn promote_on_an_expired_row_invalidates_through_f03() {
+    let f = fixture().await;
+    let past_expiry = clock_at(
+        fixed_now() + ChronoDuration::seconds(federation_mfa_pending::PENDING_LIFETIME_SECS + 1),
+    );
+    let outcome = promote(
+        &f.db,
+        &past_expiry,
+        &f.pending_id.to_string(),
+        &f.browser_binding_raw,
+        &f.csrf_raw,
+        "123456",
+    )
+    .await
+    .expect("verify reports Expired; F03 durably invalidates");
+    assert!(matches!(
+        outcome,
+        sui_id_store::commands::F03Outcome::Invalidated { .. }
+    ));
+}
+
 #[tokio::test]
 async fn a_correct_recovery_code_is_a_valid_candidate() {
     let f = fixture().await;

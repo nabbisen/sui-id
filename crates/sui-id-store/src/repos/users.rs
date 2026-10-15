@@ -709,6 +709,25 @@ pub fn is_active_local_within_tx(conn: &rusqlite::Connection, id: UserId) -> Sto
     Ok(disabled == 0 && deleted == 0 && source == crate::models::UserSource::Local.as_str())
 }
 
+/// Same as [`is_active_local_within_tx`], without the `source = local`
+/// restriction (RFC 096-B1 stage 10b, F03's own authority recheck): a
+/// federated user, whether F04-provisioned or an existing local account
+/// with a link, is "active" the same way — not disabled, not deleted.
+/// `NotFound` if the user no longer exists at all.
+pub fn is_active_within_tx(conn: &rusqlite::Connection, id: UserId) -> StoreResult<bool> {
+    let (disabled, deleted): (i64, i64) = conn
+        .query_row(
+            "SELECT is_disabled, is_deleted FROM users WHERE id = ?1",
+            [id.to_string()],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
+            other => StoreError::from(other),
+        })?;
+    Ok(disabled == 0 && deleted == 0)
+}
+
 pub fn set_role_within_tx(
     conn: &rusqlite::Connection,
     user_id: UserId,

@@ -45,6 +45,21 @@ pub async fn get(db: &Database, user_id: UserId) -> StoreResult<Option<UserTotpR
     .await
 }
 
+/// Same as [`get`], on the caller's own transaction (RFC 096-B1 stage
+/// 10b, F03: the authoritative, durable re-read `last_used_step`/
+/// `recovery_codes_enc` freshness checks run against, inside the same
+/// transaction that then consumes the proof — no gap between the read
+/// and the write for a concurrent consumer to land in).
+pub fn get_within_tx(
+    conn: &rusqlite::Connection,
+    user_id: UserId,
+) -> StoreResult<Option<UserTotpRow>> {
+    Ok(conn
+        .prepare(&format!("{SELECT} WHERE user_id = ?1"))?
+        .query_row([user_id.to_string()], map)
+        .optional()?)
+}
+
 /// Insert (or replace) a TOTP enrolment for the user. Used by both the
 /// initial unconfirmed insert and by the "regenerate secret" path.
 pub async fn upsert_pending(

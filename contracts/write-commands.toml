@@ -478,7 +478,7 @@ class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
 sealed = true
 owner = "Federated sign-in, shipped path (RFC 102 A1, A2)"
-rationale = "one `auth.federation.signin.success` with `provider`, the user re-read, `last_login_at`, the session and cap eviction; RFC 096's F01 and F03 succeed it"
+rationale = "one `auth.federation.signin.success` with `provider`, the user re-read, `last_login_at`, the session and cap eviction; RFC 096's F01 succeeds it. F03 (RFC 096-B1 stage 10b fix round, R1) has its own name, `auth.federation.mfa_success`, not this one -- the same split the local path already has between L01/L03's `auth.login.success` and L02's `auth.mfa.success`"
 mutation_surface = "`users::record_federated_login_within_tx`, `sessions::insert_within_tx`, `sessions::revoke_within_tx`"
 files = ["crates/sui-id-store/src/repos/users.rs", "crates/sui-id-store/src/repos/sessions.rs"]
 test_id = "`r102_l04_*` (e2e)"
@@ -815,13 +815,21 @@ test_id = "`f02_completes_the_attempt_and_creates_exactly_one_pending_row`, `f02
 [[command]]
 id = "F03"
 class = "P"
-status = "target-absent"  # implemented | target-absent | target-legacy
-sealed = false
+status = "implemented"  # implemented | target-absent | target-legacy
+sealed = false  # Class P is never sealed -- check-write-commands.py:248, "a sealed command is Class A by construction"; this stage's own dispatch said `true`, corrected here (see this stage's review package)
 owner = "Submit/complete federated local MFA / RFC 096 MFA login"
 rationale = "closed `Promoted`, `RejectedStillPending`, `AttemptsExhausted`, `Invalidated`; exact Class-B success/rejected/exhausted/invalidated event after commit"
 mutation_surface = "guard pending, unexpired, count 0–4, exact provider/link/user/factor/method; wrong proof increments once (1–4 pending, 5 exhausted); Promoted consumes method anti-replay + pending, observes link, bookkeeps, inserts `[Fed, local_method]` session/cap; Invalidated terminalizes only"
-files = []  # UNRESOLVED, deliberately: no current MFA-continuation flow for federation exists. Depends on RFC 096-B1. Target-state row.
-test_id = "`p_f03_promoted`, `p_f03_rejected`, `p_f03_exhausted`, `p_f03_invalidated`"
+files = [
+  "crates/sui-id-store/src/commands.rs",
+  "crates/sui-id-store/src/repos/federation_mfa_pending.rs",
+  "crates/sui-id-store/src/repos/federation_provider.rs",
+  "crates/sui-id-store/src/repos/federation_link.rs",
+  "crates/sui-id-store/src/repos/users.rs",
+  "crates/sui-id-store/src/repos/user_totp.rs",
+  "crates/sui-id-core/src/authn/federated_mfa.rs",
+]
+test_id = "`commands::tests::runner::federation::f03_totp_promotes_consumes_step_observes_link_and_creates_session`, `::f03_recovery_promotes_and_swaps_the_consumed_hash`, `::f03_wrong_proof_increments_to_one_through_four`, `::f03_fifth_wrong_proof_exhausts_and_clears_continuation`, `::f03_invalidated_on_expiry`, `::f03_invalidated_on_disabled_provider`, `::f03_invalidated_on_disabled_user`, `::f03_invalidated_when_the_factor_is_disabled_after_the_row_was_issued`, `::f03_stale_totp_step_is_treated_as_a_wrong_proof`, `::f03_stale_recovery_blob_is_treated_as_a_wrong_proof`, `::f03_unknown_pending_id_is_not_found`, `::f03_injected_commit_failure_rolls_back_everything`, `::f03_two_concurrent_submissions_at_count_four_yield_exactly_one_winner`; `sui_id_core::authn::federated_mfa::tests::promote_with_a_correct_totp_code_promotes_through_f03` and its three siblings; `tests/e2e/r096_b1_stage10b_f03_scope.rs`"
 
 [[command]]
 id = "F04"

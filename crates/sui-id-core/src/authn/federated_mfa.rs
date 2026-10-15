@@ -446,6 +446,101 @@ async fn match_recovery_code(
     Ok(Some((expected_sealed, new_sealed)))
 }
 
+/// RFC 096-B1 stage 10b: the promotion path, on this side of the F03
+/// seam (RFC 096 `:784-789`) — `sui-id-store` cannot name this module's
+/// own candidate types, so F03 is a `pub` store command taking plain
+/// primitives, and the code that converts a sealed candidate into one
+/// lives here, beside the verifier that produced it, the same way
+/// stage 10a's own placement argument already concluded it must.
+///
+/// Runs [`verify`] first, then [`sui_id_store::commands::complete_federated_mfa`]
+/// with the candidate reduced to a primitive [`sui_id_store::commands::F03Proof`].
+/// `FederatedMfaOutcome::Expired` becomes `proof: None` — the verifier's
+/// own read already decided there was nothing to evaluate, and F03's
+/// own durable recheck (not this function) is what actually terminalizes
+/// it, inside its own transaction, with its own Class-B emission.
+///
+/// **Errors fold into the same two-case shape [`verify`] already uses**,
+/// via [`classify_f03_error`]: `StoreError::NotFound` (the row vanished
+/// between `verify`'s read and F03's write — the parent link cascaded it
+/// away) and `StoreError::Conflict` (a concurrent call already decided
+/// this row — RFC 096-B1 stage 10b dispatch `:55-58`'s equality
+/// boundary) both become [`BindingFailure`], the same indistinguishable
+/// value every other refusal in this module already is; every other
+/// store error becomes [`VerifyError::Internal`], for the same reason
+/// R3 (stage 10a's own fix round) drew that line in `verify` itself.
+pub async fn promote(
+    db: &Database,
+    clock: &SharedClock,
+    presented_pending_id: &str,
+    presented_browser_binding_cookie: &str,
+    presented_csrf_body_value: &str,
+    code_input: &str,
+) -> Result<sui_id_store::commands::F03Outcome, VerifyError> {
+    let outcome = verify(
+        db,
+        clock,
+        presented_pending_id,
+        presented_browser_binding_cookie,
+        presented_csrf_body_value,
+        code_input,
+    )
+    .await?;
+
+    let pending_id: FederationMfaPendingId = presented_pending_id
+        .parse()
+        .map_err(|_| VerifyError::Binding(BindingFailure))?;
+
+    let proof = match outcome {
+        FederatedMfaOutcome::Totp(valid) => {
+            Some(sui_id_store::commands::F03Proof::Totp { step: valid.step })
+        }
+        FederatedMfaOutcome::Recovery(valid) => Some(sui_id_store::commands::F03Proof::Recovery {
+            expected_sealed: valid.expected_sealed,
+            new_sealed: valid.new_sealed,
+        }),
+        FederatedMfaOutcome::Rejected(bound) => Some(sui_id_store::commands::F03Proof::Rejected {
+            reason: convert_rejection_reason(bound.reason),
+        }),
+        FederatedMfaOutcome::Expired => None,
+    };
+
+    sui_id_store::commands::complete_federated_mfa(db, pending_id, proof, clock.now())
+        .await
+        .map_err(classify_f03_error)
+}
+
+/// The verifier's own closed reason, converted exhaustively to the
+/// plain, store-level enum F03 actually takes (RFC 096 `:784-789`'s F03
+/// seam: `sui-id-store` cannot name [`RejectedReason`] itself). This is
+/// the one place that conversion happens — not F03, which has no way to
+/// construct a [`RejectedReason`] to convert *from*.
+fn convert_rejection_reason(
+    reason: RejectedReason,
+) -> sui_id_store::repos::federation_mfa_pending::MfaRejectionReason {
+    use sui_id_store::repos::federation_mfa_pending::MfaRejectionReason as Store;
+    match reason {
+        RejectedReason::Totp => Store::Totp,
+        RejectedReason::Recovery => Store::Recovery,
+        RejectedReason::Webauthn => Store::Webauthn,
+        RejectedReason::Malformed => Store::Malformed,
+        RejectedReason::MethodMismatch => Store::MethodMismatch,
+    }
+}
+
+/// `StoreError::NotFound`/`Conflict` are both "this submission reached a
+/// dead end that is not a database malfunction" — folded into
+/// [`BindingFailure`], the same indistinguishable value every other
+/// refusal already is. Everything else is [`VerifyError::Internal`].
+fn classify_f03_error(e: sui_id_store::StoreError) -> VerifyError {
+    match e {
+        sui_id_store::StoreError::NotFound | sui_id_store::StoreError::Conflict => {
+            VerifyError::Binding(BindingFailure)
+        }
+        other => VerifyError::Internal(other),
+    }
+}
+
 #[cfg(test)]
 #[path = "federated_mfa/tests.rs"]
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]

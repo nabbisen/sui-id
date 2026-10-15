@@ -1259,8 +1259,9 @@ pub async fn federated_callback(
         None => {
             match provider.provision_mode {
                 ProvisionMode::ProvisionOnFirstLogin => {
-                    // P3: RFC 096 `:710-711`, "an absent or unverified email
-                    // denies" -- both conditions, not only the unverified
+                    // P3: RFC 096 `:727-728`, "`provision_on_first_login`
+                    // requires a present email and `email_verified=true`"
+                    // -- both conditions, not only the unverified
                     // one. Before RFC 096-B1 stage 7 this checked
                     // `email.is_some() && !email_verified`, which let an
                     // absent email fall through to provisioning: that was
@@ -1276,7 +1277,7 @@ pub async fn federated_callback(
                     //
                     // RFC 096-B1 stage 6e fix round (R1): this check still
                     // runs BEFORE P2's collision check below, not after.
-                    // RFC 096 `:706-712` requires `email_verified = true`
+                    // RFC 096 `:727-728` requires `email_verified = true`
                     // before an email is even eligible for the collision
                     // comparison ("if any local user already has *that
                     // normalized email*" -- the verified one): the

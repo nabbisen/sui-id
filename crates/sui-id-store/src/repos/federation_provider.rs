@@ -80,6 +80,27 @@ pub async fn get(db: &Database, id: FederationProviderId) -> StoreResult<Federat
     .await
 }
 
+/// Durable `enabled` re-read, on the caller's own transaction (RFC
+/// 096-B1 stage 10b, F03's own authority recheck). `NotFound` if the
+/// provider no longer exists at all — the same signal a disabled
+/// provider's own absence would give, since both mean "this identity's
+/// authority is gone."
+pub fn is_enabled_within_tx(
+    conn: &rusqlite::Connection,
+    id: FederationProviderId,
+) -> StoreResult<bool> {
+    conn.query_row(
+        "SELECT enabled FROM federation_provider WHERE id = ?1",
+        [id.to_string()],
+        |r| r.get::<_, i64>(0),
+    )
+    .map(|v| v != 0)
+    .map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
+        other => StoreError::from(other),
+    })
+}
+
 /// Fetch a provider by slug.
 pub async fn get_by_slug(db: &Database, slug: &str) -> StoreResult<FederationProviderRow> {
     let slug = slug.to_owned();

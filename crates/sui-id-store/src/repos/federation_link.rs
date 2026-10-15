@@ -8,7 +8,7 @@ use crate::{
     errors::{StoreError, StoreResult},
     models::FederationLinkRow,
 };
-use rusqlite::params;
+use rusqlite::{OptionalExtension, params};
 use sui_id_shared::ids::{FederationProviderId, UserId};
 
 fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<FederationLinkRow> {
@@ -155,6 +155,62 @@ pub fn insert_within_tx(conn: &rusqlite::Connection, row: &FederationLinkRow) ->
         }
         other => StoreError::from(other),
     })?;
+    Ok(())
+}
+
+/// Durable existence re-read, on the caller's own transaction (RFC
+/// 096-B1 stage 10b fix round, R2: F03's own authority recheck —
+/// "exact provider/**link**/user/factor/method", `contracts/write-
+/// commands.toml`'s own F03 row). Under normal operation this can
+/// never observe a missing link against a *live* `federation_mfa_pending`
+/// row: that row's own composite `FOREIGN KEY ... REFERENCES
+/// federation_link ON DELETE CASCADE` (migration 0047) removes the row
+/// itself the instant the link is removed, so F03's own earlier read of
+/// the row would already have failed with `NotFound` — measured
+/// directly (`tests.rs`'s own `f03_...`; see this round's own package
+/// for the probe). This check exists for the gap the cascade is itself
+/// the primary defense against and does not cover — `PRAGMA
+/// foreign_keys` disabled for a connection, a future write path that
+/// bypasses it, or any other way the two tables' rows could drift out
+/// of sync with each other — not for the scenario a correctly
+/// FK-enforced delete already prevents entirely.
+pub fn exists_within_tx(
+    conn: &rusqlite::Connection,
+    user_id: UserId,
+    provider_id: FederationProviderId,
+) -> StoreResult<bool> {
+    Ok(conn
+        .query_row(
+            "SELECT 1 FROM federation_link WHERE user_id = ?1 AND provider_id = ?2",
+            params![user_id.to_string(), provider_id.to_string()],
+            |_| Ok(()),
+        )
+        .optional()?
+        .is_some())
+}
+
+/// Touch `last_seen_at`, on the caller's own transaction (RFC 096-B1
+/// stage 10b, F03's own link observation/bookkeeping on `Promoted`).
+/// `NotFound` if the link no longer exists — the same FK that makes
+/// `federation_mfa_pending` rows cascade away with their own unlink
+/// means this signals a genuine authority change, not a bookkeeping
+/// miss. Does not touch `upstream_email`: F03 runs on a later request
+/// than the one that carried fresh upstream claims (F02's), so there is
+/// no new email to observe here, only the fact of this successful
+/// sign-in.
+pub fn touch_last_seen_within_tx(
+    conn: &rusqlite::Connection,
+    user_id: UserId,
+    provider_id: FederationProviderId,
+    now: chrono::DateTime<chrono::Utc>,
+) -> StoreResult<()> {
+    let n = conn.execute(
+        "UPDATE federation_link SET last_seen_at = ?1 WHERE user_id = ?2 AND provider_id = ?3",
+        params![now, user_id.to_string(), provider_id.to_string()],
+    )?;
+    if n == 0 {
+        return Err(StoreError::NotFound);
+    }
     Ok(())
 }
 

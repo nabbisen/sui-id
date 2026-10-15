@@ -262,6 +262,25 @@ pub enum AuditEventKind {
     /// `auth.login.password_ok_mfa_required` append on this branch, which
     /// asserted a password was presented when none was.
     AuthFederationMfaRequired,
+    /// `auth.federation.mfa_rejected` — RFC 096-B1 stage 10b, F03: a
+    /// wrong, malformed, or unsupported proof against a still-pending
+    /// continuation, counted 1–4.
+    AuthFederationMfaRejected,
+    /// `auth.federation.mfa_exhausted` — RFC 096-B1 stage 10b, F03: the
+    /// fifth wrong proof; the continuation terminalizes to `exhausted`.
+    AuthFederationMfaExhausted,
+    /// `auth.federation.mfa_invalidated` — RFC 096-B1 stage 10b, F03:
+    /// authority drift or expiry terminalizes the continuation without
+    /// counting a wrong proof.
+    AuthFederationMfaInvalidated,
+    /// `auth.federation.mfa_success` — RFC 096-B1 stage 10b fix round,
+    /// R1: a federated sign-in's second factor completed. Distinct from
+    /// `auth.federation.signin.success` (L04/F01, no second factor
+    /// needed) the same way the local path's `auth.mfa.success` (L02)
+    /// is distinct from `auth.login.success` (L01/L03) — one name per
+    /// guarantee, not one name reused across a Class-A and a Class-B
+    /// mechanism.
+    AuthFederationMfaSuccess,
 }
 
 /// The registry entry for one [`AuditEventKind`]. `descriptor()` on a
