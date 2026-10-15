@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **A federated identity with no email claim at all could be provisioned,
+  not only one with an unverified email.** *Severity: Low.* Exploiting it
+  needed federation configured with `provision_on_first_login` and an
+  upstream IdP willing to return an ID token with no `email` claim —
+  unusual, but valid OIDC. The check RFC 096 `:727-728` requires
+  ("a present email and `email_verified=true`") tested only `email.is_some() &&
+  !email_verified`, so an **absent** claim satisfied neither half and fell
+  through to provisioning unexamined, creating a passwordless, emailless
+  user with no path to a forgot-password recovery. Now denies on an absent
+  email the same way it denies on an unverified one (RFC 096-B1 stage 7,
+  F04).
+
+### Added
+
+- **A new federated identity can provision itself automatically on first
+  sign-in, atomically.** Under a provider configured for
+  `provision_on_first_login`, an upstream identity with no existing local
+  link now has its user, its link, its `[Fed]` session, and the
+  concurrent-session cap all committed in one transaction (RFC 096-B1 stage
+  7, F04) — a partial provisioning (a user with no link, or a link with no
+  session) can no longer result from an interrupted write.
+
+### Changed
+
+- **A federated sign-in that stops at a local second factor now emits
+  `auth.federation.mfa_required`, not `auth.login.password_ok_mfa_required`
+  — on the federated path only.** The local password path is unchanged and
+  still emits the old event: a password was presented there, and
+  "password correct, MFA pending" is what that event describes. Neither is
+  true of a federated sign-in — an F04-provisioned user may have no
+  password at all — so it now has its own name rather than borrowing one
+  that asserted something false about it. **If you alert on
+  `auth.login.password_ok_mfa_required` to watch for a sign-in stopping at
+  its second factor, that alert keeps working for local sign-ins and will
+  no longer fire for federated ones** — add a second alert on the new
+  event name to keep the same coverage (RFC 096-B1 stage 9, F02).
+
+- **Groundwork for federated local-MFA completion, not yet reachable from
+  any sign-in.** Two new tables (`federation_mfa_pending`,
+  `federation_webauthn_ceremony`; migration `0047`) and a private verifier
+  that checks a federated MFA submission's browser/CSRF binding now exist
+  (RFC 096-B1 stages 8 and 10a), alongside the continuation row the item
+  above already writes on every federated sign-in that needs a second
+  factor. Nothing reads that row yet, the verifier has no caller, and no
+  sign-in can complete a federated second factor — that is later work. An
+  operator who notices `federation_mfa_pending` filling up is seeing
+  exactly this: rows written, nothing yet consuming them.
+
 ## [0.80.0] — 2026-10-13
 
 **Federation stops trusting the transport.** Until this release the federated
