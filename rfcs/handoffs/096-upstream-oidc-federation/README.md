@@ -271,8 +271,17 @@ is dispatched to close it first.
   first round reasoned about the delete direction of that key and chose reuse
   partly because of it; the update direction is the one it missed.
 
-**Stage 6d is dispatched** —
+**Stage 6d landed `a6524e0`**, first try —
 [`stage6d-f01-folded-into-l04-2026-10-15.md`](stage6d-f01-folded-into-l04-2026-10-15.md).
+Its review found two of the three checks the dispatch called misplaced were
+**absent**: the existing-link, no-MFA path never completed its login attempt
+at all, so those rows sat in `exchanging` until the 24-hour purge. Bookkeeping
+rather than an authentication weakness — `claim()` has held one-time-ness
+since stage 6c — but a shipped bug, now fixed. **The open dispatch is the
+second CHANGELOG catch-up**
+([`changelog-catch-up-2-2026-10-16.md`](changelog-catch-up-2-2026-10-16.md)):
+four stages have landed with no entries, and from stage 12 onward each
+dispatch carries its own.
 The gap below is closed: `@nabbisen` accepted the RFC 094 F01 class amendment
 on 2026-10-15, RFC 094 round-tripped through `proposed/` and back in one pass
 (`a9198f4`, `93b4b3e`), and F01 is now Class A folded into RFC 102's L04 in the
