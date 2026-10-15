@@ -276,9 +276,11 @@ pub enum FailureIncrement {
 /// already promoted).
 ///
 /// Deleting bound method ceremonies on exhaustion (RFC 096 `:768`) is
-/// not done here: no code path creates a `federation_webauthn_ceremony`
-/// row yet (F06, stage 11), so there is nothing to delete — stated
-/// rather than silently omitted.
+/// not done here, by this function — stage 11 adds it as
+/// `commands::reject_or_exhaust`'s own job, one layer up, since it
+/// means reaching into `repos::federation_webauthn_ceremony`, a sibling
+/// repo module this one does not and should not call directly (cross-
+/// repo orchestration is `commands.rs`'s job throughout this crate).
 pub fn increment_failure_within_tx(
     conn: &rusqlite::Connection,
     id: FederationMfaPendingId,
@@ -401,10 +403,13 @@ pub static AUDIT_MFA_REQUIRED_DESCRIPTOR: MustAttemptDescriptor = MustAttemptDes
 /// still closed: the only caller today is stage 10b's own promotion
 /// logic, converting exhaustively from the verifier's own closed enum,
 /// so nothing upstream of that conversion can select a value this one
-/// does not already mirror. `Webauthn` and `MethodMismatch` are
-/// unreachable this stage, the same way the verifier's own
-/// `RejectedReason::Webauthn`/`MethodMismatch` are (stage 10a's own
-/// doc) — F06 (stage 11) is what gives either a producer.
+/// does not already mirror. `Webauthn` and `MethodMismatch` were
+/// unreachable through stage 10b, the same way the verifier's own
+/// `RejectedReason::Webauthn`/`MethodMismatch` were (stage 10a's own
+/// doc) — RFC 096-B1 stage 11 (F06, the WebAuthn branch) is what gives
+/// each its first producer: `Webauthn` from a wrong WebAuthn
+/// completion, `MethodMismatch` from either verifier entry point
+/// rejecting a submission bound to the row's other method.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MfaRejectionReason {
     Totp,
@@ -427,12 +432,15 @@ impl MfaRejectionReason {
 }
 
 /// RFC 096 `:830-831`'s closed reason vocabulary for
-/// `auth.federation.mfa_invalidated`. Three of the seven are
-/// unreachable this stage, named rather than silently unused:
+/// `auth.federation.mfa_invalidated`. Two of the seven are unreachable
+/// through this stage, named rather than silently unused:
 /// `ProviderChanged` needs RFC 096-B2/M2b's durable provider version/
 /// generation columns (stage 10a's own verifier already states this
-/// limitation; F03 inherits it). `CeremonyInvalid` needs F06's ceremony
-/// table (stage 11). `LinkChanged` has no path at all with the current
+/// limitation; F03 inherits it). `CeremonyInvalid` gets its first
+/// producer this stage (RFC 096-B1 stage 11): F03's WebAuthn branch,
+/// on its own durable re-read finding the bound ceremony gone, expired,
+/// or no longer the one the candidate was built against. `LinkChanged`
+/// has no path at all with the current
 /// schema: the only way a link changes out from under a pending row is
 /// `federation_mfa_pending`'s own `FOREIGN KEY ... REFERENCES
 /// federation_link ON DELETE CASCADE` (migration 0047) firing on an
@@ -525,7 +533,7 @@ pub static AUDIT_MFA_SUCCESS_DESCRIPTOR: MustAttemptDescriptor = MustAttemptDesc
     attributes: &[
         AttributeSpec {
             name: "method",
-            description: "the second factor: \"totp\" or \"recovery_code\"",
+            description: "the second factor: \"totp\", \"recovery_code\" or \"webauthn\"",
             required: false,
         },
         AttributeSpec {

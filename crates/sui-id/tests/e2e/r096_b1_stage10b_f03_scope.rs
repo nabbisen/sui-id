@@ -13,25 +13,38 @@
 //!
 //! **Why `complete_federated_mfa` must never appear in `crates/sui-id/src/`**:
 //! the only legitimate caller is stage 10b's own promotion path
-//! (`sui_id_core::authn::federated_mfa::promote`), which runs
-//! `FederatedMfaVerifier::verify` first and converts its sealed
-//! candidate into F03's plain primitives — the one place that
-//! conversion can happen, since only that module can see the
-//! candidate types at all (stage 10a's own sealing). A handler calling
-//! F03 directly could supply a `step`, a sealed blob pair, or a
-//! rejection reason of its own choosing, with no binding gate in
-//! front of it at all — exactly what `:758-762`/`:784-789` says a
-//! handler must not be able to do.
+//! (`sui_id_core::federated_mfa::promote`/`promote_webauthn`), which
+//! runs the verifier first and converts its sealed candidate into
+//! F03's plain primitives — the one place that conversion can happen,
+//! since only that module can see the candidate types at all (stage
+//! 10a's own sealing). A handler calling F03 directly could supply a
+//! `step`, a sealed blob pair, or a rejection reason of its own
+//! choosing, with no binding gate in front of it at all — exactly what
+//! `:758-762`/`:784-789` says a handler must not be able to do.
+//!
+//! **RFC 096-B1 stage 11 extends this to F06**
+//! (`sui_id_store::commands::begin_federation_webauthn_ceremony`),
+//! rather than writing a second test: it is the same `sui-id-store`-
+//! cannot-name-`sui-id-core` seam, for the same reason, with the same
+//! one legitimate caller
+//! (`sui_id_core::federated_mfa::begin_webauthn_ceremony`) — a second,
+//! near-identical scope test would be the violation this comment
+//! warns against on the dispatch's own terms (two acknowledgments of
+//! the same rule are one more than the record needs), not a second
+//! rule.
 //!
 //! **Scope, matching `r094_m2a_db_access_scope.rs`'s own choice**:
 //! production source only (`crates/sui-id/src/`), not
-//! `crates/sui-id/tests/` — a test file naming the command to prove
+//! `crates/sui-id/tests/` — a test file naming a command to prove
 //! this very test's own mutation sensitivity (below) is not the
 //! violation this test exists to catch.
 
 use std::path::{Path, PathBuf};
 
-const FORBIDDEN_NAME: &str = "complete_federated_mfa";
+const FORBIDDEN_NAMES: &[&str] = &[
+    "complete_federated_mfa",
+    "begin_federation_webauthn_ceremony",
+];
 const HANDLER_CRATE_SRC: &str = "sui-id/src";
 
 fn handler_src_dir() -> PathBuf {
@@ -54,7 +67,7 @@ fn rs_files(dir: &Path, out: &mut Vec<PathBuf>) {
 }
 
 #[test]
-fn no_handler_source_names_f03_directly() {
+fn no_handler_source_names_f03_or_f06_directly() {
     let dir = handler_src_dir();
     let mut files = Vec::new();
     rs_files(&dir, &mut files);
@@ -66,17 +79,20 @@ fn no_handler_source_names_f03_directly() {
     let mut offenders = Vec::new();
     for path in &files {
         let text = std::fs::read_to_string(path).expect("read .rs file");
-        if text.contains(FORBIDDEN_NAME) {
-            offenders.push(path.display().to_string());
+        for name in FORBIDDEN_NAMES {
+            if text.contains(name) {
+                offenders.push(format!("{} (names `{name}`)", path.display()));
+            }
         }
     }
     assert!(
         offenders.is_empty(),
-        "RFC 096 `:758-762`/`:784-789` (the F03 seam, A-plus-four): only the \
-         federated-MFA promotion path (`sui_id_core::authn::federated_mfa::promote`) \
-         may call `{FORBIDDEN_NAME}` — it is the one place that converts the \
-         verifier's own sealed candidate into F03's plain primitives after the \
-         binding gate has already run. Calling `{FORBIDDEN_NAME}` directly from a \
-         handler bypasses that gate entirely. Found it named in: {offenders:#?}"
+        "RFC 096 `:758-762`/`:784-789` (the F03/F06 seam, A-plus-four): only the \
+         federated-MFA promotion path (`sui_id_core::federated_mfa::promote`/\
+         `promote_webauthn`/`begin_webauthn_ceremony`) may call {FORBIDDEN_NAMES:?} — \
+         these are the one place each that converts the verifier's own sealed \
+         candidate, or issues a new ceremony, after the binding gate has already \
+         run. Calling either directly from a handler bypasses that gate entirely. \
+         Found: {offenders:#?}"
     );
 }

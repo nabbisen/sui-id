@@ -2480,6 +2480,23 @@ pub enum F03Proof {
         expected_sealed: Vec<u8>,
         new_sealed: Vec<u8>,
     },
+    /// RFC 096-B1 stage 11: a WebAuthn assertion the verifier's own
+    /// `verify_webauthn` entry point already matched to a live
+    /// ceremony and credential — `ceremony_id`/`credential_id` are
+    /// what F03 durably re-checks still identify the *same* ceremony/
+    /// credential (RFC 096 `:794-798`'s own binding, re-derived rather
+    /// than trusted from the verifier's earlier, non-authoritative
+    /// read); `expected_sealed`/`new_sealed` are the credential's own
+    /// passkey blob before/after `Passkey::update_credential` advanced
+    /// its signature counter — the same compare-and-swap pair
+    /// `Recovery` already commits for the recovery-code blob, applied
+    /// here to `user_webauthn_credentials.passkey_enc` instead.
+    Webauthn {
+        ceremony_id: sui_id_shared::ids::FederationWebauthnCeremonyId,
+        credential_id: sui_id_shared::ids::WebauthnCredentialId,
+        expected_sealed: Vec<u8>,
+        new_sealed: Vec<u8>,
+    },
     /// The verifier bound the submission to the row but the proof itself
     /// was wrong, malformed, unsupported, or substituted a different
     /// method/ceremony — RFC 096 `:741-743`. `reason` is the verifier's
@@ -2498,7 +2515,8 @@ pub enum F03Outcome {
     Promoted {
         session: crate::models::SessionRow,
         evicted: i64,
-        /// `"totp"` or `"recovery_code"` — the same vocabulary L02's own
+        /// `"totp"`, `"recovery_code"`, or (RFC 096-B1 stage 11)
+        /// `"webauthn"` — the same vocabulary L02's own
         /// `auth.mfa.success` attribute uses, not the RFC 8176 `amr` token.
         method: &'static str,
     },
@@ -2591,48 +2609,24 @@ pub async fn complete_federated_mfa(
                     reason: InvalidatedReason::Expired,
                 });
             }
-            if !crate::repos::federation_provider::is_enabled_within_tx(tx, row.provider_id)? {
+            if let Some(reason) = authority_drift_within_tx(tx, row.provider_id, row.user_id)? {
                 let invalidated =
                     crate::repos::federation_mfa_pending::invalidate_within_tx(tx, pending_id)?;
                 if !invalidated {
                     return Err(StoreError::Conflict);
                 }
-                return Ok(F03Outcome::Invalidated {
-                    reason: InvalidatedReason::ProviderDisabled,
-                });
+                return Ok(F03Outcome::Invalidated { reason });
             }
-            if !crate::repos::federation_link::exists_within_tx(tx, row.user_id, row.provider_id)? {
-                let invalidated =
-                    crate::repos::federation_mfa_pending::invalidate_within_tx(tx, pending_id)?;
-                if !invalidated {
-                    return Err(StoreError::Conflict);
-                }
-                return Ok(F03Outcome::Invalidated {
-                    reason: InvalidatedReason::LinkChanged,
-                });
-            }
-            if !crate::repos::users::is_active_within_tx(tx, row.user_id)? {
-                let invalidated =
-                    crate::repos::federation_mfa_pending::invalidate_within_tx(tx, pending_id)?;
-                if !invalidated {
-                    return Err(StoreError::Conflict);
-                }
-                return Ok(F03Outcome::Invalidated {
-                    reason: InvalidatedReason::UserInactive,
-                });
-            }
+            // Resolved once, used only by the Totp/Recovery/Rejected(
+            // Totp|Recovery|Malformed) arms below — RFC 096-B1 stage 11
+            // narrows what was, through stage 10b, an unconditional
+            // requirement for *every* submission (there was no other
+            // method to require it for). A `Webauthn`/`MethodMismatch`
+            // submission needs no TOTP row at all; requiring one would
+            // wrongly invalidate a user whose only enrolled second
+            // factor is a passkey.
             let totp_row =
                 crate::repos::user_totp::get_within_tx(tx, row.user_id)?.filter(|t| t.enabled);
-            let Some(totp_row) = totp_row else {
-                let invalidated =
-                    crate::repos::federation_mfa_pending::invalidate_within_tx(tx, pending_id)?;
-                if !invalidated {
-                    return Err(StoreError::Conflict);
-                }
-                return Ok(F03Outcome::Invalidated {
-                    reason: InvalidatedReason::FactorChanged,
-                });
-            };
 
             match proof {
                 None => {
@@ -2646,8 +2640,40 @@ pub async fn complete_federated_mfa(
                             .into(),
                     ))
                 }
-                Some(F03Proof::Rejected { reason }) => reject_or_exhaust(tx, pending_id, reason),
+                Some(F03Proof::Rejected { reason }) => {
+                    if matches!(
+                        reason,
+                        MfaRejectionReason::Totp
+                            | MfaRejectionReason::Recovery
+                            | MfaRejectionReason::Malformed
+                    ) && totp_row.is_none()
+                    {
+                        let invalidated =
+                            crate::repos::federation_mfa_pending::invalidate_within_tx(
+                                tx, pending_id,
+                            )?;
+                        if !invalidated {
+                            return Err(StoreError::Conflict);
+                        }
+                        return Ok(F03Outcome::Invalidated {
+                            reason: InvalidatedReason::FactorChanged,
+                        });
+                    }
+                    reject_or_exhaust(tx, pending_id, reason)
+                }
                 Some(F03Proof::Totp { step }) => {
+                    let Some(totp_row) = totp_row else {
+                        let invalidated =
+                            crate::repos::federation_mfa_pending::invalidate_within_tx(
+                                tx, pending_id,
+                            )?;
+                        if !invalidated {
+                            return Err(StoreError::Conflict);
+                        }
+                        return Ok(F03Outcome::Invalidated {
+                            reason: InvalidatedReason::FactorChanged,
+                        });
+                    };
                     if step <= totp_row.last_used_step {
                         // Stale/replayed: functionally a wrong proof.
                         reject_or_exhaust(tx, pending_id, MfaRejectionReason::Totp)
@@ -2668,6 +2694,18 @@ pub async fn complete_federated_mfa(
                     expected_sealed,
                     new_sealed,
                 }) => {
+                    let Some(totp_row) = totp_row else {
+                        let invalidated =
+                            crate::repos::federation_mfa_pending::invalidate_within_tx(
+                                tx, pending_id,
+                            )?;
+                        if !invalidated {
+                            return Err(StoreError::Conflict);
+                        }
+                        return Ok(F03Outcome::Invalidated {
+                            reason: InvalidatedReason::FactorChanged,
+                        });
+                    };
                     if totp_row.recovery_codes_enc.as_deref() != Some(expected_sealed.as_slice()) {
                         // Stale/already consumed: functionally wrong.
                         reject_or_exhaust(tx, pending_id, MfaRejectionReason::Recovery)
@@ -2685,12 +2723,228 @@ pub async fn complete_federated_mfa(
                         Err(StoreError::Conflict)
                     }
                 }
+                Some(F03Proof::Webauthn {
+                    ceremony_id,
+                    credential_id,
+                    expected_sealed,
+                    new_sealed,
+                }) => {
+                    // RFC 096 `:798-801`'s own re-check, durable: the
+                    // ceremony the candidate was built against must
+                    // still be *the* ceremony bound to this row, and
+                    // still unexpired by its own, narrower expiry — not
+                    // the verifier's earlier, non-authoritative read.
+                    // A concurrent F06 call that replaced or outlived
+                    // it since `verify_webauthn` ran is this, not a
+                    // wrong proof: the dispatch's own `CeremonyInvalid`
+                    // description, "bound to something other than
+                    // what was presented."
+                    let ceremony =
+                        crate::repos::federation_webauthn_ceremony::find_by_pending_id_within_tx(
+                            tx, pending_id,
+                        )?;
+                    let ceremony_ok = ceremony
+                        .as_ref()
+                        .is_some_and(|c| c.id == ceremony_id && c.expires_at > now);
+                    if !ceremony_ok {
+                        let invalidated =
+                            crate::repos::federation_mfa_pending::invalidate_within_tx(
+                                tx, pending_id,
+                            )?;
+                        if !invalidated {
+                            return Err(StoreError::Conflict);
+                        }
+                        return Ok(F03Outcome::Invalidated {
+                            reason: InvalidatedReason::CeremonyInvalid,
+                        });
+                    }
+                    // The credential itself (not merely its blob) must
+                    // still exist — the WebAuthn analogue of the
+                    // TOTP-row-must-exist check above, for the one
+                    // credential this candidate names. Read before
+                    // `complete_within_tx` runs, same as TOTP's own
+                    // `last_used_step`/Recovery's own blob check: a
+                    // mismatched-but-present blob below is a wrong
+                    // proof (counted), decided *before* the row's
+                    // status flips, not after.
+                    let current =
+                        crate::repos::user_webauthn_credentials::current_passkey_enc_within_tx(
+                            tx,
+                            credential_id,
+                        )?;
+                    let Some(current) = current else {
+                        let invalidated =
+                            crate::repos::federation_mfa_pending::invalidate_within_tx(
+                                tx, pending_id,
+                            )?;
+                        if !invalidated {
+                            return Err(StoreError::Conflict);
+                        }
+                        return Ok(F03Outcome::Invalidated {
+                            reason: InvalidatedReason::FactorChanged,
+                        });
+                    };
+                    if current != expected_sealed {
+                        // Stale/already consumed: functionally wrong,
+                        // the same treatment Recovery's own blob
+                        // mismatch already gets.
+                        reject_or_exhaust(tx, pending_id, MfaRejectionReason::Webauthn)
+                    } else if crate::repos::federation_mfa_pending::complete_within_tx(
+                        tx, pending_id,
+                    )? {
+                        crate::repos::user_webauthn_credentials::swap_passkey_within_tx(
+                            tx,
+                            credential_id,
+                            &expected_sealed,
+                            &new_sealed,
+                            now,
+                        )?;
+                        crate::repos::federation_webauthn_ceremony::consume_within_tx(
+                            tx,
+                            ceremony_id,
+                        )?;
+                        promote(tx, &row, now, sui_id_shared::AuthMethod::Webauthn)
+                    } else {
+                        Err(StoreError::Conflict)
+                    }
+                }
             }
         })
         .await?;
 
     emit_f03_event(db, &outcome, now).await;
     Ok(outcome)
+}
+
+/// Shared between F03 (above) and F06 (below): RFC 096 `:740-741`'s
+/// three authority-drift checks that neither command's own identity
+/// columns durably re-prove on their own — provider enabled, link still
+/// exists, user active. Expiry is the fourth RFC 096 names in the same
+/// breath but is deliberately not here: both callers already hold
+/// `now` and the row's own `expires_at` from their own read, so
+/// checking it here would mean threading one more parameter for a
+/// comparison the caller can already make directly.
+///
+/// `Ok(None)` is authority intact. `Ok(Some(reason))` is for the
+/// caller to decide what drift means for its own outcome type: F03
+/// terminalizes the row to `invalidated` with it; F06 (RFC 096 `:822-
+/// 824`, "grants no authentication authority by itself") has no
+/// `Invalidated` outcome of its own to report one through, and simply
+/// refuses the write.
+fn authority_drift_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    provider_id: sui_id_shared::ids::FederationProviderId,
+    user_id: UserId,
+) -> StoreResult<Option<InvalidatedReason>> {
+    if !crate::repos::federation_provider::is_enabled_within_tx(tx, provider_id)? {
+        return Ok(Some(InvalidatedReason::ProviderDisabled));
+    }
+    if !crate::repos::federation_link::exists_within_tx(tx, user_id, provider_id)? {
+        return Ok(Some(InvalidatedReason::LinkChanged));
+    }
+    if !crate::repos::users::is_active_within_tx(tx, user_id)? {
+        return Ok(Some(InvalidatedReason::UserInactive));
+    }
+    Ok(None)
+}
+
+// ── F06 — begin/replace the federated WebAuthn ceremony (Protocol) ─────
+
+/// How long a federated WebAuthn ceremony outlives its own creation,
+/// before `:794-798`'s "expiry no later than the pending row" caps it
+/// down further. 60 seconds — the typical browser-side WebAuthn
+/// ceremony timeout, not the parent row's own 300-second budget
+/// (`federation_mfa_pending::PENDING_LIFETIME_SECS`): in practice the
+/// pending row is already partway through its own 300 seconds by the
+/// time F06 runs (F02 created it first), so this is almost always the
+/// tighter of the two caps — stated here rather than left for a reader
+/// to notice only the `expires_at <= pending_expires_at` `CHECK` ever
+/// binds.
+const FEDERATED_WEBAUTHN_CEREMONY_LIFETIME_SECS: i64 = 60;
+
+/// F06 itself, RFC 096 `:822-824` plus `contracts/write-commands.toml`'s
+/// own row: "require pending F02 row count 0–4 and exact unexpired
+/// provider/version/generation/link/user; atomically replace at most
+/// one `FederatedLogin` ceremony bound to parent/RP/origin/challenge
+/// and capped expiry." Class P: grants no authentication/session
+/// authority by itself, and — unlike F03 — has no `Invalidated`
+/// outcome to report a guard failure through, since it never
+/// terminalizes the pending row; every guard failure is simply
+/// `Err(StoreError::Conflict)`, the refusal shape every other guarded
+/// write in this crate's federation tables already uses.
+///
+/// `ceremony_state_sealed` arrives already sealed — this function's
+/// caller is `sui-id-core` (RFC 096-B1 stage 11 dispatch: "webauthn-rs
+/// is a `sui-id-core` dependency, not `sui-id-store`'s"), which builds
+/// the `webauthn_rs::prelude::PasskeyAuthentication` state and seals it
+/// with `sui_id_store::crypto::seal`/`db.key()` directly (both already
+/// `pub`, the same route `communication::mail::outbox` uses from the
+/// same crate) before calling this. This function never opens it: F06
+/// only needs to *store* the bytes, and the one thing that would ever
+/// need to open them durably — F03's own tamper/freshness recheck — is
+/// F03's job, not this one's.
+///
+/// The durably re-read pending row's own
+/// `provider_id`/`provider_config_version`/`provider_activation_generation`/
+/// `user_id`/`expires_at` are what get written into the new ceremony
+/// row's composite-FK columns — not whatever the caller assumed when it
+/// built `ceremony_state_sealed`'s AAD. RFC 096-B2/M2b's own durable
+/// provider version/generation columns do not exist yet (stage 10a's
+/// own verifier doc states this directly: every provider's version/
+/// generation is fixed at `(0, 0)` today), so there is currently no way
+/// for those two values to actually drift between the caller's own
+/// read and this transaction; `user_id`/`provider_id` are immutable for
+/// a given pending row's lifetime. The caller/durable-read mismatch
+/// this would otherwise create is therefore a latent gap, not a live
+/// one — named here rather than silently assumed away, the same
+/// position stage 10a already took on the identical limitation.
+pub async fn begin_federation_webauthn_ceremony(
+    db: &crate::Database,
+    pending_id: sui_id_shared::ids::FederationMfaPendingId,
+    ceremony_state_sealed: Vec<u8>,
+    rp_id: String,
+    origin: String,
+    now: DateTime<Utc>,
+) -> StoreResult<sui_id_shared::ids::FederationWebauthnCeremonyId> {
+    db.protocol(move |write| {
+        let tx = write.tx();
+        let row = crate::repos::federation_mfa_pending::get_within_tx(tx, pending_id)?
+            .ok_or(StoreError::NotFound)?;
+        if row.status != crate::models::FederationMfaPendingStatus::Pending {
+            return Err(StoreError::Conflict);
+        }
+        if row.expires_at <= now {
+            return Err(StoreError::Conflict);
+        }
+        if authority_drift_within_tx(tx, row.provider_id, row.user_id)?.is_some() {
+            return Err(StoreError::Conflict);
+        }
+        if !crate::repos::user_webauthn_credentials::has_any_within_tx(tx, row.user_id)? {
+            return Err(StoreError::Conflict);
+        }
+        let id = sui_id_shared::ids::FederationWebauthnCeremonyId::new();
+        let expires_at = std::cmp::min(
+            now + chrono::Duration::seconds(FEDERATED_WEBAUTHN_CEREMONY_LIFETIME_SECS),
+            row.expires_at,
+        );
+        let ceremony = crate::models::FederationWebauthnCeremonyRow {
+            id,
+            pending_id: row.id,
+            provider_id: row.provider_id,
+            provider_config_version: row.provider_config_version,
+            provider_activation_generation: row.provider_activation_generation,
+            user_id: row.user_id,
+            ceremony_state_sealed,
+            rp_id,
+            origin,
+            created_at: now,
+            pending_expires_at: row.expires_at,
+            expires_at,
+        };
+        crate::repos::federation_webauthn_ceremony::insert_or_replace_within_tx(tx, &ceremony)?;
+        Ok(id)
+    })
+    .await
 }
 
 /// The shared tail of [`complete_federated_mfa`]'s `Promoted` branch —
@@ -2729,7 +2983,8 @@ fn promote(
     let method_str = match method {
         sui_id_shared::AuthMethod::Totp => "totp",
         sui_id_shared::AuthMethod::RecoveryCode => "recovery_code",
-        _ => unreachable!("promote is only called with Totp or RecoveryCode"),
+        sui_id_shared::AuthMethod::Webauthn => "webauthn",
+        _ => unreachable!("promote is only called with Totp, RecoveryCode, or Webauthn"),
     };
     if method != sui_id_shared::AuthMethod::RecoveryCode {
         crate::repos::sessions::set_step_up_method_within_tx(tx, session.id, method_str)?;
@@ -2744,21 +2999,39 @@ fn promote(
 
 /// The shared guarded-increment step for a wrong/unsupported proof,
 /// whichever method it came from.
+///
+/// RFC 096 `:767-768`/`:798-801`: a ceremony bound to this row is
+/// deleted here in two cases — a wrong WebAuthn completion "consumes
+/// only that failed ceremony" regardless of whether this attempt also
+/// exhausts the row, and reaching exactly the fifth failure (by *any*
+/// reason) "deletes bound method ceremonies" outright, since
+/// exhaustion ends every retry path at once, not just WebAuthn's.
+/// [`federation_webauthn_ceremony::delete_by_pending_id_within_tx`]'s
+/// own doc is why one unconditional, idempotent call covers both:
+/// there is at most one ceremony per row, so neither case can
+/// over-reach by deleting one that was not theirs.
 fn reject_or_exhaust(
     tx: &rusqlite::Transaction<'_>,
     pending_id: sui_id_shared::ids::FederationMfaPendingId,
     reason: MfaRejectionReason,
 ) -> StoreResult<F03Outcome> {
-    match crate::repos::federation_mfa_pending::increment_failure_within_tx(tx, pending_id)? {
-        Some(FailureIncrement::StillPending { failure_count }) => {
-            Ok(F03Outcome::RejectedStillPending {
-                failure_count,
-                reason,
-            })
-        }
-        Some(FailureIncrement::Exhausted) => Ok(F03Outcome::AttemptsExhausted { reason }),
-        None => Err(StoreError::Conflict),
+    let outcome =
+        match crate::repos::federation_mfa_pending::increment_failure_within_tx(tx, pending_id)? {
+            Some(FailureIncrement::StillPending { failure_count }) => {
+                F03Outcome::RejectedStillPending {
+                    failure_count,
+                    reason,
+                }
+            }
+            Some(FailureIncrement::Exhausted) => F03Outcome::AttemptsExhausted { reason },
+            None => return Err(StoreError::Conflict),
+        };
+    if reason == MfaRejectionReason::Webauthn
+        || matches!(outcome, F03Outcome::AttemptsExhausted { .. })
+    {
+        crate::repos::federation_webauthn_ceremony::delete_by_pending_id_within_tx(tx, pending_id)?;
     }
+    Ok(outcome)
 }
 
 async fn emit_f03_event(db: &crate::Database, outcome: &F03Outcome, at: DateTime<Utc>) {

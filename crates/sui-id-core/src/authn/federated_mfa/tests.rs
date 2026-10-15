@@ -232,7 +232,15 @@ async fn terminalize(db: &Database, id: FederationMfaPendingId, status: &str) {
 /// point: a caller that expected a binding refusal and got something
 /// else should see that distinction, not have it erased by an
 /// equality check that could not tell the difference either.
-fn as_binding_failure(result: Result<FederatedMfaOutcome, VerifyError>) -> BindingFailure {
+///
+/// Generic over the `Ok` type (RFC 096-B1 stage 11): [`verify`]/
+/// [`verify_webauthn`] return `FederatedMfaOutcome`,
+/// [`begin_webauthn_ceremony`] returns a challenge `String`, and
+/// [`promote`]/[`promote_webauthn`] return
+/// `sui_id_store::commands::F03Outcome` — all four share the exact
+/// same [`VerifyError`], and this helper's job is entirely about that
+/// shared error type, not any one of their differing success types.
+fn as_binding_failure<T: std::fmt::Debug>(result: Result<T, VerifyError>) -> BindingFailure {
     match result {
         Err(VerifyError::Binding(b)) => b,
         other => panic!("expected a binding failure, got {other:?}"),
@@ -794,3 +802,362 @@ async fn a_store_failure_is_internal_not_a_binding_failure() {
         ),
     }
 }
+
+// ── RFC 096-B1 stage 11: verify_webauthn / begin_webauthn_ceremony /
+//    promote_webauthn ──────────────────────────────────────────────────
+//
+// No virtual WebAuthn authenticator exists anywhere in this codebase
+// (`authn::webauthn::integration_tests`'s own three tests never
+// construct a real `Passkey` or a real successful
+// `finish_passkey_authentication` either — only the surrounding guard
+// logic and a "dummy", syntactically-valid-but-cryptographically-wrong
+// credential). These tests hold to the same limit: they prove
+// `bind_pending` reuse, both directions of `MethodMismatch`, the
+// ceremony's own AAD tamper check, and the wiring from each entry
+// point through to F03 -- not a real cryptographic completion, which
+// the dispatch's own package states explicitly rather than silently
+// shipping a thinner webauthn suite than its own neighbours without
+// saying why.
+
+use sui_id_shared::ids::FederationWebauthnCeremonyId;
+use sui_id_store::models::FederationWebauthnCeremonyRow;
+use sui_id_store::repos::federation_webauthn_ceremony;
+use webauthn_rs::prelude::PublicKeyCredential;
+
+/// Stores a ceremony row directly through the repo layer, bypassing
+/// [`begin_webauthn_ceremony`] entirely -- these tests need a ceremony
+/// to *exist*, bound correctly, with full control over what
+/// `ceremony_state_sealed` actually contains (correctly sealed
+/// garbage, or sealed under the wrong AAD), neither of which
+/// `begin_webauthn_ceremony`'s own real `webauthn-rs` call could
+/// produce without a real enrolled passkey.
+async fn seed_ceremony(f: &Fixture, sealed: Vec<u8>) -> FederationWebauthnCeremonyId {
+    let row =
+        f.db.with_conn({
+            let pending_id = f.pending_id;
+            let user_id = f.user_id;
+            move |conn| {
+                let pending =
+                    federation_mfa_pending::get_within_tx(conn, pending_id)?.expect("pending row");
+                let ceremony = FederationWebauthnCeremonyRow {
+                    id: FederationWebauthnCeremonyId::new(),
+                    pending_id,
+                    provider_id: pending.provider_id,
+                    provider_config_version: pending.provider_config_version,
+                    provider_activation_generation: pending.provider_activation_generation,
+                    user_id,
+                    ceremony_state_sealed: sealed,
+                    rp_id: "idp.example".to_owned(),
+                    origin: "https://idp.example".to_owned(),
+                    created_at: Utc::now(),
+                    pending_expires_at: pending.expires_at,
+                    expires_at: pending.expires_at,
+                };
+                federation_webauthn_ceremony::insert_or_replace_within_tx(conn, &ceremony)?;
+                Ok(ceremony)
+            }
+        })
+        .await
+        .expect("seed ceremony");
+    row.id
+}
+
+/// A correctly-sealed ceremony whose plaintext is not valid
+/// `PasskeyAuthentication` JSON -- opens cleanly (proving the AAD
+/// binding is right) but fails to deserialize, the farthest this test
+/// suite can push [`verify_webauthn`] without a real passkey.
+async fn seed_openable_ceremony(f: &Fixture) -> FederationWebauthnCeremonyId {
+    let pending = federation_mfa_pending::find_by_id(&f.db, f.pending_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let aad = federation_webauthn_ceremony::build_aad(
+        f.pending_id,
+        pending.provider_id,
+        pending.provider_config_version,
+        pending.provider_activation_generation,
+        f.user_id,
+    );
+    let sealed =
+        sui_id_store::crypto::seal(f.db.key(), b"not a passkey authentication state", &aad)
+            .unwrap();
+    seed_ceremony(f, sealed).await
+}
+
+fn a_dummy_credential() -> PublicKeyCredential {
+    serde_json::from_str(
+        r#"{"id":"AA","rawId":"AA","type":"public-key","response":{"authenticatorData":"AA","clientDataJSON":"AA","signature":"AA"},"extensions":{}}"#,
+    )
+    .expect("dummy credential parses")
+}
+
+#[tokio::test]
+async fn verify_webauthn_reuses_the_same_binding_gate_as_verify() {
+    let f = fixture().await;
+    let result = verify_webauthn(
+        &f.db,
+        &f.clock,
+        "https://issuer.example",
+        &FederationMfaPendingId::new().to_string(),
+        &f.browser_binding_raw,
+        &f.csrf_raw,
+        &a_dummy_credential(),
+    )
+    .await;
+    assert_eq!(as_binding_failure(result), BindingFailure);
+}
+
+/// RFC 096 `:802`, direction 1: no live ceremony for this row at all.
+#[tokio::test]
+async fn verify_webauthn_direction_1_method_mismatch_when_no_ceremony_exists() {
+    let f = fixture().await;
+    let outcome = verify_webauthn(
+        &f.db,
+        &f.clock,
+        "https://issuer.example",
+        &f.pending_id.to_string(),
+        &f.browser_binding_raw,
+        &f.csrf_raw,
+        &a_dummy_credential(),
+    )
+    .await
+    .expect("a binding success, not an error");
+    match outcome {
+        FederatedMfaOutcome::Rejected(bound) => {
+            assert_eq!(bound.reason, RejectedReason::MethodMismatch)
+        }
+        other => panic!("expected Rejected(MethodMismatch), got {other:?}"),
+    }
+}
+
+/// The ceremony's own AAD tamper check (mirrors `continuation_sealed`'s
+/// own, stage 9): sealed under a *different* user's AAD, so opening it
+/// with this row's own identity must fail.
+#[tokio::test]
+async fn verify_webauthn_reports_internal_when_the_ceremony_state_fails_to_open() {
+    let f = fixture().await;
+    let wrong_aad = federation_webauthn_ceremony::build_aad(
+        FederationMfaPendingId::new(),
+        FederationProviderId::new(),
+        0,
+        0,
+        f.user_id,
+    );
+    let sealed = sui_id_store::crypto::seal(f.db.key(), b"anything", &wrong_aad).unwrap();
+    seed_ceremony(&f, sealed).await;
+
+    let result = verify_webauthn(
+        &f.db,
+        &f.clock,
+        "https://issuer.example",
+        &f.pending_id.to_string(),
+        &f.browser_binding_raw,
+        &f.csrf_raw,
+        &a_dummy_credential(),
+    )
+    .await;
+    match result {
+        Err(VerifyError::Internal(_)) => {}
+        other => panic!(
+            "a tampered ceremony must be Internal, not a binding refusal or a verdict on the proof; got {other:?}"
+        ),
+    }
+}
+
+/// A ceremony that opens correctly but is not valid
+/// `PasskeyAuthentication` JSON -- the farthest this suite can push
+/// without a real passkey (see the module doc above).
+#[tokio::test]
+async fn verify_webauthn_reports_internal_for_a_corrupt_but_openable_ceremony_state() {
+    let f = fixture().await;
+    seed_openable_ceremony(&f).await;
+
+    let result = verify_webauthn(
+        &f.db,
+        &f.clock,
+        "https://issuer.example",
+        &f.pending_id.to_string(),
+        &f.browser_binding_raw,
+        &f.csrf_raw,
+        &a_dummy_credential(),
+    )
+    .await;
+    match result {
+        Err(VerifyError::Internal(_)) => {}
+        other => panic!("expected Internal, got {other:?}"),
+    }
+}
+
+/// RFC 096 `:802`, direction 2: a live WebAuthn ceremony already bound
+/// to this row makes a code submission the wrong method, checked
+/// before any TOTP/recovery evaluation -- the row's TOTP enrolment
+/// from `fixture()` is deliberately still present and still correct,
+/// so a pass here cannot be mistaken for `verify`'s own pre-existing
+/// TOTP path happening to reject this input for an unrelated reason.
+#[tokio::test]
+async fn verify_direction_2_method_mismatch_when_a_live_ceremony_exists() {
+    let f = fixture().await;
+    seed_openable_ceremony(&f).await;
+
+    let outcome = verify(
+        &f.db,
+        &f.clock,
+        &f.pending_id.to_string(),
+        &f.browser_binding_raw,
+        &f.csrf_raw,
+        "123456",
+    )
+    .await
+    .expect("a binding success, not an error");
+    match outcome {
+        FederatedMfaOutcome::Rejected(bound) => {
+            assert_eq!(bound.reason, RejectedReason::MethodMismatch)
+        }
+        other => panic!("expected Rejected(MethodMismatch), got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn begin_webauthn_ceremony_reuses_the_same_binding_gate() {
+    let f = fixture().await;
+    let result = begin_webauthn_ceremony(
+        &f.db,
+        &f.clock,
+        "https://issuer.example",
+        &FederationMfaPendingId::new().to_string(),
+        &f.browser_binding_raw,
+        &f.csrf_raw,
+        "idp.example",
+        "https://idp.example",
+    )
+    .await;
+    assert_eq!(as_binding_failure(result), BindingFailure);
+}
+
+#[tokio::test]
+async fn begin_webauthn_ceremony_refuses_an_expired_row() {
+    let f = fixture().await;
+    let past_expiry = clock_at(fixed_now() + ChronoDuration::seconds(301));
+    let result = begin_webauthn_ceremony(
+        &f.db,
+        &past_expiry,
+        "https://issuer.example",
+        &f.pending_id.to_string(),
+        &f.browser_binding_raw,
+        &f.csrf_raw,
+        "idp.example",
+        "https://idp.example",
+    )
+    .await;
+    assert_eq!(as_binding_failure(result), BindingFailure);
+}
+
+/// RFC 096 `:822-824`'s own "grants no authentication authority by
+/// itself" extends to this: a bound, unexpired request with no
+/// enrolled passkey at all has nothing to challenge.
+#[tokio::test]
+async fn begin_webauthn_ceremony_refuses_a_user_with_no_credentials() {
+    let f = fixture().await;
+    let result = begin_webauthn_ceremony(
+        &f.db,
+        &f.clock,
+        "https://issuer.example",
+        &f.pending_id.to_string(),
+        &f.browser_binding_raw,
+        &f.csrf_raw,
+        "idp.example",
+        "https://idp.example",
+    )
+    .await;
+    assert_eq!(as_binding_failure(result), BindingFailure);
+    assert!(
+        federation_webauthn_ceremony::find_by_pending_id(&f.db, f.pending_id)
+            .await
+            .unwrap()
+            .is_none(),
+        "no ceremony was created"
+    );
+}
+
+#[tokio::test]
+async fn promote_webauthn_on_an_unknown_pending_id_is_a_binding_failure() {
+    let f = fixture().await;
+    let result = promote_webauthn(
+        &f.db,
+        &f.clock,
+        "https://issuer.example",
+        &FederationMfaPendingId::new().to_string(),
+        &f.browser_binding_raw,
+        &f.csrf_raw,
+        &a_dummy_credential(),
+    )
+    .await;
+    assert_eq!(as_binding_failure(result), BindingFailure);
+}
+
+/// Mirrors `promote_on_an_expired_row_invalidates_through_f03` for the
+/// WebAuthn entry point: `FederatedMfaOutcome::Expired` becomes
+/// `proof: None`, and F03's own durable recheck is what actually
+/// terminalizes the row.
+#[tokio::test]
+async fn promote_webauthn_on_an_expired_row_invalidates_through_f03() {
+    let f = fixture().await;
+    let past_expiry = clock_at(fixed_now() + ChronoDuration::seconds(301));
+    let outcome = promote_webauthn(
+        &f.db,
+        &past_expiry,
+        "https://issuer.example",
+        &f.pending_id.to_string(),
+        &f.browser_binding_raw,
+        &f.csrf_raw,
+        &a_dummy_credential(),
+    )
+    .await
+    .expect("invalidation succeeds");
+    assert!(matches!(
+        outcome,
+        sui_id_store::commands::F03Outcome::Invalidated {
+            reason: sui_id_store::repos::federation_mfa_pending::InvalidatedReason::Expired
+        }
+    ));
+}
+
+/// The wiring stage 11 adds: `verify_webauthn`'s own `MethodMismatch`
+/// (no ceremony) reaching F03 through `promote_webauthn`, ending in
+/// the same `RejectedStillPending` outcome
+/// `commands::tests::runner::federation::f03_method_mismatch_is_rejected_without_touching_any_ceremony`
+/// already proves F03's own side of directly.
+#[tokio::test]
+async fn promote_webauthn_with_no_ceremony_is_rejected_still_pending_through_f03() {
+    let f = fixture().await;
+    let outcome = promote_webauthn(
+        &f.db,
+        &f.clock,
+        "https://issuer.example",
+        &f.pending_id.to_string(),
+        &f.browser_binding_raw,
+        &f.csrf_raw,
+        &a_dummy_credential(),
+    )
+    .await
+    .expect("rejection succeeds");
+    match outcome {
+        sui_id_store::commands::F03Outcome::RejectedStillPending { reason, .. } => {
+            assert_eq!(
+                reason,
+                sui_id_store::repos::federation_mfa_pending::MfaRejectionReason::MethodMismatch
+            )
+        }
+        other => panic!("expected RejectedStillPending(MethodMismatch), got {other:?}"),
+    }
+}
+
+/// `ValidWebAuthn`'s own fields are private, no public constructor --
+/// the same proof-of-shape this file never writes for `ValidTotp`/
+/// `ValidRecovery` either (their own privacy is proven by
+/// `crates/sui-id/tests/compile_fail/`, not here); listed so a reader
+/// of this module's own tests does not wonder why the fourth candidate
+/// has no analogous in-crate test — it has the same compile-fail
+/// fixture instead, added alongside this file.
+#[allow(dead_code)]
+fn _valid_webauthn_has_no_public_constructor_is_proven_in_compile_fail() {}

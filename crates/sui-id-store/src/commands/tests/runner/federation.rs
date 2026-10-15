@@ -7,12 +7,14 @@
 //! by losing the race deliberately.
 
 use super::*;
+use crate::models::UserWebauthnCredentialRow;
 use crate::models::{FederationLinkRow, FederationProviderRow, ProvisionMode};
 use crate::repos::federation_login_attempt;
 use crate::repos::federation_mfa_pending::{InvalidatedReason, MfaRejectionReason};
 use crate::repos::user_totp;
 use sui_id_shared::ids::{
-    FederationLoginAttemptId, FederationMfaPendingId, FederationProviderId, SessionId,
+    FederationLoginAttemptId, FederationMfaPendingId, FederationProviderId,
+    FederationWebauthnCeremonyId, SessionId, WebauthnCredentialId,
 };
 
 async fn seed_provider(db: &Database) -> FederationProviderId {
@@ -1127,4 +1129,763 @@ async fn f03_two_concurrent_submissions_at_count_four_yield_exactly_one_winner()
             "expected exactly one winner (AttemptsExhausted+Conflict or Conflict+Promoted), got {other:?}"
         ),
     }
+}
+
+// ── RFC 096-B1 stage 11: F06, and F03's WebAuthn branch ─────────────────
+//
+// These tests call `begin_federation_webauthn_ceremony` (F06) and
+// `complete_federated_mfa` (F03) directly with plain primitives, the
+// same discipline the comment above `f03_fixture` already states for
+// TOTP/Recovery: there is no verifier here (`sui-id-core`, a downstream
+// crate), and no handler either (this stage's own "no handler"
+// constraint) -- the only caller exercising this branch end to end
+// today is this file.
+
+/// Seeds one passkey credential for `user_id` and returns its row id
+/// plus the blob actually stored for it. `create`'s own second argument
+/// is the *plaintext* it seals before writing `passkey_enc` -- the
+/// fixture's own `UserWebauthnCredentialRow.passkey_enc` field is
+/// never what ends up on disk, so the real value has to be read back.
+async fn seed_webauthn_credential(
+    db: &Database,
+    user_id: UserId,
+    tag: u8,
+) -> (WebauthnCredentialId, Vec<u8>) {
+    let row = UserWebauthnCredentialRow {
+        id: WebauthnCredentialId::new(),
+        user_id,
+        credential_id: vec![tag; 16],
+        passkey_enc: vec![],
+        nickname: "Passkey".to_owned(),
+        created_at: Utc::now(),
+        last_used_at: None,
+    };
+    let id = row.id;
+    let raw_credential_id = row.credential_id.clone();
+    repos::user_webauthn_credentials::create(db, &row, &[0xAA, tag])
+        .await
+        .expect("seed webauthn credential");
+    let sealed = repos::user_webauthn_credentials::find_by_credential_id(db, &raw_credential_id)
+        .await
+        .expect("read back")
+        .expect("credential exists")
+        .passkey_enc;
+    (id, sealed)
+}
+
+async fn ceremony_count(db: &Database) -> i64 {
+    db.with_conn(|c| {
+        Ok(c.query_row(
+            "SELECT COUNT(*) FROM federation_webauthn_ceremony",
+            [],
+            |r| r.get(0),
+        )?)
+    })
+    .await
+    .expect("count")
+}
+
+async fn current_passkey_enc(db: &Database, id: WebauthnCredentialId) -> Vec<u8> {
+    db.with_conn(move |c| {
+        Ok(c.query_row(
+            "SELECT passkey_enc FROM user_webauthn_credentials WHERE id = ?1",
+            [id.to_string()],
+            |r| r.get(0),
+        )?)
+    })
+    .await
+    .expect("read passkey_enc")
+}
+
+#[tokio::test]
+async fn f06_creates_a_ceremony_bound_to_the_pending_row() {
+    let db = fresh_db();
+    let f = f03_fixture(&db, 50).await;
+    seed_webauthn_credential(&db, f.user_id, 50).await;
+    let now = Utc::now();
+
+    let ceremony_id = begin_federation_webauthn_ceremony(
+        &db,
+        f.pending_id,
+        b"sealed-state".to_vec(),
+        "idp.example".to_owned(),
+        "https://idp.example".to_owned(),
+        now,
+    )
+    .await
+    .expect("F06 succeeds");
+
+    let ceremony = repos::federation_webauthn_ceremony::find_by_pending_id(&db, f.pending_id)
+        .await
+        .unwrap()
+        .expect("ceremony exists");
+    assert_eq!(ceremony.id, ceremony_id);
+    assert_eq!(ceremony.pending_id, f.pending_id);
+    assert_eq!(ceremony.provider_id, f.provider_id);
+    assert_eq!(ceremony.user_id, f.user_id);
+    assert_eq!(ceremony.rp_id, "idp.example");
+    assert_eq!(ceremony.origin, "https://idp.example");
+    assert_eq!(ceremony.ceremony_state_sealed, b"sealed-state");
+    assert!(
+        ceremony.expires_at <= ceremony.pending_expires_at,
+        "RFC 096 :794-798: expiry no later than the pending row"
+    );
+}
+
+/// `contracts/write-commands.toml`'s own F06 row: "atomically replace
+/// at most one ... ceremony," through F06 itself rather than the repo
+/// function directly (already
+/// covered at that layer by
+/// `federation_webauthn_ceremony::tests::a_second_insert_for_the_same_pending_id_replaces_the_first`).
+#[tokio::test]
+async fn f06_replaces_an_existing_ceremony_for_the_same_pending_row() {
+    let db = fresh_db();
+    let f = f03_fixture(&db, 51).await;
+    seed_webauthn_credential(&db, f.user_id, 51).await;
+    let now = Utc::now();
+    let first = begin_federation_webauthn_ceremony(
+        &db,
+        f.pending_id,
+        b"first".to_vec(),
+        "idp.example".into(),
+        "https://idp.example".into(),
+        now,
+    )
+    .await
+    .unwrap();
+    let second = begin_federation_webauthn_ceremony(
+        &db,
+        f.pending_id,
+        b"second".to_vec(),
+        "idp.example".into(),
+        "https://idp.example".into(),
+        now,
+    )
+    .await
+    .unwrap();
+    assert_ne!(first, second);
+    assert_eq!(ceremony_count(&db).await, 1);
+    let ceremony = repos::federation_webauthn_ceremony::find_by_pending_id(&db, f.pending_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(ceremony.id, second);
+    assert_eq!(ceremony.ceremony_state_sealed, b"second");
+}
+
+/// `contracts/write-commands.toml`'s F06 row: "require ... at least one
+/// WebAuthn credential enrolled." Schema-enforced invariants (`UNIQUE
+/// (pending_id)`, the composite `FOREIGN KEY`, the `expires_at <=
+/// pending_expires_at` `CHECK`) are proven at `tests_rfc096_b1_stage8`;
+/// this one is F06's own code, with nothing in migration 0047 to lean
+/// on -- the table has no column naming "does this user have a
+/// passkey" at all.
+#[tokio::test]
+async fn f06_refuses_without_at_least_one_webauthn_credential() {
+    let db = fresh_db();
+    let f = f03_fixture(&db, 52).await;
+    let result = begin_federation_webauthn_ceremony(
+        &db,
+        f.pending_id,
+        b"state".to_vec(),
+        "idp.example".into(),
+        "https://idp.example".into(),
+        Utc::now(),
+    )
+    .await;
+    assert!(matches!(result, Err(StoreError::Conflict)));
+    assert_eq!(ceremony_count(&db).await, 0);
+}
+
+#[tokio::test]
+async fn f06_refuses_when_the_pending_row_has_expired() {
+    let db = fresh_db();
+    let f = f03_fixture(&db, 53).await;
+    seed_webauthn_credential(&db, f.user_id, 53).await;
+    let past_expiry = Utc::now() + TimeDelta::seconds(400);
+    let result = begin_federation_webauthn_ceremony(
+        &db,
+        f.pending_id,
+        b"state".to_vec(),
+        "idp.example".into(),
+        "https://idp.example".into(),
+        past_expiry,
+    )
+    .await;
+    assert!(matches!(result, Err(StoreError::Conflict)));
+}
+
+/// F06 shares `authority_drift_within_tx` with F03 -- this is the one
+/// representative check exercised directly through F06's own call
+/// site; the other two (link removed, user inactive) are the same
+/// shared function F03's own `f03_invalidated_on_disabled_user`/
+/// `..._when_the_link_is_removed_without_the_row_cascading` already
+/// exercise, and F06 has no `Invalidated` outcome of its own to give a
+/// second, F06-flavoured assertion anything new to check.
+#[tokio::test]
+async fn f06_refuses_when_the_provider_is_disabled() {
+    let db = fresh_db();
+    let f = f03_fixture(&db, 54).await;
+    seed_webauthn_credential(&db, f.user_id, 54).await;
+    repos::federation_provider::set_enabled(&db, f.provider_id, false, Utc::now())
+        .await
+        .unwrap();
+    let result = begin_federation_webauthn_ceremony(
+        &db,
+        f.pending_id,
+        b"state".to_vec(),
+        "idp.example".into(),
+        "https://idp.example".into(),
+        Utc::now(),
+    )
+    .await;
+    assert!(matches!(result, Err(StoreError::Conflict)));
+}
+
+#[tokio::test]
+async fn f06_refuses_when_the_row_is_no_longer_pending() {
+    let db = fresh_db();
+    let f = f03_fixture(&db, 55).await;
+    seed_webauthn_credential(&db, f.user_id, 55).await;
+    complete_federated_mfa(
+        &db,
+        f.pending_id,
+        Some(F03Proof::Totp { step: 5 }),
+        Utc::now(),
+    )
+    .await
+    .expect("promote via totp first");
+    let result = begin_federation_webauthn_ceremony(
+        &db,
+        f.pending_id,
+        b"state".to_vec(),
+        "idp.example".into(),
+        "https://idp.example".into(),
+        Utc::now(),
+    )
+    .await;
+    assert!(matches!(result, Err(StoreError::Conflict)));
+}
+
+/// RFC 094 M2a criterion 2, by hand -- the same reason
+/// `f03_injected_commit_failure_rolls_back_everything` is: G20 does not
+/// cover Class-P commands.
+#[tokio::test]
+async fn f06_injected_commit_failure_rolls_back_everything() {
+    let db = fresh_db();
+    let f = f03_fixture(&db, 56).await;
+    seed_webauthn_credential(&db, f.user_id, 56).await;
+    db.fail_next_commit_for_test();
+    let result = begin_federation_webauthn_ceremony(
+        &db,
+        f.pending_id,
+        b"state".to_vec(),
+        "idp.example".into(),
+        "https://idp.example".into(),
+        Utc::now(),
+    )
+    .await;
+    assert!(result.is_err());
+    assert_eq!(
+        ceremony_count(&db).await,
+        0,
+        "the guarded insert must not have committed"
+    );
+
+    // Control: the same call, no failure injected, really creates a
+    // ceremony -- without this, the assertion above would pass just as
+    // well if the injection never ran at all.
+    begin_federation_webauthn_ceremony(
+        &db,
+        f.pending_id,
+        b"state".to_vec(),
+        "idp.example".into(),
+        "https://idp.example".into(),
+        Utc::now(),
+    )
+    .await
+    .expect("the control succeeds");
+    assert_eq!(ceremony_count(&db).await, 1);
+    record_rollback_coverage("F06");
+}
+
+#[tokio::test]
+async fn f03_webauthn_promotes_swaps_the_passkey_and_creates_session() {
+    let db = fresh_db();
+    let f = f03_fixture(&db, 60).await;
+    let (credential_id, expected_sealed) = seed_webauthn_credential(&db, f.user_id, 60).await;
+    let now = Utc::now();
+    let ceremony_id = begin_federation_webauthn_ceremony(
+        &db,
+        f.pending_id,
+        b"sealed-state".to_vec(),
+        "idp.example".into(),
+        "https://idp.example".into(),
+        now,
+    )
+    .await
+    .unwrap();
+    let new_sealed = vec![0xBB, 60];
+
+    let outcome = complete_federated_mfa(
+        &db,
+        f.pending_id,
+        Some(F03Proof::Webauthn {
+            ceremony_id,
+            credential_id,
+            expected_sealed: expected_sealed.clone(),
+            new_sealed: new_sealed.clone(),
+        }),
+        now,
+    )
+    .await
+    .expect("promotion succeeds");
+    match outcome {
+        F03Outcome::Promoted {
+            session, method, ..
+        } => {
+            assert_eq!(
+                session.auth_methods,
+                vec![
+                    sui_id_shared::AuthMethod::Fed,
+                    sui_id_shared::AuthMethod::Webauthn
+                ]
+            );
+            assert_eq!(
+                session.last_step_up_at,
+                Some(now),
+                "webauthn is a fresh factor, the same as totp (RFC 102 N5)"
+            );
+            assert_eq!(method, "webauthn");
+        }
+        other => panic!("expected Promoted, got {other:?}"),
+    }
+    assert_eq!(
+        current_passkey_enc(&db, credential_id).await,
+        new_sealed,
+        "the passkey blob was swapped durably"
+    );
+    assert!(
+        repos::federation_webauthn_ceremony::find_by_pending_id(&db, f.pending_id)
+            .await
+            .unwrap()
+            .is_none(),
+        "the ceremony is consumed on a successful promotion"
+    );
+    let link = repos::federation_link::find_by_sub(&db, f.provider_id, "sub-f03-60")
+        .await
+        .unwrap()
+        .expect("link still exists");
+    assert!(link.last_seen_at > link.linked_at);
+}
+
+/// RFC 096 `:798-801`, quoted in full by the dispatch: "Wrong WebAuthn
+/// completion increments the shared failure count and consumes only
+/// that failed ceremony; retry requires F06." Both halves in one test:
+/// the ceremony is gone but the row survives, and the *same*
+/// `failure_count` a wrong TOTP submission would have advanced is what
+/// advanced here too.
+#[tokio::test]
+async fn f03_webauthn_wrong_completion_consumes_only_the_ceremony_and_shares_the_counter() {
+    let db = fresh_db();
+    let f = f03_fixture(&db, 61).await;
+    seed_webauthn_credential(&db, f.user_id, 61).await;
+    let now = Utc::now();
+    begin_federation_webauthn_ceremony(
+        &db,
+        f.pending_id,
+        b"sealed-state".to_vec(),
+        "idp.example".into(),
+        "https://idp.example".into(),
+        now,
+    )
+    .await
+    .unwrap();
+    assert_eq!(ceremony_count(&db).await, 1);
+
+    let outcome = complete_federated_mfa(
+        &db,
+        f.pending_id,
+        Some(F03Proof::Rejected {
+            reason: MfaRejectionReason::Webauthn,
+        }),
+        now,
+    )
+    .await
+    .expect("rejection succeeds");
+    match outcome {
+        F03Outcome::RejectedStillPending {
+            failure_count,
+            reason,
+        } => {
+            assert_eq!(failure_count, 1);
+            assert_eq!(reason, MfaRejectionReason::Webauthn);
+        }
+        other => panic!("expected RejectedStillPending(Webauthn), got {other:?}"),
+    }
+    assert_eq!(
+        row_status(&db, f.pending_id).await,
+        crate::models::FederationMfaPendingStatus::Pending,
+        "the row survives a wrong webauthn completion -- retry requires F06"
+    );
+    assert_eq!(
+        ceremony_count(&db).await,
+        0,
+        "the failed ceremony is consumed (:798-801)"
+    );
+
+    let outcome2 = complete_federated_mfa(
+        &db,
+        f.pending_id,
+        Some(F03Proof::Rejected {
+            reason: MfaRejectionReason::Totp,
+        }),
+        Utc::now(),
+    )
+    .await
+    .expect("second rejection succeeds");
+    match outcome2 {
+        F03Outcome::RejectedStillPending { failure_count, .. } => assert_eq!(
+            failure_count, 2,
+            "the TOTP wrong proof advanced the SAME counter the webauthn one just did"
+        ),
+        other => panic!("expected RejectedStillPending(2), got {other:?}"),
+    }
+}
+
+/// RFC 096 `:767-768`: exhaustion "deletes bound method ceremonies" --
+/// by *any* reason reaching the fifth strike, not only a wrong WebAuthn
+/// one. Distinguishes this from the per-attempt WebAuthn-only deletion
+/// the test above already proves.
+#[tokio::test]
+async fn f03_exhaustion_deletes_a_live_ceremony_even_when_the_fifth_wrong_proof_was_totp() {
+    let db = fresh_db();
+    let f = f03_fixture(&db, 62).await;
+    seed_webauthn_credential(&db, f.user_id, 62).await;
+    let now = Utc::now();
+    begin_federation_webauthn_ceremony(
+        &db,
+        f.pending_id,
+        b"sealed-state".to_vec(),
+        "idp.example".into(),
+        "https://idp.example".into(),
+        now,
+    )
+    .await
+    .unwrap();
+    for _ in 1..=4 {
+        complete_federated_mfa(
+            &db,
+            f.pending_id,
+            Some(F03Proof::Rejected {
+                reason: MfaRejectionReason::Totp,
+            }),
+            Utc::now(),
+        )
+        .await
+        .expect("seed to count 4");
+    }
+    assert_eq!(
+        ceremony_count(&db).await,
+        1,
+        "unconsumed by a wrong TOTP proof below exhaustion"
+    );
+    let outcome = complete_federated_mfa(
+        &db,
+        f.pending_id,
+        Some(F03Proof::Rejected {
+            reason: MfaRejectionReason::Totp,
+        }),
+        Utc::now(),
+    )
+    .await
+    .expect("the fifth rejection succeeds");
+    assert!(matches!(
+        outcome,
+        F03Outcome::AttemptsExhausted {
+            reason: MfaRejectionReason::Totp
+        }
+    ));
+    assert_eq!(
+        ceremony_count(&db).await,
+        0,
+        ":767-768's \"deletes bound method ceremonies\" fires on exhaustion by any reason"
+    );
+}
+
+/// The dispatch's own `CeremonyInvalid` description, "bound to
+/// something other than what was presented": a concurrent F06 call
+/// (the user reloaded the WebAuthn prompt) that
+/// replaced the ceremony since the stale candidate was built.
+#[tokio::test]
+async fn f03_webauthn_invalidated_when_the_ceremony_was_replaced_since_the_candidate_was_built() {
+    let db = fresh_db();
+    let f = f03_fixture(&db, 63).await;
+    let (credential_id, expected_sealed) = seed_webauthn_credential(&db, f.user_id, 63).await;
+    let now = Utc::now();
+    let stale_ceremony_id = begin_federation_webauthn_ceremony(
+        &db,
+        f.pending_id,
+        b"first".to_vec(),
+        "idp.example".into(),
+        "https://idp.example".into(),
+        now,
+    )
+    .await
+    .unwrap();
+    begin_federation_webauthn_ceremony(
+        &db,
+        f.pending_id,
+        b"second".to_vec(),
+        "idp.example".into(),
+        "https://idp.example".into(),
+        now,
+    )
+    .await
+    .unwrap();
+
+    let outcome = complete_federated_mfa(
+        &db,
+        f.pending_id,
+        Some(F03Proof::Webauthn {
+            ceremony_id: stale_ceremony_id,
+            credential_id,
+            expected_sealed,
+            new_sealed: vec![0xCC],
+        }),
+        Utc::now(),
+    )
+    .await
+    .expect("invalidation succeeds");
+    match outcome {
+        F03Outcome::Invalidated { reason } => {
+            assert_eq!(reason, InvalidatedReason::CeremonyInvalid)
+        }
+        other => panic!("expected Invalidated(CeremonyInvalid), got {other:?}"),
+    }
+    assert_eq!(
+        ceremony_count(&db).await,
+        1,
+        "the current (second) ceremony must survive an invalidation triggered by a stale one"
+    );
+}
+
+#[tokio::test]
+async fn f03_webauthn_invalidated_when_no_ceremony_exists_at_all() {
+    let db = fresh_db();
+    let f = f03_fixture(&db, 64).await;
+    let (credential_id, expected_sealed) = seed_webauthn_credential(&db, f.user_id, 64).await;
+    let outcome = complete_federated_mfa(
+        &db,
+        f.pending_id,
+        Some(F03Proof::Webauthn {
+            ceremony_id: FederationWebauthnCeremonyId::new(),
+            credential_id,
+            expected_sealed,
+            new_sealed: vec![0xCC],
+        }),
+        Utc::now(),
+    )
+    .await
+    .expect("invalidation succeeds");
+    assert!(matches!(
+        outcome,
+        F03Outcome::Invalidated {
+            reason: InvalidatedReason::CeremonyInvalid
+        }
+    ));
+}
+
+/// The ceremony's own, narrower expiry (`:794-798`) is nested inside
+/// the pending row's own -- this reaches `CeremonyInvalid` while the
+/// pending row itself is still well inside its own 300-second budget,
+/// distinct from `f03_invalidated_on_expiry`'s own row-level expiry.
+#[tokio::test]
+async fn f03_webauthn_invalidated_when_the_ceremony_itself_has_expired_but_the_row_has_not() {
+    let db = fresh_db();
+    let f = f03_fixture(&db, 65).await;
+    let (credential_id, expected_sealed) = seed_webauthn_credential(&db, f.user_id, 65).await;
+    let t0 = Utc::now();
+    let ceremony_id = begin_federation_webauthn_ceremony(
+        &db,
+        f.pending_id,
+        b"state".to_vec(),
+        "idp.example".into(),
+        "https://idp.example".into(),
+        t0,
+    )
+    .await
+    .unwrap();
+    let after_ceremony_expiry = t0 + TimeDelta::seconds(61);
+    assert!(
+        after_ceremony_expiry
+            < t0 + TimeDelta::seconds(repos::federation_mfa_pending::PENDING_LIFETIME_SECS),
+        "the probe must stay inside the pending row's own window"
+    );
+
+    let outcome = complete_federated_mfa(
+        &db,
+        f.pending_id,
+        Some(F03Proof::Webauthn {
+            ceremony_id,
+            credential_id,
+            expected_sealed,
+            new_sealed: vec![0xCC],
+        }),
+        after_ceremony_expiry,
+    )
+    .await
+    .expect("invalidation succeeds");
+    match outcome {
+        F03Outcome::Invalidated { reason } => {
+            assert_eq!(reason, InvalidatedReason::CeremonyInvalid)
+        }
+        other => panic!("expected Invalidated(CeremonyInvalid), got {other:?}"),
+    }
+}
+
+/// The WebAuthn analogue of `f03_invalidated_when_the_factor_is_disabled_after_the_row_was_issued`:
+/// the credential the candidate names was deleted entirely in the
+/// window between the verifier's own read and F03's transaction.
+#[tokio::test]
+async fn f03_webauthn_invalidated_when_the_credential_is_deleted_after_the_candidate_was_built() {
+    let db = fresh_db();
+    let f = f03_fixture(&db, 66).await;
+    let (credential_id, expected_sealed) = seed_webauthn_credential(&db, f.user_id, 66).await;
+    let now = Utc::now();
+    let ceremony_id = begin_federation_webauthn_ceremony(
+        &db,
+        f.pending_id,
+        b"state".to_vec(),
+        "idp.example".into(),
+        "https://idp.example".into(),
+        now,
+    )
+    .await
+    .unwrap();
+    repos::user_webauthn_credentials::delete(&db, credential_id, f.user_id)
+        .await
+        .expect("delete credential");
+
+    let outcome = complete_federated_mfa(
+        &db,
+        f.pending_id,
+        Some(F03Proof::Webauthn {
+            ceremony_id,
+            credential_id,
+            expected_sealed,
+            new_sealed: vec![0xCC],
+        }),
+        now,
+    )
+    .await
+    .expect("invalidation succeeds");
+    match outcome {
+        F03Outcome::Invalidated { reason } => assert_eq!(reason, InvalidatedReason::FactorChanged),
+        other => panic!("expected Invalidated(FactorChanged), got {other:?}"),
+    }
+}
+
+/// A stale `expected_sealed` (the blob moved since the candidate read
+/// it -- e.g. the same physical passkey used in an unrelated
+/// authentication) is a wrong proof, the same treatment Recovery's own
+/// blob mismatch already gets, decided *before* `complete_within_tx`
+/// runs rather than after. It still consumes the ceremony: by RFC 096's
+/// own vocabulary this is a `Webauthn`-reasoned rejection like any
+/// other, and ":798-801"'s "consumes only that failed ceremony" does
+/// not distinguish a cryptographically-wrong assertion from a
+/// stale-blob one -- both leave the row pending and require F06 again.
+#[tokio::test]
+async fn f03_webauthn_stale_expected_blob_is_treated_as_a_wrong_proof() {
+    let db = fresh_db();
+    let f = f03_fixture(&db, 67).await;
+    let (credential_id, _real_sealed) = seed_webauthn_credential(&db, f.user_id, 67).await;
+    let now = Utc::now();
+    let ceremony_id = begin_federation_webauthn_ceremony(
+        &db,
+        f.pending_id,
+        b"state".to_vec(),
+        "idp.example".into(),
+        "https://idp.example".into(),
+        now,
+    )
+    .await
+    .unwrap();
+    let wrong_expected = vec![0xDE, 0xAD];
+
+    let outcome = complete_federated_mfa(
+        &db,
+        f.pending_id,
+        Some(F03Proof::Webauthn {
+            ceremony_id,
+            credential_id,
+            expected_sealed: wrong_expected,
+            new_sealed: vec![0xCC],
+        }),
+        now,
+    )
+    .await
+    .expect("rejection succeeds");
+    match outcome {
+        F03Outcome::RejectedStillPending { reason, .. } => {
+            assert_eq!(reason, MfaRejectionReason::Webauthn)
+        }
+        other => panic!("expected RejectedStillPending(Webauthn), got {other:?}"),
+    }
+    assert_eq!(
+        row_status(&db, f.pending_id).await,
+        crate::models::FederationMfaPendingStatus::Pending
+    );
+    assert_eq!(
+        ceremony_count(&db).await,
+        0,
+        "a Webauthn-reasoned rejection consumes the ceremony regardless of why"
+    );
+}
+
+/// RFC 096 `:802`, direction 1 of `MethodMismatch` -- tested here only
+/// as F03's own, already-converted primitive (the verifier, in
+/// `sui-id-core`, is what actually selects this reason from "no live
+/// ceremony"; this proves F03's own handling of the reason once
+/// selected, the same division `f03_wrong_proof_increments_to_one_through_four`
+/// already draws for `Totp`).
+#[tokio::test]
+async fn f03_method_mismatch_is_rejected_without_touching_any_ceremony() {
+    let db = fresh_db();
+    let f = f03_fixture(&db, 68).await;
+    seed_webauthn_credential(&db, f.user_id, 68).await;
+    let now = Utc::now();
+    begin_federation_webauthn_ceremony(
+        &db,
+        f.pending_id,
+        b"state".to_vec(),
+        "idp.example".into(),
+        "https://idp.example".into(),
+        now,
+    )
+    .await
+    .unwrap();
+
+    let outcome = complete_federated_mfa(
+        &db,
+        f.pending_id,
+        Some(F03Proof::Rejected {
+            reason: MfaRejectionReason::MethodMismatch,
+        }),
+        now,
+    )
+    .await
+    .expect("rejection succeeds");
+    match outcome {
+        F03Outcome::RejectedStillPending { reason, .. } => {
+            assert_eq!(reason, MfaRejectionReason::MethodMismatch)
+        }
+        other => panic!("expected RejectedStillPending(MethodMismatch), got {other:?}"),
+    }
+    assert_eq!(
+        ceremony_count(&db).await,
+        1,
+        "a method-mismatch rejection leaves a live webauthn ceremony untouched -- \
+         the user can still complete the pending assertion afterward"
+    );
 }

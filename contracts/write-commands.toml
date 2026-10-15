@@ -867,13 +867,16 @@ test_id = "`federation_attempt_terminalize::tests::each_reason_terminalizes_and_
 [[command]]
 id = "F06"
 class = "P"
-status = "target-absent"  # implemented | target-absent | target-legacy
+status = "implemented"  # implemented | target-absent | target-legacy
 sealed = false
 owner = "Begin/replace federated WebAuthn method ceremony / RFC 096 MFA login"
 rationale = "method ceremony under U33; no authentication-success event/authority"
 mutation_surface = "require pending F02 row count 0–4 and exact unexpired provider/version/generation/link/user; atomically replace at most one `FederatedLogin` ceremony bound to parent/RP/origin/challenge and capped expiry"
-files = []  # UNRESOLVED, deliberately: no federated WebAuthn ceremony exists today. Depends on RFC 096-B1. Target-state row.
-test_id = "`p_f06_webauthn_begin`, `p_f06_webauthn_replace`"
+files = [
+  "crates/sui-id-store/src/commands.rs",
+  "crates/sui-id-store/src/repos/federation_webauthn_ceremony.rs",
+]  # RFC 096-B1 stage 11: implemented (`begin_federation_webauthn_ceremony`). No handler yet -- stage 12 wires it.
+test_id = "`federation::f06_creates_a_ceremony_bound_to_the_pending_row`, `::f06_replaces_an_existing_ceremony_for_the_same_pending_row`, `::f06_refuses_without_at_least_one_webauthn_credential`, `::f06_refuses_when_the_pending_row_has_expired`, `::f06_refuses_when_the_provider_is_disabled`, `::f06_refuses_when_the_row_is_no_longer_pending`, `::f06_injected_commit_failure_rolls_back_everything` (`crates/sui-id-store/src/commands/tests/runner/federation.rs`)"
 
 [[command]]
 id = "F07"

@@ -921,3 +921,28 @@ pub struct FederationMfaPendingRow {
     pub created_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
 }
+
+/// A row in the `federation_webauthn_ceremony` table (RFC 096 `:756-758`,
+/// migration 0047) — one in-flight WebAuthn challenge bound to exactly
+/// one `federation_mfa_pending` row (RFC 096-B1 stage 11, F06).
+/// `provider_id`/`provider_config_version`/`provider_activation_generation`/
+/// `user_id`/`pending_expires_at` are the composite `FOREIGN KEY`'s own
+/// child-side columns — stored again here (not read only through the
+/// join) so a consumer can check this row's own binding directly, and
+/// the FK is what makes the stored copy *agree* with the parent row
+/// rather than merely exist (migration 0047's own comment).
+#[derive(Debug, Clone)]
+pub struct FederationWebauthnCeremonyRow {
+    pub id: sui_id_shared::ids::FederationWebauthnCeremonyId,
+    pub pending_id: sui_id_shared::ids::FederationMfaPendingId,
+    pub provider_id: sui_id_shared::ids::FederationProviderId,
+    pub provider_config_version: i64,
+    pub provider_activation_generation: i64,
+    pub user_id: UserId,
+    pub ceremony_state_sealed: Vec<u8>,
+    pub rp_id: String,
+    pub origin: String,
+    pub created_at: DateTime<Utc>,
+    pub pending_expires_at: DateTime<Utc>,
+    pub expires_at: DateTime<Utc>,
+}

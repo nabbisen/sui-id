@@ -108,5 +108,10 @@ define_id!(
     "Identifier of a federated local-MFA continuation row (RFC 096 :728-734, migration 0047)."
 );
 
+define_id!(
+    FederationWebauthnCeremonyId,
+    "Identifier of an in-flight federated WebAuthn ceremony row (RFC 096 :756-758, migration 0047)."
+);
+
 #[cfg(test)]
 mod tests;

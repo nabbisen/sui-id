@@ -81,3 +81,12 @@ fn compile_fail_federated_mfa_valid_totp_cannot_be_serialized() {
     let t = trybuild::TestCases::new();
     t.compile_fail("tests/compile_fail/federated_mfa_valid_totp_cannot_be_serialized.rs");
 }
+
+/// RFC 096 :757-762 (stage 11): see the fixture's own comment.
+#[test]
+fn compile_fail_federated_mfa_valid_webauthn_cannot_be_constructed_directly() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail(
+        "tests/compile_fail/federated_mfa_valid_webauthn_cannot_be_constructed_directly.rs",
+    );
+}

@@ -1,0 +1,13 @@
+error[E0451]: fields `ceremony_id`, `credential_id`, `expected_sealed` and `new_sealed` of struct `ValidWebAuthn` are private
+  --> tests/compile_fail/federated_mfa_valid_webauthn_cannot_be_constructed_directly.rs:13:9
+   |
+12 |     ValidWebAuthn {
+   |     ------------- in this type
+13 |         ceremony_id: FederationWebauthnCeremonyId::new(),
+   |         ^^^^^^^^^^^ private field
+14 |         credential_id: WebauthnCredentialId::new(),
+   |         ^^^^^^^^^^^^^ private field
+15 |         expected_sealed: Vec::new(),
+   |         ^^^^^^^^^^^^^^^ private field
+16 |         new_sealed: Vec::new(),
+   |         ^^^^^^^^^^ private field

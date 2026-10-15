@@ -70,10 +70,16 @@ use crate::totp;
 use serde_json;
 use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
-use sui_id_shared::ids::FederationMfaPendingId;
+use sui_id_shared::ids::{
+    FederationMfaPendingId, FederationWebauthnCeremonyId, WebauthnCredentialId,
+};
 use sui_id_store::Database;
 use sui_id_store::models::FederationMfaPendingStatus;
-use sui_id_store::repos::{federation_mfa_pending, federation_provider, user_totp, users};
+use sui_id_store::repos::{
+    federation_mfa_pending, federation_provider, federation_webauthn_ceremony, user_totp,
+    user_webauthn_credentials, users,
+};
+use webauthn_rs::prelude::{Passkey, PasskeyAuthentication, PublicKeyCredential};
 use zeroize::Zeroize;
 
 // ── The one binding-failure value ───────────────────────────────────────
@@ -213,13 +219,33 @@ pub struct BoundRejected {
     reason: RejectedReason,
 }
 
-/// `ValidWebAuthn` is deliberately **not** declared here. Stage 11 owns
-/// F06 and the `federation_webauthn_ceremony` table this stage has no
-/// reader for at all — a variant nothing can ever produce would be
-/// exactly the "half-built WebAuthn path" the dispatch asks this stage
-/// not to leave. Stage 11 adds the variant when it adds the ceremony
-/// read that could produce one.
-///
+/// RFC 096-B1 stage 11: the fourth and last candidate family member,
+/// added now that F06's ceremony read exists to produce one (stage
+/// 10a's own doc, quoted above, named this stage as the one that
+/// would). Same treatment as [`ValidTotp`]/[`ValidRecovery`]: private
+/// fields, no public constructor, no `Clone`/`Debug`/`Serialize`.
+/// `ceremony_id` is what lets F03 durably re-confirm, inside its own
+/// transaction, that the ceremony it is about to consume is the *same*
+/// one this candidate was built against — the dispatch's own
+/// `CeremonyInvalid` description ("a ceremony that is ... bound to
+/// something other than what was presented") covers a concurrent F06
+/// call replacing it in the window between this struct's construction
+/// and F03's own call, not only a mismatched method.
+/// `credential_id`/`expected_sealed`/`new_sealed` are the same
+/// compare-and-swap shape [`ValidRecovery`] already commits for the
+/// recovery-code blob, applied to the matched passkey's own stored
+/// blob instead.
+pub struct ValidWebAuthn {
+    #[allow(dead_code)]
+    ceremony_id: FederationWebauthnCeremonyId,
+    #[allow(dead_code)]
+    credential_id: WebauthnCredentialId,
+    #[allow(dead_code)]
+    expected_sealed: Vec<u8>,
+    #[allow(dead_code)]
+    new_sealed: Vec<u8>,
+}
+
 /// The outcome of one verification attempt. Not a candidate itself —
 /// `Expired` is deliberately not one, see its own doc — but the one
 /// type a caller matches on to learn whether binding even reached a
@@ -227,6 +253,12 @@ pub struct BoundRejected {
 pub enum FederatedMfaOutcome {
     Totp(ValidTotp),
     Recovery(ValidRecovery),
+    /// RFC 096-B1 stage 11: produced only by [`verify_webauthn`], never
+    /// by [`verify`] — the two entry points correspond to the two
+    /// input shapes RFC 096 `:752-762` never asks one function to
+    /// accept at once (a short text code versus a JSON-serialized
+    /// `PublicKeyCredential`).
+    Webauthn(ValidWebAuthn),
     Rejected(BoundRejected),
     /// RFC 096 `:733-734`: `expires_at <= guard_at` is expired. Not
     /// folded into [`BindingFailure`]: `:740-741` assigns `Invalidated`
@@ -246,35 +278,47 @@ pub enum FederatedMfaOutcome {
 
 /// A hand-written `Debug`, deliberately **not** derived: a derive would
 /// require every variant's payload to be `Debug` too, which is exactly
-/// the property [`ValidTotp`]/[`ValidRecovery`]/[`BoundRejected`] must
-/// not have. This impl prints only which variant matched, never a
-/// candidate's own field — enough for tests and logs to say *that*
-/// binding succeeded or a proof was rejected, never *what* was proven.
+/// the property [`ValidTotp`]/[`ValidRecovery`]/[`ValidWebAuthn`]/
+/// [`BoundRejected`] must not have. This impl prints only which variant
+/// matched, never a candidate's own field — enough for tests and logs
+/// to say *that* binding succeeded or a proof was rejected, never
+/// *what* was proven.
 impl std::fmt::Debug for FederatedMfaOutcome {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Self::Totp(_) => "FederatedMfaOutcome::Totp(..)",
             Self::Recovery(_) => "FederatedMfaOutcome::Recovery(..)",
+            Self::Webauthn(_) => "FederatedMfaOutcome::Webauthn(..)",
             Self::Rejected(_) => "FederatedMfaOutcome::Rejected(..)",
             Self::Expired => "FederatedMfaOutcome::Expired",
         })
     }
 }
 
-// ── The verifier's one entry point ──────────────────────────────────────
+// ── The verifier's shared binding gate ──────────────────────────────────
 
-/// RFC 096 `:752-762`, the whole of it. Validates, in this order: the
-/// pending id parses and names a real row; the browser-binding cookie
-/// and the CSRF body value, both constant-time against the row's own
-/// digests (`subtle::ConstantTimeEq`, the same mechanism
+/// What [`bind_pending`] found. Not [`FederatedMfaOutcome`] itself —
+/// that type also carries the three candidates and [`BoundRejected`],
+/// none of which a binding check alone ever produces.
+enum Bound {
+    Expired,
+    Row(Box<sui_id_store::models::FederationMfaPendingRow>),
+}
+
+/// RFC 096 `:752-762`'s binding gate, shared by every entry point this
+/// module has (RFC 096-B1 stage 11 extracts it from stage 10a's own
+/// `verify`, unchanged in order or behavior, so that [`verify`] (TOTP/
+/// recovery), [`verify_webauthn`] and [`begin_webauthn_ceremony`]'s own
+/// core-side half all check it exactly once, the same way, rather than
+/// three call sites drifting apart over time). Validates, in this
+/// order: the pending id parses and names a real row; the browser-
+/// binding cookie and the CSRF body value, both constant-time against
+/// the row's own digests (`subtle::ConstantTimeEq`, the same mechanism
 /// `federation_login_attempt::claim` already uses for its own browser
 /// binding); the row's user is still active; the row's provider is
 /// still enabled; the row is still `pending`. Every one of those six
 /// refusals is [`BindingFailure`] — the same value, see its own doc.
-/// Only after all six does expiry get its own answer
-/// ([`FederatedMfaOutcome::Expired`]), and only after *that* does a
-/// supported-method submission get checked against the row's bound
-/// identity.
+/// Only after all six does expiry get its own answer ([`Bound::Expired`]).
 ///
 /// **The CSRF value must be the request-body value, not the cookie
 /// read back.** `repos::federation_mfa_pending`'s own module doc states
@@ -294,26 +338,13 @@ impl std::fmt::Debug for FederatedMfaOutcome {
 /// re-checked against nothing live; only `provider.enabled` is a
 /// meaningful recheck until M2b lands. Stated here rather than silently
 /// matching stage 9's own recheck division.
-///
-/// `code_input` is interpreted the same way the local path's
-/// `mfa::verify_pending` already does: digits parse as a TOTP code,
-/// anything else is tried as a recovery code. The decrypted TOTP secret
-/// is zeroized immediately after the comparison, on every path
-/// including a wrong code — the same point the local path zeroizes its
-/// own copy.
-///
-/// **Errors** (stage 10a fix round, R3): [`VerifyError::Binding`] for
-/// the six refusals above, [`VerifyError::Internal`] for everything
-/// else a store call can fail with — see [`VerifyError`]'s own doc for
-/// why the two must not collapse into one.
-pub async fn verify(
+async fn bind_pending(
     db: &Database,
     clock: &SharedClock,
     presented_pending_id: &str,
     presented_browser_binding_cookie: &str,
     presented_csrf_body_value: &str,
-    code_input: &str,
-) -> Result<FederatedMfaOutcome, VerifyError> {
+) -> Result<Bound, VerifyError> {
     let pending_id: FederationMfaPendingId = presented_pending_id
         .parse()
         .map_err(|_| VerifyError::Binding(BindingFailure))?;
@@ -355,7 +386,65 @@ pub async fn verify(
     }
 
     if row.expires_at <= clock.now() {
-        return Ok(FederatedMfaOutcome::Expired);
+        return Ok(Bound::Expired);
+    }
+
+    Ok(Bound::Row(Box::new(row)))
+}
+
+// ── The verifier's TOTP/recovery entry point ────────────────────────────
+
+/// RFC 096 `:752-762`, the text/code half. Runs [`bind_pending`] first;
+/// only after that does a supported-method submission get checked
+/// against the row's bound identity.
+///
+/// **`MethodMismatch`, direction 2** (RFC 096-B1 stage 11, `:802`): a
+/// live WebAuthn ceremony already bound to this row means the row is
+/// committed to that method for this attempt — a code submission here
+/// is the wrong method, not a wrong code, and is rejected before the
+/// TOTP row is even read (no TOTP enrolment is required to reach this
+/// check, unlike everything below it).
+///
+/// `code_input` is interpreted the same way the local path's
+/// `mfa::verify_pending` already does: digits parse as a TOTP code,
+/// anything else is tried as a recovery code. The decrypted TOTP secret
+/// is zeroized immediately after the comparison, on every path
+/// including a wrong code — the same point the local path zeroizes its
+/// own copy.
+///
+/// **Errors** (stage 10a fix round, R3): [`VerifyError::Binding`] for
+/// the six [`bind_pending`] refusals, [`VerifyError::Internal`] for
+/// everything else a store call can fail with — see [`VerifyError`]'s
+/// own doc for why the two must not collapse into one.
+pub async fn verify(
+    db: &Database,
+    clock: &SharedClock,
+    presented_pending_id: &str,
+    presented_browser_binding_cookie: &str,
+    presented_csrf_body_value: &str,
+    code_input: &str,
+) -> Result<FederatedMfaOutcome, VerifyError> {
+    let row = match bind_pending(
+        db,
+        clock,
+        presented_pending_id,
+        presented_browser_binding_cookie,
+        presented_csrf_body_value,
+    )
+    .await?
+    {
+        Bound::Expired => return Ok(FederatedMfaOutcome::Expired),
+        Bound::Row(row) => *row,
+    };
+
+    if federation_webauthn_ceremony::find_by_pending_id(db, row.id)
+        .await
+        .map_err(classify_store_error)?
+        .is_some()
+    {
+        return Ok(FederatedMfaOutcome::Rejected(BoundRejected {
+            reason: RejectedReason::MethodMismatch,
+        }));
     }
 
     let totp_row = user_totp::get(db, row.user_id)
@@ -407,6 +496,279 @@ pub async fn verify(
             })),
         }
     }
+}
+
+// ── The verifier's WebAuthn entry point ─────────────────────────────────
+
+/// RFC 096 `:752-762`, the WebAuthn half — a separate entry point from
+/// [`verify`] (RFC 096-B1 stage 11's own §3: the input shape is a
+/// JSON-serialized `PublicKeyCredential`, not a short text code, so
+/// there is no single signature both could share the way TOTP/recovery
+/// already share one). Runs [`bind_pending`] first, the same as
+/// [`verify`].
+///
+/// **`MethodMismatch`, direction 1** (`:802`): no live
+/// `federation_webauthn_ceremony` row for this pending id means this
+/// row was never committed to WebAuthn for this attempt — F06 is what
+/// creates one, and nothing here tries to tell "never called F06"
+/// apart from "a ceremony already consumed by an earlier completion";
+/// both are the same wrong-method signal against this row, the mirror
+/// image of direction 2 in [`verify`].
+///
+/// **Revalidating the sealed ceremony state**: `ceremony_state_sealed`
+/// is opened with the ceremony's own AAD
+/// (`federation_webauthn_ceremony::build_aad`) — a tamper check on the
+/// row's own identity, the same mechanism `continuation_sealed` already
+/// uses (stage 9), not re-checked a second time by F03: F03's own
+/// durable recheck (RFC 096 `:794-798`) reopens it again inside its own
+/// transaction, independently, the same "verifier's read is never
+/// trusted a second time" discipline stage 10b already established for
+/// `continuation_sealed`.
+///
+/// **Matching the credential, and updating its counter** mirrors
+/// `webauthn::finish_authentication`'s own local-path sequence
+/// exactly: resolve which credential matched
+/// (`result.cred_id()`/`find_by_credential_id`), confirm it belongs to
+/// the row's own user (an impersonation refusal, [`BindingFailure`],
+/// not a counted wrong proof — the same shape the local path's own
+/// `row.user_id != expected_user_id` check already takes), decrypt the
+/// current blob, call `Passkey::update_credential`, reseal. The
+/// *durable, race-safe* write of the result is F03's job
+/// (`ValidWebAuthn`'s own `expected_sealed`/`new_sealed` compare-and-
+/// swap pair) — this function only computes what to write, the same
+/// division [`verify`]'s own `match_recovery_code` already draws for
+/// the recovery-code blob.
+///
+/// **Errors**: [`VerifyError::Binding`] for the six [`bind_pending`]
+/// refusals plus the impersonation check above; [`VerifyError::Internal`]
+/// for everything else, including a failed ceremony-state open (data
+/// corruption, not a verdict on the presented assertion) and a failed
+/// `webauthn::build` (a config problem, not the submitter's fault —
+/// `CoreError`'s own text is folded into [`sui_id_store::StoreError::InvalidData`]
+/// since [`VerifyError::Internal`] cannot name a `sui-id-core` error
+/// type any more than `sui-id-store` itself can, the same seam
+/// `convert_rejection_reason`'s own doc names in the other direction).
+/// A cryptographically wrong assertion is not an error at all: it is
+/// `Ok(FederatedMfaOutcome::Rejected(BoundRejected { reason: Webauthn }))`,
+/// the same "a verdict, not a failure" treatment a wrong TOTP code
+/// already gets in [`verify`].
+pub async fn verify_webauthn(
+    db: &Database,
+    clock: &SharedClock,
+    issuer_url: &str,
+    presented_pending_id: &str,
+    presented_browser_binding_cookie: &str,
+    presented_csrf_body_value: &str,
+    credential: &PublicKeyCredential,
+) -> Result<FederatedMfaOutcome, VerifyError> {
+    let row = match bind_pending(
+        db,
+        clock,
+        presented_pending_id,
+        presented_browser_binding_cookie,
+        presented_csrf_body_value,
+    )
+    .await?
+    {
+        Bound::Expired => return Ok(FederatedMfaOutcome::Expired),
+        Bound::Row(row) => *row,
+    };
+
+    let Some(ceremony) = federation_webauthn_ceremony::find_by_pending_id(db, row.id)
+        .await
+        .map_err(classify_store_error)?
+    else {
+        return Ok(FederatedMfaOutcome::Rejected(BoundRejected {
+            reason: RejectedReason::MethodMismatch,
+        }));
+    };
+
+    let aad = federation_webauthn_ceremony::build_aad(
+        row.id,
+        ceremony.provider_id,
+        ceremony.provider_config_version,
+        ceremony.provider_activation_generation,
+        ceremony.user_id,
+    );
+    let state_plain = sui_id_store::crypto::open(db.key(), &ceremony.ceremony_state_sealed, &aad)
+        .map_err(|_| {
+        VerifyError::Internal(sui_id_store::StoreError::Integrity(
+            "federated webauthn ceremony state failed to open".into(),
+        ))
+    })?;
+    let auth_state: PasskeyAuthentication = serde_json::from_slice(&state_plain).map_err(|_| {
+        VerifyError::Internal(sui_id_store::StoreError::InvalidData(
+            "corrupt federated webauthn ceremony state".into(),
+        ))
+    })?;
+
+    let webauthn = crate::webauthn::build(issuer_url)
+        .await
+        .map_err(|e| VerifyError::Internal(sui_id_store::StoreError::InvalidData(e.to_string())))?;
+
+    let result = match webauthn.finish_passkey_authentication(credential, &auth_state) {
+        Ok(result) => result,
+        Err(_) => {
+            return Ok(FederatedMfaOutcome::Rejected(BoundRejected {
+                reason: RejectedReason::Webauthn,
+            }));
+        }
+    };
+
+    let cred_row = user_webauthn_credentials::find_by_credential_id(db, result.cred_id().as_ref())
+        .await
+        .map_err(classify_store_error)?
+        .ok_or(VerifyError::Binding(BindingFailure))?;
+    if cred_row.user_id != row.user_id {
+        return Err(VerifyError::Binding(BindingFailure));
+    }
+    let expected_sealed = cred_row.passkey_enc.clone();
+    let mut passkey: Passkey = {
+        let blob = user_webauthn_credentials::decrypt_passkey(db, &cred_row)
+            .await
+            .map_err(classify_store_error)?;
+        serde_json::from_slice(&blob).map_err(|_| {
+            VerifyError::Internal(sui_id_store::StoreError::InvalidData(
+                "corrupt passkey blob".into(),
+            ))
+        })?
+    };
+    let _changed = passkey.update_credential(&result);
+    let new_plain = serde_json::to_vec(&passkey).map_err(|_| {
+        VerifyError::Internal(sui_id_store::StoreError::InvalidData(
+            "passkey re-encode failed".into(),
+        ))
+    })?;
+    let new_sealed =
+        user_webauthn_credentials::seal_passkey(db, &new_plain).map_err(classify_store_error)?;
+
+    Ok(FederatedMfaOutcome::Webauthn(ValidWebAuthn {
+        ceremony_id: ceremony.id,
+        credential_id: cred_row.id,
+        expected_sealed,
+        new_sealed,
+    }))
+}
+
+/// RFC 096-B1 stage 11, F06's `sui-id-core`-side half: this is the only
+/// place `webauthn-rs` interaction for the federated ceremony can live
+/// (stage 11 dispatch `:49-50`: "webauthn-rs is a sui-id-core
+/// dependency, not sui-id-store's"). Mirrors
+/// `webauthn::start_authentication`'s own local-path sequence —
+/// build the `Webauthn` instance, decrypt every enrolled passkey,
+/// `start_passkey_authentication` — then seals the resulting
+/// `PasskeyAuthentication` state directly with
+/// `sui_id_store::crypto::seal`/`db.key()` (both already `pub`, the
+/// same route `communication::mail::outbox` already uses from this
+/// crate) before handing the sealed bytes to the store-side F06
+/// command, which never opens them (its own doc explains why).
+///
+/// Runs [`bind_pending`] first, the same as [`verify`]/[`verify_webauthn`]:
+/// F06 "grants no authentication authority by itself" (RFC 096
+/// `:822-824`), but issuing a browser challenge at all is still
+/// something only a bound, unexpired, authority-intact request should
+/// be able to trigger — the same reasoning [`verify`]/[`verify_webauthn`]
+/// already apply to reading a proof.
+///
+/// Returns the challenge JSON the browser passes to
+/// `navigator.credentials.get()`, mirroring
+/// `webauthn::AuthenticationStart::challenge_json`.
+///
+/// **Errors**: [`VerifyError::Binding`] for the [`bind_pending`]
+/// refusals and "no WebAuthn credentials enrolled" (RFC 096
+/// `:753-755`'s own binding-gate shape, not a different kind of
+/// refusal — a caller cannot distinguish "wrong cookie" from "no
+/// passkey to challenge" any more than it could distinguish any other
+/// `BindingFailure`); `VerifyError::Internal` for a store failure or a
+/// failed `webauthn::build`/`start_passkey_authentication`, and for
+/// [`sui_id_store::commands::begin_federation_webauthn_ceremony`]'s own
+/// `StoreError::Conflict` — by the time this function's own `bind_pending`
+/// has already passed, a `Conflict` from F06 itself can only be the
+/// narrow window race F06's own doc names (authority drifted between
+/// this read and F06's transaction), not a verdict on anything the
+/// caller presented.
+#[allow(clippy::too_many_arguments)]
+pub async fn begin_webauthn_ceremony(
+    db: &Database,
+    clock: &SharedClock,
+    issuer_url: &str,
+    presented_pending_id: &str,
+    presented_browser_binding_cookie: &str,
+    presented_csrf_body_value: &str,
+    rp_id: &str,
+    origin: &str,
+) -> Result<String, VerifyError> {
+    let row = match bind_pending(
+        db,
+        clock,
+        presented_pending_id,
+        presented_browser_binding_cookie,
+        presented_csrf_body_value,
+    )
+    .await?
+    {
+        Bound::Expired => {
+            return Err(VerifyError::Binding(BindingFailure));
+        }
+        Bound::Row(row) => *row,
+    };
+
+    let webauthn = crate::webauthn::build(issuer_url)
+        .await
+        .map_err(|e| VerifyError::Internal(sui_id_store::StoreError::InvalidData(e.to_string())))?;
+    let creds = user_webauthn_credentials::list_for_user(db, row.user_id)
+        .await
+        .map_err(classify_store_error)?;
+    if creds.is_empty() {
+        return Err(VerifyError::Binding(BindingFailure));
+    }
+    let mut passkeys: Vec<Passkey> = Vec::with_capacity(creds.len());
+    for c in &creds {
+        let blob = user_webauthn_credentials::decrypt_passkey(db, c)
+            .await
+            .map_err(classify_store_error)?;
+        let pk: Passkey = serde_json::from_slice(&blob).map_err(|_| {
+            VerifyError::Internal(sui_id_store::StoreError::InvalidData(
+                "corrupt passkey blob".into(),
+            ))
+        })?;
+        passkeys.push(pk);
+    }
+    let (rcr, auth_state) = webauthn
+        .start_passkey_authentication(&passkeys)
+        .map_err(|e| VerifyError::Internal(sui_id_store::StoreError::InvalidData(e.to_string())))?;
+    let state_plain = serde_json::to_vec(&auth_state).map_err(|_| {
+        VerifyError::Internal(sui_id_store::StoreError::InvalidData(
+            "ceremony state re-encode failed".into(),
+        ))
+    })?;
+    let aad = federation_webauthn_ceremony::build_aad(
+        row.id,
+        row.provider_id,
+        row.provider_config_version,
+        row.provider_activation_generation,
+        row.user_id,
+    );
+    let ceremony_state_sealed =
+        sui_id_store::crypto::seal(db.key(), &state_plain, &aad).map_err(classify_store_error)?;
+
+    sui_id_store::commands::begin_federation_webauthn_ceremony(
+        db,
+        row.id,
+        ceremony_state_sealed,
+        rp_id.to_owned(),
+        origin.to_owned(),
+        clock.now(),
+    )
+    .await
+    .map_err(classify_f06_error)?;
+
+    let challenge_json = serde_json::to_string(&rcr).map_err(|_| {
+        VerifyError::Internal(sui_id_store::StoreError::InvalidData(
+            "challenge re-encode failed".into(),
+        ))
+    })?;
+    Ok(challenge_json)
 }
 
 /// The recovery-code half of [`verify`], independent of `crate::mfa`'s
@@ -503,6 +865,61 @@ pub async fn promote(
             reason: convert_rejection_reason(bound.reason),
         }),
         FederatedMfaOutcome::Expired => None,
+        FederatedMfaOutcome::Webauthn(_) => {
+            unreachable!(
+                "verify() never produces FederatedMfaOutcome::Webauthn; only verify_webauthn() does"
+            )
+        }
+    };
+
+    sui_id_store::commands::complete_federated_mfa(db, pending_id, proof, clock.now())
+        .await
+        .map_err(classify_f03_error)
+}
+
+/// The WebAuthn twin of [`promote`] — same shape, [`verify_webauthn`]
+/// in place of [`verify`], for the same reason the two have separate
+/// entry points at all (the input shapes do not share a signature).
+pub async fn promote_webauthn(
+    db: &Database,
+    clock: &SharedClock,
+    issuer_url: &str,
+    presented_pending_id: &str,
+    presented_browser_binding_cookie: &str,
+    presented_csrf_body_value: &str,
+    credential: &PublicKeyCredential,
+) -> Result<sui_id_store::commands::F03Outcome, VerifyError> {
+    let outcome = verify_webauthn(
+        db,
+        clock,
+        issuer_url,
+        presented_pending_id,
+        presented_browser_binding_cookie,
+        presented_csrf_body_value,
+        credential,
+    )
+    .await?;
+
+    let pending_id: FederationMfaPendingId = presented_pending_id
+        .parse()
+        .map_err(|_| VerifyError::Binding(BindingFailure))?;
+
+    let proof = match outcome {
+        FederatedMfaOutcome::Webauthn(valid) => Some(sui_id_store::commands::F03Proof::Webauthn {
+            ceremony_id: valid.ceremony_id,
+            credential_id: valid.credential_id,
+            expected_sealed: valid.expected_sealed,
+            new_sealed: valid.new_sealed,
+        }),
+        FederatedMfaOutcome::Rejected(bound) => Some(sui_id_store::commands::F03Proof::Rejected {
+            reason: convert_rejection_reason(bound.reason),
+        }),
+        FederatedMfaOutcome::Expired => None,
+        FederatedMfaOutcome::Totp(_) | FederatedMfaOutcome::Recovery(_) => {
+            unreachable!(
+                "verify_webauthn() never produces FederatedMfaOutcome::Totp/Recovery; only verify() does"
+            )
+        }
     };
 
     sui_id_store::commands::complete_federated_mfa(db, pending_id, proof, clock.now())
@@ -533,6 +950,24 @@ fn convert_rejection_reason(
 /// [`BindingFailure`], the same indistinguishable value every other
 /// refusal already is. Everything else is [`VerifyError::Internal`].
 fn classify_f03_error(e: sui_id_store::StoreError) -> VerifyError {
+    match e {
+        sui_id_store::StoreError::NotFound | sui_id_store::StoreError::Conflict => {
+            VerifyError::Binding(BindingFailure)
+        }
+        other => VerifyError::Internal(other),
+    }
+}
+
+/// The same two-case mapping [`classify_f03_error`] uses, named
+/// separately rather than shared: F06's own `Conflict` is a different
+/// set of guard failures (authority drift, expiry, or no WebAuthn
+/// credential enrolled — `commands::begin_federation_webauthn_ceremony`'s
+/// own doc), but by the time [`begin_webauthn_ceremony`] calls F06,
+/// [`bind_pending`] has already passed, so a `Conflict` here is the
+/// same kind of narrow, already-bound-but-now-stale race, folded into
+/// the same indistinguishable [`BindingFailure`] value every other
+/// refusal in this module already is.
+fn classify_f06_error(e: sui_id_store::StoreError) -> VerifyError {
     match e {
         sui_id_store::StoreError::NotFound | sui_id_store::StoreError::Conflict => {
             VerifyError::Binding(BindingFailure)

@@ -94,6 +94,48 @@ pub async fn find_by_credential_id(
     .await
 }
 
+/// RFC 096-B1 stage 11, F03's WebAuthn branch: one read that answers
+/// both of F03's own questions about the credential the candidate
+/// names, the same two-in-one shape the TOTP branch's own `totp_row`
+/// read already answers for TOTP ("is there a row at all" and "what is
+/// its current state"). `Ok(None)` is the WebAuthn analogue of TOTP's
+/// own `FactorChanged`: the passkey was deleted entirely in the window
+/// between `verify_webauthn` and F03's own transaction. `Ok(Some(blob))`
+/// lets the caller compare against `expected_sealed` itself — a
+/// mismatch there is "wrong proof" (counted), not `FactorChanged`,
+/// mirroring Recovery's own blob-mismatch-is-just-wrong-proof
+/// convention rather than TOTP's row-existence one.
+pub fn current_passkey_enc_within_tx(
+    conn: &rusqlite::Connection,
+    id: WebauthnCredentialId,
+) -> StoreResult<Option<Vec<u8>>> {
+    match conn.query_row(
+        "SELECT passkey_enc FROM user_webauthn_credentials WHERE id = ?1",
+        [id.to_string()],
+        |r| r.get(0),
+    ) {
+        Ok(blob) => Ok(Some(blob)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(StoreError::from(e)),
+    }
+}
+
+/// RFC 096-B1 stage 11, F06: "require ... at least one WebAuthn
+/// credential enrolled" before issuing a ceremony — the durable,
+/// transaction-scoped twin of [`count_for_user`], mirroring
+/// `authn::webauthn::start_authentication`'s own
+/// `if creds.is_empty() { return Err(...) }` guard for the *local*
+/// path (RFC 096-B1 stage 11 dispatch `:64`: "reuse the shape, do not
+/// re-derive it").
+pub fn has_any_within_tx(conn: &rusqlite::Connection, user_id: UserId) -> StoreResult<bool> {
+    let n: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM user_webauthn_credentials WHERE user_id = ?1",
+        [user_id.to_string()],
+        |r| r.get(0),
+    )?;
+    Ok(n > 0)
+}
+
 pub async fn create(
     db: &Database,
     row: &UserWebauthnCredentialRow,
@@ -192,6 +234,40 @@ pub async fn update_passkey(
     }).await
 }
 
+/// RFC 096-B1 stage 11, F03's WebAuthn branch: the guarded compare-and-
+/// swap on `passkey_enc`, the same shape
+/// [`user_totp::swap_recovery_codes_within_tx`](super::user_totp::swap_recovery_codes_within_tx)
+/// already uses for the recovery-code blob — `expected_sealed` is the
+/// blob the verifier's own WebAuthn entry point read and matched the
+/// completion against (its `ValidWebAuthn` candidate's own field).
+/// `WHERE id = ... AND passkey_enc = ...` is a second, redundant guard
+/// by the time F03 calls this: its own caller already compares
+/// [`current_passkey_enc_within_tx`]'s read against `expected_sealed`
+/// before reaching this point (mismatch there is a wrong proof, counted
+/// via `reject_or_exhaust`, resolved *before* `complete_within_tx` runs
+/// — not after, the way `complete_within_tx`'s own guard would have
+/// rolled back a too-late failure here instead). Kept anyway, the same
+/// defense-in-depth posture `complete_within_tx`'s own
+/// `WHERE status = 'pending'` clause already takes even though its
+/// callers also check status first.
+pub fn swap_passkey_within_tx(
+    conn: &rusqlite::Connection,
+    id: WebauthnCredentialId,
+    expected_sealed: &[u8],
+    new_sealed: &[u8],
+    now: DateTime<Utc>,
+) -> StoreResult<()> {
+    let n = conn.execute(
+        "UPDATE user_webauthn_credentials SET passkey_enc = ?1, last_used_at = ?2 \
+         WHERE id = ?3 AND passkey_enc = ?4",
+        params![new_sealed, now, id.to_string(), expected_sealed],
+    )?;
+    if n == 0 {
+        return Err(StoreError::NotFound);
+    }
+    Ok(())
+}
+
 pub async fn delete(db: &Database, id: WebauthnCredentialId, user_id: UserId) -> StoreResult<()> {
     // Scoped to user_id so a stray id can't delete another user's
     // credential even via a server-side path.
@@ -281,3 +357,8 @@ pub async fn update_nickname(
     })
     .await
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[path = "user_webauthn_credentials/tests.rs"]
+mod tests;
