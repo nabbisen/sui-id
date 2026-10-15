@@ -3,7 +3,7 @@
 **Prepared:** 2026-08-27 (Asia/Tokyo)
 **Prepared by:** requirements-architect role
 **Audience:** implementation role
-**Governing RFC:** [RFC 094](../../proposed/094-transactional-audit-registry.md), Accepted 2026-08-27
+**Governing RFC:** [RFC 094](../../accepted/094-transactional-audit-registry.md), Accepted 2026-08-27
 **Companion:** [`migration-checklist.md`](migration-checklist.md) — the staged task list
 
 > **Entry gate satisfied 2026-08-28.** RFC 093 closed as Implemented on

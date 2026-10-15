@@ -1,6 +1,6 @@
 # Move `crates/sui-id/src/backup/` into `sui-id-store`
 
-**Governing RFC.** [RFC 094](../../proposed/094-transactional-audit-registry.md),
+**Governing RFC.** [RFC 094](../../accepted/094-transactional-audit-registry.md),
 the M2a exit condition that raw database access is confined to `sui-id-store` by
 the dependency graph. The migration checklist's open item *"Owner decision
 required: where `crates/sui-id/src/backup/` belongs"* is now ruled.

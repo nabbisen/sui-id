@@ -25,7 +25,7 @@ the later Accepted transition.
 
 | Return-to-Proposed candidate path | SHA-256 |
 |---|---|
-| `rfcs/proposed/094-transactional-audit-registry.md` | `20d826e22791af4890a83ff17c5fd48d326b706ba175f4d6117655d92a722fed` |
+| `rfcs/accepted/094-transactional-audit-registry.md` | `20d826e22791af4890a83ff17c5fd48d326b706ba175f4d6117655d92a722fed` |
 | `rfcs/handoffs/094-transactional-audit/README.md` | `87bbc3366bd5c40ea5b60cd0c759b96c39372eb1cb191d6c24a68d62ee1310e8` |
 | `rfcs/handoffs/094-transactional-audit/architecture.md` | `a7f963c0f32a92a13fecfd46fc6ae12c746fdf06bb112c5eac2558346f5ad1f1` |
 | `rfcs/handoffs/094-transactional-audit/command-inventory.md` | `eb05b8333127a33014f315a52ec4b071cb6ba38f80844db8718570cc8a9a8dac` |
@@ -44,7 +44,7 @@ reviewer must independently recalculate them.
 
 | Accepted-transition candidate path | SHA-256 |
 |---|---|
-| `rfcs/proposed/094-transactional-audit-registry.md` | `2c3e36e89f2d45f6aca8fec804f61abc793957dc6bc03fe7d020672469be1aa7` |
+| `rfcs/accepted/094-transactional-audit-registry.md` | `2c3e36e89f2d45f6aca8fec804f61abc793957dc6bc03fe7d020672469be1aa7` |
 | `rfcs/handoffs/094-transactional-audit/README.md` | `b0a9ad6706c819883fecf9a497aabc29c40c6e8359fbb3bfd9bc014eb172c8cd` |
 | `rfcs/handoffs/094-transactional-audit/architecture.md` | `5cd5e0a7baaf9356fd1c37b58af6fc004cb5c2b125c0863633581020a3f98fe2` |
 | `rfcs/handoffs/094-transactional-audit/command-inventory.md` | `b4d505f0d591ac7e6ec45ec7b5cde4b173fdc4a58b7275a39cb3c84ddb50e718` |

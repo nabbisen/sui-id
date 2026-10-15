@@ -15,7 +15,7 @@ The approved RFC and companion handoff bytes are preserved by proposal commit
 
 | Reviewed path at the proposal commit | SHA-256 |
 |---|---|
-| `rfcs/proposed/094-transactional-audit-registry.md` | `ecab63d374351a527bb75dee03dd0539cb166b945b64668b2b2fc0d94a567faa` |
+| `rfcs/accepted/094-transactional-audit-registry.md` | `ecab63d374351a527bb75dee03dd0539cb166b945b64668b2b2fc0d94a567faa` |
 | `rfcs/handoffs/094-transactional-audit/README.md` | `0204f057fb3890d093595eedfe91939b09c8903bd24baaaf0e22977b161af91d` |
 | `rfcs/handoffs/094-transactional-audit/architecture.md` | `7e1ee70885ed3f61aabb0f7f3d484c2492332e57d13447a229bb1665ad1095f8` |
 | `rfcs/handoffs/094-transactional-audit/command-inventory.md` | `83e622380115f6c1828d3c26c9d7f9505f4b819d402dcdffa2d03ab48750196b` |

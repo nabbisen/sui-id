@@ -9,7 +9,7 @@ RFC's clause list instead of writing the review against the RFC alone.
 
 ## 1. The two lists are different, in both directions
 
-**`rfcs/proposed/094-transactional-audit-registry.md`, `Closure prerequisites`,
+**`rfcs/accepted/094-transactional-audit-registry.md`, `Closure prerequisites`,
 M2a — five clauses:**
 
 1. every converted Class-A path uses the approved transaction seam;

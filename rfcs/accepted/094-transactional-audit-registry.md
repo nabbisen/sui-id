@@ -1,6 +1,15 @@
 # RFC 094 — Transactional Audit Completeness and Typed Event Registry
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-10-15 (re-accepted after the F01 class amendment; first accepted 2026-08-27)
+**Approved by.** `@nabbisen`, 2026-10-15: *"Accepted."* — on the architect's
+drafted amendment,
+[`rfc-094-f01-class-amendment-2026-10-15.md`](../handoffs/096-upstream-oidc-federation/rfc-094-f01-class-amendment-2026-10-15.md),
+covering both the sentence and the round-trip in one pass. The amendment's
+substance he had already approved on 2026-10-11; this records it in the RFC.
+The architect wrote the amendment and is therefore not independent of it;
+`@nabbisen` is the approver, which is what RFC 000 requires when no independent
+role exists.
 **Independent design review.** [Correction review 2026-08-26](../handoffs/094-transactional-audit/094-095-096-correction-review-2026-08-26.md), by the implementation role
 (the mid-capability model), which authored neither this RFC nor its corrections — six
 findings verified, `ReadConn` sufficiency measured rather than argued. Also
@@ -9,7 +18,7 @@ findings verified, `ReadConn` sufficiency measured rather than argued. Also
 [lane-ownership design review 2026-08-27](../handoffs/094-transactional-audit/094-lane-ownership-design-review-2026-08-27.md)
 — found two checks the resolving design silently dropped, both restored.
 **Security review.** Required
-**Lifecycle history.** **Returned to Proposed on 2026-10-15** for the F01 class amendment below, per RFC 000 `:43-47`: F01's class decides whether the sign-in audit record commits atomically with the session it authorises, which is a security invariant, so the change is material rather than a clarification. The 2026-08-27 acceptance (approved by `@nabbisen`) is preserved in history and is superseded, not withdrawn. No other command's class, no conversion wave, and no gate lane is reopened. Base design accepted 2026-07-17 after [independent review](../handoffs/094-transactional-audit/094-design-review-2026-07-17.md); material amendment returned to Proposed in commit `43085e38219e5eb1bfe11cc698b18f1fa5f5e4d7`; complete amended RFC accepted by `@nabbisen` on 2026-07-21 after [independent review](../handoffs/094-transactional-audit/094-federation-command-amendment-review-2026-07-21.md); **returned to Proposed on 2026-07-28** for the scope amendment described below, per RFC 000's return-for-review rule for material changes to scope, prerequisites, and acceptance criteria. The 2026-07-21 acceptance is preserved in history and is superseded, not withdrawn.
+**Lifecycle history.** **Returned to Proposed and re-accepted on 2026-10-15**, in one pass — the design was approved on 2026-10-11 and the review was of one sentence's wording, so the folder round-trip carried no open question with it. Returned for the F01 class amendment below, per RFC 000 `:43-47`: F01's class decides whether the sign-in audit record commits atomically with the session it authorises, which is a security invariant, so the change is material rather than a clarification. The 2026-08-27 acceptance (approved by `@nabbisen`) is preserved in history and is superseded, not withdrawn. No other command's class, no conversion wave, and no gate lane is reopened. Base design accepted 2026-07-17 after [independent review](../handoffs/094-transactional-audit/094-design-review-2026-07-17.md); material amendment returned to Proposed in commit `43085e38219e5eb1bfe11cc698b18f1fa5f5e4d7`; complete amended RFC accepted by `@nabbisen` on 2026-07-21 after [independent review](../handoffs/094-transactional-audit/094-federation-command-amendment-review-2026-07-21.md); **returned to Proposed on 2026-07-28** for the scope amendment described below, per RFC 000's return-for-review rule for material changes to scope, prerequisites, and acceptance criteria. The 2026-07-21 acceptance is preserved in history and is superseded, not withdrawn.
 **Amendment summary (2026-10-15).** F01's class, corrected from Protocol to
 Class A folded into RFC 102's L04. The RFC and the approved design had disagreed
 since 2026-10-11, when `@nabbisen` accepted the architect's recommendation that

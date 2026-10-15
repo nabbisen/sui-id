@@ -12,7 +12,7 @@
 **Implementation prerequisites.** None.
 **Closure prerequisites.** No milestone exit gate and no RFC closure prerequisite requires a reviewer who does not exist. Every such statement either names a role this project has, or names the one deliberately scheduled external engagement and says why that point and no other.
 **Tracks.** Programme viability.
-**Touches.** `ROADMAP.md` (seven milestone exit gates), `rfcs/proposed/094-transactional-audit-registry.md`, `095`, `096` (five closure prerequisites).
+**Touches.** `ROADMAP.md` (seven milestone exit gates), `rfcs/accepted/094-transactional-audit-registry.md`, `095`, `096` (five closure prerequisites).
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** High-capability model, requirements-architect role.
 **Handoff.** [`../handoffs/129-review-scoped-to-who-exists/README.md`](../handoffs/129-review-scoped-to-who-exists/README.md)

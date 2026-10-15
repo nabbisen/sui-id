@@ -1,6 +1,6 @@
 # G13 — register the audit-coverage check as an interim lane owned by RFC 094
 
-**Governing RFC.** [RFC 094](../../proposed/094-transactional-audit-registry.md)
+**Governing RFC.** [RFC 094](../../accepted/094-transactional-audit-registry.md)
 §Gate Matrix lanes owned by RFC 094 (added 2026-09-12) and §Structural coverage
 gate §Migration: *"Adding the structural-gate lane afterwards is a manifest entry
 plus a single-row table in this RFC — the smallest change that can add a gate."*
