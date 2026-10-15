@@ -197,6 +197,105 @@ pub fn insert_within_tx(
     Ok(())
 }
 
+/// RFC 096-B1 stage 11b, RFC 096 `:756`: "a restart preserves count/
+/// status." At most one row can ever match this query for a given user
+/// — migration 0048's own partial `UNIQUE (user_id) WHERE status IN
+/// ('pending', 'exhausted')` index guarantees it, the same way every
+/// other "there is at most one" claim in this crate's federation tables
+/// is a schema fact the code leans on rather than re-derives. The
+/// predicate here is the index's own predicate, restated: a
+/// `completed`/`invalidated` row is *not* "active" — it carries no
+/// attack budget to protect, so F02 must not even see it when deciding
+/// whether a fresh row is owed (`commands::issue_federated_mfa_pending`'s
+/// own doc explains why those two statuses are excluded).
+pub fn find_active_by_user_id_within_tx(
+    conn: &rusqlite::Connection,
+    user_id: UserId,
+) -> StoreResult<Option<FederationMfaPendingRow>> {
+    match conn
+        .prepare(&format!(
+            "SELECT {SELECT_COLUMNS} FROM federation_mfa_pending \
+             WHERE user_id = ?1 AND status IN ('pending', 'exhausted')"
+        ))?
+        .query_row([user_id.to_string()], map_row)
+    {
+        Ok(row) => Ok(Some(row)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(StoreError::from(e)),
+    }
+}
+
+/// RFC 096-B1 stage 11b: the "preserves count/status" half of a restart
+/// against a row this stage's own `find_active_by_user_id_within_tx`
+/// found still `pending` and still live. Refreshes exactly the three
+/// per-attempt artifacts a new upstream round trip actually produces —
+/// `next_path`, the two binding digests, and a re-sealed
+/// `continuation_sealed` (re-sealed because its AAD is bound to
+/// `provider_id`/`provider_config_version`/`provider_activation_generation`,
+/// which this function also refreshes, so a restart through a
+/// *different* linked provider still opens correctly afterward) —
+/// and nothing else. `failure_count`, `status`, `created_at` and
+/// `expires_at` are not named in the `SET` list at all, not merely left
+/// unchanged by coincidence: this is the row's own count/status
+/// surviving a restart, not a value this function happens not to
+/// overwrite.
+///
+/// `WHERE id = ?.. AND user_id = ?.. AND status = 'pending'` is guarded
+/// the same way every other transition in this module is: the second
+/// clause is redundant with the first (`id` is the primary key) but
+/// costs nothing and matches `delete_within_tx`'s own defensive
+/// convention elsewhere in this crate; the third is what makes this
+/// call a no-op (`Ok(false)`) if the row somehow stopped being `pending`
+/// between the caller's own read and this write — impossible within one
+/// transaction under this crate's single-writer model, but the guard
+/// is cheap insurance against exactly the kind of "trusted a stale
+/// read" mistake this whole stage exists to close.
+///
+/// Changing `provider_id`/`provider_config_version`/
+/// `provider_activation_generation` while a `federation_webauthn_ceremony`
+/// row still references this pending row's *old* identity triple
+/// through its own composite `FOREIGN KEY` is refused by SQLite itself
+/// (the referenced tuple would no longer exist) — surfaced here as an
+/// ordinary constraint-violation `StoreError`, not specially handled.
+/// Restarting through a different provider while a WebAuthn ceremony is
+/// mid-flight for the *first* provider is accepted as a rare, non-silent
+/// failure mode rather than engineered around: both the federated-MFA
+/// path and its WebAuthn branch still have no handler (stage 12's own,
+/// and stage 12-plus-one's), so nothing reaches this edge today.
+#[allow(clippy::too_many_arguments)]
+pub fn refresh_for_restart_within_tx(
+    conn: &rusqlite::Connection,
+    id: FederationMfaPendingId,
+    provider_id: FederationProviderId,
+    provider_config_version: i64,
+    provider_activation_generation: i64,
+    user_id: UserId,
+    continuation_sealed: &[u8],
+    next_path: Option<&str>,
+    browser_binding_sha256: [u8; 32],
+    csrf_binding_sha256: [u8; 32],
+) -> StoreResult<bool> {
+    let n = conn.execute(
+        "UPDATE federation_mfa_pending SET \
+            provider_id = ?1, provider_config_version = ?2, \
+            provider_activation_generation = ?3, continuation_sealed = ?4, \
+            next_path = ?5, browser_binding_sha256 = ?6, csrf_binding_sha256 = ?7 \
+         WHERE id = ?8 AND user_id = ?9 AND status = 'pending'",
+        params![
+            provider_id.to_string(),
+            provider_config_version,
+            provider_activation_generation,
+            continuation_sealed,
+            next_path,
+            browser_binding_sha256.as_slice(),
+            csrf_binding_sha256.as_slice(),
+            id.to_string(),
+            user_id.to_string(),
+        ],
+    )?;
+    Ok(n == 1)
+}
+
 /// RFC 096-B1 stage 10a: the first read of a `federation_mfa_pending` row
 /// by its own id — the `FederatedMfaVerifier`'s binding gate needs the
 /// full row (bindings, status, failure_count, expiry) to validate a

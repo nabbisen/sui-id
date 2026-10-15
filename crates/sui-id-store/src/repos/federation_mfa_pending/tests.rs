@@ -451,8 +451,19 @@ async fn purge_expired_cascades_a_ceremony_whose_parent_it_removes() {
 async fn the_24_hour_boundary_is_strict() {
     let db = open_test_db();
     let provider_id = seed_provider(&db).await;
+    // Two distinct users (each with their own provider -- `seed_link`'s
+    // own fixed `upstream_sub` would otherwise collide across two
+    // users on the same provider), deliberately: this test is about
+    // `purge_expired`'s own time boundary, not about per-user identity
+    // (migration 0048's own stage 11b), and the two rows below would
+    // otherwise collide on the partial `UNIQUE (user_id) WHERE status
+    // IN ('pending', 'exhausted')` index that stage adds -- both rows
+    // here are `pending`.
     let user_id = seed_user(&db).await;
     seed_link(&db, user_id, provider_id).await;
+    let other_provider_id = seed_provider(&db).await;
+    let other_user_id = seed_user(&db).await;
+    seed_link(&db, other_user_id, other_provider_id).await;
     let purge_now = fixed_now();
     let cutoff = purge_now - Duration::hours(24);
 
@@ -469,8 +480,8 @@ async fn the_24_hour_boundary_is_strict() {
 
     let one_second_past = seed_pending_row(
         &db,
-        provider_id,
-        user_id,
+        other_provider_id,
+        other_user_id,
         cutoff - Duration::seconds(PENDING_LIFETIME_SECS) - Duration::seconds(1),
     );
     let one_second_past_id = one_second_past.id;

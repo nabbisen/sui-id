@@ -559,6 +559,480 @@ async fn f02_refuses_when_the_link_has_been_removed() {
     );
 }
 
+// ── RFC 096-B1 stage 11b, RFC 096 `:756`: a restart preserves count/
+//    status ──────────────────────────────────────────────────────────
+
+async fn failure_count_and_status(
+    db: &Database,
+    id: FederationMfaPendingId,
+) -> (i64, crate::models::FederationMfaPendingStatus) {
+    let row = repos::federation_mfa_pending::find_by_id(db, id)
+        .await
+        .unwrap()
+        .expect("row exists");
+    (row.failure_count, row.status)
+}
+
+/// Direct SQL, deliberately: these tests are about F02's own restart
+/// behavior, not F03's counting mechanism (already exercised in full
+/// above/elsewhere) — setting the count this way needs no TOTP
+/// enrolment and no real wrong proofs, just a row sitting at a given
+/// count when the restart arrives.
+async fn set_failure_count_and_status(
+    db: &Database,
+    id: FederationMfaPendingId,
+    failure_count: i64,
+    status: &str,
+) {
+    let id_str = id.to_string();
+    let status = status.to_owned();
+    db.with_conn(move |conn| {
+        conn.execute(
+            "UPDATE federation_mfa_pending \
+             SET failure_count = ?1, status = ?2, \
+                 continuation_sealed = CASE WHEN ?2 = 'pending' THEN continuation_sealed ELSE NULL END \
+             WHERE id = ?3",
+            rusqlite::params![failure_count, status, id_str],
+        )?;
+        Ok(())
+    })
+    .await
+    .unwrap();
+}
+
+async fn active_row_count_for_user(db: &Database, user_id: UserId) -> i64 {
+    let user_id = user_id.to_string();
+    db.with_conn(move |c| {
+        Ok(c.query_row(
+            "SELECT COUNT(*) FROM federation_mfa_pending \
+             WHERE user_id = ?1 AND status IN ('pending', 'exhausted')",
+            [user_id],
+            |r| r.get(0),
+        )?)
+    })
+    .await
+    .unwrap()
+}
+
+struct RestartFixture {
+    provider_id: FederationProviderId,
+    user_id: UserId,
+}
+
+async fn restart_fixture(db: &Database, tag: u8) -> RestartFixture {
+    let provider_id = seed_provider(db).await;
+    let user = a_federated_user(&format!("restart-{tag}"), None);
+    let user_id = user.id;
+    repos::users::create(db, &user).await.expect("seed user");
+    repos::federation_link::upsert(
+        db,
+        a_federated_link(user_id, provider_id, &format!("sub-restart-{tag}")),
+    )
+    .await
+    .expect("seed link");
+    RestartFixture {
+        provider_id,
+        user_id,
+    }
+}
+
+/// The dispatch's own worked example, exactly: a restart while a
+/// continuation sits at `failure_count = 4` must not produce a second
+/// row at 0. "Written so it fails if the reset comes back" is this
+/// test's own mutation, run below it.
+#[tokio::test]
+async fn f02_restart_at_count_four_does_not_grant_a_fresh_budget() {
+    let db = fresh_db();
+    let f = restart_fixture(&db, 1).await;
+    let attempt_1 = an_exchanging_attempt(&db, f.provider_id, 1).await;
+    let first_id = issue_federated_mfa_pending(
+        &db,
+        attempt_1,
+        f.provider_id,
+        0,
+        0,
+        f.user_id,
+        None,
+        [1; 32],
+        [2; 32],
+        Utc::now(),
+    )
+    .await
+    .expect("F02 succeeds");
+    set_failure_count_and_status(&db, first_id, 4, "pending").await;
+
+    let attempt_2 = an_exchanging_attempt(&db, f.provider_id, 2).await;
+    let second_id = issue_federated_mfa_pending(
+        &db,
+        attempt_2,
+        f.provider_id,
+        0,
+        0,
+        f.user_id,
+        None,
+        [3; 32],
+        [4; 32],
+        Utc::now(),
+    )
+    .await
+    .expect("the restart succeeds");
+
+    assert_eq!(second_id, first_id, "the restart must reuse the same row");
+    let (failure_count, status) = failure_count_and_status(&db, first_id).await;
+    assert_eq!(failure_count, 4, "the budget must survive the restart");
+    assert_eq!(status, crate::models::FederationMfaPendingStatus::Pending);
+    assert_eq!(
+        active_row_count_for_user(&db, f.user_id).await,
+        1,
+        "exactly one active row, not two"
+    );
+}
+
+/// RFC 096 `:756`'s own stickiest case, named by the dispatch as the one
+/// to be most careful with: an exhausted row must not become a fresh
+/// pending one through a restart, no matter how many times it is tried.
+#[tokio::test]
+async fn f02_restart_while_exhausted_stays_exhausted() {
+    let db = fresh_db();
+    let f = restart_fixture(&db, 3).await;
+    let attempt_1 = an_exchanging_attempt(&db, f.provider_id, 3).await;
+    let first_id = issue_federated_mfa_pending(
+        &db,
+        attempt_1,
+        f.provider_id,
+        0,
+        0,
+        f.user_id,
+        None,
+        [5; 32],
+        [6; 32],
+        Utc::now(),
+    )
+    .await
+    .expect("F02 succeeds");
+    set_failure_count_and_status(&db, first_id, 5, "exhausted").await;
+
+    for tag in [4u8, 5u8] {
+        let attempt = an_exchanging_attempt(&db, f.provider_id, tag).await;
+        let id = issue_federated_mfa_pending(
+            &db,
+            attempt,
+            f.provider_id,
+            0,
+            0,
+            f.user_id,
+            None,
+            [tag; 32],
+            [tag.wrapping_add(10); 32],
+            Utc::now(),
+        )
+        .await
+        .expect("the restart succeeds");
+        assert_eq!(id, first_id, "every restart returns the same exhausted row");
+    }
+    let (failure_count, status) = failure_count_and_status(&db, first_id).await;
+    assert_eq!(failure_count, 5);
+    assert_eq!(status, crate::models::FederationMfaPendingStatus::Exhausted);
+    assert_eq!(active_row_count_for_user(&db, f.user_id).await, 1);
+}
+
+/// The "reuse" half of the mechanism, not only "the count survives":
+/// the three per-attempt artifacts a new upstream round trip actually
+/// produces are refreshed, so the restarted attempt's own cookies
+/// validate against the row afterward.
+#[tokio::test]
+async fn f02_restart_while_still_live_refreshes_the_bindings() {
+    let db = fresh_db();
+    let f = restart_fixture(&db, 6).await;
+    let attempt_1 = an_exchanging_attempt(&db, f.provider_id, 6).await;
+    let now = Utc::now();
+    let first_id = issue_federated_mfa_pending(
+        &db,
+        attempt_1,
+        f.provider_id,
+        0,
+        0,
+        f.user_id,
+        None,
+        [7; 32],
+        [8; 32],
+        now,
+    )
+    .await
+    .expect("F02 succeeds");
+    set_failure_count_and_status(&db, first_id, 2, "pending").await;
+
+    let attempt_2 = an_exchanging_attempt(&db, f.provider_id, 7).await;
+    let second_id = issue_federated_mfa_pending(
+        &db,
+        attempt_2,
+        f.provider_id,
+        0,
+        0,
+        f.user_id,
+        Some("/next".to_owned()),
+        [11; 32],
+        [12; 32],
+        now,
+    )
+    .await
+    .expect("the restart succeeds");
+
+    assert_eq!(second_id, first_id);
+    let row = repos::federation_mfa_pending::find_by_id(&db, first_id)
+        .await
+        .unwrap()
+        .expect("row exists");
+    assert_eq!(row.browser_binding_sha256, [11; 32]);
+    assert_eq!(row.csrf_binding_sha256, [12; 32]);
+    assert_eq!(row.next_path, Some("/next".to_owned()));
+    assert_eq!(
+        row.failure_count, 2,
+        "the budget is untouched by the refresh"
+    );
+}
+
+/// A row already expired by wall clock, but not yet durably
+/// terminalized, is not a budget worth protecting — F03's own expiry
+/// check would refuse to count a proof against it either way. A
+/// restart at this point must still work, not hand back a continuation
+/// that can never be completed.
+#[tokio::test]
+async fn f02_restart_after_expiry_invalidates_the_stale_row_and_issues_a_fresh_one() {
+    let db = fresh_db();
+    let f = restart_fixture(&db, 8).await;
+    let attempt_1 = an_exchanging_attempt(&db, f.provider_id, 8).await;
+    let t0 = Utc::now();
+    let first_id = issue_federated_mfa_pending(
+        &db,
+        attempt_1,
+        f.provider_id,
+        0,
+        0,
+        f.user_id,
+        None,
+        [13; 32],
+        [14; 32],
+        t0,
+    )
+    .await
+    .expect("F02 succeeds");
+    set_failure_count_and_status(&db, first_id, 3, "pending").await;
+
+    let attempt_2 = an_exchanging_attempt(&db, f.provider_id, 9).await;
+    let after_expiry = t0 + TimeDelta::seconds(301);
+    let second_id = issue_federated_mfa_pending(
+        &db,
+        attempt_2,
+        f.provider_id,
+        0,
+        0,
+        f.user_id,
+        None,
+        [15; 32],
+        [16; 32],
+        after_expiry,
+    )
+    .await
+    .expect("the restart succeeds");
+
+    assert_ne!(
+        second_id, first_id,
+        "an already-dead continuation is not reused"
+    );
+    let (old_failure_count, old_status) = failure_count_and_status(&db, first_id).await;
+    assert_eq!(
+        old_failure_count, 3,
+        "the stale row's own count is untouched by its own invalidation"
+    );
+    assert_eq!(
+        old_status,
+        crate::models::FederationMfaPendingStatus::Invalidated
+    );
+    let (new_failure_count, new_status) = failure_count_and_status(&db, second_id).await;
+    assert_eq!(new_failure_count, 0);
+    assert_eq!(
+        new_status,
+        crate::models::FederationMfaPendingStatus::Pending
+    );
+    assert_eq!(
+        active_row_count_for_user(&db, f.user_id).await,
+        1,
+        "the stale, now-invalidated row is outside the active set"
+    );
+}
+
+/// A second provider, distinct from `seed_provider`'s own fixed
+/// `"f04-provider"` slug (`UNIQUE`) -- for the one test in this file
+/// that needs two providers linked to the same user at once.
+async fn seed_second_provider(db: &Database, tag: u8) -> FederationProviderId {
+    let now = Utc::now();
+    let row = FederationProviderRow {
+        id: FederationProviderId::new(),
+        slug: format!("restart-provider-b-{tag}"),
+        display_name: "Restart Provider B".into(),
+        issuer: "https://idp-b.example".into(),
+        client_id: "client-b".into(),
+        client_secret_enc: None,
+        scopes: "openid email".into(),
+        provision_mode: ProvisionMode::ProvisionOnFirstLogin,
+        enabled: true,
+        allowed_origins: String::new(),
+        created_at: now,
+        updated_at: now,
+    };
+    let id = row.id;
+    repos::federation_provider::create(db, &row, None)
+        .await
+        .expect("seed second provider");
+    id
+}
+
+/// RFC 096-B1 stage 11b fix round, R1 — the review's own measured
+/// probe, as a real test: a live `federation_webauthn_ceremony` row's
+/// composite foreign key has `ON DELETE CASCADE` and no `ON UPDATE`
+/// clause, so `NO ACTION` governs its three identity columns.
+/// `refresh_for_restart_within_tx` changes exactly those three on a
+/// restart through a *different* linked provider — before the fix,
+/// this failed with a raw `FOREIGN KEY constraint failed`
+/// (`StoreError::Db`), not the reuse the stage exists to perform.
+#[tokio::test]
+async fn f02_restart_through_a_different_provider_consumes_a_live_ceremony() {
+    let db = fresh_db();
+    let provider_a = seed_provider(&db).await;
+    let provider_b = seed_second_provider(&db, 90).await;
+    let user = a_federated_user("restart-ceremony-cross", None);
+    let user_id = user.id;
+    repos::users::create(&db, &user).await.expect("seed user");
+    repos::federation_link::upsert(
+        &db,
+        a_federated_link(user_id, provider_a, "sub-restart-ceremony-cross-a"),
+    )
+    .await
+    .expect("seed link a");
+    repos::federation_link::upsert(
+        &db,
+        a_federated_link(user_id, provider_b, "sub-restart-ceremony-cross-b"),
+    )
+    .await
+    .expect("seed link b");
+    seed_webauthn_credential(&db, user_id, 90).await;
+
+    let attempt_1 = an_exchanging_attempt(&db, provider_a, 90).await;
+    let now = Utc::now();
+    let first_id = issue_federated_mfa_pending(
+        &db, attempt_1, provider_a, 0, 0, user_id, None, [20; 32], [21; 32], now,
+    )
+    .await
+    .expect("F02 succeeds");
+    begin_federation_webauthn_ceremony(
+        &db,
+        first_id,
+        b"sealed-state".to_vec(),
+        "idp.example".into(),
+        "https://idp.example".into(),
+        now,
+    )
+    .await
+    .expect("F06 succeeds");
+    assert!(
+        repos::federation_webauthn_ceremony::find_by_pending_id(&db, first_id)
+            .await
+            .unwrap()
+            .is_some(),
+        "control: the ceremony exists before the restart"
+    );
+
+    let attempt_2 = an_exchanging_attempt(&db, provider_b, 91).await;
+    let second_id = issue_federated_mfa_pending(
+        &db, attempt_2, provider_b, 0, 0, user_id, None, [22; 32], [23; 32], now,
+    )
+    .await
+    .expect("the restart must succeed despite the live ceremony, not surface a raw FK error");
+
+    assert_eq!(second_id, first_id, "reuse, not a fresh row");
+    assert!(
+        repos::federation_webauthn_ceremony::find_by_pending_id(&db, first_id)
+            .await
+            .unwrap()
+            .is_none(),
+        "the ceremony bound to the previous round's identity is consumed, \
+         not silently repointed at the new one"
+    );
+    let row = repos::federation_mfa_pending::find_by_id(&db, first_id)
+        .await
+        .unwrap()
+        .expect("row exists");
+    assert_eq!(
+        row.provider_id, provider_b,
+        "the row now reflects the restart's own provider"
+    );
+}
+
+/// The same consumption, without a provider change — "do not
+/// special-case `provider_id` alone" (the dispatch's own instruction):
+/// the fix must not be narrow enough to miss the day
+/// `provider_config_version`/`provider_activation_generation` stop
+/// being fixed at `(0, 0)`.
+#[tokio::test]
+async fn f02_restart_through_the_same_provider_still_consumes_a_live_ceremony() {
+    let db = fresh_db();
+    let f = restart_fixture(&db, 92).await;
+    seed_webauthn_credential(&db, f.user_id, 92).await;
+
+    let attempt_1 = an_exchanging_attempt(&db, f.provider_id, 92).await;
+    let now = Utc::now();
+    let first_id = issue_federated_mfa_pending(
+        &db,
+        attempt_1,
+        f.provider_id,
+        0,
+        0,
+        f.user_id,
+        None,
+        [24; 32],
+        [25; 32],
+        now,
+    )
+    .await
+    .expect("F02 succeeds");
+    begin_federation_webauthn_ceremony(
+        &db,
+        first_id,
+        b"sealed-state".to_vec(),
+        "idp.example".into(),
+        "https://idp.example".into(),
+        now,
+    )
+    .await
+    .expect("F06 succeeds");
+
+    let attempt_2 = an_exchanging_attempt(&db, f.provider_id, 93).await;
+    let second_id = issue_federated_mfa_pending(
+        &db,
+        attempt_2,
+        f.provider_id,
+        0,
+        0,
+        f.user_id,
+        None,
+        [26; 32],
+        [27; 32],
+        now,
+    )
+    .await
+    .expect("the restart succeeds");
+
+    assert_eq!(second_id, first_id);
+    assert!(
+        repos::federation_webauthn_ceremony::find_by_pending_id(&db, first_id)
+            .await
+            .unwrap()
+            .is_none(),
+        "retry requires F06, unconditionally on every restart"
+    );
+}
+
 // ── F03 — submit/complete federated local MFA (Protocol) ───────────────
 //
 // `complete_federated_mfa` trusts its own caller's proof the way the

@@ -2394,6 +2394,66 @@ pub async fn provision_federated_user(
 /// `expires_at` here, not read twice — the schema's own `expires_at =
 /// created_at + 300s` `CHECK` would refuse a row straddling a clock tick
 /// between two reads.
+/// RFC 096-B1 stage 11b, RFC 096 `:756`: "a restart preserves count/
+/// status; it grants no reset." Before this stage, every call inserted
+/// a brand-new row unconditionally — a federated sign-in restarted
+/// while an existing continuation sat at `failure_count = 4` produced a
+/// *second* row at `0`, with its own independent five-guess budget, as
+/// many times as the upstream round trip was repeated. This function
+/// now durably re-reads whatever "active" row already exists for
+/// `user_id` (`federation_mfa_pending::find_active_by_user_id_within_tx`,
+/// `status IN ('pending', 'exhausted')`) before deciding whether to
+/// insert at all.
+///
+/// Three outcomes, in order of how "sticky" the existing row is:
+///
+/// 1. **`Exhausted`** — the cap the row already names. Returned
+///    unchanged; nothing is written at all. This is the case the
+///    dispatch asks to be most careful with, and it is the only one
+///    with zero write path: there is no `UPDATE` for a sixth restart to
+///    race, because none runs.
+/// 2. **`Pending`, still live** (`expires_at > now`) — the restart case
+///    the dispatch's own example describes. Reused:
+///    `refresh_for_restart_within_tx` updates the three per-attempt
+///    artifacts a new upstream round trip actually produces (bindings,
+///    next target, re-sealed continuation) and nothing else —
+///    `failure_count`/`status`/`created_at`/`expires_at` are not in its
+///    own `SET` list, so this stage does not widen the 300-second
+///    lifetime to compensate either, as the dispatch asked. A live
+///    `federation_webauthn_ceremony` row, if one exists, is deleted
+///    first (fix round, R1): its own composite foreign key binds
+///    `provider_id`/`provider_config_version`/
+///    `provider_activation_generation` to this row's *current* values
+///    with `NO ACTION` on update, and `refresh_for_restart_within_tx`
+///    is about to change exactly those three — "retry requires F06" is
+///    this design's existing answer to an in-flight ceremony that
+///    cannot survive what happens next, applied here unconditionally
+///    rather than only when the triple actually changes.
+/// 3. **`Pending`, but already expired by wall clock** — not a budget
+///    worth protecting (F03's own expiry check already refuses to
+///    count a proof against a row in this state, the same way it would
+///    a fresh one), and *not* reusable either: handing back a
+///    continuation that is already dead would make every restart after
+///    a plain 300-second timeout permanently useless, not safe. Durably
+///    invalidated here (`invalidate_within_tx`, the same guarded
+///    transition F03 already uses for the identical reason), then
+///    treated as if no active row existed.
+///
+/// **Why `completed`/`invalidated` rows are invisible to this check
+/// entirely**, rather than also staying sticky: `:756`'s own sentence
+/// sits in a paragraph about the row's *brute-force*-relevant state —
+/// the five-guess cap and what restarting it should not be able to do.
+/// A `completed` row already granted its session; nothing is left to
+/// protect by refusing the same user a fresh continuation on their
+/// next, unrelated federated sign-in. An `invalidated` row ended for a
+/// reason that is not a wrong guess at all (authority drift, or this
+/// same wall-clock expiry) — treating *that* as permanently sticky
+/// would turn an ordinary timeout into a de-facto lockout no RFC text
+/// asks for. Only `pending` (mid-budget) and `exhausted` (budget spent)
+/// are the states a restart must not be able to escape, and migration
+/// `0048`'s own partial index enforces exactly that pair, not all four
+/// statuses — see its own header for the reasoning restated against the
+/// schema.
 #[allow(clippy::too_many_arguments)]
 pub async fn issue_federated_mfa_pending(
     db: &crate::Database,
@@ -2407,40 +2467,128 @@ pub async fn issue_federated_mfa_pending(
     csrf_binding_sha256: [u8; 32],
     now: DateTime<Utc>,
 ) -> StoreResult<sui_id_shared::ids::FederationMfaPendingId> {
-    let id = sui_id_shared::ids::FederationMfaPendingId::new();
-    let aad = crate::repos::federation_mfa_pending::build_aad(
-        id,
-        provider_id,
-        provider_config_version,
-        provider_activation_generation,
-        user_id,
-    );
-    let continuation_sealed = crate::crypto::seal(db.key(), &[], &aad)?;
-    let pending = crate::models::FederationMfaPendingRow {
-        id,
-        provider_id,
-        provider_config_version,
-        provider_activation_generation,
-        user_id,
-        continuation_sealed: Some(continuation_sealed),
-        next_path,
-        browser_binding_sha256,
-        csrf_binding_sha256,
-        failure_count: 0,
-        status: crate::models::FederationMfaPendingStatus::Pending,
-        created_at: now,
-        expires_at: now
-            + chrono::Duration::seconds(
-                crate::repos::federation_mfa_pending::PENDING_LIFETIME_SECS,
-            ),
-    };
-    db.protocol(move |write| -> StoreResult<()> {
-        crate::repos::federation_login_attempt::complete_within_tx(write.tx(), attempt_id)?;
-        crate::repos::federation_mfa_pending::insert_within_tx(write.tx(), &pending)?;
-        Ok(())
-    })
-    .await?;
-    Ok(id)
+    // `Database` is a cheap `Clone` handle (unlike `MasterKey`): the
+    // closure below must be `'static`, and which row gets sealed (the
+    // existing one, on reuse, or a freshly generated one) is not known
+    // until the durable read inside the transaction runs — so unlike
+    // this function's own pre-stage-11b shape, sealing cannot happen
+    // before `db.protocol` is entered at all.
+    let db_for_tx = db.clone();
+    db.protocol(
+        move |write| -> StoreResult<sui_id_shared::ids::FederationMfaPendingId> {
+            let tx = write.tx();
+            crate::repos::federation_login_attempt::complete_within_tx(tx, attempt_id)?;
+
+            if let Some(existing) =
+                crate::repos::federation_mfa_pending::find_active_by_user_id_within_tx(tx, user_id)?
+            {
+                if existing.status == crate::models::FederationMfaPendingStatus::Exhausted {
+                    return Ok(existing.id);
+                }
+                if existing.expires_at > now {
+                    // RFC 096-B1 stage 11b fix round, R1: the ceremony
+                    // table's own composite `FOREIGN KEY` has `ON
+                    // DELETE CASCADE` and no `ON UPDATE` clause (0047
+                    // `:240-249`), so `NO ACTION` governs the three
+                    // columns `refresh_for_restart_within_tx` is about
+                    // to change (`provider_id`, `provider_config_version`,
+                    // `provider_activation_generation`) — a live
+                    // ceremony still referencing this row's *old*
+                    // identity triple refuses that `UPDATE` outright,
+                    // measured directly: `FOREIGN KEY constraint
+                    // failed`, extended code 787, not a clean outcome.
+                    // A restart re-issuing the continuation is the same
+                    // "retry requires F06" rule this design already
+                    // applies to a wrong WebAuthn completion
+                    // (`reject_or_exhaust`) and to F06 itself replacing
+                    // its own prior ceremony — an in-flight challenge
+                    // bound to the *previous* round has no claim on
+                    // surviving this one, so it is consumed
+                    // unconditionally here too, not only when the
+                    // identity triple actually changes: `provider_
+                    // config_version`/`provider_activation_generation`
+                    // are fixed at `(0, 0)` today (stage 10a's own
+                    // measurement) and would otherwise make this fix
+                    // invisible until RFC 096-B2/M2b makes them real.
+                    // `ON UPDATE CASCADE` was considered and rejected:
+                    // the copied triple exists so a ceremony cannot
+                    // outlive the authority it was issued under, and
+                    // cascading would let it silently follow a changed
+                    // one instead of being invalidated by it.
+                    crate::repos::federation_webauthn_ceremony::delete_by_pending_id_within_tx(
+                        tx,
+                        existing.id,
+                    )?;
+                    let aad = crate::repos::federation_mfa_pending::build_aad(
+                        existing.id,
+                        provider_id,
+                        provider_config_version,
+                        provider_activation_generation,
+                        user_id,
+                    );
+                    let continuation_sealed = crate::crypto::seal(db_for_tx.key(), &[], &aad)?;
+                    let refreshed =
+                        crate::repos::federation_mfa_pending::refresh_for_restart_within_tx(
+                            tx,
+                            existing.id,
+                            provider_id,
+                            provider_config_version,
+                            provider_activation_generation,
+                            user_id,
+                            &continuation_sealed,
+                            next_path.as_deref(),
+                            browser_binding_sha256,
+                            csrf_binding_sha256,
+                        )?;
+                    if !refreshed {
+                        return Err(StoreError::Conflict);
+                    }
+                    return Ok(existing.id);
+                }
+                // Expired by wall clock, still `pending` in the database:
+                // dead, not reusable, and must not go on blocking the fresh
+                // row below (migration 0048's own partial index would
+                // refuse a second `pending`/`exhausted` row for this
+                // `user_id` otherwise).
+                let invalidated =
+                    crate::repos::federation_mfa_pending::invalidate_within_tx(tx, existing.id)?;
+                if !invalidated {
+                    return Err(StoreError::Conflict);
+                }
+            }
+
+            let id = sui_id_shared::ids::FederationMfaPendingId::new();
+            let aad = crate::repos::federation_mfa_pending::build_aad(
+                id,
+                provider_id,
+                provider_config_version,
+                provider_activation_generation,
+                user_id,
+            );
+            let continuation_sealed = crate::crypto::seal(db_for_tx.key(), &[], &aad)?;
+            let pending = crate::models::FederationMfaPendingRow {
+                id,
+                provider_id,
+                provider_config_version,
+                provider_activation_generation,
+                user_id,
+                continuation_sealed: Some(continuation_sealed),
+                next_path,
+                browser_binding_sha256,
+                csrf_binding_sha256,
+                failure_count: 0,
+                status: crate::models::FederationMfaPendingStatus::Pending,
+                created_at: now,
+                expires_at: now
+                    + chrono::Duration::seconds(
+                        crate::repos::federation_mfa_pending::PENDING_LIFETIME_SECS,
+                    ),
+            };
+            crate::repos::federation_mfa_pending::insert_within_tx(tx, &pending)?;
+            Ok(id)
+        },
+    )
+    .await
 }
 
 // ── F03 — submit/complete federated local MFA (Protocol) ───────────────
