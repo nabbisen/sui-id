@@ -243,13 +243,29 @@ it.
   case the fix round measured — a link missing without a cascade propagates a
   raw store error instead of a clean `Invalidated`.
 
-**Stage 11 is dispatched** —
+**Stage 11 landed `749571b`**, first try — Level B, 24/24 locally, CI run `38683652735`, 27 jobs, 0 skipped —
 [`stage11-the-third-method-2026-10-15.md`](stage11-the-third-method-2026-10-15.md):
 F06, the `ValidWebAuthn` candidate, the verifier's WebAuthn path and F03's
 WebAuthn branch, as one stage. The plan's own line said F06 alone; the drift
 was the architect's and is corrected there. F06 by itself would write a
 ceremony nothing reads, and stage 10's split bought a decision that here is
-already made.
+already made. **Reviewing it turned up a defect that is not its own**: RFC 096
+`:756` says "A restart preserves count/status; it grants no reset", and the
+implementation grants one — no `UNIQUE` on `federation_mfa_pending.user_id`,
+so a restart at `failure_count = 4` makes a second row at 0. Unreachable until
+stage 12, and
+[`stage11b-a-restart-grants-no-reset-2026-10-15.md`](stage11b-a-restart-grants-no-reset-2026-10-15.md)
+is dispatched to close it first.
+
+### Dispatched and open
+
+- [`stage11b-a-restart-grants-no-reset-2026-10-15.md`](stage11b-a-restart-grants-no-reset-2026-10-15.md)
+  — **the open work.** The five-attempt cap on a federated second factor is
+  bypassable by restarting the upstream sign-in, once stage 12 makes the path
+  reachable. `:756` fixes the requirement and leaves the mechanism open; three
+  shapes are offered, and the exhausted-row case is the one to be careful with.
+  Two of us missed this: stage 10b's package answered that the RFC states no
+  cross-row limit, and the architect accepted it without checking.
 
 ### Returned, 2026-10-15
 
