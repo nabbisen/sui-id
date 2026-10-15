@@ -243,7 +243,13 @@ it.
   case the fix round measured — a link missing without a cascade propagates a
   raw store error instead of a clean `Invalidated`.
 
-**Nothing is dispatched.** Stage 11 (F06 and the WebAuthn branch) is next.
+**Stage 11 is dispatched** —
+[`stage11-the-third-method-2026-10-15.md`](stage11-the-third-method-2026-10-15.md):
+F06, the `ValidWebAuthn` candidate, the verifier's WebAuthn path and F03's
+WebAuthn branch, as one stage. The plan's own line said F06 alone; the drift
+was the architect's and is corrected there. F06 by itself would write a
+ceremony nothing reads, and stage 10's split bought a decision that here is
+already made.
 
 ### Returned, 2026-10-15
 
