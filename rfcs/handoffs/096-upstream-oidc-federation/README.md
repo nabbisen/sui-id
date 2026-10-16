@@ -277,11 +277,17 @@ Its review found two of the three checks the dispatch called misplaced were
 **absent**: the existing-link, no-MFA path never completed its login attempt
 at all, so those rows sat in `exchanging` until the 24-hour purge. Bookkeeping
 rather than an authentication weakness — `claim()` has held one-time-ness
-since stage 6c — but a shipped bug, now fixed. **The open dispatch is the
-second CHANGELOG catch-up**
-([`changelog-catch-up-2-2026-10-16.md`](changelog-catch-up-2-2026-10-16.md)):
-four stages have landed with no entries, and from stage 12 onward each
-dispatch carries its own.
+since stage 6c — but a shipped bug, now fixed. **Stage 12 is dispatched** —
+[`stage12-remove-the-two-legacy-paths-2026-10-17.md`](stage12-remove-the-two-legacy-paths-2026-10-17.md),
+**cycle D's gate**: the two legacy paths removed, the two discovery items
+wired, and the federated second factor finally given a caller. One item inside
+it waits on `@nabbisen`
+([`federated-lockout-request-2026-10-17.md`](federated-lockout-request-2026-10-17.md))
+and is carved out so nothing else is blocked. The second CHANGELOG catch-up
+landed `6cb866b`
+([`changelog-catch-up-2-2026-10-16.md`](changelog-catch-up-2-2026-10-16.md));
+from stage 12 onward each dispatch carries its own entry, which is the half of
+that fix that stops a third catch-up.
 The gap below is closed: `@nabbisen` accepted the RFC 094 F01 class amendment
 on 2026-10-15, RFC 094 round-tripped through `proposed/` and back in one pass
 (`a9198f4`, `93b4b3e`), and F01 is now Class A folded into RFC 102's L04 in the
