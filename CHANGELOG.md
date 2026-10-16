@@ -21,6 +21,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   email the same way it denies on an unverified one (RFC 096-B1 stage 7,
   F04).
 
+- **A restart of the upstream federated sign-in could reset the
+  five-attempt cap on a federated local second factor.** *Severity: Low —
+  no released version was exploitable.* The federated MFA continuation
+  table had no constraint tying it to one row per user: restarting the
+  upstream sign-in while a continuation sat at `failure_count = 4` (or was
+  already exhausted) produced a fresh row at `0`, giving an attacker who
+  holds the upstream identity but not the local second factor a new
+  five-guess budget on every restart. Not exploitable in any released
+  version — nothing can yet submit a proof against the row at all; the
+  verifier and its promotion path still have no caller (see *Changed*,
+  below). Fixed by a schema constraint (migration `0048`) that allows at
+  most one active (pending or exhausted) continuation per user: a restart
+  now reuses the live one, preserving its count, and an exhausted one
+  stays exhausted rather than restarting at zero. **Upgrading runs a
+  one-time cleanup that deletes rows**: if a database already holds more
+  than one active continuation for the same user — possible only by
+  restarting the upstream sign-in before this fix — the migration keeps
+  the most restrictive one (exhausted outranks pending, then the higher
+  failure count) and deletes the rest (RFC 096-B1 stage 11b).
+
+- **The provider-enabled and same-link checks for a federated sign-in with
+  no local second factor were read once, before the upstream round trip,
+  and never re-checked before the session committed.** *Severity: Low.*
+  An administrator who disabled a federation provider, or removed a
+  user's link to it, while that exact user's sign-in was already in
+  flight could not stop it: the session still committed on whatever
+  `provider.enabled`/link state was true minutes earlier, at the start of
+  the OIDC exchange, rather than at commit time. **Unlike the item above,
+  this one is present in released versions**, `0.80.0` included — the
+  window is one OIDC round trip, and it delays a revocation rather than
+  granting anything a revocation had not already allowed. Both are now re-read,
+  durably, inside the same transaction that commits the session — atomic
+  with it, not stale (RFC 096-B1 stage 6d).
+
 ### Added
 
 - **A new federated identity can provision itself automatically on first
@@ -52,10 +86,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that checks a federated MFA submission's browser/CSRF binding now exist
   (RFC 096-B1 stages 8 and 10a), alongside the continuation row the item
   above already writes on every federated sign-in that needs a second
-  factor. Nothing reads that row yet, the verifier has no caller, and no
+  factor. **Promotion through all three local second-factor methods —
+  TOTP, a recovery code, and now a WebAuthn passkey — is also built** (RFC
+  096-B1 stages 10b and 11): a correct proof completes the continuation
+  and opens a session, a wrong one counts toward the five-attempt cap, and
+  a WebAuthn challenge can be issued and consumed. Nothing reads any of
+  this yet, the verifier and its promotion path have no caller, and no
   sign-in can complete a federated second factor — that is later work. An
-  operator who notices `federation_mfa_pending` filling up is seeing
-  exactly this: rows written, nothing yet consuming them.
+  operator who notices `federation_mfa_pending`/
+  `federation_webauthn_ceremony` filling up is seeing exactly this: rows
+  written, nothing yet consuming them.
+
+### Fixed
+
+- **A federated sign-in through an existing link with no local second
+  factor never marked its login attempt complete.** Those rows sat in
+  `exchanging` until the 24-hour purge collected them, rather than moving
+  to `completed` the moment the session was issued — the same bug RFC
+  096-B1 stage 9 had already fixed for the branch that *does* need a
+  second factor, left standing on the one that does not. **This was
+  bookkeeping, not an authentication weakness**: one-time-ness has been
+  enforced by the attempt's own single-use claim since RFC 096-B1 stage
+  6c, regardless of whether the row was ever marked `completed`
+  afterward. The attempt now completes atomically with the session (RFC
+  096-B1 stage 6d).
 
 ## [0.80.0] — 2026-10-13
 
