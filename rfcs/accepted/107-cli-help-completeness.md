@@ -1,6 +1,9 @@
 # RFC 107 — `sui-id --help` names every subcommand the binary accepts
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-10-18
+**Approved by.** `@nabbisen`, 2026-10-18: *"RFC 107 is accepted."*
+**Independent design review.** [`design-review-2026-10-14.md`](../handoffs/107-cli-help-completeness/design-review-2026-10-14.md) — by the implementation role, under RFC 139's dispatch §6. **Genuinely independent**, unlike most reviews in this repository: the architect authored RFC 107 and did not review it. The review confirmed the problem by reading source rather than repeating the handoff, found one factual error in the Summary (which named `setup` as missing when `cli.rs:680` carries it), and required its correction before acceptance. **That correction landed on 2026-10-15** and is marked in the Summary below, so the review's only pre-acceptance condition is discharged. Its §5 records one adjacent finding held outside this repository; the review states it is not a blocker for accepting RFC 107.
 **Security review.** Required
 **Design prerequisites.** None.
 **Implementation prerequisites.** None.
@@ -24,9 +27,9 @@ to correspond to an existing RFC number, and leaves to each project the
 question of what an RFC covers — so operational and repair work gets one here,
 on the same terms as a feature.
 
-The RFC is **Proposed**: the design below has not been approved. The
-specification, its evidence requirements and its history are in the handoff,
-unchanged by the move.
+The RFC is **Accepted** as of 2026-10-18, so it is implementation-eligible
+under RFC 000 `:49-50`. The specification, its evidence requirements and its
+history are in the handoff, unchanged by the move.
 
 ## Decision
 

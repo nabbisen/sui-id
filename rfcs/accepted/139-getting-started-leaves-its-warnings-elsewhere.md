@@ -143,7 +143,7 @@ the two images are its first instance.
 ## Non-goals
 
 - **`sui-id --help` advertising five flags that stop the program starting.**
-  Real, and already [RFC 107](../proposed/107-cli-help-completeness.md), whose `:16`
+  Real, and already [RFC 107](../accepted/107-cli-help-completeness.md), whose `:16`
   names the same mechanism the review rediscovered — `find_subcommand` treats
   only `--config`, `--to` and `--from` as value-taking. It is a code change and
   it is that RFC's. This one does not touch `crates/`.

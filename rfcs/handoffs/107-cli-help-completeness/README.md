@@ -1,18 +1,32 @@
 # `sui-id --help` names every subcommand the binary accepts
 
-**Authorized by.** [`ROADMAP.md`](../../../ROADMAP.md) §Non-RFC work packages. Owner
-authorization, 2026-09-16.
-**Implementer.** Mid-capability model. **Baseline.** `9f6acdb` or later.
+**Authorized by.** [RFC 107](../../accepted/107-cli-help-completeness.md),
+**Accepted 2026-10-18**. That supersedes the 2026-09-16 authorization under
+`ROADMAP.md` §Non-RFC work packages, which is the line this handoff was
+written with and which is now historical record.
+**Independent design review.** [`design-review-2026-10-14.md`](design-review-2026-10-14.md).
+**Implementer.** Mid-capability model. **Baseline.** Read the tip with
+`git log -1`; `9f6acdb` is the measurement point below, not the baseline to
+build on.
 
 ## The defect
 
 Measured by reading at `9f6acdb`. `print_help` (`crates/sui-id/src/cli.rs:508`)
-omits three subcommands:
-- `setup`, dispatched in `crates/sui-id/src/main.rs`;
+omits **two** subactions:
 - `admin rotate-metrics-token`;
 - `admin issue-registration-token`.
 
-The last two are dispatched in `run_admin_subcommand`. That dispatcher's own
+> **Corrected 2026-10-18.** This list said *three* and began with `setup`.
+> **`setup` is not omitted** — `cli.rs:680` documents it, and so did `9f6acdb`,
+> the commit this handoff names as its own measurement point. The error was
+> found by the independent design review
+> ([`design-review-2026-10-14.md`](design-review-2026-10-14.md) §1), which
+> checked the claim against both trees instead of taking it, and required the
+> correction before acceptance. RFC 107's own Summary was corrected on
+> 2026-10-15; **this file was missed and is corrected now.** Do not add a
+> `setup` entry: it is already there.
+
+Both are dispatched in `run_admin_subcommand`. That dispatcher's own
 error message lists the admin subactions a third time. Three hand-written lists
 drifted apart.
 
@@ -30,8 +44,9 @@ fourth hand-kept list of the same flags.
   another names the admin subactions. The dispatchers' "unknown …" messages build
   from these consts. So does a test.
 - **Help is complete.** `print_help` documents every entry, with usage and a
-  one-line description, in the existing style. Add the three missing ones. Take
-  their flags from each subcommand's own argument parsing, not from memory.
+  one-line description, in the existing style. Add the **two** missing ones —
+  see the correction above. Take their flags from each subcommand's own
+  argument parsing, not from memory.
 - **Binding test.** Every name in each const appears in the help text. Every
   dispatched arm is in its const, so an arm with no entry fails to compile or
   fails the test; choose the mechanism and say why.

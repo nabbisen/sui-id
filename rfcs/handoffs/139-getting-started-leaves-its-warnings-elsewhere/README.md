@@ -5,7 +5,7 @@
 2026-10-14.
 
 Documentation only. No code, no schema, no crate's public surface. The one code
-defect the review found belongs to [RFC 107](../../proposed/107-cli-help-completeness.md)
+defect the review found belongs to [RFC 107](../../accepted/107-cli-help-completeness.md)
 and is a non-goal here.
 
 **Updated 2026-10-14.** One dispatch open.
