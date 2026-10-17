@@ -16,7 +16,9 @@
 //! named `sui_id_fed_state`, it clears.
 
 use super::common::*;
-use super::federation_fail_closed::{add_federation_provider_config, linked_user, mock_upstream};
+use super::federation_fail_closed::{
+    add_federation_provider_config, linked_user, mock_upstream, seal_test_client_secret,
+};
 use axum::body::Body;
 use axum::http::{Method, Request, StatusCode, header};
 use sui_id::build_router;
@@ -161,18 +163,22 @@ fn assert_both_federation_cookies_expired(headers: &axum::http::HeaderMap) {
 /// provider row without the link, since an existing link is a different
 /// decision entirely (`ExistingLink`, not `LinkRequired`).
 async fn seed_provider_row_only(state: &sui_id::AppState, issuer: &str) {
+    let sealed_secret = seal_test_client_secret(state);
     state
         .db
         .with_conn({
             let issuer = issuer.to_owned();
+            let id = uuid::Uuid::new_v4().to_string();
             move |c| {
-                Ok(c.execute_batch(&format!(
+                c.execute(
                     "INSERT INTO federation_provider \
-                     (id, slug, display_name, issuer, client_id, enabled, created_at, updated_at) \
-                     VALUES ('{}', 'up', 'Up', '{issuer}', 'client', 1, \
+                     (id, slug, display_name, issuer, client_id, client_secret_enc, \
+                      enabled, created_at, updated_at) \
+                     VALUES (?1, 'up', 'Up', ?2, 'client', ?3, 1, \
                      '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
-                    uuid::Uuid::new_v4()
-                ))?)
+                    rusqlite::params![id, issuer, sealed_secret],
+                )?;
+                Ok(())
             }
         })
         .await

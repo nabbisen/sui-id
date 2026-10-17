@@ -118,6 +118,11 @@ pub enum DeniedDetail {
     IdentityClaimsInvalid,
     TimeClaimsInvalid,
     OptionalClaimsInvalid,
+    /// RFC 096-B1 stage 12c: the upstream's `token_endpoint_auth_methods_
+    /// supported` does not contain this provider's own configured
+    /// client-authentication method (RFC 096 `:570`, cross-checking
+    /// `:320`'s own `client_secret_basic`/`none` profile).
+    TokenEndpointAuthMethodUnsupported,
     IdentityResolutionDbError,
     LinkUpsertDbError,
     UnverifiedEmail,
@@ -155,6 +160,7 @@ impl DeniedDetail {
             Self::IdentityClaimsInvalid => "identity_claims_invalid",
             Self::TimeClaimsInvalid => "time_claims_invalid",
             Self::OptionalClaimsInvalid => "optional_claims_invalid",
+            Self::TokenEndpointAuthMethodUnsupported => "token_endpoint_auth_method_unsupported",
             Self::IdentityResolutionDbError => "identity_resolution_db_error",
             Self::LinkUpsertDbError => "link_upsert_db_error",
             Self::UnverifiedEmail => "unverified_email",

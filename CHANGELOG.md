@@ -166,6 +166,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   afterward. The attempt now completes atomically with the session (RFC
   096-B1 stage 6d).
 
+- **Federation's token exchange authenticated a confidential client with
+  `client_secret_post` (the secret in the form body), which RFC 096's own
+  profile (`:320`) excludes — only `client_secret_basic` or `none` are in
+  it.** *Present since federation shipped, `0.80.0` included* — confirmed
+  unchanged at `ee57b76:790`, before any RFC 096-B1 stage touched this
+  file. A conformant upstream IdP advertising only `client_secret_basic`
+  (RFC 6749 `:2.3.1` requires every confidential client to support it; the
+  profile does not admit the alternative this handler used) would refuse
+  the token request outright — **federation could not complete a sign-in
+  against such a provider at all**, not a weakness in what succeeded, a
+  failure of what should have. Fixed: the secret now moves to an
+  `Authorization: Basic` header, built with `client_id`/`client_secret`
+  each `application/x-www-form-urlencoded`-encoded before the base64 step,
+  as RFC 6749 `:2.3.1` requires (not the raw-byte encoding `reqwest`'s own
+  `basic_auth` would have produced, which breaks for a secret containing a
+  reserved character) — tested against exactly that case. The matching
+  discovery cross-check (RFC 096 `:570`, built by RFC 096-A stage 8, wired
+  by RFC 096-B1 stage 12a and immediately found to refuse everything for
+  this reason) is live for the first time (RFC 096-B1 stage 12c).
+
 ## [0.80.0] — 2026-10-13
 
 **Federation stops trusting the transport.** Until this release the federated

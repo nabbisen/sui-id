@@ -4,21 +4,15 @@
 //! against the real router rather than asserted at the unit level alone.
 
 use super::common::*;
-use super::federation_fail_closed::{add_federation_provider_config, linked_user, mock_upstream};
+use super::federation_fail_closed::{
+    add_federation_provider_config, linked_user, mock_upstream, seal_test_client_secret,
+};
 use axum::body::Body;
 use axum::http::{Method, Request, header};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use sui_id::{AppState, build_router};
 use tower::ServiceExt;
-
-async fn exec(state: &AppState, sql: String) {
-    state
-        .db
-        .with_conn(move |c| Ok(c.execute_batch(&sql)?))
-        .await
-        .expect("exec");
-}
 
 async fn base_state() -> AppState {
     let mut state = test_app();
@@ -144,18 +138,24 @@ use sha2::Digest;
 /// no-side-effect test needs, duplicated from the same idiom
 /// `tests/e2e/r096_b1_stage5.rs` already established for exactly this.
 async fn seed_unlinked_provider(state: &AppState, issuer: &str) {
-    exec(
-        state,
-        format!(
-            "INSERT INTO federation_provider \
-             (id, slug, display_name, issuer, client_id, provision_mode, enabled, \
-              created_at, updated_at) \
-             VALUES ('{}', 'up', 'Up', '{issuer}', 'client', 'link_only', 1, \
-             '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
-            uuid::Uuid::new_v4()
-        ),
-    )
-    .await;
+    let sealed_secret = seal_test_client_secret(state);
+    let id = uuid::Uuid::new_v4().to_string();
+    let issuer = issuer.to_owned();
+    state
+        .db
+        .with_conn(move |c| {
+            c.execute(
+                "INSERT INTO federation_provider \
+                 (id, slug, display_name, issuer, client_id, client_secret_enc, \
+                  provision_mode, enabled, created_at, updated_at) \
+                 VALUES (?1, 'up', 'Up', ?2, 'client', ?3, 'link_only', 1, \
+                 '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+                rusqlite::params![id, issuer, sealed_secret],
+            )?;
+            Ok(())
+        })
+        .await
+        .expect("seed unlinked provider");
 }
 
 async fn row_counts(state: &AppState) -> (i64, i64, i64) {

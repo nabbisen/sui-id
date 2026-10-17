@@ -263,6 +263,29 @@ fn hex_lower(bytes: &[u8; 32]) -> String {
     out
 }
 
+/// RFC 096-B1 stage 12c: the `Authorization` header value for
+/// `client_secret_basic` (RFC 096 `:320`), built by hand rather than via
+/// `reqwest::RequestBuilder::basic_auth` -- that method base64-encodes the
+/// raw `username:password` bytes, which is plain HTTP Basic auth (RFC
+/// 7617), not what RFC 6749 `:2.3.1` asks for. The OAuth rule is stricter:
+/// *"the client identifier and client secret... encoded using the
+/// `application/x-www-form-urlencoded` algorithm"* **before** the colon
+/// join and the base64 step -- the encoding most implementations skip,
+/// and the reason a `client_id`/`client_secret` holding a reserved
+/// character (`:`, `&`, `%`, a space) is the test that actually catches a
+/// wrong implementation: skipping this step still *looks* correct for any
+/// value with none of those characters.
+fn basic_auth_header(client_id: &str, client_secret: &str) -> String {
+    use base64ct::Encoding;
+    let encode =
+        |s: &str| -> String { url::form_urlencoded::byte_serialize(s.as_bytes()).collect() };
+    let credentials = format!("{}:{}", encode(client_id), encode(client_secret));
+    format!(
+        "Basic {}",
+        base64ct::Base64::encode_string(credentials.as_bytes())
+    )
+}
+
 /// RFC 096 `:580-581`, `:305-306`: the provider's current, durably checked
 /// `config_version`/`activation_generation` pair.
 ///
@@ -811,52 +834,70 @@ pub async fn federated_callback(
         }
     };
 
-    // RFC 096-B1 stage 12a, §3: the configured-method cross-check RFC 096
-    // `:546` asks for (*"Contains the configured method; `none` required
-    // for public clients"*) -- available since 096-A stage 8 as
-    // `ValidatedDiscovery::supports_token_endpoint_auth_method`, and
-    // **deliberately left unwired this round, a finding rather than an
-    // implementation.** This handler's token request below sends a
-    // confidential client's secret exactly one way -- in the form body,
-    // `client_secret_post` -- never as an `Authorization` header. Every
-    // e2e fixture in this suite (and, measured by what they were modelled
-    // on, plausibly many real IdPs) advertises only `client_secret_basic`
-    // in `token_endpoint_auth_methods_supported`. Wiring the check as
-    // written refuses every one of them: not a test-fixture gap to patch
-    // around, since the same mismatch would refuse a real confidential
-    // provider configured the same way. RFC 6749 `:2.3.1` requires `client_
-    // secret_basic` support from every such client and treats
-    // `client_secret_post` as the optional alternative -- the reverse of
-    // what this handler does -- so the candidates are: switch this
-    // request to `.basic_auth(...)`, support both and choose from what
-    // discovery advertises, or make the method provider-configurable.
-    // Each is a real change to how federation authenticates at the token
-    // endpoint, not a flag this stage's own authorization covers; left for
-    // the architect's call, named here rather than guessed at. `discovery.
-    // id_token_algs_intersection` (below, unchanged) is `:547`'s own
-    // cross-check and needed no such decision -- confirmed already wired,
-    // by stage 4, before this stage touched anything.
+    // RFC 096-B1 stage 12c: the configured-method cross-check RFC 096
+    // `:570` asks for (*"discovery's `token_endpoint_auth_methods_supported`
+    // must contain the configured method"*). `:320`'s own profile table
+    // allows exactly `client_secret_basic` or `none` -- `client_secret_post`
+    // is explicitly excluded. Stage 12a built this check, watched it refuse
+    // every provider this handler could reach, and found why: the handler
+    // sent a confidential client's secret in the form body
+    // (`client_secret_post`), the one method `:320` excludes. Fixed here --
+    // see `basic_auth_header` below -- so the configured method is now
+    // always one `:320` allows.
+    let configured_auth_method = if client_secret.is_some() {
+        "client_secret_basic"
+    } else {
+        "none"
+    };
+    if !discovery.supports_token_endpoint_auth_method(configured_auth_method) {
+        tracing::warn!(
+            slug = %provider.slug,
+            method = configured_auth_method,
+            "federation: token endpoint does not advertise the configured auth method"
+        );
+        terminalize_and_audit(
+            &app.db,
+            claimed.id,
+            TerminalFailureReason::Denied(DeniedDetail::TokenEndpointAuthMethodUnsupported),
+            app.clock.now(),
+            provider.id,
+            None,
+        )
+        .await;
+        return Ok(terminal(
+            jar,
+            Redirect::to("/admin/login?fed_error=token_endpoint_auth_method"),
+        ));
+    }
 
     // Exchange the code for tokens at the upstream token_endpoint.
     let redirect_uri = format!(
         "{}/auth/federated/callback",
         app.config.server.issuer.trim_end_matches('/')
     );
-    let mut form_params = vec![
+    let form_params = vec![
         ("grant_type", "authorization_code".to_owned()),
         ("code", code),
         ("redirect_uri", redirect_uri),
         ("client_id", provider.client_id.clone()),
         ("code_verifier", pkce_verifier),
     ];
-    if let Some(ref secret) = client_secret {
-        form_params.push(("client_secret", secret.clone()));
-    }
 
-    let token_resp = app
+    // RFC 096-B1 stage 12c: `client_secret_basic` for a confidential
+    // client, nothing for a public one (`:320`) -- the secret moves from
+    // the form body to the `Authorization` header, never both.
+    let mut request_builder = app
         .http_client
         .post(discovery.token_endpoint())
-        .form(&form_params)
+        .form(&form_params);
+    if let Some(ref secret) = client_secret {
+        request_builder = request_builder.header(
+            reqwest::header::AUTHORIZATION,
+            basic_auth_header(&provider.client_id, secret),
+        );
+    }
+
+    let token_resp = request_builder
         .send()
         .await
         .and_then(|r| r.error_for_status());
@@ -1689,23 +1730,20 @@ async fn complete_federated_signin(
 // distinguished from a known one.
 
 /// Every distinct `fed_error` value this module's handlers can produce, as
-/// measured directly against this file (not assumed): 25 values, 18 of
+/// measured directly against this file (not assumed): 26 values, 19 of
 /// them collapsing into [`Self::Retry`] below. `claim_fed_error`'s own six
 /// named `StoreError` arms plus its wildcard account for seven of the
-/// eighteen; the rest are this file's static `Redirect::to(...)` literals.
+/// nineteen; the rest are this file's static `Redirect::to(...)` literals.
 ///
 /// RFC 096-B1 stage 12a recounted this from the 28/21 the comment
 /// previously stated: `userinfo`, `no_id_token`, and `no_sub` are gone with
-/// the legacy identity-mapping block that produced them (confirmed by grep,
-/// not assumed -- none of the three appears anywhere in this file any
-/// longer). §3's own cross-check (`token_endpoint_auth_method`) was
-/// written, found to refuse every real and test provider this handler can
-/// actually reach (its own doc comment above explains why), and backed out
-/// rather than shipped disabled-by-omission -- it never became a producible
-/// value at all. `attempt_not_found`, `nonce_mismatch`, `state_mismatch`,
-/// and `token_parse` all still occur, each now from exactly one producer
-/// where stage 12a's own changes removed what had been a second,
-/// redundant one.
+/// the legacy identity-mapping block that produced them. Stage 12a also
+/// wrote `token_endpoint_auth_method`'s check and backed it out -- fixing
+/// *why* it refused everything (`:320`'s profile, not a test-fixture gap)
+/// is stage 12c's own job, which is what makes `token_endpoint_auth_method`
+/// a producible value for the first time. `attempt_not_found`, `nonce_
+/// mismatch`, `state_mismatch`, and `token_parse` all still occur, each
+/// from exactly one producer since stage 12a's own removals.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FedErrorBucket {
     /// Every transport, token, signature, claims, or validation failure
@@ -1715,12 +1753,12 @@ enum FedErrorBucket {
     /// `binding_mismatch`, `attempt_claim_failed`, `token_exchange`,
     /// `token_parse`, `missing_id_token`, `signature_invalid`,
     /// `nonce_mismatch`, `identity_claims_invalid`, `time_claims_invalid`,
-    /// `optional_claims_invalid`, and anything not in the other three
-    /// buckets. None of these distinguish one local account from another
-    /// -- each is about this one request's own protocol state, not about
-    /// whether some other upstream identity would have succeeded -- so
-    /// lumping them together costs nothing and keeps the message set
-    /// small.
+    /// `optional_claims_invalid`, `token_endpoint_auth_method`, and
+    /// anything not in the other three buckets. None of these distinguish
+    /// one local account from another -- each is about this one request's
+    /// own protocol state, not about whether some other upstream identity
+    /// would have succeeded -- so lumping them together costs nothing and
+    /// keeps the message set small.
     Retry,
     /// A provider- or account-level issue only an administrator can act
     /// on: `disabled` (provider disabled), `config_drift` (startup config
@@ -1798,5 +1836,6 @@ fn emit_audit_soon(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 #[path = "federation/tests.rs"]
 mod tests;

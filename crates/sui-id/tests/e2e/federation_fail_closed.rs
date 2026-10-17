@@ -188,7 +188,32 @@ async fn scalar_text(state: &AppState, sql: String) -> String {
         .expect("scalar_text")
 }
 
-/// A local user linked to the mock upstream's `SUB`.
+/// RFC 096-B1 stage 12c fix round: every federation fixture used to be a
+/// public client while its own discovery document advertised only
+/// `client_secret_basic` -- a pairing RFC 096 `:570` forbids ("`none`
+/// required for public clients"). Most fixtures become confidential here,
+/// sealing this value into `client_secret_enc` the same way
+/// `federation_provider::create` does in production (`AAD`, `crypto::seal`).
+/// Carries a `:` deliberately -- the exact reserved character
+/// `basic_auth_header`'s own unit test already proves is handled, now
+/// also exercised end-to-end against a real mock token endpoint.
+pub(super) const TEST_CLIENT_SECRET: &str = "fed-fixture-secret:with-a-colon";
+
+/// Seals [`TEST_CLIENT_SECRET`] the way `federation_provider::create`
+/// seals a real one, so a raw `INSERT` that binds the result decrypts
+/// through the production `decrypt_secret` path unchanged.
+pub(super) fn seal_test_client_secret(state: &AppState) -> Vec<u8> {
+    sui_id_store::crypto::seal(
+        state.db.key(),
+        TEST_CLIENT_SECRET.as_bytes(),
+        sui_id_store::repos::federation_provider::AAD,
+    )
+    .expect("seal test client secret")
+}
+
+/// A local user linked to the mock upstream's `SUB`. The provider is
+/// confidential (`client_secret_enc` set) -- see [`TEST_CLIENT_SECRET`]'s
+/// own doc for why.
 pub(super) async fn linked_user(state: &AppState, issuer: &str) -> UserId {
     let now = chrono::Utc::now();
     let uid = UserId::new();
@@ -219,13 +244,30 @@ pub(super) async fn linked_user(state: &AppState, issuer: &str) -> UserId {
     .await
     .expect("create user");
     let provider = uuid::Uuid::new_v4();
+    let sealed_secret = seal_test_client_secret(state);
+    {
+        let issuer = issuer.to_owned();
+        let provider_str = provider.to_string();
+        state
+            .db
+            .with_conn(move |c| {
+                c.execute(
+                    "INSERT INTO federation_provider \
+                     (id, slug, display_name, issuer, client_id, client_secret_enc, \
+                      enabled, created_at, updated_at) \
+                     VALUES (?1, 'up', 'Up', ?2, 'client', ?3, 1, \
+                     '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+                    rusqlite::params![provider_str, issuer, sealed_secret],
+                )?;
+                Ok(())
+            })
+            .await
+            .expect("insert confidential provider");
+    }
     exec(
         state,
         format!(
-            "INSERT INTO federation_provider (id, slug, display_name, issuer, client_id, \
-             enabled, created_at, updated_at) VALUES ('{provider}', 'up', 'Up', '{issuer}', \
-             'client', 1, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'); \
-             INSERT INTO federation_link (user_id, provider_id, upstream_sub, linked_at, \
+            "INSERT INTO federation_link (user_id, provider_id, upstream_sub, linked_at, \
              last_seen_at) VALUES ('{uid}', '{provider}', '{SUB}', '2026-01-01T00:00:00Z', \
              '2026-01-01T00:00:00Z');"
         ),

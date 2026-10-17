@@ -308,7 +308,14 @@ async fn a_second_configured_origin_is_accepted_end_to_end() {
                         "response_types_supported": ["code"],
                         "code_challenge_methods_supported": ["S256"],
                         "authorization_response_iss_parameter_supported": true,
-                        "token_endpoint_auth_methods_supported": ["client_secret_basic"],
+                        // RFC 096-B1 stage 12c fix round: this fixture's
+                        // provider stays a public client (no
+                        // `client_secret_enc`) deliberately -- RFC 096
+                        // `:570` requires "none" here because that is what
+                        // `:320` makes a public client's configured
+                        // method, not because the token endpoint stopped
+                        // supporting confidential clients too.
+                        "token_endpoint_auth_methods_supported": ["client_secret_basic", "none"],
                         "id_token_signing_alg_values_supported": ["RS256"],
                         "subject_types_supported": ["public"],
                     }))

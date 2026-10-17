@@ -13,7 +13,9 @@
 //! (`:707-708`) — that the denial genuinely still fires under that mode.
 
 use super::common::*;
-use super::federation_fail_closed::{add_federation_provider_config, nonce_slot};
+use super::federation_fail_closed::{
+    add_federation_provider_config, nonce_slot, seal_test_client_secret,
+};
 use axum::body::Body;
 use axum::http::{Method, Request, header};
 use base64ct::{Base64, Encoding};
@@ -60,14 +62,6 @@ fn claims(issuer: &str, nonce: &str, sub: &str, email: &str) -> serde_json::Valu
     })
 }
 
-async fn exec(state: &AppState, sql: String) {
-    state
-        .db
-        .with_conn(move |c| Ok(c.execute_batch(&sql)?))
-        .await
-        .expect("exec");
-}
-
 async fn seed_unlinked_local_user_with_email(state: &AppState, email: &str) {
     let now = chrono::Utc::now();
     sui_id_store::repos::users::create(
@@ -104,18 +98,25 @@ async fn seed_unlinked_local_user_with_email(state: &AppState, email: &str) {
 /// table). Deliberately not `linked_user`: that helper always creates a
 /// link, and these tests need the identity to stay *unlinked*.
 async fn seed_provider_row(state: &AppState, issuer: &str, provision_mode: &str) {
-    exec(
-        state,
-        format!(
-            "INSERT INTO federation_provider \
-             (id, slug, display_name, issuer, client_id, provision_mode, enabled, \
-              created_at, updated_at) \
-             VALUES ('{}', 'up', 'Up', '{issuer}', 'client', '{provision_mode}', 1, \
-             '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
-            uuid::Uuid::new_v4()
-        ),
-    )
-    .await;
+    let sealed_secret = seal_test_client_secret(state);
+    let id = uuid::Uuid::new_v4().to_string();
+    let issuer = issuer.to_owned();
+    let provision_mode = provision_mode.to_owned();
+    state
+        .db
+        .with_conn(move |c| {
+            c.execute(
+                "INSERT INTO federation_provider \
+                 (id, slug, display_name, issuer, client_id, client_secret_enc, \
+                  provision_mode, enabled, created_at, updated_at) \
+                 VALUES (?1, 'up', 'Up', ?2, 'client', ?3, ?4, 1, \
+                 '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+                rusqlite::params![id, issuer, sealed_secret, provision_mode],
+            )?;
+            Ok(())
+        })
+        .await
+        .expect("seed provider row");
 }
 
 struct Started {
