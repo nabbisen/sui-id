@@ -277,8 +277,19 @@ Its review found two of the three checks the dispatch called misplaced were
 **absent**: the existing-link, no-MFA path never completed its login attempt
 at all, so those rows sat in `exchanging` until the 24-hour purge. Bookkeeping
 rather than an authentication weakness — `claim()` has held one-time-ness
-since stage 6c — but a shipped bug, now fixed. **Stage 12a landed `57b4ead`**, first try — and its one backed-out check
-turned into **12c**, now the open dispatch
+since stage 6c — but a shipped bug, now fixed. **Stage 12c is in its fix round** —
+[`stage12c-fix-the-fixtures-are-public-clients-2026-10-17.md`](stage12c-fix-the-fixtures-are-public-clients-2026-10-17.md).
+Its code is right; what is wrong is the fixtures. Every federation fixture is
+a public client with no `client_secret_enc`, while its discovery advertises
+only `client_secret_basic` — the pairing RFC 096 `:570` forbids, since `none`
+is required for public clients. So the cross-check refuses 30 tests for a
+reason neither the architect nor the implementation role had diagnosed
+correctly: not post-versus-basic at all, but `none` never being advertised.
+Most fixtures become confidential, which also gives the Basic-header path its
+first end-to-end coverage.
+
+*(Was:)* **Stage 12a landed `57b4ead`**, first try — and its one backed-out check
+turned into **12c**, the dispatch
 ([`stage12c-the-token-endpoint-auth-method-2026-10-17.md`](stage12c-the-token-endpoint-auth-method-2026-10-17.md)):
 the federated token exchange authenticates with `client_secret_post`, which
 RFC 096 `:320`'s own profile table excludes — *"Exactly `client_secret_basic`
