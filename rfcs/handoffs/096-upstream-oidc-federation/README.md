@@ -277,7 +277,17 @@ Its review found two of the three checks the dispatch called misplaced were
 **absent**: the existing-link, no-MFA path never completed its login attempt
 at all, so those rows sat in `exchanging` until the 24-hour purge. Bookkeeping
 rather than an authentication weakness — `claim()` has held one-time-ness
-since stage 6c — but a shipped bug, now fixed. **Stage 12 is split, and 12a is dispatched** —
+since stage 6c — but a shipped bug, now fixed. **Stage 12a landed `57b4ead`**, first try — and its one backed-out check
+turned into **12c**, now the open dispatch
+([`stage12c-the-token-endpoint-auth-method-2026-10-17.md`](stage12c-the-token-endpoint-auth-method-2026-10-17.md)):
+the federated token exchange authenticates with `client_secret_post`, which
+RFC 096 `:320`'s own profile table excludes — *"Exactly `client_secret_basic`
+or `none`"* — so a conformant provider advertising only Basic would reject
+it. Shipped behaviour, not 12a's. It goes ahead of 12b because 12b waits on
+the account-lock call and cycle D should not ship federated MFA on a token
+exchange that cannot authenticate.
+
+*(Was:)* **Stage 12 is split, and 12a is dispatched** —
 [`stage12a-the-identity-pipeline-becomes-authoritative-2026-10-17.md`](stage12a-the-identity-pipeline-becomes-authoritative-2026-10-17.md).
 The implementation role returned a measurement pass instead of code, as the
 dispatch's own §0 asked, and recommended the split with a seam argued from
