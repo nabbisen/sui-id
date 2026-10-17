@@ -1,5 +1,11 @@
 # RFC 096-B1 stage 12 — remove the shipped defect's two paths, and wire the federated second factor
 
+> **SUPERSEDED 2026-10-17**, split in two on the implementation role's own
+> measured recommendation: §§1–3 and §6 become
+> [`stage12a-the-identity-pipeline-becomes-authoritative-2026-10-17.md`](stage12a-the-identity-pipeline-becomes-authoritative-2026-10-17.md),
+> §5 becomes Dispatch B and goes out after 12a lands, and §4 is struck as a
+> phantom. Kept because its §0 asked the question that produced the split.
+
 > ## Whose turn it is: **the implementation role's.**
 > One item inside this stage waits on `@nabbisen` — see §5 — and it is carved
 > out so nothing else is blocked by it. Everything in §§1–4 and §6 can be
@@ -49,7 +55,7 @@ Both need `fetch_discovery` (`handlers/federation.rs:93`, called at `:338` and
 - the configured-value cross-checks;
 - `validate_discovery_bytes`'s tightened bounds.
 
-## 4 — `:1067`'s audit note
+## 4 — `:1067`'s audit note — **STRUCK, and this dispatch is SUPERSEDED**
 
 The slug-rather-than-internal-id audit note. Small, and it travels with this
 stage because it is in the same handler.

@@ -277,13 +277,20 @@ Its review found two of the three checks the dispatch called misplaced were
 **absent**: the existing-link, no-MFA path never completed its login attempt
 at all, so those rows sat in `exchanging` until the 24-hour purge. Bookkeeping
 rather than an authentication weakness — `claim()` has held one-time-ness
-since stage 6c — but a shipped bug, now fixed. **Stage 12 is dispatched** —
-[`stage12-remove-the-two-legacy-paths-2026-10-17.md`](stage12-remove-the-two-legacy-paths-2026-10-17.md),
-**cycle D's gate**: the two legacy paths removed, the two discovery items
-wired, and the federated second factor finally given a caller. One item inside
-it waits on `@nabbisen`
-([`federated-lockout-request-2026-10-17.md`](federated-lockout-request-2026-10-17.md))
-and is carved out so nothing else is blocked. The second CHANGELOG catch-up
+since stage 6c — but a shipped bug, now fixed. **Stage 12 is split, and 12a is dispatched** —
+[`stage12a-the-identity-pipeline-becomes-authoritative-2026-10-17.md`](stage12a-the-identity-pipeline-becomes-authoritative-2026-10-17.md).
+The implementation role returned a measurement pass instead of code, as the
+dispatch's own §0 asked, and recommended the split with a seam argued from
+`complete_federated_signin` taking a plain `user_id` — so neither direction
+depends on the other. **12a**: the verified identity pipeline, which already
+runs on every request and whose result is thrown away, becomes the one that
+acts; the sealed-state cookie goes; the two discovery items land. **12b**,
+after it: the `/admin/login/mfa` wiring, carrying the account-lock question
+([`federated-lockout-request-2026-10-17.md`](federated-lockout-request-2026-10-17.md)),
+which that pass reframed — the lock is live today through the generic path,
+so 12b without the hook would *remove* a protection rather than decline to
+add one. **Cycle D needs both halves.** `:1067`'s audit note is struck as a
+phantom; the citation was the architect's. The second CHANGELOG catch-up
 landed `6cb866b`
 ([`changelog-catch-up-2-2026-10-16.md`](changelog-catch-up-2-2026-10-16.md));
 from stage 12 onward each dispatch carries its own entry, which is the half of

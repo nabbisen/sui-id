@@ -29,6 +29,32 @@ compounding it.
 
 Recovery codes remain out of reach at that rate; TOTP does not.
 
+## Correction, 2026-10-17: this is a regression to avoid, not a gap to close
+
+The implementation role's stage 12 measurement pass found that **the account
+lock is live for federated users today**, and I verified each step:
+
+- `complete_federated_signin` issues **both** the durable F02 row and the
+  generic `login_pending_mfa` row, setting both cookie sets on one response;
+- `/admin/login/mfa` reads `PENDING_MFA_COOKIE` (`admin/auth.rs:617`) and
+  calls `verify_pending` (`:628`) — there is no federated branch;
+- `verify_pending` calls `record_second_factor_failure` on a wrong proof
+  (`mfa.rs:249`), and the handler's own comment at `:659` says so.
+
+So a federated user's wrong second factor hits L07 **now**, through the
+generic path. What I described below as a gap is a property of
+`FederatedMfaVerifier`, which nothing calls yet.
+
+**This makes the question narrower and the answer nearly settled.** Dispatch B
+switches the live traffic onto the verifier; without the hook it *removes* a
+protection that exists today. Removing one needs a reason, where closing a gap
+merely needs a benefit — and the arithmetic below describes the world after
+that removal, not today's.
+
+I am leaving the original text below unaltered, because the recommendation is
+unchanged and the reasoning for it still stands; only the framing of what is
+at stake was wrong.
+
 ## The gap
 
 `record_second_factor_failure` — RFC 102's L07, which increments
