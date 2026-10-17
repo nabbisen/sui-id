@@ -288,10 +288,12 @@ ROADMAP milestone M4-A**. The caveat that qualified it is also gone: 096-A's
 validation was dormant because nothing called it, and stage 12a made the
 verified pipeline the one that acts.
 
-**12b is the last piece of stage 12** and is the one waiting on
-`@nabbisen`'s account-lock call
-([`federated-lockout-request-2026-10-17.md`](federated-lockout-request-2026-10-17.md));
-cycle D needs 12a, 12b and 12c.
+**12b is the last piece of stage 12** and is **ready to dispatch**. The
+account-lock item it carried is **settled by the architect, 2026-10-18**
+([`federated-lockout-request-2026-10-17.md`](federated-lockout-request-2026-10-17.md)):
+12b must call `record_second_factor_failure`, because the live path already
+feeds it and 12b without the hook would remove a shipped protection. Nothing
+in stage 12 is waiting on `@nabbisen`. Cycle D needs 12a, 12b and 12c.
 Its code is right; what is wrong is the fixtures. Every federation fixture is
 a public client with no `client_secret_enc`, while its discovery advertises
 only `client_secret_basic` — the pairing RFC 096 `:570` forbids, since `none`
@@ -319,11 +321,12 @@ dispatch's own §0 asked, and recommended the split with a seam argued from
 depends on the other. **12a**: the verified identity pipeline, which already
 runs on every request and whose result is thrown away, becomes the one that
 acts; the sealed-state cookie goes; the two discovery items land. **12b**,
-after it: the `/admin/login/mfa` wiring, carrying the account-lock question
+after it: the `/admin/login/mfa` wiring, carrying the account-lock hook
 ([`federated-lockout-request-2026-10-17.md`](federated-lockout-request-2026-10-17.md)),
-which that pass reframed — the lock is live today through the generic path,
-so 12b without the hook would *remove* a protection rather than decline to
-add one. **Cycle D needs both halves.** `:1067`'s audit note is struck as a
+which that pass reframed and the architect then settled on 2026-10-18 — the
+lock is live today through the generic path, so 12b without the hook would
+*remove* a protection rather than decline to add one. Preserving one needed
+no escalation. **Cycle D needs both halves.** `:1067`'s audit note is struck as a
 phantom; the citation was the architect's. The second CHANGELOG catch-up
 landed `6cb866b`
 ([`changelog-catch-up-2-2026-10-16.md`](changelog-catch-up-2-2026-10-16.md));

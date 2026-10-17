@@ -1,12 +1,49 @@
-# The federated second factor has no account lock — a request for your call
+# The federated second factor and the account lock — settled by the architect
 
-> ## Whose turn it is: **`@nabbisen`'s.**
-> One question, one recommendation. Stage 12 is dispatched alongside this and
-> carves this item out explicitly, so nothing is blocked while it is open — but
-> stage 12 is what makes the path reachable, so the answer wants to land before
-> that stage finishes rather than after.
+> ## Whose turn it is: **nobody's. This is closed.**
+> **Decided 2026-10-18 by the architect, within the architect's authority.**
+> **12b must call `record_second_factor_failure`.** It is now a constraint on
+> the stage, not an open question, and 12b is unblocked.
 
 **Written.** 2026-10-17 JST, by the architect.
+**Decided.** 2026-10-18 JST, by the architect.
+
+## The decision, and why it needed no escalation
+
+I escalated this and should not have. The measurement below turned the
+question inside out, and I left the file addressed to the owner after the
+framing that made it his had gone.
+
+**What the correction established:** the account lock is **live for federated
+users today**, through the generic `login_pending_mfa` row. 12b switches that
+traffic onto `FederatedMfaVerifier`, which has no hook. So 12b without the
+hook **removes a protection that currently ships**.
+
+Keeping a shipped protection across a refactor is a correctness requirement of
+the refactor. It invents no mechanism, changes no security invariant, and
+alters no behaviour a user can observe — it preserves one. **Removing** the
+lock would be the owner's call, because that would change what the product
+does to real accounts. Preserving it is not a change at all.
+
+The one thing that made it look like his — the denial-of-service objection,
+that a federated attacker could lock a victim out of local sign-in — was
+measured away before the correction: reaching either second factor requires
+proving a first factor, so the federated door is a different first factor, not
+a cheaper one. With that gone and the framing corrected, nothing of his was
+left in the question.
+
+**What 12b carries:** the handler that wires the federated MFA submission
+calls the same failure path the local one does, with a test that a wrong
+federated second factor advances the same counter a wrong local one does. The
+per-continuation cap of five is unchanged. No `docs/threat-model.md` entry is
+needed, because no asymmetry ships.
+
+**What would still be an escalation, and is not this:** bounding the federated
+path *without* touching the shared account lock — the scoped alternative named
+below — changes what ships today, so it is not mine to take. I am not
+proposing it; the measurement argues against it.
+
+*Everything below is the request as written on 2026-10-17, unaltered.*
 
 ## First, a correction to what I told you
 
