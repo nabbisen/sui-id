@@ -288,11 +288,15 @@ ROADMAP milestone M4-A**. The caveat that qualified it is also gone: 096-A's
 validation was dormant because nothing called it, and stage 12a made the
 verified pipeline the one that acts.
 
-**12b is the last piece of stage 12** and is **ready to dispatch**. The
-account-lock item it carried is **settled by the architect, 2026-10-18**
+**12b is the last piece of stage 12 and is dispatched** —
+[`stage12b-the-federated-mfa-submission-2026-10-18.md`](stage12b-the-federated-mfa-submission-2026-10-18.md),
+the open dispatch. The account-lock item it carried is **settled by the
+architect, 2026-10-18**
 ([`federated-lockout-request-2026-10-17.md`](federated-lockout-request-2026-10-17.md)):
 12b must call `record_second_factor_failure`, because the live path already
-feeds it and 12b without the hook would remove a shipped protection. Nothing
+feeds it and 12b without the hook would remove a shipped protection. The
+package also carries the federated cookie's flat `max_age` against the row's
+own `expires_at`, and the direction-2 `MethodMismatch` copy. Nothing
 in stage 12 is waiting on `@nabbisen`. Cycle D needs 12a, 12b and 12c.
 Its code is right; what is wrong is the fixtures. Every federation fixture is
 a public client with no `client_secret_enc`, while its discovery advertises
