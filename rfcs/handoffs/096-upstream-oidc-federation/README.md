@@ -281,6 +281,13 @@ since stage 6c — but a shipped bug, now fixed. **Stage 12c landed `744e699`** 
 CI run `39035758846`, 27 jobs, 0 skipped, all 24 `[gate_owners]` entries
 matched both ways —
 [`stage12c-fix-the-fixtures-are-public-clients-2026-10-17.md`](stage12c-fix-the-fixtures-are-public-clients-2026-10-17.md).
+**096-A is accepted** — `@nabbisen`, 2026-10-17: *"096-A is accepted."* — on
+the architect's completion assessment of 2026-10-09, which recommended it and
+did not grant it. That discharges 096-A's closure prerequisite and **closes
+ROADMAP milestone M4-A**. The caveat that qualified it is also gone: 096-A's
+validation was dormant because nothing called it, and stage 12a made the
+verified pipeline the one that acts.
+
 **12b is the last piece of stage 12** and is the one waiting on
 `@nabbisen`'s account-lock call
 ([`federated-lockout-request-2026-10-17.md`](federated-lockout-request-2026-10-17.md));
