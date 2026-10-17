@@ -277,8 +277,14 @@ Its review found two of the three checks the dispatch called misplaced were
 **absent**: the existing-link, no-MFA path never completed its login attempt
 at all, so those rows sat in `exchanging` until the 24-hour purge. Bookkeeping
 rather than an authentication weakness — `claim()` has held one-time-ness
-since stage 6c — but a shipped bug, now fixed. **Stage 12c is in its fix round** —
+since stage 6c — but a shipped bug, now fixed. **Stage 12c landed `744e699`** after one fix round — Level B, 24/24 locally,
+CI run `39035758846`, 27 jobs, 0 skipped, all 24 `[gate_owners]` entries
+matched both ways —
 [`stage12c-fix-the-fixtures-are-public-clients-2026-10-17.md`](stage12c-fix-the-fixtures-are-public-clients-2026-10-17.md).
+**12b is the last piece of stage 12** and is the one waiting on
+`@nabbisen`'s account-lock call
+([`federated-lockout-request-2026-10-17.md`](federated-lockout-request-2026-10-17.md));
+cycle D needs 12a, 12b and 12c.
 Its code is right; what is wrong is the fixtures. Every federation fixture is
 a public client with no `client_secret_enc`, while its discovery advertises
 only `client_secret_basic` — the pairing RFC 096 `:570` forbids, since `none`
