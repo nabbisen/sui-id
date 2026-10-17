@@ -25,9 +25,6 @@ fn every_known_value_classifies_as_declared() {
         "identity_claims_invalid",
         "time_claims_invalid",
         "optional_claims_invalid",
-        "userinfo",
-        "no_id_token",
-        "no_sub",
     ];
     for v in retry {
         assert_eq!(FedErrorBucket::classify(v), FedErrorBucket::Retry, "{v}");

@@ -1,40 +1,22 @@
 //! RFC 096-A: moved verbatim out of `handlers/federation.rs` (the preparatory
 //! split), then built on, stage by stage, beside what was there.
 //!
-//! **`decode_id_token_claims` is still what production calls, and it still
-//! verifies nothing** (`federation.rs` trusts the upstream's `token_endpoint`
-//! over TLS instead — see its own doc comment). [`verify_id_token`] and
-//! [`verify_id_token_against_jwks`] (stage 4a) join stage 2's structural
-//! parse and stage 3b's key selection into real signature verification, and
-//! are reached only by tests until 096-B1 routes live traffic through them.
-//! The JWKS cache and rotation (stage 4b) are not here yet.
+//! **The trust-on-TLS decode that verified nothing is gone (RFC 096-B1
+//! stage 12a), struct and function alike.** [`verify_id_token`] and
+//! [`verify_id_token_against_jwks`] (stage 4a) -- joining stage 2's
+//! structural parse and stage 3b's key selection into real signature
+//! verification -- are what `handlers/federation.rs` calls now, and are the
+//! sole decode path left in this module. Confirmed before removal, not
+//! assumed: the legacy decode had exactly one production caller
+//! (`federation.rs`'s own callback), now routed through the verified path
+//! instead; its own two unit tests went with it rather than being kept
+//! around to exercise a function nothing calls. The JWKS cache and rotation
+//! (stage 4b) are not here yet.
 
 use serde::Deserialize;
 use serde::de::{IgnoredAny, MapAccess, Visitor};
 
 use crate::jwks;
-
-#[derive(Deserialize)]
-pub struct IdTokenClaims {
-    pub sub: String,
-    pub email: Option<String>,
-    #[serde(default)]
-    pub email_verified: bool,
-    pub preferred_username: Option<String>,
-    pub name: Option<String>,
-    pub nonce: Option<String>,
-}
-
-/// Decode JWT claims without verifying signature (we trust the upstream's
-/// token_endpoint over TLS; full JWKS validation is a future hardening step).
-pub fn decode_id_token_claims(jwt: &str) -> Option<IdTokenClaims> {
-    use base64ct::{Base64UrlUnpadded, Encoding};
-    let parts: Vec<&str> = jwt.split('.').collect();
-    let payload = parts.get(1)?;
-    // JWT compact serialization uses unpadded base64url.
-    let decoded = Base64UrlUnpadded::decode_vec(payload).ok()?;
-    serde_json::from_slice(&decoded).ok()
-}
 
 /// RFC 096-A stage 2: the largest decoded header plus payload accepted, in bytes.
 pub(crate) const MAX_DECODED_HEADER_AND_PAYLOAD: usize = 16 * 1024;
@@ -289,9 +271,10 @@ pub(crate) fn parse_compact_jws(token: &str) -> Result<CompactJws, CompactJwsErr
 // ---- RFC 096-A stage 4a: signature verification -----------------------------
 //
 // Joins `parse_compact_jws` (stage 2) and `select_key` (stage 3b), and enforces
-// the two refusals those stages deferred. Reachable only by tests:
-// `decode_id_token_claims` is unchanged and `handlers/federation.rs` is
-// untouched; 096-B1 is what routes live traffic through this.
+// the two refusals those stages deferred. RFC 096-B1 stage 12a is what routes
+// live traffic through this: `handlers/federation.rs`'s callback calls
+// `verify_id_token` directly now, and the legacy, unverified decode this
+// paragraph used to contrast itself against is gone.
 
 /// Why a token did not verify. One variant per rule, as in stages 2, 3a and
 /// 3b. Where a failure is one of theirs, it is wrapped, not re-described; the

@@ -89,7 +89,18 @@ pub const ATTEMPT_LIFETIME_SECS: i64 = 600;
 /// integer can contain a NUL byte, so no two distinct
 /// `(id, provider_id, version, generation)` tuples can produce the same
 /// byte string.
-fn build_aad(
+///
+/// **`pub`, not `pub(crate)`** (RFC 096-B1 stage 12a): `claim`'s own tamper
+/// check already opens `pkce_verifier_sealed` with this AAD and discards the
+/// plaintext, because stage 4 (when this was written) had no caller for it
+/// yet. Stage 12a's callback does, and `sui-id` cannot reconstruct this AAD
+/// itself — the NUL-separated layout is this module's own choice, not a
+/// documented format a second crate should duplicate. Exporting the builder
+/// (plus the already-`pub` `crate::crypto::open`/`Database::key`) lets the
+/// callback open the same ciphertext a second time with the same inputs,
+/// rather than this function's signature growing a second return value
+/// every caller must now thread through, including `claim`'s own tests.
+pub fn build_aad(
     id: FederationLoginAttemptId,
     provider_id: FederationProviderId,
     provider_config_version: i64,

@@ -266,12 +266,11 @@ pub(super) async fn federated_signin(state: &AppState, nonce_slot: &NonceSlot) -
         .await
         .expect("start");
     assert!(start.status().is_redirection(), "start: {}", start.status());
-    let fed_state = extract_set_cookie(start.headers(), "sui_id_fed_state").expect("state cookie");
-    // RFC 096-B1 stage 6c: the claim now compares this cookie's digest in
-    // constant time, so it must round-trip to the callback the same way
-    // the state cookie already does -- without it, every callback this
-    // helper drives would refuse as `fed_error=binding_mismatch` before
-    // reaching whatever this test is actually about.
+    // RFC 096-B1 stage 6c: the claim compares this cookie's digest in
+    // constant time, so it must round-trip to the callback -- without it,
+    // every callback this helper drives would refuse as `fed_error=
+    // binding_mismatch` before reaching whatever this test is actually
+    // about.
     let browser_binding =
         extract_set_cookie(start.headers(), "sui_id_fed_browser_binding").expect("binding cookie");
     let location = start
@@ -311,8 +310,16 @@ pub(super) async fn federated_signin(state: &AppState, nonce_slot: &NonceSlot) -
                 ))
                 .header(
                     header::COOKIE,
+                    // `sui_id_fed_state` is never real here -- `/start`
+                    // no longer sets one (RFC 096-B1 stage 12a, §2). A
+                    // stale, never-issued value is still sent because
+                    // `CookieJar::remove`'s delta only covers a cookie
+                    // the jar's `original_cookies` actually saw on this
+                    // request (`cookie` crate's own behavior); without
+                    // it, `assert_attempt_cookie_expired(.., "sui_id_fed_state")`
+                    // below would have nothing to find.
                     format!(
-                        "sui_id_fed_state={fed_state}; sui_id_fed_browser_binding={browser_binding}"
+                        "sui_id_fed_state=stale-pre-stage-12a-value; sui_id_fed_browser_binding={browser_binding}"
                     ),
                 )
                 .body(Body::empty())

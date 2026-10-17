@@ -9,6 +9,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **The federated callback's legacy mapping path still decided the
+  outcome, verification result discarded — the gap `0.80.0`'s own release
+  notes named as unfinished ("the legacy mapping path still decides the
+  outcome and is removed in a later release") is closed.** *Severity:
+  High — present in every released version with federation enabled,
+  `0.80.0` included.* `decode_id_token_claims` decoded the token's
+  payload and trusted it directly, on the theory that the token_endpoint
+  response arrived over TLS from the configured issuer. TLS authenticates
+  the connection, not the token: a malicious or compromised upstream IdP
+  (RFC 134's own threat model names exactly this — not a generic network
+  attacker, who TLS already defeats) could return an ID token with no
+  valid signature, or none at all, naming any `sub`/`email`/
+  `preferred_username` it chose, and this handler mapped and provisioned
+  it as that identity — full impersonation of any local or newly
+  provisioned account, bounded only by which upstream the administrator
+  configured. RFC 096-A had already built full signature verification
+  (`verify_id_token`/`verify_id_token_against_jwks`), the four required-claim
+  checks (`:656-659`), and the eight bounded optional-claim checks
+  (`:663-672`) before `0.80.0` shipped — reachable only by tests, run
+  alongside the unverified decode on every real request since RFC 096-B1
+  stage 4, its own result discarded (confirmed directly, not assumed from
+  the release note's own framing). This stage makes that result the one
+  that acts: the callback now maps and provisions identity solely from a
+  signature-verified token whose required and optional claims have
+  already passed RFC 096's own closed validation rules; the unverified
+  decode and the struct it produced are deleted, not merely bypassed
+  (RFC 096-B1 stage 12a).
+
+- **The OIDC `state` CSRF check depended on a sealed cookie the browser
+  could be made to drop, rather than solely on the durable record the
+  server itself controls.** *Severity: Low — no change in what an
+  attacker could achieve, a reduction in what had to be trusted to
+  prevent it.* The signed `sui_id_fed_state` cookie carried its own copy
+  of the `state` value for a `ct_eq` comparison before the attempt row
+  was even looked up by the same value's hash; both steps enforced the
+  same fact through two independent paths that had to keep agreeing.
+  Removed: the callback now hashes the upstream's returned `state`
+  directly and looks the durable attempt row up by it, which only a party
+  who already knows the right `state` can do — the same refusal, from one
+  source instead of two, pinned by a dedicated test
+  (`tests/e2e/r096_b1_stage12a.rs`) that a wrong or absent `state` finds
+  no row. The cookie's other fields (a PKCE verifier, the provider's
+  slug, an expiry, and a `next` redirect path) were already redundant
+  with columns the durable attempt row has carried since RFC 096-B1 stage
+  2; the cookie itself, and the module that sealed and unsealed it, are
+  deleted (RFC 096-B1 stage 12a).
+
 - **A federated identity with no email claim at all could be provisioned,
   not only one with an unverified email.** *Severity: Low.* Exploiting it
   needed federation configured with `provision_on_first_login` and an
@@ -66,6 +113,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   session) can no longer result from an interrupted write.
 
 ### Changed
+
+- Federation discovery documents are now validated through RFC 096
+  `:531-532`'s own tightened, discovery-specific structural bounds
+  (nesting depth, member/array/string length, and a duplicate-member-at-
+  any-depth rule) rather than the shared, looser bounds every other
+  federation response body uses — built and fully tested by RFC 096-A
+  stage 8, wired into the live fetch for the first time this stage (RFC
+  096-B1 stage 12a).
 
 - **A federated sign-in that stops at a local second factor now emits
   `auth.federation.mfa_required`, not `auth.login.password_ok_mfa_required`

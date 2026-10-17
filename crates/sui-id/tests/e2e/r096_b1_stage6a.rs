@@ -1,9 +1,19 @@
 //! RFC 096-B1 stage 6a, item 2 — RFC 096 `:600-601`: *"The callback
 //! cookie is expired on every terminal path."* Both federation cookies,
 //! `sui_id_fed_state` and `sui_id_fed_browser_binding`, on four terminal
-//! paths of genuinely different shapes: an early refusal before
-//! `fed_state` is even unsealed, a mid-exchange failure (the token POST
+//! paths of genuinely different shapes: an early refusal before the
+//! attempt row is even looked up, a mid-exchange failure (the token POST
 //! itself failing), the `link_required` decision, and the success path.
+//!
+//! RFC 096-B1 stage 12a retired `sui_id_fed_state` itself (the durable
+//! attempt row replaced everything it carried); `/start` no longer sets
+//! it, so these four tests can no longer obtain a real one to round-trip.
+//! What `STATE_COOKIE_NAME`'s own removal in [`terminal`](sui_id) still
+//! guards is a browser that still holds a *stale* one from before that
+//! stage deployed -- so `callback_with_cookies` sends a synthetic,
+//! never-issued value for it instead of a real round-tripped cookie, and
+//! the assertion is unchanged: whatever a terminal response receives
+//! named `sui_id_fed_state`, it clears.
 
 use super::common::*;
 use super::federation_fail_closed::{add_federation_provider_config, linked_user, mock_upstream};
@@ -15,19 +25,27 @@ use tower::ServiceExt;
 const STATE_COOKIE_NAME: &str = "sui_id_fed_state";
 const BROWSER_BINDING_COOKIE_NAME: &str = "sui_id_fed_browser_binding";
 
-/// Both federation cookies, as sent in `/start`'s own response — present
-/// on every real callback request, which is why every test here drives a
-/// real `/start` first rather than hand-assembling a `Cookie:` header.
-/// `CookieJar::remove` only emits a removal `Set-Cookie` for a cookie the
-/// jar actually extracted from the incoming request (`cookie` crate's
-/// own `original_cookies` check) — a request that never carried the
-/// cookie in the first place has nothing to expire, so skipping `/start`
-/// would make this assertion vacuous, not merely unrealistic.
+/// `browser_binding_cookie` is a real one, as sent in `/start`'s own
+/// response — present on every real callback request, which is why every
+/// test here still drives a real `/start` first for it rather than
+/// hand-assembling its value. `CookieJar::remove` only emits a removal
+/// `Set-Cookie` for a cookie the jar actually extracted from the incoming
+/// request (`cookie` crate's own `original_cookies` check) — a request
+/// that never carried the cookie in the first place has nothing to
+/// expire, so skipping `/start` for it would make that half of the
+/// assertion vacuous, not merely unrealistic. `sui_id_fed_state` itself
+/// has no real value to extract any more (module doc, above); a stale,
+/// synthetic one is sent on the callback request directly instead, in
+/// [`callback_with_cookies`].
 struct StartCookies {
-    state_cookie: String,
     browser_binding_cookie: String,
     state_param: String,
 }
+
+/// A value this stage never issued and the callback never reads —
+/// standing in for whatever a browser that signed in before stage 12a
+/// deployed might still be holding.
+const STALE_STATE_COOKIE_VALUE: &str = "stale-pre-stage-12a-value";
 
 /// `nonce_slot` is `None` for the two tests whose mock never reaches
 /// `/token` through `federation_fail_closed::mock_upstream`'s own nonce-
@@ -51,7 +69,6 @@ async fn start(
         .await
         .expect("start");
     assert!(resp.status().is_redirection(), "start: {}", resp.status());
-    let state_cookie = extract_set_cookie(resp.headers(), STATE_COOKIE_NAME).expect("state cookie");
     let browser_binding_cookie = extract_set_cookie(resp.headers(), BROWSER_BINDING_COOKIE_NAME)
         .expect("browser binding cookie");
     let location = resp
@@ -77,7 +94,6 @@ async fn start(
         *slot.lock().expect("lock") = Some(nonce_param);
     }
     StartCookies {
-        state_cookie,
         browser_binding_cookie,
         state_param,
     }
@@ -99,8 +115,8 @@ async fn callback_with_cookies(
                 .header(
                     header::COOKIE,
                     format!(
-                        "{STATE_COOKIE_NAME}={}; {BROWSER_BINDING_COOKIE_NAME}={}",
-                        cookies.state_cookie, cookies.browser_binding_cookie
+                        "{STATE_COOKIE_NAME}={STALE_STATE_COOKIE_VALUE}; {BROWSER_BINDING_COOKIE_NAME}={}",
+                        cookies.browser_binding_cookie
                     ),
                 )
                 .body(Body::empty())

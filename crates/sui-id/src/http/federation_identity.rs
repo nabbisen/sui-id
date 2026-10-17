@@ -1,13 +1,28 @@
 //! RFC 096-A prerequisite: moved verbatim out of `handlers/federation.rs`
 //! (the preparatory split) — username derivation and conflict resolution
 //! for a newly provisioned federated user (P7).
+//!
+//! RFC 096-B1 stage 12a: [`derive_username`] now reads an
+//! [`IdentityCapability`] rather than the legacy, unverified claims struct
+//! this module used before — the capability is only ever constructed from
+//! a signature-verified
+//! token whose optional claims already passed `:663-672`'s bounded-length,
+//! no-control/bidi-character rule (`optional_claims::validate_preferred_
+//! username`), so the ASCII/length filtering below is now a second,
+//! narrower restriction on an already-validated string, not the only check
+//! standing between this function and a malformed upstream claim. The one
+//! caller reaches this function only from `IdentityResolution::
+//! ProvisionEligible`, which itself only exists when `capability.
+//! verified_email()` is `Some` — so the `email` fallback below reads the
+//! *verified* email, exactly as the legacy code's own call site reached it
+//! only after its own, separate unverified-email refusal already ran.
 
-use crate::id_token::IdTokenClaims;
+use crate::identity_capability::IdentityCapability;
 
-/// Derive a candidate username from upstream ID token claims (P7).
-pub fn derive_username(claims: &IdTokenClaims) -> String {
-    // Priority: preferred_username → email local-part → sub (truncated)
-    if let Some(ref pu) = claims.preferred_username {
+/// Derive a candidate username from the validated upstream identity (P7).
+pub fn derive_username(capability: &IdentityCapability) -> String {
+    // Priority: preferred_username → verified email local-part → sub (truncated)
+    if let Some(pu) = capability.preferred_username() {
         let clean: String = pu
             .chars()
             .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_' || *c == '.')
@@ -17,7 +32,7 @@ pub fn derive_username(claims: &IdTokenClaims) -> String {
             return clean;
         }
     }
-    if let Some(ref email) = claims.email
+    if let Some(email) = capability.verified_email()
         && let Some(local) = email.split('@').next()
     {
         let clean: String = local
@@ -30,7 +45,7 @@ pub fn derive_username(claims: &IdTokenClaims) -> String {
         }
     }
     // Final fallback: first 16 chars of sub
-    claims.sub.chars().take(16).collect()
+    capability.sub().chars().take(16).collect()
 }
 
 /// Conflict-resolve a proposed username (P7): append numeric suffix until free.

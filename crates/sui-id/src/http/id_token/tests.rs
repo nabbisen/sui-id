@@ -1,40 +1,13 @@
-use super::decode_id_token_claims;
-use base64ct::{Base64UrlUnpadded, Encoding};
-
-fn jwt_with_payload(payload: &[u8]) -> String {
-    let header = Base64UrlUnpadded::encode_string(br#"{"alg":"none"}"#);
-    let payload = Base64UrlUnpadded::encode_string(payload);
-    format!("{header}.{payload}.")
-}
-
-#[test]
-fn decode_id_token_claims_accepts_unpadded_jwt_payload() {
-    let jwt = jwt_with_payload(
-        br#"{"sub":"upstream-123","email":"alice@example.com","email_verified":true,"nonce":"n"}"#,
-    );
-
-    let claims = decode_id_token_claims(&jwt).expect("claims should decode");
-
-    assert_eq!(claims.sub, "upstream-123");
-    assert_eq!(claims.email.as_deref(), Some("alice@example.com"));
-    assert!(claims.email_verified);
-    assert_eq!(claims.nonce.as_deref(), Some("n"));
-}
-
-#[test]
-fn decode_id_token_claims_rejects_malformed_payload() {
-    assert!(decode_id_token_claims("header.not-base64url.signature").is_none());
-}
-
 // ---- RFC 096-A stage 2: compact-JWS structure and header hygiene -----------
 //
 // Structural only. Nothing here checks a signature, an algorithm allowlist or
-// a claim: those are stage 4's, and `decode_id_token_claims` is untouched.
+// a claim: those are stage 4's.
 
 use super::{
     CompactJws, CompactJwsError, MAX_DECODED_HEADER_AND_PAYLOAD, MAX_ENCODED_JWS_LEN, Segment,
     VerificationError, parse_compact_jws, verify_id_token, verify_id_token_against_jwks,
 };
+use base64ct::{Base64UrlUnpadded, Encoding};
 
 const GOOD: &str = r#"{"alg":"RS256","kid":"k1","typ":"JWT"}"#;
 

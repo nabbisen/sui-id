@@ -30,7 +30,6 @@ async fn base_state() -> AppState {
 }
 
 struct Started {
-    fed_state_cookie: String,
     browser_binding_cookie: String,
     state_param: String,
 }
@@ -47,8 +46,6 @@ async fn start(state: &AppState, slot: &super::federation_fail_closed::NonceSlot
         .await
         .expect("start");
     assert!(resp.status().is_redirection(), "start: {}", resp.status());
-    let fed_state_cookie =
-        extract_set_cookie(resp.headers(), "sui_id_fed_state").expect("state cookie");
     let browser_binding_cookie =
         extract_set_cookie(resp.headers(), "sui_id_fed_browser_binding").expect("binding cookie");
     let location = resp
@@ -72,7 +69,6 @@ async fn start(state: &AppState, slot: &super::federation_fail_closed::NonceSlot
         .into_owned();
     *slot.lock().expect("lock") = Some(nonce_param);
     Started {
-        fed_state_cookie,
         browser_binding_cookie,
         state_param,
     }
@@ -254,10 +250,7 @@ async fn a_wrong_browser_binding_cookie_is_refused_as_binding_mismatch() {
     let resp = callback_with_cookie_header(
         &state,
         &started.state_param,
-        &format!(
-            "sui_id_fed_state={}; sui_id_fed_browser_binding=not-the-real-value",
-            started.fed_state_cookie
-        ),
+        "sui_id_fed_browser_binding=not-the-real-value",
     )
     .await;
 
@@ -281,12 +274,7 @@ async fn an_absent_browser_binding_cookie_is_refused_the_same_way_as_a_wrong_one
     let started = start(&state, &nonce_slot_v).await;
 
     // No `sui_id_fed_browser_binding` in the Cookie header at all.
-    let resp = callback_with_cookie_header(
-        &state,
-        &started.state_param,
-        &format!("sui_id_fed_state={}", started.fed_state_cookie),
-    )
-    .await;
+    let resp = callback_with_cookie_header(&state, &started.state_param, "").await;
 
     assert_eq!(
         location_of(&resp),
@@ -310,8 +298,8 @@ async fn the_real_browser_binding_cookie_lets_the_claim_succeed() {
         &state,
         &started.state_param,
         &format!(
-            "sui_id_fed_state={}; sui_id_fed_browser_binding={}",
-            started.fed_state_cookie, started.browser_binding_cookie
+            "sui_id_fed_browser_binding={}",
+            started.browser_binding_cookie
         ),
     )
     .await;
@@ -350,10 +338,7 @@ async fn a_claim_refused_for_the_wrong_browser_binding_never_reaches_token_excha
     let resp = callback_with_cookie_header(
         &state,
         &started.state_param,
-        &format!(
-            "sui_id_fed_state={}; sui_id_fed_browser_binding=not-the-real-value",
-            started.fed_state_cookie
-        ),
+        "sui_id_fed_browser_binding=not-the-real-value",
     )
     .await;
 
@@ -467,8 +452,8 @@ async fn a_post_claim_denial_creates_or_changes_no_link_user_or_session_row() {
         &state,
         &started.state_param,
         &format!(
-            "sui_id_fed_state={}; sui_id_fed_browser_binding={}",
-            started.fed_state_cookie, started.browser_binding_cookie
+            "sui_id_fed_browser_binding={}",
+            started.browser_binding_cookie
         ),
     )
     .await;

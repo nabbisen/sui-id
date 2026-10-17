@@ -172,8 +172,8 @@ async fn token_endpoint_outside_the_allowed_set_receives_no_request() {
         .unwrap_or("");
     assert_eq!(location, DISCOVERY_ORIGIN_REJECTED);
     assert!(
-        extract_set_cookie(resp.headers(), "sui_id_fed_state").is_none(),
-        "no state cookie -- the upstream redirect never happened either"
+        extract_set_cookie(resp.headers(), "sui_id_fed_browser_binding").is_none(),
+        "no browser-binding cookie -- the upstream redirect never happened either"
     );
 }
 
@@ -229,8 +229,8 @@ async fn authorization_endpoint_outside_the_allowed_set_is_rejected_at_start() {
         .unwrap_or("");
     assert_eq!(location, DISCOVERY_ORIGIN_REJECTED);
     assert!(
-        extract_set_cookie(resp.headers(), "sui_id_fed_state").is_none(),
-        "no state cookie must be issued for a rejected discovery document"
+        extract_set_cookie(resp.headers(), "sui_id_fed_browser_binding").is_none(),
+        "no browser-binding cookie must be issued for a rejected discovery document"
     );
 }
 

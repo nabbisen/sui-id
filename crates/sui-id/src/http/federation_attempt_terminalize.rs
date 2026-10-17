@@ -103,6 +103,14 @@ impl UpstreamFailureDetail {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeniedDetail {
     ClientSecretDecryptFailed,
+    /// RFC 096-B1 stage 12a, §2: the sealed-state cookie's own PKCE
+    /// verifier no longer has a copy to fall back on -- the sole source is
+    /// now the attempt row's own `pkce_verifier_sealed`, opened a second
+    /// time with the same AAD `claim`'s own tamper check just used. Not
+    /// observed to actually fail in practice (the same inputs that let
+    /// `claim` succeed guarantee this open succeeds too), carried for the
+    /// same defense-in-depth reason `ClientSecretDecryptFailed` is.
+    PkceVerifierDecryptFailed,
     MissingIdToken,
     ConfigDrift,
     SignatureInvalid,
@@ -111,11 +119,6 @@ pub enum DeniedDetail {
     TimeClaimsInvalid,
     OptionalClaimsInvalid,
     IdentityResolutionDbError,
-    LegacyTokenParseFailed,
-    LegacyNoIdToken,
-    LegacyNonceMismatch,
-    EmptySub,
-    LinkLookupDbError,
     LinkUpsertDbError,
     UnverifiedEmail,
     /// RFC 096-B1 stage 7, F04: the provisioning transaction refused the
@@ -144,6 +147,7 @@ impl DeniedDetail {
     fn as_str(self) -> &'static str {
         match self {
             Self::ClientSecretDecryptFailed => "client_secret_decrypt_failed",
+            Self::PkceVerifierDecryptFailed => "pkce_verifier_decrypt_failed",
             Self::MissingIdToken => "missing_id_token",
             Self::ConfigDrift => "config_drift",
             Self::SignatureInvalid => "signature_invalid",
@@ -152,11 +156,6 @@ impl DeniedDetail {
             Self::TimeClaimsInvalid => "time_claims_invalid",
             Self::OptionalClaimsInvalid => "optional_claims_invalid",
             Self::IdentityResolutionDbError => "identity_resolution_db_error",
-            Self::LegacyTokenParseFailed => "legacy_token_parse_failed",
-            Self::LegacyNoIdToken => "legacy_no_id_token",
-            Self::LegacyNonceMismatch => "legacy_nonce_mismatch",
-            Self::EmptySub => "empty_sub",
-            Self::LinkLookupDbError => "link_lookup_db_error",
             Self::LinkUpsertDbError => "link_upsert_db_error",
             Self::UnverifiedEmail => "unverified_email",
             Self::ProvisionTransactionFailed => "provision_transaction_failed",

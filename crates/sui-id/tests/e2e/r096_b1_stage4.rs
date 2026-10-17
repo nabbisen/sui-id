@@ -129,7 +129,6 @@ async fn custom_mock_upstream(
 }
 
 struct Started {
-    fed_state_cookie: String,
     browser_binding_cookie: String,
     state_param: String,
 }
@@ -148,8 +147,6 @@ async fn start(state: &AppState, nonce_slot: &super::federation_fail_closed::Non
         .await
         .expect("start");
     assert!(resp.status().is_redirection(), "start: {}", resp.status());
-    let fed_state_cookie =
-        extract_set_cookie(resp.headers(), "sui_id_fed_state").expect("state cookie");
     // RFC 096-B1 stage 6c: the claim now compares this digest in constant
     // time; without round-tripping it, every callback here refuses as
     // `fed_error=binding_mismatch` before reaching this file's own point.
@@ -176,7 +173,6 @@ async fn start(state: &AppState, nonce_slot: &super::federation_fail_closed::Non
         .into_owned();
     *nonce_slot.lock().expect("lock") = Some(nonce_param);
     Started {
-        fed_state_cookie,
         browser_binding_cookie,
         state_param,
     }
@@ -196,8 +192,8 @@ async fn callback(state: &AppState, started: &Started) -> String {
                 .header(
                     header::COOKIE,
                     format!(
-                        "sui_id_fed_state={}; sui_id_fed_browser_binding={}",
-                        started.fed_state_cookie, started.browser_binding_cookie
+                        "sui_id_fed_browser_binding={}",
+                        started.browser_binding_cookie
                     ),
                 )
                 .body(Body::empty())

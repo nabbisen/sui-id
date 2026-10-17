@@ -83,14 +83,16 @@ async fn start(state: &AppState) -> axum::response::Response {
         .expect("start")
 }
 
-/// Succeeded discovery is observable as the signed `sui_id_fed_state`
-/// cookie `federated_start` only ever sets after `ValidatedDiscovery::
-/// validate` returns `Ok` -- the same signal `federation_fail_closed.rs`'s
-/// `federated_signin` relies on, used bare here since these vectors stop
-/// at discovery and never need the token exchange that follows it.
+/// Succeeded discovery is observable as the `sui_id_fed_browser_binding`
+/// cookie `federated_start` only ever sets after the discovery fetch
+/// (and the attempt-row insert that follows it) succeeds -- RFC 096-B1
+/// stage 12a retired the sealed `sui_id_fed_state` cookie this check used
+/// before, in favor of the durable attempt row; `browser_binding` is set
+/// at the same point in the function `fed_state`'s own cookie used to be,
+/// so the signal is unchanged even though the cookie that carries it is.
 fn discovery_succeeded(resp: &axum::response::Response) -> bool {
     resp.status().is_redirection()
-        && extract_set_cookie(resp.headers(), "sui_id_fed_state").is_some()
+        && extract_set_cookie(resp.headers(), "sui_id_fed_browser_binding").is_some()
 }
 
 /// RFC 096 `:74-76`: a root issuer (`https://id.example`) derives

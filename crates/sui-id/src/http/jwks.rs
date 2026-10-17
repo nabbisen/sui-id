@@ -2,9 +2,11 @@
 //! Stage 3b: [`select_key`], the key-selection rules RFC 096 `:641-646` states
 //! and `jsonwebtoken` does not enforce.
 //!
-//! Signature verification (stage 4) is not here. Nothing in this module is
-//! reachable from production: the only caller is the tests, and
-//! `decode_id_token_claims` is untouched.
+//! Signature verification (stage 4) is not here, but calls into this module
+//! for key selection and the fetch itself. RFC 096-B1 stage 12a routed
+//! `handlers/federation.rs`'s callback through `verify_id_token`/`verify_
+//! id_token_against_jwks`, so [`fetch_jwks`] and [`select_key`] are reached
+//! by production now, not only by this module's own tests.
 //!
 //! The fetch goes through the caller's client, which must be the RFC 134 federation
 //! client ([`crate::egress::build_federation_client`]). This module builds no client

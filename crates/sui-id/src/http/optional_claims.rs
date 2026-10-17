@@ -21,8 +21,12 @@
 //! -- that is the deterministic-rejection rule above -- it just has nothing
 //! to hand the caller afterwards.
 //!
-//! Reachable only by tests, same as the rest of 096-A until 096-B1 routes
-//! live traffic through it.
+//! **Note (RFC 096-B1 stage 12a):** this was already stale before stage 12a
+//! touched anything -- `handlers/federation.rs` has called this module since
+//! its own stage 4/6c wiring, discarding only the final decision's effect,
+//! not this module's own reach. Corrected here rather than left to be found
+//! a second time: this module has been reachable from production, not only
+//! tests, since before this stage.
 
 use crate::id_token::{NumericDateError, VerifiedIdTokenClaims, numeric_date};
 

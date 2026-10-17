@@ -20,21 +20,16 @@
 use axum::extract::{Path, Query, State};
 use axum::response::{IntoResponse, Redirect, Response};
 use axum_extra::extract::cookie::{Cookie, CookieJar};
-use chrono::Duration;
-use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
 use crate::errors::HttpError;
 use crate::federation_identity::{derive_username, resolve_shadow_username};
-use crate::federation_state::{FedState, STATE_COOKIE, STATE_TTL_SECS, seal_state, unseal_state};
 use crate::handlers::{AppState, AppStateExt, session_cookie};
-use crate::id_token::{IdTokenClaims, decode_id_token_claims};
 use sui_id_core::errors::CoreError;
 use sui_id_shared::ids::{FederationProviderId, SessionId, UserId};
 use sui_id_store::models::{
-    AuditLogRow, FederationLinkRow, FederationProviderRow, ProvisionMode, Role, SessionRow,
-    UserRow, UserSource,
+    AuditLogRow, FederationLinkRow, FederationProviderRow, Role, SessionRow, UserRow, UserSource,
 };
 
 // ── RFC 096-B1 stage 4: 096-A's validators, their first production callers ──
@@ -46,7 +41,7 @@ use crate::federation_attempt_terminalize::{
 use crate::id_token::verify_id_token;
 use crate::identity_capability::construct_identity_capability;
 use crate::identity_claims::validate_identity_claims;
-use crate::identity_resolution::resolve_verified_identity;
+use crate::identity_resolution::{IdentityResolution, resolve_verified_identity};
 use crate::nonce_claim::validate_nonce;
 use crate::optional_claims::validate_optional_claims;
 use crate::time_claims::validate_iat;
@@ -55,7 +50,7 @@ use sui_id_store::repos::federation_login_attempt;
 
 // ── Upstream discovery ────────────────────────────────────────────────────────
 
-use crate::discovery::{DiscoveryError, RawDiscovery, ValidatedDiscovery};
+use crate::discovery::{DiscoveryError, ValidatedDiscovery};
 
 /// Everything that can go wrong fetching and validating discovery. Kept
 /// distinct from [`DiscoveryError`] because callers must react
@@ -112,14 +107,31 @@ async fn fetch_discovery(
         .map_err(|e| FetchDiscoveryError::Network(format!("discovery fetch failed: {e}")))?;
     // RFC 134 D5 Tier 1: status (200 only -- see response_bounds's own
     // doc comment for why "304 under the cache rules" reduces to that
-    // here), media type, a byte cap honored on bytes actually read, and
-    // member/array/string caps, all before this ever reaches `RawDiscovery`.
-    // Supersedes the old bare `is_success()` check (2xx was looser than
-    // intended; a discovery document on 201/204 was never a real case).
-    let raw = crate::response_bounds::read_bounded_json::<RawDiscovery>(resp)
+    // here), media type, and a byte cap honored on bytes actually read --
+    // the transport half, unchanged. Supersedes the old bare `is_success()`
+    // check (2xx was looser than intended; a discovery document on 201/204
+    // was never a real case).
+    //
+    // RFC 096-B1 stage 12a, §3: the structural/semantic half used to be
+    // `read_bounded_json::<RawDiscovery>` (the generic `JWKS_AND_TRANSPORT`
+    // member/array/string caps, no depth or duplicate-member check) plus a
+    // bare `ValidatedDiscovery::validate`. `discovery::validate_discovery_
+    // bytes` is RFC 096 `:531-532`'s own tighter, discovery-specific bounds
+    // (depth 16, 32 array members, 2,048 bytes per string,
+    // `ResponseCaps::DISCOVERY`) plus the duplicate-key-at-any-depth rule
+    // `read_bounded_json` cannot apply once the body is a `Value` (096-A
+    // stage 8 built it complete and correct for exactly this call site,
+    // forbidden from reaching it at the time). A body that trips one of
+    // these is now `FetchDiscoveryError::Invalid` -- "the upstream sent a
+    // document we must not trust" -- rather than the generic `Network`
+    // variant every malformed body collapsed into before; a genuine
+    // transport failure (wrong status, wrong media type, over the byte cap)
+    // is unaffected and still `Network`, from `read_bounded_body` itself.
+    let bytes = crate::response_bounds::read_bounded_body(resp)
         .await
-        .map_err(|e| FetchDiscoveryError::Network(format!("discovery parse failed: {e}")))?;
-    ValidatedDiscovery::validate(raw, issuer, allowed_origins).map_err(FetchDiscoveryError::Invalid)
+        .map_err(|e| FetchDiscoveryError::Network(format!("discovery fetch failed: {e}")))?;
+    crate::discovery::validate_discovery_bytes(&bytes, issuer, allowed_origins)
+        .map_err(FetchDiscoveryError::Invalid)
 }
 
 // ── RFC 096-B1 stage 4: shared helpers for the attempt row ──────────────────
@@ -127,6 +139,16 @@ async fn fetch_discovery(
 /// RFC 096 `:564-566`: the browser-held opaque binding cookie, scoped the
 /// same way `STATE_COOKIE` is.
 const BROWSER_BINDING_COOKIE: &str = "sui_id_fed_browser_binding";
+
+/// RFC 096-B1 stage 12a: the sealed-state cookie this stage retires is gone
+/// (the module that carried it is deleted; the durable attempt row is the
+/// sole source of everything it carried), but the name stays as a bare
+/// constant so [`terminal`] keeps actively clearing it on every terminal
+/// response -- a browser that still holds one from before this stage
+/// deployed gets it cleared on its next completed attempt, rather than
+/// carrying a cookie no code will ever read again until its own 10-minute
+/// `max_age` lapses.
+const STATE_COOKIE: &str = "sui_id_fed_state";
 
 /// RFC 096-B1 stage 9, F02: the `federation_mfa_pending` row's own id,
 /// so a future consumer (stage 10/11) can find which row belongs to this
@@ -406,27 +428,22 @@ pub async fn federated_start(
     // stage is making about whether to enforce it.
     let browser_binding = sui_id_core::tokens::random_token(32);
 
-    let fed_state = FedState {
-        nonce: nonce.clone(),
-        pkce_verifier,
-        provider_slug: slug.clone(),
-        expires_at: (chrono::Utc::now() + Duration::seconds(STATE_TTL_SECS)).timestamp(),
-        next: if q.next.starts_with('/') {
-            Some(q.next)
-        } else {
-            None
-        },
-        upstream_state: state_param.clone(),
+    // RFC 096-B1 stage 12a, §2: `next` used to be carried in the retired
+    // sealed state cookie alongside everything else; the attempt row's own
+    // `next_path` column (below) has carried it durably since stage 2, and
+    // the callback reads `claimed.next_path`, never a cookie -- so this is
+    // the one and only place `next` needs computing now.
+    let next_path = if q.next.starts_with('/') {
+        Some(q.next)
+    } else {
+        None
     };
-    let sealed = seal_state(&app, &fed_state).map_err(|_| HttpError::html(CoreError::Internal))?;
 
     // RFC 096-B1 stage 4: the durable attempt row the callback claims and
-    // validates against. Created here, alongside the legacy sealed-state
-    // cookie above, not in place of it -- "do not remove the old paths"
-    // (this stage's own scope boundary; stage 7 removes it). Both carry
-    // the *same* `nonce`/`state_param`/`pkce_verifier` values generated
-    // above: one real OAuth request goes out below, so both records of it
-    // must agree on what was actually sent.
+    // validates against -- now the *only* record of this request, since
+    // the sealed-state cookie stage 12a retires carried nothing the row
+    // did not already carry durably (measured field-by-field in the
+    // review package this dispatch was built against).
     let now = app.clock.now();
     let (provider_config_version, provider_activation_generation) =
         placeholder_provider_version_and_generation(&provider);
@@ -442,9 +459,9 @@ pub async fn federated_start(
         sha256_32(state_param.as_bytes()),
         sha256_32(nonce.as_bytes()),
         sha256_32(browser_binding.as_bytes()),
-        fed_state.pkce_verifier.as_bytes(),
+        pkce_verifier.as_bytes(),
         redirect_uri.clone(),
-        fed_state.next.clone(),
+        next_path,
         now,
     )
     .await
@@ -456,12 +473,17 @@ pub async fn federated_start(
 
     // RFC 096 `:564-566`: the browser receives only the opaque binding, in
     // a Secure, HttpOnly, SameSite=Lax cookie scoped to the provider
-    // callback -- the same scoping as the state cookie below.
+    // callback. Its own lifetime is the attempt row's own
+    // `ATTEMPT_LIFETIME_SECS` directly (previously a separate constant of
+    // the same cookie-state module that happened to equal it) -- one
+    // source for the window, not two that could drift apart.
     let browser_binding_cookie = {
         let mut c = Cookie::new(BROWSER_BINDING_COOKIE, browser_binding);
         c.set_http_only(true);
         c.set_same_site(axum_extra::extract::cookie::SameSite::Lax);
-        c.set_max_age(time::Duration::seconds(STATE_TTL_SECS));
+        c.set_max_age(time::Duration::seconds(
+            federation_login_attempt::ATTEMPT_LIFETIME_SECS,
+        ));
         c.set_path("/auth/federated");
         if app.config.server.cookie_secure {
             c.set_secure(true);
@@ -488,24 +510,7 @@ pub async fn federated_start(
     );
     let upstream_url = _upstream_url;
 
-    // Store sealed state in a short-lived HttpOnly cookie (P5).
-    let state_cookie = {
-        let mut c = Cookie::new(STATE_COOKIE, sealed);
-        c.set_http_only(true);
-        c.set_same_site(axum_extra::extract::cookie::SameSite::Lax);
-        c.set_max_age(time::Duration::seconds(STATE_TTL_SECS));
-        c.set_path("/auth/federated");
-        if app.config.server.cookie_secure {
-            c.set_secure(true);
-        }
-        c
-    };
-
-    Ok((
-        jar.add(state_cookie).add(browser_binding_cookie),
-        Redirect::to(&upstream_url),
-    )
-        .into_response())
+    Ok((jar.add(browser_binding_cookie), Redirect::to(&upstream_url)).into_response())
 }
 
 // ── GET /auth/federated/callback ─────────────────────────────────────────────
@@ -519,14 +524,17 @@ pub struct CallbackQuery {
 
 #[derive(Deserialize)]
 struct TokenResponse {
-    // RFC 096 `:593-595`: held only in a zeroize-on-drop value until the
-    // response is discarded; never persisted (P6). A `refresh_token`, if
-    // the upstream returns one despite the request not asking for it, is
-    // not a field of this struct at all -- `serde`'s default struct
-    // deserialization never retains a JSON member it has no field for, so
-    // it is dropped at parse time, not read into memory as a named value
-    // to then have to remember to ignore.
-    access_token: SecretString,
+    // RFC 096 `:593-595`, P6: the upstream access token is never persisted.
+    // Stage 12a strengthens this from "captured, zeroized on drop, never
+    // read" to "never captured at all" -- `access_token`'s one reader was
+    // the legacy userinfo-fallback branch this stage removes (dead in
+    // practice since the mandatory-id_token refusal above it, and now
+    // unreachable in full), and `serde`'s default struct deserialization
+    // never retains a JSON member it has no field for, the same reasoning
+    // a `refresh_token` field (which this struct also omits) already
+    // relied on. A field that is never named here is dropped at parse
+    // time, not read into memory as a named value this file would then
+    // have to remember never to use.
     id_token: Option<String>,
 }
 
@@ -542,8 +550,8 @@ pub async fn federated_callback(
     // grep): the `error` query parameter is attacker-controlled upstream
     // text (RFC 096's own threat model treats the upstream as potentially
     // hostile or compromised) -- it is never logged, not even truncated or
-    // allowlisted, which is also why it is dropped here before `fed_state`
-    // is even unsealed and no provider identity is available to log
+    // allowlisted, which is also why it is dropped here before the attempt
+    // row is even looked up and no provider identity is available to log
     // instead.
     if q.error.is_some() {
         tracing::warn!("federation callback: upstream returned an error response");
@@ -584,34 +592,40 @@ pub async fn federated_callback(
         .code
         .ok_or_else(|| HttpError::html(CoreError::BadRequest("missing code in callback".into())))?;
 
-    // Validate and consume the state cookie (P5).
-    let sealed = jar
-        .get(STATE_COOKIE)
-        .map(|c| c.value().to_owned())
-        .ok_or_else(|| HttpError::html(CoreError::BadRequest("missing state cookie".into())))?;
-
-    let fed_state = unseal_state(&app, &sealed)
-        .ok_or_else(|| HttpError::html(CoreError::BadRequest("invalid or expired state".into())))?;
-
-    // P5 CSRF: verify the upstream echoes back the same state we sent.
+    // ── RFC 096-B1 stage 12a, §2: the state match, and finding the attempt ──
+    //
+    // The retired sealed state cookie used to carry its own
+    // copy of the `state` value we sent, `ct_eq`-compared against the
+    // query's returned value, *then* hashed to find the attempt row by
+    // `state_sha256`. Both steps compared against the same durable
+    // `state_sha256` column in the end -- hashing the query's own returned
+    // `state` and looking the row up by that hash directly collapses them
+    // into one: a wrong, missing, or replayed `state` finds no row, which
+    // is the same refusal `ct_eq` gave before, now pinned by
+    // `tests/e2e/r096_b1_stage12a.rs`'s own
+    // `wrong_state_finds_no_attempt_row` rather than only where it used to
+    // live. RFC 096 `:714-715`: nothing about which digests do or do not
+    // exist is observable from the response either way (module doc, above).
     let returned_state = q.state.as_deref().unwrap_or("");
-    use subtle::ConstantTimeEq;
-    let state_ok: bool = fed_state
-        .upstream_state
-        .as_bytes()
-        .ct_eq(returned_state.as_bytes())
-        .into();
-    if !state_ok {
-        tracing::warn!(slug = %fed_state.provider_slug, "federation: state mismatch — possible CSRF");
-        return Ok(terminal(
-            jar,
-            Redirect::to("/admin/login?fed_error=state_mismatch"),
-        ));
-    }
+    let state_hash = sha256_32(returned_state.as_bytes());
+    let pre_claim_attempt =
+        match federation_login_attempt::find_by_state_sha256(&app.db, state_hash).await {
+            Ok(a) => a,
+            Err(e) => {
+                tracing::warn!(error = %e, "federation: state mismatch — possible CSRF");
+                return Ok(terminal(
+                    jar,
+                    Redirect::to("/admin/login?fed_error=state_mismatch"),
+                ));
+            }
+        };
 
-    // Load the provider.
+    // Load the provider by the attempt row's own internal id -- not by a
+    // slug a cookie would have had to carry (RFC 096 `:715`'s own
+    // preference for internal ids, applied here as well as in every audit
+    // call site).
     let provider =
-        sui_id_store::repos::federation_provider::get_by_slug(&app.db, &fed_state.provider_slug)
+        sui_id_store::repos::federation_provider::get(&app.db, pre_claim_attempt.provider_id)
             .await
             .map_err(|_| HttpError::html(CoreError::NotFound))?;
 
@@ -631,28 +645,10 @@ pub async fn federated_callback(
     // `exchanging`, and every failure from here on terminalizes it via F05
     // (`terminalize_and_audit`) rather than leaving it to expire.
     //
-    // State digest: by `find_by_state_sha256` below, then claiming by id --
-    // kept in this two-step shape (stage 4's own), not folded into one
-    // statement, since a wrong state can never find a row to begin with.
     // Provider id/version/generation and the browser binding are the two
     // elements `:597-598` added to the match set this stage; pending state,
     // unexpired time and clock-regression were already checked by `claim`
     // (stage 3) and are unchanged here, only moved earlier.
-    let state_hash = sha256_32(fed_state.upstream_state.as_bytes());
-    let pre_claim_attempt = match federation_login_attempt::find_by_state_sha256(
-        &app.db, state_hash,
-    )
-    .await
-    {
-        Ok(a) => a,
-        Err(e) => {
-            tracing::warn!(slug = %provider.slug, error = %e, "federation: no attempt row for this state");
-            return Ok(terminal(
-                jar,
-                Redirect::to("/admin/login?fed_error=attempt_not_found"),
-            ));
-        }
-    };
 
     // RFC 096 `:564-566`: the opaque browser-binding cookie, read here
     // rather than at claim time in the old code (there was no comparison
@@ -696,6 +692,47 @@ pub async fn federated_callback(
                 jar,
                 Redirect::to(&format!("/admin/login?fed_error={}", claim_fed_error(&e))),
             ));
+        }
+    };
+
+    // RFC 096-B1 stage 12a, §2: the PKCE verifier, read back from the
+    // attempt row rather than the retired sealed state cookie. `claim`'s
+    // own tamper check just opened this exact sealed
+    // blob with this exact AAD and discarded the plaintext (it had no
+    // caller for it yet); this is that caller, opening the same ciphertext
+    // a second time with the same inputs rather than growing `claim`'s own
+    // signature and its tests for a second return value. Guaranteed to
+    // succeed whenever `claim` just did: the AAD is built from four columns
+    // `claim` already re-read unchanged (`row.id`/`provider_id`/`provider_
+    // config_version`/`provider_activation_generation`, carried into
+    // `claimed` via its own `..row`), and the sealed bytes and the master
+    // key are the same two values either open call sees.
+    let pkce_verifier_aad = federation_login_attempt::build_aad(
+        claimed.id,
+        claimed.provider_id,
+        claimed.provider_config_version,
+        claimed.provider_activation_generation,
+    );
+    let pkce_verifier = match sui_id_store::crypto::open(
+        app.db.key(),
+        &claimed.pkce_verifier_sealed,
+        &pkce_verifier_aad,
+    )
+    .and_then(|plain| String::from_utf8(plain).map_err(|_| StoreError::Crypto))
+    {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!(slug = %provider.slug, error = %e, "federation: pkce verifier decrypt failed");
+            terminalize_and_audit(
+                &app.db,
+                claimed.id,
+                TerminalFailureReason::Denied(DeniedDetail::PkceVerifierDecryptFailed),
+                app.clock.now(),
+                provider.id,
+                None,
+            )
+            .await;
+            return Err(HttpError::html(CoreError::from(e)));
         }
     };
 
@@ -774,6 +811,32 @@ pub async fn federated_callback(
         }
     };
 
+    // RFC 096-B1 stage 12a, §3: the configured-method cross-check RFC 096
+    // `:546` asks for (*"Contains the configured method; `none` required
+    // for public clients"*) -- available since 096-A stage 8 as
+    // `ValidatedDiscovery::supports_token_endpoint_auth_method`, and
+    // **deliberately left unwired this round, a finding rather than an
+    // implementation.** This handler's token request below sends a
+    // confidential client's secret exactly one way -- in the form body,
+    // `client_secret_post` -- never as an `Authorization` header. Every
+    // e2e fixture in this suite (and, measured by what they were modelled
+    // on, plausibly many real IdPs) advertises only `client_secret_basic`
+    // in `token_endpoint_auth_methods_supported`. Wiring the check as
+    // written refuses every one of them: not a test-fixture gap to patch
+    // around, since the same mismatch would refuse a real confidential
+    // provider configured the same way. RFC 6749 `:2.3.1` requires `client_
+    // secret_basic` support from every such client and treats
+    // `client_secret_post` as the optional alternative -- the reverse of
+    // what this handler does -- so the candidates are: switch this
+    // request to `.basic_auth(...)`, support both and choose from what
+    // discovery advertises, or make the method provider-configurable.
+    // Each is a real change to how federation authenticates at the token
+    // endpoint, not a flag this stage's own authorization covers; left for
+    // the architect's call, named here rather than guessed at. `discovery.
+    // id_token_algs_intersection` (below, unchanged) is `:547`'s own
+    // cross-check and needed no such decision -- confirmed already wired,
+    // by stage 4, before this stage touched anything.
+
     // Exchange the code for tokens at the upstream token_endpoint.
     let redirect_uri = format!(
         "{}/auth/federated/callback",
@@ -784,7 +847,7 @@ pub async fn federated_callback(
         ("code", code),
         ("redirect_uri", redirect_uri),
         ("client_id", provider.client_id.clone()),
-        ("code_verifier", fed_state.pkce_verifier.clone()),
+        ("code_verifier", pkce_verifier),
     ];
     if let Some(ref secret) = client_secret {
         form_params.push(("client_secret", secret.clone()));
@@ -839,26 +902,20 @@ pub async fn federated_callback(
         }
     };
 
-    // ── RFC 096-B1 stage 4: the attempt claim and 096-A's validators ─────────
+    // ── RFC 096-B1 stage 4/12a: the attempt claim and 096-A's validators ────
     //
-    // Everything below runs *before* the legacy trust-on-TLS decode a few
-    // lines down, and fails the request closed on any error -- this is
-    // "096-A stops being dormant" (the dispatch's own title for this
-    // stage): a forged signature, wrong issuer, stale `iat`, replayed or
-    // mismatched nonce, or a superseded attempt is refused *here*, by the
-    // validators that have had zero production callers until now, not by
-    // the old code a few lines below (which still runs afterward, on the
-    // *same* token, redundantly and unchanged -- "do not remove the old
-    // paths," stage 7's job). A success here changes nothing about what
-    // the old code does with its own, separately-decoded claims: "no
-    // identity mapping and no session... hold [the capability], and let
-    // stage 5 consume it."
+    // Everything below fails the request closed on any error -- a forged
+    // signature, wrong issuer, stale `iat`, replayed or mismatched nonce,
+    // or a superseded attempt is refused here, by the validators 096-A
+    // built and stage 12a made the sole, authoritative identity decision
+    // for this handler (the trust-on-TLS decode they shadowed, and the
+    // identity-mapping code built on top of it, are gone).
     //
-    // RFC 096's own requirement (`:593-594`): the ID token is mandatory.
-    // The pre-existing userinfo-fallback branch a few lines down, for a
-    // response with no `id_token` at all, is unreachable once this refuses
-    // first -- not deleted (same "do not remove" reasoning), but dead in
-    // practice from this stage on.
+    // RFC 096's own requirement (`:593-594`): the ID token is mandatory,
+    // checked immediately below -- the userinfo-endpoint fallback this
+    // handler used before stage 12a, for a response with no `id_token` at
+    // all, had been unreachable since this refusal was added and is
+    // removed along with everything else this stage retires.
     let id_token_jwt = match tokens.id_token.as_deref() {
         Some(jwt) => jwt,
         None => {
@@ -1057,7 +1114,19 @@ pub async fn federated_callback(
     // this resolution the one that acts; the `link_only`-is-generic
     // property specifically is proven against that live path by this
     // file's own e2e tests, not by the unit suite.
-    let _resolution = match resolve_verified_identity(
+    // RFC 096-B1 stage 12a, §1: `resolution` now acts -- the five states
+    // RFC 096 `:693-711` names, each mapped onto exactly the outcome the
+    // legacy block (removed this stage) produced for it, confirmed arm by
+    // arm against that block before it was deleted:
+    //
+    // | `IdentityResolution`     | legacy outcome it replaces              |
+    // |--------------------------|------------------------------------------|
+    // | `ExistingLink { user_id }` | `link_opt: Some(existing_link)` branch |
+    // | `LinkRequired`           | the `ProvisionMode::LinkOnly` arm         |
+    // | `ProvisionEligible`      | falls through to `provision_federated_user` |
+    // | `DeniedCollision`        | the `find_by_email_normalized` P2 check   |
+    // | `DeniedUnverified`       | `email.is_none() || !email_verified`      |
+    let resolution = match resolve_verified_identity(
         &app.db,
         &capability,
         provider.provision_mode.clone(),
@@ -1079,164 +1148,33 @@ pub async fn federated_callback(
         }
     };
 
-    // ── End of stage 4/5's new validation and resolution. The legacy path
-    // below is unchanged (except RFC 096 `:700-701`'s removal of the
-    // pending-link cookie and skeleton, below) and still authoritative for
-    // identity mapping and session establishment (stage 6) -- it re-
-    // decodes the same token itself, without signature verification,
-    // exactly as it always has. ───────────────────────────────────────────
+    // P6: the upstream access token was used for discovery/token-exchange
+    // bookkeeping above and is dropped with `tokens` at the end of this
+    // scope — never persisted.
 
-    // Decode the ID token claims (light validation — nonce check + sub extraction).
-    // We trust the token_endpoint over TLS; full signature verification would
-    // require fetching the upstream JWKS — out of scope for Step 1.
-    let id_claims: IdTokenClaims = match tokens.id_token.as_deref() {
-        Some(jwt) => match decode_id_token_claims(jwt) {
-            Some(claims) => claims,
-            None => {
-                // Dead in practice (module doc, above): the mandatory
-                // id_token check earlier already refused a response this
-                // legacy decode could fail to parse. Still terminalized,
-                // for defense in depth rather than left exchanging.
-                tracing::warn!("federation ID token claims parse failed");
-                terminalize_and_audit(
-                    &app.db,
-                    claimed.id,
-                    TerminalFailureReason::Denied(DeniedDetail::LegacyTokenParseFailed),
-                    validation_now,
-                    provider.id,
-                    None,
-                )
-                .await;
-                return Ok(terminal(
-                    jar,
-                    Redirect::to("/admin/login?fed_error=token_parse"),
-                ));
-            }
-        },
-        None => {
-            // Dead in practice, same reason: no_id_token's own branch
-            // above already refuses a response with no id_token.
-            // No id_token: fall back to userinfo endpoint if available.
-            if let Some(ui_url) = discovery.userinfo_endpoint() {
-                match fetch_userinfo(
-                    &app.http_client,
-                    ui_url,
-                    tokens.access_token.expose_secret(),
-                )
-                .await
-                {
-                    Ok(claims) => claims,
-                    Err(e) => {
-                        tracing::warn!(error = %e, "userinfo fetch failed");
-                        terminalize_and_audit(
-                            &app.db,
-                            claimed.id,
-                            TerminalFailureReason::UpstreamFailure(
-                                UpstreamFailureDetail::UserinfoFetchFailed,
-                            ),
-                            validation_now,
-                            provider.id,
-                            None,
-                        )
-                        .await;
-                        return Ok(terminal(
-                            jar,
-                            Redirect::to("/admin/login?fed_error=userinfo"),
-                        ));
-                    }
-                }
-            } else {
-                terminalize_and_audit(
-                    &app.db,
-                    claimed.id,
-                    TerminalFailureReason::Denied(DeniedDetail::LegacyNoIdToken),
-                    validation_now,
-                    provider.id,
-                    None,
-                )
-                .await;
-                return Ok(terminal(
-                    jar,
-                    Redirect::to("/admin/login?fed_error=no_id_token"),
-                ));
-            }
-        }
-    };
-
-    // Nonce check (P5 replay protection). Dead in practice, same reason:
-    // the new, split nonce comparison (item 1, above) already refuses a
-    // mismatch before this point is ever reached.
-    if let Some(ref token_nonce) = id_claims.nonce
-        && token_nonce != &fed_state.nonce
-    {
-        tracing::warn!(slug = %provider.slug, "federation nonce mismatch");
-        terminalize_and_audit(
-            &app.db,
-            claimed.id,
-            TerminalFailureReason::Denied(DeniedDetail::LegacyNonceMismatch),
-            validation_now,
-            provider.id,
-            None,
-        )
-        .await;
-        return Ok(terminal(
-            jar,
-            Redirect::to("/admin/login?fed_error=nonce_mismatch"),
-        ));
-    }
-
-    // Still reachable: nothing above validates that `sub` is non-empty.
-    if id_claims.sub.is_empty() {
-        terminalize_and_audit(
-            &app.db,
-            claimed.id,
-            TerminalFailureReason::Denied(DeniedDetail::EmptySub),
-            validation_now,
-            provider.id,
-            None,
-        )
-        .await;
-        return Ok(terminal(jar, Redirect::to("/admin/login?fed_error=no_sub")));
-    }
-
-    // P6: upstream access token is used above and then dropped — never persisted.
-
-    // Resolve the federation link by (provider_id, upstream_sub) — P1.
-    let now = app.clock.now();
-    let link_opt = match sui_id_store::repos::federation_link::find_by_sub(
-        &app.db,
-        provider.id,
-        &id_claims.sub,
-    )
-    .await
-    {
-        Ok(l) => l,
-        Err(e) => {
-            terminalize_and_audit(
-                &app.db,
-                claimed.id,
-                TerminalFailureReason::Denied(DeniedDetail::LinkLookupDbError),
-                now,
-                provider.id,
-                None,
-            )
-            .await;
-            return Err(HttpError::html(CoreError::from(e)));
-        }
-    };
-
-    let user_id: UserId = match link_opt {
+    let user_id: UserId = match resolution {
         // ── Known user: update last_seen and proceed to MFA gate ─────────────
-        Some(existing_link) => {
+        IdentityResolution::ExistingLink { user_id } => {
+            // `linked_at` is read by `upsert`'s own `INSERT`, but this row
+            // is only ever reached via `ExistingLink`, which
+            // `resolve_verified_identity` only returns when a link for
+            // `(provider.id, capability.sub())` already exists -- so the
+            // `(user_id, provider_id)` conflict this call's own `INSERT`
+            // target fires every time, and `federation_link::upsert`'s own
+            // `ON CONFLICT` clause never writes `linked_at` at all (only
+            // `upstream_email`/`last_seen_at` are in its `SET`). The value
+            // passed here is therefore never actually stored; `validation_now`
+            // is used rather than re-reading the row a second time for a
+            // column this call can never persist.
             if let Err(e) = sui_id_store::repos::federation_link::upsert(
                 &app.db,
                 FederationLinkRow {
-                    user_id: existing_link.user_id,
+                    user_id,
                     provider_id: provider.id,
-                    upstream_sub: id_claims.sub.clone(),
-                    upstream_email: id_claims.email.clone(),
-                    linked_at: existing_link.linked_at,
-                    last_seen_at: now,
+                    upstream_sub: capability.sub().to_owned(),
+                    upstream_email: capability.verified_email().map(str::to_owned),
+                    linked_at: validation_now,
+                    last_seen_at: validation_now,
                 },
             )
             .await
@@ -1245,296 +1183,183 @@ pub async fn federated_callback(
                     &app.db,
                     claimed.id,
                     TerminalFailureReason::Denied(DeniedDetail::LinkUpsertDbError),
-                    now,
+                    validation_now,
                     provider.id,
-                    Some(existing_link.user_id),
+                    Some(user_id),
                 )
                 .await;
                 return Err(HttpError::html(CoreError::from(e)));
             }
-            existing_link.user_id
+            user_id
         }
 
-        // ── Unknown: provision or link-only ─────────────────────────────────
-        None => {
-            match provider.provision_mode {
-                ProvisionMode::ProvisionOnFirstLogin => {
-                    // P3: RFC 096 `:727-728`, "`provision_on_first_login`
-                    // requires a present email and `email_verified=true`"
-                    // -- both conditions, not only the unverified
-                    // one. Before RFC 096-B1 stage 7 this checked
-                    // `email.is_some() && !email_verified`, which let an
-                    // absent email fall through to provisioning: that was
-                    // legacy behaviour stage 6c's own fix round deliberately
-                    // left alone ("that resolution is not yet authoritative
-                    // ... a check-order fix is not where to change it"),
-                    // and stage 7 -- F04's own stage -- is where it changes.
-                    // `docs/src/guides/operators.md`'s "requires
-                    // `email_verified = true` ... otherwise the sign-in is
-                    // rejected" becomes true for the first time with this
-                    // change; confirmed, not merely asserted, in this
-                    // stage's own review package.
-                    //
-                    // RFC 096-B1 stage 6e fix round (R1): this check still
-                    // runs BEFORE P2's collision check below, not after.
-                    // RFC 096 `:727-728` requires `email_verified = true`
-                    // before an email is even eligible for the collision
-                    // comparison ("if any local user already has *that
-                    // normalized email*" -- the verified one): the
-                    // verification requirement precedes the collision rule
-                    // in the RFC's own sequence, and the code must too.
-                    // Checking collision before verification let an
-                    // attacker who can only present an address, never
-                    // verify one they don't own, learn whether an
-                    // *unverified* copy of a victim's email collides with
-                    // a local account -- `email_collision` vs
-                    // `unverified_email` differ by exactly that, which is
-                    // the same local-account-enumeration oracle stage 5
-                    // closed, reached by a different route. Running this
-                    // check first means no unverified or absent email ever
-                    // reaches the collision comparison: every one of them
-                    // gets `unverified_email`, full stop, carrying no
-                    // information about whether any local account matches
-                    // it.
-                    if id_claims.email.is_none() || !id_claims.email_verified {
-                        tracing::info!(slug = %provider.slug, "provision held: absent or unverified email");
-                        terminalize_and_audit(
-                            &app.db,
-                            claimed.id,
-                            TerminalFailureReason::Denied(DeniedDetail::UnverifiedEmail),
-                            now,
-                            provider.id,
-                            None,
-                        )
-                        .await;
-                        return Ok(terminal(
-                            jar,
-                            Redirect::to("/admin/login?fed_error=unverified_email"),
-                        ));
-                    }
+        // ── No local account is linked; `link_only` denies generically ──────
+        IdentityResolution::LinkRequired => {
+            // RFC 096-B1 stage 5, RFC 096 `:699-701`: one generic "local
+            // account link required" result for every unlinked upstream
+            // identity under `link_only` -- generic is load-bearing, since
+            // `resolve_verified_identity` itself never reads local state on
+            // this path (its own doc comment), so there is nothing here
+            // that could narrow it either.
+            terminalize_and_audit(
+                &app.db,
+                claimed.id,
+                TerminalFailureReason::LinkRequired,
+                validation_now,
+                provider.id,
+                None,
+            )
+            .await;
+            return Ok(terminal(
+                jar,
+                Redirect::to("/admin/login?fed_error=link_required"),
+            ));
+        }
 
-                    // P2. RFC 096 `:707-708`: collision denial is specific
-                    // to `provision_on_first_login` -- under `link_only`
-                    // nothing is created and nothing is linked, so there is
-                    // no takeover to block. It lives *inside* this arm, and
-                    // must stay inside it: `:699` requires `link_only` to
-                    // return one generic result for every unlinked upstream
-                    // identity, and any read of local state on that path
-                    // is a way for the result to stop being generic. Inside
-                    // the arm rather than guarded in place, so a reader of
-                    // the `LinkOnly` arm can see directly that nothing
-                    // about local accounts is consulted there at all.
-                    //
-                    // Reached only with a present, verified email: P3 above
-                    // now denies both the absent and the unverified case
-                    // (RFC 096-B1 stage 7), so `id_claims.email` is always
-                    // `Some` here and `find_by_email_normalized` is never
-                    // called on an email the upstream has not vouched for.
-                    // By the time this runs, the only email this comparison can
-                    // see is one the upstream has already vouched for.
-                    if let Some(ref email) = id_claims.email
-                        && let Ok(Some(_collision)) =
-                            sui_id_store::repos::users::find_by_email_normalized(
-                                &app.db,
-                                &sui_id_shared::normalize_email(email),
-                            )
-                            .await
-                    {
-                        // An existing local user has this email but is NOT
-                        // linked to this provider. Treat as attempted
-                        // takeover. RFC 096 `:714-715` (review R2): no raw
-                        // email in the log field or the audit note --
-                        // internal `provider_id` and a bounded reason token
-                        // only.
-                        //
-                        // RFC 096-B1 stage 6b built this as the one
-                        // converted Class-B site, calling `emit_must_
-                        // attempt` directly; stage 6c's F05 subsumes that
-                        // emission rather than sitting beside it -- the
-                        // event (`takeover_blocked`) and its one-line
-                        // reason token are unchanged, but the call now also
-                        // terminalizes the attempt, which the 6b version
-                        // never did. `terminalize_and_audit`'s own module
-                        // doc restates why this `let _`-equivalent discard
-                        // (its return is `()`, nothing to discard) is still
-                        // correct here: A6 (RFC 094 `:120`) requires the
-                        // denial below to happen regardless of whether
-                        // either internal step succeeded.
-                        tracing::warn!(
-                            provider_id = %provider.id,
-                            "federation: email collision — potential takeover attempt blocked (P2)"
-                        );
-                        terminalize_and_audit(
-                            &app.db,
-                            claimed.id,
-                            TerminalFailureReason::TakeoverBlocked,
-                            now,
-                            provider.id,
-                            None,
-                        )
-                        .await;
-                        return Ok(terminal(
-                            jar,
-                            Redirect::to("/admin/login?fed_error=email_collision"),
-                        ));
-                    }
-                    // P7: derive username, never trust upstream directly.
-                    let proposed = derive_username(&id_claims);
-                    let username = resolve_shadow_username(&app.db, &proposed).await;
+        // ── Verified email collides with a different, unlinked local user ──
+        IdentityResolution::DeniedCollision => {
+            // RFC 096 `:714-715` (review R2): no raw email in the log field
+            // or the audit note -- internal `provider_id` and a bounded
+            // reason token only.
+            tracing::warn!(
+                provider_id = %provider.id,
+                "federation: email collision — potential takeover attempt blocked (P2)"
+            );
+            terminalize_and_audit(
+                &app.db,
+                claimed.id,
+                TerminalFailureReason::TakeoverBlocked,
+                validation_now,
+                provider.id,
+                None,
+            )
+            .await;
+            return Ok(terminal(
+                jar,
+                Redirect::to("/admin/login?fed_error=email_collision"),
+            ));
+        }
 
-                    // RFC 096-B1 stage 7, F04: attempt completion,
-                    // passwordless non-admin user, link, `[Fed]` session/
-                    // cap, and the `auth.federation.provisioned` commit,
-                    // all in one Class-A transaction (RFC 096 `:706-711`).
-                    // The id is generated here, before the transaction,
-                    // and used identically on the user, link and session
-                    // rows -- the three rows the transaction creates must
-                    // already agree on who they are about.
-                    let uid = UserId::new();
-                    let user = UserRow {
-                        id: uid,
-                        username,
-                        display_name: id_claims.name.clone(),
-                        is_admin: false,
-                        role: Role::User,
-                        is_disabled: false,
-                        is_deleted: false,
-                        user_uuid: uuid::Uuid::new_v4(),
-                        created_at: now,
-                        updated_at: now,
-                        failed_login_count: 0,
-                        locked_until: None,
-                        email: id_claims.email.clone(),
-                        preferred_lang: None,
-                        email_normalized: None,
-                        email_verified_at: None,
-                        last_login_at: None,
-                        // This stage's own decision (review package §2):
-                        // `source` stays the plain default, not
-                        // `UserSource::Ldap` the legacy writer used.
-                        // `sui_id_core::authn::step_up::first_factor_
-                        // proof` -- the one place a federated user's
-                        // `source` could matter -- already checks
-                        // `federation_link` existence first (this row's
-                        // own link, created below, in the same
-                        // transaction), so nothing reads `source` to
-                        // decide federation status. `forgot_password`'s
-                        // `source == Local` filter and
-                        // `try_login_with_cascade`'s `source == Ldap`
-                        // directory-bind routing both stay correct for a
-                        // `Local`-tagged federated user too: it has no
-                        // `credentials` row, so RFC 115 D8's existing
-                        // passwordless-local-account refusal already
-                        // handles it safely either way.
-                        source: UserSource::Local,
-                        external_stable_id: None,
-                    };
-                    let link = FederationLinkRow {
-                        user_id: uid,
-                        provider_id: provider.id,
-                        upstream_sub: id_claims.sub.clone(),
-                        upstream_email: id_claims.email.clone(),
-                        linked_at: now,
-                        last_seen_at: now,
-                    };
-                    let session_row = SessionRow {
-                        id: SessionId::new(),
-                        user_id: uid,
-                        expires_at: now + chrono::Duration::hours(24),
-                        created_at: now,
-                        revoked_at: None,
-                        auth_methods: vec![sui_id_shared::AuthMethod::Fed],
-                        last_step_up_at: None,
-                        last_used_at: None,
-                    };
-                    let session_id = session_row.id;
-                    return match sui_id_store::commands::provision_federated_user(
-                        &app.db,
-                        claimed.id,
-                        provider.id,
-                        user,
-                        link,
-                        session_row,
-                    )
-                    .await
-                    {
-                        Ok(_audited) => {
-                            if let Some(m) = app.metric() {
-                                m.signin(sui_id_store::metrics::signin_result::SUCCESS);
-                            }
-                            let cookie = session_cookie(
-                                session_id.to_string(),
-                                app.config.server.cookie_secure,
-                            );
-                            let jar = jar.add(cookie);
-                            Ok(terminal(jar, Redirect::to("/admin")))
-                        }
-                        Err(e) => {
-                            tracing::warn!(
-                                provider_id = %provider.id,
-                                error = %e,
-                                "federation: first-login provisioning failed"
-                            );
-                            terminalize_and_audit(
-                                &app.db,
-                                claimed.id,
-                                TerminalFailureReason::Denied(
-                                    DeniedDetail::ProvisionTransactionFailed,
-                                ),
-                                now,
-                                provider.id,
-                                None,
-                            )
-                            .await;
-                            Ok(terminal(
-                                jar,
-                                Redirect::to("/admin/login?fed_error=attempt_claim_failed"),
-                            ))
-                        }
-                    };
+        // ── No verified email; `provision_on_first_login` cannot proceed ───
+        IdentityResolution::DeniedUnverified => {
+            tracing::info!(slug = %provider.slug, "provision held: absent or unverified email");
+            terminalize_and_audit(
+                &app.db,
+                claimed.id,
+                TerminalFailureReason::Denied(DeniedDetail::UnverifiedEmail),
+                validation_now,
+                provider.id,
+                None,
+            )
+            .await;
+            return Ok(terminal(
+                jar,
+                Redirect::to("/admin/login?fed_error=unverified_email"),
+            ));
+        }
+
+        // ── No local account is linked; eligible for first-login provisioning ──
+        IdentityResolution::ProvisionEligible => {
+            // P7: derive username from the validated capability, never
+            // trust upstream directly.
+            let proposed = derive_username(&capability);
+            let username = resolve_shadow_username(&app.db, &proposed).await;
+
+            // RFC 096-B1 stage 7, F04: attempt completion, passwordless
+            // non-admin user, link, `[Fed]` session/cap, and the
+            // `auth.federation.provisioned` commit, all in one Class-A
+            // transaction (RFC 096 `:706-711`). The id is generated here,
+            // before the transaction, and used identically on the user,
+            // link and session rows -- the three rows the transaction
+            // creates must already agree on who they are about.
+            let uid = UserId::new();
+            let user = UserRow {
+                id: uid,
+                username,
+                display_name: capability.name().map(str::to_owned),
+                is_admin: false,
+                role: Role::User,
+                is_disabled: false,
+                is_deleted: false,
+                user_uuid: uuid::Uuid::new_v4(),
+                created_at: validation_now,
+                updated_at: validation_now,
+                failed_login_count: 0,
+                locked_until: None,
+                email: capability.verified_email().map(str::to_owned),
+                preferred_lang: None,
+                email_normalized: None,
+                email_verified_at: None,
+                last_login_at: None,
+                // `source` stays the plain default, not `UserSource::Ldap`
+                // the legacy writer used -- unchanged from before this
+                // stage (review package §2 of the stage this code
+                // originated in); `sui_id_core::authn::step_up::first_
+                // factor_proof`, the one place a federated user's `source`
+                // could matter, already checks `federation_link` existence
+                // first.
+                source: UserSource::Local,
+                external_stable_id: None,
+            };
+            let link = FederationLinkRow {
+                user_id: uid,
+                provider_id: provider.id,
+                upstream_sub: capability.sub().to_owned(),
+                upstream_email: capability.verified_email().map(str::to_owned),
+                linked_at: validation_now,
+                last_seen_at: validation_now,
+            };
+            let session_row = SessionRow {
+                id: SessionId::new(),
+                user_id: uid,
+                expires_at: validation_now + chrono::Duration::hours(24),
+                created_at: validation_now,
+                revoked_at: None,
+                auth_methods: vec![sui_id_shared::AuthMethod::Fed],
+                last_step_up_at: None,
+                last_used_at: None,
+            };
+            let session_id = session_row.id;
+            return match sui_id_store::commands::provision_federated_user(
+                &app.db,
+                claimed.id,
+                provider.id,
+                user,
+                link,
+                session_row,
+            )
+            .await
+            {
+                Ok(_audited) => {
+                    if let Some(m) = app.metric() {
+                        m.signin(sui_id_store::metrics::signin_result::SUCCESS);
+                    }
+                    let cookie =
+                        session_cookie(session_id.to_string(), app.config.server.cookie_secure);
+                    let jar = jar.add(cookie);
+                    Ok(terminal(jar, Redirect::to("/admin")))
                 }
-
-                ProvisionMode::LinkOnly => {
-                    // RFC 096-B1 stage 5, RFC 096 `:699-701`: one generic
-                    // "local account link required" result for every
-                    // unlinked upstream identity under `link_only` --
-                    // generic is load-bearing, since it must not reveal
-                    // whether the upstream identity is known locally
-                    // (`identity_resolution::IdentityResolution::
-                    // LinkRequired` is unit-tested to be the same state
-                    // whether or not the email collides, and
-                    // `tests/e2e/r096_b1_stage5.rs` pins the same property
-                    // on this live path, which is where it counts). The
-                    // unsigned
-                    // `sui_id_fed_pending` cookie and the incomplete
-                    // `/auth/federated/link` confirmation skeleton this
-                    // branch used to redirect to are removed, not reused
-                    // (`:700-701`) -- "M4 does not create a link." A later
-                    // design may restore self-service linking with fresh
-                    // local authentication, local MFA, CSRF, a single-use
-                    // durable intent, explicit approval, and C19 atomicity.
-                    //
-                    // RFC 096-B1 stage 6c, F05: `link_required`'s own
-                    // registry-declared descriptor. No email/collision
-                    // detail in the `reason` token either, matching the
-                    // generic-result requirement above: this call site is
-                    // one of the things that must not distinguish a
-                    // collision from any other unlinked identity.
+                Err(e) => {
+                    tracing::warn!(
+                        provider_id = %provider.id,
+                        error = %e,
+                        "federation: first-login provisioning failed"
+                    );
                     terminalize_and_audit(
                         &app.db,
                         claimed.id,
-                        TerminalFailureReason::LinkRequired,
-                        now,
+                        TerminalFailureReason::Denied(DeniedDetail::ProvisionTransactionFailed),
+                        validation_now,
                         provider.id,
                         None,
                     )
                     .await;
-                    return Ok(terminal(
+                    Ok(terminal(
                         jar,
-                        Redirect::to("/admin/login?fed_error=link_required"),
-                    ));
+                        Redirect::to("/admin/login?fed_error=attempt_claim_failed"),
+                    ))
                 }
-            }
+            };
         }
     };
 
@@ -1546,7 +1371,7 @@ pub async fn federated_callback(
         &claimed,
         provider.id,
         &provider.slug,
-        now,
+        validation_now,
     )
     .await
 }
@@ -1852,26 +1677,6 @@ async fn complete_federated_signin(
     Ok(terminal(jar, Redirect::to("/admin")))
 }
 
-async fn fetch_userinfo(
-    client: &reqwest::Client,
-    url: &str,
-    access_token: &str,
-) -> Result<IdTokenClaims, String> {
-    let resp = client
-        .get(url)
-        .bearer_auth(access_token)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-    // RFC 134 D5 Tier 1: the same bounded pipeline as discovery and the
-    // token response. This site previously had no status check at all
-    // before deserializing -- `read_bounded_json`'s 200-only requirement
-    // closes that, not only adds the size/shape caps.
-    crate::response_bounds::read_bounded_json(resp)
-        .await
-        .map_err(|e| e.to_string())
-}
-
 // ── RFC 096-B1 stage 6e: the `fed_error` surfacing map ───────────────────────
 //
 // `:714-716`'s rule applies to rendered output at least as strongly as to
@@ -1884,11 +1689,23 @@ async fn fetch_userinfo(
 // distinguished from a known one.
 
 /// Every distinct `fed_error` value this module's handlers can produce, as
-/// measured directly against this file (not assumed): 28 values, 21 of
+/// measured directly against this file (not assumed): 25 values, 18 of
 /// them collapsing into [`Self::Retry`] below. `claim_fed_error`'s own six
 /// named `StoreError` arms plus its wildcard account for seven of the
-/// twenty-one; the rest are this file's static `Redirect::to(...)`
-/// literals.
+/// eighteen; the rest are this file's static `Redirect::to(...)` literals.
+///
+/// RFC 096-B1 stage 12a recounted this from the 28/21 the comment
+/// previously stated: `userinfo`, `no_id_token`, and `no_sub` are gone with
+/// the legacy identity-mapping block that produced them (confirmed by grep,
+/// not assumed -- none of the three appears anywhere in this file any
+/// longer). §3's own cross-check (`token_endpoint_auth_method`) was
+/// written, found to refuse every real and test provider this handler can
+/// actually reach (its own doc comment above explains why), and backed out
+/// rather than shipped disabled-by-omission -- it never became a producible
+/// value at all. `attempt_not_found`, `nonce_mismatch`, `state_mismatch`,
+/// and `token_parse` all still occur, each now from exactly one producer
+/// where stage 12a's own changes removed what had been a second,
+/// redundant one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FedErrorBucket {
     /// Every transport, token, signature, claims, or validation failure
@@ -1898,12 +1715,12 @@ enum FedErrorBucket {
     /// `binding_mismatch`, `attempt_claim_failed`, `token_exchange`,
     /// `token_parse`, `missing_id_token`, `signature_invalid`,
     /// `nonce_mismatch`, `identity_claims_invalid`, `time_claims_invalid`,
-    /// `optional_claims_invalid`, `userinfo`, `no_id_token`, `no_sub`, and
-    /// anything not in the other three buckets. None of these distinguish
-    /// one local account from another -- each is about this one request's
-    /// own protocol state, not about whether some other upstream identity
-    /// would have succeeded -- so lumping them together costs nothing and
-    /// keeps the message set small.
+    /// `optional_claims_invalid`, and anything not in the other three
+    /// buckets. None of these distinguish one local account from another
+    /// -- each is about this one request's own protocol state, not about
+    /// whether some other upstream identity would have succeeded -- so
+    /// lumping them together costs nothing and keeps the message set
+    /// small.
     Retry,
     /// A provider- or account-level issue only an administrator can act
     /// on: `disabled` (provider disabled), `config_drift` (startup config

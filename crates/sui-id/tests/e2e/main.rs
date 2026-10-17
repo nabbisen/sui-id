@@ -61,6 +61,7 @@ mod r096_a_stage3a_jwks;
 mod r096_a_stage4a_verify;
 mod r096_a_stage9_well_known;
 mod r096_b1_stage10b_f03_scope;
+mod r096_b1_stage12a;
 mod r096_b1_stage4;
 mod r096_b1_stage5;
 mod r096_b1_stage6a;
