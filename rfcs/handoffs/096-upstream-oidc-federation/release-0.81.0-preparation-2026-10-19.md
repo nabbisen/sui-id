@@ -126,9 +126,10 @@ output of each**, not a claim that it passed:
    required release step. **Return its stdout and its exit code.** It exits
    **1** today and will keep exiting 1 until `0.80.0` is resolved (proposal
    §G); that is expected and is not yours to fix. Return it anyway — the evidence is the
-   point, and D7 exists because nobody was looking. *Note for fish: `$status`
-   after a pipeline is the last command's, so capture the exit code without a
-   pipe or you will report `0`.*
+   point, and D7 exists because nobody was looking. *In zsh — which is this machine's shell,
+   whatever the tooling reports — `$status` is `$?`, so after a pipeline it is
+   the last command's. Capture the exit code without a pipe, or you will
+   report `0` for a check that returned 1.*
 2. **`cargo package -p sui-id-shared --allow-dirty`** — must produce a package
    and the verify build must succeed. **Only this one is verifiable.** The
    other five resolve their internal dependencies from the index and cannot be
