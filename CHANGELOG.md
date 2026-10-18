@@ -76,9 +76,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   already exhausted) produced a fresh row at `0`, giving an attacker who
   holds the upstream identity but not the local second factor a new
   five-guess budget on every restart. Not exploitable in any released
-  version — nothing can yet submit a proof against the row at all; the
-  verifier and its promotion path still have no caller (see *Changed*,
-  below). Fixed by a schema constraint (migration `0048`) that allows at
+  version — in every released version nothing could submit a proof against
+  the row at all, because the verifier and its promotion path had no caller
+  until this release gave them one (see *Added*, above). Fixed by a schema constraint (migration `0048`) that allows at
   most one active (pending or exhausted) continuation per user: a restart
   now reuses the live one, preserving its count, and an exhausted one
   stays exhausted rather than restarting at zero. **Upgrading runs a
@@ -163,22 +163,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   no longer fire for federated ones** — add a second alert on the new
   event name to keep the same coverage (RFC 096-B1 stage 9, F02).
 
-- **Groundwork for federated local-MFA completion, not yet reachable from
-  any sign-in.** Two new tables (`federation_mfa_pending`,
-  `federation_webauthn_ceremony`; migration `0047`) and a private verifier
-  that checks a federated MFA submission's browser/CSRF binding now exist
-  (RFC 096-B1 stages 8 and 10a), alongside the continuation row the item
-  above already writes on every federated sign-in that needs a second
-  factor. **Promotion through all three local second-factor methods —
-  TOTP, a recovery code, and now a WebAuthn passkey — is also built** (RFC
-  096-B1 stages 10b and 11): a correct proof completes the continuation
-  and opens a session, a wrong one counts toward the five-attempt cap, and
-  a WebAuthn challenge can be issued and consumed. Nothing reads any of
-  this yet, the verifier and its promotion path have no caller, and no
-  sign-in can complete a federated second factor — that is later work. An
-  operator who notices `federation_mfa_pending`/
-  `federation_webauthn_ceremony` filling up is seeing exactly this: rows
-  written, nothing yet consuming them.
+- **Two new tables back federated local-MFA completion:
+  `federation_mfa_pending` and `federation_webauthn_ceremony`, migration
+  `0047`.** They hold the continuation a federated sign-in writes when it
+  stops at a second factor, and the WebAuthn challenge issued against it
+  (RFC 096-B1 stages 8, 10a, 10b and 11). Promotion works through all three
+  local second-factor methods — TOTP, a recovery code, and a WebAuthn
+  passkey: a correct proof completes the continuation and opens a session,
+  and a wrong one counts toward the five-attempt cap. **These tables and
+  the code that reads them arrived in separate stages of this same
+  release**, so an operator upgrading from 0.80.0 sees them appear and be
+  consumed together; there is no version in which rows accumulate with
+  nothing reading them. The existing GC purges `federation_mfa_pending` on
+  the rows' own expiry, and `federation_webauthn_ceremony` needs no purge
+  of its own: its `FOREIGN KEY … ON DELETE CASCADE` collects any ceremony
+  whose parent continuation that `DELETE` removes.
 
 ### Fixed
 
