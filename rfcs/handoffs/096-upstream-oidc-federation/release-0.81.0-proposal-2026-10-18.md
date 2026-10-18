@@ -151,7 +151,45 @@ Per `docs/src/contributing/release-process.md`:
 
 **Step 5 is an outward-facing act and is not covered by my standing commit
 and push authorization.** Authorizing the cut is not by itself authorizing the
-publish; say whether you want both or only the tag.
+publish; say whether you want both or only the tag — and see §G first, which
+changes what that question means.
+
+## G — crates.io is at `0.79.0`, and that looks deliberate
+
+Measured 2026-10-18 against the crates.io sparse index, after the
+pre-publish dry run failed for four crates and sent me looking.
+
+| | |
+|---|---|
+| Tags in this repository | … `0.76.12`, `0.77.0`, **`0.78.0`**, `0.79.0`, **`0.80.0`** |
+| Published on crates.io | … `0.76.9`, `0.77.0`, `0.79.0` |
+
+**`0.78.0` and `0.80.0` were tagged and never published**, and `0.76.10`–`.12`
+before them. Absent from the index entirely, not yanked — a yanked version
+still appears, flagged. So **publishing is not something this project does for
+every tag**, and I am recording a pattern, not an omission. I do not know the
+reason and am not guessing at one.
+
+**What follows for `0.81.0`:**
+
+- Cutting the release — bump, promote, tag — is unaffected. That is what you
+  authorized and it proceeds.
+- **Publishing is a separate question with a different shape than I put to
+  you.** It is not "publish this release"; it is "resume publishing, after two
+  tags that were not published". A crates.io consumer would move
+  `0.79.0` → `0.81.0` and receive `0.80.0`'s content in the jump, including
+  `0.80.0`'s own `### Security` fixes.
+- If the answer is no, say so and the cut stops at the tag. Nothing else in
+  the release depends on it.
+
+**On the dry run itself: the four failures are not a defect.** `cargo package`
+resolves each crate's internal dependencies from the index, so a crate can
+only be dry-run-packaged once the ones below it are published. The checklist
+in `docs/src/contributing/release-process.md:119` names only `sui-id-shared`
+for exactly this reason. `sui-id-shared` and `sui-id-i18n` — the two with no
+internal dependencies — both package cleanly. The other four fail on
+`sui-id-shared = "^0.80.0"` finding no such version, which is the index
+telling us §G's fact rather than anything wrong with the crates.
 
 ## F — nothing else is waiting on you
 
