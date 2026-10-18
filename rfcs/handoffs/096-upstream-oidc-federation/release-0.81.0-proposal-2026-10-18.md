@@ -243,8 +243,31 @@ internal dependencies — both package cleanly. The other four fail on
 `sui-id-shared = "^0.80.0"` finding no such version, which is the index
 reporting this section's fact rather than anything wrong with the crates.
 
-## F — nothing else is waiting on you
+## F — your queue, with the one blocking item marked
 
-The three remaining items in your queue are unchanged and block nothing: the
-severity and timeline on the held CLI registration-token finding, the M3 FAQ
-veto, and stage 14's upstream credentials.
+*This section read "nothing else is waiting on you" until 2026-10-19. §G now
+holds something that is, so the heading was wrong and is replaced rather than
+left to be read past.*
+
+**Blocking the tag — one item:**
+
+- **§G: is `0.80.0` abandoned, or published late?** RFC 131 D7 makes the
+  detector a required release step that fails the release, and it exits 1
+  until this is answered. The preparation runs to completion without it; the
+  tag does not. My recommendation is to abandon it on the `0.78.0` ruling.
+
+**Owed an answer, blocking nothing:**
+
+- **§B's three rulings** — the wording of the two released-version `### Security`
+  entries, the advisory question (my recommendation: no), and the rule change
+  that stops a stage dispatch routing around the disclosure gate again. The
+  third is the one that matters, because it is the only one that prevents a
+  repeat.
+- The severity and timeline on the held CLI registration-token finding.
+- The M3 veto on the restored FAQ sentence.
+- Stage 14's upstream and credentials — a closure item for RFC 096, not a
+  release gate.
+
+**Not in your queue:** the publish. §G reframes it as *resuming* publishing
+rather than publishing this release, and it is asked for separately once the
+tree is tagged.

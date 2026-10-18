@@ -36,6 +36,7 @@ ROADMAP.md	392884e1eb83766da2d205ed9de35e2f8930f22c298a692da72804110c3c0f6f	1	Wh
 ROADMAP.md	39f12d68482659d1745c435af3eb426e697afd7383d1751a002d104edf3f914e	1	And where no reviewer exists , the judgement is carried by @nabbisen under R1's residual rather than labelled a completed independent review
 ROADMAP.md	3ff17aee5d6f11a9c0b47dbe077c8ede26d6ef622b52bc9aaa7129ab54825d44	1	What this replaced. From 2026-09-10 to 2026-09-22 this work was carried in a roadmap/ directory created by ee48257 , which justified itself 
 ROADMAP.md	40c089706b27d6d15adb13d42149a4f686e2d5c855c703a775cb49719efc16d4	1	R1 Review independence: authoring, implementation and review concentrate in few roles Certain (structural) High — the readiness claim rests 
+ROADMAP.md	44b5d773ea867234dc732ce4dc06e8ba9ebb032e2440b3a6f472197de9445f70	1	D — the federated path becomes real v0.81.0 Gate met and cut authorized 2026-10-18 — @nabbisen : "Authorized." The tag waits on one ruling, 
 ROADMAP.md	4682dafde0a54772dd01c44edfaa1bae0eeb258438b0e65da112a67a074e164a	1	Owner and approver @nabbisen Yes
 ROADMAP.md	49dbfcab44b8ec3a2978613ef519cb233fb5c91c5e0ab44211be15c4f749b3bd	1	Recording a proposal as an owner ruling removes the owner's decision without their knowledge.
 ROADMAP.md	4c13be87c9cd301126e224cb8a1f947e693bb723402b21dcd2f85f83df07e5d9	1	This is recorded, not resolved. It reads against the owner decision of 2026-08-26 above, which routes a design to the role that must build a
@@ -69,7 +70,6 @@ ROADMAP.md	c7f1e35be50044c487b2b4057e969a72c2f64e1f725cde24c38f7bae20193109	1	Wh
 ROADMAP.md	c85ab670b7b295f5f71a70048e2389912bb49a45e6d38982b6df9d3b6d5139d6	1	@nabbisen states he made no such ruling.
 ROADMAP.md	d3cd0b595bd83c39875dac8e2641faed3b76a8b07b9679bc4f41659e0f68a479	1	M3 — Atomic dynamic registration — Validate all metadata before consuming authorization; atomic use/client/audit transaction; race and retry
 ROADMAP.md	d82c728ed5be7a135227fe87a78f0e113122359b0ae2f2e4ffec0885abd7edb6	1	Blocked — substantial work outstanding (4). RFC 131, listed below as held, closed 2026-10-02 once @nabbisen approved removing the D5 clause 
-ROADMAP.md	d99fdbb8166f22ffe960505ba3530ab9bf005ef81e0dc35b49b529a2c5f4d9be	1	D — the federated path becomes real v0.81.0 Gate met and cut authorized 2026-10-18 — @nabbisen : "Authorized." 096-B1 stages 7–12 and RFC 13
 ROADMAP.md	dd16e9a10736b78b224f43fe486104fc847e923d1d0f98f9c08e1af1e0990a66	1	The architect's self-reviews to date , each to be confirmed against this ruling rather than assumed compliant: RFC 124 ( @nabbisen assigned 
 ROADMAP.md	e48726a2966498de86bf8216ccf3cd161bf3681500bce35a105c0dfc6ac665e0	1	119 accepted by @nabbisen 2026-09-26; status held — G11 refuses an Accepted RFC whose security review is Required and which cites no review 
 ROADMAP.md	ef658746902d7c4f4907f832379c8b77083fc5b0f850c4b8e4154c71eafbf984	1	Closed 2026-10-17 on @nabbisen 's "096-A is accepted." , on the architect's [completion assessment](rfcs/handoffs/096-upstream-oidc-federati
