@@ -13,13 +13,13 @@
 > as settled by it. They do not block the cut: the entries are already
 > public, so promoting `[Unreleased]` to `[0.81.0]` discloses nothing new.
 >
-> ## One ruling now gates the cut, and it is **§G**, not §B.
-> Found 2026-10-19, after the authorization. `0.80.0` is tagged, unpublished
-> and not recorded as abandoned; RFC 131 D7 makes the detector that says so a
-> required release step that **fails the release**. The preparation can be
-> dispatched and run to completion, but **the tag waits on your ruling**:
-> abandon `0.80.0` as you abandoned `0.78.0`, or publish it late. My
-> recommendation is in §G.
+> ## §G is settled, 2026-10-19, and the architect was overruled.
+> He recommended abandoning `0.80.0` "on the `0.78.0` ruling". The ruling:
+> *"Both should have been published unless any good reason existed… They are
+> the unwanted exception in the past."* **Publishing follows every tag.**
+> `0.80.0` is the one case with a good reason — it carries the **High**-severity
+> flaw that stage 12a fixed four days after its tag — so it is recorded as
+> **superseded**, and `0.81.0` publishes over the gap. §G has the measurement.
 >
 > ## Original framing, kept: **two things, not one.**
 > **(1)** Authorize the cut. **(2)** Rule on a disclosure question that is
@@ -167,81 +167,79 @@ and push authorization.** Authorizing the cut is not by itself authorizing the
 publish; say whether you want both or only the tag — and see §G first, which
 changes what that question means.
 
-## G — `0.80.0` is tagged, unpublished and **unrecorded**, and only the last word is open
+## G — `0.80.0`: the architect recommended abandonment and was overruled
 
-*Rewritten 2026-10-19. The first version of this section reported the
-unpublished tags as a pattern whose reason I did not know and would not guess
-at. The reason was in `CHANGELOG.md` the whole time and I had not looked.
-What follows replaces it.*
+*Rewritten twice. The first version reported the unpublished tags as a pattern
+whose reason the architect did not know; the reason was in `CHANGELOG.md` and
+he had not looked. The second recommended abandoning `0.80.0` "on the `0.78.0`
+ruling, for the same reason". **That recommendation was wrong and is
+withdrawn.** It read a record of something going wrong as a precedent for
+doing it again.*
 
-**This repository's own detector states the finding in one line.**
-`scripts/check-published-versions.py` — RFC 131 D7, and a required step of the
-release process — run 2026-10-19, exit 1:
+**The ruling.** `@nabbisen`, 2026-10-19: *"Both should have been published
+unless any good reason existed."* And on the earlier lapses: *"They are the
+unwanted exception in the past."*
 
-```
-check-published-versions: sui-id-shared: tag 0.80.0 is ahead of the registry's 0.79.0
-… the same for sui-id-i18n, sui-id-store, sui-id-core, sui-id-web, sui-id
-check-published-versions: 0.80.0 is tagged but not fully published,
-  and CHANGELOG.md does not record it as abandoned
-```
+So the rule is **publish every tag**, and a tag that goes unpublished is a
+defect unless a good reason exists. `0.78.0` and `0.76.10`–`.12` had none —
+they were missed, and the `2026-10-01` abandonment was the owner cleaning up
+after the lapse, not endorsing it. The architect generalised a remediation
+into a policy and then recommended it back to him.
 
-**Four of the five gaps are settled, and you settled them.**
-`CHANGELOG.md:485-494` records `0.78.0` as *"Never published to crates.io;
-abandoned"* — tagged 2026-09-24, the publish step not run, its content reaching
-users in `0.79.0` instead — **abandoned by `@nabbisen` on 2026-10-01** rather
-than published late. `0.76.10`, `0.76.11` and `0.76.12` are abandoned on the
-same ruling and for the same reason.
+### `0.80.0` is the one case where a good reason does exist, and it is security
 
-So publishing every tag is not this project's practice, and that is a decision
-of record rather than the drift my first draft implied. I should have read the
-changelog I had just finished reconciling.
+Measured 2026-10-19:
 
-**`0.80.0` alone is unrecorded**, and
-`docs/src/contributing/release-process.md:91-95` does not permit leaving it so:
-a version found tagged-but-unpublished *"is either published late or recorded
-as abandoned in `CHANGELOG.md` with a reason — never left looking
-unfinished."*
+| | |
+|---|---|
+| `0.80.0` tagged | `7aecd98`, 2026-10-13 |
+| Stage 12a, the **High**-severity fix | `57b4ead`, 2026-10-17 — **not an ancestor of the `0.80.0` tag** |
 
-**One ruling, with a precedent that fits exactly.** `0.80.0`'s tag is an
-ancestor of `main` (verified with `git merge-base --is-ancestor`), so its
-content reaches users in `0.81.0` — `0.78.0`'s situation word for word. My
-recommendation: **abandon `0.80.0` on the same ruling and for the same
-reason**, record that in `CHANGELOG.md` as part of the cut, and publish
-`0.81.0`. That closes the gap instead of widening it to three tags. If you
-would rather `0.80.0` went out late, it publishes before `0.81.0` and I need to
-know before the tag. The precedent is evidence; it is not your decision, and I
-am not treating it as having made one.
+`CHANGELOG.md`'s entry 1 names the flaw as present in *"every released version
+with federation enabled, `0.80.0` included"*: the federated callback decoded
+the upstream ID token without verifying its signature, so a malicious or
+compromised upstream IdP could name any `sub`/`email`/`preferred_username` and
+be provisioned as that identity.
 
-**And this one does gate the cut — I told you nothing did, and that was
-wrong.** RFC 131 D7 point 3 makes the detector *"a **required step in the
-release process**, run at the cut and again after publishing, **failing the
-release** rather than a cron nobody reads"*, and D7 point 1 makes a cut
-*"incomplete until every crate in the publication order is on the registry at
-that version, or until the cut is recorded as abandoned in `CHANGELOG.md` with
-a reason."* The detector exits 1 today, on `0.80.0`. So the `0.81.0` cut cannot
-pass its own required step until `0.80.0` is resolved one way or the other.
-§B still blocks nothing. **This does**, and it is the one thing in your queue
-that the preparation cannot be finished without.
+**Publishing `0.80.0` now would create the first installable copy of that
+flaw** — permanently, since crates.io versions can be yanked but not removed —
+four days after it was fixed and immediately before `0.81.0` supersedes it.
+That is the "good reason" the ruling allows for, and it is the first time one
+has actually applied.
 
-**The process finding, which is mine and needs nothing from you.** This is the
-third occurrence and the second since the detector existed: the script is dated
-2026-10-01, the day of the `0.78.0` ruling, and `0.80.0` was cut on 2026-10-13
-without it being run. `release-process.md:82-89` diagnoses precisely this — the
-gap exists *"because nobody was looking"*, and *"a mechanism that depends on
-someone looking cannot be its own fix"* — and then makes the detector a step
-that depends on someone looking. It cannot become a `[gates]` lane, because it
-needs a live call to crates.io while `[gates]` stays offline and deterministic.
-It can stop being a sentence in a document. **The preparation dispatch will
-require its output and its exit code as a returned artefact, before the tag.**
+**So: `0.80.0` is not published, and the record says *superseded*, not
+*abandoned*, with that reason.** The distinction is the whole point of the
+ruling and the record must carry it.
 
-**On the dry run: the four failures are not a defect.** `cargo package`
-resolves each crate's internal dependencies from the index, so a crate can only
-be dry-run-packaged once the ones below it are published. The checklist at
-`docs/src/contributing/release-process.md:119` names only `sui-id-shared` for
-exactly this reason. `sui-id-shared` and `sui-id-i18n` — the two with no
-internal dependencies — both package cleanly. The other four fail on
-`sui-id-shared = "^0.80.0"` finding no such version, which is the index
-reporting this section's fact rather than anything wrong with the crates.
+### Publishing `0.81.0` over the gap is sound
+
+- crates.io imposes no contiguity requirement; `0.79.0` → `0.81.0` is legal.
+- The six crates pin their internal dependencies to the workspace version, so
+  the documented bottom-up order resolves at each step. **Nothing requires
+  `0.80.0` to be on the registry.**
+- A consumer at `0.79.0` moving to `0.81.0` receives `0.80.0`'s content in the
+  jump. Nothing is lost.
+
+### One mechanical consequence
+
+`scripts/check-published-versions.py` recognises exactly two outcomes —
+published, or the literal word *abandoned* (`:73-77`). It has no vocabulary for
+*superseded*, which is part of what made the wrong recommendation look like the
+only option. **Widening it to a third outcome is a regex and a test**, and it
+is folded into the preparation dispatch rather than raised as separate work.
+RFC 131 D7's two-outcome model is correspondingly narrow; amending it is a
+separate proposal and is not raised here.
+
+### On the dry run
+
+**The four failures are not a defect.** `cargo package` resolves each crate's
+internal dependencies from the index, so a crate can only be dry-run-packaged
+once the ones below it are published; `docs/src/contributing/release-process.md:119`
+names only `sui-id-shared` for exactly this reason. `sui-id-shared` and
+`sui-id-i18n` — the two with no internal dependencies — both package cleanly.
+The other four fail on the dependency version not being on the index, which is
+this section's fact rather than anything wrong with the crates, and they clear
+as each publish step lands.
 
 ## F — your queue, with the one blocking item marked
 
@@ -249,12 +247,8 @@ reporting this section's fact rather than anything wrong with the crates.
 holds something that is, so the heading was wrong and is replaced rather than
 left to be read past.*
 
-**Blocking the tag — one item:**
-
-- **§G: is `0.80.0` abandoned, or published late?** RFC 131 D7 makes the
-  detector a required release step that fails the release, and it exits 1
-  until this is answered. The preparation runs to completion without it; the
-  tag does not. My recommendation is to abandon it on the `0.78.0` ruling.
+**Blocking the tag — nothing.** §G was the one item and it was ruled on
+2026-10-19.
 
 **Owed an answer, blocking nothing:**
 
@@ -268,6 +262,7 @@ left to be read past.*
 - Stage 14's upstream and credentials — a closure item for RFC 096, not a
   release gate.
 
-**Not in your queue:** the publish. §G reframes it as *resuming* publishing
-rather than publishing this release, and it is asked for separately once the
-tree is tagged.
+**The publish** is authorized in direction by §G's ruling — publishing follows
+every tag — but it remains an outward-facing act outside the architect's
+standing authorization, so it is asked for as a one-line confirm once the tree
+is tagged and the dry runs are clean.

@@ -36,7 +36,6 @@ ROADMAP.md	392884e1eb83766da2d205ed9de35e2f8930f22c298a692da72804110c3c0f6f	1	Wh
 ROADMAP.md	39f12d68482659d1745c435af3eb426e697afd7383d1751a002d104edf3f914e	1	And where no reviewer exists , the judgement is carried by @nabbisen under R1's residual rather than labelled a completed independent review
 ROADMAP.md	3ff17aee5d6f11a9c0b47dbe077c8ede26d6ef622b52bc9aaa7129ab54825d44	1	What this replaced. From 2026-09-10 to 2026-09-22 this work was carried in a roadmap/ directory created by ee48257 , which justified itself 
 ROADMAP.md	40c089706b27d6d15adb13d42149a4f686e2d5c855c703a775cb49719efc16d4	1	R1 Review independence: authoring, implementation and review concentrate in few roles Certain (structural) High — the readiness claim rests 
-ROADMAP.md	44b5d773ea867234dc732ce4dc06e8ba9ebb032e2440b3a6f472197de9445f70	1	D — the federated path becomes real v0.81.0 Gate met and cut authorized 2026-10-18 — @nabbisen : "Authorized." The tag waits on one ruling, 
 ROADMAP.md	4682dafde0a54772dd01c44edfaa1bae0eeb258438b0e65da112a67a074e164a	1	Owner and approver @nabbisen Yes
 ROADMAP.md	49dbfcab44b8ec3a2978613ef519cb233fb5c91c5e0ab44211be15c4f749b3bd	1	Recording a proposal as an owner ruling removes the owner's decision without their knowledge.
 ROADMAP.md	4c13be87c9cd301126e224cb8a1f947e693bb723402b21dcd2f85f83df07e5d9	1	This is recorded, not resolved. It reads against the owner decision of 2026-08-26 above, which routes a design to the role that must build a
@@ -53,6 +52,7 @@ ROADMAP.md	6e364cabaa11522c5c854bd5ae883cd048fd57c65b877741fc33ee0d474451fd	1	Cy
 ROADMAP.md	766450b57c4bb79e356dfd9ac065f79cbec7c49ef087e3ca6fa8ba0c5afad2b6	1	#### S1a — The workflow, ruled by @nabbisen on 2026-10-01
 ROADMAP.md	7c3b4d73cf9008f591c43f49ceb79d4570fa262c5fa82e72506f9abea4c17ebb	1	All remain Proposed , no schedule, require owner direction + soak.
 ROADMAP.md	831b9986beea7e5a3407a96fb665d91220901ae66ea5285416a15da856e8f4df	1	Ruled 2026-09-22 ( @nabbisen ): Chinese is necessary but not urgent — it waits until the APIs are stable, and then a native-speaker review, 
+ROADMAP.md	833c2d87b0a9e843ce4f926560041de2627844e26d012e13ab6c7159e663471f	1	D — the federated path becomes real v0.81.0 Gate met and cut authorized 2026-10-18 — @nabbisen : "Authorized." 0.80.0 ruled on 2026-10-19: p
 ROADMAP.md	85972bca8cfda9e25847b615a12c3709aae33d07115fcd9c82cad11b804bd37b	1	Owner decision, 2026-08-26. Review is not skipped.
 ROADMAP.md	8f0151094259a8bc85d880cb9104615b5a24981cf3d81397b72d47814e1352a0	1	RFCs 094, 095 and 096 were returned to proposed/ on 2026-07-28 for owner-approved material amendments, and were re-accepted on 2026-08-27.
 ROADMAP.md	92e87f0d49a150a6963709d59e47d782889e1336a93d3eedfb51fcdb52347651	1	They must: because owner-requested self-review is legitimate, a gate that rejected every self-review would reject work this ruling permits.
@@ -461,6 +461,7 @@ rfcs/handoffs/096-upstream-oidc-federation/harness-redesign-2026-10-06.md	4dae62
 rfcs/handoffs/096-upstream-oidc-federation/harness-redesign-2026-10-06.md	ac54be506b30c5891326e19ee7a8b69810bb4e06c1b33af3ae42cab36b2fcbc9	1	That evidence was wrong. Option A approved by @nabbisen , 2026-10-06 ("A.
 rfcs/handoffs/096-upstream-oidc-federation/hostile-provider-harness-2026-10-05.md	91b3e3cf21b6f8de4ffbbb78dc682d9088f6d159c476c930b80380874c6dade0	1	Date: 2026-10-05 Status: APPROVED by @nabbisen , 2026-10-05 ("Approved."), and dispatched — see [ harness-build-2026-10-05.md ](harness-buil
 rfcs/handoffs/096-upstream-oidc-federation/read-path-audit-2026-10-09.md	2097fd0026a6cf17d4f9403200139811aeaad8690f9f4a1bbc35370ee9f07d82	1	Authorized. @nabbisen , 2026-10-09, on the recommendation that it run as its own task after the ReadConn ruling: "Your recommendation is acc
+rfcs/handoffs/096-upstream-oidc-federation/release-0.81.0-proposal-2026-10-18.md	0de6adc509ceefa4c549d53d5e4c5e5a8cfc6a53381bdef8b0d273ca3a3efc8f	1	The ruling. @nabbisen , 2026-10-19: "Both should have been published unless any good reason existed." And on the earlier lapses: "They are t
 rfcs/handoffs/096-upstream-oidc-federation/release-0.81.0-proposal-2026-10-18.md	b90f5c3c596c7e9e1038793b7a022477f043cf8ff82acb5a8028fffe05463ec3	1	## AUTHORIZED — @nabbisen , 2026-10-18: "Authorized."
 rfcs/handoffs/096-upstream-oidc-federation/rfc-094-f01-class-amendment-2026-10-15.md	de0212d63183a26e65cd83f6c54292b68344f1cce70f20f2d2a9732d0b30118a	1	Approved by @nabbisen 2026-10-11 as a
 rfcs/handoffs/096-upstream-oidc-federation/schedule-2026-10-15.md	649f21ad834fa89403f25bf12e9ad0f43812f51c76cf5738bb618431349e26ed	1	~~ The RFC 094 amendment and its re-acceptance ~~ — done : @nabbisen accepted the amendment on 2026-10-15 and RFC 094 round-tripped the same
