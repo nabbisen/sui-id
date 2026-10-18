@@ -1,6 +1,19 @@
 # `0.81.0` — cycle D, proposed for authorization
 
-> ## Whose turn it is: **`@nabbisen`'s.** Two things, not one.
+> ## **AUTHORIZED** — `@nabbisen`, 2026-10-18: *"Authorized."*
+> In the same breath, on who does what: *"Remember we can ask dev team to
+> help the preps at least partially. Besides, to do the actual release and
+> publish is the role of you and me."* So the preparation is dispatchable;
+> the tag and the publish are not.
+>
+> ## Still open, and not answered by that authorization: **§B.**
+> The cut was authorized on §A's recommendation. §B's three rulings — the
+> wording of the two released-version `### Security` entries, the advisory
+> question, and the rule change — were not addressed and are **not** treated
+> as settled by it. They do not block the cut: the entries are already
+> public, so promoting `[Unreleased]` to `[0.81.0]` discloses nothing new.
+>
+> ## Original framing, kept: **two things, not one.**
 > **(1)** Authorize the cut. **(2)** Rule on a disclosure question that is
 > already live and that I caused — §B. Read §B first; it is the part that
 > should not wait on the release decision.
@@ -10,13 +23,24 @@
 **Gate.** Met — the cycle was gated on 096-B1 stage 12, which completed
 2026-10-18 with 12b (`09c1e04`, Level B run `39123221966`, 27 jobs, 0 skipped).
 
-## A — the recommendation
+## A — the recommendation, and its outcome
 
 **Cut `0.81.0`.** The gate is met and the release has a real feature in it
 rather than inert scaffolding, which is precisely why cycle D was not cut at
-stage 10a on 2026-10-15.
+stage 10a on 2026-10-15. — **Authorized 2026-10-18.**
 
-**But not before §B is settled**, because cutting publishes the notes.
+*This section originally read "but not before §B is settled, because cutting
+publishes the notes." That was wrong and is struck: the notes are already
+public, which is the whole of §B's problem. Promoting them to a versioned
+section discloses nothing that `57b4ead` and `6cb866b` did not already
+disclose, so §B gates nothing here — it is owed an answer on its own terms,
+not as a precondition of the cut.*
+
+**Sequencing.** RFC 107's dispatch is open and the implementation role keeps
+one working tree; its package and the release preparation would both edit
+`CHANGELOG.md`, so they cannot run concurrently. 107 lands first, then the
+preparation is dispatched. If 107 comes back needing a fix round, `0.81.0`
+is cut without it, exactly as §D says.
 
 ## B — the disclosure question, and it is mine
 
