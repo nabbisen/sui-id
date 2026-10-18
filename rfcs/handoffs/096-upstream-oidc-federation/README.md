@@ -288,15 +288,20 @@ ROADMAP milestone M4-A**. The caveat that qualified it is also gone: 096-A's
 validation was dormant because nothing called it, and stage 12a made the
 verified pipeline the one that acts.
 
-**12b is the last piece of stage 12 and is dispatched** —
-[`stage12b-the-federated-mfa-submission-2026-10-18.md`](stage12b-the-federated-mfa-submission-2026-10-18.md),
-the open dispatch. The account-lock item it carried is **settled by the
-architect, 2026-10-18**
-([`federated-lockout-request-2026-10-17.md`](federated-lockout-request-2026-10-17.md)):
-12b must call `record_second_factor_failure`, because the live path already
-feeds it and 12b without the hook would remove a shipped protection. The
-package also carries the federated cookie's flat `max_age` against the row's
-own `expires_at`, and the direction-2 `MethodMismatch` copy. Nothing
+**12b is the last piece of stage 12.** Its first round
+([`stage12b-the-federated-mfa-submission-2026-10-18.md`](stage12b-the-federated-mfa-submission-2026-10-18.md))
+came back built and was **returned for a fix round** —
+[`stage12b-fix-the-row-the-old-path-consumed-2026-10-18.md`](stage12b-fix-the-row-the-old-path-consumed-2026-10-18.md),
+now the open dispatch. All three of the first round's items are honoured: the
+account-lock hook settled by the architect
+([`federated-lockout-request-2026-10-17.md`](federated-lockout-request-2026-10-17.md)),
+the federated cookie's `max_age` derived from the row's own `expires_at`, and
+the direction-2 `MethodMismatch` copy. **What the dispatch missed is a second
+protection in the same place**: before 12b the federated path completed
+through L02, whose first act deletes the generic `login_pending_mfa` row; the
+new path never reaches L02, so that row now outlives the sign-in it
+authorised. The omission is the architect's, not the implementation role's —
+the dispatch named one protection not to drop and there were two. Nothing
 in stage 12 is waiting on `@nabbisen`. Cycle D needs 12a, 12b and 12c.
 Its code is right; what is wrong is the fixtures. Every federation fixture is
 a public client with no `client_secret_enc`, while its discovery advertises
