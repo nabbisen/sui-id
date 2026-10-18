@@ -154,42 +154,70 @@ and push authorization.** Authorizing the cut is not by itself authorizing the
 publish; say whether you want both or only the tag — and see §G first, which
 changes what that question means.
 
-## G — crates.io is at `0.79.0`, and that looks deliberate
+## G — `0.80.0` is tagged, unpublished and **unrecorded**, and only the last word is open
 
-Measured 2026-10-18 against the crates.io sparse index, after the
-pre-publish dry run failed for four crates and sent me looking.
+*Rewritten 2026-10-19. The first version of this section reported the
+unpublished tags as a pattern whose reason I did not know and would not guess
+at. The reason was in `CHANGELOG.md` the whole time and I had not looked.
+What follows replaces it.*
 
-| | |
-|---|---|
-| Tags in this repository | … `0.76.12`, `0.77.0`, **`0.78.0`**, `0.79.0`, **`0.80.0`** |
-| Published on crates.io | … `0.76.9`, `0.77.0`, `0.79.0` |
+**This repository's own detector states the finding in one line.**
+`scripts/check-published-versions.py` — RFC 131 D7, and a required step of the
+release process — run 2026-10-19, exit 1:
 
-**`0.78.0` and `0.80.0` were tagged and never published**, and `0.76.10`–`.12`
-before them. Absent from the index entirely, not yanked — a yanked version
-still appears, flagged. So **publishing is not something this project does for
-every tag**, and I am recording a pattern, not an omission. I do not know the
-reason and am not guessing at one.
+```
+check-published-versions: sui-id-shared: tag 0.80.0 is ahead of the registry's 0.79.0
+… the same for sui-id-i18n, sui-id-store, sui-id-core, sui-id-web, sui-id
+check-published-versions: 0.80.0 is tagged but not fully published,
+  and CHANGELOG.md does not record it as abandoned
+```
 
-**What follows for `0.81.0`:**
+**Four of the five gaps are settled, and you settled them.**
+`CHANGELOG.md:485-494` records `0.78.0` as *"Never published to crates.io;
+abandoned"* — tagged 2026-09-24, the publish step not run, its content reaching
+users in `0.79.0` instead — **abandoned by `@nabbisen` on 2026-10-01** rather
+than published late. `0.76.10`, `0.76.11` and `0.76.12` are abandoned on the
+same ruling and for the same reason.
 
-- Cutting the release — bump, promote, tag — is unaffected. That is what you
-  authorized and it proceeds.
-- **Publishing is a separate question with a different shape than I put to
-  you.** It is not "publish this release"; it is "resume publishing, after two
-  tags that were not published". A crates.io consumer would move
-  `0.79.0` → `0.81.0` and receive `0.80.0`'s content in the jump, including
-  `0.80.0`'s own `### Security` fixes.
-- If the answer is no, say so and the cut stops at the tag. Nothing else in
-  the release depends on it.
+So publishing every tag is not this project's practice, and that is a decision
+of record rather than the drift my first draft implied. I should have read the
+changelog I had just finished reconciling.
 
-**On the dry run itself: the four failures are not a defect.** `cargo package`
-resolves each crate's internal dependencies from the index, so a crate can
-only be dry-run-packaged once the ones below it are published. The checklist
-in `docs/src/contributing/release-process.md:119` names only `sui-id-shared`
-for exactly this reason. `sui-id-shared` and `sui-id-i18n` — the two with no
+**`0.80.0` alone is unrecorded**, and
+`docs/src/contributing/release-process.md:91-95` does not permit leaving it so:
+a version found tagged-but-unpublished *"is either published late or recorded
+as abandoned in `CHANGELOG.md` with a reason — never left looking
+unfinished."*
+
+**One ruling, with a precedent that fits exactly.** `0.80.0`'s tag is an
+ancestor of `main` (verified with `git merge-base --is-ancestor`), so its
+content reaches users in `0.81.0` — `0.78.0`'s situation word for word. My
+recommendation: **abandon `0.80.0` on the same ruling and for the same
+reason**, record that in `CHANGELOG.md` as part of the cut, and publish
+`0.81.0`. That closes the gap instead of widening it to three tags. If you
+would rather `0.80.0` went out late, it publishes before `0.81.0` and I need to
+know before the tag. The precedent is evidence; it is not your decision, and I
+am not treating it as having made one.
+
+**The process finding, which is mine and needs nothing from you.** This is the
+third occurrence and the second since the detector existed: the script is dated
+2026-10-01, the day of the `0.78.0` ruling, and `0.80.0` was cut on 2026-10-13
+without it being run. `release-process.md:82-89` diagnoses precisely this — the
+gap exists *"because nobody was looking"*, and *"a mechanism that depends on
+someone looking cannot be its own fix"* — and then makes the detector a step
+that depends on someone looking. It cannot become a `[gates]` lane, because it
+needs a live call to crates.io while `[gates]` stays offline and deterministic.
+It can stop being a sentence in a document. **The preparation dispatch will
+require its output and its exit code as a returned artefact, before the tag.**
+
+**On the dry run: the four failures are not a defect.** `cargo package`
+resolves each crate's internal dependencies from the index, so a crate can only
+be dry-run-packaged once the ones below it are published. The checklist at
+`docs/src/contributing/release-process.md:119` names only `sui-id-shared` for
+exactly this reason. `sui-id-shared` and `sui-id-i18n` — the two with no
 internal dependencies — both package cleanly. The other four fail on
 `sui-id-shared = "^0.80.0"` finding no such version, which is the index
-telling us §G's fact rather than anything wrong with the crates.
+reporting this section's fact rather than anything wrong with the crates.
 
 ## F — nothing else is waiting on you
 
