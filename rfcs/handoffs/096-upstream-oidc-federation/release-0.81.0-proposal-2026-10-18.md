@@ -13,6 +13,14 @@
 > as settled by it. They do not block the cut: the entries are already
 > public, so promoting `[Unreleased]` to `[0.81.0]` discloses nothing new.
 >
+> ## One ruling now gates the cut, and it is **§G**, not §B.
+> Found 2026-10-19, after the authorization. `0.80.0` is tagged, unpublished
+> and not recorded as abandoned; RFC 131 D7 makes the detector that says so a
+> required release step that **fails the release**. The preparation can be
+> dispatched and run to completion, but **the tag waits on your ruling**:
+> abandon `0.80.0` as you abandoned `0.78.0`, or publish it late. My
+> recommendation is in §G.
+>
 > ## Original framing, kept: **two things, not one.**
 > **(1)** Authorize the cut. **(2)** Rule on a disclosure question that is
 > already live and that I caused — §B. Read §B first; it is the part that
@@ -149,6 +157,11 @@ Per `docs/src/contributing/release-process.md`:
 5. Publish to crates.io in the documented order: `sui-id-shared`,
    `sui-id-i18n`, `sui-id-store`, `sui-id-core`, `sui-id-web`, `sui-id`.
 
+**The preparation for steps 1–3 is written and held**:
+[`release-0.81.0-preparation-2026-10-19.md`](release-0.81.0-preparation-2026-10-19.md).
+It is not dispatched — RFC 107's dispatch is open and the implementation role
+keeps one working tree — and it stops before the tag.
+
 **Step 5 is an outward-facing act and is not covered by my standing commit
 and push authorization.** Authorizing the cut is not by itself authorizing the
 publish; say whether you want both or only the tag — and see §G first, which
@@ -198,6 +211,17 @@ reason**, record that in `CHANGELOG.md` as part of the cut, and publish
 would rather `0.80.0` went out late, it publishes before `0.81.0` and I need to
 know before the tag. The precedent is evidence; it is not your decision, and I
 am not treating it as having made one.
+
+**And this one does gate the cut — I told you nothing did, and that was
+wrong.** RFC 131 D7 point 3 makes the detector *"a **required step in the
+release process**, run at the cut and again after publishing, **failing the
+release** rather than a cron nobody reads"*, and D7 point 1 makes a cut
+*"incomplete until every crate in the publication order is on the registry at
+that version, or until the cut is recorded as abandoned in `CHANGELOG.md` with
+a reason."* The detector exits 1 today, on `0.80.0`. So the `0.81.0` cut cannot
+pass its own required step until `0.80.0` is resolved one way or the other.
+§B still blocks nothing. **This does**, and it is the one thing in your queue
+that the preparation cannot be finished without.
 
 **The process finding, which is mine and needs nothing from you.** This is the
 third occurrence and the second since the detector existed: the script is dated
