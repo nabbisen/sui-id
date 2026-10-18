@@ -239,6 +239,7 @@ pub static STRINGS_EN: Strings = Strings {
     mfa_challenge_passkey_alt: "Or sign in with a passkey:",
     mfa_challenge_passkey_button: "Sign in with passkey",
     mfa_challenge_failed_flash: "Verification failed. Try again, or use a recovery code.",
+    mfa_challenge_method_mismatch_flash: "This sign-in is waiting for your passkey, not a code. Use the passkey option below.",
 
     // Profile / self-service security (v0.29.1)
     profile_subtitle_template: "Security settings for {username}",

@@ -239,6 +239,7 @@ pub static STRINGS_JA: Strings = Strings {
     mfa_challenge_passkey_alt: "または、パスキーでサインイン:",
     mfa_challenge_passkey_button: "パスキーでサインイン",
     mfa_challenge_failed_flash: "確認に失敗しました。コードを再入力するか、リカバリーコードをお試しください。",
+    mfa_challenge_method_mismatch_flash: "このログインはパスキーでの確認を待っています。下のパスキーのオプションをお使いください。",
 
     // Profile / self-service security (v0.29.1)
     profile_subtitle_template: "{username} のセキュリティ設定",

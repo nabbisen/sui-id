@@ -112,6 +112,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   7, F04) — a partial provisioning (a user with no link, or a link with no
   session) can no longer result from an interrupted write.
 
+- **A federated sign-in's local second factor can now actually be
+  completed — the verifier and promotion path RFC 096-B1 stages 10b/11
+  built had no caller from any sign-in until this stage.**
+  `/admin/login/mfa`'s existing POST handler now branches on the
+  federated pending cookie and dispatches to `FederatedMfaVerifier`/F03
+  instead of falling through to the generic, federation-blind local-MFA
+  path. Switching this traffic onto F03 would, on its own, have silently
+  *removed* **two** existing protections, both carried forward
+  explicitly: the generic `login_pending_mfa` row dual-issued alongside
+  the federated one (RFC 096-B1 stage 9) is what has advanced
+  `users.mfa_failure_count` on a federated user's wrong second factor up
+  to now, and is also what has been consumed — deleted — at completion,
+  so that one browser cannot present the same second factor twice. Both
+  were not exploitable in any released version, since nothing read the
+  federated row to produce either outcome in the first place, but become
+  real once this stage gives it a caller. The lock is carried forward by
+  calling the same `record_second_factor_failure` hook a wrong local
+  proof does, on a wrong federated one, verified by a before/after
+  counter assertion; the row's own consumption is carried forward by
+  deleting it on a successful federated promotion, verified by a
+  before/after row-count assertion — neither only by the response, since
+  the response (and the cookie it clears) would look identical either
+  way. A federated WebAuthn submission is unaffected either way —
+  `/admin/login/webauthn/{start,complete}` are separate routes this
+  stage does not touch, and the generic row already locks a wrong
+  passkey attempt there, through its own existing, unmodified mechanism
+  (RFC 096-B1 stage 12b).
+
 ### Changed
 
 - Federation discovery documents are now validated through RFC 096
@@ -185,6 +213,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   discovery cross-check (RFC 096 `:570`, built by RFC 096-A stage 8, wired
   by RFC 096-B1 stage 12a and immediately found to refuse everything for
   this reason) is live for the first time (RFC 096-B1 stage 12c).
+
+- **The federated MFA pending cookies carried a flat 300-second
+  lifetime, independent of the row's own `expires_at` — which a
+  mid-wait restart of the upstream sign-in deliberately does not refresh
+  (RFC 096-B1 stage 11b).** Not exploitable in any released version:
+  nothing yet read the cookie's value against the row in a way the drift
+  could affect, since this stage is what gives the cookie its first real
+  caller. Now derived from the row's own `expires_at` at the point the
+  cookie is set, with no added read to the hot path — `issue_federated_mfa_pending`
+  already hands its caller the exact row (fresh or restart-reused) that
+  value belongs to (RFC 096-B1 stage 12b).
+
+- **A successful federated promotion left the generic `login_pending_mfa`
+  row — dual-issued alongside the federated one since RFC 096-B1 stage 9
+  — in place, where before this stage it was always destroyed at
+  completion** (L02's own `consume_within_tx`, which this new path never
+  reaches). *Severity: low, and not exploitable in any released
+  version* — the cookie naming the row is `HttpOnly`, is cleared on the
+  same response that left the row behind, and a party would still need a
+  valid local second factor as well; the realistic precondition is
+  transient access to the browser's own cookie jar, within whatever
+  remains of the row's unrefreshed five-minute window. It is still a
+  protection this project ships deliberately — one credential should not
+  authenticate two sign-ins — and switching the federated second factor
+  onto F03 would have dropped it silently had nothing else changed. Now
+  deleted in the same `Promoted` arm that clears its cookie, keyed off
+  the same cookie the local path already parses, best-effort (a delete
+  failure is logged, not fatal to the response it would otherwise
+  have blocked) — the identical shape the account-lock hook above
+  already uses, for the identical reason (RFC 096-B1 stage 12b fix
+  round).
+
+- **A federated second-factor submission against a row already bound to
+  a live WebAuthn ceremony (a passkey challenge already begun) showed
+  the generic "verification failed, try again or use a recovery code"
+  flash**, naming two remedies that could not have succeeded — the
+  submitted code is being checked against the wrong method entirely, not
+  merely wrong. Now shows a specific message naming the one submission
+  that will work (RFC 096-B1 stage 12b).
 
 ## [0.80.0] — 2026-10-13
 

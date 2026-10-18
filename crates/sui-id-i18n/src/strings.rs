@@ -325,6 +325,16 @@ pub struct Strings {
     /// not verify. Same text covers both factors so the UI
     /// doesn't leak which one the user got wrong.
     pub mfa_challenge_failed_flash: &'static str,
+    /// RFC 096-B1 stage 12b: shown instead of
+    /// [`mfa_challenge_failed_flash`] only for a federated continuation
+    /// bound to WebAuthn that received a code submission instead
+    /// (`RejectedReason::MethodMismatch`, direction 2) -- the generic
+    /// flash's "try again, or use a recovery code" is actively wrong
+    /// here, since neither remedy can succeed. Safe to be this specific
+    /// because the row is already bound (RFC 096 `:741-743`); it names
+    /// the one actionable fact about this submission, not about whether
+    /// the account or row exists.
+    pub mfa_challenge_method_mismatch_flash: &'static str,
 
     // ---- Profile / self-service security (v0.29.1) ----
     pub profile_subtitle_template: &'static str,

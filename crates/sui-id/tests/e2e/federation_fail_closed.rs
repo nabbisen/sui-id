@@ -297,11 +297,32 @@ pub(super) struct Outcome {
 /// URL and fills the slot immediately before firing the callback, since
 /// the mock has no other way to learn it (see [`sign_id_token`]).
 pub(super) async fn federated_signin(state: &AppState, nonce_slot: &NonceSlot) -> Outcome {
+    federated_signin_with_next(state, nonce_slot, "").await
+}
+
+/// Same as [`federated_signin`], but starts the flow with `?next=<next>`
+/// (empty means no `next` at all) — RFC 096-B1 stage 12b fix round, item
+/// 2: lets a test drive a continuation that actually carries a `next_path`
+/// through to the pending row, rather than every e2e sign-in exercising
+/// only the no-`next` default.
+pub(super) async fn federated_signin_with_next(
+    state: &AppState,
+    nonce_slot: &NonceSlot,
+    next: &str,
+) -> Outcome {
+    let uri = if next.is_empty() {
+        "/auth/federated/up/start".to_owned()
+    } else {
+        format!(
+            "/auth/federated/up/start?next={}",
+            percent_encoding::utf8_percent_encode(next, percent_encoding::NON_ALPHANUMERIC)
+        )
+    };
     let start = build_router(state.clone())
         .oneshot(
             Request::builder()
                 .method(Method::GET)
-                .uri("/auth/federated/up/start")
+                .uri(uri)
                 .body(Body::empty())
                 .expect("req"),
         )

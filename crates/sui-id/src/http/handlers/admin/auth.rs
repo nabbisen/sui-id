@@ -3,6 +3,10 @@
 use super::forms::CsrfOnlyForm;
 use super::with_csrf_cookie;
 use crate::errors::HttpError;
+use crate::handlers::federation::{
+    FED_MFA_BROWSER_BINDING_COOKIE, FED_MFA_CSRF_COOKIE, FED_MFA_PENDING_COOKIE,
+    clear_fed_mfa_browser_binding_cookie, clear_fed_mfa_csrf_cookie, clear_fed_mfa_pending_cookie,
+};
 use crate::handlers::{
     AppStateExt, PENDING_MFA_COOKIE, PENDING_MFA_NEXT_COOKIE, SESSION_COOKIE,
     clear_pending_mfa_cookie, clear_pending_mfa_next_cookie, clear_session_cookie,
@@ -576,12 +580,21 @@ pub async fn mfa_challenge_get(
             false
         }
     };
+    // RFC 096-B1 stage 12b: a federated continuation's own CSRF-binding
+    // value, read back here so the POST form can carry it in a hidden
+    // field -- `None` for the local path, unchanged. `has_passkey`, above,
+    // needs no federated branch of its own: the generic `login_pending_mfa`
+    // row is still issued alongside the federated one (this stage's own
+    // "leave the dual-row emission in place"), so it already answers
+    // correctly either way.
+    let fed_csrf = jar.get(FED_MFA_CSRF_COOKIE).map(|c| c.value().to_owned());
     let token = crate::csrf::ensure_token(&jar);
     let resp = Html(sui_id_web::render_mfa_challenge(
         None,
         token.clone(),
         has_passkey,
         lang,
+        fed_csrf,
     ))
     .into_response();
     Ok(with_csrf_cookie(resp, &app, &token))
@@ -593,6 +606,11 @@ pub struct MfaChallengeForm {
     pub code: SecretString,
     #[serde(rename = "_csrf", default)]
     pub csrf: String,
+    /// RFC 096-B1 stage 12b: a federated continuation's own CSRF-binding
+    /// value, echoed back from the hidden field `render_mfa_challenge`
+    /// renders it into. Empty, and never read, on the local path.
+    #[serde(default)]
+    pub fed_csrf: String,
 }
 
 pub async fn mfa_challenge_post(
@@ -614,6 +632,25 @@ pub async fn mfa_challenge_post(
         crate::handlers::ErrorAs::Html,
     )?;
     crate::handlers::enforce_csrf(&jar, Some(&form.csrf))?;
+
+    // RFC 096-B1 stage 12b: branch on `FED_MFA_PENDING_COOKIE` being
+    // present. Present -> the federated path, switched this stage onto
+    // `FederatedMfaVerifier`. Absent -> the existing local path below,
+    // unchanged. Not also "and parsing" as a precondition of the branch
+    // itself: `federated_mfa::promote` parses `presented_pending_id`
+    // internally and folds an unparseable value into the same
+    // `BindingFailure` every other binding refusal already is, so
+    // re-validating the shape here first would just be a second,
+    // redundant gate in front of a check that already exists and already
+    // produces the uniform response this handler needs either way.
+    if let Some(fed_pending_raw) = jar
+        .get(FED_MFA_PENDING_COOKIE)
+        .map(|c| c.value().to_owned())
+    {
+        return mfa_challenge_post_federated(app, request_id, lang, jar, form, fed_pending_raw)
+            .await;
+    }
+
     let pending_value = match jar.get(PENDING_MFA_COOKIE) {
         Some(c) => c.value().to_owned(),
         None => {
@@ -710,12 +747,264 @@ pub async fn mfa_challenge_post(
                     token.clone(),
                     has_passkey,
                     lang,
+                    None,
                 )),
             )
                 .into_response();
             Ok(with_csrf_cookie(resp, &app, &token))
         }
     }
+}
+
+/// RFC 096-B1 stage 12b: the federated half of [`mfa_challenge_post`],
+/// switched onto `sui_id_core::federated_mfa::promote` rather than the
+/// generic `login_pending_mfa` row `FederatedMfaVerifier` (stages 10a,
+/// 11) was built to replace. The generic row is still issued alongside
+/// the federated one (`complete_federated_signin`'s own "leave the
+/// dual-row emission in place") and is what the webauthn-passkey path
+/// (`/admin/login/webauthn/*`, untouched this stage) still completes
+/// through; this function only switches the *code* submission.
+///
+/// `presented_pending_id` goes to `promote` as the raw cookie value,
+/// unparsed by this function first (see the caller's own comment on
+/// why). A separate, best-effort row read happens only in the two arms
+/// that actually need a field no `F03Outcome` variant carries:
+/// `Promoted`'s own `next_path`, and the rejection arms' own `user_id`
+/// for the account-lock hook (§3).
+async fn mfa_challenge_post_federated(
+    app: crate::handlers::AppState,
+    request_id: Option<axum::Extension<crate::request_id::RequestId>>,
+    lang: sui_id_i18n::Locale,
+    jar: CookieJar,
+    form: MfaChallengeForm,
+    fed_pending_raw: String,
+) -> Result<Response, HttpError> {
+    let browser_binding_raw = jar
+        .get(FED_MFA_BROWSER_BINDING_COOKIE)
+        .map(|c| c.value().to_owned())
+        .unwrap_or_default();
+
+    let outcome = sui_id_core::federated_mfa::promote(
+        &app.db,
+        &app.clock,
+        &fed_pending_raw,
+        &browser_binding_raw,
+        &form.fed_csrf,
+        form.code.expose_secret(),
+    )
+    .await;
+
+    match outcome {
+        Ok(sui_id_store::commands::F03Outcome::Promoted { session, .. }) => {
+            let next_target = find_fed_pending_row(&app, &fed_pending_raw)
+                .await
+                .and_then(|row| row.next_path)
+                .filter(|s| s.starts_with('/'))
+                .unwrap_or_else(|| "/admin".into());
+            // RFC 096-B1 stage 12b fix round, item 1: the generic
+            // `login_pending_mfa` row dual-issued alongside the federated
+            // one (stage 9) is never reached by L02 on this path --
+            // `verify_pending`'s own `consume_within_tx` only runs from
+            // the local branch. Best-effort, same shape as the §3 lockout
+            // hook below: a different crate, a different lifetime, no
+            // business inside F03's own guarded transaction.
+            if let Some(pending_id) = jar
+                .get(PENDING_MFA_COOKIE)
+                .and_then(|c| c.value().parse::<sui_id_shared::ids::PendingMfaId>().ok())
+                && let Err(e) =
+                    sui_id_store::repos::login_pending_mfa::delete(&app.db, pending_id).await
+            {
+                let rid = request_id.as_ref().map(|e| e.0.0.as_str()).unwrap_or("-");
+                tracing::error!(
+                    request_id = rid,
+                    error = %e,
+                    "federated promotion: consuming the generic pending-MFA row failed"
+                );
+            }
+            // `auth.mfa.success` was committed by F03 with the session
+            // (RFC 096 `:812-818`). RFC 006: MFA verified -> full
+            // sign-in success, the same metric the local path emits.
+            if let Some(m) = app.metric() {
+                m.signin(sui_id_store::metrics::signin_result::SUCCESS);
+            }
+            let cookie = session_cookie(session.id.to_string(), app.config.server.cookie_secure);
+            // Dispatch item 3: clear all four federated cookies *and*
+            // the generic pending-MFA pair -- the generic row's own job
+            // ends here too, even though this path never consumed it.
+            let jar = jar
+                .add(cookie)
+                .add(clear_fed_mfa_pending_cookie(
+                    app.config.server.cookie_secure,
+                ))
+                .add(clear_fed_mfa_csrf_cookie(app.config.server.cookie_secure))
+                .add(clear_fed_mfa_browser_binding_cookie(
+                    app.config.server.cookie_secure,
+                ))
+                .add(clear_pending_mfa_cookie(app.config.server.cookie_secure))
+                .add(clear_pending_mfa_next_cookie(
+                    app.config.server.cookie_secure,
+                ));
+            Ok((jar, Redirect::to(&next_target)).into_response())
+        }
+        Ok(
+            sui_id_store::commands::F03Outcome::RejectedStillPending { reason, .. }
+            | sui_id_store::commands::F03Outcome::AttemptsExhausted { reason },
+        ) => {
+            // RFC 096-B1 stage 12b §3: the account lock. F03 counts the
+            // *row's* own `failure_count` (the per-continuation cap of
+            // five, unchanged); this feeds the *user's* own
+            // `mfa_failure_count` (L07), the separate, escalating bound
+            // the local path already enforces -- so both doors to an
+            // account share one lock, which is the whole reason this
+            // call exists rather than a federated-only backoff.
+            match find_fed_pending_row(&app, &fed_pending_raw).await {
+                Some(row) => {
+                    let max_lockout = app.config.security.max_lockout.as_secs();
+                    if let Err(e) = sui_id_core::mfa::record_second_factor_failure(
+                        &app.db,
+                        row.user_id,
+                        max_lockout,
+                    )
+                    .await
+                    {
+                        let rid = request_id.as_ref().map(|e| e.0.0.as_str()).unwrap_or("-");
+                        tracing::error!(
+                            request_id = rid,
+                            error = %e,
+                            "federated second-factor lockout bookkeeping failed"
+                        );
+                    }
+                }
+                // `promote` only reaches this arm after its own
+                // `bind_pending` found a real row, so this is not
+                // expected -- logged as the anomaly it would be, not
+                // silently skipped, rather than failing the response.
+                None => {
+                    tracing::error!(
+                        "federated second-factor rejected but its pending row could not be \
+                         re-read for the account-lock hook"
+                    );
+                }
+            }
+            mfa_challenge_federated_failure(&app, jar, lang, Some(reason)).await
+        }
+        Ok(sui_id_store::commands::F03Outcome::Invalidated { .. }) => {
+            // Terminal; no retry against this row can succeed. Clear
+            // only the federated cookies (dispatch item 3) -- the
+            // generic pending-MFA pair is this stage's own declared
+            // scope boundary ("leave the dual-row emission in place"),
+            // so its own lifecycle is untouched here.
+            let jar = jar
+                .add(clear_fed_mfa_pending_cookie(
+                    app.config.server.cookie_secure,
+                ))
+                .add(clear_fed_mfa_csrf_cookie(app.config.server.cookie_secure))
+                .add(clear_fed_mfa_browser_binding_cookie(
+                    app.config.server.cookie_secure,
+                ));
+            mfa_challenge_federated_failure(&app, jar, lang, None).await
+        }
+        Err(sui_id_core::federated_mfa::VerifyError::Binding(_)) => {
+            mfa_challenge_federated_failure(&app, jar, lang, None).await
+        }
+        Err(sui_id_core::federated_mfa::VerifyError::Internal(e)) => {
+            // Not a verdict on the presented proof (RFC 102 C1, R11 1b) --
+            // the same shape the local path's own non-credential-error
+            // branch already logs with.
+            let rid = request_id.as_ref().map(|e| e.0.0.as_str()).unwrap_or("-");
+            tracing::error!(
+                request_id = rid,
+                error = %e,
+                detail = ?e,
+                "federated second-factor sign-in failed for a reason other than a wrong proof; \
+                 returning the uniform failure response"
+            );
+            mfa_challenge_federated_failure(&app, jar, lang, None).await
+        }
+    }
+}
+
+async fn find_fed_pending_row(
+    app: &crate::handlers::AppState,
+    fed_pending_raw: &str,
+) -> Option<sui_id_store::models::FederationMfaPendingRow> {
+    let id = fed_pending_raw
+        .parse::<sui_id_shared::ids::FederationMfaPendingId>()
+        .ok()?;
+    sui_id_store::repos::federation_mfa_pending::find_by_id(&app.db, id)
+        .await
+        .ok()
+        .flatten()
+}
+
+/// The federated path's own uniform failure response -- the local path's
+/// (above) stays untouched rather than sharing this, since nothing about
+/// it needed to change. `reason` selects the one copy RFC 096-B1 stage
+/// 12b §5 allows to be specific (`MethodMismatch`, direction 2 only --
+/// the only direction `promote`/`verify` can ever produce, since this
+/// handler never calls `verify_webauthn`); every other reason, and every
+/// `None` (a binding failure or a terminal row), gets the same generic
+/// flash the local path's own wrong-code case does.
+async fn mfa_challenge_federated_failure(
+    app: &crate::handlers::AppState,
+    jar: CookieJar,
+    lang: sui_id_i18n::Locale,
+    reason: Option<sui_id_store::repos::federation_mfa_pending::MfaRejectionReason>,
+) -> Result<Response, HttpError> {
+    if let Some(m) = app.metric() {
+        m.signin(sui_id_store::metrics::signin_result::MFA_FAILED);
+    }
+    let t = lang.strings();
+    let text = if reason
+        == Some(sui_id_store::repos::federation_mfa_pending::MfaRejectionReason::MethodMismatch)
+    {
+        t.mfa_challenge_method_mismatch_flash
+    } else {
+        t.mfa_challenge_failed_flash
+    };
+    let flash = Flash {
+        kind: FlashKind::Error,
+        text: text.into(),
+    };
+    // has_passkey: the same `PENDING_MFA_COOKIE`-keyed check the local
+    // path's own failure branch uses -- the generic row still exists
+    // (dispatch's own "leave the dual-row emission in place"), so it
+    // already answers correctly for a federated continuation too.
+    let has_passkey = {
+        let pid_opt = jar
+            .get(PENDING_MFA_COOKIE)
+            .and_then(|c| c.value().parse::<sui_id_shared::ids::PendingMfaId>().ok());
+        if let Some(pid) = pid_opt {
+            let row_opt = sui_id_store::repos::login_pending_mfa::get(&app.db, pid)
+                .await
+                .ok()
+                .flatten();
+            if let Some(row) = row_opt {
+                sui_id_core::webauthn::has_credentials(&app.db, row.user_id)
+                    .await
+                    .unwrap_or(false)
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    };
+    let fed_csrf = jar.get(FED_MFA_CSRF_COOKIE).map(|c| c.value().to_owned());
+    let token = crate::csrf::ensure_token(&jar);
+    let inner = (
+        StatusCode::UNAUTHORIZED,
+        Html(sui_id_web::render_mfa_challenge(
+            Some(flash),
+            token.clone(),
+            has_passkey,
+            lang,
+            fed_csrf,
+        )),
+    )
+        .into_response();
+    let resp = (jar, inner).into_response();
+    Ok(with_csrf_cookie(resp, app, &token))
 }
 
 pub async fn logout(

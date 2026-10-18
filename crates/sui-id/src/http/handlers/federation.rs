@@ -156,7 +156,11 @@ const STATE_COOKIE: &str = "sui_id_fed_state";
 /// (`/`), not to `/auth/federated`: unlike `STATE_COOKIE`/
 /// `BROWSER_BINDING_COOKIE`, which only the callback itself ever reads,
 /// this cookie's eventual reader is `/admin/login/mfa` (stage 12).
-const FED_MFA_PENDING_COOKIE: &str = "sui_id_fed_mfa_pending";
+///
+/// `pub(crate)` since RFC 096-B1 stage 12b: `/admin/login/mfa`'s own
+/// handler (`handlers::admin::auth`) is the reader this doc comment
+/// already named, and it lives in a different module.
+pub(crate) const FED_MFA_PENDING_COOKIE: &str = "sui_id_fed_mfa_pending";
 
 /// RFC 096-B1 stage 9, F02: the raw CSRF-binding value, CSPRNG-minted the
 /// same way `browser_binding`/`nonce`/`state_param` already are (`:564`'s
@@ -164,7 +168,13 @@ const FED_MFA_PENDING_COOKIE: &str = "sui_id_fed_mfa_pending";
 /// independent opaque value, so a party holding one binding cannot drive
 /// the other. Only `csrf_binding_sha256` (the digest) is stored in the
 /// row; this is what the digest is a hash of.
-const FED_MFA_CSRF_COOKIE: &str = "sui_id_fed_mfa_csrf";
+///
+/// `pub(crate)`: `/admin/login/mfa`'s POST handler reads this cookie's raw
+/// value as `presented_csrf_body_value` only via the hidden form field the
+/// GET handler renders it into (RFC 096-B1 stage 12b) -- `repos::
+/// federation_mfa_pending`'s own module doc states why the cookie itself,
+/// `HttpOnly`, can never be the presented value directly.
+pub(crate) const FED_MFA_CSRF_COOKIE: &str = "sui_id_fed_mfa_csrf";
 
 /// RFC 096-B1 stage 9 fix round, R1: the continuation's **own**
 /// browser-binding value, CSPRNG-minted the same way as
@@ -183,7 +193,95 @@ const FED_MFA_CSRF_COOKIE: &str = "sui_id_fed_mfa_csrf";
 /// rather than widening `BROWSER_BINDING_COOKIE` to `Path=/` keeps the
 /// OAuth-callback secret's lifetime and scope exactly as narrow as
 /// `:600-601` already requires.
-const FED_MFA_BROWSER_BINDING_COOKIE: &str = "sui_id_fed_mfa_browser_binding";
+pub(crate) const FED_MFA_BROWSER_BINDING_COOKIE: &str = "sui_id_fed_mfa_browser_binding";
+
+/// RFC 096-B1 stage 12b: the three federated-MFA cookies' own builders,
+/// shared with `handlers::admin::auth` rather than left as inline
+/// `Cookie` literals only this file could reconstruct. `max_age` is a
+/// parameter, not `PENDING_LIFETIME_SECS` baked in, because the row's own
+/// remaining lifetime -- not a flat constant -- is what the caller must
+/// derive it from (`:4` of this stage's own dispatch): a restart reuses
+/// an existing row without refreshing its `expires_at`, so a cookie that
+/// always claims a fresh 300 seconds can outlive the row it names.
+fn fed_mfa_pending_cookie<'a>(value: String, max_age: time::Duration, secure: bool) -> Cookie<'a> {
+    let mut c = Cookie::new(FED_MFA_PENDING_COOKIE, value);
+    c.set_http_only(true);
+    c.set_same_site(axum_extra::extract::cookie::SameSite::Lax);
+    c.set_max_age(max_age);
+    c.set_path("/");
+    if secure {
+        c.set_secure(true);
+    }
+    c
+}
+
+fn fed_mfa_csrf_cookie<'a>(value: String, max_age: time::Duration, secure: bool) -> Cookie<'a> {
+    let mut c = Cookie::new(FED_MFA_CSRF_COOKIE, value);
+    c.set_http_only(true);
+    c.set_same_site(axum_extra::extract::cookie::SameSite::Lax);
+    c.set_max_age(max_age);
+    c.set_path("/");
+    if secure {
+        c.set_secure(true);
+    }
+    c
+}
+
+fn fed_mfa_browser_binding_cookie<'a>(
+    value: String,
+    max_age: time::Duration,
+    secure: bool,
+) -> Cookie<'a> {
+    let mut c = Cookie::new(FED_MFA_BROWSER_BINDING_COOKIE, value);
+    c.set_http_only(true);
+    c.set_same_site(axum_extra::extract::cookie::SameSite::Lax);
+    c.set_max_age(max_age);
+    c.set_path("/");
+    if secure {
+        c.set_secure(true);
+    }
+    c
+}
+
+/// The three federated-MFA cookies' own clearers -- `/admin/login/mfa`'s
+/// own handler uses these on `F03Outcome::Promoted` (all four federated
+/// cookies, this stage's own dispatch item 3) and on `Invalidated` (the
+/// row is terminal; no retry can succeed).
+pub(crate) fn clear_fed_mfa_pending_cookie<'a>(secure: bool) -> Cookie<'a> {
+    let mut c = Cookie::new(FED_MFA_PENDING_COOKIE, "");
+    c.set_http_only(true);
+    c.set_same_site(axum_extra::extract::cookie::SameSite::Lax);
+    c.set_max_age(time::Duration::seconds(0));
+    c.set_path("/");
+    if secure {
+        c.set_secure(true);
+    }
+    c
+}
+
+pub(crate) fn clear_fed_mfa_csrf_cookie<'a>(secure: bool) -> Cookie<'a> {
+    let mut c = Cookie::new(FED_MFA_CSRF_COOKIE, "");
+    c.set_http_only(true);
+    c.set_same_site(axum_extra::extract::cookie::SameSite::Lax);
+    c.set_max_age(time::Duration::seconds(0));
+    c.set_path("/");
+    if secure {
+        c.set_secure(true);
+    }
+    c
+}
+
+pub(crate) fn clear_fed_mfa_browser_binding_cookie<'a>(secure: bool) -> Cookie<'a> {
+    let mut c = Cookie::new(FED_MFA_BROWSER_BINDING_COOKIE, "");
+    c.set_http_only(true);
+    c.set_same_site(axum_extra::extract::cookie::SameSite::Lax);
+    c.set_max_age(time::Duration::seconds(0));
+    c.set_path("/");
+    if secure {
+        c.set_secure(true);
+    }
+    c
+}
 
 /// RFC 096-B1 stage 6a, RFC 096 `:600-601`: *"The callback cookie is
 /// expired on every terminal path."* -- both of them, `STATE_COOKIE` and
@@ -1537,40 +1635,41 @@ async fn complete_federated_signin(
         // revoked by `terminal()` on this very response, and scoped away
         // from the reader regardless).
         let fed_browser_binding_raw = sui_id_core::tokens::random_token(32);
-        let fed_pending_id = match sui_id_store::commands::issue_federated_mfa_pending(
-            &app.db,
-            attempt_id,
-            provider_id,
-            claimed.provider_config_version,
-            claimed.provider_activation_generation,
-            user_id,
-            claimed.next_path.clone(),
-            sha256_32(fed_browser_binding_raw.as_bytes()),
-            sha256_32(csrf_raw.as_bytes()),
-            now,
-        )
-        .await
-        {
-            Ok(id) => id,
-            Err(e) => {
-                tracing::error!(
-                    provider = %provider_slug,
-                    user_id = %user_id,
-                    error = %e,
-                    "federation: F02 (attempt completion + MFA continuation) failed"
-                );
-                terminalize_and_audit(
-                    &app.db,
-                    attempt_id,
-                    TerminalFailureReason::Denied(DeniedDetail::MfaPendingTransactionFailed),
-                    now,
-                    provider_id,
-                    Some(user_id),
-                )
-                .await;
-                return signin_failed(jar);
-            }
-        };
+        let (fed_pending_id, fed_pending_expires_at) =
+            match sui_id_store::commands::issue_federated_mfa_pending(
+                &app.db,
+                attempt_id,
+                provider_id,
+                claimed.provider_config_version,
+                claimed.provider_activation_generation,
+                user_id,
+                claimed.next_path.clone(),
+                sha256_32(fed_browser_binding_raw.as_bytes()),
+                sha256_32(csrf_raw.as_bytes()),
+                now,
+            )
+            .await
+            {
+                Ok(v) => v,
+                Err(e) => {
+                    tracing::error!(
+                        provider = %provider_slug,
+                        user_id = %user_id,
+                        error = %e,
+                        "federation: F02 (attempt completion + MFA continuation) failed"
+                    );
+                    terminalize_and_audit(
+                        &app.db,
+                        attempt_id,
+                        TerminalFailureReason::Denied(DeniedDetail::MfaPendingTransactionFailed),
+                        now,
+                        provider_id,
+                        Some(user_id),
+                    )
+                    .await;
+                    return signin_failed(jar);
+                }
+            };
 
         let pending = match sui_id_core::mfa::issue_pending_mfa(&app.db, &app.clock, user_id).await
         {
@@ -1595,45 +1694,32 @@ async fn complete_federated_signin(
             pending.id.to_string(),
             app.config.server.cookie_secure,
         );
-        let fed_pending_cookie = {
-            let mut c = Cookie::new(FED_MFA_PENDING_COOKIE, fed_pending_id.to_string());
-            c.set_http_only(true);
-            c.set_same_site(axum_extra::extract::cookie::SameSite::Lax);
-            c.set_max_age(time::Duration::seconds(
-                sui_id_store::repos::federation_mfa_pending::PENDING_LIFETIME_SECS,
-            ));
-            c.set_path("/");
-            if app.config.server.cookie_secure {
-                c.set_secure(true);
-            }
-            c
-        };
-        let fed_csrf_cookie = {
-            let mut c = Cookie::new(FED_MFA_CSRF_COOKIE, csrf_raw);
-            c.set_http_only(true);
-            c.set_same_site(axum_extra::extract::cookie::SameSite::Lax);
-            c.set_max_age(time::Duration::seconds(
-                sui_id_store::repos::federation_mfa_pending::PENDING_LIFETIME_SECS,
-            ));
-            c.set_path("/");
-            if app.config.server.cookie_secure {
-                c.set_secure(true);
-            }
-            c
-        };
-        let fed_browser_binding_cookie = {
-            let mut c = Cookie::new(FED_MFA_BROWSER_BINDING_COOKIE, fed_browser_binding_raw);
-            c.set_http_only(true);
-            c.set_same_site(axum_extra::extract::cookie::SameSite::Lax);
-            c.set_max_age(time::Duration::seconds(
-                sui_id_store::repos::federation_mfa_pending::PENDING_LIFETIME_SECS,
-            ));
-            c.set_path("/");
-            if app.config.server.cookie_secure {
-                c.set_secure(true);
-            }
-            c
-        };
+        // RFC 096-B1 stage 12b, §4: the row's own remaining lifetime, not
+        // a flat `PENDING_LIFETIME_SECS` -- `fed_pending_expires_at` is
+        // the *existing* row's own value on a restart (returned by F02
+        // above unchanged, never refreshed), so a cookie that always
+        // claimed a fresh 300 seconds could outlive the row it names.
+        // Clamped at zero: a row already expired (reachable only for the
+        // `Exhausted` branch, which still returns its own stale
+        // `expires_at`) gets a cookie that expires immediately rather
+        // than a negative `Duration`, which `time` itself would refuse.
+        let fed_cookie_max_age =
+            time::Duration::seconds((fed_pending_expires_at - now).num_seconds().max(0));
+        let fed_pending_cookie = fed_mfa_pending_cookie(
+            fed_pending_id.to_string(),
+            fed_cookie_max_age,
+            app.config.server.cookie_secure,
+        );
+        let fed_csrf_cookie = fed_mfa_csrf_cookie(
+            csrf_raw,
+            fed_cookie_max_age,
+            app.config.server.cookie_secure,
+        );
+        let fed_browser_binding_cookie = fed_mfa_browser_binding_cookie(
+            fed_browser_binding_raw,
+            fed_cookie_max_age,
+            app.config.server.cookie_secure,
+        );
         let jar = jar
             .add(cookie)
             .add(fed_pending_cookie)

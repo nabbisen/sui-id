@@ -2441,7 +2441,12 @@ pub async fn provision_federated_user(
 /// `continuation_sealed`'s AAD construction (`build_aad`, five columns,
 /// all resolved here) out of the caller's crate entirely: the HTTP
 /// handler never needs to know the sealed column exists, only that this
-/// function returns the new row's id for the cookie it does need to set.
+/// function returns the row's id and its own `expires_at` for the cookie
+/// it does need to set. RFC 096-B1 stage 12b: `expires_at` is returned
+/// alongside the id — not read a second time by the caller — because a
+/// restart reuses the *existing* row's own value (the next paragraph's
+/// own point), and the cookie's `max_age` must reflect that, not a fresh
+/// `PENDING_LIFETIME_SECS` the row itself was never granted.
 /// `now` is sampled once by the caller and used for both `created_at` and
 /// `expires_at` here, not read twice — the schema's own `expires_at =
 /// created_at + 300s` `CHECK` would refuse a row straddling a clock tick
@@ -2518,7 +2523,7 @@ pub async fn issue_federated_mfa_pending(
     browser_binding_sha256: [u8; 32],
     csrf_binding_sha256: [u8; 32],
     now: DateTime<Utc>,
-) -> StoreResult<sui_id_shared::ids::FederationMfaPendingId> {
+) -> StoreResult<(sui_id_shared::ids::FederationMfaPendingId, DateTime<Utc>)> {
     // `Database` is a cheap `Clone` handle (unlike `MasterKey`): the
     // closure below must be `'static`, and which row gets sealed (the
     // existing one, on reuse, or a freshly generated one) is not known
@@ -2527,7 +2532,7 @@ pub async fn issue_federated_mfa_pending(
     // before `db.protocol` is entered at all.
     let db_for_tx = db.clone();
     db.protocol(
-        move |write| -> StoreResult<sui_id_shared::ids::FederationMfaPendingId> {
+        move |write| -> StoreResult<(sui_id_shared::ids::FederationMfaPendingId, DateTime<Utc>)> {
             let tx = write.tx();
             crate::repos::federation_login_attempt::complete_within_tx(tx, attempt_id)?;
 
@@ -2535,7 +2540,7 @@ pub async fn issue_federated_mfa_pending(
                 crate::repos::federation_mfa_pending::find_active_by_user_id_within_tx(tx, user_id)?
             {
                 if existing.status == crate::models::FederationMfaPendingStatus::Exhausted {
-                    return Ok(existing.id);
+                    return Ok((existing.id, existing.expires_at));
                 }
                 if existing.expires_at > now {
                     // RFC 096-B1 stage 11b fix round, R1: the ceremony
@@ -2595,7 +2600,7 @@ pub async fn issue_federated_mfa_pending(
                     if !refreshed {
                         return Err(StoreError::Conflict);
                     }
-                    return Ok(existing.id);
+                    return Ok((existing.id, existing.expires_at));
                 }
                 // Expired by wall clock, still `pending` in the database:
                 // dead, not reusable, and must not go on blocking the fresh
@@ -2637,7 +2642,7 @@ pub async fn issue_federated_mfa_pending(
                     ),
             };
             crate::repos::federation_mfa_pending::insert_within_tx(tx, &pending)?;
-            Ok(id)
+            Ok((id, pending.expires_at))
         },
     )
     .await

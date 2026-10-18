@@ -404,6 +404,7 @@ async fn call_f02(
         now,
     )
     .await
+    .map(|(id, _)| id)
 }
 
 async fn pending_count(db: &Database) -> i64 {
@@ -645,7 +646,7 @@ async fn f02_restart_at_count_four_does_not_grant_a_fresh_budget() {
     let db = fresh_db();
     let f = restart_fixture(&db, 1).await;
     let attempt_1 = an_exchanging_attempt(&db, f.provider_id, 1).await;
-    let first_id = issue_federated_mfa_pending(
+    let (first_id, _) = issue_federated_mfa_pending(
         &db,
         attempt_1,
         f.provider_id,
@@ -662,7 +663,7 @@ async fn f02_restart_at_count_four_does_not_grant_a_fresh_budget() {
     set_failure_count_and_status(&db, first_id, 4, "pending").await;
 
     let attempt_2 = an_exchanging_attempt(&db, f.provider_id, 2).await;
-    let second_id = issue_federated_mfa_pending(
+    let (second_id, _) = issue_federated_mfa_pending(
         &db,
         attempt_2,
         f.provider_id,
@@ -688,6 +689,69 @@ async fn f02_restart_at_count_four_does_not_grant_a_fresh_budget() {
     );
 }
 
+/// RFC 096-B1 stage 12b §4: a restart reuses the existing row without
+/// refreshing its `expires_at` (the assertion above, restated as the
+/// premise this test needs) -- so the caller's own cookie `max_age` must
+/// come from the row's *real* `expires_at`, not a fresh
+/// `PENDING_LIFETIME_SECS` computed from `now` at restart time. This is
+/// exactly what the second element of `issue_federated_mfa_pending`'s own
+/// return tuple now exists to give the handler, without an extra read.
+#[tokio::test]
+async fn f02_restart_returns_the_original_row_s_real_expires_at_not_a_fresh_one() {
+    let db = fresh_db();
+    let f = restart_fixture(&db, 9).await;
+    let t0 = Utc::now();
+    let attempt_1 = an_exchanging_attempt(&db, f.provider_id, 9).await;
+    let (first_id, first_expires_at) = issue_federated_mfa_pending(
+        &db,
+        attempt_1,
+        f.provider_id,
+        0,
+        0,
+        f.user_id,
+        None,
+        [5; 32],
+        [6; 32],
+        t0,
+    )
+    .await
+    .expect("F02 succeeds");
+    assert_eq!(
+        first_expires_at,
+        t0 + chrono::Duration::seconds(crate::repos::federation_mfa_pending::PENDING_LIFETIME_SECS),
+        "a fresh row's own expires_at is exactly now + the lifetime constant"
+    );
+
+    // The restart happens well inside the original 300s window, at a
+    // later `now` -- the exact shape a late-but-not-expired restart
+    // takes in production.
+    let t1 = t0 + chrono::Duration::seconds(200);
+    let attempt_2 = an_exchanging_attempt(&db, f.provider_id, 10).await;
+    let (second_id, second_expires_at) = issue_federated_mfa_pending(
+        &db,
+        attempt_2,
+        f.provider_id,
+        0,
+        0,
+        f.user_id,
+        None,
+        [7; 32],
+        [8; 32],
+        t1,
+    )
+    .await
+    .expect("the restart succeeds");
+
+    assert_eq!(second_id, first_id, "the restart must reuse the same row");
+    assert_eq!(
+        second_expires_at, first_expires_at,
+        "the restart must return the ORIGINAL row's own expires_at, not a \
+         fresh one computed from the later restart time -- a caller deriving \
+         a cookie's max_age from this value would otherwise hand the browser \
+         a cookie that outlives the row by the restart's own elapsed time"
+    );
+}
+
 /// RFC 096 `:756`'s own stickiest case, named by the dispatch as the one
 /// to be most careful with: an exhausted row must not become a fresh
 /// pending one through a restart, no matter how many times it is tried.
@@ -696,7 +760,7 @@ async fn f02_restart_while_exhausted_stays_exhausted() {
     let db = fresh_db();
     let f = restart_fixture(&db, 3).await;
     let attempt_1 = an_exchanging_attempt(&db, f.provider_id, 3).await;
-    let first_id = issue_federated_mfa_pending(
+    let (first_id, _) = issue_federated_mfa_pending(
         &db,
         attempt_1,
         f.provider_id,
@@ -714,7 +778,7 @@ async fn f02_restart_while_exhausted_stays_exhausted() {
 
     for tag in [4u8, 5u8] {
         let attempt = an_exchanging_attempt(&db, f.provider_id, tag).await;
-        let id = issue_federated_mfa_pending(
+        let (id, _) = issue_federated_mfa_pending(
             &db,
             attempt,
             f.provider_id,
@@ -746,7 +810,7 @@ async fn f02_restart_while_still_live_refreshes_the_bindings() {
     let f = restart_fixture(&db, 6).await;
     let attempt_1 = an_exchanging_attempt(&db, f.provider_id, 6).await;
     let now = Utc::now();
-    let first_id = issue_federated_mfa_pending(
+    let (first_id, _) = issue_federated_mfa_pending(
         &db,
         attempt_1,
         f.provider_id,
@@ -763,7 +827,7 @@ async fn f02_restart_while_still_live_refreshes_the_bindings() {
     set_failure_count_and_status(&db, first_id, 2, "pending").await;
 
     let attempt_2 = an_exchanging_attempt(&db, f.provider_id, 7).await;
-    let second_id = issue_federated_mfa_pending(
+    let (second_id, _) = issue_federated_mfa_pending(
         &db,
         attempt_2,
         f.provider_id,
@@ -803,7 +867,7 @@ async fn f02_restart_after_expiry_invalidates_the_stale_row_and_issues_a_fresh_o
     let f = restart_fixture(&db, 8).await;
     let attempt_1 = an_exchanging_attempt(&db, f.provider_id, 8).await;
     let t0 = Utc::now();
-    let first_id = issue_federated_mfa_pending(
+    let (first_id, _) = issue_federated_mfa_pending(
         &db,
         attempt_1,
         f.provider_id,
@@ -821,7 +885,7 @@ async fn f02_restart_after_expiry_invalidates_the_stale_row_and_issues_a_fresh_o
 
     let attempt_2 = an_exchanging_attempt(&db, f.provider_id, 9).await;
     let after_expiry = t0 + TimeDelta::seconds(301);
-    let second_id = issue_federated_mfa_pending(
+    let (second_id, _) = issue_federated_mfa_pending(
         &db,
         attempt_2,
         f.provider_id,
@@ -920,7 +984,7 @@ async fn f02_restart_through_a_different_provider_consumes_a_live_ceremony() {
 
     let attempt_1 = an_exchanging_attempt(&db, provider_a, 90).await;
     let now = Utc::now();
-    let first_id = issue_federated_mfa_pending(
+    let (first_id, _) = issue_federated_mfa_pending(
         &db, attempt_1, provider_a, 0, 0, user_id, None, [20; 32], [21; 32], now,
     )
     .await
@@ -944,7 +1008,7 @@ async fn f02_restart_through_a_different_provider_consumes_a_live_ceremony() {
     );
 
     let attempt_2 = an_exchanging_attempt(&db, provider_b, 91).await;
-    let second_id = issue_federated_mfa_pending(
+    let (second_id, _) = issue_federated_mfa_pending(
         &db, attempt_2, provider_b, 0, 0, user_id, None, [22; 32], [23; 32], now,
     )
     .await
@@ -982,7 +1046,7 @@ async fn f02_restart_through_the_same_provider_still_consumes_a_live_ceremony() 
 
     let attempt_1 = an_exchanging_attempt(&db, f.provider_id, 92).await;
     let now = Utc::now();
-    let first_id = issue_federated_mfa_pending(
+    let (first_id, _) = issue_federated_mfa_pending(
         &db,
         attempt_1,
         f.provider_id,
@@ -1008,7 +1072,7 @@ async fn f02_restart_through_the_same_provider_still_consumes_a_live_ceremony() 
     .expect("F06 succeeds");
 
     let attempt_2 = an_exchanging_attempt(&db, f.provider_id, 93).await;
-    let second_id = issue_federated_mfa_pending(
+    let (second_id, _) = issue_federated_mfa_pending(
         &db,
         attempt_2,
         f.provider_id,

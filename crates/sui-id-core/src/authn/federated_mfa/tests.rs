@@ -159,7 +159,7 @@ async fn fixture() -> Fixture {
     let attempt_id = an_exchanging_attempt(&db, provider_id, 10).await;
     let browser_binding_raw = "browser-binding-raw".to_owned();
     let csrf_raw = "csrf-raw".to_owned();
-    let pending_id = sui_id_store::commands::issue_federated_mfa_pending(
+    let (pending_id, _) = sui_id_store::commands::issue_federated_mfa_pending(
         &db,
         attempt_id,
         provider_id,
@@ -490,7 +490,7 @@ async fn every_binding_failure_is_the_same_value() {
     let other_user_id = seed_user(&f.db).await;
     seed_link(&f.db, other_user_id, other_provider_id).await;
     let other_attempt_id = an_exchanging_attempt(&f.db, other_provider_id, 20).await;
-    let others_pending_id = sui_id_store::commands::issue_federated_mfa_pending(
+    let (others_pending_id, _) = sui_id_store::commands::issue_federated_mfa_pending(
         &f.db,
         other_attempt_id,
         other_provider_id,
@@ -604,7 +604,7 @@ async fn a_binding_failure_touches_no_row() {
     let control_attempt_id = an_exchanging_attempt(&f.db, control_provider_id, 30).await;
     let control_browser_raw = "control-browser-binding".to_owned();
     let control_csrf_raw = "control-csrf".to_owned();
-    let control_pending_id = sui_id_store::commands::issue_federated_mfa_pending(
+    let (control_pending_id, _) = sui_id_store::commands::issue_federated_mfa_pending(
         &f.db,
         control_attempt_id,
         control_provider_id,

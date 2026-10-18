@@ -99,11 +99,21 @@ pub fn render_mfa_challenge(
     csrf_token: String,
     has_passkey: bool,
     lang: sui_id_i18n::Locale,
+    // RFC 096-B1 stage 12b: `Some` only for a federated continuation
+    // (`FED_MFA_PENDING_COOKIE` present). The row's own CSRF-binding
+    // value, rendered into a hidden field rather than left for the
+    // browser to send the cookie back unprompted -- `repos::
+    // federation_mfa_pending`'s own module doc states why the cookie
+    // itself, `HttpOnly`, can never be the presented value.
+    fed_csrf: Option<String>,
 ) -> String {
     render(move || {
         let t = lang.strings();
         let csrf_for_totp = csrf_token.clone();
         let csrf_for_pk = csrf_token.clone();
+        let fed_csrf_field = fed_csrf.clone().map(|v| {
+            view! { <input type="hidden" name="fed_csrf" value=v /> }
+        });
         let passkey_block = if has_passkey {
             view! {
                 <hr class="divider" />
@@ -129,6 +139,7 @@ pub fn render_mfa_challenge(
                 <p class="muted">{t.mfa_challenge_lede}</p>
                 <form method="post" action="/admin/login/mfa" class="stack">
                     <input type="hidden" name="_csrf" value=csrf_for_totp />
+                    {fed_csrf_field}
                     <div class="field">
                         <label for="code" class="field__label">{t.mfa_challenge_code_label}</label>
                         <input id="code" name="code" type="text"

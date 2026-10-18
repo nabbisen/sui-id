@@ -242,6 +242,7 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     mfa_challenge_passkey_alt: "或使用通行密钥登录：",
     mfa_challenge_passkey_button: "使用通行密钥登录",
     mfa_challenge_failed_flash: "验证失败，请重试或使用恢复码。",
+    mfa_challenge_method_mismatch_flash: "此次登录正在等待您的通行密钥验证，请使用下方的通行密钥选项。",
 
     // Profile / self-service security
     profile_subtitle_template: "{username} 的安全设置",
