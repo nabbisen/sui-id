@@ -5,6 +5,10 @@
 `ROADMAP.md` §Non-RFC work packages, which is the line this handoff was
 written with and which is now historical record.
 **Independent design review.** [`design-review-2026-10-14.md`](design-review-2026-10-14.md).
+**Dispatched.** 2026-10-18 —
+[`dispatch-one-list-per-level-2026-10-18.md`](dispatch-one-list-per-level-2026-10-18.md),
+which carries the measurement at `1a49e95` and the order. Where it and this
+file differ, the dispatch says so explicitly.
 **Implementer.** Mid-capability model. **Baseline.** Read the tip with
 `git log -1`; `9f6acdb` is the measurement point below, not the baseline to
 build on.
