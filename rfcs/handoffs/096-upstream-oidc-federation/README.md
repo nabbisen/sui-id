@@ -288,21 +288,29 @@ ROADMAP milestone M4-A**. The caveat that qualified it is also gone: 096-A's
 validation was dormant because nothing called it, and stage 12a made the
 verified pipeline the one that acts.
 
-**12b is the last piece of stage 12.** Its first round
-([`stage12b-the-federated-mfa-submission-2026-10-18.md`](stage12b-the-federated-mfa-submission-2026-10-18.md))
-came back built and was **returned for a fix round** —
-[`stage12b-fix-the-row-the-old-path-consumed-2026-10-18.md`](stage12b-fix-the-row-the-old-path-consumed-2026-10-18.md),
-now the open dispatch. All three of the first round's items are honoured: the
-account-lock hook settled by the architect
-([`federated-lockout-request-2026-10-17.md`](federated-lockout-request-2026-10-17.md)),
-the federated cookie's `max_age` derived from the row's own `expires_at`, and
-the direction-2 `MethodMismatch` copy. **What the dispatch missed is a second
-protection in the same place**: before 12b the federated path completed
-through L02, whose first act deletes the generic `login_pending_mfa` row; the
-new path never reaches L02, so that row now outlives the sign-in it
-authorised. The omission is the architect's, not the implementation role's —
-the dispatch named one protection not to drop and there were two. Nothing
-in stage 12 is waiting on `@nabbisen`. Cycle D needs 12a, 12b and 12c.
+**12b landed `09c1e04` — stage 12 is complete.** Level B on CI run
+`39123221966`, 27 jobs, 27 success, 0 skipped, all 24 `[gate_owners]` entries
+matched both ways. Two rounds:
+[`stage12b-the-federated-mfa-submission-2026-10-18.md`](stage12b-the-federated-mfa-submission-2026-10-18.md)
+then
+[`stage12b-fix-the-row-the-old-path-consumed-2026-10-18.md`](stage12b-fix-the-row-the-old-path-consumed-2026-10-18.md).
+
+The verifier and F03 now have a caller, and **two protections the switch
+would otherwise have removed are carried forward**, neither exploitable in
+any released version because nothing read the federated row to produce an
+outcome at all before this stage. The account lock, settled by the architect
+([`federated-lockout-request-2026-10-17.md`](federated-lockout-request-2026-10-17.md)).
+And the generic `login_pending_mfa` row's own consumption: before 12b the
+federated path completed through L02, whose first act is a guarded `DELETE`;
+the new path never reaches L02, so without the fix that row would have
+outlived the sign-in it authorised. **Both omissions in the dispatches were
+the architect's, not the implementation role's** — the first dispatch named
+one protection not to drop and there were two. Also in the stage: the cookie
+`max_age` derived from the row's own `expires_at`, the direction-2
+`MethodMismatch` copy in all four locales, and a `next_path` test for an
+implementation that was already correct and untested.
+
+**Cycle D's last gate is met** — 12a `57b4ead`, 12c `744e699`, 12b `09c1e04`.
 Its code is right; what is wrong is the fixtures. Every federation fixture is
 a public client with no `client_secret_enc`, while its discovery advertises
 only `client_secret_basic` — the pairing RFC 096 `:570` forbids, since `none`
