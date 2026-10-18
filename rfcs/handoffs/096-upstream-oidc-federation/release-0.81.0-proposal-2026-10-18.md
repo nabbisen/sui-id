@@ -13,6 +13,12 @@
 > as settled by it. They do not block the cut: the entries are already
 > public, so promoting `[Unreleased]` to `[0.81.0]` discloses nothing new.
 >
+> ## The resolution is accepted — `@nabbisen`, 2026-10-19: *"Accepted."*
+> Accepting §G as rewritten: `0.81.0` publishes over the gap, `0.80.0` is
+> recorded as **superseded** with the security reason, and the detector learns
+> the third outcome. **Nothing further is owed by the owner before the tag**;
+> the next thing asked of him is the one-line publish confirm.
+>
 > ## §G is settled, 2026-10-19, and the architect was overruled.
 > He recommended abandoning `0.80.0` "on the `0.78.0` ruling". The ruling:
 > *"Both should have been published unless any good reason existed… They are
