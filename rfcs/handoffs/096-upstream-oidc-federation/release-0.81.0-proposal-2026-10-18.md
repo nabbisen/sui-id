@@ -13,6 +13,15 @@
 > as settled by it. They do not block the cut: the entries are already
 > public, so promoting `[Unreleased]` to `[0.81.0]` discloses nothing new.
 >
+> ## The publish is authorized — `@nabbisen`, 2026-10-20: *"Tag it when green.
+> Also, you are authorized to do the publish."*
+> So §E step 5 is covered: the architect tags `0.81.0` once Level B is green
+> on `ef52e4f`, then publishes the six crates in the documented bottom-up
+> order and re-runs `check-published-versions.py`, which must exit 0 after.
+> **Nothing is owed by the owner on this release any more.** §B's three
+> rulings remain open and block nothing; the rule change is the one that
+> matters, since it is the only one that prevents a repeat.
+>
 > ## The resolution is accepted — `@nabbisen`, 2026-10-19: *"Accepted."*
 > Accepting §G as rewritten: `0.81.0` publishes over the gap, `0.80.0` is
 > recorded as **superseded** with the security reason, and the detector learns
