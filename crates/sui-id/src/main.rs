@@ -88,14 +88,13 @@ async fn run() -> Result<()> {
 /// First positional argument that is a real subcommand name, not a flag and
 /// not the value of a flag that takes one.
 fn find_subcommand(args: &[String]) -> Option<String> {
-    const FLAGS_WITH_VALUE: &[&str] = &["--config", "--to", "--from"];
     let mut i = 1; // skip program name
     while i < args.len() {
         let a = &args[i];
         if a.starts_with('-') {
             // `--flag=value` is one token; otherwise it consumes the next arg
             // when it's a value-taking flag.
-            if FLAGS_WITH_VALUE.contains(&a.as_str()) {
+            if cli::VALUE_TAKING_FLAGS.contains(&a.as_str()) {
                 i += 2;
             } else {
                 i += 1;
@@ -199,10 +198,22 @@ async fn serve(args: &[String]) -> Result<()> {
 ///
 /// 0.0.0.0 binding requires explicit `yes` confirmation
 /// from stdin; this is in `dev_mode::confirm_external_bind`.
-async fn serve_dev(args: &[String]) -> Result<()> {
-    use sui_id::dev_mode;
+/// `--dev-*` flags, parsed. Separated from [`serve_dev`] so a test can
+/// assert each flag's value is actually extracted -- RFC 107's own
+/// defect was that `find_subcommand` mistook this value for a subcommand
+/// before any of this parsing ever ran; a test that only exercises
+/// `serve_dev` end to end cannot tell "the value was read" from "the
+/// value was silently defaulted," since several of these fields fall
+/// back to a default that produces no error either way.
+struct DevFlags {
+    dev_db: Option<PathBuf>,
+    dev_seed_path: Option<PathBuf>,
+    dev_bind: String,
+    dev_admin_password: Option<String>,
+    dev_client_secret: Option<String>,
+}
 
-    // Flag parsing.
+fn parse_dev_flags(args: &[String]) -> DevFlags {
     let dev_db: Option<PathBuf> = args
         .iter()
         .position(|a| a == "--dev-db")
@@ -229,6 +240,25 @@ async fn serve_dev(args: &[String]) -> Result<()> {
         .position(|a| a == "--dev-client-secret")
         .and_then(|i| args.get(i + 1))
         .cloned();
+    DevFlags {
+        dev_db,
+        dev_seed_path,
+        dev_bind,
+        dev_admin_password,
+        dev_client_secret,
+    }
+}
+
+async fn serve_dev(args: &[String]) -> Result<()> {
+    use sui_id::dev_mode;
+
+    let DevFlags {
+        dev_db,
+        dev_seed_path,
+        dev_bind,
+        dev_admin_password,
+        dev_client_secret,
+    } = parse_dev_flags(args);
 
     // 0.0.0.0 (or any non-loopback) binding requires explicit
     // `yes` confirmation. We treat anything that is not `127.*`
@@ -378,3 +408,6 @@ async fn shutdown_signal() {
     }
     tracing::info!("graceful shutdown initiated");
 }
+
+#[cfg(test)]
+mod tests;

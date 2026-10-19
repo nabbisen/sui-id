@@ -7,6 +7,61 @@
 use anyhow::{Context, Result, bail};
 use std::path::PathBuf;
 use sui_id::{backup, config::Config};
+
+/// RFC 107: the one list of top-level subcommand names. `main.rs`'s own
+/// `match` (which needs literal patterns, not a slice) is not generated
+/// from this, but `cli_bindings_cover_help_and_dispatch` asserts every
+/// name here appears in `print_help`'s text, so the two cannot drift
+/// silently apart. Consumed only by that test -- there is no non-test
+/// use site, since the dispatch's own §1 is explicit that the top-level
+/// unknown-subcommand message must not grow a list it does not have today.
+#[allow(dead_code)]
+pub(crate) const TOP_LEVEL_SUBCOMMANDS: &[&str] =
+    &["backup", "restore", "verify-backup", "admin", "setup"];
+
+/// RFC 107: the one list of `admin` subaction names — previously
+/// hand-kept separately in `run_admin_subcommand`'s `match`, its own
+/// unknown-subaction message, and `print_help`'s text, which had already
+/// drifted (two entries missing from help). The unknown-subaction message
+/// is now built from this list directly; `cli_bindings_cover_help_and_dispatch`
+/// covers the help text, and `every_admin_subaction_dispatches` covers the
+/// `match`.
+pub(crate) const ADMIN_SUBACTIONS: &[&str] = &[
+    "unlock-user",
+    "reset-mfa",
+    "issue-recovery-link",
+    "rotate-key",
+    "rotate-metrics-token",
+    "issue-registration-token",
+];
+
+/// RFC 107: the one list of flags that take a value, replacing the
+/// previous `FLAGS_WITH_VALUE` (`--config`, `--to`, `--from` only).
+/// `find_subcommand` (`main.rs`) uses this to skip a flag's value when
+/// walking argv for the subcommand; a flag missing here makes it
+/// misread that value as the subcommand (RFC 107's own `--dev-*` defect).
+/// Derived from each flag's own parsing, not from the help text, which is
+/// the artefact this RFC exists because it cannot be trusted; cross-checked
+/// against the architect's own independently measured list of sixteen.
+pub(crate) const VALUE_TAKING_FLAGS: &[&str] = &[
+    "--config",
+    "--to",
+    "--from",
+    "--username",
+    "--reason",
+    "--new-key",
+    "--max-uses",
+    "--note",
+    "--admin-username",
+    "--admin-email",
+    "--admin-display-name",
+    "--dev-bind",
+    "--dev-db",
+    "--dev-seed",
+    "--dev-admin-password",
+    "--dev-client-secret",
+];
+
 pub(crate) fn run_backup_subcommand(args: &[String]) -> Result<()> {
     let dest = parse_named_path(args, "--to").context("backup requires --to PATH")?;
     let config_path = parse_config_path(args).unwrap_or_else(|| PathBuf::from("./sui-id.toml"));
@@ -91,8 +146,8 @@ pub(crate) fn run_verify_backup_subcommand(args: &[String]) -> Result<()> {
     Ok(())
 }
 
-/// Dispatcher for `sui-id admin <subaction> ...`. Currently the only
-/// admin subaction is `unlock-user`, but the surface is shaped to grow.
+/// Dispatcher for `sui-id admin <subaction> ...`. Six subactions exist
+/// today (`ADMIN_SUBACTIONS`); the surface is shaped to keep growing.
 /// NOTE: async because `main` is `#[tokio::main]` — constructing a second
 /// runtime here (`Runtime::new().block_on`) panics with "Cannot start a
 /// runtime from within a runtime". Surfaced during RFC 077 smoke testing;
@@ -106,9 +161,12 @@ pub(crate) async fn run_admin_subcommand(args: &[String]) -> Result<()> {
         Some("rotate-key") => run_admin_rotate_key(args).await,
         Some("rotate-metrics-token") => run_admin_rotate_metrics_token(args).await,
         Some("issue-registration-token") => run_admin_issue_registration_token(args).await,
+        Some(known) if ADMIN_SUBACTIONS.contains(&known) => unreachable!(
+            "{known} is listed in ADMIN_SUBACTIONS but has no dispatch arm above -- add one"
+        ),
         Some(other) => bail!(
-            "unknown admin subaction `{other}`. Known subactions: unlock-user, reset-mfa, \
-             issue-recovery-link, rotate-key, rotate-metrics-token, issue-registration-token"
+            "unknown admin subaction `{other}`. Known subactions: {}",
+            ADMIN_SUBACTIONS.join(", ")
         ),
         None => bail!("admin requires a subaction. Try: sui-id admin unlock-user --username NAME"),
     }
@@ -612,7 +670,14 @@ pub(crate) fn parse_named_path(args: &[String], flag: &str) -> Option<PathBuf> {
 }
 
 pub(crate) fn print_help() {
-    println!(
+    println!("{}", help_text());
+}
+
+/// Separated from [`print_help`] so a test can assert `TOP_LEVEL_SUBCOMMANDS`
+/// and `ADMIN_SUBACTIONS` each appear in this text, rather than only in
+/// `print_help`'s own `println!` call site.
+fn help_text() -> String {
+    format!(
         "sui-id {ver}
 
 Self-hosted OpenID Connect provider.
@@ -626,6 +691,8 @@ USAGE:
     sui-id admin reset-mfa --username NAME --reason TEXT [--config PATH]
     sui-id admin issue-recovery-link --username NAME --reason TEXT [--config PATH]
     sui-id admin rotate-key [--generate-new-key | --new-key PATH] [--yes] [--config PATH]
+    sui-id admin rotate-metrics-token [--config PATH]
+    sui-id admin issue-registration-token [--max-uses N] [--note TEXT] [--config PATH]
     sui-id --dev [--dev-bind ADDR] [--dev-db PATH] [--dev-seed PATH]
                  [--dev-admin-password STR] [--dev-client-secret STR]
     sui-id --print-sample-config
@@ -647,10 +714,13 @@ SUBCOMMANDS:
                              storage paths. Refuses to overwrite existing
                              files unless --force is supplied. Use --decrypt
                              when restoring an encrypted backup.
-    verify-backup            Read a backup file and report what it contains
-                             without writing anything. Runs a SQLite
-                             integrity check on the inner snapshot. Use
-                             before a real restore to catch a corrupted or
+    verify-backup            Read a backup file and report what it
+                             contains. Writes nothing to the backup or to
+                             the configured storage paths; stages a
+                             temporary copy of the snapshot under the
+                             system temp directory to run a SQLite
+                             integrity check, then removes it. Use before
+                             a real restore to catch a corrupted or
                              mismatched backup.
     admin unlock-user        Clear an account-lockout state for the given
                              user. Resets the failed-login counter and
@@ -677,6 +747,18 @@ SUBCOMMANDS:
                              this. The previous key file is renamed to
                              '<original>.bak.<timestamp>' beside it; the
                              new key is written to the configured path.
+    admin rotate-metrics-token
+                             Generate a fresh metrics bearer token and
+                             store its hash, invalidating the previous
+                             one immediately (no grace-period overlap).
+                             The raw token is printed to stdout ONCE;
+                             update your Prometheus scrape config with it
+                             before the next scrape interval.
+    admin issue-registration-token
+                             Issue an RFC 7591 initial access token for
+                             dynamic client registration. The raw token
+                             is printed to stdout ONCE. Accepts
+                             --max-uses N (default 1) and --note TEXT.
     setup                    Headless initialization (RFC 077). Creates the
                              first administrator and bootstraps a signing
                              key without the GUI wizard. Requires
@@ -713,6 +795,10 @@ OPTIONS:
                              reset-mfa` and `admin issue-recovery-link`.
     --new-key PATH           Pre-prepared new key file for `admin rotate-key`.
     --generate-new-key       Have `admin rotate-key` mint a fresh key.
+    --max-uses N             Use count for `admin issue-registration-token`
+                             (default: 1).
+    --note TEXT              Operator note for `admin
+                             issue-registration-token`.
     --yes, -y                Skip the confirmation prompt.
     --force                  Allow `restore` to overwrite existing files.
     --encrypt                Encrypt the backup with a passphrase.
@@ -745,7 +831,7 @@ DOCUMENTATION:
     See README.md and docs/src/guides/operators.md for the operator's guide.
 ",
         ver = env!("CARGO_PKG_VERSION")
-    );
+    )
 }
 
 /// `sui-id admin rotate-metrics-token [--config PATH]`
@@ -804,8 +890,7 @@ pub(crate) async fn run_admin_rotate_metrics_token(args: &[String]) -> Result<()
     Ok(())
 }
 
-/// `sui-id admin issue-registration-token [--max-uses N] [--expires-in Nd] [--note TEXT]
-///                                         [--config PATH]`
+/// `sui-id admin issue-registration-token [--max-uses N] [--note TEXT] [--config PATH]`
 ///
 /// Generates a fresh RFC 7591 initial access token, stores its SHA-256 hash
 /// in `client_registration_token`, and prints the raw token once to stdout.
@@ -898,3 +983,7 @@ pub(crate) async fn run_admin_issue_registration_token(args: &[String]) -> Resul
 
     Ok(())
 }
+
+#[cfg(test)]
+#[allow(clippy::expect_used, clippy::unwrap_used)]
+mod tests;

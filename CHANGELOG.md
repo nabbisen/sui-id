@@ -181,6 +181,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Every `--dev-*` flag that takes a value (`--dev-bind`, `--dev-db`,
+  `--dev-seed`, `--dev-admin-password`, `--dev-client-secret`) failed
+  dev mode at startup with `Error: unknown subcommand "<value>"`.**
+  `find_subcommand` only knew to skip the value of `--config`, `--to`
+  and `--from` (added 2026-09-16, RFC 098) when walking argv for the
+  subcommand, so `sui-id --dev --dev-seed path.toml` read `path.toml`
+  itself as an unrecognised subcommand before `--dev` was ever reached.
+  `--dev` alone (no value-taking flag before it) was unaffected, which
+  is why the defect went unnoticed. Now derives the skip-list from
+  every flag's own parsing (sixteen, not three) rather than from the
+  help text, which drifted independently (RFC 107).
+
+- **`sui-id --help` omitted two dispatched `admin` subactions**
+  (`rotate-metrics-token`, `issue-registration-token`) from its usage
+  and description blocks — both worked, neither was documented. The
+  admin dispatcher's own three hand-written lists (the `match`, its
+  unknown-subaction message, and the help text) had drifted apart;
+  the unknown-subaction message now builds from the same list the
+  help-text binding test checks against, so they cannot drift again
+  without a test failing (RFC 107).
+
+- **`verify-backup`'s help line claimed it runs "without writing
+  anything."** It stages a temporary copy of the backup's snapshot
+  under the system temp directory to run the integrity check, then
+  removes it — it never touches the backup file or the configured
+  storage paths, but it does write, briefly, elsewhere. The line now
+  says so, matching `docs/src/guides/deployment.md` (RFC 107).
+
 - **A federated sign-in through an existing link with no local second
   factor never marked its login attempt complete.** Those rows sat in
   `exchanging` until the 24-hour purge collected them, rather than moving

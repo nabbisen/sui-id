@@ -99,10 +99,9 @@ Dev mode:
 - Binds to `127.0.0.1:8801` by default.
 - Seeds an admin (`admin`), two users (`alice`, `bob`) and one OIDC client from
   hardcoded defaults. No seed file is read automatically; `--dev-seed PATH`
-  is the flag for one. In this release every `--dev-*` flag that takes a value
-  (`--dev-seed`, `--dev-bind`, `--dev-db`, `--dev-admin-password`,
-  `--dev-client-secret`) is rejected at startup with "unknown subcommand", so
-  dev mode runs on the hardcoded defaults only.
+  is the flag for one. Every `--dev-*` flag that takes a value (`--dev-seed`,
+  `--dev-bind`, `--dev-db`, `--dev-admin-password`, `--dev-client-secret`) is
+  honoured.
 - Disables `cookie_secure` and HIBP checking. Account lockout stays active.
 - Shows a **yellow banner** on every admin page as a reminder.
 

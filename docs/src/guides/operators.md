@@ -218,13 +218,6 @@ match hold the same as in production.
 
 ### Customising the seed
 
-> **Not working in this release.** Every `--dev-*` flag that takes a value —
-> `--dev-seed`, `--dev-admin-password`, `--dev-client-secret`, `--dev-db` and
-> `--dev-bind` — is rejected at startup with `Error: unknown subcommand`, so
-> each command in this section and the two below currently fails, and dev
-> mode runs on the hardcoded defaults on `127.0.0.1:8801` only. The rest of
-> this section describes the intended behaviour.
-
 Three sources, in priority order (highest first):
 
 1. **TOML file** via `--dev-seed PATH`. Full schema in
