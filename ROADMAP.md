@@ -1014,11 +1014,23 @@ decisions, and neither is a date:**
    The freeze above admits four kinds of work — urgent security fixes,
    remediation-enabling refactors, dependency and security maintenance, and
    repairs that keep approved gates executable. **An embeddable module is none
-   of them.** RFC 120 (the store boundary) has a real claim to being a
-   remediation-enabling refactor; RFC 119 ships no code at all; RFC 121 is a
-   feature. Scheduling any of it is `@nabbisen`'s exception to make, and the
-   architect's first proposal scheduled it without naming the freeze, which it
-   should have.
+   of them.** The store boundary has a real claim to being a
+   remediation-enabling refactor; RFC 119 ships no code at all; the embeddable
+   module itself is a feature. Scheduling any of it is `@nabbisen`'s exception
+   to make, and the architect's first proposal scheduled it without naming the
+   freeze, which it should have.
+
+   > **Numbering corrected 2026-10-20.** This paragraph and the constraints
+   > below were written when the store boundary was expected to be RFC 120 and
+   > the embeddable module RFC 121. **Both numbers were reassigned**: RFC 120
+   > is `consent-and-setup-prove-the-caller` and RFC 121 is
+   > `a-verification-failure-is-not-a-pass`, and both are **Implemented in
+   > v0.79.0** as security fixes with nothing to do with either subject.
+   > **The store boundary has no RFC and is not written** — RFC 119 `:90`
+   > still calls it "RFC 120 (the store boundary; not yet written)" and is
+   > wrong in the same way. The next free number is 140. Reserving one is
+   > not done here, because whether this work is scheduled at all is
+   > decision 1 above, which is not the architect's to make.
 2. **Whether the store boundary comes before or after M2b.** Cycles D and E as
    proposed **displace M2b** and push M2c, M3 and everything to M7 by roughly
    two months. That is a trade on the critical path to production readiness,
@@ -1028,6 +1040,15 @@ decisions, and neither is a date:**
    M2b is written against the new boundary, and doing it second means
    refactoring M2b's work too.** The technical argument favours before; the
    programme argument favours after.
+
+> **Cycle E proposed 2026-10-20** —
+> [`cycle-e-proposal-2026-10-20.md`](rfcs/handoffs/094-transactional-audit/cycle-e-proposal-2026-10-20.md).
+> The recommendation below said to decide D and E *"at the end of cycle C"*.
+> C closed 2026-10-03 and D shipped 2026-10-20, so that trigger is met and was
+> missed for seventeen days. The proposal restates both decisions against the
+> corrected numbering and recommends **holding the freeze and spending cycle E
+> on RFC 094 M2b**, which is the only remaining work that unblocks anything —
+> 096-B2, M4-B, RFC 097/M5, M6 and M7 all sit behind it.
 
 **The architect's recommendation, revised:** take **RFC 119 now** — it ships no
 code, breaks no freeze, and costs design capacity rather than implementation
@@ -1039,12 +1060,13 @@ the only genuinely date-shaped item and is the smallest of the three.
 
 **Ordering constraints, stated so they can be checked:**
 
-- **RFC 120 comes after RFCs 112 and 106, not beside them.** Both change the
-  store — `migrations::run`, `Database::open`, restore — and RFC 120 is the
-  largest single refactor since the programme began. Running them concurrently
-  would put two lanes through the same files.
-- **RFC 119 blocks RFC 121, not RFC 120.** The store boundary is worth having
-  whether or not sui-id is ever embedded, so it does not wait on the contract.
+- **The store boundary comes after RFCs 112 and 106, not beside them.** Both
+  change the store — `migrations::run`, `Database::open`, restore — and the
+  boundary is the largest single refactor since the programme began. Running
+  them concurrently would put two lanes through the same files.
+- **RFC 119 blocks the embeddable module, not the store boundary.** The
+  boundary is worth having whether or not sui-id is ever embedded, so it does
+  not wait on the contract.
 - **Each is a minor bump in v0** under the 2026-08-26 surface test: each changes
   public surface.
 - **Publishing an embeddable crate is an outward-facing act** and is not

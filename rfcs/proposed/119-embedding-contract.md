@@ -87,7 +87,7 @@ layer by itself — that is RFC 121 (the split; not yet written). It does not
 commit to publishing anything: publishing is an outward-facing act and
 `@nabbisen`'s decision separately.
 
-**D7 — The enumeration is the deliverable.** Before RFC 120 (the store boundary; not yet written)
+**D7 — The enumeration is the deliverable.** Before the store boundary refactor (unwritten, and **not** RFC 120 — that number was reassigned to `consent-and-setup-prove-the-caller`, Implemented in v0.79.0; corrected 2026-10-20)
 moves a line, every security-relevant behaviour in `crates/sui-id/src/http/`
 is enumerated and assigned one of D4's three outcomes. The table above has
 three rows because that is what one afternoon's measurement found; the real
