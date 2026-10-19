@@ -5,8 +5,11 @@
 
 **Dispatched.** 2026-10-19 JST, by the architect.
 **Round.** Fix round on the package returned 2026-10-19.
-**Baseline.** `21a7128`, the same as your round — **your working tree is
-untouched and stays uncommitted.** Build on it; do not re-create it.
+**Baseline.** `658ca38` — this dispatch's own commit, docs only, touching no
+`crates/` file. **Your working tree is untouched and stays uncommitted**
+(`cli.rs` md5 `044cf8a5…`, as you left it); build on it, do not re-create it.
+Your returned hunks were measured against `21a7128`; they are unchanged by my
+commit, but the round's final hashes go against `658ca38`.
 **Previous dispatch.** [`dispatch-one-list-per-level-2026-10-18.md`](dispatch-one-list-per-level-2026-10-18.md)
 — still the specification. Everything in it that I did not reopen below is
 accepted.
@@ -124,8 +127,8 @@ The usual package, plus:
 - **Your decision on item 2**, with the reasoning, whichever way it goes.
 - The full matrix, Level B scope — this touches `crates/`.
 - `python3.14 scripts/hunk-hashes.py --baseline <sha>` against the **last**
-  commit of the round. **Baseline against `21a7128` unless I land something
-  first**, in which case use my commit.
+  commit of the round, **baselined against `658ca38`** — I have already landed
+  this dispatch, so that is the commit, not `21a7128`.
 
 **No new `CHANGELOG` entry.** Your three `### Fixed` entries already describe
 the user-visible behaviour and none of this round changes it; item 2 may make
