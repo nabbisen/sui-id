@@ -5,11 +5,13 @@
 
 **Dispatched.** 2026-10-19 JST, by the architect.
 **Round.** Fix round on the package returned 2026-10-19.
-**Baseline.** `658ca38` — this dispatch's own commit, docs only, touching no
-`crates/` file. **Your working tree is untouched and stays uncommitted**
-(`cli.rs` md5 `044cf8a5…`, as you left it); build on it, do not re-create it.
-Your returned hunks were measured against `21a7128`; they are unchanged by my
-commit, but the round's final hashes go against `658ca38`.
+**Baseline.** **Read the tip with `git log -1`** — I may land more docs
+commits while you work, and a hash written here goes stale the moment I do
+(it already did once). Whatever the tip is when you finish is the baseline.
+Everything I land in this window is documentation; **no `crates/` file is
+touched by me**, so your returned hunks stay valid either way.
+**Your working tree is untouched and stays uncommitted** — `cli.rs` md5
+`044cf8a5…`, exactly as you left it. Build on it; do not re-create it.
 **Previous dispatch.** [`dispatch-one-list-per-level-2026-10-18.md`](dispatch-one-list-per-level-2026-10-18.md)
 — still the specification. Everything in it that I did not reopen below is
 accepted.
@@ -127,8 +129,8 @@ The usual package, plus:
 - **Your decision on item 2**, with the reasoning, whichever way it goes.
 - The full matrix, Level B scope — this touches `crates/`.
 - `python3.14 scripts/hunk-hashes.py --baseline <sha>` against the **last**
-  commit of the round, **baselined against `658ca38`** — I have already landed
-  this dispatch, so that is the commit, not `21a7128`.
+  commit of the round, baselined against **the tip at that moment**, not
+  against `21a7128` and not against a hash copied from this file.
 
 **No new `CHANGELOG` entry.** Your three `### Fixed` entries already describe
 the user-visible behaviour and none of this round changes it; item 2 may make
