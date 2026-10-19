@@ -1,17 +1,21 @@
 # `0.81.0` — the release preparation
 
-> ## **HELD, not dispatched.** Whose turn it is: **nobody's yet.**
-> RFC 107's dispatch is open and the implementation role keeps one working
-> tree; its package and this one both edit `CHANGELOG.md`. **This is written
-> in advance so it can go out the moment 107's package is reviewed**, not
-> started then. Under the one-open-dispatch rule it is not live until the
-> architect says so in writing here.
+> ## **DISPATCHED 2026-10-19.** Whose turn it is: **the implementation role's.**
+> The hold is lifted. RFC 107's fix round was accepted and committed
+> (`36c0a74`), so the working tree is free and `CHANGELOG.md` has no competing
+> edit. This is the only open dispatch.
 >
-> **It also does not produce a release.** The division recorded in the
-> proposal's header block: the preparation is dispatchable, *the tag and the
-> publish are not*. This dispatch stops before both.
+> **It does not produce a release.** The division recorded in the proposal's
+> header block: the preparation is dispatchable, *the tag and the publish are
+> not*. This dispatch stops before both.
+>
+> **`0.81.0` therefore includes RFC 107.** The proposal's §D listed it as
+> joining the cycle only if its package returned in time. It did. §C's "fifteen
+> entries" count is correspondingly out of date — three `### Fixed` entries were
+> added by 107 — and **that is for the architect to reconcile, not you**; §3
+> below tells you what to do if you spot others.
 
-**Written.** 2026-10-19 JST, by the architect.
+**Written and dispatched.** 2026-10-19 JST, by the architect.
 **Authorization.** The cut is authorized; the proposal's header block carries
 the wording and the date.
 **Proposal.** [`release-0.81.0-proposal-2026-10-18.md`](release-0.81.0-proposal-2026-10-18.md)
