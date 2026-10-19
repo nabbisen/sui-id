@@ -9,6 +9,13 @@ written with and which is now historical record.
 [`dispatch-one-list-per-level-2026-10-18.md`](dispatch-one-list-per-level-2026-10-18.md),
 which carries the measurement at `1a49e95` and the order. Where it and this
 file differ, the dispatch says so explicitly.
+**Returned and reviewed 2026-10-19; one fix round open** —
+[`fix-the-binding-test-passes-without-the-entry-2026-10-19.md`](fix-the-binding-test-passes-without-the-entry-2026-10-19.md).
+Most of the package is accepted. The binding test asserts substring
+containment, so it passes with `backup` removed from the help entirely
+(`verify-backup` contains it) — three of the five top-level names are
+satisfied by unrelated text. **Read the fix dispatch before this file's
+`Required` section**; the specification is unchanged, the evidence bar is not.
 **Implementer.** Mid-capability model. **Baseline.** Read the tip with
 `git log -1`; `9f6acdb` is the measurement point below, not the baseline to
 build on.
