@@ -13,6 +13,15 @@
 > as settled by it. They do not block the cut: the entries are already
 > public, so promoting `[Unreleased]` to `[0.81.0]` discloses nothing new.
 >
+> ## **DONE — released and published 2026-10-20.**
+> Tag `0.81.0` → `ef52e4f`; Level B on that commit (`workflow_dispatch`
+> `39325299908`, 27 jobs, 0 skipped); six crates published bottom-up, each
+> dry-run first; `check-published-versions.py` exits **0** —
+> *"0.81.0 is published on all 6 crates"* — and the registry API agrees.
+> `0.80.0` is recorded as superseded. **Nothing in this proposal is
+> outstanding except §B**, which blocks nothing and whose rule change is the
+> only part that prevents a repeat.
+>
 > ## The publish is authorized — `@nabbisen`, 2026-10-20: *"Tag it when green.
 > Also, you are authorized to do the publish."*
 > So §E step 5 is covered: the architect tags `0.81.0` once Level B is green

@@ -28,6 +28,7 @@ ROADMAP.md	2636ad08eb9e597ede73bccdc24e0b3cd3011bd3659d1b66c1144846611b195a	1	R4
 ROADMAP.md	26de88e14f6fa11f02c4846c6a1a577eaf8cb96761082e7c37663009ee51ade0	1	The owner and independent reviewer decide whether a narrower change resets a targeted exercise or the complete four-week window.
 ROADMAP.md	2a29ae17a5167459bb933a6e2f0fa114c30c4452df38af543f9ca0f24a9448c0	1	R2 Audit hash chain is unkeyed and unanchored — tamper-evident only within its trust boundary Certain (by design) High if misrepresented; lo
 ROADMAP.md	2d4ab9968741d00b73c18bdf3c32d69f3d6cb9508934906d06fc3574002da5e4	1	On 2026-07-28 the owner authorized the programme to run two lanes : a second implementer was assigned and increased security-review capacity
+ROADMAP.md	2e91785c43a36f69cbf8b936ee0e1aeab1b1e2681008ae6a4abdeecbcbac2e92	1	Cut authorized 2026-10-18 — @nabbisen : "Authorized." 0.80.0 ruled on 2026-10-19: publishing follows every tag, and the earlier unpublished 
 ROADMAP.md	3020eded07c19c334137809bde2ec4452e08da628c4f96b495921fec478089da	1	Acceptance @nabbisen
 ROADMAP.md	3351aec715f3ba49395145f7af82e742bc1233506da4da1df6facb4916f22f56	1	Every statement in this repository that the owner made that ruling traces to documents written by the architect role that proposed it: this 
 ROADMAP.md	36060284344212921053b00aa09fd5934b9a264236165a241f43611f1ab7e726	1	Like the withdrawn 2026-07-28 attribution above, the 2026-09-09 ruling reaches this repository only through a document written by the archit
@@ -53,7 +54,6 @@ ROADMAP.md	6e364cabaa11522c5c854bd5ae883cd048fd57c65b877741fc33ee0d474451fd	1	Cy
 ROADMAP.md	766450b57c4bb79e356dfd9ac065f79cbec7c49ef087e3ca6fa8ba0c5afad2b6	1	#### S1a — The workflow, ruled by @nabbisen on 2026-10-01
 ROADMAP.md	7c3b4d73cf9008f591c43f49ceb79d4570fa262c5fa82e72506f9abea4c17ebb	1	All remain Proposed , no schedule, require owner direction + soak.
 ROADMAP.md	831b9986beea7e5a3407a96fb665d91220901ae66ea5285416a15da856e8f4df	1	Ruled 2026-09-22 ( @nabbisen ): Chinese is necessary but not urgent — it waits until the APIs are stable, and then a native-speaker review, 
-ROADMAP.md	833c2d87b0a9e843ce4f926560041de2627844e26d012e13ab6c7159e663471f	1	D — the federated path becomes real v0.81.0 Gate met and cut authorized 2026-10-18 — @nabbisen : "Authorized." 0.80.0 ruled on 2026-10-19: p
 ROADMAP.md	85972bca8cfda9e25847b615a12c3709aae33d07115fcd9c82cad11b804bd37b	1	Owner decision, 2026-08-26. Review is not skipped.
 ROADMAP.md	8f0151094259a8bc85d880cb9104615b5a24981cf3d81397b72d47814e1352a0	1	RFCs 094, 095 and 096 were returned to proposed/ on 2026-07-28 for owner-approved material amendments, and were re-accepted on 2026-08-27.
 ROADMAP.md	92e87f0d49a150a6963709d59e47d782889e1336a93d3eedfb51fcdb52347651	1	They must: because owner-requested self-review is legitimate, a gate that rejected every self-review would reject work this ruling permits.
