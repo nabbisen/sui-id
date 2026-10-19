@@ -1,5 +1,6 @@
 #!/usr/bin/env python3.14
-"""RFC 131 D7: a tagged version is published, or recorded as abandoned.
+"""RFC 131 D7: a tagged version is published, or recorded as abandoned or
+superseded.
 
 A release cut (RFC 131 D2) requires Level B on the commit it cites, but says
 nothing about the cut *reaching anyone* -- and that turned out to be the gap
@@ -14,8 +15,10 @@ newest git tag is compared against the registry's current `max_version`
 policy error that reads as "not published" for every crate, which is the
 trap `docs/src/contributing/release-process.md` already records). A tag
 ahead of the registry is a gap, unless `CHANGELOG.md` records that version as
-abandoned -- D7 point 1's resolution for 0.78.0 and 0.76.10-12, already
-landed.
+abandoned or superseded -- abandoned for D7 point 1's own resolution, for
+0.78.0 and 0.76.10-12; superseded for 0.80.0 (the `0.81.0` release
+proposal's §G), the first version excused for a reason other than having
+simply been missed.
 
 **Corrected 2026-10-01, the same day RFC 131 was written**: the first draft
 of D7 ran this weekly, in `audit.yml`'s shape. The RFC's own decision text
@@ -26,7 +29,7 @@ when the RFC was amended. This implements the RFC's corrected decision, not
 the handoff's stale one: a required release-time step, not a schedule.
 `docs/src/contributing/release-process.md` is where it's wired in.
 
-Exit 0 = every tagged version is published or recorded abandoned.
+Exit 0 = every tagged version is published or recorded abandoned/superseded.
 Exit 1 = a gap. Exit 2 = a tag, the registry, or CHANGELOG.md could not be
 read.
 """
@@ -69,33 +72,46 @@ def newest_tag(root: Path) -> str:
     return max(tags, key=semver_key)
 
 
-SECTION_ABANDONED_RE = re.compile(
-    r"^##\s*\[(\d+\.\d+\.\d+)\].*?\n+(?:>.*\n?)*?>\s*\*\*never published.*?abandoned",
+SECTION_EXCUSED_RE = re.compile(
+    r"^##\s*\[(\d+\.\d+\.\d+)\].*?\n+(?:>.*\n?)*?>\s*\*\*never published.*?(?:abandoned|superseded)",
     re.IGNORECASE | re.MULTILINE,
 )
-LIST_ABANDONED_RE = re.compile(
-    r"((?:\d+\.\d+\.\d+(?:,\s*|\s+and\s+))*\d+\.\d+\.\d+)\s+(?:is|are)\s+abandoned",
+LIST_EXCUSED_RE = re.compile(
+    r"((?:\d+\.\d+\.\d+(?:,\s*|\s+and\s+))*\d+\.\d+\.\d+)\s+(?:is|are)\s+(?:abandoned|superseded)",
     re.IGNORECASE,
 )
 
 
-def abandoned_versions(changelog_path: Path) -> set[str]:
-    """Versions CHANGELOG.md records as abandoned.
+def excused_versions(changelog_path: Path) -> set[str]:
+    """Versions CHANGELOG.md records as deliberately not published --
+    *abandoned* (never published, no good reason to) or *superseded*
+    (never published, a later release carries the content and a specific
+    reason -- e.g. security -- not to put the gap on the registry).
+
+    Renamed from `abandoned_versions` (RFC 131 D7's own name) once a
+    second, distinct reason to skip a version existed: `0.80.0` is the
+    first version this script has ever had to recognise that is not
+    abandoned at all, and naming the function after only one of the two
+    reasons it now excuses would itself be the kind of mismatch between
+    a name and what it actually does this project's own design
+    philosophy exists to catch.
 
     Two patterns, both present today and both narrow on purpose -- a loose
-    "this paragraph mentions 'abandoned' somewhere" scan over-matched 0.79.0,
-    which is not abandoned, merely *named* in 0.78.0's abandonment note as
-    where its content actually shipped:
+    "this paragraph mentions the word somewhere" scan over-matched 0.79.0,
+    which is neither abandoned nor superseded, merely *named* in 0.78.0's
+    abandonment note as where its content actually shipped:
 
     1. A version's own section (`## [X.Y.Z]`) opens with a blockquote stating
-       it was never published and is abandoned (0.78.0's shape).
-    2. An explicit list followed by "is/are abandoned" (0.76.10-12's shape,
-       recorded inside 0.78.0's own section rather than their own).
+       it was never published and is abandoned or superseded (0.78.0's shape;
+       0.80.0's superseded record follows the same shape).
+    2. An explicit list followed by "is/are abandoned" or "is/are superseded"
+       (0.76.10-12's shape, recorded inside 0.78.0's own section rather than
+       their own).
     """
     text = changelog_path.read_text(encoding="utf-8")
     found: set[str] = set()
-    found.update(SECTION_ABANDONED_RE.findall(text))
-    for m in LIST_ABANDONED_RE.finditer(text):
+    found.update(SECTION_EXCUSED_RE.findall(text))
+    for m in LIST_EXCUSED_RE.finditer(text):
         found.update(VERSION_RE.findall(m.group(1)))
     return found
 
@@ -125,13 +141,16 @@ def main(argv: list[str]) -> int:
         return 2
 
     try:
-        abandoned = abandoned_versions(root / args.changelog)
+        excused = excused_versions(root / args.changelog)
     except OSError as exc:
         print(f"check-published-versions: cannot read {args.changelog}: {exc}", file=sys.stderr)
         return 2
 
-    if tag in abandoned:
-        print(f"check-published-versions: {tag} is tagged and recorded as abandoned; nothing to check")
+    if tag in excused:
+        print(
+            f"check-published-versions: {tag} is tagged and recorded as "
+            f"abandoned or superseded; nothing to check"
+        )
         return 0
 
     gaps = []
@@ -149,7 +168,7 @@ def main(argv: list[str]) -> int:
             print(f"check-published-versions: {g}", file=sys.stderr)
         print(
             f"check-published-versions: {tag} is tagged but not fully published, "
-            f"and CHANGELOG.md does not record it as abandoned",
+            f"and CHANGELOG.md does not record it as abandoned or superseded",
             file=sys.stderr,
         )
         return 1

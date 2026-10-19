@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.81.0] — 2026-10-20
+
+**A federated sign-in can now complete its own local second factor.** Before
+this release the verifier and its promotion path (RFC 096-B1 stages 8, 10a,
+10b, 11) existed with no caller: a federated sign-in that needed a second
+factor wrote a continuation row and set cookies nothing read, and completed
+through the generic local path instead. Stage 12 wires `/admin/login/mfa`
+onto the verifier directly, carrying forward both protections that switch
+would otherwise have dropped silently — the account lock, and the generic
+pending row's own consumption at completion. The federated callback's token
+endpoint authentication and its discovery cross-check are also live for the
+first time (stages 12a/12c), and stage 12a closes the one item `0.80.0`'s own
+release notes left open — the legacy mapping path that still decided the
+outcome.
+
+RFC 107 lands alongside it: `sui-id --help` now documents every subcommand
+the binary accepts, and a flag's value can no longer be mistaken for one —
+every `--dev-*` flag that takes a value previously failed dev mode at
+startup with `Error: unknown subcommand`.
+
 ### Security
 
 - **The federated callback's legacy mapping path still decided the
@@ -281,6 +301,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that will work (RFC 096-B1 stage 12b).
 
 ## [0.80.0] — 2026-10-13
+
+> **Never published to crates.io; superseded by 0.81.0.** Tagged 2026-10-13;
+> the publish step was not run. **This is not an abandonment and is not the
+> same case as 0.78.0 and 0.76.10–12**, which were simply missed: this one is
+> deliberately not published late, for a security reason. 0.80.0 carries the
+> **High**-severity flaw recorded under 0.81.0's own `### Security` — the
+> federated callback decided the outcome on the legacy mapping path, the ID
+> token's verification result discarded — which RFC 096-B1 stage 12a
+> (`57b4ead`, 2026-10-17) fixed four days after this tag. Publishing 0.80.0
+> now would put the first installable copy of that flaw on the registry
+> permanently, since crates.io yanks but never removes, immediately before
+> 0.81.0 supersedes it. Its content reaches users in 0.81.0 instead.
+>
+> **Ruled by `@nabbisen`, 2026-10-19**, on the architect's contrary
+> recommendation that it be abandoned on the 0.78.0 precedent: *"Both should
+> have been published unless any good reason existed."* Publishing follows
+> every tag; a tag goes unpublished only where a good reason exists, and this
+> is the first time one has. Per RFC 131 D7, a cut that is not published is
+> recorded here with its reason rather than left looking unfinished.
 
 **Federation stops trusting the transport.** Until this release the federated
 callback decoded the upstream ID token without verifying its signature, and

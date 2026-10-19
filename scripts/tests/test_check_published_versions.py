@@ -34,7 +34,7 @@ def init_repo(root: Path) -> None:
     git(root, "config", "user.name", "t")
 
 
-class SemverAndAbandoned(unittest.TestCase):
+class SemverAndExcused(unittest.TestCase):
     def test_semver_key_orders_numerically_not_lexicographically(self) -> None:
         versions = ["0.76.9", "0.76.10", "0.76.2", "0.9.0"]
         self.assertEqual(
@@ -51,7 +51,19 @@ class SemverAndAbandoned(unittest.TestCase):
             f.write(text)
             path = Path(f.name)
         self.addCleanup(path.unlink)
-        self.assertEqual(cpv.abandoned_versions(path), {"0.78.0"})
+        self.assertEqual(cpv.excused_versions(path), {"0.78.0"})
+
+    def test_section_superseded_pattern_is_found(self) -> None:
+        text = (
+            "## [0.80.0] — 2026-10-13\n\n"
+            "> **Never published to crates.io; superseded.** Tagged 2026-10-13.\n\n"
+            "Some content.\n"
+        )
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+            f.write(text)
+            path = Path(f.name)
+        self.addCleanup(path.unlink)
+        self.assertEqual(cpv.excused_versions(path), {"0.80.0"})
 
     def test_list_abandoned_pattern_is_found(self) -> None:
         text = (
@@ -63,8 +75,19 @@ class SemverAndAbandoned(unittest.TestCase):
             path = Path(f.name)
         self.addCleanup(path.unlink)
         self.assertEqual(
-            cpv.abandoned_versions(path), {"0.76.10", "0.76.11", "0.76.12"}
+            cpv.excused_versions(path), {"0.76.10", "0.76.11", "0.76.12"}
         )
+
+    def test_list_superseded_pattern_is_found(self) -> None:
+        text = (
+            "## [0.81.0] — 2026-10-19\n\n"
+            "> 0.80.0 is superseded by this release on the same ruling.\n"
+        )
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+            f.write(text)
+            path = Path(f.name)
+        self.addCleanup(path.unlink)
+        self.assertEqual(cpv.excused_versions(path), {"0.80.0"})
 
     def test_a_version_merely_named_as_where_content_shipped_is_not_abandoned(self) -> None:
         # The exact trap: 0.78.0's own abandonment note names 0.79.0 as where
@@ -79,14 +102,40 @@ class SemverAndAbandoned(unittest.TestCase):
             f.write(text)
             path = Path(f.name)
         self.addCleanup(path.unlink)
-        found = cpv.abandoned_versions(path)
+        found = cpv.excused_versions(path)
         self.assertIn("0.78.0", found)
         self.assertNotIn("0.79.0", found)
         self.assertNotIn("0.77.0", found)
 
-    def test_the_real_changelog_marks_exactly_the_four_known_gaps(self) -> None:
-        found = cpv.abandoned_versions(REPO_ROOT / "CHANGELOG.md")
-        self.assertEqual(found, {"0.78.0", "0.76.10", "0.76.11", "0.76.12"})
+    def test_a_version_merely_named_as_where_content_shipped_is_not_superseded(self) -> None:
+        # The same trap, for the new keyword: a superseded record naming the
+        # release it is superseded *by* must not sweep that release in either.
+        text = (
+            "## [0.80.0] — 2026-10-13\n\n"
+            "> **Never published to crates.io; superseded.** The registry\n"
+            "> moves straight to 0.81.0, so the changes reached users in\n"
+            "> 0.81.0 rather than in a release of their own.\n"
+        )
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+            f.write(text)
+            path = Path(f.name)
+        self.addCleanup(path.unlink)
+        found = cpv.excused_versions(path)
+        self.assertIn("0.80.0", found)
+        self.assertNotIn("0.81.0", found)
+
+    def test_the_real_changelog_marks_exactly_the_five_known_gaps(self) -> None:
+        """0.76.10-12 and 0.78.0 were missed and are abandoned; 0.80.0 is
+        superseded by 0.81.0 for a security reason (it carries the High
+        flaw stage 12a fixed four days after its tag). 0.79.0 must stay
+        out -- it is only *named* in 0.78.0's note as where that content
+        shipped, and an earlier, looser scan did match it."""
+        found = cpv.excused_versions(REPO_ROOT / "CHANGELOG.md")
+        self.assertEqual(
+            found, {"0.78.0", "0.76.10", "0.76.11", "0.76.12", "0.80.0"}
+        )
+        self.assertNotIn("0.79.0", found)
+        self.assertNotIn("0.81.0", found)
 
 
 class NewestTag(unittest.TestCase):
@@ -148,6 +197,15 @@ class MainIntegration(unittest.TestCase):
     def test_an_abandoned_tag_is_exit_zero_without_querying_the_registry(self) -> None:
         self.write_changelog(
             "## [1.2.0] — 2026-01-01\n\n> **Never published to crates.io; abandoned.**\n"
+        )
+        with mock.patch.object(cpv, "registry_max_version") as fake:
+            rc = cpv.main(["--root", str(self.root)])
+        fake.assert_not_called()
+        self.assertEqual(rc, 0)
+
+    def test_a_superseded_tag_is_exit_zero_without_querying_the_registry(self) -> None:
+        self.write_changelog(
+            "## [1.2.0] — 2026-01-01\n\n> **Never published to crates.io; superseded.**\n"
         )
         with mock.patch.object(cpv, "registry_max_version") as fake:
             rc = cpv.main(["--root", str(self.root)])
