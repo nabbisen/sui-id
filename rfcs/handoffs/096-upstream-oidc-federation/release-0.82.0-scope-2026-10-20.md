@@ -3,6 +3,15 @@
 > ## Whose turn it is: **not the architect's.** This needs authorization.
 > It does **not** wait on the cycle E decision, and §A says why.
 
+> ## **AUTHORIZED** 2026-10-20 — both asks in §F.
+> The cut is authorized on §B's measured severity. The §D pre-publish audit
+> step is approved, with a standing constraint on how it is implemented —
+> **`@nabbisen`, 2026-10-20**: *"be careful not to damage development cycles and productivity. I mean it
+> will harm the project if some check for the release gate only is processed
+> at each RFC, each implementation or each review."* Implemented as one
+> reading at the cut — not a `[gates]` lane, not part of Level B, and not
+> evidence any round must produce. A3.4 passes.
+
 **Proposed.** 2026-10-20 JST, by the architect.
 **Prompted by.** *"Is it time to scope 0.82 now?"* — and the honest first
 answer was no. Measuring it turned up something that changed it.

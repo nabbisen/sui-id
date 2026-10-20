@@ -62,6 +62,15 @@ Unchanged in substance from `ROADMAP.md`; only the names are repaired.
 
 ## D — the recommendation: cycle E is RFC 094 M2b, and the freeze holds
 
+> **SUPERSEDED 2026-10-20** by
+> [`cycle-e-and-0.83-revised-2026-10-20.md`](cycle-e-and-0.83-revised-2026-10-20.md).
+> This section named M3 as a milestone not blocked by M2b and then did not
+> weigh it as a candidate. M3 is Accepted, its entry gate has been open since
+> 2026-10-05, two of its stages have landed and **two remain** — it fits a
+> release, which M2b's 77 planned rows do not. The revision recommends M3 for
+> `0.83.0` and M2b as the programme after it. The critical-path argument
+> below is unchanged and still correct; only the order is.
+
 **M2b is the only remaining work that unblocks anything.** The chain, each
 link read from the documents rather than recalled:
 

@@ -2,9 +2,11 @@
 
 **Governing RFC:** [RFC 095](../../accepted/095-dynamic-client-registration-transaction.md)
 **Audience:** the mid-capability model only after RFC re-acceptance and prerequisite evidence
-**Stages 1 and 1b are dispatched.** Stage 1 has **landed** (`78a2dec`); stage 1b
-— [`stage1b-loopback-port-matching-2026-10-05.md`](stage1b-loopback-port-matching-2026-10-05.md)
-— completes the one redirect-corpus row stage 1 deferred, and is open.
+**Stages 1 and 1b have both landed** — stage 1 `78a2dec`, stage 1b `99f83bb`
+([`stage1b-loopback-port-matching-2026-10-05.md`](stage1b-loopback-port-matching-2026-10-05.md),
+the one redirect-corpus row stage 1 deferred). *This line said 1b "is open"
+until 2026-10-20; it had landed. The architect maintains this file and did
+not update it when the round closed.*
 
 Stage 1 was dispatched as —
 [`stage1-envelope-and-redirect-profile-2026-10-05.md`](stage1-envelope-and-redirect-profile-2026-10-05.md):

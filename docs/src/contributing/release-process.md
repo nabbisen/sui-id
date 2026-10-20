@@ -124,6 +124,33 @@ Before tagging, in addition to Level B on the commit being tagged:
    are centralized in root `[workspace.dependencies]`.
 3. `CHANGELOG.md` has an entry for the new version.
 4. The git working tree is clean (no `--allow-dirty` for the actual publish).
+5. **The `Security audit` workflow is green on the exact commit being
+   tagged**, or every finding it reports is recorded with a reachability
+   assessment and a decision. Dispatch it on that commit
+   (`gh workflow run audit.yml --ref <ref>`) and read the result; the
+   workflow's own header already anticipates this — *"Manually via the
+   Actions tab if a release is being prepared."*
+
+   **Added 2026-10-20, after `0.81.0` was tagged and published on `ef52e4f`
+   with this lane red** and had been since at least 2026-10-14. Level B covers
+   the `CI` workflow's gates; `Security audit` is a separate workflow and is
+   deliberately **not** in `[gates]`, so the release could satisfy RFC 131 D2
+   in full and still ship on a commit whose advisory scan was failing. Same
+   shape as the publish gap D7 exists for, and the same fix: bind the check to
+   the moment attention is already there.
+
+   **This is a release-time step and nothing else.** It is **not** a `[gates]`
+   lane, **not** part of Level B, and **not** evidence any RFC, dispatch,
+   implementation round or review is required to produce. A check that exists
+   for the release gate must not be paid for at every stage — that cost lands
+   on every round and buys nothing until a cut. The lane keeps its existing
+   push/PR/weekly triggers, which are free; this adds one reading of it, once,
+   at the cut.
+
+   Reading it is not the same as blocking on it. An advisory with no reachable
+   path into the built artifact is recorded and does not stop a release — the
+   lockfile carries the union of optional dependencies, so `cargo audit` can
+   report a crate the feature resolver never builds.
 
 ## Yanking
 
