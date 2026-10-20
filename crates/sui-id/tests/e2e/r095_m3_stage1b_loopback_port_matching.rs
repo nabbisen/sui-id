@@ -71,7 +71,7 @@ async fn a_public_native_loopback_client_matches_a_different_request_time_port()
     let state = test_app();
     let client_id = register_and_enable(
         &state,
-        r#"{"client_name":"Native","token_endpoint_auth_method":"none","redirect_uris":["http://127.0.0.1:49152/cb"]}"#,
+        r#"{"client_name":"Native","scope":"openid","token_endpoint_auth_method":"none","redirect_uris":["http://127.0.0.1:49152/cb"]}"#,
     )
     .await;
     let outcome = sui_id_core::authorize::validate_client_and_redirect_uri(
@@ -88,7 +88,7 @@ async fn the_same_client_still_refuses_a_differing_path() {
     let state = test_app();
     let client_id = register_and_enable(
         &state,
-        r#"{"client_name":"Native","token_endpoint_auth_method":"none","redirect_uris":["http://127.0.0.1:49152/cb"]}"#,
+        r#"{"client_name":"Native","scope":"openid","token_endpoint_auth_method":"none","redirect_uris":["http://127.0.0.1:49152/cb"]}"#,
     )
     .await;
     let outcome = sui_id_core::authorize::validate_client_and_redirect_uri(
@@ -105,7 +105,7 @@ async fn a_confidential_https_client_refuses_a_differing_port() {
     let state = test_app();
     let client_id = register_and_enable(
         &state,
-        r#"{"client_name":"Confidential","redirect_uris":["https://rp.test:8443/cb"]}"#,
+        r#"{"client_name":"Confidential","scope":"openid","redirect_uris":["https://rp.test:8443/cb"]}"#,
     )
     .await;
     let outcome = sui_id_core::authorize::validate_client_and_redirect_uri(
@@ -122,7 +122,7 @@ async fn a_public_https_client_refuses_a_differing_port() {
     let state = test_app();
     let client_id = register_and_enable(
         &state,
-        r#"{"client_name":"PublicHttps","token_endpoint_auth_method":"none","redirect_uris":["https://rp.test:8443/cb"]}"#,
+        r#"{"client_name":"PublicHttps","scope":"openid","token_endpoint_auth_method":"none","redirect_uris":["https://rp.test:8443/cb"]}"#,
     )
     .await;
     let outcome = sui_id_core::authorize::validate_client_and_redirect_uri(
@@ -144,7 +144,7 @@ async fn cors_origin_comparison_still_requires_the_exact_port() {
     let state = test_app();
     register_and_enable(
         &state,
-        r#"{"client_name":"Native","token_endpoint_auth_method":"none","redirect_uris":["http://127.0.0.1:49152/cb"]}"#,
+        r#"{"client_name":"Native","scope":"openid","token_endpoint_auth_method":"none","redirect_uris":["http://127.0.0.1:49152/cb"]}"#,
     )
     .await;
     state

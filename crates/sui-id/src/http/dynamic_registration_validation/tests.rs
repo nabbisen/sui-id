@@ -532,21 +532,738 @@ fn a_native_loopback_profile_is_unaffected_by_an_independent_https_logout_uri() 
         derive_closed_profile("none", &uris),
         Ok(RedirectProfile::PublicNativeLoopback)
     );
-    assert!(reject_http_post_logout_uris(&["https://rp.example/logout".to_string()]).is_ok());
+    assert!(
+        validate_post_logout_redirect_uris(Some(&["https://rp.example/logout".to_string()]))
+            .is_ok()
+    );
 }
 
 #[test]
 fn any_http_post_logout_uri_is_rejected_including_numeric_loopback() {
-    assert!(reject_http_post_logout_uris(&["http://rp.example/logout".to_string()]).is_err());
-    assert!(reject_http_post_logout_uris(&["http://127.0.0.1:49152/logout".to_string()]).is_err());
+    assert!(
+        validate_post_logout_redirect_uris(Some(&["http://rp.example/logout".to_string()]))
+            .is_err()
+    );
+    assert!(
+        validate_post_logout_redirect_uris(Some(&["http://127.0.0.1:49152/logout".to_string()]))
+            .is_err()
+    );
 }
 
 #[test]
 fn an_https_post_logout_uri_is_accepted() {
-    assert!(reject_http_post_logout_uris(&["https://rp.example/logout".to_string()]).is_ok());
+    assert!(
+        validate_post_logout_redirect_uris(Some(&["https://rp.example/logout".to_string()]))
+            .is_ok()
+    );
 }
 
 #[test]
 fn an_empty_post_logout_list_is_accepted() {
-    assert!(reject_http_post_logout_uris(&[]).is_ok());
+    assert!(validate_post_logout_redirect_uris(Some(&[])).is_ok());
+}
+
+#[test]
+fn an_absent_post_logout_list_is_accepted() {
+    assert_eq!(validate_post_logout_redirect_uris(None), Ok(Vec::new()));
+}
+
+// ── 2: client_name ───────────────────────────────────────────────────────
+
+/// `tag` makes every filler unique; padded with `'x'` to reach `width`
+/// bytes exactly (ASCII, 1 byte per `char`, so `width` chars == `width`
+/// bytes here).
+fn ascii_filler(tag: char, width: usize) -> String {
+    let mut s = String::with_capacity(width);
+    s.push(tag);
+    s.extend(std::iter::repeat_n('x', width - 1));
+    s
+}
+
+#[test]
+fn leading_and_trailing_whitespace_is_trimmed_and_accepted() {
+    assert_eq!(
+        validate_client_name(Some("  Example Inc.  ")),
+        Ok("Example Inc.".to_string())
+    );
+}
+
+#[test]
+fn an_absent_name_is_rejected_as_blank() {
+    assert_eq!(validate_client_name(None), Err(ClientNameRejection::Blank));
+}
+
+#[test]
+fn a_whitespace_only_name_is_rejected_as_blank() {
+    assert_eq!(
+        validate_client_name(Some("   ")),
+        Err(ClientNameRejection::Blank)
+    );
+}
+
+#[test]
+fn combining_characters_are_accepted() {
+    // "e" + COMBINING ACUTE ACCENT (U+0301) -- two scalars, one grapheme.
+    let name = "Caf\u{0301}e";
+    assert!(validate_client_name(Some(name)).is_ok());
+}
+
+#[test]
+fn emoji_are_accepted() {
+    assert!(validate_client_name(Some("Rocket \u{1F680} App")).is_ok());
+}
+
+#[test]
+fn html_is_accepted_not_rejected_as_a_shape() {
+    // The corpus's own note: valid values are escaped by the UI and
+    // bounded/sanitized before audit, so this validator's job is the
+    // control-character floor, not content sanitisation.
+    assert!(validate_client_name(Some("<b>Bold</b> Co")).is_ok());
+}
+
+#[test]
+fn quotes_are_accepted() {
+    assert!(validate_client_name(Some(r#"O'Brien's "App""#)).is_ok());
+}
+
+#[test]
+fn a_pipe_character_is_accepted_not_treated_as_a_log_delimiter() {
+    assert!(validate_client_name(Some("Name | With | Pipes")).is_ok());
+}
+
+#[test]
+fn a_c0_control_character_is_rejected() {
+    assert_eq!(
+        validate_client_name(Some("Bad\u{0007}Name")),
+        Err(ClientNameRejection::ForbiddenCharacter)
+    );
+}
+
+#[test]
+fn a_newline_is_rejected_as_a_c0_control() {
+    assert_eq!(
+        validate_client_name(Some("Bad\nName")),
+        Err(ClientNameRejection::ForbiddenCharacter)
+    );
+}
+
+#[test]
+fn a_c1_control_character_is_rejected() {
+    assert_eq!(
+        validate_client_name(Some("Bad\u{0085}Name")),
+        Err(ClientNameRejection::ForbiddenCharacter)
+    );
+}
+
+#[test]
+fn a_bidi_override_character_is_rejected() {
+    // U+202E RIGHT-TO-LEFT OVERRIDE.
+    assert_eq!(
+        validate_client_name(Some("Bad\u{202E}Name")),
+        Err(ClientNameRejection::ForbiddenCharacter)
+    );
+}
+
+#[test]
+fn a_bidi_isolate_character_is_rejected() {
+    // U+2066 LEFT-TO-RIGHT ISOLATE.
+    assert_eq!(
+        validate_client_name(Some("Bad\u{2066}Name")),
+        Err(ClientNameRejection::ForbiddenCharacter)
+    );
+}
+
+/// Boundary pair 1 of 5: 128/129 scalars. ASCII (1 byte/scalar) keeps the
+/// byte count far under 512, isolating the scalar check.
+#[test]
+fn exactly_128_scalars_is_accepted() {
+    let name = "a".repeat(128);
+    assert_eq!(name.chars().count(), 128);
+    assert_eq!(validate_client_name(Some(&name)), Ok(name));
+}
+
+#[test]
+fn exactly_129_scalars_is_rejected() {
+    let name = "a".repeat(129);
+    assert_eq!(
+        validate_client_name(Some(&name)),
+        Err(ClientNameRejection::TooManyScalars)
+    );
+}
+
+/// Boundary pair 2 of 5: 512/513 bytes. A UTF-8 scalar is at most 4 bytes,
+/// so 513 bytes is unreachable below 129 scalars -- `validate_client_name`
+/// checks bytes before scalars for exactly this reason (see
+/// `MAX_CLIENT_NAME_BYTES`'s own doc comment), which is what lets this
+/// input's rejection name `TooManyBytes` specifically rather than
+/// `TooManyScalars`.
+#[test]
+fn exactly_512_bytes_is_accepted() {
+    // 128 four-byte scalars (U+20000, outside the BMP) = 512 bytes, 128
+    // scalars -- both exactly at their own limit, both valid together.
+    let name: String = std::iter::repeat_n('\u{20000}', 128).collect();
+    assert_eq!(name.len(), 512);
+    assert_eq!(name.chars().count(), 128);
+    assert_eq!(validate_client_name(Some(&name)), Ok(name));
+}
+
+#[test]
+fn exactly_513_bytes_is_rejected_as_too_many_bytes_not_too_many_scalars() {
+    // 128 four-byte scalars + one one-byte scalar = 129 scalars, 513
+    // bytes. 129 scalars would also trip TooManyScalars if that check ran
+    // first; it does not, by design.
+    let mut name: String = std::iter::repeat_n('\u{20000}', 128).collect();
+    name.push('a');
+    assert_eq!(name.len(), 513);
+    assert_eq!(name.chars().count(), 129);
+    assert_eq!(
+        validate_client_name(Some(&name)),
+        Err(ClientNameRejection::TooManyBytes)
+    );
+}
+
+// ── 2: token_endpoint_auth_method ─────────────────────────────────────────
+
+#[test]
+fn an_absent_auth_method_defaults_to_client_secret_basic() {
+    assert_eq!(validate_auth_method(None), Ok("client_secret_basic"));
+}
+
+#[test]
+fn none_is_accepted() {
+    assert_eq!(validate_auth_method(Some("none")), Ok("none"));
+}
+
+#[test]
+fn client_secret_basic_is_accepted() {
+    assert_eq!(
+        validate_auth_method(Some("client_secret_basic")),
+        Ok("client_secret_basic")
+    );
+}
+
+#[test]
+fn client_secret_post_is_accepted() {
+    assert_eq!(
+        validate_auth_method(Some("client_secret_post")),
+        Ok("client_secret_post")
+    );
+}
+
+/// The matrix's own table cell says "basic"/"post"; this deployment's real
+/// wire vocabulary, used everywhere else, is the RFC 7591 strings. The
+/// shorthand is rejected like any other unsupported value -- see
+/// `validate_auth_method`'s own doc comment for why the shorthand is not
+/// implemented literally.
+#[test]
+fn the_matrix_s_own_shorthand_is_not_a_real_wire_value() {
+    assert!(validate_auth_method(Some("basic")).is_err());
+    assert!(validate_auth_method(Some("post")).is_err());
+}
+
+#[test]
+fn an_unrecognised_auth_method_is_rejected() {
+    assert_eq!(
+        validate_auth_method(Some("private_key_jwt")),
+        Err(InvalidAuthMethod("private_key_jwt".to_string()))
+    );
+}
+
+// ── 2: grant_types ─────────────────────────────────────────────────────────
+
+#[test]
+fn an_absent_grant_types_defaults_to_authorization_code_alone() {
+    assert_eq!(
+        validate_grant_types(None),
+        Ok(vec!["authorization_code".to_string()])
+    );
+}
+
+#[test]
+fn authorization_code_alone_is_accepted() {
+    let grants = vec!["authorization_code".to_string()];
+    assert_eq!(validate_grant_types(Some(&grants)), Ok(grants));
+}
+
+#[test]
+fn authorization_code_plus_refresh_token_is_accepted() {
+    let grants = vec![
+        "authorization_code".to_string(),
+        "refresh_token".to_string(),
+    ];
+    assert_eq!(validate_grant_types(Some(&grants)), Ok(grants));
+}
+
+#[test]
+fn an_empty_grant_types_list_is_rejected() {
+    assert_eq!(
+        validate_grant_types(Some(&[])),
+        Err(GrantTypesRejection::Empty)
+    );
+}
+
+#[test]
+fn a_duplicate_grant_type_is_rejected() {
+    let grants = vec![
+        "authorization_code".to_string(),
+        "authorization_code".to_string(),
+    ];
+    assert_eq!(
+        validate_grant_types(Some(&grants)),
+        Err(GrantTypesRejection::Duplicate(
+            "authorization_code".to_string()
+        ))
+    );
+}
+
+#[test]
+fn refresh_token_without_authorization_code_is_rejected() {
+    let grants = vec!["refresh_token".to_string()];
+    assert_eq!(
+        validate_grant_types(Some(&grants)),
+        Err(GrantTypesRejection::RefreshWithoutCode)
+    );
+}
+
+#[test]
+fn any_other_grant_is_rejected() {
+    let grants = vec!["implicit".to_string()];
+    assert_eq!(
+        validate_grant_types(Some(&grants)),
+        Err(GrantTypesRejection::OtherGrant("implicit".to_string()))
+    );
+}
+
+// ── 2: response_types ────────────────────────────────────────────────────
+
+#[test]
+fn an_absent_response_types_defaults_to_code() {
+    assert_eq!(validate_response_types(None), Ok(vec!["code".to_string()]));
+}
+
+#[test]
+fn code_alone_is_accepted() {
+    let types = vec!["code".to_string()];
+    assert_eq!(validate_response_types(Some(&types)), Ok(types));
+}
+
+#[test]
+fn an_empty_response_types_list_is_rejected() {
+    assert_eq!(
+        validate_response_types(Some(&[])),
+        Err(ResponseTypesRejection::Empty)
+    );
+}
+
+#[test]
+fn a_duplicate_response_type_is_rejected() {
+    let types = vec!["code".to_string(), "code".to_string()];
+    assert_eq!(
+        validate_response_types(Some(&types)),
+        Err(ResponseTypesRejection::Duplicate("code".to_string()))
+    );
+}
+
+#[test]
+fn token_response_type_is_rejected() {
+    let types = vec!["token".to_string()];
+    assert_eq!(
+        validate_response_types(Some(&types)),
+        Err(ResponseTypesRejection::NotCodeOnly("token".to_string()))
+    );
+}
+
+#[test]
+fn a_hybrid_response_type_is_rejected() {
+    let types = vec!["code".to_string(), "id_token".to_string()];
+    assert_eq!(
+        validate_response_types(Some(&types)),
+        Err(ResponseTypesRejection::NotCodeOnly("id_token".to_string()))
+    );
+}
+
+#[test]
+fn any_other_response_type_is_rejected() {
+    let types = vec!["id_token".to_string()];
+    assert_eq!(
+        validate_response_types(Some(&types)),
+        Err(ResponseTypesRejection::NotCodeOnly("id_token".to_string()))
+    );
+}
+
+// ── 2: scope ─────────────────────────────────────────────────────────────
+
+fn catalog(names: &[&str]) -> HashSet<String> {
+    names.iter().map(|s| s.to_string()).collect()
+}
+
+#[test]
+fn an_absent_scope_is_rejected_as_empty() {
+    assert_eq!(
+        validate_scope(None, &catalog(&["openid"])),
+        Err(ScopeRejection::Empty)
+    );
+}
+
+#[test]
+fn an_empty_scope_string_is_rejected() {
+    assert_eq!(
+        validate_scope(Some(""), &catalog(&["openid"])),
+        Err(ScopeRejection::Empty)
+    );
+}
+
+#[test]
+fn a_space_character_inside_a_token_is_impossible_by_construction() {
+    // Space is the separator, not a token character -- a run of two
+    // spaces produces an empty token between them, which is the
+    // "malformed" case, exercised below.
+    assert_eq!(
+        validate_scope(Some("openid  profile"), &catalog(&["openid", "profile"])),
+        Err(ScopeRejection::Malformed)
+    );
+}
+
+#[test]
+fn a_leading_or_trailing_space_is_malformed() {
+    assert_eq!(
+        validate_scope(Some(" openid"), &catalog(&["openid"])),
+        Err(ScopeRejection::Malformed)
+    );
+    assert_eq!(
+        validate_scope(Some("openid "), &catalog(&["openid"])),
+        Err(ScopeRejection::Malformed)
+    );
+}
+
+#[test]
+fn a_double_quote_in_a_token_is_rejected_as_malformed() {
+    assert_eq!(
+        validate_scope(Some("openid bad\"scope"), &catalog(&["openid"])),
+        Err(ScopeRejection::Malformed)
+    );
+}
+
+#[test]
+fn a_backslash_in_a_token_is_rejected_as_malformed() {
+    assert_eq!(
+        validate_scope(Some("openid bad\\scope"), &catalog(&["openid"])),
+        Err(ScopeRejection::Malformed)
+    );
+}
+
+/// Every byte RFC 6749 §3.3 allows in a scope-token, in one token. The
+/// catalog deliberately does not contain it -- this asserts the
+/// *character* check accepts it (the rejection is `Unknown`, proving the
+/// request got all the way to the catalog check, not `Malformed`).
+#[test]
+fn every_allowed_scope_token_character_is_accepted_by_the_charset_check() {
+    let allowed: Vec<char> = (0x21u8..=0x7E)
+        .filter(|&b| is_scope_token_byte(b))
+        .map(|b| b as char)
+        .collect();
+    // Split into two tokens, each comfortably under the 64-byte
+    // per-token cap, so a too-long rejection never masks what this test
+    // is actually about: whether every allowed byte passes the charset
+    // check. Both must reach `Unknown` (the catalog check), not
+    // `Malformed` or `TokenTooLong`.
+    let (first_half, second_half) = allowed.split_at(allowed.len() / 2);
+    let token_a: String = first_half.iter().collect();
+    let token_b: String = second_half.iter().collect();
+    assert!(token_a.len() <= MAX_SCOPE_TOKEN_BYTES);
+    assert!(token_b.len() <= MAX_SCOPE_TOKEN_BYTES);
+    let scope = format!("openid {token_a} {token_b}");
+    assert_eq!(
+        validate_scope(Some(&scope), &catalog(&["openid"])),
+        Err(ScopeRejection::Unknown(token_a))
+    );
+}
+
+#[test]
+fn a_duplicate_scope_token_is_rejected() {
+    assert_eq!(
+        validate_scope(Some("openid openid"), &catalog(&["openid"])),
+        Err(ScopeRejection::Duplicate("openid".to_string()))
+    );
+}
+
+#[test]
+fn an_unknown_catalog_value_is_rejected() {
+    assert_eq!(
+        validate_scope(Some("openid not_a_real_scope"), &catalog(&["openid"])),
+        Err(ScopeRejection::Unknown("not_a_real_scope".to_string()))
+    );
+}
+
+#[test]
+fn scope_tokens_that_are_all_known_but_omit_openid_are_rejected() {
+    assert_eq!(
+        validate_scope(
+            Some("profile email"),
+            &catalog(&["openid", "profile", "email"])
+        ),
+        Err(ScopeRejection::MissingOpenid)
+    );
+}
+
+/// "Concurrent catalog deletion/default change": `validate_scope` takes
+/// whatever catalog snapshot its caller hands it, rather than reading
+/// global state itself -- so a scope valid against one snapshot and
+/// invalid against a later one (the catalog having been edited between
+/// the two calls) is exactly this function behaving as a pure function of
+/// its argument, not a bug. This is the stage's answer to the corpus case,
+/// demonstrated rather than asserted in prose.
+#[test]
+fn a_scope_valid_against_one_catalog_snapshot_can_be_invalid_against_a_later_one() {
+    let before_deletion = catalog(&["openid", "custom_scope"]);
+    assert_eq!(
+        validate_scope(Some("openid custom_scope"), &before_deletion),
+        Ok(vec!["openid".to_string(), "custom_scope".to_string()])
+    );
+
+    let after_deletion = catalog(&["openid"]);
+    assert_eq!(
+        validate_scope(Some("openid custom_scope"), &after_deletion),
+        Err(ScopeRejection::Unknown("custom_scope".to_string()))
+    );
+}
+
+/// Boundary pair 3 of 5: 32/33 tokens. 31 unique single-character fillers
+/// (well under the 64-byte-per-token and 1024-byte-total bounds) plus
+/// `openid` isolates the token-count check from the other two.
+#[test]
+fn exactly_32_tokens_is_accepted() {
+    let fillers: Vec<String> = ('a'..='z')
+        .chain('A'..='E')
+        .map(|c| c.to_string())
+        .collect();
+    assert_eq!(fillers.len(), 31);
+    let mut names: Vec<&str> = fillers.iter().map(String::as_str).collect();
+    names.push("openid");
+    let scope = names.join(" ");
+    let cat = catalog(&names);
+    assert_eq!(
+        validate_scope(Some(&scope), &cat),
+        Ok(names.iter().map(|s| s.to_string()).collect::<Vec<_>>())
+    );
+}
+
+#[test]
+fn exactly_33_tokens_is_rejected() {
+    let fillers: Vec<String> = ('a'..='z')
+        .chain('A'..='F')
+        .map(|c| c.to_string())
+        .collect();
+    assert_eq!(fillers.len(), 32);
+    let mut names: Vec<&str> = fillers.iter().map(String::as_str).collect();
+    names.push("openid");
+    let scope = names.join(" ");
+    // The catalog is irrelevant here: the count check runs before the
+    // catalog check, so an empty catalog still proves TooManyTokens, not
+    // some catalog-shaped rejection standing in for it.
+    assert_eq!(
+        validate_scope(Some(&scope), &HashSet::new()),
+        Err(ScopeRejection::TooManyTokens)
+    );
+}
+
+/// Boundary pair 4 of 5: 64/65-byte token. Two tokens total (`openid` plus
+/// the one under test) keeps token count and total bytes far from their
+/// own limits.
+#[test]
+fn a_64_byte_token_is_accepted() {
+    let long = ascii_filler('q', 64);
+    let scope = format!("openid {long}");
+    let cat = catalog(&["openid", &long]);
+    assert_eq!(
+        validate_scope(Some(&scope), &cat),
+        Ok(vec!["openid".to_string(), long])
+    );
+}
+
+#[test]
+fn a_65_byte_token_is_rejected() {
+    let long = ascii_filler('q', 65);
+    let scope = format!("openid {long}");
+    // Catalog irrelevant -- TokenTooLong runs before the catalog check.
+    assert_eq!(
+        validate_scope(Some(&scope), &HashSet::new()),
+        Err(ScopeRejection::TokenTooLong(long))
+    );
+}
+
+/// Boundary pair 5 of 5: 1,024/1,025-byte total. 15 fillers at 63 bytes +
+/// 1 filler at 57 (1024) or 58 (1025) bytes + `openid` -- 17 tokens, every
+/// one of them at most 63 bytes, so neither the 32-token nor the 64-byte
+/// bound interferes.
+#[test]
+fn exactly_1024_bytes_total_is_accepted() {
+    let mut fillers: Vec<String> = ('a'..='o').map(|c| ascii_filler(c, 63)).collect();
+    assert_eq!(fillers.len(), 15);
+    fillers.push(ascii_filler('p', 57));
+    let mut names: Vec<&str> = fillers.iter().map(String::as_str).collect();
+    names.push("openid");
+    let scope = names.join(" ");
+    assert_eq!(scope.len(), 1024);
+    let cat = catalog(&names);
+    assert_eq!(
+        validate_scope(Some(&scope), &cat),
+        Ok(names.iter().map(|s| s.to_string()).collect::<Vec<_>>())
+    );
+}
+
+#[test]
+fn exactly_1025_bytes_total_is_rejected() {
+    let mut fillers: Vec<String> = ('a'..='o').map(|c| ascii_filler(c, 63)).collect();
+    fillers.push(ascii_filler('p', 58));
+    let mut names: Vec<&str> = fillers.iter().map(String::as_str).collect();
+    names.push("openid");
+    let scope = names.join(" ");
+    assert_eq!(scope.len(), 1025);
+    // Catalog irrelevant -- the total-bytes check runs before the token
+    // loop even starts.
+    assert_eq!(
+        validate_scope(Some(&scope), &HashSet::new()),
+        Err(ScopeRejection::TooManyBytes)
+    );
+}
+
+// ── 2: the refresh_token / offline_access coupling ───────────────────────
+
+#[test]
+fn refresh_without_offline_access_is_rejected() {
+    let grants = vec![
+        "authorization_code".to_string(),
+        "refresh_token".to_string(),
+    ];
+    let scopes = vec!["openid".to_string()];
+    assert_eq!(
+        check_grant_scope_coupling(&grants, &scopes),
+        Err(GrantScopeCouplingRejection::RefreshWithoutOfflineAccess)
+    );
+}
+
+#[test]
+fn offline_access_without_refresh_is_rejected() {
+    let grants = vec!["authorization_code".to_string()];
+    let scopes = vec!["openid".to_string(), "offline_access".to_string()];
+    assert_eq!(
+        check_grant_scope_coupling(&grants, &scopes),
+        Err(GrantScopeCouplingRejection::OfflineAccessWithoutRefresh)
+    );
+}
+
+#[test]
+fn refresh_with_offline_access_is_accepted() {
+    let grants = vec![
+        "authorization_code".to_string(),
+        "refresh_token".to_string(),
+    ];
+    let scopes = vec!["openid".to_string(), "offline_access".to_string()];
+    assert_eq!(check_grant_scope_coupling(&grants, &scopes), Ok(()));
+}
+
+#[test]
+fn neither_refresh_nor_offline_access_is_accepted() {
+    let grants = vec!["authorization_code".to_string()];
+    let scopes = vec!["openid".to_string()];
+    assert_eq!(check_grant_scope_coupling(&grants, &scopes), Ok(()));
+}
+
+// ── 2: application-identity URI fields ────────────────────────────────────
+
+#[test]
+fn an_absent_application_uri_is_accepted_as_none() {
+    assert_eq!(validate_application_uri(None, "logo_uri"), Ok(None));
+}
+
+#[test]
+fn an_empty_application_uri_is_accepted_as_none() {
+    assert_eq!(validate_application_uri(Some(""), "logo_uri"), Ok(None));
+}
+
+#[test]
+fn a_canonical_https_application_uri_is_accepted() {
+    assert_eq!(
+        validate_application_uri(Some("https://rp.example/logo.png"), "logo_uri"),
+        Ok(Some("https://rp.example/logo.png".to_string()))
+    );
+}
+
+#[test]
+fn an_http_application_uri_is_rejected() {
+    assert!(validate_application_uri(Some("http://rp.example/logo.png"), "logo_uri").is_err());
+}
+
+#[test]
+fn a_numeric_loopback_http_application_uri_is_also_rejected() {
+    // Unlike redirect_uris, there is no loopback allowance here at all --
+    // these are passive display/link targets, never a redirect target.
+    assert!(validate_application_uri(Some("http://127.0.0.1:8080/logo.png"), "logo_uri").is_err());
+}
+
+#[test]
+fn an_application_uri_with_userinfo_is_rejected() {
+    assert!(
+        validate_application_uri(Some("https://user:pass@rp.example/logo.png"), "logo_uri")
+            .is_err()
+    );
+}
+
+#[test]
+fn an_application_uri_with_a_fragment_is_rejected() {
+    assert!(validate_application_uri(Some("https://rp.example/logo.png#x"), "logo_uri").is_err());
+}
+
+#[test]
+fn a_noncanonical_application_uri_is_rejected() {
+    assert!(validate_application_uri(Some("https://rp.example:443/logo.png"), "logo_uri").is_err());
+}
+
+#[test]
+fn an_oversized_application_uri_is_rejected() {
+    let padding = "x".repeat(MAX_APPLICATION_URI_BYTES);
+    let uri = format!("https://rp.example/{padding}");
+    assert!(validate_application_uri(Some(&uri), "logo_uri").is_err());
+}
+
+// ── 2: post_logout_redirect_uris, the full policy ─────────────────────────
+
+#[test]
+fn exactly_16_post_logout_uris_is_accepted() {
+    let uris: Vec<String> = (0..16)
+        .map(|i| format!("https://rp.example/logout{i}"))
+        .collect();
+    assert!(validate_post_logout_redirect_uris(Some(&uris)).is_ok());
+}
+
+#[test]
+fn seventeen_post_logout_uris_is_rejected() {
+    let uris: Vec<String> = (0..17)
+        .map(|i| format!("https://rp.example/logout{i}"))
+        .collect();
+    assert_eq!(
+        validate_post_logout_redirect_uris(Some(&uris)),
+        Err(PostLogoutRejection::TooMany)
+    );
+}
+
+#[test]
+fn a_duplicate_post_logout_uri_is_rejected() {
+    let uris = vec![
+        "https://rp.example/logout".to_string(),
+        "https://rp.example/logout".to_string(),
+    ];
+    assert_eq!(
+        validate_post_logout_redirect_uris(Some(&uris)),
+        Err(PostLogoutRejection::Duplicate(
+            "https://rp.example/logout".to_string()
+        ))
+    );
+}
+
+#[test]
+fn a_noncanonical_post_logout_uri_is_rejected() {
+    let uris = vec!["https://rp.example:443/logout".to_string()];
+    assert!(validate_post_logout_redirect_uris(Some(&uris)).is_err());
 }

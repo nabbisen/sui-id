@@ -26,12 +26,27 @@ take the same public invalid-token path.
 | `token_endpoint_auth_method` | none/basic/post; default basic | any other string |
 | `grant_types` | code; code+refresh; default code | empty, duplicate, refresh without code, other grant |
 | `response_types` | code; default code | empty, duplicate, token/hybrid/other |
-| `scope` | 1–32 unique catalog tokens including openid | empty, malformed, unknown, duplicate, oversize |
+| `scope` | 1–32 unique catalog tokens including openid; **required — no default** | **absent**, empty, malformed, unknown, duplicate, oversize |
 | `post_logout_redirect_uris` | absent/empty or 1–16 canonical HTTPS unique redirects, independent of authorization profile | HTTP (including loopback), duplicate, invalid element, >16 |
 | application URI fields | absent or one canonical HTTPS URI | HTTP, userinfo, fragment, noncanonical, oversize |
 
 `refresh_token` requires `offline_access`; `offline_access` requires
 `refresh_token`.
+
+> **`scope`'s absent case, stated 2026-10-20.** Every other row above is
+> explicit about absence — `redirect_uris` and `client_name` list `absent` as
+> invalid; three rows give a default; two say "absent or …". This row said
+> nothing, and M3 stage 2 had to resolve the silence to implement it. The
+> rule is **required**: the Valid column demands `openid` *among the tokens*,
+> which an absent `scope` cannot satisfy, and defaulting to `openid` would
+> grant a scope the registrant never asked for.
+>
+> **This is a deliberate departure from RFC 7591 §2**, where `scope` is
+> OPTIONAL in a client registration request. A server may refuse metadata on
+> policy grounds, so it is within spec — but an RFC 7591 client library that
+> omits `scope` will be refused, and **the integrator-facing documentation
+> must say so** (stage 3). The ambiguity was the architect's; it is fixed
+> here rather than left for each stage to re-decide.
 
 ## Redirect corpus
 

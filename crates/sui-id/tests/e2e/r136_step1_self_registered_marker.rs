@@ -59,7 +59,7 @@ async fn register_dynamic_client(state: &AppState) -> String {
                 .header(header::AUTHORIZATION, format!("Bearer {token}"))
                 .header(header::CONTENT_TYPE, "application/json")
                 .body(Body::from(format!(
-                    r#"{{"redirect_uris":["{REDIRECT}"],"client_name":"Dynamic RP"}}"#
+                    r#"{{"redirect_uris":["{REDIRECT}"],"client_name":"Dynamic RP","scope":"openid"}}"#
                 )))
                 .expect("req"),
         )

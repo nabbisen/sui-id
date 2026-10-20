@@ -119,7 +119,7 @@ async fn a_known_unsupported_member_is_rejected() {
 async fn an_unknown_extension_member_is_silently_ignored_and_never_echoed() {
     let state = test_app();
     let token = seed_token(&state).await;
-    let body = r#"{"client_name":"Example","redirect_uris":["https://rp.test/cb"],"x_custom_extension":"secret-looking-value"}"#;
+    let body = r#"{"client_name":"Example","scope":"openid","redirect_uris":["https://rp.test/cb"],"x_custom_extension":"secret-looking-value"}"#;
     let r = register_raw(&state, &token, body).await;
     assert_eq!(r.status, StatusCode::CREATED);
     assert!(
@@ -162,7 +162,8 @@ async fn a_malformed_bearer_token_takes_the_same_path_as_no_token() {
 async fn confidential_https_registers_successfully() {
     let state = test_app();
     let token = seed_token(&state).await;
-    let body = r#"{"client_name":"Example","redirect_uris":["https://rp.test/cb"]}"#;
+    let body =
+        r#"{"client_name":"Example","scope":"openid","redirect_uris":["https://rp.test/cb"]}"#;
     let r = register_raw(&state, &token, body).await;
     assert_eq!(r.status, StatusCode::CREATED, "{}", r.json);
     assert!(r.json["client_secret"].is_string());
@@ -172,7 +173,7 @@ async fn confidential_https_registers_successfully() {
 async fn public_https_registers_successfully_with_no_secret() {
     let state = test_app();
     let token = seed_token(&state).await;
-    let body = r#"{"client_name":"Example","token_endpoint_auth_method":"none","redirect_uris":["https://rp.test/cb"]}"#;
+    let body = r#"{"client_name":"Example","scope":"openid","token_endpoint_auth_method":"none","redirect_uris":["https://rp.test/cb"]}"#;
     let r = register_raw(&state, &token, body).await;
     assert_eq!(r.status, StatusCode::CREATED, "{}", r.json);
     assert!(r.json["client_secret"].is_null());
@@ -182,7 +183,7 @@ async fn public_https_registers_successfully_with_no_secret() {
 async fn public_native_loopback_registers_successfully() {
     let state = test_app();
     let token = seed_token(&state).await;
-    let body = r#"{"client_name":"Example Native","token_endpoint_auth_method":"none","redirect_uris":["http://127.0.0.1:49152/cb"]}"#;
+    let body = r#"{"client_name":"Example Native","scope":"openid","token_endpoint_auth_method":"none","redirect_uris":["http://127.0.0.1:49152/cb"]}"#;
     let r = register_raw(&state, &token, body).await;
     assert_eq!(r.status, StatusCode::CREATED, "{}", r.json);
 }
@@ -231,7 +232,7 @@ async fn an_http_post_logout_uri_is_rejected_even_for_a_loopback_profile() {
 async fn a_public_native_profile_accepts_an_independent_https_logout_uri() {
     let state = test_app();
     let token = seed_token(&state).await;
-    let body = r#"{"client_name":"Example Native","token_endpoint_auth_method":"none","redirect_uris":["http://127.0.0.1:49152/cb"],"post_logout_redirect_uris":["https://rp.test/logout"]}"#;
+    let body = r#"{"client_name":"Example Native","scope":"openid","token_endpoint_auth_method":"none","redirect_uris":["http://127.0.0.1:49152/cb"],"post_logout_redirect_uris":["https://rp.test/logout"]}"#;
     let r = register_raw(&state, &token, body).await;
     assert_eq!(r.status, StatusCode::CREATED, "{}", r.json);
 }

@@ -76,7 +76,7 @@ async fn a_c15_dynamic_register() {
     let resp = build_router(state.clone())
         .oneshot(register_request(
             &token,
-            r#"{"redirect_uris":["https://rp.test/cb"],"client_name":"Example RP"}"#,
+            r#"{"redirect_uris":["https://rp.test/cb"],"client_name":"Example RP","scope":"openid"}"#,
         ))
         .await
         .expect("register");
@@ -130,7 +130,7 @@ async fn the_burn_is_gone_an_invalid_body_leaves_the_token_unspent() {
     let resp = build_router(state.clone())
         .oneshot(register_request(
             &token,
-            r#"{"redirect_uris":["https://rp.test/cb"],"client_name":"Example RP"}"#,
+            r#"{"redirect_uris":["https://rp.test/cb"],"client_name":"Example RP","scope":"openid"}"#,
         ))
         .await
         .expect("register with a valid body");
@@ -160,7 +160,7 @@ async fn an_invalid_redirect_uri_also_leaves_the_token_unspent() {
     let resp = build_router(state.clone())
         .oneshot(register_request(
             &token,
-            r#"{"redirect_uris":["https://rp.test/cb"],"client_name":"Example RP"}"#,
+            r#"{"redirect_uris":["https://rp.test/cb"],"client_name":"Example RP","scope":"openid"}"#,
         ))
         .await
         .expect("register with a valid body");
@@ -177,7 +177,7 @@ async fn an_exhausted_token_is_refused() {
     let resp = build_router(state.clone())
         .oneshot(register_request(
             &token,
-            r#"{"redirect_uris":["https://rp.test/cb"],"client_name":"Example RP"}"#,
+            r#"{"redirect_uris":["https://rp.test/cb"],"client_name":"Example RP","scope":"openid"}"#,
         ))
         .await
         .expect("first registration");
@@ -186,7 +186,7 @@ async fn an_exhausted_token_is_refused() {
     let resp = build_router(state.clone())
         .oneshot(register_request(
             &token,
-            r#"{"redirect_uris":["https://rp.test/cb2"],"client_name":"Second RP"}"#,
+            r#"{"redirect_uris":["https://rp.test/cb2"],"client_name":"Second RP","scope":"openid"}"#,
         ))
         .await
         .expect("second registration");

@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `POST /oauth2/register` now accepts `response_types` (RFC 095 M3 stage 2).
+  It was previously an outright-rejected unsupported member; the only
+  accepted value is `code`, which is also the default when the member is
+  absent.
+
+### Changed
+
+- `POST /oauth2/register`'s `scope` is now required and validated against
+  this deployment's scope catalog (RFC 095 M3 stage 2): 1–32 unique,
+  known tokens, including `openid`. It was previously optional and
+  unvalidated — an absent or arbitrary `scope` is now rejected with
+  `invalid_client_metadata` instead of being silently accepted.
+- **`token_endpoint_auth_method`'s default is now `client_secret_basic`,
+  per RFC 7591 §2 — it was `client_secret_post`.** Both are confidential
+  (a secret is issued either way); a caller that relies on the specific
+  default method string rather than sending one explicitly will now see
+  `client_secret_basic` in the response.
+- **`grant_types`' default is now `authorization_code` alone — it was
+  `authorization_code` plus `refresh_token`.** A caller that did not send
+  `grant_types` and relied on the response offering `refresh_token` by
+  default must now request it explicitly, with the `offline_access` scope
+  (see below).
+- `refresh_token` in `grant_types` now requires the `offline_access` scope,
+  and `offline_access` now requires `refresh_token` in `grant_types` — one
+  without the other is rejected with `invalid_client_metadata`.
+- `client_name` is now validated: trimmed, 1–128 Unicode scalars, at most
+  512 bytes, and must not contain a control or bidi override/isolate
+  character. It was previously accepted as any non-empty string.
+- `logo_uri`, `client_uri`, `policy_uri`, and `tos_uri` now require a
+  canonical HTTPS URI. The previous check also allowed `http://localhost`
+  and `http://127.0.0.1`; dynamic registration no longer shares that
+  allowance with administrator-created clients.
+- `post_logout_redirect_uris` now enforces its full policy: at most 16
+  entries, unique, each a canonical HTTPS URI. It previously only rejected
+  a non-`https` entry; a non-canonical HTTPS URI (an explicit default
+  port, for instance), a duplicate, or more than 16 entries are now also
+  rejected.
+
 ## [0.82.0] — 2026-10-20
 
 **A dependency and security maintenance cut: no behaviour changes.**

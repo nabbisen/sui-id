@@ -1,6 +1,7 @@
-//! RFC 095 M3 stage 1 — the request envelope and the redirect profile.
+//! RFC 095 M3 stages 1 and 2 — the request envelope, the redirect profile,
+//! and the field rules over everything else `POST /oauth2/register` accepts.
 //!
-//! Two independent pieces, per the stage's own split:
+//! Stage 1's two independent pieces, per that stage's own split:
 //!
 //! - [`parse_envelope`]: the raw JSON body of `POST /oauth2/register`,
 //!   bounded and checked *before* it becomes a typed
@@ -17,16 +18,24 @@
 //! RFC 095 does not govern; this module is the validator written beside
 //! it, for dynamic registration only.
 //!
+//! Stage 2 adds one validator per *Supported fields* row:
+//! [`validate_client_name`], [`validate_auth_method`],
+//! [`validate_grant_types`], [`validate_response_types`],
+//! [`validate_scope`] (plus [`check_grant_scope_coupling`], the
+//! `refresh_token`/`offline_access` two-way rule), [`validate_application_uri`]
+//! (the four `logo_uri`/`client_uri`/`policy_uri`/`tos_uri` fields), and
+//! [`validate_post_logout_redirect_uris`] (replacing stage 1's narrower
+//! `reject_http_post_logout_uris` entirely — see its own doc comment for
+//! why nothing from that function survives unchanged).
+//!
 //! ## What this does not validate
 //!
-//! The matrix's "Supported fields", "Name and scope corpus",
-//! "Authentication/grant matrix", "Browser presentation" and
+//! The matrix's "Authentication/grant matrix", "Browser presentation" and
 //! "Response/error assertions" sections are separate, not-yet-dispatched
-//! stages. In particular `post_logout_redirect_uris`' own full policy
-//! (1-16 canonical unique HTTPS) is not built here — only the one
-//! profile-interaction rule the Redirect corpus names explicitly: no
-//! `post_logout_redirect_uris` entry may be `http`, including numeric
-//! loopback, for any dynamic profile (see [`reject_http_post_logout_uris`]).
+//! stages (4, 5, and part of 3). Stage 2 computes canonical/defaulted
+//! values for every field it validates, but does not own the response's
+//! echo-with-canonical-ordering policy (stage 3) — the handler echoes
+//! what stage 2 returns without further ceremony.
 
 use serde::de::{Deserialize, Deserializer, MapAccess, Visitor};
 use std::collections::HashSet;
@@ -96,7 +105,6 @@ impl fmt::Display for EnvelopeError {
 /// silently.
 const KNOWN_UNSUPPORTED_MEMBERS: &[&str] = &[
     // RFC 7591 §2.
-    "response_types",
     "client_id",
     "client_secret",
     "jwks_uri",
@@ -133,6 +141,7 @@ const SUPPORTED_MEMBERS: &[&str] = &[
     "client_name",
     "scope",
     "grant_types",
+    "response_types",
     "token_endpoint_auth_method",
     "logo_uri",
     "client_uri",
@@ -406,6 +415,14 @@ enum Shape {
 ///   `as_str()` output — the library silently strips a redundant default
 ///   port during parsing, which would make rejecting it after parsing
 ///   impossible. Checked on the raw string's authority section instead.
+///
+/// Stage 2 factored the checks above this point in the list — everything
+/// through "no userinfo" — into [`well_formed_uri`], shared with
+/// [`validate_application_uri`] and [`validate_post_logout_redirect_uris`]:
+/// those fields need exactly the same raw-string canonicality floor, scoped
+/// to HTTPS only rather than this function's HTTPS-or-numeric-loopback
+/// scheme branch below, which stays here because it is specific to the
+/// redirect profile.
 fn well_formed_shape(uri: &str) -> Result<Shape, RedirectRejection> {
     let reject = |reason: &'static str| {
         Err(RedirectRejection::Malformed {
@@ -413,35 +430,10 @@ fn well_formed_shape(uri: &str) -> Result<Shape, RedirectRejection> {
             reason,
         })
     };
-    if uri.len() > MAX_REDIRECT_URI_BYTES {
-        return reject("exceeds 2048 bytes");
-    }
-    if !uri.is_ascii() {
-        return reject("non-ASCII; submit canonical ASCII punycode, not a Unicode hostname");
-    }
-    if uri.contains('\\') {
-        return reject("contains a backslash");
-    }
-    if uri.contains('*') {
-        return reject("contains a wildcard/pattern character");
-    }
-    if has_malformed_percent_escape(uri) {
-        return reject("malformed percent escape");
-    }
-    if has_explicit_default_port(uri) {
-        return reject("explicit default port (443 for https, 80 for http) is redundant");
-    }
-
-    let parsed = url::Url::parse(uri).map_err(|_| RedirectRejection::Malformed {
-        uri: uri.to_owned(),
-        reason: "not a valid URL",
-    })?;
-    if parsed.fragment().is_some() {
-        return reject("must not contain a fragment");
-    }
-    if !parsed.username().is_empty() || parsed.password().is_some() {
-        return reject("must not contain userinfo");
-    }
+    let parsed = match well_formed_uri(uri, MAX_REDIRECT_URI_BYTES) {
+        Ok(p) => p,
+        Err(reason) => return reject(reason),
+    };
 
     match parsed.scheme() {
         "https" => Ok(Shape::Https),
@@ -505,6 +497,47 @@ fn has_explicit_default_port(uri: &str) -> bool {
     authority[host_end..].ends_with(default_port)
 }
 
+/// The well-formedness floor every URI this module validates shares,
+/// regardless of field: at most `max_bytes`, ASCII-only, no backslash, no
+/// wildcard character, no malformed percent escape, no explicit default
+/// port, parses as a URL, no fragment, no userinfo. See
+/// [`well_formed_shape`]'s own doc comment for why each raw-string check
+/// runs before `url::Url::parse` rather than trusting the parsed result —
+/// that reasoning is identical here, not re-derived.
+///
+/// Returns the parsed URL so a caller can still inspect scheme and host —
+/// this function takes no position on which schemes are acceptable, since
+/// that differs per field (HTTPS-or-numeric-loopback for a redirect,
+/// HTTPS-only for an application URI or a post-logout redirect).
+fn well_formed_uri(uri: &str, max_bytes: usize) -> Result<url::Url, &'static str> {
+    if uri.len() > max_bytes {
+        return Err("exceeds the byte limit");
+    }
+    if !uri.is_ascii() {
+        return Err("non-ASCII; submit canonical ASCII punycode, not a Unicode hostname");
+    }
+    if uri.contains('\\') {
+        return Err("contains a backslash");
+    }
+    if uri.contains('*') {
+        return Err("contains a wildcard/pattern character");
+    }
+    if has_malformed_percent_escape(uri) {
+        return Err("malformed percent escape");
+    }
+    if has_explicit_default_port(uri) {
+        return Err("explicit default port (443 for https, 80 for http) is redundant");
+    }
+    let parsed = url::Url::parse(uri).map_err(|_| "not a valid URL")?;
+    if parsed.fragment().is_some() {
+        return Err("must not contain a fragment");
+    }
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err("must not contain userinfo");
+    }
+    Ok(parsed)
+}
+
 /// 1a: derive the one closed profile a registration request's redirect
 /// list belongs to, or reject it. `auth_method` is the raw
 /// `token_endpoint_auth_method` string from the request (`"none"` for
@@ -543,19 +576,514 @@ pub fn derive_closed_profile(
     }
 }
 
-/// Redirect corpus row: "Any HTTP post-logout URI, including numeric
-/// loopback, is rejected for every dynamic profile" — the one
-/// profile-interaction rule for `post_logout_redirect_uris` this stage
-/// builds. The field's own full policy (count, uniqueness, canonical form)
-/// is a separate, not-yet-dispatched stage; this only rejects `http`.
-pub fn reject_http_post_logout_uris(uris: &[String]) -> Result<(), String> {
-    for uri in uris {
-        match url::Url::parse(uri) {
-            Ok(parsed) if parsed.scheme() == "https" => {}
-            _ => return Err(uri.clone()),
+// ── 2: client_name ───────────────────────────────────────────────────────────
+
+/// *Supported fields*: "trimmed 1–128 scalars, ≤512 bytes". Scalars for the
+/// count (`char`, i.e. `str::chars().count()`), bytes for the size
+/// (`str::len()`) — the matrix states these in two different units and this
+/// module matches it rather than picking one definition for both. `"é"` is
+/// one scalar and two bytes; the two bounds are independent for most
+/// strings, and are *checked* in byte-then-scalar order below for a reason
+/// that only matters at the extreme: a UTF-8 scalar is at most 4 bytes, so
+/// 513 bytes is unreachable below 129 scalars — checking bytes first is
+/// what lets the byte boundary's own rejecting-side test name
+/// [`ClientNameRejection::TooManyBytes`] specifically, rather than always
+/// surfacing [`ClientNameRejection::TooManyScalars`] for any input large
+/// enough to reach either limit.
+pub const MAX_CLIENT_NAME_SCALARS: usize = 128;
+pub const MAX_CLIENT_NAME_BYTES: usize = 512;
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum ClientNameRejection {
+    /// Absent, or empty/whitespace-only after trimming.
+    Blank,
+    /// Contains a C0/C1 control character or a bidi explicit
+    /// embedding/override/isolate character.
+    ForbiddenCharacter,
+    TooManyBytes,
+    TooManyScalars,
+}
+
+impl fmt::Display for ClientNameRejection {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Blank => write!(f, "client_name is required"),
+            Self::ForbiddenCharacter => write!(
+                f,
+                "client_name: must not contain a control or bidi override/isolate character"
+            ),
+            Self::TooManyBytes => {
+                write!(f, "client_name: exceeds {MAX_CLIENT_NAME_BYTES} bytes")
+            }
+            Self::TooManyScalars => {
+                write!(f, "client_name: exceeds {MAX_CLIENT_NAME_SCALARS} scalars")
+            }
         }
     }
-    Ok(())
+}
+
+/// C0 (including DEL) or C1 control, or a bidi explicit
+/// embedding/override (U+202A–U+202E) or isolate (U+2066–U+2069) control.
+/// Everything else — combining marks, emoji, HTML angle brackets, quotes,
+/// any other printable character — is accepted: the matrix's own corpus
+/// note says why ("valid values are escaped by the UI and
+/// bounded/sanitized before audit"), so this function's job is the
+/// control-character floor, not content sanitisation that belongs at
+/// render/log time instead.
+fn is_forbidden_name_character(c: char) -> bool {
+    let cp = u32::from(c);
+    let c0_or_del = cp <= 0x1F || cp == 0x7F;
+    let c1 = (0x80..=0x9F).contains(&cp);
+    let bidi_control = (0x202A..=0x202E).contains(&cp) || (0x2066..=0x2069).contains(&cp);
+    c0_or_del || c1 || bidi_control
+}
+
+/// *Supported fields* row 2: `client_name`. Trimmed first — the corpus's
+/// leading/trailing-whitespace case is an accept case, not a reject one —
+/// then checked blank, forbidden-character, byte, and scalar, in that
+/// order (see [`MAX_CLIENT_NAME_BYTES`]'s own doc comment for why bytes
+/// precedes scalars).
+pub fn validate_client_name(raw: Option<&str>) -> Result<String, ClientNameRejection> {
+    let trimmed = raw.unwrap_or("").trim();
+    if trimmed.is_empty() {
+        return Err(ClientNameRejection::Blank);
+    }
+    if trimmed.chars().any(is_forbidden_name_character) {
+        return Err(ClientNameRejection::ForbiddenCharacter);
+    }
+    if trimmed.len() > MAX_CLIENT_NAME_BYTES {
+        return Err(ClientNameRejection::TooManyBytes);
+    }
+    if trimmed.chars().count() > MAX_CLIENT_NAME_SCALARS {
+        return Err(ClientNameRejection::TooManyScalars);
+    }
+    Ok(trimmed.to_owned())
+}
+
+// ── 2: token_endpoint_auth_method ────────────────────────────────────────────
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct InvalidAuthMethod(String);
+
+impl fmt::Display for InvalidAuthMethod {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "token_endpoint_auth_method: must be none, client_secret_basic, or \
+             client_secret_post, not {:?}",
+            self.0
+        )
+    }
+}
+
+/// *Supported fields* row 3. The matrix's own table cells read
+/// "none/basic/post", but every other caller in this codebase — this
+/// module's own [`RedirectProfile::ConfidentialHttps`] doc comment,
+/// `discovery.rs`'s `token_endpoint_auth_methods_supported`,
+/// `federation.rs`'s upstream auth method selection, and this very
+/// handler's pre-stage-2 default — uses RFC 7591's actual wire values,
+/// `"none"`, `"client_secret_basic"`, `"client_secret_post"`. "basic"/
+/// "post" are nowhere else in this deployment's vocabulary and no real
+/// client library sends them; implementing the table's shorthand literally
+/// would reject every interoperable caller. Reported rather than silently
+/// reinterpreted — see the stage's return package.
+///
+/// **Default is `client_secret_basic`, not `client_secret_post`.** RFC
+/// 7591 §2 states this default explicitly, and the matrix agrees
+/// ("default basic"). The handler's pre-stage-2 code defaulted to
+/// `client_secret_post` instead — traced to no test asserting the
+/// specific default string (only confidentiality, i.e. "a secret is
+/// present", which either value satisfies) — so fixing it here changes no
+/// currently-asserted behaviour.
+pub fn validate_auth_method(raw: Option<&str>) -> Result<&'static str, InvalidAuthMethod> {
+    match raw {
+        None => Ok("client_secret_basic"),
+        Some("none") => Ok("none"),
+        Some("client_secret_basic") => Ok("client_secret_basic"),
+        Some("client_secret_post") => Ok("client_secret_post"),
+        Some(other) => Err(InvalidAuthMethod(other.to_owned())),
+    }
+}
+
+// ── 2: grant_types ───────────────────────────────────────────────────────────
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum GrantTypesRejection {
+    Empty,
+    Duplicate(String),
+    RefreshWithoutCode,
+    OtherGrant(String),
+}
+
+impl fmt::Display for GrantTypesRejection {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Empty => write!(f, "grant_types: must not be an empty list"),
+            Self::Duplicate(g) => write!(f, "grant_types: duplicate entry: {g}"),
+            Self::RefreshWithoutCode => write!(
+                f,
+                "grant_types: refresh_token requires authorization_code in the same list"
+            ),
+            Self::OtherGrant(g) => write!(f, "grant_types: unsupported grant type: {g}"),
+        }
+    }
+}
+
+/// *Supported fields* row 4: `authorization_code` alone, or
+/// `authorization_code` plus `refresh_token`; default `authorization_code`
+/// alone. The handler's pre-stage-2 response default was
+/// `["authorization_code", "refresh_token"]` — traced to no test asserting
+/// `grant_types`' specific contents, so corrected to match the matrix's
+/// "default code" (one grant, not two) rather than carried forward.
+pub fn validate_grant_types(raw: Option<&[String]>) -> Result<Vec<String>, GrantTypesRejection> {
+    let Some(grants) = raw else {
+        return Ok(vec!["authorization_code".to_owned()]);
+    };
+    if grants.is_empty() {
+        return Err(GrantTypesRejection::Empty);
+    }
+    let mut seen = HashSet::with_capacity(grants.len());
+    for g in grants {
+        if !seen.insert(g.as_str()) {
+            return Err(GrantTypesRejection::Duplicate(g.clone()));
+        }
+        if g != "authorization_code" && g != "refresh_token" {
+            return Err(GrantTypesRejection::OtherGrant(g.clone()));
+        }
+    }
+    if !seen.contains("authorization_code") {
+        return Err(GrantTypesRejection::RefreshWithoutCode);
+    }
+    Ok(grants.to_vec())
+}
+
+// ── 2: response_types ────────────────────────────────────────────────────────
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum ResponseTypesRejection {
+    Empty,
+    Duplicate(String),
+    /// Any entry other than `code`, or more than one distinct entry —
+    /// covers the matrix's "token", "hybrid", and "other" buckets
+    /// identically: every one of them is "the set is not exactly `{code}`".
+    NotCodeOnly(String),
+}
+
+impl fmt::Display for ResponseTypesRejection {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Empty => write!(f, "response_types: must not be an empty list"),
+            Self::Duplicate(r) => write!(f, "response_types: duplicate entry: {r}"),
+            Self::NotCodeOnly(r) => write!(
+                f,
+                "response_types: only the code response type is supported, not {r}"
+            ),
+        }
+    }
+}
+
+/// *Supported fields* row 5: `code` only, default `code`. **Zero
+/// implementation existed before this stage** — `response_types` was a
+/// [`KNOWN_UNSUPPORTED_MEMBERS`] entry, rejected outright. Deliberately
+/// not wired to `discovery.rs`'s `response_types_supported`: that field
+/// describes the *provider's* overall capability for every client, while
+/// this one is a *per-registration* request that this deployment currently
+/// only ever accepts as `code` — conflating them would make a future,
+/// wider discovery capability silently loosen what registration accepts
+/// (or vice versa) with no code change announcing it.
+pub fn validate_response_types(
+    raw: Option<&[String]>,
+) -> Result<Vec<String>, ResponseTypesRejection> {
+    let Some(types) = raw else {
+        return Ok(vec!["code".to_owned()]);
+    };
+    if types.is_empty() {
+        return Err(ResponseTypesRejection::Empty);
+    }
+    let mut seen = HashSet::with_capacity(types.len());
+    for t in types {
+        if !seen.insert(t.as_str()) {
+            return Err(ResponseTypesRejection::Duplicate(t.clone()));
+        }
+    }
+    if seen.len() != 1 || !seen.contains("code") {
+        let offending = types
+            .iter()
+            .find(|t| t.as_str() != "code")
+            .unwrap_or(&types[0]);
+        return Err(ResponseTypesRejection::NotCodeOnly(offending.clone()));
+    }
+    Ok(types.to_vec())
+}
+
+// ── 2: scope ─────────────────────────────────────────────────────────────────
+
+/// RFC 6749 §3.3's own bound on a single `scope-token`'s character set:
+/// `%x21 / %x23-5B / %x5D-7E` — every printable ASCII byte except space
+/// (the token separator), `"` (`%x22`), and `\` (`%x5C`).
+fn is_scope_token_byte(b: u8) -> bool {
+    b == 0x21 || (0x23..=0x5B).contains(&b) || (0x5D..=0x7E).contains(&b)
+}
+
+pub const MAX_SCOPE_TOKENS: usize = 32;
+pub const MAX_SCOPE_TOKEN_BYTES: usize = 64;
+pub const MAX_SCOPE_TOTAL_BYTES: usize = 1024;
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum ScopeRejection {
+    Empty,
+    /// A token used a byte outside RFC 6749 §3.3's scope-token character
+    /// set, or the string had a leading/trailing/doubled separator space
+    /// (an empty token between two spaces is the same fault: a token that
+    /// is not 1 or more allowed characters).
+    Malformed,
+    TooManyBytes,
+    TooManyTokens,
+    TokenTooLong(String),
+    Duplicate(String),
+    Unknown(String),
+    MissingOpenid,
+}
+
+impl fmt::Display for ScopeRejection {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Empty => write!(f, "scope: must not be empty"),
+            Self::Malformed => write!(
+                f,
+                "scope: must be one or more space-separated RFC 6749 scope tokens"
+            ),
+            Self::TooManyBytes => {
+                write!(f, "scope: exceeds {MAX_SCOPE_TOTAL_BYTES} bytes")
+            }
+            Self::TooManyTokens => {
+                write!(f, "scope: exceeds {MAX_SCOPE_TOKENS} tokens")
+            }
+            Self::TokenTooLong(t) => {
+                write!(f, "scope: token exceeds {MAX_SCOPE_TOKEN_BYTES} bytes: {t}")
+            }
+            Self::Duplicate(t) => write!(f, "scope: duplicate token: {t}"),
+            Self::Unknown(t) => write!(f, "scope: not in this deployment's catalog: {t}"),
+            Self::MissingOpenid => write!(f, "scope: must include openid"),
+        }
+    }
+}
+
+/// *Supported fields* row 6: 1–32 unique catalog tokens including `openid`.
+///
+/// `catalog` is one read of the whole `scope_definition` table, taken
+/// once by the caller before this function runs — not re-queried per
+/// token. That is this stage's answer to the corpus's "concurrent catalog
+/// deletion/default change" case: validating all of a request's up-to-32
+/// tokens against a single consistent snapshot closes the narrower race
+/// (two tokens checked against two different states of the catalog mid
+/// validation) that a per-token query would leave open. It does not, and
+/// is not meant to, make this request's validation linearize with a
+/// concurrent catalog edit — see the stage's return package for why that
+/// wider race is accepted rather than closed.
+///
+/// Checks run cheapest-and-structural first, catalog membership last: a
+/// request with a structural fault (empty, oversize, malformed character,
+/// duplicate) never reaches the database at all.
+pub fn validate_scope(
+    raw: Option<&str>,
+    catalog: &HashSet<String>,
+) -> Result<Vec<String>, ScopeRejection> {
+    let s = raw.unwrap_or("");
+    if s.is_empty() {
+        return Err(ScopeRejection::Empty);
+    }
+    if s.len() > MAX_SCOPE_TOTAL_BYTES {
+        return Err(ScopeRejection::TooManyBytes);
+    }
+    let tokens: Vec<&str> = s.split(' ').collect();
+    if tokens.len() > MAX_SCOPE_TOKENS {
+        return Err(ScopeRejection::TooManyTokens);
+    }
+    let mut seen: HashSet<&str> = HashSet::with_capacity(tokens.len());
+    for token in &tokens {
+        if token.is_empty() || !token.bytes().all(is_scope_token_byte) {
+            return Err(ScopeRejection::Malformed);
+        }
+        if token.len() > MAX_SCOPE_TOKEN_BYTES {
+            return Err(ScopeRejection::TokenTooLong((*token).to_owned()));
+        }
+        if !seen.insert(token) {
+            return Err(ScopeRejection::Duplicate((*token).to_owned()));
+        }
+    }
+    for token in &tokens {
+        if !catalog.contains(*token) {
+            return Err(ScopeRejection::Unknown((*token).to_owned()));
+        }
+    }
+    if !seen.contains("openid") {
+        return Err(ScopeRejection::MissingOpenid);
+    }
+    Ok(tokens.into_iter().map(str::to_owned).collect())
+}
+
+// ── 2: the refresh_token / offline_access coupling ───────────────────────────
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum GrantScopeCouplingRejection {
+    RefreshWithoutOfflineAccess,
+    OfflineAccessWithoutRefresh,
+}
+
+impl fmt::Display for GrantScopeCouplingRejection {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::RefreshWithoutOfflineAccess => write!(
+                f,
+                "grant_types: refresh_token requires the offline_access scope"
+            ),
+            Self::OfflineAccessWithoutRefresh => write!(
+                f,
+                "scope: offline_access requires the refresh_token grant type"
+            ),
+        }
+    }
+}
+
+/// *Supported fields*' closing sentence: `refresh_token` requires
+/// `offline_access`; `offline_access` requires `refresh_token`. Both
+/// directions, checked only after each side has already passed its own
+/// field validation — this function takes the validated `Vec<String>`s,
+/// not the raw request, so it never has to re-derive what counts as a
+/// valid grant or scope token.
+pub fn check_grant_scope_coupling(
+    grant_types: &[String],
+    scope_tokens: &[String],
+) -> Result<(), GrantScopeCouplingRejection> {
+    let has_refresh = grant_types.iter().any(|g| g == "refresh_token");
+    let has_offline_access = scope_tokens.iter().any(|s| s == "offline_access");
+    match (has_refresh, has_offline_access) {
+        (true, false) => Err(GrantScopeCouplingRejection::RefreshWithoutOfflineAccess),
+        (false, true) => Err(GrantScopeCouplingRejection::OfflineAccessWithoutRefresh),
+        _ => Ok(()),
+    }
+}
+
+// ── 2: application-identity URI fields ───────────────────────────────────────
+
+/// Reused for every application-identity URI field — `logo_uri`,
+/// `client_uri`, `policy_uri`, `tos_uri` — and for each entry of
+/// `post_logout_redirect_uris`. The matrix states a byte bound for
+/// `redirect_uris` (2048) and for `client_name` (512) and `scope` (1024
+/// total / 64 per token) but gives none for this group; reused from
+/// [`MAX_REDIRECT_URI_BYTES`] as the nearest already-justified bound for
+/// "a URI this deployment stores", stated here as a judgement call rather
+/// than a number the matrix actually gives — see the stage's return
+/// package.
+const MAX_APPLICATION_URI_BYTES: usize = MAX_REDIRECT_URI_BYTES;
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct InvalidApplicationUri {
+    pub field: &'static str,
+    pub uri: String,
+    pub reason: &'static str,
+}
+
+impl fmt::Display for InvalidApplicationUri {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}: {}", self.field, self.uri, self.reason)
+    }
+}
+
+/// *Supported fields* row 8: absent, or exactly one canonical HTTPS URI.
+/// Shares [`well_formed_uri`]'s raw-string canonicality floor with
+/// [`well_formed_shape`] (redirects) and [`validate_post_logout_redirect_uris`],
+/// scoped here to HTTPS only — these are passive display/link targets,
+/// never a redirect target, so the numeric-loopback-HTTP allowance a
+/// redirect gets has no reason to extend here.
+pub fn validate_application_uri(
+    raw: Option<&str>,
+    field: &'static str,
+) -> Result<Option<String>, InvalidApplicationUri> {
+    let Some(uri) = raw.filter(|u| !u.is_empty()) else {
+        return Ok(None);
+    };
+    let reject = |reason: &'static str| {
+        Err(InvalidApplicationUri {
+            field,
+            uri: uri.to_owned(),
+            reason,
+        })
+    };
+    let parsed = match well_formed_uri(uri, MAX_APPLICATION_URI_BYTES) {
+        Ok(p) => p,
+        Err(reason) => return reject(reason),
+    };
+    if parsed.scheme() != "https" {
+        return reject("must be https");
+    }
+    Ok(Some(uri.to_owned()))
+}
+
+// ── 2: post_logout_redirect_uris, the full policy ────────────────────────────
+
+pub const MAX_POST_LOGOUT_REDIRECT_URIS: usize = 16;
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum PostLogoutRejection {
+    Malformed { uri: String, reason: &'static str },
+    TooMany,
+    Duplicate(String),
+}
+
+impl fmt::Display for PostLogoutRejection {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Malformed { uri, reason } => {
+                write!(f, "post_logout_redirect_uris: {uri}: {reason}")
+            }
+            Self::TooMany => write!(
+                f,
+                "post_logout_redirect_uris: at most {MAX_POST_LOGOUT_REDIRECT_URIS} entries"
+            ),
+            Self::Duplicate(u) => write!(f, "post_logout_redirect_uris: duplicate entry: {u}"),
+        }
+    }
+}
+
+/// *Supported fields* row 7: absent/empty, or 1–16 canonical unique HTTPS
+/// redirects, independent of `redirect_uris`' own authorization profile —
+/// even a [`RedirectProfile::PublicNativeLoopback`] registration's logout
+/// URIs must be HTTPS. Replaces stage 1's `reject_http_post_logout_uris`
+/// entirely: that function checked only the one profile-interaction rule
+/// (no `http`) the Redirect corpus names explicitly; this adds the count,
+/// uniqueness, and full canonical-form checks the *Supported fields* row
+/// asks for, over the same field, so one function owns the whole rule
+/// rather than two functions each owning half of it.
+pub fn validate_post_logout_redirect_uris(
+    raw: Option<&[String]>,
+) -> Result<Vec<String>, PostLogoutRejection> {
+    let Some(uris) = raw else {
+        return Ok(Vec::new());
+    };
+    if uris.len() > MAX_POST_LOGOUT_REDIRECT_URIS {
+        return Err(PostLogoutRejection::TooMany);
+    }
+    let mut seen = HashSet::with_capacity(uris.len());
+    for uri in uris {
+        if !seen.insert(uri.as_str()) {
+            return Err(PostLogoutRejection::Duplicate(uri.clone()));
+        }
+        let parsed = well_formed_uri(uri, MAX_APPLICATION_URI_BYTES).map_err(|reason| {
+            PostLogoutRejection::Malformed {
+                uri: uri.clone(),
+                reason,
+            }
+        })?;
+        if parsed.scheme() != "https" {
+            return Err(PostLogoutRejection::Malformed {
+                uri: uri.clone(),
+                reason: "must be https",
+            });
+        }
+    }
+    Ok(uris.to_vec())
 }
 
 #[cfg(test)]

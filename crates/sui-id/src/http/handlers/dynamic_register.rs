@@ -4,8 +4,13 @@
 //!
 //! 1. Validate the `Authorization: Bearer <token>` header against
 //!    `client_registration_token` (P4/P5).
-//! 2. Validate the JSON body: `redirect_uris` required, `client_name` required,
-//!    application-identity URIs validated HTTPS-or-localhost (P6).
+//! 2. Validate the JSON body against RFC 095 M3's metadata-validation
+//!    matrix (`dynamic_registration_validation`) -- the envelope and
+//!    redirect profile (stage 1), then every other supported field
+//!    (stage 2): `client_name`, `token_endpoint_auth_method`,
+//!    `grant_types`, `response_types`, `scope` (against this
+//!    deployment's catalog), the four application-identity URIs, and
+//!    `post_logout_redirect_uris`'s own full policy.
 //! 3. Create the client row with `registered_via = 'dynamic'`,
 //!    `is_disabled = true` (admin must explicitly enable), and
 //!    `consent_policy = 'first_time_only'` (sensible default for third-party).
@@ -43,11 +48,18 @@ pub struct RegistrationRequest {
     pub redirect_uris: Vec<String>,
     /// Human-readable client name. Required by this deployment (not RFC 7591).
     pub client_name: Option<String>,
-    /// Space-separated list of requested scopes. Empty or absent → any scope.
+    /// Space-separated list of requested scopes; RFC 095 M3 stage 2:
+    /// absent or empty is rejected, not "any scope" — see
+    /// `dynamic_registration_validation::validate_scope`.
     pub scope: Option<String>,
-    /// Grant types: "authorization_code" (default), "refresh_token".
+    /// Grant types: `authorization_code` (default), optionally plus
+    /// `refresh_token`.
     pub grant_types: Option<Vec<String>>,
-    /// Token endpoint auth method: "client_secret_post" or "none".
+    /// RFC 095 M3 stage 2: `code` only, default `code`. Had no
+    /// implementation at all before this stage.
+    pub response_types: Option<Vec<String>>,
+    /// Token endpoint auth method: `none`, `client_secret_basic` (default),
+    /// or `client_secret_post`.
     pub token_endpoint_auth_method: Option<String>,
     /// Application-identity URIs (P6).
     pub logo_uri: Option<String>,
@@ -68,6 +80,7 @@ pub struct RegistrationResponse {
     pub client_name: String,
     pub redirect_uris: Vec<String>,
     pub grant_types: Vec<String>,
+    pub response_types: Vec<String>,
     pub token_endpoint_auth_method: String,
     pub scope: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -174,13 +187,24 @@ pub async fn dynamic_register(
             "redirect_uris must contain at least one URI",
         ));
     }
-    // Determine confidentiality from token_endpoint_auth_method, moved up
-    // from below: the closed-profile derivation needs it too, and this is
-    // the one place that decides what the raw string means.
-    let auth_method = body
-        .token_endpoint_auth_method
-        .as_deref()
-        .unwrap_or("client_secret_post");
+    // RFC 095 M3 stage 2: validated first, so the closed-profile derivation
+    // below sees the real wire value rather than an unvalidated raw string
+    // -- "none"/"client_secret_basic"/"client_secret_post" only, default
+    // `client_secret_basic` per RFC 7591 §2 (not `client_secret_post`,
+    // this handler's own pre-stage-2 default; see
+    // `validate_auth_method`'s doc comment for why fixing it changes no
+    // currently-asserted behaviour).
+    let auth_method =
+        match validation::validate_auth_method(body.token_endpoint_auth_method.as_deref()) {
+            Ok(m) => m,
+            Err(e) => {
+                return Ok(reg_error(
+                    StatusCode::BAD_REQUEST,
+                    "invalid_client_metadata",
+                    &e.to_string(),
+                ));
+            }
+        };
     let confidential = auth_method != "none";
 
     // RFC 095 M3 stage 1, 1a: the derived closed profile. Replaces the old
@@ -202,32 +226,135 @@ pub async fn dynamic_register(
         }
     };
     tracing::debug!(?profile, "dynamic registration: redirect profile derived");
-    if let Some(post_logout) = body.post_logout_redirect_uris.as_ref()
-        && let Err(bad_uri) = validation::reject_http_post_logout_uris(post_logout)
-    {
-        return Ok(reg_error(
-            StatusCode::BAD_REQUEST,
-            "invalid_client_metadata",
-            &format!("post_logout_redirect_uris: {bad_uri}: must be https"),
-        ));
-    }
 
-    let client_name = match body.client_name.as_deref().filter(|s| !s.is_empty()) {
-        Some(n) => n.to_owned(),
-        None => {
+    // RFC 095 M3 stage 2: the field's full policy -- count, uniqueness,
+    // canonical HTTPS form -- independent of `redirect_uris`' own profile.
+    // Replaces stage 1's narrower `reject_http_post_logout_uris`.
+    let post_logout = match validation::validate_post_logout_redirect_uris(
+        body.post_logout_redirect_uris.as_deref(),
+    ) {
+        Ok(uris) => uris,
+        Err(e) => {
             return Ok(reg_error(
                 StatusCode::BAD_REQUEST,
                 "invalid_client_metadata",
-                "client_name is required",
+                &e.to_string(),
             ));
         }
     };
 
-    // Validate application-identity URIs (P6).
-    let logo_uri = validated_uri(body.logo_uri, "logo_uri")?;
-    let homepage_uri = validated_uri(body.client_uri, "client_uri")?;
-    let privacy_policy_uri = validated_uri(body.policy_uri, "policy_uri")?;
-    let tos_uri = validated_uri(body.tos_uri, "tos_uri")?;
+    let client_name = match validation::validate_client_name(body.client_name.as_deref()) {
+        Ok(n) => n,
+        Err(e) => {
+            return Ok(reg_error(
+                StatusCode::BAD_REQUEST,
+                "invalid_client_metadata",
+                &e.to_string(),
+            ));
+        }
+    };
+
+    let grant_types = match validation::validate_grant_types(body.grant_types.as_deref()) {
+        Ok(g) => g,
+        Err(e) => {
+            return Ok(reg_error(
+                StatusCode::BAD_REQUEST,
+                "invalid_client_metadata",
+                &e.to_string(),
+            ));
+        }
+    };
+
+    let response_types = match validation::validate_response_types(body.response_types.as_deref()) {
+        Ok(r) => r,
+        Err(e) => {
+            return Ok(reg_error(
+                StatusCode::BAD_REQUEST,
+                "invalid_client_metadata",
+                &e.to_string(),
+            ));
+        }
+    };
+
+    // RFC 095 M3 stage 2: one read of the whole scope catalog, taken once
+    // for this request rather than re-queried per token -- see
+    // `validate_scope`'s own doc comment for why ("concurrent catalog
+    // deletion/default change").
+    let catalog: std::collections::HashSet<String> =
+        sui_id_store::repos::scope_definition::list(&app.db)
+            .await
+            .map_err(|e| HttpError::api(CoreError::from(e)))?
+            .into_iter()
+            .map(|row| row.name)
+            .collect();
+    let scope_tokens = match validation::validate_scope(body.scope.as_deref(), &catalog) {
+        Ok(tokens) => tokens,
+        Err(e) => {
+            return Ok(reg_error(
+                StatusCode::BAD_REQUEST,
+                "invalid_client_metadata",
+                &e.to_string(),
+            ));
+        }
+    };
+    if let Err(e) = validation::check_grant_scope_coupling(&grant_types, &scope_tokens) {
+        return Ok(reg_error(
+            StatusCode::BAD_REQUEST,
+            "invalid_client_metadata",
+            &e.to_string(),
+        ));
+    }
+    let scope = scope_tokens.join(" ");
+
+    // Validate application-identity URIs (P6). RFC 095 M3 stage 2: a
+    // dynamic registration's own, stricter rule (canonical HTTPS only, no
+    // `http://localhost` exception) -- not `is_valid_app_uri`, the
+    // administrator-client validator five other sites call; see
+    // `validate_application_uri`'s own doc comment for why the two must
+    // not be merged.
+    let logo_uri = match validation::validate_application_uri(body.logo_uri.as_deref(), "logo_uri")
+    {
+        Ok(u) => u,
+        Err(e) => {
+            return Ok(reg_error(
+                StatusCode::BAD_REQUEST,
+                "invalid_client_metadata",
+                &e.to_string(),
+            ));
+        }
+    };
+    let homepage_uri =
+        match validation::validate_application_uri(body.client_uri.as_deref(), "client_uri") {
+            Ok(u) => u,
+            Err(e) => {
+                return Ok(reg_error(
+                    StatusCode::BAD_REQUEST,
+                    "invalid_client_metadata",
+                    &e.to_string(),
+                ));
+            }
+        };
+    let privacy_policy_uri =
+        match validation::validate_application_uri(body.policy_uri.as_deref(), "policy_uri") {
+            Ok(u) => u,
+            Err(e) => {
+                return Ok(reg_error(
+                    StatusCode::BAD_REQUEST,
+                    "invalid_client_metadata",
+                    &e.to_string(),
+                ));
+            }
+        };
+    let tos_uri = match validation::validate_application_uri(body.tos_uri.as_deref(), "tos_uri") {
+        Ok(u) => u,
+        Err(e) => {
+            return Ok(reg_error(
+                StatusCode::BAD_REQUEST,
+                "invalid_client_metadata",
+                &e.to_string(),
+            ));
+        }
+    };
 
     // ── Create client row ─────────────────────────────────────────────────────
 
@@ -245,8 +372,6 @@ pub async fn dynamic_register(
         None => None,
     };
 
-    let scope = body.scope.clone().unwrap_or_default();
-    let post_logout = body.post_logout_redirect_uris.clone().unwrap_or_default();
     let now = app.clock.now();
     let client_id = ClientId::new();
 
@@ -257,7 +382,7 @@ pub async fn dynamic_register(
         secret_hash,
         redirect_uris: body.redirect_uris.clone(),
         allowed_scopes: scope.clone(),
-        post_logout_redirect_uris: post_logout,
+        post_logout_redirect_uris: post_logout.clone(),
         // Dynamically registered clients start DISABLED — admin must enable.
         is_disabled: true,
         is_deleted: false,
@@ -300,17 +425,13 @@ pub async fn dynamic_register(
 
     // ── RFC 7591 §3.2.1 response ──────────────────────────────────────────────
 
-    let grant_types = body
-        .grant_types
-        .clone()
-        .unwrap_or_else(|| vec!["authorization_code".into(), "refresh_token".into()]);
-
     let resp = RegistrationResponse {
         client_id: client_id.to_string(),
         client_secret: secret_plain,
         client_name,
         redirect_uris: body.redirect_uris,
         grant_types,
+        response_types,
         token_endpoint_auth_method: auth_method.to_owned(),
         scope,
         logo_uri,
@@ -320,22 +441,4 @@ pub async fn dynamic_register(
     };
 
     Ok((StatusCode::CREATED, Json(resp)).into_response())
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-fn validated_uri(uri: Option<String>, field: &'static str) -> Result<Option<String>, HttpError> {
-    match uri {
-        None => Ok(None),
-        Some(u) if u.is_empty() => Ok(None),
-        Some(u) => {
-            if sui_id_store::repos::clients::is_valid_app_uri(&u) {
-                Ok(Some(u))
-            } else {
-                Err(HttpError::api(CoreError::BadRequest(format!(
-                    "field {field}: must be HTTPS (or http://localhost): {u}"
-                ))))
-            }
-        }
-    }
 }

@@ -320,7 +320,8 @@ async fn dynamic_registration_response_is_no_store_and_never_a_url() {
     .await
     .expect("store registration token");
 
-    let payload = r#"{"redirect_uris":["https://rp.test/cb"],"client_name":"dyn-rp"}"#;
+    let payload =
+        r#"{"redirect_uris":["https://rp.test/cb"],"client_name":"dyn-rp","scope":"openid"}"#;
     let resp = build_router(state.clone())
         .oneshot(
             Request::builder()
