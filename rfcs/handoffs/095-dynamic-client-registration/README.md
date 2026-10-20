@@ -8,10 +8,19 @@ the one redirect-corpus row stage 1 deferred). *This line said 1b "is open"
 until 2026-10-20; it had landed. The architect maintains this file and did
 not update it when the round closed.*
 
+**The remaining stages are planned**:
+[`m3-stage-plan-2026-10-20.md`](m3-stage-plan-2026-10-20.md) — five stages,
+not the two an older label named, because the remainder spans four file sets
+and four kinds of verification. **Stage 2 is dispatched**:
+[`stage2-the-field-rules-2026-10-20.md`](stage2-the-field-rules-2026-10-20.md).
+`0.83.0` is M3's remaining implementation; closing M3 additionally needs the
+legacy-candidate disposition and the evidence acceptance, **neither of which
+is the architect's to give**.
+
 Stage 1 was dispatched as —
 [`stage1-envelope-and-redirect-profile-2026-10-05.md`](stage1-envelope-and-redirect-profile-2026-10-05.md):
-the request envelope and the derived closed redirect profile. **Stages 2 and 3
-are not dispatched.** The entry gate below is **open** — all six conditions met,
+the request envelope and the derived closed redirect profile. *That dispatch
+said "stages 2 and 3"; the plan above supersedes that numbering with five.* The entry gate below is **open** — all six conditions met,
 condition 4 discharged and the discharge approved 2026-10-05.
 
 **Status:** Planning companion; inherits the governing RFC's current status — **Accepted 2026-08-27**, the 2026-07-28 return to `proposed/` for a material prerequisite amendment having closed. Implementation remains blocked on the entry gate below.
