@@ -25,12 +25,12 @@ use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 use crate::dynamic_registration_validation::{self as validation, EnvelopeError};
 use crate::errors::HttpError;
 use crate::handlers::AppStateExt;
 use sui_id_core::errors::CoreError;
+use sui_id_core::tokens::sha256_hex;
 use sui_id_shared::ids::ClientId;
 use sui_id_store::models::{ClientRow, ConsentPolicy, RegistrationSource};
 
@@ -323,11 +323,6 @@ pub async fn dynamic_register(
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-fn sha256_hex(input: &str) -> String {
-    let hash = Sha256::digest(input.as_bytes());
-    hash.iter().map(|b| format!("{b:02x}")).collect()
-}
 
 fn validated_uri(uri: Option<String>, field: &'static str) -> Result<Option<String>, HttpError> {
     match uri {

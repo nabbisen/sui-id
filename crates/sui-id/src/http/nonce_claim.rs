@@ -86,8 +86,21 @@ impl std::error::Error for NonceError {}
 /// but the token's `nonce` claim is attacker-controlled and the *expected*
 /// digest is the caller's own value, so this is checked on the expected
 /// side as a precondition rather than assumed.
+///
+/// **Lowercase only, not `is_ascii_hexdigit`'s `A-F` too.** `sha256_hex`
+/// emits only `a-f`, and the comparison below is a case-sensitive `ct_eq`
+/// on raw bytes, so an uppercase `expected_digest` would pass this shape
+/// check and then fail the comparison as [`NonceError::Mismatch`] -- the
+/// one failure this precondition exists to prevent (see
+/// [`validate_nonce`]'s doc comment): a caller bug reported as "the token
+/// lied" instead of "the expected digest was malformed". The three tidies,
+/// 2026-10-20 -- unreachable from today's sole caller, which already
+/// commits to lowercase, but the precondition's whole job is to catch the
+/// *next* caller before it ships.
 fn is_64_hex(s: &str) -> bool {
-    s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit())
+    s.len() == 64
+        && s.bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
 /// Validates the `nonce` claim against `expected_digest` -- the attempt's

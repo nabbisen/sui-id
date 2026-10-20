@@ -28,8 +28,7 @@
 //! 7. No two keys share a nonempty `kid`. Two empty `kid`s are not a duplicate:
 //!    RFC 096 says *nonempty*.
 
-use serde::de::{DeserializeSeed, MapAccess, SeqAccess, Visitor};
-
+use crate::json_shape;
 use crate::response_bounds::{self, BoundsError, MAX_RESPONSE_BYTES};
 
 /// RFC 096's JWKS rule: at most 16 levels of nesting, the root object counted as 1.
@@ -117,14 +116,14 @@ pub fn parse_jwks(bytes: &[u8]) -> Result<Jwks, JwksError> {
     response_bounds::check_caps(&value, &response_bounds::ResponseCaps::JWKS_AND_TRANSPORT)
         .map_err(JwksError::Bounds)?;
 
-    let depth = nesting_depth(&value);
+    let depth = json_shape::nesting_depth(&value);
     if depth > MAX_JWKS_DEPTH {
         return Err(JwksError::TooDeep {
             limit: MAX_JWKS_DEPTH,
         });
     }
 
-    if let Some(name) = first_repeated_member(bytes)? {
+    if let Some(name) = json_shape::first_repeated_member(bytes).map_err(|_| JwksError::NotJson)? {
         return Err(JwksError::DuplicateMember(name));
     }
 
@@ -155,124 +154,6 @@ pub fn parse_jwks(bytes: &[u8]) -> Result<Jwks, JwksError> {
     }
 
     Ok(Jwks { keys })
-}
-
-/// The nesting depth of a parsed document. A scalar is 0; a container is one more
-/// than its deepest child. The root object of `{"keys":[{}]}` is 3.
-///
-/// `pub(crate)` since RFC 096-A stage 8: discovery's own depth bound
-/// (RFC 096 `:531`, 16, identical to [`MAX_JWKS_DEPTH`]) needs this exact
-/// walker. Promoted in place rather than moved to `response_bounds.rs` --
-/// both this and [`first_repeated_member`] are generic JSON-structure
-/// utilities with nothing JWKS-specific in them, so moving them would be
-/// the more architecturally tidy choice, but it is also a larger, riskier
-/// footprint on an already-accepted, tested module than a visibility
-/// change alone; promoting in place is the lower-risk option the dispatch
-/// offered, stated here as a deliberate choice, not an oversight.
-pub(crate) fn nesting_depth(value: &serde_json::Value) -> usize {
-    match value {
-        serde_json::Value::Object(map) => 1 + map.values().map(nesting_depth).max().unwrap_or(0),
-        serde_json::Value::Array(items) => 1 + items.iter().map(nesting_depth).max().unwrap_or(0),
-        _ => 0,
-    }
-}
-
-/// The first member name that repeats, anywhere in the document, or `None`.
-///
-/// Reads the bytes, not a `Value`, because `serde_json::Value` keeps only the last
-/// of two equal names. The bytes already passed `serde_json`'s own parse, so the
-/// `Err` branch below is unreachable in practice; it is reported as `NotJson`.
-///
-/// `pub(crate)` since stage 8 -- see [`nesting_depth`]'s doc comment for
-/// why this is promoted in place rather than relocated. Its `Result` stays
-/// tied to [`JwksError`]; a discovery caller maps the one reachable
-/// variant (`JwksError::NotJson`) into its own error, the same translation
-/// `VerificationError::Jwks(JwksError)` already does in the other
-/// direction.
-pub(crate) fn first_repeated_member(bytes: &[u8]) -> Result<Option<String>, JwksError> {
-    let mut found: Option<String> = None;
-    let mut de = serde_json::Deserializer::from_slice(bytes);
-    match (NoRepeats { found: &mut found }).deserialize(&mut de) {
-        Ok(()) => Ok(None),
-        Err(_) if found.is_some() => Ok(found),
-        Err(_) => Err(JwksError::NotJson),
-    }
-}
-
-/// Walks every value of a JSON document and stops at the first repeated member
-/// name. The name is written to `found`; the walk then fails with a custom error,
-/// which the caller reads from `found`, not from the error text.
-struct NoRepeats<'a> {
-    found: &'a mut Option<String>,
-}
-
-impl<'de> DeserializeSeed<'de> for NoRepeats<'_> {
-    type Value = ();
-
-    fn deserialize<D: serde::Deserializer<'de>>(self, deserializer: D) -> Result<(), D::Error> {
-        deserializer.deserialize_any(NoRepeatsVisitor { found: self.found })
-    }
-}
-
-struct NoRepeatsVisitor<'a> {
-    found: &'a mut Option<String>,
-}
-
-impl<'de> Visitor<'de> for NoRepeatsVisitor<'_> {
-    type Value = ();
-
-    fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        f.write_str("any JSON value")
-    }
-
-    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<(), A::Error> {
-        let mut names: Vec<String> = Vec::new();
-        while let Some(name) = map.next_key::<String>()? {
-            if names.contains(&name) {
-                *self.found = Some(name);
-                return Err(serde::de::Error::custom("repeated member"));
-            }
-            names.push(name);
-            map.next_value_seed(NoRepeats {
-                found: &mut *self.found,
-            })?;
-        }
-        Ok(())
-    }
-
-    fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<(), A::Error> {
-        while seq
-            .next_element_seed(NoRepeats {
-                found: &mut *self.found,
-            })?
-            .is_some()
-        {}
-        Ok(())
-    }
-
-    fn visit_bool<E>(self, _: bool) -> Result<(), E> {
-        Ok(())
-    }
-
-    fn visit_i64<E>(self, _: i64) -> Result<(), E> {
-        Ok(())
-    }
-
-    fn visit_u64<E>(self, _: u64) -> Result<(), E> {
-        Ok(())
-    }
-
-    fn visit_f64<E>(self, _: f64) -> Result<(), E> {
-        Ok(())
-    }
-
-    fn visit_str<E>(self, _: &str) -> Result<(), E> {
-        Ok(())
-    }
-
-    fn visit_unit<E>(self) -> Result<(), E> {
-        Ok(())
-    }
 }
 
 // ---- RFC 096-A stage 3b: JWKS key selection (RFC 096 :641-646) -------------

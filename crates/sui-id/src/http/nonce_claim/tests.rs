@@ -121,6 +121,22 @@ fn a_malformed_expected_digest_is_caught_even_when_the_token_has_no_nonce_at_all
     );
 }
 
+/// An uppercase 64-character digest has the right shape by
+/// `is_ascii_hexdigit`'s own definition, but `sha256_hex` never emits
+/// uppercase and the comparison is case-sensitive -- so this must be
+/// rejected as malformed, not fall through to `Mismatch` and read as an
+/// attacker-controlled claim rather than a caller bug.
+#[test]
+fn an_uppercase_expected_digest_is_refused_as_malformed_not_mismatched() {
+    let p = r#"{"nonce":"the-attempts-nonce"}"#;
+    let claims = verified(p);
+    let upper = digest_of("the-attempts-nonce").to_uppercase();
+    assert_eq!(
+        validate_nonce(&claims, &upper),
+        Err(NonceError::ExpectedDigestMalformed)
+    );
+}
+
 /// Stage 6a's `first_duplicate_member` scan covers every top-level member,
 /// before a `VerifiedIdTokenClaims` can exist at all -- a repeated `nonce`
 /// never reaches this module in the first place. No second check is added

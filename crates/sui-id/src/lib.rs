@@ -52,6 +52,8 @@ pub mod identity_claims;
 pub mod identity_resolution;
 #[path = "runtime/ipnet.rs"]
 pub mod ipnet;
+#[path = "http/json_shape.rs"]
+pub mod json_shape;
 #[path = "http/jwks.rs"]
 pub mod jwks;
 #[path = "runtime/keyring.rs"]

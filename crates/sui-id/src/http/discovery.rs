@@ -435,7 +435,7 @@ pub fn validate_discovery_bytes(
     response_bounds::check_caps(&value, &response_bounds::ResponseCaps::DISCOVERY)
         .map_err(DiscoveryError::Bounds)?;
 
-    let depth = crate::jwks::nesting_depth(&value);
+    let depth = crate::json_shape::nesting_depth(&value);
     if depth > DISCOVERY_MAX_DEPTH {
         return Err(DiscoveryError::TooDeep {
             limit: DISCOVERY_MAX_DEPTH,
@@ -443,7 +443,7 @@ pub fn validate_discovery_bytes(
     }
 
     if let Some(name) =
-        crate::jwks::first_repeated_member(bytes).map_err(|_| DiscoveryError::NotJson)?
+        crate::json_shape::first_repeated_member(bytes).map_err(|_| DiscoveryError::NotJson)?
     {
         return Err(DiscoveryError::DuplicateMember(name));
     }
