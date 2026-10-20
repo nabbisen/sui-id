@@ -12,6 +12,9 @@
 > reading at the cut — not a `[gates]` lane, not part of Level B, and not
 > evidence any round must produce. A3.4 passes.
 
+**Preparation dispatched** 2026-10-20 —
+[`release-0.82.0-preparation-2026-10-20.md`](release-0.82.0-preparation-2026-10-20.md).
+
 **Proposed.** 2026-10-20 JST, by the architect.
 **Prompted by.** *"Is it time to scope 0.82 now?"* — and the honest first
 answer was no. Measuring it turned up something that changed it.

@@ -99,7 +99,18 @@ built and you have dispositioned what it reports.
 
 One open dispatch at a time throughout, so these are sequential.
 
-## E — what I am asking
+## E — accepted
+
+**`@nabbisen`, 2026-10-20: *"Your recommedation is accepted."*** So `0.83.0`
+is M3 stages 2 and 3, and M2b is the programme after it, in tranches from
+`0.84.0`. The sequence in §D is the schedule of record until it is revised.
+
+**Order of work from here:** `0.82.0`'s preparation is dispatched first — it
+is authorized, independent and small — and the M3 stage plan is written
+alongside it, since planning is not a dispatch and does not consume the
+one-open-dispatch slot.
+
+## F — what was asked
 
 **One decision: is `0.83.0` M3, or M2b's first tranche?** My recommendation is
 M3, revised from the earlier M2b and for the reason in §B — not because the
