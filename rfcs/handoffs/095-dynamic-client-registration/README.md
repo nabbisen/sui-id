@@ -11,8 +11,15 @@ not update it when the round closed.*
 **The remaining stages are planned**:
 [`m3-stage-plan-2026-10-20.md`](m3-stage-plan-2026-10-20.md) — five stages,
 not the two an older label named, because the remainder spans four file sets
-and four kinds of verification. **Stage 2 is dispatched**:
+and four kinds of verification. **Stage 2 landed** `7cc1488` (Level B, 27 jobs, 0 skipped) —
 [`stage2-the-field-rules-2026-10-20.md`](stage2-the-field-rules-2026-10-20.md).
+**Stage 3 is dispatched**:
+[`stage3-the-registration-response-2026-10-21.md`](stage3-the-registration-response-2026-10-21.md).
+
+**`scope` is required at registration** as of stage 2 — a deliberate
+departure from RFC 7591 §2's optionality, recorded in
+[`metadata-validation.md`](metadata-validation.md) with its reason. The
+integrator-facing statement of it is stage 3's.
 `0.83.0` is M3's remaining implementation; closing M3 additionally needs the
 legacy-candidate disposition and the evidence acceptance, **neither of which
 is the architect's to give**.

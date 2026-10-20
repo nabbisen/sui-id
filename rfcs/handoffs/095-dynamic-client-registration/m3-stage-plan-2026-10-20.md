@@ -80,8 +80,19 @@ HTTP.
   and cache headers — one shape, no oracle.
 - Public errors carry only fixed ASCII templates plus field/index identifiers.
 - **Every success and every error carries `Cache-Control: no-store` and
-  `Pragma: no-cache`.** Measured: neither header appears in
-  `handlers/dynamic_register.rs` today.
+  `Pragma: no-cache`.**
+
+  *Corrected 2026-10-21, before stage 3 was dispatched: this said "neither
+  header appears in `handlers/dynamic_register.rs` today", which was true of
+  the handler and misleading about the route.* `Cache-Control: no-store` **is
+  already set**, at `router.rs:33-41`, covering every response from
+  `/oauth2/register`. Only `Pragma: no-cache` is absent. Stage 3's dispatch
+  carries the correction.
+
+  *Also found while measuring stage 3: the response has neither
+  `client_id_issued_at` nor `client_secret_expires_at`, the second of which
+  RFC 7591 §3.2.1 makes **required** when a secret is issued. That belongs to
+  this stage and its dispatch says so.*
 
 ### Stage 4 — the authentication/grant matrix
 
