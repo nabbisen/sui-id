@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   It was previously an outright-rejected unsupported member; the only
   accepted value is `code`, which is also the default when the member is
   absent.
+- `POST /oauth2/register`'s response now includes `client_id_issued_at`
+  (always) and `client_secret_expires_at` (only when a secret was issued;
+  always `0`, meaning this deployment's secrets do not expire) (RFC 095
+  M3 stage 3). RFC 7591 §3.2.1 makes the latter required whenever a
+  secret is issued; neither field existed before this stage.
 
 ### Changed
 
@@ -46,6 +51,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a non-`https` entry; a non-canonical HTTPS URI (an explicit default
   port, for instance), a duplicate, or more than 16 entries are now also
   rejected.
+- `POST /oauth2/register`'s successful response now echoes
+  `redirect_uris`, `grant_types`, `response_types`, and `scope` in one
+  canonical (sorted) order, regardless of the order the request used (RFC
+  095 M3 stage 3). `redirect_uris` and `scope` are also stored in that
+  same order, so a later read of the client agrees with what the
+  registration response showed.
+- **Every invalid-token state on `POST /oauth2/register` — no token,
+  a malformed token, and (checked against the store) an unknown, revoked,
+  or exhausted token — now returns the identical response: `401
+  Unauthorized`, the same body, and a `WWW-Authenticate: Bearer` header
+  (RFC 095 M3 stage 3).** Previously the three store-checked states
+  returned `400` with different body text than the other two, which let a
+  caller distinguish "no plausible token was presented" from "a
+  real-looking token was presented and turned out invalid" — by status
+  code alone, before reading the body. **If you handle registration
+  errors by status, a `400` from this endpoint is now a `401`.** This is
+  recorded as a behaviour change rather than a security fix: a
+  registration token is 32 random bytes, so the distinction confirmed
+  only that a presented value was well-shaped and gave no purchase on
+  guessing one.
+- Public error descriptions on `POST /oauth2/register` no longer include
+  the value that was rejected — a submitted URI, scope token, or
+  `token_endpoint_auth_method` string. They name the field and, for a
+  list-shaped field (`redirect_uris`, `post_logout_redirect_uris`,
+  `scope`), the zero-based index of the offending entry instead.
+- `POST /oauth2/register` now also sends `Pragma: no-cache`, alongside
+  the existing `Cache-Control: no-store`, on every response.
 
 ## [0.82.0] — 2026-10-20
 

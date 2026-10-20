@@ -975,7 +975,7 @@ fn every_allowed_scope_token_character_is_accepted_by_the_charset_check() {
     let scope = format!("openid {token_a} {token_b}");
     assert_eq!(
         validate_scope(Some(&scope), &catalog(&["openid"])),
-        Err(ScopeRejection::Unknown(token_a))
+        Err(ScopeRejection::Unknown(1))
     );
 }
 
@@ -983,7 +983,7 @@ fn every_allowed_scope_token_character_is_accepted_by_the_charset_check() {
 fn a_duplicate_scope_token_is_rejected() {
     assert_eq!(
         validate_scope(Some("openid openid"), &catalog(&["openid"])),
-        Err(ScopeRejection::Duplicate("openid".to_string()))
+        Err(ScopeRejection::Duplicate(1))
     );
 }
 
@@ -991,7 +991,7 @@ fn a_duplicate_scope_token_is_rejected() {
 fn an_unknown_catalog_value_is_rejected() {
     assert_eq!(
         validate_scope(Some("openid not_a_real_scope"), &catalog(&["openid"])),
-        Err(ScopeRejection::Unknown("not_a_real_scope".to_string()))
+        Err(ScopeRejection::Unknown(1))
     );
 }
 
@@ -1024,7 +1024,7 @@ fn a_scope_valid_against_one_catalog_snapshot_can_be_invalid_against_a_later_one
     let after_deletion = catalog(&["openid"]);
     assert_eq!(
         validate_scope(Some("openid custom_scope"), &after_deletion),
-        Err(ScopeRejection::Unknown("custom_scope".to_string()))
+        Err(ScopeRejection::Unknown(1))
     );
 }
 
@@ -1088,7 +1088,7 @@ fn a_65_byte_token_is_rejected() {
     // Catalog irrelevant -- TokenTooLong runs before the catalog check.
     assert_eq!(
         validate_scope(Some(&scope), &HashSet::new()),
-        Err(ScopeRejection::TokenTooLong(long))
+        Err(ScopeRejection::TokenTooLong(1))
     );
 }
 

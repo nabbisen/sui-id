@@ -117,16 +117,24 @@ async fn a_known_unsupported_member_is_rejected() {
 
 #[tokio::test]
 async fn an_unknown_extension_member_is_silently_ignored_and_never_echoed() {
+    // RFC 095 M3 stage 3, item 3: several distinct unknown extension
+    // members in one request, not one representative example -- each
+    // carries its own distinctive, easy-to-grep-for marker value, so a
+    // regression that echoes any *one* of them is caught, not only the
+    // specific member name this test used to pick.
     let state = test_app();
     let token = seed_token(&state).await;
-    let body = r#"{"client_name":"Example","scope":"openid","redirect_uris":["https://rp.test/cb"],"x_custom_extension":"secret-looking-value"}"#;
+    let body = r#"{"client_name":"Example","scope":"openid","redirect_uris":["https://rp.test/cb"],"x_custom_extension":"marker-alpha","x_another_extension":"marker-bravo","definitely_not_a_real_field":"marker-charlie"}"#;
     let r = register_raw(&state, &token, body).await;
-    assert_eq!(r.status, StatusCode::CREATED);
-    assert!(
-        !r.json.to_string().contains("secret-looking-value"),
-        "an unknown extension member must never be echoed back: {}",
-        r.json
-    );
+    assert_eq!(r.status, StatusCode::CREATED, "{}", r.json);
+    let rendered = r.json.to_string();
+    for marker in ["marker-alpha", "marker-bravo", "marker-charlie"] {
+        assert!(
+            !rendered.contains(marker),
+            "an unknown extension member must never be echoed back, found {marker}: {}",
+            r.json
+        );
+    }
 }
 
 // ── bearer token format, through the real endpoint ──────────────────────────

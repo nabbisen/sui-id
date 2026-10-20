@@ -30,14 +30,32 @@ pub fn build_router(app: AppState) -> Router {
         .route("/oauth2/token", post(oidc::token))
         // RFC 122 D3: the returned `client_secret` is shown once; this
         // response is unstorable, the same pattern `/reset-password` uses.
+        // RFC 122 D4's own route-layer watcher (`r122_routes.rs`) scans
+        // this exact `SetResponseHeaderLayer::overriding(CACHE_CONTROL,
+        // "no-store")` text, so it must stay literally present, not
+        // folded into a generic middleware -- the `Pragma` layer below is
+        // chained onto it rather than replacing it with one.
+        //
+        // RFC 095 M3 stage 3, item 5: `Pragma: no-cache` added the same
+        // way as `Cache-Control` above it, at the route rather than in
+        // the handler -- the handler has several exit paths, and a
+        // header added per-path is a header the next one added will miss.
+        // The first `.layer` call's `NewError` is pinned to `Infallible`
+        // explicitly; chaining two `MethodRouter::layer` calls without it
+        // leaves that type unresolved until the whole chain is built.
         .route(
             "/oauth2/register",
-            post(crate::handlers::dynamic_register::dynamic_register).layer(
-                tower_http::set_header::SetResponseHeaderLayer::overriding(
-                    axum::http::header::CACHE_CONTROL,
-                    axum::http::HeaderValue::from_static("no-store"),
-                ),
-            ),
+            post(crate::handlers::dynamic_register::dynamic_register)
+                .layer::<_, std::convert::Infallible>(
+                    tower_http::set_header::SetResponseHeaderLayer::overriding(
+                        axum::http::header::CACHE_CONTROL,
+                        axum::http::HeaderValue::from_static("no-store"),
+                    ),
+                )
+                .layer(tower_http::set_header::SetResponseHeaderLayer::overriding(
+                    axum::http::header::PRAGMA,
+                    axum::http::HeaderValue::from_static("no-cache"),
+                )),
         )
         .layer(token_cors);
 

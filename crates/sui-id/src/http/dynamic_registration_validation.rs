@@ -337,10 +337,13 @@ pub enum RedirectProfile {
 #[derive(Debug, PartialEq, Eq)]
 pub enum RedirectRejection {
     /// A specific URI failed a profile-independent well-formedness check.
-    /// Carries the offending URI and a human-readable reason, both safe to
-    /// surface (the public error path never echoes request content beyond
-    /// what the matrix allows for `invalid_client_metadata`-class errors —
-    /// callers choose how much of this to expose).
+    /// Carries the offending URI and a human-readable reason, for internal
+    /// logging. **RFC 095 M3 stage 3 decided the public response may not
+    /// echo either** — `handlers/dynamic_register.rs`'s own sanitizing
+    /// layer reports the entry's index in `redirect_uris` instead, never
+    /// this struct's `uri`. This doc comment previously said the opposite
+    /// ("both safe to surface"); that was stage 2's own open question,
+    /// closed here.
     Malformed {
         uri: String,
         reason: &'static str,
@@ -839,9 +842,17 @@ pub enum ScopeRejection {
     Malformed,
     TooManyBytes,
     TooManyTokens,
-    TokenTooLong(String),
-    Duplicate(String),
-    Unknown(String),
+    /// RFC 095 M3 stage 3: carries the token's zero-based index, not its
+    /// value — a public error may name which entry failed, not what it
+    /// was. Internal logging still has the raw request to hand without
+    /// this type carrying it.
+    TokenTooLong(usize),
+    /// The index of the *repeated* occurrence — deterministic (it is
+    /// always the second, later one, never ambiguous between two equal
+    /// entries) and, like the other variants here, an index rather than
+    /// the value.
+    Duplicate(usize),
+    Unknown(usize),
     MissingOpenid,
 }
 
@@ -859,11 +870,19 @@ impl fmt::Display for ScopeRejection {
             Self::TooManyTokens => {
                 write!(f, "scope: exceeds {MAX_SCOPE_TOKENS} tokens")
             }
-            Self::TokenTooLong(t) => {
-                write!(f, "scope: token exceeds {MAX_SCOPE_TOKEN_BYTES} bytes: {t}")
+            Self::TokenTooLong(i) => {
+                write!(
+                    f,
+                    "scope: token at index {i} exceeds {MAX_SCOPE_TOKEN_BYTES} bytes"
+                )
             }
-            Self::Duplicate(t) => write!(f, "scope: duplicate token: {t}"),
-            Self::Unknown(t) => write!(f, "scope: not in this deployment's catalog: {t}"),
+            Self::Duplicate(i) => write!(f, "scope: token at index {i} is a duplicate"),
+            Self::Unknown(i) => {
+                write!(
+                    f,
+                    "scope: token at index {i} is not in this deployment's catalog"
+                )
+            }
             Self::MissingOpenid => write!(f, "scope: must include openid"),
         }
     }
@@ -901,20 +920,20 @@ pub fn validate_scope(
         return Err(ScopeRejection::TooManyTokens);
     }
     let mut seen: HashSet<&str> = HashSet::with_capacity(tokens.len());
-    for token in &tokens {
+    for (i, token) in tokens.iter().enumerate() {
         if token.is_empty() || !token.bytes().all(is_scope_token_byte) {
             return Err(ScopeRejection::Malformed);
         }
         if token.len() > MAX_SCOPE_TOKEN_BYTES {
-            return Err(ScopeRejection::TokenTooLong((*token).to_owned()));
+            return Err(ScopeRejection::TokenTooLong(i));
         }
         if !seen.insert(token) {
-            return Err(ScopeRejection::Duplicate((*token).to_owned()));
+            return Err(ScopeRejection::Duplicate(i));
         }
     }
-    for token in &tokens {
+    for (i, token) in tokens.iter().enumerate() {
         if !catalog.contains(*token) {
-            return Err(ScopeRejection::Unknown((*token).to_owned()));
+            return Err(ScopeRejection::Unknown(i));
         }
     }
     if !seen.contains("openid") {

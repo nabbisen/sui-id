@@ -88,14 +88,28 @@ Response (`201 Created`):
 ```json
 {
   "client_id": "3f1b9c4e-0a7d-4f8e-9b21-6c5d8e7a2f40",
+  "client_id_issued_at": 1794000000,
   "client_secret": "<shown once>",
+  "client_secret_expires_at": 0,
   "client_name": "My Application",
   "redirect_uris": ["https://app.example.com/callback"],
-  "grant_types": ["authorization_code", "refresh_token"],
+  "grant_types": ["authorization_code"],
+  "response_types": ["code"],
   "token_endpoint_auth_method": "client_secret_post",
-  "scope": "openid email profile"
+  "scope": "email openid profile",
+  "logo_uri": "https://app.example.com/logo.png",
+  "client_uri": "https://app.example.com"
 }
 ```
+
+`client_secret_expires_at` is `0` whenever it appears — RFC 7591's own
+meaning for `0` is "does not expire", not "already expired" — and it
+appears only when a secret was issued (`token_endpoint_auth_method: "none"`
+issues none, and the field is then absent, not `null`). `redirect_uris`,
+`grant_types`, `response_types`, and `scope`'s token list are each echoed
+in one sorted order regardless of what order the request used — note
+`scope` above: the request sent `"openid email profile"`, the response
+reads `"email openid profile"`.
 
 > **Important.** Dynamically registered clients start **disabled**.
 > An administrator must enable the client in the admin panel before it can
@@ -103,9 +117,30 @@ Response (`201 Created`):
 > registrations before granting access.
 
 Supported fields: `redirect_uris` (required), `client_name` (required),
-`scope`, `grant_types`, `token_endpoint_auth_method` (`"client_secret_post"`
-or `"none"` for public clients), `logo_uri`, `client_uri`, `policy_uri`,
+`scope` (**required** — see below), `grant_types`, `response_types`,
+`token_endpoint_auth_method`, `logo_uri`, `client_uri`, `policy_uri`,
 `tos_uri`, `post_logout_redirect_uris`.
+
+- **`token_endpoint_auth_method`** is `"none"`, `"client_secret_basic"`, or
+  `"client_secret_post"`; absent defaults to `"client_secret_basic"` (RFC
+  7591 §2's own default).
+- **`grant_types`** is `["authorization_code"]`, optionally with
+  `"refresh_token"` added; absent defaults to `["authorization_code"]`
+  alone. Requesting `"refresh_token"` also requires `"offline_access"` in
+  `scope`, and vice versa — one without the other is rejected.
+- **`response_types`**, if sent, must be exactly `["code"]`; absent
+  defaults to `["code"]`. No other response type is supported.
+
+**`scope` is required, and this is a deliberate departure from RFC 7591
+§2, where it is OPTIONAL.** A client library that omits it will be
+refused with `invalid_client_metadata` — if you maintain one, send
+`scope` explicitly rather than relying on a default this deployment does
+not have. It must be 1–32 unique, space-separated tokens drawn from this
+deployment's scope catalog (`openid`, plus whatever an administrator has
+added), and **must include `openid`** — an OIDC client that does not
+request `openid` can obtain no identity claims, so a registration that
+omits it is refused rather than silently granted a scope it never asked
+for.
 
 **`redirect_uris` must form one closed profile** (RFC 095): every entry in
 the list must be the same one of —
@@ -123,6 +158,7 @@ A request mixing HTTPS and loopback entries, or using loopback with any
 confidential auth method, is rejected. `logo_uri`, `client_uri`,
 `policy_uri`, `tos_uri` and `post_logout_redirect_uris` must be HTTPS —
 loopback, including numeric loopback, is not accepted for any of these.
+`post_logout_redirect_uris`, if sent, is 1–16 unique canonical HTTPS URIs.
 
 The request body itself is bounded (64 KiB, 16 levels deep, 128 top-level
 members) and rejects a duplicate member, an RFC 7591/OIDC field this
@@ -131,7 +167,16 @@ deployment recognises but does not support, and `software_statement`
 unrecognised extension member is accepted and silently ignored — it is
 never persisted or echoed back.
 
-Errors follow the RFC 7591 `{"error": ..., "error_description": ...}` shape.
+Errors follow the RFC 7591 `{"error": ..., "error_description": ...}`
+shape. A rejected field is named by field, and — for a list-shaped field
+such as `redirect_uris` or `scope` — by the zero-based index of the
+offending entry; the submitted value itself is never echoed back. Every
+response from this endpoint, success or error, carries
+`Cache-Control: no-store` and `Pragma: no-cache`. A missing token, a
+malformed token, and (checked against the store) an unknown, expired, or
+exhausted initial-access token all produce the identical
+`401 Unauthorized` response, with a `WWW-Authenticate: Bearer` header —
+the five states are indistinguishable by design.
 
 ---
 

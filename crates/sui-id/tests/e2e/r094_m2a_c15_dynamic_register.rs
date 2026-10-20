@@ -190,5 +190,8 @@ async fn an_exhausted_token_is_refused() {
         ))
         .await
         .expect("second registration");
-    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    // RFC 095 M3 stage 3, item 4: every invalid-token state is now
+    // 401, not 400 -- an exhausted token is one of the five states this
+    // stage made indistinguishable from the others.
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
 }
