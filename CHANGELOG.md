@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.82.0] — 2026-10-20
+
+**A dependency and security maintenance cut: no behaviour changes.**
+`cargo update` moved the lockfile only — `Cargo.toml`'s pinned versions are
+unchanged.
+
+### Security
+
+- **`rustls` updated from 0.23.45 to 0.23.46, closing four advisories
+  reachable through this project's TLS client path.** *Severity: Medium
+  (highest of the four).* `rustls` reaches this project through `reqwest`, a
+  production dependency of `sui-id-core` used for federation egress — the
+  TLS client that talks to upstream OIDC providers. The four:
+  **RUSTSEC-2026-0346** (Medium 4.0 — `Debug` implementations for client
+  session values could expose TLS secrets in a log or panic message),
+  **RUSTSEC-2026-0349** (Low — an unauthenticated `ServerHello` could
+  downgrade a later connection to classical key exchange),
+  **RUSTSEC-2026-0348** (Low — brotli certificate-decompression could
+  allocate up to 1 GiB before authentication) and **RUSTSEC-2026-0347**
+  (Low — buffered application data could be sent to the outer server after an
+  ECH rejection).
+- **`quinn-proto` updated from 0.11.15 to 0.11.19, closing five more
+  advisories, two rated High 7.5 — none of which were ever reachable from
+  this project.** `reqwest` declares `quinn` as an optional HTTP/3
+  dependency; this workspace does not enable the feature that pulls it in,
+  and `cargo tree -i quinn-proto` finds no path into the build on any
+  target. `cargo audit` reads `Cargo.lock`, which carries the union of every
+  optional dependency's transitive graph regardless of which features are
+  enabled, which is why these showed up in a scan at all. Named here so a
+  reader does not conclude from "two High advisories fixed" that this
+  project was ever exposed to them — it was not.
+
 ## [0.81.0] — 2026-10-20
 
 **A federated sign-in can now complete its own local second factor.** Before
