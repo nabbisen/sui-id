@@ -12,6 +12,13 @@
 > reading at the cut — not a `[gates]` lane, not part of Level B, and not
 > evidence any round must produce. A3.4 passes.
 
+> ## **DONE — released and published 2026-10-20.**
+> Tag `0.82.0` → `78a32ee`; Level B (`workflow_dispatch` `39422507159`, 27
+> jobs, 0 skipped); **`Security audit` green on the same commit**, §D's own
+> step working the first time it was applied; six crates published bottom-up,
+> each dry-run first; `check-published-versions.py` exits **0** and the
+> registry API agrees. Tag and publish authorized explicitly for this release.
+
 **Preparation dispatched** 2026-10-20 —
 [`release-0.82.0-preparation-2026-10-20.md`](release-0.82.0-preparation-2026-10-20.md).
 
