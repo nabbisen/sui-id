@@ -128,8 +128,33 @@ rejected unless both grant policy and scope policy authorize it.
   consent or other browser UI.
 - Dynamic application links require a user action and use
   `rel="noopener noreferrer"` plus no-referrer policy.
-- A browser-network test must observe no request to a registrant-controlled
-  logo origin while displaying dynamic-client consent.
+- ~~A browser-network test must observe no request to a registrant-controlled
+  logo origin while displaying dynamic-client consent.~~ **Superseded
+  2026-10-21, before stage 5 was dispatched.** See the note below.
+
+> **The third bullet was a verification method, and it was the wrong one.**
+> It named a *browser* observation; RFC 095 `:269-270` places the obligation
+> on the server — *"Consent and other browser UI must not **emit** an image
+> or other automatic request for a dynamically registered `logo_uri`"* — and
+> `:572` states the criterion as *"Dynamically supplied logo URIs cause no
+> automatic server or browser request."*
+>
+> **Asserting the URL is absent from the rendered HTML tests the rule
+> itself**; a browser observation tests a consequence of it through a third
+> party's implementation, non-deterministically, and can pass for the wrong
+> reason. The workspace has no browser driver — measured 2026-10-21, zero
+> hits for playwright, webdriver, chromedriver, fantoccini, thirtyfour and
+> headless Chrome across every manifest, workflow and script — and adding one
+> to an IdP for a property provable from a string is a supply-chain and CI
+> cost with no evidence gain.
+>
+> **Replaced by:** a rendered-HTML assertion that a dynamic client's
+> `logo_uri` appears nowhere in the consent response, paired with an
+> admin-client control proving the logo is not simply dropped for everyone,
+> and an end-to-end case through `/oauth2/authorize`.
+>
+> **This departs from this document, not from RFC 095**, which is unchanged
+> and needs no amendment. The gloss was the architect's.
 
 ## Response/error assertions
 

@@ -117,9 +117,23 @@ observation, not an assertion on a value.
   by consent or any other browser UI.
 - Dynamic application links require a user action and carry
   `rel="noopener noreferrer"` plus a no-referrer policy.
-- **A browser-network test must observe no request to a registrant-controlled
-  logo origin** while dynamic-client consent is displayed. That is the stage's
-  real deliverable; the first two are cheap without it.
+- ~~A browser-network test must observe no request to a registrant-controlled
+  logo origin while dynamic-client consent is displayed.~~ **Superseded
+  2026-10-21**, before stage 5 was dispatched. RFC 095 `:269-270` puts the
+  obligation on what the server *emits*, not on what a browser is observed
+  not to do; a rendered-HTML assertion tests the rule directly and the
+  workspace has no browser driver to add. Recorded in
+  [`metadata-validation.md`](metadata-validation.md) §*Browser presentation*;
+  RFC 095 is unchanged.
+
+**Measured 2026-10-21 while dispatching this stage, and it is not "unbuilt":**
+the consent screen emits `<img src>` for *any* client's `logo_uri` with no
+provenance check (`sui-id-web/src/pages/oidc.rs:63-69`,
+`handlers/oidc.rs:211`), so RFC 095 `:269` is violated at the emit level
+today. No request is actually made — the global CSP's `img-src 'self' data:`
+blocks it — which also means **RFC 008's logo feature has never worked for
+admin-registered clients either**, under a caption that says one was
+provided. That second finding goes to `@nabbisen`. It is not settled here.
 
 ### Stage 6 — the legacy-candidate report, read-only
 
@@ -158,13 +172,23 @@ were met by C15 in cycle C.
 
 ## E — order, and what is dispatched now
 
-Stages 2 → 3 → 4 → 5 → 6, one open dispatch at a time. Stage 2 is dispatched
-with this plan: it is the largest, it blocks nothing, and stages 3 and 4
-assert on values it defines.
+Stages 2 → 3 → **5** → 4 → 6, one open dispatch at a time. Stage 2 was
+dispatched with this plan: it is the largest, it blocks nothing, and stages 3
+and 4 assert on values it defines.
 
 **Stage 4 gets an independent design review before it is dispatched.** It is
 the one security-bearing stage here, and the same rule that applied to 096's
 security path applies to it.
+
+> **Reordered 2026-10-21: stage 5 goes before stage 4.** Stage 4's design is
+> written but blocked on a question that is `@nabbisen`'s alone — who may
+> perform a design review here — and stage 5 depends on nothing in stage 4.
+> Holding stage 5 behind that ruling would idle the implementation role for a
+> decision it does not need, against the standing constraint that process must
+> not be charged where it buys nothing. Stage 5 needs no design review of its
+> own: RFC 095 states its rule prescriptively, so there is no design latitude
+> to review — only a rule to meet and evidence to produce.
+> Dispatched: [`stage5-browser-presentation-2026-10-21.md`](stage5-browser-presentation-2026-10-21.md).
 
 ## F — not in M3, and not proposed
 

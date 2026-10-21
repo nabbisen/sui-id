@@ -18,6 +18,11 @@ and four kinds of verification. **Stage 2 landed** `7cc1488` (Level B, 27 jobs, 
 **Stage 4's design is written and awaiting one ruling that is not the
 architect's to make, not dispatched**:
 [`stage4-design-the-authentication-grant-matrix-2026-10-21.md`](stage4-design-the-authentication-grant-matrix-2026-10-21.md).
+**Stage 5 is dispatched ahead of it** —
+[`stage5-browser-presentation-2026-10-21.md`](stage5-browser-presentation-2026-10-21.md)
+— because it depends on nothing stage 4 settles, and idling the
+implementation role behind a ruling it does not need would cost the cycle
+nothing but time. The order is now 2 → 3 → **5** → 4 → 6.
 
 **Measured while writing that design, and it reshapes the stage:**
 `token_endpoint_auth_method` is accepted at registration, validated by stage
@@ -34,6 +39,18 @@ one field, and the design behind it reasoned about the wrong function —
 also dispatched an "independent design review" to the implementation role,
 which RFC 000 `:39-41` forbids rather than permits. Both are recorded in the
 design's own header.*
+
+**Measured while dispatching stage 5:** the consent screen emits an
+`<img src>` for *any* client's `logo_uri` with no `registered_via` check, so
+RFC 095 `:269`'s *"must not emit an image … for a dynamically registered
+`logo_uri`"* does not hold at the emit level. No request is made — the global
+CSP's `img-src 'self' data:` blocks it on every deployment sui-id controls —
+so this is a rule met by a header the emitting code knows nothing about, not
+an exploitable hole. **The same CSP also blocks an admin-registered client's
+logo**, which means RFC 008's logo feature has never worked in a conforming
+browser, under a caption asserting a logo was provided. That second finding
+is `@nabbisen`'s to dispose of, not the architect's and not the
+implementation role's.
 
 **`scope` is required at registration** as of stage 2 — a deliberate
 departure from RFC 7591 §2's optionality, recorded in
