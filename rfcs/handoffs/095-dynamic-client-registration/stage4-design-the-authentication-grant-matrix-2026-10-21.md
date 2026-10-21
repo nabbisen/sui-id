@@ -154,19 +154,51 @@ decidable from `confidential` and the request alone.
 
 ## C — the design
 
-### C1 — persist the three fields, or decide not to
+### C1 — persist the three fields — **settled: nullable, and visible**
 
 Rows 4 and 6 are unreachable without a stored `token_endpoint_auth_method`.
 §C4 is unreachable without stored `grant_types`.
 
-**The migration default is the real decision.** Existing rows record no
-method. `client_secret_basic` is RFC 7591's default and stage 2's, but it
-retroactively asserts a method for every pre-column client, and an
-administrator-created client using `post` would begin to be rejected under
-C2. A nullable column where `NULL` means *unrecorded*, exempt from the C2
-check, cannot break a working deployment on upgrade but leaves a permanent
-unchecked class. **I incline to nullable and I am not settling it** — it is
-one of the three decisions §D hands to the review.
+**Decision: a nullable column, `NULL` meaning *unrecorded*, exempt from the
+C2 check — and the exempt class must be visible to the operator.**
+
+**Why not `client_secret_basic`.** It is RFC 7591's default and stage 2's
+default for *new* registrations, and that is exactly why it is wrong here:
+applying a default for a value the registrant supplied is not the same act
+as applying it to a row where nobody ever supplied anything. Backfilling
+`basic` **asserts a fact that was never recorded**, which is the inference
+RFC 095 `:352-353` forbids by name for `registered_via` — *"must not infer
+provenance from shape, timestamps, names, or missing application URIs"* —
+and which stage 6 exists to avoid. It would also break working deployments
+silently: an administrator-created client presenting its secret in the body
+would start being refused under C2, with an error about a method it never
+chose.
+
+**Backfilling from evidence is not available, and nobody should propose it
+later.** Measured: `client.dynamic_register` records the client id and name
+and no auth method; `confidential` and `secret_hash` establish that a
+secret exists, not which channel carries it. There is nothing to derive
+from.
+
+**What `NULL` costs, and the half of the decision that is not the column.**
+A permanently unchecked class is a real cost and it must not be an
+invisible one. The exemption is only defensible if an operator can see it:
+a client whose method is unrecorded must *read* as unrecorded wherever
+clients are listed — not blank, and not rendered as a guessed value — and
+the migration must report how many rows it left that way. A silent
+exemption is the failure the second half of this project's standard is
+about.
+
+**The class is narrower than it first looks.** `authenticate_client`
+returns `Ok(())` for `!confidential` before inspecting any secret, so a
+public client has no channel to police. The unchecked class is
+**confidential clients registered before the column existed** — nothing
+else.
+
+**Scope bound.** Stage 4 adds the column, the `NULL` exemption and the
+visibility. It does **not** add an administrator action for recording a
+method on an existing client; that is the exit path from the unchecked
+class and it is scheduled in §G, not built here.
 
 ### C2 — enforce the channel in `authorize::authenticate_client`
 
@@ -177,17 +209,42 @@ no code introspection or revocation runs. Whether the same check should also
 go to the other function is a genuinely separate decision and is **not** part
 of this stage.
 
-**One consequence to decide explicitly, not inherit.** The first version
-said "follow the existing `DUMMY_PHC` pattern; it is there for this reason."
-That pattern is in the *other* function. **This one has none.** So adding a
-channel check here either introduces uniform-timing handling for the first
-time — a larger change than "follow the existing one" — or ships without it.
-Which, and why, is an answer this stage owes before it is dispatched.
+**The timing question — settled, and my own framing of it was wrong.**
+This section previously said the choice was between *"introducing
+uniform-timing handling for the first time"* and *"shipping without it"*.
+That is a false pair. **RFC 123 D4 is an Implemented rule that already
+governs this code**: *"every branch that rejects before reaching a real
+`verify_password` call runs a dummy one first"*, implemented in
+`oauth_token::authenticate_client` (`:269-305`) and measured there at ~34ms
+hashing against under 200µs unequalised.
 
-*A related property of this function, unfixed, is recorded in
-`.git-exclude/` rather than here: it concerns an existing closure
-prerequisite, `.github/SECURITY.md` reserves severity and timeline to the
-owner, and the repository is public.*
+`authorize::authenticate_client` has **three** such branches today —
+`!confidential`, no stored hash, no provided secret — and a dummy on none
+of them. It is not a function without the pattern; it is **the one place on
+this path that does not comply with a rule already in force.** A bare
+channel check would add a fourth non-compliant branch.
+
+**Decision: add the channel check, and bring this function into RFC 123 D4
+compliance in the same change.** The pattern is not being invented — it is
+copied from the function next door, with the same decoy and the same
+measurement method. Shipping a conformance fix that knowingly deepens a
+different conformance violation is the thing to avoid here; the two belong
+in one round because they are one function and one test harness.
+
+**The error must still say what went wrong.** A `post` client that presents
+Basic gets `invalid_client` as RFC 6749 §5.2 requires, with a description
+naming the channel. The registered method is not a secret — the registrant
+received it in their own registration response — so a clear description
+costs nothing and saves an integrator a debugging session. Vague is not
+safer here; it is only vaguer.
+
+**This closes the adjacent finding, so its disclosure becomes a question.**
+The property above is the one recorded, unfixed, in
+`.git-exclude/reviewed/rfc-095-stage4-design-verification-2026-10-21.md`
+§4 and bearing on RFC 123's closure. Once fixed it may be stated publicly,
+but **how** it is stated is `@nabbisen`'s: `.github/SECURITY.md` reserves
+severity and timeline to him. The dispatch must therefore return the
+`CHANGELOG` wording for that half rather than writing it.
 
 ### C3 — reject both channels present
 
@@ -203,11 +260,57 @@ it."* Sixteen cases, not eight. **This depends on C1**: there is no stored
 `grant_types` to check a refresh request against. Scope policy is stored
 (`allowed_scopes`) and is checkable today.
 
-## D — the implementation questions, for the dispatch
+## D — the three decisions, and who settled them
 
-Not for the implementation role to rule on now; these are what the eventual
-dispatch must settle and state: the C1 default, whether C2 introduces
-uniform timing, and whether C3 ships independently.
+**All three are settled and the dispatch carries them**; none is the
+implementation role's to reopen.
+
+| | Decision | Settled by |
+|---|---|---|
+| **C1** | Nullable column, `NULL` = unrecorded, exempt from C2, and the exempt class made visible | The architect, at the owner's request |
+| **C2** | Add the channel check **and** bring the function into RFC 123 D4 compliance in the same change | The architect, at the owner's request |
+| **C3** | Ships, and may ship independently of C1 | `@nabbisen`, 2026-10-22 |
+
+**The architect settled C1 and C2 because the owner asked him to**, in
+those words on 2026-10-22: *"C1, C2: Review it carefully by yourself with
+my fundamental philosophy."* That is the `ROADMAP.md` §S1c exception —
+self-review is prohibited by default and *"permitted only where he asks for
+it, and the record must say he asked"*. This row is that record.
+
+**C3**, in his words the same day: *"Yes, if required and reasonable."* It
+is required — row 8 does not hold and RFC 6749 §2.3.1 forbids presenting
+two methods — and reasonable, since it needs no column and no migration.
+
+## G — what to record, prepare for, or schedule beyond this stage
+
+Asked for directly, 2026-10-22. Five items; none blocks stage 4, and the
+first two are created by its own decisions.
+
+1. **An exit path from C1's unchecked class.** Nullable leaves confidential
+   pre-column clients permanently unverified against their channel. An
+   administrator action that records a method on an existing client empties
+   that class one row at a time. It is a new durable write, so it needs an
+   inventory row and a class under RFC 094 — real work, not a flag.
+   **Schedule: `0.84.0` or later. Not stage 4.**
+2. **Whether the column should ever become required.** Only answerable once
+   item 1 exists and the class is observably empty on a real deployment.
+   Recording the question now so that "make it NOT NULL" is never proposed
+   as a tidy-up before the exit path exists. **No date; gated on item 1.**
+3. **The same channel check on `oauth_token::authenticate_client`**
+   (introspection and revocation). §C2 notes it is a separate decision and
+   this stage does not touch it. Those endpoints have their own RFC 7009 /
+   7662 semantics and deserve their own measurement. **Schedule: with
+   M2b's auth-path tranche, not before.**
+4. **RFC 095 `:362-366`'s erratum** — the sentence forbidding a separate
+   `set_registered_via` write in the dynamic path, which the RFC 094
+   Stage-0 classification contradicts and G17 enforces against. The text is
+   the thing out of step. **`@nabbisen`'s, no date.**
+5. **The two gate comments describing the self-review question as open** —
+   `scripts/check-rfc-integrity.py` condition 9 and its twin in
+   `scripts/tests/test_rfc_integrity.py`. §S1c asked for this on 2026-10-01
+   and it is still outstanding; it cost this engagement a wrong escalation
+   and will cost the next one the same. **`@nabbisen`'s, and the cheapest
+   item on this list.**
 
 ## E — withdrawn: the question was already answered
 
