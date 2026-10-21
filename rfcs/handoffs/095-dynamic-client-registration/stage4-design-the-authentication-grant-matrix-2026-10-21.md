@@ -165,7 +165,8 @@ retroactively asserts a method for every pre-column client, and an
 administrator-created client using `post` would begin to be rejected under
 C2. A nullable column where `NULL` means *unrecorded*, exempt from the C2
 check, cannot break a working deployment on upgrade but leaves a permanent
-unchecked class. **I incline to nullable and I am not ruling it** — see §E.
+unchecked class. **I incline to nullable and I am not settling it** — it is
+one of the three decisions §D hands to the review.
 
 ### C2 — enforce the channel in `authorize::authenticate_client`
 
