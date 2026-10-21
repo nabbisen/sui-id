@@ -13,8 +13,17 @@ not update it when the round closed.*
 not the two an older label named, because the remainder spans four file sets
 and four kinds of verification. **Stage 2 landed** `7cc1488` (Level B, 27 jobs, 0 skipped) —
 [`stage2-the-field-rules-2026-10-20.md`](stage2-the-field-rules-2026-10-20.md).
-**Stage 3 is dispatched**:
+**Stage 3 landed** `2bdc6af` (Level B, 27 jobs, 0 skipped) —
 [`stage3-the-registration-response-2026-10-21.md`](stage3-the-registration-response-2026-10-21.md).
+**Stage 4 is out for independent design review, not dispatched**:
+[`stage4-design-the-authentication-grant-matrix-2026-10-21.md`](stage4-design-the-authentication-grant-matrix-2026-10-21.md).
+
+**Measured while writing that design, and it reshapes the stage:**
+`token_endpoint_auth_method` is accepted at registration, validated by stage
+2 and echoed by stage 3, but **never persisted** — `ClientRow` has no such
+field and no migration adds the column. Three of the matrix's eight rows
+therefore do not hold today, two of which need a schema change. RFC 095
+`:362-366` states the C15 insert writes the auth method; it does not.
 
 **`scope` is required at registration** as of stage 2 — a deliberate
 departure from RFC 7591 §2's optionality, recorded in
