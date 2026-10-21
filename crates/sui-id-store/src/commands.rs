@@ -4083,6 +4083,19 @@ impl SealedCommandEvent<C15> for C15Event {
 /// `set_registered_via_within_tx` call below is not redundant with the row
 /// just inserted — it is the only place that column is ever actually set
 /// for this path.
+///
+/// **Two statements, one transaction, and that is the registered shape.**
+/// `contracts/write-commands.toml` declares C15's mutation surface as
+/// *"guarded `client_registration_token::consume`, `clients::create`,
+/// `set_registered_via` in one RFC 094 transaction"*, and G17 checks it.
+/// RFC 095 `:362-366` reads differently — it says the insert writes the
+/// source *"in one statement"* and that separate `set_registered_via`
+/// writes are *"forbidden in the dynamic path"*. **The code is not being
+/// changed to match that sentence**; the two-call shape is the RFC 094
+/// Stage-0 classification, atomicity is preserved by the transaction, and
+/// `create_leaves_registered_via_at_the_table_default` exists to stop
+/// exactly that "fix". The RFC sentence is what is out of step, and
+/// correcting an Accepted RFC's text is not the implementation's call.
 pub async fn register_client_dynamically(
     db: &crate::Database,
     token_hash: String,

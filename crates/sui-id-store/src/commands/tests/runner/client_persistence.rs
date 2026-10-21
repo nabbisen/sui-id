@@ -32,13 +32,23 @@ async fn create_persists_consent_policy_and_application_identity_uris() {
 }
 
 /// `registered_via` is deliberately excluded from this round-trip: it is
-/// the one field `create` still does not persist, by design (C11's own
-/// dedicated, separately-audited writer is the only path to a non-default
-/// value, and this dispatch's own "what this does not decide" section
-/// forbids routing creation through the C09/C10/C11 setters). Pinning that
-/// here means a future attempt to "fix" it by adding the column to this
-/// `INSERT` fails a test that says why, rather than silently changing
-/// behaviour C15 already depends on.
+/// the one field `create` still does not persist, by design. C11
+/// (`set_registered_via`) is the only path to a non-default value, and
+/// the dispatch that built this forbids routing creation through the
+/// C09/C10/C11 setters. Pinning that here means a future attempt to
+/// "fix" it by adding the column to this `INSERT` fails a test that says
+/// why, rather than silently changing behaviour C15 already depends on.
+///
+/// *Corrected 2026-10-21: this said C11 was a "separately-audited"
+/// writer. It is not. `contracts/write-commands.toml` gives it class
+/// `I` — an internal mutation primitive, `sealed = false`, no audit
+/// event — which `command-inventory.md` defines as an explicit exclusion
+/// from Class A. The guard is still right; the reason given for it
+/// inverted a security classification, which is worse than giving none.
+/// The architect proposed removing this guard on 2026-10-21, on the RFC
+/// 095 `:362-366` reading that a separate `set_registered_via` write is
+/// forbidden in the dynamic path, and withdrew that on reading this test
+/// and the inventory. The guard did its job.*
 #[tokio::test]
 async fn create_leaves_registered_via_at_the_table_default() {
     let db = fresh_db();

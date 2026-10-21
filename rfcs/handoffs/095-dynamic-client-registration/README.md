@@ -30,17 +30,28 @@ the cycle nothing but time. The order is now 2 → 3 → **5** → 4 → 6.
 legacy-dynamic-candidates`. **Stage 4 is the only stage of `0.83.0` not
 built**, and it is undispatched pending the self-review ruling.
 
-**Found by stage 6's round and not yet fixed:** C15's dynamic path calls
-`clients::create_within_tx` and then `clients::set_registered_via_within_tx`
-(`commands.rs:4102-4103`), which RFC 095 `:364-366` forbids by name —
-*"Separate `set_registered_via` or `update_app_identity` writes are
-forbidden in the dynamic path."* **No security consequence**: both writes
-are inside the one Class-A transaction, so no reader observes the
-intermediate row, and the client is created disabled regardless. It is a
-conformance divergence between the code and an Accepted RFC. The proposed
-repair — write `registered_via` in `create_within_tx`'s own INSERT and drop
-the follow-up call — is ordinary implementation work for a round of its
-own, and nothing is blocked by it.
+**Found by stage 6's round; the repair was proposed and then withdrawn.**
+C15's dynamic path calls `clients::create_within_tx` and then
+`clients::set_registered_via_within_tx` (`commands.rs:4102-4103`), which
+RFC 095 `:364-366` forbids by name — *"Separate `set_registered_via` or
+`update_app_identity` writes are forbidden in the dynamic path."*
+
+**The code is right and the RFC sentence is not.** Measured 2026-10-21:
+`contracts/write-commands.toml` declares that two-call shape as C15's
+mutation surface and G17 enforces it; C11 (`set_registered_via`) is class
+`I` there — an internal mutation primitive, `sealed = false`, no audit
+event — which `command-inventory.md` defines as an explicit exclusion from
+Class A; and `create_leaves_registered_via_at_the_table_default` exists
+specifically to fail the edit that was proposed. Atomicity is held by the
+transaction either way, so nothing is at risk.
+
+**What is actually needed is an erratum on RFC 095 `:362-366`.** That one
+belongs to `@nabbisen`.
+
+Amending an Accepted RFC's text is not the architect's to settle, and under
+`ROADMAP.md` §S1a neither is reviewing such a change. Three
+doc comments that described C11 as "separately-audited" are corrected;
+nothing else in the code moves.
 
 **Measured while writing that design, and it reshapes the stage:**
 `token_endpoint_auth_method` is accepted at registration, validated by stage

@@ -64,9 +64,13 @@ pub async fn create(db: &Database, c: &ClientRow) -> StoreResult<()> {
 /// (`create`'s own use, via deref) or a `WriteTx`'s transaction.
 ///
 /// **Does not set `registered_via`** — that column alone is stamped
-/// afterward by its own dedicated, separately-audited writer
-/// (`set_registered_via`, C11); a caller that needs a non-default value
-/// for it must call that writer in the same transaction. `consent_policy`
+/// afterward by `set_registered_via`, which the command inventory
+/// classifies as **C11, class `I`**: an *internal mutation primitive*,
+/// `sealed = false`, callable only beneath a named A/P/O capability and
+/// carrying **no audit event of its own**. Class I is an explicit
+/// exclusion from Class A, not a bypass and not a separate audit. A
+/// caller that needs a non-default value must call it in the same
+/// transaction, which is what C15 does. `consent_policy`
 /// and the application-identity URIs (`logo_uri`/`homepage_uri`/
 /// `privacy_policy_uri`/`tos_uri`) **are** written here, from the row —
 /// fixed 2026-10-02 (the "persistence bug"): the `INSERT` previously

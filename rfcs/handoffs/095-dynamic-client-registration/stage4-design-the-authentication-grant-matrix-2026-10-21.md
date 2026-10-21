@@ -68,21 +68,38 @@ C15 insert writes *"…scopes, auth method, grants, response types, consent
 policy, and timestamps in one statement."* Scopes and consent policy are
 written; auth method, grants and response types are not.
 
-> **Corrected 2026-10-21, and it is worse than this said.** The paragraph
-> above also lists `source`, which I treated as written correctly. It is
-> written — but by a *second* statement, which the very next sentence of
-> the RFC forbids by name: *"Separate `set_registered_via` or
-> `update_app_identity` writes are forbidden in the dynamic path."* C15
-> (`commands.rs:4102-4103`) calls `clients::create_within_tx` and then
-> `clients::set_registered_via_within_tx`, because
-> `create_within_tx`'s INSERT has no `registered_via` column
-> (`clients.rs:65-68` documents the omission). **No security consequence**
-> — both writes are inside the one Class-A transaction, so no reader sees
-> the intermediate row, and the client is created disabled regardless —
-> but the code does not conform to the Accepted RFC. Surfaced by stage 6's
-> round through a test fixture that hit the same thing; recorded in
-> `.git-exclude/reviewed/rfc-095-stage6-legacy-candidates-2026-10-21.md`
-> §3. Of the six nouns, only two are written as described.
+> **Corrected 2026-10-21.** The paragraph above also lists `source`, which
+> I treated as written by the insert. It is written by a *second*
+> statement — `commands.rs:4102-4103` calls `clients::create_within_tx`
+> and then `clients::set_registered_via_within_tx` — and the next sentence
+> of the RFC says *"Separate `set_registered_via` or `update_app_identity`
+> writes are forbidden in the dynamic path."*
+>
+> **Corrected again the same day, and this time against the code rather
+> than against the RFC.** I proposed repairing the code to match that
+> sentence and **withdrew it on measurement.** The two-call shape is the
+> registered design, not a drift from it:
+>
+> - `contracts/write-commands.toml` declares C15's mutation surface as
+>   *"guarded `client_registration_token::consume`, `clients::create`,
+>   `set_registered_via` in one RFC 094 transaction"*, and **G17 enforces
+>   that row**.
+> - C11 (`set_registered_via`) is **class `I`** there — an *internal
+>   mutation primitive*, `sealed = false`, no audit event.
+>   `command-inventory.md` defines class I as an **explicit exclusion from
+>   Class A, not a bypass**. So it is deliberately unaudited, by
+>   classification, and the doc comments calling it "separately-audited"
+>   had it backwards; those are corrected.
+> - `create_leaves_registered_via_at_the_table_default`
+>   (`commands/tests/runner/client_persistence.rs`) exists **specifically**
+>   to fail the edit I proposed, and says so in its own doc comment.
+>
+> Atomicity — the property *"one statement"* was reaching for — is held by
+> the transaction, so nothing is at risk either way. **The RFC sentence is
+> what is out of step with the built design, and amending an Accepted
+> RFC's text is `@nabbisen`'s.** Of the six nouns, two are written by the
+> insert and one by a registered companion write inside the same
+> transaction.
 
 **Whether that needs an RFC amendment is §E's question, not this document's
 decision.** RFC 095 is Accepted, and RFC 000 makes a material correction to
