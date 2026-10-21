@@ -49,6 +49,22 @@ C15 insert writes *"…scopes, auth method, grants, response types, consent
 policy, and timestamps in one statement."* Scopes and consent policy are
 written; auth method, grants and response types are not.
 
+> **Corrected 2026-10-21, and it is worse than this said.** The paragraph
+> above also lists `source`, which I treated as written correctly. It is
+> written — but by a *second* statement, which the very next sentence of
+> the RFC forbids by name: *"Separate `set_registered_via` or
+> `update_app_identity` writes are forbidden in the dynamic path."* C15
+> (`commands.rs:4102-4103`) calls `clients::create_within_tx` and then
+> `clients::set_registered_via_within_tx`, because
+> `create_within_tx`'s INSERT has no `registered_via` column
+> (`clients.rs:65-68` documents the omission). **No security consequence**
+> — both writes are inside the one Class-A transaction, so no reader sees
+> the intermediate row, and the client is created disabled regardless —
+> but the code does not conform to the Accepted RFC. Surfaced by stage 6's
+> round through a test fixture that hit the same thing; recorded in
+> `.git-exclude/reviewed/rfc-095-stage6-legacy-candidates-2026-10-21.md`
+> §3. Of the six nouns, only two are written as described.
+
 **Whether that needs an RFC amendment is §E's question, not this document's
 decision.** RFC 095 is Accepted, and RFC 000 makes a material correction to
 it an act with its own procedure.

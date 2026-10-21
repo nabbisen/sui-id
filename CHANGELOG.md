@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- New admin subaction: `sui-id admin legacy-dynamic-candidates [--config PATH]`
+  (RFC 095 M3 stage 6). Read-only — it lists `clients` rows that a
+  pre-RFC-094 bug (commit `48946f6` through `930513b`) may have left
+  mislabelled `admin` when they were really self-registered via RFC 7591.
 - `POST /oauth2/register` now accepts `response_types` (RFC 095 M3 stage 2).
   It was previously an outright-rejected unsupported member; the only
   accepted value is `code`, which is also the default when the member is

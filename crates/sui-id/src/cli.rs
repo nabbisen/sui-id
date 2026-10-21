@@ -33,6 +33,7 @@ pub(crate) const ADMIN_SUBACTIONS: &[&str] = &[
     "rotate-key",
     "rotate-metrics-token",
     "issue-registration-token",
+    "legacy-dynamic-candidates",
 ];
 
 /// RFC 107: the one list of flags that take a value, replacing the
@@ -161,6 +162,7 @@ pub(crate) async fn run_admin_subcommand(args: &[String]) -> Result<()> {
         Some("rotate-key") => run_admin_rotate_key(args).await,
         Some("rotate-metrics-token") => run_admin_rotate_metrics_token(args).await,
         Some("issue-registration-token") => run_admin_issue_registration_token(args).await,
+        Some("legacy-dynamic-candidates") => run_admin_legacy_dynamic_candidates(args).await,
         Some(known) if ADMIN_SUBACTIONS.contains(&known) => unreachable!(
             "{known} is listed in ADMIN_SUBACTIONS but has no dispatch arm above -- add one"
         ),
@@ -693,6 +695,7 @@ USAGE:
     sui-id admin rotate-key [--generate-new-key | --new-key PATH] [--yes] [--config PATH]
     sui-id admin rotate-metrics-token [--config PATH]
     sui-id admin issue-registration-token [--max-uses N] [--note TEXT] [--config PATH]
+    sui-id admin legacy-dynamic-candidates [--config PATH]
     sui-id --dev [--dev-bind ADDR] [--dev-db PATH] [--dev-seed PATH]
                  [--dev-admin-password STR] [--dev-client-secret STR]
     sui-id --print-sample-config
@@ -759,6 +762,13 @@ SUBCOMMANDS:
                              dynamic client registration. The raw token
                              is printed to stdout ONCE. Accepts
                              --max-uses N (default 1) and --note TEXT.
+    admin legacy-dynamic-candidates
+                             Read-only (RFC 095). Lists `clients` rows a
+                             pre-RFC-094 bug (2026-07-02 to 2026-10-02)
+                             may have left mislabelled `admin` when they
+                             were really self-registered. Writes nothing;
+                             an empty result does not mean none exist —
+                             see docs/src/guides/upgrade.md.
     setup                    Headless initialization (RFC 077). Creates the
                              first administrator and bootstraps a signing
                              key without the GUI wizard. Requires
@@ -979,6 +989,216 @@ pub(crate) async fn run_admin_issue_registration_token(args: &[String]) -> Resul
     println!("    -H 'Content-Type: application/json' \\");
     println!(
         "    -d '{{\"client_name\":\"My App\",\"redirect_uris\":[\"https://app.example/cb\"]}}'"
+    );
+
+    Ok(())
+}
+
+/// RFC 008's handler bug: `clients::create` discarded `registered_via`
+/// between these two commits (inclusive start, exclusive end), so a
+/// dynamically registered client's row landed on the column's own
+/// `DEFAULT 'admin'`.
+const LEGACY_WINDOW_START_COMMIT: &str = "48946f6";
+const LEGACY_WINDOW_START_DATE: &str = "2026-07-02";
+const LEGACY_WINDOW_END_COMMIT: &str = "930513b";
+const LEGACY_WINDOW_END_DATE: &str = "2026-10-02";
+
+/// The oldest `audit_seq` across both evidence categories, if any — what
+/// a chain-verification range must reach back to in order to cover every
+/// row this report's output names. `None` means neither category has a
+/// row to anchor a range to.
+fn oldest_evidence_seq(
+    report: &sui_id_store::repos::audit::LegacyDynamicCandidateReport,
+) -> Option<i64> {
+    report
+        .candidates
+        .iter()
+        .map(|c| c.audit_seq)
+        .chain(report.unresolved.iter().map(|u| u.audit_seq))
+        .min()
+}
+
+/// Renders the full report as text. **Pure and synchronous** — no I/O, no
+/// database access — so §7's empty-case requirement ("the rendered output
+/// for zero candidates contains the incompleteness statement and does not
+/// contain a bare zero-count claim") is assertable directly against this
+/// function's return value, not against captured stdout.
+///
+/// `chain`, when `Some`, is `(oldest_seq, newest_seq, report)` from a
+/// [`sui_id_store::repos::audit::verify_chain_tail`] call the caller
+/// already ran over `[oldest_seq, newest_seq]` — this function only
+/// formats that result, it does not decide the range or run the check.
+fn render_legacy_dynamic_candidate_report(
+    report: &sui_id_store::repos::audit::LegacyDynamicCandidateReport,
+    chain: Option<(i64, i64, &sui_id_store::repos::audit::ChainVerifyReport)>,
+) -> String {
+    use std::fmt::Write;
+    let mut out = String::new();
+    let w = &mut out;
+
+    let _ = writeln!(
+        w,
+        "RFC 095 legacy dynamic-registration candidate report (read-only; nothing here writes to the database)."
+    );
+    let _ = writeln!(w);
+    let _ = writeln!(
+        w,
+        "Historical ambiguity window: {LEGACY_WINDOW_START_COMMIT} ({LEGACY_WINDOW_START_DATE}) \
+         through {LEGACY_WINDOW_END_COMMIT} ({LEGACY_WINDOW_END_DATE})."
+    );
+    let _ = writeln!(
+        w,
+        "Within that window, `clients::create` discarded `registered_via`, and the audit \
+         row that would identify a dynamic registration was written best-effort: if that \
+         write failed, the registration still succeeded and left no trace at all. A client \
+         with no `client.dynamic_register` audit row is therefore not evidence of anything \
+         — it is a gap this report cannot see, not evidence that nothing happened."
+    );
+    let _ = writeln!(w);
+
+    if report.candidates.is_empty() {
+        let _ = writeln!(
+            w,
+            "No legacy_unstamped_dynamic_candidate is visible in the evidence this report is \
+             permitted to use. This does NOT mean no such client exists — the historical \
+             best-effort audit cannot prove completeness, so no \"zero candidates\" claim is \
+             being made. See the incompleteness note above."
+        );
+    } else {
+        let n = report.candidates.len();
+        let _ = writeln!(
+            w,
+            "{n} legacy_unstamped_dynamic_candidate(s) FOUND in the evidence available — not \
+             necessarily {n} that exist. The same incompleteness applies here: a dynamically \
+             registered client with no surviving audit row would not appear in this list \
+             either."
+        );
+        let _ = writeln!(w);
+        for c in &report.candidates {
+            let _ = writeln!(
+                w,
+                "  legacy_unstamped_dynamic_candidate: client_id={} name={:?} \
+                 created_at={} is_disabled={} is_deleted={} audit_seq={} audit_at={}",
+                c.client_id,
+                c.client_name,
+                c.created_at.to_rfc3339(),
+                c.is_disabled,
+                c.is_deleted,
+                c.audit_seq,
+                c.audit_at.to_rfc3339(),
+            );
+        }
+    }
+
+    let _ = writeln!(w);
+    let _ = writeln!(
+        w,
+        "Audit-chain verification for the evidence above (informational, read-only):"
+    );
+    match chain {
+        Some((oldest, newest, chain)) => {
+            let limit = newest - oldest + 1;
+            let _ = writeln!(
+                w,
+                "  verified seq range [{oldest}, {newest}] or older ({limit} rows read back \
+                 from the tail, which reaches at least this far -- further if `seq` has any \
+                 gaps): checked={}, broken_at_seq={:?}, legacy_unhashed={}.",
+                chain.checked, chain.broken_at_seq, chain.legacy_unhashed
+            );
+            if chain.legacy_unhashed != 0 {
+                let _ = writeln!(
+                    w,
+                    "  legacy_unhashed is nonzero, which should not happen for this window \
+                     (the hash chain predates `registered_via`) — this is a finding, not a \
+                     formality."
+                );
+            }
+            if chain.broken_at_seq.is_some() {
+                let _ = writeln!(
+                    w,
+                    "  broken_at_seq is set — the chain itself may be compromised in or \
+                     before this range. Treat every row in it, candidate or not, as unverified."
+                );
+            }
+        }
+        None => {
+            let _ = writeln!(
+                w,
+                "  no client.dynamic_register evidence row exists to anchor a verification \
+                 range to, so none was run for this report. This says nothing about the rest \
+                 of the audit log."
+            );
+        }
+    }
+
+    if !report.unresolved.is_empty() {
+        let _ = writeln!(w);
+        let _ = writeln!(
+            w,
+            "client.dynamic_register audit rows that do not resolve to any client row ({}) — \
+             more alarming than a candidate, not a candidate themselves:",
+            report.unresolved.len()
+        );
+        for u in &report.unresolved {
+            let _ = writeln!(
+                w,
+                "  unresolved: audit_seq={} audit_at={} target={:?}",
+                u.audit_seq,
+                u.audit_at.to_rfc3339(),
+                u.target,
+            );
+        }
+    }
+
+    let _ = writeln!(w);
+    let _ = writeln!(
+        w,
+        "This report lists; it disposes nothing. Before RFC 095 M3 closes, the owner must \
+         durably record, for every candidate above, disablement, explicit legacy acceptance, \
+         or a separately audited metadata correction."
+    );
+
+    out
+}
+
+/// `sui-id admin legacy-dynamic-candidates [--config PATH]`
+///
+/// RFC 095 `:350-360`. Read-only throughout: no `set_registered_via`, no
+/// `set_disabled`, no writes of any kind, and no audit event for having
+/// run this report. See
+/// [`sui_id_store::repos::audit::legacy_dynamic_candidates`] for the
+/// query and the no-provenance-inference rule it implements, and
+/// [`render_legacy_dynamic_candidate_report`] for the output text, which
+/// is tested directly rather than through captured stdout.
+pub(crate) async fn run_admin_legacy_dynamic_candidates(args: &[String]) -> Result<()> {
+    let config_path =
+        parse_config_path(args).unwrap_or_else(|| std::path::PathBuf::from("./sui-id.toml"));
+    let cfg = crate::Config::load(&config_path)
+        .with_context(|| format!("loading config from {}", config_path.display()))?;
+
+    let resolved = sui_id::keyring::resolve(&cfg.storage.key_file).context("loading master key")?;
+    let db = sui_id::database::open(&cfg.storage.db_path, resolved.key)?;
+
+    let report = sui_id_store::repos::audit::legacy_dynamic_candidates(&db)
+        .await
+        .context("querying legacy dynamic-registration candidates")?;
+
+    let oldest = oldest_evidence_seq(&report);
+    let chain_result = match (oldest, report.max_seq) {
+        (Some(oldest), Some(newest)) => {
+            let limit = newest - oldest + 1;
+            let r = sui_id_store::repos::audit::verify_chain_tail(&db, limit)
+                .await
+                .context("verifying audit chain over the candidate range")?;
+            Some((oldest, newest, r))
+        }
+        _ => None,
+    };
+    let chain_ref = chain_result.as_ref().map(|(o, n, r)| (*o, *n, r));
+
+    print!(
+        "{}",
+        render_legacy_dynamic_candidate_report(&report, chain_ref)
     );
 
     Ok(())

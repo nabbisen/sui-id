@@ -94,13 +94,33 @@ fn cli_bindings_cover_help_and_dispatch() {
 /// it into a boxed-future dispatch table, a complexity tax this plain
 /// CLI dispatcher does not carry for the five lines a test already
 /// costs.
+///
+/// **Every subaction must fail this call, but not all for the same
+/// reason** (RFC 095 M3 stage 6 §3.1, measured rather than assumed).
+/// Most are missing a required flag (`--username`, `--max-uses` is
+/// optional so `issue-registration-token` fails on nothing it needs here
+/// and is really failing on the config load below, same as
+/// `legacy-dynamic-candidates`). `legacy-dynamic-candidates` has no
+/// required flag at all; it fails because `Config::load("./sui-id.toml")`
+/// finds nothing — `sui-id.toml` is gitignored and does not exist in a
+/// fresh checkout, including the one this test runs against. Measured
+/// directly: the error is `"failed to read config ./sui-id.toml: No such
+/// file or directory"`, not a flag complaint. The assertion below only
+/// ever checked that the dispatcher recognises the name, not *why* the
+/// call failed, so this was always the right assertion — only the
+/// doc comment and the `expect_err` caption claimed a narrower reason
+/// than the code enforces. A fake required flag is not the fix: that
+/// would change the command's interface to suit this test, backwards
+/// from how a command should be designed.
 #[tokio::test]
 async fn every_admin_subaction_dispatches() {
     for name in ADMIN_SUBACTIONS {
         let args: Vec<String> = vec!["sui-id".into(), "admin".into(), (*name).into()];
-        let err = run_admin_subcommand(&args)
-            .await
-            .expect_err("every admin subaction is missing a required flag here");
+        let err = run_admin_subcommand(&args).await.expect_err(
+            "every admin subaction must fail this no-flags call -- on a missing required \
+             flag for most, or (legacy-dynamic-candidates) on the absent ./sui-id.toml, \
+             never by succeeding",
+        );
         let msg = format!("{err:?}");
         assert!(
             !msg.contains("unknown admin subaction"),
@@ -186,4 +206,68 @@ async fn an_unlisted_admin_subaction_is_rejected() {
     ];
     let err = run_admin_subcommand(&args).await.expect_err("unknown");
     assert!(format!("{err:?}").contains("unknown admin subaction"));
+}
+
+/// RFC 095 M3 stage 6 §5, made executable: the empty-case output must
+/// state the incompleteness of the evidence, never a bare "there are
+/// none" claim an operator could mistake for an all-clear. Tested
+/// directly against [`render_legacy_dynamic_candidate_report`]'s return
+/// value, not captured stdout, and with no database at all — the report
+/// struct is plain data.
+#[test]
+fn the_empty_case_states_incompleteness_not_a_bare_zero() {
+    let report = sui_id_store::repos::audit::LegacyDynamicCandidateReport {
+        candidates: vec![],
+        unresolved: vec![],
+        max_seq: None,
+    };
+    let text = render_legacy_dynamic_candidate_report(&report, None);
+
+    assert!(
+        text.contains("does NOT mean no such client exists"),
+        "the empty case must state the evidence is incomplete, not just empty:\n{text}"
+    );
+    assert!(
+        text.contains(LEGACY_WINDOW_START_COMMIT) && text.contains(LEGACY_WINDOW_END_COMMIT),
+        "the empty case must name both window commits, not just assert incompleteness \
+         in the abstract:\n{text}"
+    );
+    for forbidden in ["0 candidates", "none found", "clean"] {
+        assert!(
+            !text.to_lowercase().contains(&forbidden.to_lowercase()),
+            "the empty case must not contain {forbidden:?}, which a reader could take as \
+             \"there were none\":\n{text}"
+        );
+    }
+}
+
+/// The control for the test above: a genuine candidate's own row renders
+/// with the `legacy_unstamped_dynamic_candidate` label RFC 095 names,
+/// and the non-empty case still carries its own "found, not existing"
+/// qualifier (§5's second sentence, required on every run).
+#[test]
+fn a_real_candidate_renders_with_the_rfcs_own_label_and_the_found_not_existing_qualifier() {
+    let id = sui_id_shared::ids::ClientId::new();
+    let now = chrono::Utc::now();
+    let report = sui_id_store::repos::audit::LegacyDynamicCandidateReport {
+        candidates: vec![sui_id_store::repos::audit::LegacyDynamicCandidate {
+            client_id: id,
+            client_name: "a client".into(),
+            created_at: now,
+            is_disabled: false,
+            is_deleted: false,
+            audit_seq: 7,
+            audit_at: now,
+        }],
+        unresolved: vec![],
+        max_seq: Some(7),
+    };
+    let text = render_legacy_dynamic_candidate_report(&report, None);
+
+    assert!(text.contains("legacy_unstamped_dynamic_candidate"));
+    assert!(text.contains(&id.to_string()));
+    assert!(
+        text.contains("FOUND") && text.contains("not necessarily"),
+        "the non-empty case must also say it found entries, not that they exist:\n{text}"
+    );
 }

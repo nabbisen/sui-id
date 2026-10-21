@@ -28,6 +28,26 @@ migration runs once.
 
 ## Version-specific notes
 
+### v0.83.x
+
+**New admin subaction: `sui-id admin legacy-dynamic-candidates [--config PATH]`
+(RFC 095).** Read-only — it writes nothing. If any client ever self-registered
+through RFC 7591 dynamic registration while your instance was running a
+build between commits `48946f6` (2026-07-02) and `930513b` (2026-10-02),
+run this command once after upgrading. A bug in that window discarded the
+`registered_via` column on write, so such a client's row may still read
+`admin` today even though it was never created by an operator.
+
+**An empty result is not an all-clear.** The only admissible evidence is an
+audit-log row recorded at registration time, and that row's write was
+best-effort in the affected window — if it failed, the registration
+succeeded anyway and left nothing to find. The command says this
+explicitly every time it runs; it does not print a bare "0 candidates" the
+way a clean report normally would. Before RFC 095 M3 is considered closed,
+every candidate the command does find must be disabled, explicitly
+accepted as legacy, or have its metadata corrected under a separate audit —
+this command only lists; it decides nothing.
+
 ### v0.76.x
 
 **New migrations (0033–0038).** All run automatically and are backwards-compatible

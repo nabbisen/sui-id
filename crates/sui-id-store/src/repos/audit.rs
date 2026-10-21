@@ -35,13 +35,14 @@
 //! the codebase never updates or deletes audit rows.
 
 use crate::db::Database;
-use crate::errors::StoreResult;
-use crate::models::AuditLogRow;
+use crate::errors::{StoreError, StoreResult};
+use crate::models::{AuditLogRow, RegistrationSource};
 use crate::registry::{AuditAttributes, AuditBuildError, AuditTarget, MustAttemptDescriptor};
 use chrono::{DateTime, Utc};
 use rusqlite::OptionalExtension;
 use rusqlite::params;
 use sha2::{Digest, Sha256};
+use sui_id_shared::ids::ClientId;
 
 fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<AuditLogRow> {
     Ok(AuditLogRow {
@@ -716,5 +717,141 @@ pub async fn recent_important(db: &Database, n: usize) -> StoreResult<Vec<AuditL
     .await
 }
 
+/// RFC 095 `:350-360` — a `client.dynamic_register` audit row whose
+/// *current* client row says `admin`. The only admissible evidence of a
+/// pre-RFC-094 dynamic registration that the migration's own
+/// `clients::create` discarded `registered_via` for (RFC 008,
+/// `48946f6` → `930513b`): no shape, timestamp, name, or missing
+/// application-URI heuristic may be used instead, per the RFC's own
+/// prohibition.
+#[derive(Debug, Clone)]
+pub struct LegacyDynamicCandidate {
+    pub client_id: ClientId,
+    /// The client row's *current* name, not the audit row's `note`'s
+    /// `name=` fragment — they can differ, and the row is the current
+    /// truth (RFC 095 M3 stage 6 §4.1).
+    pub client_name: String,
+    pub created_at: DateTime<Utc>,
+    pub is_disabled: bool,
+    pub is_deleted: bool,
+    pub audit_seq: i64,
+    pub audit_at: DateTime<Utc>,
+}
+
+/// A `client.dynamic_register` audit row whose `target` does not resolve
+/// to any `clients` row at all — RFC 095 M3 stage 6 §4.3's own category.
+/// An inner join between `audit_log` and `clients` drops these silently;
+/// they are not "no candidate", they are evidence of a registration whose
+/// client cannot be found, which is strictly more alarming than a
+/// candidate. No hard delete exists in this codebase (`clients` only has
+/// `soft_delete`), so this should always be empty — a restored,
+/// hand-edited, or partially migrated database can still produce one.
+#[derive(Debug, Clone)]
+pub struct UnresolvedDynamicRegistrationTarget {
+    pub audit_seq: i64,
+    pub audit_at: DateTime<Utc>,
+    /// The raw `target` column value — `None` if the audit row itself
+    /// never recorded one, `Some` (but unparseable or unresolvable) if it
+    /// did.
+    pub target: Option<String>,
+}
+
+/// Result of [`legacy_dynamic_candidates`].
+#[derive(Debug, Clone)]
+pub struct LegacyDynamicCandidateReport {
+    pub candidates: Vec<LegacyDynamicCandidate>,
+    pub unresolved: Vec<UnresolvedDynamicRegistrationTarget>,
+    /// `MAX(seq)` over the whole `audit_log` table at query time, `None`
+    /// only if the table is empty. Lets a caller compute how far back
+    /// [`verify_chain_tail`] must reach to cover the oldest candidate's
+    /// `seq` — this function does not call it itself, since whether that
+    /// cost is acceptable is the caller's decision, not this repo's.
+    pub max_seq: Option<i64>,
+}
+
+/// Read-only. Writes nothing, and calls nothing that writes — RFC 095 M3
+/// stage 6 is a report, not a migration: *"It does not mutate them."*
+///
+/// Joins `audit_log` (`action = 'client.dynamic_register'`, `result =
+/// 'ok'`) against `clients` by the audit row's own `target`, entirely in
+/// Rust rather than SQL, so the three-way split (candidate / correctly
+/// stamped / unresolved) falls out of one match rather than needing a
+/// second query for the category a `JOIN` would silently drop.
+///
+/// Filtering `result = 'ok'` documents the RFC's word "positive" rather
+/// than discriminating between outcomes — `commands.rs`'s C15 insert sets
+/// `AuditResult::Ok` unconditionally for this action, and being Class-A,
+/// only ever commits alongside the client row it describes, so every row
+/// this query could ever see already has `result = 'ok'`.
+pub async fn legacy_dynamic_candidates(db: &Database) -> StoreResult<LegacyDynamicCandidateReport> {
+    type Rows = Vec<(i64, DateTime<Utc>, Option<String>)>;
+
+    let (rows, max_seq): (Rows, Option<i64>) = db
+        .with_read(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT seq, at, target FROM audit_log \
+                 WHERE action = 'client.dynamic_register' AND result = 'ok' \
+                 ORDER BY seq ASC",
+            )?;
+            let collected = stmt
+                .query_map([], |r| {
+                    let seq: i64 = r.get(0)?;
+                    let at: DateTime<Utc> = r.get(1)?;
+                    let target: Option<String> = r.get(2)?;
+                    Ok((seq, at, target))
+                })?
+                .collect::<Result<Vec<_>, _>>()?;
+            let max_seq: Option<i64> = conn
+                .prepare("SELECT MAX(seq) FROM audit_log")?
+                .query_row([], |r| r.get(0))?;
+            Ok((collected, max_seq))
+        })
+        .await?;
+
+    let mut candidates = Vec::new();
+    let mut unresolved = Vec::new();
+    for (audit_seq, audit_at, target) in rows {
+        let parsed: Option<ClientId> = target.as_deref().and_then(|t| t.parse().ok());
+        let Some(client_id) = parsed else {
+            unresolved.push(UnresolvedDynamicRegistrationTarget {
+                audit_seq,
+                audit_at,
+                target,
+            });
+            continue;
+        };
+        match crate::repos::clients::get(db, client_id).await {
+            Ok(client) if client.registered_via == RegistrationSource::Admin => {
+                candidates.push(LegacyDynamicCandidate {
+                    client_id,
+                    client_name: client.name,
+                    created_at: client.created_at,
+                    is_disabled: client.is_disabled,
+                    is_deleted: client.is_deleted,
+                    audit_seq,
+                    audit_at,
+                });
+            }
+            // Correctly stamped `dynamic` — not a candidate, and not a gap.
+            Ok(_) => {}
+            Err(StoreError::NotFound) => {
+                unresolved.push(UnresolvedDynamicRegistrationTarget {
+                    audit_seq,
+                    audit_at,
+                    target,
+                });
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(LegacyDynamicCandidateReport {
+        candidates,
+        unresolved,
+        max_seq,
+    })
+}
+
 #[cfg(test)]
 mod tests_rfc085;
+#[cfg(test)]
+mod tests_rfc095_stage6;
