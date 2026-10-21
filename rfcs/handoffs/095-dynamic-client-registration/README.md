@@ -24,6 +24,13 @@ architect's to make, not dispatched**:
 idling the implementation role behind a ruling it does not need would cost
 the cycle nothing but time. The order is now 2 → 3 → **5** → 4 → 6.
 
+> **Whose turn: `@nabbisen`'s.** `0.83.0` holds until stage 4 is reviewed,
+> built and green — the scope was not re-cut around it
+> ([`m3-stage-plan-2026-10-20.md`](m3-stage-plan-2026-10-20.md) §D,
+> 2026-10-22). Under [`ROADMAP.md`](../../../ROADMAP.md) §S1a, stage 4's
+> design review is his or an external architect's, not the architect's and
+> not the dev team's. **Nothing is dispatchable meanwhile.**
+
 **Stage 6 landed** `4549c3b` (Level B, 27 jobs, 0 skipped) —
 [`stage6-the-legacy-candidate-report-2026-10-21.md`](stage6-the-legacy-candidate-report-2026-10-21.md)
 — the read-only legacy-candidate report, `sui-id admin

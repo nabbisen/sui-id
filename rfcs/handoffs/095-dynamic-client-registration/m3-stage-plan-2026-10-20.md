@@ -156,6 +156,31 @@ and that disposition is a closure prerequisite rather than release content.
 
 **`0.83.0` = stages 2 through 6.** That completes M3's implementation.
 
+> **Scope held, 2026-10-22.** Stages 2, 3, 5 and 6 have landed
+> (`7cc1488`, `2bdc6af`, `a8583e4`, `4549c3b`), each Level B 27/0. Stage 4
+> has not, and under [`ROADMAP.md`](../../../ROADMAP.md) §S1a its design
+> review is `@nabbisen`'s or an external architect's.
+>
+> The architect proposed re-scoping `0.83.0` to the four landed stages and
+> moving stage 4 to `0.84.0`, so the release would not wait on one review.
+> **That proposal is declined.** `0.83.0` keeps all five stages and does
+> not cut until stage 4 is reviewed, built and green.
+>
+> **Why this is the safer of the two.** Cutting is the only irreversible,
+> outward-facing act in the cycle, and the alternative spends it to ship a
+> milestone whose security-bearing stage is still unbuilt — client
+> authentication at the token endpoint, where a wrong accept is a bypass
+> rather than a validation gap. Holding costs calendar time and nothing
+> else: no version is promoted, no tag is cut, nothing reaches crates.io,
+> and the four landed stages sit on `main` already exercised by every
+> subsequent run. Re-scoping would also have split M3's implementation
+> across two releases for no gain, since M3 cannot close on `0.83.0`
+> either way — both remaining closure prerequisites are the owner's.
+>
+> **Nothing is dispatchable to the implementation role** while this holds.
+> That is the real cost and it is accepted rather than worked around; the
+> alternative is inventing work to fill it.
+
 **It does not close M3.** Two prerequisites remain afterwards and both are
 `@nabbisen`'s:
 
