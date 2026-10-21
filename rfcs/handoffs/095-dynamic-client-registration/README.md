@@ -15,15 +15,25 @@ and four kinds of verification. **Stage 2 landed** `7cc1488` (Level B, 27 jobs, 
 [`stage2-the-field-rules-2026-10-20.md`](stage2-the-field-rules-2026-10-20.md).
 **Stage 3 landed** `2bdc6af` (Level B, 27 jobs, 0 skipped) —
 [`stage3-the-registration-response-2026-10-21.md`](stage3-the-registration-response-2026-10-21.md).
-**Stage 4 is out for independent design review, not dispatched**:
+**Stage 4's design is written and awaiting one ruling that is not the
+architect's to make, not dispatched**:
 [`stage4-design-the-authentication-grant-matrix-2026-10-21.md`](stage4-design-the-authentication-grant-matrix-2026-10-21.md).
 
 **Measured while writing that design, and it reshapes the stage:**
 `token_endpoint_auth_method` is accepted at registration, validated by stage
 2 and echoed by stage 3, but **never persisted** — `ClientRow` has no such
-field and no migration adds the column. Three of the matrix's eight rows
-therefore do not hold today, two of which need a schema change. RFC 095
-`:362-366` states the C15 insert writes the auth method; it does not.
+field and no migration adds the column. **Four** of the matrix's eight rows do not hold
+today, two of which need a schema change. RFC 095 `:362-366` states the C15
+insert writes the auth method, grants and response types; it writes none of
+the three.
+
+*Corrected 2026-10-21: an earlier version of this entry said three rows and
+one field, and the design behind it reasoned about the wrong function —
+`/oauth2/token`'s grant dispatch calls a private `authenticate_client` in
+`authorize.rs`, not the public one serving introspection and revocation. It
+also dispatched an "independent design review" to the implementation role,
+which RFC 000 `:39-41` forbids rather than permits. Both are recorded in the
+design's own header.*
 
 **`scope` is required at registration** as of stage 2 — a deliberate
 departure from RFC 7591 §2's optionality, recorded in

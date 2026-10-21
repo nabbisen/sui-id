@@ -1,171 +1,180 @@
-# M3 stage 4 — the authentication/grant matrix: design, for independent review
+# M3 stage 4 — the authentication/grant matrix: design
 
-> ## Whose turn it is: **the implementation role's — to review this, not to build it.**
-> My plan §E reserved an independent design review for this stage before it is
-> dispatched, because it is client authentication: the one stage here where a
-> wrong accept is a bypass rather than a validation gap. **Attack this
-> document.** Implementation is dispatched only after the review returns.
+> ## **Rewritten 2026-10-21.** The first version was wrong twice, and both are recorded rather than quietly replaced.
+>
+> **1. It dispatched an "independent design review" to the implementation
+> role, citing RFC 000 as permitting it.** RFC 000 `:39-41` says the
+> opposite: *"The implementer cannot be the sole approver of a
+> security-sensitive design or its closure evidence."* The implementation
+> role's own operating instructions scope it to review *requests*,
+> clarification *requests* and risk *reporting* — not verdicts. The
+> arrangement was the architect's error, asked for in writing.
+>
+> **2. It was built on the wrong function.** §B, §C2 and §C3 reasoned about
+> `sui_id_core::oauth_token::authenticate_client`, which serves
+> introspection and revocation — the two endpoints the same document flagged
+> as out of scope. The token endpoint's own grant dispatch calls a
+> *different*, private function. One row of the old table was not merely
+> unverified but backwards.
+>
+> Both were found by the implementation role's measurements, which are kept:
+> `.git-exclude/reviewed/rfc-095-stage4-design-verification-2026-10-21.md`,
+> corroboration under RFC 129 `:5` and not approval.
 
-**Written.** 2026-10-21 JST, by the architect.
-**Reviewer.** The implementation role — genuinely independent in the sense
-RFC 000 allows: I wrote RFC 095's matrix, this plan and this design, and did
-not review any of them. Same arrangement as RFC 107's design review.
+**Written.** 2026-10-21 JST, by the architect. **Rewritten the same day.**
+**Independence, stated plainly.** I wrote RFC 095's matrix, the stage plan
+and this design, so **this design is not independently reviewed**, and under
+RFC 129 `:24` there is no reviewer outside this team to supply one.
+Per RFC 129 `:5`, approval in exactly that situation rests outside the
+architect's authority. §E has the one question it turns on.
 **Normative source.** [`metadata-validation.md`](metadata-validation.md),
-§*Authentication/grant matrix* — eight rows, each to be tested for both
+§*Authentication/grant matrix* — eight rows, each tested for both
 authorization-code and refresh dispatch.
-**Measured at.** `2bdc6af` (stage 3, Level B 27/0).
+**Measured at.** `1ab7a5a`.
 
-## A — the finding that reshapes this stage
+## A — three fields are accepted, validated, echoed, and never persisted
 
-**`token_endpoint_auth_method` is never persisted.** Measured:
+Not one field, as the first version said.
 
-- `ClientRow` (`sui-id-store/src/models.rs:294-320`) has no such field. The
-  only authentication-shape signal it carries is `confidential: bool`.
-- No migration adds the column. `grep` over every `migrations/*.sql` for
-  `auth_method` on `clients` returns nothing — the `auth_methods` hits are
-  **session** MFA factors from `0006`/`0019`, a different concept that merely
-  shares a word.
-- The token endpoint never reads it. `client_credentials`
-  (`handlers/oauth_token.rs:188`) tries Basic, falls back to the form body.
-  `authenticate_client` (`sui-id-core/src/oidc/oauth_token.rs:275`) checks
-  `confidential`, disabled, deleted and the secret hash. Neither consults a
-  registered method, because there is none to consult.
+`ClientRow` (`sui-id-store/src/models.rs:294-320`) has no
+`token_endpoint_auth_method`, no `grant_types` and no `response_types`. No
+migration adds any of them — the `auth_methods` columns in `0006`/`0019` are
+**session MFA factors**, an unrelated concept sharing a word. Stage 3 named
+`grant_types` and `response_types` as echo-only; it named the fact without
+drawing the consequence, and `token_endpoint_auth_method` is in the same
+category and was named by nobody.
 
-So the field is **accepted** at registration, **validated** by stage 2 and
-**echoed** by stage 3 — recomputed from the request each time, never read
-back. Stage 3 correctly identified `grant_types` and `response_types` as
-echo-only with no backing column; this field is in the same category and
-was not named.
+**RFC 095 `:362-366` is wrong about three of its six nouns.** It states the
+C15 insert writes *"…scopes, auth method, grants, response types, consent
+policy, and timestamps in one statement."* Scopes and consent policy are
+written; auth method, grants and response types are not.
 
-**RFC 095 `:362-366` says otherwise.** Its C15 paragraph states the insert
-writes *"…logout URIs, scopes, **auth method**, grants, response types,
-consent policy, and timestamps in one statement."* That describes something
-that does not happen. **I am not proposing an RFC amendment in this
-document** — the RFC is Accepted and amending it is its own act — but the
-review should say whether it thinks one is needed.
+**Whether that needs an RFC amendment is §E's question, not this document's
+decision.** RFC 095 is Accepted, and RFC 000 makes a material correction to
+it an act with its own procedure.
 
-## B — what this does and does not mean
+## B — the eight rows, against the function the token endpoint actually calls
 
-**It is not a live vulnerability, and I want to be exact about that rather
-than dramatic.** Walking the eight rows against today's code:
+```
+authorize.rs:423 → exchange_code      (authorization-code grant)
+authorize.rs:592 → exchange_refresh   (refresh grant)
+     ↳ both call  authenticate_client  (private, authorize.rs:685)
+```
 
-| Auth method | Request | Matrix | Today | Enforceable without the column? |
+`handlers/oauth_token.rs:67`/`:132` are `introspect` and `revoke`; they call
+the *public* `oauth_token::authenticate_client` at `:275`. **That function is
+not on this matrix's path.** Nothing added to it affects `/oauth2/token`.
+
+The function that is (`authorize.rs:685-706`), in full:
+
+```rust
+async fn authenticate_client(client: &ClientRow, secret: Option<&str>) -> CoreResult<()> {
+    if !client.confidential { return Ok(()); }
+    let stored = client.secret_hash.as_deref().ok_or(…)?;
+    let provided = secret.ok_or(…)?;
+    crate::password::verify_password(provided, stored).await.map_err(…)
+}
+```
+
+| # | Auth method | Request | Matrix | Today |
 |---|---|---|---|---|
-| `none` | Basic or any secret | Reject | **Rejected** — `authenticate_client` refuses `!confidential` | n/a, already holds |
-| `none` | client id only, no secret | Accept with PKCE | Accept | n/a |
-| `basic` | one Basic pair | Accept | Accept | n/a |
-| `basic` | secret in body, no header | **Reject** | **Accepted** | **No — needs the column** |
-| `post` | id+secret in body | Accept | Accept | n/a |
-| `post` | Basic present | **Reject** | **Accepted** | **No — needs the column** |
-| legacy | either, not both | Accept | Accept | n/a |
-| any | **Basic and body both present** | **Reject** | **Accepted, Basic silently wins** | **Yes — this is purely about the request** |
+| 1 | `none` | Basic or any secret | **Reject** | **Accepted** — `!confidential` returns `Ok(())` and `secret` is never inspected |
+| 2 | `none` | client id only, no secret | Accept with PKCE | Accept |
+| 3 | `basic` | one Basic pair | Accept | Accept |
+| 4 | `basic` | secret in body, no header | **Reject** | **Accepted** — no channel is recorded or checked |
+| 5 | `post` | id+secret in body | Accept | Accept |
+| 6 | `post` | Basic present | **Reject** | **Accepted** — same reason |
+| 7 | legacy | either, not both | Accept | Accept |
+| 8 | any | **Basic and body both present** | **Reject** | **Accepted** — `client_credentials` prefers Basic silently |
 
-So the `none` rows already hold, by the confidentiality check rather than by
-a method check — the right outcome reached for a different reason, which is
-worth knowing because a future change to `confidential` would break them
-silently.
+**Four rows do not hold, not three.** Row 1 is the correction: the first
+version claimed it already held "by the confidentiality check", which is true
+of the introspection/revocation function and false here.
 
-**Three rows do not hold.** Two need a column that does not exist. One does
-not: *Basic and body both present* is a property of the request alone.
+**Severity of row 1: low.** A `none` client has no secret; accepting a
+spurious one authenticates nobody who could not already authenticate, and
+PKCE still applies. It is a conformance gap, not a bypass. **Row 8 is low for
+the same shape of reason** — RFC 6749 §2.3.1 forbids presenting two methods,
+but an attacker who can set the header already controls the request.
 
-**The severity of the one that needs nothing:** RFC 6749 §2.3.1 says a client
-*"MUST NOT use more than one authentication method in each request."* We
-accept both and prefer Basic. I judge this **low**: an attacker who can set
-the `Authorization` header already controls the request, and the body secret
-being ignored does not grant anything. It is a conformance gap and an
-ambiguity, not a bypass. **Say so if you disagree** — I would rather be
-argued out of a low rating than have one stand because nobody pushed.
+Rows 4 and 6 need the method persisted. Rows 1 and 8 do not: both are
+decidable from `confidential` and the request alone.
 
-## C — the design I propose
+## C — the design
 
-### C1 — persist the method
+### C1 — persist the three fields, or decide not to
 
-Add `token_endpoint_auth_method TEXT NOT NULL DEFAULT 'client_secret_basic'`
-to `clients`, surface it on `ClientRow`, and write it in the C15 insert —
-which is what RFC 095 already claims happens.
+Rows 4 and 6 are unreachable without a stored `token_endpoint_auth_method`.
+§C4 is unreachable without stored `grant_types`.
 
-**The default is the migration's real decision, not boilerplate.** Existing
-rows have no recorded method. `client_secret_basic` is RFC 7591's default and
-what stage 2 now defaults new registrations to, so it is the consistent
-choice — **but it retroactively asserts a method for every client that
-predates the column**, including administrator-created ones that may be using
-`client_secret_post` today and would begin to be rejected under C2.
+**The migration default is the real decision.** Existing rows record no
+method. `client_secret_basic` is RFC 7591's default and stage 2's, but it
+retroactively asserts a method for every pre-column client, and an
+administrator-created client using `post` would begin to be rejected under
+C2. A nullable column where `NULL` means *unrecorded*, exempt from the C2
+check, cannot break a working deployment on upgrade but leaves a permanent
+unchecked class. **I incline to nullable and I am not ruling it** — see §E.
 
-**This is the question I most want the review to answer.** Options as I see
-them, and I am not committing to one here:
+### C2 — enforce the channel in `authorize::authenticate_client`
 
-1. Default `client_secret_basic` and accept that some existing clients break.
-2. Make the column nullable; `NULL` means "unrecorded", and an unrecorded
-   method skips the C2 check — enforcement applies only to clients registered
-   after this lands.
-3. Backfill from `confidential`, which cannot distinguish basic from post and
-   so is only a two-way split dressed as a three-way one.
+Not in the public `oauth_token` one. **There is no shared-function scope
+question**, which the first version worried about: nothing but
+`exchange_code` and `exchange_refresh` calls this one, so fixing it touches
+no code introspection or revocation runs. Whether the same check should also
+go to the other function is a genuinely separate decision and is **not** part
+of this stage.
 
-My inclination is **(2)**, because it is the only one that cannot break a
-working deployment on upgrade, and because "we never recorded this" is a true
-statement that the schema should be able to express. But it leaves a
-permanent class of clients outside the check, which is a real cost and may be
-the wrong trade.
+**One consequence to decide explicitly, not inherit.** The first version
+said "follow the existing `DUMMY_PHC` pattern; it is there for this reason."
+That pattern is in the *other* function. **This one has none.** So adding a
+channel check here either introduces uniform-timing handling for the first
+time — a larger change than "follow the existing one" — or ships without it.
+Which, and why, is an answer this stage owes before it is dispatched.
 
-### C2 — enforce the method, in core
+*A related property of this function, unfixed, is recorded in
+`.git-exclude/` rather than here: it concerns an existing closure
+prerequisite, `.github/SECURITY.md` reserves severity and timeline to the
+owner, and the repository is public.*
 
-In `authenticate_client`, after the row is loaded and before the secret is
-verified: if the row records a method and the presented credential's
-*channel* does not match it, fail as `Unauthenticated`.
+### C3 — reject both channels present
 
-- **Same error, same timing as every other failure in that function.** It
-  already runs `verify_password` against `DUMMY_PHC` on every early return
-  specifically so a refusal costs the same time as a real verification. A new
-  early return that skips that is a timing oracle for "this client exists but
-  used the wrong channel". **Follow the existing pattern; it is there for
-  this reason.**
-- The channel must be passed in. `authenticate_client` currently takes
-  `(db, client_id, client_secret)` and cannot tell how the secret arrived.
-  Widening its signature is the straightforward route; **check whether its
-  other callers** — RFC 7009 revocation and RFC 7662 introspection, per its
-  own doc comment — **should enforce the same rule**, and say so. My reading
-  is that they should, since the matrix says *"each row is tested for
-  authorization-code and refresh dispatch"* and says nothing about exempting
-  other endpoints, but those endpoints are outside RFC 095's stated scope and
-  I may be over-reaching.
-
-### C3 — reject both-channels-present
-
-In `client_credentials`: if a Basic pair **and** body credentials are both
-present, return a rejection rather than preferring Basic. Needs no column and
-does not depend on C1.
-
-**It could ship on its own if the review concludes C1 needs more thought
-than this stage can carry.** Saying that now so the stage is not all-or-
-nothing by default.
+In `client_credentials` (`handlers/oauth_token.rs:188`): if a Basic pair and
+body credentials are both present, reject rather than prefer Basic. Needs no
+column and does not depend on C1, so **it can ship alone** if C1 needs more
+deliberation than this stage can carry.
 
 ### C4 — the refresh half
 
 *"Refresh is rejected unless both grant policy and scope policy authorize
-it."* Every row is tested for authorization-code **and** refresh dispatch, so
-the matrix is sixteen cases, not eight. Stage 2 validates `grant_types` and
-the `refresh_token`/`offline_access` coupling at registration; this stage
-checks them at the token endpoint, where the request actually asks for a
-refresh. **Confirm the two are not already enforced somewhere I have not
-found** before building anything.
+it."* Sixteen cases, not eight. **This depends on C1**: there is no stored
+`grant_types` to check a refresh request against. Scope policy is stored
+(`allowed_scopes`) and is checkable today.
 
-## D — what I want the review to attack
+## D — the implementation questions, for the dispatch
 
-1. **C1's default.** The three options, or a fourth. This is the decision
-   with upgrade consequences and I have given an inclination, not a ruling.
-2. **Whether C2 belongs in core's `authenticate_client` at all**, given
-   revocation and introspection share it. Widening a shared authentication
-   function is how a scope creeps.
-3. **The severity I put on C3.** Low, argued in §B. Push if it is wrong.
-4. **Whether RFC 095 needs an amendment** for the C15 paragraph that
-   describes a write that does not occur.
-5. **Anything in §B's table.** It is eight rows I walked by reading code; if
-   a row is wrong, the design built on it is wrong.
+Not for the implementation role to rule on now; these are what the eventual
+dispatch must settle and state: the C1 default, whether C2 introduces
+uniform timing, and whether C3 ships independently.
 
-## E — what this review is not
+## E — the one question for `@nabbisen`
 
-Not an implementation round. Nothing is dispatched and the working tree
-should stay untouched. Return a review document; the stage 4 dispatch is
-written against it afterwards, and will cite it the way RFC 107's did.
+**Who may perform a design review here?**
 
-It does not close M3. Stages 5 and 6 follow.
+`scripts/check-rfc-integrity.py` condition 9 reserves exactly this in its own
+source: it deliberately does not inspect **who** reviewed, and its comment
+says the check must not be added until self-review has been ruled on. The
+question has been open, and ungated on purpose, since RFC 128.
+
+It needs answering because the practice is already in the record:
+**RFC 095's own `Independent design review` field has read "by the
+implementation role" since 2026-08-26**, and RFC 107's says the same. This
+incident did not create the arrangement; it mis-cited RFC 000 as authorizing
+it.
+
+Changing either RFC's field is a material change to security-review metadata,
+which RFC 000 returns an Accepted RFC to `proposed/` for. **So nothing is
+touched until he rules**, and the ruling also decides whether this design —
+written by the author of what it designs — can proceed on RFC 129 `:5`'s
+disclosed-non-independence footing, which is what it currently claims.
+
+**Stage 4 is not dispatched and nothing waits on the implementation role.**
