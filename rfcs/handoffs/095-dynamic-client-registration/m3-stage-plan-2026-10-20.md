@@ -108,6 +108,23 @@ rejects a present Basic header; legacy accepts either but not both; **Basic and
 body both present is always a reject**. Refresh is rejected unless grant policy
 *and* scope policy both authorize it.
 
+> **Stage 4 is split in two, 2026-10-22.** Its three decisions are settled
+> (the design's §D), and writing the dispatch showed the stage spans a
+> migration, three columns, an HTTP-layer type change, client
+> authentication logic and a timing-uniformity fix — four kinds of
+> verification in one round, on the one stage where a wrong accept is a
+> bypass. That is the shape §A of this plan says produces rounds where
+> defects hide, so the plan's own principle applies to its own stage.
+>
+> - **4a — persistence.** The three fields stored and read back. No
+>   behaviour change at `/oauth2/token`.
+>   [`stage4a-persist-the-three-fields-2026-10-22.md`](stage4a-persist-the-three-fields-2026-10-22.md)
+> - **4b — enforcement.** The typed credential presentation, the channel
+>   check, RFC 123 D4 compliance for `authorize::authenticate_client`,
+>   both-channels-present, and the refresh half. Needs 4a's stored method.
+>
+> One extra round; each verified one way. `0.83.0` cuts when 4b lands.
+
 ### Stage 5 — browser presentation
 
 §*Browser presentation*. Separated because its verification is a browser

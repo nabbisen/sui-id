@@ -24,12 +24,14 @@ architect's to make, not dispatched**:
 idling the implementation role behind a ruling it does not need would cost
 the cycle nothing but time. The order is now 2 → 3 → **5** → 4 → 6.
 
-> **Whose turn: `@nabbisen`'s.** `0.83.0` holds until stage 4 is reviewed,
-> built and green — the scope was not re-cut around it
-> ([`m3-stage-plan-2026-10-20.md`](m3-stage-plan-2026-10-20.md) §D,
-> 2026-10-22). Under [`ROADMAP.md`](../../../ROADMAP.md) §S1a, stage 4's
-> design review is his or an external architect's, not the architect's and
-> not the dev team's. **Nothing is dispatchable meanwhile.**
+> **Whose turn: the implementation role's.** Stage 4's measurement stands
+> and its three decisions are settled. C3 is `@nabbisen`'s; C1 and C2 are
+> the architect's, at his request, under `ROADMAP.md` §S1c. The design's
+> §D is the record of which was whose. **Stage 4 is split in two**: **4a is dispatched** —
+> [`stage4a-persist-the-three-fields-2026-10-22.md`](stage4a-persist-the-three-fields-2026-10-22.md),
+> persistence only, no behaviour change at `/oauth2/token` — and 4b carries
+> the enforcement afterwards. `0.83.0` still holds until 4b lands; the
+> scope was not re-cut around stage 4.
 
 **Stage 6 landed** `4549c3b` (Level B, 27 jobs, 0 skipped) —
 [`stage6-the-legacy-candidate-report-2026-10-21.md`](stage6-the-legacy-candidate-report-2026-10-21.md)
