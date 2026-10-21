@@ -27,11 +27,16 @@ the cycle nothing but time. The order is now 2 → 3 → **5** → 4 → 6.
 > **Whose turn: the implementation role's.** Stage 4's measurement stands
 > and its three decisions are settled. C3 is `@nabbisen`'s; C1 and C2 are
 > the architect's, at his request, under `ROADMAP.md` §S1c. The design's
-> §D is the record of which was whose. **Stage 4 is split in two**: **4a is dispatched** —
-> [`stage4a-persist-the-three-fields-2026-10-22.md`](stage4a-persist-the-three-fields-2026-10-22.md),
-> persistence only, no behaviour change at `/oauth2/token` — and 4b carries
-> the enforcement afterwards. `0.83.0` still holds until 4b lands; the
-> scope was not re-cut around stage 4.
+> §D is the record of which was whose. **Stage 4 is split in two. 4a landed** `d99b14a` (Level B, 27 jobs, 0
+> skipped) —
+> [`stage4a-persist-the-three-fields-2026-10-22.md`](stage4a-persist-the-three-fields-2026-10-22.md):
+> migration `0049`, three nullable columns with no default, and the
+> unrecorded-method marker. **No behaviour change at `/oauth2/token`.**
+> **4b is the last unbuilt piece** — the typed credential presentation, the
+> channel check, RFC 123 D4 compliance for
+> `authorize::authenticate_client`, both-channels-present and the refresh
+> half. `0.83.0` cuts when it lands; the scope was not re-cut around
+> stage 4.
 
 **Stage 6 landed** `4549c3b` (Level B, 27 jobs, 0 skipped) —
 [`stage6-the-legacy-candidate-report-2026-10-21.md`](stage6-the-legacy-candidate-report-2026-10-21.md)
