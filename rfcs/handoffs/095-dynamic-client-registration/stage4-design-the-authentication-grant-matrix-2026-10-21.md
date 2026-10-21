@@ -3,12 +3,22 @@
 > ## **Rewritten 2026-10-21.** The first version was wrong twice, and both are recorded rather than quietly replaced.
 >
 > **1. It dispatched an "independent design review" to the implementation
-> role, citing RFC 000 as permitting it.** RFC 000 `:39-41` says the
-> opposite: *"The implementer cannot be the sole approver of a
-> security-sensitive design or its closure evidence."* The implementation
-> role's own operating instructions scope it to review *requests*,
-> clarification *requests* and risk *reporting* — not verdicts. The
-> arrangement was the architect's error, asked for in writing.
+> role, citing RFC 000 as permitting it.** The implementation role's own
+> operating instructions scope it to review *requests*, clarification
+> *requests* and risk *reporting* — not verdicts, and the project's role
+> documents assign design review to the architect. The arrangement was the
+> architect's error, asked for in writing.
+>
+> *Citation corrected 2026-10-21.* This paragraph cited RFC 000 `:39-41`
+> for *"The implementer cannot be the sole approver of a security-sensitive
+> design or its closure evidence."* That text was in RFC 000 when the
+> correction was written and `@nabbisen` moved it out the same day; its
+> normative home is `docs/development-specification.md`. **It also does not
+> say what this paragraph implied**: the operative word is *sole*, and the
+> sign-off of record was never the implementation role's. What the
+> delegation broke is the role assignment, not the approval chain — see
+> *Errata: the `Independent design review` field* in
+> [`rfcs/README.md`](../../README.md).
 >
 > **2. It was built on the wrong function.** §B, §C2 and §C3 reasoned about
 > `sui_id_core::oauth_token::authenticate_client`, which serves

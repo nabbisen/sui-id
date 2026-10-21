@@ -90,6 +90,8 @@ scope and prerequisites. **That return closed on 2026-08-27**: each was reviewed
 by the implementation role, which authored none of them, and re-accepted by
 `@nabbisen`. Each RFC's `Independent design review` field records which role
 reviewed it and what that role checked. Prior acceptances remain in history.
+**That field's name overstates what those reviews were** — see
+*Errata: the `Independent design review` field* below.
 
 ### Proposed — security and release-assurance remediation (097, 099–101)
 
@@ -331,6 +333,51 @@ real-environment soak of the current core before any implementation.
 | 007 | [Multi-tenancy](./archive/007-multi-tenancy.md) | Superseded by [RFC 025](./proposed/025-multi-tenant-expansion.md) |
 | 018 | [RFC lifecycle policy](./archive/018-rfc-lifecycle-policy.md) | Superseded by [RFC 000](./done/000-rfc-lifecycle-policy.md), 2026-09-10 — two documents defined one policy; RFC 000 is the shared source and carries everything 018 required |
 
+## Errata: the `Independent design review` field
+
+**Recorded 2026-10-21.** Fifteen RFCs carry an `Independent design review`
+field naming the implementation role as the reviewer. Each of those RFCs now
+carries a footer note saying the same thing; this is the single statement they
+point at.
+
+**What is accurate about those fields.** The reviews happened, the findings
+were measured rather than asserted, and in every case the reviewer had
+authored neither the RFC nor its handoff. Several of them overturned the
+RFC's own premises. Nothing in them is being withdrawn, and no acceptance is
+reopened.
+
+**What the field's name overstates.** "Independent" reads as *a third party*.
+These reviews were independent of the **author** and not of the
+**implementer**, because the implementation role performed them and then
+built the result.
+
+**The governing rule is met.** `docs/development-specification.md` requires
+that *"The implementer cannot be the sole approver of a security-sensitive
+design or its closure evidence."* The word that does the work there is
+**sole**. The sign-off of record on every one of these is `@nabbisen`'s.
+The rule therefore holds; what failed is the field's wording, not the chain
+of sign-off behind it.
+
+**What was irregular.** Design review belongs to the architect role under the
+project's role documents, which state that the high-capability model conducts
+it. Delegating it to the implementation role moved it outside that
+assignment. Where the architect authors the design under review, the pattern
+in [RFC 129](done/129-review-scoped-to-who-exists.md) applies: the architect
+performs it and discloses the non-independence. `@nabbisen` signs it off.
+[RFC 124](done/124-the-uniform-response-is-uniform.md)'s own field is the
+model for how to word that honestly.
+
+**Why a note and not fifteen re-openings.** Returning fifteen Accepted and
+Implemented RFCs to `proposed/` would cost the project far more than the
+defect does, and would change nothing about what was built or approved. The
+owner's direction, 2026-10-21: *"It's true their process was wrong but also
+they should not affect our project management cost forever."* The template
+above is corrected so new RFCs do not reproduce the wording.
+
+**Not applied to RFC 117.** It carries the same field, but it is Superseded
+and archived, and G11 condition 15 already forbids citing it as authority.
+The index entry below links it.
+
 ## Historical implementation order
 
 The v0.42 → v0.48 UI/UX hardening plan shipped in six phases
@@ -380,7 +427,7 @@ The standard shape is light:
 <!-- Add when moving to accepted/: -->
 **Accepted on.** YYYY-MM-DD
 **Approved by.** NAME — where the independent design review returned changes, name the decision it settles (by number, or by recording that it was decided directly); a plain acceptance with no returned changes needs neither (RFC 133 D1).
-**Independent design review.** Reviewing role, what it checked, and durable review reference
+**Independent design review.** Reviewing role, **what it was and was not independent of**, what it checked, and durable review reference. Where the reviewer is also the implementer, say so in the field itself rather than leaving the word "independent" to imply a third party — see *Errata: the `Independent design review` field*.
 **Implementation owner.** NAME
 
 <!-- Required when a security-sensitive RFC moves to done/: -->

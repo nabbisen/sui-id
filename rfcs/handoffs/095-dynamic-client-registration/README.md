@@ -55,7 +55,7 @@ one field, and the design behind it reasoned about the wrong function —
 `/oauth2/token`'s grant dispatch calls a private `authenticate_client` in
 `authorize.rs`, not the public one serving introspection and revocation. It
 also dispatched an "independent design review" to the implementation role,
-which RFC 000 `:39-41` forbids rather than permits. Both are recorded in the
+which the project's role documents assign to the architect, not to it. Both are recorded in the
 design's own header.*
 
 **Found while dispatching stage 5 and fixed by it:** the consent screen

@@ -160,3 +160,18 @@ foreclose it.
 - **D7 edits `rfcs/README.md` and another RFC's handoff.** Small, but it means
   this package touches RFC 111's scope; whichever lands second must not
   reinstate the label.
+
+---
+
+**Note on the `Independent design review` field above — added 2026-10-21.**
+The review it names was performed by the implementation role. It was
+independent of this RFC's *author*; it was not independent of its
+*implementer*, and the field's name does not say so. The governing rule in
+`docs/development-specification.md` — *"The implementer cannot be the sole
+approver of a security-sensitive design or its closure evidence"* — is met.
+The sign-off of record is `@nabbisen`'s. What was irregular is that design
+review belongs to the architect role under the project's role documents, and
+these reviews were delegated away from it. The review's measured findings
+stand and this RFC's acceptance is not reopened. The single statement this
+note points at is *Errata: the `Independent design review` field* in
+[`rfcs/README.md`](../README.md).
