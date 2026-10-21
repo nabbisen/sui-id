@@ -32,11 +32,12 @@ the cycle nothing but time. The order is now 2 → 3 → **5** → 4 → 6.
 > [`stage4a-persist-the-three-fields-2026-10-22.md`](stage4a-persist-the-three-fields-2026-10-22.md):
 > migration `0049`, three nullable columns with no default, and the
 > unrecorded-method marker. **No behaviour change at `/oauth2/token`.**
-> **4b is the last unbuilt piece** — the typed credential presentation, the
-> channel check, RFC 123 D4 compliance for
-> `authorize::authenticate_client`, both-channels-present and the refresh
-> half. `0.83.0` cuts when it lands; the scope was not re-cut around
-> stage 4.
+> **4b is dispatched and is the last unbuilt piece** —
+> [`stage4b-enforce-the-matrix-2026-10-22.md`](stage4b-enforce-the-matrix-2026-10-22.md):
+> the typed credential presentation, the channel check, RFC 123 D4
+> compliance for `authorize::authenticate_client`, both-channels-present
+> and the refresh half. `0.83.0` cuts when it lands; the scope was not
+> re-cut around stage 4.
 
 **Stage 6 landed** `4549c3b` (Level B, 27 jobs, 0 skipped) —
 [`stage6-the-legacy-candidate-report-2026-10-21.md`](stage6-the-legacy-candidate-report-2026-10-21.md)
