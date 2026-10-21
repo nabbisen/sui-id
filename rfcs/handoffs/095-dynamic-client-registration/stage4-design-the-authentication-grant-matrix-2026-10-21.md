@@ -209,6 +209,27 @@ no code introspection or revocation runs. Whether the same check should also
 go to the other function is a genuinely separate decision and is **not** part
 of this stage.
 
+> **Measured 2026-10-22, and it is a prerequisite this section did not
+> state: the channel never reaches core.** `handlers/oidc.rs:378-401`
+> collapses it before calling either grant:
+>
+> ```rust
+> let client_id_raw = header_client.or_else(|| form.client_id.clone())…;
+> let client_secret = header_secret.or_else(|| form.client_secret…);
+> ```
+>
+> `CodeExchangeRequest` and `RefreshExchangeRequest` carry the *values* and
+> not their origin, so `authenticate_client` cannot decide rows 4, 6 or 8
+> today — it has nothing to decide them from. **The HTTP layer must pass
+> the presentation down as typed data**, because it is the only layer that
+> can see it, and core must keep the decision, because the decision needs
+> the stored method and the HTTP layer has no business loading client rows
+> to authenticate. A three-state value — Basic, body, or both — carried on
+> both request structs. Not a `bool`, and not two.
+>
+> That same expression is also row 8 in miniature: `.or_else(…)` is what
+> *"prefers Basic silently"* means, at `:399`.
+
 **The timing question — settled, and my own framing of it was wrong.**
 This section previously said the choice was between *"introducing
 uniform-timing handling for the first time"* and *"shipping without it"*.
@@ -248,10 +269,22 @@ severity and timeline to him. The dispatch must therefore return the
 
 ### C3 — reject both channels present
 
-In `client_credentials` (`handlers/oauth_token.rs:188`): if a Basic pair and
-body credentials are both present, reject rather than prefer Basic. Needs no
-column and does not depend on C1, so **it can ship alone** if C1 needs more
-deliberation than this stage can carry.
+If a Basic pair and body credentials are both present, reject rather than
+prefer Basic. Needs no column and does not depend on C1, so **it can ship
+alone**. §D records that decision and whose it was.
+
+> **Location corrected 2026-10-22.** This section said
+> `client_credentials` (`handlers/oauth_token.rs:188`). **That is the
+> introspection and revocation helper** — the same wrong-function mistake
+> the first version of this whole document made, in a smaller place. Row 8
+> belongs to the matrix's own axis, authorization-code and refresh
+> dispatch, and that is **`handlers/oidc.rs:378-401`**, where
+> `header_secret.or_else(|| form.client_secret…)` at `:399` silently
+> prefers Basic. Both-present is detectable exactly there, before anything
+> is handed to core.
+>
+> `handlers/oauth_token.rs:188` is the twin and has the same preference.
+> Fixing it is §G item 3's business, not this stage's.
 
 ### C4 — the refresh half
 
