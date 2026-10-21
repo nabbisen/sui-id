@@ -257,3 +257,24 @@ Column layout mirrors RFC 093's table so one parser reads both. Added with stage
 | ID | Toolchain | Features | Blocking command / assertion |
 |---|---|---|---|
 | G16 | Python 3.14 | n/a | `python3.14 scripts/check-owner-attributions.py --root . --policy contracts/owner-attributions.toml` |
+
+---
+
+**Note on the `Independent design review` field above — added 2026-10-21.**
+The review it names was performed by the implementation role. It was
+independent of this RFC's *author*; it was not independent of its
+*implementer*, and the field's name does not say so. The rule in
+`docs/development-specification.md` — *"The implementer cannot be the sole
+approver of a security-sensitive design or its closure evidence"* — is met.
+The sign-off of record is `@nabbisen`'s.
+
+**What was irregular is who performed it.** [`ROADMAP.md`](../../ROADMAP.md)
+§S1a places design review with `@nabbisen`, or an external architect he
+engages, and **not** with the dev team; §S1c makes architect self-review
+prohibited by default and permitted only where he asks for it. Both were dated 2026-10-01 and most of these reviews predate them, so this records a header written before the rule, not one written against it.
+
+The review's measured findings stand and this RFC's acceptance is not
+reopened; §S1c records that correcting these headers properly is a deferred
+re-review (RFC 128 D4), which this note is not. The single statement this
+note points at is *Errata: the `Independent design review` field* in
+[`rfcs/README.md`](../README.md).

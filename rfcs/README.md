@@ -335,48 +335,63 @@ real-environment soak of the current core before any implementation.
 
 ## Errata: the `Independent design review` field
 
-**Recorded 2026-10-21.** Fifteen RFCs carry an `Independent design review`
-field naming the implementation role as the reviewer. Each of those RFCs now
-carries a footer note saying the same thing; this is the single statement they
-point at.
+**Recorded 2026-10-21.** Sixteen RFCs carry an `Independent design review`
+field naming the implementation role as the reviewer: 094, 095, 096, 107,
+110, 112, 115, 116, 117, 118, 120, 121, 122, 123, 125 and 126. Each now
+carries a footer note; this is the single statement they point at.
 
-**What is accurate about those fields.** The reviews happened, the findings
+**This is not a new finding.** [`ROADMAP.md`](../ROADMAP.md) §S1c already
+records it, with the same list minus 107. The two governing questions were
+settled on **2026-10-01** by `@nabbisen`:
+
+- **§S1a — the workflow.** Design review belongs to `@nabbisen`, or an
+  external architect he engages. **Not the dev team.**
+- **§S1c — self-review.** Prohibited by default; permitted only where he
+  asks for it, and the record must say he asked.
+
+**What is accurate about the fields.** The reviews happened, the findings
 were measured rather than asserted, and in every case the reviewer had
-authored neither the RFC nor its handoff. Several of them overturned the
-RFC's own premises. Nothing in them is being withdrawn, and no acceptance is
-reopened.
+authored neither the RFC nor its handoff. Several overturned the RFC's own
+premises. Nothing in them is withdrawn and no acceptance is reopened.
 
-**What the field's name overstates.** "Independent" reads as *a third party*.
-These reviews were independent of the **author** and not of the
-**implementer**, because the implementation role performed them and then
-built the result.
+**What the name overstates.** "Independent" reads as *a third party*. These
+reviews were independent of the **author** and not of the **implementer**,
+because the implementation role performed them and then built the result.
 
-**The governing rule is met.** `docs/development-specification.md` requires
+**The written rule is met.** `docs/development-specification.md` requires
 that *"The implementer cannot be the sole approver of a security-sensitive
-design or its closure evidence."* The word that does the work there is
-**sole**. The sign-off of record on every one of these is `@nabbisen`'s.
-The rule therefore holds; what failed is the field's wording, not the chain
-of sign-off behind it.
+design or its closure evidence"* — the operative word being **sole**.
 
-**What was irregular.** Design review belongs to the architect role under the
-project's role documents, which state that the high-capability model conducts
-it. Delegating it to the implementation role moved it outside that
-assignment. Where the architect authors the design under review, the pattern
-in [RFC 129](done/129-review-scoped-to-who-exists.md) applies: the architect
-performs it and discloses the non-independence. `@nabbisen` signs it off.
+On every one of these, the sign-off of record is `@nabbisen`'s. What failed
+is who performed the review and what the field calls it, not the chain of
+sign-off behind it.
+
+**Fifteen predate the rulings. [RFC 107](accepted/107-cli-help-completeness.md)
+does not.** Its review was dispatched to the dev team on 2026-10-14, two
+weeks after §S1a and §S1c. That one is a breach of a standing ruling rather
+than a header written before one, and it is named here rather than averaged
+into the other fifteen.
+
+**Why a note rather than sixteen re-openings.** §S1c says correcting these
+headers properly is the deferred re-review of RFC 128 D4, *"not a wording
+pass"*. These notes are not that re-review and do not stand in for it. They
+exist because the owner directed a cheaper interim record, 2026-10-21:
+*"It's true their process was wrong but also they should not affect our
+project management cost forever."* Returning sixteen Accepted and
+Implemented RFCs to `proposed/` would change nothing about what was built.
+
+**Why it kept being re-litigated.** `scripts/check-rfc-integrity.py`'s
+condition 9 still carries a comment saying the self-review question awaits a
+ruling. It does not: §S1c answered it on 2026-10-01, and §S1c itself asks
+for that comment to be updated. A reader of the gate source — including the
+architect, on 2026-10-21 — concludes the question is open and escalates it
+again. That comment is the reason this errata exists at all.
+
+**The template below is corrected** so new RFCs state what a review was and
+was not independent of, instead of naming a role and letting the word
+"independent" imply a third party.
 [RFC 124](done/124-the-uniform-response-is-uniform.md)'s own field is the
-model for how to word that honestly.
-
-**Why a note and not fifteen re-openings.** Returning fifteen Accepted and
-Implemented RFCs to `proposed/` would cost the project far more than the
-defect does, and would change nothing about what was built or approved. The
-owner's direction, 2026-10-21: *"It's true their process was wrong but also
-they should not affect our project management cost forever."* The template
-above is corrected so new RFCs do not reproduce the wording.
-
-**Not applied to RFC 117.** It carries the same field, but it is Superseded
-and archived, and G11 condition 15 already forbids citing it as authority.
-The index entry below links it.
+model.
 
 ## Historical implementation order
 

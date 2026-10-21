@@ -5,8 +5,7 @@
 > **1. It dispatched an "independent design review" to the implementation
 > role, citing RFC 000 as permitting it.** The implementation role's own
 > operating instructions scope it to review *requests*, clarification
-> *requests* and risk *reporting* — not verdicts, and the project's role
-> documents assign design review to the architect. The arrangement was the
+> *requests* and risk *reporting* — not verdicts. The arrangement was the
 > architect's error, asked for in writing.
 >
 > *Citation corrected 2026-10-21.* This paragraph cited RFC 000 `:39-41`
@@ -16,9 +15,19 @@
 > normative home is `docs/development-specification.md`. **It also does not
 > say what this paragraph implied**: the operative word is *sole*, and the
 > sign-off of record was never the implementation role's. What the
-> delegation broke is the role assignment, not the approval chain — see
-> *Errata: the `Independent design review` field* in
-> [`rfcs/README.md`](../../README.md).
+> delegation broke is who may review, not the chain of sign-off.
+>
+> **3. The escalation was wrong too, and this is the one that cost time.**
+> The rewritten header below treated "who may perform a design review here"
+> as an open question for `@nabbisen`. It was settled on **2026-10-01**:
+> [`ROADMAP.md`](../../../ROADMAP.md) §S1a places design review with
+> `@nabbisen` or an external architect he engages and **not** the dev team,
+> and §S1c prohibits architect self-review unless he asks for it. §E below
+> is withdrawn on that basis. The architect read
+> `scripts/check-rfc-integrity.py`'s condition 9 comment, which still says
+> the question awaits settlement, and trusted it over the ROADMAP — the
+> stale-pointer failure this project keeps meeting. See *Errata: the
+> `Independent design review` field* in [`rfcs/README.md`](../../README.md).
 >
 > **2. It was built on the wrong function.** §B, §C2 and §C3 reasoned about
 > `sui_id_core::oauth_token::authenticate_client`, which serves
@@ -182,25 +191,37 @@ Not for the implementation role to rule on now; these are what the eventual
 dispatch must settle and state: the C1 default, whether C2 introduces
 uniform timing, and whether C3 ships independently.
 
-## E — the one question for `@nabbisen`
+## E — withdrawn: the question was already answered
 
-**Who may perform a design review here?**
+> **Withdrawn 2026-10-21.** This section asked *"Who may perform a design
+> review here?"* as an open question. It was settled on **2026-10-01** and
+> the architect did not find it.
 
-`scripts/check-rfc-integrity.py` condition 9 reserves exactly this in its own
-source: it deliberately does not inspect **who** reviewed, and its comment
-says the check must not be added until self-review has been ruled on. The
-question has been open, and ungated on purpose, since RFC 128.
+[`ROADMAP.md`](../../../ROADMAP.md) §S1a sets out the workflow in the
+owner's own words from that day, and its design-review row reads:
+**`@nabbisen`, or an external architect he engages. Not the dev team.**
+The table is not reproduced here — §S1a is the record, and copying a
+governance table into a handoff is how a restatement drifts from its
+source.
 
-It needs answering because the practice is already in the record:
-**RFC 095's own `Independent design review` field has read "by the
-implementation role" since 2026-08-26**, and RFC 107's says the same. This
-incident did not create the arrangement; it mis-cited RFC 000 as authorizing
-it.
+§S1c adds that architect self-review is **prohibited by default** and
+permitted only where he asks for it, with the record saying he asked.
 
-Changing either RFC's field is a material change to security-review metadata,
-which RFC 000 returns an Accepted RFC to `proposed/` for. **So nothing is
-touched until he rules**, and the ruling also decides whether this design —
-written by the author of what it designs — can proceed on RFC 129 `:5`'s
-disclosed-non-independence footing, which is what it currently claims.
+**So this design's review is not the architect's to conduct either**, absent
+his asking. Two statements elsewhere in this document are corrected by that:
+the header's *"corroboration under RFC 129 `:5`"* framing, and the claim
+below that this design can proceed on disclosed non-independence. Neither is
+the architect's call to make here.
+
+**Why it was escalated anyway.** `scripts/check-rfc-integrity.py` condition
+9's comment still says the check must not be added until self-review has
+been settled — three weeks after it was. §S1c itself asks for that comment
+to be brought up to date and it never was. The architect read the gate
+source, took the question for open, and raised it a second time. The
+pointer was stale; the record was not.
+
+**What is genuinely outstanding on this design**, and it is the ordinary
+gate rather than a governance question: `@nabbisen` reviews it, or engages
+an external architect to. §A–§D stand as written and are measured.
 
 **Stage 4 is not dispatched and nothing waits on the implementation role.**
