@@ -22,8 +22,12 @@ architect's to make, not dispatched**:
 [`stage5-browser-presentation-2026-10-21.md`](stage5-browser-presentation-2026-10-21.md)
 — taken ahead of stage 4 because it depends on nothing stage 4 settles, and
 idling the implementation role behind a ruling it does not need would cost
-the cycle nothing but time. The order is now 2 → 3 → **5** → 4 → 6, and
-**stage 6 is the only one left that is not blocked.**
+the cycle nothing but time. The order is now 2 → 3 → **5** → 4 → 6.
+
+**Stage 6 is dispatched** —
+[`stage6-the-legacy-candidate-report-2026-10-21.md`](stage6-the-legacy-candidate-report-2026-10-21.md)
+— the read-only legacy-candidate report, the last unblocked stage of
+`0.83.0`. Stage 4 remains undispatched pending the self-review ruling.
 
 **Measured while writing that design, and it reshapes the stage:**
 `token_endpoint_auth_method` is accepted at registration, validated by stage
