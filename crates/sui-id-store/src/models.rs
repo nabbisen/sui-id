@@ -311,9 +311,21 @@ pub struct ClientRow {
     pub consent_policy: ConsentPolicy,
     /// RFC 008: how the client was registered.
     pub registered_via: RegistrationSource,
-    /// RFC 008: application identity URLs (validated HTTPS, never fetched).
+    /// RFC 008: application logo URL (validated HTTPS). For a dynamically
+    /// registered client, never fetched *by construction* — RFC 095 M3
+    /// stage 5's `registered_via` gate in
+    /// `sui_id_web::pages::oidc::render_consent` drops it before it reaches
+    /// the page. For an admin-registered client it is emitted as `<img
+    /// src>` on the consent screen; it is not fetched today only because
+    /// `sui_id::http::security_headers` sets `img-src 'self' data:`, a
+    /// header in another crate, not a property of this field.
     pub logo_uri: Option<String>,
+    /// RFC 008: application home-page URL (validated HTTPS). Rendered as a
+    /// user-activated link on the consent screen, never an automatic
+    /// request.
     pub homepage_uri: Option<String>,
+    /// RFC 008: application identity URLs (validated HTTPS). Not rendered
+    /// anywhere today — stored and echoed only.
     pub privacy_policy_uri: Option<String>,
     pub tos_uri: Option<String>,
     pub created_at: DateTime<Utc>,

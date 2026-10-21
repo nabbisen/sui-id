@@ -79,6 +79,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `POST /oauth2/register` now also sends `Pragma: no-cache`, alongside
   the existing `Cache-Control: no-store`, on every response.
 
+### Fixed
+
+- **A dynamically registered client's logo no longer renders on the
+  consent screen (RFC 095 M3 stage 5).** Previously, any client's
+  `logo_uri` was emitted as an `<img src>` on the consent page regardless
+  of how the client was registered. For a dynamically registered client
+  this is no longer the case — the logo block (image and caption) is
+  omitted entirely; an administrator-created client's logo is unaffected.
+  No request to the registrant-controlled image origin was ever made in
+  practice — sui-id's default `Content-Security-Policy` (`img-src 'self'
+  data:`) already blocked the cross-origin load — so this closes a gap
+  between what was emitted and what RFC 095 requires, not an exploitable
+  one.
+
 ## [0.82.0] — 2026-10-20
 
 **A dependency and security maintenance cut: no behaviour changes.**

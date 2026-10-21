@@ -25,7 +25,7 @@ use tower::ServiceExt;
 
 use super::common::*;
 
-const REDIRECT: &str = "https://rp.test/cb";
+pub(crate) const REDIRECT: &str = "https://rp.test/cb";
 const BOB_PASSWORD: &str = "bob-very-strong-password";
 
 // ---------- fixtures ----------
@@ -97,7 +97,7 @@ async fn world() -> World {
     }
 }
 
-fn authorize_uri(client_id: &str, rp_state: &str) -> String {
+pub(crate) fn authorize_uri(client_id: &str, rp_state: &str) -> String {
     let (_, challenge) = pkce_pair();
     format!(
         "/oauth2/authorize?client_id={client_id}&redirect_uri={}&response_type=code\
@@ -108,13 +108,19 @@ fn authorize_uri(client_id: &str, rp_state: &str) -> String {
 }
 
 /// What the consent screen hands the browser.
-struct Screen {
-    consent_cookie: String,
-    csrf: String,
-    set_cookies: Vec<String>,
+pub(crate) struct Screen {
+    pub(crate) consent_cookie: String,
+    pub(crate) csrf: String,
+    pub(crate) set_cookies: Vec<String>,
+    /// `Content-Security-Policy`, as the response actually carried it —
+    /// RFC 095 M3 stage 5 §5 wants this measured, not argued.
+    pub(crate) csp: Option<String>,
+    /// The rendered HTML body. Reused by RFC 095 M3 stage 5's e2e test
+    /// rather than building a second harness for the same screen.
+    pub(crate) body: String,
 }
 
-async fn consent_screen(
+pub(crate) async fn consent_screen(
     state: &AppState,
     client_id: &str,
     session: &str,
@@ -138,11 +144,20 @@ async fn consent_screen(
         .iter()
         .map(|v| v.to_str().expect("utf8").to_owned())
         .collect();
+    let consent_cookie = extract_set_cookie(resp.headers(), "sui_id_consent")
+        .expect("the screen sets its state cookie");
+    let csrf = extract_csrf_cookie(resp.headers()).expect("the screen sets a csrf cookie");
+    let csp = resp
+        .headers()
+        .get(header::CONTENT_SECURITY_POLICY)
+        .map(|v| v.to_str().expect("utf8").to_owned());
+    let body = String::from_utf8_lossy(&read_body(resp.into_body()).await).to_string();
     Screen {
-        consent_cookie: extract_set_cookie(resp.headers(), "sui_id_consent")
-            .expect("the screen sets its state cookie"),
-        csrf: extract_csrf_cookie(resp.headers()).expect("the screen sets a csrf cookie"),
+        consent_cookie,
+        csrf,
         set_cookies,
+        csp,
+        body,
     }
 }
 

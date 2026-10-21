@@ -116,6 +116,16 @@ reads `"email openid profile"`.
 > obtain tokens. This is a deliberate gate — operators review third-party
 > registrations before granting access.
 
+> **A dynamically registered `logo_uri` is never displayed.** It is stored
+> and echoed back exactly as sent, for operator/protocol inspection only.
+> The consent screen omits the element entirely, by design: RFC 095 forbids
+> making a user's browser fetch an image a self-registered client supplied,
+> and sui-id meets that by not emitting the `<img>` at all, rather than by
+> relying on a response header to block the load. If your application
+> relies on its logo appearing to the user during consent, it will not:
+> there is no error, no rejection, and nothing to detect by testing the
+> registration response alone.
+
 Supported fields: `redirect_uris` (required), `client_name` (required),
 `scope` (**required** — see below), `grant_types`, `response_types`,
 `token_endpoint_auth_method`, `logo_uri`, `client_uri`, `policy_uri`,

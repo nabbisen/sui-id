@@ -2,15 +2,29 @@
 
 use super::common::*;
 use leptos::prelude::*;
+use sui_id_store::models::RegistrationSource;
 
 pub struct ConsentData {
     pub client_name: String,
     pub requested_scopes: Vec<String>,
     pub csrf_token: String,
-    /// RFC 008: optional application logo URL (validated HTTPS, never fetched).
+    /// RFC 008: optional application logo URL. For a dynamically
+    /// registered client it is never fetched *by construction*: the
+    /// `registered_via` gate in `render_consent` drops it before it reaches
+    /// the page. For an admin-registered client it is emitted as `<img
+    /// src>`; it is not fetched today only because `img-src 'self' data:`
+    /// in `sui_id::http::security_headers` blocks the cross-origin load —
+    /// a header in another crate, not a property of this field.
     pub logo_uri: Option<String>,
     /// RFC 008: optional application home-page URL.
     pub homepage_uri: Option<String>,
+    /// RFC 008; gate added RFC 095 M3 stage 5: how this client was
+    /// registered. RFC 095 `:269-270` forbids the consent screen from
+    /// emitting any automatic request for a dynamically registered
+    /// `logo_uri` — the value is retained for operator/protocol inspection
+    /// only. Typed rather than a `bool` so a call site can't pass an
+    /// inverted flag unnoticed.
+    pub registered_via: RegistrationSource,
 }
 
 pub fn render_consent(data: ConsentData, lang: sui_id_i18n::Locale) -> String {
@@ -49,7 +63,14 @@ pub fn render_consent(data: ConsentData, lang: sui_id_i18n::Locale) -> String {
             .collect();
 
         // RFC 008: application identity — logo and homepage link.
-        let logo_uri = data.logo_uri.clone();
+        // RFC 095 M3 stage 5: a dynamically registered client's logo must
+        // never be emitted (`:269-270`) — gated here, in the renderer,
+        // rather than by the caller, so the next caller of `render_consent`
+        // cannot silently re-break it by forgetting the check.
+        let logo_uri = match data.registered_via {
+            RegistrationSource::Admin => data.logo_uri.clone(),
+            RegistrationSource::Dynamic => None,
+        };
         let homepage_uri = data.homepage_uri.clone();
         let client_name_display = client_name.clone();
 
@@ -106,3 +127,6 @@ pub fn render_consent(data: ConsentData, lang: sui_id_i18n::Locale) -> String {
         }
     })
 }
+
+#[cfg(test)]
+mod tests;

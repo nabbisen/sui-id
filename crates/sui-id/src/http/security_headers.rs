@@ -19,10 +19,11 @@
 //!   can load anything from. The admin pages are server-rendered
 //!   Leptos with one bundled JS file (`/static/webauthn.js`); inline
 //!   scripts are not used. `frame-ancestors 'none'` makes clickjacking
-//!   on `/oauth2/authorize` impossible — sui-id has no consent screen,
-//!   but a logged-in user's authorize redirect could still be staged
-//!   inside an attacker iframe to steal codes through the response
-//!   redirect, so framing is denied unconditionally.
+//!   on `/oauth2/authorize` impossible regardless of whether that
+//!   request ends in a code redirect or a consent screen (RFC 038) —
+//!   either way, a logged-in user's authorize response could be staged
+//!   inside an attacker iframe to steal the code or the approval click,
+//!   so framing is denied unconditionally.
 //!
 //! - `X-Frame-Options: DENY`: belt-and-braces alongside
 //!   `frame-ancestors 'none'` for older browsers.

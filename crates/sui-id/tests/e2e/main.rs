@@ -58,6 +58,7 @@ mod r095_m3_stage1_registration_validation;
 mod r095_m3_stage1b_loopback_port_matching;
 mod r095_m3_stage2_field_rules;
 mod r095_m3_stage3_response;
+mod r095_m3_stage5_browser_presentation;
 mod r096_a_harness;
 mod r096_a_stage3a_jwks;
 mod r096_a_stage4a_verify;
