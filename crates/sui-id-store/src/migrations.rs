@@ -207,6 +207,10 @@ const MIGRATIONS: &[Migration] = &[
         version: 48,
         sql: include_str!("./migrations/0048_federation_mfa_pending_one_active_per_user.sql"),
     },
+    Migration {
+        version: 49,
+        sql: include_str!("./migrations/0049_client_auth_method_and_grant_types.sql"),
+    },
 ];
 
 /// The highest schema version this build of sui-id-store knows how to
@@ -541,7 +545,40 @@ fn apply_migration(conn: &mut Connection, m: &Migration) -> StoreResult<()> {
         }
     }
 
+    // RFC 095 M3 stage 4a §2: the migration must say how many rows it left
+    // with no recorded auth method — the size of the class stage 4b's
+    // channel check will not enforce. Reported once, at the moment this
+    // process is the one that actually applied 0049 (not on every later
+    // startup, which would just repeat whatever state it finds).
+    if m.version == 49 {
+        report_unrecorded_auth_method_rows(conn);
+    }
+
     Ok(())
+}
+
+/// RFC 095 M3 stage 4a §2. `token_endpoint_auth_method` is nullable with no
+/// `DEFAULT` (C1), so every row that existed before this migration ran is
+/// left `NULL` in all three new columns — this count is exactly that set,
+/// and exactly the class stage 4b's channel check will treat as exempt.
+/// Best-effort: a query failure here must not fail startup over a count
+/// that only improves an operator-facing log line.
+fn report_unrecorded_auth_method_rows(conn: &Connection) {
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM clients WHERE token_endpoint_auth_method IS NULL",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap_or(0);
+    tracing::info!(
+        count,
+        "migration 0049: {count} existing client row(s) left with no recorded \
+         token_endpoint_auth_method (and no grant_types/response_types) — not \
+         inferred, per RFC 095 M3 stage 4a's C1 decision. Visible as \"unrecorded\" \
+         in the admin client views; stage 4b's channel check does not enforce \
+         against these rows."
+    );
 }
 
 /// Apply all pending migrations to `conn`.

@@ -58,6 +58,9 @@ fn a_client() -> crate::models::ClientRow {
         homepage_uri: None,
         privacy_policy_uri: None,
         tos_uri: None,
+        token_endpoint_auth_method: None,
+        grant_types: None,
+        response_types: None,
         created_at: Utc::now(),
         updated_at: Utc::now(),
     }

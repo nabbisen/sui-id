@@ -48,6 +48,16 @@ every candidate the command does find must be disabled, explicitly
 accepted as legacy, or have its metadata corrected under a separate audit —
 this command only lists; it decides nothing.
 
+**New migration (`0049`): `token_endpoint_auth_method`, `grant_types`,
+`response_types` on `clients` (RFC 095 M3 stage 4a).** Nullable, no
+default — **no authentication behaviour changes in this release.**
+Dynamic registration now stores what it already validated; an
+administrator-created client, and every client row that predates this
+migration, is left with all three unrecorded (not a guessed default) and
+is marked "Auth method unrecorded" wherever the admin UI already shows a
+client's provenance. The migration logs how many existing rows it left
+that way — check your startup log once after upgrading.
+
 ### v0.76.x
 
 **New migrations (0033–0038).** All run automatically and are backwards-compatible

@@ -95,6 +95,14 @@ pub enum StatusKind {
     /// administrator-created client; it gets no badge at all. →
     /// `badge badge--info`
     SelfRegistered,
+    /// RFC 095 M3 stage 4a §5: a client row whose `token_endpoint_auth_method`
+    /// is `NULL` — never recorded, and permanently exempt from stage 4b's
+    /// channel check until an administrator records one (not yet built).
+    /// `--warn`, not `--info` like `SelfRegistered`: the design's own words
+    /// are that this exemption "must not be an invisible one", which is a
+    /// real, if low-severity, standing cost rather than a neutral fact. →
+    /// `badge badge--warn`
+    AuthMethodUnrecorded,
 }
 
 /// Render a status badge with localised text and the matching CSS
@@ -116,6 +124,7 @@ pub fn status_badge(t: &'static sui_id_i18n::Strings, kind: StatusKind) -> impl 
         StatusKind::Unhealthy => ("badge badge--danger", t.status_unhealthy),
         StatusKind::Unknown => ("badge badge--warn", t.status_unknown),
         StatusKind::SelfRegistered => ("badge badge--info", t.status_self_registered),
+        StatusKind::AuthMethodUnrecorded => ("badge badge--warn", t.status_auth_method_unrecorded),
     };
     view! { <span class=class>{text}</span> }
 }

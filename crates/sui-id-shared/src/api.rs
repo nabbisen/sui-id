@@ -93,6 +93,13 @@ pub struct ClientSummary {
     /// RFC 136 D2: drives the self-registered marker in the admin UI.
     #[serde(default)]
     pub registered_via: String,
+    /// RFC 095 M3 stage 4a §5: `None` drives the "unrecorded" marker in
+    /// the admin UI. Carries the wire value (`"none"` /
+    /// `"client_secret_basic"` / `"client_secret_post"`) when recorded;
+    /// not rendered today, but kept a real value rather than a `bool` so
+    /// a future renderer does not need to widen this type to show it.
+    #[serde(default)]
+    pub token_endpoint_auth_method: Option<String>,
     pub created_at: DateTime<Utc>,
 }
 

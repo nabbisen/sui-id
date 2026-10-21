@@ -153,6 +153,14 @@ pub struct Strings {
     /// client gets no badge at all (its creation is not news to the
     /// administrator who did it).
     pub status_self_registered: &'static str,
+    /// RFC 095 M3 stage 4a §5: marks a client row whose
+    /// `token_endpoint_auth_method` is `NULL` — never recorded (a row that
+    /// predates migration `0049`, or an administrator-created client,
+    /// which is never asked). Shown only on that marker, the same shape as
+    /// `status_self_registered` — a recorded method gets no badge here.
+    /// Must never be confused with `client_secret_basic`: this exists
+    /// specifically so "unrecorded" cannot be misread as a default value.
+    pub status_auth_method_unrecorded: &'static str,
 
     // ---- Empty placeholders (RFC 052) ----
     // For rendering "no value" / "any" / "fallback" cells consistently.

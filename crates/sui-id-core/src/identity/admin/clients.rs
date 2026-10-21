@@ -99,6 +99,13 @@ pub async fn create_client(
         homepage_uri: None,
         privacy_policy_uri: None,
         tos_uri: None,
+        // RFC 095 M3 stage 4a: an administrator creating a client was not
+        // asked for any of these either -- `None` here is "unrecorded",
+        // the same as it is for a client that predates the column, not a
+        // default standing in for a real choice.
+        token_endpoint_auth_method: None,
+        grant_types: None,
+        response_types: None,
         created_at: now,
         updated_at: now,
     };

@@ -73,6 +73,9 @@ pub async fn clients_get(
             is_deleted: r.is_deleted,
             consent_policy: r.consent_policy.as_str().to_string(),
             registered_via: r.registered_via.as_str().to_string(),
+            token_endpoint_auth_method: r
+                .token_endpoint_auth_method
+                .map(|m| m.as_str().to_string()),
             created_at: r.created_at,
         })
         .collect();
@@ -201,6 +204,9 @@ pub async fn clients_create(
             is_deleted: r.is_deleted,
             consent_policy: r.consent_policy.as_str().to_string(),
             registered_via: r.registered_via.as_str().to_string(),
+            token_endpoint_auth_method: r
+                .token_endpoint_auth_method
+                .map(|m| m.as_str().to_string()),
             created_at: r.created_at,
         })
         .collect();
@@ -317,6 +323,9 @@ pub async fn clients_edit_get(
             is_disabled: row.is_disabled,
             consent_policy: row.consent_policy.as_str().to_string(),
             registered_via: row.registered_via.as_str().to_string(),
+            token_endpoint_auth_method: row
+                .token_endpoint_auth_method
+                .map(|m| m.as_str().to_string()),
             freshly_rotated_secret: None,
         },
         None,
@@ -439,6 +448,9 @@ pub async fn clients_rotate_secret_post(
             is_disabled: row.is_disabled,
             consent_policy: row.consent_policy.as_str().to_string(),
             registered_via: row.registered_via.as_str().to_string(),
+            token_endpoint_auth_method: row
+                .token_endpoint_auth_method
+                .map(|m| m.as_str().to_string()),
             freshly_rotated_secret: Some(new_secret),
         },
         None,

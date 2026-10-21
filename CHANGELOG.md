@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `clients` gains three new columns — `token_endpoint_auth_method`,
+  `grant_types`, `response_types` (migration `0049`) — and dynamic
+  registration now stores what it already validated and echoed (RFC 095
+  M3 stage 4a). All three are nullable with no default: a client row from
+  before this migration, or created by an administrator, has `NULL` in
+  all three and is marked "Auth method unrecorded" wherever the admin UI
+  already shows a client's provenance. **No authentication behaviour
+  changes in this release.** The token endpoint does not read these
+  columns yet; enforcing them is a separate, later change (RFC 095 M3
+  stage 4b). If you see `token_endpoint_auth_method` in a client's data
+  for the first time, it is being recorded now, not newly checked.
+- **API change, `sui-id-shared`:** `ClientSummary` and `ClientEditData`
+  gain `token_endpoint_auth_method: Option<String>`. Field access is
+  unaffected; code that builds either with a struct literal, or matches
+  one exhaustively, needs the new field. Neither type is
+  `#[non_exhaustive]`, so this is a breaking change for those callers.
 - New admin subaction: `sui-id admin legacy-dynamic-candidates [--config PATH]`
   (RFC 095 M3 stage 6). Read-only — it lists `clients` rows that a
   pre-RFC-094 bug (commit `48946f6` through `930513b`) may have left

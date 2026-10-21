@@ -128,6 +128,7 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     status_unhealthy: "异常",
     status_unknown: "未知",
     status_self_registered: "自行注册",
+    status_auth_method_unrecorded: "认证方式未记录",
 
     // Empty placeholders (RFC 052)
     empty_dash: "—",

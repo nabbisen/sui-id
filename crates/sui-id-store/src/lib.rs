@@ -63,6 +63,8 @@ pub use read_conn::{ReadConn, ReadStatement};
 mod tests_rfc021;
 
 #[cfg(test)]
+mod tests_rfc095_stage4a;
+#[cfg(test)]
 mod tests_rfc096_b1_stage1;
 #[cfg(test)]
 mod tests_rfc096_b1_stage11b;

@@ -289,6 +289,52 @@ impl RegistrationSource {
     }
 }
 
+/// RFC 7591 §2's closed set of three, exactly as
+/// `dynamic_registration_validation::validate_auth_method` already
+/// validates it (RFC 095 M3 stage 2). Typed rather than a bare `String`
+/// because the set is closed and small — the same reasoning
+/// `RegistrationSource`/`ConsentPolicy` already apply on this struct.
+///
+/// No `Default` impl: unlike `RegistrationSource`, there is no row for
+/// which defaulting this is correct. A client whose method was never
+/// recorded is `ClientRow::token_endpoint_auth_method == None` (the
+/// `Option`, not this type) — RFC 095 M3 stage 4a's own C1 decision, kept
+/// distinct from `Self::None` (the RFC 7591 wire value `"none"`, a
+/// *recorded* choice of no client authentication).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TokenEndpointAuthMethod {
+    /// RFC 7591 wire value `"none"` — a public client, no secret.
+    None,
+    ClientSecretBasic,
+    ClientSecretPost,
+}
+
+impl TokenEndpointAuthMethod {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::ClientSecretBasic => "client_secret_basic",
+            Self::ClientSecretPost => "client_secret_post",
+        }
+    }
+    /// `None` (the `Option`) for anything outside the closed set, which
+    /// today means only: the three strings this parses are the only ones
+    /// `validate_auth_method` ever lets reach storage, so a stored value
+    /// outside them indicates a mismatch between this parser and that
+    /// validator, not a legitimately unrecorded row — a case this
+    /// function has no way to distinguish from one, which is why the
+    /// comparison is kept in one place, that validator, rather than
+    /// duplicated here.
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "none" => Some(Self::None),
+            "client_secret_basic" => Some(Self::ClientSecretBasic),
+            "client_secret_post" => Some(Self::ClientSecretPost),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ClientRow {
     pub id: ClientId,
@@ -328,6 +374,19 @@ pub struct ClientRow {
     /// anywhere today — stored and echoed only.
     pub privacy_policy_uri: Option<String>,
     pub tos_uri: Option<String>,
+    /// RFC 095 M3 stage 4a. `None` means *unrecorded* — a client row that
+    /// predates migration `0049` and was never asked (RFC 095 M3 stage
+    /// 4a's own C1 decision) — not a default. Stage 4b's channel check
+    /// exempts exactly this class; `sui_id_web`'s client views must mark
+    /// it as unrecorded, never render it as `client_secret_basic`.
+    pub token_endpoint_auth_method: Option<TokenEndpointAuthMethod>,
+    /// RFC 095 M3 stage 4a. Same `None`-means-unrecorded rule as
+    /// `token_endpoint_auth_method`. JSON-array storage, matching
+    /// `redirect_uris`/`post_logout_redirect_uris` on this table.
+    pub grant_types: Option<Vec<String>>,
+    /// RFC 095 M3 stage 4a. Same `None`-means-unrecorded rule as
+    /// `token_endpoint_auth_method`. JSON-array storage.
+    pub response_types: Option<Vec<String>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

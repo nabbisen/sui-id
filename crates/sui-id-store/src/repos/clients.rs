@@ -8,6 +8,22 @@ use chrono::{DateTime, Utc};
 use rusqlite::params;
 use sui_id_shared::ids::ClientId;
 
+/// JSON-array column, nullable, "unrecorded" distinct from "recorded as
+/// empty" (RFC 095 M3 stage 4a C1) — `grant_types`/`response_types`'s own
+/// shape, not `redirect_uris`/`post_logout_redirect_uris`'s (NOT NULL,
+/// default `"[]"`).
+fn parse_optional_json_array(
+    raw: Option<String>,
+    col: usize,
+) -> rusqlite::Result<Option<Vec<String>>> {
+    raw.map(|s| {
+        serde_json::from_str(&s).map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(col, rusqlite::types::Type::Text, Box::new(e))
+        })
+    })
+    .transpose()
+}
+
 fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<ClientRow> {
     let uris_json: String = row.get(4)?;
     let redirect_uris: Vec<String> = serde_json::from_str(&uris_json).map_err(|e| {
@@ -21,6 +37,9 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<ClientRow> {
         })?;
     let consent_policy_str: String = row.get(11).unwrap_or_else(|_| "none".to_string());
     let registered_via_str: String = row.get(12).unwrap_or_else(|_| "admin".to_string());
+    let auth_method_str: Option<String> = row.get(17)?;
+    let grant_types = parse_optional_json_array(row.get(18)?, 18)?;
+    let response_types = parse_optional_json_array(row.get(19)?, 19)?;
     Ok(ClientRow {
         id: row.get::<_, String>(0)?.parse().map_err(|e| {
             rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
@@ -39,6 +58,11 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<ClientRow> {
         homepage_uri: row.get(14)?,
         privacy_policy_uri: row.get(15)?,
         tos_uri: row.get(16)?,
+        token_endpoint_auth_method: auth_method_str
+            .as_deref()
+            .and_then(crate::models::TokenEndpointAuthMethod::parse),
+        grant_types,
+        response_types,
         created_at: row.get::<_, DateTime<Utc>>(9)?,
         updated_at: row.get::<_, DateTime<Utc>>(10)?,
     })
@@ -46,11 +70,16 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<ClientRow> {
 
 // Column order in SELECT: id, name, confidential, secret_hash, redirect_uris,
 //                         is_disabled, is_deleted, allowed_scopes,
-//                         post_logout_redirect_uris, created_at, updated_at.
+//                         post_logout_redirect_uris, created_at, updated_at,
+//                         consent_policy, registered_via, logo_uri,
+//                         homepage_uri, privacy_policy_uri, tos_uri,
+//                         token_endpoint_auth_method, grant_types,
+//                         response_types.
 const SELECT: &str = "SELECT id, name, confidential, secret_hash, redirect_uris, \
                       is_disabled, is_deleted, allowed_scopes, \
                       post_logout_redirect_uris, created_at, updated_at, consent_policy, \
-                      registered_via, logo_uri, homepage_uri, privacy_policy_uri, tos_uri \
+                      registered_via, logo_uri, homepage_uri, privacy_policy_uri, tos_uri, \
+                      token_endpoint_auth_method, grant_types, response_types \
                       FROM clients";
 
 pub async fn create(db: &Database, c: &ClientRow) -> StoreResult<()> {
@@ -79,6 +108,12 @@ pub async fn create(db: &Database, c: &ClientRow) -> StoreResult<()> {
 /// consent_policy` (C09) and `update_app_identity` (C10) remain the
 /// correct, separately-audited path for changing them *after* creation —
 /// this only fixes the initial value creation itself already claims.
+///
+/// `token_endpoint_auth_method`/`grant_types`/`response_types` (RFC 095 M3
+/// stage 4a) are written the same way, from the row, straight through:
+/// `None` writes SQL `NULL`, not a default — the column has none — so a
+/// caller that passes `None` because it genuinely does not know leaves the
+/// row exactly as unrecorded as it should.
 pub fn create_within_tx(conn: &rusqlite::Connection, c: &ClientRow) -> StoreResult<()> {
     let uris = serde_json::to_string(&c.redirect_uris)?;
     let post_logout = serde_json::to_string(&c.post_logout_redirect_uris)?;
@@ -86,13 +121,31 @@ pub fn create_within_tx(conn: &rusqlite::Connection, c: &ClientRow) -> StoreResu
     // before writing, so a future read cannot encounter corrupt JSON.
     require_valid_json::<Vec<String>>(&uris, "clients.redirect_uris")?;
     require_valid_json::<Vec<String>>(&post_logout, "clients.post_logout_redirect_uris")?;
+    let grant_types = c
+        .grant_types
+        .as_ref()
+        .map(serde_json::to_string)
+        .transpose()?;
+    let response_types = c
+        .response_types
+        .as_ref()
+        .map(serde_json::to_string)
+        .transpose()?;
+    if let Some(gt) = &grant_types {
+        require_valid_json::<Vec<String>>(gt, "clients.grant_types")?;
+    }
+    if let Some(rt) = &response_types {
+        require_valid_json::<Vec<String>>(rt, "clients.response_types")?;
+    }
     conn.execute(
         "INSERT INTO clients(id, name, confidential, secret_hash, redirect_uris, \
                              is_disabled, is_deleted, allowed_scopes, \
                              post_logout_redirect_uris, created_at, updated_at, \
                              consent_policy, logo_uri, homepage_uri, privacy_policy_uri, \
-                             tos_uri) \
-         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+                             tos_uri, token_endpoint_auth_method, grant_types, \
+                             response_types) \
+         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, \
+                ?17, ?18, ?19)",
         params![
             c.id.to_string(),
             c.name,
@@ -110,6 +163,9 @@ pub fn create_within_tx(conn: &rusqlite::Connection, c: &ClientRow) -> StoreResu
             c.homepage_uri,
             c.privacy_policy_uri,
             c.tos_uri,
+            c.token_endpoint_auth_method.as_ref().map(|m| m.as_str()),
+            grant_types,
+            response_types,
         ],
     )?;
     Ok(())
