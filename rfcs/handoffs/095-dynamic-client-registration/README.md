@@ -24,10 +24,23 @@ architect's to make, not dispatched**:
 idling the implementation role behind a ruling it does not need would cost
 the cycle nothing but time. The order is now 2 → 3 → **5** → 4 → 6.
 
-**Stage 6 is dispatched** —
+**Stage 6 landed** `4549c3b` (Level B, 27 jobs, 0 skipped) —
 [`stage6-the-legacy-candidate-report-2026-10-21.md`](stage6-the-legacy-candidate-report-2026-10-21.md)
-— the read-only legacy-candidate report, the last unblocked stage of
-`0.83.0`. Stage 4 remains undispatched pending the self-review ruling.
+— the read-only legacy-candidate report, `sui-id admin
+legacy-dynamic-candidates`. **Stage 4 is the only stage of `0.83.0` not
+built**, and it is undispatched pending the self-review ruling.
+
+**Found by stage 6's round and not yet fixed:** C15's dynamic path calls
+`clients::create_within_tx` and then `clients::set_registered_via_within_tx`
+(`commands.rs:4102-4103`), which RFC 095 `:364-366` forbids by name —
+*"Separate `set_registered_via` or `update_app_identity` writes are
+forbidden in the dynamic path."* **No security consequence**: both writes
+are inside the one Class-A transaction, so no reader observes the
+intermediate row, and the client is created disabled regardless. It is a
+conformance divergence between the code and an Accepted RFC. The proposed
+repair — write `registered_via` in `create_within_tx`'s own INSERT and drop
+the follow-up call — is ordinary implementation work for a round of its
+own, and nothing is blocked by it.
 
 **Measured while writing that design, and it reshapes the stage:**
 `token_endpoint_auth_method` is accepted at registration, validated by stage
