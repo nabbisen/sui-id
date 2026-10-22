@@ -161,6 +161,11 @@ pub struct Strings {
     /// Must never be confused with `client_secret_basic`: this exists
     /// specifically so "unrecorded" cannot be misread as a default value.
     pub status_auth_method_unrecorded: &'static str,
+    /// RFC 095 M3 stage 4b §0.2: marks a client row whose
+    /// `token_endpoint_auth_method` holds a value outside the closed set
+    /// — present, but unparseable, which only a database changed from
+    /// outside the application can produce.
+    pub status_auth_method_unrecognized: &'static str,
 
     // ---- Empty placeholders (RFC 052) ----
     // For rendering "no value" / "any" / "fallback" cells consistently.

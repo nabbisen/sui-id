@@ -95,11 +95,21 @@ pub struct ClientSummary {
     pub registered_via: String,
     /// RFC 095 M3 stage 4a §5: `None` drives the "unrecorded" marker in
     /// the admin UI. Carries the wire value (`"none"` /
-    /// `"client_secret_basic"` / `"client_secret_post"`) when recorded;
-    /// not rendered today, but kept a real value rather than a `bool` so
-    /// a future renderer does not need to widen this type to show it.
+    /// `"client_secret_basic"` / `"client_secret_post"`, or an unknown
+    /// stored value — see `auth_method_unrecognized`) when recorded; not
+    /// rendered today, but kept a real value rather than a `bool` so a
+    /// future renderer does not need to widen this type to show it.
     #[serde(default)]
     pub token_endpoint_auth_method: Option<String>,
+    /// RFC 095 M3 stage 4b §0.2: `true` when the column holds a value
+    /// outside the closed set (`sui_id_store::models::TokenEndpointAuthMethod::Unknown`)
+    /// — present, but not what `validate_auth_method` would ever have
+    /// written, which only happens if something changed the database from
+    /// outside. Drives its own, more alarming marker than "unrecorded":
+    /// a value nobody can parse is worth more attention than one nobody
+    /// recorded, not less.
+    #[serde(default)]
+    pub auth_method_unrecognized: bool,
     pub created_at: DateTime<Utc>,
 }
 

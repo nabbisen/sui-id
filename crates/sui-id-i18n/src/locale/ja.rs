@@ -126,6 +126,7 @@ pub static STRINGS_JA: Strings = Strings {
     status_unknown: "不明",
     status_self_registered: "自己登録",
     status_auth_method_unrecorded: "認証方式未記録",
+    status_auth_method_unrecognized: "認証方式不明",
 
     // Empty placeholders (RFC 052)
     empty_dash: "—",

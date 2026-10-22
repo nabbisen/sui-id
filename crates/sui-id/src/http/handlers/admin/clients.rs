@@ -14,6 +14,7 @@ use sui_id_core::admin::{self as admin_uc};
 use sui_id_core::errors::CoreError;
 use sui_id_shared::api::ClientSummary;
 use sui_id_shared::ids::ClientId;
+use sui_id_store::models::TokenEndpointAuthMethod;
 use sui_id_store::repos::clients;
 use sui_id_web::{
     pages::ConfirmDeleteClientData, render_clients, render_clients_new,
@@ -62,21 +63,29 @@ pub async fn clients_get(
         .map_err(HttpError::html)?;
     let summaries: Vec<ClientSummary> = rows
         .into_iter()
-        .map(|r| ClientSummary {
-            id: r.id,
-            name: r.name,
-            redirect_uris: r.redirect_uris,
-            allowed_scopes: r.allowed_scopes,
-            post_logout_redirect_uris: r.post_logout_redirect_uris,
-            confidential: r.confidential,
-            is_disabled: r.is_disabled,
-            is_deleted: r.is_deleted,
-            consent_policy: r.consent_policy.as_str().to_string(),
-            registered_via: r.registered_via.as_str().to_string(),
-            token_endpoint_auth_method: r
-                .token_endpoint_auth_method
-                .map(|m| m.as_str().to_string()),
-            created_at: r.created_at,
+        .map(|r| {
+            // RFC 095 M3 stage 4b §0.2: computed from a reference before
+            // `token_endpoint_auth_method` is moved into the field below --
+            // worth more alarm than "unrecorded" in the admin UI, not less.
+            let auth_method_unrecognized = matches!(
+                r.token_endpoint_auth_method.as_ref(),
+                Some(TokenEndpointAuthMethod::Unknown(_))
+            );
+            ClientSummary {
+                id: r.id,
+                name: r.name,
+                redirect_uris: r.redirect_uris,
+                allowed_scopes: r.allowed_scopes,
+                post_logout_redirect_uris: r.post_logout_redirect_uris,
+                confidential: r.confidential,
+                is_disabled: r.is_disabled,
+                is_deleted: r.is_deleted,
+                consent_policy: r.consent_policy.as_str().to_string(),
+                registered_via: r.registered_via.as_str().to_string(),
+                token_endpoint_auth_method: r.token_endpoint_auth_method.map(|m| m.as_str()),
+                auth_method_unrecognized,
+                created_at: r.created_at,
+            }
         })
         .collect();
     let token = crate::csrf::ensure_token(&jar);
@@ -193,21 +202,26 @@ pub async fn clients_create(
         .map_err(HttpError::html)?;
     let summaries: Vec<ClientSummary> = rows
         .into_iter()
-        .map(|r| ClientSummary {
-            id: r.id,
-            name: r.name,
-            redirect_uris: r.redirect_uris,
-            allowed_scopes: r.allowed_scopes,
-            post_logout_redirect_uris: r.post_logout_redirect_uris,
-            confidential: r.confidential,
-            is_disabled: r.is_disabled,
-            is_deleted: r.is_deleted,
-            consent_policy: r.consent_policy.as_str().to_string(),
-            registered_via: r.registered_via.as_str().to_string(),
-            token_endpoint_auth_method: r
-                .token_endpoint_auth_method
-                .map(|m| m.as_str().to_string()),
-            created_at: r.created_at,
+        .map(|r| {
+            let auth_method_unrecognized = matches!(
+                r.token_endpoint_auth_method.as_ref(),
+                Some(TokenEndpointAuthMethod::Unknown(_))
+            );
+            ClientSummary {
+                id: r.id,
+                name: r.name,
+                redirect_uris: r.redirect_uris,
+                allowed_scopes: r.allowed_scopes,
+                post_logout_redirect_uris: r.post_logout_redirect_uris,
+                confidential: r.confidential,
+                is_disabled: r.is_disabled,
+                is_deleted: r.is_deleted,
+                consent_policy: r.consent_policy.as_str().to_string(),
+                registered_via: r.registered_via.as_str().to_string(),
+                token_endpoint_auth_method: r.token_endpoint_auth_method.map(|m| m.as_str()),
+                auth_method_unrecognized,
+                created_at: r.created_at,
+            }
         })
         .collect();
 
@@ -307,6 +321,10 @@ pub async fn clients_edit_get(
         .await
         .map_err(HttpError::html)?;
     let token = crate::csrf::ensure_token(&jar);
+    let auth_method_unrecognized = matches!(
+        row.token_endpoint_auth_method.as_ref(),
+        Some(TokenEndpointAuthMethod::Unknown(_))
+    );
     // RFC 122 D2: this page renders a secret it obtained, never one it was
     // handed. A rotated secret is shown once, directly from the POST that
     // produced it (`clients_rotate_secret_post`), not from a query
@@ -323,9 +341,8 @@ pub async fn clients_edit_get(
             is_disabled: row.is_disabled,
             consent_policy: row.consent_policy.as_str().to_string(),
             registered_via: row.registered_via.as_str().to_string(),
-            token_endpoint_auth_method: row
-                .token_endpoint_auth_method
-                .map(|m| m.as_str().to_string()),
+            token_endpoint_auth_method: row.token_endpoint_auth_method.map(|m| m.as_str()),
+            auth_method_unrecognized,
             freshly_rotated_secret: None,
         },
         None,
@@ -436,6 +453,10 @@ pub async fn clients_rotate_secret_post(
         .await
         .map_err(HttpError::html)?;
     let token = crate::csrf::ensure_token(&jar);
+    let auth_method_unrecognized = matches!(
+        row.token_endpoint_auth_method.as_ref(),
+        Some(TokenEndpointAuthMethod::Unknown(_))
+    );
     let resp = Html(sui_id_web::render_client_edit(
         read_actor.can_write(),
         sui_id_web::ClientEditData {
@@ -448,9 +469,8 @@ pub async fn clients_rotate_secret_post(
             is_disabled: row.is_disabled,
             consent_policy: row.consent_policy.as_str().to_string(),
             registered_via: row.registered_via.as_str().to_string(),
-            token_endpoint_auth_method: row
-                .token_endpoint_auth_method
-                .map(|m| m.as_str().to_string()),
+            token_endpoint_auth_method: row.token_endpoint_auth_method.map(|m| m.as_str()),
+            auth_method_unrecognized,
             freshly_rotated_secret: Some(new_secret),
         },
         None,

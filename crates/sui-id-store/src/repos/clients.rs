@@ -58,9 +58,14 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<ClientRow> {
         homepage_uri: row.get(14)?,
         privacy_policy_uri: row.get(15)?,
         tos_uri: row.get(16)?,
+        // RFC 095 M3 stage 4b §0.2: `map`, not `and_then` -- `parse` is now
+        // infallible, so this is the only place "no value stored" is
+        // allowed to collapse to `None`; a stored-but-unparseable value
+        // must come out as `Some(Unknown(_))`, not disappear into the same
+        // `None` a genuinely absent column produces.
         token_endpoint_auth_method: auth_method_str
             .as_deref()
-            .and_then(crate::models::TokenEndpointAuthMethod::parse),
+            .map(crate::models::TokenEndpointAuthMethod::parse),
         grant_types,
         response_types,
         created_at: row.get::<_, DateTime<Utc>>(9)?,

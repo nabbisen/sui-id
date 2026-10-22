@@ -41,6 +41,7 @@ fn client_summary(registered_via: &str, auth_method: Option<&str>) -> ClientSumm
         consent_policy: "first_time".into(),
         registered_via: registered_via.into(),
         token_endpoint_auth_method: auth_method.map(str::to_string),
+        auth_method_unrecognized: false,
         created_at: chrono::Utc::now(),
     }
 }
@@ -57,6 +58,7 @@ fn client_edit_data(registered_via: &str, auth_method: Option<&str>) -> ClientEd
         consent_policy: "first_time".into(),
         registered_via: registered_via.into(),
         token_endpoint_auth_method: auth_method.map(str::to_string),
+        auth_method_unrecognized: false,
         freshly_rotated_secret: None,
     }
 }
@@ -192,4 +194,40 @@ fn render_client_edit_does_not_mark_a_client_with_a_recorded_auth_method() {
         !html.contains(unrecorded_marker()),
         "the edit view must not render a recorded auth method as unrecorded"
     );
+}
+
+// ---------- RFC 095 M3 stage 4b §0.2: the auth-method-unrecognized marker ----------
+
+fn unrecognized_marker() -> &'static str {
+    LANG.strings().status_auth_method_unrecognized
+}
+
+#[test]
+fn render_clients_marks_a_client_with_an_unrecognized_auth_method() {
+    let mut summary = client_summary("admin", Some("CLIENT_SECRET_BASIC"));
+    summary.auth_method_unrecognized = true;
+    let html = render_clients(true, vec![summary], None, None, "csrf".into(), false, LANG);
+    assert!(
+        html.contains(unrecognized_marker()),
+        "a client whose stored auth method is unparseable must carry the \
+         unrecognized marker, distinct from \"unrecorded\""
+    );
+    assert!(
+        !html.contains(unrecorded_marker()),
+        "an unrecognized value is present, not absent -- it must not also \
+         read as unrecorded"
+    );
+}
+
+#[test]
+fn render_client_edit_marks_a_client_with_an_unrecognized_auth_method() {
+    let mut data = client_edit_data("admin", Some("CLIENT_SECRET_BASIC"));
+    data.auth_method_unrecognized = true;
+    let html = render_client_edit(true, data, None, "csrf".into(), LANG);
+    assert!(
+        html.contains(unrecognized_marker()),
+        "the edit view must carry the unrecognized marker when the stored \
+         value is unparseable"
+    );
+    assert!(!html.contains(unrecorded_marker()));
 }

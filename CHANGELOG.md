@@ -98,6 +98,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `scope`), the zero-based index of the offending entry instead.
 - `POST /oauth2/register` now also sends `Pragma: no-cache`, alongside
   the existing `Cache-Control: no-store`, on every response.
+- **A `refresh_token` grant can now fail after it previously would have
+  succeeded, if the client's `allowed_scopes` policy was narrowed after
+  the refresh token was issued (RFC 095 M3 stage 4b §6).** The refresh
+  grant issues from the scope recorded on the refresh-token row at the
+  time it was created, and until this stage never re-checked that scope
+  against the client's *current* scope policy — so narrowing a client's
+  allowed scopes had no effect on refresh tokens issued before the
+  change. It is now re-checked on every refresh, the same
+  `enforce_scope_policy` call the initial authorization already uses,
+  and a now-out-of-policy refresh is rejected with `invalid_scope`. A
+  long-lived refresh token that an administrator believed they had
+  already restricted may now stop working where it previously did not —
+  this is the fix taking effect, not a regression.
 
 ### Fixed
 
@@ -112,6 +125,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   data:`) already blocked the cross-origin load — so this closes a gap
   between what was emitted and what RFC 095 requires, not an exploitable
   one.
+
+### Security
+
+- **The token endpoint now enforces the registered
+  `token_endpoint_auth_method` and the channel a client credential
+  arrives on, instead of accepting a correct `client_secret` regardless
+  of either (RFC 095 M3 stage 4b).** Specifically, all of the following
+  are now refused with `invalid_client` where they were previously
+  accepted, for both the `authorization_code` and `refresh_token`
+  grants: a client registered with `token_endpoint_auth_method: "none"`
+  presenting any `client_secret` at all; a `client_secret_basic` client
+  presenting its secret in the request body instead of the
+  `Authorization: Basic` header; a `client_secret_post` client
+  presenting its secret via the `Authorization: Basic` header instead of
+  the body; and a client presenting its secret on *both* channels in the
+  same request (RFC 6749 §2.3.1). A client row whose stored
+  `token_endpoint_auth_method` predates migration `0049` (`NULL` —
+  genuinely never recorded, RFC 095 M3 stage 4a's own C1 decision)
+  remains exempt from the channel check, unchanged. A client row whose
+  stored value is present but outside the three RFC 7591 §2 values this
+  build recognises — reachable only by a database changed from outside
+  the application, such as a hand-edit or a restore from a different
+  build — is now refused rather than silently treated as exempt, closing
+  a fail-open in how that case was read.
+  **[PLACEHOLDER: severity and remediation-timeline wording for this
+  entry go here, per the assignment rule in `.github/SECURITY.md`. Not
+  written in this draft.]**
+- **[PLACEHOLDER, per the same `.github/SECURITY.md` rule:]**
+  `authorize::authenticate_client` — the token endpoint's own client
+  authentication function, distinct from `oauth_token::authenticate_client`
+  which serves introspection/revocation and already complied — did not
+  apply RFC 123 D4's uniform-cost dummy-password-verification pattern on
+  its rejecting branches before this stage. Every rejecting branch added
+  above now runs a dummy verification before returning, matching RFC 123
+  D4. Severity, affected-version range, and disclosure timeline for the
+  preceding gap are not assessed in this draft.
 
 ## [0.82.0] — 2026-10-20
 

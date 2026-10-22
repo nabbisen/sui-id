@@ -126,6 +126,7 @@ pub static STRINGS_EN: Strings = Strings {
     status_unknown: "Unknown",
     status_self_registered: "Self-registered",
     status_auth_method_unrecorded: "Auth method unrecorded",
+    status_auth_method_unrecognized: "Auth method unrecognized",
 
     // Empty placeholders (RFC 052)
     empty_dash: "—",

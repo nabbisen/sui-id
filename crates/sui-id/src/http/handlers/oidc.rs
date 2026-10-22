@@ -13,7 +13,8 @@ use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use sui_id_core::authorize::{
-    self, AuthorizeParams, CodeExchangeRequest, IssuanceContext, RefreshExchangeRequest,
+    self, AuthorizeParams, CodeExchangeRequest, CredentialChannel, IssuanceContext,
+    RefreshExchangeRequest,
 };
 use sui_id_core::discovery::Discovery;
 use sui_id_core::errors::{CoreError, ProtocolError};
@@ -394,11 +395,38 @@ pub async fn token(
             description: "client_id is not a valid identifier".into(),
         })
     })?;
-    let client_secret = header_secret.or_else(|| {
-        form.client_secret
-            .as_ref()
-            .map(|s| s.expose_secret().to_owned())
-    });
+    let form_secret = form
+        .client_secret
+        .as_ref()
+        .map(|s| s.expose_secret().to_owned());
+
+    // RFC 095 M3 stage 4b §5: RFC 6749 §2.3.1 forbids presenting more than
+    // one client authentication method in a single request. Rejected
+    // here, unconditionally, before either grant is reached -- needs no
+    // stored column and does not depend on anything else in this stage.
+    // This handler never constructs `CredentialChannel::Both` -- the
+    // rejection below happens before a channel is chosen at all, so core's
+    // channel check (`authorize::authenticate_client`) never receives it
+    // either. The variant exists only so the type can represent and be
+    // matched against the case this comment is about, not because
+    // anything in this codebase produces it.
+    if header_secret.is_some() && form_secret.is_some() {
+        return Err(HttpError::oauth(CoreError::Protocol {
+            code: ProtocolError::InvalidClient,
+            description: "client_secret must not be presented both via the \
+                           Authorization: Basic header and the request body"
+                .into(),
+        }));
+    }
+    let client_secret_channel = if header_secret.is_some() {
+        CredentialChannel::Basic
+    } else {
+        // Arbitrary when neither arrived -- `client_secret` below is then
+        // `None`, and `authenticate_client` never consults this value in
+        // that case (see `CredentialChannel`'s own doc comment).
+        CredentialChannel::Body
+    };
+    let client_secret = header_secret.or(form_secret);
 
     let lifetimes = app.token_lifetimes();
     let issuer = app.issuer().to_owned();
@@ -444,6 +472,7 @@ pub async fn token(
                     redirect_uri,
                     client_id,
                     client_secret,
+                    client_secret_channel,
                     code_verifier,
                 },
             )
@@ -469,6 +498,7 @@ pub async fn token(
                     refresh_token: RawRefreshToken::from_untrusted(refresh_token),
                     client_id,
                     client_secret,
+                    client_secret_channel,
                 },
             )
             .await

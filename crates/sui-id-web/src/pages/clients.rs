@@ -41,6 +41,13 @@ fn client_row_view(
     let auth_method_unrecorded_badge = c.token_endpoint_auth_method.is_none().then(|| {
         crate::components::status_badge(t, crate::components::StatusKind::AuthMethodUnrecorded)
     });
+    // RFC 095 M3 stage 4b §0.2: distinct from "unrecorded" -- a value
+    // present but outside the closed set, which only a database changed
+    // from outside can produce. Mutually exclusive with the marker above:
+    // `token_endpoint_auth_method` is `Some(_)` whenever this is true.
+    let auth_method_unrecognized_badge = c.auth_method_unrecognized.then(|| {
+        crate::components::status_badge(t, crate::components::StatusKind::AuthMethodUnrecognized)
+    });
 
     let edit_url = format!("/admin/clients/{id_str}/edit");
     let actions = if is_deleted {
@@ -75,6 +82,7 @@ fn client_row_view(
                     <span>{c.name}</span>
                     {self_registered_badge}
                     {auth_method_unrecorded_badge}
+                    {auth_method_unrecognized_badge}
                 </div>
             </td>
             <td>
@@ -261,6 +269,9 @@ pub struct ClientEditData {
     /// carried but not yet displayed when present — see `ClientSummary`'s
     /// own field for why it is kept a real value rather than a `bool`.
     pub token_endpoint_auth_method: Option<String>,
+    /// RFC 095 M3 stage 4b §0.2: `true` renders its own, more alarming
+    /// marker than "unrecorded" — see `ClientSummary`'s own field.
+    pub auth_method_unrecognized: bool,
     /// RFC 047, RFC 122 D2: populated only by the handler that just rotated
     /// the secret, from the value that operation produced — never from a
     /// caller-supplied value. Shown once.
@@ -287,6 +298,7 @@ pub fn render_client_edit(
             consent_policy,
             registered_via,
             token_endpoint_auth_method,
+            auth_method_unrecognized,
             freshly_rotated_secret,
         } = data;
         let self_registered_badge = (registered_via == "dynamic").then(|| {
@@ -294,6 +306,12 @@ pub fn render_client_edit(
         });
         let auth_method_unrecorded_badge = token_endpoint_auth_method.is_none().then(|| {
             crate::components::status_badge(t, crate::components::StatusKind::AuthMethodUnrecorded)
+        });
+        let auth_method_unrecognized_badge = auth_method_unrecognized.then(|| {
+            crate::components::status_badge(
+                t,
+                crate::components::StatusKind::AuthMethodUnrecognized,
+            )
         });
         let post_url = format!("/admin/clients/{id}/edit");
         let kind = if confidential {
@@ -341,6 +359,7 @@ pub fn render_client_edit(
                             {status_view}
                             {self_registered_badge}
                             {auth_method_unrecorded_badge}
+                            {auth_method_unrecognized_badge}
                         </div>
                     </div>
                     <p class="muted mt-3">

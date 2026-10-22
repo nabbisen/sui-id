@@ -585,12 +585,13 @@ pub async fn dynamic_register(
         // RFC 095 M3 stage 4a: store what stage 2 already validated and
         // the response already echoes. `validate_auth_method` only ever
         // returns one of the three closed-set strings (defaulted, never
-        // absent), so this is always `Some` for a registration that
-        // reaches this point -- "unrecorded" is for a client nobody ever
-        // asked, which this path by definition is not.
-        token_endpoint_auth_method: sui_id_store::models::TokenEndpointAuthMethod::parse(
+        // absent), so this is always `Some(_)`, never `Unknown` (stage
+        // 4b's `parse` is infallible, so it is wrapped here rather than
+        // returning an `Option` itself) -- "unrecorded" is for a client
+        // nobody ever asked, which this path by definition is not.
+        token_endpoint_auth_method: Some(sui_id_store::models::TokenEndpointAuthMethod::parse(
             auth_method,
-        ),
+        )),
         grant_types: Some(grant_types.clone()),
         response_types: Some(response_types.clone()),
         created_at: now,

@@ -369,12 +369,47 @@ struct IssuableGrant {
     email: Option<(String, bool)>,
 }
 
+/// RFC 095 M3 stage 4b §2: which channel(s) a client credential arrived
+/// on. A three-state value, not a `bool` (cannot represent `Both` at all)
+/// and not two `bool`s (four representable states for three real ones,
+/// with `(false, false)` duplicating a fact `client_secret: Option<_>`
+/// already carries on the struct this travels with).
+///
+/// **This type says nothing about whether a credential arrived at all.**
+/// That fact lives entirely in `client_secret`/`refresh_token`'s own
+/// sibling field on the request struct: `None` there means "no credential
+/// arrived," and this field's value is meaningless and must not be
+/// consulted in that case. This type only ever distinguishes *which*
+/// channel(s) carried one, given that one did.
+///
+/// The HTTP layer is the only place that can observe the channel
+/// (`handlers/oidc.rs`'s own Basic/body extraction); core keeps the
+/// decision of what to do with it, because that decision needs the
+/// client's stored `token_endpoint_auth_method` and the HTTP layer has no
+/// business loading client rows to authenticate a request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CredentialChannel {
+    /// Arrived via the `Authorization: Basic` header only.
+    Basic,
+    /// Arrived in the request body (`client_secret` form field) only.
+    Body,
+    /// Arrived on both channels at once — RFC 6749 §2.3.1 forbids
+    /// presenting more than one method in a single request. Rejected
+    /// unconditionally in `handlers/oidc.rs`, before either grant is
+    /// reached, so core sees this variant only in the sense that the type
+    /// must be able to represent it to be checked at all.
+    Both,
+}
+
 pub struct CodeExchangeRequest {
     pub code: String,
     pub redirect_uri: String,
     pub client_id: ClientId,
     /// Provided by confidential clients; None for public.
     pub client_secret: Option<String>,
+    /// See [`CredentialChannel`]'s own doc comment for which fact lives
+    /// here and which lives in `client_secret`.
+    pub client_secret_channel: CredentialChannel,
     pub code_verifier: String,
 }
 
@@ -386,6 +421,9 @@ pub struct RefreshExchangeRequest {
     pub refresh_token: RawRefreshToken,
     pub client_id: ClientId,
     pub client_secret: Option<String>,
+    /// See [`CredentialChannel`]'s own doc comment for which fact lives
+    /// here and which lives in `client_secret`.
+    pub client_secret_channel: CredentialChannel,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -420,7 +458,12 @@ pub async fn exchange_code(
             description: "client is not allowed".into(),
         });
     }
-    authenticate_client(&client, req.client_secret.as_deref()).await?;
+    authenticate_client(
+        &client,
+        req.client_secret.as_deref(),
+        req.client_secret_channel,
+    )
+    .await?;
 
     // ── Step 1: atomically consume the code (RFC 079 P1 + P2) ───────────
     // The storage layer enforces single-use via a guarded UPDATE predicated
@@ -589,7 +632,12 @@ pub async fn exchange_refresh(
             description: "client is not allowed".into(),
         });
     }
-    authenticate_client(&client, req.client_secret.as_deref()).await?;
+    authenticate_client(
+        &client,
+        req.client_secret.as_deref(),
+        req.client_secret_channel,
+    )
+    .await?;
 
     // ── Preliminary, read-only lookup (RFC 094 T04 step 0) ───────────────
     let preliminary = match refresh_tokens::find_any(db, &req.refresh_token).await {
@@ -604,6 +652,37 @@ pub async fn exchange_refresh(
     if preliminary.client_id != req.client_id {
         return Err(invalid_grant());
     }
+
+    // ── RFC 095 M3 stage 4b §6: grant and scope policy ───────────────────
+    // Two independent checks, not one. Both are exempt for a client whose
+    // relevant column is unrecorded -- the same C1 shape as the auth-method
+    // check in `authenticate_client`, applied here because `grant_types`
+    // is exactly as unpersisted-until-4a as `token_endpoint_auth_method`
+    // was.
+    //
+    // Grant policy: `refresh_token` must be among the client's stored
+    // `grant_types`. Never checked before this stage -- a client that
+    // never registered for refresh could always exchange one anyway.
+    if let Some(grants) = &client.grant_types
+        && !grants.iter().any(|g| g == "refresh_token")
+    {
+        return Err(CoreError::Protocol {
+            code: ProtocolError::UnauthorizedClient,
+            description: format!(
+                "client {:?} is not registered for the refresh_token grant \
+                 (registered grant_types: {grants:?})",
+                client.name
+            ),
+        });
+    }
+    // Scope policy: re-checked against the client's *current*
+    // `allowed_scopes`, not the scope stamped onto the refresh-token row
+    // at issuance (`preliminary.scope`). Before this stage, narrowing a
+    // client's scope policy after tokens were already issued had no
+    // effect on those tokens' own refresh exchanges -- this is an
+    // operator-visible behaviour change (CHANGELOG), not a bug fix nobody
+    // will notice.
+    enforce_scope_policy(&client.allowed_scopes, &preliminary.scope, &client.name)?;
 
     // ── Fetch user email for ID token claims (scope "email") ─────────────
     // Refresh token exchanges may include an ID token (OIDC Core §12.2).
@@ -682,27 +761,162 @@ pub async fn exchange_refresh(
     }
 }
 
+/// `invalid_client` per RFC 6749 §5.2, with a description. The registered
+/// method is not a secret -- the registrant received it in its own
+/// registration response -- so naming it costs nothing against an
+/// attacker and saves an integrator a debugging session (RFC 095 M3
+/// stage 4b §7).
+fn invalid_client(description: impl Into<String>) -> CoreError {
+    CoreError::Protocol {
+        code: ProtocolError::InvalidClient,
+        description: description.into(),
+    }
+}
+
+/// RFC 123 D4, now also enforced on this function: every branch below
+/// that rejects before reaching a real `verify_password` call runs a
+/// dummy one first (`password::DUMMY_PHC`), so the wall-clock cost of a
+/// rejection is the same regardless of *why* it rejected. Copied from
+/// `oauth_token::authenticate_client` (`:275-316`), the function this one
+/// shares no code with but must match the timing shape of -- see that
+/// function's own doc comment for the measurement this one's `CHANGELOG`
+/// entry repeats. `provided` is whatever was actually presented, or an
+/// empty placeholder when nothing was -- `DUMMY_PHC` verification takes
+/// the same wall-clock time regardless of the candidate string's content.
+async fn dummy_reject(provided: Option<&str>, description: impl Into<String>) -> CoreError {
+    let _ =
+        crate::password::verify_password(provided.unwrap_or(""), crate::password::DUMMY_PHC).await;
+    invalid_client(description)
+}
+
+/// RFC 095 M3 stage 4b: the channel/method check (§3), RFC 123 D4
+/// compliance (§4), and row 1's correction (§2/§B) all live here, because
+/// all three are the same function and the same early-return shape.
+///
+/// **`!confidential` is deliberately split into two branches, not one.**
+/// A public client presenting no secret is the *success* path and gets no
+/// dummy hash -- RFC 123 D4's rule is about rejecting branches, and a
+/// dummy `verify_password` call on every public-client token exchange
+/// would cost ~34ms for no security gain (there is nothing to protect:
+/// the client has no secret, and there is no "wrong secret" case to make
+/// indistinguishable from "right secret" when there is no right secret).
+/// A public client presenting one anyway (row 1) is new behaviour this
+/// stage adds, and it *is* a rejecting branch, so it gets the dummy hash
+/// like every other one below.
 async fn authenticate_client(
     client: &sui_id_store::models::ClientRow,
     secret: Option<&str>,
+    channel: CredentialChannel,
 ) -> CoreResult<()> {
     if !client.confidential {
+        if secret.is_some() {
+            // Row 1 (RFC 095 M3 stage 4b §3): a public client has no
+            // secret to check against, so a presented one authenticates
+            // nobody who could not already authenticate without it --
+            // low severity, a conformance gap and not a bypass (design
+            // §B) -- but it must be refused, not silently ignored.
+            return Err(dummy_reject(
+                secret,
+                "client is registered with token_endpoint_auth_method \"none\" \
+                 and must not present a client_secret",
+            )
+            .await);
+        }
         return Ok(());
     }
-    let stored = client.secret_hash.as_deref().ok_or(CoreError::Protocol {
-        code: ProtocolError::InvalidClient,
-        description: "client is confidential but has no stored secret".into(),
-    })?;
-    let provided = secret.ok_or(CoreError::Protocol {
-        code: ProtocolError::InvalidClient,
-        description: "client_secret is required".into(),
-    })?;
+
+    let stored = match client.secret_hash.as_deref() {
+        Some(h) => h,
+        None => {
+            return Err(
+                dummy_reject(secret, "client is confidential but has no stored secret").await,
+            );
+        }
+    };
+    let provided = match secret {
+        Some(s) => s,
+        None => {
+            return Err(dummy_reject(None, "client_secret is required").await);
+        }
+    };
+
+    // RFC 095 M3 stage 4b §0.2/§3: the channel/method check. `None` (the
+    // column itself, via `ClientRow.token_endpoint_auth_method`) is the
+    // unrecorded class C1 (stage 4a) decided to leave permanently exempt,
+    // made visible in the admin UI since that stage. Everything else here
+    // is new in this stage.
+    match &client.token_endpoint_auth_method {
+        None => {
+            // Unrecorded: exempt, by design. Falls through to the
+            // unconditional `verify_password` below, same as before this
+            // stage existed.
+        }
+        Some(sui_id_store::models::TokenEndpointAuthMethod::Unknown(raw)) => {
+            // RFC 095 M3 stage 4b §0.2: present, but not a value
+            // `validate_auth_method` could ever have written -- a
+            // database changed from outside. Fails closed, unlike the
+            // `None` case above: an unparseable value is not evidence the
+            // channel was never meant to be checked, and must not be
+            // treated as if it were.
+            return Err(dummy_reject(
+                Some(provided),
+                format!(
+                    "client's registered token_endpoint_auth_method \
+                     (\"{raw}\") is not recognised by this build"
+                ),
+            )
+            .await);
+        }
+        Some(sui_id_store::models::TokenEndpointAuthMethod::None) => {
+            // A confidential row (secret_hash present, reached this far)
+            // recorded as the public method "none" is an inconsistent
+            // combination no validated write path produces. No channel
+            // is valid for "none", so this fails closed rather than
+            // picking one.
+            return Err(dummy_reject(
+                Some(provided),
+                "client's registered token_endpoint_auth_method is \"none\", \
+                 which does not accept a client_secret on any channel",
+            )
+            .await);
+        }
+        // Row 4. Two arms, not one with a nested `if`, so the "channel
+        // matches" case stays an exhaustive match arm of its own rather
+        // than an empty branch inside a conditional.
+        Some(sui_id_store::models::TokenEndpointAuthMethod::ClientSecretBasic)
+            if channel != CredentialChannel::Basic =>
+        {
+            return Err(dummy_reject(
+                Some(provided),
+                "client's registered token_endpoint_auth_method is \
+                 client_secret_basic; the secret must be presented via \
+                 the Authorization: Basic header",
+            )
+            .await);
+        }
+        Some(sui_id_store::models::TokenEndpointAuthMethod::ClientSecretBasic) => {}
+        // Row 6. `channel == Both` cannot reach here -- rejected
+        // unconditionally in `handlers/oidc.rs` before either grant is
+        // called (§5) -- so `channel == Body` already implies no Basic
+        // header was present; nothing further to check for that half of
+        // the row.
+        Some(sui_id_store::models::TokenEndpointAuthMethod::ClientSecretPost)
+            if channel != CredentialChannel::Body =>
+        {
+            return Err(dummy_reject(
+                Some(provided),
+                "client's registered token_endpoint_auth_method is \
+                 client_secret_post; the secret must be presented in \
+                 the request body, not the Authorization header",
+            )
+            .await);
+        }
+        Some(sui_id_store::models::TokenEndpointAuthMethod::ClientSecretPost) => {}
+    }
+
     crate::password::verify_password(provided, stored)
         .await
-        .map_err(|_| CoreError::Protocol {
-            code: ProtocolError::InvalidClient,
-            description: "client authentication failed".into(),
-        })
+        .map_err(|_| invalid_client("client authentication failed"))
 }
 
 /// Sign the access/ID-token pair. Shared by initial issuance (T09) and

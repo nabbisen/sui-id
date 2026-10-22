@@ -103,6 +103,14 @@ pub enum StatusKind {
     /// real, if low-severity, standing cost rather than a neutral fact. →
     /// `badge badge--warn`
     AuthMethodUnrecorded,
+    /// RFC 095 M3 stage 4b §0.2: a client row whose `token_endpoint_auth_method`
+    /// holds a value outside the closed set — present, but not one
+    /// `validate_auth_method` would ever have written, which only happens
+    /// if a database was changed from outside. `--danger`, not `--warn`
+    /// like `AuthMethodUnrecorded`: a value nobody can parse is worth more
+    /// alarm than one nobody recorded, not less, per the design's own
+    /// words. → `badge badge--danger`
+    AuthMethodUnrecognized,
 }
 
 /// Render a status badge with localised text and the matching CSS
@@ -125,6 +133,9 @@ pub fn status_badge(t: &'static sui_id_i18n::Strings, kind: StatusKind) -> impl 
         StatusKind::Unknown => ("badge badge--warn", t.status_unknown),
         StatusKind::SelfRegistered => ("badge badge--info", t.status_self_registered),
         StatusKind::AuthMethodUnrecorded => ("badge badge--warn", t.status_auth_method_unrecorded),
+        StatusKind::AuthMethodUnrecognized => {
+            ("badge badge--danger", t.status_auth_method_unrecognized)
+        }
     };
     view! { <span class=class>{text}</span> }
 }

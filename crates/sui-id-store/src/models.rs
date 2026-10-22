@@ -307,30 +307,49 @@ pub enum TokenEndpointAuthMethod {
     None,
     ClientSecretBasic,
     ClientSecretPost,
+    /// RFC 095 M3 stage 4b §0.2: a stored value outside the closed set
+    /// above. Unreachable through the application — `validate_auth_method`
+    /// is the only writer, and the model is this enum — so the only way a
+    /// row gets here is a database changed from outside: a hand-edit, a
+    /// restore from a different build, or a future version writing a
+    /// value this one does not know.
+    ///
+    /// This variant exists specifically so that case is distinguishable
+    /// from `ClientRow::token_endpoint_auth_method == None` (genuinely
+    /// unrecorded). Before this variant existed, `parse` returned `None`
+    /// for both — a stored-but-unparseable value and a `NULL` column
+    /// collapsed into the same case, which silently exempted the former
+    /// from stage 4b's channel check instead of failing it closed. See
+    /// `authorize::authenticate_client`.
+    Unknown(String),
 }
 
 impl TokenEndpointAuthMethod {
-    pub fn as_str(&self) -> &'static str {
+    /// Allocates for every call now that `Unknown` must return its own
+    /// stored value rather than a `&'static str` — not a hot path (write
+    /// time and admin-view render time only), so the simplicity of one
+    /// return type for all four variants is worth the allocation.
+    pub fn as_str(&self) -> String {
         match self {
-            Self::None => "none",
-            Self::ClientSecretBasic => "client_secret_basic",
-            Self::ClientSecretPost => "client_secret_post",
+            Self::None => "none".to_string(),
+            Self::ClientSecretBasic => "client_secret_basic".to_string(),
+            Self::ClientSecretPost => "client_secret_post".to_string(),
+            Self::Unknown(raw) => raw.clone(),
         }
     }
-    /// `None` (the `Option`) for anything outside the closed set, which
-    /// today means only: the three strings this parses are the only ones
-    /// `validate_auth_method` ever lets reach storage, so a stored value
-    /// outside them indicates a mismatch between this parser and that
-    /// validator, not a legitimately unrecorded row — a case this
-    /// function has no way to distinguish from one, which is why the
-    /// comparison is kept in one place, that validator, rather than
-    /// duplicated here.
-    pub fn parse(s: &str) -> Option<Self> {
+    /// Infallible, unlike before this stage: every string is now
+    /// representable, either as one of the three known variants or as
+    /// `Unknown`. The caller's own `Option` (on the column read, via
+    /// `Option::map` rather than `Option::and_then`) is what still
+    /// expresses "no value was stored at all" — this function is never
+    /// asked to represent that case and must not be given the chance to
+    /// confuse it with one of these four.
+    pub fn parse(s: &str) -> Self {
         match s {
-            "none" => Some(Self::None),
-            "client_secret_basic" => Some(Self::ClientSecretBasic),
-            "client_secret_post" => Some(Self::ClientSecretPost),
-            _ => None,
+            "none" => Self::None,
+            "client_secret_basic" => Self::ClientSecretBasic,
+            "client_secret_post" => Self::ClientSecretPost,
+            other => Self::Unknown(other.to_owned()),
         }
     }
 }
