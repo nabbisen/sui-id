@@ -316,8 +316,9 @@ two methods — and reasonable, since it needs no column and no migration.
 
 ## G — what to record, prepare for, or schedule beyond this stage
 
-Asked for directly, 2026-10-22. Five items; none blocks stage 4, and the
-first two are created by its own decisions.
+Asked for directly, 2026-10-22. Six items; none blocked stage 4, the first
+two are created by its own decisions, and item 3 was added after stage 4b
+landed.
 
 1. **An exit path from C1's unchecked class.** Nullable leaves confidential
    pre-column clients permanently unverified against their channel. An
@@ -329,16 +330,28 @@ first two are created by its own decisions.
    item 1 exists and the class is observably empty on a real deployment.
    Recording the question now so that "make it NOT NULL" is never proposed
    as a tidy-up before the exit path exists. **No date; gated on item 1.**
-3. **The same channel check on `oauth_token::authenticate_client`**
+3. **Finish RFC 123 D4 on the token endpoint, and decide its rate limit.**
+   Stage 4b equalised every rejecting branch *inside*
+   `authorize::authenticate_client`. Its two callers still return before
+   it — unknown client, and disabled or deleted — so the endpoint's cost
+   is not yet uniform, and `/oauth2/token` has no counterpart to RFC
+   123's per-IP and per-client limiters, which reach introspect and
+   revoke only. **The scoping was the architect's**: the dispatch named a
+   function when the property belongs to an endpoint, the same mistake
+   stage 4's first design made. Security-path work, so its own dispatch
+   with its own measurement; the detail is held in
+   `.git-exclude/reviewed/0.83.0-changelog-severity-drafts-2026-10-22.md`
+   §1 until it is fixed. **Schedule: the first round after `0.83.0`.**
+4. **The same channel check on `oauth_token::authenticate_client`**
    (introspection and revocation). §C2 notes it is a separate decision and
    this stage does not touch it. Those endpoints have their own RFC 7009 /
    7662 semantics and deserve their own measurement. **Schedule: with
    M2b's auth-path tranche, not before.**
-4. **RFC 095 `:362-366`'s erratum** — the sentence forbidding a separate
+5. **RFC 095 `:362-366`'s erratum** — the sentence forbidding a separate
    `set_registered_via` write in the dynamic path, which the RFC 094
    Stage-0 classification contradicts and G17 enforces against. The text is
    the thing out of step. **`@nabbisen`'s, no date.**
-5. **The two gate comments describing the self-review question as open** —
+6. **The two gate comments describing the self-review question as open** —
    `scripts/check-rfc-integrity.py` condition 9 and its twin in
    `scripts/tests/test_rfc_integrity.py`. §S1c asked for this on 2026-10-01
    and it is still outstanding; it cost this engagement a wrong escalation

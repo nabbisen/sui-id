@@ -149,18 +149,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the application, such as a hand-edit or a restore from a different
   build — is now refused rather than silently treated as exempt, closing
   a fail-open in how that case was read.
-  **[PLACEHOLDER: severity and remediation-timeline wording for this
-  entry go here, per the assignment rule in `.github/SECURITY.md`. Not
-  written in this draft.]**
-- **[PLACEHOLDER, per the same `.github/SECURITY.md` rule:]**
-  `authorize::authenticate_client` — the token endpoint's own client
-  authentication function, distinct from `oauth_token::authenticate_client`
-  which serves introspection/revocation and already complied — did not
-  apply RFC 123 D4's uniform-cost dummy-password-verification pattern on
-  its rejecting branches before this stage. Every rejecting branch added
-  above now runs a dummy verification before returning, matching RFC 123
-  D4. Severity, affected-version range, and disclosure timeline for the
-  preceding gap are not assessed in this draft.
+
+  **Severity: low.** No released version could be made to accept a
+  credential it should have refused. The two rows that need a stored
+  `token_endpoint_auth_method` — `client_secret_basic` presented in the
+  body, `client_secret_post` presented via Basic — were not violable
+  before this release, because no version before it stored the method at
+  all. The two that were reachable in released versions gain an attacker
+  nothing: a public client has no secret, so a spurious one it presents
+  authenticates nobody who could not already authenticate without it, and
+  PKCE still applies; and a caller who can set an `Authorization` header
+  already controls the request they are sending. The fail-open corrected
+  alongside them needs a client row written from outside the application,
+  and is not reachable in any released version either, the column being
+  new in this one. **No advisory is issued.** Operators upgrading do not
+  need to act.
 
 ## [0.82.0] — 2026-10-20
 
