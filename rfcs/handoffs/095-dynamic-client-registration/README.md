@@ -24,6 +24,14 @@ architect's to make, not dispatched**:
 idling the implementation role behind a ruling it does not need would cost
 the cycle nothing but time. The order is now 2 → 3 → **5** → 4 → 6.
 
+> **`0.83.0` is authorized and its preparation is dispatched** —
+> [`../096-upstream-oidc-federation/release-0.83.0-preparation-2026-10-22.md`](../096-upstream-oidc-federation/release-0.83.0-preparation-2026-10-22.md).
+> Every stage has landed: 2, 3, 4a, 4b, 5 and 6, each Level B 27/0. The
+> mechanical half of the cut is the implementation role's; the tag and the
+> publish are not. **M3 does not close with this release** — the
+> legacy-candidate disposition and the evidence sign-off both remain
+> `@nabbisen`'s.
+
 > **Whose turn: the implementation role's.** Stage 4's measurement stands
 > and its three decisions are settled. C3 is `@nabbisen`'s; C1 and C2 are
 > the architect's, at his request, under `ROADMAP.md` §S1c. The design's
