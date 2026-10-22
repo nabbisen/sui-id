@@ -48,6 +48,13 @@ class ComputeChangedScope(unittest.TestCase):
         self.addCleanup(self._tmp.cleanup)
         self.root = Path(self._tmp.name)
         git(self.root, "init", "-q", "-b", "main")
+        # Auto-maintenance writes into .git/info (commit-graph, pack-refs)
+        # asynchronously, which races TemporaryDirectory's rmtree and fails
+        # teardown with ENOTEMPTY -- observed in CI 2026-10-22, run
+        # 39702215633. Disabled here so nothing writes to the fixture repo
+        # except the commands these tests issue.
+        git(self.root, "config", "gc.auto", "0")
+        git(self.root, "config", "maintenance.auto", "false")
         git(self.root, "-c", "user.email=t@example.invalid", "-c", "user.name=t", "config", "commit.gpgsign", "false")
         (self.root / "contracts").mkdir()
         (self.root / "contracts" / "gate-inputs.toml").write_text(MANIFEST, encoding="utf-8")

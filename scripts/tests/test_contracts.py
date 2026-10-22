@@ -87,6 +87,13 @@ class Contracts(unittest.TestCase):
         self.addCleanup(self._tmp.cleanup)
         self.root = Path(self._tmp.name)
         self._git("init", "-q", "-b", "main")
+        # Auto-maintenance writes into .git/info (commit-graph, pack-refs)
+        # asynchronously, which races TemporaryDirectory's rmtree and fails
+        # teardown with ENOTEMPTY -- observed in CI 2026-10-22, run
+        # 39702215633. Disabled here so nothing writes to the fixture repo
+        # except the commands these tests issue.
+        self._git("config", "gc.auto", "0")
+        self._git("config", "maintenance.auto", "false")
         self.write("ci/contract-paths.toml", POLICY)
         self.write("ci/gate-inputs.toml", MANIFEST)
         self.write("ci/a.toml", "x = 1\n")

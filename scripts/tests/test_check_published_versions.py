@@ -29,6 +29,13 @@ def git(root: Path, *args: str) -> None:
 
 def init_repo(root: Path) -> None:
     git(root, "init", "-q", "-b", "main")
+    # Auto-maintenance writes into .git/info (commit-graph, pack-refs)
+    # asynchronously, which races TemporaryDirectory's rmtree and fails
+    # teardown with ENOTEMPTY -- observed in CI 2026-10-22, run
+    # 39702215633. Disabled here so nothing writes to the fixture repo
+    # except the commands these tests issue.
+    git(root, "config", "gc.auto", "0")
+    git(root, "config", "maintenance.auto", "false")
     git(root, "config", "commit.gpgsign", "false")
     git(root, "config", "user.email", "t@example.invalid")
     git(root, "config", "user.name", "t")

@@ -121,6 +121,17 @@ def git_commit(root: Path) -> None:
         ["git", "-C", str(root), "-c", "init.defaultBranch=main", "init", "-q"],
         check=True,
     )
+    # Auto-maintenance writes into .git/info (commit-graph, pack-refs)
+    # asynchronously, which races TemporaryDirectory's rmtree and fails
+    # teardown with ENOTEMPTY -- observed in CI 2026-10-22, run
+    # 39702215633. Disabled here so nothing writes to the fixture repo
+    # except the commands these tests issue.
+    subprocess.run(
+        ["git", "-C", str(root), "config", "gc.auto", "0"], check=True
+    )
+    subprocess.run(
+        ["git", "-C", str(root), "config", "maintenance.auto", "false"], check=True
+    )
     subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
     subprocess.run(
         [
