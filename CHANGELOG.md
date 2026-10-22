@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.83.0] — 2026-10-22
+
+**RFC 095 M3's remaining implementation: the field rules, the registration
+response, persistence of the three metadata fields, the authentication/grant
+matrix, browser presentation, and the read-only legacy-candidate report.**
+This release does not close M3 — closure additionally needs a durable
+disposition of every candidate `sui-id admin legacy-dynamic-candidates`
+reports, and the architect's acceptance of that evidence, neither of which
+is in this cut.
+
 ### Added
 
 - `clients` gains three new columns — `token_endpoint_auth_method`,
@@ -40,6 +50,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   secret is issued; neither field existed before this stage.
 
 ### Changed
+
+- **`tokio` 1.54.0 → 1.54.1 in `Cargo.lock`.** 1.54.0 was yanked from
+  crates.io. No `Cargo.toml` specification changed — the requirement is
+  still `1.40` — and no other dependency moved. Added during this
+  release's preparation, because this project's `Security audit` workflow
+  runs `cargo audit --deny unsound --deny yanked` and a yanked crate in
+  the lockfile is a release blocker by that policy, not a warning.
 
 - `POST /oauth2/register`'s `scope` is now required and validated against
   this deployment's scope catalog (RFC 095 M3 stage 2): 1–32 unique,
