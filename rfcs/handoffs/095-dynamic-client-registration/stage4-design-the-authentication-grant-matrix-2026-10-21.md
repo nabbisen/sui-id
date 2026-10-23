@@ -352,8 +352,13 @@ landed.
    > blocking-pool time, not a saturation risk. The architect asserted the
    > absence without grepping for the limiter.
 
-   Security-path work and its own dispatch, but a smaller one than this
-   item first claimed. **Schedule: the first round after `0.83.0`.**
+   **Settled and dispatched 2026-10-24** —
+   [`../123-authenticating-a-client-costs-the-caller/d4-on-the-token-endpoint-2026-10-24.md`](../123-authenticating-a-client-costs-the-caller/d4-on-the-token-endpoint-2026-10-24.md).
+   Both decisions are the architect's, at the owner's request under
+   `ROADMAP.md` §S1c: equalise cost **and** response for every
+   pre-authentication failure, and build **no** per-client bucket — RFC
+   123 D3's own test says a public `client_id` must not become a lockout
+   key, and the blast radius on this endpoint is every user's login.
 4. **The same channel check on `oauth_token::authenticate_client`**
    (introspection and revocation). §C2 notes it is a separate decision and
    this stage does not touch it. Those endpoints have their own RFC 7009 /
