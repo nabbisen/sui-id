@@ -330,18 +330,30 @@ landed.
    item 1 exists and the class is observably empty on a real deployment.
    Recording the question now so that "make it NOT NULL" is never proposed
    as a tidy-up before the exit path exists. **No date; gated on item 1.**
-3. **Finish RFC 123 D4 on the token endpoint, and decide its rate limit.**
-   Stage 4b equalised every rejecting branch *inside*
+3. **Finish RFC 123 D4 on the token endpoint, and consider a per-client
+   bucket.** Stage 4b equalised every rejecting branch *inside*
    `authorize::authenticate_client`. Its two callers still return before
    it — unknown client, and disabled or deleted — so the endpoint's cost
-   is not yet uniform, and `/oauth2/token` has no counterpart to RFC
-   123's per-IP and per-client limiters, which reach introspect and
-   revoke only. **The scoping was the architect's**: the dispatch named a
-   function when the property belongs to an endpoint, the same mistake
-   stage 4's first design made. Security-path work, so its own dispatch
-   with its own measurement; the detail is held in
-   `.git-exclude/reviewed/0.83.0-changelog-severity-drafts-2026-10-22.md`
-   §1 until it is fixed. **Schedule: the first round after `0.83.0`.**
+   is not yet uniform. **The scoping was the architect's**: the dispatch
+   named a function when the property belongs to an endpoint, the same
+   mistake stage 4's first design made.
+
+   > **Corrected 2026-10-24, and the correction shrinks this item.** This
+   > entry said *"`/oauth2/token` has no counterpart to RFC 123's per-IP
+   > and per-client limiters"*. **False.** `handlers/oidc.rs:371-377`
+   > enforces `RateLimitKey::Token` as the handler's very first statement,
+   > before credentials are even parsed, at **60 requests per 60 seconds
+   > per IP** (`runtime/ratelimit.rs:134`). What the endpoint lacks is the
+   > *per-claimed-client-id* bucket, the second half RFC 123 D2 added
+   > precisely because per-IP alone misses a distributed source
+   > (`ratelimit.rs:123`). So the gap is one bucket, not two, and the
+   > load argument against the ~34 ms dummy hashing largely goes with it:
+   > 60 probes a minute from one address is roughly two seconds of
+   > blocking-pool time, not a saturation risk. The architect asserted the
+   > absence without grepping for the limiter.
+
+   Security-path work and its own dispatch, but a smaller one than this
+   item first claimed. **Schedule: the first round after `0.83.0`.**
 4. **The same channel check on `oauth_token::authenticate_client`**
    (introspection and revocation). §C2 notes it is a separate decision and
    this stage does not touch it. Those endpoints have their own RFC 7009 /
