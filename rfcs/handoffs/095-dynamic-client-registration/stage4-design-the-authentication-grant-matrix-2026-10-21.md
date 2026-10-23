@@ -354,8 +354,8 @@ landed.
 
    **Settled and dispatched 2026-10-24** —
    [`../123-authenticating-a-client-costs-the-caller/d4-on-the-token-endpoint-2026-10-24.md`](../123-authenticating-a-client-costs-the-caller/d4-on-the-token-endpoint-2026-10-24.md).
-   Both decisions are the architect's, at the owner's request under
-   `ROADMAP.md` §S1c: equalise cost **and** response for every
+   Both decisions are the architect's, taken under `ROADMAP.md` §S1c's
+   exception and recorded there: equalise cost **and** response for every
    pre-authentication failure, and build **no** per-client bucket — RFC
    123 D3's own test says a public `client_id` must not become a lockout
    key, and the blast radius on this endpoint is every user's login.
