@@ -19,7 +19,7 @@ administration metadata."*
 
 | Wave | Commands | What is actually wrong today |
 |---|---|---|
-| 1 — server/security settings | S01–S06 | **Nothing is leaking.** Already atomic via `append_within_tx` (e.g. `server_settings.rs:145`). Unsealed only |
+| 1 — server/security settings | S01–S06 | ~~**Nothing is leaking.** Already atomic~~ — **wrong, corrected 2026-10-24; see §B′.** Four of the six emit **no audit record at all** on their production path |
 | 2 — pending sensitive settings | S07–S09 | **4 best-effort appends after a committed write** (`settings/pending_change.rs:121, 184, 211, 242`) |
 | 3 — federation configuration | C16–C18, C23 | `target-legacy` ×3, `target-absent` ×1 — unbuilt rather than mis-built |
 | 4 — client administration | C01–C10, C21, C22, K02, K03 | **9 best-effort appends after committed writes**, all through one helper |
@@ -35,6 +35,43 @@ saying plainly rather than quietly departing from it.
 `audit::append_within_tx` inside `db.with_tx`. Converting them seals a
 typed command over behaviour that is already correct. Real work, no defect
 closed.
+
+> ## §B′ — the paragraph above is wrong, corrected 2026-10-24
+>
+> **I read `change_hibp_mode` and generalised from it without tracing
+> which function production calls.** `server_settings` has pairs: an
+> atomic `change_*` and a bare `update_*`. The inventory names the
+> **bare** one as each row's mutation surface, and the admin settings page
+> calls the bare one. The atomic `change_*` pair is reached only from the
+> first-time setup wizard.
+>
+> Measured, per production path:
+>
+> | | Caller | Audit today |
+> |---|---|---|
+> | S01 default language | `handlers/settings.rs:93` → `update_default_lang` | **none** — the `.changed` event is emitted only from `setup.rs:392` |
+> | S02 HIBP mode | setup only; **not settable from the admin page** | atomic |
+> | S03 idle timeout | `handlers/settings.rs:183` | **none** |
+> | S04 max concurrent sessions | `handlers/settings.rs:214` | **none** |
+> | S05 metrics token | `cli.rs:883` | **none** |
+> | S06 SMTP configuration | `handlers/settings.rs` | best-effort, `:507` |
+>
+> `settings.idle_timeout.changed`, `settings.max_sessions.changed` and
+> `settings.metrics_token.rotated` are named in the inventory as those
+> rows' rationale and **have no emission site anywhere in the
+> workspace** — grepped, zero hits outside the inventory itself.
+>
+> **So wave 1 is not the safe wave.** Four operator actions — including
+> rotating the metrics token, which is a credential, and changing the
+> session limits, which are security controls — leave no record at all.
+> That is worse than waves 2 and 4, which at least attempt one and can
+> lose it.
+>
+> **The ordering this document recommended is unaffected for `0.84.0`**,
+> because waves 2 and 1 are both in it and 2 is already done. What is
+> affected is the comparison with wave 4 for `0.85.0`, and the claim that
+> stage 3 "closes no defect", which was wrong in both this document and
+> the stage plan.
 
 **Wave 2 commits and then logs, best-effort.**
 `settings/pending_change.rs:170` consumes the pending row through its own

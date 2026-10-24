@@ -7,11 +7,13 @@
 > Three stages: [`m2b-0.84.0-stage-plan-2026-10-24.md`](m2b-0.84.0-stage-plan-2026-10-24.md).
 > **Stage 1 landed** `594c970` (Level B, 27 jobs, 0 skipped) —
 > [`m2b-stage1-s07-s09-2026-10-24.md`](m2b-stage1-s07-s09-2026-10-24.md);
-> G20's declared set moved 25 → 27. **Stage 2 is dispatched** —
-> [`m2b-stage2-s08-2026-10-24.md`](m2b-stage2-s08-2026-10-24.md), which
-> carries S08's design as well: a pending change can currently be consumed
-> without being applied, and fixing that is a restructure, not a
-> conversion.
+> G20's declared set moved 25 → 27. **Stage 2 landed** `b971955` (Level B, 27/0) —
+> [`m2b-stage2-s08-2026-10-24.md`](m2b-stage2-s08-2026-10-24.md); G20 is
+> at 28. **Stage 3 is dispatched** —
+> [`m2b-stage3-s01-s06-2026-10-24.md`](m2b-stage3-s01-s06-2026-10-24.md),
+> the last of `0.84.0`. **The plan described that wave wrongly**: four of
+> its six leave no audit record at all on the production path, not "already
+> atomic" — corrected in the scope document's §B′.
 > **`0.84.0` does not close M2b**: waves 3 and 4 and the authority switch
 > remain after it.
 
