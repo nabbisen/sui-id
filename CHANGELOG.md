@@ -79,9 +79,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that seals secrets at rest. It also reaches `hmac` → `pbkdf2` through
   the SMTP client.
 
-  **[PLACEHOLDER: severity and the affected-version range go here, per
-  the assignment rule in `.github/SECURITY.md`. Not written in this
-  draft.]**
+  **Exposure: limited to pinned builds. No separate advisory is issued.**
+  `ctutils` has been in this project's lockfile since **v0.22.0**
+  (2026-05-04) and every release up to and including `0.83.0` pins a
+  version the advisory covers. **Installing with `cargo install sui-id`,
+  as the README and quick-start describe, was never affected** — Cargo
+  ignores a package's bundled `Cargo.lock` by default and resolves a
+  fresh dependency graph, which has had the fixed `ctutils` available
+  since 2026-10-23. A crate depending on `sui-id-core` or its siblings is
+  likewise unaffected, for the same reason. What *is* affected is a build
+  that pins this project's lockfile — `cargo install --locked`, a build
+  from a release tag's checkout, or a binary compiled before 2026-10-23.
+  **If you run one of those, rebuild**; `cargo update -p ctutils` is
+  sufficient and needs no source change. The authoritative record of the
+  underlying flaw is RUSTSEC-2026-0385 itself.
 
 - **The token endpoint's pre-authentication failures — an unknown
   `client_id`, a disabled or deleted client, and a wrong `client_secret`
