@@ -880,7 +880,7 @@ pub(crate) async fn run_admin_rotate_metrics_token(args: &[String]) -> Result<()
         .collect::<String>();
 
     let now = sui_id_core::time::system_clock().now();
-    sui_id_store::repos::server_settings::update_metrics_token_hash(&db, Some(&hash), now)
+    sui_id_store::commands::rotate_metrics_token(&db, Some(hash.clone()), now)
         .await
         .context("updating metrics_token_hash")?;
 

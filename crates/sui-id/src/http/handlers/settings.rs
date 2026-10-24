@@ -90,9 +90,14 @@ pub async fn basic_lang_post(
     let parsed = sui_id_i18n::Locale::parse(&form.default_lang)
         .ok_or_else(|| HttpError::html(CoreError::BadRequest("unknown language tag".into())))?;
     let now = app.clock.now();
-    sui_id_store::repos::server_settings::update_default_lang(&app.db, &form.default_lang, now)
-        .await
-        .map_err(|e| HttpError::html(CoreError::from(e)))?;
+    sui_id_store::commands::change_default_lang(
+        &app.db,
+        admin_actor.user_id(),
+        form.default_lang.clone(),
+        now,
+    )
+    .await
+    .map_err(|e| HttpError::html(CoreError::from(e)))?;
 
     // Re-render with a success flash so the admin sees the change took effect.
     let t = parsed.strings();
@@ -167,7 +172,7 @@ pub struct IdleTimeoutForm {
 
 pub async fn idle_timeout_post(
     state_ext: AppStateExt,
-    CurrentAdmin(_admin_id, _): CurrentAdmin,
+    CurrentAdmin(admin_id, _): CurrentAdmin,
     jar: CookieJar,
     axum::Form(form): axum::Form<IdleTimeoutForm>,
 ) -> Result<Response, HttpError> {
@@ -180,7 +185,7 @@ pub async fn idle_timeout_post(
         )));
     }
     let now = app.clock.now();
-    sui_id_store::repos::server_settings::update_idle_session_timeout(&app.db, form.secs, now)
+    sui_id_store::commands::change_idle_session_timeout(&app.db, admin_id, form.secs, now)
         .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
     Ok(axum::response::Redirect::to("/admin/settings/security").into_response())
@@ -199,7 +204,7 @@ pub struct MaxSessionsForm {
 
 pub async fn max_sessions_post(
     state_ext: AppStateExt,
-    CurrentAdmin(_admin_id, _): CurrentAdmin,
+    CurrentAdmin(admin_id, _): CurrentAdmin,
     jar: CookieJar,
     axum::Form(form): axum::Form<MaxSessionsForm>,
 ) -> Result<Response, HttpError> {
@@ -211,7 +216,7 @@ pub async fn max_sessions_post(
         )));
     }
     let now = app.clock.now();
-    sui_id_store::repos::server_settings::update_max_concurrent_sessions(&app.db, form.cap, now)
+    sui_id_store::commands::change_max_concurrent_sessions(&app.db, admin_id, form.cap, now)
         .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
     Ok(axum::response::Redirect::to("/admin/settings/security").into_response())
@@ -495,27 +500,9 @@ pub async fn email_post(
         created_at,
         updated_at: now,
     };
-    sui_id_store::repos::smtp_config::upsert(&app.db, &row)
+    sui_id_store::commands::change_smtp_config(&app.db, admin_id, row)
         .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
-
-    let _ = sui_id_store::repos::audit::append(
-        &app.db,
-        &sui_id_store::models::AuditLogRow {
-            at: now,
-            actor: Some(admin_id),
-            action: "auth.smtp_config.changed".into(),
-            target: None,
-            result: "ok".into(),
-            note: Some(format!(
-                "enabled={enabled} host={} port={} tls={}",
-                row.host,
-                row.port,
-                row.tls_mode.as_str()
-            )),
-        },
-    )
-    .await;
 
     Ok(Redirect::to("/admin/settings/email").into_response())
 }

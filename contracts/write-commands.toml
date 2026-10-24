@@ -989,67 +989,79 @@ test_id = "`p_t09_refresh_initial_issue`"
 id = "S01"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
+sealed = true
 owner = "Change default language"
-rationale = "`settings.default_language.changed`"
-mutation_surface = "`server_settings::update_default_lang`"
+rationale = "`settings.default_language.changed` with required `old`/`new`; the admin settings page and the setup wizard both call it (converted RFC 094 M2b stage 3 -- previously the admin page's path emitted nothing), `system_principal: forbidden`, actor required"
+mutation_surface = "`server_settings::update_default_lang_within_tx` (via `commands::change_default_lang`)"
 files = ["crates/sui-id-store/src/repos/server_settings.rs"]
-test_id = "`a_s01_language`"
+test_id = "`s01_change_default_lang_appends_exactly_one_audit_row`"
+event = ["settings.default_language.changed"]
+descriptor = ["S01_CHANGED"]
 
 [[command]]
 id = "S02"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
+sealed = true
 owner = "Change HIBP mode"
-rationale = "`settings.hibp_mode.changed`"
-mutation_surface = "`server_settings::update_hibp_mode`"
+rationale = "`settings.hibp_mode.changed` with required `old`/`new`; only the setup wizard calls it (converted RFC 094 M2b stage 3 -- no defect closed, already atomic before sealing), `system_principal: forbidden`, actor required"
+mutation_surface = "`server_settings::update_hibp_mode_within_tx` (via `commands::change_hibp_mode`)"
 files = ["crates/sui-id-store/src/repos/server_settings.rs"]
-test_id = "`a_s02_hibp`"
+test_id = "`s02_change_hibp_mode_appends_exactly_one_audit_row`"
+event = ["settings.hibp_mode.changed"]
+descriptor = ["S02_CHANGED"]
 
 [[command]]
 id = "S03"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
+sealed = true
 owner = "Change idle timeout"
-rationale = "`settings.idle_timeout.changed`"
-mutation_surface = "`server_settings::update_idle_session_timeout`"
+rationale = "`settings.idle_timeout.changed` with required `old`/`new`; the admin settings page calls it (converted RFC 094 M2b stage 3 -- previously named in this inventory and never emitted by anything), `system_principal: forbidden`, actor required"
+mutation_surface = "`server_settings::update_idle_session_timeout_within_tx` (via `commands::change_idle_session_timeout`)"
 files = ["crates/sui-id-store/src/repos/server_settings.rs"]
-test_id = "`a_s03_idle`"
+test_id = "`s03_change_idle_session_timeout_appends_exactly_one_audit_row`"
+event = ["settings.idle_timeout.changed"]
+descriptor = ["S03_CHANGED"]
 
 [[command]]
 id = "S04"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
+sealed = true
 owner = "Change concurrent-session limit"
-rationale = "`settings.max_sessions.changed`"
-mutation_surface = "`server_settings::update_max_concurrent_sessions`"
+rationale = "`settings.max_sessions.changed` with required `old`/`new`; the admin settings page calls it (converted RFC 094 M2b stage 3 -- previously named in this inventory and never emitted by anything), `system_principal: forbidden`, actor required"
+mutation_surface = "`server_settings::update_max_concurrent_sessions_within_tx` (via `commands::change_max_concurrent_sessions`)"
 files = ["crates/sui-id-store/src/repos/server_settings.rs"]
-test_id = "`a_s04_sessions`"
+test_id = "`s04_change_max_concurrent_sessions_appends_exactly_one_audit_row`"
+event = ["settings.max_sessions.changed"]
+descriptor = ["S04_CHANGED"]
 
 [[command]]
 id = "S05"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
+sealed = true
 owner = "Rotate metrics token"
-rationale = "`settings.metrics_token.rotated`"
-mutation_surface = "`server_settings::update_metrics_token_hash`"
+rationale = "`settings.metrics_token.rotated`, no attributes (neither the new nor the old hash may be recorded); only `sui-id admin rotate-metrics-token` calls it, which has no authenticated actor (converted RFC 094 M2b stage 3 -- previously named in this inventory and never emitted by anything), `system_principal: permitted`, actor none"
+mutation_surface = "`server_settings::update_metrics_token_hash_within_tx` (via `commands::rotate_metrics_token`)"
 files = ["crates/sui-id-store/src/repos/server_settings.rs"]
-test_id = "`a_s05_metrics_token`"
+test_id = "`s05_rotate_metrics_token_appends_exactly_one_audit_row`"
+event = ["settings.metrics_token.rotated"]
+descriptor = ["S05_ROTATED"]
 
 [[command]]
 id = "S06"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
+sealed = true
 owner = "Change SMTP configuration"
-rationale = "`auth.smtp_config.changed`"
-mutation_surface = "`smtp_config::upsert`"
+rationale = "`auth.smtp_config.changed` with required `enabled`/`host`/`port`/`tls_mode`, never the password; the direct (no-pending-change) settings-save path calls it (converted RFC 094 M2b stage 3 -- previously a best-effort append followed a separate commit), `system_principal: forbidden`, actor required"
+mutation_surface = "`smtp_config::upsert_within_tx` (via `commands::change_smtp_config`)"
 files = ["crates/sui-id-store/src/repos/smtp_config.rs"]
-test_id = "`a_s06_smtp`"
+test_id = "`s06_change_smtp_config_appends_exactly_one_audit_row`"
+event = ["auth.smtp_config.changed"]
+descriptor = ["S06_CHANGED"]
 
 [[command]]
 id = "S07"

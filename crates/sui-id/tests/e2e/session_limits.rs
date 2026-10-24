@@ -296,6 +296,31 @@ async fn admin_settings_security_idle_timeout_change() {
         .await
         .expect("settings");
     assert_eq!(row.idle_session_timeout_secs, 900);
+    assert_settings_audited(&state, "settings.idle_timeout.changed").await;
+}
+
+/// RFC 094 M2b stage 3: the sealed command writes the audit record in the
+/// same transaction as the setting. These two tests already asserted the
+/// *value* changed; they did not assert the *record* exists, and that is
+/// the half a regression would take.
+///
+/// Measured 2026-10-24: reverting `settings.rs`'s handler to the bare
+/// `server_settings::update_idle_session_timeout` wrapper — which this
+/// stage deliberately kept, because three e2e and core tests seed through
+/// it — changes the setting, writes nothing, compiles, and leaves all 596
+/// e2e tests and every lib suite green. The wrappers are the reason this
+/// assertion has to exist at the HTTP layer: the store-level command tests
+/// cannot see which function the handler chose.
+async fn assert_settings_audited(state: &sui_id::AppState, action: &str) {
+    let rows = sui_id_store::repos::audit::recent_filtered(&state.db, 50, Some(action.to_owned()))
+        .await
+        .expect("audit rows");
+    let hits = rows.iter().filter(|r| r.action == action).count();
+    assert_eq!(
+        hits, 1,
+        "exactly one {action} record must exist -- the handler must go \
+         through the sealed command, not the bare repo wrapper"
+    );
 }
 
 /// Admin POST /admin/settings/security/max-sessions updates the
@@ -339,6 +364,7 @@ async fn admin_settings_security_max_sessions_change() {
         .await
         .expect("settings");
     assert_eq!(row.max_concurrent_sessions, 5);
+    assert_settings_audited(&state, "settings.max_sessions.changed").await;
 
     // Out-of-range (>1000) is rejected.
     let body = format!("_csrf={csrf}&cap=99999");

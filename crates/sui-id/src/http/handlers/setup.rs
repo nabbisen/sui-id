@@ -389,9 +389,14 @@ pub async fn lang_post(
     };
     // Parse as Locale to confirm it's a valid tag before writing.
     let locale = sui_id_i18n::Locale::parse(chosen).unwrap_or_default();
-    server_settings::change_default_lang(&app.db, admin_id, locale.tag(), app.clock.now())
-        .await
-        .map_err(|e| HttpError::html(CoreError::from(e)))?;
+    sui_id_store::commands::change_default_lang(
+        &app.db,
+        admin_id,
+        locale.tag().to_owned(),
+        app.clock.now(),
+    )
+    .await
+    .map_err(|e| HttpError::html(CoreError::from(e)))?;
     Ok(Redirect::to("/setup/hibp").into_response())
 }
 
@@ -443,7 +448,7 @@ pub async fn hibp_post(
     };
     // Disabling the breach-password check is a change of security posture: it
     // is audited with the old and the new value, in the same transaction.
-    server_settings::change_hibp_mode(&app.db, admin_id, mode, app.clock.now())
+    sui_id_store::commands::change_hibp_mode(&app.db, admin_id, mode, app.clock.now())
         .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
     Ok(Redirect::to("/setup/done").into_response())

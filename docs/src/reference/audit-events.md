@@ -199,8 +199,11 @@ transaction as the change it records.
 
 | Event name | Label | Description |
 |---|---|---|
-| `settings.hibp_mode.changed` | — | An administrator set the breach-password (HIBP) check mode in the setup wizard. Note field: `old=<mode> new=<mode>`. Written with the change, in one transaction, and whether or not the value differs. |
-| `settings.default_language.changed` | — | An administrator set the server default language in the setup wizard. Note field: `old=<tag> new=<tag>`. Written with the change, in one transaction. |
+| `settings.hibp_mode.changed` | — | An administrator set the breach-password (HIBP) check mode, from the setup wizard. Attributes: `old`, `new`. Written with the change, in one transaction, and whether or not the value differs. |
+| `settings.default_language.changed` | — | An administrator set the server default language, from the admin settings page or the setup wizard. Attributes: `old`, `new`. Written with the change, in one transaction. |
+| `settings.idle_timeout.changed` | — | An administrator set the idle-session-timeout value from the admin settings page. Attributes: `old`, `new` (seconds). Written with the change, in one transaction. |
+| `settings.max_sessions.changed` | — | An administrator set the concurrent-session cap from the admin settings page. Attributes: `old`, `new`. Written with the change, in one transaction. |
+| `settings.metrics_token.rotated` | — | The `/metrics` endpoint's bearer token was rotated via the CLI (`sui-id admin rotate-metrics-token`). No attributes — neither the new nor the old token hash is recorded. Written with the change, in one transaction. |
 
 ## Pending settings change events (RFC 090)
 

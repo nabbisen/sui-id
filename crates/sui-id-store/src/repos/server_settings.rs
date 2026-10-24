@@ -13,12 +13,10 @@
 
 use crate::{
     Database, StoreError, StoreResult,
-    models::{AuditLogRow, HibpMode, ServerSettingsRow},
-    repos::audit,
+    models::{HibpMode, ServerSettingsRow},
 };
 use chrono::{DateTime, Utc};
 use rusqlite::params;
-use sui_id_shared::ids::UserId;
 
 const SINGLETON_ID: &str = "singleton";
 
@@ -82,182 +80,169 @@ pub fn get_within_tx(conn: &rusqlite::Connection) -> StoreResult<ServerSettingsR
     })
 }
 
-/// Update the server default UI language. `lang` is a BCP-47 tag
-/// — application-layer validation should ensure it is one of
+// RFC 094 M2b stage 3: every mutator below is now `_within_tx`, called
+// only from `commands.rs`'s sealed S01-S05. Before this stage, this file
+// held two shapes for the same two settings (HIBP mode, default
+// language): a bare `update_*` with no audit at all (the admin settings
+// page's own path) and an atomic `change_*` (the setup wizard's path,
+// already correct). The stage plan originally called this wave "sealing
+// what is already atomic" -- wrong, because it traced the atomic pair
+// and missed that production calls the bare one. One sealed command per
+// setting now serves both callers; see the dispatch's §0 and §2.
+//
+// `update_idle_session_timeout`, `update_max_concurrent_sessions` and
+// `update_metrics_token_hash` had no atomic pair at all -- their audit
+// event names were declared in the inventory and never emitted by
+// anything, which is this stage's sharper finding (§0).
+//
+// Measured before deleting anything: no `repos/server_settings/tests.rs`
+// exists, but `update_hibp_mode`, `update_idle_session_timeout` and
+// `update_max_concurrent_sessions` each have real test-seeding callers
+// elsewhere in the workspace (`sui-id`'s e2e suite and
+// `sui-id-core`'s `session_limit_tests.rs`) that have nothing to do with
+// the audit path this stage closes -- the same shape stage 1 left
+// `insert`/`cancel` in place for. Each keeps a thin async wrapper below,
+// for that reason only; no production code calls any of the three.
+// `update_default_lang`, `change_default_lang`, `change_hibp_mode` and
+// `update_metrics_token_hash` have no such caller and are fully removed.
+
+/// Update the server default UI language, inside the caller's
+/// transaction. Returns the old tag. `lang` is a BCP-47 tag —
+/// application-layer validation should ensure it is one of
 /// `Locale::ALL` before calling.
-pub async fn update_default_lang(db: &Database, lang: &str, now: DateTime<Utc>) -> StoreResult<()> {
-    let lang = lang.to_owned();
-    db.with_conn(move |conn| {
-        let n = conn.execute(
-            "UPDATE server_settings SET default_lang = ?1, updated_at = ?2 WHERE id = ?3",
-            params![lang, now, SINGLETON_ID],
-        )?;
-        if n == 0 {
-            Err(StoreError::NotFound)
-        } else {
-            Ok(())
-        }
-    })
-    .await
+pub fn update_default_lang_within_tx(
+    conn: &rusqlite::Connection,
+    lang: &str,
+    now: DateTime<Utc>,
+) -> StoreResult<String> {
+    let old = get_within_tx(conn)?.default_lang;
+    let n = conn.execute(
+        "UPDATE server_settings SET default_lang = ?1, updated_at = ?2 WHERE id = ?3",
+        params![lang, now, SINGLETON_ID],
+    )?;
+    if n == 0 {
+        return Err(StoreError::NotFound);
+    }
+    Ok(old)
 }
 
-/// Update the server-wide Pwned Passwords (HIBP) check mode.
+/// Update the server-wide Pwned Passwords (HIBP) check mode, inside the
+/// caller's transaction. Returns the old mode.
+pub fn update_hibp_mode_within_tx(
+    conn: &rusqlite::Connection,
+    mode: HibpMode,
+    now: DateTime<Utc>,
+) -> StoreResult<HibpMode> {
+    let old = get_within_tx(conn)?.hibp_mode;
+    let n = conn.execute(
+        "UPDATE server_settings SET hibp_mode = ?1, updated_at = ?2 WHERE id = ?3",
+        params![mode.as_str(), now, SINGLETON_ID],
+    )?;
+    if n == 0 {
+        return Err(StoreError::NotFound);
+    }
+    Ok(old)
+}
+
+/// Test-seeding only — no production caller (measured). Real callers
+/// use the sealed S02 command (`commands::change_hibp_mode`); this
+/// exists because `sui-id`'s e2e suite seeds the mode directly, which
+/// has nothing to do with S02's own audit path.
 pub async fn update_hibp_mode(
     db: &Database,
     mode: HibpMode,
     now: DateTime<Utc>,
 ) -> StoreResult<()> {
-    db.with_conn(move |conn| {
-        let n = conn.execute(
-            "UPDATE server_settings SET hibp_mode = ?1, updated_at = ?2 WHERE id = ?3",
-            params![mode.as_str(), now, SINGLETON_ID],
-        )?;
-        if n == 0 {
-            Err(StoreError::NotFound)
-        } else {
-            Ok(())
-        }
-    })
-    .await
+    db.with_tx(move |tx| update_hibp_mode_within_tx(tx, mode, now).map(|_| ()))
+        .await
 }
 
-/// Change the server-wide Pwned Passwords (HIBP) check mode on behalf of
-/// `actor`, and record the change, **in one transaction** (RFC 120 D5).
-///
-/// Returns `(old, new)`. The audit row is `settings.hibp_mode.changed` with the
-/// note `old=<mode> new=<mode>`; it is written whether or not the value differs,
-/// because what is audited is that an administrator made this decision.
-pub async fn change_hibp_mode(
-    db: &Database,
-    actor: UserId,
-    mode: HibpMode,
+/// Update the idle-session-timeout value, in seconds, inside the
+/// caller's transaction. Returns the old value. `0` means the feature
+/// is disabled. Application-layer validation should pin the value to
+/// an operationally sensible range before calling.
+pub fn update_idle_session_timeout_within_tx(
+    conn: &rusqlite::Connection,
+    secs: i64,
     now: DateTime<Utc>,
-) -> StoreResult<(HibpMode, HibpMode)> {
-    db.with_tx(move |tx| {
-        let old = get_within_tx(tx)?.hibp_mode;
-        let n = tx.execute(
-            "UPDATE server_settings SET hibp_mode = ?1, updated_at = ?2 WHERE id = ?3",
-            params![mode.as_str(), now, SINGLETON_ID],
-        )?;
-        if n == 0 {
-            return Err(StoreError::NotFound);
-        }
-        audit::append_within_tx(
-            tx,
-            &AuditLogRow {
-                at: now,
-                actor: Some(actor),
-                action: "settings.hibp_mode.changed".into(),
-                target: None,
-                result: "ok".into(),
-                note: Some(format!("old={} new={}", old.as_str(), mode.as_str())),
-            },
-        )?;
-        Ok((old, mode))
-    })
-    .await
+) -> StoreResult<i64> {
+    let old = get_within_tx(conn)?.idle_session_timeout_secs;
+    let n = conn.execute(
+        "UPDATE server_settings SET idle_session_timeout_secs = ?1, \
+         updated_at = ?2 WHERE id = ?3",
+        params![secs, now, SINGLETON_ID],
+    )?;
+    if n == 0 {
+        return Err(StoreError::NotFound);
+    }
+    Ok(old)
 }
 
-/// Change the server-wide default language on behalf of `actor`, and record the
-/// change, in one transaction. Returns `(old, new)`. The audit row is
-/// `settings.default_language.changed` with the note `old=<tag> new=<tag>`.
-pub async fn change_default_lang(
-    db: &Database,
-    actor: UserId,
-    lang: &str,
-    now: DateTime<Utc>,
-) -> StoreResult<(String, String)> {
-    let lang = lang.to_owned();
-    db.with_tx(move |tx| {
-        let old = get_within_tx(tx)?.default_lang;
-        let n = tx.execute(
-            "UPDATE server_settings SET default_lang = ?1, updated_at = ?2 WHERE id = ?3",
-            params![lang, now, SINGLETON_ID],
-        )?;
-        if n == 0 {
-            return Err(StoreError::NotFound);
-        }
-        audit::append_within_tx(
-            tx,
-            &AuditLogRow {
-                at: now,
-                actor: Some(actor),
-                action: "settings.default_language.changed".into(),
-                target: None,
-                result: "ok".into(),
-                note: Some(format!("old={old} new={lang}")),
-            },
-        )?;
-        Ok((old, lang))
-    })
-    .await
-}
-
-/// Update the idle-session-timeout value, in seconds. `0` means
-/// the feature is disabled. Application-layer validation should
-/// pin the value to an operationally sensible range before
-/// calling.
+/// Test-seeding only — no production caller (measured). Real callers
+/// use the sealed S03 command (`commands::change_idle_session_timeout`);
+/// this exists because `sui-id-core`'s `session_limit_tests.rs` and
+/// `sui-id`'s e2e suite seed the value directly, unrelated to S03's own
+/// audit path.
 pub async fn update_idle_session_timeout(
     db: &Database,
     secs: i64,
     now: DateTime<Utc>,
 ) -> StoreResult<()> {
-    db.with_conn(move |conn| {
-        let n = conn.execute(
-            "UPDATE server_settings SET idle_session_timeout_secs = ?1, \
-             updated_at = ?2 WHERE id = ?3",
-            params![secs, now, SINGLETON_ID],
-        )?;
-        if n == 0 {
-            Err(StoreError::NotFound)
-        } else {
-            Ok(())
-        }
-    })
-    .await
+    db.with_tx(move |tx| update_idle_session_timeout_within_tx(tx, secs, now).map(|_| ()))
+        .await
 }
 
-/// Update the concurrent-session cap. `0` means no cap. The
-/// application enforces FIFO eviction at login time when the
-/// resulting count would exceed this.
+/// Update the concurrent-session cap, inside the caller's transaction.
+/// Returns the old value. `0` means no cap. The application enforces
+/// FIFO eviction at login time when the resulting count would exceed
+/// this.
+pub fn update_max_concurrent_sessions_within_tx(
+    conn: &rusqlite::Connection,
+    cap: i64,
+    now: DateTime<Utc>,
+) -> StoreResult<i64> {
+    let old = get_within_tx(conn)?.max_concurrent_sessions;
+    let n = conn.execute(
+        "UPDATE server_settings SET max_concurrent_sessions = ?1, \
+         updated_at = ?2 WHERE id = ?3",
+        params![cap, now, SINGLETON_ID],
+    )?;
+    if n == 0 {
+        return Err(StoreError::NotFound);
+    }
+    Ok(old)
+}
+
+/// Test-seeding only — no production caller (measured). Real callers
+/// use the sealed S04 command (`commands::change_max_concurrent_sessions`);
+/// this exists for the same reason `update_idle_session_timeout`'s
+/// wrapper does.
 pub async fn update_max_concurrent_sessions(
     db: &Database,
     cap: i64,
     now: DateTime<Utc>,
 ) -> StoreResult<()> {
-    db.with_conn(move |conn| {
-        let n = conn.execute(
-            "UPDATE server_settings SET max_concurrent_sessions = ?1, \
-             updated_at = ?2 WHERE id = ?3",
-            params![cap, now, SINGLETON_ID],
-        )?;
-        if n == 0 {
-            Err(StoreError::NotFound)
-        } else {
-            Ok(())
-        }
-    })
-    .await
+    db.with_tx(move |tx| update_max_concurrent_sessions_within_tx(tx, cap, now).map(|_| ()))
+        .await
 }
 
-/// Store the hashed bearer token for the `/metrics` endpoint (RFC 006).
-/// Pass `None` to clear the token (disables bearer-token auth).
-pub async fn update_metrics_token_hash(
-    db: &Database,
+/// Store the hashed bearer token for the `/metrics` endpoint (RFC 006),
+/// inside the caller's transaction. Pass `None` to clear the token
+/// (disables bearer-token auth). Returns nothing — the dispatch's own
+/// instruction is that neither the new nor the old hash becomes an
+/// audit attribute, so there is no caller that needs the old value.
+pub fn update_metrics_token_hash_within_tx(
+    conn: &rusqlite::Connection,
     hash: Option<&str>,
     now: DateTime<Utc>,
 ) -> StoreResult<()> {
-    let hash = hash.map(|h| h.to_owned());
-    db.with_conn(move |conn| {
-        let n = conn.execute(
-            "UPDATE server_settings SET metrics_token_hash = ?1, updated_at = ?2 WHERE id = ?3",
-            params![hash, now, SINGLETON_ID],
-        )?;
-        if n == 0 {
-            Err(StoreError::NotFound)
-        } else {
-            Ok(())
-        }
-    })
-    .await
+    let n = conn.execute(
+        "UPDATE server_settings SET metrics_token_hash = ?1, updated_at = ?2 WHERE id = ?3",
+        params![hash, now, SINGLETON_ID],
+    )?;
+    if n == 0 {
+        Err(StoreError::NotFound)
+    } else {
+        Ok(())
+    }
 }

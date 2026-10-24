@@ -50,6 +50,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   write, and the audit event now commit together in one transaction — a
   validation failure leaves the pending change exactly as it was,
   retryable.
+- **Four operator actions produced no audit record at all, not merely
+  one that could be lost on a failing write (RFC 094 M2b stage 3).**
+  Changing the server default language or the breach-password (HIBP)
+  check mode from the admin settings page, changing the idle-session
+  timeout, changing the concurrent-session cap, and rotating the
+  `/metrics` endpoint's bearer token from the CLI each wrote the setting
+  with no audit append anywhere in the code — `settings.idle_timeout.changed`,
+  `settings.max_sessions.changed` and `settings.metrics_token.rotated`
+  were declared in the audit-event inventory since this project's
+  transactional-audit work began and never emitted by anything until
+  now. All four (plus the HIBP mode change, which already had a record
+  from the setup wizard but not from the settings page) now commit the
+  setting change and its audit event in one transaction. The SMTP
+  configuration's own direct-save path (not the password-change path,
+  fixed above) moves from a best-effort append after a separate commit
+  to the same one-transaction shape.
 
 ### Security
 

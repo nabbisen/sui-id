@@ -296,6 +296,37 @@ pub enum AuditEventKind {
     /// S08's denial branch (Decision B). `AuditResult::Failure`; the row
     /// is **not** deleted on this branch, unlike the success one.
     SettingsPendingChangeBindingFailed,
+    /// `settings.default_language.changed` — RFC 094 M2b stage 3, S01.
+    /// The name already in use (previously emitted only from the setup
+    /// wizard's atomic `change_default_lang`, never from the admin
+    /// settings page's bare `update_default_lang`); see `commands::S01Event`.
+    SettingsDefaultLanguageChanged,
+    /// `settings.hibp_mode.changed` — RFC 094 M2b stage 3, S02. Same
+    /// naming-continuity reasoning as `SettingsDefaultLanguageChanged`.
+    /// S02 had no defect to close (the setup wizard's `change_hibp_mode`
+    /// was already atomic); sealed because M2b requires every Class-A
+    /// inventory row converted, not because anything was broken.
+    SettingsHibpModeChanged,
+    /// `settings.idle_timeout.changed` — RFC 094 M2b stage 3, S03. Named
+    /// in the inventory since M2a but **never emitted anywhere before
+    /// this stage** — the admin settings page's `update_idle_session_timeout`
+    /// wrote the value with no audit append at all.
+    SettingsIdleTimeoutChanged,
+    /// `settings.max_sessions.changed` — RFC 094 M2b stage 3, S04. Same
+    /// "named but never emitted" shape as `SettingsIdleTimeoutChanged`.
+    SettingsMaxSessionsChanged,
+    /// `settings.metrics_token.rotated` — RFC 094 M2b stage 3, S05. Same
+    /// "named but never emitted" shape; its only caller is the CLI
+    /// (`sui-id admin rotate-metrics-token`), which has no authenticated
+    /// actor — `ActorRequirement::None`, `system_principal: permitted`,
+    /// the same shape U08 uses for its own CLI-only caller.
+    SettingsMetricsTokenRotated,
+    /// `auth.smtp_config.changed` — RFC 094 M2b stage 3, S06. The name
+    /// already in use (the direct, no-pending-change settings-save path;
+    /// the password-change path is S08's, converted in stage 2) — a
+    /// best-effort append followed a separate `smtp_config::upsert`
+    /// commit before this stage.
+    AuthSmtpConfigChanged,
 }
 
 /// The registry entry for one [`AuditEventKind`]. `descriptor()` on a

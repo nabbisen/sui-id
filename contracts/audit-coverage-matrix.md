@@ -264,24 +264,36 @@ are Class A, committed through RFC 094's runner with the mutation they record.
 | `auth.step_up.session_revoked` | The fifth consecutive step-up failure on a session; that session is revoked in the same transaction (`L06`) | user id | user id | `count` | **A** |
 | `auth.mfa.factor_added` | A second factor was added: TOTP enrolment confirmed (`U12`), recovery codes regenerated (`U14`) or a passkey registered (`U15`) | user id | user id | `method` (`totp`, `recovery_codes`, `webauthn`) | **A** |
 
-### Server settings (`settings.hibp_mode.*`, `settings.default_language.*`)
+### Server settings (`settings.*`)
 
-Both are written **in one transaction with the change they record**
-(`server_settings::change_hibp_mode`, `change_default_lang`; RFC 120 D5), so a
-failed audit append rolls the change back. They are still not sealed Class-A
-commands (the `S01`/`S02` rows of `contracts/write-commands.toml` remain
-planned), which is why the class cell says what the gate can verify.
+RFC 094 M2b stage 3 sealed all five of these as Class A (commands
+`S01`–`S05`). The stage plan originally called this wave "sealing what
+is already atomic" — wrong: production called a *bare* `update_*` with
+no audit append at all, not the already-atomic `change_*` pair this
+section used to describe; and `settings.idle_timeout.changed`,
+`settings.max_sessions.changed` and `settings.metrics_token.rotated`
+were named in `contracts/write-commands.toml` since M2a and never
+emitted by anything before this stage. One sealed command per setting
+now serves every caller (the admin settings page and, for S01/S02, the
+setup wizard too).
 
 | Event name | Operation | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
-| `settings.hibp_mode.changed` | The breach-password (HIBP) check mode was set from the setup wizard; written whether or not the value differs | admin user id | — | `old=<mode> new=<mode>` | B *(A required)* |
-| `settings.default_language.changed` | The server default language was set from the setup wizard; written whether or not the value differs | admin user id | — | `old=<tag> new=<tag>` | B *(A required)* |
+| `settings.default_language.changed` | The server default language was changed, from the admin settings page or the setup wizard (command `S01`) | admin user id | — | `old`, `new` (both required) | A |
+| `settings.hibp_mode.changed` | The breach-password (HIBP) check mode was changed, from the setup wizard only (command `S02`; no defect closed — already atomic before sealing) | admin user id | — | `old`, `new` (both required) | A |
+| `settings.idle_timeout.changed` | The idle-session-timeout value was changed, from the admin settings page (command `S03`) | admin user id | — | `old`, `new` (both required) | A |
+| `settings.max_sessions.changed` | The concurrent-session cap was changed, from the admin settings page (command `S04`) | admin user id | — | `old`, `new` (both required) | A |
+| `settings.metrics_token.rotated` | The `/metrics` endpoint's bearer token was rotated, from the CLI only (command `S05`) | — (no authenticated actor; CLI, master-key authority) | — | none — neither the new nor the old hash may be recorded | A |
 
 ### Self-service settings (`auth.smtp_config.*`)
 
+RFC 094 M2b stage 3 sealed the direct (no-pending-change) save path as
+Class A (command `S06`). The password-change path, through a pending
+settings change, is `S08`'s — sealed in stage 2 and unaffected here.
+
 | Event name | Operation | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
-| `auth.smtp_config.changed` | SMTP configuration change | admin user id | — | changed fields (non-secret) | B *(A required)* |
+| `auth.smtp_config.changed` | SMTP configuration change via the direct save path (command `S06`) | admin user id | — | `enabled`, `host`, `port`, `tls_mode` (all required; never the password) | A |
 
 ### Authentication flow (`auth.*`)
 

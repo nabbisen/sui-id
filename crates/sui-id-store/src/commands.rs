@@ -4439,5 +4439,486 @@ pub async fn apply_pending_settings_change(
     .await
 }
 
+// ── S01 — change default language ────────────────────────────────────────
+//
+// RFC 094 M2b stage 3. The stage plan originally called this wave "sealing
+// what is already atomic" -- wrong (dispatch §0): production calls the
+// *bare* `update_default_lang` (no audit at all), not the already-atomic
+// `change_default_lang` the plan traced. This command now serves both the
+// admin settings page and the setup wizard, which turned out to need the
+// same `ActorRequirement` -- the wizard's `CurrentAdmin` extractor is the
+// same one the settings page uses, so by the time either calls in, a real
+// admin session already exists. The old bare/atomic pair in
+// `server_settings.rs` is deleted; this is the one path now.
+
+static S01_CHANGED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::SettingsDefaultLanguageChanged,
+    name: "settings.default_language.changed",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::None,
+    attributes: &[
+        AttributeSpec {
+            name: "old",
+            description: "the previous BCP-47 language tag",
+            required: true,
+        },
+        AttributeSpec {
+            name: "new",
+            description: "the new BCP-47 language tag",
+            required: true,
+        },
+    ],
+};
+
+crate::declare_write_command! {
+    /// S01 — change the server default UI language. Administrator
+    /// action through `&AdminActor`, from either the settings page or
+    /// the setup wizard.
+    command S01 = "S01" {
+        system_principal: forbidden;
+        enum S01Event {
+            Changed { old: String, new: String } => &S01_CHANGED,
+        }
+    }
+}
+
+impl SealedCommandEvent<S01> for S01Event {
+    fn target(&self) -> Option<AuditTarget> {
+        None
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Changed { old, new } = self;
+        AuditAttributes::builder()
+            .attribute("old", old.clone())
+            .attribute("new", new.clone())
+            .build()
+    }
+}
+
+/// Run S01 (change default language) through the Class-A runner.
+pub async fn change_default_lang(
+    db: &crate::Database,
+    admin: UserId,
+    lang: String,
+    now: DateTime<Utc>,
+) -> StoreResult<crate::registry::Audited<(String, String)>> {
+    let context = AuthorizedCommandContext::<S01>::for_authorized_actor(admin, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, S01>| {
+        let old =
+            crate::repos::server_settings::update_default_lang_within_tx(tx.tx(), &lang, now)?;
+        Ok((
+            (old.clone(), lang.clone()),
+            S01Event::Changed { old, new: lang },
+        ))
+    })
+    .await
+}
+
+// ── S02 — change HIBP mode ───────────────────────────────────────────────
+//
+// RFC 094 M2b stage 3. **No defect closed**: the setup wizard's
+// `change_hibp_mode` was already atomic, and the admin settings page has
+// no HIBP control at all -- `update_hibp_mode`, the row's named
+// mutation surface, had zero production callers (measured). Sealed
+// anyway because the inventory lists it and M2b requires every Class-A
+// row converted (dispatch §1); the old bare/atomic pair is deleted and
+// the setup wizard now calls this command, for the same reason S01's
+// does.
+
+static S02_CHANGED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::SettingsHibpModeChanged,
+    name: "settings.hibp_mode.changed",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::None,
+    attributes: &[
+        AttributeSpec {
+            name: "old",
+            description: "the previous HIBP mode",
+            required: true,
+        },
+        AttributeSpec {
+            name: "new",
+            description: "the new HIBP mode",
+            required: true,
+        },
+    ],
+};
+
+crate::declare_write_command! {
+    /// S02 — change the server-wide HIBP check mode. Only the setup
+    /// wizard calls this today; the admin settings page has no control
+    /// for it.
+    command S02 = "S02" {
+        system_principal: forbidden;
+        enum S02Event {
+            Changed {
+                old: crate::models::HibpMode,
+                new: crate::models::HibpMode,
+            } => &S02_CHANGED,
+        }
+    }
+}
+
+impl SealedCommandEvent<S02> for S02Event {
+    fn target(&self) -> Option<AuditTarget> {
+        None
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Changed { old, new } = self;
+        AuditAttributes::builder()
+            .attribute("old", old.as_str())
+            .attribute("new", new.as_str())
+            .build()
+    }
+}
+
+/// Run S02 (change HIBP mode) through the Class-A runner.
+pub async fn change_hibp_mode(
+    db: &crate::Database,
+    admin: UserId,
+    mode: crate::models::HibpMode,
+    now: DateTime<Utc>,
+) -> StoreResult<crate::registry::Audited<(crate::models::HibpMode, crate::models::HibpMode)>> {
+    let context = AuthorizedCommandContext::<S02>::for_authorized_actor(admin, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, S02>| {
+        let old = crate::repos::server_settings::update_hibp_mode_within_tx(tx.tx(), mode, now)?;
+        Ok(((old, mode), S02Event::Changed { old, new: mode }))
+    })
+    .await
+}
+
+// ── S03 — change idle session timeout ────────────────────────────────────
+//
+// RFC 094 M2b stage 3. Named in the inventory since M2a; measured, never
+// emitted anywhere before this stage -- the admin settings page's
+// `update_idle_session_timeout` wrote the value with no audit append at
+// all (dispatch §0).
+
+static S03_CHANGED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::SettingsIdleTimeoutChanged,
+    name: "settings.idle_timeout.changed",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::None,
+    attributes: &[
+        AttributeSpec {
+            name: "old",
+            description: "the previous idle-session-timeout value, in seconds",
+            required: true,
+        },
+        AttributeSpec {
+            name: "new",
+            description: "the new idle-session-timeout value, in seconds",
+            required: true,
+        },
+    ],
+};
+
+crate::declare_write_command! {
+    /// S03 — change the idle-session-timeout value. Administrator
+    /// action through `&AdminActor`.
+    command S03 = "S03" {
+        system_principal: forbidden;
+        enum S03Event {
+            Changed { old: i64, new: i64 } => &S03_CHANGED,
+        }
+    }
+}
+
+impl SealedCommandEvent<S03> for S03Event {
+    fn target(&self) -> Option<AuditTarget> {
+        None
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Changed { old, new } = self;
+        AuditAttributes::builder()
+            .attribute("old", old.to_string())
+            .attribute("new", new.to_string())
+            .build()
+    }
+}
+
+/// Run S03 (change idle session timeout) through the Class-A runner.
+pub async fn change_idle_session_timeout(
+    db: &crate::Database,
+    admin: UserId,
+    secs: i64,
+    now: DateTime<Utc>,
+) -> StoreResult<crate::registry::Audited<(i64, i64)>> {
+    let context = AuthorizedCommandContext::<S03>::for_authorized_actor(admin, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, S03>| {
+        let old = crate::repos::server_settings::update_idle_session_timeout_within_tx(
+            tx.tx(),
+            secs,
+            now,
+        )?;
+        Ok(((old, secs), S03Event::Changed { old, new: secs }))
+    })
+    .await
+}
+
+// ── S04 — change max concurrent sessions ─────────────────────────────────
+//
+// RFC 094 M2b stage 3. Same "named but never emitted" shape as S03
+// (dispatch §0).
+
+static S04_CHANGED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::SettingsMaxSessionsChanged,
+    name: "settings.max_sessions.changed",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::None,
+    attributes: &[
+        AttributeSpec {
+            name: "old",
+            description: "the previous concurrent-session cap",
+            required: true,
+        },
+        AttributeSpec {
+            name: "new",
+            description: "the new concurrent-session cap",
+            required: true,
+        },
+    ],
+};
+
+crate::declare_write_command! {
+    /// S04 — change the concurrent-session cap. Administrator action
+    /// through `&AdminActor`.
+    command S04 = "S04" {
+        system_principal: forbidden;
+        enum S04Event {
+            Changed { old: i64, new: i64 } => &S04_CHANGED,
+        }
+    }
+}
+
+impl SealedCommandEvent<S04> for S04Event {
+    fn target(&self) -> Option<AuditTarget> {
+        None
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Changed { old, new } = self;
+        AuditAttributes::builder()
+            .attribute("old", old.to_string())
+            .attribute("new", new.to_string())
+            .build()
+    }
+}
+
+/// Run S04 (change max concurrent sessions) through the Class-A runner.
+pub async fn change_max_concurrent_sessions(
+    db: &crate::Database,
+    admin: UserId,
+    cap: i64,
+    now: DateTime<Utc>,
+) -> StoreResult<crate::registry::Audited<(i64, i64)>> {
+    let context = AuthorizedCommandContext::<S04>::for_authorized_actor(admin, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, S04>| {
+        let old = crate::repos::server_settings::update_max_concurrent_sessions_within_tx(
+            tx.tx(),
+            cap,
+            now,
+        )?;
+        Ok(((old, cap), S04Event::Changed { old, new: cap }))
+    })
+    .await
+}
+
+// ── S05 — rotate metrics token ───────────────────────────────────────────
+//
+// RFC 094 M2b stage 3. Same "named but never emitted" shape as S03/S04,
+// plus a different actor shape: the only caller is `sui-id admin
+// rotate-metrics-token`, which opens the database directly with the
+// master key and has no authenticated `UserId` at all -- the same
+// non-human-caller shape U08 uses (`for_system_actor`,
+// `ActorRequirement::None`, `system_principal: permitted`). **No
+// attributes at all**: the dispatch is explicit that neither the new nor
+// the old hash may become an audit attribute, and there is nothing else
+// non-secret left to record about a token rotation.
+
+static S05_ROTATED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::SettingsMetricsTokenRotated,
+    name: "settings.metrics_token.rotated",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::None,
+    target: TargetRequirement::None,
+    attributes: &[],
+};
+
+crate::declare_write_command! {
+    /// S05 — rotate the `/metrics` endpoint's bearer token. CLI-only; no
+    /// authenticated actor exists for this call.
+    command S05 = "S05" {
+        system_principal: permitted;
+        enum S05Event {
+            Rotated => &S05_ROTATED,
+        }
+    }
+}
+
+impl SealedCommandEvent<S05> for S05Event {
+    fn target(&self) -> Option<AuditTarget> {
+        None
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        AuditAttributes::builder().build()
+    }
+}
+
+/// Run S05 (rotate metrics token) through the Class-A runner. `hash` is
+/// `None` to clear the token (disables bearer-token auth on `/metrics`).
+pub async fn rotate_metrics_token(
+    db: &crate::Database,
+    hash: Option<String>,
+    now: DateTime<Utc>,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<S05>::for_system_actor(None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, S05>| {
+        crate::repos::server_settings::update_metrics_token_hash_within_tx(
+            tx.tx(),
+            hash.as_deref(),
+            now,
+        )?;
+        Ok(((), S05Event::Rotated))
+    })
+    .await
+}
+
+// ── S06 — change SMTP configuration (direct save) ────────────────────────
+//
+// RFC 094 M2b stage 3. The direct (no-pending-change) settings-save path
+// -- the password-change path through a pending change is S08's,
+// converted in stage 2, and untouched here. Before this stage,
+// `smtp_config::upsert` committed and a separate best-effort
+// `audit::append` followed; this reuses `upsert_within_tx`, which stage
+// 2 already added for S08's own use. Attributes mirror the pre-stage
+// best-effort note's fields exactly (`enabled`, `host`, `port`,
+// `tls_mode`) -- never the password, which this path's caller never
+// reads back out of the row it just built, let alone hands to this
+// command.
+
+static S06_CHANGED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::AuthSmtpConfigChanged,
+    name: "auth.smtp_config.changed",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::None,
+    attributes: &[
+        AttributeSpec {
+            name: "enabled",
+            description: "whether the SMTP relay is enabled",
+            required: true,
+        },
+        AttributeSpec {
+            name: "host",
+            description: "the SMTP relay host",
+            required: true,
+        },
+        AttributeSpec {
+            name: "port",
+            description: "the SMTP relay port",
+            required: true,
+        },
+        AttributeSpec {
+            name: "tls_mode",
+            description: "the SMTP relay's TLS mode",
+            required: true,
+        },
+    ],
+};
+
+crate::declare_write_command! {
+    /// S06 — change the SMTP configuration via the direct (no secret
+    /// change) save path. Administrator action through `&AdminActor`.
+    command S06 = "S06" {
+        system_principal: forbidden;
+        enum S06Event {
+            Changed {
+                enabled: bool,
+                host: String,
+                port: u16,
+                tls_mode: crate::models::SmtpTlsMode,
+            } => &S06_CHANGED,
+        }
+    }
+}
+
+impl SealedCommandEvent<S06> for S06Event {
+    fn target(&self) -> Option<AuditTarget> {
+        None
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Changed {
+            enabled,
+            host,
+            port,
+            tls_mode,
+        } = self;
+        AuditAttributes::builder()
+            .attribute("enabled", enabled.to_string())
+            .attribute("host", host.clone())
+            .attribute("port", port.to_string())
+            .attribute("tls_mode", tls_mode.as_str())
+            .build()
+    }
+}
+
+/// Run S06 (change SMTP configuration, direct save) through the Class-A
+/// runner. `new_smtp_config` is built by the caller before this is
+/// called, same discipline as S08's own `new_smtp_config` parameter.
+pub async fn change_smtp_config(
+    db: &crate::Database,
+    admin: UserId,
+    new_smtp_config: crate::models::SmtpConfigRow,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<S06>::for_authorized_actor(admin, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, S06>| {
+        crate::repos::smtp_config::upsert_within_tx(tx.tx(), &new_smtp_config)?;
+        Ok((
+            (),
+            S06Event::Changed {
+                enabled: new_smtp_config.enabled,
+                host: new_smtp_config.host.clone(),
+                port: new_smtp_config.port,
+                tls_mode: new_smtp_config.tls_mode,
+            },
+        ))
+    })
+    .await
+}
+
 #[cfg(test)]
 mod tests;
