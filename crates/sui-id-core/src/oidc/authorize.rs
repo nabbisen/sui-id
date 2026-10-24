@@ -445,18 +445,25 @@ pub async fn exchange_code(
     req: CodeExchangeRequest,
 ) -> CoreResult<TokenSet> {
     // ── Authenticate the client ──────────────────────────────────────────
-    let client = clients::get(db, req.client_id).await.map_err(|e| match e {
-        sui_id_store::StoreError::NotFound => CoreError::Protocol {
-            code: ProtocolError::InvalidClient,
-            description: "unknown client".into(),
-        },
-        other => CoreError::from(other),
-    })?;
+    let client = match clients::get(db, req.client_id).await {
+        Ok(c) => c,
+        Err(sui_id_store::StoreError::NotFound) => {
+            return Err(pre_auth_reject(
+                req.client_id,
+                req.client_secret.as_deref(),
+                "unknown client",
+            )
+            .await);
+        }
+        Err(other) => return Err(CoreError::from(other)),
+    };
     if client.is_disabled || client.is_deleted {
-        return Err(CoreError::Protocol {
-            code: ProtocolError::UnauthorizedClient,
-            description: "client is not allowed".into(),
-        });
+        let reason = if client.is_deleted {
+            "client is deleted"
+        } else {
+            "client is disabled"
+        };
+        return Err(pre_auth_reject(req.client_id, req.client_secret.as_deref(), reason).await);
     }
     authenticate_client(
         &client,
@@ -619,18 +626,25 @@ pub async fn exchange_refresh(
     req: RefreshExchangeRequest,
 ) -> CoreResult<TokenSet> {
     // ── Authenticate the client ──────────────────────────────────────────
-    let client = clients::get(db, req.client_id).await.map_err(|e| match e {
-        sui_id_store::StoreError::NotFound => CoreError::Protocol {
-            code: ProtocolError::InvalidClient,
-            description: "unknown client".into(),
-        },
-        other => CoreError::from(other),
-    })?;
+    let client = match clients::get(db, req.client_id).await {
+        Ok(c) => c,
+        Err(sui_id_store::StoreError::NotFound) => {
+            return Err(pre_auth_reject(
+                req.client_id,
+                req.client_secret.as_deref(),
+                "unknown client",
+            )
+            .await);
+        }
+        Err(other) => return Err(CoreError::from(other)),
+    };
     if client.is_disabled || client.is_deleted {
-        return Err(CoreError::Protocol {
-            code: ProtocolError::UnauthorizedClient,
-            description: "client is not allowed".into(),
-        });
+        let reason = if client.is_deleted {
+            "client is deleted"
+        } else {
+            "client is disabled"
+        };
+        return Err(pre_auth_reject(req.client_id, req.client_secret.as_deref(), reason).await);
     }
     authenticate_client(
         &client,
@@ -789,6 +803,30 @@ async fn dummy_reject(provided: Option<&str>, description: impl Into<String>) ->
     invalid_client(description)
 }
 
+/// RFC 123 D4 dispatch (2026-10-24), Decision A: the pre-`authenticate_client`
+/// rejections in [`exchange_code`] and [`exchange_refresh`] -- an unknown
+/// client id, and a disabled or deleted one -- must cost and read exactly
+/// like a wrong secret. `"client authentication failed"` is the literal
+/// description `authenticate_client`'s own final branch already returns on
+/// a wrong secret; reusing that exact string here (rather than a separately
+/// written one that merely matches today) is what keeps the two from
+/// drifting apart on a future edit to either.
+///
+/// Logs the real reason at `warn`, with the client id as claimed by the
+/// request (there may be no row for it) -- so an operator can still tell a
+/// typo from a disabled account from a wrong secret, which the caller
+/// deliberately cannot. `oauth_token::authenticate_client` returns
+/// uniformly and logs nothing on any branch; that gap is not reproduced
+/// here (dispatch §2).
+async fn pre_auth_reject(client_id: ClientId, secret: Option<&str>, reason: &str) -> CoreError {
+    tracing::warn!(
+        client_id = %client_id,
+        reason,
+        "token endpoint: rejecting before client authentication"
+    );
+    dummy_reject(secret, "client authentication failed").await
+}
+
 /// RFC 095 M3 stage 4b: the channel/method check (§3), RFC 123 D4
 /// compliance (§4), and row 1's correction (§2/§B) all live here, because
 /// all three are the same function and the same early-return shape.
@@ -916,7 +954,14 @@ async fn authenticate_client(
 
     crate::password::verify_password(provided, stored)
         .await
-        .map_err(|_| invalid_client("client authentication failed"))
+        .map_err(|_| {
+            tracing::warn!(
+                client_id = %client.id,
+                reason = "wrong secret",
+                "token endpoint: rejecting before client authentication"
+            );
+            invalid_client("client authentication failed")
+        })
 }
 
 /// Sign the access/ID-token pair. Shared by initial issuance (T09) and

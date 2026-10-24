@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **The token endpoint's pre-authentication failures — an unknown
+  `client_id`, a disabled or deleted client, and a wrong `client_secret`
+  — now return the identical response and cost the identical wall-clock
+  time, closing a timing-and-response oracle on `/oauth2/token` (RFC 123
+  D4).** Before this change, a wrong secret ran a real Argon2id
+  verification (~34 ms) while an unknown, disabled or deleted client
+  returned in well under a millisecond with a distinct error code
+  (`invalid_client` vs. `unauthorized_client`) and description — letting
+  a caller distinguish "this client id does not exist or cannot
+  authenticate" from "this client id exists and the secret was wrong" by
+  timing alone, response content alone, or both. All three now return
+  `invalid_client` with the identical description `"client
+  authentication failed"`, and the two that previously skipped Argon2
+  entirely now run the same dummy verification
+  (`password::DUMMY_PHC`) every other rejecting branch on this path
+  already used. The real reason is still logged at `warn` on the server
+  with the claimed `client_id`, so an operator debugging an integration
+  is not left as uninformed as the caller.
+
+  **[PLACEHOLDER: severity and the affected-version range go here, per
+  the assignment rule in `.github/SECURITY.md`. Not written in this
+  draft.]**
+
 ## [0.83.0] — 2026-10-22
 
 **RFC 095 M3's remaining implementation: the field rules, the registration

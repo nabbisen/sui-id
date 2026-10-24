@@ -101,6 +101,7 @@ mod r121;
 mod r122;
 mod r122_routes;
 mod r123;
+mod r123_d4_token_endpoint;
 mod r124_stage2;
 mod r126;
 mod r134_step1_egress_client;
