@@ -9,11 +9,17 @@
 > [`m2b-stage1-s07-s09-2026-10-24.md`](m2b-stage1-s07-s09-2026-10-24.md);
 > G20's declared set moved 25 → 27. **Stage 2 landed** `b971955` (Level B, 27/0) —
 > [`m2b-stage2-s08-2026-10-24.md`](m2b-stage2-s08-2026-10-24.md); G20 is
-> at 28. **Stage 3 is dispatched** —
+> at 28. **Stage 3 landed** `f77c85b` (Level B, 27/0) —
 > [`m2b-stage3-s01-s06-2026-10-24.md`](m2b-stage3-s01-s06-2026-10-24.md),
-> the last of `0.84.0`. **The plan described that wave wrongly**: four of
-> its six leave no audit record at all on the production path, not "already
-> atomic" — corrected in the scope document's §B′.
+> the last of `0.84.0`; G20 is at 34. **The plan described that wave
+> wrongly**: four of its six leave no audit record at all on the production
+> path, not "already atomic" — corrected in the scope document's §B′.
+>
+> **`0.84.0`'s scope is complete and its preparation is dispatched** —
+> [`release-0.84.0-preparation-2026-10-25.md`](release-0.84.0-preparation-2026-10-25.md).
+> Reading the `Security audit` lane before dispatching it surfaced
+> RUSTSEC-2026-0385, fixed in `5ed327d` (`ctutils` 0.4.3 → 0.4.5) and
+> carried in this release.
 > **`0.84.0` does not close M2b**: waves 3 and 4 and the authority switch
 > remain after it.
 
