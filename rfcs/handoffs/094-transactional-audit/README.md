@@ -1,5 +1,15 @@
 # RFC 094 developer handoff
 
+> **`0.84.0` is M2b's settings area and is authorized** (2026-10-24):
+> S01–S09, wave 2 before wave 1, because RFC 094's listed wave order is
+> close to the reverse of the risk order —
+> [`m2b-scope-and-0.84.0-2026-10-24.md`](m2b-scope-and-0.84.0-2026-10-24.md).
+> Three stages: [`m2b-0.84.0-stage-plan-2026-10-24.md`](m2b-0.84.0-stage-plan-2026-10-24.md).
+> **Stage 1 is dispatched** —
+> [`m2b-stage1-s07-s09-2026-10-24.md`](m2b-stage1-s07-s09-2026-10-24.md).
+> **`0.84.0` does not close M2b**: waves 3 and 4 and the authority switch
+> remain after it.
+
 **Governing RFC:** [RFC 094](../../accepted/094-transactional-audit-registry.md)
 **Audience:** the mid-capability model after RFC re-acceptance and prerequisite evidence
 **Status:** Planning companion; inherits the governing RFC's current status — **Accepted 2026-08-27**, the 2026-07-28 return for review having closed after independent design review by the implementation role. Implementation remains gated on the entry gate below.
