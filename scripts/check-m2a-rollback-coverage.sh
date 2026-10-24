@@ -53,6 +53,12 @@ ROLLBACK_EXEMPT_IDS=()
 # 2026-10-03.md was written (U37's `u37_web_issues_a_link_and_writes_
 # one_event` already asserted it); its §3 dispatch's remaining 23 landed
 # in the same change that extended this gate to check for it.
+#
+# "24" above is the count on 2026-10-03 and is left as the historical
+# figure it is -- the declared set is read from commands.rs and grows as
+# M2b converts (27 on 2026-10-24, when S07 and S09 landed). Do not
+# "correct" it to today's number: it is dating a decision, not counting
+# the current set, and the gate derives its own count anyway.
 EXACTLY_ONCE_EXEMPT_IDS=()
 
 # M2A_EXEMPT_IDS_OVERRIDE / M2A_EXACTLY_ONCE_EXEMPT_IDS_OVERRIDE,

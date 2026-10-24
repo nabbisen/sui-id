@@ -1055,12 +1055,14 @@ test_id = "`a_s06_smtp`"
 id = "S07"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
+sealed = true
 owner = "Create pending sensitive change"
-rationale = "`settings.pending_change.created`"
-mutation_surface = "`pending_settings_change::insert`"
+rationale = "`settings.pending_change.created` with required `intent`; the administrator's pending-change creation calls it (converted RFC 094 M2b stage 1), `system_principal: forbidden`, actor required"
+mutation_surface = "`pending_settings_change::insert_within_tx` (via `commands::create_pending_settings_change`)"
 files = ["crates/sui-id-store/src/repos/pending_settings_change.rs"]
-test_id = "`a_s07_pending_create`"
+test_id = "`s07_create_inserts_the_row_and_appends_exactly_one_audit_row`"
+event = ["settings.pending_change.created"]
+descriptor = ["S07_CREATED"]
 
 [[command]]
 id = "S08"
@@ -1077,12 +1079,14 @@ test_id = "`a_s08_pending_apply`"
 id = "S09"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
+sealed = true
 owner = "Cancel pending sensitive change"
-rationale = "`settings.pending_change.cancelled`"
-mutation_surface = "`pending_settings_change::cancel`"
+rationale = "`settings.pending_change.cancelled`, idempotent on an absent row; the administrator's pending-change cancellation calls it when wired (converted RFC 094 M2b stage 1; measured, no production route exists yet), `system_principal: forbidden`, actor required"
+mutation_surface = "`pending_settings_change::cancel_within_tx` (via `commands::cancel_pending_settings_change`)"
 files = ["crates/sui-id-store/src/repos/pending_settings_change.rs"]
-test_id = "`a_s09_pending_cancel`"
+test_id = "`s09_cancel_deletes_the_row_and_appends_exactly_one_audit_row`"
+event = ["settings.pending_change.cancelled"]
+descriptor = ["S09_CANCELLED"]
 
 [[command]]
 id = "S10"

@@ -95,6 +95,35 @@ pub async fn insert(db: &Database, row: &PendingSettingsChangeRow) -> StoreResul
     .await
 }
 
+/// RFC 094 M2b stage 1, S07: the same insert as [`insert`], run inside a
+/// caller-supplied transaction rather than opening its own connection.
+/// `commands::create_pending_settings_change` is the only sealed caller;
+/// [`insert`] remains for test seeding unrelated to the sealed command's
+/// own audit path (confirmed by its remaining callers before this stage's
+/// `commands.rs` conversion).
+pub fn insert_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    row: &PendingSettingsChangeRow,
+) -> StoreResult<()> {
+    tx.execute(
+        "INSERT INTO pending_settings_change \
+         (id, session_id, actor_id, intent, payload_enc, summary, csrf_token, expires_at, created_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        params![
+            row.id.to_string(),
+            row.session_id.to_string(),
+            row.actor_id.to_string(),
+            row.intent,
+            row.payload_enc,
+            row.summary,
+            row.csrf_token,
+            row.expires_at,
+            row.created_at,
+        ],
+    )?;
+    Ok(())
+}
+
 // ── Get summary (non-destructive) ───────────────────────────────────────────────
 
 /// Fetch the non-secret summary of a pending change for display on the
@@ -192,6 +221,18 @@ pub async fn cancel(db: &Database, id: PendingChangeId) -> StoreResult<()> {
         Ok(())
     })
     .await
+}
+
+/// RFC 094 M2b stage 1, S09: the same delete as [`cancel`], run inside a
+/// caller-supplied transaction. `commands::cancel_pending_settings_change`
+/// is the only sealed caller; [`cancel`] remains for test seeding, same
+/// reasoning as [`insert_within_tx`]'s doc comment.
+pub fn cancel_within_tx(tx: &rusqlite::Transaction<'_>, id: PendingChangeId) -> StoreResult<()> {
+    tx.execute(
+        "DELETE FROM pending_settings_change WHERE id = ?1",
+        [id.to_string()],
+    )?;
+    Ok(())
 }
 
 // ── Purge expired ─────────────────────────────────────────────────────────────

@@ -281,6 +281,16 @@ pub enum AuditEventKind {
     /// guarantee, not one name reused across a Class-A and a Class-B
     /// mechanism.
     AuthFederationMfaSuccess,
+    /// `settings.pending_change.created` — RFC 094 M2b stage 1, S07. The
+    /// name already in use before this stage sealed it; see
+    /// `commands::S07Event`.
+    SettingsPendingChangeCreated,
+    /// `settings.pending_change.cancelled` — RFC 094 M2b stage 1, S09.
+    /// Same naming-continuity reasoning as `SettingsPendingChangeCreated`.
+    /// Distinct from `settings.pending_change.applied` and
+    /// `settings.pending_change.binding_failed`, which remain best-effort
+    /// appends until stage 2 restructures `apply` (S08).
+    SettingsPendingChangeCancelled,
 }
 
 /// The registry entry for one [`AuditEventKind`]. `descriptor()` on a

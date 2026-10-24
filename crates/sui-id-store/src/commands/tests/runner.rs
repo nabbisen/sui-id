@@ -170,6 +170,7 @@ mod lockout;
 mod login;
 mod mfa;
 mod passwords;
+mod pending_settings;
 mod policy_markers;
 mod provisioning;
 mod recovery;

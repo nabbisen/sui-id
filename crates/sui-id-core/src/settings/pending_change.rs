@@ -37,6 +37,10 @@ use sui_id_store::{
     repos::{audit, pending_settings_change},
 };
 
+// RFC 094 M2b stage 1: `create` and `cancel` go through the sealed S07/S09
+// commands below, each one transaction. `apply` (S08) is unchanged -- its
+// restructure is stage 2's, per the dispatch's own §A.
+
 use crate::{
     actor::AdminActor,
     errors::{CoreError, CoreResult},
@@ -113,23 +117,9 @@ pub async fn create<T: Serialize>(
         expires_at,
         created_at: now,
     };
-    pending_settings_change::insert(db, &row)
+    sui_id_store::commands::create_pending_settings_change(db, actor.user_id(), row)
         .await
         .map_err(CoreError::from)?;
-
-    // Audit: creation (non-secret).
-    let _ = audit::append(
-        db,
-        &AuditLogRow {
-            at: now,
-            actor: Some(actor.user_id()),
-            action: "settings.pending_change.created".into(),
-            target: None,
-            result: "ok".into(),
-            note: Some(format!("intent={intent} id={id} summary={summary}")),
-        },
-    )
-    .await;
 
     Ok(PendingChange {
         id,
@@ -229,28 +219,20 @@ pub async fn apply<T: for<'de> Deserialize<'de>>(
 /// Cancel a pending change (user pressed "Cancel" on the confirm page).
 ///
 /// Idempotent: succeeds even if the row is already absent.
-pub async fn cancel(
-    db: &Database,
-    id: PendingChangeId,
-    actor: &AdminActor,
-    clock: &SharedClock,
-) -> CoreResult<()> {
-    pending_settings_change::cancel(db, id)
+///
+/// RFC 094 M2b stage 1: no production caller exists for this function
+/// today (measured: no `/admin/settings/*/cancel` route) -- the signature
+/// still requires `&AdminActor`, which is what the S09 command's
+/// `ActorRequirement::Required` is checked against. The former `clock:
+/// &SharedClock` parameter is dropped: its only use was the best-effort
+/// audit append's `at` field, which the sealed command below does not
+/// take from the caller (every Class-A audit row's timestamp is the
+/// commit-time wall clock, via `build_audit_row`, matching every other
+/// converted command).
+pub async fn cancel(db: &Database, id: PendingChangeId, actor: &AdminActor) -> CoreResult<()> {
+    sui_id_store::commands::cancel_pending_settings_change(db, actor.user_id(), id)
         .await
         .map_err(CoreError::from)?;
-
-    let _ = audit::append(
-        db,
-        &AuditLogRow {
-            at: clock.now(),
-            actor: Some(actor.user_id()),
-            action: "settings.pending_change.cancelled".into(),
-            target: None,
-            result: "ok".into(),
-            note: Some(format!("id={id}")),
-        },
-    )
-    .await;
 
     Ok(())
 }

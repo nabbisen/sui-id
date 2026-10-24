@@ -35,7 +35,10 @@ use crate::registry::{
 use chrono::{DateTime, Utc};
 use sui_id_shared::{
     FamilyId, RefreshTokenHash,
-    ids::{ClientId, FederationLoginAttemptId, FederationProviderId, SigningKeyId, UserId},
+    ids::{
+        ClientId, FederationLoginAttemptId, FederationProviderId, PendingChangeId, SigningKeyId,
+        UserId,
+    },
 };
 
 // ── RFC 102 B4 — the gated action carries its authorization ─────────────
@@ -4135,6 +4138,163 @@ pub async fn enqueue_email(
 ) -> StoreResult<()> {
     db.operational(move |write| crate::repos::email_outbox::enqueue_within_tx(write.tx(), &row))
         .await
+}
+
+// ── S07 — create pending settings change ─────────────────────────────────
+//
+// RFC 094 M2b stage 1. Before this stage, `sui_id_core::settings::
+// pending_change::create` called `pending_settings_change::insert` (which
+// commits on its own) and then a best-effort `let _ = audit::append(...)`
+// -- a sensitive settings change could be stored with no record of it if
+// the append failed. The mutation and the audit lived in different
+// crates with nothing between them; this command is the seam that joins
+// them, which the three remaining M2b waves copy.
+
+static S07_CREATED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::SettingsPendingChangeCreated,
+    name: "settings.pending_change.created",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[AttributeSpec {
+        name: "intent",
+        description: "the caller-supplied intent string naming what kind of \
+            settings change this is (e.g. \"smtp_password_change\")",
+        required: true,
+    }],
+};
+
+crate::declare_write_command! {
+    /// S07 — create a pending settings change (RFC 090, RFC 094 M2b stage
+    /// 1). Its only caller, `pending_change::create`, requires
+    /// `&AdminActor` -- only an administrator reaches this, so the actor
+    /// is required, matching `K01`'s reasoning for the same shape.
+    command S07 = "S07" {
+        system_principal: forbidden;
+        enum S07Event {
+            Created {
+                id: PendingChangeId,
+                intent: String,
+            } => &S07_CREATED,
+        }
+    }
+}
+
+impl SealedCommandEvent<S07> for S07Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Created { id, .. } = self;
+        Some(AuditTarget(id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Created { intent, .. } = self;
+        AuditAttributes::builder()
+            .attribute("intent", intent.clone())
+            .build()
+    }
+}
+
+/// Run S07 (create a pending settings change) through the Class-A runner.
+///
+/// `row` is built by the caller before this is called: its payload is
+/// already AES-GCM-sealed (RFC 094 keeps crypto outside the transaction),
+/// and `row.id`/`row.intent`/`row.summary`/`row.expires_at` are already
+/// everything `PendingChange` (the core-level return type) needs -- none
+/// of it depends on the insert having committed. So this command returns
+/// `()`, not a value: the K01 template's `(value, event)` shape did not
+/// force a change here, and the caller already has what it needs from
+/// the `row` it built.
+///
+/// Only `intent` becomes an attribute, not `summary`: `summary` is
+/// caller-supplied free text meant for the confirm page, and `AuditAttributes`
+/// is a closed, bounded vocabulary, not a place for arbitrary text to
+/// accumulate (dispatch §2). The row's id is already the event's target,
+/// so it is not duplicated into an attribute.
+pub async fn create_pending_settings_change(
+    db: &crate::Database,
+    admin: UserId,
+    row: crate::repos::pending_settings_change::PendingSettingsChangeRow,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<S07>::for_authorized_actor(admin, None);
+    let id = row.id;
+    let intent = row.intent.clone();
+    db.class_a(context, move |tx: &mut ClassATx<'_, S07>| {
+        crate::repos::pending_settings_change::insert_within_tx(tx.tx(), &row)?;
+        Ok(((), S07Event::Created { id, intent }))
+    })
+    .await
+}
+
+// ── S09 — cancel pending settings change ──────────────────────────────────
+
+static S09_CANCELLED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::SettingsPendingChangeCancelled,
+    name: "settings.pending_change.cancelled",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[],
+};
+
+crate::declare_write_command! {
+    /// S09 — cancel a pending settings change (RFC 090, RFC 094 M2b
+    /// stage 1). Same actor shape as S07 -- `pending_change::cancel`
+    /// also requires `&AdminActor`. Unlike S07, measured: no HTTP route
+    /// calls `pending_change::cancel` today (there is no
+    /// `/admin/settings/*/cancel` handler). `Required` still matches who
+    /// *can* reach the call, which is what the type signature commits
+    /// to regardless of whether a route exists yet -- the same
+    /// foundation-before-wiring shape this module's own header describes
+    /// for K01/U01 at M2a.
+    command S09 = "S09" {
+        system_principal: forbidden;
+        enum S09Event {
+            Cancelled {
+                id: PendingChangeId,
+            } => &S09_CANCELLED,
+        }
+    }
+}
+
+impl SealedCommandEvent<S09> for S09Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Cancelled { id } = self;
+        Some(AuditTarget(id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        AuditAttributes::builder().build()
+    }
+}
+
+/// Run S09 (cancel a pending settings change) through the Class-A runner.
+///
+/// No `intent` attribute, unlike S07: cancel does not read the row before
+/// deleting it (the pre-stage `cancel` never did either), so intent is
+/// not known without an extra lookup this stage does not add. Idempotent,
+/// like the pre-stage `cancel`: a missing row (already applied,
+/// cancelled, expired, or purged) is a correct outcome, not an error, and
+/// still emits the cancellation event -- no behaviour change for a
+/// caller that succeeds (dispatch §4).
+pub async fn cancel_pending_settings_change(
+    db: &crate::Database,
+    admin: UserId,
+    id: PendingChangeId,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<S09>::for_authorized_actor(admin, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, S09>| {
+        crate::repos::pending_settings_change::cancel_within_tx(tx.tx(), id)?;
+        Ok(((), S09Event::Cancelled { id }))
+    })
+    .await
 }
 
 #[cfg(test)]

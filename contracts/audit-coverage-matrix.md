@@ -168,10 +168,17 @@ then because `setup.` was not in the hand-written list.
 
 | Event name | Operation | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
-| `settings.pending_change.created` | Pending change stored | admin user id | — | `intent=… id=… summary=…` | B |
+| `settings.pending_change.created` | Pending change stored (command `S07`; converted RFC 094 M2b stage 1) | admin user id | pending change id | `intent` (required) | A |
 | `settings.pending_change.applied` | Pending change applied | admin user id | — | `intent=… summary=…` | B |
-| `settings.pending_change.cancelled` | Pending change cancelled | admin user id | — | `id=…` | B |
+| `settings.pending_change.cancelled` | Pending change cancelled (command `S09`; converted RFC 094 M2b stage 1) | admin user id | pending change id | — | A |
 | `settings.pending_change.binding_failed` | Binding check failed on apply | admin user id | — | `intent=… id=…` | B |
+
+> **`applied` and `binding_failed` remain Class B.** Both belong to `apply`
+> (S08), which RFC 094 M2b stage 2 restructures — making it atomic requires
+> moving the binding check inside the transaction too, which is a design,
+> not a mechanical conversion (`m2b-0.84.0-stage-plan-2026-10-24.md` §A).
+> `created` and `cancelled` (S07, S09) needed no such restructure and are
+> sealed as of stage 1.
 
 ### Audit-chain integrity (`audit.chain.*`, RFC 121)
 

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Creating and cancelling a pending settings change
+  (`settings.pending_change.created`/`.cancelled`) can no longer be
+  applied with its audit record silently dropped (RFC 094 M2b stage 1).**
+  Before this release, each committed its database change first and then
+  appended the audit row best-effort — a failing append left the change
+  applied with no record of it. Both now commit atomically with their
+  audit event, in one transaction. This is a durability fix in the audit
+  trail, not a new restriction: an administrator creating or cancelling a
+  pending settings change sees the same outcome as before on every
+  request that already succeeded. `settings.pending_change.applied` and
+  `.binding_failed` are unchanged — they remain best-effort until RFC 094
+  M2b stage 2 restructures `apply`.
+
 ### Security
 
 - **The token endpoint's pre-authentication failures — an unknown
