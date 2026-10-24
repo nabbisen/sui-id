@@ -28,9 +28,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with the claimed `client_id`, so an operator debugging an integration
   is not left as uninformed as the caller.
 
-  **[PLACEHOLDER: severity and the affected-version range go here, per
-  the assignment rule in `.github/SECURITY.md`. Not written in this
-  draft.]**
+  **Severity: low. No advisory is issued.** The oracle disclosed, for a
+  `client_id` the caller already held, whether that id named an existing
+  client and whether it was enabled — and nothing else: no secret, token,
+  authorization code or user data was obtainable through it. A `client_id`
+  is a version-4 UUID, so the oracle could not be used to discover
+  clients, only to ask about one already in hand; and a `client_id` is not
+  confidential in the first place, since it travels in the
+  `/oauth2/authorize` URLs a browser carries. Both branches date to the
+  first service implementation (2026-04-25) and are therefore present in
+  every released version with a token endpoint. Operators upgrading do not
+  need to act.
 
 ## [0.83.0] — 2026-10-22
 

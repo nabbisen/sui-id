@@ -140,6 +140,26 @@ pub async fn begin_authorization(
             },
             other => CoreError::from(other),
         })?;
+    // This endpoint states the cause, and that is deliberate -- do not
+    // make it match `/oauth2/token`'s uniform rejection (RFC 123 D4,
+    // completed there 2026-10-24). The two differ in who is asking.
+    //
+    // `/oauth2/token`'s caller is a machine presenting a credential:
+    // uniformity costs it nothing, because the real reason goes to the
+    // server log. This endpoint answers a *browser*, and a redirect flow
+    // that fails without a cause leaves an integrator with nothing to act
+    // on -- the failure the second half of this project's standard exists
+    // to prevent.
+    //
+    // It discloses nothing the token-endpoint fix was protecting: a
+    // `client_id` is a v4 UUID, so a caller asking this question already
+    // holds one, and RFC 123 D3 records that holding one implies nothing
+    // confidential -- it travels in this very endpoint's URLs.
+    //
+    // `@nabbisen`, 2026-10-24: "Your recommendation is accepted." The
+    // recommendation was to leave this endpoint as it is; the reasoning is
+    // in `.git-exclude/reviewed/rfc-123-d4-severity-draft-2026-10-24.md`
+    // §3. This is his decision, not the architect's preference.
     if client.is_disabled || client.is_deleted {
         return Err(CoreError::Protocol {
             code: ProtocolError::UnauthorizedClient,
