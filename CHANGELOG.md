@@ -69,6 +69,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **`ctutils` 0.4.3 → 0.4.5 in `Cargo.lock`, closing RUSTSEC-2026-0385**
+  — *"Non-constant-time mask generation and `u128` comparisons"*,
+  published 2026-10-23. No `Cargo.toml` specification changed and no
+  other dependency moved; `ctutils` is a transitive RustCrypto utility.
+  It is **reachable on two paths that matter here**: `digest` → `sha2`,
+  used for registration- and metrics-token hashing and the audit hash
+  chain, and `universal-hash` → `poly1305` → `chacha20poly1305`, the AEAD
+  that seals secrets at rest. It also reaches `hmac` → `pbkdf2` through
+  the SMTP client.
+
+  **[PLACEHOLDER: severity and the affected-version range go here, per
+  the assignment rule in `.github/SECURITY.md`. Not written in this
+  draft.]**
+
 - **The token endpoint's pre-authentication failures — an unknown
   `client_id`, a disabled or deleted client, and a wrong `client_secret`
   — now return the identical response and cost the identical wall-clock
