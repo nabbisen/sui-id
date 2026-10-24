@@ -113,6 +113,28 @@ the gate it imitates, which is exactly how a release checklist's bare
 in CI. `scripts/check-gate-inputs.sh` (A3.4) asserts that this file contains
 no such restatement.
 
+### Step 0: read the advisory lane before the preparation starts
+
+**Read `Security audit` on `main` before writing a single line of the
+preparation**, and treat a denied advisory as a blocker on *starting*, not on
+tagging. Step 5 below still requires the lane green on the exact commit being
+tagged; this is an earlier, cheaper reading of the same lane, and both are
+needed. They answer different questions. The late one asks *may this commit
+ship*. The early one asks *what does this release contain* — because a
+dependency fix found at step 0 belongs in the release being prepared, with its
+own `CHANGELOG` entry, while the same fix found at step 5 arrives after the
+version is bumped, the `CHANGELOG` is promoted and the package is built, and
+invalidates all three.
+
+A local `cargo audit` is not a substitute. The lane's invocation carries flags
+a bare local run does not (`.github/workflows/audit.yml`, the `Run cargo audit`
+step) and fails on classes a bare run reports as a warning and exits 0 on — a
+yanked transitive crate among them, which is how `0.83.0`'s preparation reached
+step 5 believing the lane was clean. **Anyone asked to run this check locally
+must be told to copy the flags from that step**, not to run `cargo audit`. The
+reliable form is to dispatch the workflow (`gh workflow run audit.yml --ref
+main`) and read its result, as step 5 does.
+
 Level B covers compilation, tests and lints; it does not cover packaging.
 Before tagging, in addition to Level B on the commit being tagged:
 
@@ -141,7 +163,9 @@ Before tagging, in addition to Level B on the commit being tagged:
 
    **This is a release-time step and nothing else.** It is **not** a `[gates]`
    lane, **not** part of Level B, and **not** evidence any RFC, dispatch,
-   implementation round or review is required to produce. A check that exists
+   implementation round or review is required to produce. Step 0 above is the
+   other half of it: this reading licenses the tag, that one shapes the
+   release. A check that exists
    for the release gate must not be paid for at every stage — that cost lands
    on every round and buys nothing until a cut. The lane keeps its existing
    push/PR/weekly triggers, which are free; this adds one reading of it, once,
