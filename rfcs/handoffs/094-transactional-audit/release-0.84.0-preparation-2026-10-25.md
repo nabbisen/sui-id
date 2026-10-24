@@ -14,7 +14,9 @@
 items 4 and 5, Level B, the tag and the publish are **not**; see §4.
 **Contents.** RFC 094 M2b stages 1, 2 and 3, plus RFC 123 D4 and the
 `ctutils` advisory fix. All landed and green.
-**Baseline.** `012aa31b796b0e8e41d10ca68395bad36ef44cad`.
+**Baseline.** The tip of `main` when you start — `git log -1`, and record
+the hash in your return. `e5b732c` is the commit carrying this dispatch; if
+the tip has moved past it, use the tip.
 
 ## 0 — what this release is, so the entry reads right
 
@@ -169,7 +171,7 @@ advisory.
 - The `cargo package` output, verbatim.
 - The full matrix, run local, as usual. **Report it as the local matrix,
   not as Level B** — the distinction is the whole of §4's third bullet.
-- `python3.14 scripts/hunk-hashes.py --baseline 012aa31`.
+- `python3.14 scripts/hunk-hashes.py --baseline <the hash you recorded>`.
 
 **No `CHANGELOG` entry for this round itself.** A version bump is not a
 change to describe; it is the act of naming the changes already described.
