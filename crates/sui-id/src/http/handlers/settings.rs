@@ -435,21 +435,11 @@ pub async fn email_post(
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
 
     if !form.password.expose_secret().is_empty() {
-        // Seal the payload for pending-change storage.
-        use serde::{Deserialize, Serialize};
-        #[derive(Serialize, Deserialize)]
-        struct SmtpPendingPayload {
-            enabled: bool,
-            host: String,
-            port: u16,
-            tls_mode: String,
-            username: Option<String>,
-            password: String, // plaintext; encrypted inside pending_change::create
-            from_address: String,
-            from_name: Option<String>,
-            base_url: String,
-        }
-        let payload = SmtpPendingPayload {
+        // Seal the payload for pending-change storage. The type is
+        // shared with `pending_change::apply`, which decrypts into it
+        // directly (RFC 094 M2b stage 2) -- defined once in core rather
+        // than twice, so the create and apply sides cannot drift apart.
+        let payload = sui_id_core::pending_change::SmtpPasswordChangePayload {
             enabled,
             host: form.host.trim().to_owned(),
             port: form.port,
@@ -655,20 +645,14 @@ pub async fn email_confirm_post(
     }
     let pending_id = sui_id_shared::ids::PendingChangeId::from_str(&form.pending_change_id)
         .map_err(|_| HttpError::html(CoreError::BadRequest("Invalid pending_change_id.".into())))?;
-    // Apply the pending change: verifies session, actor, CSRF (P2), consumes row (P3).
-    #[derive(serde::Deserialize)]
-    struct SmtpPendingPayload {
-        enabled: bool,
-        host: String,
-        port: u16,
-        tls_mode: String,
-        username: Option<String>,
-        password: String,
-        from_address: String,
-        from_name: Option<String>,
-        base_url: String,
-    }
-    let payload: SmtpPendingPayload = sui_id_core::pending_change::apply(
+    // Validates, decrypts, and applies the pending change in one call
+    // (RFC 094 M2b stage 2, S08): peeks the row, validates `tls_mode` and
+    // seals the password outside any transaction, then one transaction
+    // re-reads the row, checks the binding, and -- only on a match --
+    // deletes it and writes `smtp_config` together. See
+    // `sui_id_core::pending_change::apply`'s own doc comment for why a
+    // validation or binding failure both leave the row intact.
+    sui_id_core::pending_change::apply(
         &app.db,
         pending_id,
         admin_actor,
@@ -678,39 +662,6 @@ pub async fn email_confirm_post(
     )
     .await
     .map_err(HttpError::html)?;
-    // Validate and apply the settings.
-    let tls_mode =
-        sui_id_store::models::SmtpTlsMode::parse(&payload.tls_mode).ok_or_else(|| {
-            HttpError::html(CoreError::BadRequest(format!(
-                "unknown tls_mode: {}",
-                payload.tls_mode
-            )))
-        })?;
-    let now = app.clock.now();
-    let existing = sui_id_store::repos::smtp_config::get(&app.db)
-        .await
-        .map_err(|e| HttpError::html(CoreError::from(e)))?;
-    let password_enc = Some(
-        sui_id_store::repos::smtp_config::seal_password(&payload.password, app.db.key())
-            .await
-            .map_err(|e| HttpError::html(CoreError::from(e)))?,
-    );
-    let row = sui_id_store::models::SmtpConfigRow {
-        enabled: payload.enabled,
-        host: payload.host.trim().to_owned(),
-        port: payload.port,
-        tls_mode,
-        username: payload.username,
-        password_enc,
-        from_address: payload.from_address.trim().to_owned(),
-        from_name: payload.from_name,
-        base_url: payload.base_url.trim().trim_end_matches('/').to_owned(),
-        created_at: existing.map(|r| r.created_at).unwrap_or(now),
-        updated_at: now,
-    };
-    sui_id_store::repos::smtp_config::upsert(&app.db, &row)
-        .await
-        .map_err(|e| HttpError::html(CoreError::from(e)))?;
     let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
     let flash = sui_id_web::Flash {
         kind: sui_id_web::FlashKind::Info,

@@ -19,8 +19,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   trail, not a new restriction: an administrator creating or cancelling a
   pending settings change sees the same outcome as before on every
   request that already succeeded. `settings.pending_change.applied` and
-  `.binding_failed` are unchanged — they remain best-effort until RFC 094
-  M2b stage 2 restructures `apply`.
+  `.binding_failed` get the same treatment in RFC 094 M2b stage 2, below.
+- **A failed confirmation of a pending settings change no longer
+  consumes it (RFC 094 M2b stage 2).** Applying a pending change now
+  checks the session/actor/CSRF binding *before* deciding whether to
+  consume the row, instead of after. Previously, any binding failure —
+  including one from a party that only held the pending-change id, with
+  none of the credentials that actually bind it — burned the change: the
+  administrator's queued update was gone, with the generic "expired or
+  no longer valid" message giving no indication it had ever existed. The
+  caller-facing message is unchanged; what changes is that the change
+  survives a failed confirmation attempt and can still be completed
+  correctly afterward. The attempt is still recorded
+  (`settings.pending_change.binding_failed`), which now also commits
+  atomically rather than best-effort.
+
+### Fixed
+
+- **A pending settings change (for example, a new SMTP password) could
+  be consumed and never applied, silently discarding the administrator's
+  change (RFC 094 M2b stage 2).** Confirming a pending change previously
+  deleted it from the database first and only validated and applied the
+  new settings afterward; if that later step failed — an invalid value,
+  or any other error — the change was already gone, the setting was
+  never updated, and the confirmation page reported only that the
+  pending change "has expired or is no longer valid," with nothing to
+  indicate the administrator's input, not the change itself, was the
+  problem. Validation, decryption and sealing the new secret now happen
+  *before* the pending change is touched, and the delete, the setting
+  write, and the audit event now commit together in one transaction — a
+  validation failure leaves the pending change exactly as it was,
+  retryable.
 
 ### Security
 

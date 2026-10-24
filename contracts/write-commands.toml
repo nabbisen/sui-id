@@ -1068,12 +1068,14 @@ descriptor = ["S07_CREATED"]
 id = "S08"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
+sealed = true
 owner = "Apply pending sensitive change"
-rationale = "`settings.pending_change.applied` with typed intent/changed-field attributes"
-mutation_surface = "`pending_settings_change::consume` and setting mutation"
-files = ["crates/sui-id-store/src/repos/pending_settings_change.rs"]
-test_id = "`a_s08_pending_apply`"
+rationale = "`settings.pending_change.applied` (Ok) and `settings.pending_change.binding_failed` (Failure), both with required `intent`; the administrator's confirm POST calls it (converted RFC 094 M2b stage 2, restructured per Decision A/B), `system_principal: forbidden`, actor required"
+mutation_surface = "`pending_settings_change::apply_within_tx` and `smtp_config::upsert_within_tx` (via `commands::apply_pending_settings_change`)"
+files = ["crates/sui-id-store/src/repos/pending_settings_change.rs", "crates/sui-id-store/src/repos/smtp_config.rs"]
+test_id = "`s08_apply_writes_smtp_config_and_appends_exactly_one_audit_row`"
+event = ["settings.pending_change.applied", "settings.pending_change.binding_failed"]
+descriptor = ["S08_APPLIED", "S08_BINDING_FAILED"]
 
 [[command]]
 id = "S09"

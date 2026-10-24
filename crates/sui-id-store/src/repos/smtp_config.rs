@@ -107,6 +107,46 @@ pub async fn upsert(db: &Database, row: &SmtpConfigRow) -> StoreResult<()> {
     .await
 }
 
+/// RFC 094 M2b stage 2, S08: the same upsert as [`upsert`], run inside a
+/// caller-supplied transaction. `commands::apply_pending_settings_change`
+/// is the only sealed caller; [`upsert`] remains for the direct
+/// (no-pending-change) settings-save path, which this stage does not
+/// touch. Measured before this stage: no `_within_tx` form existed here
+/// at all.
+pub fn upsert_within_tx(tx: &rusqlite::Transaction<'_>, row: &SmtpConfigRow) -> StoreResult<()> {
+    tx.execute(
+        "INSERT INTO smtp_config(id, enabled, host, port, tls_mode, username, \
+                                  password_enc, from_address, from_name, base_url, \
+                                  created_at, updated_at) \
+         VALUES('singleton', ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11) \
+         ON CONFLICT(id) DO UPDATE SET \
+            enabled = excluded.enabled, \
+            host = excluded.host, \
+            port = excluded.port, \
+            tls_mode = excluded.tls_mode, \
+            username = excluded.username, \
+            password_enc = excluded.password_enc, \
+            from_address = excluded.from_address, \
+            from_name = excluded.from_name, \
+            base_url = excluded.base_url, \
+            updated_at = excluded.updated_at",
+        params![
+            row.enabled as i64,
+            row.host,
+            row.port as i64,
+            row.tls_mode.as_str(),
+            row.username,
+            row.password_enc,
+            row.from_address,
+            row.from_name,
+            row.base_url,
+            row.created_at,
+            row.updated_at,
+        ],
+    )?;
+    Ok(())
+}
+
 /// Decrypt the SMTP password using the supplied master key.
 /// Returns `None` if the row has no password set (relay does
 /// not require authentication).

@@ -15,11 +15,13 @@
 //!   → renders non-secret summary from PendingChange.summary
 //!
 //! POST /admin/settings/email/confirm  (submits pending_change_id + CSRF)
-//!   → pending_change::apply::<SmtpPayload>(...)
-//!       ├─ consumes (deletes) the row
-//!       ├─ verifies session, actor, CSRF, expiry bindings
-//!       ├─ decrypts payload
-//!       └─ returns the typed payload for the caller to apply
+//!   → pending_change::apply(...)
+//!       ├─ peeks the row (read-only; does not delete)
+//!       ├─ decrypts and validates the payload, seals the new password
+//!       │   (all outside any transaction -- RFC 094 keeps crypto there)
+//!       └─ one transaction: re-reads the row, checks the binding,
+//!          deletes it only if the binding matches, writes `smtp_config`,
+//!          and emits the event -- success and denial alike (S08)
 //! ```
 //!
 //! # Binding invariants
@@ -27,25 +29,48 @@
 //! See RFC 090 §Security properties. All five checks (admin role,
 //! session binding, actor binding, CSRF, expiry) are enforced in `apply`.
 //! Role is enforced by requiring `&AdminActor` on both create and apply.
+//!
+//! RFC 094 M2b stage 2: `apply` is no longer generic over the pending
+//! payload's type. Measured before this stage: exactly one intent exists
+//! (`"smtp_password_update"`, the only `create` call site), so a concrete
+//! command for that intent is the shape stage plan §2 asks for — a
+//! generic command taking a mutation closure would put caller-supplied
+//! code inside a Class-A transaction, exactly the boundary RFC 094 exists
+//! to narrow. `create`/`cancel` stay generic/untyped-payload; neither
+//! needs to interpret the payload the way `apply` now does.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sui_id_shared::ids::{PendingChangeId, SessionId};
-use sui_id_store::{
-    Database,
-    models::AuditLogRow,
-    repos::{audit, pending_settings_change},
-};
-
-// RFC 094 M2b stage 1: `create` and `cancel` go through the sealed S07/S09
-// commands below, each one transaction. `apply` (S08) is unchanged -- its
-// restructure is stage 2's, per the dispatch's own §A.
+use sui_id_store::{Database, repos::pending_settings_change};
 
 use crate::{
     actor::AdminActor,
     errors::{CoreError, CoreResult},
     time::SharedClock,
 };
+
+// ── The one concrete payload (RFC 094 M2b stage 2) ──────────────────────────
+
+/// The SMTP settings payload a pending change carries. Shared by `create`
+/// (the handler builds one and passes it in, generically, as `T:
+/// Serialize`) and `apply` (which now decrypts into this concrete type
+/// directly, rather than an open `T: Deserialize`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SmtpPasswordChangePayload {
+    pub enabled: bool,
+    pub host: String,
+    pub port: u16,
+    pub tls_mode: String,
+    pub username: Option<String>,
+    /// Plaintext. Encrypted by `create` before storage; decrypted by
+    /// `apply` immediately before sealing it under `smtp_config`'s own
+    /// AAD — never stored, logged, or echoed in either form.
+    pub password: String,
+    pub from_address: String,
+    pub from_name: Option<String>,
+    pub base_url: String,
+}
 
 // ── TTL ──────────────────────────────────────────────────────────────────────
 
@@ -131,87 +156,107 @@ pub async fn create<T: Serialize>(
 
 // ── apply ─────────────────────────────────────────────────────────────────────
 
-/// Consume, validate, decrypt, and return the pending settings change payload.
+/// The caller-facing message for every pre-success failure on this path —
+/// unknown id, expired, or a binding mismatch. RFC 090 P3/P2
+/// non-disclosure: unchanged by this stage, deliberately (stage plan §3).
+const EXPIRED_OR_INVALID: &str = "This pending change has expired or is no longer valid.";
+
+/// Validate, decrypt, and apply a pending SMTP-password settings change
+/// (RFC 094 M2b stage 2, S08).
 ///
-/// Enforces all five binding invariants:
-/// - **Role**: `actor` is `&AdminActor` (compile-time proof).
-/// - **Session**: `session_id` must match the creating session.
-/// - **Actor**: `actor.user_id()` must match the creating actor.
-/// - **CSRF**: `csrf_token` must match the stored token.
-/// - **Expiry**: enforced by `pending_settings_change::consume`.
+/// Three steps, in RFC 094's forced order (crypto stays outside the
+/// transaction):
 ///
-/// On any failure (including binding mismatch, expiry, or unknown id), returns
-/// `CoreError::BadRequest` with a neutral "expired or invalid" message so
-/// callers cannot distinguish which check failed.
+/// 1. **Read-only.** [`pending_settings_change::peek`] fetches the row
+///    without deleting it. Not a TOCTOU hole: nothing read here is
+///    trusted for the eventual write — step 3 re-reads the row from
+///    inside the transaction, and its own delete is what authorises the
+///    write. This step exists only to get the plaintext out for
+///    validation while the row is still intact, so a validation failure
+///    (unknown `tls_mode`) leaves it exactly that way — the defect this
+///    stage closes (stage plan §1): before this change, the row was
+///    already consumed by the time validation could fail.
+/// 2. **Outside the transaction.** Decrypt the payload, validate
+///    `tls_mode`, read the existing `smtp_config` row (only for its
+///    `created_at`), and seal the new password under `smtp_config`'s own
+///    AAD.
+/// 3. **One transaction.** [`sui_id_store::commands::apply_pending_settings_change`]
+///    re-reads the row, checks the binding, and — only if it matches —
+///    deletes the row and writes `smtp_config`, together. A binding
+///    mismatch commits a denial event instead and leaves the row intact
+///    (Decision B, stage plan §3): an id that is not fully secret must
+///    not become a free denial of a named change.
 ///
-/// On success, the row is deleted from the database (single-use, P3).
-pub async fn apply<T: for<'de> Deserialize<'de>>(
+/// Every failure path returns [`EXPIRED_OR_INVALID`] **except** an
+/// unrecognised `tls_mode`, which gets its own specific message — the
+/// method name is not a secret, and naming it saves an administrator a
+/// guessing session (the same reasoning RFC 095 M3 stage 4b §7 applied to
+/// a registered auth method).
+pub async fn apply(
     db: &Database,
     id: PendingChangeId,
     actor: &AdminActor,
     session_id: SessionId,
     csrf_token: &str,
     clock: &SharedClock,
-) -> CoreResult<T> {
+) -> CoreResult<()> {
     let now = clock.now();
 
-    // Consume the row (deletes it atomically; returns NotFound if absent or
-    // expired — both are treated as the same neutral error).
-    let row = pending_settings_change::consume(db, id, now)
+    // Step 1: read-only peek.
+    let peeked = pending_settings_change::peek(db, id, now)
         .await
-        .map_err(|_| {
-            CoreError::BadRequest("This pending change has expired or is no longer valid.".into())
-        })?;
+        .map_err(|_| CoreError::BadRequest(EXPIRED_OR_INVALID.into()))?;
 
-    // Verify binding invariants (P2). All failures use the same neutral error
-    // message so the caller cannot distinguish which check failed.
-    let binding_ok = row.session_id == session_id
-        && row.actor_id == actor.user_id()
-        && row.csrf_token == csrf_token;
-    if !binding_ok {
-        // Audit: binding failure (non-secret — note does not reveal which
-        // check failed, only that one did).
-        let _ = audit::append(
-            db,
-            &AuditLogRow {
-                at: now,
-                actor: Some(actor.user_id()),
-                action: "settings.pending_change.binding_failed".into(),
-                target: None,
-                result: "denied".into(),
-                note: Some(format!("intent={} id={id}", row.intent)),
-            },
-        )
-        .await;
-        return Err(CoreError::BadRequest(
-            "This pending change has expired or is no longer valid.".into(),
-        ));
-    }
-
-    // Decrypt the payload.
-    let plaintext = sui_id_store::crypto::open(db.key(), &row.payload_enc, PENDING_CHANGE_AAD)
-        .map_err(|_| {
-            CoreError::BadRequest("This pending change has expired or is no longer valid.".into())
-        })?;
-    let payload: T = serde_json::from_slice(&plaintext).map_err(|_| {
+    // Step 2: decrypt, validate, seal -- outside any transaction.
+    let plaintext = sui_id_store::crypto::open(db.key(), &peeked.payload_enc, PENDING_CHANGE_AAD)
+        .map_err(|_| CoreError::BadRequest(EXPIRED_OR_INVALID.into()))?;
+    let payload: SmtpPasswordChangePayload = serde_json::from_slice(&plaintext).map_err(|_| {
         CoreError::Internal // should not happen unless schema changed mid-flight
     })?;
+    let tls_mode = sui_id_store::models::SmtpTlsMode::parse(&payload.tls_mode)
+        .ok_or_else(|| CoreError::BadRequest(format!("unknown tls_mode: {}", payload.tls_mode)))?;
+    let existing = sui_id_store::repos::smtp_config::get(db)
+        .await
+        .map_err(CoreError::from)?;
+    let password_enc = Some(
+        sui_id_store::repos::smtp_config::seal_password(&payload.password, db.key())
+            .await
+            .map_err(CoreError::from)?,
+    );
+    let new_smtp_config = sui_id_store::models::SmtpConfigRow {
+        enabled: payload.enabled,
+        host: payload.host.trim().to_owned(),
+        port: payload.port,
+        tls_mode,
+        username: payload.username,
+        password_enc,
+        from_address: payload.from_address.trim().to_owned(),
+        from_name: payload.from_name,
+        base_url: payload.base_url.trim().trim_end_matches('/').to_owned(),
+        created_at: existing.map(|r| r.created_at).unwrap_or(now),
+        updated_at: now,
+    };
 
-    // Audit: applied (non-secret summary only).
-    let _ = audit::append(
+    // Step 3: the sealed command -- one transaction, success or denial.
+    let outcome = sui_id_store::commands::apply_pending_settings_change(
         db,
-        &AuditLogRow {
-            at: now,
-            actor: Some(actor.user_id()),
-            action: "settings.pending_change.applied".into(),
-            target: None,
-            result: "ok".into(),
-            note: Some(format!("intent={} summary={}", row.intent, row.summary)),
-        },
+        actor.user_id(),
+        id,
+        session_id,
+        csrf_token.to_owned(),
+        now,
+        new_smtp_config,
     )
-    .await;
+    .await
+    .map_err(CoreError::from)?
+    .into_inner();
 
-    Ok(payload)
+    match outcome {
+        sui_id_store::commands::ApplyPendingSettingsChangeOutcome::Applied => Ok(()),
+        sui_id_store::commands::ApplyPendingSettingsChangeOutcome::BindingFailed => {
+            Err(CoreError::BadRequest(EXPIRED_OR_INVALID.into()))
+        }
+    }
 }
 
 // ── cancel ────────────────────────────────────────────────────────────────────
@@ -247,3 +292,7 @@ pub async fn purge_expired(db: &Database, clock: &SharedClock) -> CoreResult<usi
         .await
         .map_err(CoreError::from)
 }
+
+#[cfg(test)]
+#[path = "pending_change/tests.rs"]
+mod tests;

@@ -4297,5 +4297,147 @@ pub async fn cancel_pending_settings_change(
     .await
 }
 
+// ── S08 — apply pending settings change ──────────────────────────────────
+//
+// RFC 094 M2b stage 2. Before this stage, `apply` consumed the pending
+// row (committing), then appended a best-effort audit row, then returned
+// the decrypted payload for the caller to write `smtp_config` itself --
+// three commits for one logical operation, and a failure after the first
+// left the row consumed with nothing changed (stage plan §A). This
+// command is the restructure: the caller validates and seals the payload
+// *before* calling in (RFC 094 keeps crypto outside the transaction),
+// and this one transaction re-reads the row, checks the binding, deletes
+// it only if the binding matches, writes `smtp_config`, and emits the
+// event -- success and denial alike.
+
+static S08_APPLIED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::SettingsPendingChangeApplied,
+    name: "settings.pending_change.applied",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[AttributeSpec {
+        name: "intent",
+        description: "the pending change's own intent string",
+        required: true,
+    }],
+};
+
+static S08_BINDING_FAILED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::SettingsPendingChangeBindingFailed,
+    name: "settings.pending_change.binding_failed",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[AttributeSpec {
+        name: "intent",
+        description: "the pending change's own intent string",
+        required: true,
+    }],
+};
+
+crate::declare_write_command! {
+    /// S08 — apply a pending settings change (RFC 090, RFC 094 M2b stage
+    /// 2). Same actor shape as S07/S09: `pending_change::apply` requires
+    /// `&AdminActor`.
+    ///
+    /// Two event variants, not one, per Decision B (stage plan §3): a
+    /// binding failure must commit a denial, not roll back as a
+    /// transaction error, so it cannot share `Applied`'s arm.
+    command S08 = "S08" {
+        system_principal: forbidden;
+        enum S08Event {
+            Applied {
+                id: PendingChangeId,
+                intent: String,
+            } => &S08_APPLIED,
+            BindingFailed {
+                id: PendingChangeId,
+                intent: String,
+            } => &S08_BINDING_FAILED,
+        }
+    }
+}
+
+impl SealedCommandEvent<S08> for S08Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let (Self::Applied { id, .. } | Self::BindingFailed { id, .. }) = self;
+        Some(AuditTarget(id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        match self {
+            Self::Applied { .. } => AuditResult::Ok,
+            Self::BindingFailed { .. } => AuditResult::Failure,
+        }
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let (Self::Applied { intent, .. } | Self::BindingFailed { intent, .. }) = self;
+        AuditAttributes::builder()
+            .attribute("intent", intent.clone())
+            .build()
+    }
+}
+
+/// What the caller learns from S08: whether the pending change was
+/// actually applied, or refused on a binding mismatch. The caller maps
+/// `BindingFailed` to the same neutral "expired or no longer valid"
+/// message absence already uses (stage plan §3: non-disclosure, for
+/// binding failure and for absence alike) -- this type exists so that
+/// mapping happens once, at the one call site, rather than the command
+/// returning an `Err` that would be indistinguishable from a real
+/// transaction failure.
+pub enum ApplyPendingSettingsChangeOutcome {
+    Applied,
+    BindingFailed,
+}
+
+/// Run S08 (apply a pending settings change) through the Class-A runner.
+///
+/// `new_smtp_config` is built by the caller *before* this is called: the
+/// payload has already been decrypted, validated (`tls_mode`), and its
+/// password re-sealed under `smtp_config`'s own AAD -- none of that is
+/// crypto or validation this command repeats or re-checks. This
+/// transaction's only job is the part that must be atomic: re-read the
+/// pending row, decide `Applied` vs `BindingFailed`, and -- on
+/// `Applied` only -- delete the row and write `smtp_config`, together.
+#[allow(clippy::too_many_arguments)]
+pub async fn apply_pending_settings_change(
+    db: &crate::Database,
+    admin: UserId,
+    id: PendingChangeId,
+    session_id: sui_id_shared::ids::SessionId,
+    csrf_token: String,
+    now: DateTime<Utc>,
+    new_smtp_config: crate::models::SmtpConfigRow,
+) -> StoreResult<crate::registry::Audited<ApplyPendingSettingsChangeOutcome>> {
+    let context = AuthorizedCommandContext::<S08>::for_authorized_actor(admin, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, S08>| {
+        let attempt = crate::repos::pending_settings_change::apply_within_tx(
+            tx.tx(),
+            id,
+            session_id,
+            admin,
+            &csrf_token,
+            now,
+        )?;
+        match attempt {
+            crate::repos::pending_settings_change::ApplyAttempt::Applied { intent } => {
+                crate::repos::smtp_config::upsert_within_tx(tx.tx(), &new_smtp_config)?;
+                Ok((
+                    ApplyPendingSettingsChangeOutcome::Applied,
+                    S08Event::Applied { id, intent },
+                ))
+            }
+            crate::repos::pending_settings_change::ApplyAttempt::BindingFailed { intent } => Ok((
+                ApplyPendingSettingsChangeOutcome::BindingFailed,
+                S08Event::BindingFailed { id, intent },
+            )),
+        }
+    })
+    .await
+}
+
 #[cfg(test)]
 mod tests;

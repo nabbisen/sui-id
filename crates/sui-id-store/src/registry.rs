@@ -287,10 +287,15 @@ pub enum AuditEventKind {
     SettingsPendingChangeCreated,
     /// `settings.pending_change.cancelled` — RFC 094 M2b stage 1, S09.
     /// Same naming-continuity reasoning as `SettingsPendingChangeCreated`.
-    /// Distinct from `settings.pending_change.applied` and
-    /// `settings.pending_change.binding_failed`, which remain best-effort
-    /// appends until stage 2 restructures `apply` (S08).
     SettingsPendingChangeCancelled,
+    /// `settings.pending_change.applied` — RFC 094 M2b stage 2, S08's
+    /// success branch. The name already in use before this stage sealed
+    /// it; see `commands::S08Event`.
+    SettingsPendingChangeApplied,
+    /// `settings.pending_change.binding_failed` — RFC 094 M2b stage 2,
+    /// S08's denial branch (Decision B). `AuditResult::Failure`; the row
+    /// is **not** deleted on this branch, unlike the success one.
+    SettingsPendingChangeBindingFailed,
 }
 
 /// The registry entry for one [`AuditEventKind`]. `descriptor()` on a

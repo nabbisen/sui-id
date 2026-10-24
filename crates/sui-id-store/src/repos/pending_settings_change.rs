@@ -155,6 +155,44 @@ pub async fn get_summary(
     .await
 }
 
+/// RFC 094 M2b stage 2, S08 §2 step 1: fetch the **full** row (ciphertext
+/// included) without deleting it. Distinct from [`get_summary`], which
+/// returns only the non-secret summary string — `apply`'s caller needs
+/// the ciphertext too, to decrypt and validate the payload *before* the
+/// destructive transaction (RFC 094 keeps crypto outside the transaction,
+/// so the read has to come first and separately).
+///
+/// **Not a TOCTOU hole.** Nothing read here is trusted for the eventual
+/// write: [`apply_within_tx`] re-reads the row from inside the
+/// transaction, and its own delete is what actually authorises the
+/// write. This call exists only to get the plaintext out for validation
+/// before any irreversible step runs — a stale or since-changed row read
+/// here cannot smuggle anything past the re-read.
+pub async fn peek(
+    db: &Database,
+    id: PendingChangeId,
+    now: DateTime<Utc>,
+) -> StoreResult<PendingSettingsChangeRow> {
+    let id_str = id.to_string();
+    db.with_read(move |conn| {
+        let row: PendingSettingsChangeRow = conn
+            .prepare(
+                "SELECT id, session_id, actor_id, intent, payload_enc, summary, csrf_token, \
+                 expires_at, created_at FROM pending_settings_change WHERE id = ?1",
+            )?
+            .query_row([id_str.as_str()], map)
+            .map_err(|e| match e {
+                rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
+                other => StoreError::from(other),
+            })?;
+        if row.expires_at <= now {
+            return Err(StoreError::NotFound);
+        }
+        Ok(row)
+    })
+    .await
+}
+
 // ── Consume (atomic get + delete) ─────────────────────────────────────────────
 
 /// Atomically fetch and delete a pending settings change (RFC 090 P3).
@@ -166,6 +204,15 @@ pub async fn get_summary(
 /// requesting actor (P2) and check the CSRF token before calling `consume`.
 /// This function only enforces the delete-on-read invariant; binding checks
 /// belong at the domain layer.
+///
+/// RFC 094 M2b stage 2: that split is still accurate **for this function**,
+/// which is unchanged — but no longer universal in this module. `apply`
+/// (S08) no longer calls `consume`; it uses [`apply_within_tx`] below,
+/// whose own binding check runs *inside* the transaction, atomic with the
+/// delete, because the delete decision depends on it (a binding failure
+/// must not consume the row — RFC 123 D3). `consume` remains for test
+/// seeding unrelated to `apply`'s own path, the same reasoning stage 1
+/// left `insert`/`cancel` in place for.
 pub async fn consume(
     db: &Database,
     id: PendingChangeId,
@@ -233,6 +280,67 @@ pub fn cancel_within_tx(tx: &rusqlite::Transaction<'_>, id: PendingChangeId) -> 
         [id.to_string()],
     )?;
     Ok(())
+}
+
+// ── Apply (re-read, conditionally consume) ──────────────────────────────────
+
+/// The outcome of [`apply_within_tx`]'s re-read: whether the binding
+/// matched. RFC 094 M2b stage 2, Decision B — a binding failure must
+/// **not** consume the row (RFC 123 D3: an id that is not fully secret
+/// must not become a free denial of a named change), so this cannot be a
+/// plain fetch-or-delete; the caller needs to know which branch it got,
+/// to build the right audit event (`Applied` vs `BindingFailed`) without
+/// expressing the denial as a transaction error that would roll the
+/// event back too.
+pub enum ApplyAttempt {
+    /// Binding matched. The row is deleted (P3); `intent` is returned so
+    /// the caller's audit event can carry it.
+    Applied { intent: String },
+    /// The row exists and is unexpired, but `session_id`, `actor_id` or
+    /// `csrf_token` did not match. **Not deleted.**
+    BindingFailed { intent: String },
+}
+
+/// RFC 094 M2b stage 2, S08 §2 step 3: re-read the row from inside the
+/// caller's transaction, check the binding, and delete it only if the
+/// binding matches. An absent or expired row is `StoreError::NotFound`
+/// (same non-disclosure shape as [`consume`]); a present-but-unbound row
+/// is `Ok(ApplyAttempt::BindingFailed)`, not an error — the caller still
+/// needs to commit a denial event for it, and a closure returning `Err`
+/// would roll that back along with everything else.
+pub fn apply_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    id: PendingChangeId,
+    session_id: SessionId,
+    actor_id: UserId,
+    csrf_token: &str,
+    now: DateTime<Utc>,
+) -> StoreResult<ApplyAttempt> {
+    let id_str = id.to_string();
+    let row: PendingSettingsChangeRow = tx
+        .query_row(
+            "SELECT id, session_id, actor_id, intent, payload_enc, summary, csrf_token, \
+             expires_at, created_at FROM pending_settings_change WHERE id = ?1",
+            [id_str.as_str()],
+            map,
+        )
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
+            other => StoreError::from(other),
+        })?;
+    if row.expires_at <= now {
+        return Err(StoreError::NotFound);
+    }
+    let binding_ok =
+        row.session_id == session_id && row.actor_id == actor_id && row.csrf_token == csrf_token;
+    if !binding_ok {
+        return Ok(ApplyAttempt::BindingFailed { intent: row.intent });
+    }
+    tx.execute(
+        "DELETE FROM pending_settings_change WHERE id = ?1",
+        [id_str.as_str()],
+    )?;
+    Ok(ApplyAttempt::Applied { intent: row.intent })
 }
 
 // ── Purge expired ─────────────────────────────────────────────────────────────
