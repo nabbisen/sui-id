@@ -121,10 +121,35 @@ That breaks the cycle in the only direction that is coherent: RFC 094 owns
 write does*. It also makes M2b's *"no production Class-A best-effort
 append anywhere"* literally satisfiable, which today it is not.
 
-**I am not acting on this.** It changes how two accepted RFCs relate, and
-RFC 000 puts that with you. If you rule the other way — that wave 3 waits
-for 096-B2 — then M2b's closure field needs amending to say so, because as
-written it cannot be met.
+**RULED by `@nabbisen`, 2026-10-25: *"Your recommendation is authorized."*** So:
+
+> **RFC 094 owns whether the write and its record commit together. RFC 096
+> owns what the write does.**
+
+The cycle is broken in that direction. **Wave 3 is now schedulable**: it
+seals `federation_provider::create` and `update_allowed_origins` — the two
+live production writes, both today in `runtime/startup.rs` and both
+emitting nothing — onto the Class-A seam, with the events the inventory
+already names. The activation generation, the sealed preflight and the
+evidence invalidation stay with **096-B2**, which then extends a sealed
+command rather than converting a bare one.
+
+Three consequences, all recorded rather than left to be re-derived:
+
+- **M2b's closure field is satisfiable as written.** *"No production
+  Class-A best-effort append anywhere"* was unreachable while wave 3 was
+  blocked; it is not now.
+- **096-B2's prerequisite narrows.** It needs wave 3's *sealing*, not all
+  of M2b. `rfcs/handoffs/096-upstream-oidc-federation/README.md:119` said
+  "requires RFC 094 M2b" and now says which part.
+- **The inventory's notes were the wrong half of the cycle.** C16–C18 and
+  C23 said their work depends on 096-B2; what depends on 096-B2 is their
+  *target semantics*, not their conversion. The notes say so now, and the
+  `status` values are unchanged — they still describe target-state rows.
+
+**Wave 3 is not in `0.85.0`.** `0.85.0` is wave 4, authorized and under
+way with one open dispatch; wave 3 is the next cycle's, ahead of the
+authority switch, which must still come last.
 
 ## E — the proposal
 

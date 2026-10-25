@@ -12,10 +12,13 @@
 > stage 1 lands. G20's declared set moves 34 → 37 → 42 → 48 across the
 > three stages.
 >
-> The scope note also records a **dependency cycle around wave 3**: RFC
-> 094 `:611-613` makes 096-B2 wait on wave 3 while the inventory makes
-> wave 3's semantics wait on 096-B2. It needs a ruling; it does not block
-> `0.85.0`.
+> **The wave-3 dependency cycle is ruled** (2026-10-25): RFC 094 owns
+> whether a write and its record commit together, RFC 096 owns what the
+> write does. Wave 3 seals today's `federation_provider` writes onto the
+> Class-A seam without waiting for 096-B2, which then extends a sealed
+> command. **M2b's closure field is satisfiable as written** again, and
+> 096-B2's prerequisite narrows from "all of M2b" to wave 3. Wave 3 is the
+> next cycle's, not `0.85.0`'s.
 
 > **`0.84.0` is M2b's settings area and is authorized** (2026-10-24):
 > S01–S09, wave 2 before wave 1, because RFC 094's listed wave order is

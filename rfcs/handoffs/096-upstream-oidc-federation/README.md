@@ -116,7 +116,14 @@ if another owner holds one of them.
 4. Verified identity mapping, provisioning, local MFA/session preservation,
    session establishment, insecure legacy-path removal.
 
-**096-B2** — requires RFC 094 M2b.
+**096-B2** — requires RFC 094 M2b **wave 3 only**, not all of M2b.
+*Narrowed 2026-10-25, on a ruling: RFC 094 owns whether a write and its
+audit record commit together; RFC 096 owns what the write does. Wave 3
+seals today's `federation_provider` writes onto the Class-A seam without
+096-B2's semantics, so 096-B2 extends a sealed command instead of waiting
+on one. Before that, this line and `contracts/write-commands.toml`'s
+C17/C18/C23 notes pointed at each other and neither could start — see
+[`../094-transactional-audit/cycle-g-and-0.85.0-2026-10-25.md`](../094-transactional-audit/cycle-g-and-0.85.0-2026-10-25.md) §D.*
 
 5. Provider/link commands on the Class-A seam, version/generation invalidation,
    preflight and audited enable integration.

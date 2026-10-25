@@ -716,7 +716,7 @@ sealed = false
 owner = "Federation-provider create"
 rationale = "`federation.provider.created`"
 mutation_surface = "create globally fresh never-reused provider ID, disabled/review-required, with canonical `activation_generation=0`"
-files = ["crates/sui-id-store/src/repos/federation_provider.rs"]  # `create` -- current implementation lacks the activation_generation=0/review-required semantics the row describes; target-state row, see Stage 0 note
+files = ["crates/sui-id-store/src/repos/federation_provider.rs"]  # `create` -- current implementation lacks the activation_generation=0/review-required semantics the row describes; target-state row, see Stage 0 note. Ruled 2026-10-25: those semantics are RFC 096-B2's; sealing today's `create` onto the Class-A seam is M2b wave 3's and does not wait for them. The live write is `runtime/startup.rs:323` and it emits no audit record at all.
 test_id = "`a_c16_provider_create`"
 
 [[command]]
@@ -727,7 +727,7 @@ sealed = false
 owner = "Federation-provider enable/disable"
 rationale = "closed branches `federation.provider.enabled` / `federation.provider.disabled`; both record old/new activation generation; enable consumes sealed preflight (<600s), disable clears evidence"
 mutation_surface = "exact provider/version/policy/generation/enabled guard; both checked-increment generation; enable stores evidence bound to new generation, disable invalidates login/MFA/ceremony state; no standalone writer"
-files = ["crates/sui-id-store/src/repos/federation_provider.rs"]  # `set_enabled` exists; the preflight capability, generation increment, and evidence storage this row describes do NOT exist yet -- depends on RFC 096-B2 (M2b). Target-state row.
+files = ["crates/sui-id-store/src/repos/federation_provider.rs"]  # `set_enabled` exists; the preflight capability, generation increment, and evidence storage this row describes do NOT exist yet -- those are RFC 096-B2's. Ruled 2026-10-25: the atomicity conversion does NOT depend on them, so wave 3 may seal `set_enabled` as it stands and 096-B2 extends a sealed command. Target-state row. No production caller today -- tests only.
 test_id = "`a_c17_provider_enable`, `a_c17_provider_disable`, `a_c17_preflight_race`, `a_c17_generation_overflow`"
 
 [[command]]
@@ -738,7 +738,7 @@ sealed = false
 owner = "Federation-provider delete"
 rationale = "`federation.provider.deleted`; old/new activation generation + bounded invalidated counts"
 mutation_surface = "exact non-deleted generation guard; checked-increment generation, clear evidence, invalidate login/MFA/ceremony state, then mark/remove provider in one transaction"
-files = ["crates/sui-id-store/src/repos/federation_provider.rs"]  # `delete` exists; generation/evidence-invalidation semantics do NOT exist yet -- depends on RFC 096-B2 (M2b). Target-state row.
+files = ["crates/sui-id-store/src/repos/federation_provider.rs"]  # `delete` exists; generation/evidence-invalidation semantics do NOT exist yet -- those are RFC 096-B2's. Ruled 2026-10-25: the atomicity conversion does NOT depend on them. Target-state row. No production caller today -- tests only.
 test_id = "`a_c18_provider_delete`, `a_c18_generation_overflow`"
 
 [[command]]
@@ -793,7 +793,7 @@ sealed = false
 owner = "Replace federation-provider trust policy / RFC 096 startup configuration"
 rationale = "`federation.provider.policy_updated`; sealed `StartupConfiguration` actor, provider-ID target, old/new version and activation generation + changed-field enums + invalidated counts"
 mutation_surface = "guarded full policy replace on exact non-deleted old version/generation, checked-increment both, force disabled/review-required, clear evidence, invalidate old flows; cache eviction post-commit"
-files = []  # UNRESOLVED, deliberately: no current function implements provider trust-policy replacement at all. Wholly new, RFC 096-B2 (M2b). Target-state row, not a reconciliation gap.
+files = []  # UNRESOLVED, deliberately: no current function implements provider trust-policy replacement at all. Wholly new, RFC 096-B2. Target-state row, not a reconciliation gap. Ruled 2026-10-25: unlike C16-C18 this one has nothing to seal, because there is no write -- it arrives with 096-B2 and is sealed on arrival, so it is not wave 3 work.
 test_id = "`a_c23_provider_policy_update`, `a_c23_generation_overflow`"
 
 [[command]]
