@@ -20,8 +20,15 @@
 > three have **no live write** (C10, C22, K02), and the client-update
 > form is a second compound transition. **Stage 2 is dispatched** —
 > [`m2b-0.85.0-stage2-c03-c04-c09-2026-10-25.md`](m2b-0.85.0-stage2-c03-c04-c09-2026-10-25.md):
-> the form's three writes in one transaction. Stage 3 is the remaining
-> live single writes, stage 4 the three dormant rows.
+> the form's three writes in one transaction. **It landed** `f03eabb`
+> (Level B, 27 jobs, 0 skipped), G20 at **38** — one command, not three,
+> because the runner appends exactly one event per call. **It retires two
+> emitted audit event names**, `client.set_allowed_scopes` and
+> `client.set_post_logout_redirect_uris`, which `0.85.0`'s summary must
+> say (stage plan §G). **Stage 3 (C01, C02, C07, K03, C08) is next and
+> not yet dispatched**; stage 4 is the three dormant rows, and carries a
+> proposal to let the inventory say *sealed under another command's id* —
+> C04 and C09 now read `sealed = false` while being sealed by C03.
 >
 > **The wave-3 dependency cycle is ruled** (2026-10-25): RFC 094 owns
 > whether a write and its record commit together, RFC 096 owns what the
