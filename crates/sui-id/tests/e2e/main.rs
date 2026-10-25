@@ -55,6 +55,7 @@ mod r094_m2a_c15_dynamic_register;
 mod r094_m2a_consent_policy_persistence;
 mod r094_m2a_db_access_scope;
 mod r094_m2b_wave4_stage1_client_lifecycle;
+mod r094_m2b_wave4_stage2_client_update_form;
 mod r095_m3_stage1_registration_validation;
 mod r095_m3_stage1b_loopback_port_matching;
 mod r095_m3_stage2_field_rules;

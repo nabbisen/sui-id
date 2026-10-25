@@ -262,3 +262,65 @@ async fn c06_injected_failure_before_append_rolls_back_the_delete_and_the_revoke
     assert_eq!(latest_audit_action(&db).await, before_audit);
     record_rollback_coverage("C06");
 }
+
+// ── Back-fill: a `NotFound` test per `_within_tx` guard (stage 2's
+//    review of stage 1 -- a disable/delete/enable of a client that does
+//    not exist must refuse, not silently write a Class-A record for a
+//    change that never happened). ─────────────────────────────────────
+
+#[tokio::test]
+async fn disable_client_against_a_nonexistent_client_is_notfound_and_writes_no_record() {
+    let db = fresh_db();
+    let (admin, _session) = an_admin_session(&db).await;
+    let ghost = ClientId::new();
+    let before = audit_rows(&db).await;
+
+    let result = crate::commands::disable_client(&db, admin, ghost, None, Utc::now()).await;
+    assert!(
+        matches!(result, Err(StoreError::NotFound)),
+        "expected NotFound"
+    );
+    assert_eq!(
+        audit_rows(&db).await,
+        before,
+        "a disable of a nonexistent client must not write an audit record"
+    );
+}
+
+#[tokio::test]
+async fn enable_client_against_a_nonexistent_client_is_notfound_and_writes_no_record() {
+    let db = fresh_db();
+    let (admin, _session) = an_admin_session(&db).await;
+    let ghost = ClientId::new();
+    let before = audit_rows(&db).await;
+
+    let result = crate::commands::enable_client(&db, admin, ghost, Utc::now()).await;
+    assert!(
+        matches!(result, Err(StoreError::NotFound)),
+        "expected NotFound"
+    );
+    assert_eq!(
+        audit_rows(&db).await,
+        before,
+        "an enable of a nonexistent client must not write an audit record"
+    );
+}
+
+#[tokio::test]
+async fn delete_client_against_a_nonexistent_client_is_notfound_and_writes_no_record() {
+    let db = fresh_db();
+    let (admin, _session) = an_admin_session(&db).await;
+    let ghost = ClientId::new();
+    let before = audit_rows(&db).await;
+
+    let result = crate::commands::delete_client(&db, admin, ghost, None, Utc::now()).await;
+    assert!(
+        matches!(result, Err(StoreError::NotFound)),
+        "expected NotFound"
+    );
+    assert_eq!(
+        audit_rows(&db).await,
+        before,
+        "a delete of a nonexistent client must not write an audit record"
+    );
+}

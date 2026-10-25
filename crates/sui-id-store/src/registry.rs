@@ -243,6 +243,12 @@ pub enum AuditEventKind {
     /// shape as `ClientDisable`: soft-delete plus
     /// `refresh_tokens_revoked`.
     ClientDelete,
+    /// `client.update_form` — RFC 094 M2b wave 4 stage 2, C03. The
+    /// client-update form's three coordinated fields (allowed scopes,
+    /// post-logout redirect URIs, consent policy) in one transaction.
+    /// C04 and C09 are this event's sibling inventory rows, not separate
+    /// commands — see `contracts/write-commands.toml`'s note on C03.
+    ClientUpdateForm,
     /// Proof-only — see [`ProofOnlyForbiddenSystemPrincipalCommand`]. Never
     /// emitted; no command can construct this event because no command can
     /// construct a context for that command in the first place.

@@ -5165,5 +5165,139 @@ pub async fn delete_client(
     .await
 }
 
+// ── C03 — the client-update form (C03, C04, C09) ─────────────────────────
+//
+// RFC 094 M2b wave 4 stage 2. One admin form submits three fields --
+// allowed scopes, post-logout redirect URIs, and consent policy -- that
+// were three independent commits before this stage: a failure partway
+// through left some fields changed and others not, with no single
+// record of what the form actually did. `Database::class_a` is generic
+// over exactly one `CommandSpec` and its closure returns exactly one
+// `(T, C::Event)` -- confirmed by reading its body (one `append_within_tx`
+// call, fed by one `C::descriptor(&event)`) -- so three separate sealed
+// commands (three separate `class_a` calls) cannot share one transaction;
+// each opens and commits its own. The three writes and one audit record
+// below are therefore one sealed command, carrying the inventory's first
+// id, C03. C04 and C09 are this event's sibling rows, not separate
+// commands -- see `contracts/write-commands.toml`'s note on C03, C04 and
+// C09.
+
+static C03_FORM_UPDATED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::ClientUpdateForm,
+    name: "client.update_form",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[
+        AttributeSpec {
+            name: "allowed_scopes_count",
+            description: "count of scope tokens in the new allowed_scopes value",
+            required: true,
+        },
+        AttributeSpec {
+            name: "post_logout_redirect_uris_count",
+            description: "count of URIs in the new post_logout_redirect_uris value",
+            required: true,
+        },
+        AttributeSpec {
+            name: "consent_policy",
+            description: "the new consent policy value",
+            required: true,
+        },
+    ],
+};
+
+crate::declare_write_command! {
+    /// C03 — the client-update form's three coordinated fields.
+    /// Administrator action through `&AdminActor`. C04 and C09 are this
+    /// command's sibling inventory rows (see the module-level comment
+    /// above this block), not separate `declare_write_command!`
+    /// invocations.
+    command C03 = "C03" {
+        system_principal: forbidden;
+        enum C03Event {
+            FormUpdated {
+                client_id: ClientId,
+                allowed_scopes_count: usize,
+                post_logout_redirect_uris_count: usize,
+                consent_policy: crate::models::ConsentPolicy,
+            } => &C03_FORM_UPDATED,
+        }
+    }
+}
+
+impl SealedCommandEvent<C03> for C03Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::FormUpdated { client_id, .. } = self;
+        Some(AuditTarget(client_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::FormUpdated {
+            allowed_scopes_count,
+            post_logout_redirect_uris_count,
+            consent_policy,
+            ..
+        } = self;
+        AuditAttributes::builder()
+            .attribute("allowed_scopes_count", allowed_scopes_count.to_string())
+            .attribute(
+                "post_logout_redirect_uris_count",
+                post_logout_redirect_uris_count.to_string(),
+            )
+            .attribute("consent_policy", consent_policy.as_str())
+            .build()
+    }
+}
+
+/// Run C03 (the client-update form) through the Class-A runner: the
+/// three field writes and the audit event now commit together.
+/// `allowed_scopes` and `post_logout_redirect_uris` are validated by the
+/// caller (`sui-id-core`'s `update_client_form`) before this runs --
+/// this function trusts its input, the same division stage 2's S08
+/// established for a sealed command's own validation boundary.
+pub async fn update_client_form(
+    db: &crate::Database,
+    admin: UserId,
+    target: ClientId,
+    allowed_scopes: String,
+    post_logout_redirect_uris: Vec<String>,
+    consent_policy: crate::models::ConsentPolicy,
+    now: DateTime<Utc>,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let allowed_scopes_count = allowed_scopes.split_whitespace().count();
+    let post_logout_redirect_uris_count = post_logout_redirect_uris.len();
+    let context = AuthorizedCommandContext::<C03>::for_authorized_actor(admin, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, C03>| {
+        crate::repos::clients::set_allowed_scopes_within_tx(tx.tx(), target, &allowed_scopes, now)?;
+        crate::repos::clients::set_post_logout_redirect_uris_within_tx(
+            tx.tx(),
+            target,
+            &post_logout_redirect_uris,
+            now,
+        )?;
+        crate::repos::clients::update_consent_policy_within_tx(
+            tx.tx(),
+            target,
+            consent_policy.clone(),
+            now,
+        )?;
+        Ok((
+            (),
+            C03Event::FormUpdated {
+                client_id: target,
+                allowed_scopes_count,
+                post_logout_redirect_uris_count,
+                consent_policy,
+            },
+        ))
+    })
+    .await
+}
+
 #[cfg(test)]
 mod tests;

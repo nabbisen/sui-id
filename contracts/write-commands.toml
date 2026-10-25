@@ -567,12 +567,14 @@ test_id = "`a_c02_basic`"
 id = "C03"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
-owner = "Replace allowed scopes"
-rationale = "`client.set_allowed_scopes`"
-mutation_surface = "`clients::set_allowed_scopes`"
+sealed = true
+owner = "The client-update form: allowed scopes, post-logout URIs, consent policy"
+rationale = "`client.update_form` -- RFC 094 M2b wave 4 stage 2. `Database::class_a` is generic over exactly one `CommandSpec` and appends exactly one event per call (measured against `registry.rs`'s body, one `append_within_tx` site), so C03, C04 and C09 -- one admin form, three fields that must commit together -- cannot be three separate sealed commands sharing a transaction; each `class_a` call opens and commits its own. This row is the one sealed command the three collapse into; C04 and C09 (below) are its sibling rows, not separate commands, and stay `sealed = false` because `check-write-commands.py` requires a `sealed = true` row's id to name a declared `command ID = \"ID\"`, which only C03 has."
+mutation_surface = "`clients::set_allowed_scopes_within_tx`, `set_post_logout_redirect_uris_within_tx`, `update_consent_policy_within_tx` (via `commands::update_client_form`)"
 files = ["crates/sui-id-store/src/repos/clients.rs"]
 test_id = "`a_c03_scopes`"
+event = ["client.update_form"]
+descriptor = ["C03_FORM_UPDATED"]
 
 [[command]]
 id = "C04"
@@ -580,8 +582,8 @@ class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
 sealed = false
 owner = "Replace post-logout URIs"
-rationale = "`client.set_post_logout_redirect_uris`"
-mutation_surface = "`clients::set_post_logout_redirect_uris`"
+rationale = "`client.update_form` now covers this field -- RFC 094 M2b wave 4 stage 2 collapsed C04 into C03 (see C03's row for why); the bare `clients::set_post_logout_redirect_uris` this row used to name is removed (confirmed, before deleting it, that its only caller was the handler converted to C03). Stays `sealed = false`: no separate `command C04 = \"C04\"` is declared, by design."
+mutation_surface = "`clients::set_post_logout_redirect_uris_within_tx` (via `commands::update_client_form`, C03)"
 files = ["crates/sui-id-store/src/repos/clients.rs"]
 test_id = "`a_c04_logout_uris`"
 
@@ -639,8 +641,8 @@ class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
 sealed = false
 owner = "Change consent policy"
-rationale = "`client.consent_policy_changed`"
-mutation_surface = "`clients::update_consent_policy`"
+rationale = "`client.update_form` now covers this field -- RFC 094 M2b wave 4 stage 2 collapsed C09 into C03 (see C03's row for why). Before this stage, `client.consent_policy_changed` was declared here and emitted by nothing (`git grep` found it nowhere in `crates/`) -- a wave-1-shaped gap, not a record that could be lost. `clients::update_consent_policy` is kept, unchanged, for `r120.rs`'s test seeding; the sealed path is the new `update_consent_policy_within_tx`. Stays `sealed = false`: no separate `command C09 = \"C09\"` is declared, by design."
+mutation_surface = "`clients::update_consent_policy_within_tx` (via `commands::update_client_form`, C03)"
 files = ["crates/sui-id-store/src/repos/clients.rs"]
 test_id = "`a_c09_consent_policy`"
 

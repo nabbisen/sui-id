@@ -398,10 +398,8 @@ pub async fn clients_edit_post(
         .map(|s| s.trim().to_owned())
         .filter(|s| !s.is_empty())
         .collect();
-    // Apply all three updates. Each is admin-gated and audit-logged
-    // separately; the operator sees three audit-log entries per save,
-    // which is desirable — it makes it possible to track exactly which
-    // facet of a client changed when.
+    // Basic metadata (name, redirect_uris) is C01/C02's surface, untouched
+    // this stage, and stays its own update.
     admin_uc::update_client_basic(
         &app.db,
         admin_actor,
@@ -412,17 +410,23 @@ pub async fn clients_edit_post(
     )
     .await
     .map_err(HttpError::html)?;
-    admin_uc::set_client_allowed_scopes(&app.db, admin_actor, target, form.allowed_scopes.trim())
-        .await
-        .map_err(HttpError::html)?;
-    admin_uc::set_client_post_logout_redirect_uris(&app.db, admin_actor, target, &post_logout_uris)
-        .await
-        .map_err(HttpError::html)?;
-    // Update consent policy (RFC 038)
+    // Allowed scopes, post-logout redirect URIs and consent policy
+    // (RFC 038) commit together, in one transaction, as one audit
+    // record (RFC 094 M2b wave 4 stage 2, C03/C04/C09) — a failure
+    // partway through no longer leaves one field changed and another
+    // not.
     let policy = sui_id_store::models::ConsentPolicy::parse(form.consent_policy.trim());
-    sui_id_store::repos::clients::update_consent_policy(&app.db, target, policy, app.clock.now())
-        .await
-        .map_err(|e| HttpError::html(sui_id_core::errors::CoreError::from(e)))?;
+    admin_uc::update_client_form(
+        &app.db,
+        &app.clock,
+        admin_actor,
+        target,
+        form.allowed_scopes.trim(),
+        &post_logout_uris,
+        policy,
+    )
+    .await
+    .map_err(HttpError::html)?;
     Ok(Redirect::to("/admin/clients").into_response())
 }
 

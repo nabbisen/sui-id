@@ -32,8 +32,9 @@ its name. Twelve did not, and the code that writes each of them is
 `let _ = audit::append(…)` **after** the state change, outside any transaction —
 Class B in fact:
 
-`client.create`, `client.update`, `client.set_allowed_scopes`,
-`client.set_post_logout_redirect_uris`, `client.disable`, `client.enable`,
+`client.create`, `client.update`, client.set_allowed_scopes (retired RFC 094
+M2b wave 4 stage 2, see below),
+client.set_post_logout_redirect_uris (retired the same stage), `client.disable`, `client.enable`,
 `client.delete`, `client.rotate_secret`, `signing_key.delete`,
 `admin.master_key.rotated`, `auth.federation.takeover_blocked`,
 `auth.smtp_config.changed`.
@@ -73,6 +74,15 @@ checked.
 **Three of the eleven pending-conversion rows were converted — `client.disable`,
 `client.enable`, `client.delete`, RFC 094 M2b wave 4 stage 1, 2026-10-25.**
 Their cells now read `A`; the remaining eight are still `B *(A required)*`.
+
+**Two more of the eight were converted, and collapsed into a third row that
+was never on this list — RFC 094 M2b wave 4 stage 2, 2026-10-25.** The old
+set-allowed-scopes and set-post-logout-redirect-uris events are gone (neither
+is emitted by anything after this stage) and the consent-policy-changed event
+was never on this list at all, because it was never emitted by anything
+before this stage either. All three fields now commit as one event,
+`client.update_form`, Class A. The remaining six of the original twelve are
+still `B *(A required)*`.
 
 ## Coverage matrix
 
@@ -121,12 +131,22 @@ and `refresh_tokens::revoke_all_for_client_within_tx` in the same
 transaction as the audit append, atomic with each other and with it;
 enable is the one-write case and revokes nothing.
 
+**Stage 2 replaced two rows with one.** The old set-allowed-scopes and
+set-post-logout-redirect-uris events named two of the client-update form's
+three independently-committed fields (the third, a consent-policy-changed
+event, was declared in the inventory and never had a row here — it was
+emitted by nothing). `Database::class_a` appends exactly one event per call,
+so the three fields collapse into one sealed command and one event,
+`client.update_form` (C03; C04 and C09 are its sibling inventory rows, not
+separate commands — see `contracts/write-commands.toml`'s note on C03).
+Neither of the two old event-name strings is emitted by anything after this
+stage.
+
 | Event name | Operation | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
 | `client.create` | Create OIDC client | admin user id | new client id | — | B *(A required)* |
 | `client.update` | Update client basic info | admin user id | client id | — | B *(A required)* |
-| `client.set_allowed_scopes` | Set client allowed scopes | admin user id | client id | — | B *(A required)* |
-| `client.set_post_logout_redirect_uris` | Set post-logout URIs | admin user id | client id | — | B *(A required)* |
+| `client.update_form` | The client-update form: allowed scopes, post-logout redirect URIs and consent policy, one admin save (commands `C03`/`C04`/`C09`) | admin user id | client id | `allowed_scopes_count`, `post_logout_redirect_uris_count` (both required — counts, not the lists themselves: an unbounded caller-influenced list has no place in a hash-chained record), `consent_policy` (required) | A |
 | `client.disable` | Disable client; also revokes its refresh tokens (command `C05`) | admin user id | client id | reason (optional), `refresh_tokens_revoked` (required) | A |
 | `client.enable` | Re-enable client; revokes nothing (command `C21`) | admin user id | client id | — | A |
 | `client.delete` | Soft-delete client; also revokes its refresh tokens (command `C06`) | admin user id | client id | reason (optional), `refresh_tokens_revoked` (required) | A |

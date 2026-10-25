@@ -63,8 +63,7 @@ the administrator is asked to step up again.
 | `client.create` | Client created | Administrator registered a new OIDC client. |
 | `client.update` | Client updated | Administrator updated an OIDC client's configuration. |
 | `client.delete` | Client deleted | Administrator deleted an OIDC client. |
-| `client.set_allowed_scopes` | Client scopes updated | Administrator changed the allowed scopes for a client. |
-| `client.set_post_logout_redirect_uris` | — | Administrator changed the URIs a client may pass as `post_logout_redirect_uri` to `/oauth2/logout`. |
+| `client.update_form` | Client scopes, logout URIs and consent policy updated | Administrator saved the client-update form: allowed scopes, the URIs a client may pass as `post_logout_redirect_uri` to `/oauth2/logout`, and the consent-screen policy. All three commit together; the note carries the scope count, the URI count and the new consent policy, never the lists themselves. |
 | `client.disable` | — | Administrator disabled an OIDC client. All of its refresh tokens are revoked. The note carries the reason, if one was given. |
 | `client.enable` | — | Administrator re-enabled a previously disabled OIDC client. |
 | `client.rotate_secret` | — | Administrator generated a new secret for a confidential client; the stored secret hash is replaced. Not available for public clients. |

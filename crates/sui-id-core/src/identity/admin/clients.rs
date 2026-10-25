@@ -117,15 +117,25 @@ pub async fn create_client(
     })
 }
 
-/// Update the per-client scope policy. Empty string means "permit any".
-pub async fn set_client_allowed_scopes(
+/// Update the client-update form's three coordinated fields: allowed
+/// scopes, post-logout redirect URIs, and consent policy. RFC 094 M2b
+/// wave 4 stage 2 (C03, C04, C09): one sealed command, one transaction,
+/// one audit record for the whole form — see `sui_id_store::commands::
+/// update_client_form`'s own doc comment for why these three collapse
+/// into a single sealed command. Validation (scope token charset,
+/// redirect URI shape) happens here, before the sealed command runs,
+/// the same boundary every other admin use-case function in this file
+/// keeps.
+pub async fn update_client_form(
     db: &Database,
+    clock: &SharedClock,
     actor: &AdminActor,
     target: ClientId,
-    scopes: &str,
+    allowed_scopes: &str,
+    post_logout_redirect_uris: &[String],
+    consent_policy: sui_id_store::models::ConsentPolicy,
 ) -> CoreResult<()> {
-    let actor_id = actor.user_id();
-    for tok in scopes.split_whitespace() {
+    for tok in allowed_scopes.split_whitespace() {
         if !tok
             .chars()
             .all(|c| c == '!' || ('#'..='[').contains(&c) || (']'..='~').contains(&c))
@@ -135,46 +145,23 @@ pub async fn set_client_allowed_scopes(
             )));
         }
     }
-    clients::set_allowed_scopes(db, target, scopes)
-        .await
-        .map_err(|e| match e {
-            sui_id_store::StoreError::NotFound => CoreError::NotFound,
-            other => CoreError::from(other),
-        })?;
-    audit_ok(
-        db,
-        actor_id,
-        "client.set_allowed_scopes",
-        Some(target.to_string()),
-    )
-    .await;
-    Ok(())
-}
-
-/// Replace the `post_logout_redirect_uris` for a client.
-pub async fn set_client_post_logout_redirect_uris(
-    db: &Database,
-    actor: &AdminActor,
-    target: ClientId,
-    uris: &[String],
-) -> CoreResult<()> {
-    let actor_id = actor.user_id();
-    for uri in uris {
+    for uri in post_logout_redirect_uris {
         validate_redirect_uri(uri)?;
     }
-    clients::set_post_logout_redirect_uris(db, target, uris)
-        .await
-        .map_err(|e| match e {
-            sui_id_store::StoreError::NotFound => CoreError::NotFound,
-            other => CoreError::from(other),
-        })?;
-    audit_ok(
+    sui_id_store::commands::update_client_form(
         db,
-        actor_id,
-        "client.set_post_logout_redirect_uris",
-        Some(target.to_string()),
+        actor.user_id(),
+        target,
+        allowed_scopes.to_owned(),
+        post_logout_redirect_uris.to_vec(),
+        consent_policy,
+        clock.now(),
     )
-    .await;
+    .await
+    .map_err(|e| match e {
+        sui_id_store::StoreError::NotFound => CoreError::NotFound,
+        other => CoreError::from(other),
+    })?;
     Ok(())
 }
 

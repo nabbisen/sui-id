@@ -12,8 +12,8 @@ mod users;
 
 pub use clients::{
     CreateClientSpec, CreatedClient, create_client, delete_client, get_client, list_clients,
-    rotate_client_secret, set_client_allowed_scopes, set_client_disabled,
-    set_client_post_logout_redirect_uris, update_client, update_client_basic,
+    rotate_client_secret, set_client_disabled, update_client, update_client_basic,
+    update_client_form,
 };
 pub use signing_keys::{delete_signing_key, list_signing_keys, rotate_signing_key};
 pub use users::{

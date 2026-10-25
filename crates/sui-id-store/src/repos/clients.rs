@@ -227,6 +227,12 @@ pub async fn update_basic(
 }
 
 /// Replace the `allowed_scopes` policy for a client.
+///
+/// RFC 094 M2b wave 4 stage 2: the only production caller was the
+/// client-update form's handler, now converted to the sealed C03
+/// command (`set_allowed_scopes_within_tx`, below). This async form
+/// remains for `r095_m3_stage4b_enforce_matrix.rs`'s test seeding,
+/// unrelated to C03's own path.
 pub async fn set_allowed_scopes(db: &Database, id: ClientId, scopes: &str) -> StoreResult<()> {
     let scopes = scopes.to_owned();
     db.with_conn(move |conn| {
@@ -242,25 +248,49 @@ pub async fn set_allowed_scopes(db: &Database, id: ClientId, scopes: &str) -> St
     .await
 }
 
-/// Replace the `post_logout_redirect_uris` list for a client.
-pub async fn set_post_logout_redirect_uris(
-    db: &Database,
+/// The same update as [`set_allowed_scopes`], run inside a
+/// caller-supplied transaction. `commands::update_client_form` (C03) is
+/// the only sealed caller.
+pub fn set_allowed_scopes_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    id: ClientId,
+    scopes: &str,
+    now: DateTime<Utc>,
+) -> StoreResult<()> {
+    let n = tx.execute(
+        "UPDATE clients SET allowed_scopes = ?1, updated_at = ?2 WHERE id = ?3",
+        params![scopes, now, id.to_string()],
+    )?;
+    if n == 0 {
+        return Err(StoreError::NotFound);
+    }
+    Ok(())
+}
+
+/// The same update as the removed bare `set_post_logout_redirect_uris`,
+/// run inside a caller-supplied transaction. RFC 094 M2b wave 4 stage 2:
+/// the bare async form had exactly one caller (the client-update form's
+/// handler, through `sui-id-core`) and no test-seeding callers, so it is
+/// removed outright rather than kept alongside this sibling —
+/// confirmed by a full-workspace grep before deleting it, the discipline
+/// stage 1's near-miss established. `commands::update_client_form` (C03)
+/// is the only caller.
+pub fn set_post_logout_redirect_uris_within_tx(
+    tx: &rusqlite::Transaction<'_>,
     id: ClientId,
     uris: &[String],
+    now: DateTime<Utc>,
 ) -> StoreResult<()> {
     let json = serde_json::to_string(uris)?;
     require_valid_json::<Vec<String>>(&json, "clients.post_logout_redirect_uris")?;
-    db.with_conn(move |conn| {
-        let n = conn.execute(
-            "UPDATE clients SET post_logout_redirect_uris = ?1, updated_at = ?2 WHERE id = ?3",
-            params![json, Utc::now(), id.to_string()],
-        )?;
-        if n == 0 {
-            return Err(StoreError::NotFound);
-        }
-        Ok(())
-    })
-    .await
+    let n = tx.execute(
+        "UPDATE clients SET post_logout_redirect_uris = ?1, updated_at = ?2 WHERE id = ?3",
+        params![json, now, id.to_string()],
+    )?;
+    if n == 0 {
+        return Err(StoreError::NotFound);
+    }
+    Ok(())
 }
 
 pub async fn set_disabled(db: &Database, id: ClientId, disabled: bool) -> StoreResult<()> {
@@ -370,6 +400,31 @@ pub async fn update_consent_policy(
         Ok(())
     })
     .await
+}
+
+/// The same update as [`update_consent_policy`], run inside a
+/// caller-supplied transaction. `commands::update_client_form` (C03) is
+/// the only sealed caller. Unlike [`update_consent_policy`] (kept
+/// unchanged for `r120.rs`'s test seeding), this sibling checks the
+/// affected-row count: RFC 094 M2b wave 4 stage 1's review found the
+/// missing-row case unguarded in `set_disabled_within_tx` (a disable of
+/// a nonexistent client returned `Ok` and wrote an audit record for a
+/// change that never happened) and asked that every `_within_tx`
+/// primitive this stage adds check it from the start.
+pub fn update_consent_policy_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    id: ClientId,
+    policy: crate::models::ConsentPolicy,
+    now: chrono::DateTime<chrono::Utc>,
+) -> StoreResult<()> {
+    let n = tx.execute(
+        "UPDATE clients SET consent_policy = ?1, updated_at = ?2 WHERE id = ?3",
+        rusqlite::params![policy.as_str(), now, id.to_string()],
+    )?;
+    if n == 0 {
+        return Err(StoreError::NotFound);
+    }
+    Ok(())
 }
 
 /// Update the client secret hash (RFC 047 — secret rotation).
