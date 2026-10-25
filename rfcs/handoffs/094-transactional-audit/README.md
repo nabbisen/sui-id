@@ -15,11 +15,16 @@
 > wrongly**: four of its six leave no audit record at all on the production
 > path, not "already atomic" — corrected in the scope document's §B′.
 >
-> **`0.84.0`'s scope is complete and its preparation is dispatched** —
+> **`0.84.0` is RELEASED AND PUBLISHED, 2026-10-25.** Tag `0.84.0` at
+> `0ecacf5`; Level B on that exact commit (`workflow_dispatch`
+> `40145716840`, 27 jobs, 0 skipped); `Security audit` green on the same
+> commit (`40145718700`); six crates on crates.io. Preparation dispatched
+> and returned the same day —
 > [`release-0.84.0-preparation-2026-10-25.md`](release-0.84.0-preparation-2026-10-25.md).
-> Reading the `Security audit` lane before dispatching it surfaced
+> Reading the `Security audit` lane **before** dispatching it surfaced
 > RUSTSEC-2026-0385, fixed in `5ed327d` (`ctutils` 0.4.3 → 0.4.5) and
-> carried in this release.
+> carried in this release; the checklist now requires that reading as
+> step 0 rather than only before the tag.
 > **`0.84.0` does not close M2b**: waves 3 and 4 and the authority switch
 > remain after it.
 
