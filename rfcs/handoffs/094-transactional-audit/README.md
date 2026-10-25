@@ -1,13 +1,20 @@
 # RFC 094 developer handoff
 
-> **`0.85.0` is scoped and awaiting authorization** —
-> [`cycle-g-and-0.85.0-2026-10-25.md`](cycle-g-and-0.85.0-2026-10-25.md).
-> Proposal: **wave 4 complete** (C01–C10, C21, C22, K02, K03) — nine live
-> best-effort appends through one helper, the largest concentration of
-> risk left and the only remaining work with no cross-RFC dependency.
-> That note also records a **dependency cycle around wave 3**: RFC 094
-> `:611-613` makes 096-B2 wait on wave 3 while the inventory makes wave
-> 3's semantics wait on 096-B2. It needs a ruling; it does not block
+> **`0.85.0` is authorized** (2026-10-24 scope,
+> [`cycle-g-and-0.85.0-2026-10-25.md`](cycle-g-and-0.85.0-2026-10-25.md);
+> authorized 2026-10-25): **wave 4 complete**, C01–C10, C21, C22, K02,
+> K03. Three stages —
+> [`m2b-0.85.0-stage-plan-2026-10-25.md`](m2b-0.85.0-stage-plan-2026-10-25.md).
+> **Stage 1 (C05, C21, C06) is dispatched**, and its dispatch is **held in
+> `.git-exclude/staging/` rather than here**: it describes an unfixed
+> weakness in released versions, which `.github/SECURITY.md` keeps out of
+> the public record until it is closed. It moves into this directory when
+> stage 1 lands. G20's declared set moves 34 → 37 → 42 → 48 across the
+> three stages.
+>
+> The scope note also records a **dependency cycle around wave 3**: RFC
+> 094 `:611-613` makes 096-B2 wait on wave 3 while the inventory makes
+> wave 3's semantics wait on 096-B2. It needs a ruling; it does not block
 > `0.85.0`.
 
 > **`0.84.0` is M2b's settings area and is authorized** (2026-10-24):

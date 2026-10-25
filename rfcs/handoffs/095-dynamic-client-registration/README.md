@@ -24,7 +24,20 @@ architect's to make, not dispatched**:
 idling the implementation role behind a ruling it does not need would cost
 the cycle nothing but time. The order is now 2 → 3 → **5** → 4 → 6.
 
-> **M3's remaining closure route is measured** —
+> **M3's closure assessment is written** —
+> [`m3-closure-assessment-2026-10-25.md`](m3-closure-assessment-2026-10-25.md),
+> 2026-10-25, on the route measured in
+> [`m3-closure-route-2026-10-25.md`](m3-closure-route-2026-10-25.md). No
+> instance ran a released build in the exposed range; the assessment
+> narrows what remains to one question, because the ambiguity window is
+> bounded by **commits**, not tags, and in-window builds from source were
+> certainly run here. What bounds it is the **registration-token
+> precondition**, verified at both ends of the window: a client cannot
+> self-register unless an operator first minted one. That is a
+> precondition, not a record, so its absence is not the inadmissible
+> inference RFC 095 refuses.
+>
+> **The earlier route note**, for the measurement behind it —
 > [`m3-closure-route-2026-10-25.md`](m3-closure-route-2026-10-25.md),
 > 2026-10-25. The dev team can test the command locally and already has;
 > they cannot produce the evidence, because it is a statement about a
