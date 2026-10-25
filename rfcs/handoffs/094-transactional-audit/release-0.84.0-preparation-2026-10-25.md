@@ -27,8 +27,13 @@ settings writes that previously left a partial trace or none at all (stage
 timing-and-response oracle — and the `ctutils` bump that closes
 RUSTSEC-2026-0385.
 
-**It does not finish M2b.** Waves 3 and 4 — the nine best-effort sites and
-the authority switch — are `0.85.0` and later. Do not write anything in
+**It does not finish M2b.** Wave 3 (federation configuration, C16–C18 and
+C23 — three `target-legacy` rows and one `target-absent`), wave 4 (client
+administration — **nine** best-effort appends through one helper), and the
+authority switch after them are `0.85.0` and later. *Corrected 2026-10-25:
+an earlier draft of this paragraph attached the nine to waves 3 and 4
+jointly; they are wave 4's alone, and wave 3 is unbuilt rather than
+mis-built. See the scope document's §B table.* Do not write anything in
 the `CHANGELOG` or elsewhere that reads as M2b being complete.
 
 ## 1 — the version bump
