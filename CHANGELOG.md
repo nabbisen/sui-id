@@ -144,8 +144,11 @@ response, persistence of the three metadata fields, the authentication/grant
 matrix, browser presentation, and the read-only legacy-candidate report.**
 This release does not close M3 — closure additionally needs a durable
 disposition of every candidate `sui-id admin legacy-dynamic-candidates`
-reports, and the architect's acceptance of that evidence, neither of which
-is in this cut.
+reports, and sign-off on that evidence by the approver RFC 095's closure
+field names, on the architect's assessment of it — neither of which is in
+this cut. *Corrected 2026-10-25: this entry originally said "the
+architect's acceptance", inverting that field. The architect assesses the
+evidence and is not the one who signs off on it.*
 
 ### Added
 

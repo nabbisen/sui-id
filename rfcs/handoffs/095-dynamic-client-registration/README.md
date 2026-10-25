@@ -24,6 +24,15 @@ architect's to make, not dispatched**:
 idling the implementation role behind a ruling it does not need would cost
 the cycle nothing but time. The order is now 2 → 3 → **5** → 4 → 6.
 
+> **M3's remaining closure route is measured** —
+> [`m3-closure-route-2026-10-25.md`](m3-closure-route-2026-10-25.md),
+> 2026-10-25. The dev team can test the command locally and already has;
+> they cannot produce the evidence, because it is a statement about a
+> deployment. The exposed version range is **`0.76.3`–`0.79.0`**, and an
+> instance that never ran one of those builds cannot hold a candidate —
+> which is a different claim from "zero candidates" and is admissible.
+> One fact decides whether M3 closes today.
+
 > **`0.83.0` is authorized and its preparation is dispatched** —
 > [`../096-upstream-oidc-federation/release-0.83.0-preparation-2026-10-22.md`](../096-upstream-oidc-federation/release-0.83.0-preparation-2026-10-22.md).
 > Every stage has landed: 2, 3, 4a, 4b, 5 and 6, each Level B 27/0. The

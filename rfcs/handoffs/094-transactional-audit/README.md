@@ -1,5 +1,15 @@
 # RFC 094 developer handoff
 
+> **`0.85.0` is scoped and awaiting authorization** —
+> [`cycle-g-and-0.85.0-2026-10-25.md`](cycle-g-and-0.85.0-2026-10-25.md).
+> Proposal: **wave 4 complete** (C01–C10, C21, C22, K02, K03) — nine live
+> best-effort appends through one helper, the largest concentration of
+> risk left and the only remaining work with no cross-RFC dependency.
+> That note also records a **dependency cycle around wave 3**: RFC 094
+> `:611-613` makes 096-B2 wait on wave 3 while the inventory makes wave
+> 3's semantics wait on 096-B2. It needs a ruling; it does not block
+> `0.85.0`.
+
 > **`0.84.0` is M2b's settings area and is authorized** (2026-10-24):
 > S01–S09, wave 2 before wave 1, because RFC 094's listed wave order is
 > close to the reverse of the risk order —
