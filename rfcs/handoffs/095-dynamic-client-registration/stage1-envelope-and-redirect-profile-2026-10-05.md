@@ -1,6 +1,6 @@
 # RFC 095 M3 stage 1 — the request envelope and the redirect profile
 
-**RFC status: Accepted** (`rfcs/accepted/095-dynamic-client-registration-transaction.md`).
+**RFC status: Accepted** (`rfcs/done/095-dynamic-client-registration-transaction.md`).
 **Entry gate: open.** All six conditions met; condition 4 was discharged and the
 discharge approved by `@nabbisen` on 2026-10-05. Implementation may start.
 

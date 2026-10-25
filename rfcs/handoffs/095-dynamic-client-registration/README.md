@@ -1,7 +1,18 @@
 # RFC 095 developer handoff
 
-**Governing RFC:** [RFC 095](../../accepted/095-dynamic-client-registration-transaction.md)
+**Governing RFC:** [RFC 095](../../done/095-dynamic-client-registration-transaction.md)
 **Audience:** the mid-capability model only after RFC re-acceptance and prerequisite evidence
+
+> ## **M3 is CLOSED — 2026-10-25.**
+> RFC 095 is **Implemented (v0.83.0)**, now in
+> [`rfcs/done/`](../../done/095-dynamic-client-registration-transaction.md).
+> `ROADMAP.md`'s M3 row is closed and **risk R7 is discharged**, with the
+> precondition chain written into the register rather than a verdict.
+> **`0.85.0`'s version summary owes the public record one clause saying
+> so** — `0.83.0`'s summary still states that closure is outstanding; the
+> requirement and its two wording bounds are in that release's stage plan.
+> **Everything below this banner is history.**
+
 **Stages 1 and 1b have both landed** — stage 1 `78a2dec`, stage 1b `99f83bb`
 ([`stage1b-loopback-port-matching-2026-10-05.md`](stage1b-loopback-port-matching-2026-10-05.md),
 the one redirect-corpus row stage 1 deferred). *This line said 1b "is open"
@@ -15,16 +26,20 @@ and four kinds of verification. **Stage 2 landed** `7cc1488` (Level B, 27 jobs, 
 [`stage2-the-field-rules-2026-10-20.md`](stage2-the-field-rules-2026-10-20.md).
 **Stage 3 landed** `2bdc6af` (Level B, 27 jobs, 0 skipped) —
 [`stage3-the-registration-response-2026-10-21.md`](stage3-the-registration-response-2026-10-21.md).
-**Stage 4's design is written and awaiting one ruling that is not the
-architect's to make, not dispatched**:
+**Stage 4 landed in two parts** — 4a `d99b14a`, 4b `1f75013`, each Level B
+27/0 — after the ruling it waited on arrived and its design was rewritten
+(§E withdrawn):
 [`stage4-design-the-authentication-grant-matrix-2026-10-21.md`](stage4-design-the-authentication-grant-matrix-2026-10-21.md).
+*This line said stage 4 was "awaiting one ruling … not dispatched" until
+2026-10-25, well after it had landed — the second time this file has gone
+stale the same way.*
 **Stage 5 landed** `a8583e4` (Level B, 27 jobs, 0 skipped) —
 [`stage5-browser-presentation-2026-10-21.md`](stage5-browser-presentation-2026-10-21.md)
 — taken ahead of stage 4 because it depends on nothing stage 4 settles, and
 idling the implementation role behind a ruling it does not need would cost
 the cycle nothing but time. The order is now 2 → 3 → **5** → 4 → 6.
 
-> **M3's closure assessment is complete and awaits acceptance** —
+> **The closure assessment** —
 > [`m3-closure-assessment-2026-10-25.md`](m3-closure-assessment-2026-10-25.md),
 > 2026-10-25, on the route measured in
 > [`m3-closure-route-2026-10-25.md`](m3-closure-route-2026-10-25.md).

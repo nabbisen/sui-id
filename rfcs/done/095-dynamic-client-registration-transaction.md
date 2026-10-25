@@ -1,6 +1,9 @@
 # RFC 095 — Dynamic Client Registration Transaction and Validation
 
-**Status.** Accepted
+**Status.** Implemented (v0.83.0)
+**Closure reviewed on.** 2026-10-25
+**Closure approved by.** `@nabbisen` (accountable owner), 2026-10-25: "Accepted. No actual user affected by it." The closure assessment was written by **the architect, which wrote this RFC**, and is therefore **not** independent of it. That split is this RFC's own `Closure prerequisites` field, approved 2026-08-27 and re-scoped by RFC 129 on 2026-10-01: the architect assesses, and the accountable approver named one line above signs off. The implementation of every stage was the mid-capability model's and was gated at Level B per stage.
+**Closure evidence.** [M3 closure assessment, 2026-10-25](../handoffs/095-dynamic-client-registration/m3-closure-assessment-2026-10-25.md), on the measurement in [the closure route note, 2026-10-25](../handoffs/095-dynamic-client-registration/m3-closure-route-2026-10-25.md). **No "zero candidates" claim was made**: the argument is a chain of preconditions — the only production path to a dynamic registration required a `client_registration_token` at every one of the nine commits in the ambiguity window, no open-registration knob has ever existed, no second writer of `RegistrationSource::Dynamic` exists, and no such token was ever minted on a surviving database — so no step infers absence from a missing audit row. Bounded to deployments `@nabbisen` controls; third-party operators are addressed by [the upgrade guide](../../docs/src/guides/upgrade.md).
 **Accepted on.** 2026-08-27
 **Approved by.** `@nabbisen`
 **Independent design review.** [Correction review 2026-08-26](../handoffs/094-transactional-audit/094-095-096-correction-review-2026-08-26.md), by the implementation role

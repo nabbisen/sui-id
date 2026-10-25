@@ -13,7 +13,7 @@ code.
 
 ## A — what RFC 095 actually requires
 
-`rfcs/accepted/095-dynamic-client-registration-transaction.md:17`, the
+`rfcs/done/095-dynamic-client-registration-transaction.md:17`, the
 closure field, verbatim on the two outstanding items:
 
 > every `legacy_unstamped_dynamic_candidate` has a durably recorded owner

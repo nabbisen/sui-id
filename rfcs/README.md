@@ -67,7 +67,7 @@ slot is `104`). One **parallel namespace** also exists:
 |---|---|---|---|
 | 093 | [Build, Toolchain, and Release-Gate Contract](./done/093-build-toolchain-release-gates.md) | M1a, M1b | the mid-capability model |
 | 094 | [Transactional Audit Completeness and Typed Event Registry](./accepted/094-transactional-audit-registry.md) | M2a, M2b | the mid-capability model (implementation and testing agent) |
-| 095 | [Dynamic Client Registration Transaction and Validation](./accepted/095-dynamic-client-registration-transaction.md) | M3 | the mid-capability model (implementation and testing agent) |
+| 095 | [Dynamic Client Registration Transaction and Validation](./done/095-dynamic-client-registration-transaction.md) | **Implemented, M3 closed 2026-10-25** | the mid-capability model (implementation and testing agent) |
 | 096 | [Upstream OIDC Federation Validation](./accepted/096-upstream-oidc-federation-validation.md) | M4-A, M4-B | the mid-capability model (implementation and testing agent) |
 | 098 | [Documentation Authority and Reconciliation](./done/098-documentation-authority-reconciliation.md) | M5 | mid-capability model |
 | 139 | [Getting Started leaves its warnings in other documents](./accepted/139-getting-started-leaves-its-warnings-elsewhere.md) | cycle C — documentation only | the mid-capability model (implementation and testing agent) |

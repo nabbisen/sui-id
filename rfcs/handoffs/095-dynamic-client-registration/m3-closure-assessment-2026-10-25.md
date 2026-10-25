@@ -135,17 +135,35 @@ project owes them. Not that the report would have found them. The claim
 is bounded to deployments you control, which is what RFC 095's field asks
 for.
 
-## E — what closes on acceptance
+## E — what closed on acceptance
 
-Mine to execute, once the evidence is accepted. Nothing in this list is
-started, and none of it should be until then:
+**Accepted 2026-10-25** — *"Accepted. No actual user affected by it."* —
+and executed the same day:
 
-1. `rfcs/accepted/095-dynamic-client-registration-transaction.md` → status
-   **Implemented**, with the closure evidence cited by path.
-2. `ROADMAP.md`'s M3 row and the cycle E row, which both currently say M3
-   does not close with `0.83.0`.
-3. A `CHANGELOG` entry under `[Unreleased]`, shipping with `0.85.0`,
-   stating what closed and on what basis — including that no
-   zero-candidates claim was made, since the public record should not
-   read as though one was.
-4. `rfcs/handoffs/095-dynamic-client-registration/README.md`.
+1. **Done.** The RFC moved `rfcs/accepted/` → `rfcs/done/`, status
+   **Implemented (v0.83.0)**, with `Closure reviewed on`,
+   `Closure approved by` and `Closure evidence` added — the three fields
+   G11 requires of a security-sensitive RFC in `done/`. Eleven references
+   to the old path re-pointed.
+2. **Done.** `ROADMAP.md`: the M3 milestone row marked closed, the cycle E
+   row's open statement resolved, and **risk R7 discharged**, with the
+   precondition chain written into the register so the discharge can be
+   re-tested rather than re-argued.
+3. **Changed from what this section first proposed.** It said a standalone
+   `CHANGELOG` entry. Measured since: **milestone closures have never had
+   one** — M2a closed 2026-10-03 and left none — and the `CHANGELOG` is
+   for changes, which a closure is not. But `0.83.0`'s own **version
+   summary** states that M3 does not close and that a candidate
+   disposition is outstanding, so the public record does carry an open
+   loop, and it was opened in a summary. It is closed in the same place: a
+   required clause in `0.85.0`'s summary, recorded in that release's stage
+   plan so the preparation round cannot miss it. No new `CHANGELOG`
+   convention is invented for a non-change.
+4. **Done.** `rfcs/handoffs/095-dynamic-client-registration/README.md`.
+
+**One limit on the public wording, deliberately.** *"No actual user
+affected by it"* is true of the deployments covered by this assessment. It
+is **not** a claim this project can make about third-party operators who
+installed `0.76.3`–`0.79.0`, since nothing here can see their databases.
+The `0.85.0` summary clause therefore states what was established and
+about whom, and does not generalise.

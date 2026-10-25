@@ -2,7 +2,7 @@
 
 **Written.** 2026-10-20 JST, by the architect.
 **Authorized.** `0.83.0` is M3's remaining work — accepted 2026-10-20.
-**Governing RFC.** [RFC 095](../../accepted/095-dynamic-client-registration-transaction.md),
+**Governing RFC.** [RFC 095](../../done/095-dynamic-client-registration-transaction.md),
 **Accepted**; entry gate **open** since 2026-10-05, six of six conditions met.
 **Normative source.** [`metadata-validation.md`](metadata-validation.md) — 127
 lines, seven sections. This plan maps every remaining one to a stage.
