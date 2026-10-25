@@ -5,12 +5,14 @@
 > authorized 2026-10-25): **wave 4 complete**, C01–C10, C21, C22, K02,
 > K03. Three stages —
 > [`m2b-0.85.0-stage-plan-2026-10-25.md`](m2b-0.85.0-stage-plan-2026-10-25.md).
-> **Stage 1 (C05, C21, C06) is dispatched**, and its dispatch is **held in
-> `.git-exclude/staging/` rather than here**: it describes an unfixed
-> weakness in released versions, which `.github/SECURITY.md` keeps out of
-> the public record until it is closed. It moves into this directory when
-> stage 1 lands. G20's declared set moves 34 → 37 → 42 → 48 across the
-> three stages.
+> **Stage 1 (C05, C21, C06) landed** `05e0050` (Level B, 27 jobs, 0
+> skipped); G20's declared set is at 37, moving to 42 → 48 across the two
+> remaining stages. Its dispatch stays **held in `.git-exclude/staging/`**
+> until `0.85.0` is released, not merely until the stage landed: it states
+> the consequence of a weakness that is fixed in the tree but not yet in
+> any published version, and `.github/SECURITY.md` reserves that
+> sequencing. **Stage 2 (C07, C08, C22, K02, K03) is next and not yet
+> dispatched.**
 >
 > **The wave-3 dependency cycle is ruled** (2026-10-25): RFC 094 owns
 > whether a write and its record commit together, RFC 096 owns what the
