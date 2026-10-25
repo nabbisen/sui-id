@@ -11,8 +11,17 @@
 > until `0.85.0` is released, not merely until the stage landed: it states
 > the consequence of a weakness that is fixed in the tree but not yet in
 > any published version, and `.github/SECURITY.md` reserves that
-> sequencing. **Stage 2 (C07, C08, C22, K02, K03) is next and not yet
-> dispatched.**
+> sequencing.
+>
+> **Stages 2–4 were re-measured before stage 2 was dispatched, and the
+> original split was wrong** — stage plan §C. Nine was the number of
+> `audit_ok`/`audit_with_note` **call sites**, not of commands with that
+> shape: two of wave 4's commands emit **no record at all** (C09, C08),
+> three have **no live write** (C10, C22, K02), and the client-update
+> form is a second compound transition. **Stage 2 is dispatched** —
+> [`m2b-0.85.0-stage2-c03-c04-c09-2026-10-25.md`](m2b-0.85.0-stage2-c03-c04-c09-2026-10-25.md):
+> the form's three writes in one transaction. Stage 3 is the remaining
+> live single writes, stage 4 the three dormant rows.
 >
 > **The wave-3 dependency cycle is ruled** (2026-10-25): RFC 094 owns
 > whether a write and its record commit together, RFC 096 owns what the
