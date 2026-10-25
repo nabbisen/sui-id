@@ -1,15 +1,20 @@
 # M3 closure — the architect's assessment of the evidence
 
-> ## Whose turn it is: **yours**, for one narrower question than the one I asked, and then for acceptance.
+> ## Whose turn it is: **yours**, for acceptance. Nothing else is outstanding.
 > **`@nabbisen`, 2026-10-25**, asked whether any instance of his ever ran
-> `0.76.3`–`0.79.0`: *"No."*
+> `0.76.3`–`0.79.0`: *"No."* Asked whether a `client_registration_token`
+> was ever minted on any surviving database of his, including a local
+> development one, while running an in-window build: *"No."*
+> **Both answers are the closure evidence this file records.** The
+> residual I left open in §B is now measured and closed; the assessment in
+> §D is unconditional.
 
 RFC 095 `:17` makes the assessment of the closure evidence the architect's
 and the acceptance his. This is the assessment. It is adversarial by
 instruction, so most of it is spent trying to break the claim rather than
 restating it.
 
-**Measured 2026-10-25** against `bac8fb0`.
+**Measured 2026-10-25** against `7a36998`.
 
 ## A — what the statement establishes, and what it does not
 
@@ -49,11 +54,32 @@ Verified at **both ends of the window**, not inferred from today's code:
   *"Open registration (no token required) is a future knob defaulting
   off."*
 
-I did **not** re-verify each of the seven intermediate commits that
-touched the handler inside the window, so I cannot exclude a transient
-removal. I am recording that rather than rounding it away; it matters
-only in combination with the question below, and only if the answer to
-that is yes.
+**Corrected 2026-10-25, and the correction matters.** An earlier revision
+of this file said the seven intermediate commits mattered *"only if the
+answer to §C is yes"*. That is backwards. The registration-token argument
+is what the second answer rests on, so a transient removal of the token
+gate would defeat it **precisely when no token was ever minted** — a
+registration could then have succeeded without one. The residual had to be
+closed, not deferred. It is:
+
+Every commit touching the handler between the window's endpoints, checked
+individually rather than inferred — `930513b`, `71bca90`, `7813b35`,
+`ff19f05`, `dfd2af0`, `be30fbf`, `901e651`, plus the two endpoints
+themselves. **All nine retain the gate.** Read in full at `dfd2af0`, the
+longest-lived state: `extract_bearer_token` runs first, a missing token
+returns `401` and an invalid one `400`, both **before any body validation
+and before any client row is built**.
+
+Two further things that would break the chain, and do not:
+
+- **No "open registration" knob has ever existed.** `git log -S
+  "open_registration" --all` returns nothing across the whole history, so
+  the handler comment's *"a future knob defaulting off"* describes
+  something unbuilt rather than something off by default.
+- **No second writer.** At the window's end, the only non-test
+  construction of `RegistrationSource::Dynamic` is the handler itself
+  (`dynamic_register.rs:199`). There is no other production path to a
+  dynamically registered client.
 
 **What this buys.** A `legacy_unstamped_dynamic_candidate` can only exist
 on a database where an operator first **minted a client registration
@@ -64,40 +90,43 @@ record, so its absence is not subject to the incompleteness that makes a
 route can close M3 at all**: the RFC refuses inference from missing
 evidence, and this is not inference from missing evidence.
 
-## C — the one question left
+## C — the chain, stated as one argument
 
-**Was a `client_registration_token` ever minted on any database of yours
-that still exists — including a local development database — while
-running a build from inside the window?**
+Answered 2026-10-25: no `client_registration_token` was ever minted on any
+surviving database, local development ones included. The argument that
+closes M3 is therefore:
 
-If **no**: the disposition set is empty by construction, on a precondition
-rather than on a silent report, and the assessment below stands as
-written.
+1. A `legacy_unstamped_dynamic_candidate` exists only where a **dynamic
+   registration succeeded**.
+2. The only production path to one is `POST /oauth2/register` through
+   `dynamic_register` — no second writer of
+   `RegistrationSource::Dynamic`, §B.
+3. That handler required a valid `client_registration_token` at **every
+   commit in the window**, returning early before any client row is
+   built — §B, nine commits checked individually.
+4. No such token was ever minted on a surviving database.
+5. **Therefore no surviving database can hold a candidate.**
 
-If **yes**, for any database still in existence: run, on that machine,
-against that database —
-
-```
-sui-id admin legacy-dynamic-candidates --config <that instance's config>
-```
-
-— read-only, no elevated privilege, and every candidate it lists then
-takes one of RFC 095's three dispositions. I will dispatch the disposal
-rehearsal at that point, not before.
-
-A database that no longer exists needs no disposition; there is nothing
-to adjudicate and nothing to carry forward. Say so and I will record it
-that way.
+Every step is a property of the code or of deployment history. **No step
+is an inference from the absence of an audit row**, which is the one move
+RFC 095's closure field refuses.
 
 ## D — my assessment
 
-**Conditional on §C being "no": the closure evidence is sound, and I
-assess it as sufficient.** The reasoning does not depend on the audit
-log's completeness, which is the specific defect RFC 095's prohibition
-exists to guard against. It depends on two measured facts — the exposed
-window's boundaries, and the registration-token precondition holding at
-both of them — plus one statement of deployment history that only you can
-give.
+**The closure evidence is sound, and I assess it as sufficient.** The
+reasoning nowhere depends on the audit log's completeness, which is the
+specific defect RFC 095's prohibition exists to guard against. It rests
+on three measured facts — the exposed window's boundaries, the
+registration-token gate holding at every one of the nine commits inside
+it, and the absence of any second writer or open-registration knob — plus
+two statements of deployment history that only you can give, both now
+given.
+
+**What would overturn it**, recorded so this can be re-tested rather than
+re-argued: a surviving database of yours on which a registration token
+was minted; a production path to `RegistrationSource::Dynamic` that is
+not `dynamic_register`; or a build run here from a branch that never
+reached `main`, since every commit I checked is reachable from it.
 
 **What I am not claiming.** Not that no candidate exists anywhere: third
 party operators who ran `0.76.3`–`0.79.0` with a registration token minted
@@ -108,7 +137,8 @@ for.
 
 ## E — what closes on acceptance
 
-Mine to execute, once §C is answered and the evidence accepted:
+Mine to execute, once the evidence is accepted. Nothing in this list is
+started, and none of it should be until then:
 
 1. `rfcs/accepted/095-dynamic-client-registration-transaction.md` → status
    **Implemented**, with the closure evidence cited by path.
@@ -119,5 +149,3 @@ Mine to execute, once §C is answered and the evidence accepted:
    zero-candidates claim was made, since the public record should not
    read as though one was.
 4. `rfcs/handoffs/095-dynamic-client-registration/README.md`.
-
-Nothing in that list is started.

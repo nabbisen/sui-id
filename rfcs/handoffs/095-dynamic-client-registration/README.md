@@ -24,18 +24,20 @@ architect's to make, not dispatched**:
 idling the implementation role behind a ruling it does not need would cost
 the cycle nothing but time. The order is now 2 → 3 → **5** → 4 → 6.
 
-> **M3's closure assessment is written** —
+> **M3's closure assessment is complete and awaits acceptance** —
 > [`m3-closure-assessment-2026-10-25.md`](m3-closure-assessment-2026-10-25.md),
 > 2026-10-25, on the route measured in
-> [`m3-closure-route-2026-10-25.md`](m3-closure-route-2026-10-25.md). No
-> instance ran a released build in the exposed range; the assessment
-> narrows what remains to one question, because the ambiguity window is
-> bounded by **commits**, not tags, and in-window builds from source were
-> certainly run here. What bounds it is the **registration-token
-> precondition**, verified at both ends of the window: a client cannot
-> self-register unless an operator first minted one. That is a
-> precondition, not a record, so its absence is not the inadmissible
-> inference RFC 095 refuses.
+> [`m3-closure-route-2026-10-25.md`](m3-closure-route-2026-10-25.md).
+> The argument is a chain of preconditions, not an inference from a
+> missing audit row — which is the one move RFC 095's closure field
+> refuses. A candidate requires a successful dynamic registration;
+> the only production path to one is `dynamic_register`, which required a
+> `client_registration_token` at **every one of the nine commits in the
+> ambiguity window**, checked individually rather than at the endpoints
+> only; no open-registration knob has ever existed; and no such token was
+> ever minted on a surviving database. **Nothing further is outstanding
+> on the architect's side**; §E lists what closes on acceptance and none
+> of it is started.
 >
 > **The earlier route note**, for the measurement behind it —
 > [`m3-closure-route-2026-10-25.md`](m3-closure-route-2026-10-25.md),
