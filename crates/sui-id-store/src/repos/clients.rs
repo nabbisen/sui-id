@@ -277,6 +277,28 @@ pub async fn set_disabled(db: &Database, id: ClientId, disabled: bool) -> StoreR
     .await
 }
 
+/// RFC 094 M2b wave 4 stage 1: the same update as [`set_disabled`], run
+/// inside a caller-supplied transaction. `commands::disable_client`/
+/// `commands::enable_client` are the only sealed callers; [`set_disabled`]
+/// remains for test seeding unrelated to either command's own path (it
+/// has callers across several e2e suites that only need a client in a
+/// given state, not the audit record).
+pub fn set_disabled_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    id: ClientId,
+    disabled: bool,
+    now: DateTime<Utc>,
+) -> StoreResult<()> {
+    let n = tx.execute(
+        "UPDATE clients SET is_disabled = ?1, updated_at = ?2 WHERE id = ?3",
+        params![disabled as i64, now, id.to_string()],
+    )?;
+    if n == 0 {
+        return Err(StoreError::NotFound);
+    }
+    Ok(())
+}
+
 pub async fn soft_delete(db: &Database, id: ClientId) -> StoreResult<()> {
     db.with_conn(move |conn| {
         let n = conn.execute(
@@ -289,6 +311,25 @@ pub async fn soft_delete(db: &Database, id: ClientId) -> StoreResult<()> {
         Ok(())
     })
     .await
+}
+
+/// RFC 094 M2b wave 4 stage 1: the same update as [`soft_delete`], run
+/// inside a caller-supplied transaction. `commands::delete_client` is
+/// the only sealed caller; [`soft_delete`] remains for test seeding, same
+/// reasoning as [`set_disabled_within_tx`]'s doc comment.
+pub fn soft_delete_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    id: ClientId,
+    now: DateTime<Utc>,
+) -> StoreResult<()> {
+    let n = tx.execute(
+        "UPDATE clients SET is_deleted = 1, is_disabled = 1, updated_at = ?1 WHERE id = ?2",
+        params![now, id.to_string()],
+    )?;
+    if n == 0 {
+        return Err(StoreError::NotFound);
+    }
+    Ok(())
 }
 
 /// Patch a client's `secret_hash` to a caller-supplied value.

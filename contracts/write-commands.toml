@@ -589,23 +589,27 @@ test_id = "`a_c04_logout_uris`"
 id = "C05"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
+sealed = true
 owner = "Disable client"
-rationale = "`client.disable`"
-mutation_surface = "`clients::set_disabled(true)`"
-files = ["crates/sui-id-store/src/repos/clients.rs"]
+rationale = "`client.disable`, with required `refresh_tokens_revoked` (the disable and the revoke now commit together, RFC 094 M2b wave 4 stage 1) and optional `reason`"
+mutation_surface = "`clients::set_disabled_within_tx` plus `refresh_tokens::revoke_all_for_client_within_tx` (via `commands::disable_client`)"
+files = ["crates/sui-id-store/src/repos/clients.rs", "crates/sui-id-store/src/repos/refresh_tokens.rs"]
 test_id = "`a_c05_disable`"
+event = ["client.disable"]
+descriptor = ["C05_DISABLED"]
 
 [[command]]
 id = "C06"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
+sealed = true
 owner = "Soft-delete client"
-rationale = "`client.delete`"
-mutation_surface = "`clients::soft_delete` plus token revocation"
-files = ["crates/sui-id-store/src/repos/clients.rs"]
+rationale = "`client.delete`, with required `refresh_tokens_revoked` (the soft-delete and the revoke now commit together, RFC 094 M2b wave 4 stage 1) and optional `reason`"
+mutation_surface = "`clients::soft_delete_within_tx` plus `refresh_tokens::revoke_all_for_client_within_tx` (via `commands::delete_client`)"
+files = ["crates/sui-id-store/src/repos/clients.rs", "crates/sui-id-store/src/repos/refresh_tokens.rs"]
 test_id = "`a_c06_delete`"
+event = ["client.delete"]
+descriptor = ["C06_DELETED"]
 
 [[command]]
 id = "C07"
@@ -767,12 +771,14 @@ test_id = "`a_c20_link_delete`"
 id = "C21"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
+sealed = true
 owner = "Enable client"
-rationale = "`client.enable`"
-mutation_surface = "`clients::set_disabled(false)`"
+rationale = "`client.enable`, no attributes -- enabling revokes nothing, unlike disable and delete (RFC 094 M2b wave 4 stage 1)"
+mutation_surface = "`clients::set_disabled_within_tx` (via `commands::enable_client`)"
 files = ["crates/sui-id-store/src/repos/clients.rs"]
 test_id = "`a_c21_enable`"
+event = ["client.enable"]
+descriptor = ["C21_ENABLED"]
 
 [[command]]
 id = "C22"

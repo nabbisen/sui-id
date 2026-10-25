@@ -302,9 +302,16 @@ pub async fn clients_delete(
     }
     let target = ClientId::from_str(&id)
         .map_err(|_| HttpError::html(CoreError::BadRequest("invalid client id".into())))?;
-    admin_uc::delete_client(&app.db, admin_actor, target, form.reason_opt(), &app.caches)
-        .await
-        .map_err(HttpError::html)?;
+    admin_uc::delete_client(
+        &app.db,
+        &app.clock,
+        admin_actor,
+        target,
+        form.reason_opt(),
+        &app.caches,
+    )
+    .await
+    .map_err(HttpError::html)?;
     Ok(Redirect::to("/admin/clients").into_response())
 }
 

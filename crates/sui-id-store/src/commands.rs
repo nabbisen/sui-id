@@ -4920,5 +4920,250 @@ pub async fn change_smtp_config(
     .await
 }
 
+// ── C05 — disable client ─────────────────────────────────────────────────
+//
+// RFC 094 M2b wave 4 stage 1. Two writes, one transaction: the client's
+// `is_disabled` flag and `refresh_tokens::revoke_all_for_client_within_tx`
+// -- the count it returns becomes this event's `refresh_tokens_revoked`
+// attribute, which an incident reconstruction wants and which is only
+// knowable inside the transaction that did the revoking.
+
+static C05_DISABLED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::ClientDisable,
+    name: "client.disable",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[
+        AttributeSpec {
+            name: "reason",
+            description: "operator-supplied reason for the disable, if given",
+            required: false,
+        },
+        AttributeSpec {
+            name: "refresh_tokens_revoked",
+            description: "count of refresh tokens revoked as part of the disable",
+            required: true,
+        },
+    ],
+};
+
+crate::declare_write_command! {
+    /// C05 — disable a client. Administrator action through
+    /// `&AdminActor`.
+    command C05 = "C05" {
+        system_principal: forbidden;
+        enum C05Event {
+            Disabled {
+                client_id: ClientId,
+                reason: Option<String>,
+                refresh_tokens_revoked: usize,
+            } => &C05_DISABLED,
+        }
+    }
+}
+
+impl SealedCommandEvent<C05> for C05Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Disabled { client_id, .. } = self;
+        Some(AuditTarget(client_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Disabled {
+            reason,
+            refresh_tokens_revoked,
+            ..
+        } = self;
+        let mut builder = AuditAttributes::builder();
+        if let Some(r) = reason {
+            builder = builder.attribute("reason", r.clone());
+        }
+        builder
+            .attribute("refresh_tokens_revoked", refresh_tokens_revoked.to_string())
+            .build()
+    }
+}
+
+/// Run C05 (disable a client) through the Class-A runner: the
+/// `is_disabled` flag and the refresh-token revoke now commit together,
+/// with the audit event.
+pub async fn disable_client(
+    db: &crate::Database,
+    admin: UserId,
+    target: ClientId,
+    reason: Option<String>,
+    now: DateTime<Utc>,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<C05>::for_authorized_actor(admin, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, C05>| {
+        crate::repos::clients::set_disabled_within_tx(tx.tx(), target, true, now)?;
+        let refresh_tokens_revoked =
+            crate::repos::refresh_tokens::revoke_all_for_client_within_tx(tx.tx(), target, now)?;
+        Ok((
+            (),
+            C05Event::Disabled {
+                client_id: target,
+                reason,
+                refresh_tokens_revoked,
+            },
+        ))
+    })
+    .await
+}
+
+// ── C21 — enable client ──────────────────────────────────────────────────
+//
+// RFC 094 M2b wave 4 stage 1. One write only -- enabling revokes nothing,
+// and must not start a revoke call the way disable and delete do.
+
+static C21_ENABLED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::ClientEnable,
+    name: "client.enable",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[],
+};
+
+crate::declare_write_command! {
+    /// C21 — enable a client. Administrator action through
+    /// `&AdminActor`.
+    command C21 = "C21" {
+        system_principal: forbidden;
+        enum C21Event {
+            Enabled { client_id: ClientId } => &C21_ENABLED,
+        }
+    }
+}
+
+impl SealedCommandEvent<C21> for C21Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Enabled { client_id } = self;
+        Some(AuditTarget(client_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        AuditAttributes::builder().build()
+    }
+}
+
+/// Run C21 (enable a client) through the Class-A runner.
+pub async fn enable_client(
+    db: &crate::Database,
+    admin: UserId,
+    target: ClientId,
+    now: DateTime<Utc>,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<C21>::for_authorized_actor(admin, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, C21>| {
+        crate::repos::clients::set_disabled_within_tx(tx.tx(), target, false, now)?;
+        Ok(((), C21Event::Enabled { client_id: target }))
+    })
+    .await
+}
+
+// ── C06 — delete client (soft) ───────────────────────────────────────────
+//
+// RFC 094 M2b wave 4 stage 1. Same two-write shape as C05: the soft
+// delete and the refresh-token revoke, one transaction, with the revoked
+// count as this event's attribute.
+
+static C06_DELETED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::ClientDelete,
+    name: "client.delete",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[
+        AttributeSpec {
+            name: "reason",
+            description: "operator-supplied reason for the delete, if given",
+            required: false,
+        },
+        AttributeSpec {
+            name: "refresh_tokens_revoked",
+            description: "count of refresh tokens revoked as part of the delete",
+            required: true,
+        },
+    ],
+};
+
+crate::declare_write_command! {
+    /// C06 — soft-delete a client. Administrator action through
+    /// `&AdminActor`.
+    command C06 = "C06" {
+        system_principal: forbidden;
+        enum C06Event {
+            Deleted {
+                client_id: ClientId,
+                reason: Option<String>,
+                refresh_tokens_revoked: usize,
+            } => &C06_DELETED,
+        }
+    }
+}
+
+impl SealedCommandEvent<C06> for C06Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Deleted { client_id, .. } = self;
+        Some(AuditTarget(client_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Deleted {
+            reason,
+            refresh_tokens_revoked,
+            ..
+        } = self;
+        let mut builder = AuditAttributes::builder();
+        if let Some(r) = reason {
+            builder = builder.attribute("reason", r.clone());
+        }
+        builder
+            .attribute("refresh_tokens_revoked", refresh_tokens_revoked.to_string())
+            .build()
+    }
+}
+
+/// Run C06 (soft-delete a client) through the Class-A runner: the
+/// soft-delete flags and the refresh-token revoke now commit together,
+/// with the audit event.
+pub async fn delete_client(
+    db: &crate::Database,
+    admin: UserId,
+    target: ClientId,
+    reason: Option<String>,
+    now: DateTime<Utc>,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<C06>::for_authorized_actor(admin, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, C06>| {
+        crate::repos::clients::soft_delete_within_tx(tx.tx(), target, now)?;
+        let refresh_tokens_revoked =
+            crate::repos::refresh_tokens::revoke_all_for_client_within_tx(tx.tx(), target, now)?;
+        Ok((
+            (),
+            C06Event::Deleted {
+                client_id: target,
+                reason,
+                refresh_tokens_revoked,
+            },
+        ))
+    })
+    .await
+}
+
 #[cfg(test)]
 mod tests;

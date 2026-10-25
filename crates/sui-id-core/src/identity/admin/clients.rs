@@ -7,7 +7,7 @@ use crate::tokens;
 use sui_id_shared::ids::ClientId;
 use sui_id_store::Database;
 use sui_id_store::models::ClientRow;
-use sui_id_store::repos::{clients, refresh_tokens};
+use sui_id_store::repos::clients;
 // Shared audit helpers from parent module.
 use super::{audit_ok, audit_with_note};
 use crate::actor::{AdminActor, ReadOnlyAdminActor};
@@ -265,35 +265,29 @@ pub async fn update_client(
 
 pub async fn set_client_disabled(
     db: &Database,
-    _clock: &SharedClock,
+    clock: &SharedClock,
     actor: &AdminActor,
     target: ClientId,
     disabled: bool,
     reason: Option<String>,
     caches: &Caches,
 ) -> CoreResult<()> {
-    let actor_id = actor.user_id();
-    clients::set_disabled(db, target, disabled)
-        .await
-        .map_err(|e| match e {
-            sui_id_store::StoreError::NotFound => CoreError::NotFound,
-            other => CoreError::from(other),
-        })?;
+    let now = clock.now();
     if disabled {
-        refresh_tokens::revoke_all_for_client(db, target).await?;
+        sui_id_store::commands::disable_client(db, actor.user_id(), target, reason, now)
+            .await
+            .map_err(|e| match e {
+                sui_id_store::StoreError::NotFound => CoreError::NotFound,
+                other => CoreError::from(other),
+            })?;
+    } else {
+        sui_id_store::commands::enable_client(db, actor.user_id(), target, now)
+            .await
+            .map_err(|e| match e {
+                sui_id_store::StoreError::NotFound => CoreError::NotFound,
+                other => CoreError::from(other),
+            })?;
     }
-    audit_with_note(
-        db,
-        actor_id,
-        if disabled {
-            "client.disable"
-        } else {
-            "client.enable"
-        },
-        Some(target.to_string()),
-        if disabled { reason } else { None },
-    )
-    .await;
     if let Err(e) = caches.redirect_origins.rebuild(db).await {
         tracing::warn!(error = %e, "cache rebuild failed after set_client_disabled");
     }
@@ -302,13 +296,13 @@ pub async fn set_client_disabled(
 
 pub async fn delete_client(
     db: &Database,
+    clock: &SharedClock,
     actor: &AdminActor,
     target: ClientId,
     reason: Option<String>,
     caches: &Caches,
 ) -> CoreResult<()> {
-    let actor_id = actor.user_id();
-    clients::soft_delete(db, target)
+    sui_id_store::commands::delete_client(db, actor.user_id(), target, reason, clock.now())
         .await
         .map_err(|e| match e {
             sui_id_store::StoreError::NotFound => CoreError::NotFound,
@@ -317,15 +311,6 @@ pub async fn delete_client(
     if let Err(e) = caches.redirect_origins.rebuild(db).await {
         tracing::warn!(error = %e, "cache rebuild failed after delete_client");
     }
-    refresh_tokens::revoke_all_for_client(db, target).await?;
-    audit_with_note(
-        db,
-        actor_id,
-        "client.delete",
-        Some(target.to_string()),
-        reason,
-    )
-    .await;
     Ok(())
 }
 

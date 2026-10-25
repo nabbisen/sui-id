@@ -70,6 +70,10 @@ there had been checked against its descriptor on 2026-09-22; one had not.
 code inaccurately since they were written; what changed is that they were
 checked.
 
+**Three of the eleven pending-conversion rows were converted — `client.disable`,
+`client.enable`, `client.delete`, RFC 094 M2b wave 4 stage 1, 2026-10-25.**
+Their cells now read `A`; the remaining eight are still `B *(A required)*`.
+
 ## Coverage matrix
 
 *RFC 102 B4 (stage 7, 2026-09-17): the five step-up-gated sealed commands —
@@ -111,15 +115,21 @@ it when RFC 094 converts it.*
 
 ### Client management (`client.*`)
 
+RFC 094 M2b wave 4 stage 1 sealed three of these as Class A (commands
+`C05`, `C21`, `C06`). Disable and delete now run the client-row mutation
+and `refresh_tokens::revoke_all_for_client_within_tx` in the same
+transaction as the audit append, atomic with each other and with it;
+enable is the one-write case and revokes nothing.
+
 | Event name | Operation | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
 | `client.create` | Create OIDC client | admin user id | new client id | — | B *(A required)* |
 | `client.update` | Update client basic info | admin user id | client id | — | B *(A required)* |
 | `client.set_allowed_scopes` | Set client allowed scopes | admin user id | client id | — | B *(A required)* |
 | `client.set_post_logout_redirect_uris` | Set post-logout URIs | admin user id | client id | — | B *(A required)* |
-| `client.disable` | Disable client | admin user id | client id | — | B *(A required)* |
-| `client.enable` | Re-enable client | admin user id | client id | — | B *(A required)* |
-| `client.delete` | Soft-delete client | admin user id | client id | reason (optional) | B *(A required)* |
+| `client.disable` | Disable client; also revokes its refresh tokens (command `C05`) | admin user id | client id | reason (optional), `refresh_tokens_revoked` (required) | A |
+| `client.enable` | Re-enable client; revokes nothing (command `C21`) | admin user id | client id | — | A |
+| `client.delete` | Soft-delete client; also revokes its refresh tokens (command `C06`) | admin user id | client id | reason (optional), `refresh_tokens_revoked` (required) | A |
 | `client.rotate_secret` | Rotate client secret | admin user id | client id | — | B *(A required)* |
 
 ### Signing keys (`signing_key.*`)

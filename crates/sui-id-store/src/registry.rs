@@ -231,6 +231,18 @@ pub enum AuditEventKind {
     AuthMfaLockout,
     /// `client.dynamic_register` — C15.
     ClientDynamicRegister,
+    /// `client.disable` — RFC 094 M2b wave 4 stage 1, C05. Two writes in
+    /// one transaction: the client's `is_disabled` flag and
+    /// `refresh_tokens::revoke_all_for_client_within_tx`, which this
+    /// event's `refresh_tokens_revoked` attribute reports the count of.
+    ClientDisable,
+    /// `client.enable` — RFC 094 M2b wave 4 stage 1, C21. One write only
+    /// — enabling revokes nothing, and must not start a revoke.
+    ClientEnable,
+    /// `client.delete` — RFC 094 M2b wave 4 stage 1, C06. Same two-write
+    /// shape as `ClientDisable`: soft-delete plus
+    /// `refresh_tokens_revoked`.
+    ClientDelete,
     /// Proof-only — see [`ProofOnlyForbiddenSystemPrincipalCommand`]. Never
     /// emitted; no command can construct this event because no command can
     /// construct a context for that command in the first place.

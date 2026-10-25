@@ -188,15 +188,23 @@ pub fn revoke_all_for_user_within_tx(
     Ok(n)
 }
 
-pub async fn revoke_all_for_client(db: &Database, client_id: ClientId) -> StoreResult<usize> {
-    db.with_conn(move |conn| {
-        let n = conn.execute(
-            "UPDATE refresh_tokens SET revoked_at = ?1 WHERE client_id = ?2 AND revoked_at IS NULL",
-            params![Utc::now(), client_id.to_string()],
-        )?;
-        Ok(n)
-    })
-    .await
+/// RFC 094 M2b wave 4 stage 1: the same revoke as
+/// [`revoke_all_for_user_within_tx`], run inside a caller-supplied
+/// transaction. `now` is a parameter, not read from the clock
+/// internally, for the same reason the user variant takes it: the value
+/// lands in `revoked_at`, which a test needs to be able to pin.
+/// `commands::disable_client`/`commands::delete_client` are the only
+/// sealed callers.
+pub fn revoke_all_for_client_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    client_id: ClientId,
+    now: DateTime<Utc>,
+) -> StoreResult<usize> {
+    let n = tx.execute(
+        "UPDATE refresh_tokens SET revoked_at = ?1 WHERE client_id = ?2 AND revoked_at IS NULL",
+        params![now, client_id.to_string()],
+    )?;
+    Ok(n)
 }
 
 /// Delete expired refresh tokens. Retains revoked-but-unexpired rows so
