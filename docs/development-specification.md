@@ -5,8 +5,8 @@
 principle, not a source: inventories were removed in v4 and each section
 that held one now names where the authoritative copy lives.*
 
-> **Stale as of v0.83.0 (2026-10-22).** This document reflects the v0.77.0
-> codebase and the workspace is six minor versions past it, which is four
+> **Stale as of v0.84.0 (2026-10-25).** This document reflects the v0.77.0
+> codebase and the workspace is seven minor versions past it, which is five
 > more than `contracts/doc-authority.toml`'s tolerance allows — RFC 098 rule 5
 > makes this banner the sanctioned state for a lagging document, and it is
 > preferred here to re-dating a synthesis nobody has re-verified section by
@@ -15,10 +15,12 @@ that held one now names where the authoritative copy lives.*
 > `0046`, RFC 096-B1) and its 24-hour retention, which §14 therefore does not
 > describe either; §15's logging and audit account predates the sealed
 > command registry's Class-B `emit_must_attempt` path and the bounded reason
-> enums that go with it; and §7 points at a threat model that does not exist
-> yet — RFC 097 owns it and is blocked on RFC 096-B completing. Everything
-> else is unverified against v0.80.0 rather than known wrong. **Re-synthesis
-> is scheduled, not forgotten.**
+> enums that go with it, and also predates the Class-A settings commands
+> (RFC 094 M2b stages 1–3), which moved six settings writes and the
+> pending-change lifecycle onto `db.class_a`; and §7 points at a threat
+> model that does not exist yet — RFC 097 owns it and is blocked on RFC
+> 096-B completing. Everything else is unverified against v0.84.0 rather
+> than known wrong. **Re-synthesis is scheduled, not forgotten.**
 
 ---
 

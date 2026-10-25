@@ -1,7 +1,7 @@
 # Threat model
 
 > **Stale as of 2026-09-10.** This document is accurate as of
-> **v0.26.0**; the workspace is now **v0.83.0**. Security-relevant
+> **v0.26.0**; the workspace is now **v0.84.0**. Security-relevant
 > capability has shipped since v0.26.0 that this document does not
 > analyze as a threat surface, including:
 >

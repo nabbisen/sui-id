@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.84.0] — 2026-10-25
+
+**RFC 094 M2b's settings waves: the pending-settings-change commands made
+atomic with their audit events, and the six settings writes that
+previously left a partial trace or none at all.** This cut also closes a
+timing-and-response oracle on `/oauth2/token` and moves `ctutils` past
+RUSTSEC-2026-0385 — **read `Security` below before judging how urgently to
+upgrade**; neither follows from the settings work. This release does not
+finish M2b: wave 3 (federation configuration), wave 4 (client
+administration — nine best-effort appends through one helper), and the
+authority switch after them remain for `0.85.0` and later.
+
 ### Changed
 
 - **Creating and cancelling a pending settings change
