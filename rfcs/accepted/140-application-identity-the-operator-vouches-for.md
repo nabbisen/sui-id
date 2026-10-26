@@ -1,12 +1,30 @@
 # RFC 140 — Application identity the operator vouches for
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-10-27
+**Approved by.** `@nabbisen`, 2026-10-27: *"Accepted."* — on the architect's
+review of whether this was over-engineering, which he asked for and whose
+measurement is this RFC's body. **What the acceptance authorizes is §4's
+stage 1**: by this RFC's own terms §4 leaves stage 2 unscoped until §5 is
+settled, so acceptance cannot authorize what the document does not yet
+specify. §7's question is open.
+**Independent design review.** [Design review 2026-10-27](../handoffs/140-application-identity-the-operator-vouches-for/design-review-2026-10-27.md),
+by **the architect, which also wrote this RFC** — so it is **not**
+independent of it, and the field says which. `ROADMAP.md` §S1c prohibits
+architect self-review by default and permits it where `@nabbisen` asks;
+he asked, 2026-10-27: *"Review it with my fundamental philosophy."* The
+review records that. §S1a places design review with him or an external
+architect he engages, not with the implementation role; no external
+architect was engaged.
+**Implementation owner.** The mid-capability model (implementation and
+testing agent).
 **Security review.** Required — the consent screen is where an end user
 makes a trust decision, and this RFC changes what that screen may show.
 
 **Design prerequisites.** None.
-**Implementation prerequisites.** RFC 000 forbids implementation while
-this is Proposed. Nothing here is authorized to be built.
+**Implementation prerequisites.** None for stage 1. **Stage 2 may not be
+built** until §5 is settled — not because of RFC 000's status rule, which
+this RFC now satisfies, but because §4 does not specify it.
 **Closure prerequisites.** The three link fields are settable by an
 administrator, render on the consent screen for administrator-registered
 clients and for no others, and a test asserts both halves; the logo
