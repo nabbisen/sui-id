@@ -29,9 +29,14 @@
 > [`m2b-0.85.0-stage3-c01-c02-c07-k03-c08-2026-10-25.md`](m2b-0.85.0-stage3-c01-c02-c07-k03-c08-2026-10-25.md),
 > Level B 27/0, G20 at **43**. It also fixed a defect older than this
 > work — creating a client never rebuilt the CORS redirect-origins cache
-> — and **that fix has no test**, which must land before the cut; stage 4 is the three dormant rows, and carries a
-> proposal to let the inventory say *sealed under another command's id* —
-> C04 and C09 now read `sealed = false` while being sealed by C03.
+> — and **that fix has no test**, which must land before the cut; **stage 4 is dispatched** and held in
+> `.git-exclude/staging/` until `0.85.0` ships, for the same reason
+> stage 1's was. It disposes of C10, C22 and K02 — wire up registration
+> token revocation, remove the two redundant functions — and carries two
+> items that are not dispositions: the missing test for stage 3's
+> CORS-cache fix, and a `sealed_by` field so the inventory can say that
+> C04 and C09 are sealed by C03 rather than unconverted. **G20 ends at
+> 44, not the 48 the first plan assumed.**
 >
 > **The wave-3 dependency cycle is ruled** (2026-10-25): RFC 094 owns
 > whether a write and its record commit together, RFC 096 owns what the
