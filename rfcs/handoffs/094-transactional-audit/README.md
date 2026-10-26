@@ -25,9 +25,11 @@
 > because the runner appends exactly one event per call. **It retires two
 > emitted audit event names**, `client.set_allowed_scopes` and
 > `client.set_post_logout_redirect_uris`, which `0.85.0`'s summary must
-> say (stage plan §G). **Stage 3 is dispatched** —
+> say (stage plan §G). **Stage 3 landed** `403bbc2` —
 > [`m2b-0.85.0-stage3-c01-c02-c07-k03-c08-2026-10-25.md`](m2b-0.85.0-stage3-c01-c02-c07-k03-c08-2026-10-25.md),
-> C01, C02, C07, K03, C08, G20 38 → 43; stage 4 is the three dormant rows, and carries a
+> Level B 27/0, G20 at **43**. It also fixed a defect older than this
+> work — creating a client never rebuilt the CORS redirect-origins cache
+> — and **that fix has no test**, which must land before the cut; stage 4 is the three dormant rows, and carries a
 > proposal to let the inventory say *sealed under another command's id* —
 > C04 and C09 now read `sealed = false` while being sealed by C03.
 >
