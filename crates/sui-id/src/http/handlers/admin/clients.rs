@@ -398,10 +398,11 @@ pub async fn clients_edit_post(
         .map(|s| s.trim().to_owned())
         .filter(|s| !s.is_empty())
         .collect();
-    // Basic metadata (name, redirect_uris) is C01/C02's surface, untouched
-    // this stage, and stays its own update.
+    // Basic metadata (name, redirect_uris, C02) stays its own update,
+    // separate from the three-field form (C03/C04/C09, stage 2).
     admin_uc::update_client_basic(
         &app.db,
+        &app.clock,
         admin_actor,
         target,
         form.name.trim(),

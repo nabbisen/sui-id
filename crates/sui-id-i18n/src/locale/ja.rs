@@ -466,7 +466,6 @@ pub static STRINGS_JA: Strings = Strings {
     audit_event_client_create: "クライアント作成",
     audit_event_client_update: "クライアント更新",
     audit_event_client_delete: "クライアント削除",
-    audit_event_client_set_allowed_scopes: "クライアントスコープ更新",
     audit_event_signing_key_rotate: "署名鍵ローテーション",
     audit_event_signing_key_delete: "署名鍵削除",
     audit_event_admin_master_key_rotated: "マスターキーローテーション",

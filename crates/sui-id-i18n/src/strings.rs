@@ -622,7 +622,6 @@ pub struct Strings {
     pub audit_event_client_create: &'static str,
     pub audit_event_client_update: &'static str,
     pub audit_event_client_delete: &'static str,
-    pub audit_event_client_set_allowed_scopes: &'static str,
     pub audit_event_signing_key_rotate: &'static str,
     pub audit_event_signing_key_delete: &'static str,
     pub audit_event_admin_master_key_rotated: &'static str,

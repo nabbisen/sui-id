@@ -1,5 +1,4 @@
 //! Signing-key admin operations (RFC 075, v0.62.0).
-use super::audit_with_note;
 use crate::actor::AdminActor;
 use crate::cache::Caches;
 use crate::errors::{CoreError, CoreResult};
@@ -80,8 +79,7 @@ pub async fn delete_signing_key(
     reason: Option<String>,
     caches: &Caches,
 ) -> CoreResult<()> {
-    let actor_id = actor.user_id();
-    sui_id_store::repos::signing_keys::delete(db, target)
+    sui_id_store::commands::delete_signing_key(db, actor.user_id(), target, reason, clock.now())
         .await
         .map_err(|e| match e {
             sui_id_store::StoreError::NotFound => CoreError::NotFound,
@@ -90,15 +88,6 @@ pub async fn delete_signing_key(
             }
             other => CoreError::from(other),
         })?;
-    let _ = clock;
-    audit_with_note(
-        db,
-        actor_id,
-        "signing_key.delete",
-        Some(target.to_string()),
-        reason,
-    )
-    .await;
     if let Err(e) = caches.jwks.rebuild(db).await {
         tracing::warn!(error = %e, "cache rebuild failed after delete_signing_key");
     }

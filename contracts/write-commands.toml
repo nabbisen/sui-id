@@ -545,23 +545,27 @@ descriptor = ["U37_ISSUED"]
 id = "C01"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
+sealed = true
 owner = "Admin create client"
-rationale = "`client.create`"
-mutation_surface = "`clients::create`"
+rationale = "`client.create`, no attributes; target is the new client's id. RFC 094 M2b wave 4 stage 3."
+mutation_surface = "`clients::create_within_tx` (via `commands::create_client`)"
 files = ["crates/sui-id-store/src/repos/clients.rs"]
 test_id = "`a_c01_create`"
+event = ["client.create"]
+descriptor = ["C01_CREATED"]
 
 [[command]]
 id = "C02"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
+sealed = true
 owner = "Update client basic metadata"
-rationale = "`client.update`"
-mutation_surface = "`clients::update_basic`"
+rationale = "`client.update`, no attributes -- name and redirect URIs only; the client-update form's other three fields are C03 (stage 2). RFC 094 M2b wave 4 stage 3. The bare `clients::update_basic` and the second, uncalled core-layer caller `update_client` (the `Option`-argument form) are both removed -- confirmed by a full-workspace grep before deleting either."
+mutation_surface = "`clients::update_basic_within_tx` (via `commands::update_client_basic`)"
 files = ["crates/sui-id-store/src/repos/clients.rs"]
 test_id = "`a_c02_basic`"
+event = ["client.update"]
+descriptor = ["C02_UPDATED"]
 
 [[command]]
 id = "C03"
@@ -617,23 +621,27 @@ descriptor = ["C06_DELETED"]
 id = "C07"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
+sealed = true
 owner = "Rotate/set production client secret"
-rationale = "`client.rotate_secret`"
-mutation_surface = "`clients::set_secret_hash`"
+rationale = "`client.rotate_secret`, optional `reason`; never the new hash or the plaintext secret. RFC 094 M2b wave 4 stage 3."
+mutation_surface = "`clients::set_secret_hash_within_tx` (via `commands::rotate_client_secret`)"
 files = ["crates/sui-id-store/src/repos/clients.rs"]
 test_id = "`a_c07_secret`"
+event = ["client.rotate_secret"]
+descriptor = ["C07_ROTATED"]
 
 [[command]]
 id = "C08"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
+sealed = true
 owner = "Set dev client secret"
-rationale = "`client.rotate_secret` with dev-source attribute"
-mutation_surface = "`clients::set_dev_secret_hash`"
+rationale = "`client.dev_secret_set`, a distinct event name from C07's `client.rotate_secret` -- two sealed commands may not share one `EventDescriptor.name` (`scripts/rust_registry.py`'s `read_registry` fails the gate with \"event … is declared by two descriptors\" the moment two statics carry the same name), and overloading the name would also mislead a reader into thinking an administrator rotated a secret when dev-mode seeding patched one in. No attributes; never the new hash. A wave-1 shape (emitted nothing before this stage), not a wave-4 one -- its only caller is dev-mode seeding, not an administrator action. RFC 094 M2b wave 4 stage 3."
+mutation_surface = "`clients::set_dev_secret_hash_within_tx` (via `commands::set_dev_client_secret`)"
 files = ["crates/sui-id-store/src/repos/clients.rs"]
 test_id = "`a_c08_dev_secret`"
+event = ["client.dev_secret_set"]
+descriptor = ["C08_DEV_SECRET_SET"]
 
 [[command]]
 id = "C09"
@@ -1149,12 +1157,14 @@ test_id = "`a_k02_signing_retire`"
 id = "K03"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
+sealed = true
 owner = "Delete signing key"
-rationale = "`signing_key.delete`"
-mutation_surface = "`signing_keys::delete`"
+rationale = "`signing_key.delete`, optional `reason`. `Conflict` (active key) and `NotFound` (missing key) both refuse before any write, so neither reaches `class_a` -- this event only ever records a successful delete of an already-retired key. RFC 094 M2b wave 4 stage 3. The bare `signing_keys::delete` is removed -- confirmed by a full-workspace grep before deleting it that its only caller was `delete_signing_key`, now converted."
+mutation_surface = "`signing_keys::delete_within_tx` (via `commands::delete_signing_key`)"
 files = ["crates/sui-id-store/src/repos/signing_keys.rs"]
 test_id = "`a_k03_signing_delete`"
+event = ["signing_key.delete"]
+descriptor = ["K03_DELETED"]
 
 [[command]]
 id = "K06"

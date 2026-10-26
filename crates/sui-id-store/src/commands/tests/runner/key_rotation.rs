@@ -168,3 +168,122 @@ async fn k01_injected_commit_failure_rolls_back_the_mutation_and_the_append() {
     .expect("rotate after the injected commit failure has cleared");
     audited.into_inner();
 }
+
+// ── K03 — delete a retired signing key (RFC 094 M2b wave 4 stage 3) ──────
+
+#[tokio::test]
+async fn a_k03_signing_delete() {
+    let db = fresh_db();
+    let (admin, _session) = an_admin_session(&db).await;
+    let id = SigningKeyId::new();
+    repos::signing_keys::insert_with_plaintext(&db, id, "ed25519", b"retired-key", b"pub", false)
+        .await
+        .expect("seed retired key");
+    let before = audit_rows(&db).await;
+
+    let audited = delete_signing_key(&db, admin, id, Some("cleanup".into()), Utc::now())
+        .await
+        .expect("delete");
+    audited.into_inner();
+
+    assert!(
+        matches!(
+            repos::signing_keys::list_published(&db).await,
+            Ok(rows) if !rows.iter().any(|r| r.id == id)
+        ),
+        "the key row must be gone"
+    );
+    assert_eq!(
+        latest_audit_action(&db).await.as_deref(),
+        Some("signing_key.delete")
+    );
+    let note = last_event(&db).await.note.expect("note");
+    assert_eq!(
+        crate::registry::note_field(&note, "reason").as_deref(),
+        Some("cleanup")
+    );
+    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
+    record_exactly_once_coverage("K03");
+}
+
+async fn last_event(db: &Database) -> crate::models::AuditLogRow {
+    repos::audit::recent(db, 1)
+        .await
+        .expect("audit tail")
+        .into_iter()
+        .next()
+        .expect("row")
+}
+
+#[tokio::test]
+async fn k03_injected_failure_before_append_rolls_back_the_delete() {
+    let db = fresh_db();
+    let (admin, _session) = an_admin_session(&db).await;
+    let id = SigningKeyId::new();
+    repos::signing_keys::insert_with_plaintext(&db, id, "ed25519", b"retired-key", b"pub", false)
+        .await
+        .expect("seed retired key");
+    let before_audit = latest_audit_action(&db).await;
+
+    db.fault_injector().fail_before_next_append();
+    let result = delete_signing_key(&db, admin, id, None, Utc::now()).await;
+    assert!(result.is_err(), "injected failure must surface as Err");
+
+    assert!(
+        matches!(
+            repos::signing_keys::list_published(&db).await,
+            Ok(rows) if rows.iter().any(|r| r.id == id)
+        ),
+        "the delete must not have survived rollback"
+    );
+    assert_eq!(latest_audit_action(&db).await, before_audit);
+    record_rollback_coverage("K03");
+}
+
+#[tokio::test]
+async fn k03_against_a_nonexistent_key_is_notfound_and_writes_no_record() {
+    let db = fresh_db();
+    let (admin, _session) = an_admin_session(&db).await;
+    let ghost = SigningKeyId::new();
+    let before = audit_rows(&db).await;
+
+    let result = delete_signing_key(&db, admin, ghost, None, Utc::now()).await;
+    assert!(
+        matches!(result, Err(StoreError::NotFound)),
+        "expected NotFound"
+    );
+    assert_eq!(
+        audit_rows(&db).await,
+        before,
+        "a delete of a nonexistent key must not write an audit record"
+    );
+}
+
+#[tokio::test]
+async fn k03_against_the_active_key_is_conflict_and_writes_no_record() {
+    let db = fresh_db();
+    let (admin, _session) = an_admin_session(&db).await;
+    let id = SigningKeyId::new();
+    repos::signing_keys::insert_with_plaintext(&db, id, "ed25519", b"active-key", b"pub", true)
+        .await
+        .expect("seed active key");
+    let before = audit_rows(&db).await;
+
+    let result = delete_signing_key(&db, admin, id, None, Utc::now()).await;
+    assert!(
+        matches!(result, Err(StoreError::Conflict)),
+        "expected Conflict for the active key"
+    );
+    assert!(
+        matches!(
+            repos::signing_keys::list_published(&db).await,
+            Ok(rows) if rows.iter().any(|r| r.id == id)
+        ),
+        "the active key must still exist"
+    );
+    assert_eq!(
+        audit_rows(&db).await,
+        before,
+        "a refused delete of the active key must not write an audit record"
+    );
+}

@@ -48,6 +48,53 @@ async fn dev_mode_default_seed_creates_admin_users_and_client() {
     assert!(client.redirect_uris.iter().any(|u| u.contains(":3000")));
 }
 
+/// RFC 094 M2b wave 4 stage 3, C08: the default seed's client carries an
+/// operator-supplied secret (`"test-secret"`, asserted above), patched in
+/// after `create_client` through the sealed `set_dev_client_secret` —
+/// this is the layer that actually runs for C08 (dev-mode seeding, not an
+/// HTTP route; the handler-level e2e pattern the other commands in this
+/// stage use doesn't apply here). Asserts the audit record, not only the
+/// patched value: the value alone would also pass if the patch bypassed
+/// the sealed command entirely.
+#[tokio::test]
+async fn dev_mode_seed_client_secret_patch_is_audited() {
+    use sui_id::dev_mode::{DevSeed, apply_seed, open_dev_db};
+
+    let db = open_dev_db(None).expect("open in-memory dev db");
+    let setup_token = "test-dev-setup-token";
+    let seed = DevSeed::default();
+    let clock = sui_id_core::time::system_clock();
+    let outcome = apply_seed(&db, &clock, setup_token, &seed)
+        .await
+        .expect("apply_seed");
+    let client_id = outcome.clients[0].client_id;
+
+    let stored = sui_id_store::repos::clients::get(&db, client_id)
+        .await
+        .expect("get client");
+    let expected_hash = stored.secret_hash.clone().expect("secret hash patched in");
+
+    let note: Option<String> = db
+        .with_conn(move |c| {
+            Ok(c.query_row(
+                "SELECT note FROM audit_log WHERE action = 'client.dev_secret_set' \
+                 AND target = ?1 ORDER BY seq DESC LIMIT 1",
+                [client_id.to_string()],
+                |r| r.get(0),
+            )?)
+        })
+        .await
+        .expect("audit row for client.dev_secret_set");
+    assert_eq!(
+        note, None,
+        "no attributes, in particular never the secret or its hash"
+    );
+    // The hash itself must never appear anywhere the audit log would
+    // carry it -- confirmed structurally (C08Event has no field for it)
+    // and here by checking the one place a leak could land.
+    let _ = expected_hash;
+}
+
 /// Flag overrides: `--dev-admin-password` and
 /// `--dev-client-secret` reach apply_seed.
 #[tokio::test]

@@ -231,6 +231,15 @@ pub enum AuditEventKind {
     AuthMfaLockout,
     /// `client.dynamic_register` — C15.
     ClientDynamicRegister,
+    /// `client.create` — RFC 094 M2b wave 4 stage 3, C01. Target is the
+    /// new client's id.
+    ClientCreate,
+    /// `client.update` — RFC 094 M2b wave 4 stage 3, C02. Name and
+    /// redirect URIs only; the client-update form's other three fields
+    /// are `ClientUpdateForm` (C03). `update_client`, the second,
+    /// uncalled core-layer caller of `clients::update_basic`, is
+    /// removed — confirmed by a full-workspace grep before deleting it.
+    ClientUpdateBasic,
     /// `client.disable` — RFC 094 M2b wave 4 stage 1, C05. Two writes in
     /// one transaction: the client's `is_disabled` flag and
     /// `refresh_tokens::revoke_all_for_client_within_tx`, which this
@@ -249,6 +258,26 @@ pub enum AuditEventKind {
     /// C04 and C09 are this event's sibling inventory rows, not separate
     /// commands — see `contracts/write-commands.toml`'s note on C03.
     ClientUpdateForm,
+    /// `client.rotate_secret` — RFC 094 M2b wave 4 stage 3, C07. Never
+    /// carries the new secret or its hash; `reason` is the only
+    /// attribute, optional, operator-supplied.
+    ClientRotateSecret,
+    /// `signing_key.delete` — RFC 094 M2b wave 4 stage 3, K03. `Conflict`
+    /// (active key) and `NotFound` (missing key) both refuse before any
+    /// write, so neither reaches `class_a` at all — this event only
+    /// ever records a successful hard-delete of an already-retired key.
+    SigningKeyDelete,
+    /// `client.dev_secret_set` — RFC 094 M2b wave 4 stage 3, C08. A
+    /// distinct name from `ClientRotateSecret`'s, deliberately: two
+    /// sealed commands may not share one `EventDescriptor.name` (
+    /// `scripts/rust_registry.py`'s `read_registry` fails the gate with
+    /// "event … is declared by two descriptors" the moment two different
+    /// statics carry the same name), and even if the gate tolerated it,
+    /// an operator reading `client.rotate_secret` in the audit log would
+    /// reasonably conclude an administrator rotated a secret — nobody
+    /// did; dev-mode seeding patched a configured value in at startup.
+    /// Never carries the secret or its hash.
+    ClientDevSecretSet,
     /// Proof-only — see [`ProofOnlyForbiddenSystemPrincipalCommand`]. Never
     /// emitted; no command can construct this event because no command can
     /// construct a context for that command in the first place.

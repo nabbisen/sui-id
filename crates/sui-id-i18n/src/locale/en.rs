@@ -466,7 +466,6 @@ pub static STRINGS_EN: Strings = Strings {
     audit_event_client_create: "Client created",
     audit_event_client_update: "Client updated",
     audit_event_client_delete: "Client deleted",
-    audit_event_client_set_allowed_scopes: "Client scopes updated",
     audit_event_signing_key_rotate: "Signing key rotated",
     audit_event_signing_key_delete: "Signing key deleted",
     audit_event_admin_master_key_rotated: "Master key rotated",

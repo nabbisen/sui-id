@@ -5299,5 +5299,350 @@ pub async fn update_client_form(
     .await
 }
 
+// ── C01 — create client ──────────────────────────────────────────────────
+//
+// RFC 094 M2b wave 4 stage 3. One write, target is the new client's id.
+
+static C01_CREATED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::ClientCreate,
+    name: "client.create",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[],
+};
+
+crate::declare_write_command! {
+    /// C01 — create a client. Administrator action through
+    /// `&AdminActor`.
+    command C01 = "C01" {
+        system_principal: forbidden;
+        enum C01Event {
+            Created { client_id: ClientId } => &C01_CREATED,
+        }
+    }
+}
+
+impl SealedCommandEvent<C01> for C01Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Created { client_id } = self;
+        Some(AuditTarget(client_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        AuditAttributes::builder().build()
+    }
+}
+
+/// Run C01 (create a client) through the Class-A runner. `row` is
+/// already fully built by the caller (`sui-id-core`'s `create_client`,
+/// which also generates and hashes the secret before this runs — the
+/// same validate/hash-outside-the-transaction boundary stage 2's S08
+/// established).
+pub async fn create_client(
+    db: &crate::Database,
+    admin: UserId,
+    row: crate::models::ClientRow,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let client_id = row.id;
+    let context = AuthorizedCommandContext::<C01>::for_authorized_actor(admin, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, C01>| {
+        crate::repos::clients::create_within_tx(tx.tx(), &row)?;
+        Ok(((), C01Event::Created { client_id }))
+    })
+    .await
+}
+
+// ── C02 — update client basic info ───────────────────────────────────────
+//
+// RFC 094 M2b wave 4 stage 3. Name and redirect URIs only; the
+// client-update form's other three fields are C03 (stage 2).
+
+static C02_UPDATED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::ClientUpdateBasic,
+    name: "client.update",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[],
+};
+
+crate::declare_write_command! {
+    /// C02 — update a client's name and redirect URIs. Administrator
+    /// action through `&AdminActor`.
+    command C02 = "C02" {
+        system_principal: forbidden;
+        enum C02Event {
+            Updated { client_id: ClientId } => &C02_UPDATED,
+        }
+    }
+}
+
+impl SealedCommandEvent<C02> for C02Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Updated { client_id } = self;
+        Some(AuditTarget(client_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        AuditAttributes::builder().build()
+    }
+}
+
+/// Run C02 (update a client's basic info) through the Class-A runner.
+pub async fn update_client_basic(
+    db: &crate::Database,
+    admin: UserId,
+    target: ClientId,
+    name: String,
+    redirect_uris: Vec<String>,
+    now: DateTime<Utc>,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<C02>::for_authorized_actor(admin, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, C02>| {
+        crate::repos::clients::update_basic_within_tx(
+            tx.tx(),
+            target,
+            Some(&name),
+            Some(&redirect_uris),
+            now,
+        )?;
+        Ok(((), C02Event::Updated { client_id: target }))
+    })
+    .await
+}
+
+// ── C07 — rotate client secret ───────────────────────────────────────────
+//
+// RFC 094 M2b wave 4 stage 3. Never carries the new secret or its hash.
+
+static C07_ROTATED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::ClientRotateSecret,
+    name: "client.rotate_secret",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[AttributeSpec {
+        name: "reason",
+        description: "operator-supplied reason for the rotation, if given",
+        required: false,
+    }],
+};
+
+crate::declare_write_command! {
+    /// C07 — rotate a confidential client's secret. Administrator
+    /// action through `&AdminActor`.
+    command C07 = "C07" {
+        system_principal: forbidden;
+        enum C07Event {
+            Rotated {
+                client_id: ClientId,
+                reason: Option<String>,
+            } => &C07_ROTATED,
+        }
+    }
+}
+
+impl SealedCommandEvent<C07> for C07Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Rotated { client_id, .. } = self;
+        Some(AuditTarget(client_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Rotated { reason, .. } = self;
+        let mut builder = AuditAttributes::builder();
+        if let Some(r) = reason {
+            builder = builder.attribute("reason", r.clone());
+        }
+        builder.build()
+    }
+}
+
+/// Run C07 (rotate a client secret) through the Class-A runner.
+/// `new_hash` is already computed by the caller (`sui-id-core`'s
+/// `rotate_client_secret`, which generates and hashes the new secret
+/// before this runs) — never the plaintext secret, and never recorded
+/// as an attribute.
+pub async fn rotate_client_secret(
+    db: &crate::Database,
+    admin: UserId,
+    target: ClientId,
+    new_hash: String,
+    reason: Option<String>,
+    now: DateTime<Utc>,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<C07>::for_authorized_actor(admin, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, C07>| {
+        crate::repos::clients::set_secret_hash_within_tx(tx.tx(), target, Some(&new_hash), now)?;
+        Ok((
+            (),
+            C07Event::Rotated {
+                client_id: target,
+                reason,
+            },
+        ))
+    })
+    .await
+}
+
+// ── K03 — delete signing key ─────────────────────────────────────────────
+//
+// RFC 094 M2b wave 4 stage 3. `Conflict` (active key) and `NotFound`
+// (missing key) both refuse before any write; neither reaches
+// `class_a`, so this event only ever records a successful delete.
+
+static K03_DELETED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::SigningKeyDelete,
+    name: "signing_key.delete",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[AttributeSpec {
+        name: "reason",
+        description: "operator-supplied reason for the deletion, if given",
+        required: false,
+    }],
+};
+
+crate::declare_write_command! {
+    /// K03 — hard-delete a retired signing key. Administrator action
+    /// through `&AdminActor`.
+    command K03 = "K03" {
+        system_principal: forbidden;
+        enum K03Event {
+            Deleted {
+                key_id: SigningKeyId,
+                reason: Option<String>,
+            } => &K03_DELETED,
+        }
+    }
+}
+
+impl SealedCommandEvent<K03> for K03Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Deleted { key_id, .. } = self;
+        Some(AuditTarget(key_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Deleted { reason, .. } = self;
+        let mut builder = AuditAttributes::builder();
+        if let Some(r) = reason {
+            builder = builder.attribute("reason", r.clone());
+        }
+        builder.build()
+    }
+}
+
+/// Run K03 (hard-delete a retired signing key) through the Class-A
+/// runner. `now` is threaded through for signature uniformity with
+/// this stage's other four commands; the delete itself touches no
+/// timestamp column (`signing_keys` has none to update on a hard
+/// delete) and the audit row's own `at` is never caller-controlled
+/// (`build_audit_row` calls `chrono::Utc::now()` directly) — so `now`
+/// is accepted and otherwise unused here. Flagged in this round's
+/// return rather than silently added.
+pub async fn delete_signing_key(
+    db: &crate::Database,
+    admin: UserId,
+    target: SigningKeyId,
+    reason: Option<String>,
+    now: DateTime<Utc>,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let _ = now;
+    let context = AuthorizedCommandContext::<K03>::for_authorized_actor(admin, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, K03>| {
+        crate::repos::signing_keys::delete_within_tx(tx.tx(), target)?;
+        Ok((
+            (),
+            K03Event::Deleted {
+                key_id: target,
+                reason,
+            },
+        ))
+    })
+    .await
+}
+
+// ── C08 — set a dev-mode client's secret hash ────────────────────────────
+//
+// RFC 094 M2b wave 4 stage 3. A wave-1 shape, not a wave-4 one: the
+// bare write emitted no event at all before this stage, and its only
+// caller is dev-mode seeding, not an administrator action. A distinct
+// event name from C07's `client.rotate_secret` — see `registry.rs`'s
+// `ClientDevSecretSet` doc comment for why two sealed commands may not
+// share one name, measured against `scripts/rust_registry.py`.
+
+static C08_DEV_SECRET_SET: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::ClientDevSecretSet,
+    name: "client.dev_secret_set",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[],
+};
+
+crate::declare_write_command! {
+    /// C08 — patch a dev-mode-seeded client's secret hash to an
+    /// operator-supplied, predictable value. Runs under the synthetic
+    /// admin actor dev-mode seeding already constructs for C01.
+    command C08 = "C08" {
+        system_principal: forbidden;
+        enum C08Event {
+            Set { client_id: ClientId } => &C08_DEV_SECRET_SET,
+        }
+    }
+}
+
+impl SealedCommandEvent<C08> for C08Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Set { client_id } = self;
+        Some(AuditTarget(client_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        AuditAttributes::builder().build()
+    }
+}
+
+/// Run C08 (patch a dev-mode client's secret hash) through the Class-A
+/// runner. `new_hash` is already computed by the caller (dev-mode
+/// seeding hashes the operator-supplied secret before this runs) —
+/// never the plaintext secret, and never recorded as an attribute.
+pub async fn set_dev_client_secret(
+    db: &crate::Database,
+    admin: UserId,
+    target: ClientId,
+    new_hash: String,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<C08>::for_authorized_actor(admin, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, C08>| {
+        crate::repos::clients::set_dev_secret_hash_within_tx(tx.tx(), target, Some(&new_hash))?;
+        Ok(((), C08Event::Set { client_id: target }))
+    })
+    .await
+}
+
 #[cfg(test)]
 mod tests;

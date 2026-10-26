@@ -145,28 +145,31 @@ pub async fn retire(db: &Database, id: SigningKeyId) -> StoreResult<()> {
     .await
 }
 
-/// Hard-delete a signing key row. Only permitted for already-retired keys
-/// — deleting an active key would break newly-minted token verification.
-/// Returns `Conflict` for an active row, `NotFound` for a missing one.
-pub async fn delete(db: &Database, id: SigningKeyId) -> StoreResult<()> {
-    db.with_conn(move |conn| {
-        let row: Option<i64> = conn
-            .query_row(
-                "SELECT is_active FROM signing_keys WHERE id = ?1",
-                [id.to_string()],
-                |r| r.get(0),
-            )
-            .ok();
-        match row {
-            None => Err(StoreError::NotFound),
-            Some(1) => Err(StoreError::Conflict),
-            Some(_) => {
-                conn.execute("DELETE FROM signing_keys WHERE id = ?1", [id.to_string()])?;
-                Ok(())
-            }
+/// The same guard and delete the removed bare `delete` made, run
+/// inside a caller-supplied transaction. RFC 094 M2b wave 4 stage 3:
+/// the bare async form had exactly one caller (`delete_signing_key`)
+/// and no test-seeding callers, so it is removed outright rather than
+/// kept alongside this sibling — confirmed by a full-workspace grep
+/// before deleting it. `commands::delete_signing_key` (K03) is the
+/// only caller. Still `Conflict` for an active row, `NotFound` for a
+/// missing one — the one error path in RFC 094 M2b wave 4 that is not
+/// just "row missing", and it must survive the conversion unchanged.
+pub fn delete_within_tx(tx: &rusqlite::Transaction<'_>, id: SigningKeyId) -> StoreResult<()> {
+    let row: Option<i64> = tx
+        .query_row(
+            "SELECT is_active FROM signing_keys WHERE id = ?1",
+            [id.to_string()],
+            |r| r.get(0),
+        )
+        .ok();
+    match row {
+        None => Err(StoreError::NotFound),
+        Some(1) => Err(StoreError::Conflict),
+        Some(_) => {
+            tx.execute("DELETE FROM signing_keys WHERE id = ?1", [id.to_string()])?;
+            Ok(())
         }
-    })
-    .await
+    }
 }
 
 /// Decrypt the private key bytes for a row.

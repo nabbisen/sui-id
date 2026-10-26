@@ -1,4 +1,5 @@
 //! Client admin operations (RFC 075, v0.62.0).
+use crate::actor::{AdminActor, ReadOnlyAdminActor};
 use crate::cache::Caches;
 use crate::errors::{CoreError, CoreResult};
 use crate::password::hash_password;
@@ -8,9 +9,6 @@ use sui_id_shared::ids::ClientId;
 use sui_id_store::Database;
 use sui_id_store::models::ClientRow;
 use sui_id_store::repos::clients;
-// Shared audit helpers from parent module.
-use super::{audit_ok, audit_with_note};
-use crate::actor::{AdminActor, ReadOnlyAdminActor};
 pub struct CreatedClient {
     pub row: ClientRow,
     pub generated_secret: Option<String>,
@@ -34,9 +32,8 @@ pub async fn create_client(
     clock: &SharedClock,
     actor: &AdminActor,
     spec: CreateClientSpec<'_>,
-    _caches: &Caches,
+    caches: &Caches,
 ) -> CoreResult<CreatedClient> {
-    let actor_id = actor.user_id();
     if spec.name.trim().is_empty() {
         return Err(CoreError::BadRequest(
             "client name must not be empty".into(),
@@ -109,8 +106,12 @@ pub async fn create_client(
         created_at: now,
         updated_at: now,
     };
-    clients::create(db, &row).await?;
-    audit_ok(db, actor_id, "client.create", Some(row.id.to_string())).await;
+    sui_id_store::commands::create_client(db, actor.user_id(), row.clone())
+        .await
+        .map_err(CoreError::from)?;
+    if let Err(e) = caches.redirect_origins.rebuild(db).await {
+        tracing::warn!(error = %e, "cache rebuild failed after create_client");
+    }
     Ok(CreatedClient {
         row,
         generated_secret: secret_plain,
@@ -170,13 +171,13 @@ pub async fn update_client_form(
 /// and `secret_hash` are immutable.
 pub async fn update_client_basic(
     db: &Database,
+    clock: &SharedClock,
     actor: &AdminActor,
     target: ClientId,
     name: &str,
     redirect_uris: &[String],
     caches: &Caches,
 ) -> CoreResult<()> {
-    let actor_id = actor.user_id();
     if name.trim().is_empty() {
         return Err(CoreError::BadRequest(
             "client name must not be empty".into(),
@@ -190,13 +191,19 @@ pub async fn update_client_basic(
     for uri in redirect_uris {
         validate_redirect_uri(uri)?;
     }
-    clients::update_basic(db, target, Some(name.trim()), Some(redirect_uris))
-        .await
-        .map_err(|e| match e {
-            sui_id_store::StoreError::NotFound => CoreError::NotFound,
-            other => CoreError::from(other),
-        })?;
-    audit_ok(db, actor_id, "client.update", Some(target.to_string())).await;
+    sui_id_store::commands::update_client_basic(
+        db,
+        actor.user_id(),
+        target,
+        name.trim().to_owned(),
+        redirect_uris.to_vec(),
+        clock.now(),
+    )
+    .await
+    .map_err(|e| match e {
+        sui_id_store::StoreError::NotFound => CoreError::NotFound,
+        other => CoreError::from(other),
+    })?;
     if let Err(e) = caches.redirect_origins.rebuild(db).await {
         tracing::warn!(error = %e, "cache rebuild failed after update_client");
     }
@@ -219,35 +226,6 @@ pub async fn get_client(
 pub async fn list_clients(db: &Database, actor: &ReadOnlyAdminActor) -> CoreResult<Vec<ClientRow>> {
     let _ = actor;
     Ok(clients::list(db).await?)
-}
-
-pub async fn update_client(
-    db: &Database,
-    actor: &AdminActor,
-    target: ClientId,
-    name: Option<&str>,
-    redirect_uris: Option<&[String]>,
-    _caches: &Caches,
-) -> CoreResult<()> {
-    let actor_id = actor.user_id();
-    if let Some(uris) = redirect_uris {
-        if uris.is_empty() {
-            return Err(CoreError::BadRequest(
-                "at least one redirect_uri must remain".into(),
-            ));
-        }
-        for u in uris {
-            validate_redirect_uri(u)?;
-        }
-    }
-    clients::update_basic(db, target, name, redirect_uris)
-        .await
-        .map_err(|e| match e {
-            sui_id_store::StoreError::NotFound => CoreError::NotFound,
-            other => CoreError::from(other),
-        })?;
-    audit_ok(db, actor_id, "client.update", Some(target.to_string())).await;
-    Ok(())
 }
 
 pub async fn set_client_disabled(
@@ -346,7 +324,6 @@ pub async fn rotate_client_secret(
     client_id: ClientId,
     reason: Option<String>,
 ) -> CoreResult<String> {
-    let actor_id = actor.user_id();
     let client = clients::get(db, client_id).await.map_err(|e| match e {
         sui_id_store::StoreError::NotFound => CoreError::NotFound,
         other => CoreError::from(other),
@@ -358,16 +335,42 @@ pub async fn rotate_client_secret(
     }
     let new_secret = tokens::random_token(32);
     let new_hash = crate::password::hash_password(&new_secret).await?;
-    clients::set_secret_hash(db, client_id, Some(&new_hash), clock.now())
-        .await
-        .map_err(CoreError::from)?;
-    audit_with_note(
+    sui_id_store::commands::rotate_client_secret(
         db,
-        actor_id,
-        "client.rotate_secret",
-        Some(client_id.to_string()),
+        actor.user_id(),
+        client_id,
+        new_hash,
         reason,
+        clock.now(),
     )
-    .await;
+    .await
+    .map_err(CoreError::from)?;
     Ok(new_secret)
+}
+
+/// Patch a dev-mode-seeded client's secret hash to an operator-supplied,
+/// predictable value (RFC 094 M2b wave 4 stage 3, C08). Not an
+/// administrator action in the ordinary sense — the only caller is
+/// dev-mode seeding — but it runs under the same synthetic admin actor
+/// `dev_mode.rs` already constructs for [`create_client`], so this stays
+/// a thin, generic wrapper rather than dev-mode-specific logic living in
+/// this crate.
+pub async fn set_dev_client_secret(
+    db: &Database,
+    actor: &AdminActor,
+    client_id: ClientId,
+    new_hash: &str,
+) -> CoreResult<()> {
+    sui_id_store::commands::set_dev_client_secret(
+        db,
+        actor.user_id(),
+        client_id,
+        new_hash.to_owned(),
+    )
+    .await
+    .map_err(|e| match e {
+        sui_id_store::StoreError::NotFound => CoreError::NotFound,
+        other => CoreError::from(other),
+    })?;
+    Ok(())
 }

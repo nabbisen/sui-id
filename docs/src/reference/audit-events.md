@@ -66,14 +66,15 @@ the administrator is asked to step up again.
 | `client.update_form` | Client scopes, logout URIs and consent policy updated | Administrator saved the client-update form: allowed scopes, the URIs a client may pass as `post_logout_redirect_uri` to `/oauth2/logout`, and the consent-screen policy. All three commit together; the note carries the scope count, the URI count and the new consent policy, never the lists themselves. |
 | `client.disable` | — | Administrator disabled an OIDC client. All of its refresh tokens are revoked. The note carries the reason, if one was given. |
 | `client.enable` | — | Administrator re-enabled a previously disabled OIDC client. |
-| `client.rotate_secret` | — | Administrator generated a new secret for a confidential client; the stored secret hash is replaced. Not available for public clients. |
+| `client.rotate_secret` | — | Administrator generated a new secret for a confidential client; the stored secret hash is replaced. Not available for public clients. The note carries the operator's `reason` when given; never the new secret or its hash. |
+| `client.dev_secret_set` | — | Dev-mode seeding patched a confidential client's secret hash to an operator-supplied, predictable value. Not an administrator action; the only caller is dev-mode startup. No note fields, and never the hash. |
 
 ## Signing key events
 
 | Event name | Label | Description |
 |---|---|---|
 | `signing_key.rotate` | Signing key rotated | Administrator triggered a key rotation. A new Ed25519 key was generated and the previous key was retired. Note fields: `algorithm`, the operator's `reason` when given, and `step_up` (see the user management events above). |
-| `signing_key.delete` | Signing key deleted | Administrator permanently deleted a retired signing key. |
+| `signing_key.delete` | Signing key deleted | Administrator permanently deleted a retired signing key. Refused with no record for the currently active key, or for one that does not exist. The note carries the operator's `reason` when given. |
 
 ## Infrastructure events
 

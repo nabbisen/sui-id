@@ -469,7 +469,6 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     audit_event_client_create: "创建客户端",
     audit_event_client_update: "更新客户端",
     audit_event_client_delete: "删除客户端",
-    audit_event_client_set_allowed_scopes: "更新客户端权限范围",
     audit_event_signing_key_rotate: "轮换签名密钥",
     audit_event_signing_key_delete: "删除签名密钥",
     audit_event_admin_master_key_rotated: "轮换主密钥",

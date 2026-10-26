@@ -84,6 +84,15 @@ before this stage either. All three fields now commit as one event,
 `client.update_form`, Class A. The remaining six of the original twelve are
 still `B *(A required)*`.
 
+**Four more of the six were converted — `client.create`, `client.update`,
+`client.rotate_secret`, `signing_key.delete`, RFC 094 M2b wave 4 stage 3,
+2026-10-25.** Their cells now read `A`. C08's write —
+`clients::set_dev_secret_hash`, emitted nothing before this stage — gets
+its own new row, `client.dev_secret_set`, rather than sharing C07's name
+(see the "Client management" section's own note on why). The remaining
+two of the original twelve, `admin.master_key.rotated` and
+`auth.smtp_config.changed`, are still `B *(A required)*`.
+
 ## Coverage matrix
 
 *RFC 102 B4 (stage 7, 2026-09-17): the five step-up-gated sealed commands —
@@ -142,22 +151,34 @@ separate commands — see `contracts/write-commands.toml`'s note on C03).
 Neither of the two old event-name strings is emitted by anything after this
 stage.
 
+**Stage 3 sealed C01, C02, C07, and gave C08 a name of its own.** C08's
+write (`clients::set_dev_secret_hash`) emitted no event at all before this
+stage — a wave-1 gap, not a best-effort append that could be lost — and its
+only caller is dev-mode seeding, not an administrator action. It could not
+share C07's `client.rotate_secret`: two sealed commands may not carry one
+`EventDescriptor.name` (`scripts/rust_registry.py`'s `read_registry` fails
+the gate the moment two different statics do), and overloading the name
+would also mislead a reader into thinking an administrator rotated a
+secret when nobody did. `client.dev_secret_set` is its own row, Class A,
+no attributes, never the hash.
+
 | Event name | Operation | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
-| `client.create` | Create OIDC client | admin user id | new client id | — | B *(A required)* |
-| `client.update` | Update client basic info | admin user id | client id | — | B *(A required)* |
+| `client.create` | Create OIDC client (command `C01`) | admin user id | new client id | — | A |
+| `client.update` | Update client basic info — name and redirect URIs only (command `C02`) | admin user id | client id | — | A |
 | `client.update_form` | The client-update form: allowed scopes, post-logout redirect URIs and consent policy, one admin save (commands `C03`/`C04`/`C09`) | admin user id | client id | `allowed_scopes_count`, `post_logout_redirect_uris_count` (both required — counts, not the lists themselves: an unbounded caller-influenced list has no place in a hash-chained record), `consent_policy` (required) | A |
 | `client.disable` | Disable client; also revokes its refresh tokens (command `C05`) | admin user id | client id | reason (optional), `refresh_tokens_revoked` (required) | A |
 | `client.enable` | Re-enable client; revokes nothing (command `C21`) | admin user id | client id | — | A |
 | `client.delete` | Soft-delete client; also revokes its refresh tokens (command `C06`) | admin user id | client id | reason (optional), `refresh_tokens_revoked` (required) | A |
-| `client.rotate_secret` | Rotate client secret | admin user id | client id | — | B *(A required)* |
+| `client.rotate_secret` | Rotate client secret (command `C07`) | admin user id | client id | reason (optional); never the new hash or the plaintext secret | A |
+| `client.dev_secret_set` | Dev-mode seeding patched a client's secret hash to an operator-supplied, predictable value (command `C08`) — not an administrator action | admin user id | client id | — ; never the hash | A |
 
 ### Signing keys (`signing_key.*`)
 
 | Event name | Operation | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
 | `signing_key.rotate` | Issue new signing key (command `K01`, the administrator's web rotation; converted RFC 102 stage 7) | admin user id | new key id | `algorithm`, `reason` (optional), `step_up` (required) | A |
-| `signing_key.delete` | Delete signing key | admin user id | key id | — | B *(A required)* |
+| `signing_key.delete` | Delete signing key — refuses with `Conflict` for the active key and `NotFound` for a missing one before any write, so only a successful delete of an already-retired key ever reaches this event (command `K03`) | admin user id | key id | reason (optional) | A |
 
 ### Administrative (`admin.*`)
 

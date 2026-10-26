@@ -33,7 +33,9 @@ use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
-use sui_id_core::admin::{CreateClientSpec, CreateUserSpec, create_client, create_user};
+use sui_id_core::admin::{
+    CreateClientSpec, CreateUserSpec, create_client, create_user, set_dev_client_secret,
+};
 use sui_id_core::setup::create_initial_admin;
 use sui_id_core::time::SharedClock;
 use sui_id_store::Database;
@@ -480,16 +482,17 @@ pub async fn apply_seed(
         // dev_mode seeds always rebuild after; pass a throwaway cache since
         // dev_mode runs before the main AppState is wired up.
         let _dev_caches = sui_id_core::cache::Caches::new();
+        let dev_admin_actor = sui_id_core::actor::Actor::from_session(
+            admin_id,
+            sui_id_store::models::Role::Admin,
+            sui_id_shared::ids::SessionId::new(),
+        )
+        .into_admin()
+        .unwrap_or_else(|_| unreachable!("dev-mode initial admin must be admin"));
         let created_client = create_client(
             db,
             clock,
-            &sui_id_core::actor::Actor::from_session(
-                admin_id,
-                sui_id_store::models::Role::Admin,
-                sui_id_shared::ids::SessionId::new(),
-            )
-            .into_admin()
-            .unwrap_or_else(|_| unreachable!("dev-mode initial admin must be admin")),
+            &dev_admin_actor,
             CreateClientSpec {
                 name: &c.name,
                 redirect_uris: &c.redirect_uris,
@@ -513,13 +516,9 @@ pub async fn apply_seed(
                     let hash = sui_id_core::password::hash_password(custom)
                         .await
                         .context("hashing dev-mode client_secret")?;
-                    sui_id_store::repos::clients::set_dev_secret_hash(
-                        db,
-                        created_client.row.id,
-                        Some(&hash),
-                    )
-                    .await
-                    .context("patching dev-mode client_secret_hash")?;
+                    set_dev_client_secret(db, &dev_admin_actor, created_client.row.id, &hash)
+                        .await
+                        .context("patching dev-mode client_secret_hash")?;
                     Some(custom.to_owned())
                 }
                 _ => created_client.generated_secret.clone(),

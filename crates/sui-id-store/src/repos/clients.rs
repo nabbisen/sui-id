@@ -197,33 +197,42 @@ pub async fn list(db: &Database) -> StoreResult<Vec<ClientRow>> {
     .await
 }
 
-pub async fn update_basic(
-    db: &Database,
+/// The same update the removed bare `update_basic` made, run inside a
+/// caller-supplied transaction. RFC 094 M2b wave 4 stage 3: the bare
+/// async form had exactly two callers, `update_client_basic` (converted
+/// here) and `update_client` (the `Option`-argument form, which had no
+/// caller anywhere in `crates/`, confirmed by a full-workspace grep, and
+/// is removed too) — no test-seeding callers, so it is removed outright
+/// rather than kept alongside this sibling. `commands::update_client_basic`
+/// (C02) is the only caller. Takes `&rusqlite::Connection` rather than
+/// `&Transaction` so a future test-seeding caller could reach it via a
+/// bare connection too, the same reasoning [`create_within_tx`]'s doc
+/// comment gives, though none exists today.
+pub fn update_basic_within_tx(
+    conn: &rusqlite::Connection,
     id: ClientId,
     name: Option<&str>,
     redirect_uris: Option<&[String]>,
+    now: DateTime<Utc>,
 ) -> StoreResult<()> {
-    let name = name.map(str::to_owned);
-    let redirect_uris = redirect_uris.map(<[_]>::to_vec);
-    db.with_conn(move |conn| {
-        // Read current row to merge new values.
-        let current: ClientRow = conn
-            .query_row(&format!("{SELECT} WHERE id = ?1"), [id.to_string()], map)
-            .map_err(|e| match e {
-                rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
-                other => StoreError::from(other),
-            })?;
-        let new_name = name.as_deref().unwrap_or(&current.name);
-        let new_uris = redirect_uris.unwrap_or(current.redirect_uris.clone());
-        let uris_json = serde_json::to_string(&new_uris)?;
-        require_valid_json::<Vec<String>>(&uris_json, "clients.redirect_uris")?;
-        conn.execute(
-            "UPDATE clients SET name = ?1, redirect_uris = ?2, updated_at = ?3 WHERE id = ?4",
-            params![new_name, uris_json, Utc::now(), id.to_string()],
-        )?;
-        Ok(())
-    })
-    .await
+    // Read current row to merge new values.
+    let current: ClientRow = conn
+        .query_row(&format!("{SELECT} WHERE id = ?1"), [id.to_string()], map)
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
+            other => StoreError::from(other),
+        })?;
+    let new_name = name.unwrap_or(&current.name);
+    let new_uris = redirect_uris
+        .map(<[_]>::to_vec)
+        .unwrap_or(current.redirect_uris.clone());
+    let uris_json = serde_json::to_string(&new_uris)?;
+    require_valid_json::<Vec<String>>(&uris_json, "clients.redirect_uris")?;
+    conn.execute(
+        "UPDATE clients SET name = ?1, redirect_uris = ?2, updated_at = ?3 WHERE id = ?4",
+        params![new_name, uris_json, now, id.to_string()],
+    )?;
+    Ok(())
 }
 
 /// Replace the `allowed_scopes` policy for a client.
@@ -366,23 +375,26 @@ pub fn soft_delete_within_tx(
 /// Used **only** by dev mode to give a confidential client a
 /// predictable secret instead of the auto-generated one. Not
 /// exposed in the production HTTP path.
-pub async fn set_dev_secret_hash(
-    db: &Database,
+/// The same update the removed bare `set_dev_secret_hash` made, run
+/// inside a caller-supplied transaction. RFC 094 M2b wave 4 stage 3:
+/// the bare async form had exactly one caller (`dev_mode.rs`'s
+/// patch-in-a-predictable-secret seeding) and no test-seeding callers,
+/// so it is removed outright rather than kept alongside this sibling
+/// — confirmed by a full-workspace grep before deleting it.
+/// `commands::set_dev_client_secret` (C08) is the only caller.
+pub fn set_dev_secret_hash_within_tx(
+    tx: &rusqlite::Transaction<'_>,
     id: ClientId,
     new_hash: Option<&str>,
 ) -> StoreResult<()> {
-    let new_hash = new_hash.map(str::to_owned);
-    db.with_conn(move |conn| {
-        let n = conn.execute(
-            "UPDATE clients SET secret_hash = ?1 WHERE id = ?2",
-            params![new_hash, id.to_string()],
-        )?;
-        if n == 0 {
-            return Err(StoreError::NotFound);
-        }
-        Ok(())
-    })
-    .await
+    let n = tx.execute(
+        "UPDATE clients SET secret_hash = ?1 WHERE id = ?2",
+        params![new_hash, id.to_string()],
+    )?;
+    if n == 0 {
+        return Err(StoreError::NotFound);
+    }
+    Ok(())
 }
 
 /// Update the consent policy for a client (RFC 038).
@@ -428,21 +440,30 @@ pub fn update_consent_policy_within_tx(
 }
 
 /// Update the client secret hash (RFC 047 — secret rotation).
-pub async fn set_secret_hash(
-    db: &Database,
+/// The same update the removed bare `set_secret_hash` made, run inside
+/// a caller-supplied transaction. RFC 094 M2b wave 4 stage 3: the bare
+/// async form had exactly one caller (`rotate_client_secret`) and no
+/// test-seeding callers, so it is removed outright rather than kept
+/// alongside this sibling — confirmed by a full-workspace grep before
+/// deleting it. `commands::rotate_client_secret` (C07) is the only
+/// caller. Unlike the removed original (which never checked the
+/// affected-row count), this sibling does: the same
+/// `NotFound`-guard discipline every `_within_tx` primitive since RFC
+/// 094 M2b wave 4 stage 1's review has carried.
+pub fn set_secret_hash_within_tx(
+    tx: &rusqlite::Transaction<'_>,
     id: ClientId,
     hash: Option<&str>,
     now: chrono::DateTime<chrono::Utc>,
 ) -> StoreResult<()> {
-    let h = hash.map(str::to_owned);
-    db.with_conn(move |conn| {
-        conn.execute(
-            "UPDATE clients SET secret_hash = ?1, updated_at = ?2 WHERE id = ?3",
-            rusqlite::params![h, now, id.to_string()],
-        )?;
-        Ok(())
-    })
-    .await
+    let n = tx.execute(
+        "UPDATE clients SET secret_hash = ?1, updated_at = ?2 WHERE id = ?3",
+        rusqlite::params![hash, now, id.to_string()],
+    )?;
+    if n == 0 {
+        return Err(StoreError::NotFound);
+    }
+    Ok(())
 }
 
 /// RFC 008: update a client's application-identity fields.

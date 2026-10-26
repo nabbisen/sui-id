@@ -12,7 +12,7 @@ mod users;
 
 pub use clients::{
     CreateClientSpec, CreatedClient, create_client, delete_client, get_client, list_clients,
-    rotate_client_secret, set_client_disabled, update_client, update_client_basic,
+    rotate_client_secret, set_client_disabled, set_dev_client_secret, update_client_basic,
     update_client_form,
 };
 pub use signing_keys::{delete_signing_key, list_signing_keys, rotate_signing_key};
@@ -22,36 +22,18 @@ pub use users::{
 };
 
 use crate::errors::{CoreError, CoreResult};
-use chrono::Utc;
 use sui_id_shared::ids::UserId;
 use sui_id_store::Database;
 use sui_id_store::repos::users as users_repo;
-use sui_id_store::{models::AuditLogRow, repos::audit};
 
-async fn audit_ok(db: &Database, actor: UserId, action: &str, target: Option<String>) {
-    audit_with_note(db, actor, action, target, None).await;
-}
-
-async fn audit_with_note(
-    db: &Database,
-    actor: UserId,
-    action: &str,
-    target: Option<String>,
-    note: Option<String>,
-) {
-    let _ = audit::append(
-        db,
-        &AuditLogRow {
-            at: Utc::now(),
-            actor: Some(actor),
-            action: action.to_owned(),
-            target,
-            result: "ok".into(),
-            note,
-        },
-    )
-    .await;
-}
+// RFC 094 M2b wave 4 stage 3: `audit_ok`/`audit_with_note`, the
+// best-effort audit helpers every command in this module used before
+// conversion, are removed here -- this stage converts their last
+// callers (C01, C02, C07, K03). Stage 4's remaining rows (C10, C22,
+// K02) write through a different path (`clients::update_app_identity`,
+// `client_registration_token::revoke`, `signing_keys::retire`), none
+// of which reaches this module, so nothing here was left depending on
+// them.
 
 /// Check if a user has admin rights by fetching their record.
 ///
