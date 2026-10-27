@@ -163,6 +163,7 @@ like a field. In such a row the real field is the *last* occurrence of its key.
 | Event name | Label | Description |
 |---|---|---|
 | `client.dynamic_register` | Dynamic client registered | A third-party application self-registered via `POST /oauth2/register` using a valid initial-access token. The client starts disabled; an administrator must enable it before it can obtain tokens. |
+| `client.registration_token.revoked` | — | The operator revoked a client-registration (initial-access) token via `sui-id admin revoke-registration-token`, so it can no longer be redeemed. No actor (CLI-only, the operator's authority is possession of the master key and filesystem access). |
 
 ## External user-source events (RFC 005)
 

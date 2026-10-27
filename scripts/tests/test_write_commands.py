@@ -99,6 +99,20 @@ files = []
 test_id = "`t`"
 """
 
+SEALED_BY_A01_P01 = """\
+[[command]]
+id = "P01"
+class = "A"
+status = "implemented"
+sealed = false
+sealed_by = "A01"
+owner = "Covered by A01's transaction"
+rationale = "r"
+mutation_surface = "`m`"
+files = ["crates/store/src/repos/things.rs"]
+test_id = "`t`"
+"""
+
 SEALED_B02 = """\
 [[command]]
 id = "B02"
@@ -254,6 +268,34 @@ class WriteCommandsGate(unittest.TestCase):
         text = self.inventory().replace('class = "A"\nstatus = "implemented"', 'class = "P"\nstatus = "target-legacy"', 1)
         self.write("contracts/write-commands.toml", text)
         self.assert_red("must be `implemented`", "Class A by construction")
+
+    # ── (G) sealed_by ──────────────────────────────────────────────────
+
+    def test_a_row_sealed_by_a_sealed_command_is_accepted(self) -> None:
+        self.write("contracts/write-commands.toml", rows(SEALED_A01, SEALED_BY_A01_P01))
+        self.assert_green()
+
+    def test_sealed_true_and_sealed_by_together_is_caught(self) -> None:
+        text = SEALED_BY_A01_P01.replace("sealed = false", "sealed = true")
+        self.write("contracts/write-commands.toml", rows(SEALED_A01, text))
+        self.assert_red("(G) row P01", "`sealed = true` and `sealed_by` together")
+
+    def test_sealed_by_naming_an_undeclared_row_is_caught(self) -> None:
+        text = SEALED_BY_A01_P01.replace('sealed_by = "A01"', 'sealed_by = "Z99"')
+        self.write("contracts/write-commands.toml", rows(SEALED_A01, text))
+        self.assert_red("(G) row P01", "'Z99'", "not a declared row")
+
+    def test_sealed_by_naming_an_unsealed_row_is_caught(self) -> None:
+        text = SEALED_BY_A01_P01.replace('sealed_by = "A01"', 'sealed_by = "P02"')
+        p02 = PLANNED_P01.replace('"P01"', '"P02"')
+        self.write("contracts/write-commands.toml", rows(SEALED_A01, text, p02))
+        self.assert_red("(G) row P01", "'P02'", "not `sealed = true`")
+
+    def test_fix_leaves_sealed_by_untouched(self) -> None:
+        self.write("contracts/write-commands.toml", rows(SEALED_A01, SEALED_BY_A01_P01))
+        r = self.run_gate("--fix")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn('sealed_by = "A01"', self.inventory())
 
     def test_an_unknown_key_is_caught(self) -> None:
         text = self.inventory().replace('owner = "Do the thing"', 'owner = "Do the thing"\nnotes = "x"')

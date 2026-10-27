@@ -36,8 +36,8 @@ use chrono::{DateTime, Utc};
 use sui_id_shared::{
     FamilyId, RefreshTokenHash,
     ids::{
-        ClientId, FederationLoginAttemptId, FederationProviderId, PendingChangeId, SigningKeyId,
-        UserId,
+        ClientId, FederationLoginAttemptId, FederationProviderId, PendingChangeId,
+        RegistrationTokenId, SigningKeyId, UserId,
     },
 };
 
@@ -5552,21 +5552,19 @@ impl SealedCommandEvent<K03> for K03Event {
 }
 
 /// Run K03 (hard-delete a retired signing key) through the Class-A
-/// runner. `now` is threaded through for signature uniformity with
-/// this stage's other four commands; the delete itself touches no
-/// timestamp column (`signing_keys` has none to update on a hard
-/// delete) and the audit row's own `at` is never caller-controlled
-/// (`build_audit_row` calls `chrono::Utc::now()` directly) — so `now`
-/// is accepted and otherwise unused here. Flagged in this round's
-/// return rather than silently added.
+/// runner. RFC 094 M2b wave 4 stage 4: stage 3's `now: DateTime<Utc>`
+/// parameter (accepted only for signature uniformity with that stage's
+/// other four commands, and otherwise unused — the delete touches no
+/// timestamp column, and the audit row's own `at` is never
+/// caller-controlled; `build_audit_row` calls `chrono::Utc::now()`
+/// directly) is removed. A parameter that provably does nothing makes
+/// every future caller work out whether it matters.
 pub async fn delete_signing_key(
     db: &crate::Database,
     admin: UserId,
     target: SigningKeyId,
     reason: Option<String>,
-    now: DateTime<Utc>,
 ) -> StoreResult<crate::registry::Audited<()>> {
-    let _ = now;
     let context = AuthorizedCommandContext::<K03>::for_authorized_actor(admin, None);
     db.class_a(context, move |tx: &mut ClassATx<'_, K03>| {
         crate::repos::signing_keys::delete_within_tx(tx.tx(), target)?;
@@ -5640,6 +5638,64 @@ pub async fn set_dev_client_secret(
     db.class_a(context, move |tx: &mut ClassATx<'_, C08>| {
         crate::repos::clients::set_dev_secret_hash_within_tx(tx.tx(), target, Some(&new_hash))?;
         Ok(((), C08Event::Set { client_id: target }))
+    })
+    .await
+}
+
+// ── C22 — revoke a client-registration token ─────────────────────────────
+//
+// RFC 094 M2b wave 4 stage 4. CLI-only, no authenticated actor -- the
+// operator's authority is possession of the master key and filesystem
+// access, the same shape U08 and K01 use.
+
+static C22_REVOKED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::ClientRegistrationTokenRevoked,
+    name: "client.registration_token.revoked",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::None,
+    target: TargetRequirement::Required,
+    attributes: &[],
+};
+
+crate::declare_write_command! {
+    /// C22 — CLI operator revokes a client-registration token.
+    command C22 = "C22" {
+        system_principal: permitted;
+        enum C22Event {
+            Revoked { token_id: RegistrationTokenId } => &C22_REVOKED,
+        }
+    }
+}
+
+impl SealedCommandEvent<C22> for C22Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Revoked { token_id } = self;
+        Some(AuditTarget(token_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        AuditAttributes::builder().build()
+    }
+}
+
+/// Run C22 (revoke a client-registration token) through the Class-A
+/// runner: the `revoked_at` write and the `client.registration_token.revoked`
+/// audit append now commit in one transaction, replacing a bare
+/// `client_registration_token::revoke` that had no caller and no event
+/// at all.
+pub async fn revoke_registration_token(
+    db: &crate::Database,
+    target: RegistrationTokenId,
+    now: DateTime<Utc>,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<C22>::for_system_actor(None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, C22>| {
+        crate::repos::client_registration_token::revoke_within_tx(tx.tx(), target, now)?;
+        Ok(((), C22Event::Revoked { token_id: target }))
     })
     .await
 }

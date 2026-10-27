@@ -73,13 +73,12 @@ pub async fn rotate_signing_key(
 /// currently active key.
 pub async fn delete_signing_key(
     db: &Database,
-    clock: &SharedClock,
     actor: &AdminActor,
     target: sui_id_shared::ids::SigningKeyId,
     reason: Option<String>,
     caches: &Caches,
 ) -> CoreResult<()> {
-    sui_id_store::commands::delete_signing_key(db, actor.user_id(), target, reason, clock.now())
+    sui_id_store::commands::delete_signing_key(db, actor.user_id(), target, reason)
         .await
         .map_err(|e| match e {
             sui_id_store::StoreError::NotFound => CoreError::NotFound,

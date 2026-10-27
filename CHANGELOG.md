@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Creating a client did not refresh the CORS redirect-origin cache
+  (RFC 094 M2b wave 4 stage 4).** `crates/sui-id/src/http/cors.rs` has
+  always documented that this cache is rebuilt on every client
+  mutation, but `create_client` never called the rebuild — only
+  updating, disabling, deleting or re-enabling a client did. A newly
+  created client's redirect URI was therefore not recognised by the
+  token endpoint's CORS check until some other client mutation (or a
+  server restart) rebuilt the cache afterward. The rebuild now runs
+  after every client creation too. No action is needed on upgrade.
+
 ## [0.84.0] — 2026-10-25
 
 **RFC 094 M2b's settings waves: the pending-settings-change commands made

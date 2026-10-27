@@ -13,13 +13,17 @@ const LANG: sui_id_i18n::Locale = sui_id_i18n::Locale::En;
 /// says — it cannot appear in the page by any other route.
 const LOGO_HOST: &str = "https://logo.rp-evidence-marker.test/logo.png";
 
+/// Likewise, for `homepage_uri` — distinct from `LOGO_HOST` so a test
+/// asserting one's absence cannot pass by accident on the other's.
+const HOMEPAGE_HOST: &str = "https://homepage.rp-evidence-marker.test/";
+
 fn consent_data(registered_via: RegistrationSource, logo_uri: Option<&str>) -> ConsentData {
     ConsentData {
         client_name: "a client".into(),
         requested_scopes: vec!["openid".into()],
         csrf_token: "csrf-token".into(),
         logo_uri: logo_uri.map(str::to_string),
-        homepage_uri: Some("https://rp.test/".into()),
+        homepage_uri: Some(HOMEPAGE_HOST.into()),
         registered_via,
     }
 }
@@ -87,5 +91,31 @@ fn the_homepage_link_is_user_activated_and_leaks_no_referrer_cross_origin() {
         html.contains(r#"name="referrer""#) && html.contains(r#"content="same-origin""#),
         "the page must carry a same-origin referrer policy, which sends no \
          Referer on this cross-origin navigation"
+    );
+}
+
+/// RFC 094 M2b wave 4 stage 4, §4a: `homepage_uri` gated by provenance,
+/// as `logo_uri` already is — a registrant-supplied URL must not become
+/// the consent screen's most prominent link.
+#[test]
+fn a_dynamic_clients_homepage_uri_never_appears_as_a_link() {
+    let html = render_consent(consent_data(RegistrationSource::Dynamic, None), LANG);
+    assert!(
+        !html.contains(HOMEPAGE_HOST),
+        "a dynamically registered client's homepage_uri must never be \
+         emitted into the page, not merely left unlinked"
+    );
+}
+
+/// Without this, the test above would pass if the homepage link were
+/// dropped for *every* client — a different bug — exactly the reasoning
+/// `an_admin_clients_logo_uri_still_appears` gives for `logo_uri`.
+#[test]
+fn an_admin_clients_homepage_uri_still_appears_as_a_link() {
+    let html = render_consent(consent_data(RegistrationSource::Admin, None), LANG);
+    assert!(
+        html.contains(&format!(r#"href="{HOMEPAGE_HOST}""#)),
+        "an admin-registered client's homepage link must still render — \
+         only the dynamic path is gated"
     );
 }

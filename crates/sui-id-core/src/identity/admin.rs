@@ -29,11 +29,14 @@ use sui_id_store::repos::users as users_repo;
 // RFC 094 M2b wave 4 stage 3: `audit_ok`/`audit_with_note`, the
 // best-effort audit helpers every command in this module used before
 // conversion, are removed here -- this stage converts their last
-// callers (C01, C02, C07, K03). Stage 4's remaining rows (C10, C22,
-// K02) write through a different path (`clients::update_app_identity`,
-// `client_registration_token::revoke`, `signing_keys::retire`), none
-// of which reaches this module, so nothing here was left depending on
-// them.
+// callers (C01, C02, C07, K03). At the time, stage 4's remaining rows
+// (C10, C22, K02) wrote through a different path that never reached
+// this module, so nothing here was left depending on them. Stage 4's
+// own dispositions: C22 is sealed directly from the CLI
+// (`commands::revoke_registration_token`), bypassing this crate
+// entirely, the same shape U08 and K01 use; K02's standalone
+// `signing_keys::retire` is removed (redundant with K01's own
+// retire-then-insert); C10 is reserved for RFC 140 and untouched.
 
 /// Check if a user has admin rights by fetching their record.
 ///

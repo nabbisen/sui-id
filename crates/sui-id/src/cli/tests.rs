@@ -271,3 +271,94 @@ fn a_real_candidate_renders_with_the_rfcs_own_label_and_the_found_not_existing_q
         "the non-empty case must also say it found entries, not that they exist:\n{text}"
     );
 }
+
+/// RFC 094 M2b wave 4 stage 4, C22 — the e2e assertion through the
+/// layer that actually runs: there is no HTTP route for this command,
+/// and no precedent in this crate for driving `run_admin_*` through a
+/// spawned binary (`backup`/`restore`'s own e2e tests call the library
+/// functions beneath the CLI directly, for the same reason) — so this
+/// calls `run_admin_revoke_registration_token` itself, the real
+/// argument-parsing and config/db-opening path, against a real on-disk
+/// database and key file, the same construction
+/// `tests/e2e/backup.rs::backup_then_restore_preserves_users_and_clients`
+/// uses. Asserts the audit record, not only the revoked value.
+#[tokio::test]
+async fn revoke_registration_token_cli_revokes_and_is_audited() {
+    use sui_id_shared::ids::RegistrationTokenId;
+    use sui_id_store::Database;
+    use sui_id_store::crypto::MasterKey;
+
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let db_path = tmp.path().join("cli-c22.sqlite");
+    let key_path = tmp.path().join("cli-c22.key");
+
+    let key = MasterKey::generate();
+    std::fs::write(&key_path, key.to_base64()).expect("write key");
+    let db = Database::open(&db_path, key).expect("open db");
+
+    let id = RegistrationTokenId::new();
+    let now = chrono::Utc::now();
+    sui_id_store::repos::client_registration_token::create(
+        &db,
+        &sui_id_store::repos::client_registration_token::RegistrationTokenRow {
+            id,
+            token_hash: "cli-test-hash".into(),
+            max_uses: 1,
+            used_count: 0,
+            expires_at: None,
+            revoked_at: None,
+            note: None,
+            created_at: now,
+            updated_at: now,
+        },
+    )
+    .await
+    .expect("seed token");
+    drop(db);
+
+    let config_path = tmp.path().join("sui-id.toml");
+    std::fs::write(
+        &config_path,
+        format!(
+            "[storage]\ndb_path = {db_path:?}\nkey_file = {key_path:?}\n\n[server]\n\
+             listen_addr = \"127.0.0.1:0\"\nissuer = \"https://idp.test\"\n"
+        ),
+    )
+    .expect("write config");
+
+    let args: Vec<String> = vec![
+        "sui-id".into(),
+        "admin".into(),
+        "revoke-registration-token".into(),
+        "--id".into(),
+        id.to_string(),
+        "--config".into(),
+        config_path.to_string_lossy().into_owned(),
+    ];
+    run_admin_revoke_registration_token(&args)
+        .await
+        .expect("revoke");
+
+    let key2 = sui_id::keyring::resolve(&key_path)
+        .expect("resolve key")
+        .key;
+    let db2 = Database::open(&db_path, key2).expect("reopen db");
+    let row = sui_id_store::repos::client_registration_token::find_by_hash(&db2, "cli-test-hash")
+        .await
+        .expect("find")
+        .expect("row exists");
+    assert!(row.revoked_at.is_some(), "the token must be revoked");
+
+    let note: Option<String> = db2
+        .with_conn(|c| {
+            Ok(c.query_row(
+                "SELECT note FROM audit_log WHERE action = 'client.registration_token.revoked' \
+                 ORDER BY seq DESC LIMIT 1",
+                [],
+                |r| r.get(0),
+            )?)
+        })
+        .await
+        .expect("audit row exists");
+    assert_eq!(note, None, "no attributes");
+}

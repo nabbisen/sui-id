@@ -278,6 +278,14 @@ pub enum AuditEventKind {
     /// did; dev-mode seeding patched a configured value in at startup.
     /// Never carries the secret or its hash.
     ClientDevSecretSet,
+    /// `client.registration_token.revoked` — RFC 094 M2b wave 4 stage 4,
+    /// C22. A wave-1 shape before this stage: the inventory declared it
+    /// and nothing emitted it — `client_registration_token::revoke` (the
+    /// write this seals) had no caller anywhere in `crates/`. CLI-only,
+    /// no authenticated actor, `system_principal: permitted` — the
+    /// operator's authority is possession of the master key and
+    /// filesystem access, the same shape U08 and K01 use.
+    ClientRegistrationTokenRevoked,
     /// Proof-only — see [`ProofOnlyForbiddenSystemPrincipalCommand`]. Never
     /// emitted; no command can construct this event because no command can
     /// construct a context for that command in the first place.

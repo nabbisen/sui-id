@@ -175,15 +175,8 @@ pub async fn signing_keys_delete(
     }
     let target = sui_id_shared::ids::SigningKeyId::from_str(&id)
         .map_err(|_| HttpError::html(CoreError::BadRequest("invalid signing key id".into())))?;
-    admin_uc::delete_signing_key(
-        &app.db,
-        &app.clock,
-        admin_actor,
-        target,
-        form.reason_opt(),
-        &app.caches,
-    )
-    .await
-    .map_err(HttpError::html)?;
+    admin_uc::delete_signing_key(&app.db, admin_actor, target, form.reason_opt(), &app.caches)
+        .await
+        .map_err(HttpError::html)?;
     Ok(Redirect::to("/admin/signing-keys").into_response())
 }

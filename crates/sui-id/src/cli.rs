@@ -33,6 +33,7 @@ pub(crate) const ADMIN_SUBACTIONS: &[&str] = &[
     "rotate-key",
     "rotate-metrics-token",
     "issue-registration-token",
+    "revoke-registration-token",
     "legacy-dynamic-candidates",
 ];
 
@@ -53,6 +54,7 @@ pub(crate) const VALUE_TAKING_FLAGS: &[&str] = &[
     "--new-key",
     "--max-uses",
     "--note",
+    "--id",
     "--admin-username",
     "--admin-email",
     "--admin-display-name",
@@ -162,6 +164,7 @@ pub(crate) async fn run_admin_subcommand(args: &[String]) -> Result<()> {
         Some("rotate-key") => run_admin_rotate_key(args).await,
         Some("rotate-metrics-token") => run_admin_rotate_metrics_token(args).await,
         Some("issue-registration-token") => run_admin_issue_registration_token(args).await,
+        Some("revoke-registration-token") => run_admin_revoke_registration_token(args).await,
         Some("legacy-dynamic-candidates") => run_admin_legacy_dynamic_candidates(args).await,
         Some(known) if ADMIN_SUBACTIONS.contains(&known) => unreachable!(
             "{known} is listed in ADMIN_SUBACTIONS but has no dispatch arm above -- add one"
@@ -695,6 +698,7 @@ USAGE:
     sui-id admin rotate-key [--generate-new-key | --new-key PATH] [--yes] [--config PATH]
     sui-id admin rotate-metrics-token [--config PATH]
     sui-id admin issue-registration-token [--max-uses N] [--note TEXT] [--config PATH]
+    sui-id admin revoke-registration-token --id ID [--config PATH]
     sui-id admin legacy-dynamic-candidates [--config PATH]
     sui-id --dev [--dev-bind ADDR] [--dev-db PATH] [--dev-seed PATH]
                  [--dev-admin-password STR] [--dev-client-secret STR]
@@ -762,6 +766,10 @@ SUBCOMMANDS:
                              dynamic client registration. The raw token
                              is printed to stdout ONCE. Accepts
                              --max-uses N (default 1) and --note TEXT.
+    admin revoke-registration-token
+                             Immediately revoke a client-registration
+                             token by id, so it can no longer be
+                             redeemed. Requires --id ID.
     admin legacy-dynamic-candidates
                              Read-only (RFC 095). Lists `clients` rows a
                              pre-RFC-094 bug (2026-07-02 to 2026-10-02)
@@ -809,6 +817,8 @@ OPTIONS:
                              (default: 1).
     --note TEXT              Operator note for `admin
                              issue-registration-token`.
+    --id ID                  Registration-token id for `admin
+                             revoke-registration-token`.
     --yes, -y                Skip the confirmation prompt.
     --force                  Allow `restore` to overwrite existing files.
     --encrypt                Encrypt the backup with a passphrase.
@@ -991,6 +1001,43 @@ pub(crate) async fn run_admin_issue_registration_token(args: &[String]) -> Resul
         "    -d '{{\"client_name\":\"My App\",\"redirect_uris\":[\"https://app.example/cb\"]}}'"
     );
 
+    Ok(())
+}
+
+/// `sui-id admin revoke-registration-token --id ID [--config PATH]`
+///
+/// Immediately revokes an RFC 7591 initial access token so it can no
+/// longer be redeemed — `consume` already refuses a revoked row
+/// (checked, not assumed: `repos::client_registration_token::
+/// consume_within_tx` returns `Ok(false)` for `row.revoked_at.is_some()`).
+/// RFC 094 M2b wave 4 stage 4, C22: the write and its
+/// `client.registration_token.revoked` audit append now commit in one
+/// transaction, replacing a bare `revoke` that had no caller and no
+/// event at all.
+pub(crate) async fn run_admin_revoke_registration_token(args: &[String]) -> Result<()> {
+    use sui_id_shared::ids::RegistrationTokenId;
+
+    let id_str = args
+        .iter()
+        .position(|a| a == "--id")
+        .and_then(|i| args.get(i + 1))
+        .context("admin revoke-registration-token requires --id ID")?;
+    let id: RegistrationTokenId = id_str
+        .parse()
+        .with_context(|| format!("{id_str:?} is not a valid registration-token id"))?;
+
+    let config_path = parse_config_path(args).unwrap_or_else(|| PathBuf::from("./sui-id.toml"));
+    let cfg = Config::load(&config_path)
+        .with_context(|| format!("loading config from {}", config_path.display()))?;
+    let resolved = sui_id::keyring::resolve(&cfg.storage.key_file).context("loading master key")?;
+    let db = sui_id::database::open(&cfg.storage.db_path, resolved.key)?;
+
+    let now = sui_id_core::time::system_clock().now();
+    sui_id_store::commands::revoke_registration_token(&db, id, now)
+        .await
+        .with_context(|| format!("revoking registration token {id}"))?;
+
+    println!("Registration token {id} revoked.");
     Ok(())
 }
 

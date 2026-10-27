@@ -173,22 +173,34 @@ pub fn consume_within_tx(
     Ok(true)
 }
 
-/// Revoke a token immediately.  Returns `NotFound` if the id is unknown.
+/// Revoke a token immediately. Returns `NotFound` if the id is unknown.
+/// RFC 094 M2b wave 4 stage 4: kept, unchanged, for `tests.rs`'s
+/// `revoke_blocks_consume` — a real test-seeding caller a first,
+/// qualified-path-only grep missed (it calls `revoke` bare, via `use
+/// super::*`), caught before this round's commit rather than after a
+/// broken build. The sealed path is the new `revoke_within_tx`.
 pub async fn revoke(db: &Database, id: RegistrationTokenId, now: DateTime<Utc>) -> StoreResult<()> {
-    let id_str = id.to_string();
-    db.with_conn(move |conn| {
-        let n = conn.execute(
-            "UPDATE client_registration_token \
-             SET revoked_at = ?1, updated_at = ?2 WHERE id = ?3",
-            params![now, now, id_str],
-        )?;
-        if n == 0 {
-            Err(StoreError::NotFound)
-        } else {
-            Ok(())
-        }
-    })
-    .await
+    db.with_tx(move |tx| revoke_within_tx(tx, id, now)).await
+}
+
+/// The same update as [`revoke`], run inside a caller-supplied
+/// transaction. `commands::revoke_registration_token` (C22) is the only
+/// sealed caller.
+pub fn revoke_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    id: RegistrationTokenId,
+    now: DateTime<Utc>,
+) -> StoreResult<()> {
+    let n = tx.execute(
+        "UPDATE client_registration_token \
+         SET revoked_at = ?1, updated_at = ?2 WHERE id = ?3",
+        params![now, now, id.to_string()],
+    )?;
+    if n == 0 {
+        Err(StoreError::NotFound)
+    } else {
+        Ok(())
+    }
 }
 
 #[cfg(test)]

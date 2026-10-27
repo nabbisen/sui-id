@@ -178,5 +178,6 @@ mod policy_markers;
 mod provisioning;
 mod recovery;
 mod refresh;
+mod registration_token;
 mod server_settings;
 mod user_admin;

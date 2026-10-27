@@ -24,6 +24,16 @@ which it is with `sealed`, and the directions follow from that:
       closed sets, a sealed row `implemented` and Class A.
   (F) No hand-written count. The file carries none; the counts this gate
       prints are derived from the rows on every run.
+  (G) `sealed_by` (RFC 094 M2b wave 4 stage 4): some rows have no write of
+      their own because another command's sealed transaction covers their
+      field -- C04 and C09 are sealed by C03's single transaction, not by a
+      `command C04 = "C04"` that does not exist. `sealed = false` would
+      conflate that with "not converted" at all, which M2b's closure
+      criterion ("every remaining Class-A row converted") cannot tell
+      apart. A row names the command that seals it with `sealed_by`: that
+      name must be a declared, `sealed = true` row, and `sealed = true`
+      together with `sealed_by` on the same row is a contradiction (the
+      row cannot be sealed by its own command and by another's at once).
 
 A `declare_write_command!` whose id is not of the inventory's shape is
 tolerated only in registry.rs, whose proof-only command exists to give a
@@ -64,7 +74,8 @@ REQUIRED = (
     "test_id",
 )
 DERIVED = ("event", "descriptor")
-ALLOWED = set(REQUIRED) | set(DERIVED)
+OPTIONAL = ("sealed_by",)
+ALLOWED = set(REQUIRED) | set(DERIVED) | set(OPTIONAL)
 
 # What a header must not say: a count is a claim a row edit falsifies. Matches
 # the `(82)` after a status, and any "N rows/entries/commands" sentence.
@@ -281,6 +292,28 @@ def check_derived(by_id: dict[str, dict], code: dict[str, dict], failures: list[
                     failures.append(f"(C) row {rid}: a planned row carries no `{key}`")
 
 
+def check_sealed_by(by_id: dict[str, dict], failures: list[str]) -> None:
+    for rid, row in sorted(by_id.items()):
+        if "sealed_by" not in row:
+            continue
+        sealer = row["sealed_by"]
+        if row.get("sealed") is True:
+            failures.append(
+                f"(G) row {rid}: `sealed = true` and `sealed_by` together are a contradiction"
+            )
+            continue
+        if not isinstance(sealer, str):
+            failures.append(f"(G) row {rid}: `sealed_by` must be a string naming a command id")
+            continue
+        sealer_row = by_id.get(sealer)
+        if sealer_row is None:
+            failures.append(f"(G) row {rid}: `sealed_by` names {sealer!r}, which is not a declared row")
+        elif sealer_row.get("sealed") is not True:
+            failures.append(
+                f"(G) row {rid}: `sealed_by` names {sealer!r}, which is not `sealed = true`"
+            )
+
+
 def check_files(root: Path, by_id: dict[str, dict], failures: list[str]) -> None:
     for rid, row in sorted(by_id.items()):
         files = row.get("files")
@@ -400,6 +433,7 @@ def main(argv: list[str]) -> int:
     by_id = check_shape(rows, failures)
     check_direction(by_id, code, failures)
     check_derived(by_id, code, failures)
+    check_sealed_by(by_id, failures)
     check_files(root, by_id, failures)
     check_header(text, failures)
 

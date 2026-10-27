@@ -114,37 +114,6 @@ pub async fn active(db: &Database) -> StoreResult<SigningKeyRow> {
     }).await
 }
 
-/// Mark a key as retired: set `is_active = 0` and stamp `rotated_at`.
-/// The row is **not** deleted — its public half stays in JWKS so that
-/// already-issued tokens can still be verified during the grace window.
-/// Returns `NotFound` if no key has the given id.
-pub async fn retire(db: &Database, id: SigningKeyId) -> StoreResult<()> {
-    db.with_conn(move |conn| {
-        let n = conn.execute(
-            "UPDATE signing_keys SET is_active = 0, rotated_at = ?1 \
-             WHERE id = ?2 AND is_active = 1",
-            rusqlite::params![Utc::now(), id.to_string()],
-        )?;
-        if n == 0 {
-            // Either the id doesn't exist or it was already retired. We
-            // distinguish by a probe; the caller usually only cares that
-            // the row is now in the retired state.
-            let exists: i64 = conn
-                .query_row(
-                    "SELECT COUNT(*) FROM signing_keys WHERE id = ?1",
-                    [id.to_string()],
-                    |r| r.get(0),
-                )
-                .unwrap_or(0);
-            if exists == 0 {
-                return Err(StoreError::NotFound);
-            }
-        }
-        Ok(())
-    })
-    .await
-}
-
 /// The same guard and delete the removed bare `delete` made, run
 /// inside a caller-supplied transaction. RFC 094 M2b wave 4 stage 3:
 /// the bare async form had exactly one caller (`delete_signing_key`)

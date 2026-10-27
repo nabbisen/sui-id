@@ -585,8 +585,9 @@ id = "C04"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
 sealed = false
+sealed_by = "C03"
 owner = "Replace post-logout URIs"
-rationale = "`client.update_form` now covers this field -- RFC 094 M2b wave 4 stage 2 collapsed C04 into C03 (see C03's row for why); the bare `clients::set_post_logout_redirect_uris` this row used to name is removed (confirmed, before deleting it, that its only caller was the handler converted to C03). Stays `sealed = false`: no separate `command C04 = \"C04\"` is declared, by design."
+rationale = "`client.update_form` now covers this field -- RFC 094 M2b wave 4 stage 2 collapsed C04 into C03 (see C03's row for why); the bare `clients::set_post_logout_redirect_uris` this row used to name is removed (confirmed, before deleting it, that its only caller was the handler converted to C03). `sealed_by = \"C03\"` since stage 4 (RFC 094 M2b wave 4): no separate `command C04 = \"C04\"` is declared, by design, but the field closes off this document's own ambiguity between \"not converted\" and \"converted under another command's id\"."
 mutation_surface = "`clients::set_post_logout_redirect_uris_within_tx` (via `commands::update_client_form`, C03)"
 files = ["crates/sui-id-store/src/repos/clients.rs"]
 test_id = "`a_c04_logout_uris`"
@@ -648,8 +649,9 @@ id = "C09"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
 sealed = false
+sealed_by = "C03"
 owner = "Change consent policy"
-rationale = "`client.update_form` now covers this field -- RFC 094 M2b wave 4 stage 2 collapsed C09 into C03 (see C03's row for why). Before this stage, `client.consent_policy_changed` was declared here and emitted by nothing (`git grep` found it nowhere in `crates/`) -- a wave-1-shaped gap, not a record that could be lost. `clients::update_consent_policy` is kept, unchanged, for `r120.rs`'s test seeding; the sealed path is the new `update_consent_policy_within_tx`. Stays `sealed = false`: no separate `command C09 = \"C09\"` is declared, by design."
+rationale = "`client.update_form` now covers this field -- RFC 094 M2b wave 4 stage 2 collapsed C09 into C03 (see C03's row for why). Before this stage, `client.consent_policy_changed` was declared here and emitted by nothing (`git grep` found it nowhere in `crates/`) -- a wave-1-shaped gap, not a record that could be lost. `clients::update_consent_policy` is kept, unchanged, for `r120.rs`'s test seeding; the sealed path is the new `update_consent_policy_within_tx`. `sealed_by = \"C03\"` since stage 4 (RFC 094 M2b wave 4): no separate `command C09 = \"C09\"` is declared, by design, but the field closes off this document's own ambiguity between \"not converted\" and \"converted under another command's id\"."
 mutation_surface = "`clients::update_consent_policy_within_tx` (via `commands::update_client_form`, C03)"
 files = ["crates/sui-id-store/src/repos/clients.rs"]
 test_id = "`a_c09_consent_policy`"
@@ -794,12 +796,14 @@ descriptor = ["C21_ENABLED"]
 id = "C22"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
+sealed = true
 owner = "Revoke registration authorization"
-rationale = "`client.registration_token.revoked`"
-mutation_surface = "`client_registration_token::revoke`"
+rationale = "`client.registration_token.revoked`, no attributes. RFC 094 M2b wave 4 stage 4: a wave-1 gap before this stage -- the bare write had no caller anywhere in `crates/` and the event was emitted by nothing. CLI-only (`sui-id admin revoke-registration-token --id ID`), no authenticated actor, `system_principal: permitted` -- the operator's authority is possession of the master key and filesystem access, the same shape U08 and K01 use. `consume` already refuses a revoked row (measured against `consume_within_tx`, not assumed)."
+mutation_surface = "`client_registration_token::revoke_within_tx` (via `commands::revoke_registration_token`)"
 files = ["crates/sui-id-store/src/repos/client_registration_token.rs"]
 test_id = "`a_c22_registration_revoke`"
+event = ["client.registration_token.revoked"]
+descriptor = ["C22_REVOKED"]
 
 [[command]]
 id = "C23"
@@ -1145,13 +1149,13 @@ descriptor = ["K01_ROTATED"]
 [[command]]
 id = "K02"
 class = "A"
-status = "implemented"  # implemented | target-absent | target-legacy
+status = "target-absent"  # implemented | target-absent | target-legacy
 sealed = false
-owner = "Retire signing key"
-rationale = "`signing_key.retire`"
-mutation_surface = "`signing_keys::retire`"
-files = ["crates/sui-id-store/src/repos/signing_keys.rs"]
-test_id = "`a_k02_signing_retire`"
+owner = "Retire signing key (standalone)"
+rationale = "Removed, RFC 094 M2b wave 4 stage 4: `signing_keys::retire` had no caller anywhere in `crates/` (confirmed by a full-workspace grep before deleting it), and retirement already happens -- atomically, inside K01's own sealed transaction (`rotate_atomic_within_tx`'s own first step: `UPDATE signing_keys SET is_active = 0, rotated_at = ?1 WHERE is_active = 1`, immediately followed by the new key's insert). The standalone async function was redundant with a path already sealed as K01; there is no `signing_key.retire` event, and none is added -- an event nothing emits has no row."
+mutation_surface = "none -- removed"
+files = []
+test_id = "none -- redundant with K01, permanently; see rationale"
 
 [[command]]
 id = "K03"

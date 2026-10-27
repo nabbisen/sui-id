@@ -258,6 +258,13 @@ either.*
 | Event name | Operation | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
 | `client.dynamic_register` | RFC 7591 dynamic client registration | — | new client id | `client_name=…` | A |
+| `client.registration_token.revoked` | CLI operator revokes a client-registration token (`sui-id admin revoke-registration-token`, command `C22`), so it can no longer be redeemed | — | token id | — | A |
+
+**New row, RFC 094 M2b wave 4 stage 4.** This event was declared in
+`contracts/write-commands.toml` and emitted by nothing before this stage
+— `client_registration_token::revoke`, the write it seals, had no
+caller anywhere in `crates/`. No row existed here either, since nothing
+had ever emitted it.
 
 ### External user-source authentication (RFC 005)
 

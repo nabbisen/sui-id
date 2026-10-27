@@ -71,7 +71,15 @@ pub fn render_consent(data: ConsentData, lang: sui_id_i18n::Locale) -> String {
             RegistrationSource::Admin => data.logo_uri.clone(),
             RegistrationSource::Dynamic => None,
         };
-        let homepage_uri = data.homepage_uri.clone();
+        // RFC 094 M2b wave 4 stage 4: the same gate `logo_uri` already has,
+        // just above — a dynamically registered client's homepage link
+        // must never be emitted either, or a registrant-supplied URL
+        // becomes the consent screen's most prominent link (it renders as
+        // `<a href>` wrapping the client name).
+        let homepage_uri = match data.registered_via {
+            RegistrationSource::Admin => data.homepage_uri.clone(),
+            RegistrationSource::Dynamic => None,
+        };
         let client_name_display = client_name.clone();
 
         let csrf = data.csrf_token.clone();

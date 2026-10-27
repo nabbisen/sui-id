@@ -181,7 +181,7 @@ async fn a_k03_signing_delete() {
         .expect("seed retired key");
     let before = audit_rows(&db).await;
 
-    let audited = delete_signing_key(&db, admin, id, Some("cleanup".into()), Utc::now())
+    let audited = delete_signing_key(&db, admin, id, Some("cleanup".into()))
         .await
         .expect("delete");
     audited.into_inner();
@@ -226,7 +226,7 @@ async fn k03_injected_failure_before_append_rolls_back_the_delete() {
     let before_audit = latest_audit_action(&db).await;
 
     db.fault_injector().fail_before_next_append();
-    let result = delete_signing_key(&db, admin, id, None, Utc::now()).await;
+    let result = delete_signing_key(&db, admin, id, None).await;
     assert!(result.is_err(), "injected failure must surface as Err");
 
     assert!(
@@ -247,7 +247,7 @@ async fn k03_against_a_nonexistent_key_is_notfound_and_writes_no_record() {
     let ghost = SigningKeyId::new();
     let before = audit_rows(&db).await;
 
-    let result = delete_signing_key(&db, admin, ghost, None, Utc::now()).await;
+    let result = delete_signing_key(&db, admin, ghost, None).await;
     assert!(
         matches!(result, Err(StoreError::NotFound)),
         "expected NotFound"
@@ -269,7 +269,7 @@ async fn k03_against_the_active_key_is_conflict_and_writes_no_record() {
         .expect("seed active key");
     let before = audit_rows(&db).await;
 
-    let result = delete_signing_key(&db, admin, id, None, Utc::now()).await;
+    let result = delete_signing_key(&db, admin, id, None).await;
     assert!(
         matches!(result, Err(StoreError::Conflict)),
         "expected Conflict for the active key"
