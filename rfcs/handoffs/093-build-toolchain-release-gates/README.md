@@ -8,6 +8,16 @@ authorization, or override the RFC.
 **Authorization:** [`implementation-start-authorization.md`](./implementation-start-authorization.md),
 reviewed at [`093-implementation-start-authorization-review-2026-07-21.md`](093-implementation-start-authorization-review-2026-07-21.md)
 
+> **Open round, 2026-10-28: the local matrix becomes a script** —
+> [`local-matrix-script-2026-10-28.md`](local-matrix-script-2026-10-28.md),
+> cycle H item 4. There is no tracked definition of "the local matrix"
+> anywhere, so it has lived in whatever each dispatch enumerated by
+> hand — which is how four consecutive `0.85.0` stages reported 30/30
+> while missing fourteen `unittest` steps CI runs, and how the round
+> that found them enumerated thirteen. The script derives the set
+> instead; a self-test holds the derivation to `ci.yml`. **No gate and
+> no lane changes.**
+
 ## Stage map
 
 RFC 093 is delivered in two milestones plus one preparatory refactor. They share

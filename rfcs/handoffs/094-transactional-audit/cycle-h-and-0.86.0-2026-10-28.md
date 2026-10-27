@@ -54,8 +54,10 @@ programme honest. Five items, none large.**
    written alongside this scope. Build the workflow in `0.86.0`; **first
    use it at `0.87.0`**, not on its own release, because the first run
    of new release machinery should not be on a release already waiting.
-4. **The local matrix becomes a script.** There is **no tracked
-   definition of it anywhere** — I grepped `docs/`, the rules and the
+4. **The local matrix becomes a script. DISPATCHED 2026-10-28** —
+   [`../093-build-toolchain-release-gates/local-matrix-script-2026-10-28.md`](../093-build-toolchain-release-gates/local-matrix-script-2026-10-28.md),
+   filed under RFC 093 because that RFC owns the Gate Matrix. There is
+   **no tracked definition of it anywhere** — I grepped `docs/`, the rules and the
    role files. It lives in whatever each dispatch happens to enumerate,
    which is why four consecutive stages ran a matrix that was missing
    fourteen `unittest` steps, and why the round that found them
