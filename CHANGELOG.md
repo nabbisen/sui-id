@@ -22,6 +22,13 @@ finding none, which RFC 095 does not accept as evidence.
   token issued by `sui-id admin issue-registration-token` can now be
   withdrawn. See `Security` below for what this closes.
 
+- **`sui-id admin list-registration-tokens`.** Lists every
+  registration token's id, creation time, use count and revoked state
+  (never the token itself). `sui-id admin issue-registration-token`
+  now also prints a token's id alongside the token, so an operator can
+  record it and revoke the token later without this listing command or
+  the database.
+
 ### Changed
 
 - **A client's lifecycle, metadata, secret and signing-key writes now

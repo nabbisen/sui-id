@@ -362,3 +362,123 @@ async fn revoke_registration_token_cli_revokes_and_is_audited() {
         .expect("audit row exists");
     assert_eq!(note, None, "no attributes");
 }
+
+/// This round's own dispatch, §2a/§3: builds two rows directly (no
+/// database needed — [`render_registration_token_list`] is pure data
+/// in, text out, same separation as
+/// [`render_legacy_dynamic_candidate_report`]), one live and one
+/// revoked, and checks every column the dispatch named: the id (the
+/// whole point of this round), `max_uses = 0` rendering as `unlimited`
+/// rather than the literal `0`, `expires_at = None` rendering as
+/// `never`, and the revoked row's own revocation timestamp appearing.
+#[test]
+fn the_listing_shows_a_tokens_id_and_its_revoked_state() {
+    use sui_id_shared::ids::RegistrationTokenId;
+    use sui_id_store::repos::client_registration_token::RegistrationTokenRow;
+
+    let now = chrono::Utc::now();
+    let live_id = RegistrationTokenId::new();
+    let revoked_id = RegistrationTokenId::new();
+    let rows = vec![
+        RegistrationTokenRow {
+            id: live_id,
+            token_hash: "live-hash".into(),
+            max_uses: 0,
+            used_count: 3,
+            expires_at: None,
+            revoked_at: None,
+            note: None,
+            created_at: now,
+            updated_at: now,
+        },
+        RegistrationTokenRow {
+            id: revoked_id,
+            token_hash: "revoked-hash".into(),
+            max_uses: 5,
+            used_count: 1,
+            expires_at: None,
+            revoked_at: Some(now),
+            note: None,
+            created_at: now,
+            updated_at: now,
+        },
+    ];
+
+    let text = render_registration_token_list(&rows);
+
+    assert!(
+        text.contains(&live_id.to_string()),
+        "the live token's id must appear:\n{text}"
+    );
+    assert!(
+        text.contains(&revoked_id.to_string()),
+        "the revoked token's id must appear:\n{text}"
+    );
+    assert!(
+        text.contains("unlimited"),
+        "max_uses = 0 must render as `unlimited`, not `0`:\n{text}"
+    );
+    assert!(
+        text.contains("never"),
+        "expires_at = None must render as `never`:\n{text}"
+    );
+    assert!(
+        text.contains(&format!("revoked {}", now.to_rfc3339())),
+        "the revoked row must show its revocation timestamp:\n{text}"
+    );
+    assert!(
+        text.contains("active"),
+        "the live row must be distinguishable from the revoked one:\n{text}"
+    );
+}
+
+/// §2a's explicit requirement: the raw token and its hash must never
+/// reach stdout through this command. Checked against both rows' own
+/// hash strings, which would otherwise be indistinguishable from a
+/// column this command is allowed to print.
+#[test]
+fn the_listing_never_prints_the_token_or_its_hash() {
+    use sui_id_shared::ids::RegistrationTokenId;
+    use sui_id_store::repos::client_registration_token::RegistrationTokenRow;
+
+    let now = chrono::Utc::now();
+    let rows = vec![RegistrationTokenRow {
+        id: RegistrationTokenId::new(),
+        token_hash: "super-secret-hash-value".into(),
+        max_uses: 1,
+        used_count: 0,
+        expires_at: None,
+        revoked_at: None,
+        note: None,
+        created_at: now,
+        updated_at: now,
+    }];
+
+    let text = render_registration_token_list(&rows);
+
+    assert!(
+        !text.contains("super-secret-hash-value"),
+        "the token hash must never appear in the listing output:\n{text}"
+    );
+}
+
+/// This round's §2b: `issue-registration-token`'s own output must
+/// contain the row's id, not only the token, so an operator who
+/// records the output can revoke later without the listing command
+/// above or the database.
+#[test]
+fn issued_registration_tokens_output_contains_the_id() {
+    use sui_id_shared::ids::RegistrationTokenId;
+
+    let id = RegistrationTokenId::new();
+    let text = render_issued_registration_token("a-raw-token-value", id, 1);
+
+    assert!(
+        text.contains(&id.to_string()),
+        "the issued token's output must contain its id:\n{text}"
+    );
+    assert!(
+        text.contains("a-raw-token-value"),
+        "the issued token's output must still contain the token itself:\n{text}"
+    );
+}

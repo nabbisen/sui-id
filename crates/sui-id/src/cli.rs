@@ -34,6 +34,7 @@ pub(crate) const ADMIN_SUBACTIONS: &[&str] = &[
     "rotate-metrics-token",
     "issue-registration-token",
     "revoke-registration-token",
+    "list-registration-tokens",
     "legacy-dynamic-candidates",
 ];
 
@@ -165,6 +166,7 @@ pub(crate) async fn run_admin_subcommand(args: &[String]) -> Result<()> {
         Some("rotate-metrics-token") => run_admin_rotate_metrics_token(args).await,
         Some("issue-registration-token") => run_admin_issue_registration_token(args).await,
         Some("revoke-registration-token") => run_admin_revoke_registration_token(args).await,
+        Some("list-registration-tokens") => run_admin_list_registration_tokens(args).await,
         Some("legacy-dynamic-candidates") => run_admin_legacy_dynamic_candidates(args).await,
         Some(known) if ADMIN_SUBACTIONS.contains(&known) => unreachable!(
             "{known} is listed in ADMIN_SUBACTIONS but has no dispatch arm above -- add one"
@@ -699,6 +701,7 @@ USAGE:
     sui-id admin rotate-metrics-token [--config PATH]
     sui-id admin issue-registration-token [--max-uses N] [--note TEXT] [--config PATH]
     sui-id admin revoke-registration-token --id ID [--config PATH]
+    sui-id admin list-registration-tokens [--config PATH]
     sui-id admin legacy-dynamic-candidates [--config PATH]
     sui-id --dev [--dev-bind ADDR] [--dev-db PATH] [--dev-seed PATH]
                  [--dev-admin-password STR] [--dev-client-secret STR]
@@ -770,6 +773,11 @@ SUBCOMMANDS:
                              Immediately revoke a client-registration
                              token by id, so it can no longer be
                              redeemed. Requires --id ID.
+    admin list-registration-tokens
+                             List every client-registration token: id,
+                             created_at, max_uses/used_count,
+                             expires_at and revoked state. Never prints
+                             the token or its hash.
     admin legacy-dynamic-candidates
                              Read-only (RFC 095). Lists `clients` rows a
                              pre-RFC-094 bug (2026-07-02 to 2026-10-02)
@@ -989,19 +997,52 @@ pub(crate) async fn run_admin_issue_registration_token(args: &[String]) -> Resul
         .await
         .context("storing registration token")?;
 
-    println!("RFC 7591 initial access token (shown ONCE — save it now):");
-    println!();
-    println!("  {token}");
-    println!();
-    println!("Usage (max_uses = {max_uses}):");
-    println!("  curl -X POST https://your-sui-id/oauth2/register \\");
-    println!("    -H 'Authorization: Bearer {token}' \\");
-    println!("    -H 'Content-Type: application/json' \\");
-    println!(
+    print!(
+        "{}",
+        render_issued_registration_token(&token, row.id, max_uses)
+    );
+    Ok(())
+}
+
+/// Separated from [`run_admin_issue_registration_token`] for direct
+/// testing, same pattern as [`render_legacy_dynamic_candidate_report`]
+/// and [`render_registration_token_list`]. Prints the id alongside the
+/// token (this round's fix: the id is not a secret, unlike the token,
+/// and an operator who records this output can revoke later without
+/// `admin list-registration-tokens` or the database) while keeping the
+/// existing "shown ONCE" warning on the token itself unchanged.
+fn render_issued_registration_token(
+    token: &str,
+    id: sui_id_shared::ids::RegistrationTokenId,
+    max_uses: i64,
+) -> String {
+    use std::fmt::Write;
+    let mut out = String::new();
+    let w = &mut out;
+    let _ = writeln!(
+        w,
+        "RFC 7591 initial access token (shown ONCE — save it now):"
+    );
+    let _ = writeln!(w);
+    let _ = writeln!(w, "  {token}");
+    let _ = writeln!(w);
+    let _ = writeln!(
+        w,
+        "Id (not secret — record it to revoke this token later with"
+    );
+    let _ = writeln!(w, "`admin revoke-registration-token --id ID`):");
+    let _ = writeln!(w);
+    let _ = writeln!(w, "  {id}");
+    let _ = writeln!(w);
+    let _ = writeln!(w, "Usage (max_uses = {max_uses}):");
+    let _ = writeln!(w, "  curl -X POST https://your-sui-id/oauth2/register \\");
+    let _ = writeln!(w, "    -H 'Authorization: Bearer {token}' \\");
+    let _ = writeln!(w, "    -H 'Content-Type: application/json' \\");
+    let _ = writeln!(
+        w,
         "    -d '{{\"client_name\":\"My App\",\"redirect_uris\":[\"https://app.example/cb\"]}}'"
     );
-
-    Ok(())
+    out
 }
 
 /// `sui-id admin revoke-registration-token --id ID [--config PATH]`
@@ -1039,6 +1080,78 @@ pub(crate) async fn run_admin_revoke_registration_token(args: &[String]) -> Resu
 
     println!("Registration token {id} revoked.");
     Ok(())
+}
+
+/// `sui-id admin list-registration-tokens [--config PATH]`
+///
+/// Read-only. Lists every row in `client_registration_token` so an
+/// operator has a way to learn a token's id without opening the
+/// database — the gap this round exists to close (RFC 094 M2b wave 4
+/// stage 4 shipped `--id`-based revocation with no way to obtain one).
+/// Wraps `repos::client_registration_token::list`, which existed with
+/// no caller until this command. **Never prints the token or its
+/// hash** — the row's `token_hash` column is excluded from the render
+/// entirely, not merely unprinted by omission at one call site.
+pub(crate) async fn run_admin_list_registration_tokens(args: &[String]) -> Result<()> {
+    let config_path = parse_config_path(args).unwrap_or_else(|| PathBuf::from("./sui-id.toml"));
+    let cfg = Config::load(&config_path)
+        .with_context(|| format!("loading config from {}", config_path.display()))?;
+    let resolved = sui_id::keyring::resolve(&cfg.storage.key_file).context("loading master key")?;
+    let db = sui_id::database::open(&cfg.storage.db_path, resolved.key)?;
+
+    let rows = sui_id_store::repos::client_registration_token::list(&db)
+        .await
+        .context("listing registration tokens")?;
+    print!("{}", render_registration_token_list(&rows));
+    Ok(())
+}
+
+/// Separated from [`run_admin_list_registration_tokens`] for direct
+/// testing, same pattern as [`render_legacy_dynamic_candidate_report`].
+/// Renders `max_uses = 0` as `unlimited` (`:22`'s own comment on the
+/// column), and `expires_at = None` as `never` (what the issue command
+/// always writes today) — both per the dispatch's explicit requirement
+/// that the raw sentinel values not be shown as themselves. Does not
+/// take or touch `token_hash`: the type this function reads from would
+/// have to change for it to leak the hash by accident.
+fn render_registration_token_list(
+    rows: &[sui_id_store::repos::client_registration_token::RegistrationTokenRow],
+) -> String {
+    use std::fmt::Write;
+    let mut out = String::new();
+    let w = &mut out;
+
+    if rows.is_empty() {
+        let _ = writeln!(w, "No registration tokens.");
+        return out;
+    }
+
+    for row in rows {
+        let max_uses = if row.max_uses == 0 {
+            "unlimited".to_string()
+        } else {
+            row.max_uses.to_string()
+        };
+        let expires_at = row
+            .expires_at
+            .map(|t| t.to_rfc3339())
+            .unwrap_or_else(|| "never".to_string());
+        let revoked = match row.revoked_at {
+            Some(at) => format!("revoked {}", at.to_rfc3339()),
+            None => "active".to_string(),
+        };
+        let _ = writeln!(
+            w,
+            "id={} created_at={} max_uses={} used_count={} expires_at={} {}",
+            row.id,
+            row.created_at.to_rfc3339(),
+            max_uses,
+            row.used_count,
+            expires_at,
+            revoked,
+        );
+    }
+    out
 }
 
 /// RFC 008's handler bug: `clients::create` discarded `registered_via`
