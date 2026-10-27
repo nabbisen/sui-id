@@ -79,9 +79,9 @@ finding none, which RFC 095 does not accept as evidence.
 
 ### Security
 
-- **Disabling or deleting a client could leave its refresh tokens
-  valid while reporting failure to the administrator.** Both operations
-  performed two uncoordinated writes — the client row, then the
+- **Disabling or deleting a client now revokes its refresh tokens in
+  the same transaction, and records how many it revoked.** Until this
+  release both operations performed two uncoordinated writes — the client row, then the
   revocation of that client's refresh tokens — with no transaction
   around them. If the revocation failed, the client row had already
   committed: the administrator saw an error, the client was in fact
@@ -99,7 +99,8 @@ finding none, which RFC 095 does not accept as evidence.
   seen an error from disabling or deleting a client, re-run it after
   upgrading**; present in every released version with this feature.
 
-- **An issued client-registration token could not be withdrawn.**
+- **An issued client-registration token can now be withdrawn:
+  `sui-id admin revoke-registration-token --id ID`.**
   `sui-id admin issue-registration-token` mints a bearer token for RFC
   7591 dynamic client registration. The token never expires — the
   command writes no expiry — and until this release nothing could
@@ -117,10 +118,10 @@ finding none, which RFC 095 does not accept as evidence.
   token's id still requires inspecting the database, which a later
   release will address.
 
-- **The consent screen rendered a registrant-supplied URL as the
-  application's own link.** A dynamically registered client supplies
-  `client_uri` at registration; the consent screen rendered the client's
-  name as a hyperlink to it. RFC 095 M3 had already stopped the screen
+- **The consent screen no longer renders a dynamically registered
+  client's own `client_uri` as the application's link.** Such a client
+  supplies `client_uri` at registration, and until this release the
+  consent screen rendered the client's name as a hyperlink to it. RFC 095 M3 had already stopped the screen
   from showing such a client's logo, for the same reason, and the
   homepage link was not covered by that rule. It is now.
 
