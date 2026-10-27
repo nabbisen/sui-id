@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.85.0] — 2026-10-27
+
 **RFC 094 M2b's client-administration wave: every remaining
 administrator write on clients and signing keys now commits atomically
 with its audit record.** Fourteen inventory rows, four stages. **Two
@@ -121,9 +123,10 @@ finding none, which RFC 095 does not accept as evidence.
   registrant cannot obtain any token until an administrator consciously
   enables it. The exposure is an unwanted disabled client row, not
   access. **If you have issued registration tokens and cannot account
-  for all of them, revoke them after upgrading** — note that finding a
-  token's id still requires inspecting the database, which a later
-  release will address.
+  for all of them, revoke them after upgrading** — `sui-id admin
+  list-registration-tokens`, added in this same release, shows every
+  token's id, use count and revoked state, and
+  `issue-registration-token` now prints a token's id when it mints it.
 
 - **The consent screen no longer renders a dynamically registered
   client's own `client_uri` as the application's link.** Such a client
