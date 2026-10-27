@@ -51,6 +51,16 @@
 > configuration, unblocked by the 2026-10-25 ruling) and **the
 > authority switch**, which must come last.
 
+> **`0.86.0` is scoped and awaiting authorization** —
+> [`cycle-h-and-0.86.0-2026-10-28.md`](cycle-h-and-0.86.0-2026-10-28.md):
+> **wave 3** (two live startup writes, smaller than its inventory rows
+> suggest), **RFC 140 stage 1**, **[RFC 141](../../proposed/141-publishing-is-a-workflow-not-a-credential.md)**
+> (Trusted Publishing — Proposed, build-prohibited until accepted), **a
+> script that derives the local gate matrix** instead of my enumerating
+> it, and three tidies. **`0.87.0` = the authority switch, and M2b
+> closes** — `cargo xtask audit-structure` does not exist and there is
+> no `xtask` crate, so it is a cycle of its own.
+
 > **Wave 4's record.** `0.85.0`'s mechanical preparation —
 > [`release-0.85.0-preparation-2026-10-27.md`](release-0.85.0-preparation-2026-10-27.md),
 > re-measured 2026-10-27 before the hold was lifted. The hold was for

@@ -148,6 +148,7 @@ the move. The paths below are current.
 | 137 | [Tests live beside the module, not inside it](./done/137-tests-live-beside-not-inside.md) | [137-tests-live-beside-not-inside](./handoffs/137-tests-live-beside-not-inside/README.md) |
 | 138 | [Per-hunk hashes are not reproducible](./done/138-per-hunk-hashes-are-not-reproducible.md) | [138-per-hunk-hashes-are-not-reproducible](./handoffs/138-per-hunk-hashes-are-not-reproducible/README.md) |
 | 140 | [Application identity the operator vouches for](./accepted/140-application-identity-the-operator-vouches-for.md) **(Accepted 2026-10-27)** | [140-application-identity-the-operator-vouches-for](./handoffs/140-application-identity-the-operator-vouches-for/design-review-2026-10-27.md) |
+| 141 | [Publishing is a workflow, not a credential](./proposed/141-publishing-is-a-workflow-not-a-credential.md) | — (Proposed 2026-10-28; no handoff until accepted) |
 
 ### Implemented — Mockup Integration epic (Phase 0 → Phase 8)
 
