@@ -5,7 +5,18 @@
 > stay with him and the architect; everything below is the preparation
 > that does not.
 
-**Dispatched.** 2026-10-27 JST, by the architect.
+> ## HELD — do not start this yet.
+> **Amended 2026-10-27, after the release notes were reviewed.** One
+> more round comes first:
+> [`registration-token-listing-2026-10-27.md`](registration-token-listing-2026-10-27.md).
+> Stage 4 shipped `revoke-registration-token --id ID` with no way for an
+> operator to learn an id, which makes a working remedy unusable from
+> the CLI. Closing that gap before the cut is authorized, 2026-10-27. **This
+> preparation starts when that round has landed**, and its §1 line
+> numbers and §2 wording will be re-measured then rather than trusted.
+
+**Dispatched.** 2026-10-27 JST, by the architect, **and held the same
+day** — see above.
 **Checklist.** [`docs/src/contributing/release-process.md`](../../../docs/src/contributing/release-process.md)
 §*Pre-publish checklist* — items 1, 2 and 3 are this dispatch. **Step 0
 is already done and is not yours**: the `Security audit` lane was read
