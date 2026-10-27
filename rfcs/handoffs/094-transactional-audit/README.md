@@ -44,17 +44,16 @@
 > stages 1–3 never ran them. All fourteen pass. The list must be derived
 > from `ci.yml`, not transcribed — the round's own came back thirteen.
 >
-> **Wave 4 is complete.** `0.85.0` is **authorized** (2026-10-27), and
-> **one small round comes before the cut** —
-> [`registration-token-listing-2026-10-27.md`](registration-token-listing-2026-10-27.md).
-> Reviewing the release notes showed stage 4 shipped
-> `revoke-registration-token --id ID` with no way for an operator to
-> learn an id: `issue-registration-token` does not print it, no list
-> command exists, and `repos::client_registration_token::list()` has
-> been written and callerless the whole time. A working remedy that
-> cannot be used from the CLI does not ship. **The mechanical
-> preparation is written and HELD** until that lands —
-> [`release-0.85.0-preparation-2026-10-27.md`](release-0.85.0-preparation-2026-10-27.md).
+> **Wave 4 is complete and `0.85.0`'s mechanical preparation is live** —
+> [`release-0.85.0-preparation-2026-10-27.md`](release-0.85.0-preparation-2026-10-27.md),
+> re-measured 2026-10-27 before the hold was lifted. The hold was for
+> one round,
+> [`registration-token-listing-2026-10-27.md`](registration-token-listing-2026-10-27.md),
+> which landed `d0c1924` (Level B, 27/0): reviewing the release notes
+> had shown stage 4 shipped `revoke-registration-token --id ID` with no
+> way for an operator to learn an id, while
+> `repos::client_registration_token::list()` sat written and callerless.
+> A working remedy that cannot be used from the CLI does not ship.
 > Checklist **step 0 was done first**: the `Security audit` lane read on
 > `main` before the dispatch was written (`40482260166` on `65c49e1`,
 > green). The release notes were written by the architect rather than

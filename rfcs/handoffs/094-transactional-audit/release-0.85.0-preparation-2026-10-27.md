@@ -5,23 +5,31 @@
 > stay with him and the architect; everything below is the preparation
 > that does not.
 
-> ## HELD — do not start this yet.
-> **Amended 2026-10-27, after the release notes were reviewed.** One
-> more round comes first:
-> [`registration-token-listing-2026-10-27.md`](registration-token-listing-2026-10-27.md).
-> Stage 4 shipped `revoke-registration-token --id ID` with no way for an
-> operator to learn an id, which makes a working remedy unusable from
-> the CLI. Closing that gap before the cut is authorized, 2026-10-27. **This
-> preparation starts when that round has landed**, and its §1 line
-> numbers and §2 wording will be re-measured then rather than trusted.
+> ## LIVE again — re-measured 2026-10-27 and ready to start.
+> This was **held** on 2026-10-27 for one round:
+> [`registration-token-listing-2026-10-27.md`](registration-token-listing-2026-10-27.md),
+> which closed the gap where `revoke-registration-token --id ID` had no
+> way for an operator to learn an id. **That round landed `d0c1924`,
+> Level B 27/0**, so the hold is lifted.
+>
+> **Re-measured rather than trusted**, as the hold note promised:
+> §1's six version sites are unchanged (`Cargo.toml:20,33-37`); the
+> `0.84.0` mentions outside the lockfile are the same six; and
+> `[Unreleased]` now carries **five** subsections — `Added`, `Changed`,
+> `Removed`, `Fixed`, `Security` — not the four it had when §2 was
+> written. §2 is amended accordingly.
 
-**Dispatched.** 2026-10-27 JST, by the architect, **and held the same
-day** — see above.
+**Dispatched.** 2026-10-27 JST, by the architect, held the same day and
+**released on 2026-10-27** — see above.
 **Checklist.** [`docs/src/contributing/release-process.md`](../../../docs/src/contributing/release-process.md)
 §*Pre-publish checklist* — items 1, 2 and 3 are this dispatch. **Step 0
 is already done and is not yours**: the `Security audit` lane was read
 on `main` before this was written — `workflow_dispatch` `40482260166` on
-`65c49e1`, green. Items 4 and 5, Level B, the tag and the publish are
+`65c49e1`, green. Two commits have landed since, and **neither touched
+`Cargo.toml` or `Cargo.lock`** (measured: `git diff 65c49e1 d0c1924 --
+Cargo.lock Cargo.toml` is empty), so that reading still holds. The lane
+is read again on the exact commit being tagged, which is step 5 and is
+the architect's. Items 4 and 5, Level B, the tag and the publish are
 **not** yours either; see §4.
 **Contents.** RFC 094 M2b wave 4, four stages, each already Level B on
 its own commit. Plus M3's closure, recorded 2026-10-25.
@@ -90,8 +98,9 @@ arithmetic included.
 `[Unreleased]` above it carrying no subsections.
 
 **The section is already written and reviewed — summary, `Added`,
-`Changed`, `Removed`, `Fixed` and `Security`. Do not rewrite, reorder,
-merge, summarise or shorten any of it**, and in particular:
+`Changed`, `Removed`, `Fixed` and `Security`, five subsections. Do not
+rewrite, reorder, merge, summarise or shorten any of it**, and in
+particular:
 
 - **Do not touch the three severity paragraphs in `Security`.** Their
   wording is `@nabbisen`'s under `.github/SECURITY.md` and is not yours
