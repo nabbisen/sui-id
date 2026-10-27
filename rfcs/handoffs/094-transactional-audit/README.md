@@ -44,7 +44,14 @@
 > stages 1–3 never ran them. All fourteen pass. The list must be derived
 > from `ci.yml`, not transcribed — the round's own came back thirteen.
 >
-> **Wave 4 is complete and `0.85.0`'s mechanical preparation is live** —
+> # **`0.85.0` IS RELEASED AND PUBLISHED.** Tag `0.85.0` at `a5ff2e3`
+> (Level B `40518101943`, 27/0; `Security audit` `40518106582`), six
+> crates on crates.io, confirmed twice. **M2b wave 4 is closed; G20
+> ends at 44.** What remains of M2b is **wave 3** (federation
+> configuration, unblocked by the 2026-10-25 ruling) and **the
+> authority switch**, which must come last.
+
+> **Wave 4's record.** `0.85.0`'s mechanical preparation —
 > [`release-0.85.0-preparation-2026-10-27.md`](release-0.85.0-preparation-2026-10-27.md),
 > re-measured 2026-10-27 before the hold was lifted. The hold was for
 > one round,
