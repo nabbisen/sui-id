@@ -50,7 +50,7 @@ programme honest. Five items, none large.**
    settable by an administrator and rendered on the consent screen for
    administrator-registered clients. Accepted 2026-10-27; §5's logo
    decision stays open and is not in this cut.
-3. **Trusted Publishing** — [RFC 141](../../proposed/141-publishing-is-a-workflow-not-a-credential.md),
+3. **Trusted Publishing** — [RFC 141](../../accepted/141-publishing-is-a-workflow-not-a-credential.md),
    written alongside this scope. Build the workflow in `0.86.0`; **first
    use it at `0.87.0`**, not on its own release, because the first run
    of new release machinery should not be on a release already waiting.
@@ -100,8 +100,10 @@ by hand.
    would rather close M2b sooner, say so and I will propose wave 3 and
    the authority switch together as one larger cycle, with the
    consequence that it is the longest cycle this programme has run.
-2. **RFC 141** — it is **Proposed** and needs your acceptance before
-   anything is built. §6 names the six crates.io configurations as
-   yours; nothing else in it is.
+2. **RFC 141 — accepted 2026-10-28.** §6's six crates.io configurations
+   are yours and are not implementation; the workflow and its refusal
+   fixtures can be built before they exist. §7's question — whether
+   `0.86.0` or `0.87.0` is the first release published this way — stays
+   open, with `0.87.0` recommended.
 3. **Nothing else.** The stage plans, the dispatches and the release
    cycle are mine once the scope is authorized.

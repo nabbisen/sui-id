@@ -1,14 +1,30 @@
 # RFC 141 — Publishing is a workflow, not a credential
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-10-28
+**Approved by.** `@nabbisen`, 2026-10-28: *"RFC 141 is Accepted."* **§7's
+question stays open** — whether `0.86.0` itself publishes through the
+workflow or `0.87.0`. The RFC recommends `0.87.0` and that recommendation
+stands unless he says otherwise; nothing in the design depends on it.
+**Independent design review.** [Design review record, 2026-10-28](../handoffs/141-publishing-is-a-workflow-not-a-credential/design-review-2026-10-28.md).
+**There was no independent review and the field says so rather than
+implying one.** `ROADMAP.md` §S1a places design review with the
+accountable approver named below, or an external architect engaged for
+it — never the implementation role. None was engaged, so the acceptance
+recorded above is the review. The architect wrote this RFC and did
+**not** review it: §S1c permits architect self-review only where it is
+asked for, and **it was not asked for here**.
+**Implementation owner.** The mid-capability model (implementation and
+testing agent).
 **Security review.** Required — this changes how six crates are
 authenticated to crates.io, and a workflow that can publish is a
 workflow worth attacking.
 
 **Design prerequisites.** None.
-**Implementation prerequisites.** RFC 000 forbids implementation while
-this is Proposed. Six per-crate configurations on crates.io are
-`@nabbisen`'s and are not implementation; see §6.
+**Implementation prerequisites.** None under RFC 000's status rule, which
+this RFC now satisfies. Six per-crate configurations on crates.io are
+`@nabbisen`'s and are not implementation; see §6. The workflow can be
+built and its refusal fixtures exercised before those exist.
 **Closure prerequisites.** A tagged release publishes all six crates
 through the workflow with no long-lived registry token in the process;
 the workflow refuses to publish a commit that does not carry Level B;

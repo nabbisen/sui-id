@@ -54,7 +54,7 @@
 > **`0.86.0` is scoped and awaiting authorization** —
 > [`cycle-h-and-0.86.0-2026-10-28.md`](cycle-h-and-0.86.0-2026-10-28.md):
 > **wave 3** (two live startup writes, smaller than its inventory rows
-> suggest), **RFC 140 stage 1**, **[RFC 141](../../proposed/141-publishing-is-a-workflow-not-a-credential.md)**
+> suggest), **RFC 140 stage 1**, **[RFC 141](../../accepted/141-publishing-is-a-workflow-not-a-credential.md)**
 > (Trusted Publishing — Proposed, build-prohibited until accepted), **a
 > script that derives the local gate matrix** instead of my enumerating
 > it, and three tidies. **`0.87.0` = the authority switch, and M2b
