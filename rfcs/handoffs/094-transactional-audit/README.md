@@ -29,14 +29,22 @@
 > [`m2b-0.85.0-stage3-c01-c02-c07-k03-c08-2026-10-25.md`](m2b-0.85.0-stage3-c01-c02-c07-k03-c08-2026-10-25.md),
 > Level B 27/0, G20 at **43**. It also fixed a defect older than this
 > work — creating a client never rebuilt the CORS redirect-origins cache
-> — and **that fix has no test**, which must land before the cut; **stage 4 is dispatched** and held in
-> `.git-exclude/staging/` until `0.85.0` ships, for the same reason
-> stage 1's was. It disposes of C10, C22 and K02 — wire up registration
-> token revocation, remove the two redundant functions — and carries two
-> items that are not dispositions: the missing test for stage 3's
-> CORS-cache fix, and a `sealed_by` field so the inventory can say that
-> C04 and C09 are sealed by C03 rather than unconverted. **G20 ends at
-> 44, not the 48 the first plan assumed.**
+> — and **that fix has no test**, which must land before the cut; **stage 4 landed** `24e2377` (Level B,
+> 27 jobs, 0 skipped), **G20 at 44 — where wave 4 ends**, not the 48 the
+> first plan assumed. C22 gained a revocation path, K02 was removed as
+> redundant with K01's own sealed rotation, C10 stayed untouched for
+> RFC 140, and the round also paid stage 3's missing test, gated the
+> consent screen's homepage link on provenance, dropped
+> `delete_signing_key`'s unused parameter and added `sealed_by`. Its
+> dispatch stays in `.git-exclude/staging/` until `0.85.0` ships.
+>
+> **It also found that the local matrix was never 30/30.**
+> `gate-matrix-fixtures` runs fourteen `python3.14 -m unittest
+> scripts.tests.test_*` steps that no bash fixture script wraps, and
+> stages 1–3 never ran them. All fourteen pass. The list must be derived
+> from `ci.yml`, not transcribed — the round's own came back thirteen.
+>
+> **Wave 4 is complete. `0.85.0` is ready to cut.**
 >
 > **The wave-3 dependency cycle is ruled** (2026-10-25): RFC 094 owns
 > whether a write and its record commit together, RFC 096 owns what the
