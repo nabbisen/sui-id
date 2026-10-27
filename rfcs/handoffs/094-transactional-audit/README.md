@@ -44,7 +44,15 @@
 > stages 1–3 never ran them. All fourteen pass. The list must be derived
 > from `ci.yml`, not transcribed — the round's own came back thirteen.
 >
-> **Wave 4 is complete. `0.85.0` is ready to cut.**
+> **Wave 4 is complete.** `0.85.0` is **authorized** (2026-10-27) and its
+> mechanical preparation is dispatched —
+> [`release-0.85.0-preparation-2026-10-27.md`](release-0.85.0-preparation-2026-10-27.md).
+> Checklist **step 0 was done first**: the `Security audit` lane read on
+> `main` before the dispatch was written (`40482260166` on `65c49e1`,
+> green). The release notes were written by the architect rather than
+> promoted from the stages, because every stage dispatch told the
+> implementation role to write none — three `Security` entries among
+> them, whose severity wording is `@nabbisen`'s.
 >
 > **The wave-3 dependency cycle is ruled** (2026-10-25): RFC 094 owns
 > whether a write and its record commit together, RFC 096 owns what the

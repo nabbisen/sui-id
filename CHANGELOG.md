@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+**RFC 094 M2b's client-administration wave: every remaining
+administrator write on clients and signing keys now commits atomically
+with its audit record.** Fourteen inventory rows, four stages. **Two
+audit event names are retired** — see `Changed` — and **three security
+gaps close**, two of which an operator may want to read before
+upgrading. **M3 closed on 2026-10-25**: the legacy dynamic-registration
+candidates were disposed of by a chain of preconditions, not by a report
+finding none, which RFC 095 does not accept as evidence.
+
+### Added
+
+- **`sui-id admin revoke-registration-token --id ID`.** A registration
+  token issued by `sui-id admin issue-registration-token` can now be
+  withdrawn. See `Security` below for what this closes.
+
+### Changed
+
+- **A client's lifecycle, metadata, secret and signing-key writes now
+  commit atomically with their audit records (RFC 094 M2b wave 4).**
+  Creating, updating, disabling, re-enabling and soft-deleting a client;
+  rotating its secret; setting a dev-mode secret; deleting a signing
+  key; and revoking a registration token each previously committed their
+  database change and then appended the audit row best-effort, so a
+  failing append left the change applied with no record of it. Four of
+  those paths wrote **no audit record at all**:
+  `client.consent_policy_changed` and the dev-mode secret patch were
+  declared and emitted by nothing, and disable and delete are covered
+  under `Security`. Nothing an administrator sees changes on a request
+  that already succeeded.
+
+- **Two audit event names are retired: `client.set_allowed_scopes` and
+  `client.set_post_logout_redirect_uris`.** The administrator
+  client-update form changes allowed scopes, post-logout redirect URIs
+  and consent policy in one save, and those three writes now commit in
+  one transaction — which can carry exactly one audit event. They are
+  replaced by **`client.update_form`**, whose note carries
+  `allowed_scopes_count`, `post_logout_redirect_uris_count` and
+  `consent_policy`. **If you query, filter or alert on either retired
+  name, those rules will stop matching after this release**; grep your
+  tooling for both strings. The counts are recorded rather than the
+  lists themselves, because an unbounded caller-supplied list has no
+  place in a hash-chained record.
+
+- **The consent screen no longer shows a dynamically registered client's
+  homepage link.** It already withheld such a client's `logo_uri` (RFC
+  095 M3); the homepage link now follows the same rule. An
+  administrator-registered client's link is unaffected — see `Security`.
+
+### Removed
+
+- **Breaking, for crates depending on `sui-id-core`:**
+  `admin::update_client`, `admin::set_client_allowed_scopes` and
+  `admin::set_client_post_logout_redirect_uris` are removed;
+  `admin::delete_client` and `admin::update_client_basic` gain a
+  `clock: &SharedClock` parameter, and `admin::delete_signing_key` loses
+  one. `sui-id` itself is unaffected — this matters only if you depend
+  on the library crate directly.
+
 ### Fixed
 
 - **Creating a client did not refresh the CORS redirect-origin cache
@@ -18,6 +76,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   token endpoint's CORS check until some other client mutation (or a
   server restart) rebuilt the cache afterward. The rebuild now runs
   after every client creation too. No action is needed on upgrade.
+
+### Security
+
+- **Disabling or deleting a client could leave its refresh tokens
+  valid while reporting failure to the administrator.** Both operations
+  performed two uncoordinated writes — the client row, then the
+  revocation of that client's refresh tokens — with no transaction
+  around them. If the revocation failed, the client row had already
+  committed: the administrator saw an error, the client was in fact
+  disabled or deleted, **its refresh tokens were still valid**, and no
+  audit record was written for any of it. Both now commit as one
+  transaction, and the event records how many tokens were revoked.
+
+  **Severity: low, and it required a database error to occur.** Nothing
+  an attacker can trigger, and no privilege is gained that was not
+  already held — the holder of an existing refresh token keeps it
+  slightly longer than the operator intended. It matters because it is
+  the recovery path: an administrator disables a client *because*
+  something is already wrong, and the failure mode told them the
+  operation had not happened when half of it had. **If you have ever
+  seen an error from disabling or deleting a client, re-run it after
+  upgrading**; present in every released version with this feature.
+
+- **An issued client-registration token could not be withdrawn.**
+  `sui-id admin issue-registration-token` mints a bearer token for RFC
+  7591 dynamic client registration. The token never expires — the
+  command writes no expiry — and until this release nothing could
+  revoke one: the database column existed and no code path set it, so a
+  leaked, unredeemed token stayed redeemable indefinitely and the only
+  remedy was editing the database by hand.
+  `sui-id admin revoke-registration-token --id ID` now sets it.
+
+  **Severity: low, because of what a redeemed token actually buys.** A
+  dynamically registered client is created **disabled**, so its
+  registrant cannot obtain any token until an administrator consciously
+  enables it. The exposure is an unwanted disabled client row, not
+  access. **If you have issued registration tokens and cannot account
+  for all of them, revoke them after upgrading** — note that finding a
+  token's id still requires inspecting the database, which a later
+  release will address.
+
+- **The consent screen rendered a registrant-supplied URL as the
+  application's own link.** A dynamically registered client supplies
+  `client_uri` at registration; the consent screen rendered the client's
+  name as a hyperlink to it. RFC 095 M3 had already stopped the screen
+  from showing such a client's logo, for the same reason, and the
+  homepage link was not covered by that rule. It is now.
+
+  **Severity: low.** The consent screen is reached only for an **enabled**
+  client, so an administrator had already reviewed and enabled the
+  registrant in question, and the link was user-activated and carried
+  `rel="noopener noreferrer"` with a same-origin referrer policy. No
+  action is needed on upgrade.
 
 ## [0.84.0] — 2026-10-25
 
