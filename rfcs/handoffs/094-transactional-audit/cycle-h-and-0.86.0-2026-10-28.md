@@ -40,8 +40,9 @@ own.
 **`0.86.0` = the deferred work, plus the machinery that keeps this
 programme honest. Five items, none large.**
 
-1. **M2b wave 3 — federation configuration.** Seal the two live startup
-   writes onto the Class-A seam, emitting the events the inventory
+1. **M2b wave 3 — federation configuration. DISPATCHED 2026-10-28** —
+   [`m2b-wave3-federation-configuration-2026-10-28.md`](m2b-wave3-federation-configuration-2026-10-28.md).
+   Seal the two live startup writes onto the Class-A seam, emitting the events the inventory
    already names, with the target semantics left to RFC 096-B2 per the
    2026-10-25 ruling. Dispose of `set_enabled`/`delete`/C23 the way
    stage 4 disposed of C10/C22/K02. **After this, the only thing

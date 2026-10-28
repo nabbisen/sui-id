@@ -61,6 +61,15 @@
 > closes** — `cargo xtask audit-structure` does not exist and there is
 > no `xtask` crate, so it is a cycle of its own.
 
+> **Wave 3 is dispatched** —
+> [`m2b-wave3-federation-configuration-2026-10-28.md`](m2b-wave3-federation-configuration-2026-10-28.md).
+> Two live writes, both in `runtime/startup.rs` and both emitting
+> nothing; C17/C18 have no production caller and C23 no function, so
+> they take dispositions rather than conversions. **It also found a live
+> Class-A-shaped write with no inventory row at all** — the
+> allowed-origins reconcile at `startup.rs:385`. **After this round only
+> the authority switch stands between M2b and closure.**
+
 > **Wave 4's record.** `0.85.0`'s mechanical preparation —
 > [`release-0.85.0-preparation-2026-10-27.md`](release-0.85.0-preparation-2026-10-27.md),
 > re-measured 2026-10-27 before the hold was lifted. The hold was for
