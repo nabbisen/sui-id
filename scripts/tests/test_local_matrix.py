@@ -50,6 +50,27 @@ def ci_yml_derived_set(path: Path) -> set[str]:
     return out
 
 
+STEP_RE = re.compile(r"^      - name:.*$", re.MULTILINE)
+
+
+def inverted_step_count(path: Path) -> int:
+    """How many of `ci.yml`'s own steps would be read as INVERTED by
+    `local-matrix.sh`'s polarity heuristic (`-eq 0` present anywhere in
+    the step's body) -- an independent re-derivation of that heuristic,
+    in Python, against the real file, the same reason `ci_yml_derived_set`
+    exists separately from the shell script's own awk. Carried from the
+    local-matrix round's own review (2026-10-28): the heuristic's unsafe
+    direction (an ordinary step that happens to contain `-eq 0` is
+    silently treated as inverted, and a real failure then reports PASS)
+    had no guard. One assertion on the real file closes both directions
+    at once -- a second genuine inverted fixture, or an accidental
+    `-eq 0`, both change this count and a person then looks."""
+    text = path.read_text(encoding="utf-8")
+    starts = [m.start() for m in STEP_RE.finditer(text)] + [len(text)]
+    steps = [text[starts[i] : starts[i + 1]] for i in range(len(starts) - 1)]
+    return sum(1 for step in steps if 'echo "command=' in step and "-eq 0" in step)
+
+
 def run_list(root: Path) -> set[str]:
     result = subprocess.run(
         ["bash", str(SCRIPT), "--root", str(root), "--list"],
@@ -134,6 +155,25 @@ class LocalMatrixDerivation(unittest.TestCase):
             _write_ci_yml(root, "      - name: dummy\n        run: bash scripts/ci-gate.sh G99\n")
             derived = run_list(root)
         self.assertIn("GATE:G99", derived)
+
+    def test_the_real_ci_yml_has_exactly_one_inverted_check(self):
+        # Carried from the local-matrix round's own review
+        # (2026-10-28, §3): the polarity heuristic's dangerous direction
+        # — an ordinary step containing `-eq 0` silently becomes
+        # INVERTED, and a real failure then reports PASS — had no
+        # guard. This closes both directions: a second genuine inverted
+        # fixture, or an accidental `-eq 0` in an unrelated step, both
+        # move this count away from the one known-correct value, and a
+        # person then looks rather than the matrix silently reporting a
+        # passed check that was actually a hidden failure.
+        count = inverted_step_count(REAL_CI_YML)
+        self.assertEqual(
+            count,
+            1,
+            f"expected exactly one INVERTED step in the real ci.yml (the mdBook "
+            f"missing-chapter negative fixture), found {count} -- review what "
+            f"changed before trusting the local matrix's own PASS/FAIL split",
+        )
 
 
 class LocalMatrixExecution(unittest.TestCase):

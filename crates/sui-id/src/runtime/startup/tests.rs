@@ -234,3 +234,105 @@ async fn differing_enabled_produces_neither_write_nor_warning() {
     let log = logged(&captured);
     assert!(!log.contains("field=enabled") && !log.contains("field=\"enabled\""));
 }
+
+/// RFC 094 M2b wave 3, C16, through the layer that actually runs it —
+/// startup's own create path, not an HTTP route. A config block whose
+/// slug is absent from the database is created and audited in one
+/// transaction; previously the insert and the (nonexistent) audit
+/// append were two uncoordinated steps and nothing emitted the event at
+/// all (`git grep federation.provider.created` found no append call
+/// anywhere in `crates/` before this round).
+#[tokio::test]
+async fn register_new_federation_provider_creates_and_audits_it() {
+    let db = fresh_db();
+    let row = seeded_row("new-provider");
+    let cfg = matching_cfg(&row);
+
+    register_new_federation_provider(&db, &cfg, None, Utc::now()).await;
+
+    let stored = federation_provider::get_by_slug(&db, "new-provider")
+        .await
+        .expect("provider created");
+    let note: Option<String> = db
+        .with_conn(move |c| {
+            Ok(c.query_row(
+                "SELECT note FROM audit_log WHERE action = 'federation.provider.created' \
+                 AND target = ?1 ORDER BY seq DESC LIMIT 1",
+                [stored.id.to_string()],
+                |r| r.get(0),
+            )?)
+        })
+        .await
+        .expect("audit row for federation.provider.created");
+    let note = note.expect("note");
+    assert_eq!(
+        sui_id_store::registry::note_field(&note, "slug").as_deref(),
+        Some("new-provider")
+    );
+    assert_eq!(
+        sui_id_store::registry::note_field(&note, "issuer").as_deref(),
+        Some(stored.issuer.as_str())
+    );
+}
+
+/// A failure registering a provider must not abort startup. Proven
+/// structurally, not only by observation: `register_new_federation_
+/// provider`'s own return type is `()`, not `Result<(), _>` — there is
+/// no error for a caller to propagate with `?` even if someone tried.
+/// Observed here too: a duplicate slug (the create's own `Conflict`
+/// path) leaves exactly the one original row and does not panic.
+#[tokio::test]
+async fn register_new_federation_provider_does_not_abort_on_failure() {
+    let db = fresh_db();
+    let row = seeded_row("dup-provider");
+    federation_provider::create(&db, &row, None).await.unwrap();
+    let cfg = matching_cfg(&row);
+
+    // Same slug already exists -- the insert hits the UNIQUE constraint.
+    register_new_federation_provider(&db, &cfg, None, Utc::now()).await;
+
+    let all = federation_provider::list(&db).await.expect("list");
+    assert_eq!(all.len(), 1, "the duplicate attempt must not add a row");
+}
+
+/// RFC 094 M2b wave 3, C24, through the layer that actually runs it —
+/// `differing_allowed_origins_are_updated` above already proves the
+/// value changes; this proves the write is now also audited, which a
+/// value-only assertion on an unchanged call site cannot (RFC 134 step
+/// 7a's original write had no audit record of any kind).
+#[tokio::test]
+async fn differing_allowed_origins_update_is_audited() {
+    let db = fresh_db();
+    let row = seeded_row("google");
+    federation_provider::create(&db, &row, None).await.unwrap();
+    let mut cfg = matching_cfg(&row);
+    cfg.allowed_origins = vec![
+        "https://accounts.google.com".into(),
+        "https://oauth2.googleapis.com".into(),
+    ];
+
+    reconcile_federation_provider(&db, &cfg, &row, Utc::now()).await;
+
+    let note: Option<String> = db
+        .with_conn(move |c| {
+            Ok(c.query_row(
+                "SELECT note FROM audit_log WHERE action = \
+                 'federation.provider.allowed_origins_changed' AND target = ?1 \
+                 ORDER BY seq DESC LIMIT 1",
+                [row.id.to_string()],
+                |r| r.get(0),
+            )?)
+        })
+        .await
+        .expect("audit row for federation.provider.allowed_origins_changed");
+    let note = note.expect("note");
+    assert_eq!(
+        sui_id_store::registry::note_field(&note, "origins_before").as_deref(),
+        Some("1"),
+        "the seeded row has one allowed origin"
+    );
+    assert_eq!(
+        sui_id_store::registry::note_field(&note, "origins_after").as_deref(),
+        Some("2")
+    );
+}

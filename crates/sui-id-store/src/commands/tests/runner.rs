@@ -168,6 +168,7 @@ mod client_update_form;
 mod credential_lockout;
 mod dynamic_registration;
 mod federation;
+mod federation_provider;
 mod key_rotation;
 mod lockout;
 mod login;

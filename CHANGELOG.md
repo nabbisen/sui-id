@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+**RFC 094 M2b wave 3: federation-provider configuration writes now
+commit atomically with their audit records.**
+
+### Changed
+
+- **Creating a federation provider from config, and updating its
+  allowed-origins list from config, now commit atomically with an audit
+  record.** Both happen at startup, not on an administrator action: a
+  `[[federation_providers]]` block absent from the database is created,
+  and a configured allowed-origins list that differs from the stored
+  one is written over it. Until this release neither wrote any audit
+  record at all — the only trace was a log line that may or may not be
+  retained. Both now commit as one transaction and record the event:
+  `federation.provider.created` (the provider's `slug` and `issuer`,
+  never the client secret) and `federation.provider.allowed_origins_changed`
+  (the origin count before and after, never the origin lists
+  themselves). Nothing an operator sees changes on a boot that already
+  succeeded.
+
 ## [0.85.0] — 2026-10-27
 
 **RFC 094 M2b's client-administration wave: every remaining

@@ -727,13 +727,15 @@ descriptor = ["C15_DYNAMIC_REGISTER"]
 [[command]]
 id = "C16"
 class = "A"
-status = "target-legacy"  # implemented | target-absent | target-legacy
-sealed = false
+status = "implemented"  # implemented | target-absent | target-legacy
+sealed = true
 owner = "Federation-provider create"
-rationale = "`federation.provider.created`"
-mutation_surface = "create globally fresh never-reused provider ID, disabled/review-required, with canonical `activation_generation=0`"
-files = ["crates/sui-id-store/src/repos/federation_provider.rs"]  # `create` -- current implementation lacks the activation_generation=0/review-required semantics the row describes; target-state row, see Stage 0 note. Ruled 2026-10-25: those semantics are RFC 096-B2's; sealing today's `create` onto the Class-A seam is M2b wave 3's and does not wait for them. The live write is `runtime/startup.rs:323` and it emits no audit record at all.
-test_id = "`a_c16_provider_create`"
+rationale = "`federation.provider.created`, attributes `slug` and `issuer` only -- never the client secret or its ciphertext. RFC 094 M2b wave 3: startup provisioning creates a `[[federation_providers]]` config block absent from the database; no session, `system_principal: permitted`, the same shape C22 uses. Previously emitted by nothing at all (`git grep federation.provider.created` found no append call anywhere in `crates/`). Ruled 2026-10-25: seals `create` as it stands; RFC 096-B2's `activation_generation=0`/review-required semantics are not implemented by this seal and will extend this sealed command, not convert a bare one."
+mutation_surface = "`federation_provider::create_within_tx` (via `commands::create_federation_provider`, which seals the plaintext secret before the transaction)"
+files = ["crates/sui-id-store/src/repos/federation_provider.rs", "crates/sui-id-store/src/commands.rs", "crates/sui-id/src/runtime/startup.rs"]
+test_id = "`a_c16_provider_create`, `c16_injected_failure_before_append_rolls_back_the_create`, `register_new_federation_provider_creates_and_audits_it`"
+event = ["federation.provider.created"]
+descriptor = ["C16_CREATED"]
 
 [[command]]
 id = "C17"
@@ -743,7 +745,7 @@ sealed = false
 owner = "Federation-provider enable/disable"
 rationale = "closed branches `federation.provider.enabled` / `federation.provider.disabled`; both record old/new activation generation; enable consumes sealed preflight (<600s), disable clears evidence"
 mutation_surface = "exact provider/version/policy/generation/enabled guard; both checked-increment generation; enable stores evidence bound to new generation, disable invalidates login/MFA/ceremony state; no standalone writer"
-files = ["crates/sui-id-store/src/repos/federation_provider.rs"]  # `set_enabled` exists; the preflight capability, generation increment, and evidence storage this row describes do NOT exist yet -- those are RFC 096-B2's. Ruled 2026-10-25: the atomicity conversion does NOT depend on them, so wave 3 may seal `set_enabled` as it stands and 096-B2 extends a sealed command. Target-state row. No production caller today -- tests only.
+files = ["crates/sui-id-store/src/repos/federation_provider.rs"]  # `set_enabled` exists, callerless, tests only -- unlike C16/C24, there is no live write for wave 3 to seal. The 2026-10-25 ruling only displaces what is actually running today; it does not require sealing a function nothing calls. The preflight capability, generation increment, and evidence storage this row describes are RFC 096-B2's and arrive with it; 096-B2 then extends a sealed command rather than converting a bare one, the same shape as C16/C24. Target-state row, left unsealed -- see wave 3's own dispatch §4 for the reasoning and the standing invitation to argue otherwise.
 test_id = "`a_c17_provider_enable`, `a_c17_provider_disable`, `a_c17_preflight_race`, `a_c17_generation_overflow`"
 
 [[command]]
@@ -754,7 +756,7 @@ sealed = false
 owner = "Federation-provider delete"
 rationale = "`federation.provider.deleted`; old/new activation generation + bounded invalidated counts"
 mutation_surface = "exact non-deleted generation guard; checked-increment generation, clear evidence, invalidate login/MFA/ceremony state, then mark/remove provider in one transaction"
-files = ["crates/sui-id-store/src/repos/federation_provider.rs"]  # `delete` exists; generation/evidence-invalidation semantics do NOT exist yet -- those are RFC 096-B2's. Ruled 2026-10-25: the atomicity conversion does NOT depend on them. Target-state row. No production caller today -- tests only.
+files = ["crates/sui-id-store/src/repos/federation_provider.rs"]  # `delete` exists, callerless, tests only -- unlike C16/C24, there is no live write for wave 3 to seal. The 2026-10-25 ruling only displaces what is actually running today; it does not require sealing a function nothing calls. Generation/evidence-invalidation semantics are RFC 096-B2's and arrive with it; 096-B2 then extends a sealed command rather than converting a bare one. Target-state row, left unsealed -- see wave 3's own dispatch §4.
 test_id = "`a_c18_provider_delete`, `a_c18_generation_overflow`"
 
 [[command]]
@@ -815,6 +817,19 @@ rationale = "`federation.provider.policy_updated`; sealed `StartupConfiguration`
 mutation_surface = "guarded full policy replace on exact non-deleted old version/generation, checked-increment both, force disabled/review-required, clear evidence, invalidate old flows; cache eviction post-commit"
 files = []  # UNRESOLVED, deliberately: no current function implements provider trust-policy replacement at all. Wholly new, RFC 096-B2. Target-state row, not a reconciliation gap. Ruled 2026-10-25: unlike C16-C18 this one has nothing to seal, because there is no write -- it arrives with 096-B2 and is sealed on arrival, so it is not wave 3 work.
 test_id = "`a_c23_provider_policy_update`, `a_c23_generation_overflow`"
+
+[[command]]
+id = "C24"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+sealed = true
+owner = "Federation-provider allowed-origins reconcile"
+rationale = "`federation.provider.allowed_origins_changed`, attributes are the origin *count* before and after, never the origin lists -- the same rule C03's counts follow, for the same reason: an unbounded caller-supplied list has no place in a hash-chained record. Not in the inventory before this round: RFC 134 step 7a's allowed-origins reconcile (startup provisioning, no session) was a live Class-A-shaped write with no id at all, found while building wave 3, not inherited from it. Numbered C24, the next free id after the existing highest (C23) at the time this row was added."
+mutation_surface = "`federation_provider::update_allowed_origins_within_tx` (via `commands::update_federation_provider_allowed_origins`)"
+files = ["crates/sui-id-store/src/repos/federation_provider.rs", "crates/sui-id-store/src/commands.rs", "crates/sui-id/src/runtime/startup.rs"]
+test_id = "`a_c24_origins_change`, `c24_injected_failure_before_append_rolls_back_the_change`, `c24_against_a_nonexistent_provider_is_notfound_and_writes_no_record`, `differing_allowed_origins_update_is_audited`"
+event = ["federation.provider.allowed_origins_changed"]
+descriptor = ["C24_ORIGINS_CHANGED"]
 
 [[command]]
 id = "F02"

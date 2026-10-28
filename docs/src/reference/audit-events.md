@@ -142,6 +142,13 @@ coverage matrix marks as not atomic) still write hand-built plain text.
 so a free-text value such as a recovery-link reason could contain text that looked
 like a field. In such a row the real field is the *last* occurrence of its key.
 
+## Federation provider configuration events (RFC 094 M2b wave 3)
+
+| Event name | Label | Description |
+|---|---|---|
+| `federation.provider.created` | Federation provider created | A `[[federation_providers]]` config block absent from the database was created at startup. No actor — startup provisioning, not an administrator action. Note fields: `slug`, `issuer`; never the client secret. |
+| `federation.provider.allowed_origins_changed` | Federation provider origins changed | A configured `allowed_origins` list that differs from the stored one was written over it at startup. No actor. Note fields: `origins_before`, `origins_after` — counts, never the origin lists themselves. |
+
 ## Federation events (RFC 004)
 
 | Event name | Label | Description |

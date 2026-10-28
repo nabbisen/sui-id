@@ -289,8 +289,6 @@ pub async fn prepare(cfg: Config) -> Result<Startup> {
     // Each [[federation_providers]] block is upserted so operators
     // can manage enabled/disabled state via the admin UI.
     for cfg in &state.config.federation_providers {
-        use sui_id_shared::ids::FederationProviderId;
-        use sui_id_store::models::{FederationProviderRow, ProvisionMode};
         let secret = match cfg.resolve_secret() {
             Ok(s) => s,
             Err(e) => {
@@ -305,33 +303,7 @@ pub async fn prepare(cfg: Config) -> Result<Startup> {
                 reconcile_federation_provider(&state.db, cfg, &existing, state.clock.now()).await;
             }
             Err(sui_id_store::StoreError::NotFound) => {
-                let now = state.clock.now();
-                let row = FederationProviderRow {
-                    id: FederationProviderId::new(),
-                    slug: cfg.slug.clone(),
-                    display_name: cfg.display_name.clone(),
-                    issuer: cfg.issuer.clone(),
-                    client_id: cfg.client_id.clone(),
-                    client_secret_enc: None, // encrypted by create()
-                    scopes: cfg.scopes.clone(),
-                    provision_mode: ProvisionMode::parse(&cfg.provision_mode),
-                    enabled: cfg.enabled,
-                    allowed_origins: cfg.allowed_origins.join(" "),
-                    created_at: now,
-                    updated_at: now,
-                };
-                if let Err(e) = sui_id_store::repos::federation_provider::create(
-                    &state.db,
-                    &row,
-                    secret.as_deref(),
-                )
-                .await
-                {
-                    tracing::error!(error = %e, slug = %cfg.slug,
-                        "failed to register federation provider");
-                } else {
-                    tracing::info!(slug = %cfg.slug, "federation provider registered");
-                }
+                register_new_federation_provider(&state.db, cfg, secret, state.clock.now()).await;
             }
             Err(e) => tracing::error!(error = %e, "federation_provider lookup failed"),
         }
@@ -341,6 +313,54 @@ pub async fn prepare(cfg: Config) -> Result<Startup> {
         listen_addr,
         _log_guard: log_guard,
     })
+}
+
+/// RFC 004 / RFC 094 M2b wave 3, C16 — create the row for a
+/// `[[federation_providers]]` config block absent from the database.
+///
+/// Extracted into its own function, the same shape
+/// [`reconcile_federation_provider`] already has, so the create path is
+/// directly testable at the layer that actually runs it rather than only
+/// through the whole of [`prepare`] — the precedent is
+/// `dev_mode_seed_client_secret_patch_is_audited`
+/// (`crates/sui-id/tests/e2e/dev_mode.rs`), which drives `apply_seed`
+/// directly for the same reason.
+///
+/// A provider that fails to register must not abort startup — preserved
+/// from the pre-Class-A call this replaces: still logged at `error`, not
+/// propagated with `?`.
+async fn register_new_federation_provider(
+    db: &sui_id_store::Database,
+    cfg: &crate::config::FederationProviderConfig,
+    secret: Option<String>,
+    now: chrono::DateTime<chrono::Utc>,
+) {
+    use sui_id_shared::ids::FederationProviderId;
+    use sui_id_store::models::{FederationProviderRow, ProvisionMode};
+
+    let row = FederationProviderRow {
+        id: FederationProviderId::new(),
+        slug: cfg.slug.clone(),
+        display_name: cfg.display_name.clone(),
+        issuer: cfg.issuer.clone(),
+        client_id: cfg.client_id.clone(),
+        client_secret_enc: None, // sealed by create_federation_provider()
+        scopes: cfg.scopes.clone(),
+        provision_mode: ProvisionMode::parse(&cfg.provision_mode),
+        enabled: cfg.enabled,
+        allowed_origins: cfg.allowed_origins.join(" "),
+        created_at: now,
+        updated_at: now,
+    };
+    // RFC 094 M2b wave 3, C16: the insert and its
+    // `federation.provider.created` audit append now commit in one
+    // transaction.
+    if let Err(e) = sui_id_store::commands::create_federation_provider(db, row, secret).await {
+        tracing::error!(error = %e, slug = %cfg.slug,
+            "failed to register federation provider");
+    } else {
+        tracing::info!(slug = %cfg.slug, "federation provider registered");
+    }
 }
 
 /// RFC 134 step 7 — reconcile one `[[federation_providers]]` block against
@@ -382,10 +402,17 @@ async fn reconcile_federation_provider(
             new_allowed_origins = %desired_origins,
             "federation_provider allowed_origins changed in config; updating stored value"
         );
-        if let Err(e) = sui_id_store::repos::federation_provider::update_allowed_origins(
+        // RFC 094 M2b wave 3, C24: the write and its
+        // `federation.provider.allowed_origins_changed` audit append now
+        // commit in one transaction. A failed reconcile must still not
+        // abort startup — preserved from the pre-Class-A call this
+        // replaces.
+        let origins_before = existing.allowed_origins.split_whitespace().count();
+        if let Err(e) = sui_id_store::commands::update_federation_provider_allowed_origins(
             db,
             existing.id,
-            &desired_origins,
+            desired_origins,
+            origins_before,
             now,
         )
         .await

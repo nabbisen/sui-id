@@ -230,6 +230,29 @@ then because `setup.` was not in the hand-written list.
 |---|---|---|---|---|---|
 | `audit.chain.verification_failed` | `verify_chain_tail` returned an error (RFC 121 D3); written best-effort, on the same connection that just failed to be read, and deliberately never Class A — see `sui_id_core::audit_chain`'s own doc for why | — | — | `limit=… detail=…` | B |
 
+### Federation provider configuration (`federation.provider.*`, RFC 094 M2b wave 3)
+
+Both rows are startup provisioning, not an administrator action: no
+session, `system_principal: permitted` — the same shape
+`client.registration_token.revoked` (C22) uses. 2026-10-25 ruling: RFC
+096-B2's activation-generation and preflight semantics are not
+implemented by either seal; 096-B2 extends these sealed commands rather
+than converting bare ones.
+
+| Event name | Operation | Actor | Target | Note fields | Class |
+|---|---|---|---|---|---|
+| `federation.provider.created` | A `[[federation_providers]]` config block absent from the database is created at startup (command `C16`) | — | new provider id | `slug=…`, `issuer=…`; never the client secret or its ciphertext | A |
+| `federation.provider.allowed_origins_changed` | A configured `allowed_origins` list that differs from the stored one is written over it at startup (RFC 134 step 7a, command `C24`) | — | provider id | `origins_before=…`, `origins_after=…` — counts, not the origin lists themselves, same rule as `client.update_form`'s counts | A |
+
+**Both rows are new, RFC 094 M2b wave 3.** `federation.provider.created`
+was declared in `contracts/write-commands.toml` and emitted by nothing
+before this wave — `git grep federation.provider.created` found no
+append call anywhere in `crates/`. `federation.provider.allowed_origins_changed`
+had no row at all before this wave: the write it seals
+(`federation_provider::update_allowed_origins`, RFC 134 step 7a) is a
+live Class-A-shaped write the inventory never named — found while
+building this wave, not inherited from it.
+
 ### Federation sign-in (`auth.federation.*`, RFC 004)
 
 | Event name | Operation | Actor | Target | Note fields | Class |

@@ -176,6 +176,48 @@ pub async fn create(
     .await
 }
 
+/// Create a provider inside an existing transaction (RFC 094 M2b wave 3,
+/// C16). `row.client_secret_enc` must already hold the sealed ciphertext
+/// (or `None`) — this function does no cryptography, unlike [`create`]
+/// above, which still does its own sealing for its many test-fixture
+/// callers. The one production call site (`runtime/startup.rs`) goes
+/// through `commands::create_federation_provider` instead, which seals
+/// the secret before calling this.
+pub fn create_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    row: &FederationProviderRow,
+) -> StoreResult<()> {
+    tx.execute(
+        "INSERT INTO federation_provider \
+         (id, slug, display_name, issuer, client_id, client_secret_enc, \
+          scopes, provision_mode, enabled, allowed_origins, created_at, updated_at) \
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)",
+        params![
+            row.id.to_string(),
+            row.slug,
+            row.display_name,
+            row.issuer,
+            row.client_id,
+            row.client_secret_enc,
+            row.scopes,
+            row.provision_mode.as_str(),
+            row.enabled as i64,
+            row.allowed_origins,
+            row.created_at,
+            row.updated_at,
+        ],
+    )
+    .map_err(|e| match e {
+        rusqlite::Error::SqliteFailure(err, _)
+            if err.code == rusqlite::ErrorCode::ConstraintViolation =>
+        {
+            StoreError::Conflict
+        }
+        other => StoreError::from(other),
+    })?;
+    Ok(())
+}
+
 /// Update `enabled` flag.
 pub async fn set_enabled(
     db: &Database,
@@ -208,20 +250,35 @@ pub async fn update_allowed_origins(
     allowed_origins: &str,
     now: DateTime<Utc>,
 ) -> StoreResult<()> {
-    let id_str = id.to_string();
     let allowed_origins = allowed_origins.to_owned();
-    db.with_conn(move |conn| {
-        let n = conn.execute(
-            "UPDATE federation_provider SET allowed_origins = ?1, updated_at = ?2 WHERE id = ?3",
-            params![allowed_origins, now, id_str],
-        )?;
-        if n == 0 {
-            Err(StoreError::NotFound)
-        } else {
-            Ok(())
-        }
-    })
-    .await
+    db.with_tx(move |tx| update_allowed_origins_within_tx(tx, id, &allowed_origins, now))
+        .await
+}
+
+/// RFC 094 M2b wave 3, C24. The primitive [`update_allowed_origins`] now
+/// wraps, via `Database::with_tx` — kept as a thin wrapper rather than
+/// removed, since its own tests (`update_allowed_origins_touches_only_
+/// that_column`, `update_allowed_origins_on_missing_id_is_not_found`)
+/// exercise the primitive directly, the same shape C22's `revoke` was
+/// kept for its own test. The sealed command
+/// (`commands::update_federation_provider_allowed_origins`) calls this
+/// directly inside its own transaction instead.
+pub fn update_allowed_origins_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    id: FederationProviderId,
+    allowed_origins: &str,
+    now: DateTime<Utc>,
+) -> StoreResult<()> {
+    let id_str = id.to_string();
+    let n = tx.execute(
+        "UPDATE federation_provider SET allowed_origins = ?1, updated_at = ?2 WHERE id = ?3",
+        params![allowed_origins, now, id_str],
+    )?;
+    if n == 0 {
+        Err(StoreError::NotFound)
+    } else {
+        Ok(())
+    }
 }
 
 /// Delete a provider (cascades to federation_link rows).

@@ -5700,5 +5700,207 @@ pub async fn revoke_registration_token(
     .await
 }
 
+// ── C16 — federation provider create ─────────────────────────────────────
+//
+// RFC 094 M2b wave 3. Startup provisioning (`runtime/startup.rs`), not an
+// administrator action: a `[[federation_providers]]` config block absent
+// from the database is created. No session -- `system_principal:
+// permitted`, the same shape C22 uses, since the operator's authority is
+// the config file and the master key, not an authenticated actor. Ruled
+// 2026-10-25: RFC 096-B2's `activation_generation`/review-required
+// semantics are not implemented by this seal -- it seals `create` as it
+// stands today, and 096-B2 extends this sealed command rather than
+// converting a bare one.
+
+static C16_CREATED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::FederationProviderCreate,
+    name: "federation.provider.created",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::None,
+    target: TargetRequirement::Required,
+    attributes: &[
+        AttributeSpec {
+            name: "slug",
+            description: "the provider's configured slug",
+            required: true,
+        },
+        AttributeSpec {
+            name: "issuer",
+            description: "the provider's configured issuer URL",
+            required: true,
+        },
+    ],
+};
+
+crate::declare_write_command! {
+    /// C16 — startup provisioning creates a federation provider absent
+    /// from the database.
+    command C16 = "C16" {
+        system_principal: permitted;
+        enum C16Event {
+            Created {
+                provider_id: FederationProviderId,
+                slug: String,
+                issuer: String,
+            } => &C16_CREATED,
+        }
+    }
+}
+
+impl SealedCommandEvent<C16> for C16Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Created { provider_id, .. } = self;
+        Some(AuditTarget(provider_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Created { slug, issuer, .. } = self;
+        AuditAttributes::builder()
+            .attribute("slug", slug.clone())
+            .attribute("issuer", issuer.clone())
+            .build()
+    }
+}
+
+/// Run C16 (create a federation provider) through the Class-A runner.
+/// `client_secret_plain` is sealed here, inside the command, before the
+/// row reaches [`crate::repos::federation_provider::create_within_tx`] —
+/// never passed to that function in plaintext, and never recorded as an
+/// attribute (only `slug` and `issuer` are). Callers must leave
+/// `row.client_secret_enc` as `None`; this command fills it.
+pub async fn create_federation_provider(
+    db: &crate::Database,
+    mut row: crate::models::FederationProviderRow,
+    client_secret_plain: Option<String>,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let db_for_tx = db.clone();
+    let context = AuthorizedCommandContext::<C16>::for_system_actor(None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, C16>| {
+        row.client_secret_enc = match &client_secret_plain {
+            Some(s) => Some(crate::crypto::seal(
+                db_for_tx.key(),
+                s.as_bytes(),
+                crate::repos::federation_provider::AAD,
+            )?),
+            None => None,
+        };
+        crate::repos::federation_provider::create_within_tx(tx.tx(), &row)?;
+        Ok((
+            (),
+            C16Event::Created {
+                provider_id: row.id,
+                slug: row.slug.clone(),
+                issuer: row.issuer.clone(),
+            },
+        ))
+    })
+    .await
+}
+
+// ── C24 — federation provider allowed-origins change ─────────────────────
+//
+// RFC 094 M2b wave 3. Not in the inventory before this round -- a live
+// Class-A-shaped write (RFC 134 step 7a) with no id at all. Startup
+// provisioning reconciles a configured `allowed_origins` list against the
+// stored one and writes over it when they differ; same no-session shape
+// as C16.
+
+static C24_ORIGINS_CHANGED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::FederationProviderOriginsChanged,
+    name: "federation.provider.allowed_origins_changed",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::None,
+    target: TargetRequirement::Required,
+    attributes: &[
+        AttributeSpec {
+            name: "origins_before",
+            description: "count of allowed origins before the change",
+            required: true,
+        },
+        AttributeSpec {
+            name: "origins_after",
+            description: "count of allowed origins after the change",
+            required: true,
+        },
+    ],
+};
+
+crate::declare_write_command! {
+    /// C24 — startup provisioning reconciles a federation provider's
+    /// configured `allowed_origins` against the stored value.
+    command C24 = "C24" {
+        system_principal: permitted;
+        enum C24Event {
+            Changed {
+                provider_id: FederationProviderId,
+                origins_before: usize,
+                origins_after: usize,
+            } => &C24_ORIGINS_CHANGED,
+        }
+    }
+}
+
+impl SealedCommandEvent<C24> for C24Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Changed { provider_id, .. } = self;
+        Some(AuditTarget(provider_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Changed {
+            origins_before,
+            origins_after,
+            ..
+        } = self;
+        AuditAttributes::builder()
+            .attribute("origins_before", origins_before.to_string())
+            .attribute("origins_after", origins_after.to_string())
+            .build()
+    }
+}
+
+/// Run C24 (reconcile a provider's `allowed_origins`) through the
+/// Class-A runner. `origins_before` is computed by the caller from the
+/// row it already fetched to decide a reconcile is needed at all
+/// (`runtime/startup.rs`'s own `reconcile_federation_provider`) — the
+/// same pre-transaction read that function already did before this
+/// round, unchanged; this command does not re-fetch inside the
+/// transaction.
+pub async fn update_federation_provider_allowed_origins(
+    db: &crate::Database,
+    target: FederationProviderId,
+    allowed_origins: String,
+    origins_before: usize,
+    now: DateTime<Utc>,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let origins_after = allowed_origins.split_whitespace().count();
+    let context = AuthorizedCommandContext::<C24>::for_system_actor(None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, C24>| {
+        crate::repos::federation_provider::update_allowed_origins_within_tx(
+            tx.tx(),
+            target,
+            &allowed_origins,
+            now,
+        )?;
+        Ok((
+            (),
+            C24Event::Changed {
+                provider_id: target,
+                origins_before,
+                origins_after,
+            },
+        ))
+    })
+    .await
+}
+
 #[cfg(test)]
 mod tests;

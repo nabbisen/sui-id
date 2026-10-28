@@ -286,6 +286,26 @@ pub enum AuditEventKind {
     /// operator's authority is possession of the master key and
     /// filesystem access, the same shape U08 and K01 use.
     ClientRegistrationTokenRevoked,
+    /// `federation.provider.created` — RFC 094 M2b wave 3, C16. Startup
+    /// provisioning creates a `[[federation_providers]]` config block
+    /// absent from the database; no session, `system_principal:
+    /// permitted`, the same shape `ClientRegistrationTokenRevoked` uses.
+    /// Attributes are the provider's `slug` and `issuer` only — never the
+    /// client secret, which `create_within_tx` does not even receive in
+    /// plaintext (it is sealed by the caller before the transaction).
+    /// Previously emitted by nothing: `git grep
+    /// federation.provider.created` found no append call anywhere in
+    /// `crates/` before this round.
+    FederationProviderCreate,
+    /// `federation.provider.allowed_origins_changed` — RFC 094 M2b wave
+    /// 3, C24. **Not in the inventory before this round** — a live
+    /// Class-A-shaped write (`update_allowed_origins`, RFC 134 step 7a)
+    /// with no id at all; found while building this wave, not inherited
+    /// from it. Attributes are the origin *count* before and after,
+    /// never the origin lists — the same rule `ClientUpdateForm`'s
+    /// counts follow, for the same reason: an unbounded caller-supplied
+    /// list has no place in a hash-chained record.
+    FederationProviderOriginsChanged,
     /// Proof-only — see [`ProofOnlyForbiddenSystemPrincipalCommand`]. Never
     /// emitted; no command can construct this event because no command can
     /// construct a context for that command in the first place.
