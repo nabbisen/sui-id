@@ -113,6 +113,12 @@ the gate it imitates, which is exactly how a release checklist's bare
 in CI. `scripts/check-gate-inputs.sh` (A3.4) asserts that this file contains
 no such restatement.
 
+**Run `scripts/local-matrix.sh` before dispatching the workflow.** It derives
+its own complete set of checks from `.github/workflows/ci.yml`, so it cannot
+go stale the way a hand-enumerated "run these N things" list already has
+(twice). It is not Level B — no local run is — but it catches most of what
+would otherwise only surface after the `workflow_dispatch` round-trip.
+
 ### Step 0: read the advisory lane before the preparation starts
 
 **Read `Security audit` on `main` before writing a single line of the

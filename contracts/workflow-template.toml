@@ -505,4 +505,18 @@ gate-matrix-fixtures = '''
           echo "exit_status=$status"
           echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           exit "$status"
+      - name: scripts/local-matrix.sh self-tests (RFC 093 cycle H item 4)
+        # The newest of the fourteen: holds scripts/local-matrix.sh's own
+        # derivation of "what ci.yml runs" to this file itself, so that
+        # script cannot drift from CI the same way the hand-written
+        # enumerations it replaces already had, twice.
+        run: |
+          set +e
+          echo "command=python3.14 -m unittest scripts.tests.test_local_matrix"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3.14 -m unittest scripts.tests.test_local_matrix
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
 '''

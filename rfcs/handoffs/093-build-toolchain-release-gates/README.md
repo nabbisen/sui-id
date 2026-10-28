@@ -16,7 +16,9 @@ reviewed at [`093-implementation-start-authorization-review-2026-07-21.md`](093-
 > while missing fourteen `unittest` steps CI runs, and how the round
 > that found them enumerated thirteen. The script derives the set
 > instead; a self-test holds the derivation to `ci.yml`. **No gate and
-> no lane changes.**
+> no lane changes.** The running mechanism is `scripts/local-matrix.sh`
+> — run it, rather than enumerating gates, fixtures or unittest modules
+> by hand, for any local confirmation this handoff or a dispatch asks for.
 
 ## Stage map
 
