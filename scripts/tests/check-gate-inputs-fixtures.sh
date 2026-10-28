@@ -27,9 +27,13 @@ make_valid_fixture() {
       cp "$repo_root/rfcs/$dir"/*.md "$target/rfcs/$dir/" 2>/dev/null || true
     fi
   done
-  cp "$repo_root/.github/workflows/ci.yml" "$target/.github/workflows/ci.yml"
-  cp "$repo_root/.github/workflows/audit.yml" "$target/.github/workflows/audit.yml"
-  cp "$repo_root/.github/workflows/fuzz.yml" "$target/.github/workflows/fuzz.yml"
+  # The whole directory, not named files one at a time: a hardcoded list
+  # (ci.yml, audit.yml, fuzz.yml) went stale the moment RFC 141 added a
+  # fourth hand-written workflow (publish.yml) -- its [actions] row was
+  # then copied into every fixture here while the one workflow that uses
+  # it was not, so condition 3 (SHA unused by any workflow) spuriously
+  # failed on every fixture, not just the one built to test staleness.
+  cp "$repo_root"/.github/workflows/*.yml "$target/.github/workflows/"
 }
 
 # A fixture with an additional lane source. RFC 900 does not exist and never

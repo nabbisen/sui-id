@@ -519,4 +519,19 @@ gate-matrix-fixtures = '''
           echo "exit_status=$status"
           echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           exit "$status"
+      - name: check-publish-preconditions.py self-tests (RFC 141)
+        # The two network-facing checks (CI run, Security audit run) are
+        # exercised through unittest.mock.patch.object, the same shape
+        # test_check_published_versions.py already uses for its own one
+        # live network call -- no token or network access needed to run
+        # these here.
+        run: |
+          set +e
+          echo "command=python3.14 -m unittest scripts.tests.test_check_publish_preconditions"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3.14 -m unittest scripts.tests.test_check_publish_preconditions
+          status=$?
+          echo "exit_status=$status"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exit "$status"
 '''

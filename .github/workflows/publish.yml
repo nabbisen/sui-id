@@ -1,0 +1,195 @@
+name: Publish to crates.io
+
+# RFC 141: publishing is a workflow, not a credential. Mints a
+# short-lived crates.io token per crate via Trusted Publishing (OIDC)
+# instead of a long-lived CARGO_REGISTRY_TOKEN on a workstation, and
+# verifies Level B on the exact tagged commit before any token is
+# minted -- the check a person performs today (release-process.md's
+# own step 5), automated here so the publish cannot skip it. A
+# workflow that minted tokens without that check would *weaken* RFC
+# 131 D2 by removing the person who was reading it, not strengthen it.
+#
+# Triggered by workflow_dispatch, not a tag push: anyone who can push
+# a tag must not thereby be able to publish (RFC 141 §2). The
+# `publish` job runs in the `release` GitHub Environment, which this
+# repository configures with a required reviewer -- the approval gate
+# the irreversible, outward-facing step belongs behind, and it does
+# not start until `verify` has already reported Level B.
+#
+# `rust-lang/crates-io-auth-action@v1` cannot be pinned by a bare `v1`
+# in this repository (A3.4 condition 1 requires a 40-hex commit SHA in
+# any hand-written workflow; condition 2 requires that SHA to be
+# recorded in contracts/gate-inputs.toml's [actions] table, where it
+# is, as `crates_io_auth_action_v1`). `v1` is a branch on that repo,
+# not a tag; it currently points at the same commit as the latest
+# `v1.0.x` release tag -- see the round's own review package for how
+# that was verified.
+#
+# 0.86.0 does not publish through this (RFC 141 §7, settled
+# 2026-10-28): the workflow is built and its refusal fixtures exercised
+# in 0.86.0, and 0.87.0 is the first release published through it.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Version tag to publish, e.g. 0.87.0 (no leading v)"
+        required: true
+        type: string
+
+jobs:
+  verify:
+    name: Verify Level B and release identity
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Install Python 3.14
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14"
+
+      # RFC 141 §3: refuses before crates-io-auth-action ever runs,
+      # in the `publish` job below, unless all four conditions hold --
+      # a CI workflow_dispatch run on this exact commit concluded
+      # success with 0 skipped jobs, a Security audit run on the same
+      # commit concluded success, the tag is annotated and on `main`,
+      # and the six Cargo.toml version fields equal it.
+      - name: Verify Level B and release identity
+        id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          python3.14 scripts/check-publish-preconditions.py \
+            --root . \
+            --repo "${{ github.repository }}" \
+            --tag "${{ inputs.tag }}" \
+            --token "$GH_TOKEN"
+          sha=$(git rev-parse "${{ inputs.tag }}^{commit}")
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+  publish:
+    name: Publish six crates
+    needs: verify
+    runs-on: ubuntu-24.04
+    environment: release
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      # Checked out at the exact commit `verify` resolved and already
+      # vouched for -- not the tag string again, so there is no second
+      # resolution for the tag to have moved between the two jobs.
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.verify.outputs.sha }}
+
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          toolchain: stable
+
+      # RFC 141 §4: six explicit sequential steps, in the dependency
+      # order docs/src/contributing/release-process.md documents --
+      # not a loop over a list, so the order is readable as six lines
+      # rather than inferred from data. `cargo publish` waits for the
+      # crate to reach the index before returning, so the next step's
+      # dependency resolution needs no hand-tuned sleep.
+
+      # 1. Foundation: shared types (no internal deps)
+      - name: Authenticate with crates.io (sui-id-shared)
+        id: auth-shared
+        uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1 (v1.0.6)
+      - name: Publish sui-id-shared
+        id: publish-shared
+        run: cargo publish -p sui-id-shared
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth-shared.outputs.token }}
+
+      # 2. Foundation: i18n (no internal deps)
+      - name: Authenticate with crates.io (sui-id-i18n)
+        id: auth-i18n
+        uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1 (v1.0.6)
+      - name: Publish sui-id-i18n
+        id: publish-i18n
+        run: cargo publish -p sui-id-i18n
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth-i18n.outputs.token }}
+
+      # 3. Storage: depends on sui-id-shared
+      - name: Authenticate with crates.io (sui-id-store)
+        id: auth-store
+        uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1 (v1.0.6)
+      - name: Publish sui-id-store
+        id: publish-store
+        run: cargo publish -p sui-id-store
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth-store.outputs.token }}
+
+      # 4. Domain logic: depends on sui-id-shared, sui-id-store, sui-id-i18n
+      - name: Authenticate with crates.io (sui-id-core)
+        id: auth-core
+        uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1 (v1.0.6)
+      - name: Publish sui-id-core
+        id: publish-core
+        run: cargo publish -p sui-id-core
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth-core.outputs.token }}
+
+      # 5. UI: depends on sui-id-shared, sui-id-store, sui-id-i18n
+      - name: Authenticate with crates.io (sui-id-web)
+        id: auth-web
+        uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1 (v1.0.6)
+      - name: Publish sui-id-web
+        id: publish-web
+        run: cargo publish -p sui-id-web
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth-web.outputs.token }}
+
+      # 6. Binary crate: depends on all five
+      - name: Authenticate with crates.io (sui-id)
+        id: auth-bin
+        uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1 (v1.0.6)
+      - name: Publish sui-id
+        id: publish-bin
+        run: cargo publish -p sui-id
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth-bin.outputs.token }}
+
+      # RFC 141 §4: a partial publish must be reported as a partial
+      # publish, naming exactly which crates already reached the
+      # registry -- the state `cargo yank` cannot undo, and the only
+      # state a later retry must not re-publish. Runs whenever any
+      # earlier step in this job failed; a step after the failure is
+      # "skipped", never "success", so only the crates that truly
+      # published are named.
+      - name: Report a partial publish, if the job failed
+        if: failure()
+        run: |
+          echo "::error::Publish did not complete all six crates."
+          echo "Crates already on the registry (do not re-run this workflow for them -- retry only from the next one):"
+          ok=0
+          for pair in "sui-id-shared:${{ steps.publish-shared.outcome }}" \
+                      "sui-id-i18n:${{ steps.publish-i18n.outcome }}" \
+                      "sui-id-store:${{ steps.publish-store.outcome }}" \
+                      "sui-id-core:${{ steps.publish-core.outcome }}" \
+                      "sui-id-web:${{ steps.publish-web.outcome }}" \
+                      "sui-id:${{ steps.publish-bin.outcome }}"; do
+            name="${pair%%:*}"
+            outcome="${pair##*:}"
+            if [ "$outcome" = "success" ]; then
+              echo "  - $name"
+              ok=$((ok + 1))
+            fi
+          done
+          if [ "$ok" -eq 0 ]; then
+            echo "  (none -- the failure was before the first publish step completed)"
+          fi

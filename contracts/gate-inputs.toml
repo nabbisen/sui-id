@@ -190,3 +190,9 @@ upload_artifact_v4 = "ea165f8d65b6e75b540449e92b4886f43607fa02"
 rust_toolchain_stable = "4cda84d5c5c54efe2404f9d843567869ab1699d4"
 rust_toolchain_nightly = "4fd1da8b0805d2d2e936788875a7d65dbd677dc2"
 setup_python_v7 = "5fda3b95a4ea91299a34e894583c3862153e4b97"
+# RFC 141: rust-lang/crates-io-auth-action's `v1` is a branch (not a tag --
+# verified via the GitHub API, `git/refs/heads/v1` vs. the absence of a
+# literal `git/refs/tags/v1`), currently at the same commit as its own
+# latest `v1.0.6` tag. Resolved and verified 2026-10-29; see the round's
+# own review package for how.
+crates_io_auth_action_v1 = "3268eb413133e2960fa4ae0e963ca76380c54cd9"
