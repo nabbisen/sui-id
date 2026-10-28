@@ -54,7 +54,12 @@ programme honest. Five items, none large.**
    2026-10-25 ruling. Dispose of `set_enabled`/`delete`/C23 the way
    stage 4 disposed of C10/C22/K02. **After this, the only thing
    standing between M2b and closure is the authority switch.**
-2. **RFC 140 stage 1. DISPATCHED 2026-10-28** —
+2. **RFC 140 stage 1. LANDED** `d5f033e`, Level B on that exact commit
+   (`workflow_dispatch` `40695644964`, 27 success, 0 failed, 0
+   skipped). G20 46 → 47. It also landed wave 3's carried finding —
+   `origins_before` is now read inside its own transaction and the
+   parameter is gone, free because the signature was still unreleased.
+   Dispatch —
    [`../140-application-identity-the-operator-vouches-for/stage1-the-three-link-fields-2026-10-28.md`](../140-application-identity-the-operator-vouches-for/stage1-the-three-link-fields-2026-10-28.md).
    `homepage_uri`, `policy_uri`, `tos_uri`
    settable by an administrator and rendered on the consent screen for

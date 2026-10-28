@@ -101,7 +101,10 @@ reach them. `homepage_uri` already renders as the client name's link.
 - **No CSP change.** See §5.
 - **No change to `validate_application_uri`.**
 
-> **Stage 1 dispatched 2026-10-28** —
+> **Stage 1 LANDED 2026-10-28**, `d5f033e`, Level B 27/0. An
+> administrator can set the three link fields and the consent screen
+> renders them for administrator-registered clients only. **Stage 2 —
+> the logo — is unbuilt and §5's decision is still open.** Dispatch —
 > [`../handoffs/140-application-identity-the-operator-vouches-for/stage1-the-three-link-fields-2026-10-28.md`](../handoffs/140-application-identity-the-operator-vouches-for/stage1-the-three-link-fields-2026-10-28.md).
 > **§1's claim that validation "reuses `validate_application_uri` — one
 > function, one rule, both callers" was written without reading the
