@@ -86,8 +86,12 @@ required reviewer.
 ### 1 — the mechanism
 
 A workflow job with `permissions: id-token: write`, running
-`rust-lang/crates-io-auth-action@v1` to mint a short-lived token, then
-`cargo publish`. Each of the six crates is configured on crates.io with
+`rust-lang/crates-io-auth-action` to mint a short-lived token, then
+`cargo publish`. **Pinned to a full 40-hex commit SHA and registered in
+`contracts/gate-inputs.toml`'s `[actions]` table** — *corrected
+2026-10-28: this section first wrote `@v1`, which A3.4 condition 1
+forbids in a hand-written workflow and condition 2 would reject for
+being absent from the manifest.* Each of the six crates is configured on crates.io with
 the repository, the workflow filename and the environment; the filename
 is part of the trust configuration, so renaming the workflow breaks
 publishing rather than silently widening it.

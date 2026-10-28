@@ -65,7 +65,9 @@ programme honest. Five items, none large.**
    settable by an administrator and rendered on the consent screen for
    administrator-registered clients. Accepted 2026-10-27; §5's logo
    decision stays open and is not in this cut.
-3. **Trusted Publishing** — [RFC 141](../../accepted/141-publishing-is-a-workflow-not-a-credential.md),
+3. **Trusted Publishing. DISPATCHED 2026-10-28** —
+   [`../141-publishing-is-a-workflow-not-a-credential/the-workflow-2026-10-28.md`](../141-publishing-is-a-workflow-not-a-credential/the-workflow-2026-10-28.md).
+   [RFC 141](../../accepted/141-publishing-is-a-workflow-not-a-credential.md),
    written alongside this scope. Build the workflow in `0.86.0`; **first
    use it at `0.87.0`**, not on its own release, because the first run
    of new release machinery should not be on a release already waiting.
