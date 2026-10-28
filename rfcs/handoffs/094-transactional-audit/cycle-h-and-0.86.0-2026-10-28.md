@@ -73,8 +73,12 @@ programme honest. Five items, none large.**
    operator sees on their first run; and the `sealed_by`/`target-absent`
    rows re-read once more when wave 3 lands.
 
-**`0.87.0` = the authority switch, and M2b closes.** Named here so the
+**`0.87.0` = the authority switch, M2b closes, and it is the first
+release published through RFC 141's workflow.** Named here so the
 sequencing is a decision on the record rather than a drift.
+[RFC 142](../../proposed/142-upgrading-is-the-least-tested-thing-we-do.md)
+— upgrade safety — is **Proposed** and not scheduled; it is a candidate
+for `0.87.0` or later.
 
 ## C — why this order
 
@@ -105,8 +109,8 @@ by hand.
    consequence that it is the longest cycle this programme has run.
 2. **RFC 141 — accepted 2026-10-28.** §6's six crates.io configurations
    are yours and are not implementation; the workflow and its refusal
-   fixtures can be built before they exist. §7's question — whether
-   `0.86.0` or `0.87.0` is the first release published this way — stays
-   open, with `0.87.0` recommended.
+   fixtures can be built before they exist. §7 is settled: **`0.87.0`** is the
+   first release published through the workflow, so `0.86.0` is
+   published by the existing path.
 3. **Nothing else.** The stage plans, the dispatches and the release
    cycle are mine once the scope is authorized.

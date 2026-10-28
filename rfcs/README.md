@@ -149,6 +149,7 @@ the move. The paths below are current.
 | 138 | [Per-hunk hashes are not reproducible](./done/138-per-hunk-hashes-are-not-reproducible.md) | [138-per-hunk-hashes-are-not-reproducible](./handoffs/138-per-hunk-hashes-are-not-reproducible/README.md) |
 | 140 | [Application identity the operator vouches for](./accepted/140-application-identity-the-operator-vouches-for.md) **(Accepted 2026-10-27)** | [140-application-identity-the-operator-vouches-for](./handoffs/140-application-identity-the-operator-vouches-for/design-review-2026-10-27.md) |
 | 141 | [Publishing is a workflow, not a credential](./accepted/141-publishing-is-a-workflow-not-a-credential.md) **(Accepted 2026-10-28)** | [141-publishing-is-a-workflow-not-a-credential](./handoffs/141-publishing-is-a-workflow-not-a-credential/design-review-2026-10-28.md) |
+| 142 | [Upgrading is the operation we test least](./proposed/142-upgrading-is-the-least-tested-thing-we-do.md) | — (Proposed 2026-10-28; no handoff until accepted) |
 
 ### Implemented — Mockup Integration epic (Phase 0 → Phase 8)
 

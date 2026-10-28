@@ -2,10 +2,10 @@
 
 **Status.** Accepted
 **Accepted on.** 2026-10-28
-**Approved by.** `@nabbisen`, 2026-10-28: *"RFC 141 is Accepted."* **§7's
-question stays open** — whether `0.86.0` itself publishes through the
-workflow or `0.87.0`. The RFC recommends `0.87.0` and that recommendation
-stands unless he says otherwise; nothing in the design depends on it.
+**Approved by.** `@nabbisen`, 2026-10-28: *"RFC 141 is Accepted."* **§7
+settled the same day: `0.87.0`** — build the workflow in `0.86.0`,
+exercise the refusal fixtures, and let the first real use be a release
+that is not already waiting on it.
 **Independent design review.** [Design review record, 2026-10-28](../handoffs/141-publishing-is-a-workflow-not-a-credential/design-review-2026-10-28.md).
 **There was no independent review and the field says so rather than
 implying one.** `ROADMAP.md` §S1a places design review with the
@@ -174,10 +174,10 @@ registry.
   precisely than six named steps. Revisit once §4's reporting has been
   exercised at least once.
 
-## Open question for the approver
+## §7 — settled: `0.87.0`
 
-**Should `0.86.0` itself be published this way, or `0.87.0`?** My
-recommendation is `0.87.0`: build it in `0.86.0`, exercise the refusal
-fixtures, and let the first real use be a release that is not already
-waiting on it. Publishing `0.86.0` with it would test it sooner at the
-cost of debugging release machinery during a release.
+**`@nabbisen`, 2026-10-28: `0.87.0`.** The workflow is built in
+`0.86.0` and its refusal fixtures exercised there; **`0.86.0` itself is
+published by the existing path**, and `0.87.0` is the first release
+published through the workflow. The alternative would have tested it
+sooner at the cost of debugging release machinery during a release.
