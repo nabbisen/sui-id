@@ -40,7 +40,14 @@ own.
 **`0.86.0` = the deferred work, plus the machinery that keeps this
 programme honest. Five items, none large.**
 
-1. **M2b wave 3 — federation configuration. DISPATCHED 2026-10-28** —
+1. **M2b wave 3 — federation configuration. LANDED** `a105ae7`, Level B
+   on that exact commit (`workflow_dispatch` `40627824690`, 27 success,
+   0 failed, 0 skipped). G20 44 → 46. **The round found a live
+   Class-A-shaped write with no inventory row at all** — the
+   allowed-origins reconcile, now C24. C17/C18/C23 keep their rows: the
+   2026-10-25 ruling says what a seal may omit, not that a seal belongs
+   over a function with no production caller. **Only the authority
+   switch now stands between M2b and closure.** Dispatched —
    [`m2b-wave3-federation-configuration-2026-10-28.md`](m2b-wave3-federation-configuration-2026-10-28.md).
    Seal the two live startup writes onto the Class-A seam, emitting the events the inventory
    already names, with the target semantics left to RFC 096-B2 per the

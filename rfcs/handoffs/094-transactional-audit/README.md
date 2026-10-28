@@ -61,7 +61,9 @@
 > closes** — `cargo xtask audit-structure` does not exist and there is
 > no `xtask` crate, so it is a cycle of its own.
 
-> **Wave 3 is dispatched** —
+> **Wave 3 landed** `a105ae7` (Level B, 27 success / 0 failed / 0
+> skipped), G20 at **46**. **Only the authority switch now stands
+> between M2b and closure**, and that is `0.87.0`. Dispatch —
 > [`m2b-wave3-federation-configuration-2026-10-28.md`](m2b-wave3-federation-configuration-2026-10-28.md).
 > Two live writes, both in `runtime/startup.rs` and both emitting
 > nothing; C17/C18 have no production caller and C23 no function, so
