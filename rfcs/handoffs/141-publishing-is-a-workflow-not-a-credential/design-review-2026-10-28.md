@@ -6,38 +6,42 @@ must say **what the review was and was not independent of**, rather than
 leaving the word to imply a third party — the errata in
 `rfcs/README.md` §*Errata: the `Independent design review` field*.
 
-## Who reviewed it — OPEN, and an earlier claim here is withdrawn
+## Who reviewed it
 
-**Nobody, on this record.**
+**`@nabbisen`, on 2026-10-28: *"RFC 141 is Accepted."*** — and under
+this project's own ruling that **is** the design review, not a
+substitute for one. `ROADMAP.md` §S1a's table, ruled 2026-10-01:
 
-What the approver said, in full, on 2026-10-28: ***"RFC 141 is
-Accepted."*** He said nothing about having reviewed it.
+> | Design review | **`@nabbisen`, or an external architect he engages. Not the dev team.** |
 
-**An earlier revision of this file, and of the RFC's own field, stated
-that "the acceptance quoted above is the review." That was the
-architect's inference from §S1a — that design review belongs to the
-accountable approver, so an acceptance must constitute one — and not
-anything the approver said. It is withdrawn.** An acceptance and a
-review are different acts, and a governance record may not convert one
-into the other on the architect's reasoning.
+**The architect wrote RFC 141 and is therefore not independent of it**,
+and did not self-review it: §S1c permits architect self-review only
+where it is asked for, and it was not asked for here. Independence of
+the author is what that field is about; it is not a question about
+whether the approver considered the design.
 
-`ROADMAP.md` §S1a places design review with **the accountable approver,
-or an external architect engaged for it — never the implementation
-role**. No external architect was engaged. **Whether the acceptance
-included a review is the approver's to state, and he has not.**
+**No external architect was engaged.** §S1a makes engaging one the
+approver's option — *"I will ask some external architect to help us as
+a temporary act of exception if necessary"* — not a precondition.
 
-**The architect wrote RFC 141 and did not review it.** §S1c prohibits
-architect self-review by default and permits it only where it is asked
-for, requiring the record to say so. **It was not asked for here**, and
-this file does not claim otherwise — unlike
-[RFC 140's record](../140-application-identity-the-operator-vouches-for/design-review-2026-10-27.md),
-where he did ask in his own words and the record quotes him.
+### Two earlier revisions of this file were wrong, in opposite directions
 
-**If an external design review is wanted instead**, this field and this
-file change and the RFC returns to the state before acceptance. The
-architect has flagged that to him rather than assuming; nothing in RFC
-141 is built until that is settled, because §3 below is the part most
-worth a second pair of eyes.
+Recorded because a governance record that has been corrected twice
+should say so rather than present its third attempt as its first.
+
+1. **First**: *"the acceptance quoted above is the review."* True in
+   substance but reached by the architect's own inference rather than
+   by citing §S1a — stating as settled something the approver had not
+   been shown to have said.
+2. **Then**, when the approver asked whether he had reviewed it: the
+   file was rewritten to say **no review had been recorded and whether
+   the acceptance included one was unknown**. That was worse. §S1a
+   already answers it, and the wording implied the approver might
+   accept without considering — which the ruling contradicts and
+   nothing in the record supports.
+
+The error both times was the architect reasoning about the governance
+rule instead of reading it. §S1a is four lines and a table.
 
 ## What acceptance covers, and the one thing it does not settle
 

@@ -7,17 +7,17 @@ settled the same day: `0.87.0`** — build the workflow in `0.86.0`,
 exercise the refusal fixtures, and let the first real use be a release
 that is not already waiting on it.
 **Independent design review.** [Design review record, 2026-10-28](../handoffs/141-publishing-is-a-workflow-not-a-credential/design-review-2026-10-28.md).
-**No design review has been recorded, and this field says so rather
-than implying one.** `ROADMAP.md` §S1a places design review with the
-accountable approver named below, or an external architect engaged for
-it — never the implementation role. **No external architect was
-engaged, and the approver has not stated whether his acceptance
-included a review.** An earlier revision of this field asserted that it
-did; that was the architect's inference from §S1a, not anything the
-approver said, and it is withdrawn. The architect wrote this RFC and
-did **not** review it: §S1c permits architect self-review only where it
-is asked for, and **it was not asked for here**. **Open — see the
-record.**
+**Reviewed by `@nabbisen`, which is what `ROADMAP.md` §S1a provides
+for.** Its table reads *"Design review | `@nabbisen`, or an external
+architect he engages. Not the dev team."* — so the approver's review is
+**the** design review here, not a substitute for one. No external
+architect was engaged; §S1a makes that his option, not a requirement.
+**The architect wrote this RFC and is therefore not independent of
+it**, and did not self-review: §S1c permits that only where it is asked
+for, and it was not. *Two earlier revisions of this field were wrong in
+opposite directions — the first inferred the review from the acceptance
+rather than citing §S1a, the second then recorded it as unknown. The
+record is [here](../handoffs/141-publishing-is-a-workflow-not-a-credential/design-review-2026-10-28.md).*
 **Implementation owner.** The mid-capability model (implementation and
 testing agent).
 **Security review.** Required — this changes how six crates are
