@@ -54,7 +54,9 @@ programme honest. Five items, none large.**
    2026-10-25 ruling. Dispose of `set_enabled`/`delete`/C23 the way
    stage 4 disposed of C10/C22/K02. **After this, the only thing
    standing between M2b and closure is the authority switch.**
-2. **RFC 140 stage 1** — `homepage_uri`, `policy_uri`, `tos_uri`
+2. **RFC 140 stage 1. DISPATCHED 2026-10-28** —
+   [`../140-application-identity-the-operator-vouches-for/stage1-the-three-link-fields-2026-10-28.md`](../140-application-identity-the-operator-vouches-for/stage1-the-three-link-fields-2026-10-28.md).
+   `homepage_uri`, `policy_uri`, `tos_uri`
    settable by an administrator and rendered on the consent screen for
    administrator-registered clients. Accepted 2026-10-27; §5's logo
    decision stays open and is not in this cut.

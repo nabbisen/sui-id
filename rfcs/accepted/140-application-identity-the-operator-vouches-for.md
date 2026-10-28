@@ -101,6 +101,17 @@ reach them. `homepage_uri` already renders as the client name's link.
 - **No CSP change.** See §5.
 - **No change to `validate_application_uri`.**
 
+> **Stage 1 dispatched 2026-10-28** —
+> [`../handoffs/140-application-identity-the-operator-vouches-for/stage1-the-three-link-fields-2026-10-28.md`](../handoffs/140-application-identity-the-operator-vouches-for/stage1-the-three-link-fields-2026-10-28.md).
+> **§1's claim that validation "reuses `validate_application_uri` — one
+> function, one rule, both callers" was written without reading the
+> store.** `clients::update_app_identity` already enforces its own,
+> laxer rule (`is_valid_app_uri`: HTTPS, or `http://localhost`, or
+> `http://127.0.0.1`). Two rules exist for these four fields. The
+> dispatch resolves it — validate administrator input at the HTTP layer
+> with the stricter rule, leave the store's backstop alone, and do not
+> harmonise by loosening — but §1's wording overstated what was there.
+
 ## 4 — stages
 
 **Stage 1 — the three link fields.** Everything above except the logo.
