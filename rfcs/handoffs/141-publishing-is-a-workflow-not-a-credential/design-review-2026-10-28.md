@@ -6,14 +6,25 @@ must say **what the review was and was not independent of**, rather than
 leaving the word to imply a third party — the errata in
 `rfcs/README.md` §*Errata: the `Independent design review` field*.
 
-## Who reviewed it
+## Who reviewed it — OPEN, and an earlier claim here is withdrawn
 
-**`@nabbisen`, by accepting it on 2026-10-28: *"RFC 141 is Accepted."***
+**Nobody, on this record.**
 
-`ROADMAP.md` §S1a places design review with **the accountable
-approver, or an external architect engaged for it — never the
-implementation role**. None was engaged for this RFC, so the acceptance
-quoted above is the review.
+What the approver said, in full, on 2026-10-28: ***"RFC 141 is
+Accepted."*** He said nothing about having reviewed it.
+
+**An earlier revision of this file, and of the RFC's own field, stated
+that "the acceptance quoted above is the review." That was the
+architect's inference from §S1a — that design review belongs to the
+accountable approver, so an acceptance must constitute one — and not
+anything the approver said. It is withdrawn.** An acceptance and a
+review are different acts, and a governance record may not convert one
+into the other on the architect's reasoning.
+
+`ROADMAP.md` §S1a places design review with **the accountable approver,
+or an external architect engaged for it — never the implementation
+role**. No external architect was engaged. **Whether the acceptance
+included a review is the approver's to state, and he has not.**
 
 **The architect wrote RFC 141 and did not review it.** §S1c prohibits
 architect self-review by default and permits it only where it is asked
