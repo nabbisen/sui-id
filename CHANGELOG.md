@@ -8,7 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 **RFC 094 M2b wave 3: federation-provider configuration writes now
-commit atomically with their audit records.**
+commit atomically with their audit records.** **RFC 140 stage 1: an
+administrator can now set a client's homepage, privacy-policy and
+terms-of-service links**, shown to the user granting access.
+
+### Added
+
+- **An administrator can set a client's homepage, privacy-policy and
+  terms-of-service links**, on the client-edit page. They are shown on
+  the consent screen for administrator-registered clients only — never
+  for a dynamically registered one, the same rule the homepage link
+  already followed. The write commits atomically with its audit
+  record, `client.app_identity_changed` (which three of the fields
+  changed, never the URLs themselves). A client's logo is not part of
+  this: still unavailable to edit, and still unaffected by this form's
+  own save.
 
 ### Changed
 

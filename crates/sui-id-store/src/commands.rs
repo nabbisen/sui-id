@@ -5299,6 +5299,129 @@ pub async fn update_client_form(
     .await
 }
 
+// ── C10 — client application-identity ────────────────────────────────────
+//
+// RFC 140 stage 1. Administrator action through `&AdminActor`. A wave-1
+// shape before this round: the inventory declared `client.
+// app_identity_changed` and nothing emitted it -- `update_app_identity`
+// (the write this seals) had no caller anywhere in `crates/`. `logo_uri`
+// is not a parameter here -- stage 2, RFC 140 §5 undecided -- and the
+// existing stored value is read fresh inside this transaction and
+// passed through unchanged.
+
+static C10_APP_IDENTITY_CHANGED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::ClientAppIdentityChanged,
+    name: "client.app_identity_changed",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[
+        AttributeSpec {
+            name: "homepage_uri_changed",
+            description: "whether homepage_uri differs from its prior stored value",
+            required: true,
+        },
+        AttributeSpec {
+            name: "privacy_policy_uri_changed",
+            description: "whether privacy_policy_uri differs from its prior stored value",
+            required: true,
+        },
+        AttributeSpec {
+            name: "tos_uri_changed",
+            description: "whether tos_uri differs from its prior stored value",
+            required: true,
+        },
+    ],
+};
+
+crate::declare_write_command! {
+    /// C10 — update a client's application-identity links. Administrator
+    /// action through `&AdminActor`.
+    command C10 = "C10" {
+        system_principal: forbidden;
+        enum C10Event {
+            Changed {
+                client_id: ClientId,
+                homepage_uri_changed: bool,
+                privacy_policy_uri_changed: bool,
+                tos_uri_changed: bool,
+            } => &C10_APP_IDENTITY_CHANGED,
+        }
+    }
+}
+
+impl SealedCommandEvent<C10> for C10Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Changed { client_id, .. } = self;
+        Some(AuditTarget(client_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Changed {
+            homepage_uri_changed,
+            privacy_policy_uri_changed,
+            tos_uri_changed,
+            ..
+        } = self;
+        AuditAttributes::builder()
+            .attribute("homepage_uri_changed", homepage_uri_changed.to_string())
+            .attribute(
+                "privacy_policy_uri_changed",
+                privacy_policy_uri_changed.to_string(),
+            )
+            .attribute("tos_uri_changed", tos_uri_changed.to_string())
+            .build()
+    }
+}
+
+/// Run C10 (update a client's application-identity links) through the
+/// Class-A runner. Reads the client's current `logo_uri` and the three
+/// managed fields inside this same transaction — never from a value the
+/// caller fetched earlier — both to preserve `logo_uri` unchanged (stage
+/// 1 does not manage it) and to compute which of the three managed
+/// fields actually changed, the same freshness discipline RFC 140
+/// stage 1 §1 just applied to wave 3's `origins_before`.
+pub async fn update_client_app_identity(
+    db: &crate::Database,
+    admin: UserId,
+    target: ClientId,
+    homepage_uri: Option<String>,
+    privacy_policy_uri: Option<String>,
+    tos_uri: Option<String>,
+    now: DateTime<Utc>,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<C10>::for_authorized_actor(admin, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, C10>| {
+        let existing = crate::repos::clients::get_app_identity_within_tx(tx.tx(), target)?;
+        let homepage_uri_changed = homepage_uri != existing.homepage_uri;
+        let privacy_policy_uri_changed = privacy_policy_uri != existing.privacy_policy_uri;
+        let tos_uri_changed = tos_uri != existing.tos_uri;
+        crate::repos::clients::update_app_identity_within_tx(
+            tx.tx(),
+            target,
+            existing.logo_uri,
+            homepage_uri,
+            privacy_policy_uri,
+            tos_uri,
+            now,
+        )?;
+        Ok((
+            (),
+            C10Event::Changed {
+                client_id: target,
+                homepage_uri_changed,
+                privacy_policy_uri_changed,
+                tos_uri_changed,
+            },
+        ))
+    })
+    .await
+}
+
 // ── C01 — create client ──────────────────────────────────────────────────
 //
 // RFC 094 M2b wave 4 stage 3. One write, target is the new client's id.
@@ -5868,23 +5991,22 @@ impl SealedCommandEvent<C24> for C24Event {
 }
 
 /// Run C24 (reconcile a provider's `allowed_origins`) through the
-/// Class-A runner. `origins_before` is computed by the caller from the
-/// row it already fetched to decide a reconcile is needed at all
-/// (`runtime/startup.rs`'s own `reconcile_federation_provider`) — the
-/// same pre-transaction read that function already did before this
-/// round, unchanged; this command does not re-fetch inside the
-/// transaction.
+/// Class-A runner. RFC 140 stage 1 §1: `origins_before` is read inside
+/// this same transaction, by `update_allowed_origins_within_tx` itself,
+/// immediately before its `UPDATE` — not supplied by the caller. The
+/// wave 3 round took it as a parameter instead, which let a Class-A
+/// record carry an attribute the transaction never verified; fixed here
+/// before the signature was published.
 pub async fn update_federation_provider_allowed_origins(
     db: &crate::Database,
     target: FederationProviderId,
     allowed_origins: String,
-    origins_before: usize,
     now: DateTime<Utc>,
 ) -> StoreResult<crate::registry::Audited<()>> {
     let origins_after = allowed_origins.split_whitespace().count();
     let context = AuthorizedCommandContext::<C24>::for_system_actor(None);
     db.class_a(context, move |tx: &mut ClassATx<'_, C24>| {
-        crate::repos::federation_provider::update_allowed_origins_within_tx(
+        let origins_before = crate::repos::federation_provider::update_allowed_origins_within_tx(
             tx.tx(),
             target,
             &allowed_origins,

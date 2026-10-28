@@ -18,6 +18,11 @@ pub struct ConsentData {
     pub logo_uri: Option<String>,
     /// RFC 008: optional application home-page URL.
     pub homepage_uri: Option<String>,
+    /// RFC 140 stage 1: optional privacy-policy and terms-of-service
+    /// URLs. Gated the same way as `homepage_uri`, in this renderer —
+    /// never rendered for a dynamically registered client.
+    pub privacy_policy_uri: Option<String>,
+    pub tos_uri: Option<String>,
     /// RFC 008; gate added RFC 095 M3 stage 5: how this client was
     /// registered. RFC 095 `:269-270` forbids the consent screen from
     /// emitting any automatic request for a dynamically registered
@@ -80,6 +85,19 @@ pub fn render_consent(data: ConsentData, lang: sui_id_i18n::Locale) -> String {
             RegistrationSource::Admin => data.homepage_uri.clone(),
             RegistrationSource::Dynamic => None,
         };
+        // RFC 140 stage 1: the same gate, for the two links stage 1
+        // adds. Neither was rendered at all before this round, so there
+        // is no prior behaviour to preserve for a dynamically
+        // registered client here — only the rule to apply consistently
+        // with `logo_uri`/`homepage_uri`'s own gate.
+        let privacy_policy_uri = match data.registered_via {
+            RegistrationSource::Admin => data.privacy_policy_uri.clone(),
+            RegistrationSource::Dynamic => None,
+        };
+        let tos_uri = match data.registered_via {
+            RegistrationSource::Admin => data.tos_uri.clone(),
+            RegistrationSource::Dynamic => None,
+        };
         let client_name_display = client_name.clone();
 
         let csrf = data.csrf_token.clone();
@@ -115,6 +133,25 @@ pub fn render_consent(data: ConsentData, lang: sui_id_i18n::Locale) -> String {
                     <ul class="consent-scope-list">
                         {scope_items}
                     </ul>
+                    // RFC 140 stage 1: privacy-policy and terms-of-service
+                    // links, beside the scope list where a user deciding
+                    // whether to grant access can reach them. Gated above,
+                    // same as `logo_uri`/`homepage_uri`.
+                    {(privacy_policy_uri.is_some() || tos_uri.is_some()).then(|| view! {
+                        <p class="consent-legal-links text-caption muted">
+                            {t.consent_legal_links_intro}" "
+                            {privacy_policy_uri.map(|uri| view! {
+                                <a href=uri target="_blank" rel="noopener noreferrer">
+                                    {t.consent_privacy_policy_link}
+                                </a>
+                            })}
+                            {tos_uri.map(|uri| view! {
+                                <a href=uri target="_blank" rel="noopener noreferrer">
+                                    {t.consent_tos_link}
+                                </a>
+                            })}
+                        </p>
+                    })}
                     // RFC: deny must not be a small text link — both Approve and
                     // Deny are POST forms with equal-weight buttons, so the user
                     // can make an informed choice using the keyboard.

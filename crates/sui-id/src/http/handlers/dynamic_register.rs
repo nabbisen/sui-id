@@ -485,9 +485,13 @@ pub async fn dynamic_register(
     // Validate application-identity URIs (P6). RFC 095 M3 stage 2: a
     // dynamic registration's own, stricter rule (canonical HTTPS only, no
     // `http://localhost` exception) -- not `is_valid_app_uri`, the
-    // administrator-client validator five other sites call; see
-    // `validate_application_uri`'s own doc comment for why the two must
-    // not be merged.
+    // administrator-client validator (RFC 140 stage 1's admin client-edit
+    // route is its one caller; measured, not assumed -- this comment
+    // previously claimed "five other sites", which was never true of
+    // `is_valid_app_uri` itself: before stage 1, `update_app_identity`,
+    // its only caller, had no production caller of its own either); see
+    // `validate_application_uri`'s own doc comment for why the two rules
+    // must not be merged.
     let logo_uri = match validation::validate_application_uri(body.logo_uri.as_deref(), "logo_uri")
     {
         Ok(u) => u,

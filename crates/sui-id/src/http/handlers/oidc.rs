@@ -211,6 +211,8 @@ pub async fn authorize(
                 // RFC 008: application identity from ClientRow.
                 logo_uri: client_for_consent.logo_uri.clone(),
                 homepage_uri: client_for_consent.homepage_uri.clone(),
+                privacy_policy_uri: client_for_consent.privacy_policy_uri.clone(),
+                tos_uri: client_for_consent.tos_uri.clone(),
                 // RFC 095 M3 stage 5: the renderer, not this handler, decides
                 // whether the logo may be shown — pass the provenance through.
                 registered_via: client_for_consent.registered_via.clone(),

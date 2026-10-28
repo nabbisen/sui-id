@@ -479,6 +479,73 @@ pub async fn update_app_identity(
     tos_uri: Option<String>,
     now: chrono::DateTime<chrono::Utc>,
 ) -> StoreResult<()> {
+    db.with_tx(move |tx| {
+        update_app_identity_within_tx(
+            tx,
+            id,
+            logo_uri,
+            homepage_uri,
+            privacy_policy_uri,
+            tos_uri,
+            now,
+        )
+    })
+    .await
+}
+
+/// The four application-identity columns, as read by
+/// [`get_app_identity_within_tx`].
+pub struct AppIdentityUris {
+    pub logo_uri: Option<String>,
+    pub homepage_uri: Option<String>,
+    pub privacy_policy_uri: Option<String>,
+    pub tos_uri: Option<String>,
+}
+
+/// RFC 140 stage 1, C10: read a client's current application-identity
+/// fields inside an existing transaction, so the sealed command
+/// (`commands::update_client_app_identity`) can preserve `logo_uri`
+/// unchanged — stage 1 does not manage it, RFC 140 §5 undecided — and
+/// know which of the three fields it does manage actually changed,
+/// both from a value read fresh inside this same transaction rather
+/// than one a caller fetched earlier and could be holding stale (the
+/// class of bug RFC 094 M2b wave 3's `origins_before` had).
+pub fn get_app_identity_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    id: ClientId,
+) -> StoreResult<AppIdentityUris> {
+    tx.query_row(
+        "SELECT logo_uri, homepage_uri, privacy_policy_uri, tos_uri FROM clients WHERE id = ?1",
+        [id.to_string()],
+        |r| {
+            Ok(AppIdentityUris {
+                logo_uri: r.get(0)?,
+                homepage_uri: r.get(1)?,
+                privacy_policy_uri: r.get(2)?,
+                tos_uri: r.get(3)?,
+            })
+        },
+    )
+    .map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
+        other => StoreError::from(other),
+    })
+}
+
+/// Same write [`update_app_identity`] wraps, for a caller that already
+/// holds a transaction (RFC 140 stage 1, C10's sealed command). Still
+/// validates with [`is_valid_app_uri`] — the store's own backstop,
+/// laxer than every caller that reaches it (the admin HTTP handler
+/// validates HTTPS-only, before this ever runs).
+pub fn update_app_identity_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    id: ClientId,
+    logo_uri: Option<String>,
+    homepage_uri: Option<String>,
+    privacy_policy_uri: Option<String>,
+    tos_uri: Option<String>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> StoreResult<()> {
     for uri in [&logo_uri, &homepage_uri, &privacy_policy_uri, &tos_uri]
         .into_iter()
         .flatten()
@@ -490,26 +557,23 @@ pub async fn update_app_identity(
         }
     }
     let id_str = id.to_string();
-    db.with_conn(move |conn| {
-        let n = conn.execute(
-            "UPDATE clients SET logo_uri = ?1, homepage_uri = ?2, \
-             privacy_policy_uri = ?3, tos_uri = ?4, updated_at = ?5 WHERE id = ?6",
-            params![
-                logo_uri,
-                homepage_uri,
-                privacy_policy_uri,
-                tos_uri,
-                now,
-                id_str
-            ],
-        )?;
-        if n == 0 {
-            Err(StoreError::NotFound)
-        } else {
-            Ok(())
-        }
-    })
-    .await
+    let n = tx.execute(
+        "UPDATE clients SET logo_uri = ?1, homepage_uri = ?2, \
+         privacy_policy_uri = ?3, tos_uri = ?4, updated_at = ?5 WHERE id = ?6",
+        params![
+            logo_uri,
+            homepage_uri,
+            privacy_policy_uri,
+            tos_uri,
+            now,
+            id_str
+        ],
+    )?;
+    if n == 0 {
+        Err(StoreError::NotFound)
+    } else {
+        Ok(())
+    }
 }
 
 /// Update the `registered_via` field on a client row.

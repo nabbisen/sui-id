@@ -286,6 +286,17 @@ pub enum AuditEventKind {
     /// operator's authority is possession of the master key and
     /// filesystem access, the same shape U08 and K01 use.
     ClientRegistrationTokenRevoked,
+    /// `client.app_identity_changed` — RFC 140 stage 1, C10. A wave-1
+    /// shape before this round: the inventory declared it and nothing
+    /// emitted it — `clients::update_app_identity` (the write this
+    /// seals) had no caller anywhere in `crates/`. Administrator action
+    /// through `&AdminActor`. Attributes are three booleans — which of
+    /// `homepage_uri`, `privacy_policy_uri` and `tos_uri` changed — never
+    /// the URLs themselves, same rule as `ClientUpdateForm`'s counts and
+    /// `FederationProviderOriginsChanged`'s counts, for the same reason.
+    /// `logo_uri` is not among the three: stage 2, RFC 140 §5 still
+    /// undecided, and the sealed command preserves it unchanged.
+    ClientAppIdentityChanged,
     /// `federation.provider.created` — RFC 094 M2b wave 3, C16. Startup
     /// provisioning creates a `[[federation_providers]]` config block
     /// absent from the database; no session, `system_principal:

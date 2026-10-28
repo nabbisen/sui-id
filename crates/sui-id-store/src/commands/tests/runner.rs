@@ -161,6 +161,7 @@ fn record_coverage(command_id: &str, file_name: &str) {
 }
 
 mod chain_integrity;
+mod client_app_identity;
 mod client_lifecycle;
 mod client_metadata;
 mod client_persistence;

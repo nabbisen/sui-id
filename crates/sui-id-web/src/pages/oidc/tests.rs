@@ -17,6 +17,11 @@ const LOGO_HOST: &str = "https://logo.rp-evidence-marker.test/logo.png";
 /// asserting one's absence cannot pass by accident on the other's.
 const HOMEPAGE_HOST: &str = "https://homepage.rp-evidence-marker.test/";
 
+/// RFC 140 stage 1 — likewise, for `privacy_policy_uri` and `tos_uri`,
+/// each distinct from every other marker here.
+const PRIVACY_HOST: &str = "https://privacy.rp-evidence-marker.test/";
+const TOS_HOST: &str = "https://tos.rp-evidence-marker.test/";
+
 fn consent_data(registered_via: RegistrationSource, logo_uri: Option<&str>) -> ConsentData {
     ConsentData {
         client_name: "a client".into(),
@@ -24,7 +29,19 @@ fn consent_data(registered_via: RegistrationSource, logo_uri: Option<&str>) -> C
         csrf_token: "csrf-token".into(),
         logo_uri: logo_uri.map(str::to_string),
         homepage_uri: Some(HOMEPAGE_HOST.into()),
+        privacy_policy_uri: None,
+        tos_uri: None,
         registered_via,
+    }
+}
+
+/// RFC 140 stage 1: `consent_data` with `privacy_policy_uri` and
+/// `tos_uri` also set, for the two new links' own gating tests.
+fn consent_data_with_legal_links(registered_via: RegistrationSource) -> ConsentData {
+    ConsentData {
+        privacy_policy_uri: Some(PRIVACY_HOST.into()),
+        tos_uri: Some(TOS_HOST.into()),
+        ..consent_data(registered_via, None)
     }
 }
 
@@ -117,5 +134,49 @@ fn an_admin_clients_homepage_uri_still_appears_as_a_link() {
         html.contains(&format!(r#"href="{HOMEPAGE_HOST}""#)),
         "an admin-registered client's homepage link must still render — \
          only the dynamic path is gated"
+    );
+}
+
+/// RFC 140 stage 1, §3c: `privacy_policy_uri` and `tos_uri`, gated the
+/// same way as `logo_uri`/`homepage_uri` — neither was rendered at all
+/// before this round, so there is no prior dynamic-path behaviour to
+/// preserve here, only the rule to apply consistently.
+#[test]
+fn a_dynamic_clients_legal_links_never_appear() {
+    let html = render_consent(
+        consent_data_with_legal_links(RegistrationSource::Dynamic),
+        LANG,
+    );
+    assert!(
+        !html.contains(PRIVACY_HOST),
+        "a dynamically registered client's privacy_policy_uri must never \
+         be emitted into the page"
+    );
+    assert!(
+        !html.contains(TOS_HOST),
+        "a dynamically registered client's tos_uri must never be emitted \
+         into the page"
+    );
+}
+
+/// The counter-test `an_admin_clients_homepage_uri_still_appears_as_a_link`
+/// gives for `homepage_uri`: without this, the test above would also
+/// pass if both links were dropped for *every* client, not only gated
+/// for the dynamic path.
+#[test]
+fn an_admin_clients_legal_links_still_appear() {
+    let html = render_consent(
+        consent_data_with_legal_links(RegistrationSource::Admin),
+        LANG,
+    );
+    assert!(
+        html.contains(&format!(r#"href="{PRIVACY_HOST}""#)),
+        "an admin-registered client's privacy-policy link must still \
+         render — only the dynamic path is gated"
+    );
+    assert!(
+        html.contains(&format!(r#"href="{TOS_HOST}""#)),
+        "an admin-registered client's terms-of-service link must still \
+         render — only the dynamic path is gated"
     );
 }

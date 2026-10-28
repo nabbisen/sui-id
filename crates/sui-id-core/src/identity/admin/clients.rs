@@ -374,3 +374,44 @@ pub async fn set_dev_client_secret(
     })?;
     Ok(())
 }
+
+/// Update a client's administrator-settable application-identity links
+/// (RFC 140 stage 1: homepage, privacy policy, terms of service). C10.
+///
+/// `logo_uri` is not a parameter here — stage 2, RFC 140 §5 still
+/// undecided — and the sealed command preserves the client's existing
+/// stored `logo_uri` unchanged; this function cannot blank it because it
+/// never receives it.
+///
+/// URI validation (HTTPS only) is the HTTP layer's job
+/// (`validate_application_uri`, in the binary crate — `sui-id-core`
+/// cannot depend on it), before this runs. This function trusts its
+/// input, the same validation boundary `update_client_form`'s own doc
+/// comment describes. `sui_id_store::repos::clients::update_app_identity_
+/// within_tx` still re-checks with the store's own, laxer rule
+/// (`is_valid_app_uri`) as a backstop.
+pub async fn update_client_app_identity(
+    db: &Database,
+    clock: &SharedClock,
+    actor: &AdminActor,
+    target: ClientId,
+    homepage_uri: Option<String>,
+    privacy_policy_uri: Option<String>,
+    tos_uri: Option<String>,
+) -> CoreResult<()> {
+    sui_id_store::commands::update_client_app_identity(
+        db,
+        actor.user_id(),
+        target,
+        homepage_uri,
+        privacy_policy_uri,
+        tos_uri,
+        clock.now(),
+    )
+    .await
+    .map_err(|e| match e {
+        sui_id_store::StoreError::NotFound => CoreError::NotFound,
+        other => CoreError::from(other),
+    })?;
+    Ok(())
+}

@@ -568,6 +568,11 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     clients_label_confidential_checkbox: "Confidential client（发放 client secret）",
     clients_button_register: "注册",
 
+    // Clients page: application-identity links (RFC 140 stage 1)
+    clients_label_homepage_uri: "主页 URL（可选）",
+    clients_label_privacy_policy_uri: "隐私政策 URL（可选）",
+    clients_label_tos_uri: "服务条款 URL（可选）",
+
     // Admin: 审计日志 (RFC 029)
     audit_lede: "管理操作历史（最新在前）。",
 
@@ -735,6 +740,9 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     consent_scope_offline_access_desc: "允许应用在您不在时代表您保持登录状态。",
     consent_approve: "允许",
     consent_deny: "拒绝",
+    consent_legal_links_intro: "继续前，请查看:",
+    consent_privacy_policy_link: "隐私政策",
+    consent_tos_link: "服务条款",
     consent_policy_label: "同意策略",
     consent_policy_none: "无（跳过同意页面）",
     consent_policy_first_time: "仅首次询问",

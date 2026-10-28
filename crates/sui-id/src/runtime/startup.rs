@@ -406,13 +406,12 @@ async fn reconcile_federation_provider(
         // `federation.provider.allowed_origins_changed` audit append now
         // commit in one transaction. A failed reconcile must still not
         // abort startup — preserved from the pre-Class-A call this
-        // replaces.
-        let origins_before = existing.allowed_origins.split_whitespace().count();
+        // replaces. RFC 140 stage 1 §1: the before-count is read inside
+        // that same transaction now, not computed here and passed in.
         if let Err(e) = sui_id_store::commands::update_federation_provider_allowed_origins(
             db,
             existing.id,
             desired_origins,
-            origins_before,
             now,
         )
         .await

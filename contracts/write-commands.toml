@@ -660,12 +660,14 @@ test_id = "`a_c09_consent_policy`"
 id = "C10"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
+sealed = true
 owner = "Change app identity/URIs"
-rationale = "`client.app_identity_changed`"
-mutation_surface = "`clients::update_app_identity`"
-files = ["crates/sui-id-store/src/repos/clients.rs"]
-test_id = "`a_c10_identity`"
+rationale = "`client.app_identity_changed`, attributes are three booleans -- which of `homepage_uri`, `privacy_policy_uri` and `tos_uri` changed -- never the URLs themselves, same rule as `client.update_form`'s counts and `federation.provider.allowed_origins_changed`'s counts. RFC 140 stage 1: administrator-settable application-identity links, rendered on the consent screen for administrator-registered clients only. A wave-1 shape before this round -- the inventory declared this event and nothing emitted it, `update_app_identity` had no caller anywhere in `crates/`. `logo_uri` is not a parameter of the sealed command: stage 2, RFC 140 §5 still undecided, and the command reads the client's existing stored `logo_uri` fresh inside its own transaction and passes it through unchanged."
+mutation_surface = "`clients::update_app_identity_within_tx` (via `commands::update_client_app_identity`)"
+files = ["crates/sui-id-store/src/repos/clients.rs", "crates/sui-id-store/src/commands.rs", "crates/sui-id-core/src/identity/admin/clients.rs", "crates/sui-id/src/http/handlers/admin/clients.rs"]
+test_id = "`a_c10_app_identity_change`, `c10_injected_failure_before_append_rolls_back_the_change`, `c10_against_a_nonexistent_client_is_notfound_and_writes_no_record`, `clients_edit_post_updates_app_identity_and_is_audited`"
+event = ["client.app_identity_changed"]
+descriptor = ["C10_APP_IDENTITY_CHANGED"]
 
 [[command]]
 id = "C11"

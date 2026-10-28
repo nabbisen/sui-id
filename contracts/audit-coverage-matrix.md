@@ -172,6 +172,12 @@ no attributes, never the hash.
 | `client.delete` | Soft-delete client; also revokes its refresh tokens (command `C06`) | admin user id | client id | reason (optional), `refresh_tokens_revoked` (required) | A |
 | `client.rotate_secret` | Rotate client secret (command `C07`) | admin user id | client id | reason (optional); never the new hash or the plaintext secret | A |
 | `client.dev_secret_set` | Dev-mode seeding patched a client's secret hash to an operator-supplied, predictable value (command `C08`) — not an administrator action | admin user id | client id | — ; never the hash | A |
+| `client.app_identity_changed` | Update a client's `homepage_uri`, `privacy_policy_uri` and `tos_uri` (RFC 140 stage 1, command `C10`) — `logo_uri` is read fresh and passed through unchanged, not a parameter of this command | admin user id | client id | `homepage_uri_changed`, `privacy_policy_uri_changed`, `tos_uri_changed` (all required — booleans, never the URLs themselves) | A |
+
+**New row, RFC 140 stage 1.** This event was declared in
+`contracts/write-commands.toml` and emitted by nothing before this
+round — `update_app_identity`, the write it seals, had no caller
+anywhere in `crates/`.
 
 ### Signing keys (`signing_key.*`)
 

@@ -253,6 +253,7 @@ pub async fn update_allowed_origins(
     let allowed_origins = allowed_origins.to_owned();
     db.with_tx(move |tx| update_allowed_origins_within_tx(tx, id, &allowed_origins, now))
         .await
+        .map(|_origins_before| ())
 }
 
 /// RFC 094 M2b wave 3, C24. The primitive [`update_allowed_origins`] now
@@ -263,22 +264,39 @@ pub async fn update_allowed_origins(
 /// kept for its own test. The sealed command
 /// (`commands::update_federation_provider_allowed_origins`) calls this
 /// directly inside its own transaction instead.
+///
+/// RFC 140 stage 1 §1: returns the origin count **as read inside this
+/// same transaction**, immediately before the write — not a value the
+/// caller computed earlier from a row it fetched outside any lock. The
+/// wave 3 round took `origins_before` as a parameter instead, which made
+/// a Class-A record carry an attribute the transaction never verified;
+/// unreachable with wave 3's one, single-threaded, pre-traffic caller,
+/// but RFC 096-B2's administrator path is concurrent and the parameter
+/// invited exactly the stale value that would make the record false.
+/// Fixed before `0.86.0` publishes the signature, while removing the
+/// parameter still costs nothing.
 pub fn update_allowed_origins_within_tx(
     tx: &rusqlite::Transaction<'_>,
     id: FederationProviderId,
     allowed_origins: &str,
     now: DateTime<Utc>,
-) -> StoreResult<()> {
+) -> StoreResult<usize> {
     let id_str = id.to_string();
-    let n = tx.execute(
+    let before: String = tx
+        .query_row(
+            "SELECT allowed_origins FROM federation_provider WHERE id = ?1",
+            [&id_str],
+            |r| r.get(0),
+        )
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
+            other => StoreError::from(other),
+        })?;
+    tx.execute(
         "UPDATE federation_provider SET allowed_origins = ?1, updated_at = ?2 WHERE id = ?3",
         params![allowed_origins, now, id_str],
     )?;
-    if n == 0 {
-        Err(StoreError::NotFound)
-    } else {
-        Ok(())
-    }
+    Ok(before.split_whitespace().count())
 }
 
 /// Delete a provider (cascades to federation_link rows).

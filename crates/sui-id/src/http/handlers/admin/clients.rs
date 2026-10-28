@@ -347,6 +347,9 @@ pub async fn clients_edit_get(
             confidential: row.confidential,
             is_disabled: row.is_disabled,
             consent_policy: row.consent_policy.as_str().to_string(),
+            homepage_uri: row.homepage_uri,
+            privacy_policy_uri: row.privacy_policy_uri,
+            tos_uri: row.tos_uri,
             registered_via: row.registered_via.as_str().to_string(),
             token_endpoint_auth_method: row.token_endpoint_auth_method.map(|m| m.as_str()),
             auth_method_unrecognized,
@@ -371,6 +374,15 @@ pub struct EditClientForm {
     pub consent_policy: String,
     #[serde(default)]
     pub post_logout_redirect_uris: String,
+    /// RFC 140 stage 1 (C10). Empty means unset, not empty-string — these
+    /// columns are nullable and "unrecorded" is a real state, not
+    /// `logo_uri`'s own stage, which this form does not edit.
+    #[serde(default)]
+    pub homepage_uri: String,
+    #[serde(default)]
+    pub privacy_policy_uri: String,
+    #[serde(default)]
+    pub tos_uri: String,
     #[serde(rename = "_csrf", default)]
     pub csrf: String,
 }
@@ -428,6 +440,38 @@ pub async fn clients_edit_post(
     )
     .await
     .map_err(HttpError::html)?;
+    // RFC 140 stage 1 (C10): homepage, privacy policy and terms links.
+    // HTTPS only (`validate_application_uri`) -- these URLs are rendered
+    // to end users on the consent screen, where a `localhost` link would
+    // be useless; the laxer `is_valid_app_uri` store check stays as a
+    // backstop, not the rule enforced here. `logo_uri` is not part of
+    // this form -- stage 2, RFC 140 §5 still undecided.
+    let homepage_uri = crate::dynamic_registration_validation::validate_application_uri(
+        Some(form.homepage_uri.as_str()),
+        "homepage_uri",
+    )
+    .map_err(|e| HttpError::html(CoreError::BadRequest(e.to_string())))?;
+    let privacy_policy_uri = crate::dynamic_registration_validation::validate_application_uri(
+        Some(form.privacy_policy_uri.as_str()),
+        "privacy_policy_uri",
+    )
+    .map_err(|e| HttpError::html(CoreError::BadRequest(e.to_string())))?;
+    let tos_uri = crate::dynamic_registration_validation::validate_application_uri(
+        Some(form.tos_uri.as_str()),
+        "tos_uri",
+    )
+    .map_err(|e| HttpError::html(CoreError::BadRequest(e.to_string())))?;
+    admin_uc::update_client_app_identity(
+        &app.db,
+        &app.clock,
+        admin_actor,
+        target,
+        homepage_uri,
+        privacy_policy_uri,
+        tos_uri,
+    )
+    .await
+    .map_err(HttpError::html)?;
     Ok(Redirect::to("/admin/clients").into_response())
 }
 
@@ -480,6 +524,9 @@ pub async fn clients_rotate_secret_post(
             confidential: row.confidential,
             is_disabled: row.is_disabled,
             consent_policy: row.consent_policy.as_str().to_string(),
+            homepage_uri: row.homepage_uri,
+            privacy_policy_uri: row.privacy_policy_uri,
+            tos_uri: row.tos_uri,
             registered_via: row.registered_via.as_str().to_string(),
             token_endpoint_auth_method: row.token_endpoint_auth_method.map(|m| m.as_str()),
             auth_method_unrecognized,

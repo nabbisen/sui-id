@@ -115,7 +115,6 @@ async fn a_c24_origins_change() {
         &db,
         row.id,
         "https://a.example https://b.example https://c.example".into(),
-        origins_before,
         Utc::now(),
     )
     .await
@@ -164,7 +163,6 @@ async fn c24_injected_failure_before_append_rolls_back_the_change() {
         &db,
         row.id,
         "https://changed.example".into(),
-        2,
         Utc::now(),
     )
     .await;
@@ -181,6 +179,50 @@ async fn c24_injected_failure_before_append_rolls_back_the_change() {
     record_rollback_coverage("C24");
 }
 
+/// RFC 140 stage 1 §1: `origins_before` must come from reading the row
+/// inside this command's own transaction, not from a value a caller
+/// computed earlier and could be holding stale. Proven by changing the
+/// stored row out from under the seeded fixture's own idea of it
+/// (`sample_row`'s two origins) before the command runs — if the count
+/// came from anywhere but a fresh, in-transaction read, it would report
+/// the seeded value (2), not the row's true current one (1).
+#[tokio::test]
+async fn origins_before_is_read_fresh_inside_the_transaction_not_stale() {
+    let db = fresh_db();
+    let row = sample_row("c24-freshness");
+    repos::federation_provider::create(&db, &row, None)
+        .await
+        .expect("seed provider");
+    repos::federation_provider::update_allowed_origins(
+        &db,
+        row.id,
+        "https://only-one.example",
+        Utc::now(),
+    )
+    .await
+    .expect("directly change the stored value, bypassing any caller-held copy");
+
+    let audited = crate::commands::update_federation_provider_allowed_origins(
+        &db,
+        row.id,
+        "https://a.example https://b.example https://c.example".into(),
+        Utc::now(),
+    )
+    .await
+    .expect("update");
+    audited.into_inner();
+
+    let event = last_event(&db).await;
+    let note = event.note.expect("note");
+    assert_eq!(
+        crate::registry::note_field(&note, "origins_before").as_deref(),
+        Some("1"),
+        "origins_before must reflect the row's true current state (1 origin), \
+         not the fixture's original seeded state (2) -- proving the read is \
+         fresh and inside this transaction, not a value from outside it"
+    );
+}
+
 #[tokio::test]
 async fn c24_against_a_nonexistent_provider_is_notfound_and_writes_no_record() {
     let db = fresh_db();
@@ -191,7 +233,6 @@ async fn c24_against_a_nonexistent_provider_is_notfound_and_writes_no_record() {
         &db,
         ghost,
         "https://x.example".into(),
-        0,
         Utc::now(),
     )
     .await;

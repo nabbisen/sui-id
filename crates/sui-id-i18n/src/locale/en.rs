@@ -567,6 +567,11 @@ pub static STRINGS_EN: Strings = Strings {
     clients_label_confidential_checkbox: "Confidential client (issues a client secret)",
     clients_button_register: "Register",
 
+    // Clients page: application-identity links (RFC 140 stage 1)
+    clients_label_homepage_uri: "Homepage URL (optional)",
+    clients_label_privacy_policy_uri: "Privacy policy URL (optional)",
+    clients_label_tos_uri: "Terms of service URL (optional)",
+
     // Admin: Audit log (RFC 029)
     audit_lede: "Administrative operation history (newest first).",
 
@@ -737,6 +742,9 @@ pub static STRINGS_EN: Strings = Strings {
     consent_scope_offline_access_desc: "Keeps the app signed in on your behalf when you are not present.",
     consent_approve: "Allow",
     consent_deny: "Deny",
+    consent_legal_links_intro: "Before continuing, review:",
+    consent_privacy_policy_link: "Privacy Policy",
+    consent_tos_link: "Terms of Service",
     consent_policy_label: "Consent policy",
     consent_policy_none: "None (skip consent screen)",
     consent_policy_first_time: "First time only",

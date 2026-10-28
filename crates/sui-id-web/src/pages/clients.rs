@@ -261,6 +261,12 @@ pub struct ClientEditData {
     pub is_disabled: bool,
     /// RFC 038: "none", "first_time", or "always"
     pub consent_policy: String,
+    /// RFC 140 stage 1 (C10). `None` means unset, not empty-string --
+    /// these columns are nullable. `logo_uri` is not here: stage 2, RFC
+    /// 140 §5 still undecided, and this form does not edit it.
+    pub homepage_uri: Option<String>,
+    pub privacy_policy_uri: Option<String>,
+    pub tos_uri: Option<String>,
     /// RFC 065: "admin" or "dynamic". RFC 136 D2: drives the
     /// self-registered marker; "admin" renders no marker at all.
     pub registered_via: String,
@@ -296,6 +302,9 @@ pub fn render_client_edit(
             confidential,
             is_disabled,
             consent_policy,
+            homepage_uri,
+            privacy_policy_uri,
+            tos_uri,
             registered_via,
             token_endpoint_auth_method,
             auth_method_unrecognized,
@@ -321,6 +330,9 @@ pub fn render_client_edit(
         };
         let redirect_uris_value = redirect_uris.join("\n");
         let post_logout_value = post_logout_redirect_uris.join("\n");
+        let homepage_uri_value = homepage_uri.unwrap_or_default();
+        let privacy_policy_uri_value = privacy_policy_uri.unwrap_or_default();
+        let tos_uri_value = tos_uri.unwrap_or_default();
 
         let status_view = if is_disabled {
             crate::components::status_badge(t, crate::components::StatusKind::Disabled).into_any()
@@ -422,6 +434,18 @@ pub fn render_client_edit(
                                     }
                                 }
                             </select>
+                        </div>
+                        <div class="field">
+                            <label for="e-homepage" class="field__label">{t.clients_label_homepage_uri}</label>
+                            <input id="e-homepage" name="homepage_uri" type="text" value=homepage_uri_value />
+                        </div>
+                        <div class="field">
+                            <label for="e-privacy" class="field__label">{t.clients_label_privacy_policy_uri}</label>
+                            <input id="e-privacy" name="privacy_policy_uri" type="text" value=privacy_policy_uri_value />
+                        </div>
+                        <div class="field">
+                            <label for="e-tos" class="field__label">{t.clients_label_tos_uri}</label>
+                            <input id="e-tos" name="tos_uri" type="text" value=tos_uri_value />
                         </div>
                         // RFC 071: auditors cannot save changes.
                         {can_write.then(|| view! {

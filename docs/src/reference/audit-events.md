@@ -68,6 +68,7 @@ the administrator is asked to step up again.
 | `client.enable` | — | Administrator re-enabled a previously disabled OIDC client. |
 | `client.rotate_secret` | — | Administrator generated a new secret for a confidential client; the stored secret hash is replaced. Not available for public clients. The note carries the operator's `reason` when given; never the new secret or its hash. |
 | `client.dev_secret_set` | — | Dev-mode seeding patched a confidential client's secret hash to an operator-supplied, predictable value. Not an administrator action; the only caller is dev-mode startup. No note fields, and never the hash. |
+| `client.app_identity_changed` | Client application-identity links updated | Administrator updated a client's `homepage_uri`, `privacy_policy_uri` and/or `tos_uri` (RFC 140 stage 1). `logo_uri` is not changed by this event — it is read fresh and carried through unchanged. The note carries three booleans, which fields actually changed, never the URLs themselves. |
 
 ## Signing key events
 

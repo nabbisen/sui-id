@@ -566,6 +566,11 @@ pub static STRINGS_JA: Strings = Strings {
     clients_label_confidential_checkbox: "Confidential client（client secret を発行する）",
     clients_button_register: "登録",
 
+    // Clients page: application-identity links (RFC 140 stage 1)
+    clients_label_homepage_uri: "ホームページ URL（任意）",
+    clients_label_privacy_policy_uri: "プライバシーポリシー URL（任意）",
+    clients_label_tos_uri: "利用規約 URL（任意）",
+
     // Admin: 監査ログ (RFC 029)
     audit_lede: "管理操作の履歴（新しい順）。",
 
@@ -734,6 +739,9 @@ pub static STRINGS_JA: Strings = Strings {
     consent_scope_offline_access_desc: "不在中もアプリが代理でサインインを維持します。",
     consent_approve: "許可",
     consent_deny: "拒否",
+    consent_legal_links_intro: "続行する前に、こちらをご確認ください:",
+    consent_privacy_policy_link: "プライバシーポリシー",
+    consent_tos_link: "利用規約",
     consent_policy_label: "同意ポリシー",
     consent_policy_none: "なし（同意画面をスキップ）",
     consent_policy_first_time: "初回のみ",

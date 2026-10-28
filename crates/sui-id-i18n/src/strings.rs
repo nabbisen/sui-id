@@ -875,6 +875,10 @@ pub struct Strings {
     pub consent_scope_offline_access_desc: &'static str,
     pub consent_approve: &'static str,
     pub consent_deny: &'static str,
+    // RFC 140 stage 1: privacy-policy and terms-of-service links.
+    pub consent_legal_links_intro: &'static str,
+    pub consent_privacy_policy_link: &'static str,
+    pub consent_tos_link: &'static str,
     pub consent_policy_label: &'static str,
     pub consent_policy_none: &'static str,
     pub consent_policy_first_time: &'static str,
@@ -934,6 +938,10 @@ pub struct Strings {
     pub clients_hint_one_per_line: &'static str,
     pub clients_label_confidential_checkbox: &'static str,
     pub clients_button_register: &'static str,
+    // ---- Clients page: application-identity links (RFC 140 stage 1) ----
+    pub clients_label_homepage_uri: &'static str,
+    pub clients_label_privacy_policy_uri: &'static str,
+    pub clients_label_tos_uri: &'static str,
 
     // ---- Admin: Audit log (RFC 029) ----
     pub audit_lede: &'static str,
