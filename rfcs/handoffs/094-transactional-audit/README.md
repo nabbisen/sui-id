@@ -64,8 +64,15 @@
 > # **`0.86.0` IS RELEASED AND PUBLISHED**, 2026-10-29. Tag at
 > `acd6a00` (Level B `40799154973`, 27/27; audit `40799157769`), six
 > crates on crates.io, confirmed twice. **Cycle H is complete.**
-> **`0.87.0` = the authority switch, M2b closes, and the first release
-> published through RFC 141's workflow.**
+> **`0.87.0` is scoped** —
+> [`cycle-i-and-0.87.0-2026-10-29.md`](cycle-i-and-0.87.0-2026-10-29.md),
+> and it opens with a correction: **"only the authority switch stands
+> between M2b and closure" was wrong.** Nineteen Class-A rows are
+> `sealed = false` with no `sealed_by`. M2b's closure field says *every
+> remaining Class-A row converted*; I scoped M2b as its four named
+> waves and finished those instead. The cycle is a census first, then
+> the conversions and dispositions it finds, then the authority switch
+> — recommended as two cycles rather than one.
 
 > **Preparation record** —
 > [`release-0.86.0-preparation-2026-10-29.md`](release-0.86.0-preparation-2026-10-29.md).
