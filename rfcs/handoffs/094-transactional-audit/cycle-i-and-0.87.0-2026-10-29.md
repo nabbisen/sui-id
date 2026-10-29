@@ -166,5 +166,5 @@ before building: whether each of the eleven is audited under some
 a result.
 
 **Not in this scope, and still open**:
-[RFC 142](../../proposed/142-upgrading-is-the-least-tested-thing-we-do.md)'s
+[RFC 142](../../accepted/142-upgrading-is-the-least-tested-thing-we-do.md)'s
 two questions, and RFC 140 §5's logo decision.

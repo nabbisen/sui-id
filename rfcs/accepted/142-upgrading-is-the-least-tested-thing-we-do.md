@@ -1,14 +1,34 @@
 # RFC 142 — Upgrading is the operation we test least
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-10-29
+**Approved by.** `@nabbisen`, 2026-10-29: *"RFC 142 is accepted with
+your recommendations."* Both open questions are thereby settled on the
+recommendations recorded in §Open questions — **all 37 shipped schema
+versions plus the one hand-built `0.29.7`-origin fixture** for Q1, and
+**D4 (a)** with its three refinements for Q2. They are repeated as
+settled decisions in §Settled below so no reader has to reconstruct
+them from a question heading.
+**Independent design review.** [Review record, 2026-10-29](../handoffs/142-upgrading-is-the-least-tested-thing-we-do/design-review-2026-10-29.md),
+which is **not** independent of this RFC, and the field says so: the architect
+wrote the RFC and also wrote that review. `ROADMAP.md` §S1c prohibits
+architect self-review by default and permits it where `@nabbisen` asks;
+he asked, 2026-10-29: *"Review it carefully by yourself with my
+fundamental philosophy."* §S1a places design review with him or an
+external architect he engages; no external architect was engaged, and
+his acceptance above followed the review rather than standing in for
+one.
+**Implementation owner.** The mid-capability model (implementation and
+testing agent).
 **Security review.** Required — a failed or half-understood upgrade of an
 identity provider's database is an availability and integrity event, and
 one of the measures proposed here touches what is written to disk before
 a migration runs.
 
 **Design prerequisites.** None.
-**Implementation prerequisites.** RFC 000 forbids implementation while
-this is Proposed.
+**Implementation prerequisites.** None under RFC 000's status rule,
+which this RFC now satisfies. **Stage 1 is a measurement and produces
+no seed SQL** — see §Stages.
 **Closure prerequisites.** A populated database at each covered
 historical schema version migrates to head in CI with its rows and key
 invariants intact; the supported upgrade range is stated in
@@ -207,7 +227,62 @@ implementation detail.
   the one who upgrades least often, which is exactly the operator this
   would not cover.
 
+## Settled
+
+**Both questions below were settled by `@nabbisen` on 2026-10-29** —
+*"RFC 142 is accepted with your recommendations."* They are recorded
+here as decisions so that no reader has to infer a decision from a
+heading that still says "questions".
+
+- **Coverage.** The corpus covers **all 37 shipped schema versions**,
+  built by replay, **plus one hand-built fixture** for the
+  `0.29.7`-origin schema-21 shape — **38 in total**. It is generated,
+  not committed: no binary `.db` files in the tree.
+- **D4.** Shape **(a)**, with its three refinements: act only when a
+  migration will actually run; `VACUUM INTO` rather than a file copy;
+  free-space check before writing. A plain snapshot beside the
+  database, not the encrypted `backup.rs` path, so a restore needs
+  `sqlite3` and nothing else.
+
+## Stages
+
+**Stage 1 — measure, and build nothing.** Produce the seed-script
+range table: for each of the 37 shipped schema versions, the shape of
+the tables a seed must write, and the boundaries where that shape
+changes. The deliverable is the table and the resulting count of seed
+scripts. **No seed SQL, no fixtures, no gate.** This stage exists
+because the cost of D1 is the number of *ranges*, which is currently
+unknown, and committing to seed authorship before counting them is the
+error this RFC's own Q1 already made once.
+
+**Stage 2 — the corpus.** The replay generator, one seed script per
+range, the 37 fixtures, the hand-built `0.29.7` fixture, and D1's
+assertions (per-table row counts before and after, each intervening
+migration's claimed invariant, final version equals
+`MAX_SCHEMA_VERSION`). Becomes a gate.
+
+**Stage 3 — D2.** Only after stage 2 reports. State the supported
+range in `docs/src/guides/upgrade.md`; if and only if some version
+does not reach head, either fix it or declare a floor with a
+`SchemaTooOld` refusal symmetric with `SchemaTooNew` and a negative
+fixture. **A floor is not to be declared to avoid fixing a migration.**
+
+**Stage 4 — D3.** The read-only preview subcommand. It must not write.
+
+**Stage 5 — D4.** The backup, in the settled shape above, with a test
+that proves the backup actually happens and a test that proves it is
+skipped when nothing is pending.
+
+**Release scheduling is not settled here.** It is proposed separately,
+under the standing arrangement recorded in `ROADMAP.md`.
+
 ## Open questions for the approver
+
+> **All settled 2026-10-29 — see §Settled above.** The two entries are
+> kept below because the reasoning that produced them, and the
+> correction of the first recommendation, are part of the record.
+
+
 
 1. **Which historical versions does the corpus cover?**
    **Recommendation revised 2026-10-29 after measuring; the earlier

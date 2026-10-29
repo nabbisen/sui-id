@@ -100,7 +100,7 @@ programme honest. Five items, none large.**
 **`0.87.0` = the authority switch, M2b closes, and it is the first
 release published through RFC 141's workflow.** Named here so the
 sequencing is a decision on the record rather than a drift.
-[RFC 142](../../proposed/142-upgrading-is-the-least-tested-thing-we-do.md)
+[RFC 142](../../accepted/142-upgrading-is-the-least-tested-thing-we-do.md)
 — upgrade safety — is **Proposed** and not scheduled; it is a candidate
 for `0.87.0` or later.
 
