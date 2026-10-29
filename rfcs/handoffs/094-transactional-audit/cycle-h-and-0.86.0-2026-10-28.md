@@ -65,7 +65,15 @@ programme honest. Five items, none large.**
    settable by an administrator and rendered on the consent screen for
    administrator-registered clients. Accepted 2026-10-27; §5's logo
    decision stays open and is not in this cut.
-3. **Trusted Publishing. DISPATCHED 2026-10-28** —
+3. **Trusted Publishing. LANDED** `81024ea`, Level B on that exact
+   commit (`workflow_dispatch` `40788546319`, 27 success, 0 failed, 0
+   skipped). `publish.yml` mints a short-lived token per crate and will
+   not mint one until four preconditions hold on the tagged commit;
+   `verify` carries no `id-token` at all, and `publish` checks out the
+   SHA `verify` resolved, so the commit that passed Level B is the one
+   published even if the tag moves. **`release-process.md` is
+   deliberately unchanged** until the path actually changes — it must
+   land before `0.87.0`. Dispatch —
    [`../141-publishing-is-a-workflow-not-a-credential/the-workflow-2026-10-28.md`](../141-publishing-is-a-workflow-not-a-credential/the-workflow-2026-10-28.md).
    [RFC 141](../../accepted/141-publishing-is-a-workflow-not-a-credential.md),
    written alongside this scope. Build the workflow in `0.86.0`; **first

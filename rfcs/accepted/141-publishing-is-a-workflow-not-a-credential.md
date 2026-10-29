@@ -44,6 +44,16 @@ if the new workflow needs declaring there.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** The architect (high-capability model).
 
+> **The workflow landed 2026-10-29**, `81024ea`, Level B 27/0 —
+> `.github/workflows/publish.yml` with
+> `scripts/check-publish-preconditions.py` and nineteen tests.
+> **Not yet used:** §7 settled `0.87.0` as the first release published
+> through it. Still outstanding and `@nabbisen`'s: the six crates.io
+> Trusted Publishing configurations, and — only after the first
+> successful workflow publish — Trusted-Publishing-only mode and
+> revoking the workstation token. `docs/src/contributing/release-process.md`
+> changes when the path does, before `0.87.0`.
+
 ## Summary
 
 Six crates are published today by running `cargo publish` six times
