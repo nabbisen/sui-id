@@ -103,9 +103,38 @@ migration claims to preserve, and that the final schema version equals
 `MAX_SCHEMA_VERSION`. A migration that silently drops rows passes a
 "no error" test and fails this one.
 
-**Cost, stated plainly:** per-version seed SQL is real work, roughly
-proportional to the number of versions covered. That is why D1 asks
-which versions, not all of them — see the open questions.
+**Cost, stated plainly:** reaching a version is free — `run_up_to`
+replays with current code, so no release needs checking out or
+building. The cost is **per-version seed SQL**. It is *not* proportional
+to the version count, because one seed script stays valid across every
+consecutive version in which the tables it writes are shape-stable: a
+script covers a **range**, not a point.
+
+**D1's first deliverable is therefore a measurement, not code** — the
+seed-script range boundaries across the covered versions, reported
+before any seed SQL is written. See the open questions.
+
+**Replay is faithful only while migration SQL is immutable after
+release, and once it was not.** Measured 2026-10-29 across all 49: three
+files have a second commit. `0009` changed only its comment block and
+`0044`'s two commits are both inside `0.79.0`, so neither ever shipped
+divergent. **`0021` did.** Its `0.29.7` text rebuilt `users`,
+`credentials`, `clients`, `signing_keys` and `user_totp` in place,
+relying on `PRAGMA foreign_keys = OFF` — a no-op inside a transaction,
+so `DROP TABLE users` fired `ON DELETE CASCADE` across the child tables.
+`0.29.8` removed the rebuilds. **Both record `schema_version = 21`**:
+
+> The stored schema version is not a unique key for the schema's actual
+> shape. There is one historical case where two databases report the
+> same version and differ structurally.
+
+The window is bounded — `0022_boolean_checks.sql` rebuilds the same five
+tables safely and **converges both lineages**, so they are identical
+from schema 22 onward, and `0.29.7`/`0.29.8` are the same day. But the
+corpus must contain **one hand-built fixture for the `0.29.7`-origin
+schema-21 shape**, because it is the single starting state replay cannot
+reproduce, and therefore the only fixture in the set that could still
+fail.
 
 ### D2 — state the supported range, and enforce a floor if one exists
 
@@ -180,10 +209,49 @@ implementation detail.
 
 ## Open questions for the approver
 
-1. **Which historical versions does the corpus cover?** Every published
-   release is the thorough answer and the expensive one. My
-   recommendation is **the `0.76` line's first published version, one
-   mid-point, and the two most recent minors** — four, chosen so the
-   oldest realistic installation and the common cases are both covered,
-   and extended later if D1 finds anything.
-2. **D4: (a) or (b)?** Recommended (a).
+1. **Which historical versions does the corpus cover?**
+   **Recommendation revised 2026-10-29 after measuring; the earlier
+   answer in this RFC was wrong.** It had been "four releases — the
+   `0.76` line's first published version, one mid-point, and the two
+   most recent minors". That samples the wrong axis and misplaces the
+   cost. An upgrade starts from a recorded **schema version**, not a
+   release: mapping all **137 tags** to the highest migration each
+   carries gives **37 distinct shipped schema versions** (1–7, 9–13,
+   15–18, 20–26, 28–34, 36, 38, 43, 44, 46, 48, 49). Four releases
+   cover 4 of those 37. Twelve of the 49 migrations never shipped at
+   all (8, 14, 19, 27, 35, 37, 39–42, 45, 47), so "every migration"
+   would be wrong in the other direction — no operator can be at 41.
+
+   **Recommendation: all 37, plus the one hand-built `0.29.7`-origin
+   schema-21 fixture — 38.** Coverage is bounded by seed-script
+   *ranges*, not by version count, so sampling saves much less than the
+   earlier answer assumed while giving up 33 of 37 starting points.
+
+   **Generate the corpus; do not commit it.** A sampled corpus needs
+   someone to remember to extend it; a derived one cannot fall behind —
+   when migration `0050` lands the corpus grows by one with no edit.
+   That is the shape `scripts/local-matrix.sh` already uses against
+   `ci.yml`, and G20 against `commands.rs`.
+2. **D4: (a) or (b)?** **Recommended (a)**, refined three ways after
+   review, each of which removes one of (a)'s stated costs:
+   **(i) act only when a migration will actually run** — the common
+   startup has zero pending and must then do nothing at all, which
+   retires the duplicate-backup objection; **(ii) `VACUUM INTO`, not a
+   file copy** — `db.rs:43` sets `journal_mode = WAL`, and a
+   filesystem copy of a live WAL database is not a valid backup;
+   **(iii) check free space against the database size first** and
+   refuse naming both numbers, so the safety measure cannot fill the
+   disk and cause the failure it prevents.
+
+   (b)'s flag is a lie detector that always passes, and any container
+   restart would carry it permanently — at which point (b) is (a)
+   without the backup.
+
+   **One sub-decision to make deliberately:**
+   `crates/sui-id-store/src/backup.rs` (RFC 040 / RFC 075) already does
+   encrypted backup and restore, and two backup concepts would be a
+   mistake. But an encrypted snapshot is restorable only with the key,
+   at the worst possible moment. **Recommendation: a plain
+   `VACUUM INTO` snapshot beside the database**, so a panicking
+   operator can restore it with `sqlite3` and nothing else — recorded
+   here as a choice, not an accident.
