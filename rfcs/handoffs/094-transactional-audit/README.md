@@ -61,7 +61,13 @@
 > closes** — `cargo xtask audit-structure` does not exist and there is
 > no `xtask` crate, so it is a cycle of its own.
 
-> **`0.86.0`'s preparation is dispatched** —
+> # **`0.86.0` IS RELEASED AND PUBLISHED**, 2026-10-29. Tag at
+> `acd6a00` (Level B `40799154973`, 27/27; audit `40799157769`), six
+> crates on crates.io, confirmed twice. **Cycle H is complete.**
+> **`0.87.0` = the authority switch, M2b closes, and the first release
+> published through RFC 141's workflow.**
+
+> **Preparation record** —
 > [`release-0.86.0-preparation-2026-10-29.md`](release-0.86.0-preparation-2026-10-29.md).
 > Cycle H's four items all landed with Level B: the local-matrix script
 > `d6fc6f9`, wave 3 `a105ae7`, RFC 140 stage 1 `d5f033e`, RFC 141's
