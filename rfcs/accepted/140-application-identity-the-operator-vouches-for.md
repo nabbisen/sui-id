@@ -157,6 +157,47 @@ Three ways out, with my assessment:
   and a different admin UI control. **My recommendation**, because it
   removes the hardest part rather than policing it.
 
+**Why (c), stated properly — reviewed 2026-10-29.** The SSRF argument
+above is correct but it is not the strongest one. **(b) is (c) plus an
+outbound fetch**: both need storage, a size limit, a content-type
+allowlist and a serving route, and they are otherwise identical, so (b)
+is strictly dominated — it delivers nothing (c) does not.
+
+The decisive argument is about meaning. A fetched image is a cached copy
+of someone else's resource, and (b) has no good answer to *what happens
+later*. **If it re-fetches**, a URL that was a logo when the
+administrator approved it can become something else afterwards — the
+operator vouched for what they saw, and the consent screen then shows
+something they never saw, which is this RFC's own premise failing
+silently. **If it does not re-fetch**, the stored copy quietly diverges
+from the URL still shown in the admin form, and the administrator
+believes the URL is live when it is decoration. Both readings confuse,
+and the choice between them is invisible in the UI. **Upload has no such
+ambiguity**: what was uploaded is what is served, and the administrator
+can see that from the control itself. §5 lands on the consent screen —
+the one place in this system where an end user makes a trust decision —
+so *APIs and UI/UX for users not to be confused or misunderstand* is the
+governing half here, not the secondary one.
+
+**Honest cost: there is no multipart or upload machinery in the tree
+today** (the only `multipart` hit is `mail-builder` emitting
+`multipart/alternative`). (c) introduces a new capability. Three
+constraints for stage 2, should `@nabbisen` settle on (c):
+
+- **Store the image in the database, not on the filesystem**, so the
+  existing encrypted backup/restore path covers it unchanged. A
+  filesystem blob falls silently outside backup — which is how an
+  operator restores a working system and finds the logos gone.
+- **Allowlist raster formats only — PNG, JPEG, WebP; reject SVG.** An
+  SVG is a document that can carry script. It does not execute through
+  `<img>`, but the stored file is also reachable directly from the
+  serving route, and the margin is not worth one optional decoration.
+- **The upload endpoint is admin-only and authenticated**, stated as a
+  requirement rather than inherited by accident.
+
+**No CSP change under (b) or (c)** — `img-src 'self' data:` stands,
+which was the point of rejecting (a).
+
 **Stage 2 is not scoped until this is settled**, and it is reasonable to
 take stage 1 and stop.
 
