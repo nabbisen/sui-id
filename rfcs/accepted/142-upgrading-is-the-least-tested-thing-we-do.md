@@ -292,6 +292,19 @@ assertions (per-table row counts before and after, each intervening
 migration's claimed invariant, final version equals
 `MAX_SCHEMA_VERSION`). Becomes a gate.
 
+> **Stage 2 LANDED 2026-10-29.** The corpus and gate **G22** exist:
+> 38 fixtures, all passing — 37 shipped schema versions by replay, two
+> `audit_log` fixtures, and the hand-built `0.29.7` one. Record —
+> [`../handoffs/142-upgrading-is-the-least-tested-thing-we-do/stage2-corpus-2026-10-29.md`](../handoffs/142-upgrading-is-the-least-tested-thing-we-do/stage2-corpus-2026-10-29.md).
+> **Every covered version reaches head with its data intact**, which
+> answers D2: there is **no floor**, and the prohibition on declaring
+> one to avoid fixing a migration never arises. Local matrix 47 → 48.
+> **A cost to know about:** `G22` carries `paths = ["**"]` because RFC
+> 130 D2's `SCOPED_LANES` is a fixed enumeration (`G01`–`G09b`) a new
+> lane cannot join, so a docs-only push now pays for a Rust lane.
+> Whoever next touches `SCOPED_LANES` has a second candidate waiting.
+> Review — `.git-exclude/reviewed/rfc142-stage2-the-corpus-2026-10-29.md`.
+
 **Stage 3 — D2.** Only after stage 2 reports. State the supported
 range in `docs/src/guides/upgrade.md`; if and only if some version
 does not reach head, either fix it or declare a floor with a
@@ -361,3 +374,21 @@ under the standing arrangement recorded in `ROADMAP.md`.
    `VACUUM INTO` snapshot beside the database**, so a panicking
    operator can restore it with `sqlite3` and nothing else — recorded
    here as a choice, not an accident.
+
+## Gate Matrix lane owned by RFC 142
+
+Registered through the multi-source lane registry (RFC 094 R10), as RFC
+098, 116, 134 and 137 do. The heading above is the recorded source
+heading and is matched by plain equality; do not rename it without
+changing the manifest in the same commit. Column layout mirrors RFC
+093's table so one parser reads both. Added with stage 2 (D1): the
+migration corpus is a `#[test]` module inside `sui-id-store`'s own test
+tree (stage 1 §4/§6 — `run_up_to`/`sql_for_version` are `#[cfg(test)]
+pub(crate)`, unreachable from an integration test in a separate crate),
+so one lane isolates it from the rest of `cargo test --workspace`'s
+output rather than leaving a corpus failure to be found by reading
+hundreds of unrelated test names.
+
+| ID | Toolchain | Features | Blocking command / assertion |
+|---|---|---|---|
+| G22 | stable | n/a | `cargo +stable test -p sui-id-store --lib tests_rfc142 --locked` |

@@ -67,10 +67,11 @@ class GenerateCiWorkflow(unittest.TestCase):
     def test_the_committed_workflow_is_a_fresh_generation(self) -> None:
         r = self.run_gen()
         self.assertEqual(r.returncode, 0, r.stderr)
-        # Bump when a gate lane is added (G19/G20 took this 24 -> 26; G21 26 -> 27).
-        # A new lane turning this red is the intended signal, not a nuisance: it is
-        # how a lane added to [gates] without a regenerated ci.yml is caught.
-        self.assertIn("27 jobs", r.stdout)
+        # Bump when a gate lane is added (G19/G20 took this 24 -> 26; G21 26 -> 27;
+        # G22 27 -> 28). A new lane turning this red is the intended signal, not a
+        # nuisance: it is how a lane added to [gates] without a regenerated ci.yml
+        # is caught.
+        self.assertIn("28 jobs", r.stdout)
 
     def test_the_real_repository_is_a_fresh_generation(self) -> None:
         # The check CI runs, on the real tree rather than the copy.
@@ -255,8 +256,9 @@ class GenerateCiWorkflow(unittest.TestCase):
         # Stage 3b: ci-gate.sh exports `tz` from [lane_profiles]; the workflow's
         # per-job env is gone, so the fact lives in one place.
         self.assertNotIn("TZ:", self.read(".github/workflows/ci.yml"))
-        # Bump when a lane profile declaring tz is added (G20 took this 4 -> 5).
-        self.assertEqual(self.read("contracts/gate-inputs.toml").count('tz = "UTC"'), 5)
+        # Bump when a lane profile declaring tz is added (G20 took this 4 -> 5;
+        # G22 5 -> 6).
+        self.assertEqual(self.read("contracts/gate-inputs.toml").count('tz = "UTC"'), 6)
         self.assertEqual(self.run_gen("--write").returncode, 0)
         self.assertNotIn("TZ:", self.read(".github/workflows/ci.yml"))
 

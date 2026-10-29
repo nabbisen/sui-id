@@ -26,6 +26,7 @@ G08 = ["rustfmt"]
 G09a = []
 G09b = []
 G20 = []
+G22 = []
 
 # RFC 094 R10: the lane registry. An RFC number maps to the heading of the
 # section in that RFC holding its lane table. Ownership is declared by number,
@@ -43,6 +44,7 @@ G20 = []
 "116" = "Gate Matrix lanes owned by RFC 116"
 "134" = "Gate Matrix lane owned by RFC 134"
 "137" = "Gate Matrix lane owned by RFC 137"
+"142" = "Gate Matrix lane owned by RFC 142"
 
 # RFC 094 R10: lane -> owning RFC number. Exactly one owner per lane; two
 # owners for one lane is a TOML parse error rather than a condition to detect.
@@ -73,6 +75,7 @@ G18 = "116"
 G19 = "134"
 G20 = "094"
 G21 = "137"
+G22 = "142"
 
 # RFC 093 Gate Matrix v1 (rfcs/done/093-build-toolchain-release-gates.md),
 # machine-readable expansion. scripts/ci-gate.sh executes these commands
@@ -104,6 +107,7 @@ G18 = "python3.14 scripts/check-contracts.py --root . --policy contracts/contrac
 G19 = "python3.14 scripts/check-federation-egress.py --root ."
 G21 = "python3.14 scripts/check-inline-tests.py --root ."
 G20 = "rm -f target/rfc094-rollback-coverage.txt && cargo +stable test -p sui-id-store --lib --locked && bash scripts/check-m2a-rollback-coverage.sh --root ."
+G22 = "cargo +stable test -p sui-id-store --lib tests_rfc142 --locked"
 
 # RFC 093 M1b C2.1: the lane-completeness rule (scripts/check-gate-inputs.sh
 # condition 7) requires every lane declared by any source RFC to be
@@ -181,6 +185,7 @@ G18 = { title = "contract paths and README (Python {python})", setup = "python",
 G19 = { title = "federation egress is one client (Python {python})", setup = "python", paths = ["**"] }
 G20 = { title = "M2a rollback coverage ({rust_stable})", setup = "rust", toolchain = "stable", apt = true, cache = true, tz = "UTC", paths = ["**"] }
 G21 = { title = "tests live beside the module (Python {python})", setup = "python", paths = ["**"] }
+G22 = { title = "migration corpus ({rust_stable})", setup = "rust", toolchain = "stable", apt = true, cache = true, tz = "UTC", paths = ["**"] }
 
 [actions]
 checkout_v6 = "d23441a48e516b6c34aea4fa41551a30e30af803"

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Upgrading from an old database is now verified in automated testing,
+  not assumed.** Every schema version this project has ever shipped —
+  including the one historical shape left behind by a known-fixed
+  `0.29.7` data-loss bug — is checked before each release: populated
+  with representative data, brought forward to the current schema, and
+  confirmed to still hold that data, unchanged, in every table that
+  carries operator or user records. An operator upgrading from an old
+  release now has the same evidence a fresh installation always had.
+
 ## [0.86.0] — 2026-10-29
 
 **An administrator can now set a client's homepage, privacy-policy and

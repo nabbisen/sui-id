@@ -78,6 +78,8 @@ mod tests_rfc105;
 mod tests_rfc112;
 #[cfg(test)]
 mod tests_rfc115;
+#[cfg(test)]
+mod tests_rfc142;
 
 #[cfg(test)]
 mod tests_state_machine;

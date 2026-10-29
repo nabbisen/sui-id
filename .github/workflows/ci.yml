@@ -575,6 +575,31 @@ jobs:
       - name: G21
         run: bash scripts/ci-gate.sh G21
 
+  G22:
+    name: "G22 — migration corpus (stable)"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          toolchain: stable
+      - name: Cache cargo registry
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-gate-input-v1-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      - name: G22
+        run: bash scripts/ci-gate.sh G22
+
   changes:
     # RFC 130 D1/D6/D7: computes whether this push touched the Rust scope
     # (G01-G09b's shared `paths`, contracts/gate-inputs.toml) so those lanes
