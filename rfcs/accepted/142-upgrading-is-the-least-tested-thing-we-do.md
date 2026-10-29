@@ -238,6 +238,19 @@ implementation detail.
 here as decisions so that no reader has to infer a decision from a
 heading that still says "questions".
 
+- **Seeded tables (architect, 2026-10-29, after stage 1).** **14**:
+  `users`, `credentials`, `clients`, `signing_keys`, `user_totp`,
+  `user_webauthn_credentials`, `smtp_config`, `server_settings`,
+  `user_consent`, `scope_definition`, `client_registration_token`,
+  `federation_provider`, `federation_link`, and
+  **`revoked_access_tokens`**. The last was added in review: losing it
+  across an upgrade loses no data an operator would mourn, but
+  **silently un-revokes every access token still inside its validity
+  window**, with no error and nothing to notice. That is the class of
+  silent upgrade regression this RFC exists to catch. It costs exactly
+  one boundary, at `0005`. `consents` is excluded as dead — no
+  non-test reference in `crates/` — and `email_outbox` as a
+  self-healing retry queue.
 - **Coverage.** The corpus covers **all 37 shipped schema versions**,
   built by replay, **plus one hand-built fixture** for the
   `0.29.7`-origin schema-21 shape — **38 in total**. It is generated,
@@ -258,6 +271,20 @@ scripts. **No seed SQL, no fixtures, no gate.** This stage exists
 because the cost of D1 is the number of *ranges*, which is currently
 unknown, and committing to seed authorship before counting them is the
 error this RFC's own Q1 already made once.
+
+> **Stage 1 LANDED 2026-10-29.** Measurement only; nothing in
+> `crates/` changed. **10 seed scripts cover all 37 shipped schema
+> versions**, plus 2 `audit_log` fixtures and the hand-built `0.29.7`
+> fixture — **13 pieces of seed material** for the 38 fixtures. The
+> seeded set is **14 tables**. Record —
+> [`../handoffs/142-upgrading-is-the-least-tested-thing-we-do/stage1-measurement-2026-10-29.md`](../handoffs/142-upgrading-is-the-least-tested-thing-we-do/stage1-measurement-2026-10-29.md).
+> The measurement confirmed the coverage decision rather than
+> unsettling it: ranges are a small fraction of versions, which is what
+> "all 37" was chosen on. The `0.29.7` divergence was upgraded from an
+> inference to a proof — the original `0021` blob exists at **exactly
+> one** of the 137 tags, and `0.29.6` carries no `0021` at all, so the
+> hand-built fixture is one fixture. Review —
+> `.git-exclude/reviewed/rfc142-stage1-seed-script-ranges-2026-10-29.md`.
 
 **Stage 2 — the corpus.** The replay generator, one seed script per
 range, the 37 fixtures, the hand-built `0.29.7` fixture, and D1's
