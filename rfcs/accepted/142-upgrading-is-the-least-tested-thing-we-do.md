@@ -114,8 +114,12 @@ CI, as a gate.
 `run_up_to(conn, N)` brings a fresh database to version `N`; per-version
 seed SQL then inserts rows using the schema *as it was at N*. No binary
 fixtures in git, and the corpus stays honest as migrations change,
-because a renumbering breaks the helper loudly — `migration_sql` already
-panics on a missing version for exactly that reason.
+because a renumbering breaks the helper loudly — `sql_for_version`
+already panics on a missing version for exactly that reason.
+
+**Both helpers are `#[cfg(test)] pub(crate)`** (`migrations.rs:623` and
+`:641`), so the corpus lives in `sui-id-store`'s own test tree, not in an
+integration test, which is a separate crate and cannot reach them.
 
 **Assert more than "it did not error."** Per covered version: row counts
 per table before and after, the specific invariants each intervening

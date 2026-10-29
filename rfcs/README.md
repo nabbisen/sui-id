@@ -149,7 +149,7 @@ the move. The paths below are current.
 | 138 | [Per-hunk hashes are not reproducible](./done/138-per-hunk-hashes-are-not-reproducible.md) | [138-per-hunk-hashes-are-not-reproducible](./handoffs/138-per-hunk-hashes-are-not-reproducible/README.md) |
 | 140 | [Application identity the operator vouches for](./accepted/140-application-identity-the-operator-vouches-for.md) **(Accepted 2026-10-27)** | [140-application-identity-the-operator-vouches-for](./handoffs/140-application-identity-the-operator-vouches-for/design-review-2026-10-27.md) |
 | 141 | [Publishing is a workflow, not a credential](./accepted/141-publishing-is-a-workflow-not-a-credential.md) **(Accepted 2026-10-28)** | [141-publishing-is-a-workflow-not-a-credential](./handoffs/141-publishing-is-a-workflow-not-a-credential/design-review-2026-10-28.md) |
-| 142 | [Upgrading is the operation we test least](./accepted/142-upgrading-is-the-least-tested-thing-we-do.md) | [design review 2026-10-29](./handoffs/142-upgrading-is-the-least-tested-thing-we-do/design-review-2026-10-29.md) — Accepted 2026-10-29; stage 1 not yet dispatched |
+| 142 | [Upgrading is the operation we test least](./accepted/142-upgrading-is-the-least-tested-thing-we-do.md) | [stage 1](./handoffs/142-upgrading-is-the-least-tested-thing-we-do/stage1-count-the-ranges-2026-10-29.md) · [design review](./handoffs/142-upgrading-is-the-least-tested-thing-we-do/design-review-2026-10-29.md) — Accepted 2026-10-29; stage 1 of 5 dispatched |
 
 ### Implemented — Mockup Integration epic (Phase 0 → Phase 8)
 
