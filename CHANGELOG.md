@@ -7,10 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-**RFC 094 M2b wave 3: federation-provider configuration writes now
-commit atomically with their audit records.** **RFC 140 stage 1: an
-administrator can now set a client's homepage, privacy-policy and
-terms-of-service links**, shown to the user granting access.
+## [0.86.0] — 2026-10-29
+
+**An administrator can now set a client's homepage, privacy-policy and
+terms-of-service links, which the consent screen shows for
+administrator-registered clients; and federation-provider configuration
+writes now commit atomically with their audit records.**
 
 ### Added
 
