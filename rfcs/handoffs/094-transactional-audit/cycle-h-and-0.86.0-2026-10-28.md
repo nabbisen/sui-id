@@ -104,6 +104,21 @@ sequencing is a decision on the record rather than a drift.
 — upgrade safety — is **Proposed** and not scheduled; it is a candidate
 for `0.87.0` or later.
 
+## B′ — all four landed; the preparation is dispatched
+
+| | Landed | Level B |
+|---|---|---|
+| The local matrix becomes a script | `d6fc6f9` | 27/0 |
+| M2b wave 3 | `a105ae7` | 27/0 |
+| RFC 140 stage 1 | `d5f033e` | 27/0 |
+| RFC 141's publish workflow | `81024ea` | 27/0 |
+
+**Mechanical preparation dispatched 2026-10-29** —
+[`release-0.86.0-preparation-2026-10-29.md`](release-0.86.0-preparation-2026-10-29.md),
+after checklist **step 0** was read on `main` (`workflow_dispatch`
+`40793702457` on `b16e2f8`, green), which is the point of step 0
+existing.
+
 ## C — why this order
 
 **Wave 3 before the authority switch** is RFC 094's own argument

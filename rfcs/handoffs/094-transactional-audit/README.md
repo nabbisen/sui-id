@@ -61,6 +61,14 @@
 > closes** — `cargo xtask audit-structure` does not exist and there is
 > no `xtask` crate, so it is a cycle of its own.
 
+> **`0.86.0`'s preparation is dispatched** —
+> [`release-0.86.0-preparation-2026-10-29.md`](release-0.86.0-preparation-2026-10-29.md).
+> Cycle H's four items all landed with Level B: the local-matrix script
+> `d6fc6f9`, wave 3 `a105ae7`, RFC 140 stage 1 `d5f033e`, RFC 141's
+> publish workflow `81024ea`. **`0.86.0` publishes by the existing
+> path** — RFC 141 §7 settled `0.87.0` as the first release through the
+> workflow.
+
 > **Wave 3 landed** `a105ae7` (Level B, 27 success / 0 failed / 0
 > skipped), G20 at **46**. **Only the authority switch now stands
 > between M2b and closure**, and that is `0.87.0`. Dispatch —
