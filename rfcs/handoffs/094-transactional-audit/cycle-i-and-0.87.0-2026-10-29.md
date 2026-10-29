@@ -100,6 +100,24 @@ workflow, and the six crates.io Trusted Publishing configurations are
 yours. Trusted-Publishing-only mode and revoking the workstation token
 come only **after** the first successful workflow publish.
 
+## C′ — stage 1 is dispatched, and it is a measurement
+
+`.git-exclude/staging/cycle-i-stage1-the-audit-census-2026-10-29.md`,
+held for the same reason the census is.
+
+**It converts nothing.** The census established that the inventory's
+declared event names and the code's emitted ones are disjoint for these
+rows — one declares events that do not exist, the other emits events
+that are not declared, and no gate notices because G13 checks the
+matrix against names that *do* exist. Converting a row whose current
+coverage is unknown risks two records where there was one, or retiring
+a name an operator depends on.
+
+So stage 1's deliverable is a table: per row, the event actually
+emitted today, the append's shape, and whether the inventory's name is
+right. Stages 2 and 3 are written against that table, not against my
+estimate of it — which has now been wrong twice.
+
 ## D — the honest alternative
 
 **This is a large cycle, and I have just demonstrated that my size
