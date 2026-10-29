@@ -116,12 +116,36 @@ becomes open-ended. The split also means the first release published
 through the new workflow is a smaller one, which is the right release
 to discover a problem on.
 
-## E — what I need from you
+## E — settled, and the census is done
 
-1. **One cycle or two?** Recommended: two, as §D.
-2. **Nothing else.** The census, the stage plans and the dispatches are
-   mine once the scope is authorized — and the census comes first
-   precisely because the plans should not be written before it.
+**`@nabbisen`, 2026-10-29: *"Two."*** So:
+
+- **`0.87.0`** = the census, the conversions and the dispositions.
+- **`0.88.0`** = the authority switch alone; M2b closes there.
+
+**The census (§C item 1) is complete, and it corrects §B.** **Eleven
+rows have a live production caller, not five.** Four have none, four
+are already dispositioned; 11 + 4 + 4 = 19.
+
+My §B estimate was wrong in the same direction as the claim it was
+correcting, and the first method I used was wrong enough to discard
+rather than patch — it matched `users::create` for
+`scope_definition::create`. The second greps the qualified path per
+row and checks bare calls only in files importing the module, which is
+the discipline that caught stage 4's `use super::*` near-miss.
+
+**The detail is held** —
+`.git-exclude/reviewed/m2b-remaining-rows-census-2026-10-29.md` — under
+`.github/SECURITY.md`, because it describes operations in released
+versions that leave no audit record. What is safe to say here: the
+rows' declared event names are emitted nowhere, the coverage matrix has
+no row for them, and the writes beneath them are live — the shape wave
+1 and C16 already showed, at larger scale.
+
+**One thing the census did not finish**, and the first dispatch must
+before building: whether each of the eleven is audited under some
+*other* event name. Two were checked and are not. Two of eleven is not
+a result.
 
 **Not in this scope, and still open**:
 [RFC 142](../../proposed/142-upgrading-is-the-least-tested-thing-we-do.md)'s
