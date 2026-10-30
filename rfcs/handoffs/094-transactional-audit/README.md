@@ -31,9 +31,41 @@
 > S10 becomes a sealed command rather than choosing between a
 > propagating append that can fail after the work has committed and a
 > best-effort one that can lose the record of the most privileged
-> operation the system performs. **Stage 2 is dispatched** —
-> `.git-exclude/staging/cycle-i-stage2-mfa-and-sessions-2026-10-30.md`,
-> five rows, one retired event name.
+> operation the system performs.
+>
+> **Stage 2 LANDED** `2677e02`, 2026-10-31, with its amendment 2b —
+> **Level B shape, CI 28 success / 0 failed / 0 skipped**. Five rows
+> sealed (U13, U16, U17, U18, U19); **three event names retired**, all
+> three named in the `CHANGELOG` with the consequence for an operator's
+> own queries stated, because `docs/src/reference/audit-events.md`
+> promises these names do not change between releases. G20's declared
+> set 47 → 52. Reviews —
+> `.git-exclude/reviewed/cycle-i-stage2-mfa-and-sessions-2026-10-30.md`
+> and `.git-exclude/reviewed/cycle-i-stage2b-u19-actor-2026-10-31.md`.
+>
+> **2b exists because an audit row must not claim more than the request
+> established.** Revoking every session is reached from RP-initiated
+> logout, where the user is named by a token rather than by a signed-in
+> session; the row now records an actor only where a validated session
+> proved who was there, and an `identified_by` field says which of the
+> two identified them. **The choice between those two paths is made by
+> the handler, not the command** — and swapping the two constants that
+> make it left the entire workspace suite green, so it is now pinned by
+> two end-to-end tests. That is the standing lesson: where a sealed
+> command splits on something the caller decides, the test belongs on
+> the caller's side too.
+>
+> **Stage 3 is dispatched** —
+> `.git-exclude/staging/cycle-i-stage3-consent-and-client-2026-10-31.md`.
+> **Three conversions (U20, U21, C14), and C19 is a measurement rather
+> than a conversion**: tracing `federation_link` before writing the
+> dispatch showed a link's *creation* is already sealed inside
+> `provision_federated_user`, and `last_seen_at` inside
+> `complete_federated_mfa`'s own tail — so the remaining unsealed write
+> can only ever update, and whether it is redundant bookkeeping already
+> covered by the sign-in event is a question to answer before building
+> anything. A **disposition** is a real possible outcome for that row,
+> not a failure.
 >
 > Stage 1's dispatch was
 > `.git-exclude/staging/cycle-i-stage1-the-audit-census-2026-10-29.md`,
