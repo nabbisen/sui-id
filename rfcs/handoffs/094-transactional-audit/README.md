@@ -1,5 +1,44 @@
 # RFC 094 developer handoff
 
+> # **`0.87.0` IS AUTHORIZED**, 2026-10-30. **`@nabbisen`:
+> *"Authorized."*** Scope settled 2026-10-29 (*"Two."*) —
+> [`cycle-i-and-0.87.0-2026-10-29.md`](cycle-i-and-0.87.0-2026-10-29.md)
+> §E: **`0.87.0` = the census, the conversions and the dispositions;
+> `0.88.0` = the authority switch alone**, and M2b closes there.
+>
+> **The census is done** and it corrects §B: **eleven** rows have a live
+> production caller, not five. Four have none, four are already
+> dispositioned; 11 + 4 + 4 = 19. The detail is held —
+> `.git-exclude/reviewed/m2b-remaining-rows-census-2026-10-29.md` —
+> under `.github/SECURITY.md`, because it describes operations in
+> released versions that leave no audit record.
+>
+> **Stage 1 is a measurement and converts nothing** —
+> `.git-exclude/staging/cycle-i-stage1-the-audit-census-2026-10-29.md`,
+> held outside git for the same reason. Its deliverable is one table of
+> eleven rows: what each one actually emits today, the append's shape,
+> and whether the inventory's declared name is right. The census
+> established that the declared and emitted name sets are **disjoint**
+> for these rows, and no gate notices, because G13 checks the matrix
+> against names that exist in source.
+>
+> **Three things must land before the cut**, and two of them are
+> `@nabbisen`'s own:
+>
+> 1. **`release-process.md` documents the publish workflow** — done,
+>    [`../../../docs/src/contributing/release-process.md`](../../../docs/src/contributing/release-process.md).
+> 2. **Six per-crate Trusted Publishing configurations on crates.io**
+>    (RFC 141 §6). His; nothing in this repository can perform them.
+> 3. **The `release` GitHub Environment, configured with a required
+>    reviewer**, which is what RFC 141 §2 rests on. His, like the
+>    crates.io side: repository settings, not something this repository
+>    can perform. Its current state and what to set is recorded in
+>    `.git-exclude/reviewed/release-0.87.0-prerequisites-2026-10-30.md`.
+>
+> `0.87.0` is RFC 141's first use. Trusted-Publishing-only mode and
+> revoking the workstation token come only **after** the first
+> successful workflow publish.
+
 > **`0.85.0` is authorized** (2026-10-24 scope,
 > [`cycle-g-and-0.85.0-2026-10-25.md`](cycle-g-and-0.85.0-2026-10-25.md);
 > authorized 2026-10-25): **wave 4 complete**, C01–C10, C21, C22, K02,

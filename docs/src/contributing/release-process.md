@@ -29,7 +29,72 @@ The **five** `sui-id-*` library crates are implementation detail; they are
 published because the binary depends on them, not because they are intended
 as a public library API.
 
+## How a release is published
+
+**From `0.87.0` onward the publish is a workflow, not a command anyone
+runs** — `.github/workflows/publish.yml` (RFC 141). Nobody holds a
+crates.io token: the workflow mints a short-lived one per crate through
+Trusted Publishing (OIDC). The manual loop below is still correct, and
+is the fallback while Trusted-Publishing-only mode is off; it is not
+the normal path.
+
+**Trigger.** `workflow_dispatch`, with the version tag as its one input
+(`0.87.0`, no leading `v`). **Not** a tag push: pushing a tag must not
+by itself be authority to publish, so the two are kept separate.
+
+**What runs, in order:**
+
+1. **`verify` — Level B and release identity.**
+   `scripts/check-publish-preconditions.py` checks four independent
+   conditions and reports all of them rather than stopping at the
+   first: the tag is **annotated** and its commit is an ancestor of
+   `main`; the six `Cargo.toml` version fields equal the tag; the most
+   recent `CI` run of event `workflow_dispatch` **on that exact
+   commit** concluded `success` with **0 skipped**; and the most recent
+   `Security audit` run on the same commit concluded `success`. It
+   distinguishes *refused* (exit 1) from *could not be checked*
+   (exit 2) — "verified and it says no" and "the network failed" must
+   never read the same to whoever is watching the job.
+2. **The `release` environment's approval.** The `publish` job will not
+   start until a required reviewer approves it, and `verify` has
+   already reported by then. This is the gate the irreversible,
+   outward-facing step sits behind.
+3. **Six publishes**, written as six named steps in the order below,
+   each preceded by its own token mint. `cargo publish` waits for the
+   crate to reach the index before returning, so no step sleeps.
+4. **A partial-publish report, on failure**, naming exactly which
+   crates already reached the registry. That is the state `cargo yank`
+   cannot undo and the one a retry must not repeat — retry from the
+   next crate, never from the first.
+
+**What is still a person's**, and deliberately: the tag itself, the
+judgement that a commit is ready, and the step 0 and step 5 readings of
+the `Security audit` lane below. This workflow automates the mechanical
+step, not the decision.
+
+**Two repository-side configurations make it work, and are the
+maintainer's own** — neither can be performed by anything in this
+repository:
+
+- **Six per-crate Trusted Publishing configurations on crates.io**, one
+  for each crate in the list below, each naming this repository, the
+  workflow filename `publish.yml` and the environment `release`.
+- **The `release` GitHub Environment, with a required reviewer.** A job
+  that names an environment which does not exist causes GitHub to
+  create it on first run **with no protection rules at all**, so the
+  approval gate in step 2 is only real if the environment was
+  configured beforehand. Create and protect it before the first
+  dispatch, not after.
+
+**Only after a first successful workflow publish**: enable
+Trusted-Publishing-only on all six crates and revoke the workstation
+API token. In that order — so a failure of the new path falls back to
+the old one instead of locking the project out of its own registry.
+
 ## Publication order
+
+This is the order the workflow's six steps follow, and the order to
+follow by hand if the fallback is ever needed.
 
 Publish strictly bottom-up. Each `cargo publish` step both uploads the
 crate *and* updates the local crates.io index, so the next step can find

@@ -4,10 +4,11 @@
 **Accepted on.** 2026-10-27
 **Approved by.** `@nabbisen`, 2026-10-27: *"Accepted."* — on the architect's
 review of whether this was over-engineering, which he asked for and whose
-measurement is this RFC's body. **What the acceptance authorizes is §4's
-stage 1**: by this RFC's own terms §4 leaves stage 2 unscoped until §5 is
-settled, so acceptance cannot authorize what the document does not yet
-specify. §7's question is open.
+measurement is this RFC's body. The acceptance authorized §4's stage 1
+only: by this RFC's own terms §4 left stage 2 unscoped until §5 was
+settled, so acceptance could not authorize what the document did not yet
+specify. **§5 and §7 settled 2026-10-30** — `@nabbisen`: *`"upload" is
+accepted.`* Stage 2 is **(c), upload**, and is now scoped below.
 **Independent design review.** [Design review 2026-10-27](../handoffs/140-application-identity-the-operator-vouches-for/design-review-2026-10-27.md),
 by **the architect, which also wrote this RFC** — so it is **not**
 independent of it, and the field says which. `ROADMAP.md` §S1c prohibits
@@ -22,9 +23,11 @@ testing agent).
 makes a trust decision, and this RFC changes what that screen may show.
 
 **Design prerequisites.** None.
-**Implementation prerequisites.** None for stage 1. **Stage 2 may not be
-built** until §5 is settled — not because of RFC 000's status rule, which
-this RFC now satisfies, but because §4 does not specify it.
+**Implementation prerequisites.** None. Stage 1 shipped in `0.86.0`.
+**Stage 2 was blocked until §5 was settled** — not by RFC 000's status
+rule, which this RFC satisfies, but because §4 did not specify it. §5 is
+settled (2026-10-30, upload) and §4 now specifies stage 2, so the block
+is lifted.
 **Closure prerequisites.** The three link fields are settable by an
 administrator, render on the consent screen for administrator-registered
 clients and for no others, and a test asserts both halves; the logo
@@ -121,8 +124,28 @@ reach them. `homepage_uri` already renders as the client name's link.
 Small: three form inputs, one sealed command with a caller, three i18n
 labels, the renderer arms, and tests.
 
-**Stage 2 — the logo, or a decision not to.** §5. Separable, and
-materially larger than stage 1.
+**Stage 2 — the logo, by upload.** §5, settled 2026-10-30 on **(c)**.
+Separable, and materially larger than stage 1. Scope:
+
+- **An admin-only, authenticated upload endpoint**, stated as a
+  requirement rather than inherited from the surrounding router.
+- **Raster formats only — PNG, JPEG, WebP. SVG is rejected.** An SVG is
+  a document that can carry script; it does not execute through `<img>`,
+  but the stored bytes are also reachable from the serving route, and
+  that margin is not worth one optional decoration.
+- **Stored in the database, not on the filesystem**, so the existing
+  encrypted backup/restore path covers it unchanged. A filesystem blob
+  falls silently outside backup, which is how an operator restores a
+  working system and finds the logos gone.
+- **A size limit**, and a serving route under `'self'`.
+- **No CSP change.** `img-src 'self' data:` stands — that was the point
+  of rejecting (a), and upload is what makes keeping it free.
+- **The admin control shows what is stored**, not a URL. §5's deciding
+  argument is that the administrator must be able to see, from the
+  control itself, that what was uploaded is what is served.
+
+**Not in `0.87.0`.** That cycle is settled as RFC 094's census,
+conversions and dispositions. Stage 2 is proposed for a later cycle.
 
 ## 5 — the logo needs a decision, and it is not a form field
 
@@ -217,8 +240,12 @@ take stage 1 and stop.
   example allowing `http` on a loopback host for development. Rejected
   as an unnecessary second rule on a security-relevant surface.
 
-## 7 — open question for the approver
+## 7 — settled 2026-10-30
 
-**Stage 1 only, or stage 1 and a stage 2 shape from §5?** Stage 1 stands
-alone and delivers the policy and terms links from a vetted source. The
-logo is the part that needs the decision.
+**The question was: stage 1 only, or stage 1 and a stage 2 shape from
+§5?** Stage 1 stood alone and delivered the policy and terms links from
+a vetted source; the logo was the part that needed the decision.
+
+**`@nabbisen`, 2026-10-30: *`"upload" is accepted.`*** So §5 lands on
+**(c)**, stage 2 is scoped in §4 above, and this RFC closes only when
+both stages meet the closure prerequisites.
