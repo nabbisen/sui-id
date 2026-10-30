@@ -311,6 +311,28 @@ does not reach head, either fix it or declare a floor with a
 `SchemaTooOld` refusal symmetric with `SchemaTooNew` and a negative
 fixture. **A floor is not to be declared to avoid fixing a migration.**
 
+> **Stage 3 LANDED 2026-10-30.** Documentation only; nothing in
+> `crates/` changed, and no floor was declared — there is nothing to
+> refuse. `docs/src/guides/upgrade.md` now states the range under
+> **Migration behaviour**. Record —
+> [`../handoffs/142-upgrading-is-the-least-tested-thing-we-do/stage3-range-2026-10-30.md`](../handoffs/142-upgrading-is-the-least-tested-thing-we-do/stage3-range-2026-10-30.md).
+> **D2's own phrasing was narrowed before it reached an operator.** D2
+> above, and the stage 3 dispatch quoting it, both say *"any supported
+> release upgrades directly to any later one"*. The corpus does not
+> prove that: it brings every shipped schema version forward to
+> **head**, and an upgrade whose *target* is an older release runs that
+> release's migration text, not today's. `0.29.7` is the standing
+> counterexample — its `0021` fired `ON DELETE CASCADE` and destroyed
+> child rows, which is why the hand-built fixture exists at all. The
+> guide therefore says **"straight to the current release from any
+> earlier one"**, which is exactly what G22 proves and exactly the
+> question an operator is asking. The guide also names what the
+> guarantee covers — the 14 seeded tables in operator words — because
+> short-lived state is outside the corpus and some migrations discard
+> it. Nothing in `docs/` had to be corrected: no hedge about stepping
+> stones existed anywhere to remove. Review —
+> `.git-exclude/reviewed/rfc142-stage3-state-the-range-2026-10-30.md`.
+
 **Stage 4 — D3.** The read-only preview subcommand. It must not write.
 
 **Stage 5 — D4.** The backup, in the settled shape above, with a test

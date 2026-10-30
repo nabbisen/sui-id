@@ -26,6 +26,22 @@ sui-id runs database migrations forward-only on startup. There is no
 `down` migration. The schema version is recorded in the database, and each
 migration runs once.
 
+**You can upgrade straight to the current release from any earlier
+one.** No upgrade has to pass through an intermediate version first,
+however far behind you are — skip as many releases as you like in one
+step. Before every release, a database populated at every schema version
+this project has ever shipped is brought forward to that release and
+checked to still hold its data, unchanged.
+
+What that covers is the records the database keeps for you: accounts and
+their MFA enrolments, credentials, clients, signing keys, scope
+definitions, server and SMTP settings, consents, federation providers
+and links, and revoked tokens. Short-lived state — an authorization code
+or a WebAuthn ceremony in flight — is not covered, and some upgrades
+discard it. Configuration-file keys and CLI flags can also change
+between releases; the `CHANGELOG` records those, and is worth reading
+before upgrading across more than one or two of them.
+
 ## Version-specific notes
 
 ### v0.83.x
