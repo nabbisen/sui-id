@@ -37,7 +37,7 @@ use sui_id_shared::{
     FamilyId, RefreshTokenHash,
     ids::{
         ClientId, FederationLoginAttemptId, FederationProviderId, PendingChangeId,
-        RegistrationTokenId, SigningKeyId, UserId,
+        RegistrationTokenId, SessionId, SigningKeyId, UserId,
     },
 };
 
@@ -4006,6 +4006,531 @@ pub async fn register_passkey(
     db.class_a(context, move |tx: &mut ClassATx<'_, U15>| {
         crate::repos::user_webauthn_credentials::create_within_tx(tx.tx(), &row)?;
         Ok(((), U15Event::Added { user_id }))
+    })
+    .await
+}
+
+// ── U13, U16 — removing a second factor (cycle I stage 2) ───────────────
+//
+// `auth.mfa.factor_removed` is one event shared by the two commands, the
+// same shape `auth.mfa.factor_added` already uses for U12/U14/U15
+// (stage plan §A1): the addition side treats TOTP and passkey additions
+// as one event with a `method` attribute, so the removal side must too,
+// or the two halves of the same fact stop lining up in the log.
+// `RecoveryCodes` has no removal counterpart — nothing removes recovery
+// codes, only regenerates them (U14) — so the enum is narrower than
+// `AddedFactor`.
+//
+// Measured 2026-10-30 (cycle I stage 1): before this stage, U13 and U16
+// each had exactly one caller, a self-service HTTP handler, which
+// appended a best-effort `mfa.disable` / `webauthn.credential.delete`
+// row *after* a silent core-layer call. Both are retired; see the
+// `CHANGELOG`.
+
+static MFA_FACTOR_REMOVED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::AuthMfaFactorRemoved,
+    name: "auth.mfa.factor_removed",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[AttributeSpec {
+        name: "method",
+        description: "the factor removed: `totp` or `webauthn`",
+        required: false,
+    }],
+};
+
+/// The factor an [`MFA_FACTOR_REMOVED`] event records. Narrower than
+/// [`AddedFactor`]: recovery codes are regenerated (U14), never removed
+/// on their own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemovedFactor {
+    Totp,
+    Webauthn,
+}
+
+impl RemovedFactor {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Totp => "totp",
+            Self::Webauthn => "webauthn",
+        }
+    }
+}
+
+fn factor_removed_attributes(method: RemovedFactor) -> Result<AuditAttributes, AuditBuildError> {
+    AuditAttributes::builder()
+        .attribute("method", method.as_str())
+        .build()
+}
+
+crate::declare_write_command! {
+    /// U13 — disable TOTP (self-service), with `auth.mfa.factor_removed`.
+    command U13 = "U13" {
+        system_principal: forbidden;
+        enum U13Event {
+            Removed { user_id: UserId } => &MFA_FACTOR_REMOVED,
+        }
+    }
+}
+
+impl SealedCommandEvent<U13> for U13Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Removed { user_id } = self;
+        Some(AuditTarget(user_id.to_string()))
+    }
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        factor_removed_attributes(RemovedFactor::Totp)
+    }
+}
+
+/// Run U13 (disable TOTP). `user_totp::delete_within_tx` does not error
+/// when there is nothing to remove (RFC 094 U07's own precedent: absence
+/// is routine for an MFA reset) — this command's own caller always has
+/// an enabled factor to remove (the self-service page only shows the
+/// "disable" action when one exists), so that absence is reported as
+/// `NotFound` here instead, matching the pre-conversion
+/// `user_totp::delete`'s own behaviour exactly.
+pub async fn disable_totp(
+    db: &crate::Database,
+    user_id: UserId,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<U13>::for_authorized_actor(user_id, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, U13>| {
+        let removed = crate::repos::user_totp::delete_within_tx(tx.tx(), user_id)?;
+        if !removed {
+            return Err(StoreError::NotFound);
+        }
+        Ok(((), U13Event::Removed { user_id }))
+    })
+    .await
+}
+
+crate::declare_write_command! {
+    /// U16 — delete a passkey (self-service), with `auth.mfa.factor_removed`.
+    command U16 = "U16" {
+        system_principal: forbidden;
+        enum U16Event {
+            Removed { user_id: UserId } => &MFA_FACTOR_REMOVED,
+        }
+    }
+}
+
+impl SealedCommandEvent<U16> for U16Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Removed { user_id } = self;
+        Some(AuditTarget(user_id.to_string()))
+    }
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        factor_removed_attributes(RemovedFactor::Webauthn)
+    }
+}
+
+/// Run U16 (delete a passkey). `user_webauthn_credentials::delete_within_tx`
+/// already errors `NotFound` on nothing removed, matching the
+/// pre-conversion `user_webauthn_credentials::delete`'s own behaviour.
+pub async fn delete_passkey(
+    db: &crate::Database,
+    user_id: UserId,
+    credential_id: sui_id_shared::ids::WebauthnCredentialId,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<U16>::for_authorized_actor(user_id, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, U16>| {
+        crate::repos::user_webauthn_credentials::delete_within_tx(tx.tx(), credential_id, user_id)?;
+        Ok(((), U16Event::Removed { user_id }))
+    })
+    .await
+}
+
+// ── U17 — renaming a passkey (cycle I stage 2) ───────────────────────────
+//
+// Measured 2026-10-30: no event existed under any name before this
+// stage — the handler called the repo's bare `UPDATE` directly, with no
+// core-layer function and no append anywhere.
+
+static MFA_FACTOR_RENAMED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::AuthMfaFactorRenamed,
+    name: "auth.mfa.factor_renamed",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[AttributeSpec {
+        name: "method",
+        description: "the factor renamed — always `webauthn` today; only passkeys carry a nickname",
+        required: false,
+    }],
+};
+
+crate::declare_write_command! {
+    /// U17 — rename a passkey (self-service), with `auth.mfa.factor_renamed`.
+    command U17 = "U17" {
+        system_principal: forbidden;
+        enum U17Event {
+            Renamed { user_id: UserId } => &MFA_FACTOR_RENAMED,
+        }
+    }
+}
+
+impl SealedCommandEvent<U17> for U17Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Renamed { user_id } = self;
+        Some(AuditTarget(user_id.to_string()))
+    }
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        AuditAttributes::builder()
+            .attribute("method", RemovedFactor::Webauthn.as_str())
+            .build()
+    }
+}
+
+/// Run U17 (rename a passkey). `update_nickname_within_tx` errors
+/// `NotFound` on nothing renamed — the pre-conversion `update_nickname`
+/// did not (a bare `UPDATE`, row count discarded); sealing adds the
+/// check rather than silently succeeding against a nonexistent or
+/// foreign credential id.
+pub async fn rename_passkey(
+    db: &crate::Database,
+    user_id: UserId,
+    credential_id: String,
+    new_nickname: String,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<U17>::for_authorized_actor(user_id, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, U17>| {
+        crate::repos::user_webauthn_credentials::update_nickname_within_tx(
+            tx.tx(),
+            &credential_id,
+            user_id,
+            &new_nickname,
+        )?;
+        Ok(((), U17Event::Renamed { user_id }))
+    })
+    .await
+}
+
+// ── U18 — revoke one session (cycle I stage 2) ───────────────────────────
+//
+// Measured 2026-10-30: all three call sites were silent. One has no
+// human actor (idle-timeout auto-revoke, inside session resolution),
+// which is why this command permits the system principal, like U08/U22 —
+// but unlike those, the *other* two call sites do have one, so the
+// system path is reached only from the one caller that truly has none,
+// not from every caller (stage plan §A2 names the same shape for S10's
+// own decision, resolved there, not here).
+
+static U18_SESSION_REVOKED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::AuthSessionRevoked,
+    name: "auth.session.revoked",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Optional,
+    target: TargetRequirement::Required,
+    attributes: &[AttributeSpec {
+        name: "trigger",
+        description: "why the session was revoked: `idle_timeout`, `self_signout` or `self_service`",
+        required: true,
+    }],
+};
+
+/// Which of [`U18_SESSION_REVOKED`]'s three call sites revoked the
+/// session. A closed set, so the attribute is bounded — the same shape
+/// [`RemovedFactor`] gives `method`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionRevokeTrigger {
+    /// `sui-id-core/src/authn/session.rs`'s idle-timeout enforcement,
+    /// inside session resolution. No human actor.
+    IdleTimeout,
+    /// The operator's own `/admin/logout`.
+    SelfSignout,
+    /// The user's own `/me/security/sessions/{id}/revoke`.
+    SelfService,
+}
+
+impl SessionRevokeTrigger {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::IdleTimeout => "idle_timeout",
+            Self::SelfSignout => "self_signout",
+            Self::SelfService => "self_service",
+        }
+    }
+}
+
+crate::declare_write_command! {
+    /// U18 — revoke one session, with `auth.session.revoked`.
+    command U18 = "U18" {
+        system_principal: permitted;
+        enum U18Event {
+            Revoked { user_id: UserId, trigger: SessionRevokeTrigger } => &U18_SESSION_REVOKED,
+        }
+    }
+}
+
+impl SealedCommandEvent<U18> for U18Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Revoked { user_id, .. } = self;
+        Some(AuditTarget(user_id.to_string()))
+    }
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Revoked { trigger, .. } = self;
+        AuditAttributes::builder()
+            .attribute("trigger", trigger.as_str())
+            .build()
+    }
+}
+
+/// Run U18 for a caller with a human actor — self sign-out
+/// (`trigger: SelfSignout`) or self-service single-session revoke
+/// (`trigger: SelfService`). `sessions::revoke_within_tx` is silently
+/// idempotent (0 rows changed if already revoked) rather than erroring,
+/// matching the pre-conversion best-effort callers' own tolerance of a
+/// session that is already gone.
+pub async fn revoke_session(
+    db: &crate::Database,
+    actor: UserId,
+    user_id: UserId,
+    session_id: SessionId,
+    trigger: SessionRevokeTrigger,
+    now: DateTime<Utc>,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<U18>::for_authorized_actor(actor, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, U18>| {
+        let _ = crate::repos::sessions::revoke_within_tx(tx.tx(), session_id, now)?;
+        Ok(((), U18Event::Revoked { user_id, trigger }))
+    })
+    .await
+}
+
+/// Run U18 for the one caller with no human actor: idle-timeout
+/// auto-revocation during session resolution. `trigger` is always
+/// [`SessionRevokeTrigger::IdleTimeout`] — fixed here, not a parameter,
+/// so no other caller can reach the system principal through this
+/// function (the same discipline U07's `operator_reset_mfa` uses).
+pub async fn revoke_session_idle_timeout(
+    db: &crate::Database,
+    user_id: UserId,
+    session_id: SessionId,
+    now: DateTime<Utc>,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<U18>::for_system_actor(None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, U18>| {
+        let _ = crate::repos::sessions::revoke_within_tx(tx.tx(), session_id, now)?;
+        Ok((
+            (),
+            U18Event::Revoked {
+                user_id,
+                trigger: SessionRevokeTrigger::IdleTimeout,
+            },
+        ))
+    })
+    .await
+}
+
+// ── U19 — revoke all sessions / force logout (cycle I stage 2, amended
+//    stage 2b) ───────────────────────────────────────────────────────────
+//
+// Measured 2026-10-30: `revoke_all_for_user` (RP-initiated logout) was
+// silent; `revoke_all_for_user_except` (self-service "sign out other
+// sessions") appended the best-effort `auth.sessions.bulk_revoke_self`.
+// One event covers both surfaces now; that name is retired (`CHANGELOG`).
+//
+// RP-initiated logout can identify the user one of two ways — a validated
+// session, or `id_token_hint` alone — and the end-session handler is the
+// only place that knows which one ran. Only the session-backed path has a
+// provable actor, so (like U18) this command permits the system
+// principal, and gains the same two-entry-function split: no caller can
+// reach the unattributed path with an actor, or the attributed path
+// without one. Self-service always holds a validated session.
+
+static U19_SESSIONS_REVOKED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::AuthSessionsRevoked,
+    name: "auth.sessions.revoked",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Optional,
+    target: TargetRequirement::Required,
+    attributes: &[
+        AttributeSpec {
+            name: "trigger",
+            description: "`rp_initiated_logout` or `self_service`",
+            required: true,
+        },
+        AttributeSpec {
+            name: "count",
+            description: "number of sessions revoked",
+            required: true,
+        },
+        AttributeSpec {
+            name: "identified_by",
+            description: "how the user was identified: `session` or `id_token_hint`",
+            required: true,
+        },
+    ],
+};
+
+/// Which of [`U19_SESSIONS_REVOKED`]'s two surfaces revoked the sessions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionsRevokeTrigger {
+    /// RP-initiated OIDC logout (`GET /oidc/logout`), via
+    /// `sui_id_core::session::logout_user`.
+    RpInitiatedLogout,
+    /// The user's own "sign out other sessions" button.
+    SelfService,
+}
+
+impl SessionsRevokeTrigger {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::RpInitiatedLogout => "rp_initiated_logout",
+            Self::SelfService => "self_service",
+        }
+    }
+}
+
+/// How the identity behind a U19 revocation was established. A closed
+/// set, the same shape [`SessionsRevokeTrigger`] already gives `trigger` —
+/// so the distinction is in the row, not only in the actor column being
+/// empty.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionsIdentifiedBy {
+    /// A validated session: self-service, or RP-initiated logout via the
+    /// session-cookie fallback.
+    Session,
+    /// `id_token_hint` alone, with no session involved.
+    IdTokenHint,
+}
+
+impl SessionsIdentifiedBy {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Session => "session",
+            Self::IdTokenHint => "id_token_hint",
+        }
+    }
+}
+
+crate::declare_write_command! {
+    /// U19 — revoke all sessions for a user, with `auth.sessions.revoked`.
+    command U19 = "U19" {
+        system_principal: permitted;
+        enum U19Event {
+            Revoked { user_id: UserId, trigger: SessionsRevokeTrigger, count: usize, identified_by: SessionsIdentifiedBy } => &U19_SESSIONS_REVOKED,
+        }
+    }
+}
+
+impl SealedCommandEvent<U19> for U19Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Revoked { user_id, .. } = self;
+        Some(AuditTarget(user_id.to_string()))
+    }
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Revoked {
+            trigger,
+            count,
+            identified_by,
+            ..
+        } = self;
+        AuditAttributes::builder()
+            .attribute("trigger", trigger.as_str())
+            .attribute("count", count.to_string())
+            .attribute("identified_by", identified_by.as_str())
+            .build()
+    }
+}
+
+/// Run U19 for RP-initiated logout when identity was established by a
+/// validated session (the session-cookie fallback). The actor is
+/// `user_id`.
+pub async fn revoke_all_sessions_for_user_as_user(
+    db: &crate::Database,
+    user_id: UserId,
+    trigger: SessionsRevokeTrigger,
+    now: DateTime<Utc>,
+) -> StoreResult<crate::registry::Audited<usize>> {
+    let context = AuthorizedCommandContext::<U19>::for_authorized_actor(user_id, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, U19>| {
+        let count = crate::repos::sessions::revoke_all_for_user_within_tx(tx.tx(), user_id, now)?;
+        Ok((
+            count,
+            U19Event::Revoked {
+                user_id,
+                trigger,
+                count,
+                identified_by: SessionsIdentifiedBy::Session,
+            },
+        ))
+    })
+    .await
+}
+
+/// Run U19 for RP-initiated logout when identity was established by
+/// `id_token_hint` alone, with no session. The system principal —
+/// `identified_by` is fixed here, not a parameter, so no caller can reach
+/// an actor through this function (the same discipline U18's
+/// `revoke_session_idle_timeout` uses).
+pub async fn revoke_all_sessions_for_user_unattributed(
+    db: &crate::Database,
+    user_id: UserId,
+    trigger: SessionsRevokeTrigger,
+    now: DateTime<Utc>,
+) -> StoreResult<crate::registry::Audited<usize>> {
+    let context = AuthorizedCommandContext::<U19>::for_system_actor(None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, U19>| {
+        let count = crate::repos::sessions::revoke_all_for_user_within_tx(tx.tx(), user_id, now)?;
+        Ok((
+            count,
+            U19Event::Revoked {
+                user_id,
+                trigger,
+                count,
+                identified_by: SessionsIdentifiedBy::IdTokenHint,
+            },
+        ))
+    })
+    .await
+}
+
+/// Run U19 for the self-service "sign out other sessions" surface:
+/// revoke every session for `user_id` except `keep`. Unchanged from stage
+/// 2 — this caller always holds a validated `SessionContext`, so the
+/// actor is proven and `identified_by` is fixed to [`SessionsIdentifiedBy::Session`].
+pub async fn revoke_other_sessions_for_user(
+    db: &crate::Database,
+    user_id: UserId,
+    keep: SessionId,
+    trigger: SessionsRevokeTrigger,
+    now: DateTime<Utc>,
+) -> StoreResult<crate::registry::Audited<usize>> {
+    let context = AuthorizedCommandContext::<U19>::for_authorized_actor(user_id, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, U19>| {
+        let count = crate::repos::sessions::revoke_all_for_user_except_within_tx(
+            tx.tx(),
+            user_id,
+            keep,
+            now,
+        )?;
+        Ok((
+            count,
+            U19Event::Revoked {
+                user_id,
+                trigger,
+                count,
+                identified_by: SessionsIdentifiedBy::Session,
+            },
+        ))
     })
     .await
 }

@@ -179,21 +179,13 @@ pub async fn mfa_disable(
     {
         return Ok(redirect);
     }
+    // Cycle I stage 2, U13: `sui_id_core::mfa::disable` now commits the
+    // sealed `auth.mfa.factor_removed` command atomically with the
+    // removal; the best-effort `mfa.disable` append this handler used
+    // to make afterwards is gone — appending it too would double-record.
     sui_id_core::mfa::disable(&app.db, user_id)
         .await
         .map_err(HttpError::html)?;
-    let _ = sui_id_store::repos::audit::append(
-        &app.db,
-        &sui_id_store::models::AuditLogRow {
-            at: app.clock.now(),
-            actor: Some(user_id),
-            action: "mfa.disable".into(),
-            target: Some(user_id.to_string()),
-            result: "ok".into(),
-            note: Some("self".into()),
-        },
-    )
-    .await;
     Ok(Redirect::to("/me/security/mfa").into_response())
 }
 

@@ -232,23 +232,9 @@ pub async fn set_recovery_codes(
     .await
 }
 
-/// Disable TOTP for the user (delete the row entirely). Used by the
-/// admin "disable MFA" action and by the user's own profile page.
-pub async fn delete(db: &Database, user_id: UserId) -> StoreResult<()> {
-    db.with_conn(move |conn| {
-        let n = conn.execute(
-            "DELETE FROM user_totp WHERE user_id = ?1",
-            [user_id.to_string()],
-        )?;
-        if n == 0 {
-            return Err(StoreError::NotFound);
-        }
-        Ok(())
-    })
-    .await
-}
-
-/// Same mutation as [`delete`], for a caller that already holds a
+/// Same mutation as the pre-cycle-I-stage-2 `delete` (removed — its one
+/// caller, `authn::mfa::disable`, now goes through the sealed
+/// `commands::disable_totp`), for a caller that already holds a
 /// transaction (RFC 094 U07: the sealed Class-A capability). Returns
 /// `true` if a row was removed, `false` if the user had none — unlike
 /// [`delete`], absence is not an error here: "no TOTP enrollment to

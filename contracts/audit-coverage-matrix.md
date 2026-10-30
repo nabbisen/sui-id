@@ -304,45 +304,42 @@ L03; one with a second factor completes through L02 as `auth.mfa.success`.*
 
 ### Self-service MFA (`mfa.*`)
 
-Added 2026-09-09. These three have shipped and are referenced in the operator
-guides, but had **no row here** — the gate's prefix filter did not include `mfa.`,
-so neither direction of `check-audit-matrix.sh` could see them. The filter is
-widened; these rows are the backlog it immediately found. Class B until RFC 094
-converts them (U12 and the MFA enrolment/disable/regeneration item after it);
-today all three are fire-and-forget `let _ = audit::append(...)` in
-`http/handlers/me_security/mfa.rs`.
-
-| Event name | Trigger | Actor | Target | Note fields | Class |
-|---|---|---|---|---|---|
-| `mfa.disable` | User disables MFA (RFC 058 dangerous self-service action) | user id | — | — | B |
+Added 2026-09-09, backfilled because the gate's prefix filter did not include
+`mfa.` and neither direction of `check-audit-matrix.sh` could see these three.
+All three are now retired; this section is kept for the record, not because
+anything still lives here.
 
 *Changed 2026-09-17 (RFC 102 stage 1): mfa.enable and
 mfa.recovery_codes_regenerate are no longer written. TOTP enrolment (U12) and
 recovery-code regeneration (U14) now commit `auth.mfa.factor_added` atomically
-with the write; see* Step-up and factor additions *below.*
+with the write; see* Step-up and factor additions, removals and renames
+*below.*
+
+*Changed 2026-10-30 (cycle I stage 2): mfa.disable is no longer written. TOTP
+disable (U13) now commits `auth.mfa.factor_removed` (method `totp`) atomically
+with the removal, shared with passkey delete (U16); see* Step-up and factor
+additions, removals and renames *below.*
 
 ### Self-service passkeys (`webauthn.*`)
 
-Registered 2026-09-13 under G13-b. Both events have been emitted since the
-passkey self-service pages shipped, but the gate's namespace allowlist did not
-include `webauthn.`, so neither direction of `check-audit-matrix.sh` could see
-them — the blindness `mfa.` had until 2026-09-09. Class B: both are
-fire-and-forget `let _ = audit::append(...)` in
-`http/handlers/me_security/passkey.rs`, appended after the credential change
-has already committed.
-
-| Event name | Trigger | Actor | Target | Note fields | Class |
-|---|---|---|---|---|---|
-| `webauthn.credential.delete` | User deletes one of their passkeys (RFC 058 step-up gated) | user id | user id | `self` | B |
+Registered 2026-09-13 under G13-b, backfilled because the gate's namespace
+allowlist did not include `webauthn.` — the blindness `mfa.` had until
+2026-09-09. Both events are now retired; this section is kept for the record.
 
 *Changed 2026-09-17 (RFC 102 stage 1): webauthn.credential.register is no
 longer written. Passkey registration (U15) commits `auth.mfa.factor_added`
 atomically with the credential.*
 
-### Step-up and factor additions (RFC 102)
+*Changed 2026-10-30 (cycle I stage 2): webauthn.credential.delete is no longer
+written. Passkey delete (U16) now commits `auth.mfa.factor_removed` (method
+`webauthn`) atomically with the removal, shared with TOTP disable (U13); see*
+Step-up and factor additions, removals and renames *below.*
 
-Added 2026-09-17, RFC 102 stage 1; `auth.step_up.success` added in stage 6. All
-are Class A, committed through RFC 094's runner with the mutation they record.
+### Step-up and factor additions, removals and renames (RFC 102 / cycle I)
+
+Added 2026-09-17, RFC 102 stage 1; `auth.step_up.success` added in stage 6;
+the removal and rename rows added 2026-10-30, cycle I stage 2. All are Class
+A, committed through RFC 094's runner with the mutation they record.
 
 | Event name | Trigger | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
@@ -350,6 +347,22 @@ are Class A, committed through RFC 094's runner with the mutation they record.
 | `auth.step_up.failure` | A wrong step-up code, failed WebAuthn step-up assertion, or wrong password when adding a first second factor; counted on the session (command `L06`) | user id | user id | `count` | **A** |
 | `auth.step_up.session_revoked` | The fifth consecutive step-up failure on a session; that session is revoked in the same transaction (`L06`) | user id | user id | `count` | **A** |
 | `auth.mfa.factor_added` | A second factor was added: TOTP enrolment confirmed (`U12`), recovery codes regenerated (`U14`) or a passkey registered (`U15`) | user id | user id | `method` (`totp`, `recovery_codes`, `webauthn`) | **A** |
+| `auth.mfa.factor_removed` | A second factor was removed: TOTP disabled (`U13`) or a passkey deleted (`U16`) — shared the same way `auth.mfa.factor_added` is, so the two halves of each factor's lifecycle line up in the log. Recovery codes have no removal counterpart (only regenerated, `U14`) | user id | user id | `method` (`totp`, `webauthn`) | **A** |
+| `auth.mfa.factor_renamed` | A passkey's nickname was changed (`U17`). Previously emitted by nothing at all | user id | user id | `method` (always `webauthn` today) | **A** |
+
+### Session revocation (cycle I stage 2)
+
+Added 2026-10-30. Both are Class A, committed through RFC 094's runner with
+the mutation they record. `auth.session.revoked` permits the system
+principal (`system_principal: permitted`, like `U08`/`U22`) because one of
+its three call sites — idle-timeout auto-revoke, inside session resolution —
+has no human actor; the other two (self sign-out, self-service single-session
+revoke) do.
+
+| Event name | Trigger | Actor | Target | Note fields | Class |
+|---|---|---|---|---|---|
+| `auth.session.revoked` | One session revoked: by idle-timeout (`U18`), the operator's own sign-out, or the user's own self-service revoke | user id; none for idle-timeout | user id | `trigger` (`idle_timeout`, `self_signout`, `self_service`) | **A** |
+| `auth.sessions.revoked` | Every session for a user revoked at once: RP-initiated OIDC logout (`U19`) or the user's own "sign out other sessions" button. Retires the best-effort auth.sessions.bulk_revoke_self, which covered only the self-service surface | user id; none for RP-initiated logout carrying a usable `id_token_hint`, which is preferred over the session cookie | user id | `trigger` (`rp_initiated_logout`, `self_service`), `count`, `identified_by` (`session`, `id_token_hint`) | **A** |
 
 ### Server settings (`settings.*`)
 
@@ -447,7 +460,6 @@ Each row below was checked against its command's descriptor on this date.
 | `auth.mfa.failure` | Wrong second factor at sign-in, counted on the user (`L07`; note field `count`) | user id | **A** |
 | `auth.mfa.lockout` | Fifth consecutive wrong second factor: every pending-MFA row removed and the account locked with the password backoff (`L07`; note fields `count`, `locked_for_secs`) | user id | **A** |
 | `auth.lockout` | Account locked after crossing the failure threshold (`U22`; note fields `count`, `locked_for_secs`) | — | **A** |
-| `auth.sessions.bulk_revoke_self` | Bulk session revocation (self) | user id | B |
 | `auth.password.changed_self` | Self-service password change; note field `lockout_cleared=<count>` only when the change cleared a non-zero password failure count or a live password lock (RFC 118 D5; the second-factor lock and count are never cleared) | user id | **A** |
 | `auth.password.reset_requested` | Forgot-password flow started | — | B |
 | `auth.password.reset_email_sent` | Reset email dispatched | — | B |
@@ -456,6 +468,12 @@ Each row below was checked against its command's descriptor on this date.
 | `auth.password.reset_completed` | Password reset completed; note field `hibp=warned` when the new password is in a known breach and the HIBP mode is `warn` (RFC 115 D9), and `lockout_cleared=<count>` only when the reset cleared a non-zero password failure count or a live password lock (RFC 118 D5) | — | **A** |
 | `auth.refresh.rotated` | Refresh token rotated (the normal, routine case) | — | **A** |
 | `auth.refresh.theft_detected` | Replay of a rotated refresh token (family revoked) | — | **A** |
+
+*Changed 2026-10-30 (cycle I stage 2): auth.sessions.bulk_revoke_self (Class
+B, self-service "sign out other sessions" only) is retired. Revoking all
+sessions for a user — that surface and RP-initiated OIDC logout, which
+appended nothing — now both commit the Class-A `auth.sessions.revoked`; see*
+Session revocation *above.*
 
 ### Token introspection and revocation (`token.*`, RFC 7662 / RFC 7009)
 

@@ -182,4 +182,5 @@ mod recovery;
 mod refresh;
 mod registration_token;
 mod server_settings;
+mod sessions;
 mod user_admin;

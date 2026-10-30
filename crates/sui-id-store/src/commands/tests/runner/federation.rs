@@ -2301,9 +2301,11 @@ async fn f03_webauthn_invalidated_when_the_credential_is_deleted_after_the_candi
     )
     .await
     .unwrap();
-    repos::user_webauthn_credentials::delete(&db, credential_id, f.user_id)
-        .await
-        .expect("delete credential");
+    db.with_conn(move |conn| {
+        repos::user_webauthn_credentials::delete_within_tx(conn, credential_id, f.user_id)
+    })
+    .await
+    .expect("delete credential");
 
     let outcome = complete_federated_mfa(
         &db,

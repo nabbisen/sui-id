@@ -134,14 +134,18 @@ pub async fn confirm_enrollment(
     Ok(plain_codes)
 }
 
-/// Permanently disable TOTP for the user. The caller layer must ensure
-/// the actor is permitted to do so — either it's the user themselves or
-/// a sui-id administrator.
+/// Permanently disable TOTP for the user (cycle I stage 2, U13: the
+/// sealed `auth.mfa.factor_removed` command, `method = totp`). Today's
+/// only caller is the self-service `/me/security/mfa/disable` handler,
+/// measured 2026-10-30 — not an administrator path; nothing in `crates/`
+/// calls this for a user other than themselves.
 pub async fn disable(db: &Database, user_id: UserId) -> CoreResult<()> {
-    user_totp::delete(db, user_id).await.map_err(|e| match e {
-        sui_id_store::StoreError::NotFound => CoreError::NotFound,
-        other => CoreError::from(other),
-    })?;
+    sui_id_store::commands::disable_totp(db, user_id)
+        .await
+        .map_err(|e| match e {
+            sui_id_store::StoreError::NotFound => CoreError::NotFound,
+            other => CoreError::from(other),
+        })?;
     Ok(())
 }
 

@@ -8,7 +8,7 @@ use axum_extra::extract::cookie::CookieJar;
 use std::str::FromStr;
 use sui_id_core::errors::CoreError;
 use sui_id_shared::ids::SessionId;
-use sui_id_store::repos::{audit, sessions};
+use sui_id_store::repos::sessions;
 
 const SESSION_COOKIE: &str = "sui_id_session";
 
@@ -47,9 +47,18 @@ pub async fn revoke_one(
         return Ok(Redirect::to("/me/security?msg=unknown").into_response());
     }
 
-    sessions::revoke(&app.db, target_id)
-        .await
-        .map_err(|e| HttpError::html(e.into()))?;
+    // Cycle I stage 2, U18: the sealed `auth.session.revoked` command,
+    // `trigger = self_service` — previously silent on this path.
+    sui_id_store::commands::revoke_session(
+        &app.db,
+        user_id,
+        user_id,
+        target_id,
+        sui_id_store::commands::SessionRevokeTrigger::SelfService,
+        app.clock.now(),
+    )
+    .await
+    .map_err(|e| HttpError::html(e.into()))?;
 
     // If the user just revoked their *own* current session, clear
     // the cookie so the next request is clean. They'll bounce to
@@ -97,24 +106,20 @@ pub async fn revoke_all_others(
     let user_id = ctx.user_id;
     let keep = ctx.session_id;
 
-    let n = sessions::revoke_all_for_user_except(&app.db, user_id, keep)
-        .await
-        .map_err(|e| HttpError::html(e.into()))?;
-
-    // Audit: emit one row capturing how many sessions were swept.
-    // The action name follows the dotted naming used elsewhere.
-    let _ = audit::append(
+    // Cycle I stage 2, U19: the sealed `auth.sessions.revoked` command,
+    // `trigger = self_service`. Retires the best-effort
+    // `auth.sessions.bulk_revoke_self` this handler used to append
+    // separately after an unsealed store write.
+    let n = sui_id_store::commands::revoke_other_sessions_for_user(
         &app.db,
-        &sui_id_store::models::AuditLogRow {
-            at: app.clock.now(),
-            actor: Some(user_id),
-            action: "auth.sessions.bulk_revoke_self".into(),
-            target: Some(user_id.to_string()),
-            result: "ok".into(),
-            note: Some(format!("revoked {n} other session(s)")),
-        },
+        user_id,
+        keep,
+        sui_id_store::commands::SessionsRevokeTrigger::SelfService,
+        app.clock.now(),
     )
-    .await;
+    .await
+    .map_err(|e| HttpError::html(e.into()))?
+    .into_inner();
 
     let target = if n == 0 {
         "/me/security?msg=no_other_sessions"

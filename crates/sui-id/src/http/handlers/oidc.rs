@@ -704,6 +704,7 @@ pub async fn logout(
 ) -> Result<Response, HttpError> {
     let axum::extract::State(app) = state_ext;
     let mut user_id: Option<sui_id_shared::ids::UserId> = None;
+    let mut identified_by: Option<sui_id_store::commands::SessionsIdentifiedBy> = None;
     let mut hinted_client: Option<sui_id_shared::ids::ClientId> = None;
 
     // Prefer the id_token_hint when present.
@@ -714,6 +715,9 @@ pub async fn logout(
             sui_id_core::tokens::verify_id_token_cached(&app.caches, &app.clock, token, true).await
         {
             user_id = claims.sub.parse().ok();
+            if user_id.is_some() {
+                identified_by = Some(sui_id_store::commands::SessionsIdentifiedBy::IdTokenHint);
+            }
             hinted_client = claims.aud.parse().ok();
         } else {
             tracing::warn!("logout: id_token_hint failed signature verification");
@@ -731,12 +735,13 @@ pub async fn logout(
                 && let Ok(uid) = sui_id_core::session::resolve(&app.db, &app.clock, sid).await
             {
                 user_id = Some(uid);
+                identified_by = Some(sui_id_store::commands::SessionsIdentifiedBy::Session);
             }
         }
     }
 
-    if let Some(uid) = user_id {
-        sui_id_core::session::logout_user(&app.db, &app.clock, uid)
+    if let (Some(uid), Some(source)) = (user_id, identified_by) {
+        sui_id_core::session::logout_user(&app.db, &app.clock, uid, source)
             .await
             .map_err(HttpError::html)?;
     }

@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Disabling TOTP, deleting or renaming a passkey, and revoking a
+  session — one at a time or all at once — now leave an audit record,
+  committed atomically with the change.** Some of these left no record
+  at all before; others appended one best-effort, after the change had
+  already happened, under a name that did not line up with its
+  counterpart. **Three event names are retired**: `mfa.disable` and
+  `webauthn.credential.delete` are replaced by `auth.mfa.factor_removed`
+  (a `method` field says which factor); `auth.sessions.bulk_revoke_self`
+  is replaced by `auth.sessions.revoked`, which now also covers a
+  relying party signing a user out, not only the self-service "sign out
+  other sessions" button. **If you query, filter or alert on any of the
+  three retired names, those rules will stop matching after this
+  release** — update your tooling to the replacements above. A fourth
+  event, `auth.mfa.factor_renamed`, is new: passkey nicknames were
+  previously unrecorded when changed. A session revocation triggered by
+  a relying party is recorded **without an actor whenever the request
+  carries a usable `id_token_hint`** — that identifies the user by a
+  token rather than by a signed-in session, so the record does not
+  claim the user was present. An `identified_by` field says which of
+  the two identified them.
+
 - **Upgrading from an old database is now verified in automated testing,
   not assumed.** Every schema version this project has ever shipped —
   including the one historical shape left behind by a known-fixed

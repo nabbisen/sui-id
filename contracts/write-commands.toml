@@ -182,12 +182,14 @@ descriptor = ["MFA_FACTOR_ADDED"]
 id = "U13"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
+sealed = true
 owner = "TOTP disable"
-rationale = "re-measured 2026-10-30 (cycle I stage 1): today's only call site (`/me/security/mfa/disable`) appends `mfa.disable`, best-effort, in the HTTP handler -- not `auth.mfa.totp_disabled`, which nothing in `crates/` emits. Not yet corrected."
-mutation_surface = "`user_totp::delete`"
-files = ["crates/sui-id-store/src/repos/user_totp.rs"]
-test_id = "`a_u13_totp_disable`"
+rationale = "`auth.mfa.factor_removed` (method `totp`), shared with U16 -- the same shape `auth.mfa.factor_added` shares across U12/U14/U15. Sealed 2026-10-30 (cycle I stage 2), superseding the best-effort `mfa.disable` row."
+mutation_surface = "`commands::disable_totp` (via `authn::mfa::disable`)"
+files = ["crates/sui-id-store/src/commands.rs", "crates/sui-id-store/src/repos/user_totp.rs", "crates/sui-id-core/src/authn/mfa.rs", "crates/sui-id/src/http/handlers/me_security/mfa.rs"]
+test_id = "`u13_injected_failure_before_append_leaves_totp_enrolled`, `u13_against_a_user_with_no_totp_is_notfound_and_writes_no_record`"
+event = ["auth.mfa.factor_removed"]
+descriptor = ["MFA_FACTOR_REMOVED"]
 
 [[command]]
 id = "U14"
@@ -219,45 +221,53 @@ descriptor = ["MFA_FACTOR_ADDED"]
 id = "U16"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
+sealed = true
 owner = "Passkey delete"
-rationale = "re-measured 2026-10-30 (cycle I stage 1): today's only call site (`DELETE /me/security/passkeys/{id}`) appends `webauthn.credential.delete`, best-effort, in the HTTP handler -- not `auth.passkey.deleted`, which nothing in `crates/` emits. Not yet corrected."
-mutation_surface = "`user_webauthn_credentials::delete`"
-files = ["crates/sui-id-store/src/repos/user_webauthn_credentials.rs"]
-test_id = "`a_u16_passkey_delete`"
+rationale = "`auth.mfa.factor_removed` (method `webauthn`), shared with U13. Sealed 2026-10-30 (cycle I stage 2), superseding the best-effort `webauthn.credential.delete` row."
+mutation_surface = "`commands::delete_passkey` (via `authn::webauthn::delete`)"
+files = ["crates/sui-id-store/src/commands.rs", "crates/sui-id-store/src/repos/user_webauthn_credentials.rs", "crates/sui-id-core/src/authn/webauthn.rs", "crates/sui-id/src/http/handlers/me_security/passkey.rs"]
+test_id = "`u16_injected_failure_before_append_leaves_the_passkey_in_place`, `u16_against_a_nonexistent_credential_is_notfound_and_writes_no_record`"
+event = ["auth.mfa.factor_removed"]
+descriptor = ["MFA_FACTOR_REMOVED"]
 
 [[command]]
 id = "U17"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
+sealed = true
 owner = "Passkey rename"
-rationale = "re-measured 2026-10-30 (cycle I stage 1): no event is emitted on any path -- `auth.passkey.renamed` does not exist anywhere in `crates/`. Not yet corrected."
-mutation_surface = "`user_webauthn_credentials::update_nickname`"
-files = ["crates/sui-id-store/src/repos/user_webauthn_credentials.rs"]
-test_id = "`a_u17_passkey_rename`"
+rationale = "`auth.mfa.factor_renamed`. Sealed 2026-10-30 (cycle I stage 2) -- no event existed under any name before this; the handler called the repo's bare `UPDATE` directly, with no core-layer function."
+mutation_surface = "`commands::rename_passkey` (via the new `authn::webauthn::rename`)"
+files = ["crates/sui-id-store/src/commands.rs", "crates/sui-id-store/src/repos/user_webauthn_credentials.rs", "crates/sui-id-core/src/authn/webauthn.rs", "crates/sui-id/src/http/handlers/me_security/passkey.rs"]
+test_id = "`u17_injected_failure_before_append_leaves_the_nickname_unchanged`, `u17_against_a_nonexistent_credential_is_notfound_and_writes_no_record`"
+event = ["auth.mfa.factor_renamed"]
+descriptor = ["MFA_FACTOR_RENAMED"]
 
 [[command]]
 id = "U18"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
+sealed = true
 owner = "Revoke one session"
-rationale = "re-measured 2026-10-30 (cycle I stage 1): no event is emitted on any of its three call sites (idle-timeout auto-revoke, self sign-out, self-service single-session revoke) -- `auth.session.revoked` does not exist anywhere in `crates/`. Not yet corrected."
-mutation_surface = "`sessions::revoke`"
-files = ["crates/sui-id-store/src/repos/sessions.rs"]
-test_id = "`a_u18_session_one`"
+rationale = "`auth.session.revoked`, `trigger` attribute names which of the three call sites (`idle_timeout`, `self_signout`, `self_service`). Sealed 2026-10-30 (cycle I stage 2), superseding the best-effort (never-emitted) prior state. `system_principal: permitted`, like U08/U22 -- idle-timeout auto-revoke has no human actor; the other two do."
+mutation_surface = "`commands::revoke_session` (self sign-out, self-service), `commands::revoke_session_idle_timeout` (idle-timeout, system principal)"
+files = ["crates/sui-id-store/src/commands.rs", "crates/sui-id-store/src/repos/sessions.rs", "crates/sui-id-core/src/authn/session.rs", "crates/sui-id/src/http/handlers/me_security/sessions.rs", "crates/sui-id/src/http/handlers/admin/auth.rs"]
+test_id = "`u18_idle_timeout_injected_failure_before_append_leaves_session_live`, `u18_self_signout_and_self_service_record_their_own_trigger`"
+event = ["auth.session.revoked"]
+descriptor = ["U18_SESSION_REVOKED"]
 
 [[command]]
 id = "U19"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
+sealed = true
 owner = "Revoke user sessions / force logout"
-rationale = "re-measured 2026-10-30 (cycle I stage 1): `revoke_all_for_user` (RP-initiated logout) emits nothing; `revoke_all_for_user_except` (self-service \"sign out other sessions\") appends `auth.sessions.bulk_revoke_self`, best-effort -- neither is `auth.sessions.revoked`, which does not exist anywhere in `crates/`. Not yet corrected."
-mutation_surface = "`sessions::revoke_all_for_user`, `revoke_all_for_user_except`"
-files = ["crates/sui-id-store/src/repos/sessions.rs"]
-test_id = "`a_u19_sessions_all`"
+rationale = "`auth.sessions.revoked`, covering both surfaces (`trigger` = `rp_initiated_logout` or `self_service`, plus `count` and `identified_by`). Sealed 2026-10-30 (cycle I stage 2), superseding the best-effort `auth.sessions.bulk_revoke_self` row, which covered only the self-service surface. Amended 2026-10-30 (cycle I stage 2b): RP-initiated logout can identify the user by a validated session or by `id_token_hint` alone, and only the former has a provable actor, so `system_principal: permitted`, like U18, with the same two-entry-function split and an `identified_by` attribute recording which held."
+mutation_surface = "`commands::revoke_all_sessions_for_user_as_user` (RP-initiated logout via a validated session), `commands::revoke_all_sessions_for_user_unattributed` (RP-initiated logout via `id_token_hint` alone, system principal), `commands::revoke_other_sessions_for_user` (self-service)"
+files = ["crates/sui-id-store/src/commands.rs", "crates/sui-id-store/src/repos/sessions.rs", "crates/sui-id-core/src/authn/session.rs", "crates/sui-id/src/http/handlers/me_security/sessions.rs", "crates/sui-id/src/http/handlers/oidc.rs"]
+test_id = "`u19_rp_initiated_injected_failure_before_append_leaves_sessions_live`, `u19_rp_initiated_via_session_records_the_user_as_actor`, `u19_rp_initiated_via_id_token_hint_records_no_actor`, `u19_self_service_except_keeps_the_named_session_and_counts_the_rest`, `u19_with_no_other_sessions_counts_zero_and_still_records_the_attempt`"
+event = ["auth.sessions.revoked"]
+descriptor = ["U19_SESSIONS_REVOKED"]
 
 [[command]]
 id = "U20"

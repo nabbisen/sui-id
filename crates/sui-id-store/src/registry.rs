@@ -413,6 +413,26 @@ pub enum AuditEventKind {
     /// best-effort append followed a separate `smtp_config::upsert`
     /// commit before this stage.
     AuthSmtpConfigChanged,
+    /// `auth.mfa.factor_removed` — cycle I stage 2, U13 (TOTP disable)
+    /// and U16 (passkey delete), shared. Retires the best-effort
+    /// `mfa.disable` and `webauthn.credential.delete`, which each
+    /// recorded only one of the two factors this event now covers both
+    /// of, mirroring how `auth.mfa.factor_added` already covers three.
+    AuthMfaFactorRemoved,
+    /// `auth.mfa.factor_renamed` — cycle I stage 2, U17 (passkey
+    /// nickname change). Previously emitted by nothing at all.
+    AuthMfaFactorRenamed,
+    /// `auth.session.revoked` — cycle I stage 2, U18 (revoke one
+    /// session). Previously emitted by nothing at all, on any of its
+    /// three call sites (idle-timeout, self sign-out, self-service).
+    /// `system_principal: permitted` — the idle-timeout call site has no
+    /// human actor.
+    AuthSessionRevoked,
+    /// `auth.sessions.revoked` — cycle I stage 2, U19 (revoke all
+    /// sessions / force logout), both surfaces. Retires the best-effort
+    /// `auth.sessions.bulk_revoke_self`, which covered only the
+    /// self-service surface and not the RP-initiated-logout one.
+    AuthSessionsRevoked,
 }
 
 /// The registry entry for one [`AuditEventKind`]. `descriptor()` on a

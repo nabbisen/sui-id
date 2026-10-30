@@ -356,3 +356,253 @@ async fn u15_injected_failure_before_append_registers_no_passkey() {
     record_rollback_coverage("U15");
     record_exactly_once_coverage("U15");
 }
+
+// ── U13 — disable TOTP (cycle I stage 2) ─────────────────────────────────
+// `auth.mfa.factor_removed`, `method = totp`, shared with U16 (the same
+// shape `auth.mfa.factor_added` already shares across U12/U14/U15).
+
+#[tokio::test]
+async fn u13_injected_failure_before_append_leaves_totp_enrolled() {
+    let db = fresh_db();
+    let user = user_with_confirmed_totp(&db).await;
+    let before_audit = latest_audit_action(&db).await;
+
+    db.fault_injector().fail_before_next_append();
+    let result = disable_totp(&db, user).await;
+    assert!(result.is_err(), "injected failure must surface as Err");
+    assert!(
+        repos::user_totp::get(&db, user)
+            .await
+            .expect("get totp")
+            .is_some(),
+        "the disable rolled back: still enrolled"
+    );
+    assert_eq!(latest_audit_action(&db).await, before_audit, "no event");
+
+    // Control: the same call, with no failure injected, removes the
+    // enrolment and writes the event.
+    let before = audit_rows(&db).await;
+    disable_totp(&db, user).await.expect("the control succeeds");
+    assert!(
+        repos::user_totp::get(&db, user)
+            .await
+            .expect("get totp")
+            .is_none(),
+        "TOTP enrolment must be gone"
+    );
+    let tail = repos::audit::recent(&db, 1)
+        .await
+        .expect("audit tail")
+        .into_iter()
+        .next()
+        .expect("row");
+    assert_eq!(tail.action, "auth.mfa.factor_removed");
+    assert_eq!(
+        tail.note.as_deref(),
+        Some("method=totp"),
+        "the shared event must say which factor -- this is what tells U13 apart from U16"
+    );
+    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
+    record_rollback_coverage("U13");
+    record_exactly_once_coverage("U13");
+}
+
+#[tokio::test]
+async fn u13_against_a_user_with_no_totp_is_notfound_and_writes_no_record() {
+    let db = fresh_db();
+    let user = a_user();
+    repos::users::create(&db, &user).await.expect("create user");
+    let before = audit_rows(&db).await;
+
+    let result = disable_totp(&db, user.id).await;
+    match result {
+        Err(StoreError::NotFound) => {}
+        Ok(_) => {
+            panic!("disabling TOTP that was never enrolled must be NotFound, not a silent success")
+        }
+        Err(e) => panic!("expected NotFound, got a different error: {e}"),
+    }
+    assert_eq!(audit_rows(&db).await, before, "no event for a no-op");
+}
+
+// ── U16 — delete a passkey (cycle I stage 2) ─────────────────────────────
+// `auth.mfa.factor_removed`, `method = webauthn`.
+
+#[tokio::test]
+async fn u16_injected_failure_before_append_leaves_the_passkey_in_place() {
+    let db = fresh_db();
+    let user = a_user();
+    repos::users::create(&db, &user).await.expect("create user");
+    let credential_id = sui_id_shared::ids::WebauthnCredentialId::new();
+    repos::user_webauthn_credentials::create(
+        &db,
+        &crate::models::UserWebauthnCredentialRow {
+            id: credential_id,
+            user_id: user.id,
+            credential_id: b"cred-u16".to_vec(),
+            passkey_enc: b"sealed-passkey-placeholder".to_vec(),
+            nickname: "u16".into(),
+            created_at: Utc::now(),
+            last_used_at: None,
+        },
+        b"passkey-json-placeholder",
+    )
+    .await
+    .expect("seed passkey");
+    let before_audit = latest_audit_action(&db).await;
+
+    db.fault_injector().fail_before_next_append();
+    let result = delete_passkey(&db, user.id, credential_id).await;
+    assert!(result.is_err(), "injected failure must surface as Err");
+    assert_eq!(
+        repos::user_webauthn_credentials::list_for_user(&db, user.id)
+            .await
+            .expect("list passkeys")
+            .len(),
+        1,
+        "the delete rolled back: the passkey is still there"
+    );
+    assert_eq!(latest_audit_action(&db).await, before_audit, "no event");
+
+    // Control: the same call, with no failure injected, removes the
+    // passkey and writes the event.
+    let before = audit_rows(&db).await;
+    delete_passkey(&db, user.id, credential_id)
+        .await
+        .expect("the control succeeds");
+    assert!(
+        repos::user_webauthn_credentials::list_for_user(&db, user.id)
+            .await
+            .expect("list passkeys")
+            .is_empty(),
+        "the passkey must be gone"
+    );
+    let tail = repos::audit::recent(&db, 1)
+        .await
+        .expect("audit tail")
+        .into_iter()
+        .next()
+        .expect("row");
+    assert_eq!(tail.action, "auth.mfa.factor_removed");
+    assert_eq!(tail.note.as_deref(), Some("method=webauthn"));
+    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
+    record_rollback_coverage("U16");
+    record_exactly_once_coverage("U16");
+}
+
+#[tokio::test]
+async fn u16_against_a_nonexistent_credential_is_notfound_and_writes_no_record() {
+    let db = fresh_db();
+    let user = a_user();
+    repos::users::create(&db, &user).await.expect("create user");
+    let before = audit_rows(&db).await;
+
+    let result = delete_passkey(
+        &db,
+        user.id,
+        sui_id_shared::ids::WebauthnCredentialId::new(),
+    )
+    .await;
+    match result {
+        Err(StoreError::NotFound) => {}
+        Ok(_) => panic!("deleting a passkey that does not exist must be NotFound"),
+        Err(e) => panic!("expected NotFound, got a different error: {e}"),
+    }
+    assert_eq!(audit_rows(&db).await, before, "no event for a no-op");
+}
+
+// ── U17 — rename a passkey (cycle I stage 2) ─────────────────────────────
+// `auth.mfa.factor_renamed`. No event existed under any name before this
+// stage.
+
+#[tokio::test]
+async fn u17_injected_failure_before_append_leaves_the_nickname_unchanged() {
+    let db = fresh_db();
+    let user = a_user();
+    repos::users::create(&db, &user).await.expect("create user");
+    let credential_id = sui_id_shared::ids::WebauthnCredentialId::new();
+    repos::user_webauthn_credentials::create(
+        &db,
+        &crate::models::UserWebauthnCredentialRow {
+            id: credential_id,
+            user_id: user.id,
+            credential_id: b"cred-u17".to_vec(),
+            passkey_enc: b"sealed-passkey-placeholder".to_vec(),
+            nickname: "old nickname".into(),
+            created_at: Utc::now(),
+            last_used_at: None,
+        },
+        b"passkey-json-placeholder",
+    )
+    .await
+    .expect("seed passkey");
+    let before_audit = latest_audit_action(&db).await;
+
+    db.fault_injector().fail_before_next_append();
+    let result = rename_passkey(
+        &db,
+        user.id,
+        credential_id.to_string(),
+        "new nickname".to_string(),
+    )
+    .await;
+    assert!(result.is_err(), "injected failure must surface as Err");
+    let unchanged = repos::user_webauthn_credentials::list_for_user(&db, user.id)
+        .await
+        .expect("list passkeys");
+    assert_eq!(
+        unchanged[0].nickname, "old nickname",
+        "the rename rolled back: the old nickname is still there"
+    );
+    assert_eq!(latest_audit_action(&db).await, before_audit, "no event");
+
+    // Control: the same call, with no failure injected, renames the
+    // passkey and writes the event.
+    let before = audit_rows(&db).await;
+    rename_passkey(
+        &db,
+        user.id,
+        credential_id.to_string(),
+        "new nickname".to_string(),
+    )
+    .await
+    .expect("the control succeeds");
+    let renamed = repos::user_webauthn_credentials::list_for_user(&db, user.id)
+        .await
+        .expect("list passkeys");
+    assert_eq!(renamed[0].nickname, "new nickname");
+    let tail = repos::audit::recent(&db, 1)
+        .await
+        .expect("audit tail")
+        .into_iter()
+        .next()
+        .expect("row");
+    assert_eq!(tail.action, "auth.mfa.factor_renamed");
+    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
+    record_rollback_coverage("U17");
+    record_exactly_once_coverage("U17");
+}
+
+#[tokio::test]
+async fn u17_against_a_nonexistent_credential_is_notfound_and_writes_no_record() {
+    let db = fresh_db();
+    let user = a_user();
+    repos::users::create(&db, &user).await.expect("create user");
+    let before = audit_rows(&db).await;
+
+    let result = rename_passkey(
+        &db,
+        user.id,
+        sui_id_shared::ids::WebauthnCredentialId::new().to_string(),
+        "new nickname".to_string(),
+    )
+    .await;
+    match result {
+        Err(StoreError::NotFound) => {}
+        Ok(_) => {
+            panic!("renaming a passkey that does not exist must be NotFound, not a silent no-op")
+        }
+        Err(e) => panic!("expected NotFound, got a different error: {e}"),
+    }
+    assert_eq!(audit_rows(&db).await, before, "no event for a no-op");
+}

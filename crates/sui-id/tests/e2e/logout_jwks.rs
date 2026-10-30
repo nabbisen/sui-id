@@ -397,3 +397,131 @@ async fn delete_retired_signing_key_drops_it_from_jwks() {
         "retired+deleted key must be gone"
     );
 }
+
+/// Cycle I stage 2b: `auth.sessions.revoked` records an actor only when a
+/// validated session proved who was there.
+///
+/// The distinction lives in two constants in the `/oauth2/logout` handler,
+/// and the store-level tests exercise the two entry functions directly —
+/// so they cannot see the handler picking the wrong one. Swapping those two
+/// constants left the entire workspace suite green, which is what these two
+/// tests exist to stop.
+async fn last_sessions_revoked(state: &sui_id::AppState) -> sui_id_store::models::AuditLogRow {
+    sui_id_store::repos::audit::recent(&state.db, 50)
+        .await
+        .expect("audit list")
+        .into_iter()
+        .find(|r| r.action == "auth.sessions.revoked")
+        .expect("an auth.sessions.revoked row")
+}
+
+#[tokio::test]
+async fn logout_identified_by_the_session_cookie_records_the_user_as_actor() {
+    let state = test_app();
+    let session = complete_setup_and_login(&state).await;
+    let user = sui_id_store::repos::users::find_by_username(&state.db, USERNAME)
+        .await
+        .expect("find user");
+
+    // No id_token_hint: the cookie fallback is the only thing that can
+    // identify the user, and it is validated by `session::resolve`.
+    let router = build_router(state.clone());
+    let req = Request::builder()
+        .method(Method::GET)
+        .uri("/oauth2/logout")
+        .header(header::COOKIE, format!("sui_id_session={session}"))
+        .body(Body::empty())
+        .expect("req");
+    router.oneshot(req).await.expect("logout");
+
+    let row = last_sessions_revoked(&state).await;
+    assert_eq!(
+        row.actor,
+        Some(user.id),
+        "a validated session proves who was there, so the actor is recorded"
+    );
+    assert!(
+        row.note
+            .as_deref()
+            .unwrap_or("")
+            .contains("identified_by=session"),
+        "note must say the identity came from a session: {:?}",
+        row.note
+    );
+}
+
+#[tokio::test]
+async fn logout_identified_by_an_id_token_hint_records_no_actor() {
+    let state = test_app();
+    let session = complete_setup_and_login(&state).await;
+    let (client_id, client_secret) = create_client(&state, &session).await;
+
+    // Drive an authorization to obtain a real id_token.
+    let (verifier, challenge) = pkce_pair();
+    let auth_url = format!(
+        "/oauth2/authorize?client_id={client_id}&redirect_uri=https%3A%2F%2Frp.test%2Fcb\
+         &response_type=code&scope=openid&code_challenge={challenge}&code_challenge_method=S256"
+    );
+    let router = build_router(state.clone());
+    let req = Request::builder()
+        .method(Method::GET)
+        .uri(&auth_url)
+        .header(header::COOKIE, format!("sui_id_session={session}"))
+        .body(Body::empty())
+        .expect("req");
+    let resp = router.oneshot(req).await.expect("authorize");
+    let location = resp
+        .headers()
+        .get(header::LOCATION)
+        .and_then(|v| v.to_str().ok())
+        .expect("redirect to the RP")
+        .to_owned();
+    let code = Url::parse(&location)
+        .expect("url")
+        .query_pairs()
+        .find(|(k, _)| k == "code")
+        .map(|(_, v)| v.into_owned())
+        .expect("code");
+
+    let body = format!(
+        "grant_type=authorization_code&code={code}&redirect_uri=https%3A%2F%2Frp.test%2Fcb\
+         &client_id={client_id}&client_secret={client_secret}&code_verifier={verifier}"
+    );
+    let router = build_router(state.clone());
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri("/oauth2/token")
+        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .body(Body::from(body))
+        .expect("req");
+    let resp = router.oneshot(req).await.expect("token");
+    let body_bytes = read_body(resp.into_body()).await;
+    let json: serde_json::Value = serde_json::from_slice(&body_bytes).expect("json");
+    let id_token = json["id_token"].as_str().expect("id_token").to_owned();
+
+    // The hint is preferred over the cookie, so this is the unattributed
+    // path even though a session cookie is also presented.
+    let logout_url = format!("/oauth2/logout?id_token_hint={}", utf8_encode(&id_token));
+    let router = build_router(state.clone());
+    let req = Request::builder()
+        .method(Method::GET)
+        .uri(&logout_url)
+        .header(header::COOKIE, format!("sui_id_session={session}"))
+        .body(Body::empty())
+        .expect("req");
+    router.oneshot(req).await.expect("logout");
+
+    let row = last_sessions_revoked(&state).await;
+    assert_eq!(
+        row.actor, None,
+        "identity came from a token, not a validated session, so no actor is recorded"
+    );
+    assert!(
+        row.note
+            .as_deref()
+            .unwrap_or("")
+            .contains("identified_by=id_token_hint"),
+        "note must say the identity came from the hint: {:?}",
+        row.note
+    );
+}

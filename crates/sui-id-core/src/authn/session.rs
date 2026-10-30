@@ -327,8 +327,12 @@ pub async fn resolve(db: &Database, clock: &SharedClock, id: SessionId) -> CoreR
                 // Past idle window: revoke and refuse. The revoke
                 // is best-effort; if it fails, the next request
                 // for the same id will simply re-evaluate and
-                // reach the same conclusion.
-                let _ = sessions::revoke(db, id).await;
+                // reach the same conclusion. Cycle I stage 2, U18:
+                // the system principal, not a human actor —
+                // `auth.session.revoked`, `trigger = idle_timeout`.
+                let _ =
+                    sui_id_store::commands::revoke_session_idle_timeout(db, row.user_id, id, now)
+                        .await;
                 return Err(CoreError::Unauthenticated);
             }
         }
@@ -372,17 +376,68 @@ pub async fn touch_last_used(db: &Database, clock: &SharedClock, id: SessionId) 
 /// reflect actual usage).
 pub const LAST_USED_AT_THROTTLE_SECS: i64 = 60;
 
+/// The operator's own sign-out (cycle I stage 2, U18: the sealed
+/// `auth.session.revoked` command, `trigger = self_signout`). The
+/// session id comes from the cookie, not a validated session context —
+/// a session already gone (expired, or already revoked) is tolerated
+/// silently, matching this function's pre-conversion behaviour exactly.
 pub async fn logout(db: &Database, id: SessionId) -> CoreResult<()> {
-    sessions::revoke(db, id).await?;
+    let row = match sessions::get(db, id).await {
+        Ok(r) => r,
+        Err(sui_id_store::StoreError::NotFound) => return Ok(()),
+        Err(other) => return Err(other.into()),
+    };
+    sui_id_store::commands::revoke_session(
+        db,
+        row.user_id,
+        row.user_id,
+        id,
+        sui_id_store::commands::SessionRevokeTrigger::SelfSignout,
+        chrono::Utc::now(),
+    )
+    .await?;
     Ok(())
 }
 
 /// End a user's RP-facing session. Revokes the named session and **all**
 /// outstanding refresh tokens for that user. Used by RP-initiated logout
 /// where we want a clean slate, not just one expired cookie.
-pub async fn logout_user(db: &Database, clock: &SharedClock, user_id: UserId) -> CoreResult<()> {
-    let _ = clock; // signature kept symmetric with other lifecycle fns
-    sessions::revoke_all_for_user(db, user_id).await?;
+///
+/// Cycle I stage 2, U19: the session revocation is now the sealed
+/// `auth.sessions.revoked` command, `trigger = rp_initiated_logout`. The
+/// refresh-token revocation stays as it was — a separate write, outside
+/// this row's scope (stage plan, cycle-i-conversion-stage-plan), still
+/// run after the session revoke commits, exactly as before this stage.
+///
+/// Stage 2b: the caller is the only one who knows whether `user_id` was
+/// established by a validated session or by `id_token_hint` alone, so it
+/// passes `identified_by` and this calls the matching U19 entry function.
+pub async fn logout_user(
+    db: &Database,
+    clock: &SharedClock,
+    user_id: UserId,
+    identified_by: sui_id_store::commands::SessionsIdentifiedBy,
+) -> CoreResult<()> {
+    match identified_by {
+        sui_id_store::commands::SessionsIdentifiedBy::Session => {
+            sui_id_store::commands::revoke_all_sessions_for_user_as_user(
+                db,
+                user_id,
+                sui_id_store::commands::SessionsRevokeTrigger::RpInitiatedLogout,
+                clock.now(),
+            )
+            .await?;
+        }
+        sui_id_store::commands::SessionsIdentifiedBy::IdTokenHint => {
+            sui_id_store::commands::revoke_all_sessions_for_user_unattributed(
+                db,
+                user_id,
+                sui_id_store::commands::SessionsRevokeTrigger::RpInitiatedLogout,
+                clock.now(),
+            )
+            .await?;
+        }
+    }
     sui_id_store::repos::refresh_tokens::revoke_all_for_user(db, user_id).await?;
     Ok(())
 }

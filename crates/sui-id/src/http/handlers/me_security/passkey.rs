@@ -81,11 +81,11 @@ pub async fn passkey_rename_post(
             "nickname must be 1–64 characters".into(),
         )));
     }
-    sui_id_store::repos::user_webauthn_credentials::update_nickname(
-        &app.db, &cred_id, user_id, new_name,
-    )
-    .await
-    .map_err(|e| HttpError::html(CoreError::from(e)))?;
+    // Cycle I stage 2, U17: the sealed `auth.mfa.factor_renamed` command
+    // — previously nothing appended here under any name.
+    sui_id_core::webauthn::rename(&app.db, user_id, cred_id, new_name.to_owned())
+        .await
+        .map_err(HttpError::html)?;
     Ok(Redirect::to("/me/security/passkeys").into_response())
 }
 
@@ -216,20 +216,12 @@ pub async fn passkey_delete(
     let id = cred_id
         .parse::<sui_id_shared::ids::WebauthnCredentialId>()
         .map_err(|_| HttpError::html(CoreError::BadRequest("invalid credential id".into())))?;
+    // Cycle I stage 2, U16: `sui_id_core::webauthn::delete` now commits
+    // the sealed `auth.mfa.factor_removed` command atomically with the
+    // removal; the best-effort `webauthn.credential.delete` append this
+    // handler used to make afterwards is gone.
     sui_id_core::webauthn::delete(&app.db, user_id, id)
         .await
         .map_err(HttpError::html)?;
-    let _ = sui_id_store::repos::audit::append(
-        &app.db,
-        &sui_id_store::models::AuditLogRow {
-            at: app.clock.now(),
-            actor: Some(user_id),
-            action: "webauthn.credential.delete".into(),
-            target: Some(user_id.to_string()),
-            result: "ok".into(),
-            note: Some("self".into()),
-        },
-    )
-    .await;
     Ok(Redirect::to("/me/security/passkeys").into_response())
 }

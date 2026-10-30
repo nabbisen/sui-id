@@ -327,12 +327,33 @@ pub async fn list_for_user(
         .collect())
 }
 
+/// Delete a passkey (cycle I stage 2, U16: the sealed
+/// `auth.mfa.factor_removed` command, `method = webauthn`).
 pub async fn delete(
     db: &Database,
     user_id: UserId,
     credential_id: WebauthnCredentialId,
 ) -> CoreResult<()> {
-    user_webauthn_credentials::delete(db, credential_id, user_id)
+    sui_id_store::commands::delete_passkey(db, user_id, credential_id)
+        .await
+        .map_err(|e| match e {
+            sui_id_store::StoreError::NotFound => CoreError::NotFound,
+            other => CoreError::from(other),
+        })?;
+    Ok(())
+}
+
+/// Rename a passkey (cycle I stage 2, U17: the sealed
+/// `auth.mfa.factor_renamed` command). Added this stage — no core-layer
+/// function existed before it; the handler called the repo's bare
+/// `UPDATE` directly, with no audit coverage under any name.
+pub async fn rename(
+    db: &Database,
+    user_id: UserId,
+    credential_id: String,
+    new_nickname: String,
+) -> CoreResult<()> {
+    sui_id_store::commands::rename_passkey(db, user_id, credential_id, new_nickname)
         .await
         .map_err(|e| match e {
             sui_id_store::StoreError::NotFound => CoreError::NotFound,

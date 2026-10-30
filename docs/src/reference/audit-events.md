@@ -26,7 +26,8 @@ Use **Admin panel → Audit log** to filter by event prefix or export to CSV.
 | `auth.password.reset_completed` | Password reset | Password was successfully changed via a reset link. The note records `origin=` — `email` (the forgot-password flow), `web` (issued by an administrator) or `cli` (issued by the operator). When the new password appears in a known breach and the breach check is in `warn` mode, the reset is allowed and the note also carries `hibp=warned`. When the reset cleared a non-zero password failure count or a live password lock, the note carries `lockout_cleared=` with the count it cleared. |
 | `auth.refresh.rotated` | Refresh token rotated | A refresh token was exchanged for a fresh access/refresh token pair (the normal, routine case). |
 | `auth.refresh.theft_detected` | Token theft detected | A refresh token was presented that had already been rotated, indicating a possible token theft. The entire token family is revoked. |
-| `auth.sessions.bulk_revoke_self` | All other sessions revoked | User revoked all sessions except the current one. |
+| `auth.session.revoked` | Session revoked | One session was revoked: by idle-timeout, the operator's own sign-out, or the user's own self-service revoke. Note field `trigger` (`idle_timeout`, `self_signout`, `self_service`). |
+| `auth.sessions.revoked` | All sessions revoked | Every session for a user was revoked at once: RP-initiated OIDC logout (**no actor** whenever the request carried a usable `id_token_hint` — that is preferred over the session cookie, so a token identifies the user even when they also have one; the user when a signed-in session is what identified them), or the user's own "sign out other sessions" button (always the user). Note fields `trigger` (`rp_initiated_logout`, `self_service`), `count` and `identified_by` (`session`, `id_token_hint`). |
 | `auth.smtp_config.changed` | SMTP config changed | Administrator saved new SMTP settings. |
 
 ## User management events
@@ -186,9 +187,9 @@ longer written.
 
 | Event name | Label | Description |
 |---|---|---|
-| `mfa.disable` | — | User turned off MFA from `/me/security/mfa`, a dangerous self-service action (RFC 058). |
-| `webauthn.credential.delete` | — | User deleted one of their passkeys. Step-up authentication is required first (RFC 058). |
 | `auth.mfa.factor_added` | — | User added a second factor: TOTP enrolment, fresh recovery codes, or a passkey. The `method` attribute says which. Recorded in the same transaction as the change. |
+| `auth.mfa.factor_removed` | — | User removed a second factor: TOTP disabled, or a passkey deleted. The `method` attribute says which (`totp` or `webauthn`). Recorded in the same transaction as the change. |
+| `auth.mfa.factor_renamed` | — | User renamed a passkey's nickname. |
 | `auth.step_up.success` | — | A step-up re-authentication succeeded on a signed-in session. `method` is `totp` or `webauthn`; `gate` is the page the step-up was for (truncated to 256 bytes). Recorded in the same transaction as the session's new freshness. |
 | `auth.step_up.failure` | — | A step-up re-authentication failed on a signed-in session (wrong code, failed passkey assertion, or wrong password when adding a first second factor). The `count` attribute is the run of consecutive failures on that session. |
 | `auth.step_up.session_revoked` | — | The fifth consecutive step-up failure on a session; that session was revoked. **Alert on this.** |
@@ -240,3 +241,15 @@ appear in an existing audit log, and this section is where to look one up.
   password directly. That operation was removed: an administrator issues a
   recovery link (`user.recovery_link.issued`) and the user chooses their own
   password.
+- `mfa.disable` — retired by cycle I stage 2 (2026-10-30). User turned off
+  MFA from `/me/security/mfa`. Replaced by `auth.mfa.factor_removed`
+  (`method=totp`), now recorded atomically with the removal rather than
+  best-effort afterwards.
+- `webauthn.credential.delete` — retired by cycle I stage 2 (2026-10-30).
+  User deleted a passkey. Replaced by `auth.mfa.factor_removed`
+  (`method=webauthn`), shared with `mfa.disable`'s replacement so the two
+  factors' removal lines up in the log the way their addition already did.
+- `auth.sessions.bulk_revoke_self` — retired by cycle I stage 2 (2026-10-30).
+  User revoked all sessions except the current one. Replaced by
+  `auth.sessions.revoked`, which also covers the RP-initiated-logout surface
+  this event never did.

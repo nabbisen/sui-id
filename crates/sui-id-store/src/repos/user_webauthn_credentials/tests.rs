@@ -96,7 +96,9 @@ async fn current_passkey_enc_within_tx_returns_none_after_the_credential_is_dele
     let row = credential_row(user_id, 2);
     let id = row.id;
     create(&db, &row, b"plaintext").await.unwrap();
-    delete(&db, id, user_id).await.unwrap();
+    db.with_conn(move |conn| delete_within_tx(conn, id, user_id))
+        .await
+        .unwrap();
 
     let found = db
         .with_conn(move |conn| current_passkey_enc_within_tx(conn, id))

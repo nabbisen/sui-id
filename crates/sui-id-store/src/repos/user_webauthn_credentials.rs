@@ -268,24 +268,10 @@ pub fn swap_passkey_within_tx(
     Ok(())
 }
 
-pub async fn delete(db: &Database, id: WebauthnCredentialId, user_id: UserId) -> StoreResult<()> {
-    // Scoped to user_id so a stray id can't delete another user's
-    // credential even via a server-side path.
-    db.with_conn(move |conn| {
-        let n = conn.execute(
-            "DELETE FROM user_webauthn_credentials WHERE id = ?1 AND user_id = ?2",
-            params![id.to_string(), user_id.to_string()],
-        )?;
-        if n == 0 {
-            return Err(StoreError::NotFound);
-        }
-        Ok(())
-    })
-    .await
-}
-
-/// Same as [`delete`], for a caller that already holds a transaction
-/// (RFC 094 U07: the sealed Class-A capability). Unlike
+/// Same mutation as the pre-cycle-I-stage-2 `delete` (removed — its one
+/// caller, `authn::webauthn::delete`, now goes through the sealed
+/// `commands::delete_passkey`), for a caller that already holds a
+/// transaction (RFC 094 U07: the sealed Class-A capability). Unlike
 /// [`user_totp::delete_within_tx`](super::user_totp::delete_within_tx),
 /// `NotFound` here stays an error: every id this is called with comes
 /// from [`list_for_user_within_tx`] read inside the same transaction, so
@@ -336,26 +322,29 @@ pub fn reseal_all(
     Ok(count)
 }
 
-/// Rename a passkey credential (RFC 040). The `user_id` predicate
-/// ensures a user can only rename their own credentials.
-pub async fn update_nickname(
-    db: &Database,
+/// Rename a passkey credential (RFC 040) inside a caller-owned
+/// transaction (cycle I stage 2, U17: the sealed `auth.mfa.factor_renamed`
+/// command). The `user_id` predicate ensures a user can only rename their
+/// own credentials. Unlike the pre-conversion bare `UPDATE` this replaces,
+/// a row count of zero is `NotFound` rather than a silent no-op — sealing
+/// adds the check rather than carrying forward a success report for a
+/// credential id that does not exist or belongs to someone else.
+pub fn update_nickname_within_tx(
+    tx: &rusqlite::Transaction<'_>,
     credential_id: &str,
     user_id: UserId,
     new_nickname: &str,
 ) -> StoreResult<()> {
-    let cid = credential_id.to_string();
-    let nick = new_nickname.to_string();
-    db.with_conn(move |conn| {
-        conn.execute(
-            "UPDATE user_webauthn_credentials \
-             SET nickname = ?1 \
-             WHERE id = ?2 AND user_id = ?3",
-            rusqlite::params![nick, cid, user_id.to_string()],
-        )?;
-        Ok(())
-    })
-    .await
+    let n = tx.execute(
+        "UPDATE user_webauthn_credentials \
+         SET nickname = ?1 \
+         WHERE id = ?2 AND user_id = ?3",
+        rusqlite::params![new_nickname, credential_id, user_id.to_string()],
+    )?;
+    if n == 0 {
+        return Err(StoreError::NotFound);
+    }
+    Ok(())
 }
 
 #[cfg(test)]
