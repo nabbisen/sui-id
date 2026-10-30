@@ -13,14 +13,36 @@
 > under `.github/SECURITY.md`, because it describes operations in
 > released versions that leave no audit record.
 >
-> **Stage 1 is a measurement and converts nothing** —
+> **Stage 1 LANDED** `ac268ba`, 2026-10-30 (CI 17 success / 0 failed /
+> 11 skipped of 28; documentation-only scope). It converted nothing, by
+> design — the measurement is the deliverable, and the eleven rows'
+> `rationale` fields now record what each one actually emits instead of
+> an event name the inventory assumed. Review —
+> `.git-exclude/reviewed/cycle-i-stage1-audit-census-2026-10-30.md`;
+> accepted unchanged, every cell independently re-measured.
+>
+> **The conversions are planned in four more stages** —
+> `.git-exclude/staging/cycle-i-conversion-stage-plan-2026-10-30.md`,
+> split by the question each family shares rather than by row count.
+> Two cross-cutting decisions are taken there before any row is
+> converted: the event-naming scheme follows the precedent already in
+> the tree (`auth.mfa.factor_added` is **one** event shared by three
+> commands, so its removal counterpart is one event too, not two), and
+> S10 becomes a sealed command rather than choosing between a
+> propagating append that can fail after the work has committed and a
+> best-effort one that can lose the record of the most privileged
+> operation the system performs. **Stage 2 is dispatched** —
+> `.git-exclude/staging/cycle-i-stage2-mfa-and-sessions-2026-10-30.md`,
+> five rows, one retired event name.
+>
+> Stage 1's dispatch was
 > `.git-exclude/staging/cycle-i-stage1-the-audit-census-2026-10-29.md`,
-> held outside git for the same reason. Its deliverable is one table of
-> eleven rows: what each one actually emits today, the append's shape,
-> and whether the inventory's declared name is right. The census
-> established that the declared and emitted name sets are **disjoint**
-> for these rows, and no gate notices, because G13 checks the matrix
-> against names that exist in source.
+> held outside git for the same reason the census is. What it measured,
+> and what makes the rest of the cycle necessary: the inventory's
+> declared event names and the names the code emits are **disjoint**
+> for these rows, and no gate notices, because G13 checks the coverage
+> matrix against names that do exist in source — a declared-but-unbuilt
+> name is invisible to it.
 >
 > **Three things must land before the cut**, and two of them are
 > `@nabbisen`'s own:
