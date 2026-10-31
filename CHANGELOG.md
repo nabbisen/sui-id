@@ -30,6 +30,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   claim the user was present. An `identified_by` field says which of
   the two identified them.
 
+- **Revoking an application's access, granting or changing consent, and
+  issuing a registration token now leave an audit record, committed
+  atomically with the change.** None of these three left any record
+  before. A revoke that finds nothing to revoke — a double-submit, or a
+  stale page — still returns you to the page as it always did, and now
+  writes no record, so the log never shows a revocation that did not
+  happen. Granting consent records whether it was a first approval or a
+  change to an application's previously granted scopes.
+
 - **Upgrading from an old database is now verified in automated testing,
   not assumed.** Every schema version this project has ever shipped —
   including the one historical shape left behind by a known-fixed

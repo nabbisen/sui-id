@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use sui_id_shared::ids::{ClientId, UserId};
 
 use crate::db::Database;
-use crate::errors::StoreResult;
+use crate::errors::{StoreError, StoreResult};
 use crate::models::UserConsentRow;
 
 fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<UserConsentRow> {
@@ -67,43 +67,39 @@ pub async fn list_for_user(db: &Database, user_id: UserId) -> StoreResult<Vec<Co
     .await
 }
 
-/// RFC 072: revoke a consent grant and all active refresh tokens for the
-/// same `(user_id, client_id)` in a single atomic transaction.
-/// The security-critical invariant: revoking the grant without invalidating
-/// the refresh tokens would leave the app able to mint access tokens
-/// indefinitely.
-pub async fn revoke_with_tokens(
-    db: &Database,
+/// RFC 072, amended RFC 094 U20: revoke a consent grant and all refresh
+/// tokens for the same `(user_id, client_id)`, inside the caller's own
+/// transaction — `commands::revoke_consent` (U20) is the only sealed
+/// caller, which brings its own transaction rather than this function's
+/// former `BEGIN`/`COMMIT`/`ROLLBACK` (a sealed command cannot nest one
+/// transaction inside another).
+///
+/// Refresh tokens first, consent second — the security-critical
+/// invariant this always enforced: revoking the grant without
+/// invalidating the refresh tokens would leave the app able to mint
+/// access tokens indefinitely. **Zero `refresh_tokens` rows is normal**
+/// (the user may hold none); **zero `user_consent` rows means there was
+/// no grant to revoke**, which is `NotFound`, not a silent no-op — U17's
+/// lesson, applied only to the row that actually means "nothing to do."
+pub fn revoke_with_tokens_within_tx(
+    conn: &rusqlite::Connection,
     user_id: UserId,
     client_id: ClientId,
 ) -> StoreResult<()> {
     let uid = user_id.to_string();
     let cid = client_id.to_string();
-    db.with_conn(move |conn| {
-        conn.execute_batch("BEGIN")?;
-        let r = (|| -> rusqlite::Result<()> {
-            conn.execute(
-                "DELETE FROM refresh_tokens WHERE user_id = ?1 AND client_id = ?2",
-                rusqlite::params![uid.clone(), cid.clone()],
-            )?;
-            conn.execute(
-                "DELETE FROM user_consent WHERE user_id = ?1 AND client_id = ?2",
-                rusqlite::params![uid, cid],
-            )?;
-            Ok(())
-        })();
-        match r {
-            Ok(_) => {
-                conn.execute_batch("COMMIT")?;
-                Ok(())
-            }
-            Err(e) => {
-                let _ = conn.execute_batch("ROLLBACK");
-                Err(e.into())
-            }
-        }
-    })
-    .await
+    conn.execute(
+        "DELETE FROM refresh_tokens WHERE user_id = ?1 AND client_id = ?2",
+        rusqlite::params![uid.clone(), cid.clone()],
+    )?;
+    let n = conn.execute(
+        "DELETE FROM user_consent WHERE user_id = ?1 AND client_id = ?2",
+        rusqlite::params![uid, cid],
+    )?;
+    if n == 0 {
+        return Err(StoreError::NotFound);
+    }
+    Ok(())
 }
 
 /// RFC 072: set `last_used_at = now()` for a grant after a successful
@@ -153,34 +149,65 @@ pub async fn get(
     .await
 }
 
-/// Upsert a consent grant.
+/// Whether a [`upsert_within_tx`] call found no existing grant (a first
+/// approval) or replaced one (the user already had a grant for this
+/// client, and this call changed its scopes or merely re-dated it). RFC
+/// 094 U21: a first grant and a scope change to an existing grant are
+/// different facts an operator reading a consent audit cares about.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConsentGrantOutcome {
+    Granted,
+    Updated,
+}
+
+impl ConsentGrantOutcome {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Granted => "granted",
+            Self::Updated => "updated",
+        }
+    }
+}
+
+/// Upsert a consent grant, inside the caller's own transaction
+/// (`commands::grant_consent`, U21, is the only sealed caller).
 ///
 /// If a row already exists for `(user_id, client_id)`, replace
-/// `granted_scopes` with the new value.
-pub async fn upsert(
-    db: &Database,
+/// `granted_scopes` with the new value. Reports which happened: `INSERT
+/// ... ON CONFLICT DO UPDATE` reports the same `changes()` either way, so
+/// the only way to tell insert from update is the cheap existence read
+/// this does first, in the same transaction.
+pub fn upsert_within_tx(
+    conn: &rusqlite::Connection,
     user_id: UserId,
     client_id: ClientId,
-    granted_scopes: String,
-) -> StoreResult<()> {
-    let now: DateTime<Utc> = Utc::now();
-    db.with_conn(move |conn| {
-        conn.execute(
-            "INSERT INTO user_consent (user_id, client_id, granted_scopes, granted_at) \
-             VALUES (?1, ?2, ?3, ?4) \
-             ON CONFLICT(user_id, client_id) DO UPDATE SET \
-               granted_scopes = excluded.granted_scopes, \
-               granted_at     = excluded.granted_at",
-            rusqlite::params![
-                user_id.to_string(),
-                client_id.to_string(),
-                granted_scopes,
-                now,
-            ],
-        )?;
-        Ok(())
+    granted_scopes: &str,
+    now: DateTime<Utc>,
+) -> StoreResult<ConsentGrantOutcome> {
+    use rusqlite::OptionalExtension;
+    let uid = user_id.to_string();
+    let cid = client_id.to_string();
+    let existed = conn
+        .query_row(
+            "SELECT 1 FROM user_consent WHERE user_id = ?1 AND client_id = ?2",
+            rusqlite::params![uid.clone(), cid.clone()],
+            |_| Ok(()),
+        )
+        .optional()?
+        .is_some();
+    conn.execute(
+        "INSERT INTO user_consent (user_id, client_id, granted_scopes, granted_at) \
+         VALUES (?1, ?2, ?3, ?4) \
+         ON CONFLICT(user_id, client_id) DO UPDATE SET \
+           granted_scopes = excluded.granted_scopes, \
+           granted_at     = excluded.granted_at",
+        rusqlite::params![uid, cid, granted_scopes, now],
+    )?;
+    Ok(if existed {
+        ConsentGrantOutcome::Updated
+    } else {
+        ConsentGrantOutcome::Granted
     })
-    .await
 }
 
 /// Remove a stored consent grant. Called when a client is deleted.

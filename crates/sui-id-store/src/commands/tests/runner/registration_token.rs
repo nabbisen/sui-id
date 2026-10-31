@@ -3,6 +3,10 @@
 //! `client.registration_token.revoked` audit append now commit in one
 //! transaction, replacing a bare `revoke` that had neither a caller nor
 //! an event at all.
+//!
+//! Cycle I stage 3, C14 — issue a registration token. Mirrors C22
+//! exactly: CLI-only, no authenticated actor, the create half of the
+//! same pair. `client_registration_token::create` had no event at all.
 
 use super::*;
 use sui_id_shared::ids::RegistrationTokenId;
@@ -29,6 +33,48 @@ async fn last_event(db: &Database) -> crate::models::AuditLogRow {
         .into_iter()
         .next()
         .expect("row")
+}
+
+#[tokio::test]
+async fn a_c14_registration_issue() {
+    let db = fresh_db();
+    let id = RegistrationTokenId::new();
+    let before = audit_rows(&db).await;
+
+    crate::commands::issue_registration_token(&db, sample_row(id))
+        .await
+        .expect("issue")
+        .into_inner();
+
+    let row = repos::client_registration_token::get(&db, id)
+        .await
+        .expect("the token must exist");
+    assert_eq!(row.id, id);
+
+    let event = last_event(&db).await;
+    assert_eq!(event.action, "client.registration_token.created");
+    assert_eq!(event.note, None, "no attributes");
+    assert_eq!(event.actor, None, "CLI-only, no authenticated actor");
+    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
+    record_exactly_once_coverage("C14");
+}
+
+#[tokio::test]
+async fn c14_injected_failure_before_append_leaves_no_token_stored() {
+    let db = fresh_db();
+    let id = RegistrationTokenId::new();
+    let before_audit = latest_audit_action(&db).await;
+
+    db.fault_injector().fail_before_next_append();
+    let result = crate::commands::issue_registration_token(&db, sample_row(id)).await;
+    assert!(result.is_err(), "injected failure must surface as Err");
+
+    let err = repos::client_registration_token::get(&db, id)
+        .await
+        .expect_err("the insert rolled back: no token was stored");
+    assert!(matches!(err, StoreError::NotFound));
+    assert_eq!(latest_audit_action(&db).await, before_audit, "no event");
+    record_rollback_coverage("C14");
 }
 
 #[tokio::test]

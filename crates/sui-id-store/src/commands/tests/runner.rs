@@ -166,6 +166,7 @@ mod client_lifecycle;
 mod client_metadata;
 mod client_persistence;
 mod client_update_form;
+mod consent;
 mod credential_lockout;
 mod dynamic_registration;
 mod federation;

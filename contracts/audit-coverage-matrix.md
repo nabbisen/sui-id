@@ -287,13 +287,18 @@ either.*
 | Event name | Operation | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
 | `client.dynamic_register` | RFC 7591 dynamic client registration | — | new client id | `client_name=…` | A |
+| `client.registration_token.created` | CLI operator issues a client-registration token (`sui-id admin issue-registration-token`, command `C14`) | — | new token id | — | A |
 | `client.registration_token.revoked` | CLI operator revokes a client-registration token (`sui-id admin revoke-registration-token`, command `C22`), so it can no longer be redeemed | — | token id | — | A |
 
-**New row, RFC 094 M2b wave 4 stage 4.** This event was declared in
-`contracts/write-commands.toml` and emitted by nothing before this stage
-— `client_registration_token::revoke`, the write it seals, had no
-caller anywhere in `crates/`. No row existed here either, since nothing
-had ever emitted it.
+**New row, RFC 094 M2b wave 4 stage 4.** `client.registration_token.revoked`
+was declared in `contracts/write-commands.toml` and emitted by nothing
+before this stage — `client_registration_token::revoke`, the write it
+seals, had no caller anywhere in `crates/`. No row existed here either,
+since nothing had ever emitted it.
+
+**New row, cycle I stage 3 (2026-10-31).** `client.registration_token.created`
+mirrors the revoke row above exactly — `client_registration_token::create`,
+the write it seals, had no event at all before this stage.
 
 ### External user-source authentication (RFC 005)
 
@@ -363,6 +368,22 @@ revoke) do.
 |---|---|---|---|---|---|
 | `auth.session.revoked` | One session revoked: by idle-timeout (`U18`), the operator's own sign-out, or the user's own self-service revoke | user id; none for idle-timeout | user id | `trigger` (`idle_timeout`, `self_signout`, `self_service`) | **A** |
 | `auth.sessions.revoked` | Every session for a user revoked at once: RP-initiated OIDC logout (`U19`) or the user's own "sign out other sessions" button. Retires the best-effort auth.sessions.bulk_revoke_self, which covered only the self-service surface | user id; none for RP-initiated logout carrying a usable `id_token_hint`, which is preferred over the session cookie | user id | `trigger` (`rp_initiated_logout`, `self_service`), `count`, `identified_by` (`session`, `id_token_hint`) | **A** |
+
+### Consent grants (`auth.consent.*`, RFC 038/072, cycle I stage 3)
+
+Added 2026-10-31. Both Class A, both actor-required: `me_apps_revoke`
+(U20) and `consent_post` (U21) each resolve a validated session before
+reaching the sealed command, so neither permits the system principal.
+`auth.consent.revoked` is `NotFound`, writing no row, when there was no
+grant to revoke (U17's lesson). `auth.consent.granted` covers both a
+first approval and a scope change to an existing grant — `change` says
+which, from a cheap existence read the command does before its own
+`INSERT ... ON CONFLICT DO UPDATE`.
+
+| Event name | Operation | Actor | Target | Note fields | Class |
+|---|---|---|---|---|---|
+| `auth.consent.revoked` | A user revokes a client's access and every refresh token it holds (`/me/apps/{client_id}/revoke`, command `U20`). Retires the best-effort `user_consent::revoke_with_tokens`, which had no event at all | user id | client id | — | **A** |
+| `auth.consent.granted` | A user approves a client's requested scopes (`POST /oauth2/consent`, command `U21`) — a first grant or a change to an existing one | user id | client id | `change` (`granted`, `updated`) | **A** |
 
 ### Server settings (`settings.*`)
 

@@ -363,6 +363,89 @@ async fn revoke_registration_token_cli_revokes_and_is_audited() {
     assert_eq!(note, None, "no attributes");
 }
 
+/// Cycle I stage 3, C14 — the counterpart of
+/// [`revoke_registration_token_cli_revokes_and_is_audited`] above, which
+/// the conversion did not get. Added in review, for a reason worth
+/// recording: `client_registration_token::create` is deliberately kept
+/// for the seventeen fixtures that seed tokens, so the CLI has two
+/// functions it could call and only one of them seals the record.
+/// Reverting the one line in `run_admin_issue_registration_token` to the
+/// kept wrapper left the **entire workspace suite green**. This test is
+/// what makes that revert fail. Same construction as C22's test: the
+/// real argument-parsing and config/db-opening path against an on-disk
+/// database and key file, asserting the audit record and not only the
+/// stored row.
+#[tokio::test]
+async fn issue_registration_token_cli_stores_the_token_and_is_audited() {
+    use sui_id_store::Database;
+    use sui_id_store::crypto::MasterKey;
+
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let db_path = tmp.path().join("cli-c14.sqlite");
+    let key_path = tmp.path().join("cli-c14.key");
+
+    let key = MasterKey::generate();
+    std::fs::write(&key_path, key.to_base64()).expect("write key");
+    // Opened once so the schema exists, then closed: the CLI opens it again.
+    drop(Database::open(&db_path, key).expect("open db"));
+
+    let config_path = tmp.path().join("sui-id.toml");
+    std::fs::write(
+        &config_path,
+        format!(
+            "[storage]\ndb_path = {db_path:?}\nkey_file = {key_path:?}\n\n[server]\n\
+             listen_addr = \"127.0.0.1:0\"\nissuer = \"https://idp.test\"\n"
+        ),
+    )
+    .expect("write config");
+
+    let args: Vec<String> = vec![
+        "sui-id".into(),
+        "admin".into(),
+        "issue-registration-token".into(),
+        "--config".into(),
+        config_path.to_string_lossy().into_owned(),
+    ];
+    run_admin_issue_registration_token(&args)
+        .await
+        .expect("issue");
+
+    let key2 = sui_id::keyring::resolve(&key_path)
+        .expect("resolve key")
+        .key;
+    let db2 = Database::open(&db_path, key2).expect("reopen db");
+
+    let (target, note): (Option<String>, Option<String>) = db2
+        .with_conn(|c| {
+            Ok(c.query_row(
+                "SELECT target, note FROM audit_log \
+                 WHERE action = 'client.registration_token.created' \
+                 ORDER BY seq DESC LIMIT 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )?)
+        })
+        .await
+        .expect("an audit row for the issued token");
+    assert_eq!(note, None, "no attributes, the same shape as C22");
+
+    let stored_id = target.expect("the audit row names the token id");
+    let rows: i64 = db2
+        .with_conn(move |c| {
+            Ok(c.query_row(
+                "SELECT COUNT(*) FROM client_registration_token WHERE id = ?1",
+                [stored_id],
+                |r| r.get(0),
+            )?)
+        })
+        .await
+        .expect("count");
+    assert_eq!(
+        rows, 1,
+        "the token the audit row names must be the one that was stored"
+    );
+}
+
 /// This round's own dispatch, §2a/§3: builds two rows directly (no
 /// database needed — [`render_registration_token_list`] is pure data
 /// in, text out, same separation as

@@ -273,23 +273,27 @@ descriptor = ["U19_SESSIONS_REVOKED"]
 id = "U20"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
+sealed = true
 owner = "Revoke user authorization grants"
-rationale = "re-measured 2026-10-30 (cycle I stage 1): no event is emitted -- `auth.consent.revoked` does not exist anywhere in `crates/`. Not yet corrected."
-mutation_surface = "`user_consent::revoke_with_tokens` / `revoke`, refresh/access revocation"
-files = ["crates/sui-id-store/src/repos/user_consent.rs"]
-test_id = "`a_u20_consent_revoke`"
+rationale = "`auth.consent.revoked`. Sealed 2026-10-31 (cycle I stage 3). `me_apps_revoke` (`/me/apps/{client_id}/revoke`) takes `CurrentUser`, a validated session, so the actor is that resolved `user_id`, `system_principal: forbidden`. `revoke_with_tokens` ran its own `BEGIN`/`COMMIT`/`ROLLBACK`, which cannot nest inside a sealed command's own transaction; replaced by `revoke_with_tokens_within_tx`, which also now returns `NotFound` when there was no grant to revoke (zero `refresh_tokens` rows stays normal)."
+mutation_surface = "`commands::revoke_consent`"
+files = ["crates/sui-id-store/src/commands.rs", "crates/sui-id-store/src/repos/user_consent.rs", "crates/sui-id/src/http/handlers/me_security/apps.rs"]
+test_id = "`u20_revokes_the_grant_and_every_refresh_token_for_the_client`, `u20_with_no_refresh_tokens_still_revokes_the_grant`, `u20_against_a_nonexistent_grant_is_notfound_and_writes_no_record`, `u20_injected_failure_before_append_leaves_the_grant_and_tokens_live`"
+event = ["auth.consent.revoked"]
+descriptor = ["CONSENT_REVOKED"]
 
 [[command]]
 id = "U21"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
+sealed = true
 owner = "Grant/update consent"
-rationale = "re-measured 2026-10-30 (cycle I stage 1): no event is emitted -- `auth.consent.granted` does not exist anywhere in `crates/`. Not yet corrected."
-mutation_surface = "`user_consent::upsert`"
-files = ["crates/sui-id-store/src/repos/user_consent.rs"]
-test_id = "`a_u21_consent_grant`"
+rationale = "`auth.consent.granted`. Sealed 2026-10-31 (cycle I stage 3). `consent_post` (`POST /oauth2/consent`) takes a `SessionContext`, enforces CSRF, and opens a sealed consent-state cookie bound to the `session_id` -- the actor is `user_id`, `system_principal: forbidden`. One event for both a first grant and a scope change to an existing one; `upsert_within_tx` tells them apart with a cheap existence read before its own write (`INSERT ... ON CONFLICT DO UPDATE` cannot on its own), carried as the `change` attribute (`granted`/`updated`)."
+mutation_surface = "`commands::grant_consent`"
+files = ["crates/sui-id-store/src/commands.rs", "crates/sui-id-store/src/repos/user_consent.rs", "crates/sui-id/src/http/handlers/oidc.rs"]
+test_id = "`u21_a_first_approval_is_granted_and_stores_the_scopes`, `u21_a_scope_change_to_an_existing_grant_is_recorded_as_updated`, `u21_injected_failure_before_append_leaves_no_grant_stored`"
+event = ["auth.consent.granted"]
+descriptor = ["CONSENT_GRANTED"]
 
 [[command]]
 id = "U22"
@@ -716,12 +720,14 @@ test_id = "`a_c13_scope_delete`"
 id = "C14"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
+sealed = true
 owner = "Issue registration authorization"
-rationale = "re-measured 2026-10-30 (cycle I stage 1): no event is emitted -- `client.registration_token.created` does not exist anywhere in `crates/`; the CLI command (`sui-id admin issue-registration-token`) prints the token and nothing else. Not yet corrected."
-mutation_surface = "`client_registration_token::create`"
-files = ["crates/sui-id-store/src/repos/client_registration_token.rs"]
-test_id = "`a_c14_registration_issue`"
+rationale = "`client.registration_token.created`. Sealed 2026-10-31 (cycle I stage 3). CLI-only (`sui-id admin issue-registration-token`), no authenticated actor -- mirrors C22 exactly, the create half of the same pair, `system_principal: permitted`, the operator's authority is possession of the master key and filesystem access."
+mutation_surface = "`commands::issue_registration_token`"
+files = ["crates/sui-id-store/src/commands.rs", "crates/sui-id-store/src/repos/client_registration_token.rs", "crates/sui-id/src/cli.rs"]
+test_id = "`a_c14_registration_issue`, `c14_injected_failure_before_append_leaves_no_token_stored`"
+event = ["client.registration_token.created"]
+descriptor = ["C14_CREATED"]
 
 [[command]]
 id = "C15"
@@ -777,7 +783,7 @@ class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
 sealed = false
 owner = "Federation-link upsert"
-rationale = "re-measured 2026-10-30 (cycle I stage 1): covered only on failure, and only the surrounding flow -- a failed upsert reaches `terminalize_and_audit` under `LinkUpsertDbError`. A successful upsert (refreshing `upstream_email`/`last_seen_at` for an already-linked identity) emits nothing of its own: `auth.federation.link.created` / `.updated` do not exist anywhere in `crates/`. Not yet corrected."
+rationale = "re-measured 2026-10-31 (cycle I stage 3, §4): the stage plan's premise does not hold. (1) The create half already has its own event -- `provision_federated_user` (F04, `commands.rs:2368-2394`) calls `federation_link::insert_within_tx` (`:2382`) inside the transaction that commits `auth.federation.provisioned`; `auth.federation.link.created` was never this command's to build. (2) `federation_link::upsert`'s one production caller (`federation.rs:1308`, the `ExistingLink` branch) can only ever update (the branch is reached only when a link already exists, `federation.rs:1296-1307`) and is redundant with `promote`'s `touch_last_seen_within_tx` (`commands.rs:3169`) for `last_seen_at` specifically, and only on the local-MFA-required path (`federation.rs:1614` through `admin/auth.rs:774-787` to `commands.rs:2766`/`3163`) -- on the no-MFA path (`sign_in_federated`, L04, `commands.rs:2257-2285`) nothing else touches `federation_link`, so `upsert`'s write is not redundant there, and `upstream_email` is never redundant on either path (`touch_last_seen_within_tx` does not set it). (3) Every path through the `ExistingLink` branch that completes already records the sign-in with a required actor: `auth.federation.signin.success` (L04, no MFA) or `auth.federation.mfa_success` (F03's `Promoted` outcome, MFA required, `federation_mfa_pending.rs:627-629`) -- so 'we saw this link again' is not an undetected fact. Not a stage-3 conversion; disposition deferred to stage 5 (retire the placeholder names rather than mint one, is the likely shape, not decided here)."
 mutation_surface = "`federation_link::upsert`"
 files = ["crates/sui-id-store/src/repos/federation_link.rs"]
 test_id = "`a_c19_link_create`, `a_c19_link_update`"

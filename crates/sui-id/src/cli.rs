@@ -993,7 +993,7 @@ pub(crate) async fn run_admin_issue_registration_token(args: &[String]) -> Resul
         updated_at: now,
     };
 
-    sui_id_store::repos::client_registration_token::create(&db, &row)
+    sui_id_store::commands::issue_registration_token(&db, row.clone())
         .await
         .context("storing registration token")?;
 

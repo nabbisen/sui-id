@@ -71,9 +71,19 @@ pub async fn me_apps_revoke(
         .parse()
         .map_err(|_| HttpError::html(CoreError::BadRequest("invalid client id".into())))?;
 
-    sui_id_store::repos::user_consent::revoke_with_tokens(&app.db, user_id, client_id)
-        .await
-        .map_err(|e| HttpError::html(CoreError::from(e)))?;
+    // Cycle I stage 3, U20: the sealed command returns `NotFound` when
+    // there was no grant to revoke, and writes no audit row for a
+    // revocation that did not happen. That is the store's job. It is not
+    // an error to show the user: the only ways to reach it are a
+    // double-submit or a stale page, and in both the grant they wanted
+    // gone is gone. `me_security/sessions.rs`'s `revoke_one` already
+    // treats an unknown session id the same way, in the same `/me` area —
+    // redirect back to the page rather than an error.
+    match sui_id_store::commands::revoke_consent(&app.db, user_id, client_id).await {
+        Ok(_) => {}
+        Err(sui_id_store::StoreError::NotFound) => {}
+        Err(e) => return Err(HttpError::html(CoreError::from(e))),
+    }
 
     Ok(Redirect::to("/me/apps").into_response())
 }

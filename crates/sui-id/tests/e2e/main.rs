@@ -51,6 +51,7 @@ mod me_security;
 mod mfa;
 mod oidc_flow;
 mod password_change;
+mod r094_cycle_i_u20_revoke_idempotent;
 mod r094_m2a_c15_dynamic_register;
 mod r094_m2a_consent_policy_persistence;
 mod r094_m2a_db_access_scope;

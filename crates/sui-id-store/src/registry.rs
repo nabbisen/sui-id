@@ -286,6 +286,14 @@ pub enum AuditEventKind {
     /// operator's authority is possession of the master key and
     /// filesystem access, the same shape U08 and K01 use.
     ClientRegistrationTokenRevoked,
+    /// `client.registration_token.created` — cycle I stage 3, C14. Mirrors
+    /// `ClientRegistrationTokenRevoked`'s own shape exactly: CLI-only, no
+    /// authenticated actor, `system_principal: permitted` — the
+    /// operator's authority is possession of the master key and
+    /// filesystem access, the create half of the same pair. Previously
+    /// emitted by nothing: the CLI command printed the token and nothing
+    /// else.
+    ClientRegistrationTokenCreated,
     /// `client.app_identity_changed` — RFC 140 stage 1, C10. A wave-1
     /// shape before this round: the inventory declared it and nothing
     /// emitted it — `clients::update_app_identity` (the write this
@@ -433,6 +441,20 @@ pub enum AuditEventKind {
     /// `auth.sessions.bulk_revoke_self`, which covered only the
     /// self-service surface and not the RP-initiated-logout one.
     AuthSessionsRevoked,
+    /// `auth.consent.revoked` — cycle I stage 3, U20 (revoke an
+    /// authorization grant, `/me/apps/{client_id}/revoke`). Previously
+    /// emitted by nothing at all: `user_consent::revoke_with_tokens` had
+    /// no event. Zero `user_consent` rows is `NotFound`, not a silent
+    /// no-op — U17's lesson.
+    AuthConsentRevoked,
+    /// `auth.consent.granted` — cycle I stage 3, U21 (grant or update
+    /// consent, `POST /oauth2/consent`). One event for both a first
+    /// approval and a scope change to an existing grant; the `change`
+    /// attribute (`granted`/`updated`) says which, from a cheap
+    /// existence read `upsert_within_tx` does before its own write —
+    /// `INSERT ... ON CONFLICT DO UPDATE` cannot tell the two apart on
+    /// its own. Previously emitted by nothing at all.
+    AuthConsentGranted,
 }
 
 /// The registry entry for one [`AuditEventKind`]. `descriptor()` on a

@@ -29,6 +29,8 @@ Use **Admin panel → Audit log** to filter by event prefix or export to CSV.
 | `auth.session.revoked` | Session revoked | One session was revoked: by idle-timeout, the operator's own sign-out, or the user's own self-service revoke. Note field `trigger` (`idle_timeout`, `self_signout`, `self_service`). |
 | `auth.sessions.revoked` | All sessions revoked | Every session for a user was revoked at once: RP-initiated OIDC logout (**no actor** whenever the request carried a usable `id_token_hint` — that is preferred over the session cookie, so a token identifies the user even when they also have one; the user when a signed-in session is what identified them), or the user's own "sign out other sessions" button (always the user). Note fields `trigger` (`rp_initiated_logout`, `self_service`), `count` and `identified_by` (`session`, `id_token_hint`). |
 | `auth.smtp_config.changed` | SMTP config changed | Administrator saved new SMTP settings. |
+| `auth.consent.revoked` | Consent revoked | A user revoked a client's access via `/me/apps`, deleting the grant and every refresh token it holds. No row if there was no grant to revoke. |
+| `auth.consent.granted` | Consent granted | A user approved a client's requested scopes. Note field `change` (`granted` for a first approval, `updated` when the user already had a grant for this client). |
 
 ## User management events
 
@@ -172,6 +174,7 @@ like a field. In such a row the real field is the *last* occurrence of its key.
 | Event name | Label | Description |
 |---|---|---|
 | `client.dynamic_register` | Dynamic client registered | A third-party application self-registered via `POST /oauth2/register` using a valid initial-access token. The client starts disabled; an administrator must enable it before it can obtain tokens. |
+| `client.registration_token.created` | — | The operator issued a client-registration (initial-access) token via `sui-id admin issue-registration-token`. No actor (CLI-only, the operator's authority is possession of the master key and filesystem access). |
 | `client.registration_token.revoked` | — | The operator revoked a client-registration (initial-access) token via `sui-id admin revoke-registration-token`, so it can no longer be redeemed. No actor (CLI-only, the operator's authority is possession of the master key and filesystem access). |
 
 ## External user-source events (RFC 005)

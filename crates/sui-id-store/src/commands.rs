@@ -4535,6 +4535,149 @@ pub async fn revoke_other_sessions_for_user(
     .await
 }
 
+// ── U20 — revoke an authorization grant (cycle I stage 3) ────────────────
+//
+// `me_apps_revoke` (`/me/apps/{client_id}/revoke`) takes `CurrentUser`,
+// which resolves the session cookie through `session::resolve` and
+// enforces CSRF -- a validated session. The actor is that resolved
+// `user_id`; `system_principal: forbidden`, unlike U18/U19, since this
+// command has no caller without one.
+
+static CONSENT_REVOKED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::AuthConsentRevoked,
+    name: "auth.consent.revoked",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[],
+};
+
+crate::declare_write_command! {
+    /// U20 — revoke a consent grant and its refresh tokens, with
+    /// `auth.consent.revoked`.
+    command U20 = "U20" {
+        system_principal: forbidden;
+        enum U20Event {
+            Revoked { user_id: UserId, client_id: ClientId } => &CONSENT_REVOKED,
+        }
+    }
+}
+
+impl SealedCommandEvent<U20> for U20Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Revoked { client_id, .. } = self;
+        Some(AuditTarget(client_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        AuditAttributes::builder().build()
+    }
+}
+
+/// Run U20: revoke the consent grant and every refresh token for
+/// `(user_id, client_id)`. `NotFound` if there was no grant to revoke
+/// (`revoke_with_tokens_within_tx`'s own rule) — no audit row is written
+/// in that case, since nothing was revoked.
+pub async fn revoke_consent(
+    db: &crate::Database,
+    user_id: UserId,
+    client_id: ClientId,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let context = AuthorizedCommandContext::<U20>::for_authorized_actor(user_id, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, U20>| {
+        crate::repos::user_consent::revoke_with_tokens_within_tx(tx.tx(), user_id, client_id)?;
+        Ok(((), U20Event::Revoked { user_id, client_id }))
+    })
+    .await
+}
+
+// ── U21 — grant/update consent (cycle I stage 3) ──────────────────────────
+//
+// `consent_post` (`POST /oauth2/consent`) takes a `SessionContext`,
+// enforces CSRF, and opens a sealed consent-state cookie bound to that
+// `session_id` -- the strongest of the three rows this stage converts.
+// The actor is `user_id`; `system_principal: forbidden`.
+
+static CONSENT_GRANTED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::AuthConsentGranted,
+    name: "auth.consent.granted",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[AttributeSpec {
+        name: "change",
+        description: "`granted` for a first approval, `updated` when the user already had a grant for this client",
+        required: true,
+    }],
+};
+
+crate::declare_write_command! {
+    /// U21 — grant or update a consent grant, with `auth.consent.granted`.
+    command U21 = "U21" {
+        system_principal: forbidden;
+        enum U21Event {
+            Granted {
+                user_id: UserId,
+                client_id: ClientId,
+                change: crate::repos::user_consent::ConsentGrantOutcome,
+            } => &CONSENT_GRANTED,
+        }
+    }
+}
+
+impl SealedCommandEvent<U21> for U21Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Granted { client_id, .. } = self;
+        Some(AuditTarget(client_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Granted { change, .. } = self;
+        AuditAttributes::builder()
+            .attribute("change", change.as_str())
+            .build()
+    }
+}
+
+/// Run U21: store the consent grant, recording whether this was a first
+/// approval or a change to an existing one (`upsert_within_tx`'s own
+/// cheap existence read).
+pub async fn grant_consent(
+    db: &crate::Database,
+    user_id: UserId,
+    client_id: ClientId,
+    granted_scopes: String,
+    now: DateTime<Utc>,
+) -> StoreResult<crate::registry::Audited<crate::repos::user_consent::ConsentGrantOutcome>> {
+    let context = AuthorizedCommandContext::<U21>::for_authorized_actor(user_id, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, U21>| {
+        let change = crate::repos::user_consent::upsert_within_tx(
+            tx.tx(),
+            user_id,
+            client_id,
+            &granted_scopes,
+            now,
+        )?;
+        Ok((
+            change,
+            U21Event::Granted {
+                user_id,
+                client_id,
+                change,
+            },
+        ))
+    })
+    .await
+}
+
 // ── C15 — dynamic client registration ────────────────────────────────────
 
 static C15_DYNAMIC_REGISTER: EventDescriptor = EventDescriptor {
@@ -6286,6 +6429,64 @@ pub async fn set_dev_client_secret(
     db.class_a(context, move |tx: &mut ClassATx<'_, C08>| {
         crate::repos::clients::set_dev_secret_hash_within_tx(tx.tx(), target, Some(&new_hash))?;
         Ok(((), C08Event::Set { client_id: target }))
+    })
+    .await
+}
+
+// ── C14 — issue a registration token (cycle I stage 3) ───────────────────
+//
+// CLI-only (`sui-id admin issue-registration-token`). No authenticated
+// actor exists. Mirrors C22 exactly, the create half of the same pair --
+// the operator's authority is possession of the master key and
+// filesystem access, the same shape U08 and K01 use.
+
+static C14_CREATED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::ClientRegistrationTokenCreated,
+    name: "client.registration_token.created",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::None,
+    target: TargetRequirement::Required,
+    attributes: &[],
+};
+
+crate::declare_write_command! {
+    /// C14 — CLI operator issues a client-registration token.
+    command C14 = "C14" {
+        system_principal: permitted;
+        enum C14Event {
+            Created { token_id: RegistrationTokenId } => &C14_CREATED,
+        }
+    }
+}
+
+impl SealedCommandEvent<C14> for C14Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Created { token_id } = self;
+        Some(AuditTarget(token_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        AuditAttributes::builder().build()
+    }
+}
+
+/// Run C14 (issue a registration token) through the Class-A runner: the
+/// insert and the `client.registration_token.created` audit append now
+/// commit in one transaction, replacing a bare
+/// `client_registration_token::create` that had no event at all.
+pub async fn issue_registration_token(
+    db: &crate::Database,
+    row: crate::repos::client_registration_token::RegistrationTokenRow,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let token_id = row.id;
+    let context = AuthorizedCommandContext::<C14>::for_system_actor(None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, C14>| {
+        crate::repos::client_registration_token::create_within_tx(tx.tx(), &row)?;
+        Ok(((), C14Event::Created { token_id }))
     })
     .await
 }

@@ -919,9 +919,15 @@ pub async fn consent_post(
         .auth_methods;
 
     // Store the consent grant.
-    sui_id_store::repos::user_consent::upsert(&app.db, user_id, client_id, cs.scope.clone())
-        .await
-        .map_err(|e| HttpError::html(CoreError::from(e)))?;
+    sui_id_store::commands::grant_consent(
+        &app.db,
+        user_id,
+        client_id,
+        cs.scope.clone(),
+        app.clock.now(),
+    )
+    .await
+    .map_err(|e| HttpError::html(CoreError::from(e)))?;
 
     let params = sui_id_core::authorize::AuthorizeParams {
         client_id,

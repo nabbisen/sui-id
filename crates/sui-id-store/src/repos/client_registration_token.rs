@@ -48,30 +48,40 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<RegistrationTokenRow> {
 const SELECT: &str = "SELECT id, token_hash, max_uses, used_count, expires_at, revoked_at, \
      note, created_at, updated_at FROM client_registration_token";
 
-/// Insert a new token.
+/// Insert a new token. RFC 094 C14: fixture-seeding callers across the
+/// e2e suite are many; kept, unchanged, for them (grepped before this
+/// round's commit, the same check stage 2 ran for its own dead-wrapper
+/// removals). The sealed path is the new `create_within_tx`.
 pub async fn create(db: &Database, row: &RegistrationTokenRow) -> StoreResult<()> {
     let row = row.clone();
-    db.with_conn(move |conn| {
-        conn.execute(
-            "INSERT INTO client_registration_token \
-             (id, token_hash, max_uses, used_count, expires_at, revoked_at, \
-              note, created_at, updated_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-            params![
-                row.id.to_string(),
-                row.token_hash,
-                row.max_uses,
-                row.used_count,
-                row.expires_at,
-                row.revoked_at,
-                row.note,
-                row.created_at,
-                row.updated_at,
-            ],
-        )?;
-        Ok(())
-    })
-    .await
+    db.with_conn(move |conn| create_within_tx(conn, &row)).await
+}
+
+/// The same insert as [`create`], run inside a caller-supplied
+/// transaction. `commands::issue_registration_token` (C14) is the only
+/// sealed caller.
+pub fn create_within_tx(
+    conn: &rusqlite::Connection,
+    row: &RegistrationTokenRow,
+) -> StoreResult<()> {
+    conn.execute(
+        "INSERT INTO client_registration_token \
+         (id, token_hash, max_uses, used_count, expires_at, revoked_at, \
+          note, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        params![
+            row.id.to_string(),
+            row.token_hash.clone(),
+            row.max_uses,
+            row.used_count,
+            row.expires_at,
+            row.revoked_at,
+            row.note.clone(),
+            row.created_at,
+            row.updated_at,
+        ],
+    )?;
+    Ok(())
 }
 
 /// Fetch all tokens ordered by creation date, newest first.
