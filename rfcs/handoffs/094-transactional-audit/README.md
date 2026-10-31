@@ -1,5 +1,31 @@
 # RFC 094 developer handoff
 
+> # **CYCLE I IS COMPLETE**, 2026-11-01. Stage 5 landed `4f55195` and
+> the pre-cut test round `e651e9c` — **CI 28 success / 0 failed / 0
+> skipped**. `0.87.0`'s scope is done: the census, the conversions
+> (stages 2, 2b, 3, 4) and the dispositions (stage 5). Reviews —
+> `.git-exclude/reviewed/cycle-i-stage5-the-dispositions-2026-10-31.md`
+> and `.git-exclude/reviewed/pre-cut-two-load-sensitive-tests-2026-10-31.md`.
+>
+> **The release preparation is dispatched** —
+> [`release-0.87.0-preparation-2026-11-01.md`](release-0.87.0-preparation-2026-11-01.md).
+> The mechanical half only: the six version sites, the `CHANGELOG`
+> promotion, the two version-pinned documents and `cargo package`. **The
+> tag and the publish dispatch stay with the architect**, and this is
+> the first release that does not publish by hand — RFC 141 §7 settled
+> `0.87.0` as the first cut through `publish.yml`.
+>
+> **Two prerequisites are `@nabbisen`'s and remain outstanding**: the
+> six per-crate Trusted Publishing configurations on crates.io, and the
+> `release` GitHub Environment with a required reviewer. The preparation
+> does not depend on either; the publish does. Settings are recorded in
+> `.git-exclude/reviewed/release-0.87.0-prerequisites-2026-10-30.md`.
+>
+> **M2b does not close with this release.** The authority switch is
+> `0.88.0`, and RFC 094's closure criterion additionally requires the
+> AST gate with a negative fixture plus an acceptance of the adversarial
+> assessment that the architect cannot give for its own work.
+
 > # **`0.87.0` IS AUTHORIZED**, 2026-10-30. **`@nabbisen`:
 > *"Authorized."*** Scope settled 2026-10-29 (*"Two."*) —
 > [`cycle-i-and-0.87.0-2026-10-29.md`](cycle-i-and-0.87.0-2026-10-29.md)
