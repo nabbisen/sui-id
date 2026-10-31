@@ -55,17 +55,47 @@
 > command splits on something the caller decides, the test belongs on
 > the caller's side too.
 >
-> **Stage 3 is dispatched** —
-> `.git-exclude/staging/cycle-i-stage3-consent-and-client-2026-10-31.md`.
-> **Three conversions (U20, U21, C14), and C19 is a measurement rather
-> than a conversion**: tracing `federation_link` before writing the
-> dispatch showed a link's *creation* is already sealed inside
-> `provision_federated_user`, and `last_seen_at` inside
-> `complete_federated_mfa`'s own tail — so the remaining unsealed write
-> can only ever update, and whether it is redundant bookkeeping already
-> covered by the sign-in event is a question to answer before building
-> anything. A **disposition** is a real possible outcome for that row,
-> not a failure.
+> **Stage 3 LANDED** `ca667c0`, 2026-10-31 — **CI 28 success / 0 failed
+> / 0 skipped**. Three rows sealed (U20, U21, C14); G20's declared set
+> 52 → 55. Granting consent now distinguishes a first approval from a
+> change to an application's already-granted scopes, which is the
+> question someone auditing consent is actually asking. Review —
+> `.git-exclude/reviewed/cycle-i-stage3-consent-and-client-2026-10-31.md`.
+>
+> **C19 was measured, not converted, and the measurement settles it.** A
+> link's *creation* is already sealed inside `provision_federated_user`
+> under its own event, and `last_seen_at` is already written by a sealed
+> command on the path that has one — so the remaining unsealed write
+> only ever refreshes `upstream_email`, a column whose single reader
+> (`federation_link::find_any_by_email`) has **no callers at all**. That
+> makes C19 a **disposition** for stage 5 rather than a conversion, and
+> `find_any_by_email` joins the dead-code list beside the `consents`
+> table.
+>
+> **Two things were added in review, both proven by mutation.** Stage 3
+> kept `client_registration_token::create` for seventeen fixtures, so
+> the CLI had two functions it could call and only one sealed the
+> record — reverting that one line left the **entire workspace suite
+> green**, and the test that now fails on it was already written for the
+> sibling command. And a revoke of an already-revoked grant was
+> returning **404** to the user; it redirects, the way revoking an
+> unknown session already did in the same part of the UI. **A kept
+> wrapper is a decision point** — that is the standing instruction this
+> stage added.
+>
+> **Stage 4 is dispatched** —
+> `.git-exclude/staging/cycle-i-stage4-setup-is-one-transaction-2026-10-31.md`.
+> **S10, the largest single change in the cycle.** First-run setup
+> becomes one transaction: today its audit append is step 5 of 5 and
+> propagates, so a failed append reports failure for an instance that is
+> already fully initialized, while making it best-effort would lose the
+> record of the most privileged operation the system performs. The actor
+> is **`None`** — RFC 120 D5/D6 already ruled first-run setup a named
+> exemption from requiring an authorized actor, so the record should not
+> invent one — with the target naming the created admin and an attribute
+> saying what authorized the setup. The round also closes a first-run
+> race: both wrappers check `is_initialized` *outside* the writes
+> today.
 >
 > Stage 1's dispatch was
 > `.git-exclude/staging/cycle-i-stage1-the-audit-census-2026-10-29.md`,
