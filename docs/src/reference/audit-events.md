@@ -85,7 +85,7 @@ the administrator is asked to step up again.
 | Event name | Label | Description |
 |---|---|---|
 | `admin.master_key.rotated` | Master key rotated | The master key was rotated offline. All column-encrypted values were re-sealed under the new key. |
-| `setup.create_initial_admin` | Initial admin created | The setup wizard completed and the first administrator account was created. |
+| `admin.setup.completed` | Initial setup completed | First-run setup completed: the first administrator account, its signing-key bootstrap, and the initialized flag all committed together. No actor — there is no authenticated session at first run. Note field `authorized_by` (`setup_token` for the web wizard, `filesystem` for the headless CLI). |
 | `audit.chain.verification_failed` | Audit chain verification failed | The audit log's hash chain could not be checked at all (a read or data error, not a broken chain — see "Audit log integrity" below). Note fields: `limit`, `detail`. Best-effort: recorded when the write itself succeeds, which is not guaranteed if the same fault also affects writes. |
 
 ## Using audit events in filters
@@ -252,6 +252,11 @@ appear in an existing audit log, and this section is where to look one up.
   User deleted a passkey. Replaced by `auth.mfa.factor_removed`
   (`method=webauthn`), shared with `mfa.disable`'s replacement so the two
   factors' removal lines up in the log the way their addition already did.
+- `setup.create_initial_admin` — retired by cycle I stage 4 (2026-10-31).
+  The setup wizard or headless CLI completed first-run setup. Replaced by
+  `admin.setup.completed`, now committed in the same transaction as the
+  admin user, credential, signing-key bootstrap and initialized flag it
+  records, rather than as a fifth, separately-committed write after them.
 - `auth.sessions.bulk_revoke_self` — retired by cycle I stage 2 (2026-10-30).
   User revoked all sessions except the current one. Replaced by
   `auth.sessions.revoked`, which also covers the RP-initiated-logout surface

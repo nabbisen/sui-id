@@ -58,6 +58,15 @@ pub enum StoreError {
     #[error("recovery link refused: {0}")]
     RecoveryRefused(RecoveryRefusal),
 
+    /// RFC 094 cycle I stage 4, S10: found, inside its transaction, that
+    /// first-run setup already completed — the race the outer, cheap
+    /// `state::is_initialized` checks cannot close by themselves. Nothing
+    /// was written. Distinct from `Conflict` (which `users::create_within_tx`
+    /// already uses for a colliding username) so the caller can tell the
+    /// two apart and report the right one.
+    #[error("the system is already initialized")]
+    AlreadyInitialized,
+
     /// RFC 112 D6: the database's stored schema version is **newer** than this
     /// build's `migrations::MAX_SCHEMA_VERSION`. Nothing was written. `found` is
     /// `i64` so a stored value beyond `i32` is reported as what it is: too new.

@@ -1159,12 +1159,14 @@ descriptor = ["S09_CANCELLED"]
 id = "S10"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
+sealed = true
 owner = "Complete first setup"
-rationale = "re-measured 2026-10-30 (cycle I stage 1): emits `setup.create_initial_admin`, propagating (`.await?`, not best-effort), after the admin/credential/signing-key/initialized-flag writes -- not `admin.setup.completed`, which nothing in `crates/` emits. Not yet corrected."
-mutation_surface = "initial admin/client/config writes and `state::mark_initialized`"
-files = ["crates/sui-id-store/src/repos/state.rs"]
-test_id = "`a_s10_setup`"
+rationale = "`admin.setup.completed`, retiring `setup.create_initial_admin`. Sealed 2026-10-31 (cycle I stage 4): the append already propagated (`.await?`) but as the fifth of five separately-committed writes, so a failure there left an operator told setup failed when it had not. One transaction now: the `is_initialized` recheck (closing the race the outer, cheap checks cannot), `users::create_within_tx`, `credentials::upsert_within_tx`, the conditional signing-key bootstrap (`signing_keys::has_active_within_tx` plus the existing `insert_sealed_on_conn`), and the new `state::mark_initialized_within_tx`, with the event. RFC 120 D5/D6's named first-run exemption: `ActorRequirement::None`, `system_principal: permitted`; target = the created admin's user id. `authorized_by` (`setup_token`/`filesystem`) replaces the old `headless` note."
+mutation_surface = "`commands::complete_initial_setup`"
+files = ["crates/sui-id-store/src/commands.rs", "crates/sui-id-store/src/repos/state.rs", "crates/sui-id-store/src/repos/signing_keys.rs", "crates/sui-id-core/src/setup.rs"]
+test_id = "`s10_headless_setup_creates_admin_credential_key_and_marks_initialized`, `s10_web_wizard_setup_records_authorized_by_setup_token`, `s10_does_not_duplicate_an_already_active_signing_key`, `s10_against_an_already_initialized_system_writes_no_record`, `s10_concurrent_setup_attempts_only_one_succeeds`, `s10_injected_failure_before_append_leaves_no_partial_state`"
+event = ["admin.setup.completed"]
+descriptor = ["S10_COMPLETED"]
 
 [[command]]
 id = "K01"

@@ -39,6 +39,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   happen. Granting consent records whether it was a first approval or a
   change to an application's previously granted scopes.
 
+- **First-run setup is now all-or-nothing.** The administrator account,
+  its signing-key bootstrap and the initialized flag used to commit as
+  separate writes; a failure partway through could leave an instance
+  already initialized while the operator was told setup had failed. A
+  failed attempt now rolls back completely and can simply be retried.
+  The event `setup.create_initial_admin` is retired, replaced by
+  `admin.setup.completed` — if you query, filter or alert on the
+  retired name, that rule will stop matching after this release.
+
 - **Upgrading from an old database is now verified in automated testing,
   not assumed.** Every schema version this project has ever shipped —
   including the one historical shape left behind by a known-fixed

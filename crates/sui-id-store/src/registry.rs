@@ -200,6 +200,12 @@ pub enum AuditEventKind {
     /// 094-wave-b-scoping-u08-blocked-2026-09-09.md`, applied in
     /// `migration-checklist.md`).
     AdminUserUnlock,
+    /// `admin.setup.completed` — cycle I stage 4, S10 (first-run setup).
+    /// Retires `setup.create_initial_admin`. RFC 120 D5/D6's own named
+    /// first-run exemption from an authorized actor, applied here:
+    /// `ActorRequirement::None`, `system_principal: permitted`, target =
+    /// the created admin's user id.
+    AdminSetupCompleted,
     /// `auth.password.changed_self` — U09.
     AuthPasswordChangedSelf,
     /// `auth.password.reset_completed` — U10.

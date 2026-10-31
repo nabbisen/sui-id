@@ -5,7 +5,7 @@ use crate::db::Database;
 use crate::errors::{StoreError, StoreResult};
 use crate::models::SigningKeyRow;
 use chrono::{DateTime, Utc};
-use rusqlite::params;
+use rusqlite::{OptionalExtension, params};
 use sui_id_shared::ids::SigningKeyId;
 
 const AAD: &[u8] = b"sui-id/signing_key/v1";
@@ -144,6 +144,23 @@ pub fn delete_within_tx(tx: &rusqlite::Transaction<'_>, id: SigningKeyId) -> Sto
 /// Decrypt the private key bytes for a row.
 pub async fn unseal_private(db: &Database, row: &SigningKeyRow) -> StoreResult<Vec<u8>> {
     open(db.key(), &row.private_key_enc, AAD)
+}
+
+/// Whether any key is currently active, for a caller that already holds
+/// a transaction (RFC 094 cycle I stage 4, S10: the sealed Class-A
+/// capability). A cheap existence check, not the full row [`active`]
+/// reads — this is the durable, inside-the-transaction answer the
+/// conditional signing-key bootstrap needs, for the same race-closing
+/// reason [`crate::repos::state::is_initialized_within_tx`] exists.
+pub fn has_active_within_tx(conn: &rusqlite::Connection) -> StoreResult<bool> {
+    Ok(conn
+        .query_row(
+            "SELECT 1 FROM signing_keys WHERE is_active = 1 LIMIT 1",
+            [],
+            |_| Ok(()),
+        )
+        .optional()?
+        .is_some())
 }
 
 /// All currently active and recently retired keys, useful for JWKS.

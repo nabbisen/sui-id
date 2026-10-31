@@ -184,4 +184,5 @@ mod refresh;
 mod registration_token;
 mod server_settings;
 mod sessions;
+mod setup;
 mod user_admin;

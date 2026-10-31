@@ -5588,6 +5588,148 @@ pub async fn change_smtp_config(
     .await
 }
 
+// ── S10 — first-run setup (cycle I stage 4) ──────────────────────────────
+//
+// Measured 2026-10-31: the append already existed and propagated
+// (`setup.rs`'s own `.await?`), but as a separate, fifth write after four
+// others each committed on their own — an append failure left an
+// operator told setup failed when it had not. One transaction now: user,
+// credential, the conditional signing-key bootstrap, and the initialized
+// flag commit together with the event, or none of them do.
+//
+// RFC 120 (Done) D5/D6: first-run setup is a named exemption from
+// requiring an authorized actor. `ActorRequirement::None`,
+// `system_principal: permitted` -- there is no actor to invent, and the
+// target (the created admin's user id) already carries what the actor
+// column would otherwise be duplicating.
+
+static S10_COMPLETED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::AdminSetupCompleted,
+    name: "admin.setup.completed",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::None,
+    target: TargetRequirement::Required,
+    attributes: &[AttributeSpec {
+        name: "authorized_by",
+        description: "what authorized the setup: `setup_token` (web wizard) or `filesystem` (CLI, key-file access)",
+        required: true,
+    }],
+};
+
+/// What authorized a first-run setup. A closed set, the same shape
+/// [`SessionsRevokeTrigger`] already gives `trigger`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SetupAuthorizedBy {
+    /// The web wizard, gated on the setup-token comparison.
+    SetupToken,
+    /// The CLI, gated on being able to read the master-key file.
+    Filesystem,
+}
+
+impl SetupAuthorizedBy {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::SetupToken => "setup_token",
+            Self::Filesystem => "filesystem",
+        }
+    }
+}
+
+crate::declare_write_command! {
+    /// S10 — complete first-run setup, with `admin.setup.completed`.
+    command S10 = "S10" {
+        system_principal: permitted;
+        enum S10Event {
+            Completed { user_id: UserId, authorized_by: SetupAuthorizedBy } => &S10_COMPLETED,
+        }
+    }
+}
+
+impl SealedCommandEvent<S10> for S10Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Completed { user_id, .. } = self;
+        Some(AuditTarget(user_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Completed { authorized_by, .. } = self;
+        AuditAttributes::builder()
+            .attribute("authorized_by", authorized_by.as_str())
+            .build()
+    }
+}
+
+/// Already-sealed signing-key material for [`complete_initial_setup`]'s
+/// conditional bootstrap, prepared by the caller before the transaction
+/// opens (RFC 094: crypto work stays outside the write lock) and used
+/// only if the in-transaction check finds no active key.
+pub struct InitialSigningKeyMaterial {
+    pub id: SigningKeyId,
+    pub algorithm: &'static str,
+    pub private_key_sealed: Vec<u8>,
+    pub public_key: Vec<u8>,
+}
+
+/// Run S10: user, credential, the conditional signing-key bootstrap, the
+/// initialized flag, and the event, all in one transaction.
+///
+/// `user` and `cred` are built by the caller; `cred.password_hash` must
+/// already be the Argon2 hash (`hash_password` is deliberately slow and
+/// must not run inside a write transaction). `signing_key` is likewise
+/// already-sealed material the caller generated unconditionally before
+/// this call — cheap to generate, so generating it speculatively and
+/// discarding it when unused costs less than a second trip through the
+/// transaction to decide.
+///
+/// Re-checks `is_initialized` durably, inside the transaction, before
+/// writing anything — the real guard against two concurrent first-run
+/// submissions both passing the callers' own early, cheap checks.
+/// Returns `StoreError::AlreadyInitialized` (nothing written) if the
+/// check loses; `StoreError::Conflict` (from `users::create_within_tx`,
+/// unchanged) if the username collides instead.
+pub async fn complete_initial_setup(
+    db: &crate::Database,
+    user: crate::models::UserRow,
+    cred: crate::models::CredentialRow,
+    signing_key: InitialSigningKeyMaterial,
+    authorized_by: SetupAuthorizedBy,
+    now: DateTime<Utc>,
+) -> StoreResult<crate::registry::Audited<()>> {
+    let user_id = user.id;
+    let context = AuthorizedCommandContext::<S10>::for_system_actor(None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, S10>| {
+        if crate::repos::state::is_initialized_within_tx(tx.tx())? {
+            return Err(StoreError::AlreadyInitialized);
+        }
+        crate::repos::users::create_within_tx(tx.tx(), &user)?;
+        crate::repos::credentials::upsert_within_tx(tx.tx(), &cred)?;
+        if !crate::repos::signing_keys::has_active_within_tx(tx.tx())? {
+            crate::repos::signing_keys::insert_sealed_on_conn(
+                tx.tx(),
+                signing_key.id,
+                signing_key.algorithm,
+                &signing_key.private_key_sealed,
+                &signing_key.public_key,
+                true,
+                now,
+            )?;
+        }
+        crate::repos::state::mark_initialized_within_tx(tx.tx())?;
+        Ok((
+            (),
+            S10Event::Completed {
+                user_id,
+                authorized_by,
+            },
+        ))
+    })
+    .await
+}
+
 // ── C05 — disable client ─────────────────────────────────────────────────
 //
 // RFC 094 M2b wave 4 stage 1. Two writes, one transaction: the client's

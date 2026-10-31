@@ -204,7 +204,7 @@ anywhere in `crates/`.
 > unlock is added later, it needs its own command with `ActorRequirement::Required`,
 > not a widening of this one.
 
-### First-run setup (`setup.*`)
+### First-run setup (`setup.*`, `admin.setup.*`)
 
 Registered 2026-09-13 under G13-b: the first run of the derived namespace
 allowlist found it. Written since the setup wizard shipped, invisible until
@@ -212,14 +212,23 @@ then because `setup.` was not in the hand-written list.
 
 | Event name | Operation | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
-| `setup.create_initial_admin` | Create the initial administrator (browser wizard or headless `sui-id setup`) | the new admin's user id | the new admin's user id | `headless` on the CLI path; none for the wizard | B |
+| `admin.setup.completed` | Create the initial administrator (browser wizard or headless CLI setup), with the signing-key bootstrap and the initialized flag, all in one transaction (cycle I stage 4, command `S10`) | — *(see note)* | the new admin's user id | `authorized_by` (`setup_token` for the wizard, `filesystem` for the CLI) | **A** |
 
-> **Class B, with a caveat.** `sui-id-core/src/setup.rs` appends with
-> `audit::append(...)` and propagates its error with `?`, but only after the
-> admin row is written and the system is marked initialised, in a separate
-> write. A failed append therefore fails the call *after* the state change has
-> committed: not atomic, so not Class A, and not silent either. RFC 094 decides
-> whether it becomes a Class-A command.
+> **`admin.setup.completed` has no actor, and that is correct.** RFC 120
+> (Done) D5/D6 names first-run setup as the narrow, enumerated exception
+> to requiring an authorized actor — there is no authenticated session at
+> first run, by the project's own design, and the target (the new admin's
+> user id) already carries what the actor column would otherwise
+> duplicate.
+
+*Changed 2026-10-31 (cycle I stage 4): setup.create_initial_admin is no
+longer written. The admin/credential/signing-key/initialized-flag writes
+that used to commit separately, with the append as a fifth, now commit
+together with admin.setup.completed — a failure anywhere in that sequence
+rolls the whole attempt back instead of leaving an operator told setup
+failed when it had in fact already completed. If you query, filter or
+alert on the retired name, that rule will stop matching after this
+release.*
 
 ### Pending settings changes (`settings.pending_change.*`)
 

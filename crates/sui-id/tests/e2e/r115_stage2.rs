@@ -566,11 +566,12 @@ fn r115_s2_credentials_writers_are_the_allowlist() {
         }
     }
     let expected: std::collections::BTreeMap<String, usize> = [
-        // The setup wizard and headless `sui-id setup`: the operator's own
-        // first account, through one raw upsert.
-        ("sui-id-core/src/setup.rs", 1),
-        // U09 (self-service change) and U10 (completion of a reset link).
-        ("sui-id-store/src/commands.rs", 2),
+        // U09 (self-service change), U10 (completion of a reset link), and
+        // S10 (cycle I stage 4: first-run setup — the operator's own first
+        // account — moved here from a raw `setup.rs` upsert so the write
+        // commits in the same transaction as the admin user, the
+        // signing-key bootstrap and the initialized flag).
+        ("sui-id-store/src/commands.rs", 3),
         // The two SQL statements that implement `upsert` and `upsert_within_tx`.
         ("sui-id-store/src/repos/credentials.rs", 2),
         // D6, the named exception: `--dev` seeds fixture users with printed
@@ -593,8 +594,9 @@ fn r118_the_credential_writers_that_change_a_password_all_clear_the_lockout() {
     // credential; this says the two that change a *live* account's password
     // (U09 and U10, both in `commands.rs`) also call the one helper that clears
     // the password lockout in the same transaction, and that nothing else calls
-    // it. Setup and `--dev` create new rows and have nothing to clear. A writer
-    // added without the call, or a call removed, fails here.
+    // it. Setup (S10, also in `commands.rs` since cycle I stage 4) and `--dev`
+    // create new rows and have nothing to clear. A writer added without the
+    // call, or a call removed, fails here.
     const HELPER: &str = "clear_password_lockout_within_tx(";
     let sources = production_sources();
 
@@ -624,10 +626,16 @@ fn r118_the_credential_writers_that_change_a_password_all_clear_the_lockout() {
         .collect();
     assert_eq!(
         writers.len(),
-        2,
-        "U09 and U10 are the two writers in commands.rs"
+        3,
+        "U09, U10 and S10 are the three writers in commands.rs"
     );
     for item in &writers {
+        // S10 (first-run setup) creates a brand-new row for a user who has
+        // never signed in — there is no live lockout state to clear, the
+        // exception this test's own doc comment already names.
+        if item.contains("fn complete_initial_setup") {
+            continue;
+        }
         assert!(
             item.contains(HELPER),
             "a credential writer in commands.rs does not clear the password lockout:\n{}",

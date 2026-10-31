@@ -9,14 +9,15 @@ use crate::errors::{CoreError, CoreResult};
 use crate::password::{check_password_policy, hash_password};
 use crate::security::SecurityLevel;
 use crate::time::SharedClock;
-use chrono::Utc;
 use ed25519_dalek::SigningKey;
 use subtle::ConstantTimeEq;
 use sui_id_shared::ids::{SigningKeyId, UserId};
 use sui_id_store::Database;
-use sui_id_store::models::AuditLogRow;
+use sui_id_store::commands::{self, InitialSigningKeyMaterial, SetupAuthorizedBy};
 use sui_id_store::models::{CredentialRow, UserRow};
-use sui_id_store::repos::{audit, credentials, signing_keys, state, users};
+#[cfg(test)]
+use sui_id_store::repos::credentials;
+use sui_id_store::repos::{signing_keys, state};
 use zeroize::Zeroizing;
 
 pub struct CreatedInitialAdmin {
@@ -60,7 +61,7 @@ pub async fn create_initial_admin(
         password,
         display_name,
         email,
-        /* headless */ false,
+        SetupAuthorizedBy::SetupToken,
     )
     .await
 }
@@ -93,7 +94,7 @@ pub async fn create_initial_admin_headless(
         password,
         display_name,
         email,
-        /* headless */ true,
+        SetupAuthorizedBy::Filesystem,
     )
     .await
 }
@@ -128,9 +129,12 @@ pub fn generate_admin_password() -> Zeroizing<String> {
 }
 
 /// Shared body for both setup paths: user row, credential, signing-key
-/// bootstrap, initialized flag, audit entry. Callers have already done
-/// their path-specific authorization (token check / filesystem trust)
-/// and the already-initialized check.
+/// bootstrap, initialized flag and the `admin.setup.completed` event, all
+/// committed in one transaction by `commands::complete_initial_setup`
+/// (S10). Callers have already done their path-specific authorization
+/// (token check / filesystem trust) and the early, cheap
+/// already-initialized check — the authoritative one is the command's
+/// own, inside its transaction.
 #[allow(clippy::too_many_arguments)]
 async fn create_initial_admin_inner(
     db: &Database,
@@ -139,7 +143,7 @@ async fn create_initial_admin_inner(
     password: &str,
     display_name: Option<&str>,
     email: Option<&str>,
-    headless: bool,
+    authorized_by: SetupAuthorizedBy,
 ) -> CoreResult<CreatedInitialAdmin> {
     if username.trim().is_empty() {
         return Err(CoreError::BadRequest("username must not be empty".into()));
@@ -150,7 +154,6 @@ async fn create_initial_admin_inner(
 
     let now = clock.now();
 
-    // 1. Create user.
     let user = UserRow {
         source: sui_id_store::models::UserSource::default(),
         external_stable_id: None,
@@ -181,60 +184,42 @@ async fn create_initial_admin_inner(
         failed_login_count: 0,
         locked_until: None,
     };
-    users::create(db, &user).await.map_err(|e| match e {
-        sui_id_store::StoreError::Conflict => CoreError::Conflict("username already in use".into()),
-        other => other.into(),
-    })?;
 
-    // 2. Persist password hash.
+    // The Argon2 hash is deliberately slow (RFC 126) and must not run
+    // inside a write transaction — computed here, before the command.
     let hash = hash_password(password).await?;
     let cred = CredentialRow {
         user_id: user.id,
         password_hash: hash,
         updated_at: now,
     };
-    credentials::upsert(db, &cred).await?;
 
-    // 3. Bootstrap an Ed25519 signing key if one isn't there yet.
-    if signing_keys::active(db).await.is_err() {
-        // RFC 069: getrandom + from_bytes replaces SigningKey::generate(&mut OsRng).
-        // Semantically equivalent: secret key material from OS RNG; memory
-        // zeroized on drop via Zeroizing<>.
-        let mut secret = Zeroizing::new([0u8; 32]);
-        getrandom::fill(secret.as_mut()).map_err(|_| CoreError::Internal)?;
-        let sk = SigningKey::from_bytes(&secret);
-        let pk = sk.verifying_key();
-        signing_keys::insert_with_plaintext(
-            db,
-            SigningKeyId::new(),
-            "EdDSA",
-            sk.to_bytes().as_ref(),
-            pk.to_bytes().as_ref(),
-            true,
-        )
-        .await?;
-    }
+    // Signing-key material, generated and sealed unconditionally before
+    // the transaction (RFC 069: getrandom + from_bytes, OS RNG; RFC 094:
+    // crypto work stays outside the write lock) — the command decides,
+    // inside its transaction, whether a key is actually needed, and
+    // discards this material otherwise. Generating it is cheap, unlike
+    // `hash_password` above.
+    let mut secret = Zeroizing::new([0u8; 32]);
+    getrandom::fill(secret.as_mut()).map_err(|_| CoreError::Internal)?;
+    let sk = SigningKey::from_bytes(&secret);
+    let pk = sk.verifying_key();
+    let signing_key = InitialSigningKeyMaterial {
+        id: SigningKeyId::new(),
+        algorithm: "EdDSA",
+        private_key_sealed: signing_keys::seal_private_key(db, sk.to_bytes().as_ref())?,
+        public_key: pk.to_bytes().to_vec(),
+    };
 
-    // 4. Mark system initialized.
-    state::mark_initialized(db)?;
-
-    // 5. Audit log entry.
-    audit::append(
-        db,
-        &AuditLogRow {
-            at: Utc::now(),
-            actor: Some(user.id),
-            action: "setup.create_initial_admin".into(),
-            target: Some(user.id.to_string()),
-            result: "ok".into(),
-            note: if headless {
-                Some("headless".into())
-            } else {
-                None
-            },
-        },
-    )
-    .await?;
+    commands::complete_initial_setup(db, user.clone(), cred, signing_key, authorized_by, now)
+        .await
+        .map_err(|e| match e {
+            sui_id_store::StoreError::AlreadyInitialized => CoreError::AlreadyInitialized,
+            sui_id_store::StoreError::Conflict => {
+                CoreError::Conflict("username already in use".into())
+            }
+            other => other.into(),
+        })?;
 
     Ok(CreatedInitialAdmin {
         user_id: user.id,
