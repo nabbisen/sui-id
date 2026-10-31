@@ -467,6 +467,100 @@ impl Write for Captured {
     }
 }
 
+thread_local! {
+    /// The current test's own capture target, read by [`ThreadLocalWriter`]
+    /// at write time. Set only while a [`ThreadLocalCapture`] guard for
+    /// *this* thread is alive.
+    static CAPTURE_TARGET: std::cell::RefCell<Option<Arc<Mutex<Vec<u8>>>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// A `MakeWriter` factory whose instances read [`CAPTURE_TARGET`] on
+/// whichever thread they are invoked from. Zero-sized, so creating one is
+/// free — `tracing_subscriber`'s fmt layer calls the factory once per
+/// event, the same way the existing `Captured`-style helpers clone an
+/// `Arc` once per event.
+#[derive(Clone, Copy, Default)]
+struct ThreadLocalWriter;
+
+impl Write for ThreadLocalWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        CAPTURE_TARGET.with(|t| {
+            if let Some(sink) = t.borrow().as_ref() {
+                sink.lock().expect("lock").extend_from_slice(buf);
+            }
+        });
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+/// Capture every `TRACE`-level event emitted on *this* thread while the
+/// guard is alive — via a subscriber installed as the process's global
+/// default exactly once (`OnceLock`), not per test as
+/// `tracing::subscriber::set_default` does.
+///
+/// Unlike `set_default` layered under a process-global
+/// `tracing::callsite::rebuild_interest_cache()` (the pattern this
+/// replaces, used by several sibling e2e modules — see those for the
+/// pattern this test no longer needs), this needs no rebuild and cannot
+/// race another test's own thread: the interest-cache decision for a
+/// given callsite is computed once, process-wide, against this one
+/// globally-installed subscriber (which answers `TRACE` to everything),
+/// and every thread's event still reaches only *its own* thread-local
+/// sink — a thread with no `ThreadLocalCapture` guard alive writes to no
+/// sink at all. The race the sibling modules' comments describe (a
+/// callsite's interest cached against whichever thread's *own*,
+/// differently-scoped subscriber happened to compute it first) cannot
+/// happen here, because there is only ever one subscriber, process-wide.
+struct ThreadLocalCapture {
+    buf: Arc<Mutex<Vec<u8>>>,
+}
+
+impl ThreadLocalCapture {
+    fn install() -> Self {
+        static INSTALLED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+        INSTALLED.get_or_init(|| {
+            let subscriber = tracing_subscriber::fmt()
+                .with_ansi(false)
+                .with_max_level(tracing::Level::TRACE)
+                .with_writer(|| ThreadLocalWriter)
+                .finish();
+            // `set_global_default` can only succeed once per process;
+            // `OnceLock` already makes this call run at most once, so an
+            // `Err` here would mean something else installed a global
+            // default first, which this test treats the same as success
+            // (there is nothing left for it to do either way).
+            let _ = tracing::subscriber::set_global_default(subscriber);
+            // Added in review: `set_global_default` does **not** rebuild the
+            // interest cache — `tracing-core-0.1.36`'s `dispatcher.rs:299-331`
+            // sets `GLOBAL_DISPATCH` and the two flags, and returns. So a
+            // callsite already registered while no global existed, by a test
+            // with no subscriber of its own, can still be cached as disabled,
+            // and this test would miss its own lines: the original flake,
+            // moved rather than removed. One rebuild here, once per process,
+            // makes the decision against the subscriber above and removes the
+            // dependence on whatever happened to rebuild last.
+            tracing::callsite::rebuild_interest_cache();
+        });
+        let buf = Arc::new(Mutex::new(Vec::new()));
+        CAPTURE_TARGET.with(|t| *t.borrow_mut() = Some(buf.clone()));
+        Self { buf }
+    }
+
+    fn contents(&self) -> String {
+        String::from_utf8_lossy(&self.buf.lock().expect("lock")).into_owned()
+    }
+}
+
+impl Drop for ThreadLocalCapture {
+    fn drop(&mut self) {
+        CAPTURE_TARGET.with(|t| *t.borrow_mut() = None);
+    }
+}
+
 #[tokio::test]
 async fn r103_token_appears_in_no_log_line_and_no_request_uri() {
     let (mut state, mailer, _admin) = reset_app().await;
@@ -474,17 +568,7 @@ async fn r103_token_appears_in_no_log_line_and_no_request_uri() {
     config.log.access_log = true;
     state.config = Arc::new(config);
 
-    let captured = Captured::default();
-    let writer = captured.clone();
-    let subscriber = tracing_subscriber::fmt()
-        .with_ansi(false)
-        .with_max_level(tracing::Level::TRACE)
-        .with_writer(move || writer.clone())
-        .finish();
-    let _guard = tracing::subscriber::set_default(subscriber);
-    // Other tests run in parallel with no subscriber; without a rebuild a
-    // callsite they reached first can stay cached as disabled.
-    tracing::callsite::rebuild_interest_cache();
+    let captured = ThreadLocalCapture::install();
 
     let (token, _) = issue_token(&state, &mailer).await;
     let page = get(&state, "/reset-password").await;
@@ -495,12 +579,11 @@ async fn r103_token_appears_in_no_log_line_and_no_request_uri() {
     assert_eq!(ok.location, None, "the confirmation is the response itself");
     // A used link is an ordinary refusal: logged at info (RFC 103 stage
     // 2), without the token. `r103_stage2` covers the error level.
-    tracing::callsite::rebuild_interest_cache();
     let replay = complete(&state, &token).await;
     assert_eq!(replay.status, StatusCode::BAD_REQUEST);
     assert!(is_invalid_link_page(&replay));
 
-    let logged = String::from_utf8_lossy(&captured.0.lock().expect("lock")).into_owned();
+    let logged = captured.contents();
     assert!(
         logged.contains("uri=/reset-password"),
         "the access log is active:\n{logged}"

@@ -265,24 +265,25 @@ async fn login_rate_limit_returns_429_with_retry_after() {
     let state = test_app();
     let _session = complete_setup_and_login(&state).await;
 
-    // The login limiter is configured to 10 requests per 60 seconds. Burn
-    // through the budget with deliberately wrong credentials.
+    // The window arithmetic (what "exhausted" means, when it resets) is
+    // already proven deterministically, with a controllable clock, by
+    // crates/sui-id/src/runtime/ratelimit/tests.rs. This test's only job
+    // is to show the route is wired to that same limiter and returns 429
+    // with a sane Retry-After once it is exhausted -- so the budget is
+    // burned by calling the limiter directly, in-process, rather than by
+    // ten real HTTP round trips racing the 60-second window under
+    // whatever load the machine is under. `ClientIp`'s own fallback
+    // (`handlers.rs`) is `127.0.0.1` for a request with no `ConnectInfo`,
+    // exactly what `router.oneshot` below produces, so this uses the same
+    // key the real request will.
+    let ip: std::net::IpAddr = "127.0.0.1".parse().expect("loopback");
     for i in 0..10 {
-        let router = build_router(state.clone());
-        let req = Request::builder()
-            .method(Method::POST)
-            .uri("/admin/login")
-            .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-            .body(Body::from("username=alice&password=wrong"))
-            .expect("req");
-        let resp = router.oneshot(req).await.expect("login");
-        assert_ne!(
-            resp.status(),
-            StatusCode::TOO_MANY_REQUESTS,
-            "request {i} unexpectedly throttled"
-        );
+        let decision = state.limiters.login.check("login", ip, state.clock.now());
+        assert!(decision.allowed, "request {i} unexpectedly throttled");
     }
-    // The eleventh attempt should be throttled with 429 + Retry-After.
+
+    // The eleventh attempt, the only real HTTP request this test makes,
+    // should be throttled with 429 + Retry-After.
     let router = build_router(state.clone());
     let req = Request::builder()
         .method(Method::POST)
