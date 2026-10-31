@@ -51,6 +51,26 @@ append_rolls_back_everything`,
 `l04_refuses_when_the_link_no_longer_exists_at_commit_time`, all under
 L04). The TOML has no `F01` row; this paragraph is its record.
 
+**Retired: `C12`, create authorization-scope definition.** `scope_definition::create`
+had no caller anywhere in `crates/` — not production, not a test fixture —
+confirmed by a full-workspace grep before deleting it (cycle I stage 5,
+2026-10-31). RFC 008 (Done) created and seeded the scope-catalog table
+(`:155-156`, migration 0036) but built no administrative path for it, and
+no proposed or accepted RFC covers scope-catalog administration — reserving
+a row against an RFC that does not exist is the same fiction this cycle
+measured elsewhere, one layer down. Its row was `A`, event
+`scope_definition.created`, mutation surface `scope_definition::create`,
+test `a_c12_scope_create` (a planning-time placeholder, never a real test
+name). The TOML has no `C12` row; this paragraph is its record.
+
+**Retired: `C13`, delete authorization-scope definition.** `scope_definition::delete`
+had no caller anywhere in `crates/`, the same measurement as `C12`'s and
+for the same reason — confirmed by a full-workspace grep before deleting
+it (cycle I stage 5, 2026-10-31). Its row was `A`, event
+`scope_definition.deleted`, mutation surface `scope_definition::delete`,
+test `a_c13_scope_delete` (a planning-time placeholder). The TOML has no
+`C13` row; this paragraph is its record.
+
 ## Classes
 
 | Class | Meaning |

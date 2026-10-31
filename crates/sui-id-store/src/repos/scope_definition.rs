@@ -9,7 +9,6 @@
 
 use crate::{Database, StoreResult, errors::StoreError};
 use chrono::{DateTime, Utc};
-use rusqlite::params;
 
 #[derive(Debug, Clone)]
 pub struct ScopeDefinitionRow {
@@ -55,50 +54,6 @@ pub async fn get(db: &Database, name: &str) -> StoreResult<ScopeDefinitionRow> {
             rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
             other => StoreError::from(other),
         })
-    })
-    .await
-}
-
-/// Insert a new scope.  Returns `StoreError::Conflict` if the name already
-/// exists.
-pub async fn create(db: &Database, row: &ScopeDefinitionRow) -> StoreResult<()> {
-    let row = row.clone();
-    db.with_conn(move |conn| {
-        conn.execute(
-            "INSERT INTO scope_definition \
-             (name, requires_consent, is_default, created_at) \
-             VALUES (?1, ?2, ?3, ?4)",
-            params![
-                row.name,
-                row.requires_consent as i64,
-                row.is_default as i64,
-                row.created_at,
-            ],
-        )
-        .map_err(|e| match e {
-            rusqlite::Error::SqliteFailure(err, _)
-                if err.code == rusqlite::ErrorCode::ConstraintViolation =>
-            {
-                StoreError::Conflict
-            }
-            other => StoreError::from(other),
-        })?;
-        Ok(())
-    })
-    .await
-}
-
-/// Delete a scope.  Callers should check that no active client uses the
-/// scope before deleting.
-pub async fn delete(db: &Database, name: &str) -> StoreResult<()> {
-    let name = name.to_owned();
-    db.with_conn(move |conn| {
-        let n = conn.execute("DELETE FROM scope_definition WHERE name = ?1", [&name])?;
-        if n == 0 {
-            Err(StoreError::NotFound)
-        } else {
-            Ok(())
-        }
     })
     .await
 }

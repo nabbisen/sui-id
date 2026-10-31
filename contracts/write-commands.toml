@@ -36,6 +36,12 @@
 # separately `declare_write_command!`-declared command for a row to describe --
 # its own mutation surface now runs inside L04's own transaction. The
 # retirement is recorded in command-inventory.md.
+#
+# C12 (create authorization-scope definition) and C13 (delete authorization-
+# scope definition) have no rows, removed cycle I stage 5 (2026-10-31):
+# `scope_definition::create` and `scope_definition::delete` had no caller
+# anywhere in `crates/`, and no proposed or accepted RFC plans scope-catalog
+# administration. The retirement is recorded in command-inventory.md.
 
 [[command]]
 id = "U01"
@@ -157,13 +163,13 @@ descriptor = ["U10_RESET_COMPLETED"]
 [[command]]
 id = "U11"
 class = "A"
-status = "implemented"  # implemented | target-absent | target-legacy
+status = "target-absent"  # implemented | target-absent | target-legacy
 sealed = false
 owner = "User email change"
-rationale = "`user.email_change`"
-mutation_surface = "`users::update_email`"
-files = ["crates/sui-id-store/src/repos/users.rs"]
-test_id = "`a_u11_email`"
+rationale = "Dispositioned 2026-10-31 (cycle I stage 5): reserve, against RFC 101 (Proposed). RFC 101 says so of its own accord -- `:12-13`, \"every mutation defined here is Class-A and must land on the sealed runner, not beside it. RFC 094's U11 inventory row is the placeholder for the change command\"; D5 (`:127-133`) repeats it. `users::update_email` exists but is called only by e2e fixtures -- ten call sites, confirmed by a full-workspace grep, no production caller -- so it is not an implementation of the command this row describes; no event is emitted and none is invented ahead of RFC 101's own naming."
+mutation_surface = "none -- reserved against RFC 101"
+files = []
+test_id = "none -- reserved; `users::update_email` has ten e2e-fixture callers, kept"
 
 [[command]]
 id = "U12"
@@ -695,28 +701,6 @@ files = ["crates/sui-id-store/src/repos/clients.rs"]
 test_id = "`i_c11_registered_via`"
 
 [[command]]
-id = "C12"
-class = "A"
-status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
-owner = "Create authorization-scope definition"
-rationale = "`scope_definition.created`"
-mutation_surface = "`scope_definition::create`"
-files = ["crates/sui-id-store/src/repos/scope_definition.rs"]
-test_id = "`a_c12_scope_create`"
-
-[[command]]
-id = "C13"
-class = "A"
-status = "implemented"  # implemented | target-absent | target-legacy
-sealed = false
-owner = "Delete authorization-scope definition"
-rationale = "`scope_definition.deleted`"
-mutation_surface = "`scope_definition::delete`"
-files = ["crates/sui-id-store/src/repos/scope_definition.rs"]
-test_id = "`a_c13_scope_delete`"
-
-[[command]]
 id = "C14"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
@@ -780,24 +764,24 @@ test_id = "`a_c18_provider_delete`, `a_c18_generation_overflow`"
 [[command]]
 id = "C19"
 class = "A"
-status = "implemented"  # implemented | target-absent | target-legacy
+status = "target-absent"  # implemented | target-absent | target-legacy
 sealed = false
-owner = "Federation-link upsert"
-rationale = "re-measured 2026-10-31 (cycle I stage 3, §4): the stage plan's premise does not hold. (1) The create half already has its own event -- `provision_federated_user` (F04, `commands.rs:2368-2394`) calls `federation_link::insert_within_tx` (`:2382`) inside the transaction that commits `auth.federation.provisioned`; `auth.federation.link.created` was never this command's to build. (2) `federation_link::upsert`'s one production caller (`federation.rs:1308`, the `ExistingLink` branch) can only ever update (the branch is reached only when a link already exists, `federation.rs:1296-1307`) and is redundant with `promote`'s `touch_last_seen_within_tx` (`commands.rs:3169`) for `last_seen_at` specifically, and only on the local-MFA-required path (`federation.rs:1614` through `admin/auth.rs:774-787` to `commands.rs:2766`/`3163`) -- on the no-MFA path (`sign_in_federated`, L04, `commands.rs:2257-2285`) nothing else touches `federation_link`, so `upsert`'s write is not redundant there, and `upstream_email` is never redundant on either path (`touch_last_seen_within_tx` does not set it). (3) Every path through the `ExistingLink` branch that completes already records the sign-in with a required actor: `auth.federation.signin.success` (L04, no MFA) or `auth.federation.mfa_success` (F03's `Promoted` outcome, MFA required, `federation_mfa_pending.rs:627-629`) -- so 'we saw this link again' is not an undetected fact. Not a stage-3 conversion; disposition deferred to stage 5 (retire the placeholder names rather than mint one, is the likely shape, not decided here)."
-mutation_surface = "`federation_link::upsert`"
-files = ["crates/sui-id-store/src/repos/federation_link.rs"]
-test_id = "`a_c19_link_create`, `a_c19_link_update`"
+owner = "Federation-link create"
+rationale = "Dispositioned 2026-10-31 (cycle I stage 5): reserve, against RFC 096-B2 (`rfcs/accepted/096-upstream-oidc-federation-validation.md:131-132`, \"link create/delete\" -- the id list beside that sentence names only C17/C18/C23, an omission this stage reported rather than fixed; the prose is authoritative). This corrects stage 3's own review, which said the placeholder names should retire -- they should not; 096-B2 is Accepted, planned work, the same place C17/C18 already wait. Stage 3's measurement (2026-10-31, §4) stands and explains why today's write is not this command: `federation_link::upsert`'s one production caller (`federation.rs:1308`, the `ExistingLink` branch) can only ever update, never create -- the create half already has its own event, `provision_federated_user` (F04) committing `auth.federation.provisioned` -- and is redundant bookkeeping on the sign-in path (conditionally with `promote`'s `touch_last_seen_within_tx`, only on the local-MFA-required path; never for `upstream_email`), already covered by `auth.federation.signin.success` or `auth.federation.mfa_success`. The command 096-B2 plans is the administrative link-create C19 names, not this sign-in-path upsert."
+mutation_surface = "none -- reserved against RFC 096-B2; today's `federation_link::upsert` is not this command (see rationale)"
+files = []
+test_id = "none -- reserved"
 
 [[command]]
 id = "C20"
 class = "A"
-status = "implemented"  # implemented | target-absent | target-legacy
+status = "target-absent"  # implemented | target-absent | target-legacy
 sealed = false
 owner = "Federation-link delete"
-rationale = "`auth.federation.link.deleted`"
-mutation_surface = "`federation_link::delete`"
-files = ["crates/sui-id-store/src/repos/federation_link.rs"]
-test_id = "`a_c20_link_delete`"
+rationale = "Dispositioned 2026-10-31 (cycle I stage 5): reserve, against RFC 096-B2 (`rfcs/accepted/096-upstream-oidc-federation-validation.md:131-132`, \"link create/delete\"; see C19's rationale for the id-list omission this stage reported rather than fixed). `federation_link::delete` has no caller anywhere in `crates/` -- confirmed by a full-workspace grep -- but is kept, not removed: 096-B2 is Accepted, not speculative, and names this exact command, unlike C12/C13, which reserved against nothing. No event is emitted; none is invented ahead of 096-B2's own naming."
+mutation_surface = "none -- reserved against RFC 096-B2; `federation_link::delete` kept for it, not yet called"
+files = []
+test_id = "none -- reserved"
 
 [[command]]
 id = "C21"

@@ -26,26 +26,6 @@ async fn openid_does_not_require_consent() {
 }
 
 #[tokio::test]
-async fn create_and_delete_scope() {
-    let db = fresh_db();
-    let row = ScopeDefinitionRow {
-        name: "custom:read".into(),
-        requires_consent: true,
-        is_default: false,
-        created_at: chrono::Utc::now(),
-    };
-    create(&db, &row).await.unwrap();
-    let fetched = get(&db, "custom:read").await.unwrap();
-    assert_eq!(fetched.name, "custom:read");
-    assert!(fetched.requires_consent);
-    delete(&db, "custom:read").await.unwrap();
-    assert!(matches!(
-        get(&db, "custom:read").await,
-        Err(StoreError::NotFound)
-    ));
-}
-
-#[tokio::test]
 async fn consented_names_excludes_openid() {
     let db = fresh_db();
     let names = consented_names(&db).await.unwrap();

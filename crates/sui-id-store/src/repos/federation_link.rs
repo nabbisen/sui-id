@@ -57,30 +57,6 @@ pub async fn find_by_sub(
     .await
 }
 
-/// Check whether any user is linked to a given `(provider_id, email)`.
-/// Used for the account-takeover guard (P2): if email matches and the
-/// provider_id differs, it may be an attempted takeover.
-pub async fn find_any_by_email(
-    db: &Database,
-    provider_id: FederationProviderId,
-    email: &str,
-) -> StoreResult<Option<FederationLinkRow>> {
-    let pid = provider_id.to_string();
-    let em = email.to_lowercase();
-    db.with_read(move |conn| {
-        let mut stmt = conn.prepare(&format!(
-            "{SELECT} WHERE provider_id = ?1 AND lower(upstream_email) = ?2 LIMIT 1"
-        ))?;
-        let mut rows = stmt.query_map(params![pid, em], map)?;
-        match rows.next() {
-            Some(Ok(r)) => Ok(Some(r)),
-            Some(Err(e)) => Err(StoreError::from(e)),
-            None => Ok(None),
-        }
-    })
-    .await
-}
-
 /// List all links for a local user (for `/me/security` future use).
 pub async fn list_for_user(db: &Database, user_id: UserId) -> StoreResult<Vec<FederationLinkRow>> {
     let uid = user_id.to_string();
