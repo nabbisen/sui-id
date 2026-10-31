@@ -132,6 +132,21 @@ Federation provider and link commands (C17/C18/C23) implemented on the RFC 094
 Class-A transaction seam: provider enable/disable, link create/delete, and
 configuration generation increments.
 
+> **The id list above is incomplete, and the prose is the authoritative
+> half — recorded 2026-10-31, during RFC 094 cycle I stage 5.** *"Link
+> create/delete"* is **C19** and **C20**; the parenthetical names only
+> C17, C18 and C23. RFC 094's own census inherited the omission and
+> listed just C17/C18 as awaiting this stage. **No decision changes
+> here**: C19 and C20 are reserved against 096-B2 in
+> `contracts/write-commands.toml`, which is where the inventory is
+> authoritative. The scope this stage was accepted with is the scope the
+> sentence states — the ids were an incomplete restatement of it, which
+> is the same failure RFC 094 cycle I was called to fix one layer down.
+> C19's current `federation_link::upsert` is **not** this command: cycle
+> I stage 3 measured it as bookkeeping on the sign-in path, already
+> covered by `auth.federation.signin.success` or
+> `auth.federation.mfa_success`.
+
 Requires RFC 094 **M2b** Implemented. RFC 094 schedules federation configuration
 in its M2b remaining-conversion wave, and these are administrative commands, not
 part of the user login path.

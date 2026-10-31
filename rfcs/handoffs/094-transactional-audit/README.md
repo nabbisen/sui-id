@@ -83,7 +83,47 @@
 > wrapper is a decision point** — that is the standing instruction this
 > stage added.
 >
-> **Stage 4 is dispatched** —
+> **Stage 4 LANDED** `9a0709c`, 2026-10-31 — **CI 28 success / 0 failed
+> / 0 skipped**. First-run setup is one transaction; G20 55 → 56.
+> **A first-run race closed with it**: both entry wrappers checked
+> `is_initialized` outside the writes they guard, so two concurrent
+> submissions could both pass. Review —
+> `.git-exclude/reviewed/cycle-i-stage4-setup-is-one-transaction-2026-10-31.md`.
+> *The round also moved a credential writer between files, which RFC
+> 115 D4's allowlist exists to force a human to look at — the total
+> number of production credential writers is unchanged at three.*
+>
+> **Stage 5 is dispatched, and it closes the cycle's scope** —
+> `.git-exclude/staging/cycle-i-stage5-the-dispositions-2026-10-31.md`.
+> No conversions: six rows with no live write get an accurate rationale
+> in place of a bare declared event name, and two functions plus one
+> dead reader are deleted. The dispositions, each traced against the
+> RFC that claims it rather than its title: **U11** reserves against
+> RFC 101, **C19 and C20** against RFC 096-B2, and **C12/C13** are
+> removed outright because nothing plans scope-catalog administration —
+> reserving a row against an RFC that does not exist is how an inventory
+> accumulates the fiction this cycle was called to fix. The four
+> callerless rows also move from `status = "implemented"` to
+> `target-absent`: a repo function existing is not the command existing.
+>
+> **One record correction, made 2026-10-31**: RFC 096-B2's prose plans
+> *"link create/delete"* while its own id list names only C17/C18/C23,
+> omitting the two rows that are link create and delete. The prose is
+> the authoritative half; no decision changed. *This also corrects stage
+> 3's review, which concluded C19's placeholder names should retire —
+> they should not; 096-B2 plans the command.*
+>
+> **Separately dispatched, and it gates the cut rather than the stages**
+> — `.git-exclude/staging/pre-cut-two-load-sensitive-tests-2026-10-31.md`.
+> Two tests failed under load during cycle I reviews and pass alone: a
+> rate-limit test asserting real-clock arithmetic against a 60-second
+> window, and a log-capture test whose subscriber is thread-local while
+> the interest cache it rebuilds is process-global. Level B requires
+> every lane green on the exact tagged commit, with 0 skipped, before
+> the publish workflow mints a token — so either can refuse a release
+> for a reason unrelated to it.
+>
+> **Stage 4's own dispatch was** —
 > `.git-exclude/staging/cycle-i-stage4-setup-is-one-transaction-2026-10-31.md`.
 > **S10, the largest single change in the cycle.** First-run setup
 > becomes one transaction: today its audit append is step 5 of 5 and
