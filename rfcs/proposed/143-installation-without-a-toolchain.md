@@ -82,7 +82,35 @@ Three, chosen to cover the stated problem rather than to look thorough:
 |---|---|
 | `x86_64-unknown-linux-gnu` | The deployment guide's own assumption, and the overwhelming majority of self-hosted Linux. |
 | `aarch64-unknown-linux-gnu` | Small-ARM self-hosting is where "I have no build toolchain" is most often literally true. |
-| `x86_64-unknown-linux-musl` | **The one that actually answers the question asked.** The glibc builds still need `libssl.so.3` and a matching glibc; a static musl build needs nothing, which is what "most users do not have a workstation to build" really requires. |
+| `x86_64-unknown-linux-musl` | **The one that actually answers the question asked.** The glibc builds still need `libssl.so.3` and a matching glibc; a static build needs neither. |
+
+> **Correction, 2026-11-01, before this RFC was reviewed.** An earlier draft
+> said a static musl build "needs nothing". **It needs vendored OpenSSL**, and
+> the measurement is this: `webauthn-rs-core` 0.5.5 depends on
+> `webauthn-attestation-ca` **unconditionally** — `[dependencies.webauthn-attestation-ca]`
+> with no `optional`, so it is not behind `webauthn-rs`'s `attestation`
+> feature. Setting `default-features = false` on `webauthn-rs` was tried and
+> **openssl survived in the tree**. Everything else is already pure Rust:
+> `rusqlite` is `bundled`, and TLS is rustls throughout (`ldap3`
+> `tls-rustls-ring`, `reqwest` `rustls`, `tokio-rustls`), so **OpenSSL is the
+> single C dependency and it arrives through one unused feature of one crate.**
+> `openssl`'s own `vendored` feature exists (`vendored = ["ffi/vendored"]`), so
+> a static build is feasible — by compiling OpenSSL into the artifact.
+>
+> **That is a supply-chain consequence, not a build detail, and it is why Q1
+> below is a real question rather than a preference.** A dynamically linked
+> artifact is patched by the operator's own OS when an OpenSSL advisory lands.
+> A statically linked one is patched by **this project cutting a release** —
+> so shipping static means accepting that latency for a C library.
+>
+> **The argument that this is acceptable here**: sui-id uses no WebAuthn
+> attestation API at all — one match for `attestation` across `crates/`, and
+> it is the `attestationObject` JSON field name in a test fixture. So the
+> linked OpenSSL is, as far as that measurement goes, unreachable, and
+> `release-process.md` already holds the rule that *"an advisory with no
+> reachable path into the built artifact is recorded and does not stop a
+> release."* **That reachability claim should be tested, not assumed**, before
+> it is relied on.
 
 **No macOS or Windows target.** sui-id is a server, the deployment guide
 documents systemd, and shipping an artifact this project neither tests nor
@@ -158,8 +186,15 @@ generated from it inherits that and cannot disagree with it.
 
 ## Open questions for the approver
 
-1. **D2's target set** — three artifacts, or musl plus `x86_64-gnu`? The
-   architect leans the latter.
+1. **D2's target set, and it is now a posture question rather than a list.**
+   The correction above means the choice is **static (vendored OpenSSL, this
+   project patches it) against dynamic (the operator's OS patches it)**, not
+   simply which triples to build. The architect's recommendation: **ship both
+   architectures, `x86_64` and `aarch64`** — small-ARM self-hosting is exactly
+   the population that cannot build — and **static**, on the unreachability
+   argument above, **conditional on that unreachability being tested rather
+   than asserted**. What remains yours is whether sui-id should become the
+   patch path for a C library it links but does not call.
 2. **Whether this is an authorized exception to the feature freeze.** The
    architect's argument that it is: it adds **no product surface** — no route,
    no configuration key, no runtime code — and lands entirely in release

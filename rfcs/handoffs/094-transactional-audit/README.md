@@ -1,5 +1,41 @@
 # RFC 094 developer handoff
 
+> # **`0.87.0` IS RELEASED AND PUBLISHED**, 2026-11-01. Tag `0.87.0` at
+> `cebb169`, annotated and on `main`. **Level B on that exact commit**
+> (`workflow_dispatch` `41262339914`, **28 jobs, 28 success, 0 skipped,
+> 0 failed**); **`Security audit` green on the same commit**
+> (`workflow_dispatch` `41294790173`), and read at step 0 as well.
+> `check-publish-preconditions.py` satisfied all four conditions.
+> **Six crates on crates.io**, confirmed twice — the project's own
+> detector (*"0.87.0 is published on all 6 crates"*) and a direct
+> per-crate `max_version` query, none yanked.
+>
+> **This is RFC 141's first real use, and it worked.** Publish run
+> `41295070165`: six token mints, six publishes, and the
+> partial-publish reporter correctly `skipped`. **Nobody held a registry
+> token** — six were minted at run time and discarded, which is the
+> property the RFC was built for and is now demonstrated rather than
+> asserted.
+>
+> **The `release` environment's gate is a deployment-ref policy, not an
+> approval step** — `branch: main` and `tag: [0-9]*.[0-9]*.[0-9]*`,
+> which correctly excludes a `v`-prefixed tag. **`@nabbisen`, 2026-11-01:
+> *"I said no requirement. - currently... The item will be necessary in
+> the future. But it is not now. We are still in v0 development."*** The
+> architect's concern was not stability but that `cargo publish` is
+> irreversible while the dispatcher holds the credentials; the counter
+> that settled it is that no third-party deployment is known, so a
+> mistaken publish costs a yank and a patch release rather than harm to
+> a dependent, and `check-publish-preconditions.py` already refuses
+> every *mechanical* error a reviewer would catch. Recorded because RFC 141 §2 and `publish.yml`'s own header
+> describe a required reviewer, and **those two now overstate the
+> control** — an amendment is owed, not a silent divergence.
+>
+> **Still `@nabbisen`'s, and RFC 141 §6 sets the order:** now that a
+> workflow publish has succeeded, enable Trusted-Publishing-only on all
+> six crates **and then** revoke the workstation API token. Until the
+> revocation, the old credential still works and the gain is partial.
+>
 > # **CYCLE I IS COMPLETE**, 2026-11-01. Stage 5 landed `4f55195` and
 > the pre-cut test round `e651e9c` — **CI 28 success / 0 failed / 0
 > skipped**. `0.87.0`'s scope is done: the census, the conversions

@@ -53,6 +53,7 @@ ROADMAP.md	6e364cabaa11522c5c854bd5ae883cd048fd57c65b877741fc33ee0d474451fd	1	Cy
 ROADMAP.md	766450b57c4bb79e356dfd9ac065f79cbec7c49ef087e3ca6fa8ba0c5afad2b6	1	#### S1a — The workflow, ruled by @nabbisen on 2026-10-01
 ROADMAP.md	7c3b4d73cf9008f591c43f49ceb79d4570fa262c5fa82e72506f9abea4c17ebb	1	All remain Proposed , no schedule, require owner direction + soak.
 ROADMAP.md	831b9986beea7e5a3407a96fb665d91220901ae66ea5285416a15da856e8f4df	1	Ruled 2026-09-22 ( @nabbisen ): Chinese is necessary but not urgent — it waits until the APIs are stable, and then a native-speaker review, 
+ROADMAP.md	83ef54d5032a1d1a52115c7af4279bb5f9dfa09ce72cac06df84a2da68d122b8	1	The release environment gates on a deployment-ref policy ( main , and tags matching N.N.N ) rather than an approval step; @nabbisen , 2026-1
 ROADMAP.md	85972bca8cfda9e25847b615a12c3709aae33d07115fcd9c82cad11b804bd37b	1	Owner decision, 2026-08-26. Review is not skipped.
 ROADMAP.md	8f0151094259a8bc85d880cb9104615b5a24981cf3d81397b72d47814e1352a0	1	RFCs 094, 095 and 096 were returned to proposed/ on 2026-07-28 for owner-approved material amendments, and were re-accepted on 2026-08-27.
 ROADMAP.md	92e87f0d49a150a6963709d59e47d782889e1336a93d3eedfb51fcdb52347651	1	They must: because owner-requested self-review is legitimate, a gate that rejected every self-review would reject work this ruling permits.
@@ -60,7 +61,6 @@ ROADMAP.md	98ceb61a86f24277ce9291924a6e17133bb443462bede8d98ec302a9c90aff71	1	La
 ROADMAP.md	a9bbc3d5025b4c0528bdbca925b2a6d6b32f670b9b1391a0c5e6ca7c07a456e4	1	RFC 115's three open questions stay open: they are design forks for @nabbisen , and the design review is asked for its view on each as an in
 ROADMAP.md	b47cd980c89ef41abd8de0e517a02478a2c05f57670c73373d4075e5a12650b1	1	This schedule is the architect's proposal. It is recorded here so it can be argued with; it becomes a plan when @nabbisen authorizes it.
 ROADMAP.md	b896eddb59d1bc16048f69a92af1c552c0e99023d5a710c6021e4b4c4096611c	1	Correction, 2026-08-26 — this entry was previously wrong about its own provenance. The version written on 2026-07-30 in 1e59e3d recorded a t
-ROADMAP.md	b909844bfad4c07feb07427a32f9d824c71934a0b3b34bca035595ab403ec4e1	1	I — every remaining Class-A row gets its record v0.87.0 AUTHORIZED 2026-10-30 — @nabbisen : "Authorized." RFC 094 M2b's remainder, split int
 ROADMAP.md	ba516c67d0d3dd1fdb14f601de2a4b446ec1230d87e5baf7c7738d4e0d691338	1	117 2026-09-24 [ rfcs/handoffs/117-verifiable-owner-decisions/design-review-request.md ](rfcs/handoffs/117-verifiable-owner-decisions/design
 ROADMAP.md	bb235e2112792587a7ec5c03335238612a542d7b027f1b50e0382ea0526d46f6	1	codex-project-architect , codex-developer , and codex-independent-architecture-security-reviewer are agent identities from one vendor, with 
 ROADMAP.md	bd873ea5fa5be8b218d9a441f7a9bb71ffb3d08e288c993dc9fa2b3265676439	1	Owner ruling, 2026-09-22: implementation handoffs live under rfcs/handoffs/ , now and in future. RFC 000 requires every rfcs/handoffs/NNN-sl
@@ -436,6 +436,7 @@ rfcs/handoffs/094-transactional-audit/command-inventory.md	982da50f353d6bd23e861
 rfcs/handoffs/094-transactional-audit/cycle-e-and-0.83-revised-2026-10-20.md	73181276d6b64e2d51eafffcfa4b25662f98450d508bc0d55683335bac046a15	1	@nabbisen , 2026-10-20: "Your recommedation is accepted." So 0.83.0 is M3 stages 2 and 3, and M2b is the programme after it, in tranches fro
 rfcs/handoffs/094-transactional-audit/cycle-e-and-0.83-revised-2026-10-20.md	f6ffda10faca7da0e34bba94abcd5ccfc7fe09b3b02cafe6674fdb8249f7f6fa	1	The pre-publish audit step is approved , with a constraint recorded verbatim and attributed, because it is a standing rule rather than a rem
 rfcs/handoffs/094-transactional-audit/cycle-g-and-0.85.0-2026-10-25.md	a7366bbbeef675605f4a938bb7a43275a805796ece9801a93b8ea811e21a1ac8	1	RULED by @nabbisen , 2026-10-25: "Your recommendation is authorized." So:
+rfcs/handoffs/094-transactional-audit/cycle-j-and-0.88.0-2026-11-01.md	cac2b466233a5ddd792ece5b7956a1f952b8634250388c5bfd0c64981ad6c89b	1	RFC 094's closure field, M2b: "every remaining Class-A row converted; no production Class-A best-effort append anywhere; the AST boundary ga
 rfcs/handoffs/094-transactional-audit/g13-audit-matrix-lane.md	7ce5204868fbdae783c77317eda6843fc2058a7a4eb04a444730a7bf9660c45c	1	Authorized. @nabbisen , 2026-09-12, as step 2 of the R10 resolution.
 rfcs/handoffs/094-transactional-audit/m2a-re-read-2026-10-02.md	99fc69f54d808a2446e87eab0ec46fe48afa6b97c84e315a5add648094ddc097	1	@nabbisen directed M2a to proceed on 2026-10-02.
 rfcs/handoffs/094-transactional-audit/m2a-re-read-2026-10-02.md	b360172a5ee8ea18461314a27708389ff5a9fe79e99d983f0196acd17b5462fe	1	## Proposed window, for @nabbisen to authorize
