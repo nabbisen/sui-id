@@ -917,17 +917,37 @@ of this is in the [threat model](https://github.com/nabbisen/sui-id/blob/main/do
 Every audit row carries a `prev_hash` and a `hash`, where
 `hash = SHA-256(prev_hash || canonical_bytes(row))` and
 `prev_hash` is the previous row's `hash`. To rewrite or delete
-row N you'd have to recompute every later row's hash — something
-an attacker with raw SQL access can do, but never without leaving
-a detectable mismatch at the boundary, because the legitimate
-code path's hash computation is the only thing that produces
-matching chains.
+row N you'd have to recompute every later row's hash.
+
+**Corrected 2026-11-01. This passage used to say that recomputation
+"never" avoids leaving a detectable mismatch, because the legitimate
+code path was "the only thing that produces matching chains". That was
+wrong, and it overstated your forensic position.** The hash is
+`SHA-256(prev_hash || canonical_row_bytes)` — **no key, no secret, and
+the algorithm is in the published source.** So the computation needs
+nothing an attacker lacks: anyone who can write to the `audit_log`
+table and bothers to run it can rewrite history and leave a chain that
+verifies clean.
+
+**What the chain really catches, which is still worth having.**
+Tampering that does *not* recompute: a careless `UPDATE` or `DELETE`, a
+partial restore, file-system corruption, a backup stitched from two
+points in time. That is the overwhelming majority of real-world
+database damage, and the chain turns it from invisible into loud. What
+it does not do is resist someone who edits the table *and* reruns the
+hash.
+
+**So: a verified chain is evidence that nothing clumsy happened to this
+database. It is not proof that nothing happened.** If you need the
+stronger property, it has to be anchored somewhere the writer cannot
+reach — an external append-only sink, or signing heads with a key the
+database host does not hold. Neither exists today; external
+timestamping remains a follow-up topic.
 
 This is local tamper-evidence: it catches DB-only attackers (SQL
-injection, misconfigured backups, file-system access) but not
-attackers who control the binary itself. For most self-hosted IdP
-deployments that's the relevant attack model; full external
-timestamping is a follow-up topic.
+injection, misconfigured backups, file-system access) **who do not
+recompute**, and not attackers who control the binary itself. For most
+self-hosted IdP deployments that is the relevant attack model.
 
 ### What sui-id does on startup
 

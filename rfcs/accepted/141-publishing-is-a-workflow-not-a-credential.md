@@ -175,6 +175,52 @@ API token. Doing it in that order means a failure of the new path falls
 back to the old one instead of locking the project out of its own
 registry.
 
+> ### Amended 2026-11-01, because the instruction above was harmful as written
+>
+> *Raised by `@nabbisen` on 2026-11-01, asking whether the restriction is
+> *"really effective"* and noting that **"restriction has goodness and
+> badness. The important is the strategy based on the project reality."***
+> He is right, and following the paragraph above literally would have
+> left this project unable to yank a bad release.
+>
+> **The measured fact.** A Trusted-Publishing token cannot yank. RFC 3691,
+> under *Unresolved questions*: *"Initially, all Trusted Publisher
+> Configurations will default to `publish-update` with no option to change
+> this."* `yank` appears only under *Future Possibilities*. So once the
+> workstation token is revoked, **nothing can yank** —
+> `release-process.md`'s own Yanking section assumes a working
+> `cargo yank`, and `cargo yank` needs a conventional API token.
+>
+> **The corrected instruction, and it is deliberately not "keep a yank
+> token".** Revoke the publish-capable token as the paragraph above says,
+> and **do not keep a standing `yank`-scoped one in its place.** A
+> long-lived yank-capable credential on a workstation is a smaller
+> instance of exactly what this RFC removed, and yanking six crates is a
+> denial of service against every consumer resolving them. **Mint a
+> `yank`-scoped token at the moment it is needed and revoke it after** —
+> that costs about a minute and needs the same crates.io account access
+> that assessing the emergency needs anyway.
+>
+> **So yanking is deliberately not automated, and that is the decision**:
+> publishing is a workflow because it is routine and mechanical; yanking
+> is a judgement made once in a crisis, and it keeps a person in it.
+>
+> **And the boundary this section never named is ownership, not the
+> configuration.** RFC 3691: *"Any owners of the crate can create, delete,
+> or edit these configurations."* So Trusted-Publishing-only is not a lock
+> against an owner — an owner can remove it. What protects the six crates
+> is therefore **who owns them**, which means a suspected account
+> compromise calls for an ownership review and not only a token
+> revocation. Nothing in this RFC previously said so.
+>
+> **Materiality.** This corrects a step and adds a caution; it does not
+> change what this RFC decided — publishing remains a workflow, and
+> Trusted-Publishing-only remains the end state. On the architect's
+> reading it is therefore **not** a material change under RFC 000's rule
+> and does not return this RFC to `proposed/`, the same judgement RFC 094's
+> closure-field consolidation recorded. **That reading is the architect's
+> and is offered for confirmation, not asserted as a ruling.**
+
 ## Alternatives rejected
 
 - **A long-lived `CARGO_REGISTRY_TOKEN` in GitHub Secrets.** Moves the

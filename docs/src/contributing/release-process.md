@@ -249,6 +249,18 @@ Before tagging, in addition to Level B on the commit being tagged:
 
 ## Yanking
 
+**Yanking needs a token, and after RFC 141 §6 there is not one standing.**
+A Trusted-Publishing token cannot yank — RFC 3691 fixes those at
+`publish-update` scope — so the publish workflow is no help here. **Mint a
+`yank`-scoped API token on crates.io, use it, and revoke it**, rather than
+keeping one for the day it is needed: a long-lived yank-capable credential
+is the thing RFC 141 removed, in miniature, and yanking six crates is a
+denial of service against everyone resolving them.
+
+**This is deliberately a person's job, not a workflow's.** Publishing is
+routine and mechanical, so it is automated. Yanking is a judgement made
+once, in a crisis, and keeping a person in it is the point.
+
 If a published version turns out to be broken:
 
 ```bash
@@ -257,6 +269,10 @@ cargo yank sui-id --version 0.1.0
 
 Run this for every crate in the affected version, in the *reverse* of the
 publish order.
+
+**A yank is not a withdrawal.** It stops *new* dependents resolving that
+version and leaves every existing lockfile working, so it is a brake, not
+an undo. A released version cannot be removed.
 
 ## Why path + version dual-spec
 

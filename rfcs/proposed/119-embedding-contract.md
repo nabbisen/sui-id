@@ -111,3 +111,80 @@ set is larger, and finding it is this RFC's work, not RFC 121's.
 
 Questions 1–3 are for the independent design review to attack and for
 `@nabbisen` to settle; the architect does not treat them as decided.
+
+## Answers, 2026-11-01
+
+`@nabbisen` asked the architect to review these *"carefully by yourself
+with my fundamental philosophy"* — `ROADMAP.md` §S1c's owner-invoked
+exception, and the record says he asked.
+
+### Q1 — the module owns the count; the host owns a stable attempt id
+
+**Half of this is solvable and the RFC was too pessimistic.**
+*Inflation* — a host retrying a failed call and driving the count up —
+is closed by requiring the host to supply an **attempt identifier
+stable across its own retries**, with the module counting once per
+distinct id. The machinery already exists: `federation_login_attempt`
+is durable attempt state with one-time consumption (RFC 096-B1).
+
+*Suppression* — a host reusing one id across genuinely distinct
+attempts — **cannot** be closed, and it is not lockout-specific: a host
+that can call the module can also decline to. It belongs in the
+closure prerequisite's category (c).
+
+### Q2 — the guarantee does not narrow, it goes away. Category (c)
+
+**Settled by measurement, and the earlier framing of "a narrower
+claim" was wrong.** Three properties would have to survive embedding
+and none can:
+
+- **Completeness** — the host decides whether to call at all.
+- **Attribution** — the actor is whatever the host asserts.
+- **Integrity** — the chain is `SHA-256(prev_hash || canonical_row_bytes)`
+  (`repos/audit.rs:3`) with **no key and no external anchor**. A host
+  with database write access recomputes it and leaves nothing to find.
+
+**And it cannot be fixed in-process**: the module cannot keep a secret
+from the host — same address space — and cannot reach a sink the host
+cannot block. So **no construction makes an embedded audit log
+trustworthy against the host.**
+
+`@nabbisen`, 2026-11-01: *"When embedded, it seems impossible to me if
+sui-id can not guarantee the log."* That is the correct reading, and it
+is structural rather than a matter of policy or wording.
+
+**So: category (c).** The embedded module's audit rows are a record
+*the host keeps* — sui-id's schema, sui-id's algorithm, and sui-id
+vouching for neither its completeness nor its integrity. The
+documentation says so plainly, in the embedder's terms.
+
+**The line this draws, which is the useful part.** If an embedder needs
+a trail sui-id vouches for, the sink must sit **outside the host's
+trust boundary** — which is not an embedding of that component but a
+service the host talks to. So: embed the authentication logic, policy
+and validation; **do not embed the thing that must be trustworthy
+against the embedder.**
+
+*This review also found a live defect outside this RFC: the operators
+guide claimed a SQL-level rewrite always leaves a detectable mismatch.
+It does not, for the same reason as above. Corrected 2026-11-01 in
+`docs/src/guides/operators.md`.*
+
+### Q3 — settled: a UI-less embedding is supported, and it is the primary case
+
+**`@nabbisen`, 2026-11-01: *"Agreed. It is contract instead of UI
+function."*** — which is the better framing and is adopted as the
+section's own.
+
+A host with its own UI is the realistic consumer, so UI-less is not an
+edge case. The difficulty the contract must carry: **several security
+properties here are produced by the UI rather than the logic** — RFC
+124's uniform response, the neutral forgot-password reply, the
+invalid-link page identical for unknown, used and expired tokens. A
+host reimplementing the presentation reproduces the look and loses the
+property, because non-enumeration looks like a cosmetic choice.
+
+**So the obligation is on the API's shape, not on the host's
+discipline**: where indistinguishability *is* the property, the module
+must not expose the distinction at all. A leak the host cannot commit
+beats a leak the host is told not to commit.
