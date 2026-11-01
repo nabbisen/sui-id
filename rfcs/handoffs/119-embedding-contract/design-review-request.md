@@ -1,9 +1,56 @@
 # RFC 119 — independent design review request
 
 **RFC.** [RFC 119 — What a host must promise before sui-id can be embedded in it](../../proposed/119-embedding-contract.md). **Proposed**, with `@nabbisen`'s acceptance recorded 2026-09-26 and the status held until this review exists.
-**Reviewer.** Mid-capability model, implementation role. It authored neither the
-RFC nor its handoff.
-**Route.** The routing recorded in `ROADMAP.md` §S1 (2026-08-26).
+**Reviewer.** **`@nabbisen`, or an external architect he engages.**
+**Corrected 2026-11-01, and this is why the RFC sat for 36 days.** This
+request originally named the *mid-capability model, implementation role* as
+the reviewer, routed on `ROADMAP.md` §S1 as it stood on 2026-08-26. Five days
+after the request was written, **§S1a (ruled 2026-10-01)** settled the routing
+differently: its table reads *"Design review | `@nabbisen`, or an external
+architect he engages. **Not the dev team.**"* So from 2026-10-01 this request
+named a reviewer who may not perform it, and there was nobody it could
+legitimately be handed to — which is why nothing happened to it.
+**Route.** `ROADMAP.md` §S1a (2026-10-01), superseding §S1 (2026-08-26).
+
+## The quickest route, and it is not the architect's to take
+
+**Route 1 below may already be satisfied, and RFC 141 is the precedent.**
+That RFC's `Independent design review` field cites a record whose own first
+section states that an approval, under §S1a's table, **is** the design review
+rather than a substitute for one. §S1a places the role with the approver, so
+an approval can discharge the field.
+
+**The difficulty is the date.** RFC 119's approval is recorded 2026-09-26 —
+**five days before §S1a existed.** The rule placing the review role there was
+not yet written, so nobody filling that role at the time could have known they
+were. **The architect is not writing that record unprompted.** Doing so would
+assign a role backwards in time on the strength of the architect's own reading,
+and this project has a standing rule against recording the architect's reading
+as a ruling. The question below is therefore genuinely open, not rhetorical.
+
+**So one of three, and it is his to pick:**
+
+1. **His 2026-09-26 acceptance was the §S1a design review** — say so, and the
+   architect writes the record citing his words, RFC 141's shape exactly. The
+   chain unblocks the same day with no new work.
+2. **He reviews it now**, against the attack list below.
+3. **He engages an external architect** — §S1a makes that his option, not a
+   requirement, and §1 below is written for that reader.
+
+**Until one of those happens, RFC 119 cannot become Accepted, and the
+store-boundary RFC may not be written at all** — RFC 119's own header makes
+itself that prerequisite. One sentence in reply moves a chain that has not
+moved in 36 days; nothing else in it is waiting on work.
+
+## Which parts suit which reviewer
+
+**§1's measurement extension is written for an external architect**, and is
+not a reasonable ask of the owner: it wants the remaining rows of a
+code-measurement counted. If route 2 is chosen, **the review that matters from
+him is §2 onward** — whether the contract's *shape* is right, which is a
+judgment call rather than a counting exercise, and the half this project's
+philosophy makes decisive: a contract an embedder misreads is worse than no
+contract.
 **Why this review is the thing standing between an owner decision and a status
 change.** G11 refuses an Accepted RFC whose security review is Required and
 which cites no review. That guard exists because RFC 105 shipped with none.

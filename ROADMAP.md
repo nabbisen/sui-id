@@ -981,7 +981,37 @@ RFC 115's three open questions stay open: they are design forks for
 `@nabbisen`, and the design review is asked for its view on each as an input,
 not as the decision.
 
-### Cycles C–E — the embeddable boundary — proposed 2026-09-25, **not yet authorized**
+### The embeddable boundary, and installation — **re-proposed 2026-11-01**
+
+> **The targets below replaced v0.80.0–v0.82.0 on 2026-11-01, and the old ones
+> were a defect, not just stale.** This section proposed cycles C/D/E at
+> v0.80.0, v0.81.0 and v0.82.0. All three shipped — with RFC 094's conversion
+> waves — and `0.87.0` is cutting now, so the table read as a live forward plan
+> while naming seven-release-old versions. **A stale plan is worse than no
+> plan**: it answers "is this scheduled?" with a yes that is not true. Raised by
+> `@nabbisen` on 2026-11-01, asking whether these two themes are *"properly
+> controlled under the real schedule"*. They were not.
+>
+> **Nothing moved because of a capacity choice.** The chain is blocked on one
+> thing: **RFC 119's status cannot change without an independent design
+> review**, and its review request named the *dev team* as reviewer — routed on
+> §S1 as it stood 2026-08-26, five days before **§S1a (2026-10-01)** ruled
+> design review to be *"`@nabbisen`, or an external architect he engages. Not
+> the dev team."* From that date the request named someone who may not perform
+> it, so there was nobody to hand it to. Retargeted 2026-11-01 —
+> [`rfcs/handoffs/119-embedding-contract/design-review-request.md`](rfcs/handoffs/119-embedding-contract/design-review-request.md),
+> which also states the three routes open and that **the quickest is a
+> one-line answer from him**.
+>
+> **Installation is newly proposed and comes first.** It was not in this
+> section, or any other, before 2026-11-01 — no RFC, no cycle, and zero
+> GitHub Releases, so no prebuilt artifact has ever existed. It is now
+> [RFC 143](rfcs/proposed/143-installation-without-a-toolchain.md). **It is
+> proposed ahead of the embeddable work deliberately**: it is small, it adds no
+> product surface, it needs no prerequisite but RFC 141's first use, and it
+> removes the condition that a prospective operator must own a Rust toolchain
+> to run sui-id at all — while the embeddable chain is still blocked on a
+> review that is not the architect's to give.
 
 `@nabbisen` raised two themes on 2026-09-25 — an **embeddable (pluggable) auth
 module**, and **ZKP as an optional feature** with the constraint that *"the core
@@ -1006,9 +1036,9 @@ compiles into any framework and guarantees nothing is worse than no module.
 
 | Cycle | Target | Ready when | Embeddable contents |
 |---|---|---|---|
-| **C** | v0.80.0 | **No window** (2026-10-02: dated windows withdrawn) | **[RFC 119](rfcs/proposed/119-embedding-contract.md) — the embedding contract.** **Written 2026-09-25 and Proposed**, on `@nabbisen`'s "Yes" of the same day. Design only, no code: what a host must promise about sessions, CSRF, redirects, clock and the audit sink for RFC 102's audited sign-in, RFC 118's lockout and RFC 094's audit seam to still mean what they claim. Written by the architect during cycle B at no cost to implementation capacity; its independent design review is the first review dispatched in C |
-| **D** | v0.81.0 | **No window** | **The store-boundary RFC** (number assigned when it is written; **120 is taken** — it is the consent and setup security fix of 2026-09-29). `sui-id-core` written against a trait rather than `sui-id-store`: the 22 entry points and the 269 references. With it, **`contracts/embeddable-deps.toml` and a gate** over the embeddable crate's resolved dependency set, so "minimal, lightweight and clean" is a checked contract rather than an intention |
-| **E** | v0.82.0 | **No window** | **The embeddable-module RFC** (number assigned when it is written). The split proper, plus a worked example embedding it in one host framework. The gap over the year end is deliberate, not slack |
+| **J** | v0.89.0 | **No window** (2026-10-02: dated windows withdrawn) | **[RFC 143](rfcs/proposed/143-installation-without-a-toolchain.md) — installation without a toolchain.** Prebuilt artifacts attached to the release by `publish.yml` itself, with `SHA256SUMS` and build-provenance attestation, and a Quick Start that leads with download-verify-run. **No crate and no runtime code**, which is also the argument that it is an authorized freeze exception — his to grant. Two open questions in the RFC: the target set, and that exception. **Not blocked on RFC 119** |
+| **K** | v0.90.0 | **No window**; needs RFC 119 **Accepted** | **The store-boundary RFC** (number assigned when it is written; **120 is taken** — it is the consent and setup security fix of 2026-09-29, and **143 is now taken** by installation). `sui-id-core` written against a trait rather than `sui-id-store`: the 22 entry points and the 269 references measured 2026-09-25. With it, `contracts/embeddable-deps.toml` and a gate over the embeddable crate's resolved dependency set. **RFC 119 is its hard prerequisite** — that RFC's own header forbids writing this one until 119 is Accepted |
+| **L** | v0.91.0 | **No window**; needs K landed | **The embeddable-module RFC** (number assigned when it is written). The split proper, plus a worked example embedding it in one host framework |
 
 **What is actually being decided — corrected 2026-09-25.** The architect first
 put this to `@nabbisen` as three windows and a date. That was the wrong
