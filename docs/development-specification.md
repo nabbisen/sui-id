@@ -5,8 +5,8 @@
 principle, not a source: inventories were removed in v4 and each section
 that held one now names where the authoritative copy lives.*
 
-> **Stale as of v0.86.0 (2026-10-29).** This document reflects the v0.77.0
-> codebase and the workspace is nine minor versions past it, which is seven
+> **Stale as of v0.87.0 (2026-11-01).** This document reflects the v0.77.0
+> codebase and the workspace is ten minor versions past it, which is eight
 > more than `contracts/doc-authority.toml`'s tolerance allows — RFC 098 rule 5
 > makes this banner the sanctioned state for a lagging document, and it is
 > preferred here to re-dating a synthesis nobody has re-verified section by
@@ -17,14 +17,16 @@ that held one now names where the authoritative copy lives.*
 > command registry's Class-B `emit_must_attempt` path and the bounded reason
 > enums that go with it, and also predates the Class-A settings commands
 > (RFC 094 M2b stages 1–3), M2b wave 4's client-administration and
-> signing-key commands, and M2b wave 3's federation-provider configuration
-> commands, which together moved six settings writes, the pending-change
-> lifecycle, every remaining administrator write on clients and signing
-> keys, and federation-provider creation and allowed-origins updates onto
-> `db.class_a`; and §7 points at a threat model that does not exist yet —
-> RFC 097 owns it and is blocked on RFC 096-B completing. Everything else
-> is unverified against v0.86.0 rather than known wrong. **Re-synthesis is
-> scheduled, not forgotten.**
+> signing-key commands, M2b wave 3's federation-provider configuration
+> commands, and RFC 094 cycle I's conversions — which together moved six
+> settings writes, the pending-change lifecycle, every remaining
+> administrator write on clients and signing keys, federation-provider
+> creation and allowed-origins updates, the MFA and session writes, consent,
+> the registration token, and first-run setup (which now commits as one
+> transaction) onto `db.class_a`; and §7 points at a threat model that does
+> not exist yet — RFC 097 owns it and is blocked on RFC 096-B completing.
+> Everything else is unverified against v0.87.0 rather than known wrong.
+> **Re-synthesis is scheduled, not forgotten.**
 
 ---
 

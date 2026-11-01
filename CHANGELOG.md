@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.87.0] — 2026-11-01
+
+**These now record themselves in the same transaction as the change,
+so an operation and its audit entry can no longer come apart: disabling
+TOTP, renaming or deleting a passkey, revoking sessions singly or in
+bulk, granting or revoking an application's access, issuing a
+registration token, and completing first-run setup — which is now
+all-or-nothing. Four event names retire with them: `mfa.disable`,
+`webauthn.credential.delete`, `auth.sessions.bulk_revoke_self` and
+`setup.create_initial_admin`.**
+
 ### Changed
 
 - **Disabling TOTP, deleting or renaming a passkey, and revoking a
