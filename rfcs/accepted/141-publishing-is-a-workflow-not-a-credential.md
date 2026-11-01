@@ -191,15 +191,34 @@ registry.
 > `release-process.md`'s own Yanking section assumes a working
 > `cargo yank`, and `cargo yank` needs a conventional API token.
 >
-> **The corrected instruction, and it is deliberately not "keep a yank
-> token".** Revoke the publish-capable token as the paragraph above says,
-> and **do not keep a standing `yank`-scoped one in its place.** A
-> long-lived yank-capable credential on a workstation is a smaller
-> instance of exactly what this RFC removed, and yanking six crates is a
-> denial of service against every consumer resolving them. **Mint a
-> `yank`-scoped token at the moment it is needed and revoke it after** —
-> that costs about a minute and needs the same crates.io account access
-> that assessing the emergency needs anyway.
+> **The corrected instruction: scope the token, do not abolish it.**
+> *Amended again 2026-11-01, within the hour, because the architect's
+> first correction overcorrected.* It said to hold **no** standing
+> token and mint one per emergency. `@nabbisen` rejected that —
+> *"No way. Crazy proposal."* — and he was right: it traded a real
+> operational capability against a risk the architect had **not
+> established**, having already recorded that it could not verify
+> whether a token can reach the owner endpoints.
+>
+> **What is established.** The registry API's owner endpoints
+> (`PUT`/`DELETE /api/v1/crates/{name}/owners`) do exist and do require
+> a token, so a token *with that scope* is a route to removing a
+> trusted-publisher configuration. **But crates.io tokens are scoped**,
+> and a token scoped to `yank`/`unyank` can neither publish nor touch
+> owners. The capability is a property of the scope, not of tokens.
+>
+> **So the rule is: hold exactly one token, scoped to exactly what a
+> person must do by hand — `yank` and `unyank` — and nothing else.**
+> Publishing is the workflow's, so no token needs that scope. Owner
+> changes are rare, deliberate and worth the friction of a fresh
+> credential. That keeps the emergency capability this RFC's first
+> version destroyed, while removing both powers that made a broad token
+> worth worrying about.
+>
+> **The actionable check is therefore the scope of the token that
+> exists, not its existence.** A legacy unscoped token predates crates.io
+> scoping and carries everything; that is the case worth replacing. A
+> narrowly scoped one needs nothing done to it.
 >
 > **So yanking is deliberately not automated, and that is the decision**:
 > publishing is a workflow because it is routine and mechanical; yanking

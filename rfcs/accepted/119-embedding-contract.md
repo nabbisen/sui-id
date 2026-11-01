@@ -1,8 +1,10 @@
 # RFC 119 — What a host must promise before sui-id can be embedded in it
 
-**Status.** Proposed
+**Status.** Accepted
+**Accepted on.** 2026-11-01
+**Approved by.** `@nabbisen`, 2026-11-01: *"Accepted."* — on the review below, which he asked for the same day. His first acceptance was recorded **2026-09-26**; the status could not move then, because G11 refuses an Accepted RFC whose security review is Required and which cites no design review, the guard adopted after RFC 105 shipped without one. **The 36 days between were not deliberation**: the review request named a reviewer that §S1a (2026-10-01) then forbade, so there was nobody it could go to. The architect did not work around the gate to record the status sooner.
 **Security review.** Required
-**Owner acceptance.** Recorded 2026-09-26: `@nabbisen` said "Accepted." **The status stays Proposed**, because G11 refuses an Accepted RFC whose security review is Required and which cites no independent design review — the guard adopted after RFC 105 shipped without one. His acceptance is not in doubt; the status changes the moment the review lands, and the architect does not work around the gate to record it sooner.
+**Independent design review.** [Design review record, 2026-11-01](../handoffs/119-embedding-contract/design-review-2026-11-01.md). **By the architect, at `@nabbisen`'s request** — *"Review the questions carefully by yourself with my fundamental philosophy"* — which is the exception `ROADMAP.md` §S1c reserves to him, and the record says he asked. **The architect wrote this RFC and is therefore not independent of it.** §S1a places design review with him or an external architect he engages; none was engaged, which §S1a makes his option rather than a requirement.
 **Design prerequisites.** None. This RFC is the prerequisite: RFC 121 (the split; not yet written) may not be written until this is Accepted.
 **Implementation prerequisites.** None — **this RFC ships no code.** It is a contract and a conformance suite's specification.
 **Closure prerequisites.** Every security property sui-id claims today is either (a) carried by the embeddable module itself, (b) written here as a numbered obligation on the host with a stated failure mode and a conformance test, or (c) named as a property an embedding cannot have, in which case sui-id says so in its own documentation. No property is left unassigned, and sui-id's own service crate satisfies the contract through the published interface rather than around it.

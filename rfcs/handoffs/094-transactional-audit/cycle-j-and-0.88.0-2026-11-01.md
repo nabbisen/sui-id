@@ -9,6 +9,32 @@
 authority switch, where M2b closes.
 **Input.** Cycle I complete; `0.87.0` released and published.
 
+> **Status, 2026-11-01.** The scope was authorized, then held: to a
+> prompt offering to dispatch stage 1 at once, *"Will be authorized when
+> ready."* — the architect had reported it as ready to go, which
+> overstated it, and that is recorded rather than quietly fixed.
+> **The start was then called the same day: *"You can start 0.88.0 when
+> ready."*** So the cycle is open.
+>
+> **Stage 1 is dispatched** —
+> `.git-exclude/staging/cycle-j-stage1-criterion-2-and-the-chain-claims-2026-11-01.md`.
+> It is a measurement and a documentation round, deliberately ahead of
+> the gates: stages 2–3 build gates **over** a boundary, and this stage
+> fixes that boundary's definition, because a gate over an ambiguous
+> criterion enforces whichever reading its author happened to hold.
+>
+> **§A item 4 turns out to be narrower and sharper than "correct
+> audit-chain claims" suggested.** RFC 094 `:1191-1194` already states
+> the honest position *and makes it normative* — the chain *"does not
+> provide external notarization or protection against an attacker who
+> can rewrite the database … **Documentation must say so plainly.**"*
+> So this was never a disagreement about the truth: one document had
+> **diverged from a requirement of its own RFC**, claiming a raw-SQL
+> rewrite could *"never"* avoid detection. Corrected 2026-11-01 in
+> `docs/src/guides/operators.md`; stage 1 checks every other place the
+> chain is described against that same sentence, the admin UI's own
+> strings included, since those have the least room to qualify.
+
 ---
 
 ## A — "the authority switch alone" is one item in the settlement and five in the RFC
@@ -127,7 +153,7 @@ for RFC 094 have now been wrong twice.** If you would rather split:
 
 - **`0.88.0`** = stages 1–3, M2b closes.
 - **`0.89.0`** = RFC 142 stages 4–5, RFC 142 closes — alongside
-  [RFC 143](../../proposed/143-installation-without-a-toolchain.md),
+  [RFC 143](../../accepted/143-installation-without-a-toolchain.md),
   which §D of the ROADMAP's re-proposal already targets there.
 
 **The architect recommends the split**, for the same reason the last one
@@ -142,9 +168,9 @@ deadline is how a cycle becomes open-ended.
    decisive one, and it is item (4) of the switch itself.
 2. **One cycle or two** (§E). The architect recommends two.
 3. **Not in this scope, and still open**:
-   [RFC 119](../../proposed/119-embedding-contract.md)'s review route
+   [RFC 119](../../accepted/119-embedding-contract.md)'s review route
    and its two remaining questions,
-   [RFC 143](../../proposed/143-installation-without-a-toolchain.md)'s
+   [RFC 143](../../accepted/143-installation-without-a-toolchain.md)'s
    two, RFC 140 stage 2 (the logo upload, unblocked since 2026-10-30),
    and the smaller carried items — the `test_id` resolution gate, the
    dead `consents` table, and the eight e2e files sharing the racy

@@ -1,7 +1,10 @@
 # RFC 143 — Installing sui-id without a toolchain, and trusting what you installed
 
-**Status.** Proposed
-**Security review.** Required — this RFC creates a **new distribution channel
+**Status.** Accepted
+**Accepted on.** 2026-11-01
+**Approved by.** `@nabbisen`, 2026-11-01: *"Accepted."* — settling both open questions below. **Q1 on static**, his words being *"Static sounds better to me"*, and the review attaches two conditions to it that were not in this RFC: an **LDAP resolution test on musl** and an **Argon2 timing comparison** against RFC 126's recorded figures, both before any artifact ships. **Q2, the feature-freeze exception, granted** — the architect's argument was that this adds no product surface, and the record notes that extending a closed exception list was never the architect's to infer.
+**Security review.** Required
+**Independent design review.** [Design review record, 2026-11-01](../handoffs/143-installation-without-a-toolchain/design-review-2026-11-01.md). **By the architect, at `@nabbisen`'s request** — *"Review the questions carefully by yourself with my fundamental philosophy"* — `ROADMAP.md` §S1c's owner-invoked exception, and the record says he asked. **The architect wrote this RFC and is therefore not independent of it**; the review's main finding is that this RFC's own D2 premise was wrong. §S1a makes engaging an external architect his option, and none was engaged. — this RFC creates a **new distribution channel
 for an authentication server's binary**, which is a supply-chain surface. The
 convenience is the easy half; the integrity is the RFC.
 **Design prerequisites.** None.

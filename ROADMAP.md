@@ -1006,7 +1006,7 @@ not as the decision.
 > **Installation is newly proposed and comes first.** It was not in this
 > section, or any other, before 2026-11-01 — no RFC, no cycle, and zero
 > GitHub Releases, so no prebuilt artifact has ever existed. It is now
-> [RFC 143](rfcs/proposed/143-installation-without-a-toolchain.md). **It is
+> [RFC 143](rfcs/accepted/143-installation-without-a-toolchain.md). **It is
 > proposed ahead of the embeddable work deliberately**: it is small, it adds no
 > product surface, it needs no prerequisite but RFC 141's first use, and it
 > removes the condition that a prospective operator must own a Rust toolchain
@@ -1036,7 +1036,7 @@ compiles into any framework and guarantees nothing is worse than no module.
 
 | Cycle | Target | Ready when | Embeddable contents |
 |---|---|---|---|
-| **J** | v0.89.0 | **No window** (2026-10-02: dated windows withdrawn) | **[RFC 143](rfcs/proposed/143-installation-without-a-toolchain.md) — installation without a toolchain.** Prebuilt artifacts attached to the release by `publish.yml` itself, with `SHA256SUMS` and build-provenance attestation, and a Quick Start that leads with download-verify-run. **No crate and no runtime code**, which is also the argument that it is an authorized freeze exception — his to grant. Two open questions in the RFC: the target set, and that exception. **Not blocked on RFC 119** |
+| **J** | v0.89.0 | **No window** (2026-10-02: dated windows withdrawn) | **[RFC 143](rfcs/accepted/143-installation-without-a-toolchain.md) — installation without a toolchain.** Prebuilt artifacts attached to the release by `publish.yml` itself, with `SHA256SUMS` and build-provenance attestation, and a Quick Start that leads with download-verify-run. **No crate and no runtime code**, which is also the argument that it is an authorized freeze exception — his to grant. Two open questions in the RFC: the target set, and that exception. **Not blocked on RFC 119** |
 | **K** | v0.90.0 | **No window**; needs RFC 119 **Accepted** | **The store-boundary RFC** (number assigned when it is written; **120 is taken** — it is the consent and setup security fix of 2026-09-29, and **143 is now taken** by installation). `sui-id-core` written against a trait rather than `sui-id-store`: the 22 entry points and the 269 references measured 2026-09-25. With it, `contracts/embeddable-deps.toml` and a gate over the embeddable crate's resolved dependency set. **RFC 119 is its hard prerequisite** — that RFC's own header forbids writing this one until 119 is Accepted |
 | **L** | v0.91.0 | **No window**; needs K landed | **The embeddable-module RFC** (number assigned when it is written). The split proper, plus a worked example embedding it in one host framework |
 

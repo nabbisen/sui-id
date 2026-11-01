@@ -249,13 +249,13 @@ Before tagging, in addition to Level B on the commit being tagged:
 
 ## Yanking
 
-**Yanking needs a token, and after RFC 141 §6 there is not one standing.**
-A Trusted-Publishing token cannot yank — RFC 3691 fixes those at
-`publish-update` scope — so the publish workflow is no help here. **Mint a
-`yank`-scoped API token on crates.io, use it, and revoke it**, rather than
-keeping one for the day it is needed: a long-lived yank-capable credential
-is the thing RFC 141 removed, in miniature, and yanking six crates is a
-denial of service against everyone resolving them.
+**Yanking needs a token, and the publish workflow cannot supply one.** A
+Trusted-Publishing token is fixed at `publish-update` scope (RFC 3691), so
+it cannot yank. **Keep one API token for this, scoped to `yank` and
+`unyank` and nothing else** — not a broad or legacy one. So scoped, it
+cannot publish (the workflow owns that) and cannot change crate owners,
+which are the two powers that would make a standing credential worth
+worrying about.
 
 **This is deliberately a person's job, not a workflow's.** Publishing is
 routine and mechanical, so it is automated. Yanking is a judgement made

@@ -1,6 +1,6 @@
 # The embedding contract — what a host must promise
 
-**RFC.** [RFC 119](../../proposed/119-embedding-contract.md), **Proposed**.
+**RFC.** [RFC 119](../../accepted/119-embedding-contract.md), **Proposed**.
 **Author.** High-capability model, requirements-architect role.
 **Status of this document.** The specification the RFC's decisions point at. It
 is **drafted, not agreed**: RFC 119 is Proposed and its obligations have had no

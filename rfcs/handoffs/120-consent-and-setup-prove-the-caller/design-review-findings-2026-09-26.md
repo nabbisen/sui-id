@@ -1,6 +1,6 @@
 # The findings this RFC answers
 
-**Source.** The independent design review of [RFC 119](../../proposed/119-embedding-contract.md),
+**Source.** The independent design review of [RFC 119](../../accepted/119-embedding-contract.md),
 2026-09-26, by the implementation role — which authored neither RFC 119 nor
 RFC 120. Its method was to read every line of `crates/sui-id/src/http/` for
 security-relevant behaviour, which is how it met these two.

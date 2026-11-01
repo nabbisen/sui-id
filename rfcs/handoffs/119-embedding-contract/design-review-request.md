@@ -1,6 +1,6 @@
 # RFC 119 — independent design review request
 
-**RFC.** [RFC 119 — What a host must promise before sui-id can be embedded in it](../../proposed/119-embedding-contract.md). **Proposed**, with `@nabbisen`'s acceptance recorded 2026-09-26 and the status held until this review exists.
+**RFC.** [RFC 119 — What a host must promise before sui-id can be embedded in it](../../accepted/119-embedding-contract.md). **Proposed**, with `@nabbisen`'s acceptance recorded 2026-09-26 and the status held until this review exists.
 **Reviewer.** **`@nabbisen`, or an external architect he engages.**
 **Corrected 2026-11-01, and this is why the RFC sat for 36 days.** This
 request originally named the *mid-capability model, implementation role* as
