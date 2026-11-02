@@ -120,6 +120,16 @@ the two showed would be as misleading as one that showed on neither:
   logged at the same severity as a failed check, because an unknown is not a
   lesser finding than a known break.
 
+**What "verified" proves, and what it does not.** The hash is unkeyed
+SHA-256 over a published algorithm, so recomputing it needs nothing an
+attacker with database write access lacks — a verified chain is evidence
+that nothing *clumsy* happened (a careless `UPDATE` or `DELETE`, a partial
+restore, corruption, a backup stitched from two points in time), not proof
+that nothing happened. This is tamper-evidence within sui-id's own trust
+boundary; it is not external notarization, and there is no anchor outside
+that boundary today. See [Audit log integrity](../guides/operators.md#audit-log-integrity)
+in the operators guide for the full explanation.
+
 ## The note format
 
 An event's `note` is its attributes as `key=value` pairs, joined by single ASCII

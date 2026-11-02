@@ -65,10 +65,38 @@ architect's adversarial assessment of it**."*
 
 | Criterion | State |
 |---|---|
-| 1. Every remaining Class-A row converted | **Met** by cycle I — eleven converted, the rest dispositioned |
+| 1. Every remaining Class-A row converted | **NOT met — corrected 2026-11-03, see below.** This cell read *"Met by cycle I — eleven converted, the rest dispositioned"* and was wrong twice |
 | 2. No production Class-A best-effort append anywhere | **Not checkable as written.** See below |
 | 3. AST gate landed with a negative fixture | Not started — needs a new `xtask` crate; there is no `xtask` in the workspace |
 | 4. Acceptance on the architect's adversarial assessment | Cannot begin until 1–3 are done |
+
+### Criterion 1 was reported met, and is not — corrected 2026-11-03
+
+**Found by the dev team in stage 1, against the architect's own record.**
+Of cycle I's eleven live Class-A rows, **nine were converted** — U13,
+U16, U17, U18, U19, U20, U21, C14, S10 — not eleven. Of the remaining
+two, **C19 was dispositioned** in stage 5; **U26 was neither converted
+nor dispositioned.** Stage 5's dispositions were U11, C12, C13, C19,
+C20. U26 appears in no stage's deliverable.
+
+**U26 is a live, unconverted Class-A mutation with no event of its
+own.** Verified: `class = "A"`, `sealed = false`, and its write at
+`admin/auth.rs:352` is a bare
+`users::upsert_ldap_shadow(&app.db, shadow, app.clock.now()).await?`
+outside any sealed command.
+
+**How the error happened, stated so it is recognisable next time.**
+Cycle I stage 1 measured U26 and found its rationale *accurate*; the
+architect read that as settling the row. **A measurement confirming
+that a row has no command is not a decision that it needs none** — the
+dev team's phrasing is better than the architect's: *"a measurement
+confirmation, not a disposition decision."* **This is the third time in
+this cycle a restatement stood in for the source**, after the authority
+switch read from a settlement rather than RFC 094's own list, and
+criterion 2 read as checkable when it was not.
+
+**So M2b's closure needs U26 disposed of or converted**, and criterion
+1 must not be reported met again until it is.
 
 ### Criterion 2 is ambiguous, and the ambiguity is load-bearing
 

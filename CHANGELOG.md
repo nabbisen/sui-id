@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Documented plainly what a verified audit chain actually proves.**
+  A verified chain catches tampering that did not recompute — a careless
+  edit, a partial restore, corruption — not tampering by someone who
+  edits the database and reruns the (unkeyed, published) hash. The
+  reference docs previously left this unstated; they now say so, in
+  [`docs/src/reference/audit-events.md`](docs/src/reference/audit-events.md)'s
+  "Audit log integrity" section, matching the correction already made to
+  [`docs/src/guides/operators.md`](docs/src/guides/operators.md). No
+  behaviour changed.
+
 ## [0.87.0] — 2026-11-01
 
 **These now record themselves in the same transaction as the change,

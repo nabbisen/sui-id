@@ -1195,9 +1195,9 @@ class = "I"
 status = "implemented"  # implemented | target-absent | target-legacy
 sealed = false
 owner = "Sealed-key insert/reseal primitives"
-rationale = "subordinate to S10 or K01 only"
+rationale = "corrected 2026-11-03 (cycle J stage 1): the previous text read \"subordinate to S10 or K01 only\" and was false -- `sui_id_core::oidc::key_rotation::rotate_master_key` (`:99`) is a **third, independent, top-level caller** of the same `reseal_all` primitives, resealing six tables inside one `db.with_tx_sync` (`signing_keys`, `refresh_tokens`, `user_totp` twice, `user_webauthn_credentials`, `smtp_config`, `email_outbox`). **That wrong rationale is why master-key rotation has no command row at all**: an inventory stating a primitive is only ever subordinate tells the next reader there is no top-level command to look for, so a wrong rationale does not merely mislead, it suppresses the search. The missing row is scoped in cycle J, not here."
 mutation_surface = "`signing_keys::insert_with_plaintext`, `insert_sealed_on_conn`, all `reseal_all` functions"
-files = ["crates/sui-id-store/src/repos/signing_keys.rs"]
+files = ["crates/sui-id-store/src/repos/signing_keys.rs", "crates/sui-id-core/src/oidc/key_rotation.rs", "crates/sui-id-store/src/repos/refresh_tokens.rs", "crates/sui-id-store/src/repos/user_totp.rs", "crates/sui-id-store/src/repos/user_webauthn_credentials.rs", "crates/sui-id-store/src/repos/smtp_config.rs", "crates/sui-id-store/src/repos/email_outbox.rs"]
 test_id = "`i_k06_key_primitives`"
 
 [[command]]

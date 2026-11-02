@@ -89,9 +89,22 @@ still `B *(A required)*`.
 2026-10-25.** Their cells now read `A`. C08's write —
 `clients::set_dev_secret_hash`, emitted nothing before this stage — gets
 its own new row, `client.dev_secret_set`, rather than sharing C07's name
-(see the "Client management" section's own note on why). The remaining
-two of the original twelve, `admin.master_key.rotated` and
-`auth.smtp_config.changed`, are still `B *(A required)*`.
+(see the "Client management" section's own note on why).
+
+**Corrected 2026-11-03 (cycle J stage 1).** This paragraph used to end
+*"The remaining two of the original twelve, `admin.master_key.rotated`
+and `auth.smtp_config.changed`, are still `B (A required)`"*, and it had
+gone stale in opposite directions:
+
+- **`auth.smtp_config.changed` is Class A**, and has been since S06
+  converted it in an earlier M2b wave — read the live row, which this
+  prose contradicted.
+- **`admin.master_key.rotated` is still outstanding, and worse than
+  `B (A required)` recorded.** `rotate_master_key` reseals six tables
+  inside one transaction and the append sits **outside** it,
+  best-effort; and there is **no command row for the operation
+  anywhere** in `contracts/write-commands.toml`. It is scoped in cycle
+  J. See K06's own rationale for why the row was never written.
 
 ## Coverage matrix
 
