@@ -138,6 +138,47 @@ such explicitly rather than left looking like a gap. **Settling this is
 item (4) of §A — "correct audit-chain claims" — and it should come
 first, not last.**
 
+## B′ — stage 1 landed, and stage 2 closes what it found
+
+**Stage 1 LANDED** `ce3e0cc`, 2026-11-03. A measurement and
+documentation round: `docs/src/reference/audit-events.md` now states
+what a verified chain proves, and three records it exposed were
+corrected — criterion 1's claim above, **K06's rationale**, and the
+coverage matrix's own class-corrections narrative, which was stale in
+both directions. Review —
+`.git-exclude/reviewed/cycle-j-stage1-criterion-2-and-the-chain-claims-2026-11-03.md`.
+
+**Criterion 2 fails on exactly one of nine sites.** Master-key rotation
+reseals six tables in one transaction and records itself **outside** it,
+best-effort, with **no command row anywhere** in the inventory.
+
+**And that absence had a cause, which is the finding to keep.** K06's
+rationale said the reseal primitives are *"subordinate to S10 or K01
+only"*. `rotate_master_key` is a **third, independent, top-level
+caller** of them. So the row was never written because the inventory
+told the next reader there was no top-level command to look for — **a
+wrong rationale does not merely mislead, it suppresses the search.**
+
+**Stage 2 is dispatched** —
+`.git-exclude/staging/cycle-j-stage2-the-two-gaps-2026-11-03.md`. One
+conversion and one measurement, split on whether the work is
+mechanical:
+
+- **U26 is a conversion, and L03 is its template.** The no-MFA
+  directory sign-in is fully sealed; the MFA-required path does the
+  same shadow write bare. One new `L` command covers U26's upsert and
+  U32's pending insert together, emitting the **existing** event name,
+  so nothing retires.
+- **Master-key rotation is a measurement**, because the operation spans
+  the database *and* the filesystem — the key file is rewritten after
+  the reseal commits — so no transaction covers both and sealing it is
+  a question about *what the record is atomic with*. The architect's
+  candidate is two facts and two records. **A separate question is
+  flagged ahead of it**: if the reseal commits and the key-file write
+  then fails, the database is sealed with a key that is not on disk, and
+  whether a documented recovery path exists is being established. That
+  may matter more than the audit gap.
+
 ## C — RFC 142 stages 4 and 5 are outstanding, and I nearly let them slide
 
 [RFC 142](../../accepted/142-upgrading-is-the-least-tested-thing-we-do.md)
