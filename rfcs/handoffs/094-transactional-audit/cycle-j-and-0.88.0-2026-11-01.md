@@ -179,6 +179,45 @@ mechanical:
   whether a documented recovery path exists is being established. That
   may matter more than the audit gap.
 
+## B″ — stage 2 landed, and it found something that jumped the queue
+
+**Stage 2 LANDED** `7c42c23`, 2026-11-03 — **CI 28 success / 0 failed /
+0 skipped**. **L08 seals the MFA-required directory sign-in**, closing
+U26 — the row criterion 1 was reported to have converted and had not.
+G20 56 → 57 declared, G17 56 → 57 sealed. Review —
+`.git-exclude/reviewed/cycle-j-stage2-the-two-gaps-2026-11-03.md`.
+
+**So criterion 1 is met, said carefully this time.** U32 deliberately
+did *not* get `sealed_by`: its mutation surface still has a live
+unsealed caller in the local-password branch. Claiming otherwise would
+have been the tidy answer and the false one.
+
+**Criterion 2 remains open on master-key rotation alone** — and the
+measurement for it found a worse problem than the audit gap it was
+sent after. **Dispatched ahead of stage 3, as its own round** —
+[`urgent-master-key-ordering-2026-11-03.md`](urgent-master-key-ordering-2026-11-03.md).
+
+**The re-seal commits before either key file is touched**, and without
+`--new-key` the key is generated in memory, never printed, and
+persisted only by the write that follows the commit. A disk error there
+destroys it, and every sealed column with it, permanently. The guide
+had promised *"There is no half-rotated state to recover from"*;
+corrected 2026-11-03, with `--new-key` documented as the safe
+procedure, which protects the operator who reads it. The round protects
+the one who does not, by staging the key to `<path>.new` before the
+re-seal — and by **refusing when that file already exists**, because a
+rerun that overwrites a `.new` left by a crashed rotation would destroy
+the key the database is already using and would look like a retry.
+
+**The split was the architect's call under the standing arrangement**:
+the ordering fix is small and independent, while the sealed command
+needs a descriptor, an id and matrix work, so bundling them would have
+shipped the urgent half at the slower half's pace.
+
+**Two by-products carried into stage 3** rather than lost: the
+`with_tx_sync`-on-an-async-path mismatch, and that today's
+`let _ = audit::append(...)` swallows even the append's own failure.
+
 ## C — RFC 142 stages 4 and 5 are outstanding, and I nearly let them slide
 
 [RFC 142](../../accepted/142-upgrading-is-the-least-tested-thing-we-do.md)
