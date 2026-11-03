@@ -8,7 +8,7 @@
 **Dispatched.** 2026-11-03, by the architect.
 **Found by.** Cycle J stage 2's measurement, answering a question about
 atomicity — the loss window was not what it was sent to look for.
-**Scope.** `sui-id admin rotate-master-key` only. **No audit work, no
+**Scope.** `sui-id admin rotate-key` only. **No audit work, no
 sealed command, no new event** — those are stage 3.
 **Baseline.** The tip of `main` when you start — `git log -1`, record it.
 

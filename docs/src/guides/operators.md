@@ -209,11 +209,13 @@ yet renamed, and you can retry with the same arguments.
 >
 > ```bash
 > # 1. Generate and keep the new key FIRST, somewhere already durable.
-> head -c 32 /dev/urandom | base64 > /secure/backup/sui-id.key.new
+> #    Not beside the configured key file: `<key_file>.new` is the name
+> #    the command stages under, and it refuses if one is already there.
+> head -c 32 /dev/urandom | base64 > /secure/backup/sui-id-master-key.b64
 >
 > # 2. Rotate using it, so the key survives any failure below.
-> sui-id admin rotate-master-key --config /etc/sui-id/sui-id.toml \
->                                --new-key /secure/backup/sui-id.key.new
+> sui-id admin rotate-key --config /etc/sui-id/sui-id.toml \
+>                         --new-key /secure/backup/sui-id-master-key.b64
 > ```
 >
 > With the key already on durable storage, **every** failure above is

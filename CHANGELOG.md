@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.87.1] — 2026-11-03
+
+**`sui-id admin rotate-key` no longer risks losing the master key
+permanently to a disk error between the re-seal committing and the key
+file being written — true of every release since the command was
+added, v0.26.0; this release also documents plainly what a verified
+audit chain actually proves, and makes a directory sign-in that
+requires a second factor record itself in the same transaction as the
+account mirroring it performs.**
+
 ### Changed
 
 - **Documented plainly what a verified audit chain actually proves.**
