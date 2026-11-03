@@ -237,22 +237,62 @@ for the case where forgetting is most expensive.
 
 ## D — the proposal
 
-**`0.88.0` = M2b closes, and RFC 142 closes.** Five stages:
+**`0.88.0` = M2b closes, and RFC 142 closes.**
+
+> **Renumbered 2026-11-03.** This section listed five stages and the
+> work has not matched them since stage 1. Two rounds happened that
+> appeared nowhere in it — the criterion 1 gap and the master-key
+> ordering fix, both discovered rather than planned — while the
+> architect went on calling the next round "stage 3" in a list whose
+> stage 3 is the gate work. That is the same stale-plan failure this
+> cycle's §A records, committed again in the document that records it.
+> The numbering below is against what happened. **Discovered rounds are
+> numbered in place, not appended**, so the list keeps answering "what
+> is next?" correctly.
 
 1. **Settle criterion 2 and correct the audit-chain claims** (§B, and
    §A item 4). Measurement and documentation; no behaviour change. It
-   comes first because stages 2–4 are gates *over* a boundary whose
-   definition this fixes.
-2. **The `syn` AST boundary gate**, in a new `xtask` crate, **with the
+   came first because the later gates are gates *over* a boundary whose
+   definition this fixes. — **LANDED** `ce3e0cc`, 2026-11-03.
+2. **Close criterion 1's gap: seal the MFA-required directory sign-in**
+   (L08, U26). *Discovered by stage 1*, which found criterion 1 had
+   been reported met and was not. — **LANDED** `7c42c23`, 2026-11-03.
+3. **The master-key ordering fix.** *Discovered by stage 2's
+   measurement*, which went looking for an audit gap and found a
+   permanent-data-loss window instead. Dispatched as its own round
+   ahead of the audit work, because the fix was small and independent
+   and the sealed command is neither. — **LANDED** `1b3bc7d`, shipped
+   in **`0.87.1`**, 2026-11-03.
+4. **Seal the re-seal, and close criterion 2.** The last outstanding
+   Class-A best-effort append with a top-level operation behind it, and
+   the operation with **no command row anywhere** — see K06's corrected
+   rationale for why the row was never written. Larger than "add a
+   command": `declare_write_command!` lives in `sui-id-store`
+   (`registry.rs:1367`) and the orchestration lives in `sui-id-core`
+   (`oidc/key_rotation.rs:99`, public API with three live callers), so
+   it carries a crate move, a public-API decision and two test
+   rewrites. **This closes criterion 2.**
+5. **Make a half-finished rotation legible.** One operation now
+   produces two records — the re-seal, atomic with its transaction, and
+   the key-file replacement, which cannot be atomic with anything. That
+   is *better* than one record, but only if the names and the docs say
+   so, which is operator-facing work in its own right. Depends on 4.
+6. **The `syn` AST boundary gate**, in a new `xtask` crate, **with the
    negative fixture that rejects an unregistered write** — the closure
    criterion names the fixture, not just the gate.
-3. **Make the structural gate blocking; downgrade the string gate from
+7. **Make the structural gate blocking; downgrade the string gate from
    authority** (§A items 2 and 3).
-4. **RFC 142 stage 4** — the preview subcommand.
-5. **RFC 142 stage 5** — the automatic pre-upgrade backup.
+8. **RFC 142 stage 4** — the preview subcommand.
+9. **RFC 142 stage 5** — the automatic pre-upgrade backup.
 
 **Then M2b closes** on the adversarial evidence package and your
 acceptance — which, per §B, the architect cannot give for its own work.
+
+**Stages 4 and 5 were one stage until 2026-11-03**, when a self-review
+the owner asked for
+(`.git-exclude/reviewed/cycle-j-stage3-self-review-2026-11-03.md`)
+found it was four things wearing one name. The split is recorded
+because the underestimate, not the work, is the recurring defect.
 
 ## E — the honest alternative
 
