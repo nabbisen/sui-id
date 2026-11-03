@@ -263,20 +263,52 @@ for the case where forgetting is most expensive.
    ahead of the audit work, because the fix was small and independent
    and the sealed command is neither. — **LANDED** `1b3bc7d`, shipped
    in **`0.87.1`**, 2026-11-03.
-4. **Seal the re-seal, and close criterion 2.** The last outstanding
-   Class-A best-effort append with a top-level operation behind it, and
-   the operation with **no command row anywhere** — see K06's corrected
-   rationale for why the row was never written. Larger than "add a
-   command": `declare_write_command!` lives in `sui-id-store`
-   (`registry.rs:1367`) and the orchestration lives in `sui-id-core`
-   (`oidc/key_rotation.rs:99`, public API with three live callers), so
-   it carries a crate move, a public-API decision and two test
-   rewrites. **This closes criterion 2.**
+4. **Seal the re-seal, and close criterion 2.** — **LANDED** `2b1bac5`,
+   2026-11-04. K07, `admin.master_key.resealed`, Class A: the six-table
+   re-seal and its audit record commit in one transaction. G17 102 → 103
+   rows and 57 → 58 sealed; G20 declared 57 → 58. `rotate_master_key` is
+   **deleted** from `sui-id-core` rather than kept as a delegating
+   wrapper — the kept-wrapper trap closed categorically instead of
+   tested around, after this cycle shipped one twice.
+   `admin.master_key.rotated` is unchanged. Review —
+   `.git-exclude/reviewed/cycle-j-stage4-seal-the-reseal-2026-11-04.md`.
+   *The round corrected the dispatch: it cited K01 as the
+   `system_principal: permitted`/no-actor shape and K01 is `forbidden`
+   with a required human actor. K07 is built against U08, C22 and S05.
+   The same wrong claim sits in three code comments
+   (`commands.rs:1020`, `:6865`, `:6922`), left for a cleanup round.*
+   *Folded in at review: four of the six re-sealed tables were exercised
+   by no test in the workspace. Mutating `refresh_tokens::reseal_all` to
+   `0` left **2212 tests passing, 0 failing** and the matrix 48/48 —
+   and `cli.rs` archives the old key file as soon as K07 commits, so a
+   skipped table leaves rows under a key the configured path no longer
+   holds. `k07_reseals_every_one_of_the_six_tables` now pins all seven
+   counts and fails by name under mutation.*
+   **This closes criterion 2** — recorded in `ROADMAP.md` only after
+   stage 5, because criterion 1 was reported met once before and was
+   not, and the closure claim belongs with the whole of its evidence.
+   **CI note, stated honestly:** `2b1bac5`'s own run
+   (`41672489921`) was **red** — 27/28, `G06 (stable, all-features)` —
+   on `r102_l02_totp_sign_in_commits_everything_and_is_fresh`, a
+   load-sensitive test on a path this stage never touched. Fixed in
+   `76a3005`, **CI 28 success / 0 failed / 0 skipped** (`41682794440`).
+   The 28/28 belongs to the fix commit, not to the stage commit.
 5. **Make a half-finished rotation legible.** One operation now
    produces two records — the re-seal, atomic with its transaction, and
    the key-file replacement, which cannot be atomic with anything. That
    is *better* than one record, but only if the names and the docs say
    so, which is operator-facing work in its own right. Depends on 4.
+   **Carries three items found while reviewing stage 4**: whether
+   `admin.master_key.rotated`'s `(A required)` annotation still means
+   anything now that the atomic half has its own name; that event's
+   matrix row still lists note fields as `keys_resealed=N` while the
+   live append writes `"re-sealed N rows; old key archived at …"`; and
+   **a sweep of the remaining `step_now()` call sites** in
+   `crates/sui-id/tests/e2e/`. The last is not optional bookkeeping —
+   `r102_stage3.rs` has now produced the **third** load-sensitive e2e
+   failure of this programme, after the two fixed in a dedicated round
+   before `0.87.0`. Three is a class, not a coincidence, and a local
+   matrix cannot see any of them.
 6. **The `syn` AST boundary gate**, in a new `xtask` crate, **with the
    negative fixture that rejects an unregistered write** — the closure
    criterion names the fixture, not just the gate.
