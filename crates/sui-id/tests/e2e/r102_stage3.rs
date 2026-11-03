@@ -259,13 +259,23 @@ async fn r102_l02_totp_sign_in_commits_everything_and_is_fresh() {
     .await;
     let sessions_before = sessions_of(&a.state, a.user).await;
 
-    let r = challenge(&a.state, &pending, &code_at(&a.secret, step_now()).await).await;
+    // Evaluate the step ONCE. `step_now()` is `Utc::now().timestamp() / 30`,
+    // so calling it again below compares the step the code was actually
+    // accepted at against whatever step the clock has reached by then --
+    // a different number whenever the challenge round trip straddles a
+    // 30-second boundary. That is not hypothetical: it turned `main` red
+    // on 2026-11-03 (CI run 41672489921, G06, an e2e suite that took
+    // 1745s under load). The product stores the step the code matched;
+    // the assertion, not the behaviour, was wrong.
+    // `r102_stage6.rs:174` already uses this idiom.
+    let step = step_now();
+    let r = challenge(&a.state, &pending, &code_at(&a.secret, step).await).await;
     assert_eq!(r.location.as_deref(), Some("/admin"), "{}", r.status);
     let session = r.session.expect("session cookie");
 
     assert_eq!(sessions_of(&a.state, a.user).await, sessions_before + 1);
     assert_eq!(pending_rows(&a.state, a.user).await, 0, "pending consumed");
-    assert_eq!(last_used_step(&a.state, a.user).await, step_now());
+    assert_eq!(last_used_step(&a.state, a.user).await, step);
     assert_eq!(
         text(
             &a.state,
