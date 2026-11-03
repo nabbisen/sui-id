@@ -303,12 +303,15 @@ for the case where forgetting is most expensive.
    anything now that the atomic half has its own name; that event's
    matrix row still lists note fields as `keys_resealed=N` while the
    live append writes `"re-sealed N rows; old key archived at …"`; and
-   **a sweep of the remaining `step_now()` call sites** in
-   `crates/sui-id/tests/e2e/`. The last is not optional bookkeeping —
-   `r102_stage3.rs` has now produced the **third** load-sensitive e2e
-   failure of this programme, after the two fixed in a dedicated round
-   before `0.87.0`. Three is a class, not a coincidence, and a local
-   matrix cannot see any of them.
+   the `step_now()` invariant. *Corrected 2026-11-04: this entry asked
+   for a **sweep** of the remaining `step_now()` call sites, and
+   measurement says no sweep is needed. `totp.rs:60` accepts a ±1 step
+   window, so a code built inline survives one boundary crossing; the
+   one site that challenges repeatedly expects refusal anyway. Only the
+   assertion that re-evaluated `step_now()` was broken, and it is fixed.
+   What stage 5 carries is a two-line comment recording that invariant at
+   each `step_now()` definition. My own entry asked for more work than
+   the facts support — the error this cycle keeps producing.*
 6. **The `syn` AST boundary gate**, in a new `xtask` crate, **with the
    negative fixture that rejects an unregistered write** — the closure
    criterion names the fixture, not just the gate.
