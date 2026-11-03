@@ -34,17 +34,3 @@ async fn reseal_one_with_wrong_aad_fails() {
     let sealed = seal(&old, b"data", b"correct-aad").expect("seal");
     assert!(reseal_one(&old, &new, &sealed, b"wrong-aad").await.is_err());
 }
-
-#[tokio::test]
-async fn rotation_report_total_sums_columns() {
-    let r = RotationReport {
-        signing_keys: 1,
-        refresh_tokens: 5,
-        user_totp_secrets: 3,
-        user_totp_recovery_codes: 3,
-        user_webauthn_credentials: 2,
-        smtp_config: 1,
-        email_outbox_rows: 0,
-    };
-    assert_eq!(r.total(), 15);
-}

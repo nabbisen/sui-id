@@ -6581,6 +6581,219 @@ pub async fn delete_signing_key(
     .await
 }
 
+// ── K07 — master-key re-seal ──────────────────────────────────────────────
+//
+// RFC 094 cycle J stage 4. Closes M2b criterion 2: the re-seal
+// orchestration moves here from `sui-id-core::oidc::key_rotation`, which
+// is downstream of this crate and so could never reach
+// `declare_write_command!` (`registry.rs`, defined only in this crate).
+// CLI-only, no authenticated actor -- the operator's authority is
+// possession of the master key and filesystem access, the same
+// non-human-caller shape U08, C22 and S05 use (`for_system_actor`,
+// `ActorRequirement::None`, `system_principal: permitted`). Moving the
+// orchestration also fixes, incidentally, a standing contradiction: the
+// old `rotate_master_key` called `Database::with_tx_sync`, documented
+// (`db.rs:141`, inheriting `:123`'s) as "use only in the migration
+// runner and in blocking test helpers outside an async runtime" -- but
+// it was an `async fn` called from the CLI's `#[tokio::main]` runtime.
+// `class_a`'s own path is `Database::with_tx`, the async primitive; the
+// contradiction is gone, not papered over.
+//
+// Distinct from `admin.master_key.rotated`, which is unchanged by this
+// stage: it still fires after the key file is renamed into place,
+// best-effort, outside any transaction. That is a second, genuinely
+// unsealable fact (a filesystem rename cannot join a SQL transaction),
+// not an oversight this command fixes -- see the dispatch and stage 2's
+// measurement for why two records, not one, is the right shape.
+
+static K07_RESEALED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::AdminMasterKeyResealed,
+    name: "admin.master_key.resealed",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::None,
+    target: TargetRequirement::None,
+    attributes: &[
+        AttributeSpec {
+            name: "signing_keys",
+            description: "rows re-sealed in `signing_keys`",
+            required: false,
+        },
+        AttributeSpec {
+            name: "refresh_tokens",
+            description: "rows re-sealed in `refresh_tokens`",
+            required: false,
+        },
+        AttributeSpec {
+            name: "user_totp_secrets",
+            description: "TOTP secrets re-sealed in `user_totp`",
+            required: false,
+        },
+        AttributeSpec {
+            name: "user_totp_recovery_codes",
+            description: "TOTP recovery codes re-sealed in `user_totp`",
+            required: false,
+        },
+        AttributeSpec {
+            name: "user_webauthn_credentials",
+            description: "rows re-sealed in `user_webauthn_credentials`",
+            required: false,
+        },
+        AttributeSpec {
+            name: "smtp_config",
+            description: "rows re-sealed in `smtp_config`",
+            required: false,
+        },
+        AttributeSpec {
+            name: "email_outbox_rows",
+            description: "rows re-sealed in `email_outbox`",
+            required: false,
+        },
+    ],
+};
+
+crate::declare_write_command! {
+    /// K07 — CLI operator re-seals every column-encrypted value under a
+    /// new master key.
+    command K07 = "K07" {
+        system_principal: permitted;
+        enum K07Event {
+            Resealed {
+                signing_keys: u64,
+                refresh_tokens: u64,
+                user_totp_secrets: u64,
+                user_totp_recovery_codes: u64,
+                user_webauthn_credentials: u64,
+                smtp_config: u64,
+                email_outbox_rows: u64,
+            } => &K07_RESEALED,
+        }
+    }
+}
+
+impl SealedCommandEvent<K07> for K07Event {
+    fn target(&self) -> Option<AuditTarget> {
+        None
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Resealed {
+            signing_keys,
+            refresh_tokens,
+            user_totp_secrets,
+            user_totp_recovery_codes,
+            user_webauthn_credentials,
+            smtp_config,
+            email_outbox_rows,
+        } = self;
+        AuditAttributes::builder()
+            .attribute("signing_keys", signing_keys.to_string())
+            .attribute("refresh_tokens", refresh_tokens.to_string())
+            .attribute("user_totp_secrets", user_totp_secrets.to_string())
+            .attribute(
+                "user_totp_recovery_codes",
+                user_totp_recovery_codes.to_string(),
+            )
+            .attribute(
+                "user_webauthn_credentials",
+                user_webauthn_credentials.to_string(),
+            )
+            .attribute("smtp_config", smtp_config.to_string())
+            .attribute("email_outbox_rows", email_outbox_rows.to_string())
+            .build()
+    }
+}
+
+/// Counts of rows re-sealed in each table by [`reseal_master_key`].
+/// Moved from `sui-id-core::oidc::key_rotation` with the orchestration
+/// itself (RFC 094 cycle J stage 4) -- useful for the CLI to print and
+/// for tests to assert on.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct RotationReport {
+    pub signing_keys: u64,
+    pub refresh_tokens: u64,
+    pub user_totp_secrets: u64,
+    pub user_totp_recovery_codes: u64,
+    pub user_webauthn_credentials: u64,
+    pub smtp_config: u64,
+    /// Rows resealed in `email_outbox` (RFC 001).
+    pub email_outbox_rows: u64,
+}
+
+impl RotationReport {
+    pub fn total(&self) -> u64 {
+        self.signing_keys
+            + self.refresh_tokens
+            + self.user_totp_secrets
+            + self.user_totp_recovery_codes
+            + self.user_webauthn_credentials
+            + self.smtp_config
+            + self.email_outbox_rows
+    }
+}
+
+/// Run K07 (master-key re-seal) through the Class-A runner: the
+/// six-table re-seal and the `admin.master_key.resealed` audit append
+/// now commit in one transaction, replacing `rotate_master_key`'s
+/// `with_tx_sync` call and the best-effort append `cli.rs` made outside
+/// it.
+///
+/// `old_key` (from `db.key()`) and `new_key` are each reconstructed
+/// into an owned copy -- `MasterKey` derives no `Clone` -- because the
+/// Class-A closure is `'static` and cannot hold a borrow of either
+/// `db` or the caller's `new_key`. `MasterKey::generate`/`from_base64`
+/// use the identical copy-then-`zeroize` idiom for the same reason:
+/// the stack copy exists only long enough to move into a fresh
+/// `SecretBox`.
+pub async fn reseal_master_key(
+    db: &crate::Database,
+    new_key: &crate::crypto::MasterKey,
+) -> StoreResult<crate::registry::Audited<RotationReport>> {
+    use zeroize::Zeroize;
+    let mut old_key_bytes = *db.key().as_bytes();
+    let old_key = crate::crypto::MasterKey::from_bytes(old_key_bytes);
+    old_key_bytes.zeroize();
+    let mut new_key_bytes = *new_key.as_bytes();
+    let new_key = crate::crypto::MasterKey::from_bytes(new_key_bytes);
+    new_key_bytes.zeroize();
+
+    let context = AuthorizedCommandContext::<K07>::for_system_actor(None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, K07>| {
+        let signing_keys = crate::repos::signing_keys::reseal_all(tx.tx(), &old_key, &new_key)?;
+        let refresh_tokens = crate::repos::refresh_tokens::reseal_all(tx.tx(), &old_key, &new_key)?;
+        let (user_totp_secrets, user_totp_recovery_codes) =
+            crate::repos::user_totp::reseal_all(tx.tx(), &old_key, &new_key)?;
+        let user_webauthn_credentials =
+            crate::repos::user_webauthn_credentials::reseal_all(tx.tx(), &old_key, &new_key)?;
+        let smtp_config = crate::repos::smtp_config::reseal_all(tx.tx(), &old_key, &new_key)?;
+        let email_outbox_rows =
+            crate::repos::email_outbox::reseal_all(tx.tx(), &old_key, &new_key)? as u64;
+        let report = RotationReport {
+            signing_keys,
+            refresh_tokens,
+            user_totp_secrets,
+            user_totp_recovery_codes,
+            user_webauthn_credentials,
+            smtp_config,
+            email_outbox_rows,
+        };
+        let event = K07Event::Resealed {
+            signing_keys: report.signing_keys,
+            refresh_tokens: report.refresh_tokens,
+            user_totp_secrets: report.user_totp_secrets,
+            user_totp_recovery_codes: report.user_totp_recovery_codes,
+            user_webauthn_credentials: report.user_webauthn_credentials,
+            smtp_config: report.smtp_config,
+            email_outbox_rows: report.email_outbox_rows,
+        };
+        Ok((report, event))
+    })
+    .await
+}
+
 // ── C08 — set a dev-mode client's secret hash ────────────────────────────
 //
 // RFC 094 M2b wave 4 stage 3. A wave-1 shape, not a wave-4 one: the

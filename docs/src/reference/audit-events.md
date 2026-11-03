@@ -84,6 +84,7 @@ the administrator is asked to step up again.
 
 | Event name | Label | Description |
 |---|---|---|
+| `admin.master_key.resealed` | Master key re-seal | Every column-encrypted value was re-sealed under the new key, inside one transaction (command `K07`, RFC 094 cycle J stage 4). Note fields: the per-table row counts (`signing_keys`, `refresh_tokens`, `user_totp_secrets`, `user_totp_recovery_codes`, `user_webauthn_credentials`, `smtp_config`, `email_outbox_rows`). |
 | `admin.master_key.rotated` | Master key rotated | The master key was rotated offline. All column-encrypted values were re-sealed under the new key. |
 | `admin.setup.completed` | Initial setup completed | First-run setup completed: the first administrator account, its signing-key bootstrap, and the initialized flag all committed together. No actor — there is no authenticated session at first run. Note field `authorized_by` (`setup_token` for the web wizard, `filesystem` for the headless CLI). |
 | `audit.chain.verification_failed` | Audit chain verification failed | The audit log's hash chain could not be checked at all (a read or data error, not a broken chain — see "Audit log integrity" below). Note fields: `limit`, `detail`. Best-effort: recorded when the write itself succeeds, which is not guaranteed if the same fault also affects writes. |

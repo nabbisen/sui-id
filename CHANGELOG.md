@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Rotating the master key now records itself in the same transaction
+  as the re-seal it performs.** Previously the six-table re-seal
+  committed and the audit append followed, outside any transaction and
+  best-effort — a crash between the two left no record that a re-seal
+  had happened at all. The re-seal now carries its own event,
+  `admin.master_key.resealed`, sealed with the mutation.
+  **`admin.master_key.rotated` is unchanged** — it still fires
+  separately, after the key file is replaced, best-effort; this is a
+  new event alongside it, not a rename or a retirement.
+
 ## [0.87.1] — 2026-11-03
 
 **`sui-id admin rotate-key` no longer risks losing the master key

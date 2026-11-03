@@ -1,129 +1,29 @@
-//! Master-key rotation.
+//! Master-key re-seal: a pure, database-free helper.
 //!
-//! Re-seal every encrypted column in the database under a new
-//! 32-byte XChaCha20-Poly1305 master key. The operation runs
-//! offline: the server is stopped, the operator runs the
-//! `sui-id admin rotate-key` CLI, the old key file is renamed
-//! to `<name>.bak.<ISO timestamp>` (kept beside the new one so
-//! recovery from a backup is straightforward), and the server
-//! is restarted with the new key.
+//! The actual re-seal orchestration (open under the old key, re-seal
+//! six tables in one transaction, append the audit record in the same
+//! transaction) moved to `sui_id_store::commands::reseal_master_key`
+//! (K07) in RFC 094 cycle J stage 4 — `declare_write_command!` is
+//! defined in `sui-id-store`, which this crate depends on, not the
+//! reverse, so the sealed command could only live there. What remains
+//! here is [`reseal_one`]: a per-ciphertext helper with no production
+//! caller (the per-table `reseal_all` functions in `sui-id-store`'s
+//! repos re-seal directly, not through this), kept because it is
+//! unit-testable without a database and nothing in the dispatch that
+//! moved its caller asked for it to go too.
 //!
-//! ## Why offline
-//!
-//! Hot rotation (live re-key while the server is running) was
-//! evaluated and rejected. The complexity ladder is steep — every
-//! sealed read needs to fall back through the old key, every
-//! seal needs to choose the new one, the cutover has to be
-//! globally consistent, and the failure modes (partial rotation
-//! after a crash) require new state machinery to recover from.
-//! Offline rotation gives sui-id the strongest guarantee — every
-//! row is either fully old-keyed or fully new-keyed at any
-//! point an operator can observe — at the cost of a few seconds
-//! of downtime once or twice in the lifetime of a deployment.
-//!
-//! ## Atomicity
-//!
-//! All re-seals run inside a single SQLite transaction. On any
-//! error during the loop, the transaction rolls back: the DB
-//! file remains entirely under the old key, the old key file
-//! has not yet been renamed (the rename happens AFTER COMMIT),
-//! and a re-run with the same arguments is a clean retry. There
-//! is no half-rotated state to recover from.
-//!
-//! ## Old-key preservation
-//!
-//! After the transaction commits, the old key file is renamed
-//! to `<original_path>.bak.<RFC3339 timestamp>`. This:
-//!
-//! - keeps the old material available for restoring from a
-//!   pre-rotation DB backup (the rotation itself does not back
-//!   up the DB — that's an operator responsibility);
-//! - moves the old file out of the path the server reads from
-//!   on next startup, so the server picks up the new key
-//!   without further configuration changes;
-//! - leaves the old file in the same directory the operator
-//!   already manages permissions on, rather than scattering
-//!   secrets across the filesystem.
-//!
-//! Old key files are not auto-deleted. The operator decides
-//! when (or whether) to remove them.
+//! The CLI subcommand is still `sui-id admin rotate-key`; the old key
+//! file is renamed to `<name>.bak.<ISO timestamp>` by `cli.rs` after
+//! K07 commits. See `docs/src/guides/operators.md`'s "Rotating the
+//! master key" section for the operator-facing procedure.
 
 use crate::errors::{CoreError, CoreResult};
-use sui_id_store::Database;
 use sui_id_store::crypto::{MasterKey, open, seal};
-use sui_id_store::repos::{
-    email_outbox, refresh_tokens, signing_keys, smtp_config, user_totp, user_webauthn_credentials,
-};
-
-/// Result of running a rotation. Counts of re-sealed rows in
-/// each table — useful for the CLI to print and for tests to
-/// assert on.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct RotationReport {
-    pub signing_keys: u64,
-    pub refresh_tokens: u64,
-    pub user_totp_secrets: u64,
-    pub user_totp_recovery_codes: u64,
-    pub user_webauthn_credentials: u64,
-    pub smtp_config: u64,
-    /// Rows resealed in `email_outbox` (RFC 001).
-    pub email_outbox_rows: u64,
-}
-
-impl RotationReport {
-    pub fn total(&self) -> u64 {
-        self.signing_keys
-            + self.refresh_tokens
-            + self.user_totp_secrets
-            + self.user_totp_recovery_codes
-            + self.user_webauthn_credentials
-            + self.smtp_config
-            + self.email_outbox_rows
-    }
-}
-
-/// Re-seal every encrypted column in the database under
-/// `new_key`. Runs in a single SQLite transaction; on any error
-/// the transaction is rolled back and `Err(_)` is returned with
-/// no observable change to the DB.
-///
-/// The caller is responsible for:
-///
-/// - taking a fresh backup of the DB *before* calling this
-///   (one rough alignment of the `backup` skill is plenty);
-/// - opening `db` under the **old** key (so reads succeed);
-/// - having the new key already constructed, ideally from
-///   `MasterKey::generate` or `from_base64`;
-/// - renaming the old key file out of the way after this
-///   function returns successfully (the CLI does this).
-pub async fn rotate_master_key(db: &Database, new_key: &MasterKey) -> CoreResult<RotationReport> {
-    let old_key = db.key();
-    let mut report = RotationReport::default();
-
-    // Each table has its own SELECT/UPDATE shape (different AADs,
-    // different number of sealed columns), and we want to error
-    // out early on the first failure with the rest still intact.
-    // SQLite-level transactionality is provided by `Database::with_conn`
-    // running inside an implicit transaction that rolls back on Err.
-    db.with_tx_sync(|tx| {
-        report.signing_keys = signing_keys::reseal_all(tx, old_key, new_key)?;
-        report.refresh_tokens = refresh_tokens::reseal_all(tx, old_key, new_key)?;
-        let (totp_n, recovery_n) = user_totp::reseal_all(tx, old_key, new_key)?;
-        report.user_totp_secrets = totp_n;
-        report.user_totp_recovery_codes = recovery_n;
-        report.user_webauthn_credentials =
-            user_webauthn_credentials::reseal_all(tx, old_key, new_key)?;
-        report.smtp_config = smtp_config::reseal_all(tx, old_key, new_key)?;
-        report.email_outbox_rows = email_outbox::reseal_all(tx, old_key, new_key)? as u64;
-        Ok(())
-    })?;
-
-    Ok(report)
-}
 
 /// Pure helper: re-seal a single ciphertext under `new_key`,
-/// preserving the AAD. Implementation detail of the per-table
-/// `reseal_all` functions; lives here so it is unit-testable
+/// preserving the AAD. No production caller — the per-table
+/// `reseal_all` functions in `sui-id-store`'s repos re-seal directly,
+/// not through this; it lives here so the primitive is unit-testable
 /// without requiring a database.
 pub async fn reseal_one(
     old_key: &MasterKey,

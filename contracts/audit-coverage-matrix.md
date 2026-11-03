@@ -99,12 +99,15 @@ gone stale in opposite directions:
 - **`auth.smtp_config.changed` is Class A**, and has been since S06
   converted it in an earlier M2b wave — read the live row, which this
   prose contradicted.
-- **`admin.master_key.rotated` is still outstanding, and worse than
-  `B (A required)` recorded.** `rotate_master_key` reseals six tables
-  inside one transaction and the append sits **outside** it,
-  best-effort; and there is **no command row for the operation
-  anywhere** in `contracts/write-commands.toml`. It is scoped in cycle
-  J. See K06's own rationale for why the row was never written.
+- **The re-seal half is sealed, cycle J stage 4, 2026-11-03.** The
+  six-table re-seal `rotate_master_key` performed now commits inside
+  its own sealed command (K07, `admin.master_key.resealed`, Class A —
+  `contracts/write-commands.toml` carries the row this paragraph said
+  was missing). `admin.master_key.rotated` itself is **unchanged**: it
+  still fires after both key-file renames, best-effort, outside any
+  transaction, and keeps its own row below. Whether that second record
+  should itself become Class A, or is a deliberate second fact next to
+  the first, is stage 5's question — not answered here.
 
 ## Coverage matrix
 
@@ -203,6 +206,7 @@ anywhere in `crates/`.
 
 | Event name | Operation | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
+| `admin.master_key.resealed` | Re-seal every column-encrypted value under a new master key, one transaction (command `K07`, RFC 094 cycle J stage 4) | — | — | `signing_keys=N`, `refresh_tokens=N`, `user_totp_secrets=N`, `user_totp_recovery_codes=N`, `user_webauthn_credentials=N`, `smtp_config=N`, `email_outbox_rows=N` | A |
 | `admin.master_key.rotated` | Master key rotation | CLI principal | — | `keys_resealed=N` | B *(A required)* |
 | `admin.user.unlock` | Clear account lockout (CLI operator) | — *(see note)* | target user id | — | A |
 

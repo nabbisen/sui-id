@@ -206,6 +206,12 @@ pub enum AuditEventKind {
     /// `ActorRequirement::None`, `system_principal: permitted`, target =
     /// the created admin's user id.
     AdminSetupCompleted,
+    /// `admin.master_key.resealed` — K07 (RFC 094 cycle J stage 4). The
+    /// six-table re-seal under the new master key, one transaction.
+    /// Distinct from `admin.master_key.rotated` (unchanged, best-effort,
+    /// fires after the key file is replaced): a sealed command for that
+    /// second record is not this stage's job.
+    AdminMasterKeyResealed,
     /// `auth.password.changed_self` — U09.
     AuthPasswordChangedSelf,
     /// `auth.password.reset_completed` — U10.

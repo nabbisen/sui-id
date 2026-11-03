@@ -174,6 +174,7 @@ mod federation_provider;
 mod key_rotation;
 mod lockout;
 mod login;
+mod master_key;
 mod mfa;
 mod passwords;
 mod pending_settings;

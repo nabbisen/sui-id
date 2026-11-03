@@ -362,9 +362,11 @@ pub(crate) async fn run_admin_issue_recovery_link(args: &[String]) -> Result<()>
 ///      permissions (`create_new` + mode `0600`, never a `chmod`
 ///      after the fact). This is the only durable copy of a generated
 ///      key until step 7.
-///   5. Re-seal every encrypted column under the new key in a single
-///      SQLite transaction. Failure: rollback; the staged key and the
-///      old key file are both untouched, and a re-run is a clean retry.
+///   5. Re-seal every encrypted column under the new key, and record
+///      `admin.master_key.resealed` (K07), in one transaction
+///      (RFC 094 cycle J stage 4). Failure: rollback, no audit row;
+///      the staged key and the old key file are both untouched, and a
+///      re-run is a clean retry.
 ///   6. Rename old key file to `.bak.<timestamp>`.
 ///   7. Rename `<key_file>.new` to the configured path. Steps 6 and 7
 ///      are renames within one directory, which allocate nothing and
@@ -494,10 +496,12 @@ pub(crate) async fn run_admin_rotate_key(args: &[String]) -> Result<()> {
     sui_id::keyring::write_key_file(&staged_path, &new_key_b64)
         .with_context(|| format!("staging new key at {}", staged_path.display()))?;
 
-    // Re-seal everything atomically.
-    let report = sui_id_core::key_rotation::rotate_master_key(&db, &new_key)
+    // Re-seal everything atomically: the re-seal and its audit record
+    // (`admin.master_key.resealed`, K07) now commit in one transaction.
+    let report = sui_id_store::commands::reseal_master_key(&db, &new_key)
         .await
-        .context("rotating sealed columns under the new key")?;
+        .context("rotating sealed columns under the new key")?
+        .into_inner();
 
     // Rename the old key file. Done AFTER the transaction
     // commits so a failure in re-sealing does not leave the

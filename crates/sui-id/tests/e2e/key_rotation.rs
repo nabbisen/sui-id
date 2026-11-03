@@ -275,7 +275,7 @@ mod ordering {
 /// every sealed-row read still works under the new key.
 #[tokio::test]
 async fn rotation_reseal_succeeds_and_old_key_no_longer_decrypts() {
-    use sui_id_core::key_rotation::rotate_master_key;
+    use sui_id_store::commands::reseal_master_key;
     use sui_id_store::crypto::MasterKey;
 
     let state = test_app();
@@ -332,9 +332,14 @@ async fn rotation_reseal_succeeds_and_old_key_no_longer_decrypts() {
     // works (the key field is unchanged). Reading sealed columns
     // through that old handle would now FAIL — which is exactly
     // what we assert.
-    let report = rotate_master_key(&state.db, &new_key)
+    let before_audit_rows = sui_id_store::repos::audit::recent(&state.db, 1000)
         .await
-        .expect("rotate");
+        .expect("audit tail")
+        .len();
+    let report = reseal_master_key(&state.db, &new_key)
+        .await
+        .expect("rotate")
+        .into_inner();
 
     assert!(
         report.signing_keys >= 1,
@@ -392,10 +397,19 @@ async fn rotation_reseal_succeeds_and_old_key_no_longer_decrypts() {
         b"my-smtp-password"
     );
 
-    // Audit row was appended for the rotation event by the CLI
-    // (we are not running through the CLI in this test, so we
-    // don't check for the row here — that's covered by the CLI-
-    // path test).
+    // RFC 094 cycle J stage 4: the re-seal is now itself a sealed
+    // command (K07), so the audit row commits with it regardless of
+    // whether the CLI is the caller — asserted here, not left to the
+    // CLI-path test, since this test IS a caller now.
+    let after_audit = sui_id_store::repos::audit::recent(&state.db, 1000)
+        .await
+        .expect("audit tail");
+    assert_eq!(
+        after_audit.len(),
+        before_audit_rows + 1,
+        "exactly one audit row from the reseal"
+    );
+    assert_eq!(after_audit[0].action, "admin.master_key.resealed");
 
     // Avoid an unused-variable warning.
     let _ = user;
@@ -408,7 +422,7 @@ async fn rotation_reseal_succeeds_and_old_key_no_longer_decrypts() {
 /// list.
 #[tokio::test]
 async fn rotation_on_minimal_db_only_rekeys_signing_key() {
-    use sui_id_core::key_rotation::rotate_master_key;
+    use sui_id_store::commands::reseal_master_key;
     use sui_id_store::crypto::MasterKey;
 
     let state = test_app();
@@ -418,9 +432,10 @@ async fn rotation_on_minimal_db_only_rekeys_signing_key() {
     // exercised here. TOTP / WebAuthn / SMTP all require admin
     // action.)
     let new_key = MasterKey::generate();
-    let report = rotate_master_key(&state.db, &new_key)
+    let report = reseal_master_key(&state.db, &new_key)
         .await
-        .expect("rotate");
+        .expect("rotate")
+        .into_inner();
     assert_eq!(report.signing_keys, 1);
     assert_eq!(report.refresh_tokens, 0);
     assert_eq!(report.user_totp_secrets, 0);

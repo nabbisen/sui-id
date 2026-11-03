@@ -1209,10 +1209,23 @@ class = "I"
 status = "implemented"  # implemented | target-absent | target-legacy
 sealed = false
 owner = "Sealed-key insert/reseal primitives"
-rationale = "corrected 2026-11-03 (cycle J stage 1): the previous text read \"subordinate to S10 or K01 only\" and was false -- `sui_id_core::oidc::key_rotation::rotate_master_key` (`:99`) is a **third, independent, top-level caller** of the same `reseal_all` primitives, resealing six tables inside one `db.with_tx_sync` (`signing_keys`, `refresh_tokens`, `user_totp` twice, `user_webauthn_credentials`, `smtp_config`, `email_outbox`). **That wrong rationale is why master-key rotation has no command row at all**: an inventory stating a primitive is only ever subordinate tells the next reader there is no top-level command to look for, so a wrong rationale does not merely mislead, it suppresses the search. The missing row is scoped in cycle J, not here."
+rationale = "corrected 2026-11-03 (cycle J stage 1): the previous text read \"subordinate to S10 or K01 only\" and was false -- `sui_id_core::oidc::key_rotation::rotate_master_key` was a **third, independent, top-level caller** of the same `reseal_all` primitives, resealing six tables inside one `db.with_tx_sync` (`signing_keys`, `refresh_tokens`, `user_totp` twice, `user_webauthn_credentials`, `smtp_config`, `email_outbox`). **That wrong rationale is why master-key rotation had no command row at all**: an inventory stating a primitive is only ever subordinate tells the next reader there is no top-level command to look for, so a wrong rationale does not merely mislead, it suppresses the search. Sealed cycle J stage 4 (2026-11-03): the orchestration moved to `sui-id-store::commands::reseal_master_key`, K07 below, `admin.master_key.resealed`."
 mutation_surface = "`signing_keys::insert_with_plaintext`, `insert_sealed_on_conn`, all `reseal_all` functions"
-files = ["crates/sui-id-store/src/repos/signing_keys.rs", "crates/sui-id-core/src/oidc/key_rotation.rs", "crates/sui-id-store/src/repos/refresh_tokens.rs", "crates/sui-id-store/src/repos/user_totp.rs", "crates/sui-id-store/src/repos/user_webauthn_credentials.rs", "crates/sui-id-store/src/repos/smtp_config.rs", "crates/sui-id-store/src/repos/email_outbox.rs"]
+files = ["crates/sui-id-store/src/repos/signing_keys.rs", "crates/sui-id-store/src/commands.rs", "crates/sui-id-store/src/repos/refresh_tokens.rs", "crates/sui-id-store/src/repos/user_totp.rs", "crates/sui-id-store/src/repos/user_webauthn_credentials.rs", "crates/sui-id-store/src/repos/smtp_config.rs", "crates/sui-id-store/src/repos/email_outbox.rs"]
 test_id = "`i_k06_key_primitives`"
+
+[[command]]
+id = "K07"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+sealed = true
+owner = "Re-seal all column-encrypted values under a new master key"
+rationale = "`admin.master_key.resealed`, not attribute-free -- carries the per-table re-seal counts as attributes. CLI-only (`sui-id admin rotate-key`); the operator's authority is possession of the master key and filesystem access, not an authenticated user, so `system_principal: permitted`, actor none -- the shape U08, C22 and S05 use. RFC 094 cycle J stage 4, closing M2b criterion 2: moved from the bare, downstream `sui_id_core::oidc::key_rotation::rotate_master_key`, which could not be sealed in place (`declare_write_command!` is defined in this crate, not `sui-id-core`). Distinct from `admin.master_key.rotated`, unchanged by this stage -- that event fires after the key file is replaced, best-effort, outside any transaction, and is not this row."
+mutation_surface = "`signing_keys::reseal_all`, `refresh_tokens::reseal_all`, `user_totp::reseal_all`, `user_webauthn_credentials::reseal_all`, `smtp_config::reseal_all`, `email_outbox::reseal_all` (via `commands::reseal_master_key`)"
+files = ["crates/sui-id-store/src/repos/signing_keys.rs", "crates/sui-id-store/src/repos/refresh_tokens.rs", "crates/sui-id-store/src/repos/user_totp.rs", "crates/sui-id-store/src/repos/user_webauthn_credentials.rs", "crates/sui-id-store/src/repos/smtp_config.rs", "crates/sui-id-store/src/repos/email_outbox.rs"]
+test_id = "`k07_reseal_master_key_appends_exactly_one_audit_row`"
+event = ["admin.master_key.resealed"]
+descriptor = ["K07_RESEALED"]
 
 [[command]]
 id = "O01"
