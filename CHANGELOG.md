@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [`docs/src/guides/operators.md`](docs/src/guides/operators.md). No
   behaviour changed.
 
+- **A directory sign-in that requires a second factor now records itself
+  in the same transaction as the account mirroring it performs.**
+  Previously that mirroring (the local shadow copy of the directory
+  account) happened outside any transaction, and its record was
+  best-effort, written after the fact. No event name changes.
+
 ## [0.87.0] — 2026-11-01
 
 **These now record themselves in the same transaction as the change,

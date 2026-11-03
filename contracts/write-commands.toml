@@ -341,9 +341,10 @@ id = "U26"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
 sealed = false
+sealed_by = "L08"
 owner = "LDAP shadow-user upsert"
-rationale = "re-measured 2026-10-30 (cycle I stage 1): still no command or event of its own. L03 subsumes the within-tx form for the no-MFA directory sign-in (`auth.login.success`); the MFA branch (`admin/auth.rs`) is today the only caller of the raw async `upsert_ldap_shadow`, followed by the best-effort `auth.login.password_ok_mfa_required` row for a different fact -- federation provisioning no longer calls it directly, which the 2026-09-17 wording still claimed."
-mutation_surface = "`users::upsert_ldap_shadow`"
+rationale = "cycle J stage 2 closes the gap cycle I stage 1 measured and left open (`.git-exclude/reviewed/cycle-j-stage1-criterion-2-and-the-chain-claims-2026-11-03.md` §2): the MFA branch's bare `upsert_ldap_shadow` call (`admin/auth.rs`) is replaced by `commands::sign_in_from_directory_mfa_required` (L08), which commits the upsert and the pending-MFA insert in one transaction. `sealed_by = \"L08\"` since this stage, the same shape C04/C09 use: no separate `command U26 = \"U26\"` is declared. The bare async `upsert_ldap_shadow` has no production caller left -- kept only for fixture seeding (`tests_rfc005.rs`, `ldap_returning_signin.rs`'s re-bind test); a source-text test (`ldap_mfa_required_branch_calls_the_sealed_command_not_the_bare_upsert`) fails if a production caller reappears."
+mutation_surface = "`users::upsert_ldap_shadow` (test fixtures only; the production caller is L08's `upsert_ldap_shadow_within_tx`)"
 files = ["crates/sui-id-store/src/repos/users.rs"]
 test_id = "`a_u26_ldap_shadow`"
 
@@ -408,8 +409,8 @@ class = "P"
 status = "implemented"  # implemented | target-absent | target-legacy
 sealed = false
 owner = "Pending MFA ceremony create/consume"
-rationale = "short-lived one-time protocol state; since RFC 102 stage 3 the consume is L02's guarded delete, and L07 removes every row at lockout"
-mutation_surface = "`login_pending_mfa::insert`, `delete`"
+rationale = "short-lived one-time protocol state; since RFC 102 stage 3 the consume is L02's guarded delete, and L07 removes every row at lockout. Cycle J stage 2: the directory branch's insert is also covered by L08, atomically with the shadow upsert (U26) -- not `sealed_by`, because the local-password branch's insert (`authn::session.rs`) still calls this bare primitive directly, outside any transaction, by design (RFC 102 A6)"
+mutation_surface = "`login_pending_mfa::insert`, `delete` (the local-password branch's insert stays this bare primitive; the directory branch's insert is L08's `insert_within_tx`)"
 files = ["crates/sui-id-store/src/repos/login_pending_mfa.rs"]
 test_id = "`p_u32_pending_mfa`"
 
@@ -497,6 +498,19 @@ files = ["crates/sui-id-store/src/repos/users.rs", "crates/sui-id-store/src/repo
 test_id = "`r102_l03_*` (e2e)"
 event = ["auth.login.success"]
 descriptor = ["L01_SUCCESS"]
+
+[[command]]
+id = "L08"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+sealed = true
+owner = "Directory sign-in, MFA required (RFC 102 Part A; cycle J stage 2, subsumes the rest of U26)"
+rationale = "L03's counterpart for the one directory sign-in shape it does not cover: the shadow upsert and the pending-MFA insert now commit together with `auth.login.password_ok_mfa_required`, which the local-password MFA-required branch still writes best effort (two writers, see `contracts/audit-coverage-matrix.md`'s row)"
+mutation_surface = "`users::upsert_ldap_shadow_within_tx`, `login_pending_mfa::insert_within_tx`"
+files = ["crates/sui-id-store/src/repos/users.rs", "crates/sui-id-store/src/repos/login_pending_mfa.rs"]
+test_id = "`l08_injected_failure_before_append_rolls_back_everything`, `ldap_returning_user_with_a_factor_gets_the_mfa_step` (e2e)"
+event = ["auth.login.password_ok_mfa_required"]
+descriptor = ["L08_PENDING_MFA"]
 
 [[command]]
 id = "L04"

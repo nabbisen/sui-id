@@ -178,6 +178,23 @@ pub async fn regenerate_recovery_codes(db: &Database, user_id: UserId) -> CoreRe
 
 // ----- login --------------------------------------------------------------
 
+/// Build a "password verified, MFA pending" row without inserting it.
+///
+/// Split out of [`issue_pending_mfa`] for L08 (RFC 102 Part A, cycle J stage
+/// 2): the directory MFA-required branch builds the row here, then hands it
+/// to `commands::sign_in_from_directory_mfa_required`, which inserts it
+/// inside the same transaction as the shadow upsert. `issue_pending_mfa`
+/// keeps the bare insert for every other MFA-required path.
+pub fn build_pending_mfa_row(clock: &SharedClock, user_id: UserId) -> LoginPendingMfaRow {
+    let now = clock.now();
+    LoginPendingMfaRow {
+        id: PendingMfaId::new(),
+        user_id,
+        expires_at: now + Duration::seconds(PENDING_MFA_TTL_SECS),
+        created_at: now,
+    }
+}
+
 /// Create a "password verified, MFA pending" record. The caller hands
 /// the resulting `id` to the user as a short-lived cookie.
 pub async fn issue_pending_mfa(
@@ -185,13 +202,7 @@ pub async fn issue_pending_mfa(
     clock: &SharedClock,
     user_id: UserId,
 ) -> CoreResult<LoginPendingMfaRow> {
-    let now = clock.now();
-    let row = LoginPendingMfaRow {
-        id: PendingMfaId::new(),
-        user_id,
-        expires_at: now + Duration::seconds(PENDING_MFA_TTL_SECS),
-        created_at: now,
-    };
+    let row = build_pending_mfa_row(clock, user_id);
     login_pending_mfa::insert(db, &row).await?;
     Ok(row)
 }

@@ -182,8 +182,50 @@ passphrase and are the operator's to refresh as needed.
 
 If the re-seal step fails for any reason (disk full, schema drift,
 etc), the SQLite transaction rolls back, the old key file is **not**
-yet renamed, and you can retry with the same arguments. There is no
-half-rotated state to recover from.
+yet renamed, and you can retry with the same arguments.
+
+> ### Use `--new-key`. Corrected 2026-11-03 — this section used to end "There is no half-rotated state to recover from", and that is not true of a failure *after* the re-seal commits.
+>
+> The re-seal is one transaction, and it commits **before** the key
+> files are touched. Only then does the command rename the old key to
+> `.bak.<timestamp>` and write the new one. So two windows exist that
+> the removed sentence denied:
+>
+> - **the rename fails** — the database is already re-sealed under the
+>   new key while the old key is still at the configured path, so the
+>   server can no longer open its own database;
+> - **the rename succeeds and the write fails** — there is now no key
+>   file at the configured path at all.
+>
+> **And without `--new-key` the generated key is never shown to you.**
+> It exists only in the command's memory and is persisted by exactly
+> that one write. If the write does not happen, the key is gone, and
+> every sealed column — signing keys, refresh tokens, TOTP secrets and
+> recovery codes, WebAuthn credentials, SMTP configuration, the email
+> outbox — **cannot be decrypted by anyone, ever.** That is permanent
+> data loss from an ordinary disk error.
+>
+> **So generate the key yourself, keep it, and pass it in:**
+>
+> ```bash
+> # 1. Generate and keep the new key FIRST, somewhere already durable.
+> head -c 32 /dev/urandom | base64 > /secure/backup/sui-id.key.new
+>
+> # 2. Rotate using it, so the key survives any failure below.
+> sui-id admin rotate-master-key --config /etc/sui-id/sui-id.toml \
+>                                --new-key /secure/backup/sui-id.key.new
+> ```
+>
+> With the key already on durable storage, **every** failure above is
+> recoverable: the database is either on the old key (re-seal rolled
+> back — retry) or on the new one (re-seal committed — put the new key
+> at the configured path and start). **Take a backup first either way.**
+>
+> If you have already hit this without `--new-key`: if the rename
+> succeeded, your old key is at `<path>.bak.<timestamp>` — it opens the
+> database only if the re-seal did **not** commit. Check the startup
+> error before overwriting anything, and restore the pre-rotation
+> backup if it did.
 
 ## Dev mode for local testing
 

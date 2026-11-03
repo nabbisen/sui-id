@@ -224,6 +224,14 @@ pub enum AuditEventKind {
     AuthMfaFactorAdded,
     /// `auth.login.success` — L01, the password sign-in (RFC 102 Part A).
     AuthLoginSuccess,
+    /// `auth.login.password_ok_mfa_required` — L08, the directory sign-in's
+    /// MFA-required branch (RFC 102 Part A, cycle J stage 2). Commits the
+    /// shadow upsert (subsumes the rest of U26) and the pending-MFA insert
+    /// (U32's directory-branch instance) together. The local-password
+    /// MFA-required branch still writes this same event name best effort,
+    /// outside any transaction — see `contracts/audit-coverage-matrix.md`'s
+    /// row, which now names two writers the way `AuthLoginFailure`'s does.
+    AuthLoginPasswordOkMfaRequired,
     /// `auth.federation.signin.success` — L04, the federated sign-in.
     AuthFederationSigninSuccess,
     /// `user.recovery_link.issued` — U37, the administrator-issued recovery

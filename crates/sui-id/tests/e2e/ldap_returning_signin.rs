@@ -438,3 +438,41 @@ async fn ldap_known_local_user_with_a_wrong_password_never_reaches_the_directory
     assert!(r.session.is_none());
     assert_eq!(calls.load(Ordering::SeqCst), 0, "directory not consulted");
 }
+
+// ── L08: a kept wrapper must not silently regain its production caller ──
+//
+// `users::upsert_ldap_shadow` (bare, non-transactional) is kept only for
+// fixture seeding (this file's own `ldap_suffixed_shadow_user_signs_in_
+// and_rebinds_by_stable_id`, and `tests_rfc005.rs`) now that the
+// MFA-required directory branch commits through the sealed `L08`
+// (`commands::sign_in_from_directory_mfa_required`, cycle J stage 2). A
+// dynamic rollback proof already exists at the store layer
+// (`l08_injected_failure_before_append_rolls_back_everything`); that proof
+// says nothing about which path a *handler* calls, so cycle I stage 3's
+// lesson applies here too -- a kept wrapper can let the whole suite stay
+// green while a handler quietly reverts to the non-atomic bare call. This
+// is the textual guard: it fails the moment `admin/auth.rs` names the bare
+// function again, regardless of what the dynamic tests still pass.
+#[test]
+fn ldap_mfa_required_branch_calls_the_sealed_command_not_the_bare_upsert() {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/src/http/handlers/admin/auth.rs"
+    );
+    let text = std::fs::read_to_string(path).expect("read admin/auth.rs");
+    let production: String = text
+        .lines()
+        .filter(|l| !l.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        !production.contains("upsert_ldap_shadow("),
+        "admin/auth.rs must not call the bare, non-transactional \
+         `upsert_ldap_shadow` -- the MFA-required branch exists to commit \
+         the shadow upsert and the pending-MFA row together (L08)"
+    );
+    assert!(
+        production.contains("sign_in_from_directory_mfa_required("),
+        "the MFA-required directory branch must call the L08 sealed command"
+    );
+}

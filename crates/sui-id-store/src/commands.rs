@@ -2143,6 +2143,75 @@ pub fn truncate_utf8(value: &str, max: usize) -> String {
     value[..end].to_owned()
 }
 
+// ── L08 — directory sign-in, MFA required (RFC 102 Part A; cycle J stage 2,
+// subsumes the rest of U26 and the directory branch of U32) ─────────────
+//
+// The asymmetry L03 did not fix: a returning directory user with a second
+// factor had the shadow upsert run bare (`users::upsert_ldap_shadow`,
+// outside any transaction), then a separate pending-MFA insert, then a
+// best-effort append -- three writes, no atomicity, for the one directory
+// sign-in shape L03 does not cover. This command is L03's counterpart: the
+// pending-MFA outcome in place of the session.
+
+static L08_PENDING_MFA: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::AuthLoginPasswordOkMfaRequired,
+    name: "auth.login.password_ok_mfa_required",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[],
+};
+
+crate::declare_write_command! {
+    /// L08 — a directory sign-in whose password checked out and whose user
+    /// has a second factor enrolled. Shares `auth.login.password_ok_mfa_
+    /// required` with the local-password branch (`contracts/audit-
+    /// coverage-matrix.md`'s row names both writers). The actor is the
+    /// shadow user whose directory password a user source just verified
+    /// -- the same reasoning L03's doc comment gives.
+    command L08 = "L08" {
+        system_principal: forbidden;
+        enum L08Event {
+            PendingMfaIssued { user_id: UserId } => &L08_PENDING_MFA,
+        }
+    }
+}
+
+impl SealedCommandEvent<L08> for L08Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::PendingMfaIssued { user_id } = self;
+        Some(AuditTarget(user_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        AuditAttributes::builder().build()
+    }
+}
+
+/// Run L08. In one transaction: upsert the shadow row (same semantics as
+/// L03's), then insert the pending-MFA row, then the event. `pending.
+/// user_id` must be the same id the caller resolved and put in `shadow`'s
+/// upsert target. Any refusal rolls back with `NotFound`.
+pub async fn sign_in_from_directory_mfa_required(
+    db: &crate::Database,
+    shadow: crate::repos::users::LdapShadowData,
+    pending: crate::models::LoginPendingMfaRow,
+) -> StoreResult<crate::registry::Audited<crate::models::LoginPendingMfaRow>> {
+    let user_id = pending.user_id;
+    let context = AuthorizedCommandContext::<L08>::for_authorized_actor(user_id, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, L08>| {
+        let now = pending.created_at;
+        crate::repos::users::upsert_ldap_shadow_within_tx(tx.tx(), &shadow, user_id, now)?;
+        crate::repos::login_pending_mfa::insert_within_tx(tx.tx(), &pending)?;
+        Ok((pending.clone(), L08Event::PendingMfaIssued { user_id }))
+    })
+    .await
+}
+
 // ── L04 — federated sign-in (RFC 102 Part A) ────────────────────────────
 
 static L04_SUCCESS: EventDescriptor = EventDescriptor {

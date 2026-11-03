@@ -489,14 +489,15 @@ event, in one transaction: `L01` and `L03` (`auth.login.success`), `L02`
 (`auth.mfa.success`), `L04` (`auth.federation.signin.success`) and `L05`
 (`auth.step_up.success`). Their failures are `L07` (`auth.mfa.failure`,
 `auth.mfa.lockout`) and `L06` (`auth.step_up.failure`,
-`auth.step_up.session_revoked`), also Class A. Two rows in this section stay
-Class B on purpose or in part: `auth.login.password_ok_mfa_required` (RFC 102 A6:
-a continuation that grants no session) and `auth.login.failure` (see its row).
+`auth.step_up.session_revoked`), also Class A. Two rows in this section are
+split or stay Class B on purpose: `auth.login.password_ok_mfa_required` (two
+writers, see its row — RFC 102 A6's "grants no session" reasoning still
+holds for the local-password writer) and `auth.login.failure` (see its row).
 Each row below was checked against its command's descriptor on this date.
 
 | Event name | Trigger | Actor | Class |
 |---|---|---|---|
-| `auth.login.password_ok_mfa_required` | Password correct; MFA challenge pending. Written best effort by every **local-password** sign-in path that has a second factor, by design (RFC 102 A6): it grants no session and no authority. RFC 096-B1 stage 9, F02: the federated sign-in path deliberately does not write this — no password was presented, and an F04-provisioned user may have none at all — and writes `auth.federation.mfa_required` instead (see that row) | user id | B |
+| `auth.login.password_ok_mfa_required` | Two writers. The **directory** sign-in path commits this atomically with the shadow upsert and the pending-MFA insert, `L08` (cycle J stage 2). The **local-password** path still writes it best effort, by design (RFC 102 A6): it grants no session and no authority, Class B. RFC 096-B1 stage 9, F02: the federated sign-in path deliberately does not write this — no password was presented, and an F04-provisioned user may have none at all — and writes `auth.federation.mfa_required` instead (see that row) | user id | **A** (directory) / B (local password) |
 | `auth.login.success` | Sign-in succeeded for a user with no second factor: a local password (command `L01`) or a user-source password (`L03`, which also upserts the shadow user), with the session, counter reset, `last_login_at` and cap eviction; note fields `evicted`, and for L03 `source` and `stable_id` (truncated to 255 bytes) | user id | **A** |
 | `auth.login.failure` | Two writers. A known user's **wrong password** is counted with the lockout counter by `U22` (note field `count`), Class A. A refused attempt made **before any credential check** (unknown user, disabled or deleted user, locked account) is appended best effort with the reason as its note, Class B | — | **A** (wrong password) / B (refused before a credential check) |
 | `auth.mfa.success` | Second-factor sign-in completed: TOTP, recovery code or passkey (command `L02`, with the pending-row consume, the factor's guard, counter resets, `last_login_at`, the session and cap eviction; note fields `method`, `evicted`) | user id | **A** |

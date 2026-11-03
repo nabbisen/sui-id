@@ -50,6 +50,22 @@ pub async fn insert(db: &Database, row: &LoginPendingMfaRow) -> StoreResult<()> 
     .await
 }
 
+/// [`insert`] on the caller's transaction (RFC 102 L08, the directory
+/// MFA-required sign-in).
+pub fn insert_within_tx(conn: &rusqlite::Connection, row: &LoginPendingMfaRow) -> StoreResult<()> {
+    conn.execute(
+        "INSERT INTO login_pending_mfa(id, user_id, expires_at, created_at) \
+         VALUES(?1, ?2, ?3, ?4)",
+        params![
+            row.id.to_string(),
+            row.user_id.to_string(),
+            row.expires_at,
+            row.created_at,
+        ],
+    )?;
+    Ok(())
+}
+
 pub async fn get(db: &Database, id: PendingMfaId) -> StoreResult<Option<LoginPendingMfaRow>> {
     db.with_read(move |conn| {
         Ok(conn

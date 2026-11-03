@@ -305,10 +305,10 @@ async fn directory_sign_in(
 /// verified the password. `known_user` is the shadow row a returning user
 /// was found by; for a first sign-in the row is looked up by stable id.
 ///
-/// - **MFA branch**, exactly as `login_with_mfa` takes it: A7, then the
-///   shadow upsert commits, then the pending-MFA row and the best-effort
-///   `auth.login.password_ok_mfa_required` row. Those three are what is
-///   written before the second factor; L02 commits the rest.
+/// - **MFA branch:** A7, then **L08** commits the shadow upsert and the
+///   pending-MFA row together with `auth.login.password_ok_mfa_required`
+///   (RFC 102, cycle J stage 2). L02 commits the rest once the second
+///   factor is presented.
 /// - **No MFA:** A7 from the role (a new shadow user is always `user`),
 ///   before any write; then **L03** commits the upsert, the bookkeeping,
 ///   the session, eviction and `auth.login.success` together (RFC 102).
@@ -349,21 +349,20 @@ async fn directory_session(
     if let Some(user) = &existing
         && sui_id_core::mfa::is_mfa_enabled(&app.db, user.id).await?
     {
-        sui_id_store::repos::users::upsert_ldap_shadow(&app.db, shadow, app.clock.now()).await?;
-        let pending = sui_id_core::mfa::issue_pending_mfa(&app.db, &app.clock, user.id).await?;
-        let _ = sui_id_store::repos::audit::append(
+        let pending_row = sui_id_core::mfa::build_pending_mfa_row(&app.clock, user.id);
+        let audited = sui_id_store::commands::sign_in_from_directory_mfa_required(
             &app.db,
-            &sui_id_store::models::AuditLogRow {
-                at: app.clock.now(),
-                actor: Some(user.id),
-                action: "auth.login.password_ok_mfa_required".into(),
-                target: Some(user.id.to_string()),
-                result: "ok".into(),
-                note: None,
-            },
+            shadow,
+            pending_row,
         )
-        .await;
-        return Ok(LoginOutcome::MfaRequired { pending });
+        .await
+        .map_err(|e| match e {
+            sui_id_store::StoreError::NotFound => CoreError::InvalidCredentials,
+            other => other.into(),
+        })?;
+        return Ok(LoginOutcome::MfaRequired {
+            pending: audited.into_inner(),
+        });
     }
 
     let now = app.clock.now();

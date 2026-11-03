@@ -29,6 +29,15 @@ fn a_pending_session(user_id: UserId) -> crate::models::SessionRow {
     }
 }
 
+fn a_pending_mfa_row(user_id: UserId) -> crate::models::LoginPendingMfaRow {
+    crate::models::LoginPendingMfaRow {
+        id: PendingMfaId::new(),
+        user_id,
+        expires_at: Utc::now() + TimeDelta::minutes(5),
+        created_at: Utc::now(),
+    }
+}
+
 async fn user_with_confirmed_totp(db: &Database) -> UserId {
     let user = a_user();
     repos::users::create(db, &user).await.expect("create user");
@@ -220,6 +229,57 @@ async fn l03_injected_failure_before_append_rolls_back_everything() {
     assert_eq!(audit_rows(&db).await, before_count + 1, "exactly one event");
     record_rollback_coverage("L03");
     record_exactly_once_coverage("L03");
+}
+
+// ── L08 — directory sign-in, MFA required ────────────────────────────
+
+#[tokio::test]
+async fn l08_injected_failure_before_append_rolls_back_everything() {
+    let db = fresh_db();
+    let user_id = UserId::new();
+    let shadow = a_shadow();
+    let pending = a_pending_mfa_row(user_id);
+    let pending_id = pending.id;
+    let before_audit = latest_audit_action(&db).await;
+
+    db.fault_injector().fail_before_next_append();
+    let result = sign_in_from_directory_mfa_required(&db, shadow, pending).await;
+    assert!(result.is_err(), "injected failure must surface as Err");
+
+    assert!(
+        repos::users::get(&db, user_id).await.is_err(),
+        "no shadow user row was created"
+    );
+    assert!(
+        repos::login_pending_mfa::get(&db, pending_id)
+            .await
+            .expect("get pending")
+            .is_none(),
+        "no pending-MFA row was inserted"
+    );
+    assert_eq!(latest_audit_action(&db).await, before_audit);
+
+    // Control: the same call, with no failure injected, really does
+    // create the shadow user and insert the pending-MFA row -- without
+    // this, the assertions above would pass just as well if the mutation
+    // never ran at all.
+    let control_pending = a_pending_mfa_row(user_id);
+    let control_id = control_pending.id;
+    let before_count = audit_rows(&db).await;
+    sign_in_from_directory_mfa_required(&db, a_shadow(), control_pending)
+        .await
+        .expect("the control succeeds");
+    assert!(repos::users::get(&db, user_id).await.is_ok());
+    assert!(
+        repos::login_pending_mfa::get(&db, control_id)
+            .await
+            .expect("get pending")
+            .is_some(),
+        "the control really inserted the pending row"
+    );
+    assert_eq!(audit_rows(&db).await, before_count + 1, "exactly one event");
+    record_rollback_coverage("L08");
+    record_exactly_once_coverage("L08");
 }
 
 // ── L04 — federated sign-in ───────────────────────────────────────────
