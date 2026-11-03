@@ -64,7 +64,13 @@ pub fn resolve(key_file: &Path) -> Result<ResolvedKey> {
     })
 }
 
-fn write_key_file(path: &Path, body: &str) -> Result<()> {
+/// Create `path` with owner-only permissions, atomically — `create_new`
+/// so the file is never briefly world-readable between creation and a
+/// later `chmod`. `pub` (not `pub(crate)`): the binary's `cli.rs` is a
+/// separate crate from this library target, so the rotation command's
+/// use of this to stage the new master key needs full visibility, not
+/// just crate-local.
+pub fn write_key_file(path: &Path, body: &str) -> Result<()> {
     use std::fs::OpenOptions;
     use std::io::Write;
     use std::os::unix::fs::OpenOptionsExt;

@@ -343,17 +343,35 @@ pub(crate) async fn run_admin_issue_recovery_link(args: &[String]) -> Result<()>
 /// in the same directory. Old files are not auto-deleted; the
 /// operator decides when (or whether) to remove them.
 ///
-/// Default flow:
+/// Default flow — urgent fix (2026-11-03): the new key is made durable
+/// *before* the re-seal commits, not after. Every release since v0.26.0
+/// (2026-05-04) wrote the only copy of a generated key after the
+/// transaction committed; a disk error there was permanent, total loss
+/// of every sealed column. See
+/// `rfcs/handoffs/094-transactional-audit/urgent-master-key-ordering-2026-11-03.md`.
 ///   1. Print a summary of what will happen and prompt
 ///      "type yes to continue:". Skip with `--yes` for non-
 ///      interactive use.
-///   2. Open DB under the OLD key.
-///   3. Re-seal every encrypted column under the new key in
-///      a single SQLite transaction. Failure: rollback, no
-///      file rename.
-///   4. Rename old key file to `.bak.<timestamp>`.
-///   5. Write new key file.
-///   6. Print a report of how many rows were re-sealed in each
+///   2. If `<key_file>.new` already exists, refuse before opening the
+///      database — a previous rotation may not have completed, and
+///      that file may be the only copy of the key the database is
+///      already using.
+///   3. Open DB under the OLD key.
+///   4. Obtain the new key (generate, or read `--new-key`) and stage
+///      it at `<key_file>.new`, created atomically with owner-only
+///      permissions (`create_new` + mode `0600`, never a `chmod`
+///      after the fact). This is the only durable copy of a generated
+///      key until step 7.
+///   5. Re-seal every encrypted column under the new key in a single
+///      SQLite transaction. Failure: rollback; the staged key and the
+///      old key file are both untouched, and a re-run is a clean retry.
+///   6. Rename old key file to `.bak.<timestamp>`.
+///   7. Rename `<key_file>.new` to the configured path. Steps 6 and 7
+///      are renames within one directory, which allocate nothing and
+///      are far less likely to fail than a write — and if either does,
+///      the new key is still recoverable from `<key_file>.new` or
+///      `.bak.<timestamp>`.
+///   8. Print a report of how many rows were re-sealed in each
 ///      table.
 pub(crate) async fn run_admin_rotate_key(args: &[String]) -> Result<()> {
     let config_path = parse_config_path(args).unwrap_or_else(|| PathBuf::from("./sui-id.toml"));
@@ -417,6 +435,34 @@ pub(crate) async fn run_admin_rotate_key(args: &[String]) -> Result<()> {
         }
     }
 
+    let old_path = cfg.storage.key_file.clone();
+    let staged_path = {
+        let mut p = old_path.clone();
+        let mut new_name = p
+            .file_name()
+            .map(|s| s.to_owned())
+            .unwrap_or_else(|| std::ffi::OsString::from("master.key"));
+        new_name.push(".new");
+        p.set_file_name(new_name);
+        p
+    };
+
+    // Refuse before touching the database. If this file exists, a
+    // previous rotation may not have completed: it may be the only
+    // copy of the key the database is already using, and overwriting
+    // it with a freshly generated key would destroy that key and look
+    // like an ordinary retry.
+    if staged_path.exists() {
+        bail!(
+            "refusing to rotate: {} already exists. A previous rotation \
+            may not have completed -- that file may be the only copy of \
+            the master key the database is already sealed under. Check \
+            it against the database (does it open with it as the \
+            key_file?) before removing it and retrying.",
+            staged_path.display()
+        );
+    }
+
     // Resolve OLD key from the configured path (or env, same as
     // the server's startup logic).
     let resolved_old =
@@ -438,6 +484,16 @@ pub(crate) async fn run_admin_rotate_key(args: &[String]) -> Result<()> {
         (key, b64)
     };
 
+    // Stage the new key at a sibling path, created atomically with
+    // owner-only permissions, BEFORE the re-seal commits. This is the
+    // only durable copy of a generated key until the final rename
+    // below — if anything after this point fails, the key survives at
+    // `staged_path` and the operator can finish the rotation by hand.
+    // (`--new-key` already has a durable copy elsewhere, but it is
+    // staged too, so recovery is the same uniform procedure either way.)
+    sui_id::keyring::write_key_file(&staged_path, &new_key_b64)
+        .with_context(|| format!("staging new key at {}", staged_path.display()))?;
+
     // Re-seal everything atomically.
     let report = sui_id_core::key_rotation::rotate_master_key(&db, &new_key)
         .await
@@ -450,7 +506,6 @@ pub(crate) async fn run_admin_rotate_key(args: &[String]) -> Result<()> {
     // Filename-safe RFC3339 (replace ':' which is illegal on
     // Windows and irritating on macOS).
     let stamp = now.format("%Y-%m-%dT%H-%M-%SZ").to_string();
-    let old_path = &cfg.storage.key_file;
     let bak_path = {
         let mut p = old_path.clone();
         let mut new_name = p
@@ -461,24 +516,20 @@ pub(crate) async fn run_admin_rotate_key(args: &[String]) -> Result<()> {
         p.set_file_name(new_name);
         p
     };
-    std::fs::rename(old_path, &bak_path)
+    std::fs::rename(&old_path, &bak_path)
         .with_context(|| format!("renaming {} -> {}", old_path.display(), bak_path.display()))?;
 
-    // Write the new key file at the configured path. Done last
-    // so a failure here is a clear "old key is .bak'd, new key
-    // not yet at expected path" state — the operator can move
-    // the .bak file back manually if needed.
-    std::fs::write(old_path, format!("{new_key_b64}\n"))
-        .with_context(|| format!("writing new key to {}", old_path.display()))?;
-
-    // Match the permission posture on the new file. Best-effort —
-    // not all platforms support 0600, so a failure here is
-    // a warning rather than a hard error.
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(old_path, std::fs::Permissions::from_mode(0o600));
-    }
+    // Move the already-durable staged key into place. A rename
+    // within one directory, which allocates nothing and is far less
+    // likely to fail than a write — and if it does, the key is still
+    // at `staged_path`, recoverable by hand.
+    std::fs::rename(&staged_path, &old_path).with_context(|| {
+        format!(
+            "renaming {} -> {}",
+            staged_path.display(),
+            old_path.display()
+        )
+    })?;
 
     let _ = sui_id_store::repos::audit::append(
         &db,

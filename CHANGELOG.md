@@ -25,6 +25,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   account) happened outside any transaction, and its record was
   best-effort, written after the fact. No event name changes.
 
+### Fixed
+
+- **`sui-id admin rotate-key` could lose the master key permanently if
+  the disk failed at the wrong moment, taking every encrypted column
+  with it.** The command re-seals the database in one transaction,
+  which commits, and only afterward touched either key file. Without
+  `--new-key`, the new key exists only in memory until that point —
+  it is persisted by exactly one write, after the commit. If that
+  write (or the rename before it) failed, the key was gone, and
+  nothing could decrypt signing keys, refresh tokens, TOTP secrets and
+  recovery codes, WebAuthn credentials, SMTP configuration or the
+  email outbox, ever again. **This has been true of every release
+  since the command was added, v0.26.0 (2026-05-04).**
+
+  The new key is now written to a sibling path (`<key_file>.new`),
+  created atomically with owner-only permissions, *before* the
+  re-seal runs. The two steps that follow the commit are then renames
+  within one directory rather than a write, and if either fails the
+  key survives at `<key_file>.new` for the operator to finish by hand.
+  If that file is already present, the command refuses outright — it
+  may be the only copy of the key the database is already using.
+  `--new-key` behaves the same way, so recovery is one uniform
+  procedure regardless of where the new key came from.
+
+  **No action is needed on upgrade.** A rotation already completed is
+  unaffected; this changes only what happens if the next one fails
+  partway through.
+
 ## [0.87.0] — 2026-11-01
 
 **These now record themselves in the same transaction as the change,

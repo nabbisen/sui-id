@@ -7,6 +7,267 @@
 
 use super::common::*;
 
+// ---------- urgent fix 2026-11-03: stage the key before the re-seal
+// commits (rfcs/handoffs/094-transactional-audit/
+// urgent-master-key-ordering-2026-11-03.md) ----------
+//
+// These run the **real binary** (`CARGO_BIN_EXE_sui-id`), the same way
+// `r112_stage2.rs` does, because the bug and its fix are entirely in
+// `cli.rs`'s file handling: `rotate_master_key` itself (exercised
+// in-process above) never touches the filesystem.
+mod ordering {
+    use std::path::{Path, PathBuf};
+    use std::process::{Command, Output};
+
+    const BIN: &str = env!("CARGO_BIN_EXE_sui-id");
+
+    struct Home {
+        dir: tempfile::TempDir,
+    }
+
+    impl Home {
+        fn new() -> Self {
+            Self {
+                dir: tempfile::tempdir().expect("tempdir"),
+            }
+        }
+        fn db(&self) -> PathBuf {
+            self.dir.path().join("t.sqlite")
+        }
+        fn key(&self) -> PathBuf {
+            self.dir.path().join("t.key")
+        }
+        fn staged_key(&self) -> PathBuf {
+            self.dir.path().join("t.key.new")
+        }
+        fn config(&self) -> PathBuf {
+            let sample = Command::new(BIN)
+                .arg("--print-sample-config")
+                .output()
+                .expect("sample");
+            let mut text = String::from_utf8(sample.stdout).expect("utf8");
+            text = text
+                .replace("./sui-id.sqlite", &self.db().display().to_string())
+                .replace("./sui-id.key", &self.key().display().to_string())
+                .replace("127.0.0.1:8801", "127.0.0.1:18813");
+            let path = self.dir.path().join("cfg.toml");
+            std::fs::write(&path, text).expect("config");
+            path
+        }
+        /// Lets the binary create and migrate the database and bootstrap
+        /// the key file (the command fails with "user not found", which
+        /// is the point: the open succeeded).
+        fn create(&self, cfg: &Path) {
+            let out = self.run(
+                &["admin", "unlock-user", "--username", "nobody", "--config"],
+                cfg,
+            );
+            assert_eq!(out.status.code(), Some(1), "{}", stderr(&out));
+            assert!(self.db().exists());
+            assert!(self.key().exists());
+        }
+        fn run(&self, args: &[&str], cfg: &Path) -> Output {
+            Command::new(BIN).args(args).arg(cfg).output().expect("run")
+        }
+        fn raw(&self) -> rusqlite::Connection {
+            rusqlite::Connection::open(self.db()).expect("raw")
+        }
+    }
+
+    fn stderr(o: &Output) -> String {
+        String::from_utf8_lossy(&o.stderr).into_owned()
+    }
+
+    fn mode_bits(path: &Path) -> u32 {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::metadata(path)
+            .expect("metadata")
+            .permissions()
+            .mode()
+            & 0o777
+    }
+
+    /// Insert a signing-key row whose `private_key_enc` cannot be
+    /// decrypted under any key (too short for even the nonce+tag
+    /// `crypto::open` requires) — a genuine re-seal failure, the
+    /// nearest honest substitute for fault injection: the dynamic
+    /// `FaultInjector` (`sui-id-store/src/backend.rs`) is
+    /// `pub(crate)` to `sui-id-store` and unreachable from this
+    /// crate's e2e binary, and nothing else hooks `with_tx_sync`
+    /// for synthetic failure the way `class_a` wires its own.
+    fn poison_a_signing_key(conn: &rusqlite::Connection) {
+        conn.execute(
+            "INSERT INTO signing_keys(id, algorithm, private_key_enc, public_key, \
+             is_active, created_at, rotated_at) \
+             VALUES ('11111111-1111-1111-1111-111111111111', 'EdDSA', X'0000', X'00', \
+             1, '2026-01-01T00:00:00Z', NULL)",
+            [],
+        )
+        .expect("poison insert");
+    }
+
+    /// Test 1 — successful rotation (generate flow): the key is at the
+    /// configured path, `.new` is gone, the old key is at
+    /// `.bak.<stamp>`, and the database opens with the new key and not
+    /// the old.
+    #[test]
+    fn successful_rotation_stages_then_lands_the_key_and_archives_the_old_one() {
+        let h = Home::new();
+        let cfg = h.config();
+        h.create(&cfg);
+        let old_key_body = std::fs::read_to_string(h.key()).expect("old key");
+
+        let out = h.run(&["admin", "rotate-key", "--yes", "--config"], &cfg);
+        assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+
+        assert!(!h.staged_key().exists(), "staged key must be gone");
+        assert!(h.key().exists(), "new key must be at the configured path");
+        let new_key_body = std::fs::read_to_string(h.key()).expect("new key");
+        assert_ne!(new_key_body, old_key_body, "the key actually changed");
+
+        let bak = std::fs::read_dir(h.dir.path())
+            .expect("read dir")
+            .filter_map(|e| e.ok())
+            .find(|e| e.file_name().to_string_lossy().starts_with("t.key.bak."))
+            .expect("a .bak.<stamp> file exists");
+        let bak_body = std::fs::read_to_string(bak.path()).expect("bak key");
+        assert_eq!(bak_body, old_key_body, "the archived key is the old one");
+
+        // The database now opens (and the server would start) with the
+        // key at the configured path, i.e. the NEW one -- prove it by
+        // running another admin command against the same config and
+        // getting the ordinary "user not found" failure, not a refusal
+        // to open the database.
+        let out2 = h.run(
+            &["admin", "unlock-user", "--username", "nobody", "--config"],
+            &cfg,
+        );
+        assert_eq!(out2.status.code(), Some(1), "{}", stderr(&out2));
+        assert!(
+            !stderr(&out2).contains("refusing"),
+            "the server would start fine with the key now at the configured path: {}",
+            stderr(&out2)
+        );
+    }
+
+    /// Test 2 — `.new` already exists: the command refuses, and
+    /// nothing is touched (neither key file, nor the database).
+    #[test]
+    fn staged_key_already_present_refuses_before_touching_anything() {
+        let h = Home::new();
+        let cfg = h.config();
+        h.create(&cfg);
+        let old_key_body = std::fs::read_to_string(h.key()).expect("old key");
+        std::fs::write(h.staged_key(), "stray-leftover-from-a-previous-run\n").expect("stray");
+        let stray_body = std::fs::read_to_string(h.staged_key()).expect("stray body");
+
+        let out = h.run(&["admin", "rotate-key", "--yes", "--config"], &cfg);
+        assert_eq!(out.status.code(), Some(1), "must refuse: {}", stderr(&out));
+        assert!(
+            stderr(&out).contains("already exists")
+                && stderr(&out).contains("may not have completed"),
+            "{}",
+            stderr(&out)
+        );
+
+        assert_eq!(
+            std::fs::read_to_string(h.key()).expect("key still there"),
+            old_key_body,
+            "the old key file is untouched"
+        );
+        assert_eq!(
+            std::fs::read_to_string(h.staged_key()).expect("stray still there"),
+            stray_body,
+            "the stray staged file is untouched, not overwritten"
+        );
+        assert!(
+            std::fs::read_dir(h.dir.path())
+                .expect("read dir")
+                .filter_map(|e| e.ok())
+                .all(|e| !e.file_name().to_string_lossy().starts_with("t.key.bak.")),
+            "no .bak file was created -- the database was never re-sealed"
+        );
+
+        // The database still opens with the OLD key.
+        let out2 = h.run(
+            &["admin", "unlock-user", "--username", "nobody", "--config"],
+            &cfg,
+        );
+        assert_eq!(out2.status.code(), Some(1), "{}", stderr(&out2));
+    }
+
+    /// Test 3 — the staged file is created with mode `0600`, not
+    /// `chmod`'d afterward.
+    #[test]
+    fn staged_key_is_created_with_owner_only_permissions() {
+        let h = Home::new();
+        let cfg = h.config();
+        h.create(&cfg);
+
+        // A corrupted signing key stalls the rotation right after the
+        // staged file is written (see test 4) -- which is exactly the
+        // window this test needs to inspect the file mid-rotation.
+        poison_a_signing_key(&h.raw());
+
+        let out = h.run(&["admin", "rotate-key", "--yes", "--config"], &cfg);
+        assert_eq!(out.status.code(), Some(1), "{}", stderr(&out));
+        assert!(
+            h.staged_key().exists(),
+            "the staged key survives the re-seal failure"
+        );
+        assert_eq!(mode_bits(&h.staged_key()), 0o600);
+    }
+
+    /// Test 4 (§3's ordering test) — a re-seal failure leaves the
+    /// staged key on disk and the database still opens under the OLD
+    /// key: the assertion that proves the key is persisted before the
+    /// irreversible step, against a genuine failure rather than an
+    /// injected one.
+    #[test]
+    fn reseal_failure_leaves_the_staged_key_and_the_old_key_file_untouched() {
+        let h = Home::new();
+        let cfg = h.config();
+        h.create(&cfg);
+        let old_key_body = std::fs::read_to_string(h.key()).expect("old key");
+        poison_a_signing_key(&h.raw());
+
+        let out = h.run(&["admin", "rotate-key", "--yes", "--config"], &cfg);
+        assert_eq!(out.status.code(), Some(1), "{}", stderr(&out));
+        assert!(
+            stderr(&out).contains("rotating sealed columns"),
+            "failed inside the re-seal, not before it: {}",
+            stderr(&out)
+        );
+
+        // The new key is durable, even though rotation did not finish.
+        assert!(h.staged_key().exists(), "the new key is still recoverable");
+        let staged_body = std::fs::read_to_string(h.staged_key()).expect("staged body");
+        assert_ne!(staged_body, old_key_body);
+
+        // Neither key file at the configured path moved.
+        assert_eq!(
+            std::fs::read_to_string(h.key()).expect("old key still there"),
+            old_key_body
+        );
+        assert!(
+            std::fs::read_dir(h.dir.path())
+                .expect("read dir")
+                .filter_map(|e| e.ok())
+                .all(|e| !e.file_name().to_string_lossy().starts_with("t.key.bak.")),
+            "no rename happened -- the transaction rolled back"
+        );
+
+        // And the database still opens with the OLD key: the same
+        // config, same key file, an ordinary command succeeds exactly
+        // as it did before the failed attempt.
+        let out2 = h.run(
+            &["admin", "unlock-user", "--username", "nobody", "--config"],
+            &cfg,
+        );
+        assert_eq!(out2.status.code(), Some(1), "{}", stderr(&out2));
+    }
+}
+
 // ---------- v0.26.0: Master-key rotation ----------
 
 /// End-to-end rotation: set up sui-id, enroll TOTP and a passkey,
