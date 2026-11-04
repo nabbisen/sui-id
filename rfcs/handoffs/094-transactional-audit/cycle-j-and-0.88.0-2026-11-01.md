@@ -343,7 +343,21 @@ for the case where forgetting is most expensive.
    the facts support — the error this cycle keeps producing.*
 6. **The `syn` AST boundary gate**, in a new `xtask` crate, **with the
    negative fixture that rejects an unregistered write** — the closure
-   criterion names the fixture, not just the gate.
+   criterion names the fixture, not just the gate. **DISPATCHED**
+   2026-11-04 —
+   `rfcs/handoffs/094-transactional-audit/cycle-j-stage6-the-ast-boundary-gate-2026-11-04.md`.
+   *Measurement before dispatch changed its shape three times. (i) RFC
+   094 says registering the lane "requires a mechanism that does not
+   exist yet"; it exists — A3.4's condition 7 and
+   `contracts/gate-inputs.toml`'s `[gate_owners]`. (ii) G18 forbids the
+   obvious split: `contract-paths.toml` requires every file in
+   `contracts/` to carry a README row naming a gate already in
+   `[gates]`, so `write-authority.toml` cannot land before the lane is
+   registered — and RFC 094 requires G17 retired in the same change.
+   One round, or a split that keeps those four together. (iii) G17 has
+   **seven** lettered checks, not the four the RFC summarises; two of
+   them postdate that summary. The dependency condition is **held out**
+   — see §F.*
 7. **Make the structural gate blocking; downgrade the string gate from
    authority** (§A items 2 and 3).
 8. **RFC 142 stage 4** — the preview subcommand.
@@ -379,7 +393,25 @@ deadline is how a cycle becomes open-ended.
    best-effort append accompanying a Class-A mutation"; this is the
    decisive one, and it is item (4) of the switch itself.
 2. **One cycle or two** (§E). The architect recommends two.
-3. **Not in this scope, and still open**:
+3. **`rusqlite` under `[dev-dependencies]`: the RFC and the test that
+   closed M2a disagree.** Opened 2026-11-04 while scoping stage 6, and
+   **`@nabbisen`'s to settle.** RFC 094's structural-gate section
+   requires that `rusqlite` appear in *"the `[dependencies]` or
+   `[dev-dependencies]` table"* of no crate but `sui-id-store`. But
+   `crates/sui-id/Cargo.toml:115` declares it under
+   `[dev-dependencies]`, with a recorded reason, and **M2a's own
+   criterion-7 test takes the opposite reading** —
+   `tests/e2e/r094_m2a_db_access_scope.rs` states *"The clause is about
+   production reach, not every Cargo edge … only a `[dependencies]`
+   entry outside `sui-id-store`"* — and **M2a closed on that reading.**
+   The strict reading would mean rewriting at least nine e2e files to
+   inspect the database through `sui-id-store`'s API instead of raw SQL,
+   including helpers stage 5 extended. The architect has **not** chosen:
+   the condition is held out of stage 6 and nothing regresses while it
+   waits, because the existing test already enforces the looser reading
+   on every run. Settling it may be a material amendment to an Accepted
+   RFC.
+4. **Not in this scope, and still open**:
    [RFC 119](../../accepted/119-embedding-contract.md)'s review route
    and its two remaining questions,
    [RFC 143](../../accepted/143-installation-without-a-toolchain.md)'s
