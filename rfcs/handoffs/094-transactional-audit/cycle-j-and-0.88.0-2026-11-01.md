@@ -358,8 +358,20 @@ for the case where forgetting is most expensive.
    **seven** lettered checks, not the four the RFC summarises; two of
    them postdate that summary. The dependency condition is **held out**
    — see §F.*
-7. **Make the structural gate blocking; downgrade the string gate from
-   authority** (§A items 2 and 3).
+7. **The structural gate becomes the coverage authority** (§A item 3).
+   **DISPATCHED** 2026-11-04 —
+   `rfcs/handoffs/094-transactional-audit/cycle-j-stage7-the-structural-gate-becomes-the-authority-2026-11-04.md`.
+   *Re-scoped at dispatch: **§A item 2 is already discharged.** G23 is a
+   `[gates]` key and `continue-on-error` appears **zero** times in
+   `ci.yml` — this project has no non-blocking lane mechanism, so
+   landing the structural gate as a registered lane was making it
+   blocking. This entry previously carried both items; only item 3
+   remains, and it is not a documentation change: RFC 094 `:946-948`
+   says `audit-structure` **becomes the authoritative coverage gate**,
+   and today the bidirectional matrix↔source check is still G13's.
+   Authority follows capability. G13 is **not** retired — the RFC makes
+   that an amendment, which is the owner's — unlike G17, which the RFC
+   required retired in the same change.*
 8. **RFC 142 stage 4** — the preview subcommand.
 9. **RFC 142 stage 5** — the automatic pre-upgrade backup.
 
