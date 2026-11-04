@@ -1,0 +1,32 @@
+[package]
+name        = "xtask"
+description = "RFC 094 cycle J stage 6b: the structural gate (`cargo xtask audit-structure`). Not published."
+publish     = false
+version.workspace       = true
+edition.workspace       = true
+rust-version.workspace  = true
+license.workspace       = true
+authors.workspace       = true
+
+[[bin]]
+name = "xtask"
+path = "src/main.rs"
+
+[dependencies]
+syn                         = { workspace = true }
+# Direct dependency (syn pulls it in transitively) so this feature is
+# guaranteed on regardless of what else is in the graph: real line/column
+# positions outside an actual proc-macro context, needed to report where
+# a write-authority violation is, not just which file.
+proc-macro2                 = { version = "1", features = ["span-locations"] }
+regex                       = { workspace = true }
+walkdir                     = { workspace = true }
+toml                        = { workspace = true }
+serde                       = { workspace = true }
+anyhow                      = { workspace = true }
+
+[dev-dependencies]
+tempfile                    = { workspace = true }
+
+[lints]
+workspace = true

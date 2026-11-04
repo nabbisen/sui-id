@@ -487,25 +487,6 @@ jobs:
       - name: G16
         run: bash scripts/ci-gate.sh G16
 
-  G17:
-    # RFC 116 stage 1's lane, registered through RFC 094's multi-source lane
-    # registry (R10): contracts/write-commands.toml against the sealed commands in
-    # crates/. Every sealed command has a row, every row that says it is sealed
-    # names a command, every `files` path exists, and `event` and `descriptor`
-    # are what the code says. Declared with stage 1 and held in
-    # [gate_matrix_exceptions] until its two dead `files` paths (O04, X02) were
-    # corrected in stage 1b, because a lane that is red on main is not a gate.
-    name: "G17 — write-command inventory (Python 3.14)"
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-      - name: Install Python 3.14
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
-        with:
-          python-version: "3.14"
-      - name: G17
-        run: bash scripts/ci-gate.sh G17
-
   G18:
     # RFC 116 stage 6's lane, registered through RFC 094's multi-source lane
     # registry (R10): what is written about the contracts directory must match the
@@ -599,6 +580,37 @@ jobs:
             ${{ runner.os }}-cargo-
       - name: G22
         run: bash scripts/ci-gate.sh G22
+
+  G23:
+    # RFC 094 cycle J stage 6b: the condition 7 `syn` write-authority
+    # boundary (contracts/write-authority.toml -- an exact, reviewed list
+    # of the production files allowed to touch a raw rusqlite type or
+    # with_conn/with_tx) and the write-command inventory check RFC 116
+    # stage 1 landed interim as G17 (retired in this same change). One
+    # tool, not two definitions of true over one 103-row contract.
+    name: "G23 — structural gate: write-authority + write-commands (stable)"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          toolchain: stable
+      - name: Cache cargo registry
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-gate-input-v1-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      - name: G23
+        run: bash scripts/ci-gate.sh G23
 
   changes:
     # RFC 130 D1/D6/D7: computes whether this push touched the Rust scope
@@ -853,15 +865,19 @@ jobs:
           echo "exit_status=$status"
           echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           exit "$status"
-      - name: G17 self-tests (write-command inventory checker)
-        # RFC 116 stage 1. The self-tests ran from the day the script existed,
-        # before the lane (job G17) was registered; they stay so that the
-        # script's own negative cases are checked apart from the tree's.
+      - name: G23 self-test (write-authority negative fixture)
+        # RFC 094 cycle J stage 6b: the criterion's own words, "a negative
+        # fixture that rejects an unregistered write" -- a repository-shaped
+        # function calling Connection::execute with no declaration, checked
+        # cleanly (the compiler cannot reject it; that is why this gate
+        # exists) and then rejected by name by the gate itself. Replaces
+        # G17's retired self-test (RFC 116 stage 1's `check-write-commands.py`,
+        # subsumed by `cargo xtask audit-structure` in the same change).
         run: |
           set +e
-          echo "command=python3.14 -m unittest scripts.tests.test_write_commands"
+          echo "command=cargo xtask audit-structure --negative-fixtures --root ."
           echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          python3.14 -m unittest scripts.tests.test_write_commands
+          cargo xtask audit-structure --negative-fixtures --root .
           status=$?
           echo "exit_status=$status"
           echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"

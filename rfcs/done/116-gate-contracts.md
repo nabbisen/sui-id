@@ -226,8 +226,13 @@ with stage 1 (D1, D2, D2a); later stages add their own rows here (G18, stage 6).
 
 | ID | Toolchain | Features | Blocking command / assertion |
 |---|---|---|---|
-| G17 | Python 3.14 | n/a | `python3.14 scripts/check-write-commands.py --root . --inventory contracts/write-commands.toml` |
 | G18 | Python 3.14 | n/a | `python3.14 scripts/check-contracts.py --root . --policy contracts/contract-paths.toml` |
+
+*G17 retired 2026-11-04 (RFC 094 cycle J stage 6b): `cargo xtask
+audit-structure` subsumes the write-command inventory check this row
+registered and owns the `syn` boundary besides, one tool rather than
+two definitions of true over one contract — see RFC 094's own lane
+table, which now carries it as G23.*
 
 ---
 

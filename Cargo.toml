@@ -7,6 +7,7 @@ members = [
     "crates/sui-id-web",
     "crates/sui-id-shared",
     "crates/sui-id-i18n",
+    "xtask",
 ]
 # RFC 093 A3.2: Gate Matrix negative fixtures are deliberately broken
 # standalone packages (scripts/tests/fixtures/gate-matrix/). Excluding the
@@ -48,6 +49,15 @@ cookie                      = "0.18"
 serde                       = { version = "1", features = ["derive"] }
 serde_json                  = "1"
 toml                        = "1.1"
+
+# Dev tooling (xtask only -- RFC 094 cycle J stage 6b). `syn = "2"` resolves
+# to 2.0.119, already pinned in Cargo.lock as a transitive dependency of the
+# proc-macro ecosystem; depending on it directly reuses that locked version
+# rather than introducing `syn` 3.x (also already present transitively) as a
+# second major version this workspace depends on directly.
+syn                         = { version = "2", features = ["full", "visit"] }
+regex                       = "1"
+walkdir                     = "2"
 
 # Storage
 rusqlite                    = { version = "0.40", features = ["bundled", "chrono"] }

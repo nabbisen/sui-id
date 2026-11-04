@@ -12,10 +12,11 @@ offset, so a doc comment quoting a declaration cannot declare one and a brace in
 a string cannot unbalance a block. String *values* are read back from the raw
 text at the blanked span.
 
-Not imported by `check-write-commands.py` (RFC 116 stage 1, already landed and
-green), which carries its own copy of `blank`, `is_test_file` and `block_end`.
-That duplication is named in the stage 2 package as a follow-up rather than
-removed here.
+Not imported by `cargo xtask audit-structure` (RFC 094 cycle J stage 6b;
+retired RFC 116 stage 1's `check-write-commands.py`, which this comment used
+to name), which carries its own copy of the same `blank`, `is_test_file` and
+`block_end` logic, ported to Rust. That duplication is named in the stage 2
+package as a follow-up rather than removed here.
 """
 
 from __future__ import annotations
@@ -301,8 +302,9 @@ def read_registry(root: Path, failures: list[str]) -> tuple[dict[str, Descriptor
             reachable[name] = d
         for cmd in cmds:
             # registry.rs's proof-only command has an id that is deliberately
-            # not an inventory code (`check-write-commands.py` tolerates it
-            # there and nowhere else); it is not on the seam of any real event.
+            # not an inventory code (`cargo xtask audit-structure` tolerates
+            # it there and nowhere else); it is not on the seam of any real
+            # event.
             if not INVENTORY_ID.fullmatch(cmd.id):
                 continue
             commands.append(cmd)

@@ -109,16 +109,6 @@ G16 = '''
     # it (the repository is small); a first push, a new tag or a manual run has no
     # base, and the script says so in the summary instead of failing.
 '''
-G17 = '''
-    # RFC 116 stage 1's lane, registered through RFC 094's multi-source lane
-    # registry (R10): contracts/write-commands.toml against the sealed commands in
-    # crates/. Every sealed command has a row, every row that says it is sealed
-    # names a command, every `files` path exists, and `event` and `descriptor`
-    # are what the code says. Declared with stage 1 and held in
-    # [gate_matrix_exceptions] until its two dead `files` paths (O04, X02) were
-    # corrected in stage 1b, because a lane that is red on main is not a gate.
-'''
-
 # (RFC 116 stage 3b: there is no [lane_env_comments]. A lane's env TZ is exported by
 # scripts/ci-gate.sh from [lane_profiles], not written into the workflow.)
 G18 = '''
@@ -130,6 +120,14 @@ G18 = '''
     # they had when they were written and are exempt by name, each with a reason.
     # It exists so that renaming the directory is checkable rather than merely
     # possible.
+'''
+G23 = '''
+    # RFC 094 cycle J stage 6b: the condition 7 `syn` write-authority
+    # boundary (contracts/write-authority.toml -- an exact, reviewed list
+    # of the production files allowed to touch a raw rusqlite type or
+    # with_conn/with_tx) and the write-command inventory check RFC 116
+    # stage 1 landed interim as G17 (retired in this same change). One
+    # tool, not two definitions of true over one 103-row contract.
 '''
 
 [snippets]
@@ -395,15 +393,19 @@ gate-matrix-fixtures = '''
           echo "exit_status=$status"
           echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           exit "$status"
-      - name: G17 self-tests (write-command inventory checker)
-        # RFC 116 stage 1. The self-tests ran from the day the script existed,
-        # before the lane (job G17) was registered; they stay so that the
-        # script's own negative cases are checked apart from the tree's.
+      - name: G23 self-test (write-authority negative fixture)
+        # RFC 094 cycle J stage 6b: the criterion's own words, "a negative
+        # fixture that rejects an unregistered write" -- a repository-shaped
+        # function calling Connection::execute with no declaration, checked
+        # cleanly (the compiler cannot reject it; that is why this gate
+        # exists) and then rejected by name by the gate itself. Replaces
+        # G17's retired self-test (RFC 116 stage 1's `check-write-commands.py`,
+        # subsumed by `cargo xtask audit-structure` in the same change).
         run: |
           set +e
-          echo "command=python3.14 -m unittest scripts.tests.test_write_commands"
+          echo "command=cargo xtask audit-structure --negative-fixtures --root ."
           echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          python3.14 -m unittest scripts.tests.test_write_commands
+          cargo xtask audit-structure --negative-fixtures --root .
           status=$?
           echo "exit_status=$status"
           echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"

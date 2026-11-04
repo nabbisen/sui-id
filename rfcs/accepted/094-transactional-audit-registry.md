@@ -921,6 +921,13 @@ table so one parser reads both.
 |---|---|---|---|
 | G13 | Python 3.14 | n/a | `bash scripts/check-audit-matrix.sh` |
 | G20 | stable | default | `rm -f target/rfc094-rollback-coverage.txt` and `cargo +stable test -p sui-id-store --lib --locked` and `bash scripts/check-m2a-rollback-coverage.sh --root .` |
+| G23 | stable | n/a | `cargo +stable xtask audit-structure --locked --policy contracts/write-authority.toml --commands contracts/write-commands.toml` |
+
+*Registered 2026-11-04 (cycle J stage 6b). `audit-structure` is this
+condition's `syn`-based write-authority boundary check (`contracts/write-authority.toml`)
+and the write-command inventory check RFC 116 stage 1 landed interim as
+G17 (`scripts/check-write-commands.py`, retired in the same change) --
+one tool, not two definitions of true over one 103-row contract.*
 
 *Registered `1ec5dad`, 2026-09-12 — the first time this script ran in CI. The
 desync fixture RFC 085 promised is in the A3.2 set, both directions pinned by

@@ -1,8 +1,9 @@
 # The durable-write command inventory (RFC 094 Stage 0), and the only copy of it:
 # rfcs/handoffs/094-transactional-audit/command-inventory.md keeps the reasoning
-# and no table (RFC 116 D1). scripts/check-write-commands.py (lane G17) reads
-# this file against crates/ on every run; it is a contract because that gate
-# fails when it stops being true (RFC 116 D2).
+# and no table (RFC 116 D1). `cargo xtask audit-structure` (lane G23; RFC 116
+# stage 1's interim `scripts/check-write-commands.py`, lane G17, retired RFC 094
+# cycle J stage 6b) reads this file against crates/ on every run; it is a
+# contract because that gate fails when it stops being true (RFC 116 D2).
 #
 # A row is one command. Two states, because the inventory records commands that
 # are planned as well as commands that are sealed (RFC 116 D2a):

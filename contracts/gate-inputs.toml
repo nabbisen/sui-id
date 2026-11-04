@@ -27,6 +27,7 @@ G09a = []
 G09b = []
 G20 = []
 G22 = []
+G23 = []
 
 # RFC 094 R10: the lane registry. An RFC number maps to the heading of the
 # section in that RFC holding its lane table. Ownership is declared by number,
@@ -70,12 +71,12 @@ G13 = "094"
 G14 = "098"
 G15 = "098"
 G16 = "135"
-G17 = "116"
 G18 = "116"
 G19 = "134"
 G20 = "094"
 G21 = "137"
 G22 = "142"
+G23 = "094"
 
 # RFC 093 Gate Matrix v1 (rfcs/done/093-build-toolchain-release-gates.md),
 # machine-readable expansion. scripts/ci-gate.sh executes these commands
@@ -102,12 +103,12 @@ G13 = "bash scripts/check-audit-matrix.sh"
 G14 = "python3.14 scripts/check-markdown-links.py --root . rfcs/handoffs"
 G15 = "python3.14 scripts/check-doc-authority.py --root . --policy contracts/doc-authority.toml"
 G16 = "python3.14 scripts/check-owner-attributions.py --root . --policy contracts/owner-attributions.toml"
-G17 = "python3.14 scripts/check-write-commands.py --root . --inventory contracts/write-commands.toml"
 G18 = "python3.14 scripts/check-contracts.py --root . --policy contracts/contract-paths.toml"
 G19 = "python3.14 scripts/check-federation-egress.py --root ."
 G21 = "python3.14 scripts/check-inline-tests.py --root ."
 G20 = "rm -f target/rfc094-rollback-coverage.txt && cargo +stable test -p sui-id-store --lib --locked && bash scripts/check-m2a-rollback-coverage.sh --root ."
 G22 = "cargo +stable test -p sui-id-store --lib tests_rfc142 --locked"
+G23 = "cargo +stable xtask audit-structure --locked --policy contracts/write-authority.toml --commands contracts/write-commands.toml"
 
 # RFC 093 M1b C2.1: the lane-completeness rule (scripts/check-gate-inputs.sh
 # condition 7) requires every lane declared by any source RFC to be
@@ -161,17 +162,17 @@ G22 = "cargo +stable test -p sui-id-store --lib tests_rfc142 --locked"
 #             condition 9 (D8) are the only readers; both go through
 #             scripts/rust_scope.py so there is one copy of this list, not two.
 [lane_profiles]
-G01 = { title = "build ({rust_msrv}, default)", setup = "rust", toolchain = "msrv", apt = true, cache = true, paths = ["crates/**", "Cargo.toml", "Cargo.lock", "clippy.toml", "rust-toolchain*", "scripts/ci-gate.sh", "contracts/gate-inputs.toml", "contracts/workflow-template.toml", ".github/workflows/ci.yml"] }
-G02 = { title = "test ({rust_msrv}, default)", setup = "rust", toolchain = "msrv", apt = true, cache = true, tz = "UTC", paths = ["crates/**", "Cargo.toml", "Cargo.lock", "clippy.toml", "rust-toolchain*", "scripts/ci-gate.sh", "contracts/gate-inputs.toml", "contracts/workflow-template.toml", ".github/workflows/ci.yml"] }
-G03 = { title = "build ({rust_msrv}, all-features)", setup = "rust", toolchain = "msrv", apt = true, cache = true, paths = ["crates/**", "Cargo.toml", "Cargo.lock", "clippy.toml", "rust-toolchain*", "scripts/ci-gate.sh", "contracts/gate-inputs.toml", "contracts/workflow-template.toml", ".github/workflows/ci.yml"] }
-G04 = { title = "test ({rust_msrv}, all-features)", setup = "rust", toolchain = "msrv", apt = true, cache = true, tz = "UTC", paths = ["crates/**", "Cargo.toml", "Cargo.lock", "clippy.toml", "rust-toolchain*", "scripts/ci-gate.sh", "contracts/gate-inputs.toml", "contracts/workflow-template.toml", ".github/workflows/ci.yml"] }
-G05 = { title = "build + test ({rust_stable}, default)", setup = "rust", toolchain = "stable", apt = true, cache = true, tz = "UTC", paths = ["crates/**", "Cargo.toml", "Cargo.lock", "clippy.toml", "rust-toolchain*", "scripts/ci-gate.sh", "contracts/gate-inputs.toml", "contracts/workflow-template.toml", ".github/workflows/ci.yml"] }
-G06 = { title = "build + test ({rust_stable}, all-features)", setup = "rust", toolchain = "stable", apt = true, cache = true, tz = "UTC", paths = ["crates/**", "Cargo.toml", "Cargo.lock", "clippy.toml", "rust-toolchain*", "scripts/ci-gate.sh", "contracts/gate-inputs.toml", "contracts/workflow-template.toml", ".github/workflows/ci.yml"] }
-G07 = { title = "clippy ({rust_stable}, all-features)", setup = "rust", toolchain = "stable", apt = true, cache = true, paths = ["crates/**", "Cargo.toml", "Cargo.lock", "clippy.toml", "rust-toolchain*", "scripts/ci-gate.sh", "contracts/gate-inputs.toml", "contracts/workflow-template.toml", ".github/workflows/ci.yml"] }
-G07b = { title = "clippy ({rust_stable}, default)", setup = "rust", toolchain = "stable", apt = true, cache = true, paths = ["crates/**", "Cargo.toml", "Cargo.lock", "clippy.toml", "rust-toolchain*", "scripts/ci-gate.sh", "contracts/gate-inputs.toml", "contracts/workflow-template.toml", ".github/workflows/ci.yml"] }
-G08 = { title = "fmt ({rust_stable})", setup = "rust", toolchain = "stable", paths = ["crates/**", "Cargo.toml", "Cargo.lock", "clippy.toml", "rust-toolchain*", "scripts/ci-gate.sh", "contracts/gate-inputs.toml", "contracts/workflow-template.toml", ".github/workflows/ci.yml"] }
-G09a = { title = "LDAP smoke ({rust_msrv})", setup = "rust", toolchain = "msrv", apt = true, cache = true, paths = ["crates/**", "Cargo.toml", "Cargo.lock", "clippy.toml", "rust-toolchain*", "scripts/ci-gate.sh", "contracts/gate-inputs.toml", "contracts/workflow-template.toml", ".github/workflows/ci.yml"] }
-G09b = { title = "LDAP smoke ({rust_stable})", setup = "rust", toolchain = "stable", apt = true, cache = true, paths = ["crates/**", "Cargo.toml", "Cargo.lock", "clippy.toml", "rust-toolchain*", "scripts/ci-gate.sh", "contracts/gate-inputs.toml", "contracts/workflow-template.toml", ".github/workflows/ci.yml"] }
+G01 = { title = "build ({rust_msrv}, default)", setup = "rust", toolchain = "msrv", apt = true, cache = true, paths = ["crates/**", "Cargo.toml", "Cargo.lock", "clippy.toml", ".cargo/config.toml", "rust-toolchain*", "scripts/ci-gate.sh", "contracts/gate-inputs.toml", "contracts/workflow-template.toml", ".github/workflows/ci.yml"] }
+G02 = { title = "test ({rust_msrv}, default)", setup = "rust", toolchain = "msrv", apt = true, cache = true, tz = "UTC", paths = ["crates/**", "Cargo.toml", "Cargo.lock", "clippy.toml", ".cargo/config.toml", "rust-toolchain*", "scripts/ci-gate.sh", "contracts/gate-inputs.toml", "contracts/workflow-template.toml", ".github/workflows/ci.yml"] }
+G03 = { title = "build ({rust_msrv}, all-features)", setup = "rust", toolchain = "msrv", apt = true, cache = true, paths = ["crates/**", "Cargo.toml", "Cargo.lock", "clippy.toml", ".cargo/config.toml", "rust-toolchain*", "scripts/ci-gate.sh", "contracts/gate-inputs.toml", "contracts/workflow-template.toml", ".github/workflows/ci.yml"] }
+G04 = { title = "test ({rust_msrv}, all-features)", setup = "rust", toolchain = "msrv", apt = true, cache = true, tz = "UTC", paths = ["crates/**", "Cargo.toml", "Cargo.lock", "clippy.toml", ".cargo/config.toml", "rust-toolchain*", "scripts/ci-gate.sh", "contracts/gate-inputs.toml", "contracts/workflow-template.toml", ".github/workflows/ci.yml"] }
+G05 = { title = "build + test ({rust_stable}, default)", setup = "rust", toolchain = "stable", apt = true, cache = true, tz = "UTC", paths = ["crates/**", "Cargo.toml", "Cargo.lock", "clippy.toml", ".cargo/config.toml", "rust-toolchain*", "scripts/ci-gate.sh", "contracts/gate-inputs.toml", "contracts/workflow-template.toml", ".github/workflows/ci.yml"] }
+G06 = { title = "build + test ({rust_stable}, all-features)", setup = "rust", toolchain = "stable", apt = true, cache = true, tz = "UTC", paths = ["crates/**", "Cargo.toml", "Cargo.lock", "clippy.toml", ".cargo/config.toml", "rust-toolchain*", "scripts/ci-gate.sh", "contracts/gate-inputs.toml", "contracts/workflow-template.toml", ".github/workflows/ci.yml"] }
+G07 = { title = "clippy ({rust_stable}, all-features)", setup = "rust", toolchain = "stable", apt = true, cache = true, paths = ["crates/**", "Cargo.toml", "Cargo.lock", "clippy.toml", ".cargo/config.toml", "rust-toolchain*", "scripts/ci-gate.sh", "contracts/gate-inputs.toml", "contracts/workflow-template.toml", ".github/workflows/ci.yml"] }
+G07b = { title = "clippy ({rust_stable}, default)", setup = "rust", toolchain = "stable", apt = true, cache = true, paths = ["crates/**", "Cargo.toml", "Cargo.lock", "clippy.toml", ".cargo/config.toml", "rust-toolchain*", "scripts/ci-gate.sh", "contracts/gate-inputs.toml", "contracts/workflow-template.toml", ".github/workflows/ci.yml"] }
+G08 = { title = "fmt ({rust_stable})", setup = "rust", toolchain = "stable", paths = ["crates/**", "Cargo.toml", "Cargo.lock", "clippy.toml", ".cargo/config.toml", "rust-toolchain*", "scripts/ci-gate.sh", "contracts/gate-inputs.toml", "contracts/workflow-template.toml", ".github/workflows/ci.yml"] }
+G09a = { title = "LDAP smoke ({rust_msrv})", setup = "rust", toolchain = "msrv", apt = true, cache = true, paths = ["crates/**", "Cargo.toml", "Cargo.lock", "clippy.toml", ".cargo/config.toml", "rust-toolchain*", "scripts/ci-gate.sh", "contracts/gate-inputs.toml", "contracts/workflow-template.toml", ".github/workflows/ci.yml"] }
+G09b = { title = "LDAP smoke ({rust_stable})", setup = "rust", toolchain = "stable", apt = true, cache = true, paths = ["crates/**", "Cargo.toml", "Cargo.lock", "clippy.toml", ".cargo/config.toml", "rust-toolchain*", "scripts/ci-gate.sh", "contracts/gate-inputs.toml", "contracts/workflow-template.toml", ".github/workflows/ci.yml"] }
 G10a = { title = "mdBook build ({rust_stable} / mdBook {mdbook})", setup = "rust", toolchain = "stable", cache = true, mdbook = true, paths = ["**"] }
 G10b = { title = "markdown links (Python {python})", setup = "python", paths = ["**"] }
 G11 = { title = "RFC integrity (Python {python})", setup = "python", paths = ["**"] }
@@ -180,12 +181,12 @@ G13 = { title = "audit coverage matrix (interim, RFC 094)", setup = "python", pa
 G14 = { title = "markdown links: handoffs and roadmap (Python {python})", setup = "python", paths = ["**"] }
 G15 = { title = "documentation authority (Python {python})", setup = "python", paths = ["**"] }
 G16 = { title = "owner attributions (Python {python})", setup = "python", fetch_depth = 0, paths = ["**"] }
-G17 = { title = "write-command inventory (Python {python})", setup = "python", paths = ["**"] }
 G18 = { title = "contract paths and README (Python {python})", setup = "python", paths = ["**"] }
 G19 = { title = "federation egress is one client (Python {python})", setup = "python", paths = ["**"] }
 G20 = { title = "M2a rollback coverage ({rust_stable})", setup = "rust", toolchain = "stable", apt = true, cache = true, tz = "UTC", paths = ["**"] }
 G21 = { title = "tests live beside the module (Python {python})", setup = "python", paths = ["**"] }
 G22 = { title = "migration corpus ({rust_stable})", setup = "rust", toolchain = "stable", apt = true, cache = true, tz = "UTC", paths = ["**"] }
+G23 = { title = "structural gate: write-authority + write-commands ({rust_stable})", setup = "rust", toolchain = "stable", apt = true, cache = true, paths = ["**"] }
 
 [actions]
 checkout_v6 = "d23441a48e516b6c34aea4fa41551a30e30af803"

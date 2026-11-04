@@ -11,7 +11,7 @@
 
 use crate::backend::{Backend, SqliteBackend};
 use crate::crypto::MasterKey;
-use crate::errors::StoreResult;
+use crate::errors::{StoreError, StoreResult};
 use crate::migrations;
 use crate::read_conn::ReadConn;
 use rusqlite::Connection;
@@ -116,6 +116,24 @@ impl Database {
         R: Send + 'static,
     {
         self.with_conn(move |conn| f(&ReadConn::new(conn))).await
+    }
+
+    /// The schema version this database's `sui_meta` row actually
+    /// records (RFC 112 D4) — distinct from
+    /// [`migrations::MAX_SCHEMA_VERSION`], this build's ceiling. RFC 094
+    /// cycle J stage 6b: a store-level query so a caller outside
+    /// `sui-id-store` (the admin settings page) asking "what schema
+    /// version is this database on" has one to call, rather than
+    /// reaching into `migrations::read_stored_version` with a raw
+    /// `with_conn` connection of its own — the deeper problem the
+    /// write-authority boundary this stage adds would otherwise flag.
+    pub async fn stored_schema_version(&self) -> StoreResult<i64> {
+        self.with_conn(|conn| {
+            migrations::read_stored_version(conn)
+                .map(migrations::StoredVersion::number)
+                .map_err(StoreError::from)
+        })
+        .await
     }
 
     // ── Synchronous interface (migration runner + blocking tests) ─────────────

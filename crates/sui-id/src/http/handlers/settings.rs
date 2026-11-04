@@ -325,13 +325,11 @@ pub async fn other_get(
     // RFC 112 D4: the version the database *records*, read with the one reader
     // every caller uses. This page used to show `MAX_SCHEMA_VERSION` under the
     // label "schema version": the binary's ceiling, not the database's value.
+    // RFC 094 cycle J stage 6b: reads it through a store method now, not a raw
+    // `with_conn` connection handed to `migrations::` from outside the store.
     let stored_schema_version = app
         .db
-        .with_conn(|conn| {
-            sui_id_store::migrations::read_stored_version(conn)
-                .map(|v| v.number())
-                .map_err(sui_id_store::StoreError::from)
-        })
+        .stored_schema_version()
         .await
         .map_err(|e| HttpError::html(CoreError::from(e)))?;
     let data = sui_id_web::SettingsOtherData {

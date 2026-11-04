@@ -1,0 +1,114 @@
+# RFC 094 condition 7's policy: the exact set of production files
+# permitted to touch a raw `rusqlite::Connection` / `Transaction` /
+# `Statement`, or call `Database::with_conn` / `with_tx` (the
+# unrestricted accessors), anywhere in `crates/`. Read by
+# `cargo xtask audit-structure` (G23) via `--policy`.
+#
+# RFC 094: "The small allowed-module list is exact in
+# `contracts/write-authority.toml`; changing it requires independent
+# review." Adding a file here is the review point this gate exists to
+# force -- not a formality to clear quickly. The gate does not assert
+# "raw SQL is rare"; almost all of `sui-id-store`'s own internals are
+# on this list, because raw access is how a repository layer is
+# implemented. It asserts that raw SQL lives in this enumerated list,
+# and adding a 37th file is the friction point, not touching raw SQL
+# per se.
+#
+# `commands.rs` belongs on this list for a reason worth stating,
+# because the obvious assumption is wrong: it is not a pure caller of
+# `repos::*_within_tx` functions. `session_step_up_evidence_within_tx`
+# (`:89-114`) takes a raw `&rusqlite::Connection` and runs two inline
+# `SELECT`s; the lockout-counting command (`:344-347`) runs an inline
+# `UPDATE` on a transaction handle rather than through a
+# `repos::users::*` helper. Both are legitimate internals of the same
+# sealed-command system `repos/` implements, not technical debt -- an
+# allow-list justified as "commands.rs only calls repos" would be
+# false on its face, so this one is not.
+#
+# Two conditions this gate's name implies but does not check, named
+# here and in the tool's own output rather than left silent, per
+# RFC 094's own stated worst case ("a structural gate without negative
+# fixtures reports success on a codebase it never inspected" --
+# the same failure mode as checking less than the name implies):
+#
+#   - Raw method-call-name matching (`.execute(`, `.prepare(`,
+#     `.query_row(`, etc.) is not checked. `syn` alone cannot tell a
+#     call on a raw `&rusqlite::Connection` apart from the same-named
+#     method on `&ReadConn` (the sanctioned read-only wrapper, which
+#     deliberately mirrors that API) without resolving the receiver's
+#     type -- cycle J stage 6's prototype proved this produces a real
+#     false positive (`http/handlers/index.rs`'s `healthz`, which uses
+#     `&ReadConn` correctly and would otherwise be flagged). Receiver-
+#     type tracking is real, valuable work, deliberately left to a
+#     later stage rather than guessed at here.
+#   - Exhaustive alias / generic-indirection tracing is not checked
+#     beyond the one instance measured: `backend.rs`'s `ConnFn`/`TxFn`
+#     (`Box<dyn FnOnce(&Connection) -> ...>`), which is legitimate --
+#     it is `Database::with_conn`/`with_tx`'s own plumbing across a
+#     trait-object boundary -- and is covered by `backend.rs` being
+#     allow-listed whole-file, not by tracing the indirection itself.
+#     A new, different indirection channel introduced elsewhere would
+#     not be caught by this gate.
+#
+# What this gate's type-path and whole-identifier detection DOES catch
+# reliably (stage 6's prototype, zero false positives measured): a
+# qualified or import-resolved raw type name, and `with_conn`/
+# `with_tx` as whole identifiers -- which is exactly RFC 094's
+# mandatory negative fixture (a new function reaching for
+# `Connection::execute` must name `Connection`, or receive one via
+# `with_conn`/`with_tx`, to get a handle on it at all) and exactly
+# `http/handlers/settings.rs`'s real pre-existing violation (fixed in
+# this same change, cycle J stage 6b, by adding
+# `Database::stored_schema_version()`).
+#
+# Raw-handle / FFI access is covered elsewhere, not here:
+# `unsafe_code = "forbid"` (`Cargo.toml`'s `[workspace.lints.rust]`) is
+# enforced workspace-wide already; this gate does not re-check it.
+#
+# PRAGMA writes, `ATTACH`/`DETACH` and backup/restore API usage are
+# string-content checks on the arguments of a call this gate already
+# locates (the same call-site-then-string-check shape, scoped to the
+# right call site rather than a whole-file grep) and are confined to
+# the same allow-listed files below; they are not separately enumerated
+# because the file-level boundary already governs them.
+
+version = 1
+
+allowed_files = [
+    "crates/sui-id-store/src/db.rs",
+    "crates/sui-id-store/src/backend.rs",
+    "crates/sui-id-store/src/migrations.rs",
+    "crates/sui-id-store/src/backup/ops.rs",
+    "crates/sui-id-store/src/read_conn.rs",
+    "crates/sui-id-store/src/registry.rs",
+    "crates/sui-id-store/src/commands.rs",
+    "crates/sui-id-store/src/repos/audit.rs",
+    "crates/sui-id-store/src/repos/auth_codes.rs",
+    "crates/sui-id-store/src/repos/client_registration_token.rs",
+    "crates/sui-id-store/src/repos/clients.rs",
+    "crates/sui-id-store/src/repos/credentials.rs",
+    "crates/sui-id-store/src/repos/email_outbox.rs",
+    "crates/sui-id-store/src/repos/federation_link.rs",
+    "crates/sui-id-store/src/repos/federation_login_attempt.rs",
+    "crates/sui-id-store/src/repos/federation_mfa_pending.rs",
+    "crates/sui-id-store/src/repos/federation_provider.rs",
+    "crates/sui-id-store/src/repos/federation_webauthn_ceremony.rs",
+    "crates/sui-id-store/src/repos/forgot_password_requests.rs",
+    "crates/sui-id-store/src/repos/json_util.rs",
+    "crates/sui-id-store/src/repos/login_pending_mfa.rs",
+    "crates/sui-id-store/src/repos/password_reset_tokens.rs",
+    "crates/sui-id-store/src/repos/pending_settings_change.rs",
+    "crates/sui-id-store/src/repos/refresh_tokens.rs",
+    "crates/sui-id-store/src/repos/revoked_access_tokens.rs",
+    "crates/sui-id-store/src/repos/scope_definition.rs",
+    "crates/sui-id-store/src/repos/server_settings.rs",
+    "crates/sui-id-store/src/repos/sessions.rs",
+    "crates/sui-id-store/src/repos/signing_keys.rs",
+    "crates/sui-id-store/src/repos/smtp_config.rs",
+    "crates/sui-id-store/src/repos/state.rs",
+    "crates/sui-id-store/src/repos/user_consent.rs",
+    "crates/sui-id-store/src/repos/users.rs",
+    "crates/sui-id-store/src/repos/user_totp.rs",
+    "crates/sui-id-store/src/repos/user_webauthn_credentials.rs",
+    "crates/sui-id-store/src/repos/webauthn_pending.rs",
+]

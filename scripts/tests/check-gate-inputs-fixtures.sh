@@ -404,12 +404,17 @@ sed -i 's|^G02 = "093"$|&\nG02 = "093"|' "$dup_owner/contracts/gate-inputs.toml"
 expect_failure registry-duplicate-owner-key "not valid TOML" "line"
 
 # --- Condition 9 (RFC 130 D8): no candidate file outside the Rust scope ---
+# `deny.toml`, not `.cargo/config.toml`: RFC 094 cycle J stage 6b added the
+# latter to the real declared scope (the `xtask` alias it carries is
+# itself build-affecting), so a fixture copying the real gate-inputs.toml
+# (make_valid_fixture does exactly that) now finds it already in scope --
+# this would otherwise be exercising nothing. `deny.toml` is still absent
+# from both the tree and the declared scope.
 scope_candidate="$tmp/scope-candidate-outside-rust-scope"
 make_valid_fixture "$scope_candidate"
-mkdir -p "$scope_candidate/.cargo"
-echo "[build]" >"$scope_candidate/.cargo/config.toml"
+echo "[graph]" >"$scope_candidate/deny.toml"
 expect_failure scope-candidate-outside-rust-scope \
-  "condition 9:" ".cargo/config.toml: exists but matches no declared Rust-scope pattern"
+  "condition 9:" "deny.toml: exists but matches no declared Rust-scope pattern"
 
 # A candidate file that exists but *is* in the declared scope (rust-toolchain*
 # already covers it) must not fail -- this is the positive half of the same

@@ -74,10 +74,6 @@ reason = "this gate's own self-test: its fixtures are synthetic repositories who
 # Allowed names that are not files in the directory. Each must still be named by a
 # file in scope, or the entry is stale and the gate says so.
 [[allow]]
-path = "contracts/write-authority.toml"
-reason = "planned by RFC 094 (the policy for `xtask audit-structure`); named in RFCs 094 and 116 and not yet built"
-
-[[allow]]
 path = "ci/matrix.md"
 reason = "a test-fixture name inside a synthetic repository built by scripts/tests/test_doc_authority.py"
 

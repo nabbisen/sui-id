@@ -32,4 +32,5 @@ one that still names `ci/<file>` is a violation that says where the file moved.
 | `rfc-policy.toml` | policy | G11 | RFC 093, RFC 110 |
 | `ui-invariants.toml` | policy | G12 | RFC 093 |
 | `workflow-template.toml` | generator input | `scripts/generate-ci-workflow.py` | RFC 116 |
-| `write-commands.toml` | registry | G17 | RFC 094, RFC 116 |
+| `write-authority.toml` | policy | G23 | RFC 094 |
+| `write-commands.toml` | registry | G23 | RFC 094, RFC 116 |

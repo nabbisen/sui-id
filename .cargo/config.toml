@@ -1,0 +1,19 @@
+# RFC 094 cycle J stage 6b: `cargo xtask <subcommand>` is the
+# conventional alias for running the workspace's own dev-tool binary
+# (`xtask`, a 7th workspace member, `publish = false`) rather than a
+# built-in cargo command. Everything after `xtask` on the command line
+# -- including `audit-structure`'s own `--locked`, `--policy`,
+# `--commands`, `--fix` and `--negative-fixtures` flags -- is passed to
+# the binary verbatim, after the `--` below; cargo itself never
+# interprets them.
+#
+# `--locked` sits **before** the `--`, so cargo receives it. Added at
+# review of RFC 094 cycle J stage 6b: G23's command line also carries a
+# `--locked`, but everything after `--` reaches the binary, which
+# accepts it as an explicit no-op. That left this the only Rust lane
+# whose cargo invocation was unlocked while displaying the flag that
+# looks like the guarantee -- every other lane passes `--locked` to
+# cargo so a gate run cannot rewrite `Cargo.lock`. The flag is on the
+# cargo side here for that reason, not for the binary's.
+[alias]
+xtask = "run --quiet --locked --package xtask --release --"
