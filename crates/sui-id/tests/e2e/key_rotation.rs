@@ -72,6 +72,17 @@ mod ordering {
         fn raw(&self) -> rusqlite::Connection {
             rusqlite::Connection::open(self.db()).expect("raw")
         }
+        /// The most recent `note` recorded for `action`, if any row with
+        /// that action exists.
+        fn audit_note(&self, action: &str) -> Option<String> {
+            self.raw()
+                .query_row(
+                    "SELECT note FROM audit_log WHERE action = ?1 ORDER BY seq DESC LIMIT 1",
+                    [action],
+                    |r| r.get(0),
+                )
+                .ok()
+        }
     }
 
     fn stderr(o: &Output) -> String {
@@ -132,6 +143,25 @@ mod ordering {
             .expect("a .bak.<stamp> file exists");
         let bak_body = std::fs::read_to_string(bak.path()).expect("bak key");
         assert_eq!(bak_body, old_key_body, "the archived key is the old one");
+
+        // RFC 094 cycle J stage 5: `admin.master_key.rotated`'s note now
+        // reports the key files, not a row count -- that moved to
+        // `admin.master_key.resealed` (K07), which this run also wrote.
+        assert!(
+            h.audit_note("admin.master_key.resealed").is_some(),
+            "the sealed re-seal record exists"
+        );
+        let rotated_note = h
+            .audit_note("admin.master_key.rotated")
+            .expect("the rotated record exists");
+        assert!(
+            rotated_note.contains("new key in place at") && rotated_note.contains(" archived at"),
+            "note reports the key files, not a row count: {rotated_note}"
+        );
+        assert!(
+            !rotated_note.contains("rows"),
+            "the row count belongs to admin.master_key.resealed now: {rotated_note}"
+        );
 
         // The database now opens (and the server would start) with the
         // key at the configured path, i.e. the NEW one -- prove it by

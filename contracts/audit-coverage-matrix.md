@@ -109,6 +109,11 @@ gone stale in opposite directions:
   should itself become Class A, or is a deliberate second fact next to
   the first, is stage 5's question — not answered here.
 
+**Answered, cycle J stage 5, 2026-11-04.** A deliberate second fact, not
+a pending conversion: a filesystem rename cannot join a SQL transaction,
+so requiring Class A of it is not a gap, it is incoherent. The row's
+`(A required)` annotation is dropped below; see its own note.
+
 ## Coverage matrix
 
 *RFC 102 B4 (stage 7, 2026-09-17): the five step-up-gated sealed commands —
@@ -207,8 +212,25 @@ anywhere in `crates/`.
 | Event name | Operation | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
 | `admin.master_key.resealed` | Re-seal every column-encrypted value under a new master key, one transaction (command `K07`, RFC 094 cycle J stage 4) | — | — | `signing_keys=N`, `refresh_tokens=N`, `user_totp_secrets=N`, `user_totp_recovery_codes=N`, `user_webauthn_credentials=N`, `smtp_config=N`, `email_outbox_rows=N` | A |
-| `admin.master_key.rotated` | Master key rotation | CLI principal | — | `keys_resealed=N` | B *(A required)* |
+| `admin.master_key.rotated` | Master key file replaced — old key archived, new key written (CLI operator) | CLI principal | — | key path, archive path *(see note)* | B |
 | `admin.user.unlock` | Clear account lockout (CLI operator) | — *(see note)* | target user id | — | A |
+
+> **`admin.master_key.rotated` is `B` by design, not `B` pending
+> conversion.** Decided 2026-11-04 (RFC 094 cycle J stage 5), dropping
+> the `(A required)` annotation this row carried since 2026-09-24. That
+> annotation was correct when written: this event was then the only
+> record of the whole rotation, and the re-seal it covered *was*
+> atomicizable. Stage 4 (2026-11-03) moved the re-seal and its atomicity
+> to its own event, `admin.master_key.resealed` above. What is left
+> here is two filesystem renames — the old key file to `.bak.<stamp>`,
+> the staged new key to the configured path — and a rename is not a SQL
+> statement; there is no transaction for this event to be atomic with.
+> Requiring it would be requiring something incoherent, not something
+> merely unfinished. Best-effort is permanent here, and its failure is
+> reported on stderr rather than silently discarded (`cli.rs`'s
+> `rotated_append` handling) — not escalated to a command failure,
+> since the rotation is already done and committed by the time this
+> event could fail to write.
 
 > **`admin.user.unlock` has no user actor, and that is correct.** Decided
 > 2026-09-09. This row previously required `admin user id`. There is no HTTP admin

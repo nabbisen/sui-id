@@ -19,6 +19,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   separately, after the key file is replaced, best-effort; this is a
   new event alongside it, not a rename or a retirement.
 
+- **A rotation that stops partway through is now diagnosable from the
+  audit log.** `admin.master_key.rotated`'s own record now reports
+  what it alone knows — the archive path and the path the new key was
+  written to — rather than the row count, which belongs to
+  `admin.master_key.resealed`. If this record fails to write, the CLI
+  now says so on stderr instead of discarding the error; the rotation
+  itself is unaffected, since it has already committed by then.
+  `docs/src/guides/operators.md`'s rotation guide has a table mapping
+  what the audit log shows after an interrupted rotation to what
+  happened and what to do — including the one case that is **not** a
+  half-finished rotation: a database rotated before this pair of
+  events existed.
+
 ## [0.87.1] — 2026-11-03
 
 **`sui-id admin rotate-key` no longer risks losing the master key

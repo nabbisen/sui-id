@@ -169,8 +169,11 @@ After rotation:
   `<original>.bak.<timestamp>` in the same directory. It is **not**
   auto-deleted — keep it as long as you might need to read a backup
   taken before the rotation, then remove it.
-- An audit row `admin.master_key.rotated` is appended with a count
-  of re-sealed rows.
+- Two audit rows are appended, for two different facts (RFC 094 cycle
+  J stage 4/5, since v0.88.0): `admin.master_key.resealed`, inside the
+  transaction that re-sealed the six tables, carrying a per-table row
+  count; and `admin.master_key.rotated`, after both renames below, best
+  effort, reporting that the key files were replaced.
 - The new key file is written with `0600` permissions on Unix.
 
 **Sealed columns covered:** signing keys, refresh tokens, TOTP
@@ -184,28 +187,80 @@ If the re-seal step fails for any reason (disk full, schema drift,
 etc), the SQLite transaction rolls back, the old key file is **not**
 yet renamed, and you can retry with the same arguments.
 
-> ### Use `--new-key`. Corrected 2026-11-03 — this section used to end "There is no half-rotated state to recover from", and that is not true of a failure *after* the re-seal commits.
+### Diagnosing a rotation from the audit log
+
+A rotation that stops partway is otherwise silent — nothing paged you,
+the server may still be down, and you need to know what state the key
+files and the database are actually in before doing anything else.
+Read the two events together:
+
+| what the log shows | what happened | what to do |
+|---|---|---|
+| both `resealed` and `rotated` | the rotation completed | nothing |
+| `resealed`, no `rotated` | the database is re-sealed under the new key; the key files may not have been swapped | the staged key in `<key_file>.new` is the one your database now needs — see "Recovering a rotation that stopped partway" below |
+| neither | nothing committed; the database is still under the old key | re-run the command |
+| `rotated`, no `resealed` | **only possible on a database rotated before v0.88.0** | see below — this is not a half-finished rotation |
+
+**That last row is not hypothetical.** Event names in this project do
+not change between releases (see
+[`docs/src/reference/audit-events.md`](../reference/audit-events.md)),
+so an audit log that spans the upgrade to v0.88.0 will hold `rotated`
+rows from earlier releases with no matching `resealed` row beside
+them — because `resealed` did not exist yet, not because anything was
+skipped. Applying this table to a pre-v0.88.0 `rotated` row would
+misdiagnose a **complete** rotation as a half-finished one. Check the
+release that was running at the time before concluding otherwise.
+
+> ### Recovering a rotation that stopped partway. Corrected twice: 2026-11-03, this section used to end "There is no half-rotated state to recover from", which is not true of a failure *after* the re-seal commits; 2026-11-04, it still described the key-loss window that `0.87.1` had already closed.
 >
-> The re-seal is one transaction, and it commits **before** the key
-> files are touched. Only then does the command rename the old key to
-> `.bak.<timestamp>` and write the new one. So two windows exist that
-> the removed sentence denied:
+> **The new key is written to disk before the re-seal commits**, since
+> `0.87.1`. The order is:
 >
-> - **the rename fails** — the database is already re-sealed under the
->   new key while the old key is still at the configured path, so the
->   server can no longer open its own database;
-> - **the rename succeeds and the write fails** — there is now no key
->   file at the configured path at all.
+> 1. refuse outright if `<key_file>.new` already exists — before the
+>    database is even opened, because that file may hold the key the
+>    database is already sealed under;
+> 2. stage the new key at `<key_file>.new`, created with owner-only
+>    permissions;
+> 3. re-seal every encrypted column, and record
+>    `admin.master_key.resealed`, in one transaction — **this commits**;
+> 4. rename the old key file to `.bak.<timestamp>`;
+> 5. rename `<key_file>.new` to the configured path.
 >
-> **And without `--new-key` the generated key is never shown to you.**
-> It exists only in the command's memory and is persisted by exactly
-> that one write. If the write does not happen, the key is gone, and
-> every sealed column — signing keys, refresh tokens, TOTP secrets and
-> recovery codes, WebAuthn credentials, SMTP configuration, the email
-> outbox — **cannot be decrypted by anyone, ever.** That is permanent
-> data loss from an ordinary disk error.
+> **So an ordinary disk error no longer loses the key.** Steps 4 and 5
+> are renames within one directory, and until step 5 completes the new
+> key is still at `<key_file>.new`. Before `0.87.1` the generated key
+> existed only in memory until a single write *after* the commit, and
+> losing that write made every sealed column permanently undecryptable.
+> **That window is closed.** If you are running `0.87.1` or later you
+> are not exposed to it; if you are running anything earlier, upgrade
+> before rotating.
 >
-> **So generate the key yourself, keep it, and pass it in:**
+> **If a rotation stopped partway, here is what to do.** Read
+> "Diagnosing a rotation from the audit log" above first — it tells you
+> which of these you are in.
+>
+> - **No `resealed` row.** Nothing committed; the database is still
+>   under the old key. If `<key_file>.new` exists it is an unused key
+>   from the failed run: confirm the server still starts on the
+>   configured key, then delete `<key_file>.new` and retry. The command
+>   refuses to run while that file is there, by design.
+> - **A `resealed` row, no `rotated` row, and `<key_file>.new` still
+>   present.** The database is re-sealed under the key in
+>   `<key_file>.new`, and the key files were not fully swapped. **That
+>   staged file is the key your database now needs.** Copy it somewhere
+>   durable, then move it to the configured path and start the server.
+>   Do not delete it, and do not re-run the rotation.
+> - **A `resealed` row, no `rotated` row, and no `<key_file>.new`.**
+>   Step 5 completed and only the audit record failed; the command also
+>   prints a warning when that happens. The configured path already
+>   holds the right key. Nothing to repair — note the rotation in your
+>   own records, since the log will not show it.
+>
+> **`--new-key` is still worth using, for a different reason than
+> before.** It no longer protects you from losing the key — step 2 does
+> that. What it gives you is an independent copy of the key in a
+> location you chose, which is what you need for key custody and for
+> restoring a backup taken before the rotation:
 >
 > ```bash
 > # 1. Generate and keep the new key FIRST, somewhere already durable.
@@ -213,21 +268,14 @@ yet renamed, and you can retry with the same arguments.
 > #    the command stages under, and it refuses if one is already there.
 > head -c 32 /dev/urandom | base64 > /secure/backup/sui-id-master-key.b64
 >
-> # 2. Rotate using it, so the key survives any failure below.
+> # 2. Rotate using it.
 > sui-id admin rotate-key --config /etc/sui-id/sui-id.toml \
 >                         --new-key /secure/backup/sui-id-master-key.b64
 > ```
 >
-> With the key already on durable storage, **every** failure above is
-> recoverable: the database is either on the old key (re-seal rolled
-> back — retry) or on the new one (re-seal committed — put the new key
-> at the configured path and start). **Take a backup first either way.**
->
-> If you have already hit this without `--new-key`: if the rename
-> succeeded, your old key is at `<path>.bak.<timestamp>` — it opens the
-> database only if the re-seal did **not** commit. Check the startup
-> error before overwriting anything, and restore the pre-rotation
-> backup if it did.
+> **Take a backup before rotating, either way.** The old key file is
+> archived to `.bak.<timestamp>` and opens a pre-rotation backup; it
+> does **not** open the database once the re-seal has committed.
 
 ## Dev mode for local testing
 

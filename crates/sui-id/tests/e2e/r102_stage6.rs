@@ -85,6 +85,11 @@ async fn last_used_step(state: &AppState, user: UserId) -> i64 {
     .await
 }
 
+/// Generating a code inline (`code_at(secret, step_now())`) is safe —
+/// the validator accepts a ±1 step window (`totp.rs`). **Comparing** a
+/// step must capture it once: the clock moves, and re-evaluating this
+/// compares against whatever step it has reached by then, not the one
+/// the code was accepted at (`76a3005`, CI run `41672489921`).
 fn step_now() -> i64 {
     chrono::Utc::now().timestamp() / 30
 }

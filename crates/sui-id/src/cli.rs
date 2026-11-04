@@ -535,7 +535,10 @@ pub(crate) async fn run_admin_rotate_key(args: &[String]) -> Result<()> {
         )
     })?;
 
-    let _ = sui_id_store::repos::audit::append(
+    // RFC 094 cycle J stage 5: this record's own subject is the key
+    // files -- the row count moved to `admin.master_key.resealed` (K07),
+    // which carries it per table. Report what only this event knows.
+    let rotated_append = sui_id_store::repos::audit::append(
         &db,
         &sui_id_store::models::AuditLogRow {
             at: now,
@@ -544,13 +547,22 @@ pub(crate) async fn run_admin_rotate_key(args: &[String]) -> Result<()> {
             target: None,
             result: "ok".into(),
             note: Some(format!(
-                "re-sealed {} rows; old key archived at {}",
-                report.total(),
+                "new key in place at {}; old key archived at {}",
+                old_path.display(),
                 bak_path.display()
             )),
         },
     )
     .await;
+    // The rotation itself is done and committed by this point; its
+    // completion does not depend on this best-effort record (a
+    // filesystem rename cannot join the transaction K07 already
+    // committed). Report a failed append rather than discard it -- an
+    // operator who loses this row is told nothing, and a later reader
+    // seeing `resealed` with no `rotated` would otherwise conclude the
+    // opposite of the truth. Do not fail the command: the work is done,
+    // and a non-zero exit would invite a re-run that the staged-file
+    // refusal would then block.
 
     eprintln!();
     eprintln!("Rotation complete.");
@@ -572,6 +584,18 @@ pub(crate) async fn run_admin_rotate_key(args: &[String]) -> Result<()> {
     eprintln!("New key file written to  {}", old_path.display());
     eprintln!();
     eprintln!("Restart the server. The new key is in place.");
+    // Last, deliberately. Sixteen lines of success report follow the
+    // append above, ending in the restart instruction; a warning printed
+    // before them is a warning the operator scrolls past. This stage
+    // exists so a half-finished rotation is legible -- the one runtime
+    // signal that something is incomplete belongs where the eye lands.
+    if let Err(err) = rotated_append {
+        eprintln!();
+        eprintln!("Warning: the rotation completed, but the admin.master_key.rotated");
+        eprintln!("audit record could not be written: {err}");
+        eprintln!("The key is rotated and in place regardless -- note this by hand if");
+        eprintln!("your audit trail needs to be complete.");
+    }
     Ok(())
 }
 
