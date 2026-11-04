@@ -293,11 +293,40 @@ for the case where forgetting is most expensive.
    load-sensitive test on a path this stage never touched. Fixed in
    `76a3005`, **CI 28 success / 0 failed / 0 skipped** (`41682794440`).
    The 28/28 belongs to the fix commit, not to the stage commit.
-5. **Make a half-finished rotation legible.** One operation now
-   produces two records — the re-seal, atomic with its transaction, and
-   the key-file replacement, which cannot be atomic with anything. That
-   is *better* than one record, but only if the names and the docs say
-   so, which is operator-facing work in its own right. Depends on 4.
+5. **Make a half-finished rotation legible.** — **LANDED** `8a0f61b`,
+   2026-11-04, **CI 28 success / 0 failed / 0 skipped**
+   (`41750549127`). The operator guide carries a table mapping what the
+   audit log shows after an interrupted rotation to what happened and
+   what to do, including the case that is **not** a half-finished
+   rotation: a database rotated before the pair existed. The
+   `(A required)` annotation is dropped from the coverage matrix with
+   its reasoning recorded — a rename is not a SQL statement, so there is
+   no transaction for that event to be atomic with — and the annotation
+   is recorded as having been *correct when written* (`8741fa6`,
+   2026-09-24), not as an error. A failed append is reported rather than
+   discarded, without failing a command whose work has already
+   committed. Review —
+   `.git-exclude/reviewed/cycle-j-stage5-a-half-finished-rotation-is-legible-2026-11-04.md`.
+   *Two fold-ins were the architect's own. The `--new-key` section the
+   new table points into still described the pre-`0.87.1` world — that a
+   generated key lived only in memory until one post-commit write, and
+   that losing it made every encrypted column permanently undecryptable.
+   `0.87.1` closed that window; closing it is that release's headline.
+   The guide was therefore warning operators on `0.87.1`+ about a risk
+   that no longer exists and recommending `--new-key` as protection
+   against it — the inverse of this stage's purpose. Written in
+   `15dc973`, **after** the fix landed in `1b3bc7d`: one false sentence
+   was corrected and the section rewritten around it rather than
+   re-derived against the code. And the new warning printed above
+   sixteen lines of success output, so the one runtime signal of
+   incompleteness scrolled past; it prints last now.*
+   **Carried to the `0.88.0` preparation:** the guide and the reference
+   doc hard-code **v0.88.0** as the version the pair starts at. That is
+   correct under this plan and nothing checks it — G15 reads
+   *"Stale as of vX"* banners, not version mentions in prose — and
+   `0.87.1` was itself an unplanned mid-cycle patch. **The preparation
+   must verify every doc naming the upcoming version against the version
+   actually being cut.**
    **Carries three items found while reviewing stage 4**: whether
    `admin.master_key.rotated`'s `(A required)` annotation still means
    anything now that the atomic half has its own name; that event's
