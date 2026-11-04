@@ -4,6 +4,37 @@
 **Status.** **Proposed — build-prohibited** under RFC 000, which bars
 implementation before acceptance. Nothing here is dispatched.
 
+## Where acceptance stands, 2026-11-04
+
+**`@nabbisen` accepted the design** — his word: *"Accepted."*
+
+**The RFC stays in `proposed/` until his design review record exists**,
+and that is a gate requirement rather than a formality.
+`scripts/check-rfc-integrity.py` condition 9 refuses an Accepted RFC
+whose `Security review` is `Required` and which carries no
+`Independent design review` field, and condition 9c requires at least
+one citation in that field to resolve under this directory. Moving the
+file today would fail G11, and writing the field without the document
+would be worse than failing it.
+
+**He is reviewing it himself.** Asked how the field should be
+satisfied, he answered: *"You design. I will review it."* So the
+architect wrote the design and performs no review of it —
+`ROADMAP.md` §S1c's self-review prohibition applies unmodified here,
+because he did not invoke its exception as he did for RFC 143.
+
+**Nothing is written on his behalf.** When his review exists it belongs
+at `design-review-2026-11-04.md` in this directory, and the RFC's
+`Independent design review` field cites it; the architect will
+transcribe his findings into that file only if he asks, and will not
+author the review itself.
+
+**Two questions in the RFC remain open.** His acceptance message did
+not address §5's AAA question for the semantic colours or §6's
+sign-out visibility question, so both stand as written. An Accepted
+RFC may carry open decisions — RFC 096 carried five — but the closure
+prerequisites cannot be met while these two are unanswered.
+
 ## What exists
 
 | document | what it is |
