@@ -4,9 +4,10 @@
 **Security review.** Required
 **Design prerequisites.** None.
 **Implementation prerequisites.** None.
-**Closure prerequisites.** Every token used as `color:` clears WCAG 2.1 AA (4.5:1) in both modes, with no token excluded from `crates/sui-id-web/src/tokens/tests.rs`'s contrast assertion on the grounds that it is decorative; the border token used on interactive controls clears 3:1 (WCAG 1.4.11); the type scale is expressed in `rem` so a reader's own browser font size is honoured, with a test that fails if a `px` font size returns; interactive controls clear 44×44 CSS px; and `prefers-contrast: more` is honoured and asserted by the same gate that asserts `prefers-reduced-motion`.
+**Closure prerequisites.** Every foreground/background **pair a component actually composes** clears WCAG 2.1 AA (4.5:1) in both modes — a token has no ratio, a pair does, and `--danger-default` clears AA on white while failing on `--danger-subtle`; the contrast assertion in `crates/sui-id-web/src/tokens/tests.rs` covers component stylesheets and not only `TOKENS_CSS`, with no token excluded from it on the grounds that it is decorative; the border token used on interactive controls clears 3:1 (WCAG 1.4.11); the type scale is expressed in `rem` so a reader's own browser font size is honoured, with a test that fails if a `px` font size returns; interactive controls clear 44×44 CSS px; and `prefers-contrast: more` is honoured and asserted by the same gate that asserts `prefers-reduced-motion`.
 **Tracks.** UI/UX accessibility. §5 and §6 carry open questions.
 **Touches.** `crates/sui-id-web/src/tokens.rs`, `crates/sui-id-web/src/tokens/tests.rs`, `crates/sui-id-web/src/components/forms.rs`, `crates/sui-id-web/src/components/buttons.rs`, `crates/sui-id-web/src/components/chrome.rs`, `crates/sui-id-web/src/components/setup.rs`.
+**Independent design review.** [Design review record, 2026-11-04](../handoffs/144-legible-to-older-eyes/design-review-2026-11-04.md). **By the architect, at `@nabbisen`'s request** — *"Review it carefully by yourself with my fundamental philosophy"* — `ROADMAP.md` §S1c's owner-invoked exception, and the record says he asked. **The architect wrote this RFC and is not independent of it**; the review's central finding is that this RFC's own §1 diagnosis was too narrow.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** High-capability model, requirements-architect role.
 **Handoff.** [`../handoffs/144-legible-to-older-eyes/README.md`](../handoffs/144-legible-to-older-eyes/README.md)
@@ -39,7 +40,7 @@ judgement calls written as questions, not as decisions already taken.
 
 ## Decision
 
-### 1 — `--fg-subtle` fails AA as text, and the gate excludes it
+### 1 — the contrast contract covers the palette, not what components compose
 
 | mode | pair | measured | AA requires |
 |---|---|---|---|
@@ -58,12 +59,44 @@ usages; it is dead and should be deleted rather than fixed.)
 **Placeholder text is the one that matters.** It is frequently the only
 hint about what a field expects, and it is being painted below AA.
 
+**And the exclusion is the smaller half.** `tokens/tests.rs` reads
+`TOKENS_CSS` and nothing else (`:19`, `:97`), so it never sees
+`CONFIRM_CSS`, `BANNERS_CSS` or any component stylesheet. The contract
+covers pairs the **token file** declares; a component may put any
+token's colour on any other token's background and nothing checks it.
+Three such pairs fail AA today — §1a.
+
 **Decision.** Placeholders get their own AA-compliant token rather than
 sharing a decorative one — a placeholder is content. The remaining uses
-move to a value clearing 4.5:1 in both modes. **The exclusion is then
-removed from the contrast assertion**, so the contract covers what it
-claims, and no token is exempt on the grounds of a claim about where it
-is used.
+move to a value clearing 4.5:1 in both modes. The exclusion is removed.
+**And the assertion is widened to the pairs components compose**, which
+is the mechanism rather than the symptom.
+
+### 1a — three failures in destructive-action UI
+
+All in `components/confirm.rs`, all measured:
+
+| element | pair | measured | size |
+|---|---|---|---|
+| `.reversibility-badge--permanent` (`:31-32`) | `--danger-default` on `--danger-subtle` | **4.28:1** | 13px |
+| `.reversibility-badge--recoverable` (`:27-28`) | `--success-default` on 15% success over surface | **3.80:1** | 13px |
+| `.danger-zone__title` (`:48-51`) | `--danger-default` on `--danger-subtle` | **4.28:1** | 15px |
+
+The permanence badge is the label saying *this cannot be undone* (RFC
+017 §3); the danger-zone title heads the section whose own comment says
+it *"physically and semantically isolates destructive operations"*. The
+two places built to stop an accidental destruction are below the
+standard, one at caption size.
+
+**`components/banners.rs` already does it correctly** — every tinted
+background pairs with `color: var(--fg-default)`, **13.72:1 to
+15.06:1**, with the semantic colour on the border. `.danger-zone__body`
+does the same. **Decision: apply that existing convention** to the three
+failures rather than invent a palette; tint the background, keep text at
+full foreground contrast, carry meaning on the border.
+
+*This also answers where the problem was not. The "messages areas" are
+sound; the labels are not.*
 
 ### 2 — control borders are effectively invisible
 
@@ -88,6 +121,12 @@ platform default, where it is currently 15px). Add an assertion that
 fails if a `px` font size reappears — the gate that exists for contrast
 should also hold this, or the regression is silent.
 
+**The spacing scale must move with it, or the RFC must say why not.**
+`--space-1` through `--space-6` are `4px`–`48px`. Convert type alone and
+a reader's enlarged font grows the text while the padding holds still,
+crowding every line against its container — an accommodation that
+partly defeats itself.
+
 ### 4 — interactive controls reach 44×44
 
 `components/buttons.rs:28` sets `min-height: 36px`. WCAG 2.5.8 (AA,
@@ -96,7 +135,9 @@ major platform guidelines. Reduced precision and tremor are the common
 case here, and a mis-tap on a destructive control costs more than a
 mis-tap elsewhere.
 
-**Decision.** 44×44 for interactive controls.
+**Decision.** 44×44 for **standalone** controls — buttons, form
+controls, menu items. **Not inline links in prose**, which WCAG 2.5.8
+exempts and which a blanket rule would wrongly inflate.
 
 ### 5 — `prefers-contrast`, and how far to go on AAA
 
@@ -123,6 +164,12 @@ and **15.41:1** dark. Line heights are generous and correct — body 1.6,
 caption 1.5. Disabled states use explicit AA tokens with the ratio
 recorded beside the value, rather than opacity. The account menu is
 `<details>`/`<summary>` and needs no JavaScript. None of this is touched.
+
+**Open, and `@nabbisen`'s:** placeholder text disappears the moment
+typing begins, which is when an uncertain reader most wants it, and
+`pages/confirm.rs:143` puts one on a textarea on a confirmation screen.
+Darkening it is strictly an improvement; not relying on it for guidance
+that matters is a product decision.
 
 **Open, and `@nabbisen`'s:** the account menu puts sign-out two actions
 away behind a `username ▾` summary. For an administrator that is a
