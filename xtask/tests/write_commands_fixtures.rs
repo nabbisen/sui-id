@@ -133,6 +133,16 @@ impl Fixture {
             "contracts/write-commands.toml",
             &rows(&[SEALED_A01, PLANNED_P01]),
         );
+        // RFC 094 cycle J stage 7: `audit-structure` now also runs the
+        // coverage check. One row, matching the baseline's one real
+        // event (A01's `thing.done`) -- the red-path tests below add a
+        // second command without a matching row on purpose; coverage
+        // flags that too, which `assert_red`'s needle check tolerates
+        // (it does not require the listed failures to be the only ones).
+        f.write(
+            "contracts/audit-coverage-matrix.md",
+            "# Matrix\n\n| Event name | Class |\n|---|---|\n| `thing.done` | A |\n| `thing.failed` | A |\n",
+        );
         // Empty, valid write-authority policy: the synthetic fixture
         // tree touches no rusqlite construct at all, so this is never
         // the thing under test here -- `audit-structure` just needs a
@@ -169,7 +179,9 @@ impl Fixture {
             .arg("--policy")
             .arg("contracts/write-authority.toml")
             .arg("--commands")
-            .arg("contracts/write-commands.toml");
+            .arg("contracts/write-commands.toml")
+            .arg("--matrix")
+            .arg("contracts/audit-coverage-matrix.md");
         for e in extra {
             cmd.arg(e);
         }

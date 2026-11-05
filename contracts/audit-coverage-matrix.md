@@ -4,17 +4,25 @@ This document is the **normative requirement** for sui-id's audit event coverage
 every privileged operation that mutates state **must** have a row here specifying
 its event name, required fields, and atomicity class.
 
-**That requirement is not mechanically enforced today.** The CI gate
-`scripts/check-audit-matrix.sh` compares *event-name strings* between this
-document and the code. It does not, and cannot, establish that a privileged
-operation emits an event at all, that the event is correctly typed, or that the
-mutation and its audit append share a transaction.
+**Bidirectional name coverage is mechanically enforced**, by G23
+(`cargo xtask audit-structure`, RFC 094's structural gate, authoritative since
+cycle J stage 7): it derives event names from the typed paths they travel
+through -- `EventDescriptor` and `MustAttemptDescriptor` statics,
+`declare_write_command!`'s mappings, and `AuditLogRow { action: … }`
+construction sites -- rather than from string literals, and fails on either
+direction of a mismatch against this document. See "CI gate" below.
 
-> **Diagnostic only: string parity proves neither emission completeness nor
-> mutation/audit atomicity. RFC 094 owns the authoritative structural gate.**
+That still does not, and cannot, establish that a privileged operation emits
+an event at all, that the event is correctly typed, or that the mutation and
+its audit append share a transaction.
 
-Until RFC 094 is implemented, treat the rows below as the coverage this project
-*requires*, verified by review rather than by CI.
+> **Name coverage, both ways, is enforced by G23. It does not by itself
+> prove emission completeness or mutation/audit atomicity --
+> `declare_write_command!` and `WriteTx<AtomicAudit>` are what enforce
+> those.**
+
+Treat the rows below as the coverage this project *requires*: G23 fails the
+build the moment a row and a source name disagree in either direction.
 
 ## Atomicity classes
 
@@ -577,12 +585,15 @@ fire-and-forget `let _ = audit::append(...)` in
 
 ## CI gate
 
-`scripts/check-audit-matrix.sh` compares two sets of **event-name strings**:
+**G23** is the authority for the comparison below; see the top of this
+document. `scripts/check-audit-matrix.sh` (**G13**, registered for
+vocabulary-drift diagnosis, not as the authority) compares the same two sets
+of **event-name strings** instead:
 
 1. Every event name in this matrix exists as a string literal in the codebase.
 2. Every audit-namespaced string literal in the codebase has a row in this matrix.
 
-A mismatch between those two sets fails the gate. **Since 2026-09-25 (RFC 116
+A mismatch between those two sets fails G13's lane too. **Since 2026-09-25 (RFC 116
 stage 2) it also runs `scripts/check-audit-matrix-columns.py`**, which reads this
 file's *table rows* (the string comparison above takes every backticked name from
 anywhere in the file, so a whole row could be deleted while its name survived in
@@ -630,7 +641,11 @@ surfaced an MFA admin reset** — the same defect this constant carried for
 remains the clearest illustration of what a name-comparison gate cannot catch: a
 consumer looking for a name nothing emits is invisible to it.
 
-**Adding a new privileged operation without updating the matrix is therefore not
-necessarily a CI failure.** It is a violation of the requirement stated at the top
-of this document, caught by review. RFC 094 replaces this diagnostic with a
-structural gate that can enforce it.
+**Adding a new privileged operation without updating the matrix is now a CI
+failure**, in the direction the typed descriptors reach: G23's backward check
+fails the moment a sealed event name has no matching row. The one gap that
+check does not close is a literal reached only through a named `const`/`static`
+with no typed descriptor alongside it -- not a hole in principle, a limit of
+what a single-file AST walk resolves without crate-wide constant propagation;
+such a case is still a violation of the requirement stated at the top of this
+document, caught by review rather than by G23.

@@ -85,8 +85,10 @@ name, class, actor requirement and attributes into a typed descriptor, and
 the runner hands the domain function a `WriteTx<AtomicAudit>` — so the
 mutation cannot land without its audit row, and the audit row cannot name an
 event the registry does not declare. RFC 094 is the design; the registered
-event set is `contracts/audit-coverage-matrix.md`, which lane G13 checks against the
-source literals in both directions.
+event set is `contracts/audit-coverage-matrix.md`, which lane G23
+(`cargo xtask audit-structure`) checks against the source literals in both
+directions, walked from the typed descriptors above rather than a string
+match. G13 remains registered for vocabulary-drift diagnosis.
 
 `events::emit(db, clock, ctx, event)` remains for Class-B events — the
 best-effort, non-transactional ones, six call sites, all in

@@ -711,11 +711,14 @@ bytes of the prior hash plus the current event) provides tamper evidence
 within the trust boundary `docs/threat-model.md` states.
 
 The event vocabulary is authoritative and is not transcribed here:
-`contracts/audit-coverage-matrix.md` is the gate input that G13 checks against the
-source literals in both directions, and `docs/src/reference/audit-events.md`
-is the reader-facing reference. The v3 list named six events against
-fifty-four registered, and one of the six — `auth.refresh.family_revoked` —
-was a name that never existed in the code.
+`contracts/audit-coverage-matrix.md` is the gate input that G23
+(`cargo xtask audit-structure`) checks against the source literals in both
+directions, derived from the typed paths an event name travels through
+rather than a string match; G13 remains registered for vocabulary-drift
+diagnosis. `docs/src/reference/audit-events.md` is the reader-facing
+reference. The v3 list named six events against fifty-four registered, and
+one of the six — `auth.refresh.family_revoked` — was a name that never
+existed in the code.
 
 ---
 

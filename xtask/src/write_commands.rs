@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 
 use regex::Regex;
 
-const REGISTRY_RS: &str = "crates/sui-id-store/src/registry.rs";
+pub(crate) const REGISTRY_RS: &str = "crates/sui-id-store/src/registry.rs";
 
 const STATUSES: &[&str] = &["implemented", "target-absent", "target-legacy"];
 const CLASSES: &[&str] = &["A", "P", "O", "I", "X"];

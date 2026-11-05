@@ -1,8 +1,13 @@
-//! `cargo xtask audit-structure` — RFC 094's structural gate (cycle J
-//! stage 6b). Replaces G17 (`scripts/check-write-commands.py`, retired in
-//! this change) and adds the `syn` write-authority boundary condition 7
-//! names.
+//! `cargo xtask audit-structure` — RFC 094's structural gate. Stage 6b
+//! replaced G17 (`scripts/check-write-commands.py`) and added the `syn`
+//! write-authority boundary condition 7 names. Stage 7 adds the audit-
+//! coverage check (RFC 094 `:1105-1107` item 6's third clause), built on
+//! the same typed AST paths rather than G13's string extraction
+//! (`scripts/check-audit-matrix.sh`, which remains registered for
+//! vocabulary-drift diagnosis, per RFC 094's own two endings for it —
+//! retiring it is an amendment, not this stage's to make).
 
+mod coverage;
 mod write_authority;
 mod write_commands;
 
@@ -29,7 +34,7 @@ fn main() -> std::process::ExitCode {
         }
         None => {
             eprintln!(
-                "xtask: usage: cargo xtask audit-structure --policy PATH --commands PATH [--fix] [--negative-fixtures]"
+                "xtask: usage: cargo xtask audit-structure --policy PATH --commands PATH --matrix PATH [--fix] [--negative-fixtures]"
             );
             std::process::ExitCode::FAILURE
         }
@@ -57,6 +62,9 @@ fn run_audit_structure(args: &[String]) -> std::process::ExitCode {
     let commands = parse_flag_value(&args, "--commands")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("contracts/write-commands.toml"));
+    let matrix = parse_flag_value(&args, "--matrix")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("contracts/audit-coverage-matrix.md"));
 
     if negative_fixtures {
         return write_authority::run_negative_fixtures(&root);
@@ -87,6 +95,26 @@ fn run_audit_structure(args: &[String]) -> std::process::ExitCode {
                  tracing beyond the allow-listed executor cluster. See \
                  contracts/write-authority.toml's header.",
                 outcome.scanned, outcome.allow_listed
+            );
+        }
+        Err(e) => {
+            eprintln!("audit-structure: {e}");
+            return std::process::ExitCode::from(2);
+        }
+    }
+
+    match coverage::check(&root, &matrix) {
+        Ok(outcome) => {
+            failures.extend(outcome.failures);
+            eprintln!(
+                "audit-structure: coverage: {} matrix entries, {} source names \
+                 (EventDescriptor/MustAttemptDescriptor statics, events.rs-shaped \
+                 name() match arms, AuditLogRow{{action: \"literal\"}} sites). \
+                 Not resolved: a name reached only through a named const/static \
+                 referenced at the call site with no typed descriptor alongside \
+                 it. G13 (scripts/check-audit-matrix.sh) remains registered for \
+                 vocabulary-drift diagnosis; this is the coverage authority.",
+                outcome.matrix_count, outcome.source_count
             );
         }
         Err(e) => {

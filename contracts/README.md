@@ -22,7 +22,7 @@ one that still names `ci/<file>` is a violation that says where the file moved.
 
 | File | Kind | Read by | Owning RFC |
 |---|---|---|---|
-| `audit-coverage-matrix.md` | registry | G13, G15 | RFC 094, RFC 098 |
+| `audit-coverage-matrix.md` | registry | G13, G15, G23 | RFC 094, RFC 098 |
 | `contract-paths.toml` | policy | G18 | RFC 116 |
 | `doc-authority.toml` | policy | G15 | RFC 098 |
 | `inline-test-exemptions.toml` | policy | G21 | RFC 137 |

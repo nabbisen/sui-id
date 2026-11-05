@@ -54,6 +54,14 @@ impl Fixture {
             "contracts/write-commands.toml",
             &format!("# header\n\n{SEALED_A01}"),
         );
+        // RFC 094 cycle J stage 7: `audit-structure` now also runs the
+        // coverage check, which needs a matrix file to read -- one row,
+        // matching this fixture's one real event, so the write-authority
+        // cases above stay the only thing under test here.
+        f.write(
+            "contracts/audit-coverage-matrix.md",
+            "# Matrix\n\n| Event name | Class |\n|---|---|\n| `thing.done` | A |\n",
+        );
         f
     }
 
@@ -86,6 +94,8 @@ impl Fixture {
             .arg("contracts/write-authority.toml")
             .arg("--commands")
             .arg("contracts/write-commands.toml")
+            .arg("--matrix")
+            .arg("contracts/audit-coverage-matrix.md")
             .output()
             .expect("run xtask")
     }

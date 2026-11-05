@@ -108,7 +108,7 @@ G19 = "python3.14 scripts/check-federation-egress.py --root ."
 G21 = "python3.14 scripts/check-inline-tests.py --root ."
 G20 = "rm -f target/rfc094-rollback-coverage.txt && cargo +stable test -p sui-id-store --lib --locked && bash scripts/check-m2a-rollback-coverage.sh --root ."
 G22 = "cargo +stable test -p sui-id-store --lib tests_rfc142 --locked"
-G23 = "cargo +stable xtask audit-structure --locked --policy contracts/write-authority.toml --commands contracts/write-commands.toml"
+G23 = "cargo +stable xtask audit-structure --locked --policy contracts/write-authority.toml --commands contracts/write-commands.toml --matrix contracts/audit-coverage-matrix.md"
 
 # RFC 093 M1b C2.1: the lane-completeness rule (scripts/check-gate-inputs.sh
 # condition 7) requires every lane declared by any source RFC to be

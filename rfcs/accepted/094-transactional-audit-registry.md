@@ -921,13 +921,23 @@ table so one parser reads both.
 |---|---|---|---|
 | G13 | Python 3.14 | n/a | `bash scripts/check-audit-matrix.sh` |
 | G20 | stable | default | `rm -f target/rfc094-rollback-coverage.txt` and `cargo +stable test -p sui-id-store --lib --locked` and `bash scripts/check-m2a-rollback-coverage.sh --root .` |
-| G23 | stable | n/a | `cargo +stable xtask audit-structure --locked --policy contracts/write-authority.toml --commands contracts/write-commands.toml` |
+| G23 | stable | n/a | `cargo +stable xtask audit-structure --locked --policy contracts/write-authority.toml --commands contracts/write-commands.toml --matrix contracts/audit-coverage-matrix.md` |
 
 *Registered 2026-11-04 (cycle J stage 6b). `audit-structure` is this
 condition's `syn`-based write-authority boundary check (`contracts/write-authority.toml`)
 and the write-command inventory check RFC 116 stage 1 landed interim as
 G17 (`scripts/check-write-commands.py`, retired in the same change) --
 one tool, not two definitions of true over one 103-row contract.*
+
+*Amended 2026-11-05 (cycle J stage 7). `audit-structure` gained a third,
+AST-based check: the bidirectional audit-coverage matrix comparison
+(`contracts/audit-coverage-matrix.md`), item 3 of `:1105-1107` item 6. This
+is the "downgrade/remove the string gate as authority" item -- `audit-structure`
+is now the authoritative coverage control at M2b (`:946-948`), not
+`scripts/check-audit-matrix.sh` (G13). G13 remains registered, per its own
+two endings in `:946-948`: retiring it is an amendment, not this stage's to
+make. It now diagnoses vocabulary drift only; it is not the coverage
+authority.*
 
 *Registered `1ec5dad`, 2026-09-12 — the first time this script ran in CI. The
 desync fixture RFC 085 promised is in the A3.2 set, both directions pinned by

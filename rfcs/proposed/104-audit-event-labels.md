@@ -3,7 +3,7 @@
 **Status.** Proposed
 **Security review.** Required
 **Design prerequisites.** None. The label text already exists in `crates/sui-id-i18n`.
-**Implementation prerequisites.** RFC 094's `contracts/audit-coverage-matrix.md` is the registered-event source of truth, kept true against the code by G13.
+**Implementation prerequisites.** RFC 094's `contracts/audit-coverage-matrix.md` is the registered-event source of truth, kept true against the code by G23 (`cargo xtask audit-structure`, authoritative since cycle J stage 7; G13 still runs the same comparison for vocabulary-drift diagnosis).
 **Closure prerequisites.** Every registered event has a label in every locale in `Locale::ALL`; no label names an unregistered event; a test binds the label set to the matrix so neither can drift again.
 **Tracks.** Audit legibility.
 **Touches.** `crates/sui-id-i18n/src/strings.rs`, `crates/sui-id-i18n/src/locale/`, `crates/sui-id-web/src/pages/audit.rs`, `crates/sui-id-web/src/pages/dashboard.rs`, `contracts/audit-coverage-matrix.md`.
