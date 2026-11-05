@@ -47,6 +47,16 @@
 //! `&'static str` audit-action constant exists with no typed descriptor
 //! alongside it, this check would miss it; named here rather than
 //! discovered later.
+//!
+//! The matrix side (`matrix_event_names`, below) reads the `Event name`
+//! column of the matrix's tables, not every backticked `word.word` in the
+//! file -- a correction, stage 7b, to this module's first version, which
+//! scanned every backtick and filtered by a namespace list derived from the
+//! source side (the same filter G13 itself applies). That filter cuts both
+//! ways: a matrix row in a namespace the source happens not to declare
+//! anywhere passed the forward check silently rather than failing it, found
+//! on the real tree at review. Column-keyed extraction removes the filter
+//! and the blind spot together.
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -218,37 +228,107 @@ pub fn source_event_names(root: &Path) -> BTreeSet<String> {
     finder.names
 }
 
-const NAME_WORD: &str = r"[a-z0-9_]+(?:\.[a-z0-9_]+)+";
-
-/// Every `` `namespace.word...` `` in the matrix whose first segment is a
-/// namespace the source actually declares -- the same filter G13 applies,
-/// computed from the AST-derived set above instead of a hand-maintained
-/// list or a second grep.
-///
-/// `NAME_WORD` is a fixed, hand-written pattern; only the surrounding
-/// backtick literals are added via `format!`, so the built pattern is the
-/// same valid one on every run, proven valid at every build.
-#[allow(clippy::expect_used)]
-pub fn matrix_event_names(
-    matrix_text: &str,
-    known_namespaces: &BTreeSet<String>,
-) -> BTreeSet<String> {
-    let re = regex::Regex::new(&format!("`({NAME_WORD})`")).expect("fixed pattern");
-    re.captures_iter(matrix_text)
-        .map(|c| c[1].to_string())
-        .filter(|n| {
-            n.split('.')
-                .next()
-                .is_some_and(|ns| known_namespaces.contains(ns))
-        })
-        .collect()
+/// Cells of one markdown table line, honouring a `|` inside inline code or
+/// escaped as `\|` -- the same splitting
+/// `scripts/check-audit-matrix-columns.py`'s `split_row` does, so the two
+/// tools agree on what counts as a cell.
+fn split_row(line: &str) -> Vec<String> {
+    let mut s = line.trim();
+    if let Some(rest) = s.strip_prefix('|') {
+        s = rest;
+    }
+    if s.ends_with('|') && !s.ends_with("\\|") {
+        s = &s[..s.len() - 1];
+    }
+    let chars: Vec<char> = s.chars().collect();
+    let mut cells = Vec::new();
+    let mut cur = String::new();
+    let mut in_code = false;
+    let mut i = 0;
+    while i < chars.len() {
+        let c = chars[i];
+        if c == '\\' && chars.get(i + 1) == Some(&'|') {
+            cur.push('|');
+            i += 2;
+            continue;
+        }
+        if c == '`' {
+            in_code = !in_code;
+        }
+        if c == '|' && !in_code {
+            cells.push(cur.trim().to_string());
+            cur.clear();
+        } else {
+            cur.push(c);
+        }
+        i += 1;
+    }
+    cells.push(cur.trim().to_string());
+    cells
 }
 
-pub fn namespaces_of(names: &BTreeSet<String>) -> BTreeSet<String> {
+/// A markdown table rule line (`|---|---|`, optionally with `:` alignment
+/// markers): every cell is three-or-more dashes, optionally colon-bounded.
+#[allow(clippy::expect_used)]
+fn is_separator(cells: &[String]) -> bool {
+    let re = regex::Regex::new(r"^:?-{3,}:?$").expect("fixed pattern");
+    !cells.is_empty() && cells.iter().all(|c| re.is_match(c))
+}
+
+const EVENT_CELL: &str = r"^`([a-z0-9_]+(?:\.[a-z0-9_]+)+)`$";
+
+/// Every event name in the matrix's **`Event name` column** -- the same
+/// keying `scripts/check-audit-matrix-columns.py`'s `read_matrix` uses, not
+/// every backticked `word.word` anywhere in the file.
+///
+/// G13's own extraction (and this check's first version) took any
+/// backtick-quoted name, which also catches stray matches like `` `db.rs` ``
+/// in prose; G13 narrows that with a namespace filter derived from the
+/// source, but the filter cuts both ways -- a matrix row in a namespace the
+/// source happens not to declare *anywhere* passes silently in the forward
+/// direction, rather than failing. Found on the real tree at review (cycle J
+/// stage 7, `@nabbisen`): `` `ghost.probe.forward` `` added as a matrix row
+/// was not reported, because `ghost` is not a namespace any source literal
+/// uses. Reading the column instead removes the reason the filter existed
+/// (a table cell cannot be mistaken for a prose mention) and the blind spot
+/// with it -- there is no longer a filter to have a blind spot.
+pub fn matrix_event_names(matrix_text: &str) -> BTreeSet<String> {
+    #[allow(clippy::expect_used)]
+    let event_cell = regex::Regex::new(EVENT_CELL).expect("fixed pattern");
+    let lines: Vec<&str> = matrix_text.lines().collect();
+    let mut names = BTreeSet::new();
+    let mut header: Option<Vec<String>> = None;
+    let mut in_fence = false;
+    for (idx, line) in lines.iter().enumerate() {
+        if line.trim_start().starts_with("```") {
+            in_fence = !in_fence;
+            header = None;
+            continue;
+        }
+        if in_fence || !line.trim_start().starts_with('|') {
+            header = None;
+            continue;
+        }
+        let cells = split_row(line);
+        if header.is_none() {
+            // The first table line is the header; the next must be the rule.
+            let next = lines.get(idx + 1).map(|l| split_row(l)).unwrap_or_default();
+            if is_separator(&next) {
+                header = Some(cells.iter().map(|c| c.to_lowercase()).collect());
+            }
+            continue;
+        }
+        if is_separator(&cells) {
+            continue;
+        }
+        if header.as_ref().and_then(|h| h.first()).map(String::as_str) == Some("event name")
+            && let Some(first) = cells.first()
+            && let Some(m) = event_cell.captures(first)
+        {
+            names.insert(m[1].to_string());
+        }
+    }
     names
-        .iter()
-        .filter_map(|n| n.split('.').next().map(str::to_owned))
-        .collect()
 }
 
 #[derive(Default)]
@@ -269,8 +349,7 @@ pub fn check(root: &Path, matrix_rel: &Path) -> anyhow::Result<CoverageOutcome> 
             "no audit event names derived from crates/ (fails closed)"
         ));
     }
-    let namespaces = namespaces_of(&source_names);
-    let matrix_names = matrix_event_names(&matrix_text, &namespaces);
+    let matrix_names = matrix_event_names(&matrix_text);
     if matrix_names.is_empty() {
         return Err(anyhow::anyhow!(
             "no event names extracted from {}",

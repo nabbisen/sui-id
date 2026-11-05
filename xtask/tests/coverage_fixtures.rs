@@ -148,6 +148,40 @@ fn backward_a_source_name_absent_from_the_matrix_is_caught() {
     assert!(stderr(&out).contains("not in contracts/audit-coverage-matrix.md"));
 }
 
+#[test]
+fn forward_a_matrix_name_in_a_namespace_the_source_never_declares_is_still_caught() {
+    // The blind spot found at review (cycle J stage 7, real tree): the
+    // first version filtered matrix names by a namespace list derived from
+    // the source, so a row in a namespace nothing declares passed
+    // silently. `ghost` is not `thing` -- a namespace this fixture's source
+    // never mentions at all -- and must still be caught now that matrix
+    // names come from the `Event name` column, not a namespace guess.
+    let f = Fixture::new();
+    f.write(
+        "contracts/audit-coverage-matrix.md",
+        "# Matrix\n\n| Event name | Class |\n|---|---|\n| `thing.done` | A |\n| `ghost.probe.forward` | A |\n",
+    );
+    let out = f.run_gate();
+    assert_eq!(out.status.code(), Some(1), "{}", stderr(&out));
+    assert!(stderr(&out).contains("(coverage forward) ghost.probe.forward"));
+    assert!(stderr(&out).contains("in matrix but not found"));
+}
+
+#[test]
+fn a_backticked_name_shape_outside_the_event_name_column_is_not_a_false_positive() {
+    // Column-keyed extraction's own obligation, now that it replaces the
+    // namespace filter as the thing that keeps prose out of the name set:
+    // a backticked, name-shaped string under a different header, and one
+    // in running prose, must not become a spurious matrix entry.
+    let f = Fixture::new();
+    f.append(
+        "contracts/audit-coverage-matrix.md",
+        "\nSee also `db.rs`, unrelated to any event.\n\n| File | Kind |\n|---|---|\n| `thing.ghost` | registry |\n",
+    );
+    let out = f.run_gate();
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+}
+
 // ── each typed source, individually ───────────────────────────────────────
 
 #[test]
