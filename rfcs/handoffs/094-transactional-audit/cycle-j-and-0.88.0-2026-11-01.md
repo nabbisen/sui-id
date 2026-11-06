@@ -372,6 +372,28 @@ for the case where forgetting is most expensive.
    Authority follows capability. G13 is **not** retired — the RFC makes
    that an amendment, which is the owner's — unlike G17, which the RFC
    required retired in the same change.*
+7b. **The coverage check reads the `Event name` column, not every
+   backtick.** — **LANDED** `61cc57d`, 2026-11-05. Closed a blind spot
+   stage 7's review found: `matrix_event_names` filtered matrix names to
+   namespaces the source declares, so a row in a namespace nothing
+   declares passed the forward check silently. The filter is **deleted**,
+   not widened. Review —
+   `.git-exclude/reviewed/cycle-j-stage7b-the-matrix-column-not-the-backtick-2026-11-05.md`.
+   *Inherited from G13, not introduced — G13 passes the same probe.*
+   **Built without a dispatch, which was the architect's error**: stage
+   7's review said "Dispatched as stage 7b" before any dispatch existed.
+   No dispatch is written after the fact. **A review may recommend a
+   stage; only a dispatch dispatches it.**
+7c. **The column check moves onto the AST** (stage 7 §5(a), proposed by
+   the implementation role and accepted at review). **DISPATCHED**
+   2026-11-07 —
+   `rfcs/handoffs/094-transactional-audit/cycle-j-stage7c-the-column-check-moves-2026-11-07.md`.
+   `scripts/check-audit-matrix-columns.py` reads descriptors through
+   `rust_registry.py`, whose own docstring says it works *"without an
+   AST… nothing here can see a type"* — the defect RFC 094 exists to
+   end. The descriptor side moves to `syn`; the matrix-cell side stays
+   text, which is correct because a cell is text. G23's command is
+   unchanged, so no A3.4 byte-match churn.
 8. **RFC 142 stage 4** — the preview subcommand.
 9. **RFC 142 stage 5** — the automatic pre-upgrade backup.
 
