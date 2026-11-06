@@ -38,3 +38,8 @@ __pycache__/
 
 # dev
 /.git-exclude/
+
+# Claude Code personal settings: local by design (its own permission
+# allowlist), never shared. Unignored, `git add -A` would stage it and
+# G18 would scan it as repository content.
+/.claude/settings.local.json
