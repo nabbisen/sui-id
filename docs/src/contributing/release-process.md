@@ -184,6 +184,18 @@ go stale the way a hand-enumerated "run these N things" list already has
 (twice). It is not Level B — no local run is — but it catches most of what
 would otherwise only surface after the `workflow_dispatch` round-trip.
 
+**`--changed` skips the eleven Rust-build-and-test lanes (G01-G09b) when they
+cannot be affected**, by the same rule CI's own `changes` job applies to a
+push — reading `.github/workflows/ci.yml`'s own `needs.changes.outputs.rust`
+condition, not a hand-picked subset. Every other check always runs. **A
+release preparation runs the full matrix, not `--changed`**: a preparation
+bumps `Cargo.toml` and refreshes `Cargo.lock` as its own first step, so
+`--changed` would select every lane anyway — running the full matrix removes
+any doubt that it did. A return may cite a `--changed` run whenever it quotes
+the scope line the run printed: for a change that touches the Rust scope,
+`--changed` *is* the complete matrix; for a docs-only change, the scope line
+states exactly what was not run.
+
 ### Step 0: read the advisory lane before the preparation starts
 
 **Read `Security audit` on `main` before writing a single line of the

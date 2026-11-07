@@ -118,6 +118,13 @@ class ComputeChangedScope(unittest.TestCase):
         r = self.run_script(event_name="push", before=self.base, after=after)
         self.assertEqual(r.stdout.strip(), "true")
 
+    def test_a_push_touching_a_non_ascii_path_under_crates_is_true(self) -> None:
+        # git quotes such a path by default (`core.quotePath`); read without
+        # `-z`, the quoted form matches no glob and this push read `false`.
+        after = self.write_commit("crates/x/src/\u00e9.rs", "// hi\n")
+        r = self.run_script(event_name="push", before=self.base, after=after)
+        self.assertEqual(r.stdout.strip(), "true")
+
     # ── D7: fail open ─────────────────────────────────────────────────────
 
     def test_workflow_dispatch_fails_open(self) -> None:

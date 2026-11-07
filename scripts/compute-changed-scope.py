@@ -14,23 +14,24 @@ cannot resolve), a base ref not present in the fetched history, or any `git`
 error. Scoping is an optimisation applied only when the inputs are known
 with certainty; it is never the fallback.
 
-The Rust-scope path list itself is read through `rust_scope.py`, not
-restated here -- the same module `scripts/check-gate-inputs.sh`'s condition
-9 (D8) reads, so there is one copy of "what counts as Rust" rather than two
-that can drift apart.
+The Rust-scope path list, and the match against it, are both read through
+`rust_scope.py`, not restated here -- the same module `scripts/check-gate-
+inputs.sh`'s condition 9 (D8) reads and `scripts/compute-local-changed-
+scope.py` (cycle J stage 7d's local `--changed` chooser) calls too, so
+there is one copy of "what counts as Rust" and one copy of "what touches
+it", not two of either that can drift apart.
 """
 
 from __future__ import annotations
 
 import argparse
-import fnmatch
 import re
 import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from rust_scope import load_rust_scope  # noqa: E402
+from rust_scope import first_matching_path, load_rust_scope  # noqa: E402
 
 ZERO_SHA_RE = re.compile(r"^0+$")
 
@@ -67,7 +68,7 @@ def main(argv: list[str]) -> int:
         fail_open(f"base ref {args.before} is not present in the fetched history")
 
     diff = subprocess.run(
-        ["git", "-C", str(root), "diff", "--name-only", args.before, args.after],
+        ["git", "-C", str(root), "diff", "--name-only", "-z", args.before, args.after],
         capture_output=True,
         text=True,
     )
@@ -79,11 +80,15 @@ def main(argv: list[str]) -> int:
     except (OSError, ValueError) as exc:
         fail_open(f"could not read the declared Rust scope: {exc}")
 
-    changed = [line for line in diff.stdout.splitlines() if line]
-    rust_changed = any(
-        any(fnmatch.fnmatch(path, pattern) for pattern in rust_scope) for path in changed
-    )
-    print("true" if rust_changed else "false")
+    # `-z`: paths verbatim, NUL-terminated. Without it git quotes any path
+    # holding a non-ASCII byte, a double quote, a backslash or a control
+    # character (`core.quotePath`), e.g. crates/a/é.rs becomes
+    # "crates/a/\303\251.rs". No scope glob matches the quoted form, so a
+    # Rust change would read as no Rust change and every scoped lane would
+    # be skipped: the unsafe direction RFC 130 D7 forbids.
+    changed = [path for path in diff.stdout.split("\0") if path]
+    match = first_matching_path(changed, rust_scope)
+    print("true" if match is not None else "false")
     return 0
 
 

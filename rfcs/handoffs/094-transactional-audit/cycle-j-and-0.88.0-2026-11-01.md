@@ -430,7 +430,17 @@ for the case where forgetting is most expensive.
    run in full. *It reverses the script's "no fast subset" rule, which
    came from the architect's own dispatch and from nowhere else.
    The dispatch's §2 says why the defect that rule guarded against stays
-   closed.*
+   closed.* — **LANDED** 2026-11-07. A docs-and-scripts change now checks
+   in about 80 seconds instead of about 21 minutes (36 run, 11 skipped,
+   scope line quoted). Review —
+   `.git-exclude/reviewed/cycle-j-stage7d-local-matrix-changed-mode-2026-11-07.md`.
+   *The review found a defect the stage inherited from CI's own chooser*:
+   git quotes a path holding a non-ASCII byte, a double quote, a backslash
+   or a control character, the quoted form matches no scope glob, and
+   **both** `compute-changed-scope.py` (CI's `changes` job, since RFC 130)
+   and the new local chooser read such a Rust change as "no Rust change".
+   That is the unsafe direction RFC 130 D7 forbids. Fixed in both with
+   `-z`, with a test each that the old reading turns red.
 8. **RFC 142 stage 4** — the preview subcommand.
 9. **RFC 142 stage 5** — the automatic pre-upgrade backup.
 

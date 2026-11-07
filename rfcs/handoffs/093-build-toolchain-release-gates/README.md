@@ -8,7 +8,7 @@ authorization, or override the RFC.
 **Authorization:** [`implementation-start-authorization.md`](./implementation-start-authorization.md),
 reviewed at [`093-implementation-start-authorization-review-2026-07-21.md`](093-implementation-start-authorization-review-2026-07-21.md)
 
-> **Open round, 2026-11-07: `--changed`** —
+> **Landed round, 2026-11-07: `--changed`** —
 > [`local-matrix-changed-mode-2026-11-07.md`](local-matrix-changed-mode-2026-11-07.md),
 > cycle J stage 7d. The local matrix gains the selection CI's `changes`
 > job already applies (RFC 130 D6/D7), from the same `rust_scope.py`, so

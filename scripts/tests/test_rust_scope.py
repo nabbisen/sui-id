@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from rust_scope import SCOPED_LANES, load_rust_scope  # noqa: E402
+from rust_scope import SCOPED_LANES, first_matching_path, load_rust_scope  # noqa: E402
 
 GOOD_SCOPE = '["crates/**", "Cargo.toml", "Cargo.lock", "rust-toolchain*", "scripts/ci-gate.sh", "contracts/gate-inputs.toml", "contracts/workflow-template.toml", ".github/workflows/ci.yml"]'
 
@@ -60,6 +60,34 @@ class RustScope(unittest.TestCase):
     def test_an_unreadable_manifest_raises_oserror(self) -> None:
         with self.assertRaises(OSError):
             load_rust_scope(Path("/nonexistent/gate-inputs.toml"))
+
+
+class FirstMatchingPath(unittest.TestCase):
+    """RFC 130 D1/D3, cycle J stage 7d: the one match rule
+    `compute-changed-scope.py` (CI) and `compute-local-changed-scope.py`
+    (the local `--changed` chooser) both call."""
+
+    SCOPE = ("crates/**", "Cargo.toml", "Cargo.lock")
+
+    def test_no_match_is_none(self) -> None:
+        self.assertIsNone(first_matching_path(["docs/a.md", "README.md"], self.SCOPE))
+
+    def test_a_match_returns_that_path(self) -> None:
+        self.assertEqual(
+            first_matching_path(["docs/a.md", "Cargo.lock"], self.SCOPE), "Cargo.lock"
+        )
+
+    def test_the_first_match_in_order_wins_not_the_first_scope_entry(self) -> None:
+        # "docs/a.md" does not match; "crates/x/lib.rs" is the first path in
+        # the list that does, even though "Cargo.toml" (a later path) also
+        # matches a scope entry listed earlier in SCOPE than "crates/**".
+        self.assertEqual(
+            first_matching_path(["docs/a.md", "crates/x/lib.rs", "Cargo.toml"], self.SCOPE),
+            "crates/x/lib.rs",
+        )
+
+    def test_empty_changed_set_is_none(self) -> None:
+        self.assertIsNone(first_matching_path([], self.SCOPE))
 
 
 if __name__ == "__main__":

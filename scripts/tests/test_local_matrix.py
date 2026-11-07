@@ -176,6 +176,362 @@ class LocalMatrixDerivation(unittest.TestCase):
         )
 
 
+SCOPED_LANE_IDS = ("G01", "G02", "G03", "G04", "G05", "G06", "G07", "G07b", "G08", "G09a", "G09b")
+RUST_SCOPE_PATHS = [
+    "crates/**",
+    "Cargo.toml",
+    "Cargo.lock",
+    "clippy.toml",
+    ".cargo/config.toml",
+    "rust-toolchain*",
+    "scripts/ci-gate.sh",
+    "contracts/gate-inputs.toml",
+    "contracts/workflow-template.toml",
+    ".github/workflows/ci.yml",
+]
+
+
+def _git(root: Path, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, check=True)
+
+
+def _gate_inputs_for_scope(scoped_lanes: tuple[str, ...] = SCOPED_LANE_IDS) -> str:
+    # `[gates]` entries are trivial `true` commands, not real Rust
+    # commands: these fixtures run through `--changed` without `--list`
+    # only to assert the summary line's own arithmetic, never to prove a
+    # real gate's command.
+    lines = ["[gates]"]
+    for lane in (*scoped_lanes, "G10a"):
+        lines.append(f'{lane} = "true"')
+    lines.append("")
+    lines.append("[lane_profiles]")
+    for lane in scoped_lanes:
+        lines.append(f"{lane} = {{ paths = {RUST_SCOPE_PATHS!r} }}")
+    lines.append('G10a = { paths = ["**"] }')
+    return "\n".join(lines) + "\n"
+
+
+def _ci_yml_for_scope(scoped_lanes: tuple[str, ...] = SCOPED_LANE_IDS) -> str:
+    parts = ["jobs:"]
+    for lane in scoped_lanes:
+        parts.append(f"  {lane}:")
+        parts.append("    if: needs.changes.outputs.rust == 'true'")
+        parts.append("    steps:")
+        parts.append(f"      - run: bash scripts/ci-gate.sh {lane}")
+    parts.append("  G10a:")
+    parts.append("    steps:")
+    parts.append("      - run: bash scripts/ci-gate.sh G10a")
+    return "\n".join(parts) + "\n"
+
+
+class LocalMatrixChangedChooser(unittest.TestCase):
+    """RFC 093 cycle J stage 7d, §4: the ten chooser cases, black-box
+    against real throwaway git repositories, driven through `--list
+    --changed` (a seam that needs no cargo). `--base <commit>` is used
+    explicitly in every case except the no-upstream one (7), so that case
+    is the only one depending on the default `@{upstream}` resolution --
+    every other case's own property (the changed-set union, `--no-renames`,
+    the ignored-file exclusion) does not depend on how the base ref itself
+    was found.
+    """
+
+    def _init_repo(self, root: Path, scoped_lanes: tuple[str, ...] = SCOPED_LANE_IDS) -> str:
+        _git(root, "init", "-q", "-b", "main")
+        _git(root, "config", "gc.auto", "0")
+        _git(root, "config", "maintenance.auto", "false")
+        _git(root, "-c", "user.email=t@example.invalid", "-c", "user.name=t", "config", "commit.gpgsign", "false")
+        (root / "contracts").mkdir()
+        (root / "contracts" / "gate-inputs.toml").write_text(
+            _gate_inputs_for_scope(scoped_lanes), encoding="utf-8"
+        )
+        (root / ".github" / "workflows").mkdir(parents=True)
+        (root / ".github" / "workflows" / "ci.yml").write_text(
+            _ci_yml_for_scope(scoped_lanes), encoding="utf-8"
+        )
+        (root / "README.md").write_text("hello\n", encoding="utf-8")
+        (root / ".gitignore").write_text("*.sqlite\n", encoding="utf-8")
+        return self._commit_all(root, "base")
+
+    def _commit_all(self, root: Path, message: str) -> str:
+        _git(root, "add", "-A")
+        _git(root, "-c", "user.email=t@example.invalid", "-c", "user.name=t", "commit", "-q", "-m", message)
+        return _git(root, "rev-parse", "HEAD").stdout.strip()
+
+    def _write(self, root: Path, rel: str, content: str = "x\n") -> Path:
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        return path
+
+    def _run_list_changed(self, root: Path, base: str | None = None) -> subprocess.CompletedProcess:
+        args = ["bash", str(SCRIPT), "--root", str(root), "--list", "--changed"]
+        if base is not None:
+            args += ["--base", base]
+        return subprocess.run(args, capture_output=True, text=True)
+
+    def _parse(self, stdout: str) -> tuple[str | None, list[tuple[str, ...]]]:
+        scope = None
+        entries: list[tuple[str, ...]] = []
+        for line in stdout.splitlines():
+            parts = tuple(line.split("\t"))
+            if parts[0] == "SCOPE":
+                scope = parts[1]
+            else:
+                entries.append(parts)
+        return scope, entries
+
+    def _skipped_gates(self, entries: list[tuple[str, ...]]) -> set[str]:
+        return {v for k1, k2, v in entries if k1 == "SKIP" and k2 == "GATE"}
+
+    def _run_gates(self, entries: list[tuple[str, ...]]) -> set[str]:
+        return {v for k1, k2, v in entries if k1 == "RUN" and k2 == "GATE"}
+
+    # ── 1 ──────────────────────────────────────────────────────────────
+
+    def test_docs_only_change_skips_the_scoped_lanes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = self._init_repo(root)
+            self._write(root, "docs/guide.md")
+            self._commit_all(root, "docs")
+            r = self._run_list_changed(root, base=base)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        scope, entries = self._parse(r.stdout)
+        self.assertEqual(self._skipped_gates(entries), set(SCOPED_LANE_IDS))
+        self.assertIn("G10a", self._run_gates(entries))
+        self.assertIn("no Rust-scope path", scope)
+
+    # ── 2 ──────────────────────────────────────────────────────────────
+
+    def test_a_committed_unpushed_rust_change_skips_nothing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = self._init_repo(root)
+            self._write(root, "crates/x/lib.rs")
+            self._commit_all(root, "rust")
+            r = self._run_list_changed(root, base=base)
+        scope, entries = self._parse(r.stdout)
+        self.assertEqual(self._skipped_gates(entries), set())
+        self.assertIn("Rust scope touched", scope)
+
+    # ── 3 ──────────────────────────────────────────────────────────────
+
+    def test_a_staged_only_rust_change_skips_nothing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = self._init_repo(root)
+            self._write(root, "crates/x/lib.rs")
+            _git(root, "add", "crates/x/lib.rs")  # staged, not committed
+            r = self._run_list_changed(root, base=base)
+        _, entries = self._parse(r.stdout)
+        self.assertEqual(self._skipped_gates(entries), set())
+
+    def test_an_unstaged_only_rust_change_skips_nothing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write(root, "crates/x/lib.rs", "original\n")
+            base = self._init_repo(root)
+            # Modify a tracked file without staging the change.
+            self._write(root, "crates/x/lib.rs", "modified\n")
+            r = self._run_list_changed(root, base=base)
+        _, entries = self._parse(r.stdout)
+        self.assertEqual(self._skipped_gates(entries), set())
+
+    # ── 4 ──────────────────────────────────────────────────────────────
+
+    def test_an_untracked_new_rust_file_skips_nothing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = self._init_repo(root)
+            self._write(root, "crates/x/new_untracked.rs")  # never `git add`ed
+            r = self._run_list_changed(root, base=base)
+        _, entries = self._parse(r.stdout)
+        self.assertEqual(self._skipped_gates(entries), set())
+
+    def test_a_non_ascii_rust_path_skips_nothing_committed_or_untracked(self) -> None:
+        # git quotes such a path by default (`core.quotePath`); read without
+        # `-z`, the quoted form matched no glob and both listings missed it.
+        for committed in (True, False):
+            with self.subTest(committed=committed), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                base = self._init_repo(root)
+                self._write(root, "crates/x/\u00e9.rs")
+                if committed:
+                    self._commit_all(root, "non-ascii")
+                r = self._run_list_changed(root, base=base)
+                _, entries = self._parse(r.stdout)
+                self.assertEqual(self._skipped_gates(entries), set())
+
+    # ── 5 ──────────────────────────────────────────────────────────────
+
+    def test_a_deleted_rust_file_skips_nothing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write(root, "crates/x/lib.rs")
+            base = self._init_repo(root)
+            _git(root, "rm", "-q", "crates/x/lib.rs")
+            self._commit_all(root, "delete")
+            r = self._run_list_changed(root, base=base)
+        _, entries = self._parse(r.stdout)
+        self.assertEqual(self._skipped_gates(entries), set())
+
+    def test_a_rename_out_of_crates_skips_nothing(self) -> None:
+        # The property `--no-renames` exists for: without it, `git diff`
+        # would report only the new path (docs/lib.rs), which matches
+        # nothing in the Rust scope, making the file leaving `crates/`
+        # invisible to this check.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write(root, "crates/x/lib.rs")
+            base = self._init_repo(root)
+            (root / "docs").mkdir(exist_ok=True)
+            _git(root, "mv", "crates/x/lib.rs", "docs/lib.rs")
+            self._commit_all(root, "move out of crates")
+            r = self._run_list_changed(root, base=base)
+        _, entries = self._parse(r.stdout)
+        self.assertEqual(self._skipped_gates(entries), set())
+
+    # ── 6 ──────────────────────────────────────────────────────────────
+
+    def test_cargo_lock_alone_skips_nothing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = self._init_repo(root)
+            self._write(root, "Cargo.lock")
+            self._commit_all(root, "lock")
+            r = self._run_list_changed(root, base=base)
+        _, entries = self._parse(r.stdout)
+        self.assertEqual(self._skipped_gates(entries), set())
+
+    def test_cargo_config_toml_alone_skips_nothing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = self._init_repo(root)
+            self._write(root, ".cargo/config.toml")
+            self._commit_all(root, "cargo config")
+            r = self._run_list_changed(root, base=base)
+        _, entries = self._parse(r.stdout)
+        self.assertEqual(self._skipped_gates(entries), set())
+
+    def test_ci_yml_alone_skips_nothing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = self._init_repo(root)
+            # Touch ci.yml itself -- still must count as a Rust-scope path.
+            (root / ".github" / "workflows" / "ci.yml").write_text(
+                _ci_yml_for_scope() + "\n# touched\n", encoding="utf-8"
+            )
+            self._commit_all(root, "ci.yml")
+            r = self._run_list_changed(root, base=base)
+        _, entries = self._parse(r.stdout)
+        self.assertEqual(self._skipped_gates(entries), set())
+
+    # ── 7 ──────────────────────────────────────────────────────────────
+
+    def test_no_upstream_and_no_base_runs_the_complete_matrix(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_repo(root)
+            self._write(root, "docs/guide.md")
+            self._commit_all(root, "docs")
+            r = self._run_list_changed(root, base=None)  # no --base, no upstream
+        self.assertEqual(r.returncode, 0, r.stderr)
+        scope, entries = self._parse(r.stdout)
+        self.assertEqual(self._skipped_gates(entries), set())
+        self.assertIn("could not determine the changed set", scope)
+
+    # ── 8 ──────────────────────────────────────────────────────────────
+
+    def test_an_unresolvable_base_is_a_usage_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_repo(root)
+            r = self._run_list_changed(root, base="does-not-exist-anywhere")
+        self.assertEqual(r.returncode, 2)
+
+    # ── 9 ──────────────────────────────────────────────────────────────
+
+    def test_a_ci_yml_scoped_set_mismatch_runs_the_complete_matrix(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            # ci.yml conditions only 10 of the 11 canonical lanes -- a
+            # drift `rust_scope.SCOPED_LANES` does not know about.
+            drifted = SCOPED_LANE_IDS[:-1]
+            base = self._init_repo(root, scoped_lanes=drifted)
+            self._write(root, "docs/guide.md")
+            self._commit_all(root, "docs")
+            r = self._run_list_changed(root, base=base)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        scope, entries = self._parse(r.stdout)
+        self.assertEqual(self._skipped_gates(entries), set())
+        self.assertIn("scoped-lane sets disagree", scope)
+        self.assertIn("G09b", scope)  # the dropped lane, named
+
+    # ── 10 ─────────────────────────────────────────────────────────────
+
+    def test_an_ignored_sqlite_file_under_crates_skips_the_scoped_lanes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = self._init_repo(root)
+            # Never committed, never added, and ignored -- CI never sees
+            # it either (`git ls-files --others --exclude-standard`
+            # excludes it the same way).
+            self._write(root, "crates/x/dev.sqlite")
+            r = self._run_list_changed(root, base=base)
+        scope, entries = self._parse(r.stdout)
+        self.assertEqual(
+            self._skipped_gates(entries),
+            set(SCOPED_LANE_IDS),
+            "an ignored file under crates/ must not be seen as a Rust-scope change",
+        )
+
+    # ── §4's own output assertions ───────────────────────────────────────
+
+    def test_changed_summary_counts_add_up_and_skipped_is_counted_apart(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = self._init_repo(root)
+            self._write(root, "docs/guide.md")
+            self._commit_all(root, "docs")
+            result = subprocess.run(
+                ["bash", str(SCRIPT), "--root", str(root), "--changed", "--base", base],
+                capture_output=True,
+                text=True,
+            )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        summary = next(
+            line for line in result.stdout.splitlines() if line.startswith("local-matrix: ") and "check(s):" in line
+        )
+        m = re.match(
+            r"local-matrix: (\d+) check\(s\): (\d+) run, (\d+) passed, (\d+) failed, (\d+) skipped",
+            summary,
+        )
+        self.assertIsNotNone(m, summary)
+        total, run, passed, failed, skipped = (int(x) for x in m.groups())
+        self.assertEqual(total, run + skipped, summary)
+        self.assertEqual(run, passed + failed, summary)
+        self.assertEqual(skipped, len(SCOPED_LANE_IDS), summary)
+        self.assertIn("not verified green", summary)
+
+    def test_default_mode_summary_format_is_unchanged(self) -> None:
+        # Deliberately not `_init_repo` (which builds the 12-lane chooser
+        # fixture): the point of this test is the default, non-`--changed`
+        # summary line's own format, so it reuses the minimal single-check
+        # fixture `LocalMatrixExecution` already relies on, not a git
+        # repository at all -- the default path never calls the chooser.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_gate_inputs(root)
+            _write_ci_yml(root, '      - name: x\n        run: echo "command=true"\n')
+            result = subprocess.run(
+                ["bash", str(SCRIPT), "--root", str(root)],
+                capture_output=True,
+                text=True,
+            )
+        self.assertIn("local-matrix: 1 check(s) run, 1 passed, 0 failed.", result.stdout)
+        self.assertNotIn("skipped", result.stdout)
+
+
 class LocalMatrixExecution(unittest.TestCase):
     """End-to-end: the script actually runs what it derives, applies the
     [gates] command and [lane_profiles] tz for a gate id, and respects the
