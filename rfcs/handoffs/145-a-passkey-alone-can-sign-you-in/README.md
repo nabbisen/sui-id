@@ -14,12 +14,17 @@ feature freeze**. The freeze admits four kinds of work, and this is none
 of them. The recommendation is to schedule the build after RFC 094 M2b
 closes, with that exception granted explicitly.
 
-**Security review is Required.** Before the RFC can move to `accepted/`,
-an independent design review must exist in this directory and be cited
-from the RFC's `Independent design review` field. G11 (conditions 9 and
-9c) enforces this. The architect wrote this design and cannot be that
-reviewer, unless the owner invokes `ROADMAP.md` §S1c's exception, as he
-did for RFC 143 and RFC 144.
+**`@nabbisen`: *"RFC 145 is almost accepted."*** He asked the architect to
+review it against his fundamental philosophy, which is `ROADMAP.md` §S1c's
+owner-invoked exception, as for RFC 143 and RFC 144. The record is
+[`design-review-2026-11-07.md`](design-review-2026-11-07.md). It re-measured
+every premise, ran the two that rested on reading the library, and made
+thirteen amendments in the same change. No decision is reversed and no open
+question changes. The most serious finding: the ceremony was not bound to
+the browser that started it.
+
+**The RFC stays in `proposed/` until he reads the record and the amended
+RFC.** "Almost accepted" is left as exactly that.
 
 ## The stages, once accepted
 
