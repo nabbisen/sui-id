@@ -459,7 +459,17 @@ for the case where forgetting is most expensive.
    it). It also moved `admin rotate-key`'s flags out of `setup`'s `--help`
    entry. Review —
    `.git-exclude/reviewed/cycle-j-stage8-rfc142-stage4-preview-upgrade-2026-11-07.md`.
-9. **RFC 142 stage 5** — the automatic pre-upgrade backup.
+9. **RFC 142 stage 5** — the automatic pre-upgrade backup. **DISPATCHED**
+   2026-11-08 —
+   `rfcs/handoffs/142-upgrading-is-the-least-tested-thing-we-do/stage5-the-backup-before-the-migration-2026-11-08.md`.
+   Every `database::open` migrates: the server, and every `admin`
+   subcommand and `setup`. So the policy becomes a required parameter of
+   that wrapper, and all eleven callers must choose. Measured before
+   dispatch: `VACUUM INTO` works from a read-only source, includes WAL-only
+   rows, and fills a pre-created `0600` file, which stays `0600`. Free space
+   comes from `rustix` (already locked, since `unsafe` is forbidden). A
+   shortfall is a refusal with exit 1, not 65. `preview-upgrade` predicts
+   the decision. The last stage of RFC 142; its closure stays the owner's.
 
 **Then M2b closes** on the adversarial evidence package and your
 acceptance — which, per §B, the architect cannot give for its own work.
