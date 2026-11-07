@@ -414,6 +414,9 @@ for the case where forgetting is most expensive.
    **DISPATCHED** 2026-11-07 —
    `rfcs/handoffs/094-transactional-audit/release-0.87.2-preparation-2026-11-07.md`.
    Step 0 green (`Security audit` on `8df3093`, run `42356328349`).
+   — **RELEASED AND PUBLISHED** 2026-11-07: tag `0.87.2` at `623ece8`, Level B
+   `42363728891` (28/28, 0 skipped), `Security audit` green on the same commit,
+   publish run `42366830929`, six crates confirmed on crates.io.
 7d. **The local matrix learns what CI already knows: `--changed`.**
    **DISPATCHED** 2026-11-07 —
    `rfcs/handoffs/093-build-toolchain-release-gates/local-matrix-changed-mode-2026-11-07.md`.
