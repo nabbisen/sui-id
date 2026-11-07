@@ -2,12 +2,12 @@
 
 **Status.** Accepted
 **Accepted on.** 2026-11-07
-**Approved by.** `@nabbisen`, 2026-11-07: *"RFC 145 is accepted."* This followed the [design review record](../handoffs/145-a-passkey-alone-can-sign-you-in/design-review-2026-11-07.md) and its thirteen amendments. **His words accept the design. They do not, by themselves, rule §Q1–§Q3**, which stay open with the RFC's recommendations, to be settled before stage 2 is dispatched. **§Q4 needs no ruling yet**, because its recommendation is exactly this sequence: accept the design now, and grant the feature-freeze exception when the build is scheduled.
+**Approved by.** `@nabbisen`, 2026-11-07: *"RFC 145 is accepted."* This followed the [design review record](../handoffs/145-a-passkey-alone-can-sign-you-in/design-review-2026-11-07.md) and its thirteen amendments. **§Q1–§Q3 settled as recommended**, the same day. Asked whether the acceptance meant the recommendations stand, he answered *"Yes. Accepted."* **§Q4 needs no ruling yet**, because its recommendation is exactly this sequence: accept the design now, and grant the feature-freeze exception when the build is scheduled.
 **Security review.** Required
 **Design prerequisites.** None.
-**Implementation prerequisites.** RFC 094 M2b closed (`0.88.0`); `@nabbisen`'s explicit feature-freeze exception (§Q4); §Q1–§Q3 settled. Until all three hold, nothing here is dispatched.
+**Implementation prerequisites.** RFC 094 M2b closed (`0.88.0`), and `@nabbisen`'s explicit feature-freeze exception (§Q4). Until both hold, nothing here is dispatched.
 **Closure prerequisites.** With `[security] passkey_sign_in_without_password` off, every sign-in behaves byte-for-byte as before (the login page, the passkey page, the claims), proven by tests that run with it off, and the only intended difference anywhere, the registration options' `residentKey: "preferred"` (§D8), is pinned by its own test; with it on, a passkey sign-in is one sealed Class-A command whose ceremony consumption, session, failed-sign-in counter reset, step-up stamp and `auth.login.success` row commit together or not at all; a ceremony completes only from the browser that started it; every refusal on the passkey path is the same response, whatever its cause; an account whose source is not `local` cannot complete it; an unauthenticated start writes nothing that outlives its expiry, and is bounded by the sign-in rate limiter; the session's `acr`/`amr` are the values §D6 settles, asserted end to end in an ID token; the login page offers the passkey button only when the switch is on, with its text in all three locales; and the passkey page tells the user, in plain words, that a passkey can sign them in by itself.
-**Tracks.** Authentication. §Q carries four open questions for the owner, the last of them the feature freeze.
+**Tracks.** Authentication. §Q1–§Q3 were settled as recommended on 2026-11-07; §Q4, the feature freeze, is answered when the build is scheduled.
 **Touches.** `Cargo.toml` (one `webauthn-rs` feature, and a direct `webauthn-rs-proto` dependency at the version `webauthn-rs` resolves), `crates/sui-id-core/src/authn/webauthn.rs`, `crates/sui-id-core/src/authn/session.rs`, `crates/sui-id-shared/src/auth_method.rs`, `crates/sui-id-store/src/commands.rs`, one migration, `crates/sui-id/src/http/handlers/admin/webauthn.rs`, `crates/sui-id/src/http/router.rs`, `crates/sui-id/static/` (one script), `crates/sui-id-web/src/pages/auth.rs`, the passkey page, `crates/sui-id-i18n`, `contracts/write-commands.toml`, `contracts/audit-coverage-matrix.md`, `docs/src/reference/configuration.md`, `docs/src/reference/audit-events.md`, `docs/src/reference/oidc-api.md`, `docs/src/guides/operators.md`.
 **Independent design review.** [Design review record, 2026-11-07](../handoffs/145-a-passkey-alone-can-sign-you-in/design-review-2026-11-07.md). **By the architect, at `@nabbisen`'s request** — *"Review it carefully by yourself with my fundamental philosophy"* — `ROADMAP.md` §S1c's owner-invoked exception, and the record says he asked. **The architect wrote this RFC and is not independent of it**; the review re-measured every premise and ran the two that rested on reading the library, and its most serious finding is that the ceremony was not bound to the browser that started it.
 **Accountable owner and approver.** `@nabbisen`.
@@ -392,16 +392,16 @@ privileges.
 
 ## Open questions (§Q)
 
-**Q1 — the claims (D6).** Recommended: `acr "3"`, `amr ["hwk","mfa"]`. The
+**Q1 — the claims (D6). Settled 2026-11-07, as recommended.** Recommended: `acr "3"`, `amr ["hwk","mfa"]`. The
 alternative, `["hwk"]` alone, is defensible on the old comment's reading,
 but makes MFA-requiring relying parties reject a sign-in stronger than one
 they accept. This is an external contract, so it is your call.
 
-**Q2 — the default of the switch (D8).** Recommended: **off**, so that no
+**Q2 — the default of the switch (D8). Settled 2026-11-07, as recommended.** Recommended: **off**, so that no
 upgrade changes what a user's enrolled passkey can do. Revisit after a
 release has shipped with it on somewhere real.
 
-**Q3 — a locked account.** The password lockout is set by failed password
+**Q3 — a locked account. Settled 2026-11-07, as recommended.** The password lockout is set by failed password
 guesses. Recommended: **a locked account is refused on this path too**,
 because "locked" should mean one thing everywhere, and L01 already re-reads
 "active and unlocked". A successful passkey sign-in then resets the counter

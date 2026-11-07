@@ -2,10 +2,11 @@
 
 **RFC.** [`../../accepted/145-a-passkey-alone-can-sign-you-in.md`](../../accepted/145-a-passkey-alone-can-sign-you-in.md)
 **Status.** **Accepted 2026-11-07** — `@nabbisen`: *"RFC 145 is accepted."*
-**Not scheduled.** The build needs three things, none of them met yet: RFC 094
-M2b closed (`0.88.0`); his explicit feature-freeze exception (§Q4, which
-the acceptance does not grant and which is not the architect's to infer);
-and §Q1–§Q3 settled. Nothing here is dispatched until all three hold.
+**§Q1–§Q3 settled as recommended**, the same day: *"Yes. Accepted."*
+**Not scheduled.** The build needs two things, neither met yet: RFC 094 M2b
+closed (`0.88.0`), and his explicit feature-freeze exception (§Q4, which
+the acceptance does not grant and which is not the architect's to infer).
+Nothing here is dispatched until both hold.
 
 ## Where it stands, 2026-11-07
 
