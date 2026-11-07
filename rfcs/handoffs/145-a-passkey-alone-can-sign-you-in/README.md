@@ -1,8 +1,11 @@
 # RFC 145 — handoff
 
-**RFC.** [`../../proposed/145-a-passkey-alone-can-sign-you-in.md`](../../proposed/145-a-passkey-alone-can-sign-you-in.md)
-**Status.** **Proposed — build-prohibited** under RFC 000, which bars
-implementation before acceptance. Nothing here is dispatched.
+**RFC.** [`../../accepted/145-a-passkey-alone-can-sign-you-in.md`](../../accepted/145-a-passkey-alone-can-sign-you-in.md)
+**Status.** **Accepted 2026-11-07** — `@nabbisen`: *"RFC 145 is accepted."*
+**Not scheduled.** The build needs three things, none of them met yet: RFC 094
+M2b closed (`0.88.0`); his explicit feature-freeze exception (§Q4, which
+the acceptance does not grant and which is not the architect's to infer);
+and §Q1–§Q3 settled. Nothing here is dispatched until all three hold.
 
 ## Where it stands, 2026-11-07
 
@@ -23,8 +26,7 @@ thirteen amendments in the same change. No decision is reversed and no open
 question changes. The most serious finding: the ceremony was not bound to
 the browser that started it.
 
-**The RFC stays in `proposed/` until he reads the record and the amended
-RFC.** "Almost accepted" is left as exactly that.
+He then accepted it, the same day.
 
 ## The stages, once accepted
 
