@@ -441,7 +441,17 @@ for the case where forgetting is most expensive.
    and the new local chooser read such a Rust change as "no Rust change".
    That is the unsafe direction RFC 130 D7 forbids. Fixed in both with
    `-z`, with a test each that the old reading turns red.
-8. **RFC 142 stage 4** — the preview subcommand.
+8. **RFC 142 stage 4** — the preview subcommand. **DISPATCHED** 2026-11-07 —
+   `rfcs/handoffs/142-upgrading-is-the-least-tested-thing-we-do/stage4-preview-the-upgrade-2026-11-07.md`.
+   `sui-id preview-upgrade`: one definition of "pending" shared with the
+   runner, migrations given their file names, and no key needed. Two things
+   were measured before dispatch. A read-only open of a cleanly closed WAL
+   database **leaves `-shm`/`-wal` files behind**, so a root-run preview
+   would leave root-owned files beside the service's database; the dispatch
+   prescribes `immutable=1` when no `-wal` exists, after a re-measure on the
+   bundled SQLite 3.53.2. And the subcommand reference table it joins is
+   wrong in several rows, including `admin rotate-key` described as a
+   signing-key rotation; the dispatch corrects it.
 9. **RFC 142 stage 5** — the automatic pre-upgrade backup.
 
 **Then M2b closes** on the adversarial evidence package and your
