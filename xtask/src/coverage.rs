@@ -228,60 +228,16 @@ pub fn source_event_names(root: &Path) -> BTreeSet<String> {
     finder.names
 }
 
-/// Cells of one markdown table line, honouring a `|` inside inline code or
-/// escaped as `\|` -- the same splitting
-/// `scripts/check-audit-matrix-columns.py`'s `split_row` does, so the two
-/// tools agree on what counts as a cell.
-fn split_row(line: &str) -> Vec<String> {
-    let mut s = line.trim();
-    if let Some(rest) = s.strip_prefix('|') {
-        s = rest;
-    }
-    if s.ends_with('|') && !s.ends_with("\\|") {
-        s = &s[..s.len() - 1];
-    }
-    let chars: Vec<char> = s.chars().collect();
-    let mut cells = Vec::new();
-    let mut cur = String::new();
-    let mut in_code = false;
-    let mut i = 0;
-    while i < chars.len() {
-        let c = chars[i];
-        if c == '\\' && chars.get(i + 1) == Some(&'|') {
-            cur.push('|');
-            i += 2;
-            continue;
-        }
-        if c == '`' {
-            in_code = !in_code;
-        }
-        if c == '|' && !in_code {
-            cells.push(cur.trim().to_string());
-            cur.clear();
-        } else {
-            cur.push(c);
-        }
-        i += 1;
-    }
-    cells.push(cur.trim().to_string());
-    cells
-}
-
-/// A markdown table rule line (`|---|---|`, optionally with `:` alignment
-/// markers): every cell is three-or-more dashes, optionally colon-bounded.
-#[allow(clippy::expect_used)]
-fn is_separator(cells: &[String]) -> bool {
-    let re = regex::Regex::new(r"^:?-{3,}:?$").expect("fixed pattern");
-    !cells.is_empty() && cells.iter().all(|c| re.is_match(c))
-}
-
-const EVENT_CELL: &str = r"^`([a-z0-9_]+(?:\.[a-z0-9_]+)+)`$";
-
 /// Every event name in the matrix's **`Event name` column** -- the same
 /// keying `scripts/check-audit-matrix-columns.py`'s `read_matrix` uses, not
-/// every backticked `word.word` anywhere in the file.
+/// every backticked `word.word` anywhere in the file. Reuses
+/// `matrix_table::read_matrix`, stage 7c's shared reader (built for the
+/// column check, which needs the same rows' full cell map); this function
+/// now only needs each row's event name and discards the rest, and
+/// discards `read_matrix`'s schema failures too -- those are the column
+/// check's concern (`columns.rs`), not coverage's.
 ///
-/// G13's own extraction (and this check's first version) took any
+/// G13's own extraction (and this check's first version, stage 7) took any
 /// backtick-quoted name, which also catches stray matches like `` `db.rs` ``
 /// in prose; G13 narrows that with a namespace filter derived from the
 /// source, but the filter cuts both ways -- a matrix row in a namespace the
@@ -293,42 +249,11 @@ const EVENT_CELL: &str = r"^`([a-z0-9_]+(?:\.[a-z0-9_]+)+)`$";
 /// (a table cell cannot be mistaken for a prose mention) and the blind spot
 /// with it -- there is no longer a filter to have a blind spot.
 pub fn matrix_event_names(matrix_text: &str) -> BTreeSet<String> {
-    #[allow(clippy::expect_used)]
-    let event_cell = regex::Regex::new(EVENT_CELL).expect("fixed pattern");
-    let lines: Vec<&str> = matrix_text.lines().collect();
-    let mut names = BTreeSet::new();
-    let mut header: Option<Vec<String>> = None;
-    let mut in_fence = false;
-    for (idx, line) in lines.iter().enumerate() {
-        if line.trim_start().starts_with("```") {
-            in_fence = !in_fence;
-            header = None;
-            continue;
-        }
-        if in_fence || !line.trim_start().starts_with('|') {
-            header = None;
-            continue;
-        }
-        let cells = split_row(line);
-        if header.is_none() {
-            // The first table line is the header; the next must be the rule.
-            let next = lines.get(idx + 1).map(|l| split_row(l)).unwrap_or_default();
-            if is_separator(&next) {
-                header = Some(cells.iter().map(|c| c.to_lowercase()).collect());
-            }
-            continue;
-        }
-        if is_separator(&cells) {
-            continue;
-        }
-        if header.as_ref().and_then(|h| h.first()).map(String::as_str) == Some("event name")
-            && let Some(first) = cells.first()
-            && let Some(m) = event_cell.captures(first)
-        {
-            names.insert(m[1].to_string());
-        }
-    }
-    names
+    crate::matrix_table::read_matrix(matrix_text)
+        .0
+        .into_iter()
+        .map(|row| row.event)
+        .collect()
 }
 
 #[derive(Default)]

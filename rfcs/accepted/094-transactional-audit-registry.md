@@ -919,7 +919,7 @@ table so one parser reads both.
 
 | ID | Toolchain | Features | Blocking command / assertion |
 |---|---|---|---|
-| G13 | Python 3.14 | n/a | `bash scripts/check-audit-matrix.sh` |
+| G13 | n/a | n/a | `bash scripts/check-audit-matrix.sh` |
 | G20 | stable | default | `rm -f target/rfc094-rollback-coverage.txt` and `cargo +stable test -p sui-id-store --lib --locked` and `bash scripts/check-m2a-rollback-coverage.sh --root .` |
 | G23 | stable | n/a | `cargo +stable xtask audit-structure --locked --policy contracts/write-authority.toml --commands contracts/write-commands.toml --matrix contracts/audit-coverage-matrix.md` |
 
@@ -938,6 +938,18 @@ is now the authoritative coverage control at M2b (`:946-948`), not
 two endings in `:946-948`: retiring it is an amendment, not this stage's to
 make. It now diagnoses vocabulary drift only; it is not the coverage
 authority.*
+
+*Amended 2026-11-07 (cycle J stage 7c). `audit-structure` gained a fourth
+check: the `class`/`actor`/`step_up` column check RFC 116 stage 2 landed as
+G13's second step (`scripts/check-audit-matrix-columns.py`, deleted by this
+change), read from the same `EventDescriptor`/`MustAttemptDescriptor`
+statics `syn` already parses rather than from table-row text. G13's
+command and toolchain both change here: `scripts/check-audit-matrix.sh` no
+longer shells out to Python, so this row's Toolchain cell reverts to `n/a`
+and the lane installs no toolchain of its own again. G13 remains
+registered for the string-literal coverage comparison alone; its own
+retirement is still `@nabbisen`'s amendment to make, unchanged by this
+round.*
 
 *Registered `1ec5dad`, 2026-09-12 — the first time this script ran in CI. The
 desync fixture RFC 085 promised is in the A3.2 set, both directions pinned by

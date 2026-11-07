@@ -593,11 +593,18 @@ of **event-name strings** instead:
 1. Every event name in this matrix exists as a string literal in the codebase.
 2. Every audit-namespaced string literal in the codebase has a row in this matrix.
 
-A mismatch between those two sets fails G13's lane too. **Since 2026-09-25 (RFC 116
-stage 2) it also runs `scripts/check-audit-matrix-columns.py`**, which reads this
-file's *table rows* (the string comparison above takes every backticked name from
-anywhere in the file, so a whole row could be deleted while its name survived in
-prose) and holds three things to the sealed descriptors in `crates/`:
+A mismatch between those two sets fails G13's lane too.
+
+**G23 also reads this file's `class`, `actor` and `step_up` columns**, not only
+the Event name one. From 2026-09-25 (RFC 116 stage 2) to 2026-11-07 (cycle J
+stage 7c) this was G13's own second step, `scripts/check-audit-matrix-columns.py`
+-- reading the matrix's *table rows* (G13's own string comparison above takes
+every backticked name from anywhere in the file, so a whole row could be
+deleted while its name survived in prose) and holding three things to the
+sealed descriptors in `crates/`. Stage 7c moved it onto `cargo xtask
+audit-structure`, reading the same three things from the typed
+`EventDescriptor`/`MustAttemptDescriptor` statics with `syn` instead of from
+table-row text, and deleted the script:
 
 - the **Class** column, both ways: a row claiming Class A names an event a sealed
   descriptor of class `Atomic` carries, a row claiming Class B names none, and
@@ -613,7 +620,7 @@ not sealed has no descriptor, so its Actor cell is not checked either. A table
 whose header does not start with `Event name` may not hold event rows at all, so a
 new table shape cannot drop its rows out of the check.
 
-Together that is the whole of what the gate checks.
+Together that is the whole of what the two gates check between them.
 
 **What it therefore catches:** a newly introduced audit-namespaced event-name
 literal with no matrix row, or a matrix row naming an event no longer present in

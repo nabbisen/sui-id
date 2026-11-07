@@ -177,7 +177,7 @@ G10a = { title = "mdBook build ({rust_stable} / mdBook {mdbook})", setup = "rust
 G10b = { title = "markdown links (Python {python})", setup = "python", paths = ["**"] }
 G11 = { title = "RFC integrity (Python {python})", setup = "python", paths = ["**"] }
 G12 = { title = "UI invariants v1", setup = "none", bash = true, paths = ["**"] }
-G13 = { title = "audit coverage matrix (interim, RFC 094)", setup = "python", paths = ["**"] }
+G13 = { title = "audit coverage matrix (interim, RFC 094)", setup = "none", paths = ["**"] }
 G14 = { title = "markdown links: handoffs and roadmap (Python {python})", setup = "python", paths = ["**"] }
 G15 = { title = "documentation authority (Python {python})", setup = "python", paths = ["**"] }
 G16 = { title = "owner attributions (Python {python})", setup = "python", fetch_depth = 0, paths = ["**"] }

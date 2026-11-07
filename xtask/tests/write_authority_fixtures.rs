@@ -13,6 +13,7 @@ const COMMANDS_RS: &str = r#"static A01_DONE: EventDescriptor = EventDescriptor 
     kind: AuditEventKind::Thing,
     name: "thing.done",
     class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
     attributes: &[],
 };
 
@@ -57,10 +58,13 @@ impl Fixture {
         // RFC 094 cycle J stage 7: `audit-structure` now also runs the
         // coverage check, which needs a matrix file to read -- one row,
         // matching this fixture's one real event, so the write-authority
-        // cases above stay the only thing under test here.
+        // cases above stay the only thing under test here. Stage 7c adds
+        // the columns check, which also needs an Actor cell matching the
+        // descriptor's `ActorRequirement::Required` above.
         f.write(
             "contracts/audit-coverage-matrix.md",
-            "# Matrix\n\n| Event name | Class |\n|---|---|\n| `thing.done` | A |\n",
+            "# Matrix\n\n| Event name | Actor | Class |\n|---|---|---|\n\
+             | `thing.done` | admin user id | A |\n",
         );
         f
     }

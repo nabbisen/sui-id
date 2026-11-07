@@ -393,7 +393,20 @@ for the case where forgetting is most expensive.
    AST… nothing here can see a type"* — the defect RFC 094 exists to
    end. The descriptor side moves to `syn`; the matrix-cell side stays
    text, which is correct because a cell is text. G23's command is
-   unchanged, so no A3.4 byte-match churn.
+   unchanged, so no A3.4 byte-match churn. — **LANDED** 2026-11-07;
+   the check fires on the real matrix (a Class `A`→`B` and an Actor
+   `—`→`admin user id` mutation of K07's row each fail by name), and the
+   local matrix moves 48 → 47 because exactly one check — the deleted
+   Python self-test step — left it. Review —
+   `.git-exclude/reviewed/cycle-j-stage7c-the-column-check-moves-2026-11-07.md`.
+   *Two corrections to the architect: the `audit-desync` fixture trap the
+   dispatch warned of did not exist (its matrix has no Class or Actor
+   column, so the Python step never ran on it), and stage 7's review had
+   accepted a `CARGO_TARGET_DIR` explanation contradicting the
+   architect's own stage 6b record. Process consequence:
+   `.git-exclude/tmp/clones/` is the wrong place for a clone that builds
+   the workspace, and `/tmp` is too small; a sibling of the tree on the
+   main disk works.*
 8. **RFC 142 stage 4** — the preview subcommand.
 9. **RFC 142 stage 5** — the automatic pre-upgrade backup.
 

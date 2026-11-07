@@ -661,9 +661,9 @@ pub fn fix_text(text: &str, code: &BTreeMap<String, DeclaredCommand>) -> String 
 pub struct Outcome {
     pub failures: Vec<String>,
     pub summary: Option<String>,
-    /// Every declared command found, for a caller that wants to report
-    /// on it (e.g. a future `--list` mode); unused by `main.rs` today.
-    #[allow(dead_code)]
+    /// Every declared command found. RFC 094 cycle J stage 7c reuses this
+    /// to derive which `EventDescriptor` statics a real command reaches,
+    /// rather than re-deriving reachability a second way in `columns.rs`.
     pub code: BTreeMap<String, DeclaredCommand>,
 }
 

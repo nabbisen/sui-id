@@ -64,7 +64,7 @@ fn collect_use_tree(prefix: &str, tree: &syn::UseTree, out: &mut Vec<String>) {
     }
 }
 
-fn line_of(span: proc_macro2::Span) -> usize {
+pub(crate) fn line_of(span: proc_macro2::Span) -> usize {
     span.start().line
 }
 

@@ -14,6 +14,7 @@ const COMMANDS_RS: &str = r#"static A01_DONE: EventDescriptor = EventDescriptor 
     kind: AuditEventKind::Thing,
     name: "thing.done",
     class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
     attributes: &[],
 };
 
@@ -43,7 +44,7 @@ event = ["thing.done"]
 descriptor = ["A01_DONE"]
 "#;
 
-const MATRIX_MD: &str = "# Matrix\n\n| Event name | Class |\n|---|---|\n| `thing.done` | A |\n";
+const MATRIX_MD: &str = "# Matrix\n\n| Event name | Actor | Class |\n|---|---|---|\n| `thing.done` | admin user id | A |\n";
 
 struct Fixture {
     dir: tempfile::TempDir,
@@ -119,7 +120,8 @@ fn forward_a_matrix_name_absent_from_source_is_caught() {
     let f = Fixture::new();
     f.write(
         "contracts/audit-coverage-matrix.md",
-        "# Matrix\n\n| Event name | Class |\n|---|---|\n| `thing.done` | A |\n| `thing.ghost` | A |\n",
+        "# Matrix\n\n| Event name | Actor | Class |\n|---|---|---|\n\
+         | `thing.done` | admin user id | A |\n| `thing.ghost` | admin user id | A |\n",
     );
     let out = f.run_gate();
     assert_eq!(out.status.code(), Some(1), "{}", stderr(&out));
@@ -159,7 +161,8 @@ fn forward_a_matrix_name_in_a_namespace_the_source_never_declares_is_still_caugh
     let f = Fixture::new();
     f.write(
         "contracts/audit-coverage-matrix.md",
-        "# Matrix\n\n| Event name | Class |\n|---|---|\n| `thing.done` | A |\n| `ghost.probe.forward` | A |\n",
+        "# Matrix\n\n| Event name | Actor | Class |\n|---|---|---|\n\
+         | `thing.done` | admin user id | A |\n| `ghost.probe.forward` | admin user id | A |\n",
     );
     let out = f.run_gate();
     assert_eq!(out.status.code(), Some(1), "{}", stderr(&out));
@@ -168,18 +171,40 @@ fn forward_a_matrix_name_in_a_namespace_the_source_never_declares_is_still_caugh
 }
 
 #[test]
-fn a_backticked_name_shape_outside_the_event_name_column_is_not_a_false_positive() {
+fn a_backticked_name_shape_in_prose_is_not_a_false_positive() {
     // Column-keyed extraction's own obligation, now that it replaces the
     // namespace filter as the thing that keeps prose out of the name set:
-    // a backticked, name-shaped string under a different header, and one
-    // in running prose, must not become a spurious matrix entry.
+    // a backticked, name-shaped string in running prose (not inside any
+    // table at all) must not become a spurious matrix entry.
     let f = Fixture::new();
     f.append(
         "contracts/audit-coverage-matrix.md",
-        "\nSee also `db.rs`, unrelated to any event.\n\n| File | Kind |\n|---|---|\n| `thing.ghost` | registry |\n",
+        "\nSee also `db.rs`, unrelated to any event.\n",
     );
     let out = f.run_gate();
     assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+}
+
+#[test]
+fn a_name_shaped_cell_under_the_wrong_header_is_not_a_coverage_entry_but_is_a_schema_violation() {
+    // Stage 7c's own interaction, named by the dispatch (§3): coverage
+    // must not be fooled into treating `thing.ghost` as a real matrix row
+    // just because it sits in a table whose header isn't `Event name` --
+    // but the columns check's schema rule must still catch the row shape
+    // itself, so a table change cannot silently drop a row from being
+    // checked by making it invisible to *both* checks.
+    let f = Fixture::new();
+    f.append(
+        "contracts/audit-coverage-matrix.md",
+        "\n| File | Kind |\n|---|---|\n| `thing.ghost` | registry |\n",
+    );
+    let out = f.run_gate();
+    assert_eq!(out.status.code(), Some(1), "{}", stderr(&out));
+    let text = stderr(&out);
+    assert!(!text.contains("(coverage") || !text.contains("thing.ghost"));
+    assert!(text.contains("(schema) line"));
+    assert!(text.contains("thing.ghost"));
+    assert!(text.contains("does not start with `Event name`"));
 }
 
 // ── each typed source, individually ───────────────────────────────────────
@@ -242,10 +267,16 @@ fn the_registry_proof_only_descriptor_is_excluded() {
     let f = Fixture::new();
     f.write(
         "crates/sui-id-store/src/registry.rs",
-        "static PROOF_ONLY_FORBIDDEN_DESCRIPTOR: EventDescriptor = EventDescriptor {\n    kind: AuditEventKind::Other,\n    name: \"proof_only.system_principal_forbidden\",\n    class: AuditClass::Atomic,\n    attributes: &[],\n};\n",
+        "static PROOF_ONLY_FORBIDDEN_DESCRIPTOR: EventDescriptor = EventDescriptor {\n    kind: AuditEventKind::Other,\n    name: \"proof_only.system_principal_forbidden\",\n    class: AuditClass::Atomic,\n    actor: ActorRequirement::None,\n    attributes: &[],\n};\n",
     );
     let out = f.run_gate();
-    // Still green: registry.rs is skipped entirely, so this never becomes
-    // a (spurious) backward-direction coverage obligation.
+    // Still green for coverage: registry.rs is skipped entirely there, so
+    // this never becomes a (spurious) backward-direction coverage
+    // obligation. (The columns check, stage 7c, does not skip registry.rs
+    // by path -- it excludes this descriptor because no command reaches
+    // it, the same reason `the_registry_proof_only_command_is_tolerated_
+    // there_and_only_there` in `write_commands_fixtures.rs` stays green.
+    // `actor` is present here so that exclusion-by-reachability is what's
+    // under test, not an unrelated shape failure.)
     assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
 }

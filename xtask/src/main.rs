@@ -1,13 +1,18 @@
 //! `cargo xtask audit-structure` — RFC 094's structural gate. Stage 6b
 //! replaced G17 (`scripts/check-write-commands.py`) and added the `syn`
-//! write-authority boundary condition 7 names. Stage 7 adds the audit-
+//! write-authority boundary condition 7 names. Stage 7 added the audit-
 //! coverage check (RFC 094 `:1105-1107` item 6's third clause), built on
-//! the same typed AST paths rather than G13's string extraction
-//! (`scripts/check-audit-matrix.sh`, which remains registered for
-//! vocabulary-drift diagnosis, per RFC 094's own two endings for it —
-//! retiring it is an amendment, not this stage's to make).
+//! the same typed AST paths rather than G13's string extraction. Stage 7c
+//! moves G13's second step (RFC 116 stage 2's `class`/`actor`/`step_up`
+//! column check, `scripts/check-audit-matrix-columns.py`, deleted by this
+//! change) onto the same typed statics, for the same reason: a text read
+//! cannot see a type. `scripts/check-audit-matrix.sh` (G13) remains
+//! registered for vocabulary-drift diagnosis, per RFC 094's own two
+//! endings for it — retiring it is an amendment, not this stage's to make.
 
+mod columns;
 mod coverage;
+mod matrix_table;
 mod write_authority;
 mod write_commands;
 
@@ -72,18 +77,19 @@ fn run_audit_structure(args: &[String]) -> std::process::ExitCode {
 
     let mut failures: Vec<String> = Vec::new();
 
-    match write_commands::run(&root, &commands, fix) {
+    let code = match write_commands::run(&root, &commands, fix) {
         Ok(outcome) => {
             failures.extend(outcome.failures);
             if let Some(summary) = &outcome.summary {
                 eprintln!("audit-structure: write-commands: {summary}");
             }
+            outcome.code
         }
         Err(e) => {
             eprintln!("audit-structure: {e}");
             return std::process::ExitCode::from(2);
         }
-    }
+    };
 
     match write_authority::check(&root, &policy) {
         Ok(outcome) => {
@@ -115,6 +121,23 @@ fn run_audit_structure(args: &[String]) -> std::process::ExitCode {
                  it. G13 (scripts/check-audit-matrix.sh) remains registered for \
                  vocabulary-drift diagnosis; this is the coverage authority.",
                 outcome.matrix_count, outcome.source_count
+            );
+        }
+        Err(e) => {
+            eprintln!("audit-structure: {e}");
+            return std::process::ExitCode::from(2);
+        }
+    }
+
+    match columns::check(&root, &matrix, &code) {
+        Ok(outcome) => {
+            failures.extend(outcome.failures);
+            eprintln!(
+                "audit-structure: columns: {} (class/actor/step_up read from \
+                 EventDescriptor/MustAttemptDescriptor statics, not from text; \
+                 reachability from write-commands' own command map). G13 \
+                 (scripts/check-audit-matrix.sh) no longer runs this check.",
+                outcome.summary
             );
         }
         Err(e) => {

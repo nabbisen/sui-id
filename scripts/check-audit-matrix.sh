@@ -6,12 +6,13 @@
 #   Forward:  every event name in the matrix must exist in source.
 #   Backward: every source literal must have a matrix row.
 #
-# A second step, added by RFC 116 stage 2 (D3, D3b), holds the matrix's `class`
-# and `actor` columns and its `step_up` marker to the sealed descriptors in
-# crates/. It is Python and reads table rows, not names: this script's own
-# extraction takes every backticked word.word from anywhere in the file, so a
-# whole row could be deleted without it noticing. See
-# scripts/check-audit-matrix-columns.py.
+# RFC 116 stage 2 (D3, D3b) added a second step here, holding the matrix's
+# `class` and `actor` columns and its `step_up` marker to the sealed
+# descriptors in crates/. Cycle J stage 7c (RFC 094) moved that step onto
+# `cargo xtask audit-structure` (G23), reading the same columns from the
+# typed `EventDescriptor`/`MustAttemptDescriptor` statics with `syn` rather
+# than as text, and deleted `scripts/check-audit-matrix-columns.py`. This
+# script is bash and grep again, as it was before RFC 116 stage 2.
 #
 # Which strings count as audit events is derived from the code on every run
 # (G13-b, step 0 below) — there is no hand-maintained namespace list.
@@ -113,20 +114,6 @@ while IFS= read -r name; do
     fail "$name  (in source but NOT in matrix $MATRIX)"
   fi
 done <<< "$SRC_LITERALS"
-
-# 4b. Column check (RFC 116 stage 2): table rows against sealed descriptors.
-#     The script is a sibling of this one, so it is found relative to it and a
-#     fixture repository that carries a copy of both runs the copy.
-echo ""
-echo "=== Column check: matrix table rows -> sealed descriptors ==="
-COLUMNS_PY="$(dirname "${BASH_SOURCE[0]}")/check-audit-matrix-columns.py"
-if ! command -v python3.14 >/dev/null 2>&1; then
-  fail "python3.14 not found: the column check cannot run, and a gate that cannot run is a failure"
-elif python3.14 "$COLUMNS_PY" --root . --matrix "$MATRIX"; then
-  ok "class, actor and step_up columns"
-else
-  fail "column check (violations above)"
-fi
 
 # 5. Summary
 echo ""

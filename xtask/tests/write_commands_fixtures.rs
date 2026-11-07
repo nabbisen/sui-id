@@ -19,6 +19,7 @@ const COMMANDS_RS: &str = r#"static A01_DONE: EventDescriptor = EventDescriptor 
     kind: AuditEventKind::Thing,
     name: "thing.done",
     class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
     attributes: &[AttributeSpec { name: "note", description: "", required: false }],
 };
 
@@ -26,6 +27,7 @@ static A01_FAILED: EventDescriptor = EventDescriptor {
     kind: AuditEventKind::Thing,
     name: "thing.failed",
     class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
     attributes: &[],
 };
 
@@ -46,6 +48,7 @@ const SECOND_RS: &str = r#"static B02_DONE: EventDescriptor = EventDescriptor {
     kind: AuditEventKind::Other,
     name: "other.done",
     class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
     attributes: &[],
 };
 
@@ -141,7 +144,8 @@ impl Fixture {
         // (it does not require the listed failures to be the only ones).
         f.write(
             "contracts/audit-coverage-matrix.md",
-            "# Matrix\n\n| Event name | Class |\n|---|---|\n| `thing.done` | A |\n| `thing.failed` | A |\n",
+            "# Matrix\n\n| Event name | Actor | Class |\n|---|---|---|\n\
+             | `thing.done` | admin user id | A |\n| `thing.failed` | admin user id | A |\n",
         );
         // Empty, valid write-authority policy: the synthetic fixture
         // tree touches no rusqlite construct at all, so this is never
