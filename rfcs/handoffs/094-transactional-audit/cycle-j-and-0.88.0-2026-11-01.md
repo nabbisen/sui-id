@@ -407,6 +407,13 @@ for the case where forgetting is most expensive.
    `.git-exclude/tmp/clones/` is the wrong place for a clone that builds
    the workspace, and `/tmp` is too small; a sibling of the tree on the
    main disk works.*
+7c′. **Patch release `0.87.2`**, inserted ahead of 7d and authorized by
+   `@nabbisen` 2026-11-07. It carries a `Security` entry: sign-in follows only
+   a same-site return path (`8df3093`). It also carries stages 4–5's
+   rotation records, so their docs' *"since v0.88.0"* becomes `v0.87.2`.
+   **DISPATCHED** 2026-11-07 —
+   `rfcs/handoffs/094-transactional-audit/release-0.87.2-preparation-2026-11-07.md`.
+   Step 0 green (`Security audit` on `8df3093`, run `42356328349`).
 7d. **The local matrix learns what CI already knows: `--changed`.**
    **DISPATCHED** 2026-11-07 —
    `rfcs/handoffs/093-build-toolchain-release-gates/local-matrix-changed-mode-2026-11-07.md`.
