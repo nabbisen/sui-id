@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.87.2] — 2026-11-07
+
+**Sign-in now follows only a same-site return path — the reason this
+release exists; it also records a master-key rotation's re-seal in the
+same transaction as a new audit event, `admin.master_key.resealed`, and
+makes a rotation that stops partway diagnosable from the audit log.**
+
 ### Changed
 
 - **Rotating the master key now records itself in the same transaction

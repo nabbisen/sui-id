@@ -170,7 +170,7 @@ After rotation:
   auto-deleted — keep it as long as you might need to read a backup
   taken before the rotation, then remove it.
 - Two audit rows are appended, for two different facts (RFC 094 cycle
-  J stage 4/5, since v0.88.0): `admin.master_key.resealed`, inside the
+  J stage 4/5, since v0.87.2): `admin.master_key.resealed`, inside the
   transaction that re-sealed the six tables, carrying a per-table row
   count; and `admin.master_key.rotated`, after both renames below, best
   effort, reporting that the key files were replaced.
@@ -199,15 +199,15 @@ Read the two events together:
 | both `resealed` and `rotated` | the rotation completed | nothing |
 | `resealed`, no `rotated` | the database is re-sealed under the new key; the key files may not have been swapped | the staged key in `<key_file>.new` is the one your database now needs — see "Recovering a rotation that stopped partway" below |
 | neither | nothing committed; the database is still under the old key | re-run the command |
-| `rotated`, no `resealed` | **only possible on a database rotated before v0.88.0** | see below — this is not a half-finished rotation |
+| `rotated`, no `resealed` | **only possible on a database rotated before v0.87.2** | see below — this is not a half-finished rotation |
 
 **That last row is not hypothetical.** Event names in this project do
 not change between releases (see
 [`docs/src/reference/audit-events.md`](../reference/audit-events.md)),
-so an audit log that spans the upgrade to v0.88.0 will hold `rotated`
+so an audit log that spans the upgrade to v0.87.2 will hold `rotated`
 rows from earlier releases with no matching `resealed` row beside
 them — because `resealed` did not exist yet, not because anything was
-skipped. Applying this table to a pre-v0.88.0 `rotated` row would
+skipped. Applying this table to a pre-v0.87.2 `rotated` row would
 misdiagnose a **complete** rotation as a half-finished one. Check the
 release that was running at the time before concluding otherwise.
 
