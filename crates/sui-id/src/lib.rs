@@ -72,6 +72,8 @@ pub mod resolver;
 pub mod response_bounds;
 #[path = "http/router.rs"]
 pub mod router;
+#[path = "http/same_site_return_path.rs"]
+pub mod same_site_return_path;
 #[path = "http/security_headers.rs"]
 pub mod security_headers;
 #[path = "runtime/startup.rs"]

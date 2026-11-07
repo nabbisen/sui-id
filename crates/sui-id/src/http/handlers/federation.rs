@@ -554,11 +554,7 @@ pub async fn federated_start(
     // `next_path` column (below) has carried it durably since stage 2, and
     // the callback reads `claimed.next_path`, never a cookie -- so this is
     // the one and only place `next` needs computing now.
-    let next_path = if q.next.starts_with('/') {
-        Some(q.next)
-    } else {
-        None
-    };
+    let next_path = crate::same_site_return_path::same_site_return_path(&q.next).map(str::to_owned);
 
     // RFC 096-B1 stage 4: the durable attempt row the callback claims and
     // validates against -- now the *only* record of this request, since

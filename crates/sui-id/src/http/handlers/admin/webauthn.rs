@@ -92,7 +92,7 @@ pub async fn webauthn_auth_complete(
     let next = jar
         .get(PENDING_MFA_NEXT_COOKIE)
         .map(|c| c.value().to_owned())
-        .filter(|s| s.starts_with('/') && !s.starts_with("//"));
+        .filter(|s| crate::same_site_return_path::same_site_return_path(s).is_some());
     let refused = |err: Option<CoreError>| {
         if let Some(err) = err {
             let request_id = request_id.as_ref().map(|e| e.0.0.as_str()).unwrap_or("-");

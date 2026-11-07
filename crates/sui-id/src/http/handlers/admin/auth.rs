@@ -100,11 +100,9 @@ pub async fn login_get(
         && let Ok(sid) = SessionId::from_str(cookie.value())
         && session::resolve(&app.db, &app.clock, sid).await.is_ok()
     {
-        let dest = if q.next.starts_with('/') {
-            q.next.clone()
-        } else {
-            "/admin".into()
-        };
+        let dest = crate::same_site_return_path::same_site_return_path(&q.next)
+            .map(str::to_owned)
+            .unwrap_or_else(|| "/admin".into());
         return Ok(Redirect::to(&dest).into_response());
     }
     // Thread `next` into the form so login_post can redirect to it.
@@ -438,11 +436,9 @@ pub async fn login_post(
         ip,
         crate::handlers::ErrorAs::Html,
     )?;
-    let target = if form.next.starts_with('/') {
-        form.next.clone()
-    } else {
-        "/admin".into()
-    };
+    let target = crate::same_site_return_path::same_site_return_path(&form.next)
+        .map(str::to_owned)
+        .unwrap_or_else(|| "/admin".into());
     // RFC 102 A7: an admin-panel destination is decided before the sign-in
     // writes anything, so a refused sign-in commits no session and no
     // success event.
@@ -495,14 +491,10 @@ pub async fn login_post(
             // pending row, and bounce them into the MFA challenge page.
             let cookie =
                 pending_mfa_cookie(pending.id.to_string(), app.config.server.cookie_secure);
-            let next_cookie = if !form.next.is_empty() {
-                Some(pending_mfa_next_cookie(
-                    form.next.clone(),
-                    app.config.server.cookie_secure,
-                ))
-            } else {
-                None
-            };
+            let next_cookie =
+                crate::same_site_return_path::same_site_return_path(&form.next).map(|path| {
+                    pending_mfa_next_cookie(path.to_owned(), app.config.server.cookie_secure)
+                });
             let jar = jar.add(cookie);
             let jar = match next_cookie {
                 Some(c) => jar.add(c),
@@ -676,7 +668,7 @@ pub async fn mfa_challenge_post(
             let next_target = jar
                 .get(PENDING_MFA_NEXT_COOKIE)
                 .map(|c| c.value().to_owned())
-                .filter(|s| s.starts_with('/'))
+                .filter(|s| crate::same_site_return_path::same_site_return_path(s).is_some())
                 .unwrap_or_else(|| "/admin".into());
             // `auth.mfa.success` was committed by L02 with the session.
             // RFC 006: MFA verified → full sign-in success.
@@ -798,7 +790,7 @@ async fn mfa_challenge_post_federated(
             let next_target = find_fed_pending_row(&app, &fed_pending_raw)
                 .await
                 .and_then(|row| row.next_path)
-                .filter(|s| s.starts_with('/'))
+                .filter(|s| crate::same_site_return_path::same_site_return_path(s).is_some())
                 .unwrap_or_else(|| "/admin".into());
             // RFC 096-B1 stage 12b fix round, item 1: the generic
             // `login_pending_mfa` row dual-issued alongside the federated

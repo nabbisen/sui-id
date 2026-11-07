@@ -123,6 +123,7 @@ mod sec_headers;
 mod session_limits;
 mod settings;
 mod setup_wizard;
+mod sign_in_return_path;
 mod step_up_totp;
 mod step_up_webauthn;
 mod user_identity_invariants;

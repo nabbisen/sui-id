@@ -78,21 +78,10 @@ const STEP_UP_RETURN_ALLOWLIST: &[&str] = &[
 /// a crafted `?return_to=` cannot redirect the user to an arbitrary
 /// route post-step-up.
 fn sanitise_return_to(raw: &str) -> String {
-    // ── Format checks (unchanged from pre-RFC-089) ──────────────────
-    if raw.is_empty() {
+    // ── Format checks, shared with every other `?next=`-shaped site ──
+    let Some(raw) = crate::same_site_return_path::same_site_return_path(raw) else {
         return "/me/security".to_owned();
-    }
-    if !raw.starts_with('/') {
-        return "/me/security".to_owned();
-    }
-    if raw.starts_with("//") || raw.starts_with("/\\") {
-        return "/me/security".to_owned();
-    }
-    for c in raw.chars() {
-        if c == '\\' || c == '\n' || c == '\r' || c == '\0' {
-            return "/me/security".to_owned();
-        }
-    }
+    };
     // ── RFC 089: allowlist check ─────────────────────────────────────
     // Reject any path not under a step-up-gated prefix, collapsing to
     // the safe default.  This prevents a crafted link from bouncing

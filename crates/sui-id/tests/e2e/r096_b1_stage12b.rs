@@ -69,7 +69,7 @@ fn login_pending_mfa_count(
     }
 }
 
-struct FedMfaSetup {
+pub(super) struct FedMfaSetup {
     fed_pending: String,
     fed_csrf: String,
     fed_browser_binding: String,
@@ -79,7 +79,7 @@ struct FedMfaSetup {
     /// item 1 (consuming the row it names) ever run at all.
     pending_mfa_cookie: String,
     user_id: sui_id_shared::ids::UserId,
-    totp_secret: Vec<u8>,
+    pub(super) totp_secret: Vec<u8>,
 }
 
 async fn drive_to_federated_mfa(state: &mut AppState) -> FedMfaSetup {
@@ -88,8 +88,14 @@ async fn drive_to_federated_mfa(state: &mut AppState) -> FedMfaSetup {
 
 /// Same as [`drive_to_federated_mfa`], but starts the upstream sign-in
 /// with `?next=<next>` (empty means no `next` at all) -- RFC 096-B1
-/// stage 12b fix round, item 2.
-async fn drive_to_federated_mfa_with_next(state: &mut AppState, next: &str) -> FedMfaSetup {
+/// stage 12b fix round, item 2. `pub(super)`: the urgent sign-in-return-path
+/// round's e2e matrix (`sign_in_return_path.rs`) reuses this to drive the
+/// federation write site to the MFA-continuation point without a second
+/// copy of this setup.
+pub(super) async fn drive_to_federated_mfa_with_next(
+    state: &mut AppState,
+    next: &str,
+) -> FedMfaSetup {
     state.http_client = std::sync::Arc::new(super::tls_mock::federation_test_client(
         sui_id::resolver::ValidatingResolver,
     ));
@@ -120,7 +126,7 @@ async fn drive_to_federated_mfa_with_next(state: &mut AppState, next: &str) -> F
     }
 }
 
-async fn post_mfa_code(
+pub(super) async fn post_mfa_code(
     state: &AppState,
     setup: &FedMfaSetup,
     code: &str,
@@ -154,7 +160,7 @@ async fn post_mfa_code(
         .expect("mfa POST")
 }
 
-async fn get_admin_csrf(state: &AppState, setup: &FedMfaSetup) -> String {
+pub(super) async fn get_admin_csrf(state: &AppState, setup: &FedMfaSetup) -> String {
     let resp = build_router(state.clone())
         .oneshot(
             Request::builder()

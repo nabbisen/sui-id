@@ -32,6 +32,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   half-finished rotation: a database rotated before this pair of
   events existed.
 
+### Security
+
+- **Sign-in now follows only a same-site return path.** Every place
+  that redirects back to a caller-supplied `next`/`return_to` value —
+  the sign-in form, both the password and second-factor completion
+  steps, and the federated sign-in continuation — now requires it to
+  be a plain path on this origin; any other value returns to that
+  flow's own default destination instead. No action is needed on
+  upgrade.
+
 ## [0.87.1] — 2026-11-03
 
 **`sui-id admin rotate-key` no longer risks losing the master key
