@@ -16,8 +16,14 @@ use sui_id::{backup, config::Config};
 /// use site, since the dispatch's own §1 is explicit that the top-level
 /// unknown-subcommand message must not grow a list it does not have today.
 #[allow(dead_code)]
-pub(crate) const TOP_LEVEL_SUBCOMMANDS: &[&str] =
-    &["backup", "restore", "verify-backup", "admin", "setup"];
+pub(crate) const TOP_LEVEL_SUBCOMMANDS: &[&str] = &[
+    "backup",
+    "restore",
+    "verify-backup",
+    "preview-upgrade",
+    "admin",
+    "setup",
+];
 
 /// RFC 107: the one list of `admin` subaction names — previously
 /// hand-kept separately in `run_admin_subcommand`'s `match`, its own
@@ -148,6 +154,93 @@ pub(crate) fn run_verify_backup_subcommand(args: &[String]) -> Result<()> {
         println!("✓ Decrypted with provided passphrase");
     }
     Ok(())
+}
+
+/// `sui-id preview-upgrade [--config PATH]` (RFC 142 stage 4): what this
+/// build would do to the configured database, without opening it for
+/// writing and without resolving a master key — loading `Config` reads
+/// `storage.db_path` only; nothing here ever reaches `storage.key_file`.
+/// A refused database (`sui_id::database::preview`'s `Err`) is exactly the
+/// same [`sui_id::database::DatabaseRefused`] every other refused-database
+/// path produces, so `main` prints the one line and exits 65 without any
+/// special case here.
+pub(crate) fn run_preview_upgrade_subcommand(args: &[String]) -> Result<()> {
+    let config_path = parse_config_path(args).unwrap_or_else(|| PathBuf::from("./sui-id.toml"));
+    let cfg = Config::load(&config_path)
+        .with_context(|| format!("loading config from {}", config_path.display()))?;
+    let path = &cfg.storage.db_path;
+
+    let outcome = sui_id::database::preview(path)?;
+    print!(
+        "{}",
+        render_preview_upgrade(env!("CARGO_PKG_VERSION"), path, &outcome)
+    );
+    Ok(())
+}
+
+/// The exact text of `preview-upgrade`'s report (RFC 142 stage 4 §2). A pure
+/// function of its inputs so the four forms can be asserted against
+/// synthetic `Preview` values, not only through a real database file.
+fn render_preview_upgrade(
+    version: &str,
+    path: &std::path::Path,
+    outcome: &sui_id_store::migrations::Preview,
+) -> String {
+    use std::fmt::Write as _;
+    use sui_id_store::migrations::{MAX_SCHEMA_VERSION, Preview};
+
+    let mut out = format!("sui-id {version}: upgrade preview for {}\n", path.display());
+    match outcome {
+        Preview::NoFile => {
+            let _ = writeln!(out, "  No database exists at {} yet.", path.display());
+            let _ = writeln!(
+                out,
+                "  Starting this sui-id creates its schema and runs all {MAX_SCHEMA_VERSION} \
+                 migrations. Nothing was changed."
+            );
+        }
+        Preview::Fresh => {
+            let _ = writeln!(out, "  The database at {} is empty.", path.display());
+            let _ = writeln!(
+                out,
+                "  Starting this sui-id creates its schema and runs all {MAX_SCHEMA_VERSION} \
+                 migrations. Nothing was changed."
+            );
+        }
+        Preview::AtHead => {
+            let _ = writeln!(
+                out,
+                "  The database is already at schema version {MAX_SCHEMA_VERSION}. Starting \
+                 this sui-id runs no migrations. Nothing was changed."
+            );
+        }
+        Preview::Pending {
+            current,
+            last_migrated_by,
+            migrations,
+        } => {
+            let stamp = match last_migrated_by {
+                Some(v) => format!("last migrated by sui-id {v}"),
+                None => "the release that last migrated it is not recorded".to_string(),
+            };
+            let _ = writeln!(out, "  Schema version now:      {current} ({stamp})");
+            let _ = writeln!(out, "  This sui-id migrates to: {MAX_SCHEMA_VERSION}");
+            let _ = writeln!(
+                out,
+                "  {} migrations would run when this sui-id starts:",
+                migrations.len()
+            );
+            for m in migrations {
+                let _ = writeln!(out, "    {}", m.name);
+            }
+            let _ = writeln!(
+                out,
+                "  Nothing was changed. Back up before starting this sui-id: \
+                 docs/src/guides/upgrade.md"
+            );
+        }
+    }
+    out
 }
 
 /// Dispatcher for `sui-id admin <subaction> ...`. Six subactions exist
@@ -773,6 +866,7 @@ USAGE:
     sui-id backup --to PATH [--config PATH] [--encrypt]
     sui-id restore --from PATH [--config PATH] [--force] [--decrypt]
     sui-id verify-backup --from PATH [--decrypt]
+    sui-id preview-upgrade [--config PATH]
     sui-id admin unlock-user --username NAME [--config PATH]
     sui-id admin reset-mfa --username NAME --reason TEXT [--config PATH]
     sui-id admin issue-recovery-link --username NAME --reason TEXT [--config PATH]
@@ -811,6 +905,16 @@ SUBCOMMANDS:
                              integrity check, then removes it. Use before
                              a real restore to catch a corrupted or
                              mismatched backup.
+    preview-upgrade          Read-only. Reports the configured database's
+                             stored schema version, the release that last
+                             migrated it, the migrations this sui-id would
+                             run, and the version it would end at — or the
+                             same refusal line startup would print. Writes
+                             nothing: not the version, not sui_meta, not a
+                             WAL frame it did not need. Needs no master
+                             key. Run it with the new binary before
+                             replacing the old one; see
+                             docs/src/guides/upgrade.md.
     admin unlock-user        Clear an account-lockout state for the given
                              user. Resets the failed-login counter and
                              removes any active lock. Use to recover a real
@@ -836,6 +940,11 @@ SUBCOMMANDS:
                              this. The previous key file is renamed to
                              '<original>.bak.<timestamp>' beside it; the
                              new key is written to the configured path.
+                             Use --generate-new-key (default) for the
+                             CLI to mint a fresh key, or --new-key PATH
+                             to provide one you prepared yourself. Use
+                             --yes to skip the interactive confirmation
+                             prompt for non-interactive use.
     admin rotate-metrics-token
                              Generate a fresh metrics bearer token and
                              store its hash, invalidating the previous
@@ -873,11 +982,6 @@ SUBCOMMANDS:
                              random one is generated and printed ONCE to
                              stdout (change it after first login). Fails
                              if the instance is already initialized.
-                             Use --generate-new-key (default) for the
-                             CLI to mint a fresh key, or --new-key PATH
-                             to provide one you prepared yourself. Use
-                             --yes to skip the interactive confirmation
-                             prompt for non-interactive use.
     --dev                    Start sui-id in dev mode for local testing.
                              Skips the setup wizard, opens an in-memory
                              SQLite database under a freshly generated

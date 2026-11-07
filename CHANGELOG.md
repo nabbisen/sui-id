@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`sui-id preview-upgrade [--config PATH]`**: before starting a new
+  binary, see what it would do to your database — the
+  stored schema version, the release that last migrated it, the migrations
+  that would run and their names, and the version it would end at. Reads
+  only; it opens nothing for writing and needs no master key. A database
+  this build cannot use prints the same refusal line startup would, and
+  exits the same way. See the upgrade guide's "General procedure".
+
+### Fixed
+
+- **`docs/src/reference/configuration.md`'s Subcommands table now matches
+  the commands it documents.** `backup`/`restore`/`verify-backup` used
+  `--dest`/`--src` instead of the real `--to`/`--from`; `restore` was
+  described as prompting before an overwrite, when it refuses outright
+  unless `--force` is given; `admin unlock-user` showed a positional
+  username instead of `--username NAME`. **`admin rotate-key`'s row
+  described Ed25519 signing-key rotation — it does nothing of the kind: it
+  re-seals every encrypted column under a new master key, offline.** An
+  operator who ran it expecting a routine signing-key rotation would have
+  been surprised by what it actually does. `admin reset-mfa`, `admin
+  revoke-registration-token`, `admin list-registration-tokens` and `admin
+  legacy-dynamic-candidates` were missing from the table entirely.
+- **`sui-id --help` listed `admin rotate-key`'s `--generate-new-key`,
+  `--new-key PATH` and `--yes` under `setup`**, which takes none of them.
+  They now appear under `admin rotate-key`.
+
 ## [0.87.2] — 2026-11-07
 
 **Sign-in now follows only a same-site return path — the reason this

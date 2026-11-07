@@ -335,6 +335,21 @@ fixture. **A floor is not to be declared to avoid fixing a migration.**
 
 **Stage 4 — D3.** The read-only preview subcommand. It must not write.
 
+> **Stage 4 LANDED 2026-11-07** (cycle J stage 8). `sui-id
+> preview-upgrade [--config PATH]` reports the stored schema version, the
+> release that last migrated the file (recorded since `0.79.0`), the
+> migrations that would run **by file name**, and where it would end. It
+> needs no master key, and a refused database prints the same line and
+> exit code 65 as startup. The runner and the preview share one
+> definition of pending, and a test observes what the runner actually
+> applies. **"It must not write" needed more than a read-only open**: on a
+> cleanly closed WAL database a read-only open leaves `-shm`/`-wal` behind,
+> so the preview opens with `immutable=1` when no `-wal` exists, with the
+> path percent-encoded. The review found that, unencoded, a `#` or `?` in a
+> directory name made a populated database preview as *empty*. Dispatch —
+> [`../handoffs/142-upgrading-is-the-least-tested-thing-we-do/stage4-preview-the-upgrade-2026-11-07.md`](../handoffs/142-upgrading-is-the-least-tested-thing-we-do/stage4-preview-the-upgrade-2026-11-07.md).
+> Review — `.git-exclude/reviewed/cycle-j-stage8-rfc142-stage4-preview-upgrade-2026-11-07.md`.
+
 **Stage 5 — D4.** The backup, in the settled shape above, with a test
 that proves the backup actually happens and a test that proves it is
 skipped when nothing is pending.

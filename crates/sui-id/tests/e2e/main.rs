@@ -114,6 +114,7 @@ mod r134_step2_endpoint_origins;
 mod r134_step3_validating_resolver;
 mod r136_step1_self_registered_marker;
 mod r140_stage1_app_identity;
+mod r142_stage4_preview_upgrade;
 mod refresh_theft;
 mod request_id;
 mod rfc030_033_035;

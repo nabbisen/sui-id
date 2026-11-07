@@ -14,10 +14,20 @@
 
 3. **Replace** the binary with the new version.
 
-4. **Start** the new binary. Migrations run automatically on startup.
+4. **Preview**, with the new binary, before starting it:
+   ```bash
+   sui-id preview-upgrade --config sui-id.toml
+   ```
+   Read which migrations it lists, and confirm it reports `Nothing was
+   changed.` It opens nothing for writing, needs no master key, and prints
+   the same refusal line startup would if the database is not one this
+   build can use, so you learn that here rather than from a service that
+   will not start.
+
+5. **Start** the new binary. Migrations run automatically on startup.
    Check stderr for any migration errors.
 
-5. **Verify** — open the admin panel and confirm the version shown in
+6. **Verify** — open the admin panel and confirm the version shown in
    Settings → Advanced.
 
 ## Migration behaviour
@@ -148,6 +158,9 @@ What the refusal looks like: one line on stderr, first and alone (`sui-id:
 refusing to run: the database at … is at schema version 44, but this sui-id
 0.78.0 understands up to 43 …`), naming the path, both versions and, when the
 database recorded it, the release that migrated it, and exit code **65**.
+The release is recorded since sui-id 0.79.0 (RFC 112); a database no build
+from before that has migrated since shows no release name, both here and in
+`preview-upgrade`'s own output.
 Nothing is written to the database. There is no override flag. A schema version
 that cannot be read, or that is missing from a database that has tables, is
 refused the same way. The full text, the exit codes and the systemd setting

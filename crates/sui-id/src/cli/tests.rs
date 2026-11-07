@@ -565,3 +565,113 @@ fn issued_registration_tokens_output_contains_the_id() {
         "the issued token's output must still contain the token itself:\n{text}"
     );
 }
+
+// ───────────────────────── RFC 142 stage 4: preview-upgrade's report ─────
+
+mod preview_upgrade_render {
+    use super::*;
+    use std::path::Path;
+    use sui_id_store::migrations::{MAX_SCHEMA_VERSION, Preview, StoredVersion, pending};
+
+    fn p() -> &'static Path {
+        Path::new("/var/lib/sui-id/sui-id.sqlite")
+    }
+
+    #[test]
+    fn no_file_says_no_database_and_that_starting_creates_everything() {
+        let text = render_preview_upgrade("0.88.0", p(), &Preview::NoFile);
+        assert_eq!(
+            text,
+            format!(
+                "sui-id 0.88.0: upgrade preview for /var/lib/sui-id/sui-id.sqlite\n\
+                 \x20\x20No database exists at /var/lib/sui-id/sui-id.sqlite yet.\n\
+                 \x20\x20Starting this sui-id creates its schema and runs all \
+                 {MAX_SCHEMA_VERSION} migrations. Nothing was changed.\n"
+            )
+        );
+    }
+
+    #[test]
+    fn fresh_says_the_database_is_empty_and_that_starting_creates_everything() {
+        let text = render_preview_upgrade("0.88.0", p(), &Preview::Fresh);
+        assert_eq!(
+            text,
+            format!(
+                "sui-id 0.88.0: upgrade preview for /var/lib/sui-id/sui-id.sqlite\n\
+                 \x20\x20The database at /var/lib/sui-id/sui-id.sqlite is empty.\n\
+                 \x20\x20Starting this sui-id creates its schema and runs all \
+                 {MAX_SCHEMA_VERSION} migrations. Nothing was changed.\n"
+            )
+        );
+    }
+
+    #[test]
+    fn at_head_says_so_and_lists_nothing() {
+        let text = render_preview_upgrade("0.88.0", p(), &Preview::AtHead);
+        assert_eq!(
+            text,
+            format!(
+                "sui-id 0.88.0: upgrade preview for /var/lib/sui-id/sui-id.sqlite\n\
+                 \x20\x20The database is already at schema version {MAX_SCHEMA_VERSION}. \
+                 Starting this sui-id runs no migrations. Nothing was changed.\n"
+            )
+        );
+    }
+
+    /// The RFC's own worked example, reproduced with the real migrations
+    /// above version 44 (not a hand-typed list) so a future migration
+    /// changes this test's expectation automatically rather than silently
+    /// drifting from reality.
+    #[test]
+    fn pending_lists_every_migration_above_the_stored_version_in_order_with_names() {
+        let migrations: Vec<_> = pending(StoredVersion::At(44)).collect();
+        let text = render_preview_upgrade(
+            "0.88.0",
+            p(),
+            &Preview::Pending {
+                current: 44,
+                last_migrated_by: Some("0.86.0".to_string()),
+                migrations: migrations.clone(),
+            },
+        );
+        let mut expected = format!(
+            "sui-id 0.88.0: upgrade preview for /var/lib/sui-id/sui-id.sqlite\n\
+             \x20\x20Schema version now:      44 (last migrated by sui-id 0.86.0)\n\
+             \x20\x20This sui-id migrates to: {MAX_SCHEMA_VERSION}\n\
+             \x20\x20{} migrations would run when this sui-id starts:\n",
+            migrations.len()
+        );
+        for m in &migrations {
+            expected.push_str(&format!("    {}\n", m.name));
+        }
+        expected.push_str(
+            "  Nothing was changed. Back up before starting this sui-id: \
+             docs/src/guides/upgrade.md\n",
+        );
+        assert_eq!(text, expected);
+        assert_eq!(
+            migrations.len(),
+            (MAX_SCHEMA_VERSION - 44) as usize,
+            "sanity: pending(44) is every migration above 44"
+        );
+    }
+
+    #[test]
+    fn pending_without_a_recorded_release_says_so_instead_of_a_version() {
+        let migrations: Vec<_> = pending(StoredVersion::At(44)).collect();
+        let text = render_preview_upgrade(
+            "0.88.0",
+            p(),
+            &Preview::Pending {
+                current: 44,
+                last_migrated_by: None,
+                migrations,
+            },
+        );
+        assert!(
+            text.contains("(the release that last migrated it is not recorded)"),
+            "{text}"
+        );
+        assert!(!text.contains("last migrated by"), "{text}");
+    }
+}

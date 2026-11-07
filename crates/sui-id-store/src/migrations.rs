@@ -9,206 +9,261 @@ use crate::errors::{StoreError, StoreResult};
 use rusqlite::{Connection, OpenFlags, TransactionBehavior};
 use std::path::Path;
 
-struct Migration {
-    version: i32,
-    sql: &'static str,
+#[derive(Debug, PartialEq, Eq)]
+pub struct Migration {
+    pub version: i32,
+    /// The file stem (`"0049_client_auth_method_and_grant_types"`), asserted
+    /// equal to this entry's `sql` and numeric `version` by
+    /// `migration_names_match_their_files_and_cover_the_directory` (RFC 142
+    /// stage 4 §4). Printed verbatim by `preview-upgrade`.
+    pub name: &'static str,
+    pub(crate) sql: &'static str,
 }
 
 const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 1,
+        name: "0001_initial",
         sql: include_str!("./migrations/0001_initial.sql"),
     },
     Migration {
         version: 2,
+        name: "0002_client_scope_and_logout_uris",
         sql: include_str!("./migrations/0002_client_scope_and_logout_uris.sql"),
     },
     Migration {
         version: 3,
+        name: "0003_totp_mfa",
         sql: include_str!("./migrations/0003_totp_mfa.sql"),
     },
     Migration {
         version: 4,
+        name: "0004_webauthn",
         sql: include_str!("./migrations/0004_webauthn.sql"),
     },
     Migration {
         version: 5,
+        name: "0005_revoked_access_tokens",
         sql: include_str!("./migrations/0005_revoked_access_tokens.sql"),
     },
     Migration {
         version: 6,
+        name: "0006_session_auth_methods",
         sql: include_str!("./migrations/0006_session_auth_methods.sql"),
     },
     Migration {
         version: 7,
+        name: "0007_user_lockout",
         sql: include_str!("./migrations/0007_user_lockout.sql"),
     },
     Migration {
         version: 8,
+        name: "0008_refresh_token_family",
         sql: include_str!("./migrations/0008_refresh_token_family.sql"),
     },
     Migration {
         version: 9,
+        name: "0009_audit_hash_chain",
         sql: include_str!("./migrations/0009_audit_hash_chain.sql"),
     },
     Migration {
         version: 10,
+        name: "0010_session_step_up",
         sql: include_str!("./migrations/0010_session_step_up.sql"),
     },
     Migration {
         version: 11,
+        name: "0011_audit_log_at_action_index",
         sql: include_str!("./migrations/0011_audit_log_at_action_index.sql"),
     },
     Migration {
         version: 12,
+        name: "0012_users_email",
         sql: include_str!("./migrations/0012_users_email.sql"),
     },
     Migration {
         version: 13,
+        name: "0013_webauthn_step_up",
         sql: include_str!("./migrations/0013_webauthn_step_up.sql"),
     },
     Migration {
         version: 14,
+        name: "0014_smtp_config",
         sql: include_str!("./migrations/0014_smtp_config.sql"),
     },
     Migration {
         version: 15,
+        name: "0015_password_reset_tokens",
         sql: include_str!("./migrations/0015_password_reset_tokens.sql"),
     },
     Migration {
         version: 16,
+        name: "0016_i18n",
         sql: include_str!("./migrations/0016_i18n.sql"),
     },
     Migration {
         version: 17,
+        name: "0017_hibp_mode",
         sql: include_str!("./migrations/0017_hibp_mode.sql"),
     },
     Migration {
         version: 18,
+        name: "0018_session_limits",
         sql: include_str!("./migrations/0018_session_limits.sql"),
     },
     Migration {
         version: 19,
+        name: "0019_auth_flow_integrity",
         sql: include_str!("./migrations/0019_auth_flow_integrity.sql"),
     },
     Migration {
         version: 20,
+        name: "0020_user_identity_invariants",
         sql: include_str!("./migrations/0020_user_identity_invariants.sql"),
     },
     Migration {
         version: 21,
+        name: "0021_schema_invariants",
         sql: include_str!("./migrations/0021_schema_invariants.sql"),
     },
     Migration {
         version: 22,
+        name: "0022_boolean_checks",
         sql: include_str!("./migrations/0022_boolean_checks.sql"),
     },
     Migration {
         version: 23,
+        name: "0023_email_outbox",
         sql: include_str!("./migrations/0023_email_outbox.sql"),
     },
     Migration {
         version: 24,
+        name: "0024_email_outbox_locale",
         sql: include_str!("./migrations/0024_email_outbox_locale.sql"),
     },
     Migration {
         version: 25,
+        name: "0025_consent",
         sql: include_str!("./migrations/0025_consent.sql"),
     },
     Migration {
         version: 26,
+        name: "0026_me_security_index",
         sql: include_str!("./migrations/0026_me_security_index.sql"),
     },
     Migration {
         version: 27,
+        name: "0027_users_role",
         sql: include_str!("./migrations/0027_users_role.sql"),
     },
     Migration {
         version: 28,
+        name: "0028_audit_actor_role",
         sql: include_str!("./migrations/0028_audit_actor_role.sql"),
     },
     Migration {
         version: 29,
+        name: "0029_user_consent_last_used",
         sql: include_str!("./migrations/0029_user_consent_last_used.sql"),
     },
     Migration {
         version: 30,
+        name: "0030_users_last_login",
         sql: include_str!("./migrations/0030_users_last_login.sql"),
     },
     Migration {
         version: 31,
+        name: "0031_auth_code_index",
         sql: include_str!("./migrations/0031_auth_code_index.sql"),
     },
     Migration {
         version: 32,
+        name: "0032_pending_settings_change",
         sql: include_str!("./migrations/0032_pending_settings_change.sql"),
     },
     Migration {
         version: 33,
+        name: "0033_server_settings_metrics_token",
         sql: include_str!("./migrations/0033_server_settings_metrics_token.sql"),
     },
     Migration {
         version: 34,
+        name: "0034_users_source",
         sql: include_str!("./migrations/0034_users_source.sql"),
     },
     Migration {
         version: 35,
+        name: "0035_clients_app_identity",
         sql: include_str!("./migrations/0035_clients_app_identity.sql"),
     },
     Migration {
         version: 36,
+        name: "0036_scope_definition_and_reg_token",
         sql: include_str!("./migrations/0036_scope_definition_and_reg_token.sql"),
     },
     Migration {
         version: 37,
+        name: "0037_federation_provider",
         sql: include_str!("./migrations/0037_federation_provider.sql"),
     },
     Migration {
         version: 38,
+        name: "0038_federation_link",
         sql: include_str!("./migrations/0038_federation_link.sql"),
     },
     Migration {
         version: 39,
+        name: "0039_step_up_failure_accounting",
         sql: include_str!("./migrations/0039_step_up_failure_accounting.sql"),
     },
     Migration {
         version: 40,
+        name: "0040_mfa_failure_count",
         sql: include_str!("./migrations/0040_mfa_failure_count.sql"),
     },
     Migration {
         version: 41,
+        name: "0041_recovery_link_tokens",
         sql: include_str!("./migrations/0041_recovery_link_tokens.sql"),
     },
     Migration {
         version: 42,
+        name: "0042_recovery_link_provisioning",
         sql: include_str!("./migrations/0042_recovery_link_provisioning.sql"),
     },
     Migration {
         version: 43,
+        name: "0043_drop_credentials_must_change",
         sql: include_str!("./migrations/0043_drop_credentials_must_change.sql"),
     },
     Migration {
         version: 44,
+        name: "0044_forgot_password_requests",
         sql: include_str!("./migrations/0044_forgot_password_requests.sql"),
     },
     Migration {
         version: 45,
+        name: "0045_federation_provider_allowed_origins",
         sql: include_str!("./migrations/0045_federation_provider_allowed_origins.sql"),
     },
     Migration {
         version: 46,
+        name: "0046_federation_login_attempt",
         sql: include_str!("./migrations/0046_federation_login_attempt.sql"),
     },
     Migration {
         version: 47,
+        name: "0047_federation_mfa_pending",
         sql: include_str!("./migrations/0047_federation_mfa_pending.sql"),
     },
     Migration {
         version: 48,
+        name: "0048_federation_mfa_pending_one_active_per_user",
         sql: include_str!("./migrations/0048_federation_mfa_pending_one_active_per_user.sql"),
     },
     Migration {
         version: 49,
+        name: "0049_client_auth_method_and_grant_types",
         sql: include_str!("./migrations/0049_client_auth_method_and_grant_types.sql"),
     },
 ];
@@ -440,6 +495,103 @@ pub fn check_database_file(path: &Path) -> StoreResult<()> {
     Ok(())
 }
 
+/// Open `path` read-only for `preview-upgrade`, without creating or leaving a
+/// WAL sibling file (RFC 142 stage 4 §5).
+///
+/// Measured against the bundled SQLite (3.53.2, via `libsqlite3-sys` 0.38.2):
+/// a plain `mode=ro` connection against a cleanly-stopped WAL database
+/// creates `-shm`/`-wal` siblings that remain after it closes (a
+/// rollback-journal database gets none either way). `immutable=1` creates
+/// neither, but is only safe when no `-wal` file already exists — if one
+/// does (a running server, or an unclean stop), the siblings already exist,
+/// so a plain read-only open creates nothing new and reads the committed
+/// WAL frames instead of a stale snapshot.
+///
+/// **The race:** a server starting between the `-wal` check and this open
+/// can make the read stale, but it cannot make this write, because an
+/// `immutable` connection is read-only regardless.
+///
+/// Unlike [`check_database_file`], this is the one caller in this module
+/// that does not leave a sibling file behind on the common path — it is
+/// never followed by a write that would otherwise clean one up.
+pub fn open_preview_connection(path: &Path) -> rusqlite::Result<Connection> {
+    let mut wal_sibling = path.as_os_str().to_owned();
+    wal_sibling.push("-wal");
+    if Path::new(&wal_sibling).exists() {
+        Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+    } else {
+        Connection::open_with_flags(
+            format!("file:{}?immutable=1", sqlite_uri_path(path)),
+            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_URI,
+        )
+    }
+}
+
+/// `path` as the path part of an SQLite `file:` URI.
+///
+/// SQLite gives `?`, `#` and `%` meaning there (query, fragment, escape), so
+/// every byte that is not an unreserved character or `/` is percent-encoded.
+/// Unencoded, a database in a directory named `a#b` or `a?b` was opened as a
+/// different, nonexistent file and reported as **empty**, a confident wrong
+/// answer about a populated database (RFC 142 stage 4 review). The raw bytes
+/// are encoded, not `Path::display`'s lossy text, so a non-UTF-8 path still
+/// names the same file.
+fn sqlite_uri_path(path: &Path) -> String {
+    use std::fmt::Write as _;
+    let mut out = String::new();
+    for &b in path.as_os_str().as_encoded_bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~' | b'/') {
+            out.push(char::from(b));
+        } else {
+            let _ = write!(out, "%{b:02X}");
+        }
+    }
+    out
+}
+
+/// What `sui-id preview-upgrade` would report (RFC 142 stage 4 §1, §2).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Preview {
+    /// The path does not exist at all.
+    NoFile,
+    /// The path exists, but the database has no application tables yet.
+    Fresh,
+    /// Already at [`MAX_SCHEMA_VERSION`]; starting runs no migrations.
+    AtHead,
+    /// Migrations would run; `migrations` is exactly [`pending`]'s list.
+    Pending {
+        current: i64,
+        last_migrated_by: Option<String>,
+        migrations: Vec<&'static Migration>,
+    },
+}
+
+/// What this build would do to the database at `path`, without writing
+/// anything and without resolving a master key (RFC 142 stage 4 §1, §5).
+///
+/// `Err` is exactly [`check_database_file`]'s refusal condition — the
+/// caller turns it into the same line and exit code `database::check`
+/// already produces for every other refused-database path.
+pub fn preview(path: &Path) -> Result<Preview, SchemaError> {
+    if !path.exists() {
+        return Ok(Preview::NoFile);
+    }
+    let conn = open_preview_connection(path)?;
+    let stored = read_stored_version(&conn)?;
+    check_supported(stored)?;
+    match stored {
+        StoredVersion::Fresh => Ok(Preview::Fresh),
+        StoredVersion::At(current) if current == i64::from(MAX_SCHEMA_VERSION) => {
+            Ok(Preview::AtHead)
+        }
+        StoredVersion::At(current) => Ok(Preview::Pending {
+            current,
+            last_migrated_by: last_migrated_by(&conn),
+            migrations: pending(stored).collect(),
+        }),
+    }
+}
+
 /// Migrations whose SQL begins with this marker line require foreign key
 /// enforcement to be disabled on the connection **before** the transaction
 /// begins. This is necessary for migrations that rebuild parent tables
@@ -452,6 +604,17 @@ pub fn check_database_file(path: &Path) -> StoreResult<()> {
 /// runs `PRAGMA foreign_key_check` to abort with an error if the migration
 /// left any FK violations.
 const FK_DISABLE_MARKER: &str = "-- MIGRATION:FK_DISABLE_REQUIRED";
+
+#[cfg(test)]
+thread_local! {
+    /// Test-only: the versions [`apply_migration`] committed on this thread,
+    /// in order. It lets a test observe what [`run`] actually applied,
+    /// rather than re-deriving the selection rule and comparing it with
+    /// itself (RFC 142 stage 4 review). Thread-local, so parallel tests do
+    /// not see each other's migrations.
+    pub(crate) static APPLIED: std::cell::RefCell<Vec<i32>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
 
 /// Apply a single migration to `conn`, handling FK_DISABLE_REQUIRED safely.
 ///
@@ -527,6 +690,8 @@ fn apply_migration(conn: &mut Connection, m: &Migration) -> StoreResult<()> {
     if !migration_result? {
         return Ok(());
     }
+    #[cfg(test)]
+    APPLIED.with(|applied| applied.borrow_mut().push(m.version));
 
     // After a successful FK_DISABLE migration, verify FK integrity. Any
     // violation here means the migration SQL had a bug and we should refuse
@@ -581,6 +746,19 @@ fn report_unrecorded_auth_method_rows(conn: &Connection) {
     );
 }
 
+/// The one definition of "pending" (RFC 142 stage 4 §3): migrations whose
+/// version is above `stored`, in the registered order. `run` and
+/// `preview-upgrade` both call this, so they cannot disagree about which
+/// migrations will run except by a bug in this function itself —
+/// `preview_and_runner_agree_on_every_pending_version` (store crate) holds
+/// them to that.
+pub fn pending(stored: StoredVersion) -> impl Iterator<Item = &'static Migration> {
+    let current = stored.number();
+    MIGRATIONS
+        .iter()
+        .filter(move |m| i64::from(m.version) > current)
+}
+
 /// Apply all pending migrations to `conn`.
 ///
 /// The version is read, and judged, inside one `BEGIN IMMEDIATE` (RFC 112), so
@@ -589,7 +767,7 @@ fn report_unrecorded_auth_method_rows(conn: &Connection) {
 /// `sui_meta` is created or anything is written. `apply_migration` re-reads
 /// under its own immediate transaction for the same reason.
 pub fn run(conn: &mut Connection) -> StoreResult<()> {
-    let current = {
+    let stored = {
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let stored = read_stored_version(&tx)?;
         check_supported(stored)?;
@@ -599,13 +777,10 @@ pub fn run(conn: &mut Connection) -> StoreResult<()> {
             "CREATE TABLE IF NOT EXISTS sui_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);",
         )?;
         tx.commit()?;
-        stored.number()
+        stored
     };
 
-    for m in MIGRATIONS {
-        if i64::from(m.version) <= current {
-            continue;
-        }
+    for m in pending(stored) {
         apply_migration(conn, m)?;
     }
     Ok(())
@@ -617,18 +792,17 @@ pub fn run(conn: &mut Connection) -> StoreResult<()> {
 /// behaviour verified.
 ///
 /// Uses the same `apply_migration()` as `run()`, so FK_DISABLE_REQUIRED
-/// migrations are handled identically.
+/// migrations are handled identically. The lower bound is the same
+/// [`pending`] every other caller uses; only the upper bound is this
+/// function's own.
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 pub(crate) fn run_up_to(conn: &mut Connection, max_version: i32) -> StoreResult<()> {
-    let current = read_stored_version(conn)?.number();
+    let stored = read_stored_version(conn)?;
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS sui_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);",
     )?;
-    for m in MIGRATIONS {
-        if i64::from(m.version) <= current || m.version > max_version {
-            continue;
-        }
+    for m in pending(stored).filter(|m| m.version <= max_version) {
         apply_migration(conn, m)?;
     }
     Ok(())
@@ -645,4 +819,11 @@ pub(crate) fn sql_for_version(version: i32) -> &'static str {
         .find(|m| m.version == version)
         .unwrap_or_else(|| panic!("no migration with version {version}"))
         .sql
+}
+
+/// All registered migrations, in order. Test-only: production code reaches
+/// them only through [`pending`], never the raw list.
+#[cfg(test)]
+pub(crate) fn all() -> &'static [Migration] {
+    MIGRATIONS
 }

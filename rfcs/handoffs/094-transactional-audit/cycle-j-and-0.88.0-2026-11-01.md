@@ -451,7 +451,14 @@ for the case where forgetting is most expensive.
    prescribes `immutable=1` when no `-wal` exists, after a re-measure on the
    bundled SQLite 3.53.2. And the subcommand reference table it joins is
    wrong in several rows, including `admin rotate-key` described as a
-   signing-key rotation; the dispatch corrects it.
+   signing-key rotation; the dispatch corrects it. — **LANDED** 2026-11-07,
+   matrix 47/47. *The review folded in two defects*: the `immutable` URI was
+   not percent-encoded, so a `#` or `?` in a directory name made a populated
+   database preview as **empty**; and the test said to prove the preview and
+   the runner agree never observed the runner (a runner skipping 0045 passed
+   it). It also moved `admin rotate-key`'s flags out of `setup`'s `--help`
+   entry. Review —
+   `.git-exclude/reviewed/cycle-j-stage8-rfc142-stage4-preview-upgrade-2026-11-07.md`.
 9. **RFC 142 stage 5** — the automatic pre-upgrade backup.
 
 **Then M2b closes** on the adversarial evidence package and your

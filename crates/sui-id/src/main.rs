@@ -72,6 +72,7 @@ async fn run() -> Result<()> {
         Some("backup") => return cli::run_backup_subcommand(&args),
         Some("restore") => return cli::run_restore_subcommand(&args),
         Some("verify-backup") => return cli::run_verify_backup_subcommand(&args),
+        Some("preview-upgrade") => return cli::run_preview_upgrade_subcommand(&args),
         Some("admin") => return cli::run_admin_subcommand(&args).await,
         Some("setup") => return cli::run_setup_subcommand(&args).await,
         Some(other) => bail!("unknown subcommand {other:?}. Run `sui-id --help` for usage."),

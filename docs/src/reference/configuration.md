@@ -128,14 +128,19 @@ CLI arguments — apply only to the current process invocation, not persisted.
 | Subcommand | Description |
 |---|---|
 | `sui-id setup --config <c> --admin-username <name>` | **Headless initialization (RFC 077).** Creates the first administrator and bootstraps a signing key without the GUI wizard. Accepts `--admin-email` and `--admin-display-name`. Password comes from `SUI_ID_ADMIN_PASSWORD` env var if set; otherwise a random 24-char password is generated and printed once to stdout with a change advisory. Fails if the instance is already initialized. |
-| `sui-id backup --config <c> --dest <path>` | Create an encrypted archive of the database and key file. |
-| `sui-id restore --config <c> --src <path>` | Restore from an archive. Prompts for confirmation before overwriting. |
-| `sui-id verify-backup --src <path>` | Verify archive integrity and print a compatibility report without writing files. |
-| `sui-id admin unlock-user --config <c> <username>` | Clear an automatically-locked account immediately. |
+| `sui-id backup --config <c> --to <path> [--encrypt]` | Create an archive of the database and key file. Plain by default; with `--encrypt`, wrapped in a passphrase-derived envelope — use it for a backup that will leave the host. |
+| `sui-id restore --config <c> --from <path> [--force] [--decrypt]` | Restore from an archive. **Refuses** to overwrite an existing database or key file unless `--force` is given — it does not prompt. Use `--decrypt` for an archive made with `--encrypt`. |
+| `sui-id verify-backup --from <path> [--decrypt]` | Verify archive integrity and print a compatibility report without writing files. |
+| `sui-id admin unlock-user --config <c> --username <name>` | Clear an automatically-locked account immediately. |
+| `sui-id admin reset-mfa --config <c> --username <name> --reason <text>` | Remove every MFA factor (TOTP and passkeys) for the user, on the operator's authority. The recovery path for a sole administrator who lost every factor. The reason is recorded in the audit log. |
 | `sui-id admin issue-recovery-link --config <c> --username <name> --reason <text>` | Issue a single-use, 30-minute account-recovery link for a local user, on the operator's authority; works for any local account including the sole administrator. The link and token text are printed once to stdout. At most 5 an hour. See [Issuing a recovery link from the host](../guides/operators.md#issuing-a-recovery-link-from-the-host). |
-| `sui-id admin rotate-key --config <c>` | Create and activate a new Ed25519 signing key; retire the old one. |
+| `sui-id admin rotate-key [--generate-new-key \| --new-key <path>] [--yes] --config <c>` | **Re-seals every encrypted column under a new master key, offline.** Not a signing-key rotation. Stop the server first and take a fresh backup — it opens the database for writing. The previous key file is kept beside the new one as `<original>.bak.<timestamp>`. |
 | `sui-id admin rotate-metrics-token --config <c>` | Generate a new Prometheus metrics bearer token and print it once. |
 | `sui-id admin issue-registration-token --config <c> [--max-uses N] [--note TEXT]` | Generate an RFC 7591 initial-access token for dynamic client registration. Printed once — save it immediately. |
+| `sui-id admin revoke-registration-token --config <c> --id <id>` | Immediately revoke a client-registration token by id so it can no longer be redeemed. |
+| `sui-id admin list-registration-tokens --config <c>` | Read-only. Lists every registration token's id, creation time, use count/limit, expiry and revoked state. Never prints the token or its hash. |
+| `sui-id admin legacy-dynamic-candidates --config <c>` | Read-only (RFC 095). Lists `clients` rows a 2026-07-02–2026-10-02 bug may have left mislabelled `admin` when they were really self-registered. An empty result is not an all-clear — see [the upgrade guide](../guides/upgrade.md#v083x). |
+| `sui-id preview-upgrade [--config <c>]` | Read-only. Reports the stored schema version, the release that last migrated it, the migrations this sui-id would run, and the version it would end at — or the same refusal line startup would print. Writes nothing and needs no master key. |
 
 Run `sui-id --help` for the full flag listings.
 

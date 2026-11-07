@@ -78,6 +78,24 @@ pub fn check(path: &Path) -> anyhow::Result<()> {
     }
 }
 
+/// Preview what this build would do to the database at `path`, without
+/// writing anything and without resolving a master key (RFC 142 stage 4). A
+/// refused database produces exactly the same [`DatabaseRefused`] — same
+/// line, same `tracing` event, same exit code — as [`check`] and [`open`],
+/// because both go through [`refusal`].
+pub fn preview(path: &Path) -> anyhow::Result<sui_id_store::migrations::Preview> {
+    match sui_id_store::migrations::preview(path) {
+        Ok(outcome) => Ok(outcome),
+        Err(err) => {
+            let store_err = StoreError::from(err);
+            match refusal(path, &store_err) {
+                Some(refused) => Err(refused.into()),
+                None => Err(anyhow::Error::new(store_err)).context("previewing the upgrade"),
+            }
+        }
+    }
+}
+
 /// If `err` is one of the two schema refusals, log it once and build the line.
 fn refusal(path: &Path, err: &StoreError) -> Option<DatabaseRefused> {
     let stamped_by = || sui_id_store::migrations::last_migrated_by_file(path);
