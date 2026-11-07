@@ -8,7 +8,14 @@ authorization, or override the RFC.
 **Authorization:** [`implementation-start-authorization.md`](./implementation-start-authorization.md),
 reviewed at [`093-implementation-start-authorization-review-2026-07-21.md`](093-implementation-start-authorization-review-2026-07-21.md)
 
-> **Open round, 2026-10-28: the local matrix becomes a script** —
+> **Open round, 2026-11-07: `--changed`** —
+> [`local-matrix-changed-mode-2026-11-07.md`](local-matrix-changed-mode-2026-11-07.md),
+> cycle J stage 7d. The local matrix gains the selection CI's `changes`
+> job already applies (RFC 130 D6/D7), from the same `rust_scope.py`, so
+> a docs-only change stops paying ~20 minutes for lanes CI would skip.
+> The full run stays the default. **No gate and no lane changes.**
+>
+> **Landed round, 2026-10-28: the local matrix becomes a script** —
 > [`local-matrix-script-2026-10-28.md`](local-matrix-script-2026-10-28.md),
 > cycle H item 4. There is no tracked definition of "the local matrix"
 > anywhere, so it has lived in whatever each dispatch enumerated by

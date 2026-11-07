@@ -407,6 +407,20 @@ for the case where forgetting is most expensive.
    `.git-exclude/tmp/clones/` is the wrong place for a clone that builds
    the workspace, and `/tmp` is too small; a sibling of the tree on the
    main disk works.*
+7d. **The local matrix learns what CI already knows: `--changed`.**
+   **DISPATCHED** 2026-11-07 —
+   `rfcs/handoffs/093-build-toolchain-release-gates/local-matrix-changed-mode-2026-11-07.md`.
+   A full local run is 20.6 minutes, 93% of it in G02/G04/G05/G06, and a
+   docs-only commit pays all of it although CI's `changes` job (RFC 130 D6)
+   would skip those lanes. `--changed` selects by CI's rule, from the same
+   `rust_scope.py`, fails open as D7 does, and states every lane it
+   skipped. The full run stays the default and release preparation keeps
+   it. It goes ahead of stages 8–9 because it speeds up every docs, RFC
+   and review commit after it. Stages 8–9 are Rust changes, so they still
+   run in full. *It reverses the script's "no fast subset" rule, which
+   came from the architect's own dispatch and from nowhere else.
+   The dispatch's §2 says why the defect that rule guarded against stays
+   closed.*
 8. **RFC 142 stage 4** — the preview subcommand.
 9. **RFC 142 stage 5** — the automatic pre-upgrade backup.
 
