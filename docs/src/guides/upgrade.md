@@ -24,8 +24,10 @@
    build can use, so you learn that here rather than from a service that
    will not start.
 
-5. **Start** the new binary. Migrations run automatically on startup.
-   Check stderr for any migration errors.
+5. **Start** the new binary. Migrations run automatically on startup. If a
+   migration will actually run, starting also takes an automatic snapshot
+   of the database first (RFC 142 stage 5) — see "The pre-migration
+   snapshot" below. Check stderr for any migration errors.
 
 6. **Verify** — open the admin panel and confirm the version shown in
    Settings → Advanced.
@@ -139,13 +141,43 @@ add them continue to work without change:
 - Migration 0023 adds the `email_outbox` table for async mail delivery.
   The outbox worker starts automatically; no configuration change is needed.
 
+## The pre-migration snapshot
+
+Starting a binary that will actually run a migration (`preview-upgrade`
+reports `Pending`, not already at head, and not a fresh database) first
+takes an automatic, plain `VACUUM INTO` snapshot beside the database,
+named from the database's own file name and the versions it spans, for
+example `sui-id.sqlite.pre-upgrade-schema-44-to-49-20261108T091500Z.sqlite`.
+It is mode `0600`, never world-readable. Decline it with `--no-backup`
+(still logged, so the decision is on the record).
+
+**It is not encrypted, and that is not a new exposure**: it holds exactly
+what the live database file already holds — the encrypted columns stay
+sealed under the master key, which is never in it. Unlike `sui-id backup`
+(step 1 above), it needs no passphrase and no key-file copy; a restore
+needs only `sqlite3` and the file itself. It is never deleted
+automatically — once the upgrade is verified (step 6), it is safe to
+delete.
+
 ## Rollback
 
-Rollback is not supported. If a bad release is deployed:
+If a bad release is deployed, roll back to the pre-upgrade state with
+either the step-1 backup or the automatic pre-migration snapshot above.
+Either one takes the database back to the moment before the migration ran.
+**Everything written after the new binary started is lost**: sign-ins and
+sessions, users or applications created, settings changed, audit entries.
+Roll back as soon as you know you need to.
 
 1. Stop the new binary.
-2. Restore the pre-upgrade backup:
-   `sui-id restore --config sui-id.toml --from sui-id-pre-upgrade.tar --force`.
+2. Restore the pre-upgrade state, either:
+   - the step-1 backup: `sui-id restore --config sui-id.toml --from
+     sui-id-pre-upgrade.tar --force`; or
+   - the automatic snapshot: replace the database file with it (and
+     remove any `-wal`/`-shm` file beside the live database first — the
+     snapshot is a complete file, not a diff). The snapshot belongs to the
+     user that ran the binary that took it, so if that was not the service
+     user (an `admin` command run as root, for example), give it the
+     database's usual owner before starting.
 3. Start the previous binary.
 
 An older binary **refuses to start** against a database that a newer binary has

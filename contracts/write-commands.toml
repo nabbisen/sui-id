@@ -1295,6 +1295,17 @@ files = ["crates/sui-id-store/src/repos/forgot_password_requests.rs"]
 test_id = "`o_o06_claim_marks_processing_and_requeue_resets_it`"
 
 [[command]]
+id = "O07"
+class = "O"
+status = "implemented"  # implemented | target-absent | target-legacy
+sealed = false
+owner = "Automatic pre-migration database snapshot"
+rationale = "automatic pre-migration snapshot; no domain mutation in the live database. RFC 142 stage 5 (D4): `database::open` takes it only when a migration will actually run, through a read-only VACUUM INTO beside the database -- distinct from O04's own operator-invoked VACUUM INTO (`sui-id backup`), which is not this row's rationale (`operator-invoked`) at all."
+mutation_surface = "`backup::ops::pre_migration_snapshot` destination"
+files = ["crates/sui-id-store/src/backup/ops.rs"]
+test_id = "`it_happens_exactly_one_valid_snapshot_at_the_pre_migration_version_mode_0600` (e2e)"
+
+[[command]]
 id = "X01"
 class = "X"
 status = "implemented"  # implemented | target-absent | target-legacy

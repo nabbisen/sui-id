@@ -171,20 +171,33 @@ pub(crate) fn run_preview_upgrade_subcommand(args: &[String]) -> Result<()> {
     let path = &cfg.storage.db_path;
 
     let outcome = sui_id::database::preview(path)?;
+    // RFC 142 stage 5 §6: the same free-space function `database::open`
+    // itself will use, so the preview's prediction and the start's actual
+    // decision can never disagree about the numbers. Only meaningful (and
+    // only computed) when a migration would actually run.
+    let free_space = matches!(outcome, sui_id_store::migrations::Preview::Pending { .. })
+        .then(|| sui_id_store::backup::check_free_space(path));
     print!(
         "{}",
-        render_preview_upgrade(env!("CARGO_PKG_VERSION"), path, &outcome)
+        render_preview_upgrade(
+            env!("CARGO_PKG_VERSION"),
+            path,
+            &outcome,
+            free_space.as_ref()
+        )
     );
     Ok(())
 }
 
-/// The exact text of `preview-upgrade`'s report (RFC 142 stage 4 §2). A pure
-/// function of its inputs so the four forms can be asserted against
-/// synthetic `Preview` values, not only through a real database file.
+/// The exact text of `preview-upgrade`'s report (RFC 142 stage 4 §2, RFC
+/// 142 stage 5 §6). A pure function of its inputs so the forms can be
+/// asserted against synthetic `Preview`/`FreeSpaceCheck` values, not only
+/// through a real database file. `free_space` is read only for `Pending`.
 fn render_preview_upgrade(
     version: &str,
     path: &std::path::Path,
     outcome: &sui_id_store::migrations::Preview,
+    free_space: Option<&sui_id_store::backup::FreeSpaceCheck>,
 ) -> String {
     use std::fmt::Write as _;
     use sui_id_store::migrations::{MAX_SCHEMA_VERSION, Preview};
@@ -232,6 +245,9 @@ fn render_preview_upgrade(
             );
             for m in migrations {
                 let _ = writeln!(out, "    {}", m.name);
+            }
+            if let Some(check) = free_space {
+                let _ = writeln!(out, "  {}", sui_id::database::backup_prediction_line(check));
             }
             let _ = writeln!(
                 out,
@@ -294,7 +310,11 @@ pub(crate) async fn run_admin_unlock_user(args: &[String]) -> Result<()> {
     // server uses (env var > file). No need to spin up the HTTP
     // layer or the clock; we read one row, write one row, exit.
     let resolved = sui_id::keyring::resolve(&cfg.storage.key_file).context("loading master key")?;
-    let db = sui_id::database::open(&cfg.storage.db_path, resolved.key)?;
+    let db = sui_id::database::open(
+        &cfg.storage.db_path,
+        resolved.key,
+        sui_id::database::backup_policy_from_args(args),
+    )?;
 
     let user = sui_id_store::repos::users::find_by_username(&db, username)
         .await
@@ -332,7 +352,11 @@ pub(crate) async fn run_admin_reset_mfa(args: &[String]) -> Result<()> {
     let cfg = Config::load(&config_path)
         .with_context(|| format!("loading config from {}", config_path.display()))?;
     let resolved = sui_id::keyring::resolve(&cfg.storage.key_file).context("loading master key")?;
-    let db = sui_id::database::open(&cfg.storage.db_path, resolved.key)?;
+    let db = sui_id::database::open(
+        &cfg.storage.db_path,
+        resolved.key,
+        sui_id::database::backup_policy_from_args(args),
+    )?;
 
     match sui_id_core::admin::operator_reset_mfa(&db, username, reason).await {
         Ok((user_id, report)) => {
@@ -381,7 +405,11 @@ pub(crate) async fn run_admin_issue_recovery_link(args: &[String]) -> Result<()>
     let cfg = Config::load(&config_path)
         .with_context(|| format!("loading config from {}", config_path.display()))?;
     let resolved = sui_id::keyring::resolve(&cfg.storage.key_file).context("loading master key")?;
-    let db = sui_id::database::open(&cfg.storage.db_path, resolved.key)?;
+    let db = sui_id::database::open(
+        &cfg.storage.db_path,
+        resolved.key,
+        sui_id::database::backup_policy_from_args(args),
+    )?;
     let clock: sui_id_core::time::SharedClock = std::sync::Arc::new(sui_id_core::time::SystemClock);
 
     match sui_id_core::recovery_link::issue_as_operator(&db, &clock, username, reason).await {
@@ -562,7 +590,11 @@ pub(crate) async fn run_admin_rotate_key(args: &[String]) -> Result<()> {
     // the server's startup logic).
     let resolved_old =
         sui_id::keyring::resolve(&cfg.storage.key_file).context("loading old master key")?;
-    let db = sui_id::database::open(&cfg.storage.db_path, resolved_old.key)?;
+    let db = sui_id::database::open(
+        &cfg.storage.db_path,
+        resolved_old.key,
+        sui_id::database::backup_policy_from_args(args),
+    )?;
 
     // Construct the NEW key. Either generate one or read it
     // from the operator-provided file.
@@ -740,7 +772,11 @@ async fn run_setup(args: &[String]) -> Result<()> {
         .with_context(|| format!("loading config from {}", config_path.display()))?;
 
     let resolved = sui_id::keyring::resolve(&cfg.storage.key_file).context("loading master key")?;
-    let db = sui_id::database::open(&cfg.storage.db_path, resolved.key)?;
+    let db = sui_id::database::open(
+        &cfg.storage.db_path,
+        resolved.key,
+        sui_id::database::backup_policy_from_args(args),
+    )?;
 
     let clock = sui_id_core::time::system_clock();
 
@@ -1014,6 +1050,12 @@ OPTIONS:
     --force                  Allow `restore` to overwrite existing files.
     --encrypt                Encrypt the backup with a passphrase.
     --decrypt                Treat the input as an encrypted backup.
+    --no-backup              Skip the automatic pre-migration database
+                             snapshot (RFC 142 stage 5). Applies to the
+                             server's own start and to any subcommand
+                             that may migrate the database — not a
+                             per-subcommand flag. Use `preview-upgrade`
+                             first to see whether it would apply.
     --dev-bind ADDR          Listen address for `--dev`
                              (default: 127.0.0.1:8801).
     --dev-db PATH            Pin the dev-mode database to a file path
@@ -1067,7 +1109,11 @@ pub(crate) async fn run_admin_rotate_metrics_token(args: &[String]) -> Result<()
         .with_context(|| format!("loading config from {}", config_path.display()))?;
 
     let resolved = sui_id::keyring::resolve(&cfg.storage.key_file).context("loading master key")?;
-    let db = sui_id::database::open(&cfg.storage.db_path, resolved.key)?;
+    let db = sui_id::database::open(
+        &cfg.storage.db_path,
+        resolved.key,
+        sui_id::database::backup_policy_from_args(args),
+    )?;
 
     // Generate a fresh 32-byte random token and encode it as URL-safe base64.
     let mut raw = [0u8; 32];
@@ -1119,7 +1165,11 @@ pub(crate) async fn run_admin_issue_registration_token(args: &[String]) -> Resul
         .with_context(|| format!("loading config from {}", config_path.display()))?;
 
     let resolved = sui_id::keyring::resolve(&cfg.storage.key_file).context("loading master key")?;
-    let db = sui_id::database::open(&cfg.storage.db_path, resolved.key)?;
+    let db = sui_id::database::open(
+        &cfg.storage.db_path,
+        resolved.key,
+        sui_id::database::backup_policy_from_args(args),
+    )?;
 
     // Parse --max-uses N (default 1)
     let max_uses: i64 = {
@@ -1254,7 +1304,11 @@ pub(crate) async fn run_admin_revoke_registration_token(args: &[String]) -> Resu
     let cfg = Config::load(&config_path)
         .with_context(|| format!("loading config from {}", config_path.display()))?;
     let resolved = sui_id::keyring::resolve(&cfg.storage.key_file).context("loading master key")?;
-    let db = sui_id::database::open(&cfg.storage.db_path, resolved.key)?;
+    let db = sui_id::database::open(
+        &cfg.storage.db_path,
+        resolved.key,
+        sui_id::database::backup_policy_from_args(args),
+    )?;
 
     let now = sui_id_core::time::system_clock().now();
     sui_id_store::commands::revoke_registration_token(&db, id, now)
@@ -1280,7 +1334,11 @@ pub(crate) async fn run_admin_list_registration_tokens(args: &[String]) -> Resul
     let cfg = Config::load(&config_path)
         .with_context(|| format!("loading config from {}", config_path.display()))?;
     let resolved = sui_id::keyring::resolve(&cfg.storage.key_file).context("loading master key")?;
-    let db = sui_id::database::open(&cfg.storage.db_path, resolved.key)?;
+    let db = sui_id::database::open(
+        &cfg.storage.db_path,
+        resolved.key,
+        sui_id::database::backup_policy_from_args(args),
+    )?;
 
     let rows = sui_id_store::repos::client_registration_token::list(&db)
         .await
@@ -1520,7 +1578,11 @@ pub(crate) async fn run_admin_legacy_dynamic_candidates(args: &[String]) -> Resu
         .with_context(|| format!("loading config from {}", config_path.display()))?;
 
     let resolved = sui_id::keyring::resolve(&cfg.storage.key_file).context("loading master key")?;
-    let db = sui_id::database::open(&cfg.storage.db_path, resolved.key)?;
+    let db = sui_id::database::open(
+        &cfg.storage.db_path,
+        resolved.key,
+        sui_id::database::backup_policy_from_args(args),
+    )?;
 
     let report = sui_id_store::repos::audit::legacy_dynamic_candidates(&db)
         .await

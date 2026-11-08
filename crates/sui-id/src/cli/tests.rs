@@ -571,6 +571,7 @@ fn issued_registration_tokens_output_contains_the_id() {
 mod preview_upgrade_render {
     use super::*;
     use std::path::Path;
+    use sui_id_store::backup::FreeSpaceCheck;
     use sui_id_store::migrations::{MAX_SCHEMA_VERSION, Preview, StoredVersion, pending};
 
     fn p() -> &'static Path {
@@ -579,7 +580,7 @@ mod preview_upgrade_render {
 
     #[test]
     fn no_file_says_no_database_and_that_starting_creates_everything() {
-        let text = render_preview_upgrade("0.88.0", p(), &Preview::NoFile);
+        let text = render_preview_upgrade("0.88.0", p(), &Preview::NoFile, None);
         assert_eq!(
             text,
             format!(
@@ -593,7 +594,7 @@ mod preview_upgrade_render {
 
     #[test]
     fn fresh_says_the_database_is_empty_and_that_starting_creates_everything() {
-        let text = render_preview_upgrade("0.88.0", p(), &Preview::Fresh);
+        let text = render_preview_upgrade("0.88.0", p(), &Preview::Fresh, None);
         assert_eq!(
             text,
             format!(
@@ -607,7 +608,7 @@ mod preview_upgrade_render {
 
     #[test]
     fn at_head_says_so_and_lists_nothing() {
-        let text = render_preview_upgrade("0.88.0", p(), &Preview::AtHead);
+        let text = render_preview_upgrade("0.88.0", p(), &Preview::AtHead, None);
         assert_eq!(
             text,
             format!(
@@ -633,6 +634,7 @@ mod preview_upgrade_render {
                 last_migrated_by: Some("0.86.0".to_string()),
                 migrations: migrations.clone(),
             },
+            None,
         );
         let mut expected = format!(
             "sui-id 0.88.0: upgrade preview for /var/lib/sui-id/sui-id.sqlite\n\
@@ -667,11 +669,103 @@ mod preview_upgrade_render {
                 last_migrated_by: None,
                 migrations,
             },
+            None,
         );
         assert!(
             text.contains("(the release that last migrated it is not recorded)"),
             "{text}"
         );
         assert!(!text.contains("last migrated by"), "{text}");
+    }
+
+    /// RFC 142 stage 5 §6: the backup-prediction line, enough space.
+    #[test]
+    fn pending_with_enough_space_predicts_the_backup_before_nothing_was_changed() {
+        let migrations: Vec<_> = pending(StoredVersion::At(44)).collect();
+        let check = FreeSpaceCheck {
+            needed_bytes: 20 * 1024 * 1024,
+            available_bytes: Some(500 * 1024 * 1024),
+        };
+        let text = render_preview_upgrade(
+            "0.88.0",
+            p(),
+            &Preview::Pending {
+                current: 44,
+                last_migrated_by: Some("0.86.0".to_string()),
+                migrations,
+            },
+            Some(&check),
+        );
+        let backup_line_pos = text
+            .find("Before migrating, this sui-id writes a backup")
+            .expect("backup prediction line present");
+        let changed_line_pos = text
+            .find("Nothing was changed.")
+            .expect("nothing-was-changed line present");
+        assert!(
+            backup_line_pos < changed_line_pos,
+            "the backup prediction must come before \"Nothing was changed.\":\n{text}"
+        );
+        // `needed_bytes` is doubled for migration headroom: the backup itself
+        // is half of it, and the line must not call the doubled figure the
+        // backup's size.
+        assert!(text.contains("a backup of about 10 MB"), "{text}");
+        assert!(
+            text.contains("(about 20 MB free needed, about 500 MB available)"),
+            "{text}"
+        );
+        assert!(!text.contains("not enough space"), "{text}");
+    }
+
+    /// RFC 142 stage 5 §6: the backup-prediction line, not enough space —
+    /// the preview must predict exactly what `database::open` would decide.
+    #[test]
+    fn pending_with_short_space_predicts_a_refusal() {
+        let migrations: Vec<_> = pending(StoredVersion::At(44)).collect();
+        let check = FreeSpaceCheck {
+            needed_bytes: 20 * 1024 * 1024,
+            available_bytes: Some(5 * 1024 * 1024),
+        };
+        let text = render_preview_upgrade(
+            "0.88.0",
+            p(),
+            &Preview::Pending {
+                current: 44,
+                last_migrated_by: Some("0.86.0".to_string()),
+                migrations,
+            },
+            Some(&check),
+        );
+        assert!(
+            text.contains("not enough space")
+                && text.contains("this sui-id would refuse to migrate"),
+            "{text}"
+        );
+    }
+
+    /// A database under a megabyte, which sui-id databases often are, must
+    /// not be described as "0 MB".
+    #[test]
+    fn a_backup_under_a_megabyte_is_not_called_zero_mb() {
+        let migrations: Vec<_> = pending(StoredVersion::At(44)).collect();
+        let check = FreeSpaceCheck {
+            needed_bytes: 2 * 40 * 1024,
+            available_bytes: Some(3 * 1024 * 1024 * 1024 + 512 * 1024),
+        };
+        let text = render_preview_upgrade(
+            "0.88.0",
+            p(),
+            &Preview::Pending {
+                current: 44,
+                last_migrated_by: Some("0.86.0".to_string()),
+                migrations,
+            },
+            Some(&check),
+        );
+        assert!(!text.contains(" 0 MB"), "{text}");
+        assert!(
+            text.contains("a backup of under 1 MB beside the database (under 1 MB free needed, about 3072 MB available)"),
+            "{text}"
+        );
     }
 }

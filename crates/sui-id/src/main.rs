@@ -28,10 +28,19 @@ async fn main() -> std::process::ExitCode {
                 eprintln!("{}", refused.line());
                 std::process::ExitCode::from(sui_id::database::EXIT_DATABASE_REFUSED)
             }
-            None => {
-                eprintln!("Error: {err:?}");
-                std::process::ExitCode::FAILURE
-            }
+            None => match err.downcast_ref::<sui_id::database::PreMigrationBackupRefused>() {
+                // RFC 142 stage 5 §5: a disk problem, not a schema one — exit
+                // 1 like any other failure, but the bare line, not wrapped in
+                // "Error: ...", since the check that refused wrote nothing.
+                Some(refused) => {
+                    eprintln!("{}", refused.line());
+                    std::process::ExitCode::FAILURE
+                }
+                None => {
+                    eprintln!("Error: {err:?}");
+                    std::process::ExitCode::FAILURE
+                }
+            },
         },
     }
 }
@@ -113,7 +122,8 @@ async fn serve(args: &[String]) -> Result<()> {
     let cfg = Config::load(&config_path)
         .with_context(|| format!("loading config from {}", config_path.display()))?;
 
-    let startup = startup::prepare(cfg).await?;
+    let backup_policy = sui_id::database::backup_policy_from_args(args);
+    let startup = startup::prepare(cfg, backup_policy).await?;
     let router = build_router(startup.state.clone());
 
     sui_id::gc::spawn(startup.state.clone());

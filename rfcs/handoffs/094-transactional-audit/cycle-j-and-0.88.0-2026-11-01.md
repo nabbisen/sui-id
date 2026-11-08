@@ -470,6 +470,12 @@ for the case where forgetting is most expensive.
    comes from `rustix` (already locked, since `unsafe` is forbidden). A
    shortfall is a refusal with exit 1, not 65. `preview-upgrade` predicts
    the decision. The last stage of RFC 142; its closure stays the owner's.
+   — **LANDED** 2026-11-08, matrix 47/47. *The review folded in operator
+   wording*: sizes under 1 MB read "about 0 MB", and the prediction named
+   the doubled free-space need as the backup's size. It also made the
+   snapshot-failure test skip visibly when run privileged, and stated in
+   Rollback what a rollback loses. Review —
+   `.git-exclude/reviewed/cycle-j-stage9-rfc142-stage5-pre-migration-backup-2026-11-08.md`.
 
 **Then M2b closes** on the adversarial evidence package and your
 acceptance — which, per §B, the architect cannot give for its own work.

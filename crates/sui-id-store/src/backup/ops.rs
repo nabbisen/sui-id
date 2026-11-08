@@ -267,6 +267,172 @@ pub fn run_verify(src: &Path, passphrase: Option<&str>) -> Result<VerifyReport> 
     })
 }
 
+// ---------- RFC 142 stage 5: the automatic pre-migration backup ---
+
+/// Free-space measurement for the pre-migration snapshot (§5). `needed` is
+/// already doubled: one multiple of the database's own size (main file plus
+/// `-wal`, if any) for the snapshot itself, one of headroom for the
+/// migrations that follow it, since a table rebuild can briefly double a
+/// table. `available` is `None` when it could not be measured on this
+/// platform — never by itself a reason to refuse (§5: take the snapshot
+/// anyway, and say it was not checked).
+#[derive(Debug, Clone, Copy)]
+pub struct FreeSpaceCheck {
+    pub needed_bytes: u64,
+    pub available_bytes: Option<u64>,
+}
+
+impl FreeSpaceCheck {
+    /// Only a *measured* shortfall refuses. `available_bytes: None` is not
+    /// short — it is unmeasurable, which `database::open` takes as "proceed,
+    /// and say so."
+    pub fn is_short(&self) -> bool {
+        matches!(self.available_bytes, Some(avail) if avail < self.needed_bytes)
+    }
+
+    /// The size of the snapshot itself: half of [`Self::needed_bytes`],
+    /// which is deliberately doubled for migration headroom. Operator lines
+    /// name the two separately; a line that called `needed_bytes` the
+    /// backup's size would state it at twice its real size.
+    pub fn snapshot_bytes(&self) -> u64 {
+        self.needed_bytes / 2
+    }
+}
+
+/// Bytes to whole megabytes, **rounded down**. Operator-facing lines do not
+/// use this: they go through `sui_id::database`'s own formatter, which says
+/// "under 1 MB" rather than "0 MB" and rounds a requirement up.
+pub fn to_mb(bytes: u64) -> u64 {
+    bytes / (1024 * 1024)
+}
+
+/// Measure free space for a pre-migration snapshot of the database at
+/// `db_path`. Reads only file sizes and the filesystem's own `statvfs`;
+/// opens nothing.
+pub fn check_free_space(db_path: &Path) -> FreeSpaceCheck {
+    let db_size = std::fs::metadata(db_path).map(|m| m.len()).unwrap_or(0);
+    let wal_size = {
+        let mut wal = db_path.as_os_str().to_owned();
+        wal.push("-wal");
+        std::fs::metadata(wal).map(|m| m.len()).unwrap_or(0)
+    };
+    let needed_bytes = (db_size + wal_size).saturating_mul(2);
+    FreeSpaceCheck {
+        needed_bytes,
+        available_bytes: available_bytes_beside(db_path),
+    }
+}
+
+#[cfg(unix)]
+fn available_bytes_beside(db_path: &Path) -> Option<u64> {
+    let dir = db_path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let stat = rustix::fs::statvfs(dir).ok()?;
+    Some(stat.f_bavail.saturating_mul(stat.f_frsize))
+}
+
+#[cfg(not(unix))]
+fn available_bytes_beside(_db_path: &Path) -> Option<u64> {
+    // No safe, already-locked `statvfs` equivalent for non-Unix platforms;
+    // `check_free_space` reports this as unmeasurable, which is not a
+    // refusal (§5).
+    None
+}
+
+/// The pre-migration snapshot's name: derived from the database's own file
+/// name, in its own directory, so an operator with several can see which
+/// one to restore without opening any (RFC 142 stage 5 §4).
+pub fn pre_migration_snapshot_path(db_path: &Path, from: i64, to: i32) -> PathBuf {
+    let file_name = db_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("database");
+    let stamp = chrono::Utc::now().format("%Y%m%dT%H%M%SZ");
+    db_path.with_file_name(format!(
+        "{file_name}.pre-upgrade-schema-{from}-to-{to}-{stamp}.sqlite"
+    ))
+}
+
+/// Take the automatic pre-migration snapshot: a plain (unencrypted)
+/// `VACUUM INTO` beside the database, not `run_backup`'s encrypted path, so
+/// a restore needs only `sqlite3` (D4). Measured before building (§4):
+/// `VACUUM INTO` works from a read-only source connection and includes
+/// committed WAL frames, so the source is never opened for writing — this
+/// reuses [`crate::migrations::open_preview_connection`], which already
+/// avoids leaving `-shm`/`-wal` behind and already percent-encodes the
+/// path. `VACUUM INTO` also accepts a pre-created empty file and keeps its
+/// mode, so the destination is created `0600` *before* any bytes are
+/// written to it — never world-readable, not even for an instant — and
+/// `create_new` means an existing file of the same name is never
+/// overwritten: this returns an error instead, and the caller removes
+/// nothing (the existing file was never touched).
+///
+/// On a failure *after* creation (the `VACUUM INTO` itself), the partial
+/// file this call created is removed before returning.
+pub fn pre_migration_snapshot(db_path: &Path, from: i64, to: i32) -> Result<PathBuf> {
+    let dest = pre_migration_snapshot_path(db_path, from, to);
+    create_snapshot_file(&dest)?;
+
+    // Every failure from here on removes the file this call just created —
+    // not only a `VACUUM INTO` failure. The source connection can fail too
+    // (RFC 142 stage 5 §3's documented race: the database can vanish or
+    // become unreadable between the free-space check and this call), and a
+    // partial file left behind either way is exactly what §3 point 4
+    // forbids.
+    match vacuum_into(db_path, &dest) {
+        Ok(()) => Ok(dest),
+        Err(e) => {
+            let _ = std::fs::remove_file(&dest);
+            Err(e)
+        }
+    }
+}
+
+fn vacuum_into(db_path: &Path, dest: &Path) -> Result<()> {
+    let conn = crate::migrations::open_preview_connection(db_path)
+        .map_err(BackupError::OpenSourceDatabase)?;
+    let target = dest.to_str().ok_or(BackupError::SnapshotPathNotUtf8)?;
+    let quoted = target.replace('\'', "''");
+    conn.execute_batch(&format!("VACUUM INTO '{quoted}'"))
+        .map_err(BackupError::VacuumInto)
+}
+
+/// `create_new` so an existing file of the same name is refused, not
+/// overwritten (§4). Unix gets mode `0600` at creation, atomically with
+/// `O_CREAT | O_EXCL` — never a window where the file exists world-
+/// readable. A non-Unix build still gets `create_new`'s collision safety;
+/// it just cannot also set the mode here (no safe, already-locked API for
+/// it), so the file is created with the platform's own default permissions.
+#[cfg(unix)]
+fn create_snapshot_file(dest: &Path) -> Result<()> {
+    use std::os::unix::fs::OpenOptionsExt as _;
+    OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .mode(0o600)
+        .open(dest)
+        .map(|_| ())
+        .map_err(|source| BackupError::CreateBackupFile {
+            path: dest.to_path_buf(),
+            source,
+        })
+}
+
+#[cfg(not(unix))]
+fn create_snapshot_file(dest: &Path) -> Result<()> {
+    OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(dest)
+        .map(|_| ())
+        .map_err(|source| BackupError::CreateBackupFile {
+            path: dest.to_path_buf(),
+            source,
+        })
+}
+
 // ---------- internals ---------------------------------------------
 
 fn read_source(src: &Path) -> Result<Vec<u8>> {

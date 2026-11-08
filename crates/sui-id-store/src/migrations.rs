@@ -795,9 +795,14 @@ pub fn run(conn: &mut Connection) -> StoreResult<()> {
 /// migrations are handled identically. The lower bound is the same
 /// [`pending`] every other caller uses; only the upper bound is this
 /// function's own.
-#[cfg(test)]
+///
+/// `pub`, not `pub(crate)`, under `test-support` (RFC 142 stage 5): lets
+/// `sui-id`'s own `tests/e2e/*.rs` build a real intermediate-version fixture
+/// through the compiled binary. Off by default; no production build of any
+/// crate enables the feature.
+#[cfg(any(test, feature = "test-support"))]
 #[allow(clippy::unwrap_used)]
-pub(crate) fn run_up_to(conn: &mut Connection, max_version: i32) -> StoreResult<()> {
+pub fn run_up_to(conn: &mut Connection, max_version: i32) -> StoreResult<()> {
     let stored = read_stored_version(conn)?;
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS sui_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);",

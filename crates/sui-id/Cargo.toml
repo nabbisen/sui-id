@@ -98,7 +98,12 @@ tempfile                    = { workspace = true }
 sha2                        = { workspace = true }
 
 [dev-dependencies]
-sui-id-store                = { workspace = true }
+# RFC 142 stage 5: `test-support` exposes `migrations::run_up_to` as `pub`
+# (otherwise `pub(crate)`/`#[cfg(test)]`, unreachable from here) so this
+# crate's own `tests/e2e/*.rs` can build a database at a known intermediate
+# schema version through the real binary. Dev-only, the same shape as
+# `sui-id-core`'s own `test-support` feature just below.
+sui-id-store                = { workspace = true, features = ["test-support"] }
 # Self dev-dependency: enables the test-support feature for this crate's tests only.
 sui-id                     = { path = ".", features = ["test-support"] }
 # Re-pull the core crate as a dev-dep with the `test-support`

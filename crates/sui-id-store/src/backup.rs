@@ -12,7 +12,10 @@ mod tar;
 mod tests;
 mod types;
 
-pub use ops::{run_backup, run_restore, run_verify};
+pub use ops::{
+    FreeSpaceCheck, check_free_space, pre_migration_snapshot, pre_migration_snapshot_path,
+    run_backup, run_restore, run_verify, to_mb,
+};
 pub use types::{BackupError, BackupOptions, Manifest, RestoreOptions, VerifyReport};
 
 /// Archive format version. Incremented on incompatible format changes.

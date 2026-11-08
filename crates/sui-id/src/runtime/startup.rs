@@ -133,7 +133,7 @@ pub fn install_rustls_crypto_provider() {
     });
 }
 
-pub async fn prepare(cfg: Config) -> Result<Startup> {
+pub async fn prepare(cfg: Config, backup: crate::database::PreMigrationBackup) -> Result<Startup> {
     let log_guard = init_tracing(&cfg.log);
 
     // 1. Resolve master key.
@@ -154,13 +154,14 @@ pub async fn prepare(cfg: Config) -> Result<Startup> {
         }
     }
 
-    // 2. Open the database (runs migrations).
+    // 2. Open the database (runs migrations; RFC 142 stage 5: takes a
+    // pre-migration backup first, unless `backup` declines it).
     if let Some(parent) = cfg.storage.db_path.parent()
         && !parent.as_os_str().is_empty()
     {
         std::fs::create_dir_all(parent).ok();
     }
-    let db = crate::database::open(&cfg.storage.db_path, resolved.key)?;
+    let db = crate::database::open(&cfg.storage.db_path, resolved.key, backup)?;
 
     // Verify the tail of the audit-log hash chain. A mismatch here
     // indicates DB-level tampering since the most recent restart;

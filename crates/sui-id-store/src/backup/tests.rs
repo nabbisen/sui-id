@@ -669,4 +669,45 @@ mod tests_inner {
         backup(&cfg, &dest, &BackupOptions::default()).expect("backup");
         assert_eq!(run_verify_manifest_only(&dest), 0);
     }
+
+    /// RFC 142 stage 5 §5: `needed` is 2x the database's own size (one
+    /// multiple for the snapshot, one of headroom for the migrations
+    /// themselves), not 1x. A real file of a known size, not a guess.
+    #[test]
+    fn free_space_needed_is_twice_the_database_plus_wal_size() {
+        let tmp = TempDir::new().unwrap();
+        let db = tmp.path().join("t.sqlite");
+        std::fs::write(&db, vec![0u8; 10_000]).unwrap();
+        let wal = tmp.path().join("t.sqlite-wal");
+        std::fs::write(&wal, vec![0u8; 2_000]).unwrap();
+
+        let check = super::super::check_free_space(&db);
+        assert_eq!(
+            check.needed_bytes,
+            2 * (10_000 + 2_000),
+            "needed must be 2x (db + wal), not 1x"
+        );
+    }
+
+    /// RFC 142 stage 5 §3 point 4 / §8 mutation table: a failure to open
+    /// the source (not only a `VACUUM INTO` failure) must still remove the
+    /// destination file this call already created.
+    #[test]
+    fn a_snapshot_failure_before_vacuum_into_still_removes_the_partial_file() {
+        let dir = TempDir::new().unwrap();
+        let fake_db = dir.path().join("fake.sqlite"); // never created
+        let err = super::super::pre_migration_snapshot(&fake_db, 44, 49)
+            .expect_err("the source does not exist");
+        assert!(matches!(err, BackupError::OpenSourceDatabase(_)), "{err:?}");
+
+        let remaining: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        assert!(
+            remaining.is_empty(),
+            "the partial file must be removed: {remaining:?}"
+        );
+    }
 }

@@ -354,6 +354,21 @@ fixture. **A floor is not to be declared to avoid fixing a migration.**
 that proves the backup actually happens and a test that proves it is
 skipped when nothing is pending.
 
+> **Stage 5 LANDED 2026-11-08** (cycle J stage 9). Starting a binary that
+> will run a migration first writes a plain `VACUUM INTO` snapshot beside
+> the database: `<db>.pre-upgrade-schema-<from>-to-<to>-<UTC>.sqlite`, mode
+> `0600` from creation, never overwriting, never deleted automatically. It
+> is taken from a read-only source that sees committed WAL frames. It is
+> refused, with exit 1 and nothing written, when free space is under `2 ×`
+> the database, or when the snapshot fails. `--no-backup` declines it, and
+> the choice is logged. **It applies to every migrating open, not only the
+> server**: the policy is a required parameter of `sui_id::database::open`,
+> so all eleven callers chose. `preview-upgrade` predicts the decision. With
+> this stage, **all four closure prerequisites are met**; closure itself is
+> the owner's. Dispatch —
+> [`../handoffs/142-upgrading-is-the-least-tested-thing-we-do/stage5-the-backup-before-the-migration-2026-11-08.md`](../handoffs/142-upgrading-is-the-least-tested-thing-we-do/stage5-the-backup-before-the-migration-2026-11-08.md).
+> Review — `.git-exclude/reviewed/cycle-j-stage9-rfc142-stage5-pre-migration-backup-2026-11-08.md`.
+
 **Release scheduling is not settled here.** It is proposed separately,
 under the standing arrangement recorded in `ROADMAP.md`.
 

@@ -9,13 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **An automatic database snapshot before a migration that will actually
+  run.** Starting a new binary now takes a plain, unencrypted `VACUUM
+  INTO` snapshot beside the database first — named from the database's
+  own file and the schema versions it spans — unless already at head, or
+  there is nothing to lose (no database yet, or an empty one). Decline it
+  with `--no-backup` (applies to the server's own start and to any
+  subcommand that may migrate, not per-subcommand; still logged, so the
+  decision is on the record). Not enough free space, or a snapshot that
+  fails to write, refuses the start with one line on stderr and exit code
+  **1** — nothing is migrated, and nothing is written. See the upgrade
+  guide's "The pre-migration snapshot" and "Rollback".
 - **`sui-id preview-upgrade [--config PATH]`**: before starting a new
   binary, see what it would do to your database — the
   stored schema version, the release that last migrated it, the migrations
-  that would run and their names, and the version it would end at. Reads
-  only; it opens nothing for writing and needs no master key. A database
-  this build cannot use prints the same refusal line startup would, and
-  exits the same way. See the upgrade guide's "General procedure".
+  that would run and their names, and the version it would end at; when a
+  migration is pending, also predicts the automatic snapshot above
+  (enough space or not), so the preview and the start can never disagree.
+  Reads only; it opens nothing for writing and needs no master key. A
+  database this build cannot use prints the same refusal line startup
+  would, and exits the same way. See the upgrade guide's "General
+  procedure".
 
 ### Fixed
 

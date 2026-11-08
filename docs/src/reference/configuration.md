@@ -142,6 +142,14 @@ CLI arguments — apply only to the current process invocation, not persisted.
 | `sui-id admin legacy-dynamic-candidates --config <c>` | Read-only (RFC 095). Lists `clients` rows a 2026-07-02–2026-10-02 bug may have left mislabelled `admin` when they were really self-registered. An empty result is not an all-clear — see [the upgrade guide](../guides/upgrade.md#v083x). |
 | `sui-id preview-upgrade [--config <c>]` | Read-only. Reports the stored schema version, the release that last migrated it, the migrations this sui-id would run, and the version it would end at — or the same refusal line startup would print. Writes nothing and needs no master key. |
 
+**`--no-backup`** (RFC 142 stage 5) is not per-subcommand: it applies to
+the server's own start and to any subcommand above that may migrate the
+database (everything except `backup`, `restore`, `verify-backup` and
+`preview-upgrade`, none of which open the database for a migration). It
+skips the automatic pre-migration snapshot, taken by default when a
+migration will actually run — see
+[the upgrade guide](../guides/upgrade.md#the-pre-migration-snapshot).
+
 Run `sui-id --help` for the full flag listings.
 
 ---
