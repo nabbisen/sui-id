@@ -477,6 +477,15 @@ for the case where forgetting is most expensive.
    Rollback what a rollback loses. Review —
    `.git-exclude/reviewed/cycle-j-stage9-rfc142-stage5-pre-migration-backup-2026-11-08.md`.
 
+**Cycle J's nine stages have landed** (`1573a72`, Level B `42435137349`,
+28/28, 0 skipped). **The architect's adversarial assessment says M2b is
+not ready to close**: criterion 1 has three undispositioned Class-A rows
+(C17, C18, C23), and G23 passes a write omitted from both manifest and
+registry when it sits in an allow-listed file. It proposes a stage 10 —
+`rfcs/handoffs/094-transactional-audit/m2b-adversarial-assessment-2026-11-08.md`.
+RFC 142's closure is ready for the owner —
+`rfcs/handoffs/142-upgrading-is-the-least-tested-thing-we-do/closure-assessment-2026-11-08.md`.
+
 **Then M2b closes** on the adversarial evidence package and your
 acceptance — which, per §B, the architect cannot give for its own work.
 
