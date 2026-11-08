@@ -55,10 +55,14 @@ by itself be authority to publish, so the two are kept separate.
    distinguishes *refused* (exit 1) from *could not be checked*
    (exit 2) — "verified and it says no" and "the network failed" must
    never read the same to whoever is watching the job.
-2. **The `release` environment's approval.** The `publish` job will not
-   start until a required reviewer approves it, and `verify` has
-   already reported by then. This is the gate the irreversible,
-   outward-facing step sits behind.
+2. **The `release` environment — no approval pause, by decision.** The
+   `publish` job runs in the `release` environment, which **has no required
+   reviewer**: `@nabbisen`, 2026-11-08: *"Denied. It is for release stability and treated as a future improvement, for the configuration harms productivity now."*
+   So `publish` starts as soon as `verify` passes. **The human decision is the
+   dispatch itself**: whoever runs `gh workflow run publish.yml -f tag=…` is
+   approving the release, and should do it only after the step 5 reading
+   below. A required reviewer remains the intended shape (RFC 141 §2),
+   deferred as a future improvement.
 3. **Six publishes**, written as six named steps in the order below,
    each preceded by its own token mint. `cargo publish` waits for the
    crate to reach the index before returning, so no step sleeps.
@@ -79,12 +83,11 @@ repository:
 - **Six per-crate Trusted Publishing configurations on crates.io**, one
   for each crate in the list below, each naming this repository, the
   workflow filename `publish.yml` and the environment `release`.
-- **The `release` GitHub Environment, with a required reviewer.** A job
-  that names an environment which does not exist causes GitHub to
-  create it on first run **with no protection rules at all**, so the
-  approval gate in step 2 is only real if the environment was
-  configured beforehand. Create and protect it before the first
-  dispatch, not after.
+- **The `release` GitHub Environment.** It exists, and Trusted Publishing
+  names it, so it must not be renamed or removed. **It has no required
+  reviewer**, by the decision quoted in step 2. If one is added later, add it
+  before a dispatch, never during one: a job that names an environment picks
+  up its protection rules when the job starts.
 
 **Only after a first successful workflow publish**: enable
 Trusted-Publishing-only on all six crates and revoke the workstation

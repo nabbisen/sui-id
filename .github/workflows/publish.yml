@@ -11,10 +11,13 @@ name: Publish to crates.io
 #
 # Triggered by workflow_dispatch, not a tag push: anyone who can push
 # a tag must not thereby be able to publish (RFC 141 §2). The
-# `publish` job runs in the `release` GitHub Environment, which this
-# repository configures with a required reviewer -- the approval gate
-# the irreversible, outward-facing step belongs behind, and it does
-# not start until `verify` has already reported Level B.
+# `publish` job runs in the `release` GitHub Environment and does not
+# start until `verify` has reported Level B. The environment has NO
+# required reviewer. @nabbisen, 2026-11-08: "Denied. It is for release
+# stability and treated as a future improvement, for the configuration
+# harms productivity now." So the dispatch of this workflow is itself the
+# approval; see release-process.md, step 2. RFC 141 §2's reviewer remains
+# the intended shape, deferred.
 #
 # `rust-lang/crates-io-auth-action@v1` cannot be pinned by a bare `v1`
 # in this repository (A3.4 condition 1 requires a 40-hex commit SHA in

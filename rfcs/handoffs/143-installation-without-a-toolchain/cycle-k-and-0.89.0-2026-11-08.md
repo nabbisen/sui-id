@@ -1,6 +1,11 @@
 # Cycle K and `0.89.0` — sui-id installs without a toolchain
 
-> ## Whose turn it is: **yours**, to authorize the scope or argue with it (§5).
+> ## Authorized 2026-11-08. `@nabbisen`: *"Authorized."* (scope), *"Approved."* (the ROADMAP relabel)
+> **The `release` reviewer, §5 item 2: denied**, *"It is for release stability
+> and treated as a future improvement, for the configuration harms productivity
+> now."* RFC 141 §2, `publish.yml`'s header and `release-process.md` now say the
+> reviewer is deferred, and that the dispatch is the approval.
+> **Stage 1 dispatched** — [`stage1-measure-the-three-conditions-2026-11-08.md`](stage1-measure-the-three-conditions-2026-11-08.md).
 
 **Proposed.** 2026-11-08, by the architect, on `@nabbisen`'s *"Scope 0.89."*
 **Schedule source.** `ROADMAP.md`, *The embeddable boundary, and installation*

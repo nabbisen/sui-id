@@ -117,6 +117,16 @@ can publish**. The workflow therefore runs on `workflow_dispatch` taking
 the tag as an input, in a **GitHub Environment with a required
 reviewer**. The publish waits in the Actions UI until approved.
 
+> **Not in force, by decision — recorded 2026-11-08.** The `release`
+> environment has **no required reviewer**: `@nabbisen`, 2026-11-08: *"Denied. It is for release stability and treated as a future improvement, for the configuration harms productivity now."*
+> `0.87.0` through `0.88.0` all published without pausing, and the
+> documents had described a pause that was never configured. **The design
+> above is unchanged and remains the intended shape**, deferred. What holds
+> today: `workflow_dispatch` (a tag push alone still cannot publish), the
+> `verify` job's four preconditions, and the dispatch itself as the human
+> approval. This RFC's closure prerequisites do not include the reviewer,
+> so the deferral changes no closure claim.
+
 `pull_request_target` and `workflow_run` are blocked from Trusted
 Publishing by crates.io since January 2026, which removes two trigger
 shapes that would otherwise need arguing about.
