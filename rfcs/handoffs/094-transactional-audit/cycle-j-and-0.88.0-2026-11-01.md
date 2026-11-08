@@ -495,6 +495,11 @@ for the case where forgetting is most expensive.
    enabled under `[dependencies]`.* Re-assessment —
    `m2b-adversarial-assessment-2026-11-08.md` §7.
 
+**`0.88.0` RELEASED AND PUBLISHED 2026-11-08** — tag `0.88.0` at `3f21349`; Level B
+`42472382054` (28/28, 0 skipped); `Security audit` green on the same commit; publish run
+`42478112789`; six crates confirmed on crates.io. RFC 094 and RFC 142 are `Implemented
+(v0.88.0)`. **Cycle J is complete.**
+
 **M2b's evidence was accepted** by `@nabbisen` on 2026-11-08 (*"Accepted."*),
 on the re-assessment in `m2b-adversarial-assessment-2026-11-08.md` §7 (Level B
 `42462622748` on `cbfb8f9`, 28/28). RFC 094 and RFC 142 both close with
