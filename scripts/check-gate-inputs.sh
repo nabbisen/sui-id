@@ -136,14 +136,21 @@ trap 'rm -rf "$tmp"' EXIT
 # Conditions 1-3: action pinning and manifest/[actions] correspondence.
 # ---------------------------------------------------------------------------
 
+# A local reference (`uses: ./…`, a reusable workflow or action in this
+# repository) is pinned by the commit it is read from: GitHub resolves it in
+# the same checkout, so there is no SHA to pin and nothing to record in
+# [actions]. Only local references are dropped. An external reusable workflow
+# (`owner/repo/.github/workflows/x.yml@ref`) is still an action reference and
+# still needs its SHA (cycle K stage 2: release-artifacts.yml is the first local
+# reusable-workflow call in this repository).
 grep -rhoE 'uses:[[:space:]]*[^[:space:]#]+' "$root/$workflows_dir" \
-  | sed -E 's/^uses:[[:space:]]*//' >"$tmp/workflow-uses"
+  | sed -E 's/^uses:[[:space:]]*//' | { grep -v '^\./' || true; } >"$tmp/workflow-uses"
 
 # Condition 1: every `uses:` in a hand-written workflow is pinned to a full
 # 40-hex commit SHA. ci.yml is generated and checked by the generator (RFC 116
 # stage 3), so it is not read here; conditions 2 and 3 still read it.
 grep -rhoE --exclude=ci.yml 'uses:[[:space:]]*[^[:space:]#]+' "$root/$workflows_dir" \
-  | sed -E 's/^uses:[[:space:]]*//' >"$tmp/workflow-uses-handwritten"
+  | sed -E 's/^uses:[[:space:]]*//' | { grep -v '^\./' || true; } >"$tmp/workflow-uses-handwritten"
 unpinned=$(grep -vE '@[0-9a-f]{40}$' "$tmp/workflow-uses-handwritten" || true)
 if [[ -n "$unpinned" ]]; then
   fail "condition 1: unpinned action reference(s):"

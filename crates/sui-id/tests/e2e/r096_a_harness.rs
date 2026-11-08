@@ -101,7 +101,7 @@ async fn fabricated_bytes_reach_fetch_discovery() {
         AfterWrite::Close,
     )
     .await;
-    state.http_client = Arc::new(federation_test_client(FixtureResolver { addr }));
+    state.http_client = Arc::new(Some(federation_test_client(FixtureResolver { addr })));
     seed_provider(&state, &base).await;
 
     let resp = start_flow(&state).await;
@@ -128,7 +128,7 @@ async fn an_honest_document_inside_the_cap_is_accepted() {
         AfterWrite::Close,
     )
     .await;
-    state.http_client = Arc::new(federation_test_client(FixtureResolver { addr }));
+    state.http_client = Arc::new(Some(federation_test_client(FixtureResolver { addr })));
     seed_provider(&state, &base).await;
 
     let resp = start_flow(&state).await;
@@ -149,7 +149,7 @@ async fn a_lying_content_length_is_capped_on_bytes_read_through_the_production_p
         AfterWrite::HoldOpen,
     )
     .await;
-    state.http_client = Arc::new(federation_test_client(FixtureResolver { addr }));
+    state.http_client = Arc::new(Some(federation_test_client(FixtureResolver { addr })));
     seed_provider(&state, &base).await;
 
     let started = Instant::now();

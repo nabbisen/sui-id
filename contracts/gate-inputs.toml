@@ -202,3 +202,12 @@ setup_python_v7 = "5fda3b95a4ea91299a34e894583c3862153e4b97"
 # latest `v1.0.6` tag. Resolved and verified 2026-10-29; see the round's
 # own review package for how.
 crates_io_auth_action_v1 = "3268eb413133e2960fa4ae0e963ca76380c54cd9"
+# RFC 143 stage 2, C2 point 5: build-provenance attestation for the
+# release-artifacts workflow's `SHA256SUMS`. Resolved from the `v4.2.2`
+# tag via the GitHub API, 2026-11-08.
+attest_build_provenance_v4 = "4d101475d8b20a2381f78447822ac1eab6504dd8"
+# RFC 143 stage 2, C2 point 6: the build job downloads nothing of its
+# own, but the `verify`/`ldap-smtp-check` jobs download what `build`
+# uploaded. Resolved from the `v8.0.2` tag via the GitHub API,
+# 2026-11-08.
+download_artifact_v8 = "9000827ccba6bdab643e8b6fd33ac0654aef8333"

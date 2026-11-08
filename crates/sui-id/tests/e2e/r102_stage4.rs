@@ -465,9 +465,9 @@ async fn r102_l03_rereads_the_user_and_rolls_back_when_inactive() {
 async fn federation_app() -> (AppState, UserId, super::federation_fail_closed::NonceSlot) {
     let mut state = test_app();
     complete_setup_and_login(&state).await;
-    state.http_client = std::sync::Arc::new(super::tls_mock::federation_test_client(
+    state.http_client = std::sync::Arc::new(Some(super::tls_mock::federation_test_client(
         sui_id::resolver::ValidatingResolver,
-    ));
+    )));
     let (issuer, nonce_slot) = mock_upstream().await;
     add_federation_provider_config(&mut state, &issuer);
     let user = linked_user(&state, &issuer).await;

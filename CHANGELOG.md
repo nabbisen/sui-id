@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **sui-id crashed at startup on a host with no CA certificates**, whether
+  HIBP breach-checking was on or off. Two clients built at startup —
+  Pwned Passwords (HIBP) and the one outbound federation client — fell
+  back to a `reqwest` constructor that panics in exactly that case. sui-id
+  now starts regardless, with one warning naming what cannot verify TLS
+  until the system's CA bundle (e.g. `ca-certificates`) is installed: HIBP
+  breach-checks (which then let every password through unchecked, since
+  HIBP already fails open), SMTP, LDAPS and federation sign-in. Each of
+  those features fails on its own, when actually used, instead.
+
 ## [0.88.0] — 2026-11-08
 
 **Upgrading is now previewable and backed up automatically — the reason

@@ -89,7 +89,14 @@ pub trait HibpClient: Send + Sync {
 /// `spawn_blocking`-wrapped) with reqwest 0.12 (async, no wrapper
 /// needed). The `HibpClient` trait is now `async fn check`.
 pub struct HttpHibpClient {
-    client: reqwest::Client,
+    /// `None` on a host with no CA certificates to build a verifying
+    /// TLS client with (RFC 143 stage 2 part A) — [`HibpClient::check`]
+    /// returns [`HibpCheckOutcome::Unavailable`] immediately in that
+    /// case, the same fail-open outcome a real network failure gets,
+    /// rather than attempt a request with no client (the old fallback
+    /// here, `reqwest::Client::new()`, panics for the identical reason
+    /// the primary builder below just failed).
+    client: Option<reqwest::Client>,
     endpoint: String,
     user_agent: String,
     timeout: Duration,
@@ -99,10 +106,10 @@ impl HttpHibpClient {
     pub fn new() -> Self {
         let timeout = Duration::from_secs(5);
         let client = match reqwest::Client::builder().timeout(timeout).build() {
-            Ok(client) => client,
+            Ok(client) => Some(client),
             Err(error) => {
-                tracing::warn!(%error, "failed to build timeout-aware HIBP HTTP client");
-                reqwest::Client::new()
+                tracing::debug!(%error, "HIBP HTTP client could not be built");
+                None
             }
         };
         Self {
@@ -122,10 +129,10 @@ impl HttpHibpClient {
         self.timeout = timeout;
         // Rebuild client with new timeout
         self.client = match reqwest::Client::builder().timeout(timeout).build() {
-            Ok(client) => client,
+            Ok(client) => Some(client),
             Err(error) => {
-                tracing::warn!(%error, "failed to build timeout-aware HIBP HTTP client");
-                reqwest::Client::new()
+                tracing::debug!(%error, "HIBP HTTP client could not be built");
+                None
             }
         };
         self
@@ -141,6 +148,9 @@ impl Default for HttpHibpClient {
 #[async_trait::async_trait]
 impl HibpClient for HttpHibpClient {
     async fn check(&self, password: &str) -> HibpCheckOutcome {
+        let Some(client) = &self.client else {
+            return HibpCheckOutcome::Unavailable;
+        };
         // 1. SHA-1 the candidate.
         let mut hasher = Sha1::new();
         hasher.update(password.as_bytes());
@@ -154,8 +164,7 @@ impl HibpClient for HttpHibpClient {
         let (prefix, suffix) = hex.split_at(5);
         let url = format!("{}/{}", self.endpoint, prefix);
 
-        let result = self
-            .client
+        let result = client
             .get(&url)
             .header("User-Agent", &self.user_agent)
             // Add-Padding defends against traffic-analysis attacks that

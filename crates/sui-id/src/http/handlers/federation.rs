@@ -480,13 +480,19 @@ pub async fn federated_start(
         )));
     }
 
+    // RFC 143 stage 2 part A: this host has no CA certificates, so no
+    // federation TLS request can ever succeed. Fails here, at use, with
+    // the same message a real transport failure gets below — not at
+    // startup.
+    let Some(client) = app.federation_http_client() else {
+        tracing::warn!(slug = %slug, "federation discovery skipped: no CA certificates on this host");
+        return Err(HttpError::html(CoreError::BadRequest(
+            "upstream identity provider is unavailable; try again later".into(),
+        )));
+    };
+
     // Fetch upstream discovery.
-    let discovery = match fetch_discovery(
-        &app.http_client,
-        &provider.issuer,
-        &provider.allowed_origins,
-    )
-    .await
+    let discovery = match fetch_discovery(client, &provider.issuer, &provider.allowed_origins).await
     {
         Ok(d) => d,
         // RFC 134 D3 §2c: a rejected endpoint is a provider configuration
@@ -878,13 +884,28 @@ pub async fn federated_callback(
         }
     };
 
+    // RFC 143 stage 2 part A: no CA certificates on this host means no
+    // federation TLS request can succeed — fails here, with the attempt
+    // terminalized the same way a real discovery failure is below, not
+    // at startup.
+    let Some(client) = app.federation_http_client() else {
+        tracing::warn!(slug = %provider.slug, "federation token exchange skipped: no CA certificates on this host");
+        terminalize_and_audit(
+            &app.db,
+            claimed.id,
+            TerminalFailureReason::UpstreamFailure(UpstreamFailureDetail::DiscoveryFailed),
+            app.clock.now(),
+            provider.id,
+            None,
+        )
+        .await;
+        return Err(HttpError::html(CoreError::BadRequest(
+            "upstream IdP unavailable".into(),
+        )));
+    };
+
     // Fetch upstream discovery for token_endpoint.
-    let discovery = match fetch_discovery(
-        &app.http_client,
-        &provider.issuer,
-        &provider.allowed_origins,
-    )
-    .await
+    let discovery = match fetch_discovery(client, &provider.issuer, &provider.allowed_origins).await
     {
         Ok(d) => d,
         Err(e) => {
@@ -1005,10 +1026,7 @@ pub async fn federated_callback(
     // RFC 096-B1 stage 12c: `client_secret_basic` for a confidential
     // client, nothing for a public one (`:320`) -- the secret moves from
     // the form body to the `Authorization` header, never both.
-    let mut request_builder = app
-        .http_client
-        .post(discovery.token_endpoint())
-        .form(&form_params);
+    let mut request_builder = client.post(discovery.token_endpoint()).form(&form_params);
     if let Some(ref secret) = client_secret {
         request_builder = request_builder.header(
             reqwest::header::AUTHORIZATION,
@@ -1128,7 +1146,7 @@ pub async fn federated_callback(
     let allowed_algs = discovery.id_token_algs_intersection(&provider_config.id_token_algs);
 
     let verified_claims = match verify_id_token(
-        &app.http_client,
+        client,
         id_token_jwt,
         &allowed_algs,
         discovery.jwks_uri(),

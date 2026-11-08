@@ -25,7 +25,9 @@ fn debug_of(client: &reqwest::Client) -> String {
 
 #[test]
 fn redirect_policy_is_none_not_default() {
-    let d = debug_of(&build_federation_client());
+    let d = debug_of(
+        &build_federation_client().expect("CA certificates available in this test environment"),
+    );
     assert!(
         d.contains("redirect_policy"),
         "a non-default redirect policy must be visible in Debug: {d}"
@@ -34,7 +36,9 @@ fn redirect_policy_is_none_not_default() {
 
 #[test]
 fn referer_is_disabled_not_default() {
-    let d = debug_of(&build_federation_client());
+    let d = debug_of(
+        &build_federation_client().expect("CA certificates available in this test environment"),
+    );
     // Default is `referer: true`, and reqwest's Debug impl prints the
     // field only when it is `true` -- so the *default* client's Debug
     // output would contain "referer" and ours, with it disabled, must not.
@@ -52,7 +56,9 @@ fn referer_is_disabled_not_default() {
 
 #[test]
 fn read_timeout_and_total_timeout_are_set() {
-    let d = debug_of(&build_federation_client());
+    let d = debug_of(
+        &build_federation_client().expect("CA certificates available in this test environment"),
+    );
     assert!(
         d.contains("read_timeout"),
         "a read timeout must be set (default is none, invisible): {d}"
@@ -135,7 +141,8 @@ async fn a_redirect_is_refused_and_no_second_request_is_made() {
         axum::serve(listener, app).await.expect("mock upstream");
     });
 
-    let client = build_federation_client();
+    let client =
+        build_federation_client().expect("CA certificates available in this test environment");
     let result = client.get(format!("http://{addr}/start")).send().await;
 
     assert!(

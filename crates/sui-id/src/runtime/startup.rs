@@ -133,8 +133,36 @@ pub fn install_rustls_crypto_provider() {
     });
 }
 
+/// RFC 143 stage 2 part A: one operator-facing warning, logged once, if
+/// this host has no CA certificates to verify outbound TLS with.
+///
+/// Probes with the same `reqwest::ClientBuilder` construction every
+/// startup-time TLS-capable client (HIBP, federation) attempts — the
+/// one that fails, cleanly, with no certificates on disk. LDAPS and
+/// SMTP build their own TLS roots lazily, per connection, not at
+/// startup, so this probe is the only place that would otherwise see
+/// no signal at all that anything is wrong until the first federated
+/// sign-in or outbound mail attempt fails.
+///
+/// Deliberately **not** called from the probe's own result: a true
+/// positive here is read once, logged once, and forgotten — each
+/// feature's own call site degrades and fails on its own, every time,
+/// not just the first.
+pub fn warn_if_no_tls_roots() {
+    if reqwest::Client::builder().build().is_err() {
+        tracing::warn!(
+            "no CA certificates were found on this host: outbound TLS cannot verify \
+             servers, so HIBP breach checks, SMTP, LDAPS and federation sign-in will \
+             all fail until the system's CA bundle is installed (e.g. the \
+             `ca-certificates` package on Debian/Ubuntu). HIBP fails open: with no \
+             CA certificates, no password will be breach-checked."
+        );
+    }
+}
+
 pub async fn prepare(cfg: Config, backup: crate::database::PreMigrationBackup) -> Result<Startup> {
     let log_guard = init_tracing(&cfg.log);
+    warn_if_no_tls_roots();
 
     // 1. Resolve master key.
     let resolved = keyring::resolve(&cfg.storage.key_file).context("resolving master key")?;

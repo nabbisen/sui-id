@@ -25,7 +25,8 @@ async fn the_real_egress_client_refuses_a_name_that_resolves_to_loopback() {
         axum::serve(listener, app).await.expect("mock server");
     });
 
-    let client = build_federation_client();
+    let client =
+        build_federation_client().expect("CA certificates available in this test environment");
     // "localhost" resolves through `tokio::net::lookup_host` (the real
     // DNS path `ValidatingResolver` sits in front of) to 127.0.0.1 and/or
     // ::1 -- Loopback, denied. An IP literal would bypass resolution (and

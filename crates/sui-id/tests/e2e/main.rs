@@ -117,6 +117,7 @@ mod r136_step1_self_registered_marker;
 mod r140_stage1_app_identity;
 mod r142_stage4_preview_upgrade;
 mod r142_stage5_pre_migration_backup;
+mod r143_no_ca_certificates;
 mod refresh_theft;
 mod request_id;
 mod rfc030_033_035;

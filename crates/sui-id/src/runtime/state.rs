@@ -48,8 +48,11 @@ pub struct AppState {
     /// Empty when no `[[user_sources]]` blocks are in the config.
     pub user_sources: Vec<Arc<dyn UserSource>>,
     /// RFC 004: shared HTTP client for upstream federation requests
-    /// (discovery fetches, token exchanges).
-    pub http_client: Arc<reqwest::Client>,
+    /// (discovery fetches, token exchanges). `None` when this host has
+    /// no CA certificates to build a verifying TLS client with (RFC 143
+    /// stage 2 part A) — every federation call site must check for this
+    /// and fail its own request, rather than assume the client exists.
+    pub http_client: Arc<Option<reqwest::Client>>,
 
     /// Prometheus metrics registry (RFC 006).
     /// `None` when `metrics_enabled = false` in config — no counters are
@@ -85,15 +88,20 @@ impl AppState {
             is_dev_mode: false,
             metrics: None,
             user_sources: Vec::new(),
-            // AppState::new() is a startup-time constructor with no Result
-            // return; a TLS-backend init failure here means the process
-            // cannot serve federation at all, so failing fast here (rather
-            // than threading a Result through every call site) is the
-            // intended behavior, not a routine failure mode. RFC 134 D1:
-            // the client's policy lives in `crate::egress`, the one place
-            // it is set.
+            // RFC 134 D1: the client's policy lives in `crate::egress`, the
+            // one place it is set. RFC 143 stage 2 part A: `None` when
+            // this host has no CA certificates — see `http_client`'s own
+            // doc above.
             http_client: Arc::new(crate::egress::build_federation_client()),
         }
+    }
+
+    /// The federation HTTP client, or `None` on a host with no CA
+    /// certificates (RFC 143 stage 2 part A). Every federation call site
+    /// goes through this, rather than the field directly, so the
+    /// `Arc<Option<_>>` unwrapping happens in one place.
+    pub fn federation_http_client(&self) -> Option<&reqwest::Client> {
+        self.http_client.as_ref().as_ref()
     }
 
     pub fn token_lifetimes(&self) -> TokenLifetimes {

@@ -191,9 +191,9 @@ async fn seed_provider_row_only(state: &sui_id::AppState, issuer: &str) {
 async fn both_cookies_expire_on_the_upstream_error_path() {
     let mut state = test_app();
     complete_setup_and_login(&state).await;
-    state.http_client = std::sync::Arc::new(super::tls_mock::federation_test_client(
+    state.http_client = std::sync::Arc::new(Some(super::tls_mock::federation_test_client(
         sui_id::resolver::ValidatingResolver,
-    ));
+    )));
     let (issuer, nonce_slot) = mock_upstream().await;
     add_federation_provider_config(&mut state, &issuer);
     linked_user(&state, &issuer).await;
@@ -253,9 +253,9 @@ async fn mock_upstream_with_failing_token_endpoint() -> String {
 async fn both_cookies_expire_on_a_mid_exchange_failure() {
     let mut state = test_app();
     complete_setup_and_login(&state).await;
-    state.http_client = std::sync::Arc::new(super::tls_mock::federation_test_client(
+    state.http_client = std::sync::Arc::new(Some(super::tls_mock::federation_test_client(
         sui_id::resolver::ValidatingResolver,
-    ));
+    )));
     let issuer = mock_upstream_with_failing_token_endpoint().await;
     add_federation_provider_config(&mut state, &issuer);
     linked_user(&state, &issuer).await;
@@ -280,9 +280,9 @@ async fn both_cookies_expire_on_a_mid_exchange_failure() {
 async fn both_cookies_expire_on_the_link_required_path() {
     let mut state = test_app();
     complete_setup_and_login(&state).await;
-    state.http_client = std::sync::Arc::new(super::tls_mock::federation_test_client(
+    state.http_client = std::sync::Arc::new(Some(super::tls_mock::federation_test_client(
         sui_id::resolver::ValidatingResolver,
-    ));
+    )));
     let (issuer, nonce_slot) = mock_upstream().await;
     add_federation_provider_config(&mut state, &issuer);
     seed_provider_row_only(&state, &issuer).await;
@@ -307,9 +307,9 @@ async fn both_cookies_expire_on_the_link_required_path() {
 async fn both_cookies_expire_on_the_success_path() {
     let mut state = test_app();
     complete_setup_and_login(&state).await;
-    state.http_client = std::sync::Arc::new(super::tls_mock::federation_test_client(
+    state.http_client = std::sync::Arc::new(Some(super::tls_mock::federation_test_client(
         sui_id::resolver::ValidatingResolver,
-    ));
+    )));
     let (issuer, nonce_slot) = mock_upstream().await;
     add_federation_provider_config(&mut state, &issuer);
     linked_user(&state, &issuer).await;

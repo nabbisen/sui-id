@@ -487,9 +487,9 @@ fn assert_refused(o: &Outcome) {
 async fn fed_active_linked_user_signs_in() {
     let mut state = test_app();
     complete_setup_and_login(&state).await;
-    state.http_client = std::sync::Arc::new(super::tls_mock::federation_test_client(
+    state.http_client = std::sync::Arc::new(Some(super::tls_mock::federation_test_client(
         sui_id::resolver::ValidatingResolver,
-    ));
+    )));
     let (issuer, nonce_slot) = mock_upstream().await;
     add_federation_provider_config(&mut state, &issuer);
     let user = linked_user(&state, &issuer).await;
@@ -504,9 +504,9 @@ async fn fed_active_linked_user_signs_in() {
 async fn fed_user_with_mfa_gets_the_mfa_step_not_a_session() {
     let mut state = test_app();
     complete_setup_and_login(&state).await;
-    state.http_client = std::sync::Arc::new(super::tls_mock::federation_test_client(
+    state.http_client = std::sync::Arc::new(Some(super::tls_mock::federation_test_client(
         sui_id::resolver::ValidatingResolver,
-    ));
+    )));
     let (issuer, nonce_slot) = mock_upstream().await;
     add_federation_provider_config(&mut state, &issuer);
     let user = linked_user(&state, &issuer).await;
@@ -611,9 +611,9 @@ async fn fed_user_with_mfa_gets_the_mfa_step_not_a_session() {
 async fn fed_mfa_read_error_gives_no_session() {
     let mut state = test_app();
     complete_setup_and_login(&state).await;
-    state.http_client = std::sync::Arc::new(super::tls_mock::federation_test_client(
+    state.http_client = std::sync::Arc::new(Some(super::tls_mock::federation_test_client(
         sui_id::resolver::ValidatingResolver,
-    ));
+    )));
     let (issuer, nonce_slot) = mock_upstream().await;
     add_federation_provider_config(&mut state, &issuer);
     let user = linked_user(&state, &issuer).await;
@@ -633,9 +633,9 @@ async fn fed_mfa_read_error_gives_no_session() {
 async fn fed_disabled_user_gets_no_session() {
     let mut state = test_app();
     complete_setup_and_login(&state).await;
-    state.http_client = std::sync::Arc::new(super::tls_mock::federation_test_client(
+    state.http_client = std::sync::Arc::new(Some(super::tls_mock::federation_test_client(
         sui_id::resolver::ValidatingResolver,
-    ));
+    )));
     let (issuer, nonce_slot) = mock_upstream().await;
     add_federation_provider_config(&mut state, &issuer);
     let user = linked_user(&state, &issuer).await;
@@ -654,9 +654,9 @@ async fn fed_disabled_user_gets_no_session() {
 async fn fed_deleted_user_gets_no_session() {
     let mut state = test_app();
     complete_setup_and_login(&state).await;
-    state.http_client = std::sync::Arc::new(super::tls_mock::federation_test_client(
+    state.http_client = std::sync::Arc::new(Some(super::tls_mock::federation_test_client(
         sui_id::resolver::ValidatingResolver,
-    ));
+    )));
     let (issuer, nonce_slot) = mock_upstream().await;
     add_federation_provider_config(&mut state, &issuer);
     let user = linked_user(&state, &issuer).await;
@@ -708,9 +708,9 @@ async fn refused_after(state: &AppState, session: &str, uri: &str, column: &str)
 async fn fed_existing_session_of_a_user_disabled_afterwards_is_refused_on_me_security() {
     let mut state = test_app();
     complete_setup_and_login(&state).await;
-    state.http_client = std::sync::Arc::new(super::tls_mock::federation_test_client(
+    state.http_client = std::sync::Arc::new(Some(super::tls_mock::federation_test_client(
         sui_id::resolver::ValidatingResolver,
-    ));
+    )));
     let (issuer, nonce_slot) = mock_upstream().await;
     add_federation_provider_config(&mut state, &issuer);
     linked_user(&state, &issuer).await;
@@ -740,9 +740,9 @@ async fn fed_existing_session_of_a_user_disabled_afterwards_is_refused_on_me_sec
 async fn fed_existing_session_of_a_user_deleted_afterwards_is_refused_on_me_security() {
     let mut state = test_app();
     complete_setup_and_login(&state).await;
-    state.http_client = std::sync::Arc::new(super::tls_mock::federation_test_client(
+    state.http_client = std::sync::Arc::new(Some(super::tls_mock::federation_test_client(
         sui_id::resolver::ValidatingResolver,
-    ));
+    )));
     let (issuer, nonce_slot) = mock_upstream().await;
     add_federation_provider_config(&mut state, &issuer);
     linked_user(&state, &issuer).await;

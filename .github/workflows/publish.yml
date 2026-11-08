@@ -80,9 +80,23 @@ jobs:
           sha=$(git rev-parse "${{ inputs.tag }}^{commit}")
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
+  build-artifacts:
+    name: Build, check and attest release artifacts
+    needs: verify
+    # RFC 143 stage 2 C1: the build happens before any `cargo publish`
+    # step, on the exact commit `verify` already vouched for, so a build
+    # failure costs nothing -- nothing has been published yet.
+    uses: ./.github/workflows/release-artifacts.yml
+    with:
+      ref: ${{ needs.verify.outputs.sha }}
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+
   publish:
     name: Publish six crates
-    needs: verify
+    needs: [verify, build-artifacts]
     runs-on: ubuntu-24.04
     environment: release
     permissions:

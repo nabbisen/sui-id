@@ -262,6 +262,17 @@ Before tagging, in addition to Level B on the commit being tagged:
    lockfile carries the union of optional dependencies, so `cargo audit` can
    report a crate the feature resolver never builds.
 
+**The `openssl-src freshness` job, in the same `Security audit` workflow,
+is read the same way** (RFC 143 stage 2 part D). `cargo audit` cannot see
+an OpenSSL vulnerability in the static build's vendored copy — RustSec
+stopped filing advisories against `openssl-src` in 2023 — so this job
+checks `Cargo.lock`'s `openssl-src` version against crates.io's own
+newest published patch for that OpenSSL series directly. A failure here
+is a security-maintenance release, the same category the freeze already
+admits: **when OpenSSL ships a security patch release, sui-id cuts one
+too**, bumping the vendored copy and nothing else, unless something else
+is also due.
+
 ## Yanking
 
 **Yanking needs a token, and the publish workflow cannot supply one.** A

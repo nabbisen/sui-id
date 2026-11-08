@@ -1,0 +1,506 @@
+name: Release artifacts
+
+# RFC 143 stage 2, part C: builds, checks and attests the static release
+# binaries on the tagged commit, before any of publish.yml's six `cargo
+# publish` steps -- a build failure here costs nothing, because nothing has
+# been published yet (RFC 143 D1).
+#
+# Reusable (`workflow_call`) so publish.yml can run it as one job in the
+# real release, and `workflow_dispatch` so the rehearsal (stage 2 C3) can
+# run the exact same jobs against an arbitrary commit -- the tip of `main`
+# by default -- publishing nothing and creating no Release.
+#
+# Why raw `docker run` instead of the `services:` key for the LDAP/SMTP
+# check job: a service container starts before any job step runs,
+# including `actions/checkout`, so there is no point at which a step could
+# hand it a freshly generated TLS certificate before it boots -- and
+# osixia/openldap's own baked-in example CA is already expired (stage 1,
+# 2026-11-08, confirmed its validity ended January 2026). Plain `docker
+# run` steps give this job the ordering `services:` cannot: checkout, then
+# generate certs, then start the LDAP/SMTP containers with those certs,
+# then run the just-built binary against them on the same user-defined
+# network, reached by container name -- the same thing stage 1 already
+# proved end-to-end with podman, translated to the `docker` CLI every
+# GitHub-hosted runner already has.
+#
+# Every external action this file `uses` is pinned to a 40-hex commit SHA
+# and recorded in contracts/gate-inputs.toml's [actions] table (A3.4
+# conditions 1-2); this file is not exempt -- scripts/check-gate-inputs.sh
+# excludes only ci.yml by name and reads every other file in
+# .github/workflows/. Every container image any step `docker run`s is
+# pinned by digest for the same reason, resolved freshly for this round (a
+# `:latest` tag's referent can move between resolutions, which is exactly
+# what pinning by digest forecloses).
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: >-
+          Commit SHA to build and check. publish.yml passes the exact
+          commit its own `verify` job already vouched for.
+        required: false
+        type: string
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: >-
+          Commit SHA or ref to build and check. Empty = the default
+          branch tip. This workflow never publishes and never creates a
+          Release, dispatched with or without a ref.
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  announce:
+    name: Announce (rehearsal or release)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Say what this run is
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "### This is a rehearsal" >> "$GITHUB_STEP_SUMMARY"
+            echo "Builds, checks and attests ref \`${{ inputs.ref || github.sha }}\`. It publishes nothing and creates no GitHub Release." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Release build" >> "$GITHUB_STEP_SUMMARY"
+            echo "Builds, checks and attests ref \`${{ inputs.ref || github.sha }}\`, called by publish.yml." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  build:
+    name: "build (${{ matrix.target }})"
+    needs: announce
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # RFC 143 stage 2 C2.1: aarch64 builds natively here, not
+          # cross-compiled -- stage 1's Zig cross-toolchain recipe is not
+          # reused. The native runner's own architecture IS aarch64, so
+          # none of stage 1's three cross-compile fixes (the `-target`
+          # collision, the duplicate `_start`, `-C link-self-contained=no`)
+          # are needed, and this build is checked for PIE, which stage 1's
+          # cross-compiled one lost only to that workaround.
+          - target: x86_64-unknown-linux-musl
+            runner: ubuntu-24.04
+            cc_env: CC_x86_64_unknown_linux_musl
+            linker_env: CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER
+            # library/debian:stable-slim, amd64 manifest digest, resolved
+            # 2026-11-08.
+            debian_digest: "sha256:cd9f2189b62dc5ce003b22ad8cb109bbc3cef8ddcc8bc13771472a6edeb16980"
+          - target: aarch64-unknown-linux-musl
+            runner: ubuntu-24.04-arm
+            cc_env: CC_aarch64_unknown_linux_musl
+            linker_env: CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER
+            # library/debian:stable-slim, arm64/v8 manifest digest,
+            # resolved 2026-11-08.
+            debian_digest: "sha256:04bba436c86dbce81eac09593099a9b468c49c3ed4835820ba71bb27b135fedb"
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      - name: Install musl build packages
+        # RFC 143 stage 1: the runner's `perl` is full already (unlike the
+        # `rust:1.95-slim` container stage 1 built in), but `musl-tools` and
+        # `make` are not installed by default.
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq musl-tools make
+
+      - name: Build (static, vendored OpenSSL -- part B's Cargo.toml table)
+        run: |
+          set -euo pipefail
+          export "${{ matrix.cc_env }}=musl-gcc"
+          export "${{ matrix.linker_env }}=musl-gcc"
+          # `--locked`, as every gate builds: a lockfile inconsistent with
+          # Cargo.toml must fail here, never be silently re-resolved, or the
+          # artifact would carry dependency versions Level B and the audit
+          # never saw. The compiler is recorded too, because the attestation
+          # names the workflow and the commit, not the toolchain.
+          rustc -Vv | tee -a "$GITHUB_STEP_SUMMARY"
+          cargo build --release --locked -p sui-id --features ldap --target ${{ matrix.target }}
+
+      - name: Prove the binary is static (file, ldd) and report PIE
+        run: |
+          set -euo pipefail
+          bin="target/${{ matrix.target }}/release/sui-id"
+          file "$bin" | tee file-output.txt
+          if ! grep -qE 'static-pie linked|statically linked' file-output.txt; then
+            echo "::error::$bin is not statically linked (file(1) output above)" >&2
+            exit 1
+          fi
+          if grep -q 'pie executable' file-output.txt; then
+            echo "pie: yes" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "pie: no (RFC 143 as read states no PIE requirement; recorded for the record)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          ldd "$bin" > ldd-output.txt 2>&1 || true
+          cat ldd-output.txt
+          if grep -q '=>' ldd-output.txt; then
+            echo "::error::ldd resolved a dynamic library against $bin -- not static" >&2
+            exit 1
+          fi
+
+      - name: Run it in a bare debian:stable-slim with only ca-certificates
+        # RFC 143 stage 1 §3: a literal `scratch` image, or any base image
+        # with genuinely zero CA certificates, cannot serve anything --
+        # part A fixes the startup panic, but the setup redirect itself
+        # still needs outbound-TLS-capable clients to exist for nothing
+        # here, so the one runtime requirement is `ca-certificates`.
+        run: |
+          set -euo pipefail
+          mkdir -p bare data
+          cp "target/${{ matrix.target }}/release/sui-id" bare/sui-id
+          cat > bare/sui-id.toml <<'EOF'
+          [server]
+          listen_addr = "0.0.0.0:8801"
+          issuer = "http://127.0.0.1:18801"
+          cookie_secure = false
+          trusted_proxies = []
+
+          [storage]
+          db_path = "/data/sui-id.sqlite"
+          key_file = "/data/sui-id.key"
+
+          [tokens]
+          access_lifetime_secs = 900
+          id_token_lifetime_secs = 900
+          refresh_lifetime_secs = 1209600
+
+          [log]
+          format = "json"
+          filter = "info,sui_id=info,sui_id_core=info,sui_id_store=info"
+
+          [security]
+          max_lockout = "24h"
+          EOF
+
+          docker run -d --name bare-run \
+            -p 18801:8801 \
+            -v "$PWD/bare/sui-id":/usr/local/bin/sui-id:ro \
+            -v "$PWD/bare/sui-id.toml":/etc/sui-id.toml:ro \
+            -v "$PWD/data":/data \
+            "debian@${{ matrix.debian_digest }}" \
+            sh -c 'apt-get update -qq && apt-get install -y -qq ca-certificates && exec /usr/local/bin/sui-id --config /etc/sui-id.toml'
+
+          ok=""
+          for _ in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18801/ || echo 000)
+            if [ "$code" = "303" ]; then ok=1; break; fi
+            sleep 1
+          done
+          echo "--- container log ---"
+          docker logs bare-run || true
+          if [ -z "$ok" ]; then
+            echo "::error::sui-id did not serve the 303 setup redirect inside a bare debian:stable-slim + ca-certificates container" >&2
+            docker rm -f bare-run || true
+            exit 1
+          fi
+          loc=$(curl -s -o /dev/null -w '%{redirect_url}' http://127.0.0.1:18801/)
+          docker rm -f bare-run
+          case "$loc" in
+            */setup*) echo "redirect target: $loc (ok)" ;;
+            *) echo "::error::redirect target was not /setup (got: $loc)" >&2; exit 1 ;;
+          esac
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sui-id-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/sui-id
+          if-no-files-found: error
+
+  ldap-smtp-check:
+    name: "LDAP + SMTP check (x86_64 musl binary -- RFC 143 condition 1, every release)"
+    needs: build
+    # Runs only against the x86_64 artifact: this job executes the built
+    # binary directly (not under emulation), and only an amd64 runner can
+    # run an x86_64-unknown-linux-musl binary without one. Stage 1 made the
+    # identical choice for the identical reason.
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: sui-id-x86_64-unknown-linux-musl
+          path: bin
+
+      - name: Generate TLS certs for LDAP and SMTP
+        # RFC 143 stage 1: osixia/openldap's own baked-in example CA
+        # expired in January 2026, so a fresh CA + leaf cert is generated
+        # here every run, exactly as stage 1 did with podman.
+        run: |
+          set -euo pipefail
+          mkdir -p certs
+          openssl genrsa -out certs/ca.key 4096
+          openssl req -x509 -new -key certs/ca.key -days 1 -out certs/ca.crt \
+            -subj "/CN=sui-id-release-check-ca"
+          for name in sui-id-release-ldap sui-id-release-smtp; do
+            openssl genrsa -out "certs/$name.key" 2048
+            openssl req -new -key "certs/$name.key" -out "certs/$name.csr" \
+              -subj "/CN=$name" -addext "subjectAltName=DNS:$name"
+            openssl x509 -req -in "certs/$name.csr" -CA certs/ca.crt -CAkey certs/ca.key \
+              -CAcreateserial -days 1 -out "certs/$name.crt" \
+              -extfile <(echo "subjectAltName=DNS:$name")
+          done
+
+      - name: Start the LDAP and SMTP containers on a user-defined network
+        run: |
+          set -euo pipefail
+          docker network create sui-id-release-check-net
+
+          # osixia/openldap:1.5.0, amd64 manifest digest, resolved
+          # 2026-11-08 (same image stage 1 used).
+          docker run -d --name sui-id-release-ldap --network sui-id-release-check-net \
+            -e LDAP_TLS_CRT_FILENAME=ldap.crt \
+            -e LDAP_TLS_KEY_FILENAME=ldap.key \
+            -e LDAP_TLS_CA_CRT_FILENAME=ca.crt \
+            -e LDAP_ADMIN_PASSWORD=release-check-admin-pw \
+            -v "$PWD/certs/sui-id-release-ldap.crt":/container/service/slapd/assets/certs/ldap.crt:ro \
+            -v "$PWD/certs/sui-id-release-ldap.key":/container/service/slapd/assets/certs/ldap.key:ro \
+            -v "$PWD/certs/ca.crt":/container/service/slapd/assets/certs/ca.crt:ro \
+            osixia/openldap@sha256:0de3850635911109f0daf8f5957808ec4f4eb827fbaaa339100b5f1bab925745
+
+          # axllent/mailpit:latest, amd64 manifest digest, resolved
+          # 2026-11-08 (stage 1's own recorded digest had already moved by
+          # the time this round resolved it -- exactly what digest-pinning
+          # forecloses from here on).
+          docker run -d --name sui-id-release-smtp --network sui-id-release-check-net \
+            -e MP_SMTP_TLS_CERT=/certs/sui-id-release-smtp.crt \
+            -e MP_SMTP_TLS_KEY=/certs/sui-id-release-smtp.key \
+            -v "$PWD/certs":/certs:ro \
+            axllent/mailpit@sha256:c95e8356f55b65520e8b7fd4d74d3e2d06e4a83513f639e316b1e592fbd52646
+
+          for _ in $(seq 1 30); do
+            docker exec sui-id-release-ldap ldapwhoami -x -H ldap://localhost -D "" >/dev/null 2>&1 && break
+            sleep 1
+          done
+
+      - name: Seed the LDAP test user (alice)
+        run: |
+          set -euo pipefail
+          cat > seed.ldif <<'EOF'
+          dn: ou=people,dc=example,dc=org
+          objectClass: organizationalUnit
+          ou: people
+
+          dn: uid=alice,ou=people,dc=example,dc=org
+          objectClass: inetOrgPerson
+          uid: alice
+          cn: Alice Example
+          sn: Example
+          mail: alice@example.org
+          userPassword: alice-release-check-pw
+          EOF
+          docker cp seed.ldif sui-id-release-ldap:/seed.ldif
+          docker exec sui-id-release-ldap ldapadd -x -D "cn=admin,dc=example,dc=org" \
+            -w release-check-admin-pw -f /seed.ldif
+
+      - name: Start the built sui-id binary, pointed at both
+        run: |
+          set -euo pipefail
+          chmod +x bin/sui-id
+          mkdir -p data
+          cat > sui-id-check.toml <<'EOF'
+          [server]
+          listen_addr = "0.0.0.0:8801"
+          issuer = "http://sui-id-release-check:8801"
+          cookie_secure = false
+          trusted_proxies = []
+
+          [storage]
+          db_path = "/data/sui-id.sqlite"
+          key_file = "/data/sui-id.key"
+
+          [tokens]
+          access_lifetime_secs = 900
+          id_token_lifetime_secs = 900
+          refresh_lifetime_secs = 1209600
+
+          [log]
+          format = "json"
+          filter = "info,sui_id=info,sui_id_core=info,sui_id_store=info"
+
+          [security]
+          max_lockout = "24h"
+
+          [[user_sources]]
+          kind = "ldap"
+          slug = "release-check-ldap"
+          url = "ldaps://sui-id-release-ldap:636"
+          bind_dn = "cn=admin,dc=example,dc=org"
+          bind_password_env = "RELEASE_CHECK_LDAP_BIND_PW"
+          user_search_base = "ou=people,dc=example,dc=org"
+          user_search_filter = "(uid={username})"
+          stable_id_attribute = "entryUUID"
+          display_name_attribute = "cn"
+          email_attribute = "mail"
+          EOF
+
+          docker run -d --name sui-id-release-check --network sui-id-release-check-net \
+            -e RELEASE_CHECK_LDAP_BIND_PW=release-check-admin-pw \
+            -v "$PWD/bin/sui-id":/usr/local/bin/sui-id:ro \
+            -v "$PWD/sui-id-check.toml":/etc/sui-id.toml:ro \
+            -v "$PWD/certs/ca.crt":/usr/local/share/ca-certificates/sui-id-release-check-ca.crt:ro \
+            -v "$PWD/data":/data \
+            "debian@sha256:cd9f2189b62dc5ce003b22ad8cb109bbc3cef8ddcc8bc13771472a6edeb16980" \
+            sh -c 'apt-get update -qq && apt-get install -y -qq ca-certificates && update-ca-certificates && exec /usr/local/bin/sui-id --config /etc/sui-id.toml'
+
+          for _ in $(seq 1 60); do
+            docker logs sui-id-release-check 2>&1 | grep -q 'listening' && break
+            sleep 1
+          done
+
+      - name: Drive the LDAP sign-in and the SMTP send, from the same network
+        # RFC 143 stage 2 C2.3: the LDAP assertion is on the log line, not
+        # HTTP status -- a non-admin LDAP-sourced user gets the generic
+        # 200 failure page by design (RFC 102 A7), identical to stage 1's
+        # own finding. The admin's own password-reset is used for the SMTP
+        # leg (alice has no local password to reset) and its own `_csrf`
+        # token is scraped because /admin/settings/email and
+        # /forgot-password both enforce it; /setup/admin and /admin/login
+        # do not.
+        run: |
+          set -euo pipefail
+          cat > check.sh <<'SCRIPT'
+          set -eu
+          BASE=http://sui-id-release-check:8801
+          JAR=/tmp/cookies.txt
+
+          i=0
+          while [ "$i" -lt 60 ]; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/" || echo 000)
+            [ "$code" != "000" ] && break
+            i=$((i+1)); sleep 1
+          done
+
+          curl -s -c "$JAR" -b "$JAR" -o /dev/null "$BASE/setup/admin"
+          curl -s -c "$JAR" -b "$JAR" -o /dev/null "$BASE/setup/admin" \
+            --data-urlencode "setup_token=__TOKEN__" \
+            --data-urlencode "username=release-check-admin" \
+            --data-urlencode "email=release-check-admin@example.org" \
+            --data-urlencode "password=release-check-admin-pw-1!" \
+            --data-urlencode "confirm_password=release-check-admin-pw-1!"
+
+          csrf=$(curl -s -c "$JAR" -b "$JAR" "$BASE/admin/settings/email" \
+            | grep -o 'name="_csrf"[^>]*value="[^"]*"' | head -1 \
+            | sed -E 's/.*value="([^"]*)".*/\1/')
+          curl -s -c "$JAR" -b "$JAR" -o /dev/null "$BASE/admin/settings/email" \
+            --data-urlencode "_csrf=$csrf" \
+            --data-urlencode "enabled=true" \
+            --data-urlencode "host=sui-id-release-smtp" \
+            --data-urlencode "port=1025" \
+            --data-urlencode "tls_mode=starttls" \
+            --data-urlencode "from_address=release-check@example.org" \
+            --data-urlencode "base_url=$BASE"
+
+          curl -s -o /dev/null "$BASE/admin/login" \
+            --data-urlencode "username=alice" \
+            --data-urlencode "password=alice-release-check-pw"
+
+          csrf2=$(curl -s -c "$JAR" -b "$JAR" "$BASE/forgot-password" \
+            | grep -o 'name="_csrf"[^>]*value="[^"]*"' | head -1 \
+            | sed -E 's/.*value="([^"]*)".*/\1/')
+          curl -s -c "$JAR" -b "$JAR" -o /dev/null "$BASE/forgot-password" \
+            --data-urlencode "_csrf=$csrf2" \
+            --data-urlencode "email=release-check-admin@example.org"
+
+          sleep 8
+          SCRIPT
+
+          # `cut -d=` is not used here: the token is standard base64 and
+          # could in principle contain `=` padding, which `cut -d=` would
+          # truncate at. `sed` strips only the leading `token=` prefix.
+          token=$(docker logs sui-id-release-check 2>&1 | grep -oE 'token=[^& ]+' | tail -1 | sed 's/^token=//')
+          if [ -z "$token" ]; then
+            echo "::error::could not read the setup token from sui-id-release-check's own log" >&2
+            docker logs sui-id-release-check || true
+            exit 1
+          fi
+          # The setup token is standard base64 (base64ct::Base64) and can
+          # contain `/`, so `|` is the sed delimiter here, not `/`.
+          sed -i "s|__TOKEN__|$token|" check.sh
+
+          docker run --rm --network sui-id-release-check-net \
+            -v "$PWD/check.sh":/check.sh:ro \
+            --entrypoint sh curlimages/curl@sha256:3b8fde20978e330b401837f24b871ebe2c8d14ff7f07b87990bcd832588a1a75 \
+            /check.sh
+
+      - name: Assert the LDAP and SMTP log lines
+        run: |
+          set -euo pipefail
+          echo "--- sui-id-release-check log ---"
+          docker logs sui-id-release-check 2>&1 | tee app.log
+          if ! grep -q 'user-source cascade matched' app.log; then
+            echo "::error::LDAP sign-in never produced the 'user-source cascade matched' log line" >&2
+            exit 1
+          fi
+          if ! grep -q 'outbox: mail sent' app.log; then
+            echo "::error::the forgot-password send never produced the 'outbox: mail sent' log line" >&2
+            exit 1
+          fi
+          echo "--- mailpit API (secondary confirmation) ---"
+          docker run --rm --network sui-id-release-check-net \
+            curlimages/curl@sha256:3b8fde20978e330b401837f24b871ebe2c8d14ff7f07b87990bcd832588a1a75 \
+            -s "http://sui-id-release-smtp:8025/api/v1/messages" | tee mailpit.json
+          grep -q '"total":[1-9]' mailpit.json
+
+      - name: Tear down
+        if: always()
+        run: |
+          docker rm -f sui-id-release-check sui-id-release-ldap sui-id-release-smtp 2>/dev/null || true
+          docker network rm sui-id-release-check-net 2>/dev/null || true
+
+  provenance:
+    name: SHA256SUMS, attest, upload
+    needs: [build, ldap-smtp-check]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      # RFC 143 stage 2 C2.5: granted to this job only, never
+      # workflow-wide -- attest-build-provenance mints a Sigstore identity
+      # token and signs the build's provenance with it.
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: sui-id-x86_64-unknown-linux-musl
+          path: release/x86_64-unknown-linux-musl
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: sui-id-aarch64-unknown-linux-musl
+          path: release/aarch64-unknown-linux-musl
+
+      - name: Rename and checksum
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp release/x86_64-unknown-linux-musl/sui-id dist/sui-id-x86_64-unknown-linux-musl
+          cp release/aarch64-unknown-linux-musl/sui-id dist/sui-id-aarch64-unknown-linux-musl
+          cd dist
+          sha256sum sui-id-x86_64-unknown-linux-musl sui-id-aarch64-unknown-linux-musl > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Attest build provenance (per artifact)
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4 (v4.2.2)
+        with:
+          subject-path: "dist/*"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-artifacts
+          path: dist/*
+          if-no-files-found: error

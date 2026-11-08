@@ -101,7 +101,9 @@ fn discovery_succeeded(resp: &axum::response::Response) -> bool {
 async fn a_root_issuer_derives_the_well_known_path_at_the_root() {
     let mut state = test_app();
     complete_setup_and_login(&state).await;
-    state.http_client = Arc::new(federation_test_client(sui_id::resolver::ValidatingResolver));
+    state.http_client = Arc::new(Some(federation_test_client(
+        sui_id::resolver::ValidatingResolver,
+    )));
 
     let issuer = serve_https(move |base| {
         let doc = discovery_json(&base);
@@ -132,7 +134,9 @@ async fn a_root_issuer_derives_the_well_known_path_at_the_root() {
 async fn a_path_issuer_derives_the_well_known_path_after_the_path() {
     let mut state = test_app();
     complete_setup_and_login(&state).await;
-    state.http_client = Arc::new(federation_test_client(sui_id::resolver::ValidatingResolver));
+    state.http_client = Arc::new(Some(federation_test_client(
+        sui_id::resolver::ValidatingResolver,
+    )));
 
     let base = serve_https(move |base| {
         let issuer = format!("{base}/tenant/a");
@@ -169,7 +173,9 @@ async fn a_path_issuer_derives_the_well_known_path_after_the_path() {
 async fn the_rfc_8414_insert_before_path_form_is_never_attempted_for_a_path_issuer() {
     let mut state = test_app();
     complete_setup_and_login(&state).await;
-    state.http_client = Arc::new(federation_test_client(sui_id::resolver::ValidatingResolver));
+    state.http_client = Arc::new(Some(federation_test_client(
+        sui_id::resolver::ValidatingResolver,
+    )));
 
     let base = serve_https(move |base| {
         let issuer = format!("{base}/tenant/a");

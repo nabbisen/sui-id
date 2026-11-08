@@ -58,6 +58,22 @@ async fn parse_response_is_case_insensitive_on_suffix() {
     assert_eq!(result, HibpCheckOutcome::Breached { count: 5 });
 }
 
+/// RFC 143 stage 2 part A: `HttpHibpClient` with no usable `reqwest::Client`
+/// (the shape `new()` leaves it in when this host has no CA certificates)
+/// must answer `Unavailable` directly, never attempt a request with no
+/// client to send it on.
+#[tokio::test]
+async fn check_with_no_client_is_unavailable_not_a_panic() {
+    let client = HttpHibpClient {
+        client: None,
+        endpoint: "https://api.pwnedpasswords.com/range".to_owned(),
+        user_agent: "sui-id/test".to_owned(),
+        timeout: Duration::from_secs(5),
+    };
+    let outcome = client.check("anything").await;
+    assert_eq!(outcome, HibpCheckOutcome::Unavailable);
+}
+
 #[tokio::test]
 async fn enforce_off_skips_check_entirely() {
     // Passing a "would-be-breached" stub but mode=Off must

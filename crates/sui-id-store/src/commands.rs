@@ -1017,7 +1017,11 @@ fn remove_mfa_within_tx(tx: &mut ClassATx<'_, U07>, target: UserId) -> StoreResu
 // possession of the master key and filesystem access, not an
 // authenticated user — it cannot supply an actor, so unlike U01-U07 this
 // command uses the sealed system-authority adapter (`for_system_actor`),
-// the same mechanism K01 and T04 use for their own non-human callers.
+// the same mechanism T04 uses for its own non-human caller. (Cycle K
+// stage 2, part E: this comment named K01 here too, but K01's own
+// `system_principal: forbidden` requires a real administrator actor --
+// `for_authorized_actor(admin, None)`, not `for_system_actor` -- so it
+// was never this shape.)
 //
 // U08 covers `users::admin_unlock` only. The automatic counter reset on a
 // successful sign-in is a distinct thing, not an alternate branch of this
@@ -6862,7 +6866,9 @@ pub async fn set_dev_client_secret(
 // CLI-only (`sui-id admin issue-registration-token`). No authenticated
 // actor exists. Mirrors C22 exactly, the create half of the same pair --
 // the operator's authority is possession of the master key and
-// filesystem access, the same shape U08 and K01 use.
+// filesystem access, the same shape U08 uses. (Cycle K stage 2, part E:
+// K01 was named here too, but K01 requires a real administrator actor
+// and was never this shape -- see U08's own comment above.)
 
 static C14_CREATED: EventDescriptor = EventDescriptor {
     kind: AuditEventKind::ClientRegistrationTokenCreated,
@@ -6919,7 +6925,9 @@ pub async fn issue_registration_token(
 //
 // RFC 094 M2b wave 4 stage 4. CLI-only, no authenticated actor -- the
 // operator's authority is possession of the master key and filesystem
-// access, the same shape U08 and K01 use.
+// access, the same shape U08 uses. (Cycle K stage 2, part E: K01 was
+// named here too, but K01 requires a real administrator actor and was
+// never this shape -- see U08's own comment above.)
 
 static C22_REVOKED: EventDescriptor = EventDescriptor {
     kind: AuditEventKind::ClientRegistrationTokenRevoked,

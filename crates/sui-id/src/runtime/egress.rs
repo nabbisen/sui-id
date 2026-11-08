@@ -23,16 +23,26 @@ use std::time::Duration;
 /// client for federation traffic — G19 (RFC 134 step 1c) asserts that
 /// `reqwest::Client::builder()` appears nowhere else under the federation
 /// path.
-// A startup-time constructor with no `Result` return; a TLS-backend init
-// failure here means the process cannot serve federation at all, so
-// failing fast is the intended behavior, not a routine failure mode
-// (moved from `AppState::new`, which carried the same allow for the same
-// reason).
-#[allow(clippy::expect_used)]
-pub fn build_federation_client() -> reqwest::Client {
-    federation_client_builder(Arc::new(crate::resolver::ValidatingResolver), None)
-        .build()
-        .expect("failed to build federation HTTP client")
+///
+/// RFC 143 stage 2, part A: a host with no CA certificates makes the
+/// TLS backend's own client construction fail (measured: `rustls-
+/// platform-verifier` returns `Err`, not a panic, from `.build()`
+/// itself) — this used to be `.expect()`'d, which turned "no federation
+/// provider is even configured" into a startup crash. `None` here means
+/// exactly that: no federation traffic can ever succeed on this host,
+/// which is true and unavoidable, but is not a reason this process
+/// should not start. The one combined, operator-facing warning about
+/// missing CA certificates is `startup::warn_if_no_tls_roots`'s job, not
+/// this function's; every caller of a `None` client fails its own
+/// request with its own error, at the point that request is attempted.
+pub fn build_federation_client() -> Option<reqwest::Client> {
+    match federation_client_builder(Arc::new(crate::resolver::ValidatingResolver), None).build() {
+        Ok(client) => Some(client),
+        Err(error) => {
+            tracing::debug!(%error, "federation HTTP client could not be built");
+            None
+        }
+    }
 }
 
 /// The one list of federation client settings. Production and the test-support

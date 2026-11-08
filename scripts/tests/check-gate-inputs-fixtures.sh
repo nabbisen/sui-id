@@ -126,6 +126,18 @@ sed -i 's|uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6|u
   "$unpinned/.github/workflows/audit.yml"
 expect_failure unpinned-action "condition 1: unpinned action reference"
 
+# --- Condition 1: a local reference is exempt, an external reusable one is not --
+# release-artifacts.yml is called as `uses: ./.github/workflows/…`, which the
+# commit itself pins. The exemption must not widen to an external reusable
+# workflow referenced by branch: that is an unpinned action like any other.
+external_reusable="$tmp/external-reusable-workflow"
+make_valid_fixture "$external_reusable"
+cat >>"$external_reusable/.github/workflows/audit.yml" <<'EXTERNAL'
+  external-reusable:
+    uses: someorg/somerepo/.github/workflows/shared.yml@main
+EXTERNAL
+expect_failure external-reusable-workflow "condition 1: unpinned action reference"
+
 # --- Condition 2: workflow SHA missing from [actions] ---------------------
 unrecorded="$tmp/unrecorded-sha"
 make_valid_fixture "$unrecorded"

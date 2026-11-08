@@ -153,9 +153,9 @@ async fn callback(
 async fn base_state() -> AppState {
     let mut state = test_app();
     complete_setup_and_login(&state).await;
-    state.http_client = std::sync::Arc::new(super::tls_mock::federation_test_client(
+    state.http_client = std::sync::Arc::new(Some(super::tls_mock::federation_test_client(
         sui_id::resolver::ValidatingResolver,
-    ));
+    )));
     state
 }
 

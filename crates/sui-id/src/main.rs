@@ -340,6 +340,7 @@ async fn serve_dev(args: &[String]) -> Result<()> {
     // In normal mode startup::prepare does this; dev mode builds AppState
     // directly so we must call it explicitly here.
     let _log_guard = sui_id::startup::init_tracing(&cfg.log);
+    sui_id::startup::warn_if_no_tls_roots();
 
     // Build the AppState directly (we can't use startup::prepare
     // because it opens its own DB). Mirror its mailer + HIBP
