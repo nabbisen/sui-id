@@ -301,7 +301,21 @@ jobs:
           # and chown that copy instead -- the bind-mounted certs
           # underneath are read, never written, so `:ro` still means what
           # it says for them.
+          #
+          # `LDAP_TLS_VERIFY_CLIENT=never`: the image defaults to `demand`,
+          # so slapd refuses any client that presents no certificate
+          # ("TLS: can't accept: No certificate was found"), and sui-id
+          # presents none -- its LDAP client has no client-certificate
+          # setting (`LdapConnSettings::new()`, ldap_source.rs). The
+          # server's certificate is still verified by sui-id against the
+          # generated CA; only the mutual-TLS demand, which sui-id cannot
+          # meet, is turned off. Rehearsal 42535043149 failed on exactly
+          # this. Note that `openssl s_client` prints "Verify return
+          # code: 0 (ok)" even when slapd rejects it, because that line
+          # reports the *client's* check of the server, so the server's
+          # log is the evidence.
           docker run -d --name sui-id-release-ldap --network sui-id-release-check-net \
+            -e LDAP_TLS_VERIFY_CLIENT=never \
             -e LDAP_TLS_CRT_FILENAME=ldap.crt \
             -e LDAP_TLS_KEY_FILENAME=ldap.key \
             -e LDAP_TLS_CA_CRT_FILENAME=ca.crt \
