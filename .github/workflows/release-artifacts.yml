@@ -390,7 +390,17 @@ jobs:
 
           [log]
           format = "json"
-          filter = "info,sui_id=info,sui_id_core=info,sui_id_store=info"
+          # The two lines asserted below are `tracing::debug!`
+          # (sui-id-store/src/user_source.rs, "user-source cascade
+          # matched"; sui-id-core/src/communication/mail/outbox.rs,
+          # "outbox: mail sent"), so their two targets are raised to
+          # debug and nothing else is. At "info" neither line is ever
+          # emitted, and rehearsal 42535940718 failed on exactly that
+          # while slapd's own log showed alice's bind succeeding. The
+          # outbox's target is `sui_id_core::mail::outbox`: lib.rs
+          # declares the module with `#[path]`, which moves the file
+          # but not the module path.
+          filter = "info,sui_id_store::user_source=debug,sui_id_core::mail::outbox=debug"
 
           [security]
           max_lockout = "24h"
