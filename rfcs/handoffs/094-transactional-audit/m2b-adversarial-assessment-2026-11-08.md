@@ -225,8 +225,9 @@ waits for stage 10. RFC 142's closure does not depend on it.
 
 > ## Whose turn it is: **yours** — accept M2b's durable evidence, or not.
 
-Stage 10 and its fix round landed in `LANDING_COMMIT`. Level B on that exact
-commit: LEVEL_B_RESULT. Each criterion was **re-tried against the code**, as
+Stage 10 and its fix round landed in `cbfb8f9`. Level B on that exact
+commit: `workflow_dispatch` run `42462622748`, **28 jobs, 28 success, 0 failed,
+0 skipped**. `Security audit` on the same commit: run `42462625022`, **success**. Each criterion was **re-tried against the code**, as
 §1–§3 were. None was read off the stage's own report.
 
 | # | Criterion | Now |
