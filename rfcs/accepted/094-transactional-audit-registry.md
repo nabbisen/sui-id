@@ -1329,6 +1329,18 @@ intention; it must be observed on one clean commit before M2a closes.
 - Independent closure review accepts adversarial, rollback, concurrency, and
   clean-matrix evidence.
 
+**The second bullet's meaning, settled 2026-11-08** (`@nabbisen`: *"Both your
+directions are accepted."*), after the architect verified three readings against
+both halves of the owner's philosophy
+([`../handoffs/094-transactional-audit/m2b-criterion-2-and-f3-verified-2026-11-08.md`](../handoffs/094-transactional-audit/m2b-criterion-2-and-f3-verified-2026-11-08.md)):
+**no best-effort append accompanies a Class-A mutation; every best-effort append
+that remains reports its own failure** (Class B as the coverage matrix defines it);
+**every row that exempts an append by its class names its real callers; and the
+operator reference says which events can be absent from the log**, and that each
+absence leaves an error in the service log. A literal reading (no best-effort
+append at all) is excluded because it contradicts invariant 5: it would let a failed
+audit write undo a denial or a revocation.
+
 Master-key rotation crash recovery is no longer an acceptance criterion of this
 RFC; it moved to RFC 100 with the 2026-07-28 amendment.
 

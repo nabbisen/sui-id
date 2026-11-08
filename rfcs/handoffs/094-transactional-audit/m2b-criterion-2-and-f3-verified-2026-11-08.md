@@ -1,6 +1,8 @@
 # M2b criterion 2's reading (§F1) and `rusqlite` under dev-dependencies (§F3), verified
 
-> ## Whose turn it is: **yours** — two rulings, §3.
+> ## Both rulings settled, 2026-11-08 — `@nabbisen`: *"Both your directions are accepted."*
+> §F1 is reading **(b′)**. §F3 is **production reach**, with RFC 094's sentence
+> amended and the check moved into G23, both inside stage 10.
 
 **Asked.** *"Verify carefully that it meets my fundamental philosophy"*
 (§F1), and whether §F3 *"is up to the result of verification on 3"*.

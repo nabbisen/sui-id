@@ -477,6 +477,17 @@ for the case where forgetting is most expensive.
    Rollback what a rollback loses. Review —
    `.git-exclude/reviewed/cycle-j-stage9-rfc142-stage5-pre-migration-backup-2026-11-08.md`.
 
+10. **The write site, not only the module** — **DISPATCHED** 2026-11-08 —
+   `rfcs/handoffs/094-transactional-audit/cycle-j-stage10-the-write-site-not-only-the-module-2026-11-08.md`.
+   G23 checks every writing function in an allow-listed file against the
+   manifest, with a second negative fixture inside an allow-listed path.
+   Every function it flags gets a decision. C17, C18 and C23 are
+   dispositioned. Criterion 2 as settled: R1 (seven `let _` appends onto
+   `emit_must_attempt`), R2 (a row for RFC 7009 revocation), and an
+   operator section on events that can be missing. §F3 as settled: G23
+   reads the manifests, and the e2e witness retires. Plus a concurrency
+   inventory.
+
 **Cycle J's nine stages have landed** (`1573a72`, Level B `42435137349`,
 28/28, 0 skipped). **The architect's adversarial assessment says M2b is
 not ready to close**: criterion 1 has three undispositioned Class-A rows
@@ -516,11 +527,25 @@ deadline is how a cycle becomes open-ended.
 
 ## F — open questions
 
-1. **Criterion 2's reading** (§B). The architect proposes "no
+1. **SETTLED 2026-11-08** — `@nabbisen`: *"Both your directions are accepted."*
+   Criterion 2 means reading **(b′)** of
+   `m2b-criterion-2-and-f3-verified-2026-11-08.md`: no best-effort append
+   accompanies a Class-A mutation; every remaining best-effort append
+   reports its own failure; every row that exempts an append by its class
+   names its real callers; and the operator reference says which events can
+   be absent. R1 and R2 move into stage 10.
+   *Original entry:* **Criterion 2's reading** (§B). The architect proposes "no
    best-effort append accompanying a Class-A mutation"; this is the
    decisive one, and it is item (4) of the switch itself.
 2. **One cycle or two** (§E). The architect recommends two.
-3. **`rusqlite` under `[dev-dependencies]`: the RFC and the test that
+3. **SETTLED 2026-11-08**, in the same words as item 1. **Production reach**:
+   `rusqlite` in the `[dependencies]` of no crate but `sui-id-store`.
+   RFC 094's sentence is amended to say so, and **G23 reads the manifests**
+   and enforces it, both in stage 10. The architect's view that the
+   amendment is a correction rather than a weakening (nothing ever enforced
+   is relaxed) was part of the direction accepted. So it is made in place,
+   and RFC 094 stays in `accepted/`.
+   *Original entry:* **`rusqlite` under `[dev-dependencies]`: the RFC and the test that
    closed M2a disagree.** Opened 2026-11-04 while scoping stage 6, and
    **`@nabbisen`'s to settle.** RFC 094's structural-gate section
    requires that `rusqlite` appear in *"the `[dependencies]` or
