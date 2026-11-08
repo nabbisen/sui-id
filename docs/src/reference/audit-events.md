@@ -157,6 +157,59 @@ coverage matrix marks as not atomic) still write hand-built plain text.
 so a free-text value such as a recovery-link reason could contain text that looked
 like a field. In such a row the real field is the *last* occurrence of its key.
 
+## Events that can be missing from the log
+
+Every event in this reference is one of two kinds, and the coverage matrix
+(`contracts/audit-coverage-matrix.md`) marks each row with which: **Class A**
+(sealed) commits its audit row in the same database transaction as the
+change it records — if the row is missing, the change did not happen either,
+because the transaction would have rolled back both together. **Class B**
+(best-effort) writes its audit row *after* the real action already
+succeeded or failed, over a second, separate database write. RFC 094's own
+rule is that a denial, a detection, or a revocation must never wait on its
+own audit write succeeding — so these stay Class B even though some of them
+(`token.revoke`, a sign-in denial) are real actions in their own right, not
+mere bookkeeping.
+
+A Class-B row can therefore go missing even though the event it describes
+really happened: the database could be briefly unreachable, full, or
+locked at the moment of the *second* write, after the first one (the
+revocation, the denial) already committed. **This is not silent.** Every
+Class-B append that fails leaves one `ERROR`-level line in the service log,
+naming the event:
+
+```text
+ERROR ...: sui_id_store::repos::audit: must-attempt emission: audit append failed event="token.revoke" error=...
+```
+
+or, for the small number of sites that cannot use this mechanism (below),
+the same shape under a different message:
+
+```text
+ERROR ...: sui_id_core::authn::session: best-effort audit append failed event="auth.login.failure" error=...
+```
+
+So the question "why is there no `token.revoke` row for this request?" has
+exactly two possible answers, and the service log — not the audit log —
+is what tells them apart: an `ERROR` line naming `token.revoke` at the
+right time means *it happened, but was not recorded*; no such line means
+*it never happened*. Search the service log for the event name, not just
+the word "error" — these lines always carry `event="<the exact action
+string>"` so a search for the event name a reader already has (from an
+alert, a ticket, or this reference) finds its own failures and no one
+else's.
+
+Two event names — `auth.login.failure` and
+`auth.login.password_ok_mfa_required` — are each written by two different
+code paths: a sealed Class-A path and a best-effort Class-B one (the
+coverage matrix's own "two writers" note on both rows). A new, separately
+named descriptor cannot be declared for the Class-B side of either without
+colliding with the Class-A side's already-registered name, so these two
+best-effort sites log their own failure directly (the second log shape
+above) rather than through the shared mechanism the rest use; the
+guarantee an operator gets — a named `ERROR` line on a failed write, never
+a silent drop — is the same either way.
+
 ## Federation provider configuration events (RFC 094 M2b wave 3)
 
 | Event name | Label | Description |

@@ -475,6 +475,27 @@ pub enum AuditEventKind {
     /// `INSERT ... ON CONFLICT DO UPDATE` cannot tell the two apart on
     /// its own. Previously emitted by nothing at all.
     AuthConsentGranted,
+    /// `audit.chain.verification_failed` — cycle J stage 10, RFC 094 M2b
+    /// criterion 2 R1: moved from a bare `audit::append` (which discarded
+    /// its own failure to write) onto `emit_must_attempt`, so this
+    /// already-best-effort event (RFC 121 D3: never on the critical path)
+    /// now also reports when *it itself* could not be recorded.
+    AuditChainVerificationFailed,
+    /// `oauth2.exchange_code.user_revoked` — cycle J stage 10, RFC 094 M2b
+    /// criterion 2 R1: a denial (the user behind an authorization code was
+    /// disabled or deleted between issue and exchange), moved from a bare
+    /// `audit::append` onto `emit_must_attempt` for the same reason.
+    Oauth2ExchangeCodeUserRevoked,
+    /// `token.introspect` — cycle J stage 10, RFC 094 M2b criterion 2 R1:
+    /// a read, not a mutation, moved onto `emit_must_attempt` so its own
+    /// best-effort record reports a failure to write rather than
+    /// discarding it.
+    TokenIntrospect,
+    /// `token.revoke` — cycle J stage 10, RFC 094 M2b criterion 2 R1 and
+    /// R2: RFC 7009's `/oauth2/revoke`, T05's event. A revocation, Class B
+    /// by RFC 094 invariant 5's own rule — moved from a bare `audit::append`
+    /// onto `emit_must_attempt`.
+    TokenRevoke,
 }
 
 /// The registry entry for one [`AuditEventKind`]. `descriptor()` on a

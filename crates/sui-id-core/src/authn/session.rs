@@ -58,7 +58,18 @@ pub async fn record_refused_login(
 }
 
 async fn record_login_failure(db: &Database, clock: &SharedClock, username: &str, reason: &str) {
-    let _ = audit::append(
+    // RFC 094 M2b criterion 2 R1 (cycle J stage 10): `auth.login.failure` is
+    // one of the matrix's documented "two writers" (`contracts/
+    // audit-coverage-matrix.md`'s own note on this event and `auth.login.
+    // password_ok_mfa_required`) -- this best-effort row and L02's sealed
+    // Class-A path both write the same event name. A dedicated
+    // `MustAttemptDescriptor` here cannot be declared: `scripts/
+    // rust_registry.py`'s `read_registry` and its Rust port (`xtask/src/
+    // columns.rs`) both reject two descriptors sharing one `name`, and
+    // L02's `EventDescriptor` already claims this one. `tracing::error!`
+    // on failure gets R1's actual requirement -- logged loudly, never
+    // silently dropped -- without that collision.
+    if let Err(e) = audit::append(
         db,
         &AuditLogRow {
             at: clock.now(),
@@ -69,7 +80,14 @@ async fn record_login_failure(db: &Database, clock: &SharedClock, username: &str
             note: Some(reason.to_owned()),
         },
     )
-    .await;
+    .await
+    {
+        tracing::error!(
+            event = "auth.login.failure",
+            error = %e,
+            "best-effort audit append failed"
+        );
+    }
 }
 
 pub async fn login(
@@ -232,7 +250,17 @@ pub async fn login_with_mfa(
         let pending = crate::mfa::issue_pending_mfa(db, clock, user.id).await?;
         // Audit success of the *password* step. The MFA step issues its
         // own audit entry on completion.
-        let _ = audit::append(
+        //
+        // RFC 094 M2b criterion 2 R1 (cycle J stage 10): like
+        // `record_login_failure`'s own `auth.login.failure`, this event
+        // name is one of the matrix's documented "two writers" -- a
+        // sealed Class-A `EventDescriptor` already claims
+        // `auth.login.password_ok_mfa_required`, so this best-effort side
+        // cannot declare its own `MustAttemptDescriptor` of the same name
+        // (the registry's one-static-per-name rule,`xtask/src/
+        // columns.rs`). `tracing::error!` on failure, not a new
+        // descriptor.
+        if let Err(e) = audit::append(
             db,
             &AuditLogRow {
                 at: clock.now(),
@@ -243,7 +271,14 @@ pub async fn login_with_mfa(
                 note: None,
             },
         )
-        .await;
+        .await
+        {
+            tracing::error!(
+                event = "auth.login.password_ok_mfa_required",
+                error = %e,
+                "best-effort audit append failed"
+            );
+        }
         return Ok(LoginOutcome::MfaRequired { pending });
     }
 

@@ -752,9 +752,21 @@ write site lacks a generated command declaration, a manifest row lacks a
 registry descriptor, two commands claim one exclusive binding, a Class-A
 command lacks its failure test, generated documentation differs, an
 unapproved raw-write module exists, **or `rusqlite` appears in a
-`[dependencies]` or `[dev-dependencies]` table of any crate other than
-`sui-id-store`**. The generated declaration set must equal the reviewed
+`[dependencies]` or `[build-dependencies]` table (target-specific ones
+included) of any crate other than `sui-id-store`**. `[dev-dependencies]` is
+permitted: Cargo never links one into a shipped binary, so the boundary is
+**production reach**. The generated declaration set must equal the reviewed
 inventory set. Grep is not authoritative.
+
+*Amended 2026-11-08, cycle J stage 10, on `@nabbisen`'s ruling of §F3
+("Both your directions are accepted."). The sentence previously also named
+`[dev-dependencies]`. M2a closed on the production-reach reading
+(`tests/e2e/r094_m2a_db_access_scope.rs`), so the text and the accepted
+evidence disagreed. And this gate did not read manifests at all until this
+stage: the condition was enforced by that e2e test alone. G23 now enforces
+it (`xtask/src/manifest.rs`), with fixtures, and the e2e test is retired. Nothing
+that was ever enforced is relaxed. The same check also refuses a
+`test-support` feature on any production dependency table.*
 
 **Interim gate.** [RFC 116](../done/116-gate-contracts.md) stage 1 landed the part of this that needs no AST as `scripts/check-write-commands.py` (lane G17): every sealed command has a row, every row that says it is sealed names a command, every `files` path exists, and the `event` and `descriptor` fields are derived from the code. `xtask audit-structure` subsumes it and still owns the `syn` boundary and the failure-test presence; when it lands, G17 is retired in the same change so that one file does not have two definitions of true.
 
@@ -1256,8 +1268,11 @@ intention; it must be observed on one clean commit before M2a closes.
   inventory IDs.
 - **Raw database access is confined to `sui-id-store` by the dependency graph,
   not by visibility alone.** Owner decision, 2026-08-26. Three conditions:
-  1. **`rusqlite` appears in no `[dependencies]` or `[dev-dependencies]` table
-     outside `sui-id-store`**, asserted by a gate check that fails if it does.
+  1. **`rusqlite` appears in no `[dependencies]` or `[build-dependencies]`
+     table outside `sui-id-store`**, asserted by a gate check that fails if it
+     does. *(Amended 2026-11-08 to name what M2a actually closed on, production
+     reach; see the structural-gate section's note. `[dev-dependencies]` is
+     permitted.)*
      This is the primary control: a crate that does not depend on `rusqlite`
      cannot name `Connection`, `Transaction` or `Statement`, so no visibility
      change, feature flag, or later-added accessor can reopen the path, and

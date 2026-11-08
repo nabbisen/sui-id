@@ -336,8 +336,9 @@ enum Bound {
 /// confirms this directly — every provider's version/generation is
 /// fixed at `(0, 0)` today). The row's own stored triple is therefore
 /// re-checked against nothing live; only `provider.enabled` is a
-/// meaningful recheck until M2b lands. Stated here rather than silently
-/// matching stage 9's own recheck division.
+/// meaningful recheck until RFC 096-B2 lands (M2b closed, cycle J stage
+/// 10, with C17/C18/C23 reserved against it). Stated here rather than
+/// silently matching stage 9's own recheck division.
 async fn bind_pending(
     db: &Database,
     clock: &SharedClock,

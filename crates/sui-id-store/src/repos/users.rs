@@ -239,6 +239,13 @@ pub async fn list(db: &Database) -> StoreResult<Vec<UserRow>> {
 }
 
 /// Toggle the `is_disabled` flag (suspend / un-suspend).
+///
+/// Cycle J stage 10 (fix round): no production caller (the real path is
+/// `set_disabled_within_tx`, U02/U03's own). Kept behind `test-support`:
+/// callers span `sui-id-core`'s `authn::federated_mfa` tests, this
+/// crate's own `commands::tests::runner::federation`, and `sui-id`'s
+/// `tests/e2e/auth_flow_integrity.rs`.
+#[cfg(any(test, feature = "test-support"))]
 pub async fn set_disabled(db: &Database, id: UserId, disabled: bool) -> StoreResult<()> {
     db.with_conn(move |conn| {
         let n = conn.execute(
@@ -272,6 +279,11 @@ pub fn set_disabled_within_tx(
 
 /// Soft-delete a user. Hard delete is intentionally not exposed at this
 /// layer: it would orphan audit-log references.
+///
+/// Cycle J stage 10 (fix round): no production caller (the real path is
+/// `soft_delete_within_tx`, U04's own). Kept for this crate's own
+/// `commands::tests::runner::mfa`'s in-crate test seeding.
+#[cfg(test)]
 pub async fn soft_delete(db: &Database, id: UserId) -> StoreResult<()> {
     db.with_conn(move |conn| {
         let n = conn.execute(
@@ -301,30 +313,22 @@ pub fn soft_delete_within_tx(conn: &rusqlite::Connection, id: UserId) -> StoreRe
 
 /// Increment the user's consecutive-failure counter and (when the
 /// caller decides the lock window applies) stamp `locked_until`.
-/// Returns the new failure count.
+/// Returns the new failure count, inside a caller-owned transaction
+/// (RFC 094 U22: the sealed Class-A capability, not a bare
+/// `with_conn`-opened one). Commit is the caller's responsibility.
 ///
 /// `lock_until` is the wall-clock time before which the account is
 /// refused. `None` means "increment the counter but don't lock yet"
 /// — used at low failure counts where we want to count but not yet
 /// punish. The decision is intentionally outside this function so
 /// that the `sui_id_core` layer can choose the backoff curve.
-pub async fn record_login_failure(
-    db: &Database,
-    id: UserId,
-    lock_until: Option<DateTime<Utc>>,
-) -> StoreResult<i64> {
-    db.with_conn(move |conn| {
-        let tx = conn.unchecked_transaction()?;
-        let new_count = record_login_failure_within_tx(&tx, id, lock_until)?;
-        tx.commit()?;
-        Ok(new_count)
-    })
-    .await
-}
-
-/// Same as [`record_login_failure`], for a caller that already holds a
-/// transaction (RFC 094 U22: the sealed Class-A capability, not a bare
-/// `with_conn`-opened one). Commit is the caller's responsibility.
+///
+/// Cycle J stage 10 (fix round): the bare async `record_login_failure`
+/// this replaced had no caller anywhere, including tests — every real
+/// and test caller already names either this function or
+/// `commands::record_login_failure` (U22's own sealed command, a
+/// different function sharing the name, `use super::*`-imported by its
+/// own tests) — so it is deleted rather than kept alongside this one.
 pub fn record_login_failure_within_tx(
     tx: &rusqlite::Transaction<'_>,
     id: UserId,
@@ -523,9 +527,19 @@ pub fn increment_mfa_failure_within_tx(
 
 /// Admin-initiated unlock: reset the password-failure count, the
 /// second-factor failure count and the lock, without requiring a successful
-/// password check. Used by `sui-id admin unlock-user`. The second-factor count
-/// is cleared too (RFC 102 stage 9): otherwise the next wrong code after an
-/// `auth.mfa.lockout` unlock would be the sixth and lock the account again.
+/// password check. The second-factor count is cleared too (RFC 102 stage
+/// 9): otherwise the next wrong code after an `auth.mfa.lockout` unlock
+/// would be the sixth and lock the account again.
+///
+/// Cycle J stage 10 (fix round): this doc once said "used by `sui-id
+/// admin unlock-user`" — true before U08 was sealed, not since.
+/// `admin_unlock_within_tx` is U08's own path now
+/// (`commands::admin_unlock_user`); this bare form has no production
+/// caller left, confirmed by a full-workspace grep, and is kept only for
+/// `commands::tests::runner::lockout` and `tests/e2e/lockout.rs`'s own
+/// "the same statement, without the sealed command's audit wrapper"
+/// tests.
+#[cfg(any(test, feature = "test-support"))]
 pub async fn admin_unlock(db: &Database, id: UserId) -> StoreResult<()> {
     db.with_conn(move |conn| {
         let n = conn.execute(
@@ -665,33 +679,6 @@ pub async fn has_mfa(db: &Database, user_id: &UserId) -> StoreResult<bool> {
     .await
 }
 
-/// RFC 071: Change a user's role. Writes both `role` (new) and `is_admin`
-/// (compat shim) so old code that still reads `is_admin` continues to work
-/// until migration 0029 drops the column.
-pub async fn set_role(
-    db: &Database,
-    user_id: &UserId,
-    role: crate::models::Role,
-) -> StoreResult<()> {
-    let uid = user_id.to_string();
-    let role_str = role.as_str().to_owned();
-    let is_admin_val = role.is_admin() as i64;
-    db.with_conn(move |conn| {
-        let rows = conn.execute(
-            "UPDATE users SET role = ?2, is_admin = ?3, updated_at = datetime('now') \
-             WHERE id = ?1 AND is_deleted = 0",
-            params![uid, role_str, is_admin_val],
-        )?;
-        if rows == 0 {
-            return Err(StoreError::NotFound);
-        }
-        Ok(())
-    })
-    .await
-}
-
-/// Same as [`set_role`] but runs inside a caller-owned transaction (RFC
-/// 094 U05: the sealed Class-A capability).
 /// RFC 103 D13: whether the user may receive a local password — active,
 /// not deleted, and `source = local` — read inside the caller's
 /// transaction. A missing user is `NotFound`.
@@ -728,6 +715,17 @@ pub fn is_active_within_tx(conn: &rusqlite::Connection, id: UserId) -> StoreResu
     Ok(disabled == 0 && deleted == 0)
 }
 
+/// Change a user's role (RFC 071), inside a caller-owned transaction
+/// (RFC 094 U05: the sealed Class-A capability). Writes both `role`
+/// (new) and `is_admin` (compat shim) so old code that still reads
+/// `is_admin` continues to work until migration 0029 drops the column.
+///
+/// Cycle J stage 10 (fix round): this doc comment's own attribution had
+/// drifted onto `is_active_local_within_tx`, above, sometime before
+/// this stage — fixed here rather than left, while already touching
+/// this exact function pair. The bare async `set_role` this replaced
+/// had no caller anywhere, including tests, so it is deleted rather
+/// than kept alongside this one.
 pub fn set_role_within_tx(
     conn: &rusqlite::Connection,
     user_id: UserId,

@@ -73,6 +73,12 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<PendingSettingsChangeRow> {
 /// `crypto::seal`); the plaintext is never stored.  `summary` must contain
 /// only non-secret human-readable text suitable for the confirm page and audit
 /// log.
+///
+/// Cycle J stage 10 (fix round): no production caller (the real path is
+/// `insert_within_tx`'s own doc, below). Kept for this crate's own
+/// in-crate test seeding, confirmed by a full-workspace grep to have no
+/// caller outside it.
+#[cfg(test)]
 pub async fn insert(db: &Database, row: &PendingSettingsChangeRow) -> StoreResult<()> {
     let id = row.id.to_string();
     let sid = row.session_id.to_string();
@@ -213,6 +219,12 @@ pub async fn peek(
 /// must not consume the row — RFC 123 D3). `consume` remains for test
 /// seeding unrelated to `apply`'s own path, the same reasoning stage 1
 /// left `insert`/`cancel` in place for.
+/// Cycle J stage 10: this function's own doc already explained why it has
+/// no production caller -- `apply` (S08) uses `apply_within_tx` instead,
+/// whose binding check runs inside the transaction. `#[cfg(test)]` makes
+/// that explicit rather than leaving a `pub async fn` with no caller for
+/// the write-site gate to flag.
+#[cfg(test)]
 pub async fn consume(
     db: &Database,
     id: PendingChangeId,
@@ -258,6 +270,12 @@ pub async fn consume(
 ///
 /// Returns `Ok(())` even if the row was already absent, because a missing row
 /// is a correct outcome of cancel (idempotent).
+///
+/// Cycle J stage 10 (fix round): no production caller (the real path is
+/// `cancel_within_tx`'s own doc, above). Kept for this crate's own
+/// in-crate test seeding, confirmed by a full-workspace grep to have no
+/// caller outside it.
+#[cfg(test)]
 pub async fn cancel(db: &Database, id: PendingChangeId) -> StoreResult<()> {
     let id_str = id.to_string();
     db.with_conn(move |conn| {

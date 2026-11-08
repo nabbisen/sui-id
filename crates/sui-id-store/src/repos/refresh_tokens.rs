@@ -297,21 +297,6 @@ pub async fn find_any(db: &Database, token: &RawRefreshToken) -> StoreResult<Ref
     Err(StoreError::NotFound)
 }
 
-/// Revoke every active row in the given rotation family. Returns
-/// the number of rows updated. Idempotent: rows already revoked
-/// are not re-revoked.
-pub async fn revoke_family(db: &Database, family_id: &FamilyId) -> StoreResult<usize> {
-    let family_id = family_id.as_str().to_owned();
-    db.with_conn(move |conn| {
-        let n = conn.execute(
-            "UPDATE refresh_tokens SET revoked_at = ?1 WHERE family_id = ?2 AND revoked_at IS NULL",
-            params![Utc::now(), family_id],
-        )?;
-        Ok(n)
-    })
-    .await
-}
-
 /// The outcome of an atomic refresh-token rotation attempt (RFC 080).
 ///
 /// Every concurrent exchange of the same token hash receives exactly one

@@ -38,15 +38,18 @@
 //! `const`/`static` of type `&str` referenced at the call site (not inlined,
 //! and not one of the typed descriptors above) is not resolved -- doing so
 //! needs crate-wide constant-propagation, which plain `syn` parsing of one
-//! file at a time cannot do. Measured: `AUDIT_SIGNIN_UPSTREAM_FAILURE`
-//! (`repos/federation_provider.rs`) is exactly this shape, and is still
-//! found anyway because the *same* name is independently declared as the
-//! `name` field of `AUDIT_SIGNIN_UPSTREAM_FAILURE_DESCRIPTOR`'s
-//! `MustAttemptDescriptor` literal two lines below it -- source (1) reaches
-//! it even though the `const`-indirected call site does not. If a future
-//! `&'static str` audit-action constant exists with no typed descriptor
-//! alongside it, this check would miss it; named here rather than
-//! discovered later.
+//! file at a time cannot do. Previously measured: `AUDIT_SIGNIN_UPSTREAM_
+//! FAILURE` (`repos/federation_provider.rs`) was exactly this shape, and
+//! was still found anyway because the *same* name was independently
+//! declared as the `name` field of `AUDIT_SIGNIN_UPSTREAM_FAILURE_
+//! DESCRIPTOR`'s `MustAttemptDescriptor` literal nearby -- source (1)
+//! reached it even though the `const`-indirected call site did not. RFC 094
+//! M2b criterion 2 R1 (cycle J stage 10) converted that call site onto the
+//! descriptor directly and removed the now-unreferenced const, so no
+//! current example of the gap remains in this tree; it is named here for
+//! when the next one appears, not left to be discovered then for the first
+//! time. If a future `&'static str` audit-action constant exists with no
+//! typed descriptor alongside it, this check would miss it.
 //!
 //! The matrix side (`matrix_event_names`, below) reads the `Event name`
 //! column of the matrix's tables, not every backticked `word.word` in the

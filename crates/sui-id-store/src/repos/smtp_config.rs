@@ -69,6 +69,15 @@ pub async fn get(db: &Database) -> StoreResult<Option<SmtpConfigRow>> {
 ///
 /// Always writes `id = 'singleton'`; the row's primary key is
 /// fixed by the schema's CHECK constraint.
+///
+/// Cycle J stage 10 (fix round): no production caller anywhere (full
+/// workspace grep) -- the "direct (no-pending-change) settings-save
+/// path" [`upsert_within_tx`]'s own doc comment once named no longer
+/// exists; every SMTP config change goes through the pending-change
+/// flow now. Kept behind `test-support`: callers span this crate's own
+/// `commands::tests::runner::master_key` and several of `sui-id`'s
+/// e2e suites.
+#[cfg(any(test, feature = "test-support"))]
 pub async fn upsert(db: &Database, row: &SmtpConfigRow) -> StoreResult<()> {
     let row = row.clone();
     db.with_conn(move |conn| {
@@ -109,10 +118,10 @@ pub async fn upsert(db: &Database, row: &SmtpConfigRow) -> StoreResult<()> {
 
 /// RFC 094 M2b stage 2, S08: the same upsert as [`upsert`], run inside a
 /// caller-supplied transaction. `commands::apply_pending_settings_change`
-/// is the only sealed caller; [`upsert`] remains for the direct
-/// (no-pending-change) settings-save path, which this stage does not
-/// touch. Measured before this stage: no `_within_tx` form existed here
-/// at all.
+/// is the only sealed caller, and -- measured in cycle J stage 10's fix
+/// round -- the only caller of any kind in production: [`upsert`] has
+/// none, and is kept only for test seeding. Measured before this stage:
+/// no `_within_tx` form existed here at all.
 pub fn upsert_within_tx(tx: &rusqlite::Transaction<'_>, row: &SmtpConfigRow) -> StoreResult<()> {
     tx.execute(
         "INSERT INTO smtp_config(id, enabled, host, port, tls_mode, username, \

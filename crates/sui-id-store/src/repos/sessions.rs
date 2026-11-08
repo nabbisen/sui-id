@@ -98,6 +98,10 @@ pub async fn get_with_user_active(db: &Database, id: SessionId) -> StoreResult<(
     .await
 }
 
+/// Cycle J stage 10 (fix round): no production caller (the real path is
+/// `revoke_within_tx`, U18's own). Kept for
+/// `tests_state_machine::sessions`' own in-crate property test.
+#[cfg(test)]
 pub async fn revoke(db: &Database, id: SessionId) -> StoreResult<()> {
     db.with_conn(move |conn| {
         conn.execute(
@@ -109,6 +113,10 @@ pub async fn revoke(db: &Database, id: SessionId) -> StoreResult<()> {
     .await
 }
 
+/// Cycle J stage 10: no production caller (the real paths go through
+/// `revoke_all_for_user_within_tx`, inside U02/U04/U10/L06). Kept for
+/// `tests_state_machine::sessions`' own in-crate property test.
+#[cfg(test)]
 pub async fn revoke_all_for_user(db: &Database, user_id: UserId) -> StoreResult<usize> {
     db.with_conn(move |conn| {
         let n = conn.execute(
@@ -200,6 +208,11 @@ pub async fn list_active_for_user(db: &Database, user_id: UserId) -> StoreResult
 }
 
 /// Revoke every active session for the user *except* the supplied id.
+///
+/// Cycle J stage 10: no production caller (the real path is
+/// `revoke_all_for_user_except_within_tx`, inside U09/U19). Kept for
+/// `tests_state_machine::sessions`' own in-crate property test.
+#[cfg(test)]
 pub async fn revoke_all_for_user_except(
     db: &Database,
     user_id: UserId,

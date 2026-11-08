@@ -29,8 +29,9 @@ use crate::handlers::{AppState, AppStateExt, session_cookie};
 use sui_id_core::errors::CoreError;
 use sui_id_shared::ids::{FederationProviderId, SessionId, UserId};
 use sui_id_store::models::{
-    AuditLogRow, FederationLinkRow, FederationProviderRow, Role, SessionRow, UserRow, UserSource,
+    FederationLinkRow, FederationProviderRow, Role, SessionRow, UserRow, UserSource,
 };
+use sui_id_store::registry;
 
 // ── RFC 096-B1 stage 4: 096-A's validators, their first production callers ──
 
@@ -397,8 +398,10 @@ fn basic_auth_header(client_id: &str, client_secret: &str) -> String {
 /// or generation column either -- checked directly, not assumed from the
 /// manifest alone.
 ///
-/// Until M2b adds the real columns, every provider's version/generation is
-/// fixed at `(0, 0)`. That makes the provider id/version/generation match
+/// Until RFC 096-B2 adds the real columns (M2b closed, cycle J stage 10,
+/// with C17/C18/C23 reserved against it), every provider's version/
+/// generation is fixed at `(0, 0)`. That makes the provider id/version/
+/// generation match
 /// `federation_login_attempt::claim` now checks (RFC 096-B1 stage 6c, RFC
 /// 096 `:597-598`) trivially satisfied in production today — there is
 /// only one value in play, so it can never disagree with itself on a
@@ -494,13 +497,35 @@ pub async fn federated_start(
         // offending URL to the browser.
         Err(e) if e.is_invalid() => {
             tracing::warn!(slug = %slug, error = %e, "federation discovery endpoint rejected");
+            // RFC 094 M2b criterion 2 R1 (cycle J stage 10): no attempt row
+            // exists yet at this point (unchanged from before -- see this
+            // function's own doc in federation_provider.rs), so this stays
+            // the one caller of `AUDIT_SIGNIN_UPSTREAM_FAILURE_DESCRIPTOR`
+            // outside `terminalize_and_audit`'s F05 path. Spawned, not
+            // awaited, so a slow/failed audit write never delays the
+            // redirect; `emit_must_attempt` itself now reports its own
+            // failure via `tracing::error!`, which the old fire-and-forget
+            // `emit_audit_soon`/bare `audit::append` could not.
+            let db = app.db.clone();
+            let at = app.clock.now();
+            let provider_id = provider.id;
             #[allow(clippy::let_underscore_future)]
-            let _ = emit_audit_soon(
-                app.db.clone(),
-                app.clock.now(),
-                sui_id_store::repos::federation_provider::AUDIT_SIGNIN_UPSTREAM_FAILURE,
-                Some(format!("provider={} error={e}", provider.slug)),
-            );
+            let _ = tokio::spawn(async move {
+                let attributes = registry::AuditAttributes::builder()
+                    .attribute("provider_id", provider_id.to_string())
+                    .attribute("reason", "discovery_rejected")
+                    .build();
+                let _ = sui_id_store::repos::audit::emit_must_attempt(
+                    &db,
+                    &sui_id_store::repos::federation_provider::AUDIT_SIGNIN_UPSTREAM_FAILURE_DESCRIPTOR,
+                    at,
+                    None,
+                    None,
+                    "fail",
+                    attributes,
+                )
+                .await;
+            });
             return Ok(Redirect::to("/admin/login?fed_error=discovery_origin").into_response());
         }
         Err(e) => {
@@ -872,9 +897,9 @@ pub async fn federated_callback(
             // RFC 096-B1 stage 6c, F05: a post-claim transport failure --
             // the attempt is now `exchanging` (claimed above), so this is
             // F05's own job, through `terminalize_and_audit` rather than
-            // the old fire-and-forget `emit_audit_soon`/`AUDIT_SIGNIN_
-            // UPSTREAM_FAILURE` best-effort append. (`federated_start`'s
-            // own discovery failure keeps that old path: no attempt row
+            // `AUDIT_SIGNIN_UPSTREAM_FAILURE_DESCRIPTOR`'s own direct,
+            // spawned `emit_must_attempt` call. (`federated_start`'s own
+            // discovery failure uses that direct call: no attempt row
             // exists yet at that point, so there is nothing for F05 to
             // terminalize.)
             terminalize_and_audit(
@@ -1895,26 +1920,6 @@ pub fn fed_error_message(fed_error: &str, t: &'static sui_id_i18n::Strings) -> s
         kind: sui_id_web::FlashKind::Error,
         text: text.to_owned(),
     }
-}
-
-/// Fire-and-forget audit append (for paths where we can't await).
-fn emit_audit_soon(
-    db: sui_id_store::Database,
-    at: chrono::DateTime<chrono::Utc>,
-    action: &'static str,
-    note: Option<String>,
-) -> tokio::task::JoinHandle<()> {
-    let row = AuditLogRow {
-        at,
-        actor: None,
-        action: action.into(),
-        target: None,
-        result: "fail".into(),
-        note,
-    };
-    tokio::spawn(async move {
-        let _ = sui_id_store::repos::audit::append(&db, &row).await;
-    })
 }
 
 #[cfg(test)]

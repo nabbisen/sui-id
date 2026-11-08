@@ -220,3 +220,67 @@ waits for stage 10. RFC 142's closure does not depend on it.
    nine e2e rewrites and protects no production path. **This amendment is
    yours to judge material or not**; the architect does not decide that for
    an Accepted RFC.
+
+## 7 — after stage 10: the criteria re-assessed, 2026-11-08
+
+> ## Whose turn it is: **yours** — accept M2b's durable evidence, or not.
+
+Stage 10 and its fix round landed in `LANDING_COMMIT`. Level B on that exact
+commit: LEVEL_B_RESULT. Each criterion was **re-tried against the code**, as
+§1–§3 were. None was read off the stage's own report.
+
+| # | Criterion | Now |
+|---|---|---|
+| 1 | Every remaining Class-A row converted | **Met.** 68 Class-A rows: 58 sealed; 3 covered by a sealed successor (U26 → L08, C04 and C09 → C03); 7 dispositioned or removed (U11, C19, C20, **C17, C18, C23**, all reserved against RFC 101 or RFC 096-B2; K02 removed). The legacy writers `federation_provider::set_enabled` and `delete` are test-gated out of production |
+| 2 | No production Class-A best-effort append (reading **(b′)**, settled) | **Met.** No best-effort append accompanies a Class-A mutation. **R1**: all seven discarding sites now report their own failure, five through `emit_must_attempt` and two through `tracing::error!` beside a name L02's sealed descriptor owns, with fault-injected tests proving the revocation or denial still holds. **R2**: RFC 7009 revocation is row **T05**, and T06/T07 name it. **Operator reference**: `docs/src/reference/audit-events.md`, *"Events that can be missing from the log"* |
+| 3 | AST boundary gate with a negative fixture | **Met, in substance.** G23 now checks the **write site**: every writing function in an allow-listed file must be named in a row. Re-probed on the real tree, all five shapes now **fail by name**: §3's probe A; a prefix of a registered name; a write through `query_row … RETURNING`; a `#[cfg(not(test))]` writer; and a new `DELETE FROM audit_log` beside the exempted `audit::append`. Each is kept as a fixture. **Stated limitation:** SQL bound to a variable or built at runtime before reaching a query method is not inspected |
+| §F3 | `rusqlite` boundary (production reach, settled) | **Enforced by G23**, which now reads every `Cargo.toml` with fixtures; the e2e witness is retired. RFC 094's two sentences are amended in the same commit |
+
+**What the re-assessment found, and the review fixed in the same round:**
+- **The new check could first be passed four ways**: a substring name
+  match, `query_row` writes, a `cfg` test that skipped `not(test)`, and
+  whole-file exemptions.
+- **Fixed, it flagged 20 functions**, 18 of them bare writers with no
+  production caller (`users::set_role` and `users::set_disabled` among them).
+  All were resolved: 3 deleted, 15 test-gated, 2 named.
+- **A production defect, older than M2b.** `crates/sui-id/Cargo.toml` had
+  enabled `sui-id-core/test-support` under `[dependencies]` since
+  2026-07-02, so every release build compiled an in-memory HIBP mock that no
+  production path constructed. The dev-dependency meant to carry the feature
+  carried none. Moved, and G23 now refuses a `test-support` feature on any
+  production dependency table.
+- **The dev team's own finding:** expired password-reset tokens were never
+  cleaned up. They now are, with a test.
+
+### The concurrency evidence (§4's gap), inventoried and verified
+
+Every cited test was confirmed to exist at the stated location.
+
+| Command | Evidence |
+|---|---|
+| U05 admin role change | `crates/sui-id-store/src/commands/tests/runner/user_admin.rs:438` `u05_concurrent_demotions_of_the_last_two_admins_leave_exactly_one` |
+| U10 forgot-password completion | `crates/sui-id/tests/e2e/r103_stage1.rs:388` `r103_two_concurrent_completions_change_the_password_once`; `crates/sui-id/tests/e2e/r118.rs:300` (sequential replay) |
+| L02 second-factor sign-in | `crates/sui-id/tests/e2e/r102_stage3.rs:954`, `:977`, `:1000`, `:1029` (four races) |
+| L05 step-up success | `crates/sui-id/tests/e2e/r102_stage6.rs:408` |
+| S10 first setup | `crates/sui-id-store/src/commands/tests/runner/setup.rs:206` |
+| T04 refresh rotation / reuse | `crates/sui-id-store/src/repos/refresh_tokens/tests.rs:149` (8 concurrent rotations); `crates/sui-id/tests/e2e/refresh_theft.rs:19` (replay) |
+| F04, structurally | its gate, `federation_login_attempt::claim`: `crates/sui-id-store/src/repos/federation_login_attempt/tests.rs:481` |
+| All Class-A writes | `crates/sui-id-store/src/commands/tests/runner/chain_integrity.rs:4`: the chain stays unbroken under concurrent Class-A commands |
+
+**51 sealed commands have no race test of their own**, and **that is not a
+gap**. The store holds **one connection behind a `Mutex`**, locked for the
+whole transaction (`crates/sui-id-store/src/backend.rs:81-91`, `:131-132`,
+`:161-162`), so every transaction within one process is serialized and
+cannot interleave. Across processes, a deferred WAL transaction that writes
+after another process committed fails with `SQLITE_BUSY`: an error, never a
+silent lost update. The stage's first report had flagged U22 as a
+lost-update risk; **measured, it is not one**, and the report was corrected.
+The tests above exist where the property is more than serialization:
+exactly one winner, a consumed token, a code used once.
+
+**What remains outside M2b, deliberately:** commands reserved against RFC 096-B2
+and RFC 101 wait for those RFCs. SQL built at runtime is outside G23's reach
+and stays a reviewer's to catch.
+
+**Recommendation: accept M2b's evidence.** On your word, RFC 094 records M2b
+closed in the `0.88.0` preparation, alongside RFC 142's move to `done/`.

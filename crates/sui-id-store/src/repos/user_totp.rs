@@ -87,6 +87,13 @@ pub async fn decrypt_secret(db: &Database, row: &UserTotpRow) -> StoreResult<Vec
 /// Mark the enrolment as confirmed and store the (already-hashed) recovery
 /// codes JSON. Atomic — the user is only "MFA enabled" once both fields
 /// are written.
+///
+/// Cycle J stage 10 (fix round): no production caller (the real path is
+/// `confirm_with_recovery_within_tx`, U12's own). Kept behind
+/// `test-support`: callers span `sui-id-core`'s `authn::step_up` tests,
+/// this crate's own `commands::tests::runner::{federation,login,mfa}`,
+/// and several of `sui-id`'s e2e suites.
+#[cfg(any(test, feature = "test-support"))]
 pub async fn confirm_with_recovery(
     db: &Database,
     user_id: UserId,
@@ -213,6 +220,11 @@ pub async fn decrypt_recovery_codes(
 
 /// Replace the recovery codes blob (used when the user regenerates them
 /// after MFA is already enabled).
+///
+/// Cycle J stage 10 (fix round): no production caller (the real path is
+/// `set_recovery_codes_within_tx`, U14's own). Kept for this crate's own
+/// `commands::tests::runner::master_key`'s in-crate test seeding.
+#[cfg(test)]
 pub async fn set_recovery_codes(
     db: &Database,
     user_id: UserId,

@@ -59,6 +59,13 @@ proptest                    = { workspace = true }
 tempfile                    = { workspace = true }
 tokio                       = { workspace = true, features = ["net"] }
 rustls                      = { workspace = true, features = ["aws_lc_rs"] }
+# RFC 094 M2b / cycle J stage 10: `test-support` exposes
+# `federation_provider::set_enabled` as `pub` for this crate's own
+# `authn::federated_mfa` tests, which flip a provider's `enabled` flag
+# directly (no production caller exists for it -- see its own doc
+# comment). The same feature `sui-id`'s own dev-dependencies enabled in
+# RFC 142 stage 5, for the same cross-crate-test reason.
+sui-id-store                = { workspace = true, features = ["test-support"] }
 
 [lints]
 workspace = true

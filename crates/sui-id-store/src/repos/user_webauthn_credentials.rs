@@ -136,6 +136,11 @@ pub fn has_any_within_tx(conn: &rusqlite::Connection, user_id: UserId) -> StoreR
     Ok(n > 0)
 }
 
+/// Cycle J stage 10 (fix round): no production caller (the real path is
+/// `create_within_tx`, U15's own). Kept behind `test-support`: callers
+/// span this crate's own `commands::tests::runner::{federation,
+/// master_key, mfa}` and `sui-id`'s e2e suites.
+#[cfg(any(test, feature = "test-support"))]
 pub async fn create(
     db: &Database,
     row: &UserWebauthnCredentialRow,

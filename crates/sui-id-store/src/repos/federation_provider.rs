@@ -131,6 +131,14 @@ pub fn decrypt_secret(key: &MasterKey, row: &FederationProviderRow) -> StoreResu
 }
 
 /// Create a provider.  `client_secret_plain` is encrypted before writing.
+///
+/// Cycle J stage 10 (fix round): no production caller (`create_within_tx`,
+/// below, is C16's own path -- its doc already says so). Kept behind
+/// `test-support`: 21 callers across `sui-id-core`, `sui-id-store`'s own
+/// test runners, and `sui-id`'s e2e suites, all building a provider row
+/// to seed a fixture, none relying on this form's own sealing over
+/// `create_within_tx`'s pre-sealed one.
+#[cfg(any(test, feature = "test-support"))]
 pub async fn create(
     db: &Database,
     row: &FederationProviderRow,
@@ -219,6 +227,17 @@ pub fn create_within_tx(
 }
 
 /// Update `enabled` flag.
+///
+/// Cycle J stage 10 (RFC 094 M2b criterion 1/3): no production caller
+/// anywhere (C17's own row already said so). Kept behind `test-support`
+/// — not deleted, unlike `delete` (no caller at all, including tests) —
+/// because test fixtures in *this* crate's `repos::federation_provider`
+/// tests and in `sui-id-core`'s `authn::federated_mfa` tests both call it
+/// to flip a provider's `enabled` flag directly, bypassing the admin
+/// surface RFC 096-B2 has not built yet. `sui-id-core`'s own Cargo.toml
+/// dev-dependency on this crate gained `features = ["test-support"]` for
+/// exactly this.
+#[cfg(any(test, feature = "test-support"))]
 pub async fn set_enabled(
     db: &Database,
     id: FederationProviderId,
@@ -231,6 +250,27 @@ pub async fn set_enabled(
             "UPDATE federation_provider SET enabled = ?1, updated_at = ?2 WHERE id = ?3",
             params![enabled as i64, now, id_str],
         )?;
+        if n == 0 {
+            Err(StoreError::NotFound)
+        } else {
+            Ok(())
+        }
+    })
+    .await
+}
+
+/// Delete a provider (cascades to federation_link rows).
+///
+/// Cycle J stage 10 (RFC 094 M2b criterion 1/3): no production caller
+/// anywhere (C18's own row already said so) -- unlike `set_enabled`, its
+/// one caller (`set_enabled_and_delete`, this file's own `tests.rs`) is
+/// in-crate, so plain `#[cfg(test)]` is enough; no cross-crate
+/// `test-support` reach is needed for this one.
+#[cfg(test)]
+pub async fn delete(db: &Database, id: FederationProviderId) -> StoreResult<()> {
+    let id_str = id.to_string();
+    db.with_conn(move |conn| {
+        let n = conn.execute("DELETE FROM federation_provider WHERE id = ?1", [&id_str])?;
         if n == 0 {
             Err(StoreError::NotFound)
         } else {
@@ -299,20 +339,6 @@ pub fn update_allowed_origins_within_tx(
     Ok(before.split_whitespace().count())
 }
 
-/// Delete a provider (cascades to federation_link rows).
-pub async fn delete(db: &Database, id: FederationProviderId) -> StoreResult<()> {
-    let id_str = id.to_string();
-    db.with_conn(move |conn| {
-        let n = conn.execute("DELETE FROM federation_provider WHERE id = ?1", [&id_str])?;
-        if n == 0 {
-            Err(StoreError::NotFound)
-        } else {
-            Ok(())
-        }
-    })
-    .await
-}
-
 // ── Audit event anchors (RFC 004) ────────────────────────────────────────────
 //
 // The actual audit::append calls happen in the binary-crate federation handlers
@@ -321,8 +347,6 @@ pub async fn delete(db: &Database, id: FederationProviderId) -> StoreResult<()> 
 
 /// Audit event emitted when a federated sign-in completes successfully.
 pub const AUDIT_SIGNIN_SUCCESS: &str = "auth.federation.signin.success";
-/// Audit event emitted when the upstream IdP returns an error during callback.
-pub const AUDIT_SIGNIN_UPSTREAM_FAILURE: &str = "auth.federation.signin.upstream_failure";
 
 /// RFC 096-B1 stage 6b: the registry-declared descriptor for
 /// `auth.federation.takeover_blocked` (an email collision detected and
@@ -357,11 +381,15 @@ pub static AUDIT_TAKEOVER_BLOCKED_DESCRIPTOR: MustAttemptDescriptor = MustAttemp
 /// RFC 096-B1 stage 6c, F05: a transport/token-level failure talking to the
 /// upstream IdP, discovered *after* the attempt was found (and, once
 /// claimed, while it is `exchanging`) -- discovery fetch, token exchange,
-/// or token response parsing. `federated_start`'s own discovery failure
-/// (no attempt row exists yet at that point) is unrelated and keeps using
-/// `AUDIT_SIGNIN_UPSTREAM_FAILURE`'s existing best-effort `audit::append`
-/// path; this descriptor is for the post-claim case F05 owns.
-/// `actor`/`target` both `None`, matching
+/// or token response parsing. `federated_start`'s own discovery failure (no
+/// attempt row exists yet at that point) is unrelated to F05's state
+/// machine, but shares this same descriptor: RFC 094 M2b criterion 2 R1
+/// (cycle J stage 10) converted its call site too, from the bare
+/// `audit::append` this doc used to describe, to a spawned
+/// `emit_must_attempt` call using the exact `provider_id`/`reason`
+/// attributes below -- the former separate `AUDIT_SIGNIN_UPSTREAM_FAILURE`
+/// string constant is gone; this is now the one declared source of the
+/// name, from both call sites. `actor`/`target` both `None`, matching
 /// [`AUDIT_TAKEOVER_BLOCKED_DESCRIPTOR`]'s own reasoning: nothing about a
 /// transport failure identifies a local actor.
 pub static AUDIT_SIGNIN_UPSTREAM_FAILURE_DESCRIPTOR: MustAttemptDescriptor =

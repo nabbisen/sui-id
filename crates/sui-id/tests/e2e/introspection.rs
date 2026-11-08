@@ -275,6 +275,106 @@ async fn revoke_is_idempotent() {
     assert_eq!(resp.status(), StatusCode::OK);
 }
 
+/// RFC 094 cycle J stage 10, R2, T05's own named test: `oauth_token::
+/// revoke` reaches both token kinds (T06's refresh revocation, T07's
+/// access-token deny-list insert) and is idempotent under RFC 7009
+/// §2.2 -- the three properties `revoke_then_introspect_shows_inactive_
+/// for_access_token`, `revoke_refresh_token_invalidates_subsequent_
+/// refresh_grant` and `revoke_is_idempotent` already prove individually,
+/// combined here under T05's own `test_id` so the write-commands row
+/// names a real test.
+#[tokio::test]
+async fn t05_revoke_calls_both_token_kinds_and_is_idempotent() {
+    let state = test_app();
+    let (client_id, client_secret, access, refresh) = obtain_tokens(&state).await;
+
+    // T07: revoking the access token reaches the deny list.
+    let body = format!(
+        "token={access}&token_type_hint=access_token\
+         &client_id={client_id}&client_secret={client_secret}"
+    );
+    let router = build_router(state.clone());
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri("/oauth2/revoke")
+        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .body(Body::from(body))
+        .expect("req");
+    assert_eq!(
+        router.oneshot(req).await.expect("revoke access").status(),
+        StatusCode::OK
+    );
+    let body = format!("token={access}&client_id={client_id}&client_secret={client_secret}");
+    let router = build_router(state.clone());
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri("/oauth2/introspect")
+        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .body(Body::from(body))
+        .expect("req");
+    let resp = router.oneshot(req).await.expect("introspect access");
+    let v: serde_json::Value = serde_json::from_slice(&read_body(resp.into_body()).await).unwrap();
+    assert_eq!(
+        v["active"].as_bool(),
+        Some(false),
+        "T07: the access token must be inactive after revoke"
+    );
+
+    // T06: revoking the refresh token reaches refresh_tokens::revoke.
+    let body = format!(
+        "token={refresh}&token_type_hint=refresh_token\
+         &client_id={client_id}&client_secret={client_secret}"
+    );
+    let router = build_router(state.clone());
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri("/oauth2/revoke")
+        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .body(Body::from(body))
+        .expect("req");
+    assert_eq!(
+        router.oneshot(req).await.expect("revoke refresh").status(),
+        StatusCode::OK
+    );
+    let body = format!(
+        "grant_type=refresh_token&refresh_token={refresh}\
+         &client_id={client_id}&client_secret={client_secret}"
+    );
+    let router = build_router(state.clone());
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri("/oauth2/token")
+        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .body(Body::from(body))
+        .expect("req");
+    let resp = router.oneshot(req).await.expect("refresh after revoke");
+    assert!(
+        resp.status().is_client_error(),
+        "T06: a refresh grant on a revoked refresh token must fail; got {}",
+        resp.status()
+    );
+
+    // RFC 7009 §2.2: revoking either, again, or a bogus token, is still 200.
+    for body in [
+        format!("token={access}&client_id={client_id}&client_secret={client_secret}"),
+        format!("token={refresh}&client_id={client_id}&client_secret={client_secret}"),
+        format!("token=garbage&client_id={client_id}&client_secret={client_secret}"),
+    ] {
+        let router = build_router(state.clone());
+        let req = Request::builder()
+            .method(Method::POST)
+            .uri("/oauth2/revoke")
+            .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+            .body(Body::from(body))
+            .expect("req");
+        assert_eq!(
+            router.oneshot(req).await.expect("re-revoke").status(),
+            StatusCode::OK,
+            "revoke must stay idempotent"
+        );
+    }
+}
+
 #[tokio::test]
 async fn introspect_other_clients_token_returns_inactive() {
     // Two clients exist; client B tries to introspect a token issued

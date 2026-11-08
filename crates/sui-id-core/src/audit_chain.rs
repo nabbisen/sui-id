@@ -15,9 +15,33 @@
 
 use crate::time::SharedClock;
 use sui_id_store::Database;
-use sui_id_store::models::AuditLogRow;
 use sui_id_store::registry;
+use sui_id_store::registry::{
+    ActorRequirement, AttributeSpec, AuditEventKind, MustAttemptDescriptor, TargetRequirement,
+};
 use sui_id_store::repos::audit;
+
+/// RFC 094 M2b criterion 2 R1 (cycle J stage 10): this event's own
+/// best-effort append now reports its own failure, via
+/// [`audit::emit_must_attempt`], instead of discarding it.
+static AUDIT_CHAIN_VERIFICATION_FAILED_DESCRIPTOR: MustAttemptDescriptor = MustAttemptDescriptor {
+    kind: AuditEventKind::AuditChainVerificationFailed,
+    name: "audit.chain.verification_failed",
+    actor: ActorRequirement::None,
+    target: TargetRequirement::None,
+    attributes: &[
+        AttributeSpec {
+            name: "limit",
+            description: "how many of the most recent rows were checked",
+            required: true,
+        },
+        AttributeSpec {
+            name: "detail",
+            description: "the store error's own message",
+            required: true,
+        },
+    ],
+};
 
 /// The result of one [`check`] call, turned into exactly the three outcomes
 /// RFC 121 D1 names. Every variant carries `limit`: "intact" and "broken"
@@ -128,35 +152,23 @@ async fn record(db: &Database, clock: &SharedClock, check: &ChainCheck) {
             );
             // Best-effort, and deliberately not `?`: see this module's doc
             // and `check`'s for why a failure here is discarded rather than
-            // propagated or retried.
-            //
-            // The note is built through the RFC 105 encoder, not `format!`
-            // — `detail` is a store error's message, and a future
-            // `StoreError` variant (several already interpolate arbitrary
-            // content, e.g. `Integrity(String)`) could put a forged
-            // `key=value` pair inside it. `render_note` percent-encodes
-            // every value, so a pair inside `detail` cannot be read back as
-            // a real attribute (RFC 105's own guarantee — see
-            // `sui_id_store::registry`'s module doc). If the attributes
-            // fail to build at all (e.g. `detail` alone exceeding the
-            // per-attribute byte bound), the event is still worth a row
-            // without a note rather than not at all.
-            let note = registry::AuditAttributes::builder()
+            // propagated or retried. RFC 094 M2b criterion 2 R1 (cycle J
+            // stage 10): `emit_must_attempt` itself now reports, via
+            // `tracing::error!`, if *this* append fails -- the defect the
+            // bare `let _ = audit::append(...)` this replaces could not
+            // see.
+            let attributes = registry::AuditAttributes::builder()
                 .attribute("limit", limit.to_string())
                 .attribute("detail", detail.clone())
-                .build()
-                .ok()
-                .and_then(|attrs| registry::render_note(&attrs));
-            let _ = audit::append(
+                .build();
+            let _ = audit::emit_must_attempt(
                 db,
-                &AuditLogRow {
-                    at: clock.now(),
-                    actor: None,
-                    action: "audit.chain.verification_failed".into(),
-                    target: None,
-                    result: "error".into(),
-                    note,
-                },
+                &AUDIT_CHAIN_VERIFICATION_FAILED_DESCRIPTOR,
+                clock.now(),
+                None,
+                None,
+                "error",
+                attributes,
             )
             .await;
         }

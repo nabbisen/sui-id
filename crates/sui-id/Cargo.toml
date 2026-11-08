@@ -48,7 +48,7 @@ workspace = true
 sui-id-shared               = { workspace = true }
 sui-id-i18n                 = { workspace = true }
 sui-id-store                = { workspace = true }
-sui-id-core                 = { workspace = true, features = ["test-support"] }
+sui-id-core                 = { workspace = true }
 sui-id-web                  = { workspace = true }
 
 # RFC 134 D2: `features = ["net"]` declared explicitly because this crate
@@ -109,14 +109,20 @@ sui-id                     = { path = ".", features = ["test-support"] }
 # Re-pull the core crate as a dev-dep with the `test-support`
 # feature so e2e tests can construct `InMemoryHibpClient` /
 # `InMemoryMailSender` from `core::test_support`. The library
-# build of the same crate (no feature) is unaffected.
-sui-id-core                 = { workspace = true }
+# build of the same crate (no feature) is unaffected -- true since cycle J
+# stage 10's review: before it, this line carried no feature and the
+# `[dependencies]` entry above did, so every release build had the seam.
+sui-id-core                 = { workspace = true, features = ["test-support"] }
 
 proptest                    = { workspace = true }
 tempfile                    = { workspace = true }
 # RFC 094 M2a: raw database access is confined to sui-id-store; this crate's
-# only use of rusqlite is in its own tests (see r094_m2a_db_access_scope.rs,
-# which gate-asserts the scope).
+# only use of rusqlite is in its own tests. Gate-asserted by `cargo xtask
+# audit-structure`'s manifest check (`xtask/src/manifest.rs`, cycle J stage
+# 10) -- the e2e test that used to assert this narrower scope on its own
+# (`r094_m2a_db_access_scope.rs`) is retired, now that one gate checks it
+# for every crate, [build-dependencies] included, not just this one under
+# [dependencies].
 rusqlite                    = { workspace = true }
 # RFC 134 D4: a compile-fail proof that the `cookies` feature (a
 # transitive dependency's, not this crate's own -- there is no `cfg` that

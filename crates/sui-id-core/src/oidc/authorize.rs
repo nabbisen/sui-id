@@ -28,11 +28,27 @@ use ed25519_dalek::SigningKey;
 use sui_id_shared::ids::{ClientId, UserId};
 use sui_id_shared::{CodeHash, FamilyId, RawRefreshToken, RefreshTokenHash, RefreshTokenId};
 use sui_id_store::Database;
-use sui_id_store::models::{AuditLogRow, AuthorizationCodeRow, ClientRow, RefreshTokenRow};
+use sui_id_store::models::{AuthorizationCodeRow, ClientRow, RefreshTokenRow};
+use sui_id_store::registry;
+use sui_id_store::registry::{
+    ActorRequirement, AuditEventKind, AuditTarget, MustAttemptDescriptor, TargetRequirement,
+};
 use sui_id_store::repos::{audit, auth_codes, clients, refresh_tokens, signing_keys, users};
 
 /// Lifetime of an authorization code (kept very short by design).
 const AUTH_CODE_LIFETIME_SECS: i64 = 60;
+
+/// RFC 094 M2b criterion 2 R1 (cycle J stage 10): this denial's own
+/// best-effort append now reports its own failure, via
+/// [`audit::emit_must_attempt`], instead of discarding it.
+static AUDIT_OAUTH2_EXCHANGE_CODE_USER_REVOKED_DESCRIPTOR: MustAttemptDescriptor =
+    MustAttemptDescriptor {
+        kind: AuditEventKind::Oauth2ExchangeCodeUserRevoked,
+        name: "oauth2.exchange_code.user_revoked",
+        actor: ActorRequirement::Required,
+        target: TargetRequirement::Required,
+        attributes: &[],
+    };
 
 /// Parsed request to /authorize.
 #[derive(Debug, Clone)]
@@ -584,16 +600,15 @@ async fn resolve_user(
         other => CoreError::from(other),
     })?;
     if user.is_disabled || user.is_deleted {
-        let _ = audit::append(
+        let attributes = registry::AuditAttributes::builder().build();
+        let _ = audit::emit_must_attempt(
             db,
-            &AuditLogRow {
-                at: clock.now(),
-                actor: Some(row.user_id),
-                action: "oauth2.exchange_code.user_revoked".into(),
-                target: Some(client_id.to_string()),
-                result: "denied".into(),
-                note: Some("user disabled or deleted during auth-code exchange window".into()),
-            },
+            &AUDIT_OAUTH2_EXCHANGE_CODE_USER_REVOKED_DESCRIPTOR,
+            clock.now(),
+            Some(row.user_id),
+            Some(AuditTarget(client_id.to_string())),
+            "denied",
+            attributes,
         )
         .await;
         return Err(CoreError::Protocol {

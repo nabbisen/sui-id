@@ -12,9 +12,11 @@
 
 mod columns;
 mod coverage;
+mod manifest;
 mod matrix_table;
 mod write_authority;
 mod write_commands;
+mod write_sites;
 
 use std::path::PathBuf;
 
@@ -102,6 +104,44 @@ fn run_audit_structure(args: &[String]) -> std::process::ExitCode {
                  contracts/write-authority.toml's header.",
                 outcome.scanned, outcome.allow_listed
             );
+        }
+        Err(e) => {
+            eprintln!("audit-structure: {e}");
+            return std::process::ExitCode::from(2);
+        }
+    }
+
+    match manifest::check(&root) {
+        Ok(outcome) => {
+            failures.extend(outcome.failures);
+            eprintln!(
+                "audit-structure: manifest: {} Cargo.toml(s) checked. `rusqlite` permitted \
+                 only in sui-id-store's [dependencies]/[build-dependencies]; \
+                 [dev-dependencies] and [workspace.dependencies] are allowed everywhere \
+                 (RFC 094 §F3, production reach).",
+                outcome.manifests_checked
+            );
+        }
+        Err(e) => {
+            eprintln!("audit-structure: {e}");
+            return std::process::ExitCode::from(2);
+        }
+    }
+
+    match write_sites::check(&root, &policy, &commands) {
+        Ok(outcome) => {
+            failures.extend(outcome.failures);
+            eprintln!(
+                "audit-structure: write-sites: {} file(s) checked, {} exempt (write by \
+                 design), {} function(s) exempt by name, {} function(s) flagged.",
+                outcome.checked_files,
+                outcome.exempt_files,
+                outcome.exempt_functions,
+                outcome.flagged.len()
+            );
+            for f in &outcome.flagged {
+                eprintln!("audit-structure: write-sites: flagged {f}");
+            }
         }
         Err(e) => {
             eprintln!("audit-structure: {e}");

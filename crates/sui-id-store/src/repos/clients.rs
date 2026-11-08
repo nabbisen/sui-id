@@ -240,8 +240,11 @@ pub fn update_basic_within_tx(
 /// RFC 094 M2b wave 4 stage 2: the only production caller was the
 /// client-update form's handler, now converted to the sealed C03
 /// command (`set_allowed_scopes_within_tx`, below). This async form
-/// remains for `r095_m3_stage4b_enforce_matrix.rs`'s test seeding,
-/// unrelated to C03's own path.
+/// remains for `commands::tests::runner::client_update_form`'s and
+/// `r095_m3_stage4b_enforce_matrix.rs`'s test seeding, unrelated to
+/// C03's own path. Cycle J stage 10 (fix round): gated behind
+/// `test-support` for the latter, a cross-crate caller.
+#[cfg(any(test, feature = "test-support"))]
 pub async fn set_allowed_scopes(db: &Database, id: ClientId, scopes: &str) -> StoreResult<()> {
     let scopes = scopes.to_owned();
     db.with_conn(move |conn| {
@@ -302,6 +305,14 @@ pub fn set_post_logout_redirect_uris_within_tx(
     Ok(())
 }
 
+/// Cycle J stage 10 (fix round): no production caller (the real path is
+/// `set_disabled_within_tx`'s own doc, below). Kept behind
+/// `test-support`: callers span this crate's own `repos::audit::
+/// tests_rfc095_stage6` and several of `sui-id`'s e2e suites
+/// (`r094_m2a_consent_policy_persistence`, `r095_m3_stage1b_
+/// loopback_port_matching`, `r095_m3_stage5_browser_presentation`,
+/// `r120`).
+#[cfg(any(test, feature = "test-support"))]
 pub async fn set_disabled(db: &Database, id: ClientId, disabled: bool) -> StoreResult<()> {
     db.with_conn(move |conn| {
         let n = conn.execute(
@@ -338,6 +349,10 @@ pub fn set_disabled_within_tx(
     Ok(())
 }
 
+/// Cycle J stage 10 (fix round): no production caller (the real path is
+/// `soft_delete_within_tx`'s own doc, below). Kept for this crate's own
+/// `repos::audit::tests_rfc095_stage6`'s in-crate test seeding.
+#[cfg(test)]
 pub async fn soft_delete(db: &Database, id: ClientId) -> StoreResult<()> {
     db.with_conn(move |conn| {
         let n = conn.execute(
@@ -398,6 +413,11 @@ pub fn set_dev_secret_hash_within_tx(
 }
 
 /// Update the consent policy for a client (RFC 038).
+///
+/// Cycle J stage 10 (fix round): no production caller (the real path is
+/// `update_consent_policy_within_tx`'s own doc, below). Kept behind
+/// `test-support`: its only caller is `sui-id`'s `tests/e2e/r120.rs`.
+#[cfg(any(test, feature = "test-support"))]
 pub async fn update_consent_policy(
     db: &Database,
     id: ClientId,

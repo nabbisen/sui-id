@@ -12,7 +12,7 @@ use crate::AppState;
 use std::time::Duration;
 use sui_id_store::repos::{
     auth_codes, federation_login_attempt, federation_mfa_pending, login_pending_mfa,
-    refresh_tokens, revoked_access_tokens, sessions, webauthn_pending,
+    password_reset_tokens, refresh_tokens, revoked_access_tokens, sessions, webauthn_pending,
 };
 
 const GC_INTERVAL: Duration = Duration::from_secs(15 * 60);
@@ -92,5 +92,15 @@ pub async fn run_once(state: &AppState) {
         }
         Ok(_) => {}
         Err(e) => tracing::warn!(error = %e, "gc: federation_mfa_pending purge failed"),
+    }
+    // RFC 094 M2b / cycle J stage 10: this call was missing entirely --
+    // `password_reset_tokens::delete_expired` existed, with a doc comment
+    // describing it as exactly this kind of periodic cleanup, but nothing
+    // anywhere called it. Expired password-reset tokens accumulated
+    // forever until this stage wired it in.
+    match password_reset_tokens::delete_expired(db, state.clock.now()).await {
+        Ok(n) if n > 0 => tracing::info!(deleted = n, "gc: removed expired password-reset tokens"),
+        Ok(_) => {}
+        Err(e) => tracing::warn!(error = %e, "gc: password_reset_tokens purge failed"),
     }
 }

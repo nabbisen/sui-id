@@ -210,19 +210,6 @@ pub fn upsert_within_tx(
     })
 }
 
-/// Remove a stored consent grant. Called when a client is deleted.
-/// No-ops silently if no row exists.
-pub async fn revoke(db: &Database, user_id: UserId, client_id: ClientId) -> StoreResult<()> {
-    db.with_conn(move |conn| {
-        conn.execute(
-            "DELETE FROM user_consent WHERE user_id = ?1 AND client_id = ?2",
-            rusqlite::params![user_id.to_string(), client_id.to_string()],
-        )?;
-        Ok(())
-    })
-    .await
-}
-
 /// Check whether a stored consent covers `requested_scopes`.
 ///
 /// Returns `true` if every token in `requested_scopes` appears in

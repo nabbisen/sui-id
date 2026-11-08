@@ -128,30 +128,13 @@ pub async fn find_by_hash(
     .await
 }
 
-/// Mark a token row as consumed. Idempotent in practice: the
-/// caller checks `consumed_at IS NULL` before calling, and the
-/// row continues to exist post-consume so a replay attempt sees
-/// "consumed" rather than "missing".
-pub async fn mark_consumed(
-    db: &Database,
-    id: PasswordResetTokenId,
-    consumed_at: DateTime<Utc>,
-) -> StoreResult<()> {
-    db.with_conn(move |conn| {
-        let n = conn.execute(
-            "UPDATE password_reset_tokens SET consumed_at = ?1 WHERE id = ?2",
-            params![consumed_at, id.to_string()],
-        )?;
-        if n == 0 {
-            Err(StoreError::NotFound)
-        } else {
-            Ok(())
-        }
-    })
-    .await
-}
-
-/// Same as [`mark_consumed`] but runs inside a caller-owned transaction.
+/// Mark a token row as consumed, inside a caller-owned transaction.
+/// Idempotent in practice: the caller checks `consumed_at IS NULL`
+/// before calling, and the row continues to exist post-consume so a
+/// replay attempt sees "consumed" rather than "missing". Cycle J stage
+/// 10 (RFC 094 M2b criterion 1/3, fix round): the bare async form had
+/// no caller anywhere, including tests, so it is deleted rather than
+/// kept alongside this one.
 pub fn mark_consumed_within_tx(
     tx: &rusqlite::Transaction<'_>,
     id: PasswordResetTokenId,

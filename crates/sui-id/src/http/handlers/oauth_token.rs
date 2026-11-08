@@ -14,6 +14,43 @@ use axum::{Form, Json};
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use sui_id_core::errors::CoreError;
+use sui_id_store::registry::{
+    self, ActorRequirement, AttributeSpec, AuditEventKind, AuditTarget, MustAttemptDescriptor,
+    TargetRequirement,
+};
+
+/// RFC 094 M2b criterion 2 R1 (cycle J stage 10): this read's own
+/// best-effort append now reports its own failure, via
+/// [`sui_id_store::repos::audit::emit_must_attempt`], instead of discarding
+/// it.
+static AUDIT_TOKEN_INTROSPECT_DESCRIPTOR: MustAttemptDescriptor = MustAttemptDescriptor {
+    kind: AuditEventKind::TokenIntrospect,
+    name: "token.introspect",
+    actor: ActorRequirement::None,
+    target: TargetRequirement::Required,
+    attributes: &[AttributeSpec {
+        name: "kind",
+        description: "the token's kind (access/refresh), when known",
+        required: false,
+    }],
+};
+
+/// RFC 094 M2b criterion 2 R1 and R2 (cycle J stage 10, T05): this
+/// revocation's own best-effort append now reports its own failure, via
+/// [`sui_id_store::repos::audit::emit_must_attempt`], instead of discarding
+/// it. The revocation itself stays Class B — RFC 094 invariant 5 — only the
+/// append's own silent failure is fixed.
+static AUDIT_TOKEN_REVOKE_DESCRIPTOR: MustAttemptDescriptor = MustAttemptDescriptor {
+    kind: AuditEventKind::TokenRevoke,
+    name: "token.revoke",
+    actor: ActorRequirement::None,
+    target: TargetRequirement::Required,
+    attributes: &[AttributeSpec {
+        name: "token_type_hint",
+        description: "the client's token_type_hint, if sent",
+        required: false,
+    }],
+};
 
 #[derive(Debug, Deserialize)]
 pub struct IntrospectForm {
@@ -88,20 +125,18 @@ pub async fn introspect(
         aud: resp.aud,
         iss: resp.iss,
     };
-    let _ = sui_id_store::repos::audit::append(
+    let mut attributes = registry::AuditAttributes::builder();
+    if let Some(kind) = &resp.kind {
+        attributes = attributes.attribute("kind", kind.to_string());
+    }
+    let _ = sui_id_store::repos::audit::emit_must_attempt(
         &app.db,
-        &sui_id_store::models::AuditLogRow {
-            at: app.clock.now(),
-            actor: None,
-            action: "token.introspect".into(),
-            target: Some(cid.to_string()),
-            result: if resp.active {
-                "active".into()
-            } else {
-                "inactive".into()
-            },
-            note: resp.kind.map(|k| k.to_string()),
-        },
+        &AUDIT_TOKEN_INTROSPECT_DESCRIPTOR,
+        app.clock.now(),
+        None,
+        Some(AuditTarget(cid.to_string())),
+        if resp.active { "active" } else { "inactive" },
+        attributes.build(),
     )
     .await;
     Ok(Json(wire).into_response())
@@ -141,16 +176,18 @@ pub async fn revoke(
     )
     .await
     .map_err(HttpError::oauth)?;
-    let _ = sui_id_store::repos::audit::append(
+    let mut attributes = registry::AuditAttributes::builder();
+    if let Some(hint) = &form.token_type_hint {
+        attributes = attributes.attribute("token_type_hint", hint.clone());
+    }
+    let _ = sui_id_store::repos::audit::emit_must_attempt(
         &app.db,
-        &sui_id_store::models::AuditLogRow {
-            at: app.clock.now(),
-            actor: None,
-            action: "token.revoke".into(),
-            target: Some(cid.to_string()),
-            result: "ok".into(),
-            note: form.token_type_hint,
-        },
+        &AUDIT_TOKEN_REVOKE_DESCRIPTOR,
+        app.clock.now(),
+        None,
+        Some(AuditTarget(cid.to_string())),
+        "ok",
+        attributes.build(),
     )
     .await;
     // RFC 7009 §2.2: 200 OK with empty body.

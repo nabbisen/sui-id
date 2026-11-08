@@ -112,3 +112,66 @@ allowed_files = [
     "crates/sui-id-store/src/repos/user_webauthn_credentials.rs",
     "crates/sui-id-store/src/repos/webauthn_pending.rs",
 ]
+
+# RFC 094 M2b / cycle J stage 10 §1: the function-level write-site check
+# (`cargo xtask audit-structure`'s write-sites step) requires every
+# function in an allow-listed file that contains a write call to be named
+# in some row's `mutation_surface`. These two files write **by design**
+# and are exempt from that specific check, whole-file -- they remain
+# subject to the module-boundary rule above; only the per-function naming
+# requirement does not apply to them.
+write_by_design_exempt = [
+    # The migration runner. Every migration statement is itself the write;
+    # naming each one as a row's mutation_surface would mean 49 rows (and
+    # counting) for a mechanism RFC 112/RFC 142 already govern completely
+    # on their own terms (`MAX_SCHEMA_VERSION`, the migration corpus, G22).
+    "crates/sui-id-store/src/migrations.rs",
+    # The pre-migration snapshot (RFC 142 stage 5) and the operator-invoked
+    # backup/restore/verify machinery (RFC 040/075). Both are already
+    # inventoried by name -- O04 (operator-invoked backup) and O07
+    # (automatic pre-migration snapshot) -- at the *file* level; naming
+    # every internal helper the same way would duplicate what those two
+    # rows already say without adding information.
+    "crates/sui-id-store/src/backup/ops.rs",
+    # `Database::open`/`open_in_memory`: the writes inside are three
+    # connection-mode `PRAGMA` calls (`journal_mode`, `synchronous`,
+    # `foreign_keys`) and the migration runner call -- configuring the
+    # connection, not a tracked domain mutation. Measured cycle J stage 10:
+    # every non-test `pragma_update` call in the whole allow-listed set is
+    # one of these three, all here.
+    # Function-scoped (cycle J stage 10 review): exempting the whole file
+    # would also exempt any *future* writer in it, which the review showed
+    # is the gap this check exists to close. These are the only writing
+    # functions in the file, measured; a new one is flagged.
+    "crates/sui-id-store/src/db.rs::open",
+    "crates/sui-id-store/src/db.rs::open_in_memory",
+    # `Database::with_conn`/`with_tx`'s own type-erasure plumbing
+    # (`with_conn_erased`/`with_tx_erased`, the module's own doc explains
+    # why they exist). This is the dispatch mechanism every sealed
+    # command's own `*_within_tx` function runs inside, not a mutation of
+    # its own -- the same reasoning the module-boundary check above
+    # already gives for not tracing this indirection separately.
+    # Function-scoped (cycle J stage 10 review): exempting the whole file
+    # would also exempt any *future* writer in it, which the review showed
+    # is the gap this check exists to close. These are the only writing
+    # functions in the file, measured; a new one is flagged.
+    "crates/sui-id-store/src/backend.rs::with_tx_erased",
+    "crates/sui-id-store/src/backend.rs::with_tx_sync",
+    # `audit::append`/`append_within_tx`: the audit log's own row-insert
+    # primitives, which every Class-A/O/P event in the whole inventory
+    # writes through (directly, or via `emit_must_attempt`/`class_a`).
+    # They are the shared plumbing an inventory of *domain* mutations
+    # tracks the callers of, not a domain mutation of their own --
+    # structurally the same role `migrations.rs`/`backup/ops.rs` play for
+    # their own mechanisms. `append`'s own best-effort callers remain
+    # separately tracked (RFC 094 criterion 2, R1); this exemption is only
+    # about naming `append`/`append_within_tx` themselves in a row.
+    # Function-scoped (cycle J stage 10 review): exempting the whole file
+    # would also exempt any *future* writer in it, which the review showed
+    # is the gap this check exists to close. These are the only writing
+    # functions in the file, measured; a new one is flagged.
+    # Above all here: a whole-file exemption would let a new `DELETE FROM
+    # audit_log` in this file pass the check.
+    "crates/sui-id-store/src/repos/audit.rs::append",
+    "crates/sui-id-store/src/repos/audit.rs::append_within_tx",
+]

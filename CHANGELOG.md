@@ -31,8 +31,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   would, and exits the same way. See the upgrade guide's "General
   procedure".
 
+### Changed
+
+- **A failed best-effort audit write now leaves an error line in the
+  service log, naming the event, instead of being silently discarded.**
+  `token.revoke`, `token.introspect`, `oauth2.exchange_code.user_revoked`,
+  `audit.chain.verification_failed` and `auth.federation.signin.
+  upstream_failure`'s pre-attempt case now go through a mechanism that
+  always logs on failure; `auth.login.failure` and `auth.login.
+  password_ok_mfa_required` (each already written by a separate, sealed
+  path under the same name) log their own failure directly. The action
+  these events describe was never affected either way — only whether a
+  failure to record it was visible. See the audit event reference's new
+  "Events that can be missing from the log" section for how to tell
+  "never happened" from "happened, not recorded".
+
 ### Fixed
 
+- **Expired password-reset tokens were never cleaned up.** The periodic
+  cleanup task ran for every other expiring table but had no call into
+  this one, despite the removal function existing since the feature
+  shipped. Rows now age out on the same schedule as everything else;
+  nothing about requesting or completing a reset changes.
 - **`docs/src/reference/configuration.md`'s Subcommands table now matches
   the commands it documents.** `backup`/`restore`/`verify-backup` used
   `--dest`/`--src` instead of the real `--to`/`--from`; `restore` was

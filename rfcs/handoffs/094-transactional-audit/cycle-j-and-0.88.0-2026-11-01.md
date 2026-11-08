@@ -487,6 +487,13 @@ for the case where forgetting is most expensive.
    operator section on events that can be missing. §F3 as settled: G23
    reads the manifests, and the e2e witness retires. Plus a concurrency
    inventory.
+   — **LANDED** 2026-11-08, with a fix round. *The review found the new check
+   could be passed four ways (substring names, `query_row` writes, a `cfg`
+   test that skipped `not(test)`, and whole-file exemptions) and fixed it.
+   Fixed, it flagged 20 bare writers, which the fix round resolved. It also
+   found a release-build defect from 2026-07-02: `sui-id-core/test-support`
+   enabled under `[dependencies]`.* Re-assessment —
+   `m2b-adversarial-assessment-2026-11-08.md` §7.
 
 **Cycle J's nine stages have landed** (`1573a72`, Level B `42435137349`,
 28/28, 0 skipped). **The architect's adversarial assessment says M2b is

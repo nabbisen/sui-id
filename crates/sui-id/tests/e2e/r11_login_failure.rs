@@ -320,3 +320,49 @@ async fn r11_1c_every_failure_branch_is_identical() {
         }
     }
 }
+
+// ── 1d ────────────────────────────────────────────────────────────────
+
+/// RFC 094 M2b criterion 2 R1, cycle J stage 10: the best-effort
+/// `auth.login.failure` append itself -- not U22's store failure that 1b
+/// covers -- now reports its own failure (`authn::session::
+/// record_login_failure`'s `tracing::error!`, not a new descriptor: this
+/// event name collides with a sealed `EventDescriptor` of the same name,
+/// per `contracts/audit-coverage-matrix.md`'s documented "two writers").
+/// An unknown-user login hits this append directly; with the audit log
+/// broken, the denial must still deny (1a already proves that), and this
+/// append's own failure must now be visible.
+#[tokio::test]
+async fn r11_1d_the_failure_append_itself_is_logged() {
+    let state = test_app();
+    complete_setup_and_login(&state).await;
+    break_audit_log(&state).await;
+
+    let captured = Captured::default();
+    let writer = captured.clone();
+    let subscriber = tracing_subscriber::fmt()
+        .with_ansi(false)
+        .with_max_level(tracing::Level::INFO)
+        .with_writer(move || writer.clone())
+        .finish();
+    let _guard = tracing::subscriber::set_default(subscriber);
+
+    let (status, _, has_session) = post_login(&state, "nobody-here", WRONG).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "the denial is unchanged");
+    assert!(!has_session);
+
+    let logged = captured.text();
+    let line = logged
+        .lines()
+        .find(|l| l.contains("best-effort audit append failed"))
+        .unwrap_or_else(|| panic!("no telemetry line for the failed append:\n{logged}"));
+    assert!(line.contains("ERROR"), "wrong level: {line}");
+    assert!(
+        line.contains("auth.login.failure"),
+        "telemetry line present but doesn't name the event: {line}"
+    );
+    assert!(
+        !logged.contains(WRONG),
+        "the submitted password leaked into the log"
+    );
+}
