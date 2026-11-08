@@ -6,6 +6,10 @@
 > now."* RFC 141 §2, `publish.yml`'s header and `release-process.md` now say the
 > reviewer is deferred, and that the dispatch is the approval.
 > **Stage 1 dispatched** — [`stage1-measure-the-three-conditions-2026-11-08.md`](stage1-measure-the-three-conditions-2026-11-08.md).
+> **Stage 1 returned 2026-11-08, and the static decision is reopened for a ruling**:
+> OpenSSL verifies every passkey sign-in, so it is reachable, and RustSec has not
+> filed an `openssl-src` advisory since 2023-02. Stage 2 is held —
+> [`stage1-result-and-the-static-decision-2026-11-08.md`](stage1-result-and-the-static-decision-2026-11-08.md).
 
 **Proposed.** 2026-11-08, by the architect, on `@nabbisen`'s *"Scope 0.89."*
 **Schedule source.** `ROADMAP.md`, *The embeddable boundary, and installation*
