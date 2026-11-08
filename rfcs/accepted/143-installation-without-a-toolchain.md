@@ -114,6 +114,21 @@ Three, chosen to cover the stated problem rather than to look thorough:
 > reachable path into the built artifact is recorded and does not stop a
 > release."* **That reachability claim should be tested, not assumed**, before
 > it is relied on.
+>
+> **Tested 2026-11-08 (stage 1): the claim is false, and the paragraph above is
+> superseded.** OpenSSL verifies **every passkey sign-in**: `webauthn-rs-core`
+> 0.5.5's `COSEKey::verify_signature` builds an OpenSSL key for each assertion,
+> and 1,229 OpenSSL symbols survive in the static binary. Searching for
+> "attestation" measured the wrong thing. **And the advisory rule cannot carry
+> it**: RustSec has filed no `openssl-src` advisory since 2023-02-07, so a new
+> OpenSSL vulnerability would not reach the `Security audit` lane at all.
+> **Static was re-decided on those facts.** `@nabbisen`, 2026-11-08: *"static"*.
+> What it now rests on, as designed for stage 2: a scheduled check that **fails
+> when `openssl-src` is behind its newest patch release**, since OpenSSL ships
+> its security fixes as patch releases. And a release commitment: an OpenSSL
+> security release means a sui-id release. That is what static always meant;
+> this text had understated it. Record —
+> [`../handoffs/143-installation-without-a-toolchain/stage1-result-and-the-static-decision-2026-11-08.md`](../handoffs/143-installation-without-a-toolchain/stage1-result-and-the-static-decision-2026-11-08.md).
 
 **No macOS or Windows target.** sui-id is a server, the deployment guide
 documents systemd, and shipping an artifact this project neither tests nor

@@ -10,6 +10,8 @@
 > OpenSSL verifies every passkey sign-in, so it is reachable, and RustSec has not
 > filed an `openssl-src` advisory since 2023-02. Stage 2 is held —
 > [`stage1-result-and-the-static-decision-2026-11-08.md`](stage1-result-and-the-static-decision-2026-11-08.md).
+> **Re-decided 2026-11-08: static** (`@nabbisen`: *"static"*). **Stage 2 dispatched** —
+> [`stage2-build-check-and-attest-2026-11-08.md`](stage2-build-check-and-attest-2026-11-08.md).
 
 **Proposed.** 2026-11-08, by the architect, on `@nabbisen`'s *"Scope 0.89."*
 **Schedule source.** `ROADMAP.md`, *The embeddable boundary, and installation*

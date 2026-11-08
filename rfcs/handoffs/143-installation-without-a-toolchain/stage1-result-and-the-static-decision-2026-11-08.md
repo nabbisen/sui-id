@@ -1,6 +1,12 @@
 # RFC 143 stage 1 result — the static decision comes back to you
 
-> ## Whose turn it is: **yours** — two decisions, §4.
+> ## Decided 2026-11-08. `@nabbisen`: 1. *"static"*; 2. *"Your recommendation is accepted."*
+> Static stands. The `openssl-src` freshness check and the release commitment
+> are the architect's design for stage 2, which is how static is made safe, and
+> are recorded as that, not as part of the ruling. A host with no CA bundle
+> starts with one clear warning, and `ca-certificates` is the Quick Start's
+> runtime requirement; no root set is compiled in. **Stage 2 dispatched** —
+> [`stage2-build-check-and-attest-2026-11-08.md`](stage2-build-check-and-attest-2026-11-08.md).
 
 **Prepared by.** The architect, 2026-11-08, on stage 1's return (baseline
 `c46d621`). The measurements are the dev team's; **each finding below was
