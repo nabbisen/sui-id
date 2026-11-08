@@ -495,6 +495,12 @@ for the case where forgetting is most expensive.
    enabled under `[dependencies]`.* Re-assessment —
    `m2b-adversarial-assessment-2026-11-08.md` §7.
 
+**M2b's evidence was accepted** by `@nabbisen` on 2026-11-08 (*"Accepted."*),
+on the re-assessment in `m2b-adversarial-assessment-2026-11-08.md` §7 (Level B
+`42462622748` on `cbfb8f9`, 28/28). RFC 094 and RFC 142 both close with
+`0.88.0`. **Release preparation dispatched** —
+`rfcs/handoffs/094-transactional-audit/release-0.88.0-preparation-2026-11-08.md`.
+
 **Cycle J's nine stages have landed** (`1573a72`, Level B `42435137349`,
 28/28, 0 skipped). **The architect's adversarial assessment says M2b is
 not ready to close**: criterion 1 has three undispositioned Class-A rows

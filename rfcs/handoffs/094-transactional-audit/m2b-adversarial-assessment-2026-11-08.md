@@ -223,7 +223,11 @@ waits for stage 10. RFC 142's closure does not depend on it.
 
 ## 7 — after stage 10: the criteria re-assessed, 2026-11-08
 
-> ## Whose turn it is: **yours** — accept M2b's durable evidence, or not.
+> ## M2b's evidence accepted. `@nabbisen`, 2026-11-08: *"Accepted."*
+> With M2a closed on 2026-10-03, this completes RFC 094's per-stage closure.
+> RFC 094 moves to `done/` as `Implemented (v0.88.0)` in the `0.88.0`
+> preparation, with this document and the M2a closure review as its
+> `Closure evidence`.
 
 Stage 10 and its fix round landed in `cbfb8f9`. Level B on that exact
 commit: `workflow_dispatch` run `42462622748`, **28 jobs, 28 success, 0 failed,
