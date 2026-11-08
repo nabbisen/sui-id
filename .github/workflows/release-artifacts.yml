@@ -92,6 +92,14 @@ jobs:
             # library/debian:stable-slim, amd64 manifest digest, resolved
             # 2026-11-08.
             debian_digest: "sha256:cd9f2189b62dc5ce003b22ad8cb109bbc3cef8ddcc8bc13771472a6edeb16980"
+            # rustc's own x86_64-unknown-linux-musl target spec sets
+            # `static_position_independent_executables = true`
+            # (compiler/rustc_target/src/spec/targets/
+            # x86_64_unknown_linux_musl.rs) -- static-PIE is this target's
+            # *proven* default, now also confirmed by the 2026-11-09
+            # rehearsal run (`static-pie linked`, both the file(1) check
+            # and the bare-container run-check passed). Hard assertion.
+            require_pie: "true"
           - target: aarch64-unknown-linux-musl
             runner: ubuntu-24.04-arm
             cc_env: CC_aarch64_unknown_linux_musl
@@ -99,6 +107,22 @@ jobs:
             # library/debian:stable-slim, arm64/v8 manifest digest,
             # resolved 2026-11-08.
             debian_digest: "sha256:04bba436c86dbce81eac09593099a9b468c49c3ed4835820ba71bb27b135fedb"
+            # Not PIE, and no stable flag can make it so (measured
+            # 2026-11-09, rustc 1.99.1). This target's spec
+            # (compiler/rustc_target/src/spec/targets/
+            # aarch64_unknown_linux_musl.rs) does not set
+            # `static_position_independent_executables`; x86_64's does.
+            # And rustc's link_output_kind
+            # (compiler/rustc_codegen_ssa/src/back/link.rs:2272) downgrades
+            # the output itself:
+            #   StaticPicExe if !static_pic_exe_supported => StaticNoPicExe
+            # So `-C relocation-model=pie` compiles PIC code but still links
+            # a non-PIE static executable. Only a custom target spec could
+            # change it, and that needs nightly, against `rust_stable =
+            # "stable"`. Reported, not enforced: if rustc ever opts this
+            # target in, the summary shows `pie: yes`, and this row is
+            # flipped to "true" deliberately.
+            require_pie: "false"
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -142,8 +166,12 @@ jobs:
           fi
           if grep -q 'pie executable' file-output.txt; then
             echo "pie: yes" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ matrix.require_pie }}" = "true" ]; then
+            echo "pie: no" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::$bin is not PIE, and this target (${{ matrix.target }}) is proven to produce static-PIE by default -- a regression" >&2
+            exit 1
           else
-            echo "pie: no (RFC 143 as read states no PIE requirement; recorded for the record)" >> "$GITHUB_STEP_SUMMARY"
+            echo "pie: no (rustc's own target spec does not request static-PIE for ${{ matrix.target }}; see the matrix comment above -- reported, not enforced, until that changes upstream)" >> "$GITHUB_STEP_SUMMARY"
           fi
           ldd "$bin" > ldd-output.txt 2>&1 || true
           cat ldd-output.txt
@@ -262,6 +290,17 @@ jobs:
 
           # osixia/openldap:1.5.0, amd64 manifest digest, resolved
           # 2026-11-08 (same image stage 1 used).
+          #
+          # `--copy-service` (reproduced locally with podman, 2026-11-09,
+          # using these exact arguments): the image's own entrypoint
+          # `chown`s everything under /container/service/slapd/assets/certs
+          # at startup, which fails outright against a `:ro` bind mount
+          # ("Read-only file system") and kills the container before slapd
+          # ever starts. `--copy-service` makes the entrypoint copy
+          # /container/service to a writable /container/run/service first
+          # and chown that copy instead -- the bind-mounted certs
+          # underneath are read, never written, so `:ro` still means what
+          # it says for them.
           docker run -d --name sui-id-release-ldap --network sui-id-release-check-net \
             -e LDAP_TLS_CRT_FILENAME=ldap.crt \
             -e LDAP_TLS_KEY_FILENAME=ldap.key \
@@ -270,7 +309,8 @@ jobs:
             -v "$PWD/certs/sui-id-release-ldap.crt":/container/service/slapd/assets/certs/ldap.crt:ro \
             -v "$PWD/certs/sui-id-release-ldap.key":/container/service/slapd/assets/certs/ldap.key:ro \
             -v "$PWD/certs/ca.crt":/container/service/slapd/assets/certs/ca.crt:ro \
-            osixia/openldap@sha256:0de3850635911109f0daf8f5957808ec4f4eb827fbaaa339100b5f1bab925745
+            osixia/openldap@sha256:0de3850635911109f0daf8f5957808ec4f4eb827fbaaa339100b5f1bab925745 \
+            --copy-service
 
           # axllent/mailpit:latest, amd64 manifest digest, resolved
           # 2026-11-08 (stage 1's own recorded digest had already moved by
@@ -282,10 +322,16 @@ jobs:
             -v "$PWD/certs":/certs:ro \
             axllent/mailpit@sha256:c95e8356f55b65520e8b7fd4d74d3e2d06e4a83513f639e316b1e592fbd52646
 
+          ready=""
           for _ in $(seq 1 30); do
-            docker exec sui-id-release-ldap ldapwhoami -x -H ldap://localhost -D "" >/dev/null 2>&1 && break
+            docker exec sui-id-release-ldap ldapwhoami -x -H ldap://localhost -D "" >/dev/null 2>&1 && { ready=1; break; }
             sleep 1
           done
+          if [ -z "$ready" ]; then
+            echo "::error::OpenLDAP never answered ldapwhoami within 30s" >&2
+            docker logs sui-id-release-ldap || true
+            exit 1
+          fi
 
       - name: Seed the LDAP test user (alice)
         run: |
@@ -357,10 +403,16 @@ jobs:
             "debian@sha256:cd9f2189b62dc5ce003b22ad8cb109bbc3cef8ddcc8bc13771472a6edeb16980" \
             sh -c 'apt-get update -qq && apt-get install -y -qq ca-certificates && update-ca-certificates && exec /usr/local/bin/sui-id --config /etc/sui-id.toml'
 
+          ready=""
           for _ in $(seq 1 60); do
-            docker logs sui-id-release-check 2>&1 | grep -q 'listening' && break
+            docker logs sui-id-release-check 2>&1 | grep -q 'listening' && { ready=1; break; }
             sleep 1
           done
+          if [ -z "$ready" ]; then
+            echo "::error::sui-id-release-check never logged 'listening' within 60s" >&2
+            docker logs sui-id-release-check || true
+            exit 1
+          fi
 
       - name: Drive the LDAP sign-in and the SMTP send, from the same network
         # RFC 143 stage 2 C2.3: the LDAP assertion is on the log line, not
@@ -455,6 +507,19 @@ jobs:
             curlimages/curl@sha256:3b8fde20978e330b401837f24b871ebe2c8d14ff7f07b87990bcd832588a1a75 \
             -s "http://sui-id-release-smtp:8025/api/v1/messages" | tee mailpit.json
           grep -q '"total":[1-9]' mailpit.json
+
+      - name: Dump every container's log, on failure
+        # Each container's own log is already dumped at its own failure
+        # point above (readiness loops, the log-line assertions); this is
+        # the catch-all for a failure in between those points -- a step
+        # that never got the chance to look at any container's log before
+        # dying, such as the driver script itself.
+        if: failure()
+        run: |
+          for c in sui-id-release-check sui-id-release-ldap sui-id-release-smtp; do
+            echo "=== docker logs $c ==="
+            docker logs "$c" 2>&1 || echo "(no such container, or it never started)"
+          done
 
       - name: Tear down
         if: always()
