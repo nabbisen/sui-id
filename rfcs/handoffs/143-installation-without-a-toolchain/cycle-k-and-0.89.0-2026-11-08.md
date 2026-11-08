@@ -12,6 +12,10 @@
 > [`stage1-result-and-the-static-decision-2026-11-08.md`](stage1-result-and-the-static-decision-2026-11-08.md).
 > **Re-decided 2026-11-08: static** (`@nabbisen`: *"static"*). **Stage 2 dispatched** —
 > [`stage2-build-check-and-attest-2026-11-08.md`](stage2-build-check-and-attest-2026-11-08.md).
+> **Stage 2's rehearsal passed 2026-11-09** (`42536756643`, all seven criteria).
+> Fix round 2 makes the attestation name the commit it built. **One question for
+> you: the `aarch64` artifact is not PIE** —
+> [`stage2-result-and-the-aarch64-pie-question-2026-11-09.md`](stage2-result-and-the-aarch64-pie-question-2026-11-09.md).
 
 **Proposed.** 2026-11-08, by the architect, on `@nabbisen`'s *"Scope 0.89."*
 **Schedule source.** `ROADMAP.md`, *The embeddable boundary, and installation*
