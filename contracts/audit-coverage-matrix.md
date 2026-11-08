@@ -48,7 +48,7 @@ client.set_post_logout_redirect_uris (retired the same stage), `client.disable`,
 `auth.smtp_config.changed`.
 
 Their cells now read **`B *(A required)*`**: Class B is what the code does
-today, Class A is what this document requires, and **[RFC 094](../rfcs/accepted/094-transactional-audit-registry.md)
+today, Class A is what this document requires, and **[RFC 094](../rfcs/done/094-transactional-audit-registry.md)
 M2b converts them** — its scope is settings, pending settings, federation
 configuration and client metadata. This is the same treatment the auth-flow
 section already gives its own unconverted rows; these twelve simply never

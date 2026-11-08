@@ -1,6 +1,6 @@
 # RFC 142 stage 3 — state the supported range
 
-**RFC.** [142 — Upgrading is the operation we test least](../../accepted/142-upgrading-is-the-least-tested-thing-we-do.md), **Accepted**.
+**RFC.** [142 — Upgrading is the operation we test least](../../done/142-upgrading-is-the-least-tested-thing-we-do.md), **Accepted**.
 **Stage.** 3 of 5. D2.
 **Input.** [stage 2's record](./stage2-corpus-2026-10-29.md), accepted.
 **Small stage.** Mostly one sentence, written carefully.

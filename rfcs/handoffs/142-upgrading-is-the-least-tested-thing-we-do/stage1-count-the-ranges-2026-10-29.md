@@ -1,6 +1,6 @@
 # RFC 142 stage 1 — count the ranges, build nothing
 
-**RFC.** [142 — Upgrading is the operation we test least](../../accepted/142-upgrading-is-the-least-tested-thing-we-do.md)
+**RFC.** [142 — Upgrading is the operation we test least](../../done/142-upgrading-is-the-least-tested-thing-we-do.md)
 **Status of that RFC.** **Accepted** 2026-10-29. Implementation is
 permitted under RFC 000's status rule.
 **Stage.** 1 of 5. See the RFC's §Stages.

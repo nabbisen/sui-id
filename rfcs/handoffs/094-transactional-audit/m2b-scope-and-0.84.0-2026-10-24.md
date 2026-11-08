@@ -4,7 +4,7 @@
 **Proposal, not a plan of record.** `0.84.0`'s scope is for `@nabbisen` to
 settle. **The wave order below is the part worth his attention**, because
 it is not the order RFC 094 lists.
-**Governing RFC.** [RFC 094](../../accepted/094-transactional-audit-registry.md),
+**Governing RFC.** [RFC 094](../../done/094-transactional-audit-registry.md),
 **Accepted**; M2a closed 2026-10-03.
 **Measured.** 2026-10-24, against the tip.
 

@@ -5,8 +5,8 @@
 principle, not a source: inventories were removed in v4 and each section
 that held one now names where the authoritative copy lives.*
 
-> **Stale as of v0.87.2 (2026-11-07).** This document reflects the v0.77.0
-> codebase and the workspace is ten minor versions past it, which is eight
+> **Stale as of v0.88.0 (2026-11-08).** This document reflects the v0.77.0
+> codebase and the workspace is eleven minor versions past it, which is nine
 > more than `contracts/doc-authority.toml`'s tolerance allows — RFC 098 rule 5
 > makes this banner the sanctioned state for a lagging document, and it is
 > preferred here to re-dating a synthesis nobody has re-verified section by

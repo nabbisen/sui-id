@@ -23,7 +23,7 @@ the amended set; §5 of this report is superseded on that number alone.
 
 
 **Handoff.** `rfcs/handoffs/142-upgrading-is-the-least-tested-thing-we-do/stage1-count-the-ranges-2026-10-29.md`
-**RFC.** `rfcs/accepted/142-upgrading-is-the-least-tested-thing-we-do.md`, Accepted.
+**RFC.** `rfcs/done/142-upgrading-is-the-least-tested-thing-we-do.md`, Accepted.
 **Baseline.** `25ea2de` (`git log -1` at start).
 **Candidate.** None — this stage writes no code. Nothing in `crates/` changed; nothing to copy back; working tree is clean.
 

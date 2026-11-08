@@ -371,7 +371,7 @@
 > **`0.84.0` does not close M2b**: waves 3 and 4 and the authority switch
 > remain after it.
 
-**Governing RFC:** [RFC 094](../../accepted/094-transactional-audit-registry.md)
+**Governing RFC:** [RFC 094](../../done/094-transactional-audit-registry.md)
 **Audience:** the mid-capability model after RFC re-acceptance and prerequisite evidence
 **Status:** Planning companion; inherits the governing RFC's current status — **Accepted 2026-08-27**, the 2026-07-28 return for review having closed after independent design review by the implementation role. Implementation remains gated on the entry gate below.
 

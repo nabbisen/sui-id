@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.88.0] — 2026-11-08
+
+**Upgrading is now previewable and backed up automatically — the reason
+this release exists; a failed best-effort audit write now leaves an
+error line instead of being silently discarded; and three fixes:
+expired password-reset tokens are now cleaned up, and two
+documentation corrections to the subcommand reference and `--help`.**
+
 ### Added
 
 - **An automatic database snapshot before a migration that will actually

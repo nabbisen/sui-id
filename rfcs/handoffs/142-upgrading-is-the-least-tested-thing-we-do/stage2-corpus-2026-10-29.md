@@ -216,7 +216,7 @@ clean.
 R10), the same mechanism G13/G19/G20/G21 use — not a new, separate
 mechanism:
 
-- `rfcs/accepted/142-upgrading-is-the-least-tested-thing-we-do.md`:
+- `rfcs/done/142-upgrading-is-the-least-tested-thing-we-do.md`:
   new `## Gate Matrix lane owned by RFC 142` heading with the G22 row,
   mirroring RFC 134/137's exact template.
 - `contracts/gate-inputs.toml`: `[rust_components]`, `[gate_lane_sources]

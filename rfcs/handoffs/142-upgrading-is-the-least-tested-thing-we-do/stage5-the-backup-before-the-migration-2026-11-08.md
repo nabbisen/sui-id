@@ -6,7 +6,7 @@
 > §D. Scoped and authorized 2026-11-08.
 
 **Dispatched.** 2026-11-08, by the architect.
-**Governing RFC.** [RFC 142](../../accepted/142-upgrading-is-the-least-tested-thing-we-do.md)
+**Governing RFC.** [RFC 142](../../done/142-upgrading-is-the-least-tested-thing-we-do.md)
 **D4**, **Accepted**, in its **settled** shape. Building is permitted.
 **Baseline.** The tip of `main` when you start — `git log -1`, record it.
 

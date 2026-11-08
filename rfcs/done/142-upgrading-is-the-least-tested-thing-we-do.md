@@ -1,6 +1,12 @@
 # RFC 142 — Upgrading is the operation we test least
 
-**Status.** Accepted
+**Status.** Implemented (v0.88.0)
+**Closure reviewed on.** 2026-11-08
+**Closure approved by.** `@nabbisen`, 2026-11-08: *"Approved."*, on the architect's closure
+assessment. **The architect is not independent of this RFC** (it wrote, reviewed and dispatched
+it, and folded code into stages 4 and 5).
+**Closure evidence.** [Closure assessment, 2026-11-08](../handoffs/142-upgrading-is-the-least-tested-thing-we-do/closure-assessment-2026-11-08.md)
+(Level B `42435137349` on `1573a72`, 28/28, 0 skipped).
 **Accepted on.** 2026-10-29
 **Approved by.** `@nabbisen`, 2026-10-29: *"RFC 142 is accepted with
 your recommendations."* Both open questions are thereby settled on the
@@ -40,7 +46,10 @@ that proves the refusal or the backup actually happens.
 safety, 2026-10-28.
 **Touches.** `crates/sui-id-store/src/migrations.rs` and its tests,
 `crates/sui-id/src/cli.rs`, `crates/sui-id/src/runtime/database.rs`,
-`docs/src/guides/upgrade.md`.
+`docs/src/guides/upgrade.md`, and, as built (corrected at closure, 2026-11-08):
+`crates/sui-id-store/src/backup/ops.rs`, `crates/sui-id/src/main.rs`,
+`crates/sui-id/src/runtime/startup.rs`, `docs/src/reference/configuration.md`,
+and `Cargo.toml` (a direct `rustix` dependency).
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** The architect (high-capability model).
 
@@ -444,3 +453,9 @@ hundreds of unrelated test names.
 | ID | Toolchain | Features | Blocking command / assertion |
 |---|---|---|---|
 | G22 | stable | n/a | `cargo +stable test -p sui-id-store --lib tests_rfc142 --locked` |
+
+*Recorded at closure, 2026-11-08:* cargo matches a test filter as a
+substring, so since stage 4 this lane also runs `tests_rfc142_stage4` (the
+migration-name, preview/runner agreement and directory-name tests). That is
+coverage the lane now owns, recorded here so its scope is a decision on the
+record rather than an accident of naming.

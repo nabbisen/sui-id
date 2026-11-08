@@ -1,6 +1,16 @@
 # RFC 094 — Transactional Audit Completeness and Typed Event Registry
 
-**Status.** Accepted
+**Status.** Implemented (v0.88.0)
+**Closure reviewed on.** 2026-11-08
+**Closure approved by.** `@nabbisen`, per stage: **M2a** on 2026-10-03 (*"Approved."*, on the
+architect's [M2a closure review](../handoffs/094-transactional-audit/m2a-closure-review-2026-10-03.md)),
+and **M2b** on 2026-11-08 (*"Accepted."*), on the architect's adversarial assessment and its
+re-assessment after cycle J stage 10. RFC 094's closure prerequisites are per-stage, so the two
+acceptances together close it. **The architect is not independent of M2b**: it dispatched every
+stage and folded code into stage 10 at review.
+**Closure evidence.** [M2b adversarial assessment and re-assessment, 2026-11-08](../handoffs/094-transactional-audit/m2b-adversarial-assessment-2026-11-08.md)
+(§7: Level B `42462622748` on `cbfb8f9`, 28/28, 0 skipped; `Security audit` `42462625022`, success),
+with M2a's closure review linked above.
 **Accepted on.** 2026-10-15 (re-accepted after the F01 class amendment; first accepted 2026-08-27)
 **Approved by.** `@nabbisen`, 2026-10-15: *"Accepted."* — on the architect's
 drafted amendment,

@@ -56,6 +56,25 @@ before upgrading across more than one or two of them.
 
 ## Version-specific notes
 
+### v0.88.x
+
+**Upgrading to `0.88.0` from a release with pending migrations takes the
+automatic pre-migration snapshot first** — see "The pre-migration
+snapshot" above for where it lands, its name and mode, and that it is
+never deleted automatically. If there is not enough free space beside
+the database, the start now **refuses with exit code `1`, with nothing
+changed**. Free some space and start again; start with `--no-backup` only
+if you have taken a backup yourself (General procedure, step 1).
+
+**Run `sui-id preview-upgrade` first** (General procedure, step 4) — it
+now also predicts whether this snapshot will be taken and whether there
+is room for it, before you start the new binary.
+
+**Upgrading from `0.87.2` itself runs no migration, so no snapshot is
+taken.** If you are upgrading from an older release, see below for
+whether a migration (and therefore a snapshot) applies to your
+starting version.
+
 ### v0.83.x
 
 **New admin subaction: `sui-id admin legacy-dynamic-candidates [--config PATH]`

@@ -1,6 +1,6 @@
 # RFC 142 stage 2 — build the corpus
 
-**RFC.** [142 — Upgrading is the operation we test least](../../accepted/142-upgrading-is-the-least-tested-thing-we-do.md), **Accepted**.
+**RFC.** [142 — Upgrading is the operation we test least](../../done/142-upgrading-is-the-least-tested-thing-we-do.md), **Accepted**.
 **Stage.** 2 of 5.
 **Input.** [stage 1's measurement](./stage1-measurement-2026-10-29.md),
 accepted — **read it first**, including its header, which records the

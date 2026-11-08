@@ -220,7 +220,7 @@ shipped the urgent half at the slower half's pace.
 
 ## C — RFC 142 stages 4 and 5 are outstanding, and I nearly let them slide
 
-[RFC 142](../../accepted/142-upgrading-is-the-least-tested-thing-we-do.md)
+[RFC 142](../../done/142-upgrading-is-the-least-tested-thing-we-do.md)
 is **Accepted** with five stages. Stages 1–3 landed in `0.87.0`;
 **stages 4 and 5 have no LANDED note and were in no cycle**:
 

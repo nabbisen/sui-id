@@ -269,6 +269,12 @@ sui-id uses three, and only three:
 | `65` | The database is not one this build can use: its schema is **newer** than this build understands, or its schema version is **unreadable** (or missing from a database that has tables). Nothing was written to it. |
 | `1` | Everything else. |
 
+A refused pre-migration backup (not enough free space beside the
+database) is exit `1`, so `Restart=on-failure` retries it until
+systemd's start limit — harmless, since the check writes nothing, but
+the cause is the first line on stderr and in the log. Do not add `1` to
+`RestartPreventExitStatus`: it covers every other failure too.
+
 `65` is `EX_DATAERR` from `sysexits.h`. Both refusals use it, so
 `RestartPreventExitStatus=65` in the unit above covers both; without it,
 `Restart=on-failure` restarts a refusing service every two seconds until
