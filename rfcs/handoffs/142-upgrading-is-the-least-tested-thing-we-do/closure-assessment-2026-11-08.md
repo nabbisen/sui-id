@@ -1,6 +1,8 @@
 # RFC 142 — closure assessment, 2026-11-08
 
-> ## Whose turn it is: **yours** — approve or decline closure.
+> ## Closure approved. `@nabbisen`, 2026-11-08: *"Approved."*
+> RFC 142 moves to `done/` as `Implemented (v0.88.0)` in the `0.88.0`
+> preparation, with this document as its `Closure evidence`.
 
 **Prepared by.** The architect, 2026-11-08.
 **Asked of you.** Approve RFC 142's closure. On approval, the
