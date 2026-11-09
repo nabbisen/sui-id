@@ -1,8 +1,9 @@
 # RFC 143 — the vendored OpenSSL is out of support, and `0.89.0` is held
 
-> ## Whose turn it is: **yours**, for one decision (§4).
-> **`0.89.0` is held**, before its preparation is dispatched. Nothing has been
-> published, and no artifact containing this OpenSSL has been released.
+> ## Decided 2026-11-09. `@nabbisen`: *"A"*
+> Static, linked against OpenSSL **3.5 LTS** built from upstream source by the
+> release workflow, and verified against a pinned SHA-256. **`0.89.0` stays held**
+> until that is built and rehearsed. The architect prototypes it first (§3).
 
 **Prepared by.** The architect, 2026-11-09, at step 0 of `0.89.0`'s
 preparation. Every fact below was measured today against a primary source,

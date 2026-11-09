@@ -27,6 +27,8 @@
 > missing upstream security fixes, and no current crate can supply a supported one.
 > One decision for you —
 > [`the-vendored-openssl-is-out-of-support-2026-11-09.md`](the-vendored-openssl-is-out-of-support-2026-11-09.md).
+> **Decided 2026-11-09: A** (`@nabbisen`: *"A"*) — static against upstream OpenSSL
+> 3.5 LTS built from verified source. `0.89.0` stays held until it is built and rehearsed.
 
 **Proposed.** 2026-11-08, by the architect, on `@nabbisen`'s *"Scope 0.89."*
 **Schedule source.** `ROADMAP.md`, *The embeddable boundary, and installation*

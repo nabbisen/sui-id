@@ -129,6 +129,19 @@ Three, chosen to cover the stated problem rather than to look thorough:
 > security release means a sui-id release. That is what static always meant;
 > this text had understated it. Record —
 > [`../handoffs/143-installation-without-a-toolchain/stage1-result-and-the-static-decision-2026-11-08.md`](../handoffs/143-installation-without-a-toolchain/stage1-result-and-the-static-decision-2026-11-08.md).
+>
+> **Tested again 2026-11-09 (`0.89.0`'s step 0): `openssl-src` does not follow
+> each patch release, so the check above was blind.** It had packaged OpenSSL
+> 3.6.3 and nothing later. Meanwhile 3.6 went out of support, upstream shipped
+> 3.6.4 and 3.6.5 with security fixes, and no `openssl-sys` accepts
+> `openssl-src`'s newer line. A check that compares against that crate's own
+> versions compares stale with stale. **Static now takes OpenSSL from OpenSSL.**
+> `@nabbisen`, 2026-11-09: *"A"*. The release workflow builds the **3.5 LTS**
+> line from upstream source, verified against a SHA-256 pinned in this
+> repository. The freshness check compares with OpenSSL's own release and
+> support lists. The `vendored` feature goes. The commitment stands, and can
+> now be kept. Record —
+> [`../handoffs/143-installation-without-a-toolchain/the-vendored-openssl-is-out-of-support-2026-11-09.md`](../handoffs/143-installation-without-a-toolchain/the-vendored-openssl-is-out-of-support-2026-11-09.md).
 
 **No macOS or Windows target.** sui-id is a server, the deployment guide
 documents systemd, and shipping an artifact this project neither tests nor
