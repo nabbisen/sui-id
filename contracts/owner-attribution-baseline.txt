@@ -78,6 +78,7 @@ ROADMAP.md	e722d6a8d555e7825cc2d5cc3977168935095c642fb98fdc51f1e1cf0002d0ed	1	Re
 ROADMAP.md	ef658746902d7c4f4907f832379c8b77083fc5b0f850c4b8e4154c71eafbf984	1	Closed 2026-10-17 on @nabbisen 's "096-A is accepted." , on the architect's [completion assessment](rfcs/handoffs/096-upstream-oidc-federati
 ROADMAP.md	f065af1f53ccc57882ec4177dfe0a2f6dd81c033ce8dcbad4d5a59a036cd6210	1	[117](rfcs/archive/117-verifiable-owner-decisions.md) Owner decisions must be verifiable
 ROADMAP.md	f28ee07a59bcf8fe20042bcdd369924c17453b138e4bafc7bfaaace5d1b7fedb	1	The architect legislated. Rules, scope and schedule are proposed by the architect and decided by the owner.
+ROADMAP.md	f6d4ca2918e80e9801fcdb3cc2d6b40420a33d23b4421c5e18010a14d48e1dea	1	After K: a scoping note on formal verification, not a cycle. Accepted 2026-11-09 ( @nabbisen : "Your recommendation is accepted." ).
 ROADMAP.md	f84f03a3721a8dd2205312be09a1b85eb11b41f63b3ba41196a64fd33a0ea704	1	Closing one requires, per RFC 000 and RFC 131 D2: its own Closure prerequisites demonstrably met; Closure reviewed on , Closure approved by 
 contracts/audit-coverage-matrix.md	7eabca6616e34b638eb38be8c856450237a82e58159180fbb802125fb837aca9	1	Ruled by @nabbisen , 2026-09-24.
 contracts/audit-coverage-matrix.md	fb947f40bca1f1ca7a1d95d85e73e458e0a0c350e50f4c114fe5f52d90d4a41a	1	One of the twelve is carved out — auth.federation.takeover blocked , 2026-10-12. @nabbisen approved the architect's recommendation to amend 

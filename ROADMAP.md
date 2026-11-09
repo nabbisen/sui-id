@@ -1041,6 +1041,17 @@ compiles into any framework and guarantees nothing is worse than no module.
 | **L** | v0.90.0 | **No window**; needs RFC 119 **Accepted** | **The store-boundary RFC** (number assigned when it is written; **120 is taken** — it is the consent and setup security fix of 2026-09-29, and **143 is now taken** by installation). `sui-id-core` written against a trait rather than `sui-id-store`: the 22 entry points and the 269 references measured 2026-09-25. With it, `contracts/embeddable-deps.toml` and a gate over the embeddable crate's resolved dependency set. **RFC 119 is its hard prerequisite** — that RFC's own header forbids writing this one until 119 is Accepted |
 | **M** | v0.91.0 | **No window**; needs L landed | **The embeddable-module RFC** (number assigned when it is written). The split proper, plus a worked example embedding it in one host framework |
 
+**After K: a scoping note on formal verification, not a cycle.** Accepted
+2026-11-09 (`@nabbisen`: *"Your recommendation is accepted."*). Verus is now
+available on the owner's machine. Once `0.89.0` is released, the architect
+writes a short note: candidate code paths, measured by `file:line`, where
+security depends on one property holding for every input; the property each
+would prove; and what it costs to keep a verified copy in step with the real
+code. Verus checks its own dialect on its own pinned toolchain, not the crates
+as they stand. **The note is design work and changes nothing above.** Whether
+any of it becomes an RFC, and whether that RFC is a freeze exception, is
+decided on the note.
+
 **What is actually being decided — corrected 2026-09-25.** The architect first
 put this to `@nabbisen` as three windows and a date. That was the wrong
 framing, and he asked what there was to decide. The dates are planning aids
