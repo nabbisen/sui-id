@@ -16,6 +16,9 @@
 > Fix round 2 makes the attestation name the commit it built. **One question for
 > you: the `aarch64` artifact is not PIE** —
 > [`stage2-result-and-the-aarch64-pie-question-2026-11-09.md`](stage2-result-and-the-aarch64-pie-question-2026-11-09.md).
+> **Stage 2 complete 2026-11-09**: rehearsal `42541537200` on `bd8be11` met all
+> eight criteria, the attested commit being the built commit. **Stage 3 dispatched** —
+> [`stage3-the-github-release-2026-11-09.md`](stage3-the-github-release-2026-11-09.md).
 
 **Proposed.** 2026-11-08, by the architect, on `@nabbisen`'s *"Scope 0.89."*
 **Schedule source.** `ROADMAP.md`, *The embeddable boundary, and installation*
