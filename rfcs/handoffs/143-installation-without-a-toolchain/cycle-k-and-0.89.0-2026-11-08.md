@@ -22,6 +22,11 @@
 > **Stage 3 complete 2026-11-09** (`c57d6fa`, rehearsal `42548940886`). **Stage 4
 > dispatched** — [`stage4-the-documents-2026-11-09.md`](stage4-the-documents-2026-11-09.md);
 > its one `aarch64` sentence waits for your ruling.
+> **Stage 4 complete 2026-11-09** (`46b7dda`, rehearsal `42553539952`).
+> **`0.89.0` is held at step 0**: the vendored OpenSSL (3.6.3) is out of support and
+> missing upstream security fixes, and no current crate can supply a supported one.
+> One decision for you —
+> [`the-vendored-openssl-is-out-of-support-2026-11-09.md`](the-vendored-openssl-is-out-of-support-2026-11-09.md).
 
 **Proposed.** 2026-11-08, by the architect, on `@nabbisen`'s *"Scope 0.89."*
 **Schedule source.** `ROADMAP.md`, *The embeddable boundary, and installation*
