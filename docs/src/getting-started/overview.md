@@ -18,7 +18,7 @@ A user flow with sui-id looks like this:
 | Property | sui-id | Typical self-hosted IdP |
 |---|---|---|
 | Binary count | 1 | 3–10 (app + DB + cache + …) |
-| Runtime deps | system OpenSSL and libc (shared libraries) | JVM / Node / container runtime |
+| Runtime deps | `ca-certificates` only (downloaded static binary), or system OpenSSL/libc (built from source) | JVM / Node / container runtime |
 | Database | SQLite (bundled) | PostgreSQL / MariaDB |
 | Backup | `sui-id backup` (one tar file) | dump + restore procedure |
 | Sensitive-column encryption | XChaCha20-Poly1305 | depends on DB driver |

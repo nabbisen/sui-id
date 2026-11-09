@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Downloadable static binaries, for x86_64 and aarch64 Linux, on every
+  GitHub Release.** No Rust toolchain and no system OpenSSL needed —
+  download, verify the checksum and the build-provenance attestation,
+  install, run. Each release carries `SHA256SUMS`, and a signed
+  attestation for each file naming the release tag and commit it was built
+  from. The
+  [Quick Start](docs/src/getting-started/quick-start.md) now leads with
+  this path; `cargo install sui-id` and building from source remain, for
+  anyone who already has the toolchain or needs a platform with no
+  prebuilt binary.
+
 ### Fixed
 
 - **sui-id crashed at startup on a host with no CA certificates**, whether

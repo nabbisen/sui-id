@@ -74,8 +74,14 @@ that's a feature.
 
 ## Quick start
 
-Both commands below compile from source: you need Rust 1.95 (MSRV) — newer
-than most distribution-packaged toolchains, so use
+Download a prebuilt binary (x86_64/aarch64 Linux, no toolchain) from the
+[Releases page](https://github.com/nabbisen/sui-id/releases) — see the
+[full Quick Start](docs/src/getting-started/quick-start.md) for the
+checksum and provenance verification steps, which belong before the first
+run, not after.
+
+Or compile from source: you need Rust 1.95 (MSRV) — newer than most
+distribution-packaged toolchains, so use
 [`rustup`](https://rustup.rs/) rather than your distro's `rustc` — and the
 build packages `build-essential pkg-config libssl-dev` (`libssl.so.3` is also
 needed at runtime). See the

@@ -27,10 +27,25 @@ touches a fenced code block or an inline code span: `CHANGELOG.md` has
 fenced ```toml`` blocks (example manifests) whose own bracket-paren text
 must survive untouched.
 
+RFC 143 stage 4, carried from stage 3's review: `G10b`/`G14` (this
+project's markdown-link gates) do not cover `CHANGELOG.md`, so nothing
+previously caught a section linking a file that had since moved or been
+deleted -- the rewritten blob URL would simply 404 once a Release shipped
+it. `--root` is the checkout to resolve a rewritten target against (on a
+real release, the checkout *is* the tag, so this reads the same tree the
+link will be pinned to); a target with no file or directory under it is
+refused (exit 1) the same way a `..` target is, before the body is ever
+printed. A target with a URL scheme, a bare `#fragment`, or an absolute
+`/path` is never checked against the filesystem: `should_rewrite` already
+excludes all three from rewriting, and this check only runs on what would
+otherwise be rewritten. A repo-relative target with a fragment
+(`docs/x.md#section`) is checked by its file part, and keeps the fragment.
+
 Exit 0 = the section was found, is non-empty, and every link target
-needing rewrite had no `..` in it; its (possibly rewritten) body is
-printed to stdout. Exit 1 = the section is missing, is empty after
-trimming, or a link target contained `..` -- each refusal is one line
+needing rewrite both had no `..` and resolved under `--root`; its
+(possibly rewritten) body is printed to stdout. Exit 1 = the section is
+missing, is empty after trimming, a link target contained `..`, or a
+link target does not exist under `--root` -- each refusal is one line
 on stderr naming the version (or target) and the file.
 """
 
@@ -52,7 +67,10 @@ LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
 
 
 class RefuseError(Exception):
-    """A link target this script refuses to guess at (contains `..`)."""
+    """A link target this script refuses to rewrite: contains `..`, or
+    (RFC 143 stage 4) resolves to nothing under `--root`. The message is
+    already complete; `main` prints `str(exc)` as-is rather than
+    re-asserting which of the two reasons applies."""
 
 
 def section_heading_re(version: str) -> re.Pattern[str]:
@@ -95,7 +113,7 @@ def should_rewrite(target: str) -> bool:
     )
 
 
-def rewrite_line(line: str, repo: str, ref: str) -> str:
+def rewrite_line(line: str, repo: str, ref: str, root: Path) -> str:
     """Rewrites qualifying link targets on one line, skipping any match
     that falls inside an inline code span (computed once, from the
     original line, before any substitution -- so the replacement
@@ -113,7 +131,16 @@ def rewrite_line(line: str, repo: str, ref: str) -> str:
         if not should_rewrite(target):
             return m.group(0)
         if ".." in target:
-            raise RefuseError(target)
+            raise RefuseError(f"refusing to rewrite link target {target!r} (contains '..')")
+        # The file is the part before any `#fragment` or `?query`:
+        # `docs/x.md#section` is a valid link to an existing file, and
+        # checking the whole string would refuse it. The URL keeps both.
+        path_part = target.split("#", 1)[0].split("?", 1)[0]
+        if not (root / path_part).exists():
+            raise RefuseError(
+                f"refusing to rewrite link target {target!r}: "
+                f"no such file or directory under {root}"
+            )
         new_target = f"https://github.com/{repo}/blob/{ref}/{target}"
         whole = m.group(0)
         # Replace only the parenthesised target, preserving the link
@@ -124,7 +151,7 @@ def rewrite_line(line: str, repo: str, ref: str) -> str:
     return LINK_RE.sub(replace, line)
 
 
-def rewrite_links(lines: list[str], repo: str, ref: str) -> list[str]:
+def rewrite_links(lines: list[str], repo: str, ref: str, root: Path) -> list[str]:
     out = []
     in_fence = False
     for line in lines:
@@ -135,11 +162,11 @@ def rewrite_links(lines: list[str], repo: str, ref: str) -> list[str]:
         if in_fence:
             out.append(line)
             continue
-        out.append(rewrite_line(line, repo, ref))
+        out.append(rewrite_line(line, repo, ref, root))
     return out
 
 
-def extract(changelog: Path, version: str, repo: str, ref: str) -> str:
+def extract(changelog: Path, version: str, repo: str, ref: str, root: Path) -> str:
     """Returns the rewritten section body, or raises `RefuseError` /
     `LookupError` (missing/empty section) for `main` to report."""
     text = changelog.read_text(encoding="utf-8")
@@ -149,7 +176,7 @@ def extract(changelog: Path, version: str, repo: str, ref: str) -> str:
     lines = trim_blank(lines)
     if not lines:
         raise LookupError(f"the '## [{version}]' section in {changelog} is empty")
-    lines = rewrite_links(lines, repo, ref)
+    lines = rewrite_links(lines, repo, ref, root)
     return "\n".join(lines) + "\n"
 
 
@@ -159,17 +186,20 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--version", required=True)
     parser.add_argument("--repo", required=True, help="owner/repo, e.g. nabbisen/sui-id")
     parser.add_argument("--ref", required=True, help="git ref link targets are pinned to")
+    parser.add_argument(
+        "--root", required=True, help="checkout root a rewritten target must exist under"
+    )
     args = parser.parse_args(argv)
 
     try:
-        body = extract(Path(args.changelog), args.version, args.repo, args.ref)
+        body = extract(Path(args.changelog), args.version, args.repo, args.ref, Path(args.root))
     except LookupError as exc:
         print(f"extract-changelog-section: {exc}", file=sys.stderr)
         return 1
     except RefuseError as exc:
         print(
-            f"extract-changelog-section: refusing to rewrite link target "
-            f"{exc} (contains '..') -- {args.changelog}, version {args.version!r}",
+            f"extract-changelog-section: {exc} -- "
+            f"{args.changelog}, version {args.version!r}",
             file=sys.stderr,
         )
         return 1

@@ -6,12 +6,87 @@ mean.
 
 ## Install
 
-Both commands below compile from source: you need Rust 1.95 (MSRV) — newer
-than most distribution-packaged toolchains, so use
-[`rustup`](https://rustup.rs/) rather than your distro's `rustc` — and the
-build packages `build-essential pkg-config libssl-dev` (`libssl.so.3` is also
-needed at runtime). See the [Deployment guide](../guides/deployment.md) for
-the full package list.
+### Download the binary (no toolchain needed)
+
+Every GitHub Release carries a statically-linked binary for x86_64 and
+aarch64 Linux, with `SHA256SUMS` and a build-provenance attestation. It
+needs no compiler, no Rust toolchain and no system OpenSSL. The one thing
+it needs at runtime is below.
+
+1. **Choose your architecture:**
+
+   ```bash
+   ARCH=$(uname -m)   # x86_64 or aarch64
+   ```
+
+   Anything else has no prebuilt binary: use [Build from source](#build-from-source).
+
+2. **Download the binary and `SHA256SUMS`:**
+
+   ```bash
+   VERSION=0.89.0   # the current release -- see https://github.com/nabbisen/sui-id/releases
+   curl -fLO "https://github.com/nabbisen/sui-id/releases/download/$VERSION/sui-id-${ARCH}-unknown-linux-musl"
+   curl -fLO "https://github.com/nabbisen/sui-id/releases/download/$VERSION/SHA256SUMS"
+   ```
+
+3. **Verify before running.** There are two checks, and they prove
+   different things.
+
+   **The checksum** proves the download matches the file published beside
+   it. It says nothing about who built that file. `SHA256SUMS` lists both
+   architectures and you downloaded one, so a plain `sha256sum -c
+   SHA256SUMS` would fail on the file you don't have. This form checks
+   only yours, and works with both GNU and BusyBox (Alpine) `sha256sum`:
+
+   ```bash
+   grep " sui-id-${ARCH}-unknown-linux-musl\$" SHA256SUMS | sha256sum -c -
+   ```
+
+   **The provenance** proves the file was built by this repository's own
+   release workflow, from that release's tag — nothing a checksum alone
+   can say:
+
+   ```bash
+   gh attestation verify "sui-id-${ARCH}-unknown-linux-musl" \
+     --repo nabbisen/sui-id --source-ref "refs/tags/$VERSION"
+   ```
+
+   This needs the [`gh` CLI](https://cli.github.com/), **v2.68.0 or
+   newer** (an older one reports `unknown flag: --source-ref`), **signed
+   in** with `gh auth login` or `GH_TOKEN`, even though the attestation is
+   public. **Keep `--source-ref`.** The same bytes, built again from
+   another commit, carry a second attestation, and both are true. Without
+   `--source-ref`, a pass says only that this repository's workflow built
+   the file at some point, not that it is release `$VERSION`.
+
+   **If either check fails: do not run the binary.** Report it through
+   [a private security advisory](https://github.com/nabbisen/sui-id/security/advisories/new).
+
+4. **Run it:**
+
+   ```bash
+   sudo install -m 0755 "sui-id-${ARCH}-unknown-linux-musl" /usr/local/bin/sui-id
+   ```
+
+   Then continue at [Configure](#configure) below — `sui-id` now runs the
+   same way regardless of how it got onto this machine.
+
+<!-- OPEN: stage 2 result §3 is unanswered. Recommended form, not yet
+settled: "The ARM build does not use address randomisation for its own
+code (it is not position-independent); the x86_64 build does." -->
+
+**The one runtime requirement**: the system's CA bundle (`ca-certificates`
+on Debian/Ubuntu, and the equivalent elsewhere). Without it sui-id still
+starts, with one warning, but HIBP breach-checks, SMTP, LDAPS and
+federation sign-in cannot verify TLS until that bundle is installed.
+
+### Build from source
+
+You need Rust 1.95 (MSRV) — newer than most distribution-packaged
+toolchains, so use [`rustup`](https://rustup.rs/) rather than your
+distro's `rustc` — and the build packages `build-essential pkg-config
+libssl-dev` (`libssl.so.3` is also needed at runtime). See the
+[Deployment guide](../guides/deployment.md) for the full package list.
 
 ```bash
 cargo install sui-id

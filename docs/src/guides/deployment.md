@@ -71,6 +71,19 @@ world-readable.
 
 ## 3. Install the binary
 
+If you download the prebuilt binary from the GitHub Release (no
+toolchain on this host at all):
+
+```bash
+install -m 0755 -o root -g root sui-id-x86_64-unknown-linux-musl /usr/local/bin/sui-id
+sui-id --version
+```
+
+Verify the download **before** this step — the checksum and the
+build-provenance attestation — exactly as the [Quick Start's own
+download section](../getting-started/quick-start.md#download-the-binary-no-toolchain-needed)
+does; that is not repeated here.
+
 If you build from source on the deployment host:
 
 ```bash
@@ -96,8 +109,9 @@ install -m 0755 -o root -g root /tmp/sui-id /usr/local/bin/sui-id
 sui-id --version
 ```
 
-The runtime needs `libssl.so.3` from the system. A statically-linked
-build is not provided.
+The glibc build's runtime needs `libssl.so.3` from the system; the
+downloaded static binary needs nothing from this list (only the CA
+bundle in §1, for outbound TLS).
 
 ## 4. Configuration
 

@@ -269,7 +269,11 @@ Before tagging, in addition to Level B on the commit being tagged:
    `sui-id-shared` is on the index).
 2. The version field in the workspace `[workspace.package]` has been bumped
    and `Cargo.lock` has been refreshed. Internal workspace crate dependencies
-   are centralized in root `[workspace.dependencies]`.
+   are centralized in root `[workspace.dependencies]`. **The Quick Start's
+   own `VERSION=` line** (`docs/src/getting-started/quick-start.md`, the
+   download section) **is bumped to match** — nothing checks that it
+   agrees with the tag, so a missed bump here is silent until an operator
+   downloads a stale version with no warning that it is not current.
 3. `CHANGELOG.md` has an entry for the new version.
 4. The git working tree is clean (no `--allow-dirty` for the actual publish).
 5. **The `Security audit` workflow is green on the exact commit being

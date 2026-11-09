@@ -607,6 +607,7 @@ jobs:
             --version "$version" \
             --repo "${{ github.repository }}" \
             --ref "$REF_NAME" \
+            --root . \
             > release-notes.md
           {
             echo "### Release notes (version: $version)"
@@ -659,6 +660,7 @@ jobs:
           sha256sum -c SHA256SUMS
           for f in sui-id-x86_64-unknown-linux-musl sui-id-aarch64-unknown-linux-musl SHA256SUMS; do
             gh attestation verify "$f" --repo "${{ github.repository }}" --source-ref "$GITHUB_REF"
+            echo "verified: $f (source ref $GITHUB_REF)"
           done
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
