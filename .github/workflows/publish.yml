@@ -55,72 +55,59 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      # Fix round 2 (RFC 143 stage 2 result, 2026-11-09 §2): a
-      # provenance attestation records the commit the *workflow run*
-      # started on (`github.sha`), not whatever a later step happens to
-      # `actions/checkout` at a `ref:`. Dispatching this workflow
-      # against `main` while building a different, named tag commit
-      # (the prior shape: `git rev-parse` resolved the tag separately,
-      # and every later job checked that out) made the attested commit
-      # and the built commit two different things that merely usually
-      # agreed -- correct only as long as `main` had not moved past the
-      # tag since. Refusing here, before anything else runs, makes
-      # `github.sha` *be* the tagged commit by construction: this run
-      # must itself have been dispatched directly against the tag ref,
-      # never against a branch with the tag as a mere string input.
-      - name: Refuse unless this run was dispatched against the tag itself
-        env:
-          # `${{ }}` expressions are templated into the script text
-          # itself, before the shell ever sees it -- routed through
-          # `env:` instead, so a surprising `tag` input is shell data,
-          # never shell syntax.
-          REF_TYPE: ${{ github.ref_type }}
-          REF_NAME: ${{ github.ref_name }}
-          TAG_INPUT: ${{ inputs.tag }}
-        run: |
-          set -euo pipefail
-          if [ "$REF_TYPE" != "tag" ] || [ "$REF_NAME" != "$TAG_INPUT" ]; then
-            echo "::error::this workflow must be dispatched with the tag itself as its ref (ref_type=$REF_TYPE, ref_name=$REF_NAME, tag input=$TAG_INPUT) -- 'gh workflow run publish.yml --ref $TAG_INPUT -f tag=$TAG_INPUT', not --ref main" >&2
-            exit 1
-          fi
-
       - name: Install Python 3.14
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.14"
 
-      # RFC 141 §3: refuses before crates-io-auth-action ever runs,
-      # in the `publish` job below, unless all four conditions hold --
-      # a CI workflow_dispatch run on this exact commit concluded
-      # success with 0 skipped jobs, a Security audit run on the same
-      # commit concluded success, the tag is annotated and on `main`,
-      # and the six Cargo.toml version fields equal it.
+      # RFC 141 §3 + RFC 143 stage 2 fix round 2b: refuses before
+      # crates-io-auth-action ever runs, in the `publish` job below,
+      # unless all five conditions hold -- a CI workflow_dispatch run on
+      # this exact commit concluded success with 0 skipped jobs, a
+      # Security audit run on the same commit concluded success, the tag
+      # is annotated and on `main`, the six Cargo.toml version fields
+      # equal it, and *this run itself* was dispatched directly against
+      # the tag (not a branch with the tag as a mere string input) --
+      # the condition that makes `github.sha`, used below, provably the
+      # tagged commit rather than a value that merely usually agrees
+      # with it. The tag input and the run's ref type, ref name and
+      # commit all go through `env:`, not templated into the script
+      # text, so a surprising `tag` input is shell data, never shell
+      # syntax.
       - name: Verify Level B and release identity
         id: resolve
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_REF_TYPE: ${{ github.ref_type }}
+          RUN_REF_NAME: ${{ github.ref_name }}
+          RUN_SHA: ${{ github.sha }}
+          TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
           python3.14 scripts/check-publish-preconditions.py \
             --root . \
             --repo "${{ github.repository }}" \
-            --tag "${{ inputs.tag }}" \
-            --token "$GH_TOKEN"
-          # `github.sha` is the tagged commit by construction now (the
-          # guard above refused otherwise) -- not re-resolved via a
+            --tag "$TAG" \
+            --token "$GH_TOKEN" \
+            --run-ref-type "$RUN_REF_TYPE" \
+            --run-ref-name "$RUN_REF_NAME" \
+            --run-sha "$RUN_SHA"
+          # `github.sha` is the tagged commit by construction, proven by
+          # the check above rather than assumed -- not re-resolved via a
           # second `git rev-parse`, so there is exactly one value for
           # "the commit this release is", not two that happen to agree.
-          echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          echo "sha=$RUN_SHA" >> "$GITHUB_OUTPUT"
 
   build-artifacts:
     name: Build, check and attest release artifacts
     needs: verify
     # RFC 143 stage 2 C1: the build happens before any `cargo publish`
     # step, on the exact commit `verify` already vouched for, so a build
-    # failure costs nothing -- nothing has been published yet.
+    # failure costs nothing -- nothing has been published yet. No `ref`
+    # input (fix round 2b): `release-artifacts.yml` takes none, and
+    # checks out `github.sha`, which `verify`'s own guard has already
+    # made the tagged commit for this entire run.
     uses: ./.github/workflows/release-artifacts.yml
-    with:
-      ref: ${{ needs.verify.outputs.sha }}
     permissions:
       contents: read
       id-token: write

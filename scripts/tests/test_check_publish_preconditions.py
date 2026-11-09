@@ -7,7 +7,10 @@ Cargo.toml version fields, the CI run, the Security audit run -- each
 proving the refusal its own bullet exists for. A fifth group of extra
 fixtures pins the CI job-counting rigor specifically (RFC 141 dispatch §2:
 "a job still running has conclusion null, which is not skipped"), since
-that is the one carried mistake this round exists to not repeat.
+that is the one carried mistake this round exists to not repeat. A sixth
+group (`RunIdentity`, RFC 143 stage 2 fix round 2b) covers the condition
+added later: the workflow run itself, not merely a later step's checkout,
+must have been dispatched against the tag.
 
 Tag identity and the Cargo.toml read are tested against a real throwaway
 git repository (this project's own convention for anything whose
@@ -282,6 +285,51 @@ class AuditCheck(unittest.TestCase):
         self.assertEqual(errors, [])
 
 
+class RunIdentity(unittest.TestCase):
+    """RFC 143 stage 2 fix round 2b: the workflow run itself -- its own
+    `github.ref_type`/`github.ref_name`/`github.sha` -- must be the tag
+    being published, not merely whatever a later step happens to check
+    out. A provenance attestation records the run's own triggering
+    ref/commit, so a run dispatched against `main` while naming a
+    different tag as a string input would attest the wrong commit and
+    still verify."""
+
+    def test_a_run_dispatched_against_a_branch_is_refused(self) -> None:
+        errors = cpp.check_run_identity("branch", "main", "deadbeef", "0.89.0", "deadbeef")
+        self.assertTrue(
+            any(
+                "gh workflow run publish.yml --ref 0.89.0 -f tag=0.89.0" in e
+                for e in errors
+            ),
+            f"expected the exact dispatch command in the refusal, got: {errors}",
+        )
+
+    def test_a_run_dispatched_against_a_different_tag_is_refused(self) -> None:
+        errors = cpp.check_run_identity("tag", "0.88.0", "deadbeef", "0.89.0", "deadbeef")
+        self.assertTrue(
+            any("0.88.0" in e and "0.89.0" in e for e in errors),
+            f"expected a tag-name mismatch refusal, got: {errors}",
+        )
+
+    def test_a_run_whose_own_commit_differs_from_the_tags_is_refused(self) -> None:
+        errors = cpp.check_run_identity("tag", "0.89.0", "beefdead", "0.89.0", "deadbeef")
+        self.assertTrue(
+            any("beefdead" in e and "deadbeef" in e for e in errors),
+            f"expected a commit-mismatch refusal, got: {errors}",
+        )
+
+    def test_a_tag_that_never_resolved_does_not_double_refuse(self) -> None:
+        # `resolved_sha=None` means `check_tag_identity` already refused
+        # for its own reason -- the commit comparison is skipped, not
+        # refused a second time for the same underlying absence.
+        errors = cpp.check_run_identity("tag", "0.89.0", "deadbeef", "0.89.0", None)
+        self.assertEqual(errors, [])
+
+    def test_matching_ref_type_name_and_commit_is_accepted(self) -> None:
+        errors = cpp.check_run_identity("tag", "0.89.0", "deadbeef", "0.89.0", "deadbeef")
+        self.assertEqual(errors, [])
+
+
 class MainIntegration(unittest.TestCase):
     """`main`'s own exit-code and exit-1-vs-exit-2 distinction, over a
     real repo, with the two network checks mocked."""
@@ -294,7 +342,16 @@ class MainIntegration(unittest.TestCase):
         self.sha = commit_cargo_toml(self.root)
         git_ok(self.root, "tag", "-a", "1.2.3", "-m", "t")
 
-    def test_all_four_satisfied_exits_zero(self) -> None:
+    # `--run-ref-type tag --run-ref-name 1.2.3 --run-sha <self.sha>`
+    # below matches this fixture's own tag exactly, so every test here
+    # exercises only the condition it names -- the run-identity
+    # condition itself is `RunIdentity`'s to test, in isolation.
+
+    def test_all_five_satisfied_exits_zero(self) -> None:
+        # Confirms the three new arguments are wired through `main()`
+        # itself, not only through `check_run_identity` -- this call
+        # would refuse (exit 1) if they were missing, ignored, or
+        # mismatched, since `main` is required to pass them on.
         with mock.patch.object(
             cpp, "ci_run_for_sha", return_value={"id": 1, "conclusion": "success"}
         ), mock.patch.object(cpp, "jobs_for_run", return_value=[{"conclusion": "success"}]), mock.patch.object(
@@ -307,6 +364,9 @@ class MainIntegration(unittest.TestCase):
                     "--tag", "1.2.3",
                     "--token", "tok",
                     "--main-ref", "main",
+                    "--run-ref-type", "tag",
+                    "--run-ref-name", "1.2.3",
+                    "--run-sha", self.sha,
                 ]
             )
         self.assertEqual(code, 0)
@@ -324,6 +384,9 @@ class MainIntegration(unittest.TestCase):
                     "--tag", "1.2.3",
                     "--token", "tok",
                     "--main-ref", "main",
+                    "--run-ref-type", "tag",
+                    "--run-ref-name", "1.2.3",
+                    "--run-sha", self.sha,
                 ]
             )
         self.assertEqual(code, 1, "a refusal (checked, and it says no) must be exit 1, not exit 2")
@@ -341,6 +404,9 @@ class MainIntegration(unittest.TestCase):
                     "--tag", "1.2.3",
                     "--token", "tok",
                     "--main-ref", "main",
+                    "--run-ref-type", "tag",
+                    "--run-ref-name", "1.2.3",
+                    "--run-sha", self.sha,
                 ]
             )
         self.assertEqual(code, 2, "could not verify must be exit 2, distinct from a refusal")

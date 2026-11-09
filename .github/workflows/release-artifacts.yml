@@ -33,23 +33,21 @@ name: Release artifacts
 # what pinning by digest forecloses).
 
 on:
+  # RFC 143 stage 2 fix round 2b: no `ref` input, on either trigger. A
+  # build-provenance attestation records the *run's own* triggering
+  # ref/commit (`github.sha`), never a `ref:` a step happens to
+  # `actions/checkout` -- so a `ref` input here would only invite the
+  # exact mismatch fix round 2 closed for `publish.yml`: a rehearsal
+  # dispatched against `main` while naming `ref: <something else>`
+  # would build that other commit and attest `main`'s tip, and the
+  # attestation is signed into Rekor's public, append-only log, where a
+  # false one cannot be withdrawn. `github.sha` is always exactly what
+  # this run was dispatched against, by construction, with no second
+  # value to ever disagree with it. A rehearsal of a specific ref is
+  # `gh workflow run release-artifacts.yml --ref <ref>`, which keeps
+  # "what was checked out" and "what gets attested" equal the same way.
   workflow_call:
-    inputs:
-      ref:
-        description: >-
-          Commit SHA to build and check. publish.yml passes the exact
-          commit its own `verify` job already vouched for.
-        required: false
-        type: string
   workflow_dispatch:
-    inputs:
-      ref:
-        description: >-
-          Commit SHA or ref to build and check. Empty = the default
-          branch tip. This workflow never publishes and never creates a
-          Release, dispatched with or without a ref.
-        required: false
-        type: string
 
 permissions:
   contents: read
@@ -65,10 +63,10 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "### This is a rehearsal" >> "$GITHUB_STEP_SUMMARY"
-            echo "Builds, checks and attests ref \`${{ inputs.ref || github.sha }}\`. It publishes nothing and creates no GitHub Release." >> "$GITHUB_STEP_SUMMARY"
+            echo "Builds, checks and attests \`${{ github.sha }}\`. It publishes nothing and creates no GitHub Release." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "### Release build" >> "$GITHUB_STEP_SUMMARY"
-            echo "Builds, checks and attests ref \`${{ inputs.ref || github.sha }}\`, called by publish.yml." >> "$GITHUB_STEP_SUMMARY"
+            echo "Builds, checks and attests \`${{ github.sha }}\`, called by publish.yml." >> "$GITHUB_STEP_SUMMARY"
           fi
 
   build:
@@ -127,9 +125,11 @@ jobs:
     permissions:
       contents: read
     steps:
+      # No `ref:` -- see the `on:` block's own comment above. This
+      # checks out `github.sha`, the commit this run was itself
+      # dispatched against, which is exactly what the attestation
+      # records too.
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          ref: ${{ inputs.ref || github.sha }}
 
       - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
         with:

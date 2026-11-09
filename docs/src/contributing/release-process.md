@@ -42,22 +42,24 @@ the normal path.
 (`0.87.0`, no leading `v`). **Not** a tag push: pushing a tag must not
 by itself be authority to publish, so the two are kept separate.
 
-**Dispatched against the tag itself, not `main`** (fix round 2, RFC 143
-stage 2, 2026-11-09): `gh workflow run publish.yml --ref 0.87.0 -f
-tag=0.87.0`, or, in the GitHub UI, "Use workflow from" set to the tag,
-not the default branch. The workflow refuses immediately otherwise. This
-is what makes the build-provenance attestation (RFC 143 stage 2 part C)
-correct: an attestation records the commit the *run* started on, and a
-run dispatched from `main` while naming a different tag as a string
-input would attest the wrong commit — correct only as long as `main`
-had not moved past the tag since, which is not something to depend on.
+**Dispatched against the tag itself, not `main`**: `gh workflow run
+publish.yml --ref 0.87.0 -f tag=0.87.0`, or, in the GitHub UI, "Use
+workflow from" set to the tag, not the default branch. `verify` refuses
+otherwise (below). This is what makes the build-provenance attestation
+(RFC 143 stage 2 part C) correct: an attestation records the commit
+the *run* started on, and a run dispatched from `main` while naming a
+different tag as a string input would attest the wrong commit —
+correct only as long as `main` had not moved past the tag since, which
+is not something to depend on.
 
 **What runs, in order:**
 
 1. **`verify` — Level B and release identity.**
-   `scripts/check-publish-preconditions.py` checks four independent
+   `scripts/check-publish-preconditions.py` checks five independent
    conditions and reports all of them rather than stopping at the
-   first: the tag is **annotated** and its commit is an ancestor of
+   first: this run was itself dispatched against the tag (its own ref
+   type, ref name and commit all match); the tag is **annotated** and
+   its commit is an ancestor of
    `main`; the six `Cargo.toml` version fields equal the tag; the most
    recent `CI` run of event `workflow_dispatch` **on that exact
    commit** concluded `success` with **0 skipped**; and the most recent

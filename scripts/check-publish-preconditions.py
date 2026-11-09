@@ -12,8 +12,9 @@ action` mints a token, so a failure here stops the job before that
 step ever runs (a nonzero exit from this step fails the job outright;
 no later step executes).
 
-Four things, independent, all checked and reported together rather
-than stopping at the first (RFC 141 §3's own four bullets, in order):
+Five things, independent, all checked and reported together rather
+than stopping at the first (RFC 141 §3's own four bullets, plus one
+added in RFC 143 stage 2 fix round 2b):
 
   1. the tag resolves to a commit in this checkout, is an **annotated**
      tag (not lightweight), and that commit is an ancestor of `main`;
@@ -30,7 +31,16 @@ than stopping at the first (RFC 141 §3's own four bullets, in order):
      regardless of what changed, so a skip on this trigger means
      something is wrong, not that a path filter correctly excluded it;
   4. the most recent `Security audit` workflow run (any trigger) on
-     that same commit concluded `success`.
+     that same commit concluded `success`;
+  5. **this workflow run itself** -- not merely some later step's
+     `actions/checkout` `ref:` -- was dispatched directly against the
+     tag: its own ref type is `tag`, its own ref name equals the tag
+     being published, and its own commit equals the tag's resolved
+     commit. A provenance attestation (RFC 143 stage 2 part C) records
+     the run's own triggering ref/commit, not whatever a later step
+     happens to check out, so a run dispatched against `main` while
+     naming a different tag as a mere string input would attest the
+     wrong commit -- and would still verify, silently.
 
 Checks 1 and 2 are local (git, and a local file); checks 3 and 4 read
 the GitHub REST API via the four `*_for_sha`/`jobs_for_run` functions
@@ -38,8 +48,10 @@ below, each one wrapping exactly one API call so a test can replace it
 with `unittest.mock.patch.object` (the same shape
 `check-published-versions.py`'s own `registry_max_version` already
 uses for the one other network call this project's own checkers make).
+Check 5 is local too (three strings the workflow passes in, compared
+against the tag input and check 1's own resolved commit).
 
-Exit 0 = all four conditions satisfied. Exit 1 = at least one refused
+Exit 0 = all five conditions satisfied. Exit 1 = at least one refused
 the publish (every refusal reported, not only the first). Exit 2 = a
 condition could not be checked at all (network error, malformed API
 response, unreadable file) -- distinct from a refusal, because "could
@@ -217,6 +229,39 @@ def check_tag_identity(root: Path, tag: str, main_ref: str) -> tuple[list[str], 
     return ([], sha)
 
 
+def check_run_identity(
+    run_ref_type: str, run_ref_name: str, run_sha: str, tag: str, resolved_sha: str | None
+) -> list[str]:
+    """Condition 5 (RFC 143 stage 2 fix round 2b). `run_ref_type`,
+    `run_ref_name` and `run_sha` are the *workflow run's own*
+    `github.ref_type`/`github.ref_name`/`github.sha` -- not a second,
+    independent resolution of `tag`, which is exactly the two-values-
+    that-merely-usually-agree shape this check exists to close. The
+    `resolved_sha` comparison is `None`-tolerant (skipped, not refused)
+    because a tag that failed to resolve at all is already refused by
+    `check_tag_identity`; reporting the same absence twice would not
+    add information.
+    """
+    command = f"gh workflow run publish.yml --ref {tag} -f tag={tag}"
+    errors = []
+    if run_ref_type != "tag":
+        errors.append(
+            f"this run was dispatched against a {run_ref_type}, not a "
+            f"tag (ref_name={run_ref_name!r}) -- {command}"
+        )
+    elif run_ref_name != tag:
+        errors.append(
+            f"this run was dispatched against tag {run_ref_name!r}, not "
+            f"the tag being published, {tag!r} -- {command}"
+        )
+    if resolved_sha is not None and run_sha != resolved_sha:
+        errors.append(
+            f"this run's own commit ({run_sha}) does not match tag "
+            f"{tag!r}'s resolved commit ({resolved_sha}) -- {command}"
+        )
+    return errors
+
+
 def check_cargo_versions(root: Path, sha: str, tag: str) -> list[str]:
     # Read via `git show <sha>:Cargo.toml`, not the filesystem -- the
     # working tree currently checked out is not guaranteed to be the
@@ -256,6 +301,13 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--token", required=True)
     parser.add_argument("--main-ref", default="origin/main")
     parser.add_argument("--timeout", type=float, default=30.0)
+    parser.add_argument(
+        "--run-ref-type", required=True, help="the dispatching run's own github.ref_type"
+    )
+    parser.add_argument(
+        "--run-ref-name", required=True, help="the dispatching run's own github.ref_name"
+    )
+    parser.add_argument("--run-sha", required=True, help="the dispatching run's own github.sha")
     args = parser.parse_args(argv)
     root = Path(args.root)
 
@@ -264,6 +316,9 @@ def main(argv: list[str]) -> int:
 
     tag_errors, sha = check_tag_identity(root, args.tag, args.main_ref)
     refusals.extend(tag_errors)
+    refusals.extend(
+        check_run_identity(args.run_ref_type, args.run_ref_name, args.run_sha, args.tag, sha)
+    )
 
     if sha is not None:
         refusals.extend(check_cargo_versions(root, sha, args.tag))
@@ -296,7 +351,7 @@ def main(argv: list[str]) -> int:
             print(f"  - {r}", file=sys.stderr)
         return 1
 
-    print(f"check-publish-preconditions: {args.tag} ({sha}) satisfies all four preconditions")
+    print(f"check-publish-preconditions: {args.tag} ({sha}) satisfies all five preconditions")
     return 0
 
 
