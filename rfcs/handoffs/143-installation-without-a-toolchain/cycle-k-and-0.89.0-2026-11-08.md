@@ -29,6 +29,8 @@
 > [`the-vendored-openssl-is-out-of-support-2026-11-09.md`](the-vendored-openssl-is-out-of-support-2026-11-09.md).
 > **Decided 2026-11-09: A** (`@nabbisen`: *"A"*) — static against upstream OpenSSL
 > 3.5 LTS built from verified source. `0.89.0` stays held until it is built and rehearsed.
+> **Prototyped 2026-11-09 by the architect (x86_64): it works. Stage 5 dispatched** —
+> [`stage5-openssl-from-upstream-source-2026-11-09.md`](stage5-openssl-from-upstream-source-2026-11-09.md).
 
 **Proposed.** 2026-11-08, by the architect, on `@nabbisen`'s *"Scope 0.89."*
 **Schedule source.** `ROADMAP.md`, *The embeddable boundary, and installation*
