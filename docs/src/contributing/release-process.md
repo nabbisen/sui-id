@@ -42,6 +42,16 @@ the normal path.
 (`0.87.0`, no leading `v`). **Not** a tag push: pushing a tag must not
 by itself be authority to publish, so the two are kept separate.
 
+**Dispatched against the tag itself, not `main`** (fix round 2, RFC 143
+stage 2, 2026-11-09): `gh workflow run publish.yml --ref 0.87.0 -f
+tag=0.87.0`, or, in the GitHub UI, "Use workflow from" set to the tag,
+not the default branch. The workflow refuses immediately otherwise. This
+is what makes the build-provenance attestation (RFC 143 stage 2 part C)
+correct: an attestation records the commit the *run* started on, and a
+run dispatched from `main` while naming a different tag as a string
+input would attest the wrong commit — correct only as long as `main`
+had not moved past the tag since, which is not something to depend on.
+
 **What runs, in order:**
 
 1. **`verify` — Level B and release identity.**
@@ -59,10 +69,10 @@ by itself be authority to publish, so the two are kept separate.
    `publish` job runs in the `release` environment, which **has no required
    reviewer**: `@nabbisen`, 2026-11-08: *"Denied. It is for release stability and treated as a future improvement, for the configuration harms productivity now."*
    So `publish` starts as soon as `verify` passes. **The human decision is the
-   dispatch itself**: whoever runs `gh workflow run publish.yml -f tag=…` is
-   approving the release, and should do it only after the step 5 reading
-   below. A required reviewer remains the intended shape (RFC 141 §2),
-   deferred as a future improvement.
+   dispatch itself**: whoever runs `gh workflow run publish.yml --ref
+   <tag> -f tag=<tag>` is approving the release, and should do it only
+   after the step 5 reading below. A required reviewer remains the
+   intended shape (RFC 141 §2), deferred as a future improvement.
 3. **Six publishes**, written as six named steps in the order below,
    each preceded by its own token mint. `cargo publish` waits for the
    crate to reach the index before returning, so no step sleeps.
