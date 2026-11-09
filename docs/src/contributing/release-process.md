@@ -67,21 +67,49 @@ is not something to depend on.
    distinguishes *refused* (exit 1) from *could not be checked*
    (exit 2) — "verified and it says no" and "the network failed" must
    never read the same to whoever is watching the job.
-2. **The `release` environment — no approval pause, by decision.** The
+2. **`build-artifacts` — builds, checks and attests the static release
+   binaries** (RFC 143 stage 2), calling `release-artifacts.yml` as a
+   reusable workflow on the exact commit `verify` vouched for. A build
+   failure here costs nothing: nothing has been published yet.
+3. **The `release` environment — no approval pause, by decision.** The
    `publish` job runs in the `release` environment, which **has no required
    reviewer**: `@nabbisen`, 2026-11-08: *"Denied. It is for release stability and treated as a future improvement, for the configuration harms productivity now."*
-   So `publish` starts as soon as `verify` passes. **The human decision is the
-   dispatch itself**: whoever runs `gh workflow run publish.yml --ref
-   <tag> -f tag=<tag>` is approving the release, and should do it only
-   after the step 5 reading below. A required reviewer remains the
+   So `publish` starts as soon as `verify` and `build-artifacts` pass. **The
+   human decision is the dispatch itself**: whoever runs `gh workflow run
+   publish.yml --ref <tag> -f tag=<tag>` is approving the release, and should
+   do it only after the step 5 reading below. A required reviewer remains the
    intended shape (RFC 141 §2), deferred as a future improvement.
-3. **Six publishes**, written as six named steps in the order below,
+4. **Six publishes**, written as six named steps in the order below,
    each preceded by its own token mint. `cargo publish` waits for the
    crate to reach the index before returning, so no step sleeps.
-4. **A partial-publish report, on failure**, naming exactly which
+5. **A partial-publish report, on failure**, naming exactly which
    crates already reached the registry. That is the state `cargo yank`
    cannot undo and the one a retry must not repeat — retry from the
-   next crate, never from the first.
+   next crate, never from the first. Also says, now, that no GitHub
+   Release was created.
+6. **`github-release` — creates the Release** (RFC 143 stage 3), after
+   `publish` succeeds, in the `release` environment, with `contents:
+   write` and nothing else. Downloads the artifacts `build-artifacts`
+   already attested (re-checking `sha256sum -c SHA256SUMS` before
+   attaching them), **refuses if a Release for the tag already exists**
+   (never overwrites), creates it with `--verify-tag` (so it cannot
+   create the tag itself) and the already-rendered notes, then confirms
+   the Release lists exactly the three expected assets with matching
+   digests. **If this job fails**, all six crates are already
+   published, and its failure report says which of two cases it is.
+   **No Release was created:** re-run only this job (nothing depends
+   on it, and the earlier jobs' artifacts carry over); the report gives
+   the manual `gh release create` command as a fallback. **A Release
+   was created but failed the check after it:** do not re-run, since
+   the job refuses an existing Release. Inspect its assets against
+   `SHA256SUMS`, and if they are wrong, delete the Release (not the
+   tag) before re-running.
+
+**After the run, look at the Release page**: exactly three assets
+(`sui-id-x86_64-unknown-linux-musl`, `sui-id-aarch64-unknown-linux-musl`,
+`SHA256SUMS`) and the version's notes. `github-release` has already
+checked the asset list and each digest, so this confirms that it ran
+and that the notes read as intended. It is not a second check.
 
 **What is still a person's**, and deliberately: the tag itself, the
 judgement that a commit is ready, and the step 0 and step 5 readings of
@@ -97,7 +125,7 @@ repository:
   workflow filename `publish.yml` and the environment `release`.
 - **The `release` GitHub Environment.** It exists, and Trusted Publishing
   names it, so it must not be renamed or removed. **It has no required
-  reviewer**, by the decision quoted in step 2. If one is added later, add it
+  reviewer**, by the decision quoted in step 3. If one is added later, add it
   before a dispatch, never during one: a job that names an environment picks
   up its protection rules when the job starts.
 

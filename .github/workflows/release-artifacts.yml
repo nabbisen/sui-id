@@ -552,7 +552,7 @@ jobs:
           docker network rm sui-id-release-check-net 2>/dev/null || true
 
   provenance:
-    name: SHA256SUMS, attest, upload
+    name: SHA256SUMS, notes, attest, verify, upload
     needs: [build, ldap-smtp-check]
     runs-on: ubuntu-24.04
     permissions:
@@ -561,8 +561,59 @@ jobs:
       # workflow-wide -- attest-build-provenance mints a Sigstore identity
       # token and signs the build's provenance with it.
       id-token: write
+      # RFC 143 stage 3 part B: `gh attestation verify` below reads the
+      # same scope, not a second one. GitHub's own REST API description
+      # for `GET /repos/{owner}/{repo}/attestations/{subject_digest}`
+      # (the endpoint `gh attestation verify --repo` calls --
+      # confirmed by reading cli/cli's own
+      # pkg/cmd/attestation/api/client.go) says: "a fine-grained access
+      # token requires the attestations:read permission." `attestations:
+      # write|read|none` is one setting, not two independent ones
+      # (contracts/gate-inputs.toml's own convention, and every
+      # GITHUB_TOKEN scope GitHub documents), and workflow-syntax's own
+      # wording -- a forked-repo PR's permissions are "adjusted to
+      # change any write permissions to read only" -- only makes sense
+      # if `write` already carries whatever `read` would have granted.
+      # No second permission added; if a rehearsal's own verify step
+      # ever reports 403, that reading was wrong and this comment (and
+      # the one on the permissions line) says exactly what to recheck.
       attestations: write
     steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Install Python 3.14
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14"
+
+      - name: Render the release notes
+        # RFC 143 stage 3 part A/B. The version is the tag name on a real
+        # release, "Unreleased" on a rehearsal (any other ref); `--ref`
+        # pins the rewritten link targets to the same ref either way, so
+        # a rehearsal's own notes point at `main` and a release's point
+        # at the tag.
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ "$REF_TYPE" = "tag" ]; then
+            version="$REF_NAME"
+          else
+            version="Unreleased"
+          fi
+          python3.14 scripts/extract-changelog-section.py \
+            --changelog CHANGELOG.md \
+            --version "$version" \
+            --repo "${{ github.repository }}" \
+            --ref "$REF_NAME" \
+            > release-notes.md
+          {
+            echo "### Release notes (version: $version)"
+            echo
+            cat release-notes.md
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: sui-id-x86_64-unknown-linux-musl
@@ -573,20 +624,42 @@ jobs:
           name: sui-id-aarch64-unknown-linux-musl
           path: release/aarch64-unknown-linux-musl
 
-      - name: Rename and checksum
+      - name: Rename, checksum, and add the release notes to the bundle
         run: |
           set -euo pipefail
           mkdir -p dist
           cp release/x86_64-unknown-linux-musl/sui-id dist/sui-id-x86_64-unknown-linux-musl
           cp release/aarch64-unknown-linux-musl/sui-id dist/sui-id-aarch64-unknown-linux-musl
+          cp release-notes.md dist/release-notes.md
           cd dist
           sha256sum sui-id-x86_64-unknown-linux-musl sui-id-aarch64-unknown-linux-musl > SHA256SUMS
           cat SHA256SUMS
 
       - name: Attest build provenance (per artifact)
+        # `release-notes.md` is deliberately not a subject here: it is
+        # not a build artifact, has no `SHA256SUMS` entry, and stage 3 C1
+        # downloads it alongside the two binaries but attests nothing
+        # about it -- there is nothing about release notes a build
+        # attestation could truthfully claim.
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4 (v4.2.2)
         with:
-          subject-path: "dist/*"
+          subject-path: "dist/sui-id-x86_64-unknown-linux-musl,dist/sui-id-aarch64-unknown-linux-musl,dist/SHA256SUMS"
+
+      - name: Verify, exactly as an operator will
+        # RFC 143 stage 3 part B2. `--source-ref "$GITHUB_REF"` filters
+        # to attestations made by *this* ref's own runs, so a rehearsal
+        # build of `main` can never satisfy a tag's own check (and,
+        # symmetrically, stage 3 C1's pre-attach verification must use
+        # the same filter against the tag).
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum -c SHA256SUMS
+          for f in sui-id-x86_64-unknown-linux-musl sui-id-aarch64-unknown-linux-musl SHA256SUMS; do
+            gh attestation verify "$f" --repo "${{ github.repository }}" --source-ref "$GITHUB_REF"
+          done
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

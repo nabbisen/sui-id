@@ -9,6 +9,14 @@ name: Publish to crates.io
 # workflow that minted tokens without that check would *weaken* RFC
 # 131 D2 by removing the person who was reading it, not strengthen it.
 #
+# Four jobs, in order: `verify` (Level B and release identity, RFC
+# 141 §3), `build-artifacts` (builds, checks and attests the static
+# release binaries, RFC 143 stage 2, calling release-artifacts.yml),
+# `publish` (the six crates.io mints and publishes, RFC 141 §4), and
+# `github-release` (creates the Release from what `build-artifacts`
+# already attested, RFC 143 stage 3). See release-process.md's own
+# "What runs, in order" for what each refuses and how to recover.
+#
 # Triggered by workflow_dispatch, not a tag push: anyone who can push
 # a tag must not thereby be able to publish (RFC 141 §2). The
 # `publish` job runs in the `release` GitHub Environment and does not
@@ -16,7 +24,7 @@ name: Publish to crates.io
 # required reviewer. @nabbisen, 2026-11-08: "Denied. It is for release
 # stability and treated as a future improvement, for the configuration
 # harms productivity now." So the dispatch of this workflow is itself the
-# approval; see release-process.md, step 2. RFC 141 §2's reviewer remains
+# approval; see release-process.md, step 3. RFC 141 §2's reviewer remains
 # the intended shape, deferred.
 #
 # `rust-lang/crates-io-auth-action@v1` cannot be pinned by a bare `v1`
@@ -210,7 +218,7 @@ jobs:
       - name: Report a partial publish, if the job failed
         if: failure()
         run: |
-          echo "::error::Publish did not complete all six crates."
+          echo "::error::Publish did not complete all six crates. No GitHub Release was created -- github-release needs this job to succeed first."
           echo "Crates already on the registry (do not re-run this workflow for them -- retry only from the next one):"
           ok=0
           for pair in "sui-id-shared:${{ steps.publish-shared.outcome }}" \
@@ -229,3 +237,143 @@ jobs:
           if [ "$ok" -eq 0 ]; then
             echo "  (none -- the failure was before the first publish step completed)"
           fi
+
+  github-release:
+    name: Create the GitHub Release
+    needs: [verify, build-artifacts, publish]
+    runs-on: ubuntu-24.04
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      # The exact SHA `release-artifacts.yml` already uploaded under
+      # (RFC 143 stage 3 C1): adds no new action, touches no
+      # `[actions]` row.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: release-artifacts
+          path: dist
+
+      - name: Confirm what is about to be attached is what was attested
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum -c SHA256SUMS
+
+      - name: Refuse if a Release for this tag already exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "::error::a Release for $TAG already exists -- refusing to overwrite it" >&2
+            exit 1
+          fi
+
+      - name: Create the Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          # --verify-tag aborts if the tag does not exist, so this step
+          # can never create one; --notes-file, never --generate-notes,
+          # since the notes are already rendered (RFC 143 stage 3 A/B).
+          gh release create "$TAG" --repo "${{ github.repository }}" --verify-tag \
+            --title "sui-id $TAG" --notes-file dist/release-notes.md \
+            dist/sui-id-x86_64-unknown-linux-musl \
+            dist/sui-id-aarch64-unknown-linux-musl \
+            dist/SHA256SUMS
+
+      - name: Confirm the Release has exactly the three expected assets, each matching SHA256SUMS
+        # RFC 143 stage 3 C4. Measured 2026-11-09: the release-asset API
+        # does carry a digest (GitHub's own REST API description,
+        # `components.schemas.release-asset.digest`: `{"type":
+        # "string", "nullable": true}`, listed as a `required` response
+        # field; `gh release view`'s own source
+        # (pkg/cmd/release/view/view.go) prints it as the "Digest"
+        # column, read from the identical field). Its prefix was not
+        # independently confirmed against a real release by this
+        # round -- `${digest#sha256:}` strips one if present and is a
+        # no-op otherwise, so the comparison is correct either way.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          names=$(gh release view "$TAG" --repo "${{ github.repository }}" --json assets --jq '[.assets[].name] | sort | join(",")')
+          expected="SHA256SUMS,sui-id-aarch64-unknown-linux-musl,sui-id-x86_64-unknown-linux-musl"
+          if [ "$names" != "$expected" ]; then
+            echo "::error::Release $TAG has unexpected assets: $names (expected: $expected)" >&2
+            exit 1
+          fi
+          gh release view "$TAG" --repo "${{ github.repository }}" --json assets \
+            --jq '.assets[] | "\(.name) \(.digest)"' > asset-digests.txt
+          cat asset-digests.txt
+          # SHA256SUMS is itself an asset and cannot list itself, so it is
+          # checked against its own hash; every other asset against its
+          # line in it. (Before this, the SHA256SUMS row found no line,
+          # and the step failed on every release -- after the Release was
+          # created.) The Release API gives `sha256:<hex>`, measured
+          # 2026-11-09 on cli/cli v2.103.3's assets.
+          while read -r name digest; do
+            if [ "$name" = "SHA256SUMS" ]; then
+              want=$(sha256sum dist/SHA256SUMS | cut -d' ' -f1)
+            else
+              want=$(awk -v n="$name" '$2 == n { print $1 }' dist/SHA256SUMS)
+            fi
+            if [ -z "$want" ]; then
+              echo "::error::asset $name is not listed in SHA256SUMS" >&2
+              exit 1
+            fi
+            if [ -z "$digest" ] || [ "$digest" = "null" ]; then
+              echo "::error::the Release API returned no digest for asset $name" >&2
+              exit 1
+            fi
+            got="${digest#sha256:}"
+            if [ "$got" != "$want" ]; then
+              echo "::error::asset $name digest mismatch: Release API says $got, SHA256SUMS says $want" >&2
+              exit 1
+            fi
+          done < asset-digests.txt
+
+      - name: Report a failure, if this job did not complete
+        # RFC 143 stage 3 (stage 3's own failure-reporting requirement).
+        # By the time this job runs, all six crates are already
+        # published (its own `needs:` requires `publish` to have
+        # succeeded) -- a failure here means the Release is missing, or
+        # exists but failed the check after creation; never the crates.
+        #
+        # The recommended recovery, re-running only this job, rests on
+        # two claims from GitHub's own docs
+        # (docs/actions/how-tos/manage-workflow-runs/re-run-workflows-
+        # and-jobs.md, fetched 2026-11-09): "When you re-run failed jobs
+        # or a specific job, GitHub also re-runs the jobs that depend on
+        # them" -- this job has none, so only it re-runs -- and "Jobs
+        # that aren't included keep their outputs from the previous
+        # attempt, which the newly run jobs can use" -- so
+        # `build-artifacts`'s uploaded `release-artifacts` artifact,
+        # from the attempt that is not re-run, is still there for this
+        # job's own `download-artifact` step to find. Neither claim was
+        # proven against a real re-run by this round; the manual command
+        # is given regardless, since it costs nothing extra and does not
+        # depend on either claim holding.
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          # A failure after `gh release create` leaves a Release that
+          # exists but did not pass the check above, so ask rather than
+          # assume which case this is.
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            echo "::error::All six crates are published. A GitHub Release for $TAG WAS created, but the check after creating it failed (see the step above). Do not re-run this job: it refuses because the Release exists. Inspect the Release's assets against SHA256SUMS; if they are wrong, delete the Release and its assets (not the tag), then re-run this job." >&2
+            exit 0
+          fi
+          echo "::error::All six crates are published. The GitHub Release was not created." >&2
+          echo "Recovery: re-run only this job (\"Re-run failed jobs\", or re-run this specific job) -- GitHub's own docs say a re-run of a job with nothing depending on it re-runs only that job, and reuses the other jobs' outputs from this attempt, including the artifact this job downloads." >&2
+          echo "If that does not work, create the Release by hand:" >&2
+          echo "  gh release create $TAG --repo $REPO --verify-tag --title \"sui-id $TAG\" --notes-file release-notes.md sui-id-x86_64-unknown-linux-musl sui-id-aarch64-unknown-linux-musl SHA256SUMS" >&2
+          echo "(after downloading the release-artifacts workflow artifact from this run, with gh run download)." >&2
