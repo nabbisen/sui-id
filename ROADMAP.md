@@ -1048,7 +1048,12 @@ writes a short note: candidate code paths, measured by `file:line`, where
 security depends on one property holding for every input; the property each
 would prove; and what it costs to keep a verified copy in step with the real
 code. Verus checks its own dialect on its own pinned toolchain, not the crates
-as they stand. **The note is design work and changes nothing above.** Whether
+as they stand. **It starts from the smallest target**: `@nabbisen`,
+2026-11-10: *"Too wide range will cost insanely. It should start from minimal
+and be optimized every time."* So the note proposes one first target, with
+what its proof covers and does not, and what each later change to that code
+would cost. Any widening is judged one target at a time, after the first has
+paid for itself. **The note is design work and changes nothing above.** Whether
 any of it becomes an RFC, and whether that RFC is a freeze exception, is
 decided on the note.
 
