@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.89.0] — 2026-11-10
+
+**sui-id can now be downloaded as a verified static binary, with no
+toolchain needed.** A host with no CA certificates now starts, with a
+warning, instead of crashing; and the bundled SQLite moves to 3.54.1,
+closing a security advisory.
+
 ### Added
 
 - **Downloadable static binaries, for x86_64 and aarch64 Linux, on every

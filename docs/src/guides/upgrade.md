@@ -56,6 +56,24 @@ before upgrading across more than one or two of them.
 
 ## Version-specific notes
 
+### v0.89.x
+
+**Upgrading from `0.88.x` runs no migration, so no pre-migration snapshot
+is taken.** Don't look for one.
+
+**A new way to install: the static binary.** Verify it **before** running
+it — the checksum and the build-provenance attestation — exactly as the
+[Quick Start's own download
+section](../getting-started/quick-start.md#download-the-binary-no-toolchain-needed)
+does; that is not repeated here.
+
+**A host with no CA bundle (e.g. `ca-certificates`) now starts, with one
+warning, instead of crashing.** The warning means HIBP breach-checks, SMTP,
+LDAPS and federation sign-in cannot verify TLS until that bundle is
+installed — see the [Quick Start's runtime
+requirement](../getting-started/quick-start.md#download-the-binary-no-toolchain-needed)
+for what to install.
+
 ### v0.88.x
 
 **Upgrading to `0.88.0` from a release with pending migrations takes the
