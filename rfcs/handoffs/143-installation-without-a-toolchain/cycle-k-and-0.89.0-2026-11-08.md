@@ -35,6 +35,8 @@
 > advisory, RUSTSEC-2026-0459 (bundled SQLite), turned `Security audit` red**, so it
 > goes into this release. **Stage 6 dispatched** —
 > [`stage6-rusqlite-0.41-for-rustsec-2026-0459-2026-11-10.md`](stage6-rusqlite-0.41-for-rustsec-2026-0459-2026-11-10.md).
+> **Stage 5 complete 2026-11-10**: rehearsal `42797155526` on `2d27957`, both
+> architectures embedding exactly OpenSSL 3.5.9 and passing the signature probe.
 
 **Proposed.** 2026-11-08, by the architect, on `@nabbisen`'s *"Scope 0.89."*
 **Schedule source.** `ROADMAP.md`, *The embeddable boundary, and installation*
