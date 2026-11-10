@@ -1,7 +1,15 @@
 # Cycle L and `0.90.0` — federation administration (RFC 096-B2)
 
-> ## Whose turn it is: **yours**, for four decisions (§5).
-> Nothing is dispatched until you answer.
+> ## Authorized 2026-11-11. `@nabbisen`: *"All your recommendations and directions are accepted."*
+> 1. **Scope**: `0.90.0` = RFC 096-B2, with RFC 100's acceptance as a design track.
+> 2. **Upgrade**: RFC 096's design stands. Providers are disabled on upgrade until
+>    re-enabled, with the four protections in §4 as acceptance criteria.
+> 3. **RFC 100's reviewer**: §5 item 3 carried no recommendation, so it is
+>    **still open**. It comes back to you when the refreshed RFC is ready.
+> 4. **ROADMAP relabel**: done. L is 096-B2, and the store-boundary and
+>    embeddable rows are unscheduled.
+>
+> ## Whose turn it is now: **the architect's**, for stage 0, the 096-B2 stage plan.
 
 **Proposed.** 2026-11-11, by the architect, after `0.89.0` (cycle K) was published.
 **Why now.** Scheduling is the architect's to propose and yours to authorize.
