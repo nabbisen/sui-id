@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.89.0] — 2026-11-10
+## [0.89.0] — 2026-11-11
 
 **sui-id can now be downloaded as a verified static binary, with no
 toolchain needed.** A host with no CA certificates now starts, with a
