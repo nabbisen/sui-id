@@ -43,6 +43,9 @@
 > The tag waits on one open question: the `aarch64` sentence (stage 2 result §3).
 > **Decided 2026-11-10** (`@nabbisen`: 1. *"Agreed."* 2. *"Authorized."*): `aarch64` ships
 > as it is, said plainly, and the tag and publish of `0.89.0` are authorized.
+> **Released and published 2026-11-11**: tag `0.89.0` at `9ff8ddb`, publish run
+> `42921837076`, six crates and the first GitHub Release. **RFC 143's closure is proposed** —
+> [`closure-assessment-2026-11-11.md`](closure-assessment-2026-11-11.md).
 
 **Proposed.** 2026-11-08, by the architect, on `@nabbisen`'s *"Scope 0.89."*
 **Schedule source.** `ROADMAP.md`, *The embeddable boundary, and installation*
