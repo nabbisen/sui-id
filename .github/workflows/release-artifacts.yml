@@ -200,8 +200,26 @@ jobs:
           # /opt`; the arm64 image is built separately, and nothing here
           # should depend on that detail.)
           prefix="$RUNNER_TEMP/openssl"
+          # The flags are the withdrawn `vendored` build's own defaults
+          # (openssl-src, src/lib.rs, main branch), so the static OpenSSL
+          # carries no more than it did:
+          # - no-shared, no-module: static libraries only, and no provider
+          #   built as a loadable module. Without no-module, aarch64's
+          #   providers/legacy.so fails to link (`undefined reference to
+          #   __getauxval`, from libgcc's lse-init.o under musl). Rehearsal
+          #   42793365084.
+          # - no-legacy, no-ssl3, no-md2, no-rc5, no-weak-ssl-ciphers,
+          #   no-camellia, no-idea, no-seed, no-comp, no-zlib,
+          #   no-zlib-dynamic: algorithms and features passkey verification
+          #   never uses (it needs ES256, RS256 and EdDSA), left out
+          #   rather than shipped.
+          # - no-engine, no-async, -DOPENSSL_NO_SECURE_MEMORY: musl, as
+          #   explained above.
           CC=musl-gcc ./Configure ${{ matrix.openssl_configure_target }} \
-            no-shared no-tests no-engine no-async -DOPENSSL_NO_SECURE_MEMORY \
+            no-shared no-module no-tests \
+            no-legacy no-ssl3 no-md2 no-rc5 no-weak-ssl-ciphers \
+            no-camellia no-idea no-seed no-comp no-zlib no-zlib-dynamic \
+            no-engine no-async -DOPENSSL_NO_SECURE_MEMORY \
             --prefix="$prefix" --libdir=lib --openssldir=/etc/ssl
           make -j"$(nproc)"
           make install_sw
