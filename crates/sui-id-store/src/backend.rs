@@ -104,7 +104,10 @@ impl SqliteBackend {
     #[cfg(test)]
     pub(crate) fn fail_next_commit_for_test(&self) {
         #[allow(clippy::expect_used)]
-        let guard = self.conn.lock().expect("database mutex poisoned");
+        // rusqlite 0.41 made `Connection::commit_hook` take `&mut self`
+        // (RUSTSEC-2026-0459's bump; release notes #1899, a use-after-free
+        // fix in the hooks path) -- this guard must be mutable now.
+        let mut guard = self.conn.lock().expect("database mutex poisoned");
         let fired = Arc::new(std::sync::atomic::AtomicBool::new(false));
         #[allow(clippy::expect_used)]
         guard

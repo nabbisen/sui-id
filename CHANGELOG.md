@@ -35,6 +35,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   HIBP already fails open), SMTP, LDAPS and federation sign-in. Each of
   those features fails on its own, when actually used, instead.
 
+### Security
+
+- **`rusqlite` 0.40.2 → 0.41.1 in `Cargo.toml`/`Cargo.lock`, bundling
+  SQLite 3.54.1 (from 3.53.2), closing RUSTSEC-2026-0459** —
+  CVE-2026-119375, CVSS 4.0 medium: SQLite before 3.54.0 can return
+  uninitialised page-cache memory when a database file is opened
+  together with a sibling `-wal` file whose page size differs from the
+  main file's. It needs a crafted *pair* of files, and the victim must
+  open them both.
+
+  **Exposure: not meaningfully reachable.** sui-id opens two kinds of
+  database file. One is its own live database. Planting a crafted `-wal`
+  beside it needs write access to the data directory, and anyone with
+  that could already replace the database and the master key. Taking a
+  backup or the pre-migration snapshot only reads that live database.
+  The other is the database inside a backup archive, which `verify` and
+  `restore` stage **alone** into a fresh temporary directory. An archive
+  has no place for a `-wal` file, so a crafted archive cannot supply the
+  pair.
+
+  **Every build carries the fix**: `cargo install sui-id`, a build from
+  source, and the downloadable static binaries all bundle SQLite through
+  the same `rusqlite`.
+
 ## [0.88.0] — 2026-11-08
 
 **Upgrading is now previewable and backed up automatically — the reason

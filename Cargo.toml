@@ -60,7 +60,7 @@ regex                       = "1"
 walkdir                     = "2"
 
 # Storage
-rusqlite                    = { version = "0.40", features = ["bundled", "chrono"] }
+rusqlite                    = { version = "0.41", features = ["bundled", "chrono"] }
 # RFC 142 stage 5 §5: `statvfs`, for the pre-migration backup's free-space
 # check. The workspace forbids `unsafe`, so `libc::statvfs` is out; `rustix`
 # wraps it safely. Already locked at 1.1.5 as a transitive dependency (of
