@@ -97,22 +97,21 @@ webauthn-rs                 = { workspace = true }
 tempfile                    = { workspace = true }
 sha2                        = { workspace = true }
 
-# RFC 143 stage 2 part B: a static musl build has no system OpenSSL to
-# link against (`webauthn-attestation-ca` -> `openssl` is the one
-# transitive pull-in; see `cargo tree -i openssl-sys`). `vendored` makes
-# openssl-sys compile OpenSSL's own C source and link it statically
-# instead. Scoped to the musl target only (`cfg(target_env = "musl")`)
-# so the ordinary glibc dev/CI build keeps using the system OpenSSL it
-# already has, unchanged (confirmed: `ldd` on the glibc build still
-# shows `libssl.so.3`/`libcrypto.so.3`, below). Cycle K stage 1 measured
-# that OpenSSL is reachable -- every passkey verification goes through
-# it (`webauthn-rs-core`'s `COSEKey::verify_signature`) -- so this is
-# vendoring a dependency the binary actually uses, not merely satisfying
-# an unreachable one's build requirements.
-[target.'cfg(target_env = "musl")'.dependencies]
-openssl = { version = "0.10", features = ["vendored"] }
-
 [dev-dependencies]
+# RFC 143 stage 5 part B: `examples/openssl_probe.rs` exercises the
+# three signature algorithms passkey verification uses (ES256, RS256,
+# EdDSA) through whatever OpenSSL the release workflow's static build
+# links -- the one thing in the shipped artifact no other test reaches
+# (part F). `openssl` is already in the tree, at the same version, via
+# `webauthn-rs-core`'s own transitive pull-in (`cargo tree -i
+# openssl-sys`); this adds nothing to the supply chain. The static
+# musl build itself takes OpenSSL from upstream source, not from this
+# crate's `vendored` feature (withdrawn 2026-11-09: `openssl-src`
+# stopped following OpenSSL's own patch releases -- see
+# `contracts/openssl.toml` and `.github/workflows/release-
+# artifacts.yml`'s build job) -- this dependency is dev-only and never
+# links into the shipped binary itself.
+openssl                      = { version = "0.10" }
 # RFC 142 stage 5: `test-support` exposes `migrations::run_up_to` as `pub`
 # (otherwise `pub(crate)`/`#[cfg(test)]`, unreachable from here) so this
 # crate's own `tests/e2e/*.rs` can build a database at a known intermediate

@@ -306,16 +306,47 @@ Before tagging, in addition to Level B on the commit being tagged:
    lockfile carries the union of optional dependencies, so `cargo audit` can
    report a crate the feature resolver never builds.
 
-**The `openssl-src freshness` job, in the same `Security audit` workflow,
-is read the same way** (RFC 143 stage 2 part D). `cargo audit` cannot see
-an OpenSSL vulnerability in the static build's vendored copy — RustSec
-stopped filing advisories against `openssl-src` in 2023 — so this job
-checks `Cargo.lock`'s `openssl-src` version against crates.io's own
-newest published patch for that OpenSSL series directly. A failure here
-is a security-maintenance release, the same category the freeze already
-admits: **when OpenSSL ships a security patch release, sui-id cuts one
-too**, bumping the vendored copy and nothing else, unless something else
-is also due.
+**The `openssl freshness` job, in the same `Security audit` workflow,
+is read the same way** (RFC 143 stage 5 part D). `cargo audit` cannot
+see an OpenSSL vulnerability in the static build's OpenSSL at all — the
+static build takes OpenSSL's own source directly now, not a crate
+`cargo audit` has a dependency graph for — so this job reads OpenSSL
+itself: its own tags, for whether `contracts/openssl.toml`'s pinned
+patch is still the newest in its series, and its own published
+Series/End-of-Life list, for whether that series is still supported at
+all. It is deliberately **not** a check against `openssl-src` or any
+other crate's version numbers — that was the first form of this check
+(RFC 143 stage 2 part D), and it failed exactly because the crate it
+compared against had itself stopped following OpenSSL's patch
+releases: the check compared a stale value with an equally stale one
+and reported "current" (recorded in full in
+[`the-vendored-openssl-is-out-of-support-2026-11-09.md`](https://github.com/nabbisen/sui-id/blob/main/rfcs/handoffs/143-installation-without-a-toolchain/the-vendored-openssl-is-out-of-support-2026-11-09.md)).
+A failure here is a security-maintenance release, the same category
+the freeze already admits: **when OpenSSL ships a security patch
+release, sui-id cuts one too** — bump `contracts/openssl.toml`'s
+`openssl_version` and `sha256` by the pinning procedure below, and
+nothing else, unless something else is also due.
+
+**The pinning procedure** (RFC 143 stage 5 part A). `contracts/
+openssl.toml` is the one place this is written:
+
+1. Find the new release at <https://openssl-library.org/source/> and
+   download its `.tar.gz`, `.tar.gz.asc` (PGP signature) and
+   `.tar.gz.sha256`.
+2. **Verify the PGP signature once**, against OpenSSL's own published
+   signing key (the same page names its current fingerprint and links
+   `pubkeys.asc`): `gpg --import pubkeys.asc`, confirm the imported
+   key's fingerprint matches the one the page states — by eye, since
+   that published fingerprint is the trust anchor, not the key
+   server — then `gpg --verify openssl-X.Y.Z.tar.gz.asc
+   openssl-X.Y.Z.tar.gz` and confirm `Good signature` against that
+   exact fingerprint.
+3. Confirm the downloaded `.sha256` file's hash matches what you
+   computed yourself (`sha256sum openssl-X.Y.Z.tar.gz`) — belt and
+   braces over a single source.
+4. Update `series`, `openssl_version` and `sha256` in `contracts/
+   openssl.toml` together, in one commit. `url_template` changes only
+   if OpenSSL's own release-asset naming does.
 
 ## Yanking
 

@@ -27,6 +27,7 @@ one that still names `ci/<file>` is a violation that says where the file moved.
 | `doc-authority.toml` | policy | G15 | RFC 098 |
 | `inline-test-exemptions.toml` | policy | G21 | RFC 137 |
 | `gate-inputs.toml` | registry, generator input | `scripts/ci-gate.sh`, `scripts/check-gate-inputs.sh`, `scripts/generate-ci-workflow.py` | RFC 093, RFC 094, RFC 116 |
+| `openssl.toml` | registry | `.github/workflows/release-artifacts.yml`, `scripts/check-openssl-freshness.py` | RFC 143 |
 | `owner-attribution-baseline.txt` | baseline | G16 | RFC 117 |
 | `owner-attributions.toml` | policy | G16 | RFC 117 |
 | `rfc-policy.toml` | policy | G11 | RFC 093, RFC 110 |

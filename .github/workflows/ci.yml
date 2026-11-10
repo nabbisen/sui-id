@@ -927,12 +927,12 @@ jobs:
           echo "exit_status=$status"
           echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           exit "$status"
-      - name: check-openssl-src-freshness.py self-tests (RFC 143 stage 2 part D)
+      - name: check-openssl-freshness.py self-tests (RFC 143 stage 5 part D)
         run: |
           set +e
-          echo "command=python3.14 -m unittest scripts.tests.test_check_openssl_src_freshness"
+          echo "command=python3.14 -m unittest scripts.tests.test_check_openssl_freshness"
           echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          python3.14 -m unittest scripts.tests.test_check_openssl_src_freshness
+          python3.14 -m unittest scripts.tests.test_check_openssl_freshness
           status=$?
           echo "exit_status=$status"
           echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"

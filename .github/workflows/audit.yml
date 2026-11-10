@@ -40,11 +40,13 @@ on:
       - "**/Cargo.toml"
       - "**/Cargo.lock"
       - ".github/workflows/audit.yml"
+      - "contracts/openssl.toml"
   pull_request:
     paths:
       - "**/Cargo.toml"
       - "**/Cargo.lock"
       - ".github/workflows/audit.yml"
+      - "contracts/openssl.toml"
   schedule:
     # Wednesdays at 06:13 UTC. Off-business-hours, off-the-hour to
     # avoid a thundering herd of GitHub-scheduled jobs.
@@ -52,16 +54,18 @@ on:
   workflow_dispatch:
 
 jobs:
-  openssl-src-freshness:
-    # RFC 143 stage 2 part D: RustSec has filed no advisory against
-    # `openssl-src` (the crate the static build's vendored OpenSSL
-    # comes from) since 2023-02-07, so `cargo audit` above would never
-    # catch a new OpenSSL vulnerability there. This reads crates.io
-    # directly for the newest published patch in the locked OpenSSL
-    # series and fails if `Cargo.lock` is behind it -- the thing
-    # RustSec stopped telling us. See scripts/check-openssl-src-
-    # freshness.py's own module doc for the version-scheme reasoning.
-    name: openssl-src freshness
+  openssl-freshness:
+    # RFC 143 stage 5 part D: the static build takes OpenSSL's source
+    # directly now (stage 5 part C removed the `openssl-src` crate), so
+    # this reads OpenSSL itself -- its own tags, for whether
+    # `contracts/openssl.toml`'s pinned patch is current, and its own
+    # Series/End-of-Life table, for whether the pinned series is still
+    # supported at all. The predecessor of this job compared the
+    # vendoring crate's version against its own newest release and
+    # passed once that crate stopped following OpenSSL's patches --
+    # "it checked the supplier against itself". See
+    # scripts/check-openssl-freshness.py's own module doc.
+    name: openssl freshness
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -71,8 +75,8 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.14"
-      - name: check-openssl-src-freshness.py
-        run: python3.14 scripts/check-openssl-src-freshness.py --root .
+      - name: check-openssl-freshness.py
+        run: python3.14 scripts/check-openssl-freshness.py --contract contracts/openssl.toml
 
   audit:
     name: cargo audit

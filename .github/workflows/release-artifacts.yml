@@ -87,6 +87,9 @@ jobs:
             runner: ubuntu-24.04
             cc_env: CC_x86_64_unknown_linux_musl
             linker_env: CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER
+            # openssl-src's own target-to-Configure-name mapping
+            # (src/lib.rs), read 2026-11-09 rather than guessed.
+            openssl_configure_target: linux-x86_64
             # library/debian:stable-slim, amd64 manifest digest, resolved
             # 2026-11-08.
             debian_digest: "sha256:cd9f2189b62dc5ce003b22ad8cb109bbc3cef8ddcc8bc13771472a6edeb16980"
@@ -102,6 +105,7 @@ jobs:
             runner: ubuntu-24.04-arm
             cc_env: CC_aarch64_unknown_linux_musl
             linker_env: CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER
+            openssl_configure_target: linux-aarch64
             # library/debian:stable-slim, arm64/v8 manifest digest,
             # resolved 2026-11-08.
             debian_digest: "sha256:04bba436c86dbce81eac09593099a9b468c49c3ed4835820ba71bb27b135fedb"
@@ -138,11 +142,75 @@ jobs:
 
       - name: Install musl build packages
         # RFC 143 stage 1: the runner's `perl` is full already (unlike the
-        # `rust:1.95-slim` container stage 1 built in), but `musl-tools` and
-        # `make` are not installed by default.
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq musl-tools make
+        # `rust:1.95-slim` container stage 1 built in), but `musl-tools`
+        # and `make` are not installed by default. `binutils` (RFC 143
+        # stage 5, measured 2026-11-09 on a bare `ubuntu:24.04` --
+        # `musl-tools` alone pulls in `binutils-x86_64-linux-gnu`, which
+        # provides `x86_64-linux-gnu-as`, but not the bare `as` symlink
+        # gcc's own search path looks for; "cannot execute 'as'" without
+        # it) and `gcc` (same measurement: the host-target build scripts
+        # proc-macro crates compile need a *host* `cc`, which `musl-
+        # tools` does not provide either) are both already present on
+        # GitHub's own hosted runner image (confirmed from `actions/
+        # runner-images`' own Ubuntu2404-Readme.md), so this is
+        # self-sufficiency, not a gap this round actually hit in CI.
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq musl-tools binutils gcc make perl file
 
-      - name: Build (static, vendored OpenSSL -- part B's Cargo.toml table)
+      - name: Download and verify OpenSSL source
+        # RFC 143 stage 5 part A/B1: `contracts/openssl.toml` is the one
+        # place this version and hash are written; a bump there is the
+        # entire pinning procedure. Parsed with grep/sed, not a TOML
+        # library: every value is a single-line `key = "value"`, and
+        # this job has no Python step to spend on a parser for that.
+        run: |
+          set -euo pipefail
+          series=$(grep -E '^series' contracts/openssl.toml | sed -E 's/^series = "([^"]+)"/\1/')
+          version=$(grep -E '^openssl_version' contracts/openssl.toml | sed -E 's/^openssl_version = "([^"]+)"/\1/')
+          sha256=$(grep -E '^sha256' contracts/openssl.toml | sed -E 's/^sha256 = "([^"]+)"/\1/')
+          url_template=$(grep -E '^url_template' contracts/openssl.toml | sed -E 's/^url_template = "([^"]+)"/\1/')
+          url=${url_template//\{version\}/$version}
+          echo "OPENSSL_SERIES=$series" >> "$GITHUB_ENV"
+          echo "OPENSSL_VERSION=$version" >> "$GITHUB_ENV"
+          mkdir -p openssl-src
+          curl -fLsS -o openssl-src/openssl.tar.gz "$url"
+          echo "$sha256  openssl-src/openssl.tar.gz" | sha256sum -c -
+
+      - name: Build a static OpenSSL for this target
+        # RFC 143 stage 5 part B2. `no-engine`/`no-async`/
+        # `-DOPENSSL_NO_SECURE_MEMORY` are not this round's own
+        # invention: they are `openssl-src`'s (the now-removed crate's)
+        # own musl-specific flags (src/lib.rs), carried over because it
+        # had already solved the exact problem a bare musl-gcc hits
+        # here -- no kernel headers on its include path for the
+        # `linux/version.h` the engine module wants, or the
+        # `linux/mman.h` the secure-memory code wants
+        # (openssl/openssl#7207). Measured 2026-11-09, on this runner's
+        # own base image: both headers are genuinely absent
+        # (`musl-gcc -E -x c -` on each reports "No such file or
+        # directory"), and `./Configure` + `make` succeed with these
+        # three flags and no kernel-headers package installed at all.
+        run: |
+          set -euo pipefail
+          cd openssl-src
+          tar xzf openssl.tar.gz
+          cd "openssl-$OPENSSL_VERSION"
+          # Installed under RUNNER_TEMP, not /opt: the build then needs no
+          # write access outside the job's own temporary space, on either
+          # runner image. (ubuntu-24.04's image happens to `chmod -R 777
+          # /opt`; the arm64 image is built separately, and nothing here
+          # should depend on that detail.)
+          prefix="$RUNNER_TEMP/openssl"
+          CC=musl-gcc ./Configure ${{ matrix.openssl_configure_target }} \
+            no-shared no-tests no-engine no-async -DOPENSSL_NO_SECURE_MEMORY \
+            --prefix="$prefix" --libdir=lib --openssldir=/etc/ssl
+          make -j"$(nproc)"
+          make install_sw
+          "$prefix/bin/openssl" version
+          echo "OPENSSL_DIR=$prefix" >> "$GITHUB_ENV"
+          echo "OPENSSL_STATIC=1" >> "$GITHUB_ENV"
+
+      - name: Build (static, OpenSSL ${{ matrix.target }})
+        # OPENSSL_DIR and OPENSSL_STATIC come from the step above.
         run: |
           set -euo pipefail
           export "${{ matrix.cc_env }}=musl-gcc"
@@ -154,6 +222,41 @@ jobs:
           # names the workflow and the commit, not the toolchain.
           rustc -Vv | tee -a "$GITHUB_STEP_SUMMARY"
           cargo build --release --locked -p sui-id --features ldap --target ${{ matrix.target }}
+
+      - name: Assert the binary embeds exactly the pinned OpenSSL version
+        # RFC 143 stage 5 part B4. `OpenSSL ` with a trailing space
+        # distinguishes the real version banner from any other string
+        # that happens to start with "OpenSSL" (there is none today,
+        # but the trailing space is the actual anchor, not a guess).
+        run: |
+          set -euo pipefail
+          bin="target/${{ matrix.target }}/release/sui-id"
+          found=$(strings "$bin" | grep -E '^OpenSSL [0-9]+\.[0-9]+\.[0-9]+ ' | sort -u)
+          echo "embedded OpenSSL version string(s): $found" | tee -a "$GITHUB_STEP_SUMMARY"
+          n=$(printf '%s\n' "$found" | grep -c .)
+          if [ "$n" -ne 1 ] || ! printf '%s' "$found" | grep -q "^OpenSSL $OPENSSL_VERSION "; then
+            echo "::error::expected exactly one 'OpenSSL $OPENSSL_VERSION ' string, found: $found" >&2
+            exit 1
+          fi
+
+      - name: Build and run the OpenSSL probe (part F's real-crypto check)
+        # RFC 143 stage 5 part B5/F. No test in the repository signs a
+        # real passkey assertion, so without this, the shipped binary's
+        # OpenSSL signature-verification path (ES256/RS256/EdDSA, what
+        # `COSEKey::verify_signature` actually calls) is exercised
+        # nowhere. The probe's own `assert!`s fail the process -- and
+        # this step -- on a wrong result.
+        run: |
+          set -euo pipefail
+          export "${{ matrix.cc_env }}=musl-gcc"
+          export "${{ matrix.linker_env }}=musl-gcc"
+          cargo build --release --locked -p sui-id --example openssl_probe --target ${{ matrix.target }}
+          probe="target/${{ matrix.target }}/release/examples/openssl_probe"
+          file "$probe"
+          # The probe is a normal dynamically-runnable artifact for its
+          # own architecture, which is this runner's own on both matrix
+          # legs (x86_64 or native aarch64) -- no emulation needed.
+          "$probe" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Prove the binary is static (file, ldd) and report PIE
         run: |

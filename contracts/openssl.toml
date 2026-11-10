@@ -1,0 +1,47 @@
+# RFC 143 stage 5: the one pinned input for the static release build's
+# OpenSSL. Read by `.github/workflows/release-artifacts.yml` (which
+# downloads the tarball at this URL and refuses to build unless its
+# SHA-256 matches `sha256` below) and by `scripts/check-openssl-
+# freshness.py` (which fails the `Security audit` lane when upstream has
+# shipped a newer patch in `series`, or when `series` has left OpenSSL's
+# own supported list).
+#
+# Bumping this file is the entire pinning procedure (RFC 143 stage 5
+# part A, written out in full in docs/src/contributing/release-
+# process.md): download the new tarball and its `.asc` signature from
+# https://openssl-library.org/source/, verify the signature once against
+# OpenSSL's published signing key, take the `.sha256` alongside it (or
+# compute it yourself and confirm it matches), and update `series`,
+# `version`, `sha256` and `url_template`'s version placeholder together,
+# in one commit.
+#
+# A static OpenSSL vendored *by crate* (the `openssl-src` crate) was
+# tried first and withdrawn 2026-11-09: `openssl-src` stopped following
+# OpenSSL's own patch releases, so the project's own freshness check was
+# comparing a stale crate version against itself and passing. Taking the
+# source directly from OpenSSL removes that intermediary -- an OpenSSL
+# security release now means a sui-id release with nothing else able to
+# lag behind it.
+
+version = 1
+
+# The OpenSSL minor series this release is pinned to (`major.minor`,
+# matching openssl-library.org/source/'s own "Series" column, which
+# this project reads with any trailing "[LTS]" marker stripped).
+series = "3.5"
+
+# The exact OpenSSL patch version currently pinned. Must be in `series`.
+# Named `openssl_version`, not `version`: this file's own schema version
+# is the top-level `version` key above, the same convention every other
+# file in `contracts/` uses.
+openssl_version = "3.5.9"
+
+# SHA-256 of the tarball at the URL below, confirmed against both the
+# published `.sha256` file and a PGP signature check against OpenSSL's
+# own signing key (see the pinning procedure above) before this value
+# was set.
+sha256 = "603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a"
+
+# `{version}` is substituted with `openssl_version` above. OpenSSL's own
+# release asset naming: the tag and the filename both repeat the version.
+url_template = "https://github.com/openssl/openssl/releases/download/openssl-{version}/openssl-{version}.tar.gz"

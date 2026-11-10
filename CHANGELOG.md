@@ -12,9 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Downloadable static binaries, for x86_64 and aarch64 Linux, on every
   GitHub Release.** No Rust toolchain and no system OpenSSL needed —
   download, verify the checksum and the build-provenance attestation,
-  install, run. Each release carries `SHA256SUMS`, and a signed
-  attestation for each file naming the release tag and commit it was built
-  from. The
+  install, run. Statically linked against **OpenSSL 3.5 LTS** (supported
+  to 2030-04-08), built from OpenSSL's own verified source by the release
+  workflow itself, not vendored through a crate — an OpenSSL security
+  release means a sui-id release, with nothing else able to lag behind
+  it. Each release carries `SHA256SUMS`, and a signed attestation for
+  each file naming the release tag and commit it was built from. The
   [Quick Start](docs/src/getting-started/quick-start.md) now leads with
   this path; `cargo install sui-id` and building from source remain, for
   anyone who already has the toolchain or needs a platform with no
