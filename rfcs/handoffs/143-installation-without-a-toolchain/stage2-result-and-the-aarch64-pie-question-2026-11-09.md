@@ -1,8 +1,9 @@
 # RFC 143 stage 2 result — one fact about the `aarch64` artifact comes back to you
 
-> ## Whose turn it is: **yours**, for one question (§3).
-> The dev team's fix round (§2) is dispatched separately, from the stage 2 review
-> record. **§2 below is a summary for you, not the dispatch.**
+> ## Decided 2026-11-10. `@nabbisen`: *"Agreed."*
+> Ship `aarch64` as it is, and say so. The Quick Start's download section and
+> `0.89.0`'s `Added` entry state, in one sentence, that the ARM build does not
+> use address randomisation for its own code and the x86_64 build does.
 
 **Prepared by.** The architect, 2026-11-09, after rehearsal
 [`42536756643`](https://github.com/nabbisen/sui-id/actions/runs/42536756643)

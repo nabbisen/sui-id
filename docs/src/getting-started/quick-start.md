@@ -71,9 +71,9 @@ it needs at runtime is below.
    Then continue at [Configure](#configure) below — `sui-id` now runs the
    same way regardless of how it got onto this machine.
 
-<!-- OPEN: stage 2 result §3 is unanswered. Recommended form, not yet
-settled: "The ARM build does not use address randomisation for its own
-code (it is not position-independent); the x86_64 build does." -->
+**The ARM build does not use address randomisation for its own code** (it
+is not position-independent); the x86_64 build does. Rust's `aarch64` musl
+target does not support static position-independent executables yet.
 
 **The one runtime requirement**: the system's CA bundle (`ca-certificates`
 on Debian/Ubuntu, and the equivalent elsewhere). Without it sui-id still

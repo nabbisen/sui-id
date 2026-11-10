@@ -25,6 +25,8 @@ closing a security advisory.
   release means a sui-id release, with nothing else able to lag behind
   it. Each release carries `SHA256SUMS`, and a signed attestation for
   each file naming the release tag and commit it was built from. The
+  ARM build does not use address randomisation for its own code (it is
+  not position-independent); the x86_64 build does. The
   [Quick Start](docs/src/getting-started/quick-start.md) now leads with
   this path; `cargo install sui-id` and building from source remain, for
   anyone who already has the toolchain or needs a platform with no
