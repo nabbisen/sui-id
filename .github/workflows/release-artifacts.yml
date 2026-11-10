@@ -221,9 +221,21 @@ jobs:
             no-camellia no-idea no-seed no-comp no-zlib no-zlib-dynamic \
             no-engine no-async -DOPENSSL_NO_SECURE_MEMORY \
             --prefix="$prefix" --libdir=lib --openssldir=/etc/ssl
-          make -j"$(nproc)"
-          make install_sw
-          "$prefix/bin/openssl" version
+          # Libraries and headers only, as openssl-src builds them
+          # (`build_libs`, `install_dev`). The `openssl` command-line
+          # program is never needed, and on aarch64 it cannot link:
+          # Ubuntu's gcc compiles outline atomics, whose libgcc
+          # initialiser (lse-init.o) calls glibc's `__getauxval`, which
+          # musl does not provide under that name (rehearsal 42795045566).
+          # sui-id itself links, because Rust's compiler_builtins supplies
+          # those atomic helpers and libgcc's are never pulled in.
+          make -j"$(nproc)" build_libs
+          make install_dev
+          test -f "$prefix/lib/libcrypto.a" && test -f "$prefix/lib/libssl.a"
+          grep -E '^# *define OPENSSL_VERSION_TEXT' "$prefix/include/openssl/opensslv.h" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+          grep -qE "^# *define OPENSSL_VERSION_TEXT +\"OpenSSL $OPENSSL_VERSION " \
+            "$prefix/include/openssl/opensslv.h"
           echo "OPENSSL_DIR=$prefix" >> "$GITHUB_ENV"
           echo "OPENSSL_STATIC=1" >> "$GITHUB_ENV"
 
