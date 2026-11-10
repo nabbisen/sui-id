@@ -31,6 +31,10 @@
 > 3.5 LTS built from verified source. `0.89.0` stays held until it is built and rehearsed.
 > **Prototyped 2026-11-09 by the architect (x86_64): it works. Stage 5 dispatched** —
 > [`stage5-openssl-from-upstream-source-2026-11-09.md`](stage5-openssl-from-upstream-source-2026-11-09.md).
+> **Stage 5 committed 2026-11-10** (`32d04e6`, flags fixed in `9cda34b`). **A new
+> advisory, RUSTSEC-2026-0459 (bundled SQLite), turned `Security audit` red**, so it
+> goes into this release. **Stage 6 dispatched** —
+> [`stage6-rusqlite-0.41-for-rustsec-2026-0459-2026-11-10.md`](stage6-rusqlite-0.41-for-rustsec-2026-0459-2026-11-10.md).
 
 **Proposed.** 2026-11-08, by the architect, on `@nabbisen`'s *"Scope 0.89."*
 **Schedule source.** `ROADMAP.md`, *The embeddable boundary, and installation*
