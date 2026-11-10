@@ -17,16 +17,28 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 const BIN: &str = env!("CARGO_BIN_EXE_sui-id");
-const PORT: u16 = 18814;
 
 struct Home {
     dir: tempfile::TempDir,
+    /// This run's own port. It is not a shared constant: both tests here
+    /// start a server, and `cargo test` runs them in parallel. With one fixed
+    /// port, a test's connection could reach the *other* test's server, count
+    /// it as its own, and kill its own child before it had logged a line. That
+    /// gave empty output in Level B run 42825365703. The OS hands out an unused
+    /// port, which is then released for the child to bind.
+    port: u16,
 }
 
 impl Home {
     fn new() -> Self {
+        let port = std::net::TcpListener::bind(("127.0.0.1", 0))
+            .expect("bind an ephemeral port")
+            .local_addr()
+            .expect("local addr")
+            .port();
         Self {
             dir: tempfile::tempdir().expect("tempdir"),
+            port,
         }
     }
 
@@ -45,7 +57,7 @@ impl Home {
                 "./sui-id.key",
                 &self.dir.path().join("t.key").display().to_string(),
             )
-            .replace("127.0.0.1:8801", &format!("127.0.0.1:{PORT}"));
+            .replace("127.0.0.1:8801", &format!("127.0.0.1:{}", self.port));
         let path = self.dir.path().join("cfg.toml");
         std::fs::write(&path, text).expect("config");
         path
@@ -90,7 +102,7 @@ fn run_with_empty_ca_bundle(home: &Home) -> Run {
     let mut accepted_connection = false;
     let mut exited_early = false;
     loop {
-        if std::net::TcpStream::connect(("127.0.0.1", PORT)).is_ok() {
+        if std::net::TcpStream::connect(("127.0.0.1", home.port)).is_ok() {
             accepted_connection = true;
             break;
         }
