@@ -4,6 +4,13 @@
 > Cycle L, 096-B2 S3 —
 > [`096-b2-stage-plan-2026-11-11.md`](096-b2-stage-plan-2026-11-11.md) §3.
 > **This document is the dispatch.**
+>
+> **Corrected 2026-11-11, after dispatch: `observed_at`'s clock (§B row 6).**
+> It first said the app's `SharedClock`. C17's 600-second guard reads the
+> store's own clock (`chrono::Utc::now()`, `registry.rs:1200`), and the store
+> cannot name `SharedClock`. With two sources, the window would measure clock
+> skew, not the check's age. **Read `observed_at` from `chrono::Utc::now()`,
+> once.** If you have already built it on `app.clock`, change only that.
 
 **Dispatched.** 2026-11-11, by the architect.
 **Governing RFC.** [RFC 096](../../accepted/096-upstream-oidc-federation-validation.md),
@@ -67,7 +74,7 @@ In `sui-id`, a new module next to `identity_capability.rs`.
 | 3 | *"Successful production transport/metadata/JWKS validation"* | **through the production functions**, with the egress client the callback uses (`app.http_client`). No second validation path. See §C |
 | 4 | Compatibility, which is what *"proves current reachability/config compatibility"* means (`architecture.md:40`) | the discovery must support the policy's token-auth method (`supports_token_endpoint_auth_method`, as `federation.rs:954` does), and `id_token_algs_intersection` with the policy's algorithms must be non-empty. The JWKS must parse under `parse_jwks`'s rules |
 | 5 | *"after all validation, re-reads them and the disabled state before its private constructor can return a capability"* | version, generation, digest and disabled are all equal, or no capability |
-| 6 | Contents: *"provider ID/version, the exact disabled-state activation generation, a digest of the complete durable policy, trusted `observed_at`, and bounded validated metadata/key-set fingerprints"* | `observed_at` comes from the app's clock (`SharedClock`), read **once**, after validation and before the re-read. **The fingerprints are SHA-256 over the exact response bytes that passed validation**, discovery and JWKS, 32 bytes each, matching 0050's evidence columns |
+| 6 | Contents: *"provider ID/version, the exact disabled-state activation generation, a digest of the complete durable policy, trusted `observed_at`, and bounded validated metadata/key-set fingerprints"* | `observed_at` comes from `chrono::Utc::now()`, **the source C17's guard reads**, never from `app.clock`, read **once**, after validation and before the re-read. **The fingerprints are SHA-256 over the exact response bytes that passed validation**, discovery and JWKS, 32 bytes each, matching 0050's evidence columns |
 | 7 | *"private, non-cloneable, non-debuggable, non-serializable"* | four `trybuild` fixtures: cannot be constructed, cloned, `Debug`-printed or serialized. Use the federated-MFA ones as the pattern |
 | 8 | *"Failure or cancellation returns no capability and performs no write"* | the preflight writes nothing in any case. A test counts audit rows and the provider row before and after a success and a failure |
 
