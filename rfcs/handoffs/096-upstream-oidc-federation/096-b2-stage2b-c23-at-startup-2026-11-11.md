@@ -1,6 +1,8 @@
 # RFC 096-B2 stage 2b — C23 at startup
 
-> ## Whose turn it is: **the implementation role's.**
+> ## Landed 2026-11-11, with reviewer fold-ins. Next: S3 (the architect's
+> turn first) — see the stage plan's banner.
+>
 > Cycle L, 096-B2 S2b —
 > [`096-b2-stage-plan-2026-11-11.md`](096-b2-stage-plan-2026-11-11.md) §3.
 > **This document is the dispatch.**

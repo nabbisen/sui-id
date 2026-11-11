@@ -119,6 +119,22 @@ pub fn is_enabled_within_tx(
     })
 }
 
+/// RFC 096-B2 S2b: the fresh, same-transaction re-read C23 and C25 build
+/// their comparison and guard on — the row cannot change between this
+/// read and either command's own guarded `UPDATE` because both run in
+/// the same transaction.
+pub fn get_within_tx(
+    tx: &rusqlite::Connection,
+    id: FederationProviderId,
+) -> StoreResult<FederationProviderRow> {
+    tx.prepare(&format!("{SELECT} WHERE id = ?1"))?
+        .query_row([id.to_string()], map)
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
+            other => StoreError::from(other),
+        })
+}
+
 /// Fetch a provider by slug.
 pub async fn get_by_slug(db: &Database, slug: &str) -> StoreResult<FederationProviderRow> {
     let slug = slug.to_owned();
@@ -419,63 +435,117 @@ pub async fn delete(db: &Database, id: FederationProviderId) -> StoreResult<()> 
     .await
 }
 
-/// Update `allowed_origins` only (RFC 134 step 7a). Deliberately not a
-/// general `update`: one column, so a future caller reconciling the origin
-/// set at boot cannot reach `issuer`, `client_id` or any other
-/// config-managed field by accident.
-pub async fn update_allowed_origins(
-    db: &Database,
-    id: FederationProviderId,
-    allowed_origins: &str,
-    now: DateTime<Utc>,
-) -> StoreResult<()> {
-    let allowed_origins = allowed_origins.to_owned();
-    db.with_tx(move |tx| update_allowed_origins_within_tx(tx, id, &allowed_origins, now))
-        .await
-        .map(|_origins_before| ())
-}
-
-/// RFC 094 M2b wave 3, C24. The primitive [`update_allowed_origins`] now
-/// wraps, via `Database::with_tx` — kept as a thin wrapper rather than
-/// removed, since its own tests (`update_allowed_origins_touches_only_
-/// that_column`, `update_allowed_origins_on_missing_id_is_not_found`)
-/// exercise the primitive directly, the same shape C22's `revoke` was
-/// kept for its own test. The sealed command
-/// (`commands::update_federation_provider_allowed_origins`) calls this
-/// directly inside its own transaction instead.
-///
-/// RFC 140 stage 1 §1: returns the origin count **as read inside this
-/// same transaction**, immediately before the write — not a value the
-/// caller computed earlier from a row it fetched outside any lock. The
-/// wave 3 round took `origins_before` as a parameter instead, which made
-/// a Class-A record carry an attribute the transaction never verified;
-/// unreachable with wave 3's one, single-threaded, pre-traffic caller,
-/// but RFC 096-B2's administrator path is concurrent and the parameter
-/// invited exactly the stale value that would make the record false.
-/// Fixed before `0.86.0` publishes the signature, while removing the
-/// parameter still costs nothing.
-pub fn update_allowed_origins_within_tx(
+/// RFC 096-B2 S2b, C23: the guarded full-policy replacement `UPDATE`.
+/// Exactly RFC 094 clause 9's guard (`WHERE id = ? AND config_version = ?
+/// AND activation_generation = ?`), clause 4 (forced disabled/
+/// requires_review, every evidence column cleared), and clause 2 (both
+/// counters -- already checked-incremented by the caller, this function
+/// only writes the two values given). Returns the number of rows the
+/// `UPDATE` touched; the caller asserts exactly 1.
+#[allow(clippy::too_many_arguments)]
+pub fn replace_policy_within_tx(
     tx: &rusqlite::Transaction<'_>,
     id: FederationProviderId,
+    issuer: &str,
+    client_id: &str,
+    client_secret_enc: Option<&[u8]>,
+    scopes: &str,
+    provision_mode: ProvisionMode,
     allowed_origins: &str,
+    id_token_algs: &str,
+    old_config_version: i64,
+    new_config_version: i64,
+    old_activation_generation: i64,
+    new_activation_generation: i64,
     now: DateTime<Utc>,
 ) -> StoreResult<usize> {
-    let id_str = id.to_string();
-    let before: String = tx
-        .query_row(
-            "SELECT allowed_origins FROM federation_provider WHERE id = ?1",
-            [&id_str],
-            |r| r.get(0),
-        )
-        .map_err(|e| match e {
-            rusqlite::Error::QueryReturnedNoRows => StoreError::NotFound,
-            other => StoreError::from(other),
-        })?;
-    tx.execute(
-        "UPDATE federation_provider SET allowed_origins = ?1, updated_at = ?2 WHERE id = ?3",
-        params![allowed_origins, now, id_str],
+    let n = tx.execute(
+        "UPDATE federation_provider \
+         SET issuer = ?1, client_id = ?2, client_secret_enc = ?3, scopes = ?4, \
+             provision_mode = ?5, allowed_origins = ?6, id_token_algs = ?7, \
+             config_version = ?8, activation_generation = ?9, \
+             enabled = 0, validation_status = 'requires_review', \
+             evidence_config_version = NULL, evidence_activation_generation = NULL, \
+             evidence_policy_digest = NULL, evidence_observed_at = NULL, \
+             evidence_metadata_fingerprint = NULL, evidence_jwks_fingerprint = NULL, \
+             updated_at = ?10 \
+         WHERE id = ?11 AND config_version = ?12 AND activation_generation = ?13",
+        params![
+            issuer,
+            client_id,
+            client_secret_enc,
+            scopes,
+            provision_mode.as_str(),
+            allowed_origins,
+            id_token_algs,
+            new_config_version,
+            new_activation_generation,
+            now,
+            id.to_string(),
+            old_config_version,
+            old_activation_generation,
+        ],
     )?;
-    Ok(before.split_whitespace().count())
+    Ok(n)
+}
+
+/// RFC 096-B2 S2b, C25 (and the shape C17's own disable, S4, will
+/// reuse): disable an enabled row, checked-incrementing only
+/// `activation_generation` (RFC 094 `:445-450`) -- `config_version` is
+/// untouched, since the trust policy itself has not changed, only its
+/// activation. Guarded on `enabled = 1` as well as the exact old
+/// generation: a provider already disabled cannot be "disabled" a
+/// second time by this function (the caller checks this first and
+/// returns `StoreError::NoChange` without calling it at all, but the
+/// guard is restated here too, the same defensive-insurance shape
+/// `federation_mfa_pending::refresh_for_restart_within_tx`'s own doc
+/// comment explains).
+pub fn disable_removed_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    id: FederationProviderId,
+    old_activation_generation: i64,
+    new_activation_generation: i64,
+    now: DateTime<Utc>,
+) -> StoreResult<usize> {
+    let n = tx.execute(
+        "UPDATE federation_provider \
+         SET enabled = 0, validation_status = 'requires_review', \
+             activation_generation = ?1, \
+             evidence_config_version = NULL, evidence_activation_generation = NULL, \
+             evidence_policy_digest = NULL, evidence_observed_at = NULL, \
+             evidence_metadata_fingerprint = NULL, evidence_jwks_fingerprint = NULL, \
+             updated_at = ?2 \
+         WHERE id = ?3 AND activation_generation = ?4 AND enabled = 1",
+        params![
+            new_activation_generation,
+            now,
+            id.to_string(),
+            old_activation_generation,
+        ],
+    )?;
+    Ok(n)
+}
+
+/// RFC 096-B2 S2b Part D, C26. `display_name` is not trust policy (RFC
+/// 096 `:434`) — updates without disabling, checked-incrementing
+/// nothing, invalidating nothing. The one-column counterpart to
+/// migration 0051's full-policy `UPDATE` (`commands::
+/// replace_federation_provider_policy`).
+pub fn update_display_name_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    id: FederationProviderId,
+    display_name: &str,
+    now: DateTime<Utc>,
+) -> StoreResult<()> {
+    let n = tx.execute(
+        "UPDATE federation_provider SET display_name = ?1, updated_at = ?2 WHERE id = ?3",
+        params![display_name, now, id.to_string()],
+    )?;
+    if n == 0 {
+        Err(StoreError::NotFound)
+    } else {
+        Ok(())
+    }
 }
 
 // ── Audit event anchors (RFC 004) ────────────────────────────────────────────

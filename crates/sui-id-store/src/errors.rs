@@ -19,6 +19,19 @@ pub enum StoreError {
     #[error("requested operation conflicts with current state")]
     Conflict,
 
+    /// RFC 096-B2 S2b: a command whose entire purpose is to change
+    /// something found nothing to change (C23's trust policy already
+    /// matches, or C25's provider is already disabled). Not an error
+    /// condition for the caller — `Database::class_a`'s closure returns
+    /// this to force a rollback of a transaction that opened but made no
+    /// write (not even a reseal or a generation bump), and the command's
+    /// own public wrapper converts it to `Ok(None)` rather than
+    /// propagating it. RFC 096 `:449-452`: "a generation must never be
+    /// burned for nothing" is the rule this exists to satisfy without
+    /// duplicating the same early-exit shape in every caller.
+    #[error("nothing to change")]
+    NoChange,
+
     #[error("data integrity violation: {0}")]
     Integrity(String),
 

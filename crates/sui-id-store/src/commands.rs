@@ -7082,52 +7082,134 @@ pub async fn create_federation_provider(
     .await
 }
 
-// ── C24 — federation provider allowed-origins change ─────────────────────
+// ── RFC 096-B2 S2b §B — shared per-provider flow invalidation ─────────────
 //
-// RFC 094 M2b wave 3. Not in the inventory before this round -- a live
-// Class-A-shaped write (RFC 134 step 7a) with no id at all. Startup
-// provisioning reconciles a configured `allowed_origins` list against the
-// stored one and writes over it when they differ; same no-session shape
-// as C16.
+// Mirrors migration 0050's own upgrade SQL (`:184-224`), scoped to one
+// provider instead of every row in the database. Built once, here,
+// because every one of its callers -- C23 and C25 below, and later C17's
+// disable and C18's delete -- needs exactly these three invalidations and
+// nothing else ("cross-repo orchestration is commands.rs's job
+// throughout this crate" -- `federation_mfa_pending.rs`'s own words).
 
-static C24_ORIGINS_CHANGED: EventDescriptor = EventDescriptor {
-    kind: AuditEventKind::FederationProviderOriginsChanged,
-    name: "federation.provider.allowed_origins_changed",
+/// The three bounded counts RFC 094 `:547-575` asks every caller's event
+/// to carry.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct InvalidatedFlowCounts {
+    pub login_attempts: usize,
+    pub mfa_pending: usize,
+    pub ceremonies: usize,
+}
+
+fn invalidate_provider_flows_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    provider_id: FederationProviderId,
+    now: DateTime<Utc>,
+) -> StoreResult<InvalidatedFlowCounts> {
+    let login_attempts =
+        crate::repos::federation_login_attempt::terminalize_failed_for_provider_within_tx(
+            tx,
+            provider_id,
+            now,
+        )?;
+    let mfa_pending =
+        crate::repos::federation_mfa_pending::invalidate_for_provider_within_tx(tx, provider_id)?;
+    let ceremonies =
+        crate::repos::federation_webauthn_ceremony::delete_for_provider_within_tx(tx, provider_id)?;
+    Ok(InvalidatedFlowCounts {
+        login_attempts,
+        mfa_pending,
+        ceremonies,
+    })
+}
+
+// ── C23 — federation provider trust-policy replacement ───────────────────
+//
+// RFC 096-B2 S2b. RFC 094 `:547-575`'s own text, built clause by clause
+// (the dispatch's own table, `096-b2-stage2b-c23-at-startup-2026-11-11.
+// md` §A, is this function's real spec). Startup provisioning: no
+// session, `system_principal: permitted`, the same shape C16 uses --
+// "sealed system actor is `StartupConfiguration`" (RFC 094 `:563`) names
+// no Rust type anywhere in this codebase (a repo-wide grep for
+// `StartupConfiguration` found it only in prose: RFCs, this file's own
+// predecessor rationale, and the dispatch itself); it is prose for
+// exactly the no-session shape `for_system_actor(None)` already gives
+// C16, not a type to construct. Retires C24: `allowed_origins` is trust
+// policy like every other field here (RFC 096 amendment A4, corrected
+// 2026-11-11), not a write of its own.
+
+static C23_POLICY_UPDATED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::FederationProviderPolicyUpdated,
+    name: "federation.provider.policy_updated",
     class: AuditClass::Atomic,
     actor: ActorRequirement::None,
     target: TargetRequirement::Required,
     attributes: &[
         AttributeSpec {
-            name: "origins_before",
-            description: "count of allowed origins before the change",
+            name: "old_config_version",
+            description: "config_version before the replacement",
             required: true,
         },
         AttributeSpec {
-            name: "origins_after",
-            description: "count of allowed origins after the change",
+            name: "new_config_version",
+            description: "config_version after the replacement",
+            required: true,
+        },
+        AttributeSpec {
+            name: "old_activation_generation",
+            description: "activation_generation before the replacement",
+            required: true,
+        },
+        AttributeSpec {
+            name: "new_activation_generation",
+            description: "activation_generation after the replacement",
+            required: true,
+        },
+        AttributeSpec {
+            name: "changed_fields",
+            description: "sorted, comma-separated policy-digest field names that changed",
+            required: true,
+        },
+        AttributeSpec {
+            name: "invalidated_login_attempts",
+            description: "count of pending/exchanging login attempts invalidated",
+            required: true,
+        },
+        AttributeSpec {
+            name: "invalidated_mfa_pending",
+            description: "count of pending federated-MFA continuations invalidated",
+            required: true,
+        },
+        AttributeSpec {
+            name: "invalidated_ceremonies",
+            description: "count of bound WebAuthn ceremonies deleted",
             required: true,
         },
     ],
 };
 
 crate::declare_write_command! {
-    /// C24 — startup provisioning reconciles a federation provider's
-    /// configured `allowed_origins` against the stored value.
-    command C24 = "C24" {
+    /// C23 — startup provisioning replaces a federation provider's
+    /// complete trust policy when a configured field no longer matches
+    /// the stored, decoded value.
+    command C23 = "C23" {
         system_principal: permitted;
-        enum C24Event {
-            Changed {
+        enum C23Event {
+            Updated {
                 provider_id: FederationProviderId,
-                origins_before: usize,
-                origins_after: usize,
-            } => &C24_ORIGINS_CHANGED,
+                old_config_version: i64,
+                new_config_version: i64,
+                old_activation_generation: i64,
+                new_activation_generation: i64,
+                changed_fields: Vec<&'static str>,
+                invalidated: InvalidatedFlowCounts,
+            } => &C23_POLICY_UPDATED,
         }
     }
 }
 
-impl SealedCommandEvent<C24> for C24Event {
+impl SealedCommandEvent<C23> for C23Event {
     fn target(&self) -> Option<AuditTarget> {
-        let Self::Changed { provider_id, .. } = self;
+        let Self::Updated { provider_id, .. } = self;
         Some(AuditTarget(provider_id.to_string()))
     }
 
@@ -7136,48 +7218,425 @@ impl SealedCommandEvent<C24> for C24Event {
     }
 
     fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
-        let Self::Changed {
-            origins_before,
-            origins_after,
+        let Self::Updated {
+            old_config_version,
+            new_config_version,
+            old_activation_generation,
+            new_activation_generation,
+            changed_fields,
+            invalidated,
             ..
         } = self;
         AuditAttributes::builder()
-            .attribute("origins_before", origins_before.to_string())
-            .attribute("origins_after", origins_after.to_string())
+            .attribute("old_config_version", old_config_version.to_string())
+            .attribute("new_config_version", new_config_version.to_string())
+            .attribute(
+                "old_activation_generation",
+                old_activation_generation.to_string(),
+            )
+            .attribute(
+                "new_activation_generation",
+                new_activation_generation.to_string(),
+            )
+            .attribute("changed_fields", changed_fields.join(","))
+            .attribute(
+                "invalidated_login_attempts",
+                invalidated.login_attempts.to_string(),
+            )
+            .attribute(
+                "invalidated_mfa_pending",
+                invalidated.mfa_pending.to_string(),
+            )
+            .attribute("invalidated_ceremonies", invalidated.ceremonies.to_string())
             .build()
     }
 }
 
-/// Run C24 (reconcile a provider's `allowed_origins`) through the
-/// Class-A runner. RFC 140 stage 1 §1: `origins_before` is read inside
-/// this same transaction, by `update_allowed_origins_within_tx` itself,
-/// immediately before its `UPDATE` — not supplied by the caller. The
-/// wave 3 round took it as a parameter instead, which let a Class-A
-/// record carry an attribute the transaction never verified; fixed here
-/// before the signature was published.
-pub async fn update_federation_provider_allowed_origins(
+/// RFC 096-B2 S2b §A, the secret's four cases. Returns the exact bytes
+/// to write to `client_secret_enc` (identical to the stored bytes when
+/// nothing changed -- never a fresh seal of an unchanged plaintext,
+/// since RFC 096 `:426` puts the envelope's own hash in the policy
+/// digest, and a needless reseal would invalidate evidence for nothing),
+/// plus whether the secret and/or `token_auth_method` changed.
+fn compute_secret_change(
+    key: &crate::crypto::MasterKey,
+    stored_enc: &Option<Vec<u8>>,
+    configured_plain: Option<&str>,
+) -> StoreResult<(Option<Vec<u8>>, bool, bool)> {
+    use subtle::ConstantTimeEq;
+    match (stored_enc, configured_plain) {
+        (None, None) => Ok((None, false, false)),
+        (None, Some(plain)) => {
+            let sealed = crate::crypto::seal(
+                key,
+                plain.as_bytes(),
+                crate::repos::federation_provider::AAD,
+            )?;
+            Ok((Some(sealed), true, true))
+        }
+        (Some(_), None) => Ok((None, true, true)),
+        (Some(enc), Some(plain)) => {
+            // RFC 096 `:403-405`: compared only inside zeroizing types. The
+            // opened plaintext is wiped when this arm ends, whichever way.
+            match crate::crypto::open(key, enc, crate::repos::federation_provider::AAD)
+                .map(zeroize::Zeroizing::new)
+            {
+                Ok(opened) => {
+                    let equal: bool = opened.as_slice().ct_eq(plain.as_bytes()).into();
+                    if equal {
+                        Ok((stored_enc.clone(), false, false))
+                    } else {
+                        let sealed = crate::crypto::seal(
+                            key,
+                            plain.as_bytes(),
+                            crate::repos::federation_provider::AAD,
+                        )?;
+                        Ok((Some(sealed), true, false))
+                    }
+                }
+                Err(_) => {
+                    let sealed = crate::crypto::seal(
+                        key,
+                        plain.as_bytes(),
+                        crate::repos::federation_provider::AAD,
+                    )?;
+                    Ok((Some(sealed), true, false))
+                }
+            }
+        }
+    }
+}
+
+/// Run C23 (replace a federation provider's complete trust policy)
+/// through the Class-A runner, or do nothing if `proposed`/
+/// `configured_secret_plain`/`allowed_origins_storage` already match the
+/// stored, decoded policy exactly (RFC 096-B2 S2b §A: "C23 runs exactly
+/// when the [changed-field] set is non-empty"). Everything -- the fresh
+/// read, the field-by-field comparison against the decoded stored value,
+/// the secret's own constant-time comparison, the checked-increment, the
+/// guarded write, the flow invalidation, and the event -- runs inside
+/// one transaction; a `StoreError::NoChange` from the closure (nothing
+/// differed) is caught here and reported as `Ok(None)`, never
+/// propagated to the caller as an error.
+///
+/// `allowed_origins_storage` is the column's own 0045 encoding (the
+/// operator's raw list, or `""` for "the issuer's origin alone") --
+/// `proposed.allowed_origins()` is already resolved to the *effective*
+/// set for comparison, which is not what gets written (S2a fold-in 1).
+pub async fn replace_federation_provider_policy(
     db: &crate::Database,
-    target: FederationProviderId,
-    allowed_origins: String,
+    provider_id: FederationProviderId,
+    proposed: crate::federation_policy::FederationTrustPolicy,
+    allowed_origins_storage: String,
+    configured_secret_plain: Option<String>,
+    now: DateTime<Utc>,
+) -> StoreResult<Option<crate::registry::Audited<Vec<&'static str>>>> {
+    // RFC 096 `:403-405`: the configured plaintext is wiped when this
+    // command is done with it.
+    let configured_secret_plain = configured_secret_plain.map(zeroize::Zeroizing::new);
+    let db_for_tx = db.clone();
+    let context = AuthorizedCommandContext::<C23>::for_system_actor(None);
+    let result = db
+        .class_a(context, move |tx: &mut ClassATx<'_, C23>| {
+            let current = crate::repos::federation_provider::get_within_tx(tx.tx(), provider_id)?;
+
+            let (new_secret_enc, secret_changed, token_auth_method_changed) =
+                compute_secret_change(
+                    db_for_tx.key(),
+                    &current.client_secret_enc,
+                    configured_secret_plain.as_ref().map(|s| s.as_str()),
+                )?;
+
+            let mut changed: std::collections::BTreeSet<&'static str> =
+                std::collections::BTreeSet::new();
+            if secret_changed {
+                changed.insert("client_secret");
+            }
+            if token_auth_method_changed {
+                changed.insert("token_auth_method");
+            }
+            // Each stored field decoded on its own (`changed_fields`), so a
+            // row 0051 copied, with only `id_token_algs` unrecorded, records
+            // only that field in the hash-chained event.
+            changed.extend(crate::federation_policy::changed_fields(
+                &current, &proposed,
+            ));
+
+            if changed.is_empty() {
+                return Err(StoreError::NoChange);
+            }
+
+            let old_config_version = current.config_version;
+            let old_activation_generation = current.activation_generation;
+            let new_config_version = old_config_version
+                .checked_add(1)
+                .ok_or_else(|| StoreError::Integrity("config_version overflow".into()))?;
+            let new_activation_generation = old_activation_generation
+                .checked_add(1)
+                .ok_or_else(|| StoreError::Integrity("activation_generation overflow".into()))?;
+
+            let affected = crate::repos::federation_provider::replace_policy_within_tx(
+                tx.tx(),
+                provider_id,
+                proposed.issuer(),
+                proposed.client_id(),
+                new_secret_enc.as_deref(),
+                &proposed.scopes_canonical(),
+                proposed.provision_mode(),
+                &allowed_origins_storage,
+                &proposed.id_token_algs_canonical(),
+                old_config_version,
+                new_config_version,
+                old_activation_generation,
+                new_activation_generation,
+                now,
+            )?;
+            if affected != 1 {
+                return Err(StoreError::Conflict);
+            }
+
+            let invalidated = invalidate_provider_flows_within_tx(tx.tx(), provider_id, now)?;
+            let changed_fields: Vec<&'static str> = changed.into_iter().collect();
+
+            Ok((
+                changed_fields.clone(),
+                C23Event::Updated {
+                    provider_id,
+                    old_config_version,
+                    new_config_version,
+                    old_activation_generation,
+                    new_activation_generation,
+                    changed_fields,
+                    invalidated,
+                },
+            ))
+        })
+        .await;
+
+    match result {
+        Ok(audited) => Ok(Some(audited)),
+        Err(StoreError::NoChange) => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
+// ── C25 — federation provider removed from configuration ─────────────────
+//
+// RFC 096-B2 S2b (amendment A2). Startup provisioning: a stored provider
+// whose slug no configured `[[federation_providers]]` block names,
+// found still enabled, is disabled the same way C17's own disable (S4)
+// will be: generation checked-incremented, evidence cleared, pending
+// flows invalidated through §B, `enabled = 0`. Links are kept -- nothing
+// is deleted implicitly. A provider already disabled when its block
+// disappears commits nothing and writes no event (RFC 096 `:449-452`:
+// "a generation must never be burned for nothing").
+
+static C25_REMOVED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::FederationProviderRemovedFromConfiguration,
+    name: "federation.provider.removed_from_configuration",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::None,
+    target: TargetRequirement::Required,
+    attributes: &[
+        AttributeSpec {
+            name: "old_activation_generation",
+            description: "activation_generation before the disable",
+            required: true,
+        },
+        AttributeSpec {
+            name: "new_activation_generation",
+            description: "activation_generation after the disable",
+            required: true,
+        },
+        AttributeSpec {
+            name: "invalidated_login_attempts",
+            description: "count of pending/exchanging login attempts invalidated",
+            required: true,
+        },
+        AttributeSpec {
+            name: "invalidated_mfa_pending",
+            description: "count of pending federated-MFA continuations invalidated",
+            required: true,
+        },
+        AttributeSpec {
+            name: "invalidated_ceremonies",
+            description: "count of bound WebAuthn ceremonies deleted",
+            required: true,
+        },
+    ],
+};
+
+crate::declare_write_command! {
+    /// C25 — startup provisioning disables a federation provider whose
+    /// `[[federation_providers]]` block was removed from config.
+    command C25 = "C25" {
+        system_principal: permitted;
+        enum C25Event {
+            Removed {
+                provider_id: FederationProviderId,
+                old_activation_generation: i64,
+                new_activation_generation: i64,
+                invalidated: InvalidatedFlowCounts,
+            } => &C25_REMOVED,
+        }
+    }
+}
+
+impl SealedCommandEvent<C25> for C25Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Removed { provider_id, .. } = self;
+        Some(AuditTarget(provider_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Removed {
+            old_activation_generation,
+            new_activation_generation,
+            invalidated,
+            ..
+        } = self;
+        AuditAttributes::builder()
+            .attribute(
+                "old_activation_generation",
+                old_activation_generation.to_string(),
+            )
+            .attribute(
+                "new_activation_generation",
+                new_activation_generation.to_string(),
+            )
+            .attribute(
+                "invalidated_login_attempts",
+                invalidated.login_attempts.to_string(),
+            )
+            .attribute(
+                "invalidated_mfa_pending",
+                invalidated.mfa_pending.to_string(),
+            )
+            .attribute("invalidated_ceremonies", invalidated.ceremonies.to_string())
+            .build()
+    }
+}
+
+/// Run C25 (disable a federation provider removed from configuration)
+/// through the Class-A runner, or do nothing if the provider is already
+/// disabled -- caught the same `StoreError::NoChange` way C23's own
+/// early exit is, for the same reason: a generation must never be
+/// burned for nothing.
+pub async fn remove_federation_provider_from_configuration(
+    db: &crate::Database,
+    provider_id: FederationProviderId,
+    now: DateTime<Utc>,
+) -> StoreResult<Option<crate::registry::Audited<()>>> {
+    let context = AuthorizedCommandContext::<C25>::for_system_actor(None);
+    let result = db
+        .class_a(context, move |tx: &mut ClassATx<'_, C25>| {
+            let current = crate::repos::federation_provider::get_within_tx(tx.tx(), provider_id)?;
+            if !current.enabled {
+                return Err(StoreError::NoChange);
+            }
+            let old_activation_generation = current.activation_generation;
+            let new_activation_generation = old_activation_generation
+                .checked_add(1)
+                .ok_or_else(|| StoreError::Integrity("activation_generation overflow".into()))?;
+
+            let affected = crate::repos::federation_provider::disable_removed_within_tx(
+                tx.tx(),
+                provider_id,
+                old_activation_generation,
+                new_activation_generation,
+                now,
+            )?;
+            if affected != 1 {
+                return Err(StoreError::Conflict);
+            }
+
+            let invalidated = invalidate_provider_flows_within_tx(tx.tx(), provider_id, now)?;
+
+            Ok((
+                (),
+                C25Event::Removed {
+                    provider_id,
+                    old_activation_generation,
+                    new_activation_generation,
+                    invalidated,
+                },
+            ))
+        })
+        .await;
+
+    match result {
+        Ok(audited) => Ok(Some(audited)),
+        Err(StoreError::NoChange) => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
+// ── C26 — federation provider display-name update ────────────────────────
+//
+// RFC 096-B2 S2b Part D. `display_name` is not trust policy (RFC 096
+// `:434`) -- a config edit to it updates the stored row without
+// disabling, checked-incrementing nothing, invalidating nothing. No
+// values in the event, the same rule row 7 of C23's own clause table
+// states for its event.
+
+static C26_DISPLAY_NAME_CHANGED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::FederationProviderDisplayNameChanged,
+    name: "federation.provider.display_name_changed",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::None,
+    target: TargetRequirement::Required,
+    attributes: &[],
+};
+
+crate::declare_write_command! {
+    /// C26 — startup provisioning updates a federation provider's
+    /// display label without disabling it.
+    command C26 = "C26" {
+        system_principal: permitted;
+        enum C26Event {
+            Changed {
+                provider_id: FederationProviderId,
+            } => &C26_DISPLAY_NAME_CHANGED,
+        }
+    }
+}
+
+impl SealedCommandEvent<C26> for C26Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Changed { provider_id } = self;
+        Some(AuditTarget(provider_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        AuditAttributes::builder().build()
+    }
+}
+
+/// Run C26 (update a federation provider's display label) through the
+/// Class-A runner.
+pub async fn update_federation_provider_display_name(
+    db: &crate::Database,
+    provider_id: FederationProviderId,
+    display_name: String,
     now: DateTime<Utc>,
 ) -> StoreResult<crate::registry::Audited<()>> {
-    let origins_after = allowed_origins.split_whitespace().count();
-    let context = AuthorizedCommandContext::<C24>::for_system_actor(None);
-    db.class_a(context, move |tx: &mut ClassATx<'_, C24>| {
-        let origins_before = crate::repos::federation_provider::update_allowed_origins_within_tx(
+    let context = AuthorizedCommandContext::<C26>::for_system_actor(None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, C26>| {
+        crate::repos::federation_provider::update_display_name_within_tx(
             tx.tx(),
-            target,
-            &allowed_origins,
+            provider_id,
+            &display_name,
             now,
         )?;
-        Ok((
-            (),
-            C24Event::Changed {
-                provider_id: target,
-                origins_before,
-                origins_after,
-            },
-        ))
+        Ok(((), C26Event::Changed { provider_id }))
     })
     .await
 }

@@ -1,9 +1,9 @@
-//! RFC 094 M2b wave 3 — federation-provider configuration writes, C16
-//! and C24. Both are startup provisioning, not an administrator action:
-//! no authenticated actor, `system_principal: permitted`, the same shape
-//! C22 uses. 2026-10-25 ruling: RFC 096-B2's activation-generation and
-//! preflight semantics are not implemented here — this seals `create`
-//! and the allowed-origins write as they stand today.
+//! RFC 094 M2b wave 3 / RFC 096-B2 S2b — federation-provider
+//! configuration writes: C16 (create), C23 (trust-policy replacement,
+//! retiring C24), C25 (disable on removal from configuration) and C26
+//! (display-name update). All four are startup provisioning, not an
+//! administrator action: no authenticated actor, `system_principal:
+//! permitted`, the same shape C22 uses.
 
 use super::*;
 use sui_id_shared::ids::FederationProviderId;
@@ -134,23 +134,617 @@ async fn c16_injected_failure_before_append_rolls_back_the_create() {
     record_rollback_coverage("C16");
 }
 
-// ── C24 — allowed-origins change ──────────────────────────────────────
+// ── C23 — trust-policy replacement (retires C24) ──────────────────────
+
+use crate::federation_policy::FederationTrustPolicy;
+
+/// A fully enabled, `validated` provider with evidence bound to its own
+/// (0, 0) counters — the same shape `create_enabled_for_test` always
+/// produces — with a real sealed client secret, so the secret-change
+/// tests below have something to compare against.
+fn sample_enabled_row(slug: &str) -> crate::models::FederationProviderRow {
+    let now = Utc::now();
+    crate::models::FederationProviderRow {
+        id: FederationProviderId::new(),
+        slug: slug.into(),
+        display_name: "Google".into(),
+        issuer: format!("https://{slug}.example"),
+        client_id: "client-abc".into(),
+        client_secret_enc: None,
+        scopes: "openid email".into(),
+        provision_mode: crate::models::ProvisionMode::LinkOnly,
+        enabled: true,
+        allowed_origins: String::new(),
+        config_version: 0,
+        activation_generation: 0,
+        validation_status: crate::models::ValidationStatus::Validated,
+        evidence_config_version: Some(0),
+        evidence_activation_generation: Some(0),
+        evidence_policy_digest: Some(vec![0xABu8; 32]),
+        evidence_observed_at: Some(now),
+        evidence_metadata_fingerprint: Some(vec![0xABu8; 32]),
+        evidence_jwks_fingerprint: Some(vec![0xABu8; 32]),
+        created_at: now,
+        updated_at: now,
+        id_token_algs: Some("RS256".into()),
+    }
+}
+
+fn a_proposed_policy(issuer: &str) -> FederationTrustPolicy {
+    FederationTrustPolicy::new(
+        issuer,
+        "client-xyz",
+        true,
+        "openid email profile",
+        &["ES256"],
+        &[],
+        crate::models::ProvisionMode::ProvisionOnFirstLogin,
+    )
+    .expect("valid policy")
+}
 
 #[tokio::test]
-async fn a_c24_origins_change() {
+async fn an_enabled_providers_policy_changing_disables_it_and_replaces_every_field() {
     let db = fresh_db();
-    let row = sample_row("c24-happy");
-    repos::federation_provider::create(&db, &row, None)
+    let row = sample_enabled_row("c23-happy");
+    repos::federation_provider::create_enabled_for_test(&db, &row, Some("old-secret"))
         .await
-        .expect("seed provider");
-    let origins_before = row.allowed_origins.split_whitespace().count();
-    assert_eq!(origins_before, 2);
+        .expect("seed enabled provider");
     let before = audit_rows(&db).await;
 
-    let audited = crate::commands::update_federation_provider_allowed_origins(
+    let proposed = a_proposed_policy(&row.issuer);
+    let audited = crate::commands::replace_federation_provider_policy(
         &db,
         row.id,
-        "https://a.example https://b.example https://c.example".into(),
+        proposed,
+        String::new(),
+        Some("new-secret".into()),
+        Utc::now(),
+    )
+    .await
+    .expect("C23 must not error")
+    .expect("a policy this different must change something");
+    let changed = audited.into_inner();
+    for field in [
+        "client_id",
+        "scopes",
+        "id_token_algs",
+        "provision_mode",
+        "client_secret",
+    ] {
+        assert!(
+            changed.contains(&field),
+            "expected {field:?} in {changed:?}"
+        );
+    }
+    assert!(
+        !changed.contains(&"issuer"),
+        "issuer did not change: {changed:?}"
+    );
+    assert_eq!(
+        changed,
+        {
+            let mut v = changed.clone();
+            v.sort_unstable();
+            v
+        },
+        "changed_fields must be sorted"
+    );
+
+    let stored = repos::federation_provider::get(&db, row.id)
+        .await
+        .expect("get");
+    assert!(!stored.enabled, "must be disabled");
+    assert_eq!(
+        stored.validation_status,
+        crate::models::ValidationStatus::RequiresReview
+    );
+    assert!(
+        stored.evidence_policy_digest.is_none(),
+        "evidence must be cleared"
+    );
+    assert!(stored.evidence_observed_at.is_none());
+    assert_eq!(stored.config_version, 1);
+    assert_eq!(stored.activation_generation, 1);
+    assert_eq!(stored.client_id, "client-xyz");
+    assert_eq!(stored.scopes, "openid email profile");
+    assert_eq!(stored.id_token_algs.as_deref(), Some("ES256"));
+    assert_eq!(
+        stored.provision_mode,
+        crate::models::ProvisionMode::ProvisionOnFirstLogin
+    );
+    let opened = crate::crypto::open(
+        db.key(),
+        stored.client_secret_enc.as_ref().expect("secret present"),
+        crate::repos::federation_provider::AAD,
+    )
+    .expect("must decrypt");
+    assert_eq!(opened, b"new-secret");
+
+    let event = last_event(&db).await;
+    assert_eq!(event.action, "federation.provider.policy_updated");
+    assert_eq!(event.target.as_deref(), Some(row.id.to_string().as_str()));
+    assert_eq!(event.actor, None, "no session at startup");
+    let note = event.note.expect("note");
+    assert_eq!(
+        crate::registry::note_field(&note, "old_config_version").as_deref(),
+        Some("0")
+    );
+    assert_eq!(
+        crate::registry::note_field(&note, "new_config_version").as_deref(),
+        Some("1")
+    );
+    assert_eq!(
+        crate::registry::note_field(&note, "old_activation_generation").as_deref(),
+        Some("0")
+    );
+    assert_eq!(
+        crate::registry::note_field(&note, "new_activation_generation").as_deref(),
+        Some("1")
+    );
+    // Nothing was seeded to invalidate; the counts are present and zero
+    // -- the shape every future caller's event will have, proven here
+    // rather than assumed.
+    assert_eq!(
+        crate::registry::note_field(&note, "invalidated_login_attempts").as_deref(),
+        Some("0")
+    );
+    assert_eq!(
+        crate::registry::note_field(&note, "invalidated_mfa_pending").as_deref(),
+        Some("0")
+    );
+    assert_eq!(
+        crate::registry::note_field(&note, "invalidated_ceremonies").as_deref(),
+        Some("0")
+    );
+    assert!(
+        !note.contains("new-secret") && !note.contains("old-secret"),
+        "the plaintext secret must never reach the note:\n{note}"
+    );
+    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
+    record_exactly_once_coverage("C23");
+}
+
+/// §B's own two-provider isolation proof, exercised through the real
+/// command rather than the shared invalidation function directly: a
+/// pending login attempt for a second, untouched provider must survive
+/// a policy replacement on the first.
+#[tokio::test]
+async fn replacing_one_providers_policy_invalidates_only_that_providers_flows() {
+    let db = fresh_db();
+    let target = sample_enabled_row("c23-target");
+    repos::federation_provider::create_enabled_for_test(&db, &target, None)
+        .await
+        .expect("seed target");
+    let other = sample_enabled_row("c23-other");
+    repos::federation_provider::create_enabled_for_test(&db, &other, None)
+        .await
+        .expect("seed other");
+
+    repos::federation_login_attempt::insert(
+        &db,
+        target.id,
+        0,
+        0,
+        [1u8; 32],
+        [2u8; 32],
+        [3u8; 32],
+        b"pkce-verifier",
+        "https://rp.example/cb".into(),
+        None,
+        Utc::now(),
+    )
+    .await
+    .expect("seed target's attempt");
+    repos::federation_login_attempt::insert(
+        &db,
+        other.id,
+        0,
+        0,
+        [4u8; 32],
+        [5u8; 32],
+        [6u8; 32],
+        b"pkce-verifier",
+        "https://rp.example/cb".into(),
+        None,
+        Utc::now(),
+    )
+    .await
+    .expect("seed other's attempt");
+
+    let proposed = a_proposed_policy(&target.issuer);
+    crate::commands::replace_federation_provider_policy(
+        &db,
+        target.id,
+        proposed,
+        String::new(),
+        None,
+        Utc::now(),
+    )
+    .await
+    .expect("C23 must not error")
+    .expect("must change");
+
+    let target_now = repos::federation_login_attempt::find_by_state_sha256(&db, [1u8; 32])
+        .await
+        .expect("target attempt still exists");
+    let other_now = repos::federation_login_attempt::find_by_state_sha256(&db, [4u8; 32])
+        .await
+        .expect("other attempt still exists");
+    assert_eq!(
+        target_now.status,
+        crate::models::FederationLoginAttemptStatus::Failed,
+        "the target provider's own pending attempt must be invalidated"
+    );
+    assert_eq!(
+        other_now.status,
+        crate::models::FederationLoginAttemptStatus::Pending,
+        "the other provider's attempt must be untouched"
+    );
+}
+
+#[tokio::test]
+async fn an_unchanged_policy_is_a_no_op_and_writes_no_event() {
+    let db = fresh_db();
+    let row = sample_enabled_row("c23-unchanged");
+    repos::federation_provider::create_enabled_for_test(&db, &row, Some("same-secret"))
+        .await
+        .expect("seed");
+    let before = audit_rows(&db).await;
+
+    let proposed = FederationTrustPolicy::new(
+        &row.issuer,
+        &row.client_id,
+        true,
+        &row.scopes,
+        &["RS256"],
+        &[],
+        row.provision_mode.clone(),
+    )
+    .expect("valid policy");
+
+    let result = crate::commands::replace_federation_provider_policy(
+        &db,
+        row.id,
+        proposed,
+        String::new(),
+        Some("same-secret".into()),
+        Utc::now(),
+    )
+    .await
+    .expect("must not error");
+    assert!(result.is_none(), "nothing differs; must be a no-op");
+
+    let stored = repos::federation_provider::get(&db, row.id)
+        .await
+        .expect("get");
+    assert!(
+        stored.enabled,
+        "an unchanged policy must not disable the provider"
+    );
+    assert_eq!(
+        stored.config_version, 0,
+        "a generation must never be burned for nothing"
+    );
+    assert_eq!(audit_rows(&db).await, before, "no event written");
+}
+
+#[tokio::test]
+async fn an_unchanged_secret_is_not_resealed() {
+    let db = fresh_db();
+    let row = sample_enabled_row("c23-secret-same");
+    repos::federation_provider::create_enabled_for_test(&db, &row, Some("the-secret"))
+        .await
+        .expect("seed");
+    let before_enc = repos::federation_provider::get(&db, row.id)
+        .await
+        .expect("get")
+        .client_secret_enc
+        .expect("secret present");
+
+    // The secret stays the same; scopes changes, so the call is not a
+    // no-op overall.
+    let proposed = FederationTrustPolicy::new(
+        &row.issuer,
+        &row.client_id,
+        true,
+        "openid",
+        &["RS256"],
+        &[],
+        row.provision_mode.clone(),
+    )
+    .expect("valid policy");
+    let audited = crate::commands::replace_federation_provider_policy(
+        &db,
+        row.id,
+        proposed,
+        String::new(),
+        Some("the-secret".into()),
+        Utc::now(),
+    )
+    .await
+    .expect("must not error")
+    .expect("scopes changed");
+    assert!(
+        !audited.into_inner().contains(&"client_secret"),
+        "the unchanged secret must not be reported as a changed field"
+    );
+
+    let after_enc = repos::federation_provider::get(&db, row.id)
+        .await
+        .expect("get")
+        .client_secret_enc
+        .expect("secret present");
+    assert_eq!(
+        before_enc, after_enc,
+        "an unchanged secret must not be resealed -- the stored bytes must be byte-identical, \
+         not merely decrypt to the same plaintext, since a fresh seal always produces a \
+         different nonce/ciphertext"
+    );
+}
+
+#[tokio::test]
+async fn a_changed_secret_is_resealed() {
+    let db = fresh_db();
+    let row = sample_enabled_row("c23-secret-changed");
+    repos::federation_provider::create_enabled_for_test(&db, &row, Some("old-secret"))
+        .await
+        .expect("seed");
+    let before_enc = repos::federation_provider::get(&db, row.id)
+        .await
+        .expect("get")
+        .client_secret_enc
+        .expect("secret present");
+
+    let proposed = FederationTrustPolicy::new(
+        &row.issuer,
+        &row.client_id,
+        true,
+        &row.scopes,
+        &["RS256"],
+        &[],
+        row.provision_mode.clone(),
+    )
+    .expect("valid policy");
+    let audited = crate::commands::replace_federation_provider_policy(
+        &db,
+        row.id,
+        proposed,
+        String::new(),
+        Some("new-secret".into()),
+        Utc::now(),
+    )
+    .await
+    .expect("must not error")
+    .expect("secret changed");
+    assert!(audited.into_inner().contains(&"client_secret"));
+
+    let stored = repos::federation_provider::get(&db, row.id)
+        .await
+        .expect("get");
+    let after_enc = stored.client_secret_enc.expect("secret present");
+    assert_ne!(before_enc, after_enc, "a changed secret must be resealed");
+    let opened = crate::crypto::open(db.key(), &after_enc, crate::repos::federation_provider::AAD)
+        .expect("must decrypt");
+    assert_eq!(opened, b"new-secret");
+}
+
+#[tokio::test]
+async fn c23_against_a_nonexistent_provider_is_notfound() {
+    let db = fresh_db();
+    let ghost = FederationProviderId::new();
+    let before = audit_rows(&db).await;
+
+    let result = crate::commands::replace_federation_provider_policy(
+        &db,
+        ghost,
+        a_proposed_policy("https://ghost.example"),
+        String::new(),
+        None,
+        Utc::now(),
+    )
+    .await;
+    assert!(matches!(result, Err(StoreError::NotFound)));
+    assert_eq!(audit_rows(&db).await, before);
+}
+
+#[tokio::test]
+async fn c23_injected_failure_before_append_rolls_back_everything() {
+    let db = fresh_db();
+    let row = sample_enabled_row("c23-rollback");
+    repos::federation_provider::create_enabled_for_test(&db, &row, Some("old-secret"))
+        .await
+        .expect("seed");
+    let before_audit = latest_audit_action(&db).await;
+
+    db.fault_injector().fail_before_next_append();
+    let proposed = a_proposed_policy(&row.issuer);
+    let result = crate::commands::replace_federation_provider_policy(
+        &db,
+        row.id,
+        proposed,
+        String::new(),
+        Some("new-secret".into()),
+        Utc::now(),
+    )
+    .await;
+    assert!(result.is_err(), "injected failure must surface as Err");
+
+    let stored = repos::federation_provider::get(&db, row.id)
+        .await
+        .expect("get");
+    assert!(stored.enabled, "the row must not have been disabled");
+    assert_eq!(stored.config_version, 0);
+    assert_eq!(
+        stored.client_secret_enc,
+        repos::federation_provider::get(&db, row.id)
+            .await
+            .expect("get")
+            .client_secret_enc,
+        "no reseal must have survived rollback either"
+    );
+    assert_eq!(latest_audit_action(&db).await, before_audit);
+    record_rollback_coverage("C23");
+}
+
+#[tokio::test]
+async fn a_config_version_overflow_refuses_and_writes_nothing() {
+    let db = fresh_db();
+    let mut row = sample_enabled_row("c23-overflow");
+    row.config_version = i64::MAX;
+    repos::federation_provider::create_enabled_for_test(&db, &row, None)
+        .await
+        .expect("seed");
+    let before = audit_rows(&db).await;
+
+    let proposed = a_proposed_policy(&row.issuer);
+    let result = crate::commands::replace_federation_provider_policy(
+        &db,
+        row.id,
+        proposed,
+        String::new(),
+        None,
+        Utc::now(),
+    )
+    .await;
+    assert!(
+        matches!(result, Err(StoreError::Integrity(_))),
+        "an overflowing checked_add must refuse, not wrap"
+    );
+    let stored = repos::federation_provider::get(&db, row.id)
+        .await
+        .expect("get");
+    assert_eq!(stored.config_version, i64::MAX, "nothing must have changed");
+    assert_eq!(audit_rows(&db).await, before);
+}
+
+// ── C25 — disable on removal from configuration (amendment A2) ────────
+
+#[tokio::test]
+async fn an_enabled_provider_removed_from_config_is_disabled_and_keeps_its_links() {
+    let db = fresh_db();
+    let row = sample_enabled_row("c25-happy");
+    repos::federation_provider::create_enabled_for_test(&db, &row, None)
+        .await
+        .expect("seed enabled provider");
+    let user = a_user();
+    repos::users::create(&db, &user).await.expect("seed user");
+    repos::federation_link::upsert(
+        &db,
+        crate::models::FederationLinkRow {
+            user_id: user.id,
+            provider_id: row.id,
+            upstream_sub: "sub-1".into(),
+            upstream_email: None,
+            linked_at: Utc::now(),
+            last_seen_at: Utc::now(),
+        },
+    )
+    .await
+    .expect("seed link");
+    let before = audit_rows(&db).await;
+
+    let audited =
+        crate::commands::remove_federation_provider_from_configuration(&db, row.id, Utc::now())
+            .await
+            .expect("must not error")
+            .expect("an enabled provider must be disabled");
+    audited.into_inner();
+
+    let stored = repos::federation_provider::get(&db, row.id)
+        .await
+        .expect("get");
+    assert!(!stored.enabled);
+    assert_eq!(
+        stored.validation_status,
+        crate::models::ValidationStatus::RequiresReview
+    );
+    assert!(stored.evidence_policy_digest.is_none());
+    assert_eq!(stored.activation_generation, 1);
+    assert_eq!(
+        stored.config_version, 0,
+        "config_version is untouched by a disable"
+    );
+    assert!(
+        repos::federation_link::any_link_exists_for_provider(&db, row.id)
+            .await
+            .expect("link check"),
+        "the link must be kept"
+    );
+
+    let event = last_event(&db).await;
+    assert_eq!(
+        event.action,
+        "federation.provider.removed_from_configuration"
+    );
+    assert_eq!(event.target.as_deref(), Some(row.id.to_string().as_str()));
+    let note = event.note.expect("note");
+    assert_eq!(
+        crate::registry::note_field(&note, "old_activation_generation").as_deref(),
+        Some("0")
+    );
+    assert_eq!(
+        crate::registry::note_field(&note, "new_activation_generation").as_deref(),
+        Some("1")
+    );
+    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
+    record_exactly_once_coverage("C25");
+}
+
+#[tokio::test]
+async fn an_already_disabled_provider_removed_from_config_is_a_no_op() {
+    let db = fresh_db();
+    let row = sample_row("c25-already-disabled");
+    repos::federation_provider::create(&db, &row, None)
+        .await
+        .expect("seed disabled provider");
+    let before = audit_rows(&db).await;
+
+    let result =
+        crate::commands::remove_federation_provider_from_configuration(&db, row.id, Utc::now())
+            .await
+            .expect("must not error");
+    assert!(result.is_none(), "an already-disabled provider is a no-op");
+
+    let stored = repos::federation_provider::get(&db, row.id)
+        .await
+        .expect("get");
+    assert_eq!(
+        stored.activation_generation, 0,
+        "a generation must never be burned for nothing"
+    );
+    assert_eq!(audit_rows(&db).await, before, "no event written");
+    record_rollback_coverage("C25"); // the non-committing guarded path *is* this command's rollback case
+}
+
+#[tokio::test]
+async fn c25_against_a_nonexistent_provider_is_notfound() {
+    let db = fresh_db();
+    let ghost = FederationProviderId::new();
+    let before = audit_rows(&db).await;
+
+    let result =
+        crate::commands::remove_federation_provider_from_configuration(&db, ghost, Utc::now())
+            .await;
+    assert!(matches!(result, Err(StoreError::NotFound)));
+    assert_eq!(audit_rows(&db).await, before);
+}
+
+// ── C26 — display-name update (no disable) ─────────────────────────────
+
+#[tokio::test]
+async fn a_changed_display_name_is_applied_without_disabling_the_provider() {
+    let db = fresh_db();
+    let row = sample_enabled_row("c26-happy");
+    repos::federation_provider::create_enabled_for_test(&db, &row, None)
+        .await
+        .expect("seed enabled provider");
+    let before = audit_rows(&db).await;
+
+    let audited = crate::commands::update_federation_provider_display_name(
+        &db,
+        row.id,
+        "A New Label".into(),
         Utc::now(),
     )
     .await
@@ -160,45 +754,36 @@ async fn a_c24_origins_change() {
     let stored = repos::federation_provider::get(&db, row.id)
         .await
         .expect("get");
-    assert_eq!(
-        stored.allowed_origins,
-        "https://a.example https://b.example https://c.example"
+    assert_eq!(stored.display_name, "A New Label");
+    assert!(
+        stored.enabled,
+        "display_name is not trust policy; must not disable"
     );
+    assert_eq!(stored.config_version, 0);
+    assert_eq!(stored.activation_generation, 0);
 
     let event = last_event(&db).await;
-    assert_eq!(event.action, "federation.provider.allowed_origins_changed");
+    assert_eq!(event.action, "federation.provider.display_name_changed");
     assert_eq!(event.target.as_deref(), Some(row.id.to_string().as_str()));
-    let note = event.note.expect("note");
-    assert_eq!(
-        crate::registry::note_field(&note, "origins_before").as_deref(),
-        Some("2")
-    );
-    assert_eq!(
-        crate::registry::note_field(&note, "origins_after").as_deref(),
-        Some("3")
-    );
-    assert!(
-        !note.contains("a.example") && !note.contains("b.example") && !note.contains("c.example"),
-        "only the counts, never the origin lists:\n{note}"
-    );
+    assert_eq!(event.note, None, "no values in this event");
     assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
-    record_exactly_once_coverage("C24");
+    record_exactly_once_coverage("C26");
 }
 
 #[tokio::test]
-async fn c24_injected_failure_before_append_rolls_back_the_change() {
+async fn c26_injected_failure_before_append_rolls_back_the_change() {
     let db = fresh_db();
-    let row = sample_row("c24-rollback");
-    repos::federation_provider::create(&db, &row, None)
+    let row = sample_enabled_row("c26-rollback");
+    repos::federation_provider::create_enabled_for_test(&db, &row, None)
         .await
-        .expect("seed provider");
+        .expect("seed enabled provider");
     let before_audit = latest_audit_action(&db).await;
 
     db.fault_injector().fail_before_next_append();
-    let result = crate::commands::update_federation_provider_allowed_origins(
+    let result = crate::commands::update_federation_provider_display_name(
         &db,
         row.id,
-        "https://changed.example".into(),
+        "A New Label".into(),
         Utc::now(),
     )
     .await;
@@ -208,73 +793,201 @@ async fn c24_injected_failure_before_append_rolls_back_the_change() {
         .await
         .expect("get");
     assert_eq!(
-        stored.allowed_origins, row.allowed_origins,
+        stored.display_name, row.display_name,
         "the change must not have survived rollback"
     );
     assert_eq!(latest_audit_action(&db).await, before_audit);
-    record_rollback_coverage("C24");
+    record_rollback_coverage("C26");
 }
 
-/// RFC 140 stage 1 §1: `origins_before` must come from reading the row
-/// inside this command's own transaction, not from a value a caller
-/// computed earlier and could be holding stale. Proven by changing the
-/// stored row out from under the seeded fixture's own idea of it
-/// (`sample_row`'s two origins) before the command runs — if the count
-/// came from anywhere but a fresh, in-transaction read, it would report
-/// the seeded value (2), not the row's true current one (1).
+// ── S2b review fold-ins ───────────────────────────────────────────────
+
+/// A row migration 0051 copied: everything recorded except the
+/// algorithms, with origins consistent with its issuer.
+fn a_row_0051_copied(slug: &str) -> crate::models::FederationProviderRow {
+    let mut row = sample_row(slug);
+    row.allowed_origins = String::new();
+    row.id_token_algs = None;
+    row
+}
+
+/// The event is hash-chained: it must name the field that changed, not
+/// all seven, when only the algorithms were unrecorded.
 #[tokio::test]
-async fn origins_before_is_read_fresh_inside_the_transaction_not_stale() {
+async fn c23_on_a_row_0051_copied_records_only_the_unrecorded_field() {
     let db = fresh_db();
-    let row = sample_row("c24-freshness");
+    let row = a_row_0051_copied("c23-legacy");
     repos::federation_provider::create(&db, &row, None)
         .await
-        .expect("seed provider");
-    repos::federation_provider::update_allowed_origins(
-        &db,
-        row.id,
-        "https://only-one.example",
-        Utc::now(),
+        .expect("seed");
+    let proposed = FederationTrustPolicy::new(
+        &row.issuer,
+        &row.client_id,
+        false,
+        &row.scopes,
+        &["RS256"],
+        &[],
+        row.provision_mode.clone(),
     )
-    .await
-    .expect("directly change the stored value, bypassing any caller-held copy");
+    .expect("valid");
 
-    let audited = crate::commands::update_federation_provider_allowed_origins(
+    crate::commands::replace_federation_provider_policy(
         &db,
         row.id,
-        "https://a.example https://b.example https://c.example".into(),
+        proposed,
+        String::new(),
+        None,
         Utc::now(),
     )
     .await
-    .expect("update");
-    audited.into_inner();
+    .expect("C23")
+    .expect("records the algorithms");
 
     let event = last_event(&db).await;
+    assert_eq!(event.action, "federation.provider.policy_updated");
     let note = event.note.expect("note");
     assert_eq!(
-        crate::registry::note_field(&note, "origins_before").as_deref(),
-        Some("1"),
-        "origins_before must reflect the row's true current state (1 origin), \
-         not the fixture's original seeded state (2) -- proving the read is \
-         fresh and inside this transaction, not a value from outside it"
+        crate::registry::note_field(&note, "changed_fields").as_deref(),
+        Some("id_token_algs")
     );
+    let stored = repos::federation_provider::get(&db, row.id)
+        .await
+        .expect("get");
+    assert_eq!(stored.id_token_algs.as_deref(), Some("RS256"));
 }
 
+/// The secret's absent case, and the method derived from it.
 #[tokio::test]
-async fn c24_against_a_nonexistent_provider_is_notfound_and_writes_no_record() {
+async fn a_removed_secret_changes_the_secret_and_the_token_auth_method() {
     let db = fresh_db();
-    let ghost = FederationProviderId::new();
-    let before = audit_rows(&db).await;
+    let row = sample_enabled_row("c23-secret-removed");
+    repos::federation_provider::create_enabled_for_test(&db, &row, Some("old-secret"))
+        .await
+        .expect("seed");
+    let proposed = FederationTrustPolicy::new(
+        &row.issuer,
+        &row.client_id,
+        false,
+        &row.scopes,
+        &["RS256"],
+        &[],
+        row.provision_mode.clone(),
+    )
+    .expect("valid");
 
-    let result = crate::commands::update_federation_provider_allowed_origins(
+    let changed = crate::commands::replace_federation_provider_policy(
         &db,
-        ghost,
-        "https://x.example".into(),
+        row.id,
+        proposed,
+        String::new(),
+        None,
         Utc::now(),
     )
-    .await;
-    assert!(
-        matches!(result, Err(StoreError::NotFound)),
-        "expected NotFound"
+    .await
+    .expect("C23")
+    .expect("changed")
+    .into_inner();
+
+    assert_eq!(changed, ["client_secret", "token_auth_method"]);
+    let stored = repos::federation_provider::get(&db, row.id)
+        .await
+        .expect("get");
+    assert!(stored.client_secret_enc.is_none(), "the secret is cleared");
+    assert!(!stored.enabled);
+}
+
+/// S2b §B's two-provider test, for all three tables: only the named
+/// provider's attempt, continuation and ceremony are touched, with exact
+/// counts.
+#[tokio::test]
+async fn the_flow_invalidation_touches_only_the_named_providers_flows() {
+    use crate::tests_rfc096_b2_stage2a::{
+        seed_attempt, seed_ceremony, seed_link, seed_mfa_pending, seed_user,
+    };
+    let db = fresh_db();
+    let a = sample_row("flows-a");
+    let b = sample_row("flows-b");
+    repos::federation_provider::create(&db, &a, None)
+        .await
+        .expect("a");
+    repos::federation_provider::create(&db, &b, None)
+        .await
+        .expect("b");
+    let (aid, bid) = (a.id.to_string(), b.id.to_string());
+    db.with_conn(move |c| {
+        seed_user(c, "user-a");
+        seed_user(c, "user-b");
+        seed_link(c, "user-a", &aid);
+        seed_link(c, "user-b", &bid);
+        seed_attempt(c, "attempt-a", &aid, 1);
+        seed_attempt(c, "attempt-b", &bid, 2);
+        seed_mfa_pending(c, "pending-a", &aid, "user-a", 3);
+        seed_mfa_pending(c, "pending-b", &bid, "user-b", 4);
+        seed_ceremony(c, "ceremony-a", "pending-a", &aid, "user-a");
+        seed_ceremony(c, "ceremony-b", "pending-b", &bid, "user-b");
+        Ok(())
+    })
+    .await
+    .expect("seed flows");
+
+    let target = a.id;
+    let counts = db
+        .with_tx(move |tx| {
+            crate::commands::invalidate_provider_flows_within_tx(tx, target, Utc::now())
+        })
+        .await
+        .expect("invalidate");
+    assert_eq!(
+        (counts.login_attempts, counts.mfa_pending, counts.ceremonies),
+        (1, 1, 1)
     );
-    assert_eq!(audit_rows(&db).await, before);
+
+    let state = db
+        .with_conn(|c| {
+            let attempt = |id: &str| -> rusqlite::Result<String> {
+                c.query_row(
+                    "SELECT status FROM federation_login_attempt WHERE id = ?1",
+                    [id],
+                    |r| r.get(0),
+                )
+            };
+            let pending = |id: &str| -> rusqlite::Result<(String, bool)> {
+                c.query_row(
+                    "SELECT status, continuation_sealed IS NULL FROM federation_mfa_pending \
+                     WHERE id = ?1",
+                    [id],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+            };
+            let ceremony = |id: &str| -> rusqlite::Result<i64> {
+                c.query_row(
+                    "SELECT COUNT(*) FROM federation_webauthn_ceremony WHERE id = ?1",
+                    [id],
+                    |r| r.get(0),
+                )
+            };
+            Ok((
+                attempt("attempt-a")?,
+                attempt("attempt-b")?,
+                pending("pending-a")?,
+                pending("pending-b")?,
+                ceremony("ceremony-a")?,
+                ceremony("ceremony-b")?,
+            ))
+        })
+        .await
+        .expect("read back");
+    assert_eq!(state.0, "failed");
+    assert_eq!(
+        state.1, "pending",
+        "the other provider's attempt is untouched"
+    );
+    assert_eq!(state.2, ("invalidated".to_string(), true));
+    assert_eq!(
+        state.3,
+        ("pending".to_string(), false),
+        "the other continuation is untouched"
+    );
+    assert_eq!(state.4, 0, "the named provider's ceremony is gone");
+    assert_eq!(state.5, 1, "the other provider's ceremony is kept");
 }

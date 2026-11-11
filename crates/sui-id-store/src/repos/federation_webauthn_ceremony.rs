@@ -217,6 +217,26 @@ pub fn delete_by_pending_id_within_tx(
     Ok(n == 1)
 }
 
+/// RFC 096-B2 S2b §B: every bound ceremony for one provider, deleted —
+/// migration 0050's own upgrade SQL (`:207`), scoped by `provider_id`
+/// (this table's own column, migration 0047) instead of unconditionally,
+/// on the caller's own transaction (C23, C25, and later C17's disable
+/// and C18). Unlike [`consume_within_tx`]/[`delete_by_pending_id_within_
+/// tx`], this reaches every in-flight ceremony for the provider at once,
+/// not one keyed row — the same relationship [`federation_mfa_pending::
+/// invalidate_for_provider_within_tx`] has to [`federation_mfa_pending::
+/// invalidate_within_tx`]. Returns the count deleted.
+pub fn delete_for_provider_within_tx(
+    conn: &rusqlite::Connection,
+    provider_id: FederationProviderId,
+) -> StoreResult<usize> {
+    let n = conn.execute(
+        "DELETE FROM federation_webauthn_ceremony WHERE provider_id = ?1",
+        [provider_id.to_string()],
+    )?;
+    Ok(n)
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests;

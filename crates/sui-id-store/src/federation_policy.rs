@@ -140,6 +140,58 @@ pub fn from_stored(
     .map_err(StoredPolicyError::Invalid)
 }
 
+/// C23's changed-field set for the seven fields that are not the secret
+/// (the secret and the token-auth method it implies are compared by C23
+/// itself, in constant time). Each stored field is decoded **on its
+/// own**, so a row with only `id_token_algs` unrecorded reports only
+/// `id_token_algs`. A stored field that is NULL or fails its rule counts
+/// as changed. The event that carries this set is hash-chained, so it
+/// must name what changed, not everything that might have.
+///
+/// Lists compare as sets, as the policy digest sorts them (RFC 096
+/// `:430-432`): reordering origins in the config file is not a change,
+/// and must not disable a provider.
+pub fn changed_fields(
+    stored: &crate::models::FederationProviderRow,
+    proposed: &FederationTrustPolicy,
+) -> BTreeSet<&'static str> {
+    let mut changed = BTreeSet::new();
+    if stored.issuer != proposed.issuer() {
+        changed.insert("issuer");
+    }
+    if stored.client_id != proposed.client_id() {
+        changed.insert("client_id");
+    }
+    if validate_scopes(&stored.scopes).ok().as_deref() != Some(proposed.scopes()) {
+        changed.insert("scopes");
+    }
+    let stored_algs = stored.id_token_algs.as_deref().and_then(|s| {
+        let tokens: Vec<&str> = s.split_whitespace().collect();
+        validate_id_token_algs(&tokens).ok()
+    });
+    if stored_algs.as_deref() != Some(proposed.id_token_algs()) {
+        changed.insert("id_token_algs");
+    }
+    // The stored list's effective set, against the stored issuer: `""`
+    // means that issuer's origin alone (migration 0045).
+    let raw: Vec<&str> = stored.allowed_origins.split_whitespace().collect();
+    let stored_origins: Option<BTreeSet<String>> = validate_origins(&stored.issuer, &raw)
+        .ok()
+        .map(|o| o.into_iter().collect());
+    let proposed_origins: BTreeSet<String> = proposed.allowed_origins().iter().cloned().collect();
+    if stored_origins.as_ref() != Some(&proposed_origins) {
+        changed.insert("endpoint_origins");
+    }
+    let stored_ports = stored_origins.map(|o| derive_ports(&o.into_iter().collect::<Vec<_>>()));
+    if stored_ports.as_deref() != Some(proposed.https_ports()) {
+        changed.insert("https_ports");
+    }
+    if stored.provision_mode != proposed.provision_mode() {
+        changed.insert("provision_mode");
+    }
+    changed
+}
+
 /// RFC 096 `:359`'s scope rule, applied to a raw space-separated value,
 /// returning its canonical encoding. Lets startup compare a stored value
 /// with a configured one by meaning, not spelling: `"email openid"` and

@@ -215,7 +215,9 @@ a silent drop — is the same either way.
 | Event name | Label | Description |
 |---|---|---|
 | `federation.provider.created` | Federation provider created | A `[[federation_providers]]` config block absent from the database was created at startup. No actor — startup provisioning, not an administrator action. Note fields: `slug`, `issuer`; never the client secret. |
-| `federation.provider.allowed_origins_changed` | Federation provider origins changed | A configured `allowed_origins` list that differs from the stored one was written over it at startup. No actor. Note fields: `origins_before`, `origins_after` — counts, never the origin lists themselves. |
+| `federation.provider.policy_updated` | Federation provider trust policy replaced | A configured trust-policy field (issuer, client ID, client secret, scopes, ID-token algorithms, allowed origins, or provision mode) differs from the stored, decoded value at startup; the complete policy was replaced and the provider disabled until an administrator reviews and re-enables it. No actor. Note fields: `old_config_version`, `new_config_version`, `old_activation_generation`, `new_activation_generation`, `changed_fields` (sorted, comma-separated field names — never the values themselves), `invalidated_login_attempts`, `invalidated_mfa_pending`, `invalidated_ceremonies`. |
+| `federation.provider.removed_from_configuration` | Federation provider removed from configuration | A stored provider's `[[federation_providers]]` block was absent from this boot's configuration, and the provider was enabled; it was disabled and its pending flows invalidated, keeping its federation links. No actor. Note fields: `old_activation_generation`, `new_activation_generation`, `invalidated_login_attempts`, `invalidated_mfa_pending`, `invalidated_ceremonies`. |
+| `federation.provider.display_name_changed` | Federation provider display name changed | A configured `display_name` that differs from the stored one was written over it at startup — applies without disabling the provider, since it is not trust policy. No actor, no note fields. |
 
 ## Federation events (RFC 004)
 
@@ -321,6 +323,13 @@ appear in an existing audit log, and this section is where to look one up.
   `admin.setup.completed`, now committed in the same transaction as the
   admin user, credential, signing-key bootstrap and initialized flag it
   records, rather than as a fifth, separately-committed write after them.
+- `federation.provider.allowed_origins_changed` — retired by RFC 096-B2
+  S2b (amendment A4, corrected 2026-11-11). A configured `allowed_origins`
+  list differing from the stored one was reconciled on its own, at
+  startup (C24). `allowed_origins` is trust policy like every other
+  federation-provider field; C24 folded into `federation.provider.
+  policy_updated` (C23), which replaces the complete policy and disables
+  the provider, rather than quietly rewriting one column.
 - `auth.sessions.bulk_revoke_self` — retired by cycle I stage 2 (2026-10-30).
   User revoked all sessions except the current one. Replaced by
   `auth.sessions.revoked`, which also covers the RP-initiated-logout surface

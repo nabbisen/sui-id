@@ -71,6 +71,29 @@ it (cycle I stage 5, 2026-10-31). Its row was `A`, event
 test `a_c13_scope_delete` (a planning-time placeholder). The TOML has no
 `C13` row; this paragraph is its record.
 
+**Retired: `C24`, federation-provider allowed-origins reconcile.** Folded
+into `C23` (federation-provider trust-policy replacement) by RFC 096-B2
+S2b (2026-11-11), RFC 096 amendment A4 (corrected 2026-11-11):
+`allowed_origins` is one of the policy digest's nine trust-policy fields
+(RFC 096 `:424-434`), like `issuer`, `client_id` or `scopes` — reconciling
+it on its own, silently, while every other trust field was only warned
+about, was the inconsistency A4's correction removed. `federation_
+provider::update_allowed_origins`/`update_allowed_origins_within_tx` and
+`commands::update_federation_provider_allowed_origins` are deleted, with
+no caller left anywhere in `crates/` (confirmed by a full-workspace grep
+before deleting them). Its row was `A`, event `federation.provider.
+allowed_origins_changed` (now in `docs/src/reference/audit-events.md`'s
+Retired events, replaced by `federation.provider.policy_updated`),
+mutation surface `federation_provider::update_allowed_origins_within_tx`.
+All four of its own tests are deleted, not moved — `a_c24_origins_change`,
+`c24_injected_failure_before_append_rolls_back_the_change`,
+`c24_against_a_nonexistent_provider_is_notfound_and_writes_no_record`,
+and `origins_before_is_read_fresh_inside_the_transaction_not_stale` each
+exercised the now-deleted primitive directly; `C23`'s own suite covers an
+origins-only config change as one case of its general field-by-field
+comparison, not as a dedicated corresponding test. The TOML has no `C24`
+row; this paragraph is its record.
+
 ## Classes
 
 | Class | Meaning |

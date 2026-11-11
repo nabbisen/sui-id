@@ -443,6 +443,24 @@ pub fn invalidate_within_tx(
     Ok(n == 1)
 }
 
+/// RFC 096-B2 S2b §B: every `pending` continuation for one provider,
+/// invalidated — migration 0050's own upgrade SQL (`:221-224`), scoped by
+/// `provider_id` instead of unconditionally, on the caller's own
+/// transaction (C23, C25, and later C17's disable and C18). Semantics
+/// match [`invalidate_within_tx`] exactly: `continuation_sealed` cleared,
+/// guarded on `status = 'pending'` alone. Returns the count invalidated.
+pub fn invalidate_for_provider_within_tx(
+    conn: &rusqlite::Connection,
+    provider_id: FederationProviderId,
+) -> StoreResult<usize> {
+    let n = conn.execute(
+        "UPDATE federation_mfa_pending SET status = 'invalidated', continuation_sealed = NULL \
+         WHERE provider_id = ?1 AND status = 'pending'",
+        [provider_id.to_string()],
+    )?;
+    Ok(n)
+}
+
 /// RFC 096 `:734`: terminal rows are purged after 24 hours. **Not filtered
 /// on `status`**, the same choice `federation_login_attempt::purge_expired`
 /// already made and for the same reason restated for this table rather

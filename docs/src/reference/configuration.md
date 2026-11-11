@@ -265,20 +265,23 @@ providers for federated sign-in (the "Sign in with X" flow).
 > locally-provisioned user is created with `is_disabled = true` as well.
 
 > **Which fields take effect after the provider already exists.**
-> `allowed_origins` is reconciled from this file on every boot, so editing
-> it (for example to add a second origin) takes effect on the next restart
-> without re-creating the provider. Every other field — `display_name`,
-> `issuer`, `client_id`, `client_secret_env`, `scopes`, `provision_mode`
-> and `id_token_algs` — is read from this file only when the provider is
-> first created;
-> editing one of these in the config afterward has no effect on the
-> stored provider, and the server logs a warning naming the field and
-> both values on every boot while they disagree (except the secret,
-> which is never compared or warned about). There is currently no admin
-> UI or CLI for editing a provider's other fields; the only way to change
-> one today is to edit the database row directly, or to delete and
-> re-create the provider, which cascades to every federation link to it
-> and unlinks every federated user.
+> `display_name` is reconciled from this file on every boot, and applies
+> without disabling the provider — it is not part of its trust policy.
+> Every other field — `issuer`, `client_id`, `client_secret_env`,
+> `scopes`, `provision_mode`, `allowed_origins` and `id_token_algs` — is
+> trust policy, and a change to any one of them also applies on the next
+> boot, but **disables the provider** until an administrator reviews and
+> re-enables it; the server logs a warning naming the provider and which
+> fields changed. Values are compared by meaning: listing the same scopes,
+> algorithms or origins in another order is not a change. (The secret is compared by its plaintext, in constant
+> time, after decrypting the stored value — never logged either way.)
+> There is currently no admin UI or CLI to review and re-enable a
+> provider after this; that mechanism ships later.
+>
+> Removing a provider's `[[federation_providers]]` block entirely also
+> disables it (keeping its existing federation links) rather than
+> deleting anything. Restoring the block keeps it disabled until it is
+> reviewed and re-enabled.
 >
 > `enabled` is never read into the stored provider at all, at creation or
 > on any later boot — RFC 096-B2 made enabling a provider an

@@ -334,7 +334,8 @@ pub async fn prepare(cfg: Config, backup: crate::database::PreMigrationBackup) -
         // Check if already in DB; create if missing.
         match sui_id_store::repos::federation_provider::get_by_slug(&state.db, &cfg.slug).await {
             Ok(existing) => {
-                reconcile_federation_provider(&state.db, cfg, &existing, state.clock.now()).await;
+                reconcile_federation_provider(&state.db, cfg, &existing, secret, state.clock.now())
+                    .await;
             }
             Err(sui_id_store::StoreError::NotFound) => {
                 register_new_federation_provider(&state.db, cfg, secret, state.clock.now()).await;
@@ -342,6 +343,21 @@ pub async fn prepare(cfg: Config, backup: crate::database::PreMigrationBackup) -
             Err(e) => tracing::error!(error = %e, "federation_provider lookup failed"),
         }
     }
+    // RFC 096-B2 S2b §E (amendment A2): every stored provider whose slug
+    // no configured block names any more. Runs after the loop above, so
+    // a slug present in both a config block and the database is never
+    // considered "removed" by this pass. Nothing between here and the
+    // `Ok(Startup {...})` return below serves a request or routes a
+    // sign-in -- `prepare`'s only caller (`main.rs`) starts listening
+    // after `prepare` returns, so this and the review-warning pass below
+    // both run before the affected providers can be routed or
+    // preflighted (RFC 094 `:547-575` clause 11).
+    remove_providers_no_longer_configured(
+        &state.db,
+        &state.config.federation_providers,
+        state.clock.now(),
+    )
+    .await;
     // RFC 096-B2 S1 §D: one warning per provider still awaiting review --
     // every provider migration 0050 disabled on upgrade, and any later
     // provider that has never been through a successful C17 enable (S4).
@@ -534,136 +550,168 @@ fn warn_if_enabled_key_is_set(cfg: &crate::config::FederationProviderConfig) {
     }
 }
 
-/// RFC 134 step 7 — reconcile one `[[federation_providers]]` block against
-/// its already-existing stored row.
+/// RFC 096-B2 S2b — reconcile one `[[federation_providers]]` block
+/// against its already-existing stored row.
 ///
-/// Only `allowed_origins` is ever written here (7a). Before this, the
-/// origin set was write-once at creation (`Ok(_) => {}`, this match arm's
-/// predecessor): the only way to change it was delete-and-recreate, and
-/// `federation_link`'s `ON DELETE CASCADE` means that destroys every
-/// federated user's account linkage. An administrator adding a second
-/// origin — the Google case RFC 134 D3 itself cites — had no non-destructive
-/// option.
-///
-/// Every other config-managed field that differs from the stored row is
-/// only warned about (7b), never written: changing `issuer` or `client_id`
-/// on a live provider is a larger, separate decision than changing its
-/// origin set, and reconciling it silently here would make that decision
-/// for an administrator who may not have intended it. `enabled` is
-/// deliberately not compared — the row's own column is meant to be a
-/// runtime toggle, independent of this file, so warning every boot about
-/// it would be noise even though (see the package this step shipped with)
-/// nothing in this codebase actually exposes a way to toggle it today.
-/// The client secret is deliberately not compared either — it is
-/// encrypted at rest, and comparing it would mean decrypting it on every
-/// boot just to produce a log line.
+/// **`display_name` (C26) applies without disabling** — it is not trust
+/// policy (RFC 096 `:434`). **Every other field (C23) applies too, now**
+/// — unlike the S2a-era 7b warning this replaces, a trust-field edit is
+/// no longer silently inert: it is applied on this boot, through a
+/// guarded full-policy replacement that forces the provider disabled
+/// and `requires_review` until an administrator re-checks and
+/// re-enables it (RFC 096-B2 S2b §0/§A). `enabled` is still never
+/// compared here — Part E's own warning covers it, independently, in
+/// the main loop.
 async fn reconcile_federation_provider(
     db: &sui_id_store::Database,
     cfg: &crate::config::FederationProviderConfig,
     existing: &sui_id_store::models::FederationProviderRow,
+    secret: Option<String>,
     now: chrono::DateTime<chrono::Utc>,
 ) {
+    use sui_id_store::federation_policy::FederationTrustPolicy;
     use sui_id_store::models::ProvisionMode;
 
-    let desired_origins = cfg.allowed_origins.join(" ");
-    if existing.allowed_origins != desired_origins {
-        tracing::info!(
-            slug = %cfg.slug,
-            old_allowed_origins = %existing.allowed_origins,
-            new_allowed_origins = %desired_origins,
-            "federation_provider allowed_origins changed in config; updating stored value"
-        );
-        // RFC 094 M2b wave 3, C24: the write and its
-        // `federation.provider.allowed_origins_changed` audit append now
-        // commit in one transaction. A failed reconcile must still not
-        // abort startup — preserved from the pre-Class-A call this
-        // replaces. RFC 140 stage 1 §1: the before-count is read inside
-        // that same transaction now, not computed here and passed in.
-        if let Err(e) = sui_id_store::commands::update_federation_provider_allowed_origins(
+    // Never reached in practice: `Config::validate` already refused
+    // startup for an unparseable value. A no-op skip, not a panic, is
+    // this function's own existing rule for every other defensive case.
+    let Ok(provision_mode) = ProvisionMode::try_parse(&cfg.provision_mode) else {
+        tracing::error!(slug = %cfg.slug,
+            "unreachable: provision_mode failed to parse after Config::validate; skipping policy reconcile");
+        return;
+    };
+    let algs: Vec<&str> = cfg.id_token_algs.iter().map(String::as_str).collect();
+    let origins: Vec<&str> = cfg.allowed_origins.iter().map(String::as_str).collect();
+    let Ok(proposed) = FederationTrustPolicy::new(
+        &cfg.issuer,
+        &cfg.client_id,
+        !cfg.client_secret_env.is_empty(),
+        &cfg.scopes,
+        &algs,
+        &origins,
+        provision_mode,
+    ) else {
+        tracing::error!(slug = %cfg.slug,
+            "unreachable: trust policy failed to validate after Config::validate; skipping policy reconcile");
+        return;
+    };
+
+    // RFC 096-B2 S2b §A, C23: one guarded, atomic comparison-and-replace
+    // against the stored, *decoded* value (never column strings -- the
+    // rule the S2a review's own three fold-ins exist to enforce) --
+    // `Ok(None)` means nothing differed, no transaction committed.
+    match sui_id_store::commands::replace_federation_provider_policy(
+        db,
+        existing.id,
+        proposed,
+        // The column's own 0045 encoding, the same choice C16 makes for
+        // the same reason (S2a fold-in 1): storing the policy's
+        // *effective*, expanded origin list here instead would make the
+        // very next boot's own decode-and-compare see a difference that
+        // is not one.
+        cfg.allowed_origins.join(" "),
+        secret,
+        now,
+    )
+    .await
+    {
+        Ok(Some(audited)) => {
+            let changed = audited.into_inner();
+            // TODO(096-B2 S5): "an administrator reviews" below names no
+            // mechanism yet -- there is no admin UI for this today.
+            // Update this message once S5 lands.
+            tracing::warn!(
+                slug = %cfg.slug,
+                changed_fields = %changed.join(","),
+                "federation provider {:?}'s trust policy changed in config ({}); the stored \
+                 policy has been replaced and it is now disabled until an administrator \
+                 reviews and re-enables it -- see the operator guide's \"Reviewing and \
+                 re-enabling a federation provider\" section",
+                cfg.slug,
+                changed.join(","),
+            );
+        }
+        Ok(None) => {}
+        Err(e) => {
+            tracing::error!(error = %e, slug = %cfg.slug,
+                "failed to replace federation_provider trust policy");
+        }
+    }
+    // RFC 094 `:555`: cache eviction only after commit. Nothing to evict:
+    // `http/federation_cache.rs` exists, but nothing on the request path
+    // calls it yet (the handler fetches discovery on each sign-in), and
+    // startup runs before the router exists. Its entries bind (provider,
+    // version, activation generation), so when it is wired in, an entry
+    // from before C23 is not served anyway.
+
+    // C26 after C23 (S2b §D): a boot that changes both trust policy and
+    // label records the policy replacement first. Each is its own
+    // transaction; a label is not trust policy and never disables.
+    if existing.display_name != cfg.display_name
+        && let Err(e) = sui_id_store::commands::update_federation_provider_display_name(
             db,
             existing.id,
-            desired_origins,
+            cfg.display_name.clone(),
+            now,
+        )
+        .await
+    {
+        tracing::error!(error = %e, slug = %cfg.slug,
+            "failed to update federation_provider display_name");
+    }
+}
+
+/// RFC 096-B2 S2b §E (amendment A2): a stored provider whose slug no
+/// configured `[[federation_providers]]` block names any more. If it is
+/// enabled, C25 disables it (keeping its links); if it is already
+/// disabled, C25 commits nothing. Either way, one warning per provider,
+/// every boot — not only the first boot after the block disappears, the
+/// same "keep saying it until it's addressed" choice
+/// [`warn_providers_requiring_review`] already makes.
+///
+/// TODO(096-B2 S6): "restore the block, or delete the provider" below
+/// names deletion as a path with no admin-UI mechanism yet either —
+/// update this message once one exists.
+async fn remove_providers_no_longer_configured(
+    db: &sui_id_store::Database,
+    configured: &[crate::config::FederationProviderConfig],
+    now: chrono::DateTime<chrono::Utc>,
+) {
+    let providers = match sui_id_store::repos::federation_provider::list(db).await {
+        Ok(providers) => providers,
+        Err(e) => {
+            tracing::error!(
+                error = %e,
+                "could not read federation providers to check for ones removed from configuration"
+            );
+            return;
+        }
+    };
+    for provider in providers {
+        if configured.iter().any(|c| c.slug == provider.slug) {
+            continue;
+        }
+        if let Err(e) = sui_id_store::commands::remove_federation_provider_from_configuration(
+            db,
+            provider.id,
             now,
         )
         .await
         {
-            tracing::error!(error = %e, slug = %cfg.slug,
-                "failed to update federation_provider allowed_origins");
+            // Not followed by the warning below: it says the provider is
+            // disabled, which a failed C25 has not made true.
+            tracing::error!(error = %e, slug = %provider.slug,
+                "failed to disable federation_provider removed from configuration");
+            continue;
         }
-    }
-
-    warn_if_federation_field_differs(
-        &cfg.slug,
-        "display_name",
-        &existing.display_name,
-        &cfg.display_name,
-    );
-    warn_if_federation_field_differs(&cfg.slug, "issuer", &existing.issuer, &cfg.issuer);
-    warn_if_federation_field_differs(&cfg.slug, "client_id", &existing.client_id, &cfg.client_id);
-    // Scopes compare by meaning, not spelling: C16 stores the canonical
-    // order, so "email openid" in config is the stored "openid email".
-    // A stored value that is not even valid scopes is shown as it is.
-    let configured_scopes = sui_id_store::federation_policy::canonical_scopes(&cfg.scopes)
-        .unwrap_or_else(|_| cfg.scopes.clone());
-    let stored_scopes = sui_id_store::federation_policy::canonical_scopes(&existing.scopes)
-        .unwrap_or_else(|_| existing.scopes.clone());
-    warn_if_federation_field_differs(&cfg.slug, "scopes", &stored_scopes, &configured_scopes);
-    // RFC 096-B2 S2a: the callback trusts the stored algorithms, so a config
-    // edit to them is not applied. Say so, as for every other field, rather
-    // than let the edit do nothing in silence. A row migration 0051 copied
-    // has none recorded yet.
-    let mut configured_algs: Vec<&str> = cfg.id_token_algs.iter().map(String::as_str).collect();
-    configured_algs.sort_unstable();
-    let mut stored_algs: Vec<&str> = existing
-        .id_token_algs
-        .as_deref()
-        .map(|s| s.split_whitespace().collect())
-        .unwrap_or_default();
-    stored_algs.sort_unstable();
-    if configured_algs != stored_algs {
-        warn_if_federation_field_differs(
-            &cfg.slug,
-            "id_token_algs",
-            existing
-                .id_token_algs
-                .as_deref()
-                .unwrap_or("(not recorded)"),
-            &cfg.id_token_algs.join(" "),
-        );
-    }
-    // Never reached in practice: `Config::validate` already refused
-    // startup for an unparseable value. A no-op skip, not a panic, is
-    // this function's own existing rule for every other defensive case.
-    let Ok(configured_provision_mode) = ProvisionMode::try_parse(&cfg.provision_mode) else {
-        tracing::error!(slug = %cfg.slug,
-            "unreachable: provision_mode failed to parse after Config::validate; skipping the comparison");
-        return;
-    };
-    if configured_provision_mode != existing.provision_mode {
-        warn_if_federation_field_differs(
-            &cfg.slug,
-            "provision_mode",
-            existing.provision_mode.as_str(),
-            &cfg.provision_mode,
-        );
-    }
-}
-
-/// Logs the 7b warning for one differing field, naming the slug, the
-/// field, and both values, with one sentence saying the stored value is
-/// in force and how to change it. A no-op when the two already agree.
-fn warn_if_federation_field_differs(slug: &str, field: &str, stored: &str, configured: &str) {
-    if stored != configured {
         tracing::warn!(
-            slug = %slug,
-            field = %field,
-            stored = %stored,
-            configured = %configured,
-            "federation_provider config field differs from the stored value; \
-             the stored value is in force -- there is no admin UI for this field \
-             today, so changing it means editing the stored row directly or \
-             deleting and recreating the provider (which cascades to its \
-             federation links)"
+            slug = %provider.slug,
+            provider_id = %provider.id,
+            "federation provider {:?} (id {}) has no matching [[federation_providers]] \
+             block in this configuration; it is disabled and keeps its existing federation \
+             links -- restore the block, or delete the provider",
+            provider.slug,
+            provider.id,
         );
     }
 }

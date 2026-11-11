@@ -500,6 +500,28 @@ pub fn complete_within_tx(
     Ok(())
 }
 
+/// RFC 096-B2 S2b §B: every `pending`/`exchanging` attempt for one
+/// provider, terminalized to `failed` — migration 0050's own upgrade SQL
+/// (`:184-187`), scoped by `provider_id` instead of unconditionally, on
+/// the caller's own transaction (C23, C25, and later C17's disable and
+/// C18). Semantics match [`terminalize_failed`] exactly: `COALESCE(
+/// claimed_at, ?1)` leaves an already-`exchanging` row's real claim time
+/// untouched. Returns the count of rows moved, for the caller's event
+/// attributes.
+pub fn terminalize_failed_for_provider_within_tx(
+    conn: &rusqlite::Connection,
+    provider_id: FederationProviderId,
+    now: DateTime<Utc>,
+) -> StoreResult<usize> {
+    let n = conn.execute(
+        "UPDATE federation_login_attempt \
+         SET status = 'failed', claimed_at = COALESCE(claimed_at, ?1) \
+         WHERE provider_id = ?2 AND status IN ('pending', 'exchanging')",
+        params![now, provider_id.to_string()],
+    )?;
+    Ok(n)
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests;

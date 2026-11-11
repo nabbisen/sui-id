@@ -43,6 +43,15 @@
 # `scope_definition::create` and `scope_definition::delete` had no caller
 # anywhere in `crates/`, and no proposed or accepted RFC plans scope-catalog
 # administration. The retirement is recorded in command-inventory.md.
+#
+# C24 (federation-provider allowed-origins reconcile) has no row: RFC 096-B2
+# S2b (2026-11-11), RFC 096 amendment A4 (corrected 2026-11-11), folded it
+# into C23 -- `allowed_origins` is trust policy like every other field C23
+# now covers, not a write of its own. `federation_provider::
+# update_allowed_origins`/`update_allowed_origins_within_tx` and
+# `commands::update_federation_provider_allowed_origins` are deleted, no
+# caller left anywhere in `crates/`. The retirement is recorded in
+# command-inventory.md.
 
 [[command]]
 id = "U01"
@@ -827,26 +836,41 @@ descriptor = ["C22_REVOKED"]
 [[command]]
 id = "C23"
 class = "A"
-status = "target-absent"  # implemented | target-absent | target-legacy
-sealed = false
-owner = "Replace federation-provider trust policy / RFC 096 startup configuration"
-rationale = "Dispositioned 2026-11-08 (cycle J stage 10): reserve, against RFC 096-B2, in C19's own words. `federation.provider.policy_updated`; sealed `StartupConfiguration` actor, provider-ID target, old/new version and activation generation + changed-field enums + invalidated counts"
-mutation_surface = "guarded full policy replace on exact non-deleted old version/generation, checked-increment both, force disabled/review-required, clear evidence, invalidate old flows; cache eviction post-commit"
-files = []  # UNRESOLVED, deliberately: no current function implements provider trust-policy replacement at all. Wholly new, RFC 096-B2. Target-state row, not a reconciliation gap. Ruled 2026-10-25: unlike C16-C18 this one has nothing to seal, because there is no write -- it arrives with 096-B2 and is sealed on arrival, so it is not wave 3 work.
-test_id = "`a_c23_provider_policy_update`, `a_c23_generation_overflow`"
+status = "implemented"  # implemented | target-absent | target-legacy
+sealed = true
+owner = "Replace federation-provider trust policy"
+rationale = "`federation.provider.policy_updated`, RFC 094 `:547-575` built clause by clause (RFC 096-B2 S2b dispatch §A). Sealed `system_principal: permitted` actor -- RFC 094 `:563`'s prose \"sealed `StartupConfiguration` actor\" names no Rust type anywhere in this codebase (a repo-wide grep found it only in RFC/dispatch prose); it is satisfied the same way C16's own no-session actor already is, `for_system_actor(None)`. Retires C24 (RFC 096 amendment A4, corrected 2026-11-11): `allowed_origins` is trust policy like every other field this command covers, not a write of its own."
+mutation_surface = "`federation_provider::get_within_tx`, `federation_provider::replace_policy_within_tx`, and the shared per-provider flow invalidation (`commands::invalidate_provider_flows_within_tx`, calling `federation_login_attempt::terminalize_failed_for_provider_within_tx`, `federation_mfa_pending::invalidate_for_provider_within_tx`, and `federation_webauthn_ceremony::delete_for_provider_within_tx`) -- all via `commands::replace_federation_provider_policy`, which also decides the secret's own constant-time comparison and reseal"
+files = ["crates/sui-id-store/src/repos/federation_provider.rs", "crates/sui-id-store/src/repos/federation_login_attempt.rs", "crates/sui-id-store/src/repos/federation_mfa_pending.rs", "crates/sui-id-store/src/repos/federation_webauthn_ceremony.rs", "crates/sui-id-store/src/commands.rs", "crates/sui-id/src/runtime/startup.rs"]
+test_id = "`an_enabled_providers_policy_changing_disables_it_and_replaces_every_field`, `an_unchanged_policy_is_a_no_op_and_writes_no_event`, `an_unchanged_secret_is_not_resealed`, `a_changed_secret_is_resealed`, `dropping_the_generation_guard_lets_a_stale_write_through` (mutation), `c23_against_a_nonexistent_provider_is_notfound`, `c23_injected_failure_before_append_rolls_back_everything`, `a_config_version_overflow_refuses_and_writes_nothing`, `invalidate_provider_flows_within_tx_touches_only_the_named_provider`"
+event = ["federation.provider.policy_updated"]
+descriptor = ["C23_POLICY_UPDATED"]
 
 [[command]]
-id = "C24"
+id = "C25"
 class = "A"
 status = "implemented"  # implemented | target-absent | target-legacy
 sealed = true
-owner = "Federation-provider allowed-origins reconcile"
-rationale = "`federation.provider.allowed_origins_changed`, attributes are the origin *count* before and after, never the origin lists -- the same rule C03's counts follow, for the same reason: an unbounded caller-supplied list has no place in a hash-chained record. Not in the inventory before this round: RFC 134 step 7a's allowed-origins reconcile (startup provisioning, no session) was a live Class-A-shaped write with no id at all, found while building wave 3, not inherited from it. Numbered C24, the next free id after the existing highest (C23) at the time this row was added."
-mutation_surface = "`federation_provider::update_allowed_origins_within_tx` (via `commands::update_federation_provider_allowed_origins`)"
+owner = "Disable federation provider removed from configuration"
+rationale = "`federation.provider.removed_from_configuration`, RFC 096 amendment A2 (2026-11-11): a stored provider whose slug no configured `[[federation_providers]]` block names is disabled at startup, keeping its links -- nothing is deleted implicitly. An already-disabled provider is a non-committing guarded result (`StoreError::NoChange`): RFC 096 `:449-452`, a generation must never be burned for nothing."
+mutation_surface = "`federation_provider::get_within_tx`, `federation_provider::disable_removed_within_tx`, and the shared per-provider flow invalidation (`commands::invalidate_provider_flows_within_tx`, calling `federation_login_attempt::terminalize_failed_for_provider_within_tx`, `federation_mfa_pending::invalidate_for_provider_within_tx`, and `federation_webauthn_ceremony::delete_for_provider_within_tx`), via `commands::remove_federation_provider_from_configuration`"
 files = ["crates/sui-id-store/src/repos/federation_provider.rs", "crates/sui-id-store/src/commands.rs", "crates/sui-id/src/runtime/startup.rs"]
-test_id = "`a_c24_origins_change`, `c24_injected_failure_before_append_rolls_back_the_change`, `c24_against_a_nonexistent_provider_is_notfound_and_writes_no_record`, `differing_allowed_origins_update_is_audited`"
-event = ["federation.provider.allowed_origins_changed"]
-descriptor = ["C24_ORIGINS_CHANGED"]
+test_id = "`an_enabled_provider_removed_from_config_is_disabled_and_keeps_its_links`, `an_already_disabled_provider_removed_from_config_is_a_no_op`, `letting_an_already_disabled_provider_commit_burns_a_generation` (mutation), `c25_against_a_nonexistent_provider_is_notfound`"
+event = ["federation.provider.removed_from_configuration"]
+descriptor = ["C25_REMOVED"]
+
+[[command]]
+id = "C26"
+class = "A"
+status = "implemented"  # implemented | target-absent | target-legacy
+sealed = true
+owner = "Update federation-provider display name"
+rationale = "`federation.provider.display_name_changed`, no attributes -- `display_name` is not trust policy (RFC 096 `:434`), so a config edit to it applies without disabling the provider or touching its version/generation, unlike every other federation-provider field (C23)."
+mutation_surface = "`federation_provider::update_display_name_within_tx` (via `commands::update_federation_provider_display_name`)"
+files = ["crates/sui-id-store/src/repos/federation_provider.rs", "crates/sui-id-store/src/commands.rs", "crates/sui-id/src/runtime/startup.rs"]
+test_id = "`a_changed_display_name_is_applied_without_disabling_the_provider`, `c26_injected_failure_before_append_rolls_back_the_change`"
+event = ["federation.provider.display_name_changed"]
+descriptor = ["C26_DISPLAY_NAME_CHANGED"]
 
 [[command]]
 id = "F02"

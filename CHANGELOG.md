@@ -51,8 +51,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now the ones recorded for it, not the ones in the config file.**
   Before this release, editing `id_token_algs` in the config file
   changed what an already-enabled provider accepted immediately, with
-  no review. A config edit alone no longer changes it, and startup logs a
-  warning on every boot while the two differ.
+  no review. A config edit to them now goes through the trust-policy
+  replacement below, which disables the provider until it is reviewed.
+- **Editing a federation provider's trust policy in the config file now
+  applies, on the next boot — and disables the provider.** Previously,
+  editing `issuer`, `client_id`, `client_secret_env`, `scopes`,
+  `provision_mode` or `id_token_algs` for an existing provider was warned
+  about but never applied, and `allowed_origins` alone was rewritten in
+  place without disabling the provider. Now,
+  startup compares the configured value against the stored one and, if
+  any of them differ, replaces the provider's complete trust policy and
+  disables it until an administrator reviews and re-enables it — the
+  same disabled/`requires_review` state an upgrade already puts an
+  existing provider into. Any federated sign-in already in progress for
+  that provider is ended, the same as on upgrade. `display_name` is not
+  trust policy and still applies without disabling anything.
+- **Removing a `[[federation_providers]]` block from the config now
+  disables that provider on the next boot, instead of leaving its old
+  configuration in force forever.** Its existing federation links are
+  kept; nothing is deleted. Restoring the block keeps the provider
+  disabled until it is reviewed and re-enabled.
 
 ## [0.89.0] — 2026-11-11
 

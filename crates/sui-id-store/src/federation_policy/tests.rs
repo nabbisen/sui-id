@@ -427,3 +427,69 @@ fn canonical_scopes_compares_by_meaning_not_spelling() {
     );
     assert!(canonical_scopes("openid groups").is_err());
 }
+
+// ── `changed_fields`, per field (S2b review fold-in) ─────────────────────
+
+fn proposed(origins: &[&str]) -> FederationTrustPolicy {
+    FederationTrustPolicy::new(
+        ISSUER,
+        "client-abc",
+        true,
+        "openid email",
+        &["RS256"],
+        origins,
+        ProvisionMode::LinkOnly,
+    )
+    .expect("valid")
+}
+
+/// The hash-chained event names what changed. A row migration 0051
+/// copied has only `id_token_algs` unrecorded, so that is all it reports.
+#[test]
+fn a_row_with_only_its_algorithms_unrecorded_reports_only_that_field() {
+    let changed = changed_fields(&stored_row(None, ""), &proposed(&[]));
+    assert_eq!(changed.into_iter().collect::<Vec<_>>(), ["id_token_algs"]);
+}
+
+#[test]
+fn a_matching_row_reports_nothing() {
+    assert!(changed_fields(&stored_row(Some("RS256"), ""), &proposed(&[])).is_empty());
+}
+
+/// `""` means the issuer's origin alone, so it equals that origin written out.
+#[test]
+fn an_empty_origin_list_and_the_issuers_origin_written_out_are_the_same() {
+    let stored = stored_row(Some("RS256"), "https://accounts.google.com");
+    assert!(changed_fields(&stored, &proposed(&[])).is_empty());
+}
+
+/// A reorder is not a policy change, so it must not disable a provider.
+#[test]
+fn reordered_origins_are_not_a_change() {
+    let stored = stored_row(
+        Some("RS256"),
+        "https://accounts.google.com https://oauth2.googleapis.com",
+    );
+    let p = proposed(&[
+        "https://oauth2.googleapis.com",
+        "https://accounts.google.com",
+    ]);
+    assert!(changed_fields(&stored, &p).is_empty());
+}
+
+/// The derived field moves with the one it is derived from.
+#[test]
+fn an_origin_moving_port_changes_the_origins_and_the_ports() {
+    let stored = stored_row(
+        Some("RS256"),
+        "https://accounts.google.com https://oauth2.googleapis.com",
+    );
+    let p = proposed(&[
+        "https://accounts.google.com",
+        "https://oauth2.googleapis.com:8443",
+    ]);
+    assert_eq!(
+        changed_fields(&stored, &p).into_iter().collect::<Vec<_>>(),
+        ["endpoint_origins", "https_ports"]
+    );
+}

@@ -57,37 +57,49 @@ async fn list_enabled_filters_disabled() {
     assert_eq!(enabled[0].slug, "g2");
 }
 
+/// RFC 096-B2 S2b, C23 (RFC 094 clause 9): `replace_policy_within_tx`'s
+/// own guarded `UPDATE` must refuse when the caller's stated old
+/// `activation_generation` does not match the row's real one, even when
+/// `old_config_version` alone would have matched. A single-conjunct
+/// mismatch, not just "both wrong" -- the mutation this proves against
+/// is removing `AND activation_generation = ?13` from the `UPDATE`'s own
+/// `WHERE`, which would let this exact call through.
 #[tokio::test]
-async fn update_allowed_origins_touches_only_that_column() {
+async fn replace_policy_refuses_when_the_activation_generation_guard_does_not_match() {
     let db = fresh_db();
-    let row = sample("origin-test");
-    let id = row.id;
-    create(&db, &row, None).await.unwrap();
-    update_allowed_origins(&db, id, "https://a.example https://b.example", Utc::now())
+    let row = sample("c23-guard");
+    create(&db, &row, None).await.unwrap(); // config_version=0, activation_generation=0
+
+    let affected = db
+        .with_tx(move |tx| {
+            replace_policy_within_tx(
+                tx,
+                row.id,
+                "https://new.example",
+                "new-client",
+                None,
+                "openid",
+                ProvisionMode::LinkOnly,
+                "",
+                "RS256",
+                /* old_config_version */ 0,
+                /* new_config_version */ 1,
+                /* old_activation_generation */ 999, // wrong on purpose
+                /* new_activation_generation */ 1000,
+                Utc::now(),
+            )
+        })
         .await
         .unwrap();
-    let fetched = get(&db, id).await.unwrap();
     assert_eq!(
-        fetched.allowed_origins,
-        "https://a.example https://b.example"
+        affected, 0,
+        "a mismatched activation_generation guard must refuse the write"
     );
-    // Every other column is unchanged from what `create` wrote.
-    assert_eq!(fetched.display_name, row.display_name);
-    assert_eq!(fetched.issuer, row.issuer);
-    assert_eq!(fetched.client_id, row.client_id);
-    assert_eq!(fetched.scopes, row.scopes);
-    assert_eq!(fetched.provision_mode, row.provision_mode);
-    assert_eq!(fetched.enabled, row.enabled);
-}
 
-#[tokio::test]
-async fn update_allowed_origins_on_missing_id_is_not_found() {
-    let db = fresh_db();
-    let bogus = FederationProviderId::new();
-    assert!(matches!(
-        update_allowed_origins(&db, bogus, "https://a.example", Utc::now()).await,
-        Err(StoreError::NotFound)
-    ));
+    let fetched = get(&db, row.id).await.unwrap();
+    assert_eq!(fetched.issuer, row.issuer, "nothing must have changed");
+    assert_eq!(fetched.config_version, 0);
+    assert_eq!(fetched.activation_generation, 0);
 }
 
 /// RFC 096-B2 S2a: `set_enabled` lost its ability to *enable* a row

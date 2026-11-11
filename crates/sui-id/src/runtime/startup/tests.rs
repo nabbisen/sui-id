@@ -100,73 +100,132 @@ fn logged(captured: &Captured) -> String {
     String::from_utf8_lossy(&captured.0.lock().expect("lock")).into_owned()
 }
 
-/// 7a: a stored origin set differing from config is updated on boot.
+/// RFC 096-B2 S2b: a config field that is also trust policy now applies
+/// on this boot, and disables the provider -- replacing the S2a-era 7a/
+/// 7b split (one field reconciled silently, every other only warned
+/// about). Seeded through [`register_new_federation_provider`] so the
+/// baseline row already has a recorded `id_token_algs` (C16's own write)
+/// and is directly comparable -- a raw `seeded_row` has none recorded at
+/// all, which would make every field "changed" for the wrong reason (no
+/// decoded baseline to compare against).
 #[tokio::test]
-async fn differing_allowed_origins_are_updated() {
+async fn a_changed_trust_field_disables_the_provider_and_logs_the_changed_fields() {
     let db = fresh_db();
-    let row = seeded_row("google");
-    federation_provider::create(&db, &row, None).await.unwrap();
-    let mut cfg = matching_cfg(&row);
-    cfg.allowed_origins = vec![
-        "https://accounts.google.com".into(),
-        "https://oauth2.googleapis.com".into(),
-    ];
-    reconcile_federation_provider(&db, &cfg, &row, Utc::now()).await;
-    let fetched = federation_provider::get(&db, row.id).await.unwrap();
+    let cfg = matching_cfg(&seeded_row("google"));
+    register_new_federation_provider(&db, &cfg, None, Utc::now()).await;
+    let stored = federation_provider::get_by_slug(&db, "google")
+        .await
+        .expect("created");
+
+    let mut edited = cfg.clone();
+    edited.scopes = "openid email profile".into();
+    let (captured, _guard) = capture();
+    reconcile_federation_provider(&db, &edited, &stored, None, Utc::now()).await;
+
+    let after = federation_provider::get_by_slug(&db, "google")
+        .await
+        .expect("still there");
+    assert_eq!(after.scopes, "openid email profile", "the field is applied");
+    assert!(
+        !after.enabled,
+        "a trust-field change must disable the provider"
+    );
+    assert_eq!(after.validation_status, ValidationStatus::RequiresReview);
+    assert_eq!(after.config_version, stored.config_version + 1);
     assert_eq!(
-        fetched.allowed_origins,
-        "https://accounts.google.com https://oauth2.googleapis.com"
+        after.activation_generation,
+        stored.activation_generation + 1
+    );
+
+    let log = logged(&captured);
+    assert!(log.contains("google"), "does not name the slug: {log}");
+    assert!(
+        log.contains("scopes"),
+        "does not name the changed field: {log}"
+    );
+    assert!(
+        log.contains("re-enable"),
+        "does not say it is now disabled until re-enabled: {log}"
+    );
+    assert_eq!(
+        audit_count(&db, "federation.provider.policy_updated").await,
+        1
     );
 }
 
-/// 7a's other half: a stored origin set that already matches config is
-/// **not written** -- asserted on the actual write, not just the end
-/// state, since an unconditional update would pass a same-value check
-/// alone.
+/// The other half: a config that already matches the stored, decoded
+/// policy exactly is a true no-op -- no write, no event, no warning.
 #[tokio::test]
-async fn matching_allowed_origins_produce_no_write() {
+async fn a_fully_matching_policy_is_a_no_op() {
     let db = fresh_db();
-    let row = seeded_row("google");
-    federation_provider::create(&db, &row, None).await.unwrap();
-    let cfg = matching_cfg(&row);
-    let later = row.updated_at + chrono::Duration::hours(1);
-    reconcile_federation_provider(&db, &cfg, &row, later).await;
-    let fetched = federation_provider::get(&db, row.id).await.unwrap();
+    let cfg = matching_cfg(&seeded_row("google"));
+    register_new_federation_provider(&db, &cfg, None, Utc::now()).await;
+    let stored = federation_provider::get_by_slug(&db, "google")
+        .await
+        .expect("created");
+
+    let (captured, _guard) = capture();
+    reconcile_federation_provider(&db, &cfg, &stored, None, Utc::now()).await;
+
+    let after = federation_provider::get_by_slug(&db, "google")
+        .await
+        .expect("still there");
+    assert_eq!(after.config_version, stored.config_version);
+    assert_eq!(after.activation_generation, stored.activation_generation);
+    assert_eq!(after.updated_at, stored.updated_at, "nothing was written");
     assert_eq!(
-        fetched.updated_at, row.updated_at,
-        "updated_at must not move if nothing was written"
+        audit_count(&db, "federation.provider.policy_updated").await,
+        0
+    );
+    let log = logged(&captured);
+    assert!(log.is_empty(), "expected no output at all:\n{log}");
+}
+
+/// `display_name` is not trust policy (RFC 096 `:434`) -- it applies
+/// without disabling the provider, unlike every field in the test
+/// above. Seeded enabled (via `create_enabled_for_test`) specifically to
+/// prove the point: if this were mistakenly routed through C23, it
+/// would come back disabled.
+#[tokio::test]
+async fn display_name_change_applies_without_disabling_the_provider() {
+    let db = fresh_db();
+    let mut row = seeded_row("google");
+    row.id_token_algs = Some("RS256".into());
+    federation_provider::create_enabled_for_test(&db, &row, None)
+        .await
+        .unwrap();
+    let mut cfg = matching_cfg(&row);
+    cfg.display_name = "A New Label".into();
+
+    reconcile_federation_provider(&db, &cfg, &row, None, Utc::now()).await;
+
+    let after = federation_provider::get(&db, row.id).await.unwrap();
+    assert_eq!(after.display_name, "A New Label");
+    assert!(after.enabled, "display_name must not disable the provider");
+    assert_eq!(after.config_version, row.config_version);
+    assert_eq!(after.activation_generation, row.activation_generation);
+    assert_eq!(
+        audit_count(&db, "federation.provider.display_name_changed").await,
+        1
+    );
+    assert_eq!(
+        audit_count(&db, "federation.provider.policy_updated").await,
+        0
     );
 }
 
-/// The update touches only `allowed_origins`: every other column is
-/// unchanged across the reconciliation.
-#[tokio::test]
-async fn update_touches_only_allowed_origins() {
-    let db = fresh_db();
-    let row = seeded_row("google");
-    federation_provider::create(&db, &row, None).await.unwrap();
-    let mut cfg = matching_cfg(&row);
-    cfg.allowed_origins = vec!["https://oauth2.googleapis.com".into()];
-    reconcile_federation_provider(&db, &cfg, &row, Utc::now()).await;
-    let fetched = federation_provider::get(&db, row.id).await.unwrap();
-    assert_eq!(fetched.allowed_origins, "https://oauth2.googleapis.com");
-    assert_eq!(fetched.display_name, row.display_name);
-    assert_eq!(fetched.issuer, row.issuer);
-    assert_eq!(fetched.client_id, row.client_id);
-    assert_eq!(fetched.scopes, row.scopes);
-    assert_eq!(fetched.provision_mode, row.provision_mode);
-    assert_eq!(fetched.enabled, row.enabled);
-    assert_eq!(fetched.created_at, row.created_at);
-}
-
-/// RFC 134's whole point: changing the origin set must not destroy
+/// RFC 134's whole point: changing a trust field must not destroy
 /// federation links to the provider (the old fix -- delete and
-/// recreate -- cascades and does exactly that).
+/// recreate -- cascades and does exactly that). C23 disables, it never
+/// deletes.
 #[tokio::test]
-async fn federation_links_survive_an_origin_set_change() {
+async fn federation_links_survive_a_policy_change() {
     let db = fresh_db();
-    let row = seeded_row("google");
-    federation_provider::create(&db, &row, None).await.unwrap();
+    let cfg = matching_cfg(&seeded_row("google"));
+    register_new_federation_provider(&db, &cfg, None, Utc::now()).await;
+    let stored = federation_provider::get_by_slug(&db, "google")
+        .await
+        .expect("created");
     let now = Utc::now();
     let user_id = UserId::new();
     sui_id_store::repos::users::create(
@@ -199,7 +258,7 @@ async fn federation_links_survive_an_origin_set_change() {
         &db,
         FederationLinkRow {
             user_id,
-            provider_id: row.id,
+            provider_id: stored.id,
             upstream_sub: "sub-1".into(),
             upstream_email: None,
             linked_at: now,
@@ -208,50 +267,11 @@ async fn federation_links_survive_an_origin_set_change() {
     )
     .await
     .unwrap();
-    let mut cfg = matching_cfg(&row);
-    cfg.allowed_origins = vec!["https://oauth2.googleapis.com".into()];
-    reconcile_federation_provider(&db, &cfg, &row, Utc::now()).await;
+    let mut edited = cfg.clone();
+    edited.allowed_origins = vec!["https://oauth2.googleapis.com".into()];
+    reconcile_federation_provider(&db, &edited, &stored, None, Utc::now()).await;
     let still_there = federation_link::list_for_user(&db, user_id).await.unwrap();
     assert_eq!(still_there.len(), 1, "the federation link must survive");
-}
-
-/// 7b: a differing `scopes` produces a warning and does not change the
-/// stored value.
-#[tokio::test]
-async fn differing_scopes_produces_a_warning_and_no_write() {
-    let (captured, _guard) = capture();
-    let db = fresh_db();
-    let row = seeded_row("google");
-    federation_provider::create(&db, &row, None).await.unwrap();
-    let mut cfg = matching_cfg(&row);
-    cfg.scopes = "openid email profile".into();
-    reconcile_federation_provider(&db, &cfg, &row, Utc::now()).await;
-    let fetched = federation_provider::get(&db, row.id).await.unwrap();
-    assert_eq!(
-        fetched.scopes, row.scopes,
-        "scopes must not be silently reconciled"
-    );
-    let log = logged(&captured);
-    assert!(log.contains("field=scopes") || log.contains("field=\"scopes\""));
-    assert!(log.contains("openid email profile"));
-}
-
-/// `enabled` is never compared -- it is meant to be a runtime toggle,
-/// independent of this file, so a differing `enabled` must produce
-/// neither a write nor a warning.
-#[tokio::test]
-async fn differing_enabled_produces_neither_write_nor_warning() {
-    let (captured, _guard) = capture();
-    let db = fresh_db();
-    let row = seeded_row("google");
-    federation_provider::create(&db, &row, None).await.unwrap();
-    let mut cfg = matching_cfg(&row);
-    cfg.enabled = !row.enabled;
-    reconcile_federation_provider(&db, &cfg, &row, Utc::now()).await;
-    let fetched = federation_provider::get(&db, row.id).await.unwrap();
-    assert_eq!(fetched.enabled, row.enabled);
-    let log = logged(&captured);
-    assert!(!log.contains("field=enabled") && !log.contains("field=\"enabled\""));
 }
 
 /// RFC 094 M2b wave 3, C16, through the layer that actually runs it —
@@ -314,45 +334,44 @@ async fn register_new_federation_provider_does_not_abort_on_failure() {
     assert_eq!(all.len(), 1, "the duplicate attempt must not add a row");
 }
 
-/// RFC 094 M2b wave 3, C24, through the layer that actually runs it —
-/// `differing_allowed_origins_are_updated` above already proves the
-/// value changes; this proves the write is now also audited, which a
-/// value-only assertion on an unchanged call site cannot (RFC 134 step
-/// 7a's original write had no audit record of any kind).
+/// RFC 096-B2 S2b, C23, through the layer that actually runs it — an
+/// `allowed_origins` change is one case of the general trust-policy
+/// replacement, audited as `federation.provider.policy_updated` with
+/// `endpoint_origins` named in its `changed_fields`, not a dedicated
+/// event of its own (C24, which this retires, had no `changed_fields`
+/// concept at all).
 #[tokio::test]
 async fn differing_allowed_origins_update_is_audited() {
     let db = fresh_db();
-    let row = seeded_row("google");
-    federation_provider::create(&db, &row, None).await.unwrap();
-    let mut cfg = matching_cfg(&row);
-    cfg.allowed_origins = vec![
+    let cfg = matching_cfg(&seeded_row("google"));
+    register_new_federation_provider(&db, &cfg, None, Utc::now()).await;
+    let stored = federation_provider::get_by_slug(&db, "google")
+        .await
+        .expect("created");
+    let mut edited = cfg.clone();
+    edited.allowed_origins = vec![
         "https://accounts.google.com".into(),
         "https://oauth2.googleapis.com".into(),
     ];
 
-    reconcile_federation_provider(&db, &cfg, &row, Utc::now()).await;
+    reconcile_federation_provider(&db, &edited, &stored, None, Utc::now()).await;
 
     let note: Option<String> = db
         .with_conn(move |c| {
             Ok(c.query_row(
                 "SELECT note FROM audit_log WHERE action = \
-                 'federation.provider.allowed_origins_changed' AND target = ?1 \
+                 'federation.provider.policy_updated' AND target = ?1 \
                  ORDER BY seq DESC LIMIT 1",
-                [row.id.to_string()],
+                [stored.id.to_string()],
                 |r| r.get(0),
             )?)
         })
         .await
-        .expect("audit row for federation.provider.allowed_origins_changed");
+        .expect("audit row for federation.provider.policy_updated");
     let note = note.expect("note");
     assert_eq!(
-        sui_id_store::registry::note_field(&note, "origins_before").as_deref(),
-        Some("1"),
-        "the seeded row has one allowed origin"
-    );
-    assert_eq!(
-        sui_id_store::registry::note_field(&note, "origins_after").as_deref(),
-        Some("2")
+        sui_id_store::registry::note_field(&note, "changed_fields").as_deref(),
+        Some("endpoint_origins")
     );
 }
 
@@ -596,7 +615,9 @@ async fn audit_count(db: &Database, action: &'static str) -> i64 {
 }
 
 /// The churn: a provider created with no `allowed_origins` must not be
-/// rewritten, and audited, by C24 on the very next boot.
+/// rewritten, and audited, by C23 on the very next boot -- the stored
+/// `""` and the config's empty list both resolve to the same effective
+/// origin (the issuer's own), so the decoded comparison sees no change.
 #[tokio::test]
 async fn a_provider_created_with_default_origins_is_not_rewritten_on_the_next_boot() {
     let db = fresh_db();
@@ -607,10 +628,10 @@ async fn a_provider_created_with_default_origins_is_not_rewritten_on_the_next_bo
         .await
         .expect("created");
 
-    reconcile_federation_provider(&db, &cfg, &stored, Utc::now()).await;
+    reconcile_federation_provider(&db, &cfg, &stored, None, Utc::now()).await;
 
     assert_eq!(
-        audit_count(&db, "federation.provider.allowed_origins_changed").await,
+        audit_count(&db, "federation.provider.policy_updated").await,
         0,
         "nothing changed, so nothing is written or audited"
     );
@@ -618,10 +639,11 @@ async fn a_provider_created_with_default_origins_is_not_rewritten_on_the_next_bo
         .await
         .expect("still there");
     assert_eq!(after.allowed_origins, stored.allowed_origins);
+    assert_eq!(after.config_version, stored.config_version);
 }
 
 #[tokio::test]
-async fn scopes_spelled_in_another_order_produce_no_warning() {
+async fn scopes_spelled_in_another_order_produce_no_change() {
     let db = fresh_db();
     let mut cfg = matching_cfg(&seeded_row("google"));
     cfg.scopes = "email openid".into();
@@ -634,19 +656,20 @@ async fn scopes_spelled_in_another_order_produce_no_warning() {
         "C16 stores the canonical order"
     );
 
-    let (captured, _guard) = capture();
-    reconcile_federation_provider(&db, &cfg, &stored, Utc::now()).await;
-    let log = logged(&captured);
-    assert!(
-        !log.contains("field=scopes") && !log.contains("field=\"scopes\""),
-        "same scopes, different spelling: {log}"
+    reconcile_federation_provider(&db, &cfg, &stored, None, Utc::now()).await;
+    assert_eq!(
+        audit_count(&db, "federation.provider.policy_updated").await,
+        0,
+        "same scopes, different spelling, must not be reported as a change"
     );
 }
 
-/// The callback trusts the stored algorithms (S2a part D), so an edit to
-/// them in the config file is not applied, and must not be silent.
+/// RFC 096-B2 S2b: the ID-token algorithms the callback trusts are now
+/// applied from config on the next boot too, like every other trust
+/// field -- this inverts the S2a-era behavior (not applied, warned
+/// about) this test used to pin.
 #[tokio::test]
-async fn differing_id_token_algs_produce_a_warning_and_no_write() {
+async fn differing_id_token_algs_are_applied_and_disable_the_provider() {
     let db = fresh_db();
     let cfg = matching_cfg(&seeded_row("google"));
     register_new_federation_provider(&db, &cfg, None, Utc::now()).await;
@@ -657,23 +680,33 @@ async fn differing_id_token_algs_produce_a_warning_and_no_write() {
 
     let mut edited = cfg.clone();
     edited.id_token_algs = vec!["ES256".into()];
-    let (captured, _guard) = capture();
-    reconcile_federation_provider(&db, &edited, &stored, Utc::now()).await;
+    reconcile_federation_provider(&db, &edited, &stored, None, Utc::now()).await;
 
     let after = federation_provider::get_by_slug(&db, "google")
         .await
         .expect("still there");
-    assert_eq!(after.id_token_algs.as_deref(), Some("RS256"), "not applied");
-    let log = logged(&captured);
-    assert!(
-        log.contains("field=id_token_algs") || log.contains("field=\"id_token_algs\""),
-        "{log}"
+    assert_eq!(after.id_token_algs.as_deref(), Some("ES256"), "now applied");
+    assert!(!after.enabled);
+    let note: Option<String> = db
+        .with_conn(move |c| {
+            Ok(c.query_row(
+                "SELECT note FROM audit_log WHERE action = 'federation.provider.policy_updated' \
+                 AND target = ?1 ORDER BY seq DESC LIMIT 1",
+                [stored.id.to_string()],
+                |r| r.get(0),
+            )?)
+        })
+        .await
+        .expect("audit row");
+    let note = note.expect("note");
+    assert_eq!(
+        sui_id_store::registry::note_field(&note, "changed_fields").as_deref(),
+        Some("id_token_algs")
     );
-    assert!(log.contains("ES256"), "{log}");
 }
 
 #[tokio::test]
-async fn the_same_id_token_algs_in_another_order_produce_no_warning() {
+async fn the_same_id_token_algs_in_another_order_produce_no_change() {
     let db = fresh_db();
     let mut cfg = matching_cfg(&seeded_row("google"));
     cfg.id_token_algs = vec!["ES256".into(), "RS256".into()];
@@ -683,11 +716,88 @@ async fn the_same_id_token_algs_in_another_order_produce_no_warning() {
         .expect("created");
     assert_eq!(stored.id_token_algs.as_deref(), Some("RS256 ES256"));
 
+    reconcile_federation_provider(&db, &cfg, &stored, None, Utc::now()).await;
+    assert_eq!(
+        audit_count(&db, "federation.provider.policy_updated").await,
+        0
+    );
+}
+
+// ── RFC 096-B2 S2b §E (amendment A2): a provider removed from config ───────
+
+#[tokio::test]
+async fn a_provider_no_longer_configured_is_disabled_and_warns() {
+    let db = fresh_db();
+    let mut row = seeded_row("ghost");
+    row.id_token_algs = Some("RS256".into());
+    federation_provider::create_enabled_for_test(&db, &row, None)
+        .await
+        .unwrap();
+
     let (captured, _guard) = capture();
-    reconcile_federation_provider(&db, &cfg, &stored, Utc::now()).await;
+    remove_providers_no_longer_configured(&db, &[], Utc::now()).await;
+
+    let after = federation_provider::get(&db, row.id).await.unwrap();
+    assert!(!after.enabled, "must be disabled");
+    assert_eq!(after.activation_generation, row.activation_generation + 1);
+    assert_eq!(
+        audit_count(&db, "federation.provider.removed_from_configuration").await,
+        1
+    );
+    let log = logged(&captured);
+    let line = log
+        .lines()
+        .find(|l| l.contains("no matching"))
+        .expect("warning line");
+    assert!(line.contains("ghost"), "{line}");
+    assert!(line.contains(&row.id.to_string()), "{line}");
+    assert!(
+        line.contains("keeps its existing federation links"),
+        "{line}"
+    );
+}
+
+#[tokio::test]
+async fn an_already_disabled_provider_no_longer_configured_still_warns_but_writes_nothing() {
+    let db = fresh_db();
+    let row = seeded_row("ghost-disabled");
+    federation_provider::create(&db, &row, None).await.unwrap();
+
+    let (captured, _guard) = capture();
+    remove_providers_no_longer_configured(&db, &[], Utc::now()).await;
+
+    let after = federation_provider::get(&db, row.id).await.unwrap();
+    assert_eq!(
+        after.activation_generation, 0,
+        "a generation must never be burned for nothing"
+    );
+    assert_eq!(
+        audit_count(&db, "federation.provider.removed_from_configuration").await,
+        0,
+        "no event for an already-disabled provider"
+    );
     let log = logged(&captured);
     assert!(
-        !log.contains("field=id_token_algs") && !log.contains("field=\"id_token_algs\""),
-        "{log}"
+        log.lines().any(|l| l.contains("no matching")),
+        "still warns every boot: {log}"
     );
+}
+
+#[tokio::test]
+async fn a_configured_provider_is_never_touched_by_the_removal_pass() {
+    let db = fresh_db();
+    let mut row = seeded_row("still-here");
+    row.id_token_algs = Some("RS256".into());
+    federation_provider::create_enabled_for_test(&db, &row, None)
+        .await
+        .unwrap();
+    let cfg = matching_cfg(&row);
+
+    let (captured, _guard) = capture();
+    remove_providers_no_longer_configured(&db, std::slice::from_ref(&cfg), Utc::now()).await;
+
+    let after = federation_provider::get(&db, row.id).await.unwrap();
+    assert!(after.enabled, "a configured provider must not be touched");
+    let log = logged(&captured);
+    assert!(log.is_empty(), "expected no output at all:\n{log}");
 }

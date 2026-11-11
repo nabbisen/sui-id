@@ -1076,10 +1076,12 @@ pub async fn federated_callback(
         }
     };
 
-    // RFC 096-B2 S2a Part D: the config-presence check stays exactly as
-    // it was (A2/S2b decide a removed block's future together) -- only
-    // *which* trust it reads for `id_token_algs` changes below, so this
-    // no longer needs the matched block itself, only whether one exists.
+    // RFC 096-B2 S2b §E: C25 now disables any provider whose config
+    // block disappears (amendment A2), so an *enabled* provider with no
+    // matching block should be unreachable here in practice. Kept
+    // anyway, as a second, independent guard: config is fixed for the
+    // life of the process, so this costs one cheap lookup and fails
+    // closed if that invariant is ever wrong.
     if !app
         .config
         .federation_providers

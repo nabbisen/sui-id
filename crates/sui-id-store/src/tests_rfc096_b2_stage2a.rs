@@ -28,7 +28,7 @@ fn conn_at_50() -> Connection {
     conn_at(50)
 }
 
-fn seed_user(conn: &Connection, id: &str) {
+pub(crate) fn seed_user(conn: &Connection, id: &str) {
     conn.execute(
         "INSERT INTO users(id, username, is_admin, is_disabled, is_deleted, created_at, \
              updated_at, user_uuid, failed_login_count) \
@@ -38,7 +38,7 @@ fn seed_user(conn: &Connection, id: &str) {
     .expect("user");
 }
 
-fn seed_link(conn: &Connection, user_id: &str, provider_id: &str) {
+pub(crate) fn seed_link(conn: &Connection, user_id: &str, provider_id: &str) {
     conn.execute(
         "INSERT INTO federation_link(user_id, provider_id, upstream_sub, linked_at, last_seen_at) \
              VALUES (?1, ?2, ?1 || '-sub', datetime('now'), datetime('now'))",
@@ -67,7 +67,7 @@ fn hash32(tag: u8) -> Vec<u8> {
     vec![tag; 32]
 }
 
-fn seed_attempt(conn: &Connection, id: &str, provider_id: &str, tag: u8) {
+pub(crate) fn seed_attempt(conn: &Connection, id: &str, provider_id: &str, tag: u8) {
     conn.execute(
         "INSERT INTO federation_login_attempt( \
              id, provider_id, provider_config_version, provider_activation_generation, \
@@ -89,7 +89,13 @@ fn seed_attempt(conn: &Connection, id: &str, provider_id: &str, tag: u8) {
 
 const PENDING_EXPIRES_AT: &str = "2026-01-01T00:05:00Z";
 
-fn seed_mfa_pending(conn: &Connection, id: &str, provider_id: &str, user_id: &str, tag: u8) {
+pub(crate) fn seed_mfa_pending(
+    conn: &Connection,
+    id: &str,
+    provider_id: &str,
+    user_id: &str,
+    tag: u8,
+) {
     conn.execute(
         "INSERT INTO federation_mfa_pending( \
              id, provider_id, provider_config_version, provider_activation_generation, user_id, \
@@ -110,7 +116,13 @@ fn seed_mfa_pending(conn: &Connection, id: &str, provider_id: &str, user_id: &st
     .expect("mfa_pending");
 }
 
-fn seed_ceremony(conn: &Connection, id: &str, pending_id: &str, provider_id: &str, user_id: &str) {
+pub(crate) fn seed_ceremony(
+    conn: &Connection,
+    id: &str,
+    pending_id: &str,
+    provider_id: &str,
+    user_id: &str,
+) {
     conn.execute(
         "INSERT INTO federation_webauthn_ceremony( \
              id, pending_id, provider_id, provider_config_version, provider_activation_generation, \

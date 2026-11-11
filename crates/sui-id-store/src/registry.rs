@@ -336,15 +336,36 @@ pub enum AuditEventKind {
     /// federation.provider.created` found no append call anywhere in
     /// `crates/` before this round.
     FederationProviderCreate,
-    /// `federation.provider.allowed_origins_changed` — RFC 094 M2b wave
-    /// 3, C24. **Not in the inventory before this round** — a live
-    /// Class-A-shaped write (`update_allowed_origins`, RFC 134 step 7a)
-    /// with no id at all; found while building this wave, not inherited
-    /// from it. Attributes are the origin *count* before and after,
-    /// never the origin lists — the same rule `ClientUpdateForm`'s
-    /// counts follow, for the same reason: an unbounded caller-supplied
-    /// list has no place in a hash-chained record.
-    FederationProviderOriginsChanged,
+    /// `federation.provider.policy_updated` — RFC 096-B2 S2b, C23. A
+    /// configured trust-policy field (any of the policy digest's nine —
+    /// RFC 096 `:424-434`) differs from the stored, decoded value at
+    /// startup: the complete typed policy is replaced in one guarded
+    /// transaction, the provider is forced disabled/`requires_review`,
+    /// every pending flow for it is invalidated, and `config_version`/
+    /// `activation_generation` are both checked-incremented. Retires
+    /// `federation.provider.allowed_origins_changed` (C24 folds into
+    /// C23 — RFC 096 amendment A4, corrected 2026-11-11): `allowed_
+    /// origins` is trust policy like every other field here, not a
+    /// write of its own. Attributes never carry a field's value, only
+    /// which fields (by name) changed, and bounded invalidation counts.
+    FederationProviderPolicyUpdated,
+    /// `federation.provider.removed_from_configuration` — RFC 096-B2
+    /// S2b, C25 (amendment A2). A stored provider whose slug no
+    /// configured `[[federation_providers]]` block names, found still
+    /// enabled: disabled the same way C17's disable would, generation
+    /// checked-incremented, evidence cleared, pending flows invalidated.
+    /// Links are kept — nothing is deleted implicitly. A provider
+    /// already disabled when its block disappears writes no event at
+    /// all (RFC 096 `:449-452`: a generation must never be burned for
+    /// nothing).
+    FederationProviderRemovedFromConfiguration,
+    /// `federation.provider.display_name_changed` — RFC 096-B2 S2b, C26.
+    /// `display_name` is not trust policy (RFC 096 `:434`) — the only
+    /// federation-provider field a config edit can change without
+    /// disabling the provider or touching its version/generation. No
+    /// values in the event, the same rule row 7 of C23's own clause
+    /// table states for the policy-update event.
+    FederationProviderDisplayNameChanged,
     /// Proof-only — see [`ProofOnlyForbiddenSystemPrincipalCommand`]. Never
     /// emitted; no command can construct this event because no command can
     /// construct a context for that command in the first place.
