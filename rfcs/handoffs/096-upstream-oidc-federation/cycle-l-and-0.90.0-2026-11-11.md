@@ -9,7 +9,8 @@
 > 4. **ROADMAP relabel**: done. L is 096-B2, and the store-boundary and
 >    embeddable rows are unscheduled.
 >
-> ## Whose turn it is now: **the architect's**, for stage 0, the 096-B2 stage plan.
+> ## Stage 0 done 2026-11-11: the stage plan, with four design amendments for you —
+> [`096-b2-stage-plan-2026-11-11.md`](096-b2-stage-plan-2026-11-11.md).
 
 **Proposed.** 2026-11-11, by the architect, after `0.89.0` (cycle K) was published.
 **Why now.** Scheduling is the architect's to propose and yours to authorize.
