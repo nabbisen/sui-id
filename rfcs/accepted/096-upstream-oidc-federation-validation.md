@@ -168,10 +168,10 @@ part of the user login path.
 >   provider already disabled. The confirmation states how many users'
 >   federated sign-in ends (links cascade, `0038:22`), and the event records
 >   that count.
-> - **A4 — C23's trust fields** are `issuer`, `client_id`, the client secret,
->   `scopes` and `provision_mode`. A change disables the provider until it is
->   re-enabled. `display_name` updates without disabling. `allowed_origins`
->   keeps RFC 134's own ruling (C24, no disable).
+> - **A4 — C23's trust policy is exactly the policy digest's nine fields** (`:424-435`, below). A change to any of them, `allowed_origins` included, goes through C23 and leaves the provider disabled until it is re-checked and re-enabled. **C24 folds into C23**, and `federation.provider.allowed_origins_changed` is no longer written. `display_name` is not trust policy and updates without disabling.
+>   *Corrected 2026-11-11.* As first accepted, A4 listed five fields of its own and kept `allowed_origins` under C24 with no disable. That list was the architect's, taken from the startup code's warnings rather than from this RFC, and it is superseded. RFC 134's requirement, a change path that keeps links (`rfcs/done/134-federation-egress-is-a-policy.md:130-142`), is still met: C23 disables and keeps links.
+>   `@nabbisen`: *"Your recommendation is accepted."*, on
+>   [`../handoffs/096-upstream-oidc-federation/096-b2-a4-correction-2026-11-11.md`](../handoffs/096-upstream-oidc-federation/096-b2-a4-correction-2026-11-11.md).
 
 *Added 2026-08-12 after independent review finding B-096-2; **settled
 2026-08-26**. The single 096-B stage named RFC 094 M2a as its prerequisite while
