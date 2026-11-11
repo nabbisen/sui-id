@@ -5,7 +5,7 @@
 > [`cycle-k-and-0.89.0-2026-11-08.md`](cycle-k-and-0.89.0-2026-11-08.md) §2.
 
 **Dispatched.** 2026-11-08, by the architect.
-**Governing RFC.** [RFC 143](../../accepted/143-installation-without-a-toolchain.md),
+**Governing RFC.** [RFC 143](../../done/143-installation-without-a-toolchain.md),
 **Accepted**. Static re-decided on stage 1's facts —
 [`stage1-result-and-the-static-decision-2026-11-08.md`](stage1-result-and-the-static-decision-2026-11-08.md).
 **Baseline.** The tip of `main` when you start — `git log -1`, record it.

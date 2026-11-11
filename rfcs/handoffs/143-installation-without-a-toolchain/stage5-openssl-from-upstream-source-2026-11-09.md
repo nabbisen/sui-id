@@ -6,7 +6,7 @@
 > **This document is the dispatch.** `0.89.0` stays held until this is rehearsed.
 
 **Dispatched.** 2026-11-09, by the architect.
-**Governing RFC.** [RFC 143](../../accepted/143-installation-without-a-toolchain.md),
+**Governing RFC.** [RFC 143](../../done/143-installation-without-a-toolchain.md),
 **Accepted**, D2 as amended 2026-11-09.
 **Baseline.** The tip of `main` when you start (`git log -1`; record it).
 

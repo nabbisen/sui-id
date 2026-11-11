@@ -1,6 +1,15 @@
 # RFC 143 — Installing sui-id without a toolchain, and trusting what you installed
 
-**Status.** Accepted
+**Status.** Implemented (v0.89.0)
+**Closure reviewed on.** 2026-11-11
+**Closure approved by.** `@nabbisen`, 2026-11-11: *"Close it when completed."*, on the
+architect's closure assessment, which found every closure prerequisite met by the published
+release. **The architect is not independent of this RFC** (it wrote, reviewed and dispatched
+it, and folded code into most of its stages).
+**Closure evidence.** [Closure assessment, 2026-11-11](../handoffs/143-installation-without-a-toolchain/closure-assessment-2026-11-11.md)
+(tag `0.89.0` at `9ff8ddb`; Level B `42851297216`, 28/28, 0 skipped; published by `publish.yml`
+run `42921837076` on the tag; checksum, provenance, tamper and truncation checks, and the first-run
+setup screen, all measured in a clean container with neither `cargo` nor `git`).
 **Accepted on.** 2026-11-01
 **Approved by.** `@nabbisen`, 2026-11-01: *"Accepted."* — settling both open questions below. **Q1 on static**, his words being *"Static sounds better to me"*, and the review attaches two conditions to it that were not in this RFC: an **LDAP resolution test on musl** and an **Argon2 timing comparison** against RFC 126's recorded figures, both before any artifact ships. **Q2, the feature-freeze exception, granted** — the architect's argument was that this adds no product surface, and the record notes that extending a closed exception list was never the architect's to infer.
 **Security review.** Required
@@ -24,7 +33,10 @@ easier installation and Quick Start. Most users do not have `cargo`,
 workstation to build. Many of them do not have even `git`."*
 **Touches.** `.github/workflows/publish.yml`, `docs/src/getting-started/quick-start.md`,
 `docs/src/guides/deployment.md`, `docs/src/contributing/release-process.md`,
-and a new contract entry. **No crate, and no runtime code.**
+and a new contract entry. **No crate, and no runtime code** was the plan.
+*Corrected at closure:* runtime code did change. Stage 1 found sui-id crashing
+at startup on a host with no CA certificates, and the fix (`hibp.rs`,
+`egress.rs`, `state.rs`, `startup.rs`) shipped in `0.89.0`'s `Fixed` section.
 **Accountable owner and approver.** `@nabbisen`.
 **RFC author / architect.** High-capability model, requirements-architect role.
 

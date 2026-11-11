@@ -1,6 +1,8 @@
 # RFC 143 — closure assessment, 2026-11-11
 
-> ## Whose turn it is: **yours**, to approve or decline the closure.
+> ## Closed 2026-11-11. `@nabbisen`: *"Close it when completed."*
+> RFC 143 is in `done/` as **Implemented (v0.89.0)**, with this document as its
+> closure evidence.
 
 **Prepared by.** The architect, 2026-11-11, after `0.89.0` was published.
 **Asked of you.** Approve RFC 143's closure. On approval, the architect moves it

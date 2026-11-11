@@ -6,7 +6,7 @@
 > **This document is the dispatch.**
 
 **Dispatched.** 2026-11-09, by the architect.
-**Governing RFC.** [RFC 143](../../accepted/143-installation-without-a-toolchain.md),
+**Governing RFC.** [RFC 143](../../done/143-installation-without-a-toolchain.md),
 **Accepted**, D5.
 **Baseline.** The tip of `main` when you start (`git log -1`; record it).
 Stage 2 is complete: rehearsal `42541537200` on `bd8be11` met all eight criteria.

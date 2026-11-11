@@ -54,7 +54,7 @@ document makes that plan concrete; it does not change it.**
 
 ## 1 — what `0.89.0` is
 
-**One RFC, [143](../../accepted/143-installation-without-a-toolchain.md):
+**One RFC, [143](../../done/143-installation-without-a-toolchain.md):
 a person with neither `cargo` nor `git` downloads sui-id, verifies it is what
 this project published, and reaches the first-run setup screen.** The RFC is
 Accepted, and its feature-freeze exception was granted on 2026-11-01 (it adds

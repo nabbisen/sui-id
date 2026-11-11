@@ -5,7 +5,7 @@
 > [`cycle-k-and-0.89.0-2026-11-08.md`](cycle-k-and-0.89.0-2026-11-08.md) §2.
 
 **Dispatched.** 2026-11-08, by the architect.
-**Governing RFC.** [RFC 143](../../accepted/143-installation-without-a-toolchain.md),
+**Governing RFC.** [RFC 143](../../done/143-installation-without-a-toolchain.md),
 **Accepted**, freeze exception granted 2026-11-01. Building is permitted.
 **Baseline.** The tip of `main` when you start — `git log -1`, record it.
 

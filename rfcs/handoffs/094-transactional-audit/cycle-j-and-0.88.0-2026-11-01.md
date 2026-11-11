@@ -535,7 +535,7 @@ for RFC 094 have now been wrong twice.** If you would rather split:
 
 - **`0.88.0`** = stages 1–3, M2b closes.
 - **`0.89.0`** = RFC 142 stages 4–5, RFC 142 closes — alongside
-  [RFC 143](../../accepted/143-installation-without-a-toolchain.md),
+  [RFC 143](../../done/143-installation-without-a-toolchain.md),
   which §D of the ROADMAP's re-proposal already targets there.
 
 **The architect recommends the split**, for the same reason the last one
@@ -584,7 +584,7 @@ deadline is how a cycle becomes open-ended.
 4. **Not in this scope, and still open**:
    [RFC 119](../../accepted/119-embedding-contract.md)'s review route
    and its two remaining questions,
-   [RFC 143](../../accepted/143-installation-without-a-toolchain.md)'s
+   [RFC 143](../../done/143-installation-without-a-toolchain.md)'s
    two, RFC 140 stage 2 (the logo upload, unblocked since 2026-10-30),
    and the smaller carried items — the `test_id` resolution gate, the
    dead `consents` table, and the eight e2e files sharing the racy
