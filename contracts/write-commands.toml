@@ -783,9 +783,9 @@ status = "target-absent"  # implemented | target-absent | target-legacy
 sealed = false
 owner = "Federation-link create"
 rationale = "Dispositioned 2026-10-31 (cycle I stage 5): reserve, against RFC 096-B2 (`rfcs/accepted/096-upstream-oidc-federation-validation.md:131-132`, \"link create/delete\" -- the id list beside that sentence names only C17/C18/C23, an omission this stage reported rather than fixed; the prose is authoritative). This corrects stage 3's own review, which said the placeholder names should retire -- they should not; 096-B2 is Accepted, planned work, the same place C17/C18 already wait. Stage 3's measurement (2026-10-31, §4) stands and explains why today's write is not this command: `federation_link::upsert`'s one production caller (`federation.rs:1308`, the `ExistingLink` branch) can only ever update, never create -- the create half already has its own event, `provision_federated_user` (F04) committing `auth.federation.provisioned` -- and is redundant bookkeeping on the sign-in path (conditionally with `promote`'s `touch_last_seen_within_tx`, only on the local-MFA-required path; never for `upstream_email`), already covered by `auth.federation.signin.success` or `auth.federation.mfa_success`. The command 096-B2 plans is the administrative link-create C19 names, not this sign-in-path upsert."
-mutation_surface = "none -- reserved against RFC 096-B2; today's `federation_link::upsert` is not this command (see rationale)"
+mutation_surface = "none -- withdrawn from RFC 096-B2 by amendment A1 (2026-11-11): an administrator-asserted link is not built; a link comes into being only through a verified upstream sign-in (F04 provisioning, or first-login linking). Today's `federation_link::upsert` is not this command (see rationale)"
 files = []
-test_id = "none -- reserved"
+test_id = "none -- withdrawn (amendment A1); no command, so no test"
 
 [[command]]
 id = "C20"

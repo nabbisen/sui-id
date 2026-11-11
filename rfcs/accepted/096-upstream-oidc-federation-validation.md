@@ -151,6 +151,28 @@ Requires RFC 094 **M2b** Implemented. RFC 094 schedules federation configuration
 in its M2b remaining-conversion wave, and these are administrative commands, not
 part of the user login path.
 
+> **Amended 2026-11-11 — four design gaps settled before building.**
+> `@nabbisen`: *"All of your directions are reviewed and accepted."*, on
+> [`../handoffs/096-upstream-oidc-federation/096-b2-stage-plan-2026-11-11.md`](../handoffs/096-upstream-oidc-federation/096-b2-stage-plan-2026-11-11.md)
+> §2. Written by the architect, who is not independent of them. He approved
+> them as the approver, the 2026-10-14 precedent.
+> - **A1 — C19 is withdrawn.** An administrator-asserted link is not built.
+>   A link comes into being only through a verified upstream sign-in (F04, or
+>   first-login linking), where the upstream proves control of the identity.
+>   Administrative linking, if ever needed, is its own RFC, defining the proof.
+>   *"Link create/delete"* above therefore means **delete only** (C20).
+> - **A2 — a provider removed from configuration is disabled and keeps its
+>   links.** At startup, in a C23-shaped transaction with its own event. It
+>   then leaves the login screen. Nothing is deleted implicitly.
+> - **A3 — C18 delete is admin-UI only**, behind a fresh step-up, and only for a
+>   provider already disabled. The confirmation states how many users'
+>   federated sign-in ends (links cascade, `0038:22`), and the event records
+>   that count.
+> - **A4 — C23's trust fields** are `issuer`, `client_id`, the client secret,
+>   `scopes` and `provision_mode`. A change disables the provider until it is
+>   re-enabled. `display_name` updates without disabling. `allowed_origins`
+>   keeps RFC 134's own ruling (C24, no disable).
+
 *Added 2026-08-12 after independent review finding B-096-2; **settled
 2026-08-26**. The single 096-B stage named RFC 094 M2a as its prerequisite while
 bundling work from two different RFC 094 conversion waves. Splitting along the

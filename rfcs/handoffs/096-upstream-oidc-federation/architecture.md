@@ -259,7 +259,9 @@ Exact RFC 094 integration is frozen by the accepted complete amended design:
   old attempts, clears evidence, and audits atomically; C18 similarly increments
   generation before delete; cache eviction is post-commit;
 - C19 remains link-authority create/update and is never used for login
-  observation;
+  observation; **[withdrawn 2026-11-11, RFC 096 amendment A1: C19 is not built.
+  A link comes into being only through a verified upstream sign-in, and only
+  C20's delete remains for administrators]**;
 - F01 is linked direct Protocol promotion; F02 is Fed-bound MFA pending; F03 is
   federated MFA Protocol promotion; F04 is Class-A first provisioning; F05 is
   Protocol terminal failure/denial; F06 is bound WebAuthn ceremony state; and

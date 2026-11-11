@@ -63,7 +63,7 @@ configuration generation increments."* In the contract
   RFC 134 step 7b (`startup.rs:401-414`). The callback keeps validating against
   the **stored** issuer (`handlers/federation.rs:495, 908, 1211`). An operator
   moving away from a tenant would believe trust had moved when it had not.
-  RFC 096 already requires the opposite (`:357-360`): the change must be
+  RFC 096 already requires the opposite (`:379-382`): the change must be
   written, and must disable the provider until it is re-enabled.
 - **There is no way to turn a provider off.** The code says so itself
   (`startup.rs:410-414`, *"nothing in this codebase actually exposes a way to
@@ -87,7 +87,7 @@ what the second half of your philosophy rules out.
   command's real insertion point before anything is dispatched.
 - Then C23 (configuration changes are written, and disable), the preflight
   capability and C17, C18, C19/C20, and the admin surface RFC 096 permits:
-  *"admin UI may enable or disable but may not mutate trust fields"* (`:358`).
+  *"admin UI may enable or disable but may not mutate trust fields"* (`:380`).
 - **The upgrade path is designed and tested, not left to happen** (§4).
 
 **Track 2 — get RFC 100 to acceptance** (design capacity only, nothing built):
@@ -106,7 +106,7 @@ soak.
 ## 4 — the one consequence you should not be surprised by
 
 **RFC 096 as accepted makes existing providers stop working on upgrade until
-an administrator re-enables them.** RFC 096 `:1002-1007`: the migration
+an administrator re-enables them.** RFC 096 `:1024-1029`: the migration
 *"sets every provider disabled, `validation_status=requires_review`, and
 `activation_generation=0`"*. It preserves provider IDs, sealed secrets and
 users' links, and reports each provider for the operator. The reason is
