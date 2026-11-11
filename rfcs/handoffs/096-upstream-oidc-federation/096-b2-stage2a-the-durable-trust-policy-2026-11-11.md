@@ -1,6 +1,8 @@
 # RFC 096-B2 stage 2a — the durable trust policy
 
-> ## Whose turn it is: **the implementation role's.**
+> ## Landed 2026-11-11, with six reviewer fold-ins. Next:
+> [`096-b2-stage2b-c23-at-startup-2026-11-11.md`](096-b2-stage2b-c23-at-startup-2026-11-11.md).
+>
 > Cycle L, 096-B2 S2a —
 > [`096-b2-stage-plan-2026-11-11.md`](096-b2-stage-plan-2026-11-11.md) §3, and §6
 > for why S2 split. **This document is the dispatch.**
