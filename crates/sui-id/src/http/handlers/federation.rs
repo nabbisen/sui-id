@@ -1076,17 +1076,16 @@ pub async fn federated_callback(
         }
     };
 
-    // The provider's startup-configured trust: `id_token_algs` is never
-    // learned from discovery, only narrowed by it (`id_token_algs_
-    // intersection`'s own doc comment) -- looked up by slug since this is
-    // `[[federation_providers]]` config, not a `federation_provider` DB
-    // column.
-    let Some(provider_config) = app
+    // RFC 096-B2 S2a Part D: the config-presence check stays exactly as
+    // it was (A2/S2b decide a removed block's future together) -- only
+    // *which* trust it reads for `id_token_algs` changes below, so this
+    // no longer needs the matched block itself, only whether one exists.
+    if !app
         .config
         .federation_providers
         .iter()
-        .find(|p| p.slug == provider.slug)
-    else {
+        .any(|p| p.slug == provider.slug)
+    {
         // Measured, not assumed: a provider enabled in the database with
         // no matching `[[federation_providers]]` block is a startup
         // configuration drift this handler cannot resolve on its own.
@@ -1104,8 +1103,37 @@ pub async fn federated_callback(
             jar,
             Redirect::to("/admin/login?fed_error=config_drift"),
         ));
+    }
+
+    // The provider's *stored, typed* trust policy decides which
+    // algorithms are trusted -- never the config file: a config edit
+    // alone must not change what an already-enabled provider accepts
+    // (RFC 096-B2's corrected A4). `id_token_algs` NULL, or any stored
+    // field failing the validating constructor, is "no usable policy" --
+    // refused fail-closed, the same `terminalize_and_audit` shape every
+    // other post-claim denial here uses.
+    let policy = match sui_id_store::federation_policy::from_stored(&provider) {
+        Ok(policy) => policy,
+        Err(e) => {
+            // The field name only: the value could carry an issuer query.
+            tracing::error!(slug = %provider.slug, field = e.field(),
+                "federation: provider has no usable stored policy");
+            terminalize_and_audit(
+                &app.db,
+                claimed.id,
+                TerminalFailureReason::Denied(DeniedDetail::NoUsablePolicy),
+                app.clock.now(),
+                provider.id,
+                None,
+            )
+            .await;
+            return Ok(terminal(
+                jar,
+                Redirect::to("/admin/login?fed_error=no_usable_policy"),
+            ));
+        }
     };
-    let allowed_algs = discovery.id_token_algs_intersection(&provider_config.id_token_algs);
+    let allowed_algs = discovery.id_token_algs_intersection(policy.id_token_algs());
 
     let verified_claims = match verify_id_token(
         client,
@@ -1849,7 +1877,8 @@ enum FedErrorBucket {
     Retry,
     /// A provider- or account-level issue only an administrator can act
     /// on: `disabled` (provider disabled), `config_drift` (startup config
-    /// missing its DB-enabled provider), `discovery_origin` (the
+    /// missing its DB-enabled provider), `no_usable_policy` (the stored
+    /// provider row has no usable trust policy), `discovery_origin` (the
     /// provider's own discovery document names a disallowed origin), and
     /// `signin_failed` (RFC 102 L04's own uniform post-identification
     /// failure -- disabled/deleted user, a DB error, or a commit
@@ -1876,9 +1905,8 @@ impl FedErrorBucket {
         match fed_error {
             "email_collision" | "link_required" => Self::LinkRequired,
             "unverified_email" => Self::UnverifiedEmail,
-            "disabled" | "config_drift" | "discovery_origin" | "signin_failed" => {
-                Self::ContactAdmin
-            }
+            "disabled" | "config_drift" | "no_usable_policy" | "discovery_origin"
+            | "signin_failed" => Self::ContactAdmin,
             _ => Self::Retry,
         }
     }

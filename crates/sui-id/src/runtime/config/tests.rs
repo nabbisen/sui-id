@@ -73,8 +73,11 @@ fn a_federation_provider() -> FederationProviderConfig {
 fn nine_allowed_origins_fails_at_load_not_first_sign_in() {
     let mut c = Config::sample();
     let mut provider = a_federation_provider();
-    provider.allowed_origins = (0..9)
-        .map(|i| format!("https://origin-{i}.example.com"))
+    // RFC 096-B2 S2a: the issuer's own origin must be one of the set --
+    // included here (plus 8 others, 9 total) to isolate the count rule
+    // this test is actually about from the newer "issuer included" one.
+    provider.allowed_origins = std::iter::once("https://idp.example.com".to_string())
+        .chain((0..8).map(|i| format!("https://origin-{i}.example.com")))
         .collect();
     c.federation_providers.push(provider);
     let err = c.validate().expect_err("9 origins must be rejected");
@@ -90,8 +93,11 @@ fn nine_allowed_origins_fails_at_load_not_first_sign_in() {
 fn eight_allowed_origins_is_accepted() {
     let mut c = Config::sample();
     let mut provider = a_federation_provider();
-    provider.allowed_origins = (0..8)
-        .map(|i| format!("https://origin-{i}.example.com"))
+    // RFC 096-B2 S2a: the issuer's own origin must be one of the set --
+    // included here (plus 7 others, 8 total) to isolate the count rule
+    // this test is actually about from the newer "issuer included" one.
+    provider.allowed_origins = std::iter::once("https://idp.example.com".to_string())
+        .chain((0..7).map(|i| format!("https://origin-{i}.example.com")))
         .collect();
     c.federation_providers.push(provider);
     c.validate().expect("8 origins is within RFC 096's cap");
@@ -217,4 +223,73 @@ fn a_four_element_list_is_accepted() {
     config_with_algs(&["RS256", "PS256", "ES256", "EdDSA"])
         .validate()
         .expect("all four permitted algorithms together are valid");
+}
+
+// ── RFC 096-B2 S2a: newly enforced rules, via `FederationTrustPolicy`
+// (`Config::validate` wires every one of these up; `federation_policy`'s
+// own test module is the exhaustive per-rule suite for each) ───────────
+
+#[test]
+fn a_noncanonical_issuer_is_refused_at_load() {
+    let mut c = Config::sample();
+    let mut provider = a_federation_provider();
+    provider.issuer = "https://Idp.example.com".into(); // mixed-case host
+    c.federation_providers.push(provider);
+    let msg = c
+        .validate()
+        .expect_err("mixed-case issuer host")
+        .to_string();
+    assert!(msg.contains("idp"), "{msg}: must name the provider");
+    assert!(msg.contains("issuer"), "{msg}");
+}
+
+#[test]
+fn an_empty_client_id_is_refused_at_load() {
+    let mut c = Config::sample();
+    let mut provider = a_federation_provider();
+    provider.client_id = String::new();
+    c.federation_providers.push(provider);
+    let msg = c.validate().expect_err("empty client_id").to_string();
+    assert!(msg.contains("idp"), "{msg}: must name the provider");
+    assert!(msg.contains("client_id"), "{msg}");
+}
+
+#[test]
+fn scopes_missing_openid_is_refused_at_load() {
+    let mut c = Config::sample();
+    let mut provider = a_federation_provider();
+    provider.scopes = "email profile".into();
+    c.federation_providers.push(provider);
+    let msg = c.validate().expect_err("scopes without openid").to_string();
+    assert!(msg.contains("idp"), "{msg}: must name the provider");
+    assert!(msg.contains("scopes"), "{msg}");
+}
+
+#[test]
+fn an_unknown_provision_mode_is_refused_at_load_not_silently_link_only() {
+    let mut c = Config::sample();
+    let mut provider = a_federation_provider();
+    provider.provision_mode = "provision_on_every_login".into(); // not a real value
+    c.federation_providers.push(provider);
+    let msg = c
+        .validate()
+        .expect_err("unknown provision_mode must refuse, not silently become link_only")
+        .to_string();
+    assert!(msg.contains("idp"), "{msg}: must name the provider");
+    assert!(msg.contains("provision_mode"), "{msg}");
+}
+
+#[test]
+fn an_explicit_origin_set_missing_the_issuers_own_origin_is_refused_at_load() {
+    let mut c = Config::sample();
+    let mut provider = a_federation_provider();
+    // The issuer is https://idp.example.com; this set never names it.
+    provider.allowed_origins = vec!["https://other.example.com".into()];
+    c.federation_providers.push(provider);
+    let msg = c
+        .validate()
+        .expect_err("an explicit origin set missing the issuer's own origin must refuse")
+        .to_string();
+    assert!(msg.contains("idp"), "{msg}: must name the provider");
+    assert!(msg.contains("issuer"), "{msg}");
 }

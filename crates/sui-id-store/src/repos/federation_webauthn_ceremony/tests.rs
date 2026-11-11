@@ -36,7 +36,10 @@ async fn seed_provider(db: &Database) -> FederationProviderId {
         client_secret_enc: None,
         scopes: "openid email".to_owned(),
         provision_mode: ProvisionMode::LinkOnly,
-        enabled: true,
+        // RFC 096-B2 S2a: no test in this file reads `.enabled`; `false`
+        // avoids fabricating evidence migration 0051's `CHECK` would
+        // otherwise require for `true`.
+        enabled: false,
         allowed_origins: String::new(),
         config_version: 0,
         activation_generation: 0,
@@ -49,6 +52,7 @@ async fn seed_provider(db: &Database) -> FederationProviderId {
         evidence_jwks_fingerprint: None,
         created_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),
+        id_token_algs: None,
     };
     federation_provider::create(db, &row, None).await.unwrap();
     id

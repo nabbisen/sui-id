@@ -100,16 +100,30 @@ struct ResolvedCheck {
     note: &'static str,
 }
 
-const RESOLVED_CHECKS: &[ResolvedCheck] = &[ResolvedCheck {
-    migration: 22,
-    opens_boundary: true,
-    note: "boolean/consistency CHECK rebuild on users/credentials/clients/\
+const RESOLVED_CHECKS: &[ResolvedCheck] = &[
+    ResolvedCheck {
+        migration: 22,
+        opens_boundary: true,
+        note: "boolean/consistency CHECK rebuild on users/credentials/clients/\
            signing_keys/user_totp. Treated conservatively as opening a \
            boundary: this codebase's existing data already used 0/1 \
            booleans, so no *specific* seed would be rejected, but \
            re-proving that by inspection for every future seed, forever, \
            costs more than one extra script now (stage 1 §4.1 point 2).",
-}];
+    },
+    ResolvedCheck {
+        migration: 51,
+        opens_boundary: false,
+        note: "federation_provider rebuild, RFC 096-B2 S2a: the new `CHECK` \
+           (`enabled = 0 OR <validated-with-evidence>`) is satisfied by \
+           *construction*, not by any property of existing data -- unlike \
+           migration 22, this migration's own `INSERT ... SELECT` forces \
+           every copied row's `enabled` to `0` unconditionally, regardless \
+           of what it held before. No seed, past or future, could ever be \
+           rejected by this rebuild: the rebuilt row never carries the \
+           seed's own `enabled` value through unexamined. Not a boundary.",
+    },
+];
 
 /// A migration that drops a column from a seeded table must be recorded
 /// here, once resolved by a human, naming whether it opens a new
@@ -499,16 +513,24 @@ fn derive_ranges_matches_the_accepted_stage1_table() {
     let ends: Vec<i32> = ranges.iter().map(|r| r.end).collect();
     assert_eq!(
         ends,
-        // RFC 096-B2 S1 (migration 0050): extends the last range from 49
-        // to 50. The generator decided this mechanically, not by
-        // amending this table on assumption -- 0050's nine `ADD COLUMN`s
-        // on `federation_provider` are each either `NOT NULL` with a
-        // `DEFAULT` or nullable with a self-referential `CHECK`, neither
-        // of which opens a new boundary (this file's own doc comment:
-        // "this test either keeps passing ... or fails naming exactly
-        // what it found" -- it kept passing, once `derive_ranges`'s
-        // output was read rather than assumed).
-        vec![2, 3, 4, 13, 15, 21, 24, 35, 36, 37, 50],
+        // RFC 096-B2 S1 (migration 0050): extended the last range from
+        // 49 to 50, mechanically, not by amending this table on
+        // assumption -- 0050's nine `ADD COLUMN`s on `federation_
+        // provider` are each either `NOT NULL` with a `DEFAULT` or
+        // nullable with a self-referential `CHECK`, neither of which
+        // opens a new boundary.
+        //
+        // RFC 096-B2 S2a (migration 0051): extends it again, to 51.
+        // 0051 rebuilds the table with a `CHECK` spanning eight columns
+        // at once -- genuinely ambiguous, so `RESOLVED_CHECKS` records
+        // the human answer: not a boundary, because the rebuild's own
+        // `INSERT ... SELECT` forces every row's `enabled` to `0`
+        // unconditionally, so the new `CHECK` is satisfied by
+        // construction, never by a property of existing seed data (this
+        // file's own doc comment: "this test either keeps passing ... or
+        // fails naming exactly what it found" -- it kept passing, once
+        // `derive_ranges`'s output was read rather than assumed).
+        vec![2, 3, 4, 13, 15, 21, 24, 35, 36, 37, 51],
         "range ends changed -- full ranges: {ranges:#?}"
     );
 

@@ -24,6 +24,10 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<FederationProviderRow> {
     let id = id_str.parse::<FederationProviderId>().map_err(|e| {
         rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
     })?;
+    let provision_mode_str: String = row.get(7)?;
+    let provision_mode = ProvisionMode::try_parse(&provision_mode_str).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(7, rusqlite::types::Type::Text, Box::new(e))
+    })?;
     Ok(FederationProviderRow {
         id,
         slug: row.get(1)?,
@@ -32,7 +36,7 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<FederationProviderRow> {
         client_id: row.get(4)?,
         client_secret_enc: row.get(5)?,
         scopes: row.get(6)?,
-        provision_mode: ProvisionMode::parse(&row.get::<_, String>(7)?),
+        provision_mode,
         enabled: row.get::<_, i64>(8)? != 0,
         allowed_origins: row.get(9)?,
         config_version: row.get(10)?,
@@ -46,6 +50,7 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<FederationProviderRow> {
         evidence_jwks_fingerprint: row.get(18)?,
         created_at: row.get(19)?,
         updated_at: row.get(20)?,
+        id_token_algs: row.get(21)?,
     })
 }
 
@@ -54,7 +59,7 @@ const SELECT: &str = "SELECT id, slug, display_name, issuer, client_id, client_s
      config_version, activation_generation, validation_status, \
      evidence_config_version, evidence_activation_generation, evidence_policy_digest, \
      evidence_observed_at, evidence_metadata_fingerprint, evidence_jwks_fingerprint, \
-     created_at, updated_at \
+     created_at, updated_at, id_token_algs \
      FROM federation_provider";
 
 /// List all providers ordered by slug.
@@ -167,8 +172,9 @@ pub async fn create(
         conn.execute(
             "INSERT INTO federation_provider \
              (id, slug, display_name, issuer, client_id, client_secret_enc, \
-              scopes, provision_mode, enabled, allowed_origins, created_at, updated_at) \
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)",
+              scopes, provision_mode, enabled, allowed_origins, created_at, updated_at, \
+              id_token_algs) \
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)",
             params![
                 row.id.to_string(),
                 row.slug,
@@ -182,6 +188,9 @@ pub async fn create(
                 row.allowed_origins,
                 row.created_at,
                 row.updated_at,
+                // RFC 096-B2 S2a: written as the fixture states it, so a
+                // fixture that records algorithms is not silently NULL.
+                row.id_token_algs,
             ],
         )
         .map_err(|e| match e {
@@ -197,21 +206,50 @@ pub async fn create(
     .await
 }
 
+/// RFC 096-B2 S2a Part C: exactly what C16 (create) supplies. **No
+/// `enabled` field exists here at all** — the production create path
+/// has no way to insert an enabled row, a type fact rather than a
+/// convention a reviewer must remember to check (`startup.rs:421` used
+/// to copy `enabled` straight from config; that is now impossible to
+/// express through this type, not merely discouraged). `client_secret_
+/// enc` must already hold the sealed ciphertext (or `None`); `provision_
+/// mode`, `allowed_origins` and `id_token_algs` are a validated
+/// [`crate::federation_policy::FederationTrustPolicy`]'s own canonical
+/// fields, never raw config strings.
+#[derive(Debug, Clone)]
+pub struct NewFederationProvider {
+    pub id: FederationProviderId,
+    pub slug: String,
+    pub display_name: String,
+    pub issuer: String,
+    pub client_id: String,
+    pub client_secret_enc: Option<Vec<u8>>,
+    pub scopes: String,
+    pub provision_mode: ProvisionMode,
+    pub allowed_origins: String,
+    pub id_token_algs: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
 /// Create a provider inside an existing transaction (RFC 094 M2b wave 3,
-/// C16). `row.client_secret_enc` must already hold the sealed ciphertext
-/// (or `None`) — this function does no cryptography, unlike [`create`]
-/// above, which still does its own sealing for its many test-fixture
-/// callers. The one production call site (`runtime/startup.rs`) goes
-/// through `commands::create_federation_provider` instead, which seals
-/// the secret before calling this.
+/// C16). Does no cryptography, unlike [`create`] above, which still does
+/// its own sealing for its many test-fixture callers. The one production
+/// call site (`runtime/startup.rs`) goes through `commands::
+/// create_federation_provider` instead, which seals the secret before
+/// calling this. `enabled`, `config_version`, `activation_generation`,
+/// `validation_status` and every evidence column are left to their own
+/// schema `DEFAULT` (migrations 0037/0050) — `0`, `0`, `'requires_
+/// review'`, and `NULL` respectively — since [`NewFederationProvider`]
+/// has no way to name a different value for any of them.
 pub fn create_within_tx(
     tx: &rusqlite::Transaction<'_>,
-    row: &FederationProviderRow,
+    row: &NewFederationProvider,
 ) -> StoreResult<()> {
     tx.execute(
         "INSERT INTO federation_provider \
          (id, slug, display_name, issuer, client_id, client_secret_enc, \
-          scopes, provision_mode, enabled, allowed_origins, created_at, updated_at) \
+          scopes, provision_mode, allowed_origins, id_token_algs, created_at, updated_at) \
          VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)",
         params![
             row.id.to_string(),
@@ -222,8 +260,8 @@ pub fn create_within_tx(
             row.client_secret_enc,
             row.scopes,
             row.provision_mode.as_str(),
-            row.enabled as i64,
             row.allowed_origins,
+            row.id_token_algs,
             row.created_at,
             row.updated_at,
         ],
@@ -239,35 +277,123 @@ pub fn create_within_tx(
     Ok(())
 }
 
-/// Update `enabled` flag.
+/// Disable a provider.
 ///
 /// Cycle J stage 10 (RFC 094 M2b criterion 1/3): no production caller
 /// anywhere (C17's own row already said so). Kept behind `test-support`
 /// — not deleted, unlike `delete` (no caller at all, including tests) —
 /// because test fixtures in *this* crate's `repos::federation_provider`
-/// tests and in `sui-id-core`'s `authn::federated_mfa` tests both call it
-/// to flip a provider's `enabled` flag directly, bypassing the admin
-/// surface RFC 096-B2 has not built yet. `sui-id-core`'s own Cargo.toml
-/// dev-dependency on this crate gained `features = ["test-support"]` for
-/// exactly this.
+/// tests, `sui-id-core`'s `authn::federated_mfa` tests, and
+/// `commands::tests::runner::{federation,login}` all call it to flip a
+/// provider back to disabled mid-test.
+///
+/// RFC 096-B2 S2a: this used to also *enable* a provider (an `enabled:
+/// bool` parameter). Migration 0051's own `CHECK` now refuses an enabled
+/// row with no `validated` status, no `id_token_algs`, and no evidence
+/// bound to its current version/generation — exactly what a bare
+/// `UPDATE ... SET enabled = 1` can never supply. Measured, not assumed:
+/// every real caller already passed `false` (a `grep -rn "set_enabled("`
+/// across the whole workspace found exactly one call passing `true`,
+/// `repos::federation_provider::tests::set_enabled_and_delete`, moved to
+/// [`create_enabled_for_test`] below instead). Dropping the parameter
+/// makes "this function cannot enable a provider" a type fact rather
+/// than a convention every future caller must remember.
 #[cfg(any(test, feature = "test-support"))]
-pub async fn set_enabled(
+pub async fn set_disabled(
     db: &Database,
     id: FederationProviderId,
-    enabled: bool,
     now: DateTime<Utc>,
 ) -> StoreResult<()> {
     let id_str = id.to_string();
     db.with_conn(move |conn| {
         let n = conn.execute(
-            "UPDATE federation_provider SET enabled = ?1, updated_at = ?2 WHERE id = ?3",
-            params![enabled as i64, now, id_str],
+            "UPDATE federation_provider SET enabled = 0, updated_at = ?1 WHERE id = ?2",
+            params![now, id_str],
         )?;
         if n == 0 {
             Err(StoreError::NotFound)
         } else {
             Ok(())
         }
+    })
+    .await
+}
+
+/// RFC 096-B2 S2a Part C: the one test-support way to create an enabled
+/// provider. Migration 0051's `CHECK` requires an enabled row to be
+/// `validated`, carry `id_token_algs`, and carry all four evidence
+/// fields with `evidence_config_version`/`evidence_activation_generation`
+/// equal to the row's own counters — the exact shape a real C17 enable
+/// (S4) will produce. No production code writes any of that yet, so
+/// this test-only builder writes it directly: `row`'s own
+/// `config_version`/`activation_generation` (0 for a fresh fixture),
+/// `row.id_token_algs` if set, else a default singleton `"RS256"`, and a
+/// fixed, arbitrary 32-byte evidence digest/fingerprint pair — nothing
+/// in this codebase reads evidence bytes as meaningful before S3/S4
+/// exist, so there is no "real" value to put there yet, and a fixed one
+/// is exactly as inert as a random one while being reproducible.
+/// **It satisfies the `CHECK`, the same `INSERT` every other row goes
+/// through — it does not bypass it.**
+#[cfg(any(test, feature = "test-support"))]
+pub async fn create_enabled_for_test(
+    db: &Database,
+    row: &FederationProviderRow,
+    client_secret_plain: Option<&str>,
+) -> StoreResult<()> {
+    const FIXED_EVIDENCE_BYTES: [u8; 32] = [0xABu8; 32];
+    let enc: Option<Vec<u8>> = match client_secret_plain {
+        Some(s) => Some(crypto::seal(db.key(), s.as_bytes(), AAD)?),
+        None => None,
+    };
+    let id_token_algs = row
+        .id_token_algs
+        .clone()
+        .unwrap_or_else(|| "RS256".to_string());
+    let row = row.clone();
+    db.with_conn(move |conn| {
+        conn.execute(
+            "INSERT INTO federation_provider \
+             (id, slug, display_name, issuer, client_id, client_secret_enc, \
+              scopes, provision_mode, enabled, allowed_origins, \
+              config_version, activation_generation, validation_status, \
+              evidence_config_version, evidence_activation_generation, \
+              evidence_policy_digest, evidence_observed_at, \
+              evidence_metadata_fingerprint, evidence_jwks_fingerprint, \
+              id_token_algs, created_at, updated_at) \
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,1,?9,?10,?11,'validated', \
+                      ?12,?13,?14,?15,?16,?17,?18,?19,?20)",
+            params![
+                row.id.to_string(),
+                row.slug,
+                row.display_name,
+                row.issuer,
+                row.client_id,
+                enc,
+                row.scopes,
+                row.provision_mode.as_str(),
+                row.allowed_origins,
+                row.config_version,
+                row.activation_generation,
+                row.config_version,
+                row.activation_generation,
+                FIXED_EVIDENCE_BYTES.as_slice(),
+                row.updated_at,
+                FIXED_EVIDENCE_BYTES.as_slice(),
+                FIXED_EVIDENCE_BYTES.as_slice(),
+                id_token_algs,
+                row.created_at,
+                row.updated_at,
+            ],
+        )
+        .map_err(|e| match e {
+            rusqlite::Error::SqliteFailure(err, _)
+                if err.code == rusqlite::ErrorCode::ConstraintViolation =>
+            {
+                StoreError::Conflict
+            }
+            other => StoreError::from(other),
+        })?;
+        Ok(())
     })
     .await
 }

@@ -41,10 +41,21 @@ async fn seed_provider(state: &AppState, issuer: &str) {
     exec(
         state,
         format!(
+            // RFC 096-B2 S2a: migration 0051's `CHECK` requires an
+            // enabled row to be `validated`, carry `id_token_algs`, and
+            // carry evidence bound to its own (default, `0`) counters.
             "INSERT INTO federation_provider \
              (id, slug, display_name, issuer, client_id, enabled, allowed_origins, \
+              validation_status, id_token_algs, evidence_config_version, \
+              evidence_activation_generation, evidence_policy_digest, evidence_observed_at, \
+              evidence_metadata_fingerprint, evidence_jwks_fingerprint, \
               created_at, updated_at) \
              VALUES ('{provider}', 'up', 'Up', '{issuer}', 'client', 1, '', \
+             'validated', 'RS256', 0, 0, \
+             X'ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB', \
+             '2026-01-01T00:00:00Z', \
+             X'ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB', \
+             X'ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB', \
              '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');"
         ),
     )

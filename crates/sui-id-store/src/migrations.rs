@@ -271,6 +271,13 @@ const MIGRATIONS: &[Migration] = &[
         name: "0050_federation_provider_validation_schema",
         sql: include_str!("./migrations/0050_federation_provider_validation_schema.sql"),
     },
+    Migration {
+        version: 51,
+        name: "0051_federation_provider_id_token_algs_and_enabled_check",
+        sql: include_str!(
+            "./migrations/0051_federation_provider_id_token_algs_and_enabled_check.sql"
+        ),
+    },
 ];
 
 /// The highest schema version this build of sui-id-store knows how to

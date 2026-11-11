@@ -26,7 +26,15 @@ fn seeded_row(slug: &str) -> FederationProviderRow {
         client_secret_enc: None,
         scopes: "openid email".into(),
         provision_mode: ProvisionMode::LinkOnly,
-        enabled: true,
+        // RFC 096-B2 S2a: every one of this fixture's 14 callers goes
+        // through `federation_provider::create`, which still writes
+        // `enabled` verbatim -- `true` would now fail migration 0051's
+        // own `CHECK` (no evidence, no `id_token_algs`, not `validated`).
+        // None of this file's tests need `row.enabled` to be `true`
+        // specifically; every assertion compares `fetched.enabled`
+        // against `row.enabled` itself, or constructs `cfg.enabled` from
+        // it, so this holds symmetrically either way.
+        enabled: false,
         allowed_origins: "https://accounts.google.com".into(),
         config_version: 0,
         activation_generation: 0,
@@ -39,6 +47,7 @@ fn seeded_row(slug: &str) -> FederationProviderRow {
         evidence_jwks_fingerprint: None,
         created_at: now,
         updated_at: now,
+        id_token_algs: None,
     }
 }
 
@@ -358,6 +367,7 @@ async fn requires_review_provider_warns_once_naming_the_slug() {
     let (captured, _guard) = capture();
     let db = fresh_db();
     let row = seeded_row("google");
+    let provider_id = row.id;
     federation_provider::create(&db, &row, None).await.unwrap();
 
     warn_providers_requiring_review(&db).await;
@@ -379,11 +389,90 @@ async fn requires_review_provider_warns_once_naming_the_slug() {
         line.contains("operator guide"),
         "does not say where: {line}"
     );
+    // RFC 096-B2 S2a Part F: architecture.md:306-307's own upgrade
+    // report asks for the internal ID, a yes/no for links, and the
+    // missing policy fields (just `id_token_algs` after this stage).
+    assert!(
+        line.contains(&provider_id.to_string()),
+        "does not name the internal id: {line}"
+    );
+    assert!(
+        line.contains("has no linked user"),
+        "does not say there is no link (this fixture has none): {line}"
+    );
+    assert!(
+        line.contains("id_token_algs"),
+        "does not name the missing policy field: {line}"
+    );
     let count = log
         .lines()
         .filter(|l| l.contains("requires review"))
         .count();
     assert_eq!(count, 1, "expected exactly one warning line:\n{log}");
+}
+
+/// Part F's other required case: a provider with an existing link says
+/// so (`has a linked user`), not `has no`.
+#[tokio::test]
+async fn requires_review_provider_with_an_existing_link_says_so() {
+    let (captured, _guard) = capture();
+    let db = fresh_db();
+    let row = seeded_row("google");
+    let provider_id = row.id;
+    federation_provider::create(&db, &row, None).await.unwrap();
+    let now = Utc::now();
+    let user_id = UserId::new();
+    sui_id_store::repos::users::create(
+        &db,
+        &UserRow {
+            id: user_id,
+            username: "fed-user".into(),
+            display_name: None,
+            is_admin: false,
+            role: Role::User,
+            last_login_at: None,
+            is_disabled: false,
+            is_deleted: false,
+            user_uuid: uuid::Uuid::new_v4(),
+            created_at: now,
+            updated_at: now,
+            failed_login_count: 0,
+            locked_until: None,
+            source: UserSource::Local,
+            external_stable_id: None,
+            email: None,
+            preferred_lang: None,
+            email_normalized: None,
+            email_verified_at: None,
+        },
+    )
+    .await
+    .unwrap();
+    federation_link::upsert(
+        &db,
+        FederationLinkRow {
+            user_id,
+            provider_id,
+            upstream_sub: "sub-1".into(),
+            upstream_email: None,
+            linked_at: now,
+            last_seen_at: now,
+        },
+    )
+    .await
+    .unwrap();
+
+    warn_providers_requiring_review(&db).await;
+
+    let log = logged(&captured);
+    let line = log
+        .lines()
+        .find(|l| l.contains("requires review"))
+        .expect("warning line");
+    assert!(
+        line.contains("has a linked user"),
+        "does not say there is a link: {line}"
+    );
 }
 
 /// A provider already `validated` -- not reachable through any writer
@@ -452,4 +541,153 @@ async fn no_providers_warns_about_nothing() {
 
     let log = logged(&captured);
     assert!(log.is_empty(), "expected no output at all:\n{log}");
+}
+
+// ── RFC 096-B2 S2a Part E: the `enabled` config key no longer enables ──────
+
+#[test]
+fn warn_if_enabled_key_is_set_warns_once_naming_the_slug() {
+    let (captured, _guard) = capture();
+    let mut cfg = matching_cfg(&seeded_row("google"));
+    cfg.enabled = true;
+
+    warn_if_enabled_key_is_set(&cfg);
+
+    let log = logged(&captured);
+    let first_line = log.lines().next();
+    assert!(first_line.is_some(), "no warning line in:\n{log}");
+    let line = first_line.expect("checked above");
+    assert!(line.contains("WARN"), "wrong level: {line}");
+    assert!(line.contains("google"), "does not name the slug: {line}");
+    assert!(
+        line.contains("no longer enables"),
+        "does not say the key no longer enables it: {line}"
+    );
+}
+
+#[test]
+fn warn_if_enabled_key_is_set_is_silent_when_enabled_is_false() {
+    let (captured, _guard) = capture();
+    let mut cfg = matching_cfg(&seeded_row("google"));
+    cfg.enabled = false;
+
+    warn_if_enabled_key_is_set(&cfg);
+
+    let log = logged(&captured);
+    assert!(log.is_empty(), "expected no output at all:\n{log}");
+}
+
+// ── RFC 096-B2 S2a review fold-ins: reconcile compares by meaning ─────────
+//
+// C16 stores the validated policy, and reconcile used to compare the raw
+// config strings with it. These pin that the two agree, so a boot after
+// creation writes nothing and warns about nothing that did not change.
+
+async fn audit_count(db: &Database, action: &'static str) -> i64 {
+    db.with_conn(move |c| {
+        Ok(c.query_row(
+            "SELECT COUNT(*) FROM audit_log WHERE action = ?1",
+            [action],
+            |r| r.get(0),
+        )?)
+    })
+    .await
+    .expect("count")
+}
+
+/// The churn: a provider created with no `allowed_origins` must not be
+/// rewritten, and audited, by C24 on the very next boot.
+#[tokio::test]
+async fn a_provider_created_with_default_origins_is_not_rewritten_on_the_next_boot() {
+    let db = fresh_db();
+    let mut cfg = matching_cfg(&seeded_row("google"));
+    cfg.allowed_origins = Vec::new();
+    register_new_federation_provider(&db, &cfg, None, Utc::now()).await;
+    let stored = federation_provider::get_by_slug(&db, "google")
+        .await
+        .expect("created");
+
+    reconcile_federation_provider(&db, &cfg, &stored, Utc::now()).await;
+
+    assert_eq!(
+        audit_count(&db, "federation.provider.allowed_origins_changed").await,
+        0,
+        "nothing changed, so nothing is written or audited"
+    );
+    let after = federation_provider::get_by_slug(&db, "google")
+        .await
+        .expect("still there");
+    assert_eq!(after.allowed_origins, stored.allowed_origins);
+}
+
+#[tokio::test]
+async fn scopes_spelled_in_another_order_produce_no_warning() {
+    let db = fresh_db();
+    let mut cfg = matching_cfg(&seeded_row("google"));
+    cfg.scopes = "email openid".into();
+    register_new_federation_provider(&db, &cfg, None, Utc::now()).await;
+    let stored = federation_provider::get_by_slug(&db, "google")
+        .await
+        .expect("created");
+    assert_eq!(
+        stored.scopes, "openid email",
+        "C16 stores the canonical order"
+    );
+
+    let (captured, _guard) = capture();
+    reconcile_federation_provider(&db, &cfg, &stored, Utc::now()).await;
+    let log = logged(&captured);
+    assert!(
+        !log.contains("field=scopes") && !log.contains("field=\"scopes\""),
+        "same scopes, different spelling: {log}"
+    );
+}
+
+/// The callback trusts the stored algorithms (S2a part D), so an edit to
+/// them in the config file is not applied, and must not be silent.
+#[tokio::test]
+async fn differing_id_token_algs_produce_a_warning_and_no_write() {
+    let db = fresh_db();
+    let cfg = matching_cfg(&seeded_row("google"));
+    register_new_federation_provider(&db, &cfg, None, Utc::now()).await;
+    let stored = federation_provider::get_by_slug(&db, "google")
+        .await
+        .expect("created");
+    assert_eq!(stored.id_token_algs.as_deref(), Some("RS256"));
+
+    let mut edited = cfg.clone();
+    edited.id_token_algs = vec!["ES256".into()];
+    let (captured, _guard) = capture();
+    reconcile_federation_provider(&db, &edited, &stored, Utc::now()).await;
+
+    let after = federation_provider::get_by_slug(&db, "google")
+        .await
+        .expect("still there");
+    assert_eq!(after.id_token_algs.as_deref(), Some("RS256"), "not applied");
+    let log = logged(&captured);
+    assert!(
+        log.contains("field=id_token_algs") || log.contains("field=\"id_token_algs\""),
+        "{log}"
+    );
+    assert!(log.contains("ES256"), "{log}");
+}
+
+#[tokio::test]
+async fn the_same_id_token_algs_in_another_order_produce_no_warning() {
+    let db = fresh_db();
+    let mut cfg = matching_cfg(&seeded_row("google"));
+    cfg.id_token_algs = vec!["ES256".into(), "RS256".into()];
+    register_new_federation_provider(&db, &cfg, None, Utc::now()).await;
+    let stored = federation_provider::get_by_slug(&db, "google")
+        .await
+        .expect("created");
+    assert_eq!(stored.id_token_algs.as_deref(), Some("RS256 ES256"));
+
+    let (captured, _guard) = capture();
+    reconcile_federation_provider(&db, &cfg, &stored, Utc::now()).await;
+    let log = logged(&captured);
+    assert!(
+        !log.contains("field=id_token_algs") && !log.contains("field=\"id_token_algs\""),
+        "{log}"
+    );
 }

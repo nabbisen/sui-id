@@ -159,13 +159,38 @@ impl ProvisionMode {
             Self::ProvisionOnFirstLogin => "provision_on_first_login",
         }
     }
-    pub fn parse(s: &str) -> Self {
+
+    /// RFC 096 `:363`: *"Exactly `link_only` or `provision_on_first_login`"*.
+    /// RFC 096-B2 S2a: the former `parse` mapped every unrecognised value to
+    /// `LinkOnly`, which made a malformed stored row or a config typo
+    /// indistinguishable from an operator's real choice. Every caller is
+    /// measured in the S2a review package; a stored value this cannot read
+    /// is a malformed row, not `link_only`.
+    pub fn try_parse(s: &str) -> Result<Self, InvalidProvisionMode> {
         match s {
-            "provision_on_first_login" => Self::ProvisionOnFirstLogin,
-            _ => Self::LinkOnly,
+            "link_only" => Ok(Self::LinkOnly),
+            "provision_on_first_login" => Ok(Self::ProvisionOnFirstLogin),
+            other => Err(InvalidProvisionMode(other.to_string())),
         }
     }
 }
+
+/// The exact text `ProvisionMode::try_parse` was given, when it is neither
+/// permitted value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InvalidProvisionMode(pub String);
+
+impl std::fmt::Display for InvalidProvisionMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{:?} is not \"link_only\" or \"provision_on_first_login\"",
+            self.0
+        )
+    }
+}
+
+impl std::error::Error for InvalidProvisionMode {}
 
 /// RFC 096-B2 S1 (migration 0050): whether a provider has been through a
 /// successful C17 preflight/enable since its trust policy last changed.
@@ -250,6 +275,13 @@ pub struct FederationProviderRow {
     pub evidence_jwks_fingerprint: Option<Vec<u8>>,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
+    /// RFC 096-B2 S2a (migration 0051): the ID-token signature algorithms
+    /// this provider is trusted to use, canonically encoded (tokens from
+    /// the closed set, in the set's fixed order, single-space separated).
+    /// `NULL` means "not recorded" — every pre-0051 row, and `requires_
+    /// review` means a provider's trust policy, including this field, has
+    /// not been reconfirmed since.
+    pub id_token_algs: Option<String>,
 }
 
 /// A confirmed link between a local user and an upstream identity (RFC 004).

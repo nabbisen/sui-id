@@ -314,9 +314,10 @@ async fn seed_federation_provider(db: &Database) -> FederationProviderId {
         evidence_jwks_fingerprint: None,
         created_at: now,
         updated_at: now,
+        id_token_algs: None,
     };
     let id = row.id;
-    repos::federation_provider::create(db, &row, None)
+    repos::federation_provider::create_enabled_for_test(db, &row, None)
         .await
         .expect("seed provider");
     id
@@ -476,7 +477,7 @@ async fn l04_refuses_when_the_provider_is_disabled_at_commit_time() {
     let provider_id = seed_federation_provider(&db).await;
     seed_federation_link(&db, user.id, provider_id).await;
     let attempt_id = an_exchanging_federation_attempt(&db, provider_id, 3).await;
-    repos::federation_provider::set_enabled(&db, provider_id, false, Utc::now())
+    repos::federation_provider::set_disabled(&db, provider_id, Utc::now())
         .await
         .expect("disable provider");
 

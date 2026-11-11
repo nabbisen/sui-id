@@ -19,7 +19,12 @@ fn sample_row(slug: &str) -> crate::models::FederationProviderRow {
         client_secret_enc: None,
         scopes: "openid email".into(),
         provision_mode: crate::models::ProvisionMode::LinkOnly,
-        enabled: true,
+        // RFC 096-B2 S2a: these C24 (allowed-origins) tests only ever
+        // seed through the test-only `create()`, which still writes
+        // `enabled` verbatim -- `false` here, since C24 has nothing to
+        // do with enablement and an enabled row with none of migration
+        // 0051's required evidence would fail its own `CHECK`.
+        enabled: false,
         allowed_origins: "https://a.example https://b.example".into(),
         config_version: 0,
         activation_generation: 0,
@@ -30,6 +35,28 @@ fn sample_row(slug: &str) -> crate::models::FederationProviderRow {
         evidence_observed_at: None,
         evidence_metadata_fingerprint: None,
         evidence_jwks_fingerprint: None,
+        created_at: now,
+        updated_at: now,
+        id_token_algs: None,
+    }
+}
+
+/// RFC 096-B2 S2a Part C: what the C16 tests below exercise now --
+/// `create_federation_provider` takes a `NewFederationProvider`, which
+/// has no `enabled` field at all (the type fact this stage adds).
+fn sample_new_provider(slug: &str) -> crate::repos::federation_provider::NewFederationProvider {
+    let now = Utc::now();
+    crate::repos::federation_provider::NewFederationProvider {
+        id: FederationProviderId::new(),
+        slug: slug.into(),
+        display_name: "Google".into(),
+        issuer: format!("https://{slug}.example"),
+        client_id: "client-abc".into(),
+        client_secret_enc: None,
+        scopes: "openid email".into(),
+        provision_mode: crate::models::ProvisionMode::LinkOnly,
+        allowed_origins: format!("https://{slug}.example"),
+        id_token_algs: "RS256".into(),
         created_at: now,
         updated_at: now,
     }
@@ -49,7 +76,7 @@ async fn last_event(db: &Database) -> crate::models::AuditLogRow {
 #[tokio::test]
 async fn a_c16_provider_create() {
     let db = fresh_db();
-    let row = sample_row("c16-happy");
+    let row = sample_new_provider("c16-happy");
     let before = audit_rows(&db).await;
 
     let audited =
@@ -91,7 +118,7 @@ async fn a_c16_provider_create() {
 #[tokio::test]
 async fn c16_injected_failure_before_append_rolls_back_the_create() {
     let db = fresh_db();
-    let row = sample_row("c16-rollback");
+    let row = sample_new_provider("c16-rollback");
     let before_audit = latest_audit_action(&db).await;
 
     db.fault_injector().fail_before_next_append();

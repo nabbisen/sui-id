@@ -92,9 +92,17 @@ async fn seed_provider(db: &Database, provision_mode: ProvisionMode) -> Federati
         evidence_jwks_fingerprint: None,
         created_at: Utc::now(),
         updated_at: Utc::now(),
+        id_token_algs: None,
     };
     let id = row.id;
-    federation_provider::create(db, &row, None).await.unwrap();
+    // RFC 096-B2 S2a: migration 0051's `CHECK` refuses an enabled row
+    // with none of its required evidence -- this file's tests need an
+    // enabled provider, so this goes through the test-only builder that
+    // satisfies the `CHECK` instead of the plain `create`, which still
+    // writes `enabled` verbatim.
+    federation_provider::create_enabled_for_test(db, &row, None)
+        .await
+        .unwrap();
     id
 }
 

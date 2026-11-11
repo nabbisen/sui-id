@@ -254,34 +254,37 @@ providers for federated sign-in (the "Sign in with X" flow).
 | `client_secret_env` | string | no | `""` | Name of the environment variable holding the client secret. Omit or set empty for public clients (no secret). Never put the secret inline. |
 | `scopes` | string | no | `"openid email"` | Space-separated scopes to request from the upstream. |
 | `provision_mode` | string | no | `"link_only"` | `"link_only"` — an upstream identity with no existing link is refused, shown the login page's generic "account link required" message; **this release has no self-service linking**, so an administrator must create the `federation_link` row directly before that user's first sign-in can succeed (a later design may restore self-service, with fresh local authentication, local MFA, CSRF, a single-use durable intent, and explicit approval — no date is set). `"provision_on_first_login"` — a password-less local account is created on first sign-in (requires `email_verified = true` from the upstream). **Prefer `provision_on_first_login` unless per-user administrator approval before first sign-in is a requirement, not a cost you are accepting by taking the default** — see the [operator guide](../guides/operators.md#federated-sign-in-upstream-oidc). |
-| `enabled` | bool | no | `false` | Whether the "Sign in with X" button is shown and callbacks are accepted. |
-| `allowed_origins` | array of strings | no | `[]` | Canonical HTTPS origins (scheme, host, and port) this provider's discovery document may name for `authorization_endpoint`, `token_endpoint` and `userinfo_endpoint`. Empty means the issuer's own origin alone — if you set this, list every origin you want allowed, including the issuer's if it uses one of them. At most 8 entries; rejected at startup if exceeded. |
+| `enabled` | bool | no | `false` | **No longer has any effect** (RFC 096-B2). Enabling a provider now requires an administrator's review, through a mechanism this release does not yet provide; the key is still accepted, and a block that sets it true logs one warning per boot saying so. |
+| `allowed_origins` | array of strings | no | `[]` | Canonical HTTPS origins (scheme, host, and port) this provider's discovery document may name for `authorization_endpoint`, `token_endpoint` and `userinfo_endpoint`. Empty means the issuer's own origin alone. If you set this, list every origin you want allowed, and **include the issuer's own origin**. Write each origin exactly in canonical form: lowercase host, no path or trailing `/`, and no `:443` (`https://accounts.google.com`, not `https://Accounts.google.com/`). At most 8 entries, no duplicates. Startup refuses any other value. |
+| `id_token_algs` | array of strings | no | `["RS256"]` | The ID-token signature algorithms this provider is trusted to use: one to four of `RS256`, `PS256`, `ES256` and `EdDSA`. `none` and the `HS*` family are refused at startup. Recorded when the provider is first created; see below. |
 
-> **Security note.** New providers start with `enabled = false` and with
-> `is_disabled = true` on the first locally-provisioned user. An administrator
-> must explicitly enable the provider after verifying the configuration.
+> **Security note.** Every provider is created disabled, and stays
+> disabled, regardless of what this file's `enabled` key says — RFC
+> 096-B2 makes enabling a provider an administrator's own action, through
+> a mechanism this release does not yet provide. The first
+> locally-provisioned user is created with `is_disabled = true` as well.
 
 > **Which fields take effect after the provider already exists.**
 > `allowed_origins` is reconciled from this file on every boot, so editing
 > it (for example to add a second origin) takes effect on the next restart
 > without re-creating the provider. Every other field — `display_name`,
-> `issuer`, `client_id`, `client_secret_env`, `scopes`, `provision_mode`,
-> and `enabled` — is read from this file only when the provider is first
-> created; editing one of these in the config afterward has no effect on
-> the stored provider, and the server logs a warning naming the field and
-> both values on every boot while they disagree (except `enabled` and the
-> secret, which are never compared or warned about — see below). There is
-> currently no admin UI or CLI for editing a provider's other fields; the
-> only way to change one today is to edit the database row directly, or to
-> delete and re-create the provider, which cascades to every federation
-> link to it and unlinks every federated user.
+> `issuer`, `client_id`, `client_secret_env`, `scopes`, `provision_mode`
+> and `id_token_algs` — is read from this file only when the provider is
+> first created;
+> editing one of these in the config afterward has no effect on the
+> stored provider, and the server logs a warning naming the field and
+> both values on every boot while they disagree (except the secret,
+> which is never compared or warned about). There is currently no admin
+> UI or CLI for editing a provider's other fields; the only way to change
+> one today is to edit the database row directly, or to delete and
+> re-create the provider, which cascades to every federation link to it
+> and unlinks every federated user.
 >
-> `enabled` is meant to be managed independently of this file once a
-> provider exists (so that, for example, disabling a provider does not
-> require a config edit and restart) — but no admin UI or CLI currently
-> implements that either, so in practice it is also fixed at whatever this
-> file said when the provider was first created, with no warning if you
-> later change it here.
+> `enabled` is never read into the stored provider at all, at creation or
+> on any later boot — RFC 096-B2 made enabling a provider an
+> administrator's own action, through a mechanism this release does not
+> yet provide. A block that still sets it logs one warning per boot
+> saying the key no longer enables anything.
 
 ```toml
 [[federation_providers]]
@@ -292,7 +295,6 @@ client_id          = "1234567890-abc.apps.googleusercontent.com"
 client_secret_env  = "GOOGLE_CLIENT_SECRET"
 scopes             = "openid email profile"
 provision_mode     = "provision_on_first_login"
-enabled            = true
 
 [[federation_providers]]
 slug               = "entra"
@@ -301,7 +303,6 @@ issuer             = "https://login.microsoftonline.com/{tenant}/v2.0"
 client_id          = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 client_secret_env  = "ENTRA_CLIENT_SECRET"
 provision_mode     = "link_only"
-enabled            = false
 ```
 
 ---

@@ -22,7 +22,12 @@ async fn seed_provider(db: &Database) -> FederationProviderId {
         client_secret_enc: None,
         scopes: "openid".into(),
         provision_mode: ProvisionMode::LinkOnly,
-        enabled: true,
+        // RFC 096-B2 S2a: none of this file's tests read `.enabled` at
+        // all (they exercise `federation_link`, not enablement), so
+        // `false` is simplest and avoids fabricating evidence this file
+        // has no use for -- migration 0051's `CHECK` would refuse `true`
+        // here with none of it present.
+        enabled: false,
         allowed_origins: String::new(),
         config_version: 0,
         activation_generation: 0,
@@ -35,6 +40,7 @@ async fn seed_provider(db: &Database) -> FederationProviderId {
         evidence_jwks_fingerprint: None,
         created_at: now,
         updated_at: now,
+        id_token_algs: None,
     };
     let id = row.id;
     federation_provider::create(db, &row, None).await.unwrap();

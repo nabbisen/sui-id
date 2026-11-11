@@ -760,10 +760,10 @@ class = "A"
 status = "target-absent"  # implemented | target-absent | target-legacy
 sealed = false
 owner = "Federation-provider enable/disable"
-rationale = "Dispositioned 2026-11-08 (cycle J stage 10): reserve, against RFC 096-B2, in C19's own words. `set_enabled` now test-gates behind `#[cfg(any(test, feature = \"test-support\"))]` (cycle J stage 10 §2: no production caller, confirmed by a full-workspace grep; kept for `repos::federation_provider`'s and `sui-id-core`'s own `authn::federated_mfa` tests), so it no longer describes production code at all -- `target-absent`, not `target-legacy`, is what the contract's own header now makes true. The preflight capability, generation increment, and evidence storage this row describes are RFC 096-B2's and arrive with it, sealed on arrival, the same shape C16/C24 already used for a from-scratch seal."
-mutation_surface = "none -- reserved against RFC 096-B2; today's `federation_provider::set_enabled` (test-only) is not this command"
+rationale = "Dispositioned 2026-11-08 (cycle J stage 10): reserve, against RFC 096-B2, in C19's own words. The former `set_enabled` test-gated behind `#[cfg(any(test, feature = \"test-support\"))]` (cycle J stage 10 §2: no production caller, confirmed by a full-workspace grep; kept for `repos::federation_provider`'s and `sui-id-core`'s own `authn::federated_mfa` tests). RFC 096-B2 S2a's migration 0051 (the `CHECK` making \"enabled\" mean \"validated\") made that one function unable to express enabling a provider at all, and it split in two: `set_disabled` (still test-only, disable-only now -- a type fact, not a convention) and `create_enabled_for_test` (writes an enabled row that already satisfies the `CHECK`, the same shape a real C17 enable will produce). Neither is this command -- `target-absent`, not `target-legacy`, is what the contract's own header still makes true. The preflight capability, generation increment, and evidence storage this row describes are RFC 096-B2's and arrive with it, sealed on arrival, the same shape C16/C24 already used for a from-scratch seal."
+mutation_surface = "none -- reserved against RFC 096-B2; today's `federation_provider::set_disabled`/`create_enabled_for_test` (both test-only) are not this command"
 files = []
-test_id = "none -- reserved; `federation_provider::set_enabled`'s own tests are not this command's"
+test_id = "none -- reserved; `federation_provider::set_disabled`'s and `create_enabled_for_test`'s own tests are not this command's"
 
 [[command]]
 id = "C18"

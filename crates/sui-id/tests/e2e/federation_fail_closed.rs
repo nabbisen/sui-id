@@ -252,10 +252,26 @@ pub(super) async fn linked_user(state: &AppState, issuer: &str) -> UserId {
             .db
             .with_conn(move |c| {
                 c.execute(
+                    // RFC 096-B2 S2a: migration 0051's `CHECK` requires
+                    // an enabled row to be `validated`, carry `id_token_
+                    // algs`, and carry evidence bound to its own
+                    // (default, `0`) counters -- the fixed placeholder
+                    // values below, the same shape `federation_provider
+                    // ::create_enabled_for_test` writes for in-crate
+                    // tests.
                     "INSERT INTO federation_provider \
                      (id, slug, display_name, issuer, client_id, client_secret_enc, \
-                      enabled, created_at, updated_at) \
-                     VALUES (?1, 'up', 'Up', ?2, 'client', ?3, 1, \
+                      enabled, validation_status, id_token_algs, \
+                      evidence_config_version, evidence_activation_generation, \
+                      evidence_policy_digest, evidence_observed_at, \
+                      evidence_metadata_fingerprint, evidence_jwks_fingerprint, \
+                      created_at, updated_at) \
+                     VALUES (?1, 'up', 'Up', ?2, 'client', ?3, 1, 'validated', 'RS256', \
+                     0, 0, \
+                     X'ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB', \
+                     '2026-01-01T00:00:00Z', \
+                     X'ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB', \
+                     X'ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB', \
                      '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
                     rusqlite::params![provider_str, issuer, sealed_secret],
                 )?;
@@ -496,6 +512,54 @@ async fn fed_active_linked_user_signs_in() {
 
     let o = federated_signin(&state, &nonce_slot).await;
     assert_eq!(o.location, "/admin");
+    assert!(o.session_cookie.is_some(), "the harness reaches a session");
+    assert_eq!(sessions_of(&state, user).await, 1);
+}
+
+/// RFC 096-B2 S2a Part D: the *stored* policy's `id_token_algs` decides,
+/// never the config file. `linked_user`'s own `INSERT` stores `RS256`
+/// (matching what [`mock_upstream`]'s token endpoint actually signs
+/// with -- `sign_id_token`, `jsonwebtoken::Algorithm::RS256`); this test
+/// configures the block's own `id_token_algs` to `ES256` instead, which
+/// would refuse the real signature if the callback still read it from
+/// config (`ES256` ∩ the upstream's advertised RS256 = empty). It does
+/// not, so sign-in still succeeds.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn fed_sign_in_uses_the_stored_algs_not_the_config_ones() {
+    let mut state = test_app();
+    complete_setup_and_login(&state).await;
+    state.http_client = std::sync::Arc::new(Some(super::tls_mock::federation_test_client(
+        sui_id::resolver::ValidatingResolver,
+    )));
+    let (issuer, nonce_slot) = mock_upstream().await;
+    {
+        let mut cfg = (*state.config).clone();
+        cfg.federation_providers
+            .push(sui_id::config::FederationProviderConfig {
+                slug: "up".into(),
+                display_name: "Up".into(),
+                issuer: issuer.clone(),
+                client_id: "client".into(),
+                client_secret_env: String::new(),
+                scopes: "openid email".into(),
+                provision_mode: "link_only".into(),
+                enabled: true,
+                allowed_origins: Vec::new(),
+                // Deliberately wrong, and deliberately different from the
+                // stored row's own `RS256` (`linked_user`'s INSERT) -- if
+                // the callback still read this instead of the stored
+                // policy, the real RS256 signature below would be refused.
+                id_token_algs: vec!["ES256".into()],
+            });
+        state.config = std::sync::Arc::new(cfg);
+    }
+    let user = linked_user(&state, &issuer).await;
+
+    let o = federated_signin(&state, &nonce_slot).await;
+    assert_eq!(
+        o.location, "/admin",
+        "the stored policy's RS256 must decide, not the config file's ES256"
+    );
     assert!(o.session_cookie.is_some(), "the harness reaches a session");
     assert_eq!(sessions_of(&state, user).await, 1);
 }

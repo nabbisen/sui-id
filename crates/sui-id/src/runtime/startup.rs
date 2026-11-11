@@ -318,6 +318,11 @@ pub async fn prepare(cfg: Config, backup: crate::database::PreMigrationBackup) -
     // Each [[federation_providers]] block is upserted so operators
     // can manage enabled/disabled state via the admin UI.
     for cfg in &state.config.federation_providers {
+        // RFC 096-B2 S2a Part E: `enabled` no longer enables anything --
+        // enabling is C17's job, after a preflight (S4) -- but the key
+        // stays accepted for now, so a block that still sets it true
+        // gets one warning per boot rather than a silent no-op.
+        warn_if_enabled_key_is_set(cfg);
         let secret = match cfg.resolve_secret() {
             Ok(s) => s,
             Err(e) => {
@@ -374,15 +379,46 @@ async fn warn_providers_requiring_review(db: &sui_id_store::Database) {
         }
     };
     for provider in providers {
-        if provider.validation_status == sui_id_store::models::ValidationStatus::RequiresReview {
-            tracing::warn!(
-                slug = %provider.slug,
-                "federation provider {:?} requires review before federated sign-in through it \
-                 is enabled again -- see the operator guide's \"Reviewing and re-enabling a \
-                 federation provider\" section",
-                provider.slug,
-            );
+        if provider.validation_status != sui_id_store::models::ValidationStatus::RequiresReview {
+            continue;
         }
+        // RFC 096-B2 S2a Part F: `architecture.md:306-307`'s own upgrade
+        // report asks for "internal ID, slug, whether a link exists, and
+        // missing policy fields but no secret, issuer query, email, or
+        // subject" -- S1's warning named only the slug. The only policy
+        // field that can be missing after this stage is `id_token_algs`
+        // (every other trust column is `NOT NULL`).
+        let has_link =
+            sui_id_store::repos::federation_link::any_link_exists_for_provider(db, provider.id)
+                .await
+                .unwrap_or_else(|e| {
+                    tracing::error!(error = %e, slug = %provider.slug,
+                "could not check for existing links; reporting none, not blocking the warning");
+                    false
+                });
+        let missing = if provider.id_token_algs.is_none() {
+            "id_token_algs"
+        } else {
+            "none"
+        };
+        tracing::warn!(
+            slug = %provider.slug,
+            provider_id = %provider.id,
+            has_link,
+            missing_policy_fields = missing,
+            "federation provider {:?} (id {}) requires review before federated sign-in \
+             through it is enabled again -- {}, missing policy fields: {} -- \
+             see the operator guide's \"Reviewing and re-enabling a federation provider\" \
+             section",
+            provider.slug,
+            provider.id,
+            if has_link {
+                "has a linked user"
+            } else {
+                "has no linked user"
+            },
+            missing,
+        );
     }
 }
 
@@ -407,46 +443,94 @@ async fn register_new_federation_provider(
     now: chrono::DateTime<chrono::Utc>,
 ) {
     use sui_id_shared::ids::FederationProviderId;
-    use sui_id_store::models::{FederationProviderRow, ProvisionMode, ValidationStatus};
+    use sui_id_store::federation_policy::FederationTrustPolicy;
+    use sui_id_store::models::ProvisionMode;
+    use sui_id_store::repos::federation_provider::NewFederationProvider;
 
-    let row = FederationProviderRow {
+    // RFC 096-B2 S2a Part B/C: C16 stores the validated policy, not raw
+    // config strings. `Config::validate` already ran this exact
+    // constructor at startup and refused to start on failure (`one
+    // validator, not two`), so re-running it here cannot fail -- it is
+    // re-run rather than threaded through `AppState` because it is pure
+    // and cheap, and caching its result would be a second place this
+    // provider's policy could silently drift from what config load time
+    // already proved.
+    let Ok(provision_mode) = ProvisionMode::try_parse(&cfg.provision_mode) else {
+        // Never reached in practice: `Config::validate` already refused
+        // startup for this. Logged and skipped, not panicked -- the
+        // same "never abort startup for this" rule the caller's own
+        // doc comment states, applied to a defensive check instead.
+        tracing::error!(slug = %cfg.slug,
+            "unreachable: provision_mode failed to parse after Config::validate; skipping");
+        return;
+    };
+    let algs: Vec<&str> = cfg.id_token_algs.iter().map(String::as_str).collect();
+    let origins: Vec<&str> = cfg.allowed_origins.iter().map(String::as_str).collect();
+    let Ok(policy) = FederationTrustPolicy::new(
+        &cfg.issuer,
+        &cfg.client_id,
+        !cfg.client_secret_env.is_empty(),
+        &cfg.scopes,
+        &algs,
+        &origins,
+        provision_mode,
+    ) else {
+        tracing::error!(slug = %cfg.slug,
+            "unreachable: trust policy failed to validate after Config::validate; skipping");
+        return;
+    };
+
+    let row = NewFederationProvider {
         id: FederationProviderId::new(),
         slug: cfg.slug.clone(),
         display_name: cfg.display_name.clone(),
-        issuer: cfg.issuer.clone(),
-        client_id: cfg.client_id.clone(),
+        issuer: policy.issuer().to_string(),
+        client_id: policy.client_id().to_string(),
         client_secret_enc: None, // sealed by create_federation_provider()
-        scopes: cfg.scopes.clone(),
-        provision_mode: ProvisionMode::parse(&cfg.provision_mode),
-        enabled: cfg.enabled,
+        scopes: policy.scopes_canonical(),
+        provision_mode: policy.provision_mode(),
+        // The column's own encoding (migration 0045): the operator's list,
+        // or "" for "the issuer's origin alone". Each entry was already
+        // proven canonical by the policy above. Storing the policy's
+        // effective list instead would make `reconcile_federation_provider`
+        // see "" != the stored list on the next boot, and C24 would rewrite
+        // the column and audit a change nobody made.
         allowed_origins: cfg.allowed_origins.join(" "),
-        // RFC 096-B2 S1: a brand-new provider starts exactly where a
-        // migrated one does -- generation 0, requires_review, no
-        // evidence. `create_within_tx`'s own INSERT does not name these
-        // columns at all (migration 0050's `DEFAULT`s supply the same
-        // values on insert), so these fields are inert for this call;
-        // they are still spelled out so the struct the caller holds
-        // afterward is never a lie about what the row now contains.
-        config_version: 0,
-        activation_generation: 0,
-        validation_status: ValidationStatus::RequiresReview,
-        evidence_config_version: None,
-        evidence_activation_generation: None,
-        evidence_policy_digest: None,
-        evidence_observed_at: None,
-        evidence_metadata_fingerprint: None,
-        evidence_jwks_fingerprint: None,
+        id_token_algs: policy.id_token_algs_canonical(),
         created_at: now,
         updated_at: now,
     };
     // RFC 094 M2b wave 3, C16: the insert and its
     // `federation.provider.created` audit append now commit in one
-    // transaction.
+    // transaction. RFC 096-B2 S2a Part C: the row this creates is always
+    // disabled -- `NewFederationProvider` has no `enabled` field for
+    // `cfg.enabled` to be copied into even if this function wanted to.
     if let Err(e) = sui_id_store::commands::create_federation_provider(db, row, secret).await {
         tracing::error!(error = %e, slug = %cfg.slug,
             "failed to register federation provider");
     } else {
         tracing::info!(slug = %cfg.slug, "federation provider registered");
+    }
+}
+
+/// RFC 096-B2 S2a Part E: `enabled` no longer enables a provider --
+/// enabling is C17's job (S4), after a preflight. The key stays accepted
+/// in the config file for now (refusing it outright is a later
+/// decision), so this is the one place that notices a block still
+/// setting it and says so, once per boot per provider.
+///
+/// TODO(096-B2 S5): "how a provider is enabled" below names no mechanism
+/// yet, because the admin UI that will be it does not exist. Update the
+/// message once S5 lands.
+fn warn_if_enabled_key_is_set(cfg: &crate::config::FederationProviderConfig) {
+    if cfg.enabled {
+        tracing::warn!(
+            slug = %cfg.slug,
+            "federation provider {:?}'s config sets enabled = true, but this key no longer \
+             enables it -- enabling a federation provider now requires an administrator's \
+             review, through a mechanism this release does not yet provide",
+            cfg.slug,
+        );
     }
 }
 
@@ -516,8 +600,45 @@ async fn reconcile_federation_provider(
     );
     warn_if_federation_field_differs(&cfg.slug, "issuer", &existing.issuer, &cfg.issuer);
     warn_if_federation_field_differs(&cfg.slug, "client_id", &existing.client_id, &cfg.client_id);
-    warn_if_federation_field_differs(&cfg.slug, "scopes", &existing.scopes, &cfg.scopes);
-    let configured_provision_mode = ProvisionMode::parse(&cfg.provision_mode);
+    // Scopes compare by meaning, not spelling: C16 stores the canonical
+    // order, so "email openid" in config is the stored "openid email".
+    // A stored value that is not even valid scopes is shown as it is.
+    let configured_scopes = sui_id_store::federation_policy::canonical_scopes(&cfg.scopes)
+        .unwrap_or_else(|_| cfg.scopes.clone());
+    let stored_scopes = sui_id_store::federation_policy::canonical_scopes(&existing.scopes)
+        .unwrap_or_else(|_| existing.scopes.clone());
+    warn_if_federation_field_differs(&cfg.slug, "scopes", &stored_scopes, &configured_scopes);
+    // RFC 096-B2 S2a: the callback trusts the stored algorithms, so a config
+    // edit to them is not applied. Say so, as for every other field, rather
+    // than let the edit do nothing in silence. A row migration 0051 copied
+    // has none recorded yet.
+    let mut configured_algs: Vec<&str> = cfg.id_token_algs.iter().map(String::as_str).collect();
+    configured_algs.sort_unstable();
+    let mut stored_algs: Vec<&str> = existing
+        .id_token_algs
+        .as_deref()
+        .map(|s| s.split_whitespace().collect())
+        .unwrap_or_default();
+    stored_algs.sort_unstable();
+    if configured_algs != stored_algs {
+        warn_if_federation_field_differs(
+            &cfg.slug,
+            "id_token_algs",
+            existing
+                .id_token_algs
+                .as_deref()
+                .unwrap_or("(not recorded)"),
+            &cfg.id_token_algs.join(" "),
+        );
+    }
+    // Never reached in practice: `Config::validate` already refused
+    // startup for an unparseable value. A no-op skip, not a panic, is
+    // this function's own existing rule for every other defensive case.
+    let Ok(configured_provision_mode) = ProvisionMode::try_parse(&cfg.provision_mode) else {
+        tracing::error!(slug = %cfg.slug,
+            "unreachable: provision_mode failed to parse after Config::validate; skipping the comparison");
+        return;
+    };
     if configured_provision_mode != existing.provision_mode {
         warn_if_federation_field_differs(
             &cfg.slug,

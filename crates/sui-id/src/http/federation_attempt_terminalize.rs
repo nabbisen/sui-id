@@ -113,6 +113,15 @@ pub enum DeniedDetail {
     PkceVerifierDecryptFailed,
     MissingIdToken,
     ConfigDrift,
+    /// RFC 096-B2 S2a Part D: the stored row has no usable trust policy
+    /// -- `id_token_algs` is `NULL` (every pre-S2a row, and any row
+    /// `requires_review` has not had it recorded since), or a stored
+    /// field fails `federation_policy::FederationTrustPolicy::new`'s
+    /// validating constructor. Distinct from `ConfigDrift`: that is
+    /// about the *config file* no longer naming this provider; this is
+    /// about the *stored row* itself not being trustworthy, regardless
+    /// of what config says.
+    NoUsablePolicy,
     SignatureInvalid,
     NonceMismatch,
     IdentityClaimsInvalid,
@@ -155,6 +164,7 @@ impl DeniedDetail {
             Self::PkceVerifierDecryptFailed => "pkce_verifier_decrypt_failed",
             Self::MissingIdToken => "missing_id_token",
             Self::ConfigDrift => "config_drift",
+            Self::NoUsablePolicy => "no_usable_policy",
             Self::SignatureInvalid => "signature_invalid",
             Self::NonceMismatch => "nonce_mismatch",
             Self::IdentityClaimsInvalid => "identity_claims_invalid",

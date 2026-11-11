@@ -171,10 +171,26 @@ async fn seed_provider_row_only(state: &sui_id::AppState, issuer: &str) {
             let id = uuid::Uuid::new_v4().to_string();
             move |c| {
                 c.execute(
+                    // RFC 096-B2 S2a: migration 0051's `CHECK` requires
+                    // an enabled row to be `validated`, carry `id_token_
+                    // algs`, and carry evidence bound to its own
+                    // (default, `0`) counters -- the fixed placeholder
+                    // values below, the same shape `federation_provider
+                    // ::create_enabled_for_test` writes for in-crate
+                    // tests.
                     "INSERT INTO federation_provider \
                      (id, slug, display_name, issuer, client_id, client_secret_enc, \
-                      enabled, created_at, updated_at) \
-                     VALUES (?1, 'up', 'Up', ?2, 'client', ?3, 1, \
+                      enabled, validation_status, id_token_algs, \
+                      evidence_config_version, evidence_activation_generation, \
+                      evidence_policy_digest, evidence_observed_at, \
+                      evidence_metadata_fingerprint, evidence_jwks_fingerprint, \
+                      created_at, updated_at) \
+                     VALUES (?1, 'up', 'Up', ?2, 'client', ?3, 1, 'validated', 'RS256', \
+                     0, 0, \
+                     X'ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB', \
+                     '2026-01-01T00:00:00Z', \
+                     X'ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB', \
+                     X'ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB', \
                      '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
                     rusqlite::params![id, issuer, sealed_secret],
                 )?;

@@ -23,6 +23,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in this same release** — this entry describes one piece of a change
   that is not safe to release on its own, and will not be, until that
   part lands too.
+- **A federation provider's configuration is now validated more
+  strictly at startup, and some previously-accepted configuration files
+  will now refuse to start.** Each of these is checked for every
+  `[[federation_providers]]` block:
+  - `issuer` must be a canonical, absolute HTTPS URL, with no userinfo,
+    query string, or fragment (a provider's own issuer page without a
+    path, e.g. `https://accounts.google.com`, is still accepted — only
+    its own serialized value, with no normalization, ever was and still
+    is authoritative).
+  - `client_id` must be 1–512 UTF-8 bytes with no control characters.
+  - `scopes` must be a unique combination of `openid`, `email` and
+    `profile`, and must include `openid`.
+  - `allowed_origins`, when set explicitly (not left to its default of
+    "the issuer's origin alone"), must include the issuer's own origin,
+    and each entry must be written in canonical form, with no duplicates:
+    lowercase host, no path or trailing `/`, and no `:443`.
+  - `provision_mode` must be exactly `link_only` or
+    `provision_on_first_login`; an unrecognized value now refuses to
+    start instead of silently being treated as `link_only`.
+- **The `enabled` key in a `[[federation_providers]]` block no longer
+  enables anything.** Enabling a federation provider is now an
+  administrator's own action, through a mechanism this release does not
+  yet provide; a block that still sets `enabled = true` logs one warning
+  per boot saying so. The key is still accepted, for now.
+- **The ID-token signature algorithms a federation provider accepts are
+  now the ones recorded for it, not the ones in the config file.**
+  Before this release, editing `id_token_algs` in the config file
+  changed what an already-enabled provider accepted immediately, with
+  no review. A config edit alone no longer changes it, and startup logs a
+  warning on every boot while the two differ.
 
 ## [0.89.0] — 2026-11-11
 

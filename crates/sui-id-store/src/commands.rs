@@ -7055,7 +7055,7 @@ impl SealedCommandEvent<C16> for C16Event {
 /// `row.client_secret_enc` as `None`; this command fills it.
 pub async fn create_federation_provider(
     db: &crate::Database,
-    mut row: crate::models::FederationProviderRow,
+    mut row: crate::repos::federation_provider::NewFederationProvider,
     client_secret_plain: Option<String>,
 ) -> StoreResult<crate::registry::Audited<()>> {
     let db_for_tx = db.clone();

@@ -165,6 +165,26 @@ pub fn exists_within_tx(
         .is_some())
 }
 
+/// RFC 096-B2 S2a Part F: whether *any* user is linked to this provider
+/// at all — `architecture.md:306-307`'s upgrade report needs a yes/no,
+/// not which users. Used by the startup `requires_review` warning, not
+/// on any request path.
+pub async fn any_link_exists_for_provider(
+    db: &Database,
+    provider_id: FederationProviderId,
+) -> StoreResult<bool> {
+    let provider_id_str = provider_id.to_string();
+    db.with_read(move |conn| {
+        let mut stmt = conn.prepare("SELECT 1 FROM federation_link WHERE provider_id = ?1")?;
+        match stmt.query_row([&provider_id_str], |_| Ok(())) {
+            Ok(()) => Ok(true),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false),
+            Err(e) => Err(StoreError::from(e)),
+        }
+    })
+    .await
+}
+
 /// Touch `last_seen_at`, on the caller's own transaction (RFC 096-B1
 /// stage 10b, F03's own link observation/bookkeeping on `Promoted`).
 /// `NotFound` if the link no longer exists — the same FK that makes

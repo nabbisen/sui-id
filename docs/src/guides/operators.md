@@ -1712,9 +1712,10 @@ not a cost you are accepting by taking the default.
 
 **Enabling a provider:**
 
-New providers start with `enabled = false`. After verifying the configuration,
-set `enabled = true` in the config file and restart sui-id to register it.
-Then enable it in the admin panel under **Admin → Federation**.
+Every provider is created disabled, and stays disabled — the config file's
+`enabled` key no longer has any effect (RFC 096-B2). Enabling a provider now
+requires an administrator's review, through a mechanism this release does
+not yet provide.
 
 **Security notes:**
 

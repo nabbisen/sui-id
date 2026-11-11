@@ -3517,6 +3517,7 @@ dependencies = [
  "tokio",
  "tracing",
  "trybuild",
+ "url",
  "uuid",
  "zeroize",
 ]

@@ -43,6 +43,10 @@ getrandom                   = { workspace = true }
 base64ct                    = { workspace = true }
 sha2                        = { workspace = true }
 subtle                      = { workspace = true }
+# RFC 096-B2 S2a: `federation_policy`'s canonical-URL rules for the
+# issuer and endpoint origins (the same crate `sui-id`'s own discovery
+# validation already uses, for the identical canonicalization check).
+url                         = { workspace = true }
 tokio                       = { workspace = true, features = ["rt"] }
 ldap3                       = { workspace = true, optional = true }
 

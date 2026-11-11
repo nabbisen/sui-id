@@ -48,8 +48,15 @@ async fn seed_provider(db: &Database) -> FederationProviderId {
         evidence_jwks_fingerprint: None,
         created_at: Utc::now(),
         updated_at: Utc::now(),
+        id_token_algs: None,
     };
-    federation_provider::create(db, &row, None).await.unwrap();
+    // RFC 096-B2 S2a: `a_disabled_provider_is_a_binding_failure` disables
+    // this fixture's own provider mid-test, so it must start enabled --
+    // migration 0051's `CHECK` requires the evidence this test-only
+    // builder supplies for that.
+    federation_provider::create_enabled_for_test(db, &row, None)
+        .await
+        .unwrap();
     id
 }
 
@@ -718,7 +725,7 @@ async fn a_disabled_provider_is_a_binding_failure() {
             .unwrap();
         row.provider_id
     };
-    federation_provider::set_enabled(&f.db, provider, false, Utc::now())
+    federation_provider::set_disabled(&f.db, provider, Utc::now())
         .await
         .unwrap();
     let result = verify(

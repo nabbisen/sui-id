@@ -48,6 +48,7 @@ pub fn global_metrics() -> Option<&'static metrics::Metrics> {
 pub mod commands;
 pub mod db;
 pub mod errors;
+pub mod federation_policy;
 pub mod metrics;
 pub mod migrations;
 pub mod models;
@@ -72,6 +73,8 @@ mod tests_rfc096_b1_stage11b;
 mod tests_rfc096_b1_stage8;
 #[cfg(test)]
 mod tests_rfc096_b2_stage1;
+#[cfg(test)]
+mod tests_rfc096_b2_stage2a;
 #[cfg(test)]
 mod tests_rfc103;
 #[cfg(test)]

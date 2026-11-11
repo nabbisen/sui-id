@@ -34,6 +34,7 @@ fn every_known_value_classifies_as_declared() {
     let contact_admin = [
         "disabled",
         "config_drift",
+        "no_usable_policy",
         "discovery_origin",
         "signin_failed",
     ];
@@ -55,6 +56,41 @@ fn every_known_value_classifies_as_declared() {
     assert_eq!(
         FedErrorBucket::classify("unverified_email"),
         FedErrorBucket::UnverifiedEmail
+    );
+}
+
+/// The census above is a hand-written list, which is how
+/// `no_usable_policy` (RFC 096-B2 S2a) first reached the generic Retry
+/// bucket unnoticed. Every `fed_error=` value this handler can redirect
+/// with must appear in that census, so a new one fails here until it is
+/// classified on purpose.
+#[test]
+fn every_fed_error_the_handler_emits_is_in_the_census() {
+    let source = include_str!("../federation.rs");
+    let census = include_str!("tests.rs");
+    let mut found = 0;
+    // String literals only (a leading quote), so a doc comment's example
+    // is not read as an emitted value. `claim_fed_error`'s dynamic values
+    // are listed in the census by hand.
+    let needle = "\"/admin/login?fed_error=";
+    for (i, _) in source.match_indices(needle) {
+        let rest = &source[i + needle.len()..];
+        let value: String = rest
+            .chars()
+            .take_while(|c| c.is_ascii_lowercase() || *c == '_')
+            .collect();
+        if value.is_empty() {
+            continue;
+        }
+        found += 1;
+        assert!(
+            census.contains(&format!("\"{value}\"")),
+            "fed_error={value} is emitted by the handler but is not in the census"
+        );
+    }
+    assert!(
+        found > 10,
+        "the scan found only {found} values; is it reading the handler?"
     );
 }
 

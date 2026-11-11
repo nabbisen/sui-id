@@ -30,6 +30,7 @@ fn sample(slug: &str) -> FederationProviderRow {
         evidence_jwks_fingerprint: None,
         created_at: now,
         updated_at: now,
+        id_token_algs: None,
     }
 }
 
@@ -49,9 +50,8 @@ async fn create_and_get_by_slug() {
 async fn list_enabled_filters_disabled() {
     let db = fresh_db();
     create(&db, &sample("g1"), None).await.unwrap();
-    let mut row2 = sample("g2");
-    row2.enabled = true;
-    create(&db, &row2, None).await.unwrap();
+    let row2 = sample("g2");
+    create_enabled_for_test(&db, &row2, None).await.unwrap();
     let enabled = list_enabled(&db).await.unwrap();
     assert_eq!(enabled.len(), 1);
     assert_eq!(enabled[0].slug, "g2");
@@ -90,15 +90,33 @@ async fn update_allowed_origins_on_missing_id_is_not_found() {
     ));
 }
 
+/// RFC 096-B2 S2a: `set_enabled` lost its ability to *enable* a row
+/// (migration 0051's `CHECK` -- see `create_enabled_for_test`'s own doc
+/// comment); this now proves the enabled-row and delete halves
+/// separately instead of flipping one row's flag mid-test.
 #[tokio::test]
-async fn set_enabled_and_delete() {
+async fn create_enabled_then_delete() {
     let db = fresh_db();
     let row = sample("test");
     let id = row.id;
-    create(&db, &row, None).await.unwrap();
-    set_enabled(&db, id, true, Utc::now()).await.unwrap();
+    create_enabled_for_test(&db, &row, None).await.unwrap();
     let fetched = get(&db, id).await.unwrap();
     assert!(fetched.enabled);
     delete(&db, id).await.unwrap();
     assert!(matches!(get(&db, id).await, Err(StoreError::NotFound)));
+}
+
+/// `set_disabled` can still disable a provider that was created enabled
+/// (through [`create_enabled_for_test`], the only way left to create
+/// one) -- the half of the old `set_enabled_and_delete` test that
+/// `set_disabled`'s own narrower signature still covers.
+#[tokio::test]
+async fn set_disabled_disables_an_enabled_provider() {
+    let db = fresh_db();
+    let row = sample("test-disable");
+    let id = row.id;
+    create_enabled_for_test(&db, &row, None).await.unwrap();
+    assert!(get(&db, id).await.unwrap().enabled);
+    set_disabled(&db, id, Utc::now()).await.unwrap();
+    assert!(!get(&db, id).await.unwrap().enabled);
 }

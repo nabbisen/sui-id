@@ -41,9 +41,10 @@ async fn seed_provider(db: &Database) -> FederationProviderId {
         evidence_jwks_fingerprint: None,
         created_at: now,
         updated_at: now,
+        id_token_algs: None,
     };
     let id = row.id;
-    repos::federation_provider::create(db, &row, None)
+    repos::federation_provider::create_enabled_for_test(db, &row, None)
         .await
         .expect("seed provider");
     id
@@ -962,9 +963,10 @@ async fn seed_second_provider(db: &Database, tag: u8) -> FederationProviderId {
         evidence_jwks_fingerprint: None,
         created_at: now,
         updated_at: now,
+        id_token_algs: None,
     };
     let id = row.id;
-    repos::federation_provider::create(db, &row, None)
+    repos::federation_provider::create_enabled_for_test(db, &row, None)
         .await
         .expect("seed second provider");
     id
@@ -1383,7 +1385,7 @@ async fn f03_invalidated_on_expiry() {
 async fn f03_invalidated_on_disabled_provider() {
     let db = fresh_db();
     let f = f03_fixture(&db, 35).await;
-    repos::federation_provider::set_enabled(&db, f.provider_id, false, Utc::now())
+    repos::federation_provider::set_disabled(&db, f.provider_id, Utc::now())
         .await
         .expect("disable provider");
     let outcome = complete_federated_mfa(
@@ -1883,7 +1885,7 @@ async fn f06_refuses_when_the_provider_is_disabled() {
     let db = fresh_db();
     let f = f03_fixture(&db, 54).await;
     seed_webauthn_credential(&db, f.user_id, 54).await;
-    repos::federation_provider::set_enabled(&db, f.provider_id, false, Utc::now())
+    repos::federation_provider::set_disabled(&db, f.provider_id, Utc::now())
         .await
         .unwrap();
     let result = begin_federation_webauthn_ceremony(

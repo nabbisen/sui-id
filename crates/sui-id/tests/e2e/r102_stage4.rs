@@ -610,9 +610,20 @@ async fn r102_l04_rereads_the_user_and_rolls_back_when_inactive() {
     exec(
         &state,
         format!(
+            // RFC 096-B2 S2a: migration 0051's `CHECK` requires an
+            // enabled row to be `validated`, carry `id_token_algs`, and
+            // carry evidence bound to its own (default, `0`) counters.
             "INSERT INTO federation_provider (id, slug, display_name, issuer, client_id, \
-             enabled, created_at, updated_at) VALUES ('{provider_id}', 'l04-rereads', 'L04', \
-             'https://idp.example', 'client', 1, '2026-01-01T00:00:00Z', \
+             enabled, validation_status, id_token_algs, evidence_config_version, \
+             evidence_activation_generation, evidence_policy_digest, evidence_observed_at, \
+             evidence_metadata_fingerprint, evidence_jwks_fingerprint, \
+             created_at, updated_at) VALUES ('{provider_id}', 'l04-rereads', 'L04', \
+             'https://idp.example', 'client', 1, 'validated', 'RS256', 0, 0, \
+             X'ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB', \
+             '2026-01-01T00:00:00Z', \
+             X'ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB', \
+             X'ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB', \
+             '2026-01-01T00:00:00Z', \
              '2026-01-01T00:00:00Z'); \
              INSERT INTO federation_link (user_id, provider_id, upstream_sub, linked_at, \
              last_seen_at) VALUES ('{user}', '{provider_id}', 'l04-rereads-sub', \
