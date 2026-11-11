@@ -21,6 +21,21 @@ use std::collections::BTreeSet;
 
 use crate::models::ProvisionMode;
 
+mod digest;
+pub use digest::PolicyDigest;
+
+/// RFC 096-B2 S3: the one place a policy digest is computed (RFC 096
+/// `:424-437`). `secret_envelope` is the stored row's raw
+/// `client_secret_enc` bytes (or `None`) -- never decrypted. Wraps
+/// [`digest::compute`] so that callers (the preflight, later S4) never
+/// need to name the private `digest` submodule itself.
+pub fn compute_policy_digest(
+    policy: &FederationTrustPolicy,
+    secret_envelope: Option<&[u8]>,
+) -> PolicyDigest {
+    digest::compute(policy, secret_envelope)
+}
+
 /// RFC 096 `:359`: the closed scope vocabulary, in its fixed canonical
 /// order — also the order the policy digest sorts scopes in (RFC 096
 /// `:430-431`, "canonical items sorted by the closed enum order").

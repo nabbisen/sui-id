@@ -86,10 +86,18 @@ pub struct Jwks {
     pub keys: Vec<serde_json::Value>,
 }
 
-/// Fetch a JWKS and check it. `jwks_uri` must be the value
-/// [`crate::discovery::ValidatedDiscovery::jwks_uri`] returned: https, on an origin
-/// the provider's configuration allows. This function does not re-check that.
-pub async fn fetch_jwks(client: &reqwest::Client, jwks_uri: &str) -> Result<Jwks, JwksError> {
+/// Fetch a JWKS, returning the exact response bytes alongside the parsed
+/// value. RFC 096-B2 S3: the preflight's own fingerprint is SHA-256 over
+/// the exact bytes that passed validation, so it needs them; [`fetch_jwks`]
+/// is this with the bytes dropped, for the one caller (the callback) that
+/// only needs the parsed value. `jwks_uri` must be the value
+/// [`crate::discovery::ValidatedDiscovery::jwks_uri`] returned: https, on
+/// an origin the provider's configuration allows. This function does not
+/// re-check that.
+pub async fn fetch_jwks_bytes(
+    client: &reqwest::Client,
+    jwks_uri: &str,
+) -> Result<(Vec<u8>, Jwks), JwksError> {
     let resp = client
         .get(jwks_uri)
         .send()
@@ -98,7 +106,14 @@ pub async fn fetch_jwks(client: &reqwest::Client, jwks_uri: &str) -> Result<Jwks
     let bytes = response_bounds::read_bounded_body(resp)
         .await
         .map_err(JwksError::Bounds)?;
-    parse_jwks(&bytes)
+    let jwks = parse_jwks(&bytes)?;
+    Ok((bytes, jwks))
+}
+
+/// Fetch a JWKS and check it, discarding the raw bytes. See
+/// [`fetch_jwks_bytes`] for the form that keeps them.
+pub async fn fetch_jwks(client: &reqwest::Client, jwks_uri: &str) -> Result<Jwks, JwksError> {
+    fetch_jwks_bytes(client, jwks_uri).await.map(|(_, j)| j)
 }
 
 /// Check the bytes of a JWKS against every structural rule in the module doc.

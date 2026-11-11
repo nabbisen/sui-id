@@ -516,6 +516,100 @@ pub fn validate_issuer(issuer: &str) -> Result<url::Url, DiscoveryError> {
     Ok(url)
 }
 
+// ── RFC 096-B2 S3 §C: the production fetch, shared ───────────────────────
+//
+// Moved here from `handlers/federation.rs` (where it was private) so both
+// the callback and the preflight call the same function, not two copies
+// of the same network/validation logic. Behavior is unchanged: the
+// callback's own tests stay green with no edits to them.
+
+/// Everything that can go wrong fetching and validating discovery. Kept
+/// distinct from [`DiscoveryError`] because callers must react
+/// differently: a network/parse failure is "the upstream is unreachable";
+/// [`FetchDiscoveryError::Invalid`] is "the upstream named an endpoint we
+/// must not use" and gets its own handling (RFC 134 D3 §2c) — logged with
+/// the provider slug and the offending origin, audited, and surfaced to
+/// the browser as a generic `fed_error`, never the offending URL.
+pub enum FetchDiscoveryError {
+    Network(String),
+    Invalid(DiscoveryError),
+}
+
+impl std::fmt::Display for FetchDiscoveryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Network(e) => write!(f, "{e}"),
+            Self::Invalid(e) => write!(f, "{e}"),
+        }
+    }
+}
+
+impl FetchDiscoveryError {
+    pub fn is_invalid(&self) -> bool {
+        matches!(self, Self::Invalid(_))
+    }
+}
+
+/// Fetch and validate the provider's discovery document, returning the
+/// exact response bytes alongside the validated value. RFC 096-B2 S3: the
+/// preflight's own fingerprint is SHA-256 over the exact bytes that passed
+/// validation, so it needs them; [`fetch_discovery`] is this with the
+/// bytes dropped, for the one caller (the callback) that only needs the
+/// parsed value.
+///
+/// The issuer is checked as canonical `https` *before* any request is
+/// made (RFC 134 D3); every endpoint the document names is checked
+/// against `allowed_origins` (space-separated, empty meaning "the
+/// issuer's origin alone") before this can return `Ok` — see
+/// [`ValidatedDiscovery`].
+pub async fn fetch_discovery_bytes(
+    client: &reqwest::Client,
+    issuer: &str,
+    allowed_origins: &str,
+) -> Result<(Vec<u8>, ValidatedDiscovery), FetchDiscoveryError> {
+    let issuer_url = validate_issuer(issuer).map_err(FetchDiscoveryError::Invalid)?;
+    let url = format!(
+        "{}/.well-known/openid-configuration",
+        issuer_url.as_str().trim_end_matches('/')
+    );
+    // RFC 134 D1: no per-request timeout override. `RequestBuilder::timeout`
+    // overrides the client's, which would make the egress client's bound
+    // dead code on this path; the client policy is the only source of
+    // timeouts for federation traffic.
+    let resp = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| FetchDiscoveryError::Network(format!("discovery fetch failed: {e}")))?;
+    // RFC 134 D5 Tier 1: status (200 only), media type, and a byte cap
+    // honored on bytes actually read (`read_bounded_body`) -- the
+    // transport half. RFC 096-B1 stage 12a, §3: the structural/semantic
+    // half is `validate_discovery_bytes`'s own tighter, discovery-specific
+    // bounds. A body that trips one of these is `FetchDiscoveryError::
+    // Invalid` -- "the upstream sent a document we must not trust" --
+    // rather than the generic `Network` variant; a genuine transport
+    // failure (wrong status, wrong media type, over the byte cap) is
+    // unaffected and still `Network`, from `read_bounded_body` itself.
+    let bytes = crate::response_bounds::read_bounded_body(resp)
+        .await
+        .map_err(|e| FetchDiscoveryError::Network(format!("discovery fetch failed: {e}")))?;
+    let validated = validate_discovery_bytes(&bytes, issuer, allowed_origins)
+        .map_err(FetchDiscoveryError::Invalid)?;
+    Ok((bytes, validated))
+}
+
+/// Fetch and validate the provider's discovery document, discarding the
+/// raw bytes. See [`fetch_discovery_bytes`] for the form that keeps them.
+pub async fn fetch_discovery(
+    client: &reqwest::Client,
+    issuer: &str,
+    allowed_origins: &str,
+) -> Result<ValidatedDiscovery, FetchDiscoveryError> {
+    fetch_discovery_bytes(client, issuer, allowed_origins)
+        .await
+        .map(|(_, d)| d)
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 #[path = "discovery/tests.rs"]

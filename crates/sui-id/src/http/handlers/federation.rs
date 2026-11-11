@@ -48,90 +48,12 @@ use sui_id_store::StoreError;
 use sui_id_store::repos::federation_login_attempt;
 
 // ── Upstream discovery ────────────────────────────────────────────────────────
+//
+// RFC 096-B2 S3 §C: `fetch_discovery`/`FetchDiscoveryError` moved to
+// `discovery.rs` so the preflight can call the same function -- no
+// change to either's behavior or signature.
 
-use crate::discovery::{DiscoveryError, ValidatedDiscovery};
-
-/// Everything that can go wrong fetching and validating discovery. Kept
-/// distinct from [`DiscoveryError`] because callers must react
-/// differently: a network/parse failure is "the upstream is unreachable",
-/// unchanged from before RFC 134 D3; [`FetchDiscoveryError::Invalid`] is
-/// "the upstream named an endpoint we must not use" and gets its own
-/// handling (RFC 134 D3 §2c) — logged with the provider slug and the
-/// offending origin, audited, and surfaced to the browser as a generic
-/// `fed_error`, never the offending URL.
-enum FetchDiscoveryError {
-    Network(String),
-    Invalid(DiscoveryError),
-}
-
-impl std::fmt::Display for FetchDiscoveryError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Network(e) => write!(f, "{e}"),
-            Self::Invalid(e) => write!(f, "{e}"),
-        }
-    }
-}
-
-impl FetchDiscoveryError {
-    fn is_invalid(&self) -> bool {
-        matches!(self, Self::Invalid(_))
-    }
-}
-
-/// Fetch and validate the provider's discovery document. The issuer is
-/// checked as canonical `https` *before* any request is made (RFC 134 D3);
-/// every endpoint the document names is checked against `allowed_origins`
-/// (space-separated, empty meaning "the issuer's origin alone") before
-/// this can return `Ok` — see [`ValidatedDiscovery`].
-async fn fetch_discovery(
-    client: &reqwest::Client,
-    issuer: &str,
-    allowed_origins: &str,
-) -> Result<ValidatedDiscovery, FetchDiscoveryError> {
-    let issuer_url =
-        crate::discovery::validate_issuer(issuer).map_err(FetchDiscoveryError::Invalid)?;
-    let url = format!(
-        "{}/.well-known/openid-configuration",
-        issuer_url.as_str().trim_end_matches('/')
-    );
-    // RFC 134 D1: no per-request timeout override. `RequestBuilder::timeout`
-    // overrides the client's, which would make the egress client's bound
-    // dead code on this path; the client policy is the only source of
-    // timeouts for federation traffic.
-    let resp = client
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| FetchDiscoveryError::Network(format!("discovery fetch failed: {e}")))?;
-    // RFC 134 D5 Tier 1: status (200 only -- see response_bounds's own
-    // doc comment for why "304 under the cache rules" reduces to that
-    // here), media type, and a byte cap honored on bytes actually read --
-    // the transport half, unchanged. Supersedes the old bare `is_success()`
-    // check (2xx was looser than intended; a discovery document on 201/204
-    // was never a real case).
-    //
-    // RFC 096-B1 stage 12a, §3: the structural/semantic half used to be
-    // `read_bounded_json::<RawDiscovery>` (the generic `JWKS_AND_TRANSPORT`
-    // member/array/string caps, no depth or duplicate-member check) plus a
-    // bare `ValidatedDiscovery::validate`. `discovery::validate_discovery_
-    // bytes` is RFC 096 `:531-532`'s own tighter, discovery-specific bounds
-    // (depth 16, 32 array members, 2,048 bytes per string,
-    // `ResponseCaps::DISCOVERY`) plus the duplicate-key-at-any-depth rule
-    // `read_bounded_json` cannot apply once the body is a `Value` (096-A
-    // stage 8 built it complete and correct for exactly this call site,
-    // forbidden from reaching it at the time). A body that trips one of
-    // these is now `FetchDiscoveryError::Invalid` -- "the upstream sent a
-    // document we must not trust" -- rather than the generic `Network`
-    // variant every malformed body collapsed into before; a genuine
-    // transport failure (wrong status, wrong media type, over the byte cap)
-    // is unaffected and still `Network`, from `read_bounded_body` itself.
-    let bytes = crate::response_bounds::read_bounded_body(resp)
-        .await
-        .map_err(|e| FetchDiscoveryError::Network(format!("discovery fetch failed: {e}")))?;
-    crate::discovery::validate_discovery_bytes(&bytes, issuer, allowed_origins)
-        .map_err(FetchDiscoveryError::Invalid)
-}
+use crate::discovery::fetch_discovery;
 
 // ── RFC 096-B1 stage 4: shared helpers for the attempt row ──────────────────
 

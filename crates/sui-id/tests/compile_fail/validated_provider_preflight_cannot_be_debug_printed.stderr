@@ -1,0 +1,7 @@
+error[E0277]: `ValidatedProviderPreflight` doesn't implement `Debug`
+ --> tests/compile_fail/validated_provider_preflight_cannot_be_debug_printed.rs:8:15
+  |
+8 |     println!("{v:?}");
+  |               ^^^^^ `ValidatedProviderPreflight` cannot be formatted using `{:?}` because it doesn't implement `Debug`
+  |
+  = help: the trait `Debug` is not implemented for `ValidatedProviderPreflight`

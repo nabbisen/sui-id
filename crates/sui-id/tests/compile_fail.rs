@@ -90,3 +90,34 @@ fn compile_fail_federated_mfa_valid_webauthn_cannot_be_constructed_directly() {
         "tests/compile_fail/federated_mfa_valid_webauthn_cannot_be_constructed_directly.rs",
     );
 }
+
+/// RFC 096 :409-413 / RFC 094 :506-512 (RFC 096-B2 S3): see the fixture's
+/// own comment.
+#[test]
+fn compile_fail_validated_provider_preflight_cannot_be_constructed_directly() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail(
+        "tests/compile_fail/validated_provider_preflight_cannot_be_constructed_directly.rs",
+    );
+}
+
+/// RFC 094 :508 (RFC 096-B2 S3): see the fixture's own comment.
+#[test]
+fn compile_fail_validated_provider_preflight_cannot_be_cloned() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compile_fail/validated_provider_preflight_cannot_be_cloned.rs");
+}
+
+/// RFC 094 :508 (RFC 096-B2 S3): see the fixture's own comment.
+#[test]
+fn compile_fail_validated_provider_preflight_cannot_be_debug_printed() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compile_fail/validated_provider_preflight_cannot_be_debug_printed.rs");
+}
+
+/// RFC 094 :508 (RFC 096-B2 S3): see the fixture's own comment.
+#[test]
+fn compile_fail_validated_provider_preflight_cannot_be_serialized() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compile_fail/validated_provider_preflight_cannot_be_serialized.rs");
+}

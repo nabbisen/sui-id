@@ -81,6 +81,7 @@ mod r096_b1_stage6b;
 mod r096_b1_stage6c;
 mod r096_b1_stage6e;
 mod r096_b1_stage7;
+mod r096_b2_stage3_preflight;
 mod r102_stage1;
 mod r102_stage2;
 mod r102_stage3;
