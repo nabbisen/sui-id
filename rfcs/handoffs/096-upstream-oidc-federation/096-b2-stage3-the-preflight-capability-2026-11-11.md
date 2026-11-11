@@ -1,6 +1,8 @@
 # RFC 096-B2 stage 3 — the policy digest, and the preflight capability
 
-> ## Whose turn it is: **the implementation role's.**
+> ## Landed 2026-11-12, with reviewer fold-ins. Next:
+> [`096-b2-stage4-c17-enable-and-disable-2026-11-12.md`](096-b2-stage4-c17-enable-and-disable-2026-11-12.md).
+>
 > Cycle L, 096-B2 S3 —
 > [`096-b2-stage-plan-2026-11-11.md`](096-b2-stage-plan-2026-11-11.md) §3.
 > **This document is the dispatch.**

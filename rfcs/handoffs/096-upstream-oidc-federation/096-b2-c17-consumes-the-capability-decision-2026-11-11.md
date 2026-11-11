@@ -3,9 +3,10 @@
 > ## Approved 2026-11-11. `@nabbisen`: *"Approved."*, on §3 as revised.
 > Applied to RFC 096 at `:390` and `:440`, and recorded in its header. As
 > recommended, RFC 096 returned to `proposed/` and was re-accepted in one pass,
-> and no line number moved. **S4 is dispatched once S3 has landed**, because it
-> builds on S3's types, and a dispatch written against code that does not yet
-> exist names things that turn out otherwise.
+> and no line number moved. **S4 is dispatched** (2026-11-12, after S3 landed) —
+> [`096-b2-stage4-c17-enable-and-disable-2026-11-12.md`](096-b2-stage4-c17-enable-and-disable-2026-11-12.md).
+> *Corrected 2026-11-12:* the RFC 094 sentence is at `:515`, not `:514` (an
+> off-by-one in the architect's read, fixed here and in RFC 096 `:440`).
 
 **Prepared by.** The architect, 2026-11-11, before dispatching S3.
 
@@ -14,7 +15,7 @@
 - RFC 096 `:409-413`: preflight *"returns a private, non-cloneable,
   non-debuggable, non-serializable `ValidatedProviderPreflight`"*.
 - RFC 096 `:440`: *"C17 enable consumes that capability"*. RFC 094
-  (`rfcs/done/094-transactional-audit-registry.md:514`) says the same
+  (`rfcs/done/094-transactional-audit-registry.md:515`) says the same
   thing of *"the C17 enable Class-A transaction"*.
 
 ## 2 — why the type system can hold only half of it
@@ -97,7 +98,7 @@ That residue is what the test in §3 holds.
    provider's configuration block, configuration is fixed for the life of
    the process, and consumption is immediate. **RFC 094 stays as written.**
    RFC 000 `:89` makes a done RFC a historical record, so RFC 096's amendment
-   names RFC 094 `:514` and says how that sentence is now held.
+   names RFC 094 `:515` and says how that sentence is now held.
 
 **Still held by a test, not the compiler:** item 4, that only that one file
 calls the store's enable command.
