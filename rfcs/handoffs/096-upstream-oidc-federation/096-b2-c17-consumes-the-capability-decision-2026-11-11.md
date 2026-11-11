@@ -1,8 +1,11 @@
 # RFC 096-B2 — how C17 "consumes" the preflight capability: one decision
 
-> ## Whose turn it is: **yours**, for one decision (§3).
-> **S3 is not blocked by it** and is dispatched now, because it builds only
-> the capability, not its consumer. **S4 (C17) waits on it.**
+> ## Approved 2026-11-11. `@nabbisen`: *"Approved."*, on §3 as revised.
+> Applied to RFC 096 at `:390` and `:440`, and recorded in its header. As
+> recommended, RFC 096 returned to `proposed/` and was re-accepted in one pass,
+> and no line number moved. **S4 is dispatched once S3 has landed**, because it
+> builds on S3's types, and a dispatch written against code that does not yet
+> exist names things that turn out otherwise.
 
 **Prepared by.** The architect, 2026-11-11, before dispatching S3.
 
