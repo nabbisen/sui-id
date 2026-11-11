@@ -337,11 +337,53 @@ pub async fn prepare(cfg: Config, backup: crate::database::PreMigrationBackup) -
             Err(e) => tracing::error!(error = %e, "federation_provider lookup failed"),
         }
     }
+    // RFC 096-B2 S1 §D: one warning per provider still awaiting review --
+    // every provider migration 0050 disabled on upgrade, and any later
+    // provider that has never been through a successful C17 enable (S4).
+    // Every DB row, not only this boot's configured blocks: a provider
+    // removed from config (A2) or never reconciled above still needs its
+    // operator told.
+    warn_providers_requiring_review(&state.db).await;
     Ok(Startup {
         state,
         listen_addr,
         _log_guard: log_guard,
     })
+}
+
+/// RFC 096-B2 S1 §D. Logged once per `requires_review` provider, every
+/// boot -- not only the first one after migration 0050 runs -- since an
+/// administrator who has not yet reviewed a provider should keep hearing
+/// about it. A provider already `validated` (a successful C17 enable,
+/// S4) produces no warning.
+///
+/// TODO(096-B2 S5): "see the operator guide's ..." below names the
+/// section S7's operator guide will add; there is no admin UI yet for an
+/// administrator to act on this warning through. Update the section name
+/// in the message below (and this doc comment) once S5/S7 land, so it
+/// names what actually exists instead of what is still planned.
+async fn warn_providers_requiring_review(db: &sui_id_store::Database) {
+    let providers = match sui_id_store::repos::federation_provider::list(db).await {
+        Ok(providers) => providers,
+        Err(e) => {
+            tracing::error!(
+                error = %e,
+                "could not read federation providers to check which still require review"
+            );
+            return;
+        }
+    };
+    for provider in providers {
+        if provider.validation_status == sui_id_store::models::ValidationStatus::RequiresReview {
+            tracing::warn!(
+                slug = %provider.slug,
+                "federation provider {:?} requires review before federated sign-in through it \
+                 is enabled again -- see the operator guide's \"Reviewing and re-enabling a \
+                 federation provider\" section",
+                provider.slug,
+            );
+        }
+    }
 }
 
 /// RFC 004 / RFC 094 M2b wave 3, C16 — create the row for a
@@ -365,7 +407,7 @@ async fn register_new_federation_provider(
     now: chrono::DateTime<chrono::Utc>,
 ) {
     use sui_id_shared::ids::FederationProviderId;
-    use sui_id_store::models::{FederationProviderRow, ProvisionMode};
+    use sui_id_store::models::{FederationProviderRow, ProvisionMode, ValidationStatus};
 
     let row = FederationProviderRow {
         id: FederationProviderId::new(),
@@ -378,6 +420,22 @@ async fn register_new_federation_provider(
         provision_mode: ProvisionMode::parse(&cfg.provision_mode),
         enabled: cfg.enabled,
         allowed_origins: cfg.allowed_origins.join(" "),
+        // RFC 096-B2 S1: a brand-new provider starts exactly where a
+        // migrated one does -- generation 0, requires_review, no
+        // evidence. `create_within_tx`'s own INSERT does not name these
+        // columns at all (migration 0050's `DEFAULT`s supply the same
+        // values on insert), so these fields are inert for this call;
+        // they are still spelled out so the struct the caller holds
+        // afterward is never a lie about what the row now contains.
+        config_version: 0,
+        activation_generation: 0,
+        validation_status: ValidationStatus::RequiresReview,
+        evidence_config_version: None,
+        evidence_activation_generation: None,
+        evidence_policy_digest: None,
+        evidence_observed_at: None,
+        evidence_metadata_fingerprint: None,
+        evidence_jwks_fingerprint: None,
         created_at: now,
         updated_at: now,
     };

@@ -330,15 +330,17 @@ enum Bound {
 /// from the request body; it has no way to enforce that itself, and
 /// says so rather than silently assuming it.
 ///
-/// **Provider version/generation**: RFC 096-B2/M2b's own durable
-/// columns do not exist yet (`handlers/federation.rs`'s own
-/// `placeholder_provider_version_and_generation`, `sui-id` crate,
-/// confirms this directly — every provider's version/generation is
-/// fixed at `(0, 0)` today). The row's own stored triple is therefore
-/// re-checked against nothing live; only `provider.enabled` is a
-/// meaningful recheck until RFC 096-B2 lands (M2b closed, cycle J stage
-/// 10, with C17/C18/C23 reserved against it). Stated here rather than
-/// silently matching stage 9's own recheck division.
+/// **Provider version/generation**: `federation_provider` has carried
+/// real `config_version`/`activation_generation` columns since RFC
+/// 096-B2 S1 (migration 0050), but no code yet increments either one —
+/// that is S2 (`reconcile_federation_provider`'s warnings becoming C23)
+/// and S4 (C17 enable/disable). Until one of those lands, every
+/// provider's real columns still read `(0, 0)`, the same value this
+/// comment used to cite a since-removed placeholder constant for. The
+/// row's own stored triple is therefore still re-checked against
+/// nothing live; only `provider.enabled` is a meaningful recheck for
+/// now. Stated here rather than silently matching stage 9's own recheck
+/// division.
 async fn bind_pending(
     db: &Database,
     clock: &SharedClock,

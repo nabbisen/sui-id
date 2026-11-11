@@ -7,6 +7,7 @@ use sui_id_shared::ids::{FederationProviderId, UserId};
 use sui_id_store::crypto::MasterKey;
 use sui_id_store::models::{
     FederationLinkRow, FederationProviderRow, ProvisionMode, Role, UserRow, UserSource,
+    ValidationStatus,
 };
 use sui_id_store::{Database, repos::federation_link, repos::federation_provider};
 
@@ -27,6 +28,15 @@ fn seeded_row(slug: &str) -> FederationProviderRow {
         provision_mode: ProvisionMode::LinkOnly,
         enabled: true,
         allowed_origins: "https://accounts.google.com".into(),
+        config_version: 0,
+        activation_generation: 0,
+        validation_status: ValidationStatus::RequiresReview,
+        evidence_config_version: None,
+        evidence_activation_generation: None,
+        evidence_policy_digest: None,
+        evidence_observed_at: None,
+        evidence_metadata_fingerprint: None,
+        evidence_jwks_fingerprint: None,
         created_at: now,
         updated_at: now,
     }
@@ -335,4 +345,111 @@ async fn differing_allowed_origins_update_is_audited() {
         sui_id_store::registry::note_field(&note, "origins_after").as_deref(),
         Some("2")
     );
+}
+
+// ── RFC 096-B2 S1 §D: the per-provider "requires review" startup warning ───
+
+/// `seeded_row` already starts `RequiresReview` (migration 0050's own
+/// default), so a freshly created provider warns once, naming it by slug,
+/// at `WARN`, and saying sign-in through it is off until an administrator
+/// reviews and re-enables it.
+#[tokio::test]
+async fn requires_review_provider_warns_once_naming_the_slug() {
+    let (captured, _guard) = capture();
+    let db = fresh_db();
+    let row = seeded_row("google");
+    federation_provider::create(&db, &row, None).await.unwrap();
+
+    warn_providers_requiring_review(&db).await;
+
+    let log = logged(&captured);
+    let found = log.lines().find(|l| l.contains("requires review"));
+    assert!(
+        found.is_some(),
+        "no review-required warning line in:\n{log}"
+    );
+    let line = found.expect("checked above");
+    assert!(line.contains("WARN"), "wrong level: {line}");
+    assert!(line.contains("google"), "does not name the slug: {line}");
+    assert!(
+        line.contains("re-enabl"),
+        "does not say sign-in is off until re-enabled: {line}"
+    );
+    assert!(
+        line.contains("operator guide"),
+        "does not say where: {line}"
+    );
+    let count = log
+        .lines()
+        .filter(|l| l.contains("requires review"))
+        .count();
+    assert_eq!(count, 1, "expected exactly one warning line:\n{log}");
+}
+
+/// A provider already `validated` -- not reachable through any writer
+/// yet (C17 enable is S4), so this moves the row with a direct `UPDATE`
+/// standing in for that future writer -- produces no warning at all.
+#[tokio::test]
+async fn validated_provider_produces_no_warning() {
+    let (captured, _guard) = capture();
+    let db = fresh_db();
+    let row = seeded_row("google");
+    federation_provider::create(&db, &row, None).await.unwrap();
+    db.with_conn(move |c| {
+        Ok(c.execute(
+            "UPDATE federation_provider SET validation_status = 'validated' WHERE id = ?1",
+            [row.id.to_string()],
+        )?)
+    })
+    .await
+    .unwrap();
+
+    warn_providers_requiring_review(&db).await;
+
+    let log = logged(&captured);
+    assert!(
+        !log.contains("requires review"),
+        "a validated provider must not warn:\n{log}"
+    );
+}
+
+/// Two providers both still `requires_review` each get their own line,
+/// naming their own slug -- not one warning that only names the first.
+#[tokio::test]
+async fn two_review_required_providers_each_get_their_own_warning() {
+    let (captured, _guard) = capture();
+    let db = fresh_db();
+    federation_provider::create(&db, &seeded_row("google"), None)
+        .await
+        .unwrap();
+    federation_provider::create(&db, &seeded_row("github"), None)
+        .await
+        .unwrap();
+
+    warn_providers_requiring_review(&db).await;
+
+    let log = logged(&captured);
+    let count = log
+        .lines()
+        .filter(|l| l.contains("requires review"))
+        .count();
+    assert_eq!(count, 2, "expected one warning line per provider:\n{log}");
+    assert!(log.contains("google"));
+    assert!(log.contains("github"));
+}
+
+/// No providers at all: the no-op case, asserted directly rather than
+/// assumed -- this must neither warn nor error. `capture()` is armed
+/// only after `fresh_db()` so the migration runner's own `INFO` lines
+/// (`fresh_db` runs every migration, including 0050) are not mistaken
+/// for silence.
+#[tokio::test]
+async fn no_providers_warns_about_nothing() {
+    let db = fresh_db();
+    let (captured, _guard) = capture();
+
+    warn_providers_requiring_review(&db).await;
+
+    let log = logged(&captured);
+    assert!(log.is_empty(), "expected no output at all:\n{log}");
 }

@@ -4,7 +4,7 @@
 //! together) rolls back — never merely that the call returned `Err`.
 
 use super::*;
-use crate::models::{FederationLinkRow, FederationProviderRow, ProvisionMode};
+use crate::models::{FederationLinkRow, FederationProviderRow, ProvisionMode, ValidationStatus};
 use sui_id_shared::ids::{FederationLoginAttemptId, FederationProviderId, PendingMfaId, SessionId};
 
 fn a_shadow() -> crate::repos::users::LdapShadowData {
@@ -303,6 +303,15 @@ async fn seed_federation_provider(db: &Database) -> FederationProviderId {
         provision_mode: ProvisionMode::LinkOnly,
         enabled: true,
         allowed_origins: String::new(),
+        config_version: 0,
+        activation_generation: 0,
+        validation_status: ValidationStatus::RequiresReview,
+        evidence_config_version: None,
+        evidence_activation_generation: None,
+        evidence_policy_digest: None,
+        evidence_observed_at: None,
+        evidence_metadata_fingerprint: None,
+        evidence_jwks_fingerprint: None,
         created_at: now,
         updated_at: now,
     };

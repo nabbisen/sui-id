@@ -256,8 +256,16 @@ fn analyze_migration(
                 };
                 let def = col_rest[col.len()..].trim_start();
                 let def_upper = def.to_ascii_uppercase();
-                let has_not_null = def_upper.contains("NOT NULL");
-                let has_default = def_upper.contains("DEFAULT");
+                // `NOT NULL` and `DEFAULT` are read from the column's own
+                // constraints, before any `CHECK`: a nullable column whose
+                // CHECK says `x IS NULL OR strftime('%s', x) IS NOT NULL`,
+                // this project's own timestamp idiom (`0047`), is not a
+                // `NOT NULL` column. Matching the whole definition flagged
+                // it as one, and migration 0050 was first respelled to
+                // dodge that instead of this being fixed.
+                let constraints = def_upper.split("CHECK").next().unwrap_or("");
+                let has_not_null = constraints.contains("NOT NULL");
+                let has_default = constraints.contains("DEFAULT");
                 if has_not_null && !has_default {
                     effects
                         .added_not_null_no_default
@@ -491,7 +499,16 @@ fn derive_ranges_matches_the_accepted_stage1_table() {
     let ends: Vec<i32> = ranges.iter().map(|r| r.end).collect();
     assert_eq!(
         ends,
-        vec![2, 3, 4, 13, 15, 21, 24, 35, 36, 37, 49],
+        // RFC 096-B2 S1 (migration 0050): extends the last range from 49
+        // to 50. The generator decided this mechanically, not by
+        // amending this table on assumption -- 0050's nine `ADD COLUMN`s
+        // on `federation_provider` are each either `NOT NULL` with a
+        // `DEFAULT` or nullable with a self-referential `CHECK`, neither
+        // of which opens a new boundary (this file's own doc comment:
+        // "this test either keeps passing ... or fails naming exactly
+        // what it found" -- it kept passing, once `derive_ranges`'s
+        // output was read rather than assumed).
+        vec![2, 3, 4, 13, 15, 21, 24, 35, 36, 37, 50],
         "range ends changed -- full ranges: {ranges:#?}"
     );
 
@@ -562,8 +579,8 @@ fn derive_ranges_matches_the_accepted_stage1_table() {
 /// (not a `#[test]`, a helper the panic tests below call): confirms the
 /// three ask-events actually fire, by constructing a migration-shaped
 /// SQL string this module never embeds and checking the analyzer flags
-/// it, rather than only trusting that it happens to pass on the real
-/// 49 migrations.
+/// it, rather than only trusting that it happens to pass on the real,
+/// shipped migrations.
 #[test]
 fn analyze_migration_flags_an_unresolved_new_table() {
     let already = std::collections::BTreeSet::new();
@@ -601,6 +618,37 @@ fn analyze_migration_does_not_flag_a_self_referential_check_on_a_new_column() {
     );
     assert!(effects.added_column_check_not_self_referential.is_empty());
     assert!(effects.rebuilt_with_check.is_empty());
+}
+
+#[test]
+fn analyze_migration_does_not_read_is_not_null_inside_a_check_as_a_not_null_column() {
+    // A nullable column, with the project's own timestamp CHECK idiom.
+    let mut already = std::collections::BTreeSet::new();
+    already.insert("federation_provider");
+    let effects = analyze_migration(
+        "ALTER TABLE federation_provider ADD COLUMN evidence_observed_at TEXT \
+         CHECK (evidence_observed_at IS NULL OR strftime('%s', evidence_observed_at) IS NOT NULL);",
+        &already,
+    );
+    assert!(
+        effects.added_not_null_no_default.is_empty(),
+        "a nullable column was read as NOT NULL: {:?}",
+        effects.added_not_null_no_default
+    );
+}
+
+#[test]
+fn analyze_migration_still_flags_a_real_not_null_column_with_no_default() {
+    let mut already = std::collections::BTreeSet::new();
+    already.insert("widgets");
+    let effects = analyze_migration(
+        "ALTER TABLE widgets ADD COLUMN gizmo TEXT NOT NULL CHECK (gizmo <> '');",
+        &already,
+    );
+    assert_eq!(
+        effects.added_not_null_no_default,
+        vec![("widgets".to_string(), "gizmo".to_string())]
+    );
 }
 
 #[test]

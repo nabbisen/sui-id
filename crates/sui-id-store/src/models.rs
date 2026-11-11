@@ -167,6 +167,33 @@ impl ProvisionMode {
     }
 }
 
+/// RFC 096-B2 S1 (migration 0050): whether a provider has been through a
+/// successful C17 preflight/enable since its trust policy last changed.
+/// `Validated` is written only by a successful C17 enable (S4); every new
+/// or migrated row starts `RequiresReview`, and this stage never writes
+/// `Validated` itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ValidationStatus {
+    #[default]
+    RequiresReview,
+    Validated,
+}
+
+impl ValidationStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::RequiresReview => "requires_review",
+            Self::Validated => "validated",
+        }
+    }
+    pub fn parse(s: &str) -> Self {
+        match s {
+            "validated" => Self::Validated,
+            _ => Self::RequiresReview,
+        }
+    }
+}
+
 /// Upstream OIDC identity-provider configuration (RFC 004).
 #[derive(Debug, Clone)]
 pub struct FederationProviderRow {
@@ -185,6 +212,42 @@ pub struct FederationProviderRow {
     /// RFC 134 D3: space-separated HTTPS origins the provider's discovery
     /// document may name. Empty means the issuer's origin alone.
     pub allowed_origins: String,
+    /// RFC 094 `:528`'s trust-policy version. Canonical, checked `u64`
+    /// represented as `0..=i64::MAX` (migration 0050's own comment
+    /// explains why that range, not the full `u64` range). New and
+    /// migrated rows start at `0`. Written only by C16 (create) and C23
+    /// (S2+); this field is read-only from every other call site.
+    pub config_version: i64,
+    /// RFC 094 `:528`'s activation-generation counter — enable/disable
+    /// authority, never substituted for `config_version`. Same
+    /// representation and starting value as it. Written only by
+    /// C17/C18/C23 (S2+).
+    pub activation_generation: i64,
+    /// RFC 096-B2 S1 (migration 0050): `requires_review` until a
+    /// successful C17 enable (S4) moves it to `validated`.
+    pub validation_status: ValidationStatus,
+    /// The following six `evidence_*` fields are RFC 094 `:506-512`'s
+    /// preflight-evidence binding (`version`/`activation generation`/
+    /// `policy digest`/`observed_at`/bounded metadata and key-set
+    /// fingerprints), always `NULL` until a successful C17 enable writes
+    /// them (S4), and cleared by disable/C23/C18. No code outside C17
+    /// enable may write any of the six, and none may ever be read as
+    /// re-enable authority (architecture.md `:248-250`).
+    pub evidence_config_version: Option<i64>,
+    pub evidence_activation_generation: Option<i64>,
+    /// SHA-256 over the complete durable trust policy (RFC 096
+    /// `:419-432`), raw 32 bytes.
+    pub evidence_policy_digest: Option<Vec<u8>>,
+    /// The trusted `observed_at` C17's `0 <= guard_at - observed_at <
+    /// 600s` guard is checked against.
+    pub evidence_observed_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// Bounded fingerprint of the validated discovery metadata document,
+    /// raw 32 bytes (migration 0050's own comment: a storage-format
+    /// choice, not yet a construction S3 has settled).
+    pub evidence_metadata_fingerprint: Option<Vec<u8>>,
+    /// Bounded fingerprint of the validated JWKS key set, same
+    /// representation as `evidence_metadata_fingerprint`.
+    pub evidence_jwks_fingerprint: Option<Vec<u8>>,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }

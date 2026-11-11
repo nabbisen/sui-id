@@ -266,6 +266,11 @@ const MIGRATIONS: &[Migration] = &[
         name: "0049_client_auth_method_and_grant_types",
         sql: include_str!("./migrations/0049_client_auth_method_and_grant_types.sql"),
     },
+    Migration {
+        version: 50,
+        name: "0050_federation_provider_validation_schema",
+        sql: include_str!("./migrations/0050_federation_provider_validation_schema.sql"),
+    },
 ];
 
 /// The highest schema version this build of sui-id-store knows how to

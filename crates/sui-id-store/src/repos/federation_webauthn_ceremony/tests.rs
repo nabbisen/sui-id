@@ -2,6 +2,7 @@ use super::*;
 use crate::crypto::MasterKey;
 use crate::models::{
     FederationLinkRow, FederationMfaPendingRow, FederationMfaPendingStatus, ProvisionMode, UserRow,
+    ValidationStatus,
 };
 use crate::repos::{federation_link, federation_mfa_pending, federation_provider, users};
 use crate::{Database, models::FederationProviderRow};
@@ -37,6 +38,15 @@ async fn seed_provider(db: &Database) -> FederationProviderId {
         provision_mode: ProvisionMode::LinkOnly,
         enabled: true,
         allowed_origins: String::new(),
+        config_version: 0,
+        activation_generation: 0,
+        validation_status: ValidationStatus::RequiresReview,
+        evidence_config_version: None,
+        evidence_activation_generation: None,
+        evidence_policy_digest: None,
+        evidence_observed_at: None,
+        evidence_metadata_fingerprint: None,
+        evidence_jwks_fingerprint: None,
         created_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),
     };

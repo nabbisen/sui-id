@@ -28,9 +28,7 @@ use crate::federation_identity::{derive_username, resolve_shadow_username};
 use crate::handlers::{AppState, AppStateExt, session_cookie};
 use sui_id_core::errors::CoreError;
 use sui_id_shared::ids::{FederationProviderId, SessionId, UserId};
-use sui_id_store::models::{
-    FederationLinkRow, FederationProviderRow, Role, SessionRow, UserRow, UserSource,
-};
+use sui_id_store::models::{FederationLinkRow, Role, SessionRow, UserRow, UserSource};
 use sui_id_store::registry;
 
 // ── RFC 096-B1 stage 4: 096-A's validators, their first production callers ──
@@ -385,51 +383,15 @@ fn basic_auth_header(client_id: &str, client_secret: &str) -> String {
     )
 }
 
-/// RFC 096 `:580-581`, `:305-306`: the provider's current, durably checked
-/// `config_version`/`activation_generation` pair.
-///
-/// **Placeholder, not a design choice this stage is making.** Those are
-/// RFC 096-B2/M2b's own durable monotonic counters on `federation_provider`
-/// -- confirmed, not a guess: `contracts/write-commands.toml`'s `C23`
-/// ("Replace federation-provider trust policy") is `status =
-/// "target-absent"`, `files = []`, "no current function implements
-/// provider trust-policy replacement at all. Wholly new, RFC 096-B2 (M2b)."
-/// `federation_provider`'s own migrations (`0037`-`0045`) have no version
-/// or generation column either -- checked directly, not assumed from the
-/// manifest alone.
-///
-/// Until RFC 096-B2 adds the real columns (M2b closed, cycle J stage 10,
-/// with C17/C18/C23 reserved against it), every provider's version/
-/// generation is fixed at `(0, 0)`. That makes the provider id/version/
-/// generation match
-/// `federation_login_attempt::claim` now checks (RFC 096-B1 stage 6c, RFC
-/// 096 `:597-598`) trivially satisfied in production today — there is
-/// only one value in play, so it can never disagree with itself on a
-/// genuine request.
-///
-/// **It is still reachable end-to-end by a tampered row, though — stage
-/// 6c changed this, and it is worth being precise about why.** Before
-/// stage 6c, the one way to make `provider_config_version`/`provider_
-/// activation_generation` disagree with this constant (direct SQL against
-/// the row after `/start`) was caught by a *different* mechanism first:
-/// those two columns are AAD-bound by stage 2's `insert`/`claim` seal
-/// (`:586-587`'s own PKCE binding), and that tamper check ran before the
-/// then-separate, post-claim superseded comparison ever got a chance —
-/// `fed_error=tamper_detected`, confirmed empirically, never `fed_error=
-/// superseded`. Stage 6c moved the match into `claim` itself, ahead of
-/// the AAD check (which still runs, after the `UPDATE`, for whatever only
-/// it can still catch). The same tampering now reaches the *match* check
-/// first and reports `superseded` — `tests/e2e/r096_b1_stage4.rs`'s own
-/// `tampering_the_rows_own_provider_generation_is_caught_as_superseded_
-/// not_tampering` pins this directly, corrected from what stage 4
-/// originally found and recorded there.
-///
-/// When M2b lands the real columns, this is the one function that
-/// changes — most likely into two field reads on `FederationProviderRow`
-/// — not every call site that compares against it.
-fn placeholder_provider_version_and_generation(_provider: &FederationProviderRow) -> (i64, i64) {
-    (0, 0)
-}
+// RFC 096-B2 S1: `placeholder_provider_version_and_generation` (the fixed
+// `(0, 0)` every call site below used to read instead of the row) is
+// gone — migration 0050 gave `federation_provider` real `config_version`/
+// `activation_generation` columns, so both call sites now read
+// `FederationProviderRow`'s own fields directly. `federation_login_
+// attempt::claim`'s match check (RFC 096-B1 stage 6c) and the AAD binding
+// underneath it are unchanged by this: they compare whatever two values
+// they are given, and those two values are now the row's real ones
+// instead of a constant that could never disagree with itself.
 
 /// Maps a claim failure to the `fed_error` query value the callback
 /// redirects with. `StoreError::Conflict` (not `pending`) really is a
@@ -594,7 +556,7 @@ pub async fn federated_start(
     // review package this dispatch was built against).
     let now = app.clock.now();
     let (provider_config_version, provider_activation_generation) =
-        placeholder_provider_version_and_generation(&provider);
+        (provider.config_version, provider.activation_generation);
     let redirect_uri = format!(
         "{}/auth/federated/callback",
         app.config.server.issuer.trim_end_matches('/')
@@ -811,7 +773,7 @@ pub async fn federated_callback(
         .unwrap_or([0u8; 32]);
 
     let (current_version, current_generation) =
-        placeholder_provider_version_and_generation(&provider);
+        (provider.config_version, provider.activation_generation);
     let claim_time = app.clock.now();
     let claimed = match federation_login_attempt::claim(
         &app.db,

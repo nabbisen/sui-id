@@ -8,7 +8,7 @@ use crate::{
     Database,
     crypto::{self, MasterKey},
     errors::{StoreError, StoreResult},
-    models::{FederationProviderRow, ProvisionMode},
+    models::{FederationProviderRow, ProvisionMode, ValidationStatus},
     registry::{
         ActorRequirement, AttributeSpec, AuditEventKind, MustAttemptDescriptor, TargetRequirement,
     },
@@ -35,13 +35,26 @@ fn map(row: &rusqlite::Row<'_>) -> rusqlite::Result<FederationProviderRow> {
         provision_mode: ProvisionMode::parse(&row.get::<_, String>(7)?),
         enabled: row.get::<_, i64>(8)? != 0,
         allowed_origins: row.get(9)?,
-        created_at: row.get(10)?,
-        updated_at: row.get(11)?,
+        config_version: row.get(10)?,
+        activation_generation: row.get(11)?,
+        validation_status: ValidationStatus::parse(&row.get::<_, String>(12)?),
+        evidence_config_version: row.get(13)?,
+        evidence_activation_generation: row.get(14)?,
+        evidence_policy_digest: row.get(15)?,
+        evidence_observed_at: row.get(16)?,
+        evidence_metadata_fingerprint: row.get(17)?,
+        evidence_jwks_fingerprint: row.get(18)?,
+        created_at: row.get(19)?,
+        updated_at: row.get(20)?,
     })
 }
 
 const SELECT: &str = "SELECT id, slug, display_name, issuer, client_id, client_secret_enc, \
-     scopes, provision_mode, enabled, allowed_origins, created_at, updated_at \
+     scopes, provision_mode, enabled, allowed_origins, \
+     config_version, activation_generation, validation_status, \
+     evidence_config_version, evidence_activation_generation, evidence_policy_digest, \
+     evidence_observed_at, evidence_metadata_fingerprint, evidence_jwks_fingerprint, \
+     created_at, updated_at \
      FROM federation_provider";
 
 /// List all providers ordered by slug.

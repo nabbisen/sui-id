@@ -8,7 +8,9 @@ use crate::identity_claims::validate_identity_claims;
 use crate::optional_claims::validate_optional_claims;
 use sui_id_shared::ids::FederationProviderId;
 use sui_id_store::crypto::MasterKey;
-use sui_id_store::models::{FederationLinkRow, FederationProviderRow, Role, UserRow, UserSource};
+use sui_id_store::models::{
+    FederationLinkRow, FederationProviderRow, Role, UserRow, UserSource, ValidationStatus,
+};
 use sui_id_store::repos::{federation_link, federation_provider, users};
 
 // Same throwaway RSA fixture key already committed at
@@ -79,6 +81,15 @@ async fn seed_provider(db: &Database, provision_mode: ProvisionMode) -> Federati
         provision_mode,
         enabled: true,
         allowed_origins: String::new(),
+        config_version: 0,
+        activation_generation: 0,
+        validation_status: ValidationStatus::RequiresReview,
+        evidence_config_version: None,
+        evidence_activation_generation: None,
+        evidence_policy_digest: None,
+        evidence_observed_at: None,
+        evidence_metadata_fingerprint: None,
+        evidence_jwks_fingerprint: None,
         created_at: Utc::now(),
         updated_at: Utc::now(),
     };

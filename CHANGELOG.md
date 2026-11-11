@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **On upgrade, every configured federation ("Sign in with...") provider
+  is disabled, and stays disabled until an administrator reviews and
+  re-enables it.** Upgrading adds durable trust-policy tracking to each
+  provider, and an existing provider's configuration was never recorded
+  durably enough to safely re-validate it automatically — so instead of
+  guessing, this release disables every provider on upgrade rather than
+  risk one running with policy nobody re-checked. Any federated sign-in
+  already in progress at the moment of upgrade (including a pending
+  second-factor step) is ended, not left half-completed; linked accounts
+  and the upstream identity links themselves are unaffected and need no
+  action. **The way to review and re-enable a provider again ships later
+  in this same release** — this entry describes one piece of a change
+  that is not safe to release on its own, and will not be, until that
+  part lands too.
+
 ## [0.89.0] — 2026-11-11
 
 **sui-id can now be downloaded as a verified static binary, with no

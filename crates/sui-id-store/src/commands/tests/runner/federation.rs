@@ -8,7 +8,7 @@
 
 use super::*;
 use crate::models::UserWebauthnCredentialRow;
-use crate::models::{FederationLinkRow, FederationProviderRow, ProvisionMode};
+use crate::models::{FederationLinkRow, FederationProviderRow, ProvisionMode, ValidationStatus};
 use crate::repos::federation_login_attempt;
 use crate::repos::federation_mfa_pending::{InvalidatedReason, MfaRejectionReason};
 use crate::repos::user_totp;
@@ -30,6 +30,15 @@ async fn seed_provider(db: &Database) -> FederationProviderId {
         provision_mode: ProvisionMode::ProvisionOnFirstLogin,
         enabled: true,
         allowed_origins: String::new(),
+        config_version: 0,
+        activation_generation: 0,
+        validation_status: ValidationStatus::RequiresReview,
+        evidence_config_version: None,
+        evidence_activation_generation: None,
+        evidence_policy_digest: None,
+        evidence_observed_at: None,
+        evidence_metadata_fingerprint: None,
+        evidence_jwks_fingerprint: None,
         created_at: now,
         updated_at: now,
     };
@@ -942,6 +951,15 @@ async fn seed_second_provider(db: &Database, tag: u8) -> FederationProviderId {
         provision_mode: ProvisionMode::ProvisionOnFirstLogin,
         enabled: true,
         allowed_origins: String::new(),
+        config_version: 0,
+        activation_generation: 0,
+        validation_status: ValidationStatus::RequiresReview,
+        evidence_config_version: None,
+        evidence_activation_generation: None,
+        evidence_policy_digest: None,
+        evidence_observed_at: None,
+        evidence_metadata_fingerprint: None,
+        evidence_jwks_fingerprint: None,
         created_at: now,
         updated_at: now,
     };
