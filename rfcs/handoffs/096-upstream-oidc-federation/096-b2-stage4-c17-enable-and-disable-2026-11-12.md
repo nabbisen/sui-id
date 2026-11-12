@@ -1,6 +1,8 @@
 # RFC 096-B2 stage 4 — C17, enable and disable
 
-> ## Whose turn it is: **the implementation role's.**
+> ## Landed 2026-11-12, with reviewer fold-ins. Next:
+> [`096-b2-stage5-the-admin-surface-2026-11-12.md`](096-b2-stage5-the-admin-surface-2026-11-12.md).
+>
 > Cycle L, 096-B2 S4 —
 > [`096-b2-stage-plan-2026-11-11.md`](096-b2-stage-plan-2026-11-11.md) §3.
 > **This document is the dispatch.**
