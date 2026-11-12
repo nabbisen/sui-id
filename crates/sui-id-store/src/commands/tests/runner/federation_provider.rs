@@ -714,7 +714,77 @@ async fn an_already_disabled_provider_removed_from_config_is_a_no_op() {
         "a generation must never be burned for nothing"
     );
     assert_eq!(audit_rows(&db).await, before, "no event written");
-    record_rollback_coverage("C25"); // the non-committing guarded path *is* this command's rollback case
+    // Not rollback coverage: nothing is written here to roll back. That is
+    // `c25_injected_failure_before_append_rolls_back_everything`, below
+    // (096-B2 completion assessment: this line used to register this test
+    // as C25's rollback evidence).
+}
+
+/// C25's rollback evidence, the 096-B2 closure clause's "with rollback
+/// evidence". C25 on an enabled provider increments the generation, clears
+/// the evidence, invalidates flows, disables, then appends. A failure
+/// injected before the append must leave all of it as it was: still
+/// enabled, same generation, evidence kept, the attempt still pending, no
+/// event.
+#[tokio::test]
+async fn c25_injected_failure_before_append_rolls_back_everything() {
+    let db = fresh_db();
+    let row = sample_enabled_row("c25-rollback");
+    repos::federation_provider::create_enabled_for_test(&db, &row, None)
+        .await
+        .expect("seed enabled provider");
+    repos::federation_login_attempt::insert(
+        &db,
+        row.id,
+        0,
+        0,
+        [7u8; 32],
+        [8u8; 32],
+        [9u8; 32],
+        b"pkce-verifier",
+        "https://rp.example/cb".into(),
+        None,
+        Utc::now(),
+    )
+    .await
+    .expect("seed a pending attempt");
+    let before_row = repos::federation_provider::get(&db, row.id)
+        .await
+        .expect("get");
+    let before_audit = audit_rows(&db).await;
+
+    db.fault_injector().fail_before_next_append();
+    let result =
+        crate::commands::remove_federation_provider_from_configuration(&db, row.id, Utc::now())
+            .await;
+    assert!(result.is_err(), "injected failure must surface as Err");
+
+    let after = repos::federation_provider::get(&db, row.id)
+        .await
+        .expect("get");
+    assert!(after.enabled, "the disable must not have survived rollback");
+    assert_eq!(
+        after.activation_generation,
+        before_row.activation_generation
+    );
+    assert_eq!(
+        after.evidence_policy_digest,
+        before_row.evidence_policy_digest
+    );
+    assert_eq!(
+        after.evidence_activation_generation,
+        before_row.evidence_activation_generation
+    );
+    let attempt = repos::federation_login_attempt::find_by_state_sha256(&db, [7u8; 32])
+        .await
+        .expect("attempt still exists");
+    assert_eq!(
+        attempt.status,
+        crate::models::FederationLoginAttemptStatus::Pending,
+        "the flow invalidation must have rolled back too"
+    );
+    assert_eq!(audit_rows(&db).await, before_audit, "no event written");
+    record_rollback_coverage("C25");
 }
 
 #[tokio::test]
