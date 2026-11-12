@@ -7122,6 +7122,545 @@ fn invalidate_provider_flows_within_tx(
     })
 }
 
+// ── C17 — federation provider enable (from a preflight) / disable ────────
+//
+// RFC 096-B2 S4. RFC 096 `:438-452`, RFC 094 `:506-543`. An administrator
+// action (`system_principal: forbidden`, unlike C16/C23/C25/C26's startup
+// shape): the actor is the administrator who ran the check (enable) or
+// chose to turn a provider off (disable), with RFC 102 B4 step-up
+// evidence, the same shape K01 uses.
+//
+// **Enable's own transaction mode.** `Database::class_a_immediate`, not
+// `class_a` -- the one caller anywhere in this crate. RFC 096 `:440`'s
+// `guard_at` must be read only after the write lock is actually held
+// (`BEGIN IMMEDIATE`), never under `DEFERRED`'s weaker guarantee.
+//
+// **"Still configured" (RFC 096 `:440`).** Held by construction, not
+// built here: the preflight that produced this evidence already required
+// the provider's `[[federation_providers]]` block to exist, and
+// configuration is fixed for the life of the process, so nothing between
+// that check and this transaction could have removed it.
+
+/// RFC 096-B2 S4 §C (approved design item 3): the store's enable command
+/// takes one struct of distinct types, not six positional values a
+/// caller could silently transpose. Built only by
+/// `sui-id::federation_preflight::check_and_enable`, from a
+/// `ValidatedProviderPreflight`'s own accessors, and moved straight into
+/// [`enable_federation_provider_from_preflight`] -- nothing holds one
+/// between requests.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConfigVersion(pub i64);
+
+/// See [`ConfigVersion`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ActivationGeneration(pub i64);
+
+/// See [`ConfigVersion`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MetadataFingerprint(pub [u8; 32]);
+
+/// See [`ConfigVersion`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct JwksFingerprint(pub [u8; 32]);
+
+/// The capability's own contents, carried into
+/// [`enable_federation_provider_from_preflight`] as one value. Every
+/// field is a distinct type (RFC 096-B2 S4 §C): swapping
+/// `config_version` and `activation_generation`, or the two
+/// fingerprints, fails to compile instead of being silently stored
+/// wrong.
+// Deliberately no `Debug` derive: `policy_digest`'s own type (RFC 096
+// `:437`, dispatch row 10) forbids it, and a derive here would print it
+// the first time anyone wrote `{:?}` on this struct in a log statement.
+#[derive(Clone, Copy)]
+pub struct PreflightEvidence {
+    pub provider_id: FederationProviderId,
+    pub config_version: ConfigVersion,
+    pub activation_generation: ActivationGeneration,
+    pub policy_digest: crate::federation_policy::PolicyDigest,
+    pub observed_at: DateTime<Utc>,
+    pub metadata_fingerprint: MetadataFingerprint,
+    pub jwks_fingerprint: JwksFingerprint,
+}
+
+/// RFC 096-B2 S4 §A row 3: `guard_at` is the store's own clock, read
+/// once, inside the transaction. The `#[cfg(any(test, feature =
+/// "test-support"))]` arm is the only way anything can make this
+/// function return anything other than the real clock -- and that arm
+/// does not exist at all in a normal build, so there is no override for
+/// production code to reach even if it tried.
+#[cfg(any(test, feature = "test-support"))]
+fn c17_guard_at(db: &crate::Database) -> DateTime<Utc> {
+    db.guard_clock().now()
+}
+
+#[cfg(not(any(test, feature = "test-support")))]
+fn c17_guard_at(_db: &crate::Database) -> DateTime<Utc> {
+    chrono::Utc::now()
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+static C17_ENABLED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::FederationProviderEnabled,
+    name: "federation.provider.enabled",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[
+        AttributeSpec {
+            name: "config_version",
+            description: "the policy version the enabled evidence is bound to (unchanged by enable)",
+            required: true,
+        },
+        AttributeSpec {
+            name: "old_activation_generation",
+            description: "activation_generation before the enable",
+            required: true,
+        },
+        AttributeSpec {
+            name: "new_activation_generation",
+            description: "activation_generation after the enable",
+            required: true,
+        },
+        AttributeSpec {
+            name: "metadata_fingerprint",
+            description: "hex SHA-256 of the exact discovery-document bytes the preflight validated",
+            required: true,
+        },
+        AttributeSpec {
+            name: "jwks_fingerprint",
+            description: "hex SHA-256 of the exact JWKS bytes the preflight validated",
+            required: true,
+        },
+        STEP_UP_ATTRIBUTE,
+    ],
+};
+
+static C17_DISABLED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::FederationProviderDisabled,
+    name: "federation.provider.disabled",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[
+        AttributeSpec {
+            name: "old_activation_generation",
+            description: "activation_generation before the disable",
+            required: true,
+        },
+        AttributeSpec {
+            name: "new_activation_generation",
+            description: "activation_generation after the disable",
+            required: true,
+        },
+        AttributeSpec {
+            name: "invalidated_login_attempts",
+            description: "count of pending/exchanging login attempts invalidated",
+            required: true,
+        },
+        AttributeSpec {
+            name: "invalidated_mfa_pending",
+            description: "count of pending federated-MFA continuations invalidated",
+            required: true,
+        },
+        AttributeSpec {
+            name: "invalidated_ceremonies",
+            description: "count of bound WebAuthn ceremonies deleted",
+            required: true,
+        },
+        STEP_UP_ATTRIBUTE,
+    ],
+};
+
+crate::declare_write_command! {
+    /// C17 — an administrator enables a federation provider from a
+    /// completed preflight, or disables one.
+    command C17 = "C17" {
+        system_principal: forbidden;
+        enum C17Event {
+            Enabled {
+                provider_id: FederationProviderId,
+                config_version: i64,
+                old_activation_generation: i64,
+                new_activation_generation: i64,
+                metadata_fingerprint: [u8; 32],
+                jwks_fingerprint: [u8; 32],
+                step_up: SessionStepUpEvidence,
+            } => &C17_ENABLED,
+            Disabled {
+                provider_id: FederationProviderId,
+                old_activation_generation: i64,
+                new_activation_generation: i64,
+                invalidated: InvalidatedFlowCounts,
+                step_up: SessionStepUpEvidence,
+            } => &C17_DISABLED,
+        }
+    }
+}
+
+impl SealedCommandEvent<C17> for C17Event {
+    fn target(&self) -> Option<AuditTarget> {
+        match self {
+            Self::Enabled { provider_id, .. } | Self::Disabled { provider_id, .. } => {
+                Some(AuditTarget(provider_id.to_string()))
+            }
+        }
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        match self {
+            Self::Enabled {
+                config_version,
+                old_activation_generation,
+                new_activation_generation,
+                metadata_fingerprint,
+                jwks_fingerprint,
+                step_up,
+                ..
+            } => AuditAttributes::builder()
+                .attribute("config_version", config_version.to_string())
+                .attribute(
+                    "old_activation_generation",
+                    old_activation_generation.to_string(),
+                )
+                .attribute(
+                    "new_activation_generation",
+                    new_activation_generation.to_string(),
+                )
+                .attribute("metadata_fingerprint", hex_encode(metadata_fingerprint))
+                .attribute("jwks_fingerprint", hex_encode(jwks_fingerprint))
+                .attribute("step_up", step_up.as_attribute())
+                .build(),
+            Self::Disabled {
+                old_activation_generation,
+                new_activation_generation,
+                invalidated,
+                step_up,
+                ..
+            } => AuditAttributes::builder()
+                .attribute(
+                    "old_activation_generation",
+                    old_activation_generation.to_string(),
+                )
+                .attribute(
+                    "new_activation_generation",
+                    new_activation_generation.to_string(),
+                )
+                .attribute(
+                    "invalidated_login_attempts",
+                    invalidated.login_attempts.to_string(),
+                )
+                .attribute(
+                    "invalidated_mfa_pending",
+                    invalidated.mfa_pending.to_string(),
+                )
+                .attribute("invalidated_ceremonies", invalidated.ceremonies.to_string())
+                .attribute("step_up", step_up.as_attribute())
+                .build(),
+        }
+    }
+}
+
+/// RFC 096-B2 S4 §D: every way [`enable_federation_provider_from_
+/// preflight`] can refuse. No fingerprint, digest, URL, or upstream body
+/// in any variant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EnableFromPreflightError {
+    /// The provider's version, generation, enabled state, or trust
+    /// policy digest no longer match the preflight's own evidence.
+    ChangedSinceCheck,
+    /// `guard_at - observed_at` is negative or `>= 600` seconds.
+    CheckTooOld,
+    /// The provider is already enabled.
+    AlreadyEnabled,
+    /// The provider no longer exists.
+    NotFound,
+    /// A step-up was required and is missing or stale.
+    StepUpRequired,
+    /// Any other storage failure; rolled back.
+    Storage,
+}
+
+impl std::fmt::Display for EnableFromPreflightError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let msg = match self {
+            Self::ChangedSinceCheck => "the provider changed since the check; run it again",
+            Self::CheckTooOld => "the check is more than 10 minutes old; run it again",
+            Self::AlreadyEnabled => {
+                "the provider is already enabled; disable it first to check it again"
+            }
+            Self::NotFound => "the provider no longer exists; reload the provider list",
+            Self::StepUpRequired => {
+                "your identity confirmation has expired; confirm it again, then retry"
+            }
+            Self::Storage => {
+                "the provider could not be updated; try again, and see the server log if it \
+                 persists"
+            }
+        };
+        write!(f, "{msg}")
+    }
+}
+
+impl std::error::Error for EnableFromPreflightError {}
+
+impl From<StoreError> for EnableFromPreflightError {
+    fn from(e: StoreError) -> Self {
+        match e {
+            StoreError::NotFound => Self::NotFound,
+            StoreError::StepUpRequired => Self::StepUpRequired,
+            // The message points to the server log, so the log must say
+            // what happened.
+            other => {
+                tracing::error!(error = %other, "C17: storage failure, rolled back");
+                Self::Storage
+            }
+        }
+    }
+}
+
+/// Run C17 enable. `evidence` is a [`ValidatedProviderPreflight`]'s own
+/// contents, moved here by its one legitimate caller
+/// (`sui-id::federation_preflight::check_and_enable`) immediately after
+/// a successful preflight -- see the source-scope test
+/// (`crates/sui-id/tests/e2e/r096_b2_stage4_c17_scope.rs`) for what makes
+/// that "one legitimate caller" more than a comment.
+///
+/// RFC 096 `:440-446`, built clause by clause
+/// (`096-b2-stage4-c17-enable-and-disable-2026-11-12.md` §A):
+/// 1. `guard_at` is read once, inside the transaction, after `BEGIN
+///    IMMEDIATE` (`class_a_immediate`).
+/// 2. `0 <= guard_at - observed_at < 600s`; refuses otherwise.
+/// 3. Re-reads the row; refuses unless it is still disabled, at the
+///    evidence's exact `config_version`/`activation_generation`, and its
+///    freshly recomputed policy digest matches the evidence's, in
+///    constant time.
+/// 4. Checked-increments `activation_generation`.
+/// 5. One guarded `UPDATE`: enables, `validated`, every evidence column
+///    bound to the new generation.
+/// 6. Appends `federation.provider.enabled`.
+pub async fn enable_federation_provider_from_preflight(
+    db: &crate::Database,
+    admin: UserId,
+    session_id: SessionId,
+    evidence: PreflightEvidence,
+    now: DateTime<Utc>,
+) -> Result<crate::registry::Audited<()>, EnableFromPreflightError> {
+    let db_for_clock = db.clone();
+    let context = AuthorizedCommandContext::<C17>::for_authorized_actor(admin, None);
+    db.class_a_immediate(context, move |tx: &mut ClassATx<'_, C17>| {
+        let step_up = session_step_up_evidence_within_tx(tx.tx(), session_id, admin, now)?;
+
+        // Clause 1: the store's own clock, inside the transaction, after
+        // `BEGIN IMMEDIATE`.
+        let guard_at = c17_guard_at(&db_for_clock);
+
+        // Clause 2: the 600-second window. `0 <= age < 600`; `age == 600`
+        // is stale (RFC 096 `:440`'s own wording), and so is a negative
+        // age (an `observed_at` the preflight could not actually have
+        // produced, e.g. a clock regression).
+        let age = (guard_at - evidence.observed_at).num_seconds();
+        if !(0..600).contains(&age) {
+            return Err(EnableFromPreflightError::CheckTooOld);
+        }
+
+        // Clause 3: re-read and re-validate everything, never trusting
+        // the capability's own digest alone.
+        let current =
+            crate::repos::federation_provider::get_within_tx(tx.tx(), evidence.provider_id)?;
+        if current.enabled {
+            return Err(EnableFromPreflightError::AlreadyEnabled);
+        }
+        if current.config_version != evidence.config_version.0
+            || current.activation_generation != evidence.activation_generation.0
+        {
+            return Err(EnableFromPreflightError::ChangedSinceCheck);
+        }
+        let Ok(policy) = crate::federation_policy::from_stored(&current) else {
+            return Err(EnableFromPreflightError::ChangedSinceCheck);
+        };
+        let fresh_digest = crate::federation_policy::compute_policy_digest(
+            &policy,
+            current.client_secret_enc.as_deref(),
+        );
+        if !fresh_digest.ct_eq(&evidence.policy_digest) {
+            return Err(EnableFromPreflightError::ChangedSinceCheck);
+        }
+
+        // Clause 4: checked-increment.
+        let old_activation_generation = current.activation_generation;
+        let new_activation_generation = old_activation_generation
+            .checked_add(1)
+            .ok_or(EnableFromPreflightError::Storage)?;
+
+        // Clause 5: the guarded write.
+        let affected = crate::repos::federation_provider::enable_from_preflight_within_tx(
+            tx.tx(),
+            evidence.provider_id,
+            old_activation_generation,
+            new_activation_generation,
+            evidence.config_version.0,
+            evidence.policy_digest.as_bytes(),
+            evidence.observed_at,
+            &evidence.metadata_fingerprint.0,
+            &evidence.jwks_fingerprint.0,
+            now,
+        )?;
+        if affected != 1 {
+            return Err(EnableFromPreflightError::ChangedSinceCheck);
+        }
+
+        Ok((
+            (),
+            C17Event::Enabled {
+                provider_id: evidence.provider_id,
+                config_version: evidence.config_version.0,
+                old_activation_generation,
+                new_activation_generation,
+                metadata_fingerprint: evidence.metadata_fingerprint.0,
+                jwks_fingerprint: evidence.jwks_fingerprint.0,
+                step_up,
+            },
+        ))
+    })
+    .await
+}
+
+/// RFC 096-B2 S4 §D: every way [`disable_federation_provider`] can
+/// refuse.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DisableFederationProviderError {
+    /// The provider no longer exists.
+    NotFound,
+    /// A step-up was required and is missing or stale.
+    StepUpRequired,
+    /// Any other storage failure; rolled back.
+    Storage,
+}
+
+impl std::fmt::Display for DisableFederationProviderError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let msg = match self {
+            Self::NotFound => "the provider no longer exists; reload the provider list",
+            Self::StepUpRequired => {
+                "your identity confirmation has expired; confirm it again, then retry"
+            }
+            Self::Storage => {
+                "the provider could not be updated; try again, and see the server log if it \
+                 persists"
+            }
+        };
+        write!(f, "{msg}")
+    }
+}
+
+impl std::error::Error for DisableFederationProviderError {}
+
+impl From<StoreError> for DisableFederationProviderError {
+    fn from(e: StoreError) -> Self {
+        match e {
+            StoreError::NotFound => Self::NotFound,
+            StoreError::StepUpRequired => Self::StepUpRequired,
+            // The message points to the server log, so the log must say
+            // what happened.
+            other => {
+                tracing::error!(error = %other, "C17: storage failure, rolled back");
+                Self::Storage
+            }
+        }
+    }
+}
+
+/// Run C17 disable, or do nothing if the provider is already disabled
+/// (`Ok(None)`, caught the same way C23/C25's own `StoreError::NoChange`
+/// early exit is -- RFC 096 `:449-450`, "a generation must never be
+/// burned for nothing"). `validation_status` is left exactly as it is
+/// (see `federation_provider::disable_within_tx`'s own doc comment for
+/// why that differs from C25's `disable_removed_within_tx`).
+pub async fn disable_federation_provider(
+    db: &crate::Database,
+    admin: UserId,
+    session_id: SessionId,
+    provider_id: FederationProviderId,
+    now: DateTime<Utc>,
+) -> Result<Option<crate::registry::Audited<()>>, DisableFederationProviderError> {
+    let context = AuthorizedCommandContext::<C17>::for_authorized_actor(admin, None);
+    let result = db
+        .class_a(context, move |tx: &mut ClassATx<'_, C17>| {
+            let step_up = session_step_up_evidence_within_tx(tx.tx(), session_id, admin, now)?;
+
+            let current = crate::repos::federation_provider::get_within_tx(tx.tx(), provider_id)?;
+            if !current.enabled {
+                return Err(DisableFederationProviderErrorOrNoChange::NoChange);
+            }
+            let old_activation_generation = current.activation_generation;
+            let new_activation_generation = old_activation_generation.checked_add(1).ok_or(
+                DisableFederationProviderErrorOrNoChange::Err(
+                    DisableFederationProviderError::Storage,
+                ),
+            )?;
+
+            let affected = crate::repos::federation_provider::disable_within_tx(
+                tx.tx(),
+                provider_id,
+                old_activation_generation,
+                new_activation_generation,
+                now,
+            )?;
+            if affected != 1 {
+                return Err(DisableFederationProviderErrorOrNoChange::Err(
+                    DisableFederationProviderError::Storage,
+                ));
+            }
+
+            let invalidated = invalidate_provider_flows_within_tx(tx.tx(), provider_id, now)?;
+
+            Ok((
+                (),
+                C17Event::Disabled {
+                    provider_id,
+                    old_activation_generation,
+                    new_activation_generation,
+                    invalidated,
+                    step_up,
+                },
+            ))
+        })
+        .await;
+
+    match result {
+        Ok(audited) => Ok(Some(audited)),
+        Err(DisableFederationProviderErrorOrNoChange::NoChange) => Ok(None),
+        Err(DisableFederationProviderErrorOrNoChange::Err(e)) => Err(e),
+    }
+}
+
+/// `disable_federation_provider`'s own closure needs a third outcome
+/// (benign no-op) that is not one of [`DisableFederationProviderError`]'s
+/// own operator-facing refusals -- this exists only to carry it through
+/// `class_a`'s generic `E: From<StoreError>` boundary, and is never
+/// returned to a caller of `disable_federation_provider` itself.
+enum DisableFederationProviderErrorOrNoChange {
+    NoChange,
+    Err(DisableFederationProviderError),
+}
+
+impl From<StoreError> for DisableFederationProviderErrorOrNoChange {
+    fn from(e: StoreError) -> Self {
+        match e {
+            StoreError::NoChange => Self::NoChange,
+            other => Self::Err(DisableFederationProviderError::from(other)),
+        }
+    }
+}
+
 // ── C23 — federation provider trust-policy replacement ───────────────────
 //
 // RFC 096-B2 S2b. RFC 094 `:547-575`'s own text, built clause by clause

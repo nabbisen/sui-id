@@ -336,20 +336,21 @@ pub async fn set_disabled(
 }
 
 /// RFC 096-B2 S2a Part C: the one test-support way to create an enabled
-/// provider. Migration 0051's `CHECK` requires an enabled row to be
-/// `validated`, carry `id_token_algs`, and carry all four evidence
-/// fields with `evidence_config_version`/`evidence_activation_generation`
-/// equal to the row's own counters — the exact shape a real C17 enable
-/// (S4) will produce. No production code writes any of that yet, so
-/// this test-only builder writes it directly: `row`'s own
-/// `config_version`/`activation_generation` (0 for a fresh fixture),
-/// `row.id_token_algs` if set, else a default singleton `"RS256"`, and a
-/// fixed, arbitrary 32-byte evidence digest/fingerprint pair — nothing
-/// in this codebase reads evidence bytes as meaningful before S3/S4
-/// exist, so there is no "real" value to put there yet, and a fixed one
-/// is exactly as inert as a random one while being reproducible.
+/// provider directly, bypassing a real preflight. Migration 0051's
+/// `CHECK` requires an enabled row to be `validated`, carry `id_token_
+/// algs`, and carry all four evidence fields with `evidence_config_
+/// version`/`evidence_activation_generation` equal to the row's own
+/// counters — the same shape `commands::enable_federation_provider_
+/// from_preflight` (C17, S4) now produces for real, from an actual
+/// preflight capability's evidence, not an arbitrary fixed value. This
+/// builder writes it directly instead: `row`'s own `config_version`/
+/// `activation_generation` (0 for a fresh fixture), `row.id_token_algs`
+/// if set, else a default singleton `"RS256"`, and a fixed, arbitrary
+/// 32-byte evidence digest/fingerprint pair, standing in for whatever a
+/// real preflight would have measured — useful for every fixture that
+/// needs an already-enabled row and does not care how it got that way.
 /// **It satisfies the `CHECK`, the same `INSERT` every other row goes
-/// through — it does not bypass it.**
+/// through — it does not bypass that.**
 #[cfg(any(test, feature = "test-support"))]
 pub async fn create_enabled_for_test(
     db: &Database,
@@ -511,6 +512,104 @@ pub fn disable_removed_within_tx(
         "UPDATE federation_provider \
          SET enabled = 0, validation_status = 'requires_review', \
              activation_generation = ?1, \
+             evidence_config_version = NULL, evidence_activation_generation = NULL, \
+             evidence_policy_digest = NULL, evidence_observed_at = NULL, \
+             evidence_metadata_fingerprint = NULL, evidence_jwks_fingerprint = NULL, \
+             updated_at = ?2 \
+         WHERE id = ?3 AND activation_generation = ?4 AND enabled = 1",
+        params![
+            new_activation_generation,
+            now,
+            id.to_string(),
+            old_activation_generation,
+        ],
+    )?;
+    Ok(n)
+}
+
+/// RFC 096-B2 S4, C17 enable: the guarded write RFC 096 `:440-446`/RFC
+/// 094 `:515-541` describe. Guarded on `enabled = 0`, the exact old
+/// `activation_generation`, and the exact expected `config_version` (the
+/// caller's own re-read already proved these match the preflight's
+/// evidence; this `WHERE` is the same "defensive insurance" shape
+/// `disable_removed_within_tx`'s own guard is). `config_version` itself
+/// is **not** in the `SET` list -- C17 enable never changes the trust
+/// policy, only its activation -- but the row's own current value is
+/// what `evidence_config_version` must equal, so the one bound value
+/// (`config_version`) is reused for both the `WHERE` guard and the
+/// evidence column, by construction rather than by two separate
+/// parameters that could drift apart.
+///
+/// Migration 0051's `CHECK` requires, for `enabled = 1`: `validation_
+/// status = 'validated'` (set here), `id_token_algs IS NOT NULL`
+/// (already true -- the caller only reaches this after `from_stored`
+/// succeeded on the pre-write row, and this function does not touch
+/// that column), and all four `evidence_*` pairs satisfied, which the
+/// four evidence columns set here satisfy by construction.
+#[allow(clippy::too_many_arguments)]
+pub fn enable_from_preflight_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    id: FederationProviderId,
+    old_activation_generation: i64,
+    new_activation_generation: i64,
+    config_version: i64,
+    policy_digest: &[u8; 32],
+    observed_at: DateTime<Utc>,
+    metadata_fingerprint: &[u8; 32],
+    jwks_fingerprint: &[u8; 32],
+    now: DateTime<Utc>,
+) -> StoreResult<usize> {
+    let n = tx.execute(
+        "UPDATE federation_provider \
+         SET enabled = 1, validation_status = 'validated', \
+             activation_generation = ?1, \
+             evidence_config_version = ?2, \
+             evidence_activation_generation = ?1, \
+             evidence_policy_digest = ?3, \
+             evidence_observed_at = ?4, \
+             evidence_metadata_fingerprint = ?5, \
+             evidence_jwks_fingerprint = ?6, \
+             updated_at = ?7 \
+         WHERE id = ?8 AND enabled = 0 AND activation_generation = ?9 AND config_version = ?2",
+        params![
+            new_activation_generation,
+            config_version,
+            policy_digest.as_slice(),
+            observed_at,
+            metadata_fingerprint.as_slice(),
+            jwks_fingerprint.as_slice(),
+            now,
+            id.to_string(),
+            old_activation_generation,
+        ],
+    )?;
+    Ok(n)
+}
+
+/// RFC 096-B2 S4, C17 disable (an administrator's own action, unlike
+/// [`disable_removed_within_tx`]'s config-removal trigger): the same
+/// disable shape, **except `validation_status` is left exactly as it
+/// is.** RFC 096-B2 S4 dispatch §B: "A disabled, `validated` provider
+/// still needs a fresh check to be enabled, since evidence is cleared" --
+/// `validation_status` is not what gates that (migration 0051's own
+/// `CHECK` only constrains it when `enabled = 1`; at `enabled = 0` it is
+/// unconstrained), so there is nothing to reset. The distinction from
+/// [`disable_removed_within_tx`] is deliberate, not an oversight: an
+/// administrator who disables a provider they just reviewed is not the
+/// same event as a provider's whole configuration block disappearing
+/// out from under it, and the S1 "requires review" warning (which fires
+/// only on `RequiresReview`) should not re-nag about a provider the
+/// administrator themselves just turned off.
+pub fn disable_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    id: FederationProviderId,
+    old_activation_generation: i64,
+    new_activation_generation: i64,
+    now: DateTime<Utc>,
+) -> StoreResult<usize> {
+    let n = tx.execute(
+        "UPDATE federation_provider \
+         SET enabled = 0, activation_generation = ?1, \
              evidence_config_version = NULL, evidence_activation_generation = NULL, \
              evidence_policy_digest = NULL, evidence_observed_at = NULL, \
              evidence_metadata_fingerprint = NULL, evidence_jwks_fingerprint = NULL, \

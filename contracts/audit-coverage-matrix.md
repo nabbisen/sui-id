@@ -294,9 +294,12 @@ release.*
 
 ### Federation provider configuration (`federation.provider.*`, RFC 094 M2b wave 3 / RFC 096-B2)
 
-All four rows are startup provisioning, not an administrator action: no
-session, `system_principal: permitted` — the same shape
-`client.registration_token.revoked` (C22) uses.
+The first four rows are startup provisioning, not an administrator
+action: no session, `system_principal: permitted` — the same shape
+`client.registration_token.revoked` (C22) uses. The last two
+(`enabled`/`disabled`, RFC 096-B2 S4, command `C17`) are the opposite
+shape: an administrator action, a real session, `system_principal:
+forbidden`, step-up evidence recorded like K01's.
 
 | Event name | Operation | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
@@ -304,11 +307,13 @@ session, `system_principal: permitted` — the same shape
 | `federation.provider.policy_updated` | A configured trust-policy field differs from the stored, decoded value at startup; the complete policy is replaced and the provider forced disabled/`requires_review` (RFC 096-B2 S2b, command `C23`) | — | provider id | `old_config_version=…`, `new_config_version=…`, `old_activation_generation=…`, `new_activation_generation=…`, `changed_fields=…` (sorted, comma-separated field names, never values), `invalidated_login_attempts=…`, `invalidated_mfa_pending=…`, `invalidated_ceremonies=…` | A |
 | `federation.provider.removed_from_configuration` | A stored, enabled provider's config block is absent at startup; disabled, flows invalidated, links kept (RFC 096 amendment A2, command `C25`) | — | provider id | `old_activation_generation=…`, `new_activation_generation=…`, `invalidated_login_attempts=…`, `invalidated_mfa_pending=…`, `invalidated_ceremonies=…` | A |
 | `federation.provider.display_name_changed` | A configured `display_name` that differs from the stored one is written over it at startup, without disabling (not trust policy — command `C26`) | — | provider id | none | A |
+| `federation.provider.enabled` | An administrator enables a disabled provider after a fresh preflight check, consumed via `BEGIN IMMEDIATE` (RFC 096-B2 S4, command `C17`) | administrator | provider id | `config_version=…`, `old_activation_generation=…`, `new_activation_generation=…`, `metadata_fingerprint=…`, `jwks_fingerprint=…` (both hex; never the digest or `observed_at` — RFC 096 `:436-437`); `step_up` (required) | A |
+| `federation.provider.disabled` | An administrator disables a currently enabled provider: generation incremented, evidence cleared, flows invalidated (`validation_status` untouched — RFC 096-B2 S4 §B, command `C17`) | administrator | provider id | `old_activation_generation=…`, `new_activation_generation=…`, `invalidated_login_attempts=…`, `invalidated_mfa_pending=…`, `invalidated_ceremonies=…`; `step_up` (required) | A |
 
 **`federation.provider.created` is RFC 094 M2b wave 3**, declared in
 `contracts/write-commands.toml` and emitted by nothing before that wave
 — `git grep federation.provider.created` found no append call anywhere
-in `crates/`. **The other three rows are RFC 096-B2 S2b.**
+in `crates/`. **The next three rows are RFC 096-B2 S2b.**
 `federation.provider.policy_updated` retires `federation.provider.
 allowed_origins_changed` (RFC 096 amendment A4, corrected 2026-11-11):
 `allowed_origins` is trust policy like every other field this event
@@ -316,7 +321,11 @@ now covers, not a write of its own (C24 folded into C23 — see `docs/src/
 reference/audit-events.md`'s Retired events). `federation.provider.
 removed_from_configuration` and `federation.provider.display_name_
 changed` are both wholly new, naming behavior this stage builds for the
-first time.
+first time. **The last two rows are RFC 096-B2 S4.** No operator can
+reach either yet — `check_and_enable` and `disable_federation_provider`
+have no caller but their own tests until S5 builds the admin surface —
+so neither appears in `CHANGELOG.md` yet, the same way a sealed command
+with no caller never has before this stage's own dispatch required one.
 
 ### Federation sign-in (`auth.federation.*`, RFC 004)
 

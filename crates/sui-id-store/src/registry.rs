@@ -366,6 +366,23 @@ pub enum AuditEventKind {
     /// values in the event, the same rule row 7 of C23's own clause
     /// table states for the policy-update event.
     FederationProviderDisplayNameChanged,
+    /// `federation.provider.enabled` — RFC 096-B2 S4, C17 enable. An
+    /// administrator's action, consuming a `ValidatedProviderPreflight`
+    /// capability (RFC 096 `:409-421`, `:440-446`): checked-increments
+    /// `activation_generation`, stores evidence bound to it, enables.
+    /// Attributes carry the policy version, old/new activation
+    /// generation, and bounded hex fingerprint identifiers — never the
+    /// digest, `observed_at`, or any metadata/JWKS body (RFC 096
+    /// `:436-437`).
+    FederationProviderEnabled,
+    /// `federation.provider.disabled` — RFC 096-B2 S4, C17 disable. An
+    /// administrator's action: checked-increments `activation_
+    /// generation`, clears evidence, disables, invalidates pending
+    /// flows through S2b's shared invalidation. `validation_status` is
+    /// deliberately left unchanged (`federation_provider::disable_
+    /// within_tx`'s own doc comment explains why this differs from
+    /// C25's config-removal disable).
+    FederationProviderDisabled,
     /// Proof-only — see [`ProofOnlyForbiddenSystemPrincipalCommand`]. Never
     /// emitted; no command can construct this event because no command can
     /// construct a context for that command in the first place.
@@ -1085,6 +1102,50 @@ impl Database {
         E: From<StoreError> + Send + 'static,
         F: FnOnce(&mut ClassATx<'_, C>) -> Result<(T, C::Event), E> + Send + 'static,
     {
+        self.class_a_in(TxMode::Deferred, context, build).await
+    }
+
+    /// RFC 096-B2 S4: identical to [`Self::class_a`] in every respect
+    /// except that the transaction opens `BEGIN IMMEDIATE`
+    /// (`Database::with_tx_immediate`, not `with_tx`) -- one shared
+    /// runner, [`Self::class_a_in`], with the mode as its only difference.
+    /// (S4 first wrote it as a byte-for-byte copy; the review merged them,
+    /// since the runner holds the commit-on-domain-error fix and two copies
+    /// of it can drift.) C17
+    /// enable is the one caller: RFC 096 `:440`'s `guard_at` must be read
+    /// only after the write lock is actually held, which `DEFERRED`
+    /// (`class_a`'s own default) does not guarantee -- a deferred
+    /// transaction's first statement decides whether it reads or writes,
+    /// and SQLite does not take the lock until then.
+    pub async fn class_a_immediate<C, T, E, F>(
+        &self,
+        context: AuthorizedCommandContext<C>,
+        build: F,
+    ) -> Result<Audited<T>, E>
+    where
+        C: CommandSpec,
+        T: Send + 'static,
+        E: From<StoreError> + Send + 'static,
+        F: FnOnce(&mut ClassATx<'_, C>) -> Result<(T, C::Event), E> + Send + 'static,
+    {
+        self.class_a_in(TxMode::Immediate, context, build).await
+    }
+
+    /// The one Class-A runner. Every comment below is the history of a bug
+    /// found here; it exists once so that fixing one copy can never leave
+    /// another behind.
+    async fn class_a_in<C, T, E, F>(
+        &self,
+        mode: TxMode,
+        context: AuthorizedCommandContext<C>,
+        build: F,
+    ) -> Result<Audited<T>, E>
+    where
+        C: CommandSpec,
+        T: Send + 'static,
+        E: From<StoreError> + Send + 'static,
+        F: FnOnce(&mut ClassATx<'_, C>) -> Result<(T, C::Event), E> + Send + 'static,
+    {
         let context = std::sync::Arc::new(context);
         let context_for_closure = context.clone();
         // RFC 094 Stage 2 item 2: test-only failure points bracketing
@@ -1111,65 +1172,65 @@ impl Database {
         // The event type is computed and consumed entirely inside the
         // closure (it feeds `append_within_tx` here, not the caller), so it
         // never has to cross the `with_tx` boundary and never needs `Send`.
-        let result = self
-            .with_tx(move |tx| -> StoreResult<T> {
-                let mut class_a_tx = ClassATx {
-                    write: WriteTx::new(tx),
-                    context: &context_for_closure,
-                };
-                let (value, event) = match build(&mut class_a_tx) {
-                    Ok(pair) => pair,
-                    Err(e) => {
-                        #[allow(clippy::expect_used)]
-                        domain_error_for_closure
-                            .lock()
-                            .expect("domain_error mutex poisoned")
-                            .replace(e);
-                        return Err(StoreError::Integrity(
-                            "class_a: build failed, rolling back".into(),
-                        ));
-                    }
-                };
-                let descriptor = C::descriptor(&event);
-                let target = event.target();
-                let audit_result = event.result();
-                let attributes = match event.attributes().and_then(|a| {
-                    match descriptor
-                        .attributes
-                        .iter()
-                        .find(|spec| spec.required && !a.iter().any(|(k, _)| k == spec.name))
-                    {
-                        Some(missing) => {
-                            Err(AuditBuildError::MissingRequiredAttribute(missing.name))
-                        }
-                        None => Ok(a),
-                    }
-                }) {
-                    Ok(a) => a,
-                    Err(build_err) => {
-                        #[allow(clippy::expect_used)]
-                        domain_error_for_closure
-                            .lock()
-                            .expect("domain_error mutex poisoned")
-                            .replace(E::from(StoreError::Integrity(build_err.to_string())));
-                        return Err(StoreError::Integrity(
-                            "class_a: event-attribute build failed, rolling back".into(),
-                        ));
-                    }
-                };
-                let row = build_audit_row(descriptor, &context, target, audit_result, &attributes);
-                #[cfg(test)]
-                if fault_injector.take_before_append() {
-                    return Err(StoreError::Integrity("injected: before append".into()));
+        let work = move |tx: &rusqlite::Transaction<'_>| -> StoreResult<T> {
+            let mut class_a_tx = ClassATx {
+                write: WriteTx::new(tx),
+                context: &context_for_closure,
+            };
+            let (value, event) = match build(&mut class_a_tx) {
+                Ok(pair) => pair,
+                Err(e) => {
+                    #[allow(clippy::expect_used)]
+                    domain_error_for_closure
+                        .lock()
+                        .expect("domain_error mutex poisoned")
+                        .replace(e);
+                    return Err(StoreError::Integrity(
+                        "class_a: build failed, rolling back".into(),
+                    ));
                 }
-                crate::repos::audit::append_within_tx(tx, &row)?;
-                #[cfg(test)]
-                if fault_injector.take_after_append() {
-                    return Err(StoreError::Integrity("injected: after append".into()));
+            };
+            let descriptor = C::descriptor(&event);
+            let target = event.target();
+            let audit_result = event.result();
+            let attributes = match event.attributes().and_then(|a| {
+                match descriptor
+                    .attributes
+                    .iter()
+                    .find(|spec| spec.required && !a.iter().any(|(k, _)| k == spec.name))
+                {
+                    Some(missing) => Err(AuditBuildError::MissingRequiredAttribute(missing.name)),
+                    None => Ok(a),
                 }
-                Ok(value)
-            })
-            .await;
+            }) {
+                Ok(a) => a,
+                Err(build_err) => {
+                    #[allow(clippy::expect_used)]
+                    domain_error_for_closure
+                        .lock()
+                        .expect("domain_error mutex poisoned")
+                        .replace(E::from(StoreError::Integrity(build_err.to_string())));
+                    return Err(StoreError::Integrity(
+                        "class_a: event-attribute build failed, rolling back".into(),
+                    ));
+                }
+            };
+            let row = build_audit_row(descriptor, &context, target, audit_result, &attributes);
+            #[cfg(test)]
+            if fault_injector.take_before_append() {
+                return Err(StoreError::Integrity("injected: before append".into()));
+            }
+            crate::repos::audit::append_within_tx(tx, &row)?;
+            #[cfg(test)]
+            if fault_injector.take_after_append() {
+                return Err(StoreError::Integrity("injected: after append".into()));
+            }
+            Ok(value)
+        };
+        let result = match mode {
+            TxMode::Deferred => self.with_tx(work).await,
+            TxMode::Immediate => self.with_tx_immediate(work).await,
+        };
 
         match result {
             Ok(value) => Ok(Audited {
@@ -1186,6 +1247,15 @@ impl Database {
             }
         }
     }
+}
+
+/// Which `BEGIN` a Class-A transaction opens with. Only C17 enable needs
+/// `Immediate` (RFC 096 `:440`): its `guard_at` must be read with the write
+/// lock already held.
+#[derive(Clone, Copy)]
+enum TxMode {
+    Deferred,
+    Immediate,
 }
 
 fn build_audit_row<C: CommandSpec>(

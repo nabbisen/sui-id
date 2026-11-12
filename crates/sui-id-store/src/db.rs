@@ -43,6 +43,10 @@ impl Database {
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "synchronous", "NORMAL")?;
         conn.pragma_update(None, "foreign_keys", "ON")?;
+        // No busy-timeout pragma here: rusqlite sets 5 s on every connection
+        // it opens (`inner_connection.rs`, `sqlite3_busy_timeout(db, 5000)`).
+        // C17's `BEGIN IMMEDIATE` relies on it to wait for another process's
+        // write instead of failing (S4 review).
         migrations::run(&mut conn)?;
         Ok(Self {
             backend: Arc::new(SqliteBackend::new(conn, key)),
@@ -103,6 +107,28 @@ impl Database {
         Ok(*boxed
             .downcast::<R>()
             .expect("with_tx: type mismatch — internal error"))
+    }
+
+    /// Like [`Self::with_tx`], except the transaction opens `BEGIN
+    /// IMMEDIATE` (RFC 096-B2 S4: C17 enable's `guard_at`, RFC 096
+    /// `:440`, must be read only after the write lock is actually held).
+    /// `Database::class_a_immediate` is the one caller; every other
+    /// command keeps calling [`Self::with_tx`]/`class_a` unchanged.
+    pub async fn with_tx_immediate<F, R>(&self, f: F) -> StoreResult<R>
+    where
+        F: FnOnce(&rusqlite::Transaction<'_>) -> StoreResult<R> + Send + 'static,
+        R: Send + 'static,
+    {
+        let erased: crate::backend::TxFn = Box::new(move |tx| {
+            let r: StoreResult<R> = f(tx);
+            r.map(|v| -> Box<dyn std::any::Any + Send> { Box::new(v) })
+        });
+
+        let boxed = self.backend.with_tx_immediate_erased(erased).await?;
+        #[allow(clippy::expect_used)]
+        Ok(*boxed
+            .downcast::<R>()
+            .expect("with_tx_immediate: type mismatch — internal error"))
     }
 
     /// Like [`Self::with_conn`], but the closure receives a [`ReadConn`]
@@ -190,6 +216,13 @@ impl Database {
     #[cfg(test)]
     pub(crate) fn fail_next_commit_for_test(&self) {
         self.sqlite_backend().fail_next_commit_for_test();
+    }
+
+    /// RFC 096-B2 S4: the test-only seam for C17's `guard_at`. See
+    /// `backend::GuardClock`'s own doc comment.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn guard_clock(&self) -> std::sync::Arc<crate::backend::GuardClock> {
+        self.sqlite_backend().guard_clock.clone()
     }
 
     // ── Internal ──────────────────────────────────────────────────────────────

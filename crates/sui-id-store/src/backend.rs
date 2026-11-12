@@ -60,6 +60,20 @@ pub trait Backend: Send + Sync {
     /// Run an erased closure inside a transaction asynchronously.
     fn with_tx_erased<'a>(&'a self, f: TxFn) -> BoxFuture<'a, StoreResult<Box<dyn Any + Send>>>;
 
+    /// RFC 096-B2 S4: the same as [`Self::with_tx_erased`], except the
+    /// transaction opens `BEGIN IMMEDIATE` rather than SQLite's default
+    /// `DEFERRED`. C17 enable is the one caller (`Database::class_a_
+    /// immediate`) -- every other command keeps calling
+    /// [`Self::with_tx_erased`] unchanged. RFC 096 `:440`'s `guard_at`
+    /// must be read only after the write lock is actually held, which
+    /// `DEFERRED` does not guarantee (a deferred transaction's first
+    /// statement decides whether it reads or writes, and SQLite does not
+    /// take the lock until then).
+    fn with_tx_immediate_erased<'a>(
+        &'a self,
+        f: TxFn,
+    ) -> BoxFuture<'a, StoreResult<Box<dyn Any + Send>>>;
+
     /// The master encryption key.
     fn key(&self) -> &MasterKey;
 
@@ -83,6 +97,8 @@ pub struct SqliteBackend {
     key: Arc<MasterKey>,
     #[cfg(test)]
     pub(crate) fault_injector: Arc<FaultInjector>,
+    #[cfg(any(test, feature = "test-support"))]
+    pub(crate) guard_clock: Arc<GuardClock>,
 }
 
 impl SqliteBackend {
@@ -92,6 +108,8 @@ impl SqliteBackend {
             key: Arc::new(key),
             #[cfg(test)]
             fault_injector: Arc::new(FaultInjector::default()),
+            #[cfg(any(test, feature = "test-support"))]
+            guard_clock: Arc::new(GuardClock::default()),
         }
     }
 
@@ -172,6 +190,27 @@ impl Backend for SqliteBackend {
         })
     }
 
+    fn with_tx_immediate_erased<'a>(
+        &'a self,
+        f: TxFn,
+    ) -> BoxFuture<'a, StoreResult<Box<dyn Any + Send>>> {
+        let conn = self.conn.clone();
+        Box::pin(async move {
+            tokio::task::spawn_blocking(move || {
+                #[allow(clippy::expect_used)]
+                let mut guard = conn.lock().expect("database mutex poisoned");
+                let tx = guard
+                    .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+                    .map_err(StoreError::from)?;
+                let result = f(&tx)?; // propagates Err → rollback (tx dropped)
+                tx.commit().map_err(StoreError::from)?;
+                Ok(result)
+            })
+            .await
+            .map_err(|e| StoreError::JoinError(e.to_string()))?
+        })
+    }
+
     fn key(&self) -> &MasterKey {
         &self.key
     }
@@ -232,6 +271,49 @@ impl FaultInjector {
     pub(crate) fn take_after_append(&self) -> bool {
         self.after_append
             .swap(false, std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+// ── Test-only clock seam for C17's `guard_at` (RFC 096-B2 S4) ──────────────
+
+/// RFC 096 `:440`: C17 reads `guard_at` from the store's own clock,
+/// `chrono::Utc::now()`, never a caller-supplied value -- production has
+/// no way to set it. `#[cfg(any(test, feature = "test-support"))]`-gated,
+/// the dispatch's own exact words (`096-b2-stage4-c17-enable-and-disable-
+/// 2026-11-12.md` §A row 3) -- so a test can place `guard_at` from
+/// another crate's own test-support-gated fixture too, the same reach
+/// [`crate::repos::federation_provider::create_enabled_for_test`] already
+/// has, not narrowed to this crate's own test binary the way
+/// [`FaultInjector`] is.
+#[cfg(any(test, feature = "test-support"))]
+#[derive(Default)]
+pub struct GuardClock {
+    override_at: std::sync::Mutex<Option<chrono::DateTime<chrono::Utc>>>,
+}
+
+#[cfg(any(test, feature = "test-support"))]
+impl GuardClock {
+    pub fn set(&self, at: chrono::DateTime<chrono::Utc>) {
+        let Ok(mut guard) = self.override_at.lock() else {
+            return;
+        };
+        *guard = Some(at);
+    }
+
+    /// Reads the override, if one was set, else the real clock. Never
+    /// consumes the override -- unlike [`FaultInjector`]'s flags, a test
+    /// placing `guard_at` wants every read inside the same test to see
+    /// the same value, not just the first. A poisoned mutex (unreachable
+    /// in practice: nothing panics while holding it) falls back to the
+    /// real clock rather than panicking this one, the same "never abort
+    /// for a defensive check" rule the rest of this crate already
+    /// follows.
+    pub fn now(&self) -> chrono::DateTime<chrono::Utc> {
+        self.override_at
+            .lock()
+            .ok()
+            .and_then(|guard| *guard)
+            .unwrap_or_else(chrono::Utc::now)
     }
 }
 

@@ -991,3 +991,647 @@ async fn the_flow_invalidation_touches_only_the_named_providers_flows() {
     assert_eq!(state.4, 0, "the named provider's ceremony is gone");
     assert_eq!(state.5, 1, "the other provider's ceremony is kept");
 }
+
+// ── C17 — enable (from a preflight) / disable ──────────────────────────
+
+use crate::commands::{
+    ActivationGeneration, ConfigVersion, DisableFederationProviderError, EnableFromPreflightError,
+    JwksFingerprint, MetadataFingerprint, PreflightEvidence,
+};
+
+/// A disabled provider with a *recorded, usable* trust policy -- the
+/// state a provider is in after a real preflight (S3) but before C17
+/// enable, unlike `sample_row`'s own bare disabled-with-no-algs shape.
+fn a_disabled_row_with_recorded_policy(slug: &str) -> crate::models::FederationProviderRow {
+    let now = Utc::now();
+    crate::models::FederationProviderRow {
+        id: FederationProviderId::new(),
+        slug: slug.into(),
+        display_name: "Google".into(),
+        issuer: format!("https://{slug}.example"),
+        client_id: "client-abc".into(),
+        client_secret_enc: None,
+        scopes: "openid email".into(),
+        provision_mode: crate::models::ProvisionMode::LinkOnly,
+        enabled: false,
+        allowed_origins: String::new(),
+        config_version: 0,
+        activation_generation: 0,
+        validation_status: crate::models::ValidationStatus::RequiresReview,
+        evidence_config_version: None,
+        evidence_activation_generation: None,
+        evidence_policy_digest: None,
+        evidence_observed_at: None,
+        evidence_metadata_fingerprint: None,
+        evidence_jwks_fingerprint: None,
+        created_at: now,
+        updated_at: now,
+        id_token_algs: Some("RS256".into()),
+    }
+}
+
+/// The evidence a real preflight (S3) would have produced for `row`, as
+/// it stands right now -- decodes `row`'s own policy and computes its
+/// real digest, rather than a fixed placeholder, so a test that mutates
+/// the row afterward (changing its generation, or its policy) produces
+/// evidence that genuinely disagrees with the row C17 re-reads.
+fn evidence_for(
+    row: &crate::models::FederationProviderRow,
+    observed_at: chrono::DateTime<chrono::Utc>,
+) -> PreflightEvidence {
+    let policy = crate::federation_policy::from_stored(row).expect("row must decode");
+    let digest =
+        crate::federation_policy::compute_policy_digest(&policy, row.client_secret_enc.as_deref());
+    PreflightEvidence {
+        provider_id: row.id,
+        config_version: ConfigVersion(row.config_version),
+        activation_generation: ActivationGeneration(row.activation_generation),
+        policy_digest: digest,
+        observed_at,
+        metadata_fingerprint: MetadataFingerprint([0xCDu8; 32]),
+        jwks_fingerprint: JwksFingerprint([0xEFu8; 32]),
+    }
+}
+
+#[tokio::test]
+async fn an_enable_from_preflight_succeeds_and_records_the_evidence() {
+    let db = fresh_db();
+    let row = a_disabled_row_with_recorded_policy("c17-enable-happy");
+    repos::federation_provider::create(&db, &row, None)
+        .await
+        .expect("seed provider");
+    let (admin, session_id) = an_admin_session(&db).await;
+    let before = audit_rows(&db).await;
+
+    let now = Utc::now();
+    let evidence = evidence_for(&row, now);
+    let audited = crate::commands::enable_federation_provider_from_preflight(
+        &db, admin, session_id, evidence, now,
+    )
+    .await
+    .expect("enable must succeed");
+    audited.into_inner();
+
+    let stored = repos::federation_provider::get(&db, row.id)
+        .await
+        .expect("get");
+    assert!(stored.enabled);
+    assert_eq!(
+        stored.validation_status,
+        crate::models::ValidationStatus::Validated
+    );
+    assert_eq!(
+        stored.config_version, 0,
+        "enable never changes config_version"
+    );
+    assert_eq!(stored.activation_generation, 1);
+    assert_eq!(stored.evidence_config_version, Some(0));
+    assert_eq!(stored.evidence_activation_generation, Some(1));
+    assert!(stored.evidence_policy_digest.is_some());
+    assert_eq!(
+        stored.evidence_metadata_fingerprint,
+        Some([0xCDu8; 32].to_vec())
+    );
+    assert_eq!(
+        stored.evidence_jwks_fingerprint,
+        Some([0xEFu8; 32].to_vec())
+    );
+    assert_eq!(stored.evidence_observed_at, Some(now));
+
+    let event = last_event(&db).await;
+    assert_eq!(event.action, "federation.provider.enabled");
+    assert_eq!(event.target.as_deref(), Some(row.id.to_string().as_str()));
+    assert_eq!(event.actor, Some(admin));
+    let note = event.note.expect("note");
+    assert_eq!(
+        crate::registry::note_field(&note, "config_version").as_deref(),
+        Some("0")
+    );
+    assert_eq!(
+        crate::registry::note_field(&note, "old_activation_generation").as_deref(),
+        Some("0")
+    );
+    assert_eq!(
+        crate::registry::note_field(&note, "new_activation_generation").as_deref(),
+        Some("1")
+    );
+    assert_eq!(
+        crate::registry::note_field(&note, "metadata_fingerprint").as_deref(),
+        Some("cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd")
+    );
+    assert_eq!(
+        crate::registry::note_field(&note, "jwks_fingerprint").as_deref(),
+        Some("efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef")
+    );
+    assert!(
+        !note.contains("evidence_policy_digest")
+            && !note.contains("observed_at")
+            && crate::registry::note_field(&note, "observed_at").is_none(),
+        "RFC 096 :436-437: never the digest, never observed_at:\n{note}"
+    );
+    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
+    record_exactly_once_coverage("C17");
+}
+
+#[tokio::test]
+async fn enable_accepts_a_599_second_old_check() {
+    let db = fresh_db();
+    let row = a_disabled_row_with_recorded_policy("c17-599");
+    repos::federation_provider::create(&db, &row, None)
+        .await
+        .expect("seed provider");
+    let (admin, session_id) = an_admin_session(&db).await;
+
+    let observed_at = Utc::now() - chrono::Duration::seconds(599);
+    db.guard_clock().set(Utc::now());
+    let evidence = evidence_for(&row, observed_at);
+    let result = crate::commands::enable_federation_provider_from_preflight(
+        &db,
+        admin,
+        session_id,
+        evidence,
+        Utc::now(),
+    )
+    .await;
+    assert!(result.is_ok(), "599 seconds old must be accepted");
+}
+
+#[tokio::test]
+async fn enable_refuses_when_the_check_is_exactly_600_seconds_old() {
+    let db = fresh_db();
+    let row = a_disabled_row_with_recorded_policy("c17-600");
+    repos::federation_provider::create(&db, &row, None)
+        .await
+        .expect("seed provider");
+    let (admin, session_id) = an_admin_session(&db).await;
+
+    let guard_at = Utc::now();
+    let observed_at = guard_at - chrono::Duration::seconds(600);
+    db.guard_clock().set(guard_at);
+    let evidence = evidence_for(&row, observed_at);
+    let result = crate::commands::enable_federation_provider_from_preflight(
+        &db,
+        admin,
+        session_id,
+        evidence,
+        Utc::now(),
+    )
+    .await;
+    assert!(matches!(result, Err(EnableFromPreflightError::CheckTooOld)));
+}
+
+#[tokio::test]
+async fn enable_refuses_a_check_with_a_future_observed_at() {
+    let db = fresh_db();
+    let row = a_disabled_row_with_recorded_policy("c17-negative-age");
+    repos::federation_provider::create(&db, &row, None)
+        .await
+        .expect("seed provider");
+    let (admin, session_id) = an_admin_session(&db).await;
+
+    let guard_at = Utc::now();
+    let observed_at = guard_at + chrono::Duration::seconds(5); // in the future
+    db.guard_clock().set(guard_at);
+    let evidence = evidence_for(&row, observed_at);
+    let result = crate::commands::enable_federation_provider_from_preflight(
+        &db,
+        admin,
+        session_id,
+        evidence,
+        Utc::now(),
+    )
+    .await;
+    assert!(matches!(result, Err(EnableFromPreflightError::CheckTooOld)));
+}
+
+#[tokio::test]
+async fn enable_refuses_an_already_enabled_provider() {
+    let db = fresh_db();
+    let mut row = a_disabled_row_with_recorded_policy("c17-already-enabled");
+    row.enabled = true;
+    row.validation_status = crate::models::ValidationStatus::Validated;
+    let (admin, session_id) = an_admin_session(&db).await;
+    repos::federation_provider::create_enabled_for_test(&db, &row, None)
+        .await
+        .expect("seed enabled provider");
+
+    let now = Utc::now();
+    let evidence = evidence_for(&row, now);
+    let result = crate::commands::enable_federation_provider_from_preflight(
+        &db, admin, session_id, evidence, now,
+    )
+    .await;
+    assert!(matches!(
+        result,
+        Err(EnableFromPreflightError::AlreadyEnabled)
+    ));
+}
+
+#[tokio::test]
+async fn enable_refuses_when_the_activation_generation_changed_since_the_check() {
+    let db = fresh_db();
+    let row = a_disabled_row_with_recorded_policy("c17-wrong-generation");
+    repos::federation_provider::create(&db, &row, None)
+        .await
+        .expect("seed provider");
+    let (admin, session_id) = an_admin_session(&db).await;
+    let now = Utc::now();
+    let evidence = evidence_for(&row, now); // captures generation 0
+
+    // Something else bumps the generation out from under this evidence.
+    db.with_conn(move |c| {
+        Ok(c.execute(
+            "UPDATE federation_provider SET activation_generation = 5 WHERE id = ?1",
+            [row.id.to_string()],
+        )?)
+    })
+    .await
+    .expect("bump generation");
+
+    let result = crate::commands::enable_federation_provider_from_preflight(
+        &db, admin, session_id, evidence, now,
+    )
+    .await;
+    assert!(matches!(
+        result,
+        Err(EnableFromPreflightError::ChangedSinceCheck)
+    ));
+}
+
+#[tokio::test]
+async fn enable_refuses_when_the_policy_digest_no_longer_matches() {
+    let db = fresh_db();
+    let row = a_disabled_row_with_recorded_policy("c17-wrong-policy");
+    repos::federation_provider::create(&db, &row, None)
+        .await
+        .expect("seed provider");
+    let (admin, session_id) = an_admin_session(&db).await;
+    let now = Utc::now();
+
+    // Evidence computed for a *different* policy than what is stored --
+    // standing in for "the row's trust policy changed after the check."
+    let wrong_policy = FederationTrustPolicy::new(
+        "https://a-different-issuer.example",
+        "a-different-client",
+        false,
+        "openid",
+        &["RS256"],
+        &[],
+        crate::models::ProvisionMode::LinkOnly,
+    )
+    .expect("valid policy");
+    let wrong_digest = crate::federation_policy::compute_policy_digest(&wrong_policy, None);
+    let mut evidence = evidence_for(&row, now);
+    evidence.policy_digest = wrong_digest;
+
+    let result = crate::commands::enable_federation_provider_from_preflight(
+        &db, admin, session_id, evidence, now,
+    )
+    .await;
+    assert!(matches!(
+        result,
+        Err(EnableFromPreflightError::ChangedSinceCheck)
+    ));
+}
+
+#[tokio::test]
+async fn enable_refuses_a_nonexistent_provider() {
+    let db = fresh_db();
+    let (admin, session_id) = an_admin_session(&db).await;
+    let ghost = a_disabled_row_with_recorded_policy("c17-ghost"); // never created
+    let now = Utc::now();
+    let evidence = evidence_for(&ghost, now);
+    let result = crate::commands::enable_federation_provider_from_preflight(
+        &db, admin, session_id, evidence, now,
+    )
+    .await;
+    assert!(matches!(result, Err(EnableFromPreflightError::NotFound)));
+}
+
+/// RFC 096-B2 S4 dispatch §A row 10: "two preflights, then two enables:
+/// the second refuses as changed since the check." Also row 11's
+/// "replayed" case, since the second call here submits the *same*
+/// evidence the first one already consumed.
+#[tokio::test]
+async fn two_preflights_race_the_second_enable_refuses_as_changed_since_the_check() {
+    let db = fresh_db();
+    let row = a_disabled_row_with_recorded_policy("c17-race");
+    repos::federation_provider::create(&db, &row, None)
+        .await
+        .expect("seed provider");
+    let (admin, session_id) = an_admin_session(&db).await;
+    let now = Utc::now();
+
+    // Two preflights, both run against the same (generation 0) row.
+    let evidence_a = evidence_for(&row, now);
+    let evidence_b = evidence_for(&row, now);
+
+    let first = crate::commands::enable_federation_provider_from_preflight(
+        &db, admin, session_id, evidence_a, now,
+    )
+    .await;
+    assert!(first.is_ok(), "the first enable must win");
+
+    let second = crate::commands::enable_federation_provider_from_preflight(
+        &db, admin, session_id, evidence_b, now,
+    )
+    .await;
+    assert!(
+        matches!(second, Err(EnableFromPreflightError::AlreadyEnabled)),
+        "the second capability is now stale -- the provider is already enabled, \
+         which is also a true statement of what changed since that check"
+    );
+}
+
+#[tokio::test]
+async fn enable_refuses_at_generation_overflow_and_writes_nothing() {
+    let db = fresh_db();
+    let row = a_disabled_row_with_recorded_policy("c17-overflow");
+    repos::federation_provider::create(&db, &row, None)
+        .await
+        .expect("seed provider");
+    // `create()`'s own `INSERT` leaves `activation_generation` to the
+    // schema `DEFAULT` (0); set it to the boundary value directly, then
+    // re-read the row so the evidence below is built from what is
+    // actually stored, not from `row`'s own (unpersisted) field.
+    db.with_conn({
+        let id = row.id;
+        move |c| {
+            Ok(c.execute(
+                "UPDATE federation_provider SET activation_generation = ?1 WHERE id = ?2",
+                rusqlite::params![i64::MAX, id.to_string()],
+            )?)
+        }
+    })
+    .await
+    .expect("set activation_generation to i64::MAX");
+    let row = repos::federation_provider::get(&db, row.id)
+        .await
+        .expect("re-read");
+    let (admin, session_id) = an_admin_session(&db).await;
+    let before = audit_rows(&db).await;
+    let now = Utc::now();
+    let evidence = evidence_for(&row, now);
+
+    let result = crate::commands::enable_federation_provider_from_preflight(
+        &db, admin, session_id, evidence, now,
+    )
+    .await;
+    assert!(matches!(result, Err(EnableFromPreflightError::Storage)));
+    let stored = repos::federation_provider::get(&db, row.id)
+        .await
+        .expect("get");
+    assert!(!stored.enabled, "nothing must have changed");
+    assert_eq!(stored.activation_generation, i64::MAX);
+    assert_eq!(audit_rows(&db).await, before);
+}
+
+#[tokio::test]
+async fn c17_enable_injected_failure_before_append_rolls_back_everything() {
+    let db = fresh_db();
+    let row = a_disabled_row_with_recorded_policy("c17-enable-rollback");
+    repos::federation_provider::create(&db, &row, None)
+        .await
+        .expect("seed provider");
+    let (admin, session_id) = an_admin_session(&db).await;
+    let before_audit = latest_audit_action(&db).await;
+    let now = Utc::now();
+    let evidence = evidence_for(&row, now);
+
+    db.fault_injector().fail_before_next_append();
+    let result = crate::commands::enable_federation_provider_from_preflight(
+        &db, admin, session_id, evidence, now,
+    )
+    .await;
+    assert!(result.is_err(), "injected failure must surface as Err");
+
+    let stored = repos::federation_provider::get(&db, row.id)
+        .await
+        .expect("get");
+    assert!(
+        !stored.enabled,
+        "the enable must not have survived rollback"
+    );
+    assert_eq!(stored.activation_generation, 0);
+    assert_eq!(latest_audit_action(&db).await, before_audit);
+    record_rollback_coverage("C17");
+}
+
+#[tokio::test]
+async fn c17_disable_disables_an_enabled_provider_and_invalidates_its_flows() {
+    let db = fresh_db();
+    let row = sample_enabled_row("c17-disable-happy");
+    repos::federation_provider::create_enabled_for_test(&db, &row, None)
+        .await
+        .expect("seed enabled provider");
+    let (admin, session_id) = an_admin_session(&db).await;
+    repos::federation_login_attempt::insert(
+        &db,
+        row.id,
+        0,
+        0,
+        [1u8; 32],
+        [2u8; 32],
+        [3u8; 32],
+        b"pkce-verifier",
+        "https://rp.example/cb".into(),
+        None,
+        Utc::now(),
+    )
+    .await
+    .expect("seed a pending attempt");
+    let before = audit_rows(&db).await;
+    let now = Utc::now();
+
+    let audited = crate::commands::disable_federation_provider(&db, admin, session_id, row.id, now)
+        .await
+        .expect("must not error")
+        .expect("an enabled provider must be disabled");
+    audited.into_inner();
+
+    let stored = repos::federation_provider::get(&db, row.id)
+        .await
+        .expect("get");
+    assert!(!stored.enabled);
+    assert_eq!(
+        stored.validation_status,
+        crate::models::ValidationStatus::Validated,
+        "validation_status is left exactly as it was"
+    );
+    assert!(stored.evidence_policy_digest.is_none());
+    assert_eq!(stored.activation_generation, 1);
+    assert_eq!(stored.config_version, 0);
+
+    let target_attempt = repos::federation_login_attempt::find_by_state_sha256(&db, [1u8; 32])
+        .await
+        .expect("still exists");
+    assert_eq!(
+        target_attempt.status,
+        crate::models::FederationLoginAttemptStatus::Failed
+    );
+
+    let event = last_event(&db).await;
+    assert_eq!(event.action, "federation.provider.disabled");
+    assert_eq!(event.target.as_deref(), Some(row.id.to_string().as_str()));
+    let note = event.note.expect("note");
+    assert_eq!(
+        crate::registry::note_field(&note, "old_activation_generation").as_deref(),
+        Some("0")
+    );
+    assert_eq!(
+        crate::registry::note_field(&note, "new_activation_generation").as_deref(),
+        Some("1")
+    );
+    assert_eq!(
+        crate::registry::note_field(&note, "invalidated_login_attempts").as_deref(),
+        Some("1")
+    );
+    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
+    record_exactly_once_coverage("C17");
+}
+
+#[tokio::test]
+async fn c17_disable_is_a_no_op_for_an_already_disabled_provider() {
+    let db = fresh_db();
+    let row = a_disabled_row_with_recorded_policy("c17-disable-noop");
+    repos::federation_provider::create(&db, &row, None)
+        .await
+        .expect("seed disabled provider");
+    let (admin, session_id) = an_admin_session(&db).await;
+    let before = audit_rows(&db).await;
+
+    let result =
+        crate::commands::disable_federation_provider(&db, admin, session_id, row.id, Utc::now())
+            .await
+            .expect("must not error");
+    assert!(result.is_none(), "an already-disabled provider is a no-op");
+
+    let stored = repos::federation_provider::get(&db, row.id)
+        .await
+        .expect("get");
+    assert_eq!(
+        stored.activation_generation, 0,
+        "a generation must never be burned for nothing"
+    );
+    assert_eq!(audit_rows(&db).await, before, "no event written");
+    record_rollback_coverage("C17"); // the non-committing guarded path is this command's rollback case for disable
+}
+
+#[tokio::test]
+async fn c17_disable_refuses_a_nonexistent_provider() {
+    let db = fresh_db();
+    let (admin, session_id) = an_admin_session(&db).await;
+    let ghost = FederationProviderId::new();
+    let result =
+        crate::commands::disable_federation_provider(&db, admin, session_id, ghost, Utc::now())
+            .await;
+    assert!(matches!(
+        result,
+        Err(DisableFederationProviderError::NotFound)
+    ));
+}
+
+#[tokio::test]
+async fn c17_disable_injected_failure_before_append_rolls_back_everything() {
+    let db = fresh_db();
+    let row = sample_enabled_row("c17-disable-rollback");
+    repos::federation_provider::create_enabled_for_test(&db, &row, None)
+        .await
+        .expect("seed enabled provider");
+    let (admin, session_id) = an_admin_session(&db).await;
+    let before_audit = latest_audit_action(&db).await;
+
+    db.fault_injector().fail_before_next_append();
+    let result =
+        crate::commands::disable_federation_provider(&db, admin, session_id, row.id, Utc::now())
+            .await;
+    assert!(result.is_err(), "injected failure must surface as Err");
+
+    let stored = repos::federation_provider::get(&db, row.id)
+        .await
+        .expect("get");
+    assert!(
+        stored.enabled,
+        "the disable must not have survived rollback"
+    );
+    assert_eq!(latest_audit_action(&db).await, before_audit);
+    record_rollback_coverage("C17");
+}
+
+/// S4 review: C17's store-side refusals give a reason and a next step,
+/// the rule every operator-facing refusal in this cycle follows.
+#[test]
+fn c17_store_refusals_each_name_a_next_step() {
+    use crate::commands::{DisableFederationProviderError as D, EnableFromPreflightError as E};
+    let enable = [
+        (E::ChangedSinceCheck.to_string(), "run it again"),
+        (E::CheckTooOld.to_string(), "run it again"),
+        (E::AlreadyEnabled.to_string(), "disable it first"),
+        (E::NotFound.to_string(), "reload the provider list"),
+        (E::StepUpRequired.to_string(), "confirm it again"),
+        (E::Storage.to_string(), "see the server log"),
+    ];
+    let disable = [
+        (D::NotFound.to_string(), "reload the provider list"),
+        (D::StepUpRequired.to_string(), "confirm it again"),
+        (D::Storage.to_string(), "see the server log"),
+    ];
+    for (text, next_step) in enable.iter().chain(disable.iter()) {
+        assert!(text.contains(next_step), "{text:?} lacks {next_step:?}");
+    }
+}
+
+/// S4 review: the chooser, not only the choice. The backend test proves
+/// `with_tx_immediate` waits; this proves **C17** runs through it.
+/// Another connection holds the write lock for 2 s while C17 runs on a
+/// check that is 599.5 s old.
+/// - `IMMEDIATE` (correct): C17's `BEGIN` waits for the lock, so `guard_at`
+///   is read after the wait, the check is over 600 s old, and C17 refuses
+///   it as stale.
+/// - `DEFERRED`: `guard_at` would be read before any wait (C17's first
+///   statements are reads, which WAL never blocks), the check would pass at
+///   599 s, and the `UPDATE` would then wait out the lock and enable the
+///   provider.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn c17_reads_guard_at_only_after_it_holds_the_write_lock() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("c17-immediate.db");
+    let db = Database::open(&path, crate::crypto::MasterKey::generate()).expect("open file db");
+    let row = a_disabled_row_with_recorded_policy("c17-lock");
+    repos::federation_provider::create(&db, &row, None)
+        .await
+        .expect("seed provider");
+    let (admin, session_id) = an_admin_session(&db).await;
+    let evidence = evidence_for(&row, Utc::now() - chrono::Duration::milliseconds(599_500));
+
+    let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+    let lock_path = path.clone();
+    let holder = std::thread::spawn(move || {
+        let conn = rusqlite::Connection::open(&lock_path).expect("second connection");
+        conn.execute_batch("BEGIN IMMEDIATE;")
+            .expect("take the write lock");
+        ready_tx.send(()).expect("signal");
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        conn.execute_batch("ROLLBACK;").expect("release it");
+    });
+    ready_rx.recv().expect("the lock is held");
+
+    let result = crate::commands::enable_federation_provider_from_preflight(
+        &db,
+        admin,
+        session_id,
+        evidence,
+        Utc::now(),
+    )
+    .await;
+    holder.join().expect("lock holder");
+
+    assert!(
+        matches!(result, Err(EnableFromPreflightError::CheckTooOld)),
+        "guard_at must be read after the write lock is held"
+    );
+    let stored = repos::federation_provider::get(&db, row.id)
+        .await
+        .expect("get");
+    assert!(!stored.enabled, "nothing was enabled");
+}

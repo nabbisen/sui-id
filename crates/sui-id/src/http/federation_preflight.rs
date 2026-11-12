@@ -1,11 +1,13 @@
 //! RFC 096-B2 S3: the preflight capability (RFC 096 `:409-421`), and RFC
 //! 094 `:506-512`'s `ValidatedProviderPreflight`.
 //!
-//! **Not in this stage: the consumer.** C17's enable is S4, and how it
-//! consumes the capability across the crate boundary is a question still
-//! open --
-//! [`096-b2-c17-consumes-the-capability-decision-2026-11-11.md`](../../../../../rfcs/handoffs/096-upstream-oidc-federation/096-b2-c17-consumes-the-capability-decision-2026-11-11.md).
-//! This module builds the capability and has no caller of its contents.
+//! **The consumer (RFC 096-B2 S4, the C17-seam amendment, `:440`):**
+//! [`check_and_enable`] is the *only* function that runs
+//! [`preflight_provider`] and moves its capability into
+//! [`sui_id_store::commands::enable_federation_provider_from_preflight`].
+//! Nothing else calls that store command — the source-scope test
+//! (`crates/sui-id/tests/e2e/r096_b2_stage4_c17_scope.rs`) is what makes
+//! that more than a comment.
 //!
 //! Sealed the same way as [`crate::identity_capability::IdentityCapability`]
 //! and `sui-id-core`'s federated-MFA candidates: private fields, no public
@@ -354,6 +356,166 @@ pub async fn preflight_provider(
         metadata_fingerprint,
         jwks_fingerprint,
     })
+}
+
+/// RFC 096-B2 S4 §D: every way [`check_and_enable`] can refuse — S3's
+/// [`PreflightError`] variants (the check itself refused), plus C17
+/// enable's own (the provider changed, or the check went stale, between
+/// the check finishing and the commit). Flat and closed, like
+/// `PreflightError` itself: no fingerprint, digest, URL, or upstream
+/// body in any variant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CheckAndEnableError {
+    /// See [`PreflightError::NotFound`].
+    NotFound,
+    /// See [`PreflightError::Storage`].
+    Storage,
+    /// See [`PreflightError::NotDisabled`].
+    NotDisabled,
+    /// See [`PreflightError::NotInConfiguration`].
+    NotInConfiguration,
+    /// See [`PreflightError::PolicyNotRecorded`].
+    PolicyNotRecorded,
+    /// See [`PreflightError::Transport`].
+    Transport,
+    /// See [`PreflightError::Discovery`].
+    Discovery,
+    /// See [`PreflightError::Jwks`].
+    Jwks,
+    /// See [`PreflightError::AuthMethodUnsupported`].
+    AuthMethodUnsupported,
+    /// See [`PreflightError::NoCommonAlgorithm`].
+    NoCommonAlgorithm,
+    /// See [`PreflightError::ChangedDuringPreflight`].
+    ChangedDuringPreflight,
+    /// The provider's version, generation, enabled state, or trust
+    /// policy digest changed between the check finishing and the
+    /// enable command's own commit.
+    ChangedSinceCheck,
+    /// `guard_at - observed_at` was negative or `>= 600` seconds by the
+    /// time the enable command's transaction ran.
+    CheckTooOld,
+    /// The provider was enabled by something else between the check
+    /// finishing and the commit.
+    AlreadyEnabled,
+    /// The administrator's step-up lapsed while the check ran: it does
+    /// network I/O between the admin surface's gate and the commit. Not a
+    /// storage failure, and its fix is different: confirm identity again.
+    StepUpRequired,
+}
+
+/// Same rule as [`PreflightError::fmt`]: the reason **and** the next
+/// step, nothing an administrator cannot act on.
+impl std::fmt::Display for CheckAndEnableError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotFound => write!(f, "{}", PreflightError::NotFound),
+            Self::Storage => write!(f, "{}", PreflightError::Storage),
+            Self::NotDisabled => write!(f, "{}", PreflightError::NotDisabled),
+            Self::NotInConfiguration => write!(f, "{}", PreflightError::NotInConfiguration),
+            Self::PolicyNotRecorded => write!(f, "{}", PreflightError::PolicyNotRecorded),
+            Self::Transport => write!(f, "{}", PreflightError::Transport),
+            Self::Discovery => write!(f, "{}", PreflightError::Discovery),
+            Self::Jwks => write!(f, "{}", PreflightError::Jwks),
+            Self::AuthMethodUnsupported => {
+                write!(f, "{}", PreflightError::AuthMethodUnsupported)
+            }
+            Self::NoCommonAlgorithm => write!(f, "{}", PreflightError::NoCommonAlgorithm),
+            Self::ChangedDuringPreflight => {
+                write!(f, "{}", PreflightError::ChangedDuringPreflight)
+            }
+            // Same operator-facing meaning as `NotDisabled` (a race landed
+            // on it at the very end instead of at the start): same text.
+            Self::AlreadyEnabled => write!(f, "{}", PreflightError::NotDisabled),
+            Self::ChangedSinceCheck => {
+                write!(f, "the provider changed since the check; run it again")
+            }
+            Self::CheckTooOld => {
+                write!(f, "the check is more than 10 minutes old; run it again")
+            }
+            Self::StepUpRequired => write!(
+                f,
+                "your identity confirmation expired while the check ran; confirm it again, \
+                 then run the check again"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for CheckAndEnableError {}
+
+impl From<PreflightError> for CheckAndEnableError {
+    fn from(e: PreflightError) -> Self {
+        match e {
+            PreflightError::NotFound => Self::NotFound,
+            PreflightError::Storage => Self::Storage,
+            PreflightError::NotDisabled => Self::NotDisabled,
+            PreflightError::NotInConfiguration => Self::NotInConfiguration,
+            PreflightError::PolicyNotRecorded => Self::PolicyNotRecorded,
+            PreflightError::Transport => Self::Transport,
+            PreflightError::Discovery => Self::Discovery,
+            PreflightError::Jwks => Self::Jwks,
+            PreflightError::AuthMethodUnsupported => Self::AuthMethodUnsupported,
+            PreflightError::NoCommonAlgorithm => Self::NoCommonAlgorithm,
+            PreflightError::ChangedDuringPreflight => Self::ChangedDuringPreflight,
+        }
+    }
+}
+
+impl From<sui_id_store::commands::EnableFromPreflightError> for CheckAndEnableError {
+    fn from(e: sui_id_store::commands::EnableFromPreflightError) -> Self {
+        use sui_id_store::commands::EnableFromPreflightError as E;
+        match e {
+            E::ChangedSinceCheck => Self::ChangedSinceCheck,
+            E::CheckTooOld => Self::CheckTooOld,
+            E::AlreadyEnabled => Self::AlreadyEnabled,
+            E::NotFound => Self::NotFound,
+            // Its own refusal, not `Storage`: the check's network I/O makes
+            // a lapse between S5's gate and this commit a real case, and
+            // "try again, see the log" would send the administrator the
+            // wrong way. S5 renders it as the step-up redirect.
+            E::StepUpRequired => Self::StepUpRequired,
+            E::Storage => Self::Storage,
+        }
+    }
+}
+
+/// RFC 096-B2 S4 §A row 1, the C17-seam amendment's *"consumes that
+/// capability"*: the **only** function that runs [`preflight_provider`]
+/// and moves its [`ValidatedProviderPreflight`] into
+/// [`sui_id_store::commands::enable_federation_provider_from_preflight`].
+/// `admin` is an [`sui_id_core::actor::AdminActor`] — proof of write
+/// privilege (RFC 081) — not a raw id, so there is no way to call this
+/// with an actor that has not passed the role check.
+pub async fn check_and_enable(
+    app: &AppState,
+    admin: &sui_id_core::actor::AdminActor,
+    provider_id: FederationProviderId,
+) -> Result<(), CheckAndEnableError> {
+    let evidence = preflight_provider(app, provider_id).await?;
+    let now = chrono::Utc::now();
+    sui_id_store::commands::enable_federation_provider_from_preflight(
+        &app.db,
+        admin.user_id(),
+        admin.session_id(),
+        sui_id_store::commands::PreflightEvidence {
+            provider_id: evidence.provider_id(),
+            config_version: sui_id_store::commands::ConfigVersion(evidence.config_version()),
+            activation_generation: sui_id_store::commands::ActivationGeneration(
+                evidence.activation_generation(),
+            ),
+            policy_digest: evidence.policy_digest(),
+            observed_at: evidence.observed_at(),
+            metadata_fingerprint: sui_id_store::commands::MetadataFingerprint(
+                *evidence.metadata_fingerprint(),
+            ),
+            jwks_fingerprint: sui_id_store::commands::JwksFingerprint(*evidence.jwks_fingerprint()),
+        },
+        now,
+    )
+    .await
+    .map(|audited| audited.into_inner())
+    .map_err(CheckAndEnableError::from)
 }
 
 #[cfg(test)]
