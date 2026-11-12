@@ -508,12 +508,19 @@ fn check_endpoint(
 /// issuer itself is canonical HTTPS before the discovery fetch is
 /// attempted"). Returns the parsed `Url` so callers build the well-known
 /// path from it rather than the raw string a second time.
+///
+/// **One issuer check, not two.** This used to check only the scheme;
+/// RFC 096-B2 S6b collapsed it into `sui_id_store::federation_policy::
+/// validate_issuer`'s one full rule (canonical form, and the issuer host
+/// rule — no IP literal, no `localhost`/`.localhost`/`.local`/`.internal`/
+/// `.home.arpa`) so there is exactly one place in the codebase that
+/// decides whether an issuer is acceptable. By the time this runs the
+/// issuer is normally already a stored, policy-validated row — this is a
+/// second, defense-in-depth gate right before the fetch, not the first.
 pub fn validate_issuer(issuer: &str) -> Result<url::Url, DiscoveryError> {
-    let url = url::Url::parse(issuer).map_err(|_| DiscoveryError::InvalidIssuer(issuer.into()))?;
-    if url.scheme() != "https" {
-        return Err(DiscoveryError::InvalidIssuer(issuer.into()));
-    }
-    Ok(url)
+    let canonical = sui_id_store::federation_policy::validate_issuer(issuer)
+        .map_err(|_| DiscoveryError::InvalidIssuer(issuer.into()))?;
+    url::Url::parse(&canonical).map_err(|_| DiscoveryError::InvalidIssuer(issuer.into()))
 }
 
 // ── RFC 096-B2 S3 §C: the production fetch, shared ───────────────────────

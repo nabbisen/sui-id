@@ -113,7 +113,7 @@ async fn token_endpoint_outside_the_allowed_set_receives_no_request() {
     let mut state = test_app();
     complete_setup_and_login(&state).await;
     state.http_client = Arc::new(Some(federation_test_client(
-        sui_id::resolver::ValidatingResolver,
+        super::tls_mock::LoopbackFixtureResolver,
     )));
 
     let token_hits = Arc::new(AtomicUsize::new(0));
@@ -198,7 +198,7 @@ async fn authorization_endpoint_outside_the_allowed_set_is_rejected_at_start() {
     let mut state = test_app();
     complete_setup_and_login(&state).await;
     state.http_client = Arc::new(Some(federation_test_client(
-        sui_id::resolver::ValidatingResolver,
+        super::tls_mock::LoopbackFixtureResolver,
     )));
 
     let discovery_issuer = serve_https(move |base| {
@@ -257,7 +257,7 @@ async fn a_second_configured_origin_is_accepted_end_to_end() {
     let mut state = test_app();
     complete_setup_and_login(&state).await;
     state.http_client = Arc::new(Some(federation_test_client(
-        sui_id::resolver::ValidatingResolver,
+        super::tls_mock::LoopbackFixtureResolver,
     )));
 
     let token_hits = Arc::new(AtomicUsize::new(0));

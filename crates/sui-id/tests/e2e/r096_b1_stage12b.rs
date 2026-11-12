@@ -97,7 +97,7 @@ pub(super) async fn drive_to_federated_mfa_with_next(
     next: &str,
 ) -> FedMfaSetup {
     state.http_client = std::sync::Arc::new(Some(super::tls_mock::federation_test_client(
-        sui_id::resolver::ValidatingResolver,
+        super::tls_mock::LoopbackFixtureResolver,
     )));
     let (issuer, slot) = mock_upstream().await;
     add_federation_provider_config(state, &issuer);

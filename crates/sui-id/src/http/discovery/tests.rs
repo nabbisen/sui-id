@@ -208,6 +208,16 @@ fn validate_issuer_rejects_garbage() {
     assert!(validate_issuer("not a url").is_err());
 }
 
+/// RFC 096-B2 S6b: proves the collapse, not just the policy's own rule --
+/// this function used to check only the scheme, so a host-rule refusal
+/// reaching it is evidence the one-check design actually took effect
+/// here, not only in `federation_policy`'s own tests.
+#[test]
+fn validate_issuer_rejects_a_host_the_policy_refuses() {
+    assert!(validate_issuer("https://idp.localhost").is_err());
+    assert!(validate_issuer("https://127.0.0.1").is_err());
+}
+
 // ---- RFC 096-A stage 3a: jwks_uri ------------------------------------------
 
 fn with_jwks(jwks: Option<&str>) -> RawDiscovery {

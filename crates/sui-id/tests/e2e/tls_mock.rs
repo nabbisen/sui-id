@@ -22,9 +22,13 @@
 use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock};
 
-/// Host name the raw fixture answers for. It is a name, not an address, so that
-/// the request goes through the client's resolver (an IP literal would bypass it).
-pub(super) const RAW_FIXTURE_HOST: &str = "fixture.test";
+/// Host name every mock in this file answers for -- `serve_https` and
+/// `serve_raw_https` alike (RFC 096-B2 S6b: `serve_https` used to return an IP
+/// literal, which the issuer host rule now refuses). It is a name, not an
+/// address, so that the request goes through the client's resolver (an IP
+/// literal would bypass it) -- `LoopbackFixtureResolver` and `FixtureResolver`
+/// both answer only for this one name.
+pub(super) const FIXTURE_HOST: &str = "fixture.test";
 
 struct MockCert {
     cert_der: rustls::pki_types::CertificateDer<'static>,
@@ -36,7 +40,7 @@ fn mock_cert() -> &'static MockCert {
     static CERT: OnceLock<MockCert> = OnceLock::new();
     CERT.get_or_init(|| {
         let cert =
-            rcgen::generate_simple_self_signed(vec!["127.0.0.1".into(), RAW_FIXTURE_HOST.into()])
+            rcgen::generate_simple_self_signed(vec!["127.0.0.1".into(), FIXTURE_HOST.into()])
                 .expect("generate self-signed cert");
         MockCert {
             cert_der: cert.cert.der().clone(),
@@ -100,15 +104,20 @@ impl axum::serve::Listener for TlsListener {
 }
 
 /// Bind a self-signed HTTPS listener on `127.0.0.1`, hand `build_app` its base URL
-/// (`https://127.0.0.1:port`) so routes can echo it back into a discovery document
-/// before anything is actually listening, then spawn the server in the background.
-/// Returns the same base URL. Callers reach it with [`federation_test_client`].
+/// (RFC 096-B2 S6b: `https://fixture.test:port`, not the IP literal this used to
+/// return — the issuer host rule now refuses an IP literal, and `.test` is
+/// reserved for testing, RFC 6761, and not on RFC 096's refused list) so routes can
+/// echo it back into a discovery document before anything is actually listening,
+/// then spawn the server in the background. Returns the same base URL. Callers
+/// reach it with [`federation_test_client`], passing [`LoopbackFixtureResolver`]
+/// (not [`sui_id::resolver::ValidatingResolver`], which refuses loopback by design,
+/// RFC 134 D2) unless the test is itself about that refusal.
 pub(super) async fn serve_https(build_app: impl FnOnce(String) -> axum::Router) -> String {
     let tcp = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("bind");
     let addr = tcp.local_addr().expect("local_addr");
-    let base_url = format!("https://{addr}");
+    let base_url = format!("https://{FIXTURE_HOST}:{}", addr.port());
     let app = build_app(base_url.clone());
 
     let acceptor = tls_acceptor();
@@ -148,7 +157,7 @@ pub(super) async fn serve_raw_https(
         .await
         .expect("bind raw fixture");
     let addr = tcp.local_addr().expect("local_addr");
-    let base_url = format!("https://{RAW_FIXTURE_HOST}:{}", addr.port());
+    let base_url = format!("https://{FIXTURE_HOST}:{}", addr.port());
     let response = Arc::new(build(&base_url));
     let acceptor = tls_acceptor();
     tokio::spawn(async move {
@@ -188,7 +197,7 @@ pub(super) async fn serve_raw_https(
     (base_url, addr)
 }
 
-/// Resolves [`RAW_FIXTURE_HOST`] to the loopback port a raw fixture listens on, and
+/// Resolves [`FIXTURE_HOST`] to the loopback port a raw fixture listens on, and
 /// nothing else. This is the resolver difference a fixture test makes; production's
 /// [`sui_id::resolver::ValidatingResolver`] refuses loopback by design (RFC 134 D2),
 /// and the row that proves it still does is cited, not repeated, in the harness.
@@ -198,7 +207,7 @@ pub(super) struct FixtureResolver {
 
 impl reqwest::dns::Resolve for FixtureResolver {
     fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
-        let answer = (name.as_str() == RAW_FIXTURE_HOST).then_some(self.addr);
+        let answer = (name.as_str() == FIXTURE_HOST).then_some(self.addr);
         Box::pin(async move {
             match answer {
                 Some(addr) => {
@@ -211,12 +220,45 @@ impl reqwest::dns::Resolve for FixtureResolver {
     }
 }
 
+/// Resolves [`FIXTURE_HOST`] to loopback, on **no particular port** — `0`,
+/// which answers nothing on its own — and nothing else. RFC 096-B2 S6b:
+/// [`serve_https`] now returns `https://fixture.test:PORT` for a real,
+/// per-mock port, never the same one twice in a process; the DNS layer only
+/// ever supplies an *address* for a name, and the real target port a
+/// connection actually uses comes from the URL being connected to, not from
+/// the resolver's own answer (`r096_b2_stage6b_fixture_host.rs`'s
+/// `two_mocks_on_two_ports_reach_through_one_client_and_one_resolver` proves
+/// this directly, with two mocks on two different real ports through one
+/// resolver and one client, rather than assuming it). One instance of this
+/// resolver therefore serves any number of `serve_https` mocks in one test,
+/// unlike [`FixtureResolver`], which still carries one fixed, real port for
+/// [`serve_raw_https`]'s own single-mock-per-test shape.
+pub(super) struct LoopbackFixtureResolver;
+
+impl reqwest::dns::Resolve for LoopbackFixtureResolver {
+    fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
+        let answer =
+            (name.as_str() == FIXTURE_HOST).then_some(SocketAddr::from(([127, 0, 0, 1], 0)));
+        Box::pin(async move {
+            match answer {
+                Some(addr) => {
+                    let addrs: reqwest::dns::Addrs = Box::new(std::iter::once(addr));
+                    Ok(addrs)
+                }
+                None => Err("LoopbackFixtureResolver answers only for the fixture host".into()),
+            }
+        })
+    }
+}
+
 /// The federation client, built by the production constructor with the caller's
 /// resolver and [`mock_root`] as its extra trusted root.
 ///
-/// For tests that reach a [`serve_https`] mock by IP literal, pass the production
-/// resolver: the IP literal never reaches DNS, so the client then differs from
-/// production in its extra root alone.
+/// Pass [`LoopbackFixtureResolver`] for an ordinary [`serve_https`] mock. Pass
+/// [`sui_id::resolver::ValidatingResolver`], the production resolver, only for a
+/// test that is itself about its own refusal of loopback (RFC 134 D2) — it
+/// refuses every mock in this file by design, since all of them are loopback
+/// underneath their name.
 pub(super) fn federation_test_client<R>(resolver: R) -> reqwest::Client
 where
     R: reqwest::dns::Resolve + 'static,

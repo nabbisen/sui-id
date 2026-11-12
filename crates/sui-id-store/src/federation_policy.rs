@@ -333,14 +333,17 @@ impl FederationTrustPolicy {
 /// the un-slashed form, so storing anything else would make that
 /// comparison fail for every provider whose issuer has no path.
 ///
-/// TODO(096-B2 issuer host rule): RFC 096 `:355` also requires "no IP
-/// literal, no `localhost`, `.localhost`, `.local`, `.internal` or
-/// `.home.arpa`" for the issuer host. Not enforced here yet -- S2a
-/// measured the cost (41 e2e tests across 8 files configure a federation
-/// provider's issuer as `https://127.0.0.1:PORT`, the architect's own
-/// stage-plan §6) and left it for its own stage. This is the one place
-/// the check will go.
-fn validate_issuer(s: &str) -> Result<String, PolicyError> {
+/// RFC 096 `:355`: the issuer host rule — no IP literal, and no
+/// `localhost` or name ending `.localhost`, `.local`, `.internal`, or
+/// `.home.arpa` (case-insensitive; a trailing dot is no dot). RFC 096
+/// `:374-377`: *"Private, loopback, link-local, or literal-IP issuers are
+/// not supported in M4. There is no configuration escape hatch."*
+///
+/// The only caller outside this module is `sui_id::http::discovery`'s own
+/// `validate_issuer`, which used to run a scheme-only check of its own;
+/// S3's review recorded that as the one issuer check this module should
+/// own, so every path that validates an issuer runs this one rule.
+pub fn validate_issuer(s: &str) -> Result<String, PolicyError> {
     if s.is_empty() || s.len() > 2048 {
         return Err(PolicyError::Issuer(format!(
             "must be 1-2048 bytes, got {}",
@@ -363,7 +366,36 @@ fn validate_issuer(s: &str) -> Result<String, PolicyError> {
              fragment (RFC 096 :355, :367-372)"
         )));
     }
+    match u.host() {
+        Some(url::Host::Domain(host)) => {
+            let host = host.strip_suffix('.').unwrap_or(host).to_ascii_lowercase();
+            // Each reserved zone is refused as a name and as a suffix: the
+            // bare zone (`local`, `internal`, `home.arpa`) is as private as a
+            // name inside it (S6b review).
+            let is_refused_name = ["localhost", "local", "internal", "home.arpa"]
+                .iter()
+                .any(|zone| host == *zone || host.ends_with(&format!(".{zone}")));
+            if is_refused_name {
+                return Err(PolicyError::Issuer(issuer_host_refusal(s)));
+            }
+        }
+        _ => return Err(PolicyError::Issuer(issuer_host_refusal(s))),
+    }
     Ok(s.to_string())
+}
+
+/// The issuer host rule's refusal message (RFC 096 `:355`, `:374-377`):
+/// shared by every host-rule refusal so an operator with an internal IdP
+/// sees the same, deliberately-worded explanation regardless of which
+/// form of the rule their issuer tripped.
+fn issuer_host_refusal(s: &str) -> String {
+    format!(
+        "{s:?} has an issuer host the issuer host rule refuses: no IP literal, and no \
+         \"localhost\" or name ending \".localhost\", \".local\", \".internal\", or \
+         \".home.arpa\" (RFC 096 :355). \"Private, loopback, link-local, or literal-IP \
+         issuers are not supported in M4. There is no configuration escape hatch\" \
+         (RFC 096 :374-377)."
+    )
 }
 
 /// RFC 096 `:356`: 1-512 UTF-8 bytes, no control characters.

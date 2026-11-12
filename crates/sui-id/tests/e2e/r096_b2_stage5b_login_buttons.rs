@@ -239,7 +239,7 @@ async fn a_sign_in_started_from_the_rendered_button_completes_then_disappears_on
     let mut state = test_app();
     let admin_session = complete_setup_and_login(&state).await;
     state.http_client = std::sync::Arc::new(Some(super::tls_mock::federation_test_client(
-        sui_id::resolver::ValidatingResolver,
+        super::tls_mock::LoopbackFixtureResolver,
     )));
     let (issuer, nonce_slot) = mock_upstream().await;
     add_federation_provider_config(&mut state, &issuer);
@@ -337,7 +337,7 @@ async fn starting_from_oauth2_authorize_lands_on_the_login_page_with_the_button(
     let session = complete_setup_and_login(&state).await;
     let (client_id, _secret) = create_client(&state, &session).await;
     state.http_client = std::sync::Arc::new(Some(super::tls_mock::federation_test_client(
-        sui_id::resolver::ValidatingResolver,
+        super::tls_mock::LoopbackFixtureResolver,
     )));
     let (issuer, nonce_slot) = mock_upstream().await;
     add_federation_provider_config(&mut state, &issuer);

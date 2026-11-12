@@ -362,7 +362,7 @@ async fn user_detail_lists_the_link_admin_only_unlinks_auditor_read_only() {
     let (session, admin_id) = log_in_as_admin_in_english(&state).await;
     let (issuer, _slot) = {
         state.http_client = std::sync::Arc::new(Some(super::tls_mock::federation_test_client(
-            sui_id::resolver::ValidatingResolver,
+            super::tls_mock::LoopbackFixtureResolver,
         )));
         super::federation_fail_closed::mock_upstream().await
     };
@@ -422,7 +422,7 @@ async fn unlink_through_the_admin_surface_keeps_the_user_and_records_the_audit_r
     let (session, admin_id) = log_in_as_admin_in_english(&state).await;
     let (issuer, _slot) = {
         state.http_client = std::sync::Arc::new(Some(super::tls_mock::federation_test_client(
-            sui_id::resolver::ValidatingResolver,
+            super::tls_mock::LoopbackFixtureResolver,
         )));
         super::federation_fail_closed::mock_upstream().await
     };

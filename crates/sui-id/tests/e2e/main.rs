@@ -88,6 +88,7 @@ mod r096_b2_stage5_admin_surface;
 mod r096_b2_stage5b_login_buttons;
 mod r096_b2_stage6_c18_c20_scope;
 mod r096_b2_stage6_delete_and_unlink;
+mod r096_b2_stage6b_fixture_host;
 mod r102_stage1;
 mod r102_stage2;
 mod r102_stage3;

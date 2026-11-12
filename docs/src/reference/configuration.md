@@ -249,7 +249,7 @@ providers for federated sign-in (the "Sign in with X" flow).
 |---|---|---|---|---|
 | `slug` | string | **yes** | — | URL-safe identifier used in routes: `/auth/federated/{slug}/start`. Must be 1–64 characters of lowercase letters, digits and hyphens, and unique across blocks; startup refuses anything else. |
 | `display_name` | string | **yes** | — | Human-readable label for the "Sign in with X" button. |
-| `issuer` | string | **yes** | — | Upstream OIDC issuer URL. Used to fetch `/.well-known/openid-configuration`. |
+| `issuer` | string | **yes** | — | Upstream OIDC issuer URL. Used to fetch `/.well-known/openid-configuration`. The host may not be an IP address, `localhost`, or a name ending `.localhost`, `.local`, `.internal`, or `.home.arpa`, nor one of those zones itself (`local`, `internal`, `home.arpa`) — an identity provider reachable only on a private network is not supported in this release, and there is no configuration escape hatch. Renaming it does not help: sui-id also refuses a name that resolves to a private, loopback or link-local address when it connects. Startup refuses any other value. |
 | `client_id` | string | **yes** | — | OAuth 2.0 client ID registered at the upstream. |
 | `client_secret_env` | string | no | `""` | Name of the environment variable holding the client secret. Omit or set empty for public clients (no secret). Never put the secret inline. |
 | `scopes` | string | no | `"openid email"` | Space-separated scopes to request from the upstream. |

@@ -78,6 +78,73 @@ fn issuer_not_a_url_is_refused() {
     assert!(new("not a url", &["RS256"], &[]).is_err());
 }
 
+// ── the issuer host rule (RFC 096 :355, :374-377) ────────────────────────
+
+#[test]
+fn issuer_ipv4_literal_is_refused() {
+    assert!(new("https://127.0.0.1", &["RS256"], &[]).is_err());
+}
+
+#[test]
+fn issuer_ipv6_literal_is_refused() {
+    assert!(new("https://[::1]", &["RS256"], &[]).is_err());
+}
+
+#[test]
+fn issuer_private_ipv4_literal_is_refused() {
+    assert!(new("https://10.0.0.1", &["RS256"], &[]).is_err());
+}
+
+#[test]
+fn issuer_localhost_is_refused() {
+    assert!(new("https://localhost", &["RS256"], &[]).is_err());
+}
+
+#[test]
+fn issuer_dot_localhost_suffix_is_refused() {
+    assert!(new("https://idp.localhost", &["RS256"], &[]).is_err());
+}
+
+#[test]
+fn issuer_dot_local_suffix_is_refused() {
+    assert!(new("https://idp.local", &["RS256"], &[]).is_err());
+}
+
+#[test]
+fn issuer_dot_internal_suffix_is_refused() {
+    assert!(new("https://idp.internal", &["RS256"], &[]).is_err());
+}
+
+#[test]
+fn issuer_dot_home_arpa_suffix_is_refused() {
+    assert!(new("https://idp.home.arpa", &["RS256"], &[]).is_err());
+}
+
+#[test]
+fn issuer_dot_local_suffix_is_refused_case_insensitively() {
+    assert!(new("https://IDP.LOCAL", &["RS256"], &[]).is_err());
+}
+
+#[test]
+fn issuer_dot_local_suffix_with_a_trailing_dot_is_still_refused() {
+    assert!(new("https://idp.local.", &["RS256"], &[]).is_err());
+}
+
+#[test]
+fn issuer_host_that_merely_contains_local_as_a_label_is_accepted() {
+    assert!(new("https://local.example.com", &["RS256"], &[]).is_ok());
+}
+
+#[test]
+fn issuer_host_with_internal_idp_as_a_label_is_accepted() {
+    assert!(new("https://internal-idp.example.com", &["RS256"], &[]).is_ok());
+}
+
+#[test]
+fn issuer_host_fixture_test_is_accepted() {
+    assert!(new("https://fixture.test", &["RS256"], &[]).is_ok());
+}
+
 // ── the origin canonical rule ────────────────────────────────────────────
 
 #[test]
@@ -408,6 +475,18 @@ fn a_stored_row_with_a_refused_algorithm_has_no_usable_policy() {
 }
 
 #[test]
+fn a_stored_row_with_an_issuer_host_the_rule_refuses_has_no_usable_policy() {
+    let mut row = stored_row(Some("RS256"), "");
+    row.issuer = "https://idp.internal".into();
+    let e = from_stored(&row).expect_err("refused");
+    assert_eq!(e.field(), "issuer");
+    assert!(matches!(
+        e,
+        StoredPolicyError::Invalid(PolicyError::Issuer(_))
+    ));
+}
+
+#[test]
 fn a_stored_row_with_empty_origins_reads_as_the_issuers_origin_alone() {
     let p = from_stored(&stored_row(Some("RS256 ES256"), "")).expect("usable");
     assert_eq!(p.allowed_origins(), ["https://accounts.google.com"]);
@@ -492,4 +571,33 @@ fn an_origin_moving_port_changes_the_origins_and_the_ports() {
         changed_fields(&stored, &p).into_iter().collect::<Vec<_>>(),
         ["endpoint_origins", "https_ports"]
     );
+}
+
+/// S6b review: the bare reserved zones are refused as well as names inside
+/// them, since each check used to require a leading dot.
+#[test]
+fn issuer_bare_reserved_zones_are_refused() {
+    for host in ["local", "internal", "home.arpa", "LOCAL", "internal."] {
+        let issuer = format!("https://{host}");
+        assert!(
+            new(&issuer, &["RS256"], &[]).is_err(),
+            "{issuer} must be refused"
+        );
+    }
+}
+
+/// Names that merely end in the same letters are not the zone.
+#[test]
+fn issuer_names_that_only_end_in_the_same_letters_are_accepted() {
+    for host in [
+        "mylocal.example.com",
+        "notinternal.example.com",
+        "myhome.arpa.example.com",
+    ] {
+        let issuer = format!("https://{host}");
+        assert!(
+            new(&issuer, &["RS256"], &[]).is_ok(),
+            "{issuer} must be accepted"
+        );
+    }
 }

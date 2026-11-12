@@ -243,6 +243,25 @@ fn a_noncanonical_issuer_is_refused_at_load() {
     assert!(msg.contains("issuer"), "{msg}");
 }
 
+/// RFC 096-B2 S6b: the issuer host rule, wired through the same
+/// `Config::validate` path as every other `FederationTrustPolicy` rule --
+/// an operator who points `issuer` at an internal IdP by its loopback or
+/// `.internal` name learns this at startup, not only when a user tries to
+/// sign in.
+#[test]
+fn an_issuer_host_the_host_rule_refuses_is_refused_at_load() {
+    let mut c = Config::sample();
+    let mut provider = a_federation_provider();
+    provider.issuer = "https://idp.internal".into();
+    c.federation_providers.push(provider);
+    let msg = c
+        .validate()
+        .expect_err("an .internal issuer host must refuse to start")
+        .to_string();
+    assert!(msg.contains("idp"), "{msg}: must name the provider");
+    assert!(msg.contains("issuer host rule"), "{msg}");
+}
+
 #[test]
 fn an_empty_client_id_is_refused_at_load() {
     let mut c = Config::sample();

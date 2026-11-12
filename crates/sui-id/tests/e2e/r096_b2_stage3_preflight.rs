@@ -118,7 +118,7 @@ fn disabled_row(issuer: &str) -> FederationProviderRow {
 
 fn with_federation_client(state: &mut sui_id::AppState) {
     state.http_client = Arc::new(Some(super::tls_mock::federation_test_client(
-        sui_id::resolver::ValidatingResolver,
+        super::tls_mock::LoopbackFixtureResolver,
     )));
 }
 

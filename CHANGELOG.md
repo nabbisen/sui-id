@@ -80,6 +80,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     path, e.g. `https://accounts.google.com`, is still accepted — only
     its own serialized value, with no normalization, ever was and still
     is authoritative).
+  - `issuer`'s host may not be an IP address, `localhost`, or a name
+    ending `.localhost`, `.local`, `.internal`, or `.home.arpa`, nor one of those zones itself (`local`, `internal`, `home.arpa`). An
+    identity provider reachable only on a private network is not supported
+    in this release, and there is no configuration escape hatch. Renaming
+    it does not help: sui-id also refuses a name that resolves to a
+    private, loopback or link-local address when it connects.
   - `client_id` must be 1–512 UTF-8 bytes with no control characters.
   - `scopes` must be a unique combination of `openid`, `email` and
     `profile`, and must include `openid`.

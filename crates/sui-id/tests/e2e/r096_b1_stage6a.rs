@@ -208,7 +208,7 @@ async fn both_cookies_expire_on_the_upstream_error_path() {
     let mut state = test_app();
     complete_setup_and_login(&state).await;
     state.http_client = std::sync::Arc::new(Some(super::tls_mock::federation_test_client(
-        sui_id::resolver::ValidatingResolver,
+        super::tls_mock::LoopbackFixtureResolver,
     )));
     let (issuer, nonce_slot) = mock_upstream().await;
     add_federation_provider_config(&mut state, &issuer);
@@ -270,7 +270,7 @@ async fn both_cookies_expire_on_a_mid_exchange_failure() {
     let mut state = test_app();
     complete_setup_and_login(&state).await;
     state.http_client = std::sync::Arc::new(Some(super::tls_mock::federation_test_client(
-        sui_id::resolver::ValidatingResolver,
+        super::tls_mock::LoopbackFixtureResolver,
     )));
     let issuer = mock_upstream_with_failing_token_endpoint().await;
     add_federation_provider_config(&mut state, &issuer);
@@ -297,7 +297,7 @@ async fn both_cookies_expire_on_the_link_required_path() {
     let mut state = test_app();
     complete_setup_and_login(&state).await;
     state.http_client = std::sync::Arc::new(Some(super::tls_mock::federation_test_client(
-        sui_id::resolver::ValidatingResolver,
+        super::tls_mock::LoopbackFixtureResolver,
     )));
     let (issuer, nonce_slot) = mock_upstream().await;
     add_federation_provider_config(&mut state, &issuer);
@@ -324,7 +324,7 @@ async fn both_cookies_expire_on_the_success_path() {
     let mut state = test_app();
     complete_setup_and_login(&state).await;
     state.http_client = std::sync::Arc::new(Some(super::tls_mock::federation_test_client(
-        sui_id::resolver::ValidatingResolver,
+        super::tls_mock::LoopbackFixtureResolver,
     )));
     let (issuer, nonce_slot) = mock_upstream().await;
     add_federation_provider_config(&mut state, &issuer);

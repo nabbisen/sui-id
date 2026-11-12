@@ -222,7 +222,7 @@ async fn check_and_enable_lets_a_real_sign_in_through_then_disable_takes_it_away
     let mut state = test_app();
     let session_cookie = super::common::complete_setup_and_login(&state).await;
     state.http_client = std::sync::Arc::new(Some(super::tls_mock::federation_test_client(
-        sui_id::resolver::ValidatingResolver,
+        super::tls_mock::LoopbackFixtureResolver,
     )));
     let (issuer, nonce_slot) = super::federation_fail_closed::mock_upstream().await;
     add_federation_provider_config(&mut state, &issuer);

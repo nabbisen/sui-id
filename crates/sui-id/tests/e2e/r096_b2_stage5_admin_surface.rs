@@ -200,7 +200,7 @@ async fn with_federation_client_and_mock(
     state: &mut AppState,
 ) -> (String, super::federation_fail_closed::NonceSlot) {
     state.http_client = std::sync::Arc::new(Some(super::tls_mock::federation_test_client(
-        sui_id::resolver::ValidatingResolver,
+        super::tls_mock::LoopbackFixtureResolver,
     )));
     super::federation_fail_closed::mock_upstream().await
 }
