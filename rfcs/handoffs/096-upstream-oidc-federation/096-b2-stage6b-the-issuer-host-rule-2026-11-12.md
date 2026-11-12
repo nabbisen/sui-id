@@ -1,6 +1,8 @@
 # RFC 096-B2 stage 6b — the issuer host rule
 
-> ## Whose turn it is: **the implementation role's.**
+> ## Landed 2026-11-12, with reviewer fold-ins. Next:
+> [`096-b2-stage7-the-documents-2026-11-12.md`](096-b2-stage7-the-documents-2026-11-12.md).
+>
 > Cycle L, 096-B2 S6b —
 > [`096-b2-stage-plan-2026-11-11.md`](096-b2-stage-plan-2026-11-11.md) §6:
 > *"096-B2 does not close without it."* **This document is the dispatch.**
