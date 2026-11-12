@@ -1,6 +1,8 @@
 # RFC 096-B2 stage 7 — the documents
 
-> ## Whose turn it is: **the implementation role's.**
+> ## Landed 2026-11-12, with reviewer fold-ins. Next: the completion assessment —
+> [`096-b2-completion-assessment-2026-11-12.md`](096-b2-completion-assessment-2026-11-12.md).
+>
 > Cycle L, 096-B2 S7 —
 > [`096-b2-stage-plan-2026-11-11.md`](096-b2-stage-plan-2026-11-11.md) §3.
 > **This document is the dispatch.**
