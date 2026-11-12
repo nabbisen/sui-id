@@ -1,6 +1,8 @@
 # RFC 096-B2 stage 5 — the federation-provider admin surface
 
-> ## Whose turn it is: **the implementation role's.**
+> ## Landed 2026-11-12, with reviewer fold-ins. Next: two decisions —
+> [`096-b2-login-screen-buttons-decision-2026-11-12.md`](096-b2-login-screen-buttons-decision-2026-11-12.md).
+>
 > Cycle L, 096-B2 S5 —
 > [`096-b2-stage-plan-2026-11-11.md`](096-b2-stage-plan-2026-11-11.md) §3.
 > **This document is the dispatch.**

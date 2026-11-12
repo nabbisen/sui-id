@@ -71,7 +71,11 @@ configuration generation increments."* In the contract
   the admin UI can. Removing the configuration block does fail closed: the
   callback denies with `ConfigDrift` (`federation.rs:1122-1139`). But the
   login screen still offers the provider, so the operator gets a flow that
-  fails only at the end.
+  fails only at the end. *Corrected 2026-11-12:* the login screen offers no
+  provider at all, enabled or not. It has never rendered a federation
+  button, and `list_enabled` has no production caller. The architect cited
+  that function without tracing its callers. See
+  [`096-b2-login-screen-buttons-decision-2026-11-12.md`](096-b2-login-screen-buttons-decision-2026-11-12.md).
 
 **None of this is a hidden vulnerability.** The 7b behaviour is a recorded
 interim, and removal fails closed. But it is the gap between what an operator
