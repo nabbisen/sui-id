@@ -167,7 +167,7 @@ part of the user login path.
 > - **A3 — C18 delete is admin-UI only**, behind a fresh step-up, and only for a
 >   provider already disabled. The confirmation states how many users'
 >   federated sign-in ends (links cascade, `0038:22`), and the event records
->   that count.
+>   that count. *Narrowed 2026-11-12:* C18 also refuses a provider that a `[[federation_providers]]` block still names, because startup's C16 would otherwise recreate it, with a new id and no links, on the next restart. The refusal says to remove the block and restart first. `@nabbisen`: *"Both your recommendations are accepted."*, on [`../handoffs/096-upstream-oidc-federation/096-b2-login-screen-buttons-decision-2026-11-12.md`](../handoffs/096-upstream-oidc-federation/096-b2-login-screen-buttons-decision-2026-11-12.md) §4.
 > - **A4 — C23's trust policy is exactly the policy digest's nine fields** (`:424-435`, below). A change to any of them, `allowed_origins` included, goes through C23 and leaves the provider disabled until it is re-checked and re-enabled. **C24 folds into C23**, and `federation.provider.allowed_origins_changed` is no longer written. `display_name` is not trust policy and updates without disabling.
 >   *Corrected 2026-11-11.* As first accepted, A4 listed five fields of its own and kept `allowed_origins` under C24 with no disable. That list was the architect's, taken from the startup code's warnings rather than from this RFC, and it is superseded. RFC 134's requirement, a change path that keeps links (`rfcs/done/134-federation-egress-is-a-policy.md:130-142`), is still met: C23 disables and keeps links.
 >   `@nabbisen`: *"Your recommendation is accepted."*, on

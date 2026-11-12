@@ -1,8 +1,10 @@
 # RFC 096-B2 — the login screen has no federation buttons, and one question for S6
 
-> ## Whose turn it is: **yours**, for two decisions (§3 and §4).
-> S5 is unaffected and is being committed. **S6 is not dispatched until §4 is
-> answered**, because §4 decides its precondition.
+> ## Accepted 2026-11-12. `@nabbisen`: *"Both your recommendations are accepted."*
+> **§3:** the login-page buttons are built in cycle L, as **S5b**, which is dispatched —
+> [`096-b2-stage5b-the-login-page-buttons-2026-11-12.md`](096-b2-stage5b-the-login-page-buttons-2026-11-12.md).
+> **§4:** C18 also refuses a provider a configuration block still names. That
+> is recorded in RFC 096's A3, at `:170`, and S6 builds it.
 
 **Prepared by.** The architect, 2026-11-12, while reviewing S5.
 
