@@ -34,6 +34,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   RFC 004 described from the start: until now, federated sign-in could
   only be started by typing `/auth/federated/{slug}/start` directly into
   the browser. A disabled provider offers no button.
+- **Delete a federation provider.** From its row on the Federation
+  providers page, an administrator can delete a provider that is both
+  disabled and no longer named by any `[[federation_providers]]` config
+  block — the confirmation states exactly how many users' federated
+  sign-in ends, and the delete cannot be undone. A provider that is
+  still enabled, or still configured, cannot be deleted; the message
+  says what to do first.
+- **Unlink a user from a federation provider.** From a user's own admin
+  page, an administrator can see every federation provider that user
+  has signed in through and unlink any one of them. **An unlink cannot be
+  undone in this release:** nothing in sui-id re-links a user, so the
+  confirmation is marked irreversible. Unlinking also does not end the
+  user's open sessions or the tokens already issued to applications,
+  since sessions do not record how they were opened. The confirmation says
+  so, and that disabling the account ends both.
 
 ### Changed
 

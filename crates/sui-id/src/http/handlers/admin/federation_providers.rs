@@ -17,6 +17,7 @@ use super::forms::ConfirmedForm;
 use super::with_csrf_cookie;
 use crate::errors::HttpError;
 use crate::federation_preflight::{self, CheckAndEnableError, PreflightError};
+use crate::federation_provider_admin::{self, DeleteProviderError};
 use crate::handlers::{AppStateExt, CurrentAdmin, CurrentAdminOrAuditor};
 use axum::Form;
 use axum::extract::{Path, Query, State};
@@ -32,9 +33,12 @@ use sui_id_store::models::ValidationStatus;
 use sui_id_store::repos::{federation_link, federation_provider};
 use sui_id_web::{
     Flash, FlashKind,
-    pages::{ConfirmDisableFederationProviderData, ConfirmEnableFederationProviderData},
-    render_confirm_disable_federation_provider, render_confirm_enable_federation_provider,
-    render_federation_providers,
+    pages::{
+        ConfirmDeleteFederationProviderData, ConfirmDisableFederationProviderData,
+        ConfirmEnableFederationProviderData,
+    },
+    render_confirm_delete_federation_provider, render_confirm_disable_federation_provider,
+    render_confirm_enable_federation_provider, render_federation_providers,
 };
 
 fn parse_provider_id(id: &str) -> Result<FederationProviderId, HttpError> {
@@ -108,6 +112,20 @@ fn disable_error_text(
     }
 }
 
+/// RFC 096-B2 S6 §C: one i18n key per [`DeleteProviderError`] variant.
+fn delete_provider_error_text(
+    e: DeleteProviderError,
+    t: &'static sui_id_i18n::Strings,
+) -> &'static str {
+    match e {
+        DeleteProviderError::NotFound => t.fed_err_not_found,
+        DeleteProviderError::StillEnabled => t.fed_err_not_disabled,
+        DeleteProviderError::StillConfigured => t.fed_err_still_configured,
+        DeleteProviderError::StepUpRequired => t.fed_err_step_up_lapsed,
+        DeleteProviderError::Storage => t.fed_err_storage,
+    }
+}
+
 #[derive(Debug, Deserialize, Default)]
 pub struct FederationProvidersListQuery {
     #[serde(default)]
@@ -123,6 +141,7 @@ fn list_flash(q: &FederationProvidersListQuery, t: &'static sui_id_i18n::Strings
         "enabled" => t.federation_providers_enabled_flash,
         "disabled" => t.federation_providers_disabled_flash,
         "already_disabled" => t.federation_providers_already_disabled_flash,
+        "deleted" => t.federation_providers_deleted_flash,
         _ => return None,
     };
     Some(Flash {
@@ -425,6 +444,103 @@ pub async fn federation_providers_disable_post(
                 }),
             };
             let resp = Html(render_confirm_disable_federation_provider(
+                data,
+                app.is_dev_mode,
+                lang,
+            ))
+            .into_response();
+            Ok(with_csrf_cookie(resp, &app, &token))
+        }
+    }
+}
+
+// ── C18 — delete ──────────────────────────────────────────────────────────
+
+pub async fn federation_providers_delete_confirm_get(
+    state_ext: AppStateExt,
+    CurrentAdminOrAuditor(admin_id, _role, ref actor): CurrentAdminOrAuditor,
+    ctx: crate::handlers::SessionContext,
+    jar: CookieJar,
+    Path(id): Path<String>,
+) -> Result<Response, HttpError> {
+    if !actor.can_write() {
+        return Err(HttpError::html_403_auditor());
+    }
+    let State(app) = state_ext;
+    // Parsed before anything uses it, so `return_to` and the page carry
+    // the canonical id, never the raw path segment (S5 review).
+    let provider_id = parse_provider_id(&id)?;
+    let id = provider_id.to_string();
+    let return_to = format!("/admin/federation-providers/{id}/delete-confirm");
+    if let Err(redirect) = crate::handlers::require_fresh_step_up(&app, &ctx, &return_to).await {
+        return Ok(redirect);
+    }
+    let row = federation_provider::get(&app.db, provider_id)
+        .await
+        .map_err(|e| HttpError::html(CoreError::Store(e)))?;
+    let linked_users_count = federation_link::count_for_provider(&app.db, provider_id)
+        .await
+        .map_err(|e| HttpError::html(CoreError::Store(e)))?;
+    let token = crate::csrf::ensure_token(&jar);
+    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
+    let data = ConfirmDeleteFederationProviderData {
+        provider_id: id,
+        display_name: row.display_name,
+        linked_users_count: linked_users_count.max(0) as usize,
+        csrf_token: token.clone(),
+        flash: None,
+    };
+    let resp = Html(render_confirm_delete_federation_provider(
+        data,
+        app.is_dev_mode,
+        lang,
+    ))
+    .into_response();
+    Ok(with_csrf_cookie(resp, &app, &token))
+}
+
+pub async fn federation_providers_delete_post(
+    state_ext: AppStateExt,
+    CurrentAdmin(admin_id, ref admin_actor): CurrentAdmin,
+    ctx: crate::handlers::SessionContext,
+    jar: CookieJar,
+    Path(id): Path<String>,
+    Form(form): Form<ConfirmedForm>,
+) -> Result<Response, HttpError> {
+    let State(app) = state_ext;
+    crate::handlers::enforce_csrf(&jar, Some(&form.csrf))?;
+    crate::handlers::require_confirmed(&form.confirmed)?;
+    let provider_id = parse_provider_id(&id)?;
+    let id = provider_id.to_string();
+    let return_to = format!("/admin/federation-providers/{id}/delete-confirm");
+    if let Err(redirect) = crate::handlers::require_fresh_step_up(&app, &ctx, &return_to).await {
+        return Ok(redirect);
+    }
+    match federation_provider_admin::delete_provider(&app, admin_actor, provider_id).await {
+        Ok(()) => Ok(Redirect::to("/admin/federation-providers?flash=deleted").into_response()),
+        Err(DeleteProviderError::StepUpRequired) => {
+            Ok(crate::handlers::step_up_redirect(&return_to))
+        }
+        Err(e) => {
+            let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
+            let row = federation_provider::get(&app.db, provider_id)
+                .await
+                .map_err(|e| HttpError::html(CoreError::Store(e)))?;
+            let linked_users_count = federation_link::count_for_provider(&app.db, provider_id)
+                .await
+                .map_err(|e| HttpError::html(CoreError::Store(e)))?;
+            let token = crate::csrf::ensure_token(&jar);
+            let data = ConfirmDeleteFederationProviderData {
+                provider_id: id,
+                display_name: row.display_name,
+                linked_users_count: linked_users_count.max(0) as usize,
+                csrf_token: token.clone(),
+                flash: Some(Flash {
+                    kind: FlashKind::Error,
+                    text: delete_provider_error_text(e, lang.strings()).into(),
+                }),
+            };
+            let resp = Html(render_confirm_delete_federation_provider(
                 data,
                 app.is_dev_mode,
                 lang,

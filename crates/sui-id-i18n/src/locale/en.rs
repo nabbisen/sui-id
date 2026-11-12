@@ -913,7 +913,7 @@ pub static STRINGS_EN: Strings = Strings {
     federation_providers_never_checked: "—",
     federation_providers_linked_yes: "Yes",
     federation_providers_linked_no: "No",
-    federation_providers_not_configured_note: "No configuration block names this provider. Restore it and restart sui-id to enable this provider.",
+    federation_providers_not_configured_note: "No configuration block names this provider. Restore it and restart sui-id to enable it again, or delete it.",
     federation_providers_check_and_enable_button: "Check and enable",
     federation_providers_check_only_button: "Check only",
     federation_providers_disable_button: "Disable",
@@ -940,6 +940,41 @@ pub static STRINGS_EN: Strings = Strings {
     fed_err_changed_since_check: "The provider changed since the check. Run it again.",
     fed_err_check_too_old: "The check is more than 10 minutes old. Run it again.",
     fed_err_step_up_lapsed: "Your identity confirmation expired while the check ran. Confirm it again, then run the check again.",
+
+    federation_providers_delete_button: "Delete",
+    confirm_delete_federation_provider_title: "Delete this federation provider",
+    confirm_delete_federation_provider_impact: |n| {
+        if n == 1 {
+            "1 user will no longer be able to sign in through this provider; their sui-id \
+             account remains."
+                .to_owned()
+        } else {
+            format!(
+                "{n} users will no longer be able to sign in through this provider; their \
+                 sui-id accounts remain."
+            )
+        }
+    },
+    confirm_delete_federation_provider_reversibility: "This cannot be undone.",
+    federation_providers_deleted_flash: "The provider was deleted.",
+    fed_err_still_configured: "A [[federation_providers]] block still names this provider. \
+         Remove it and restart sui-id first, or it would be created again on restart.",
+
+    user_detail_federation_section: "Federated sign-in",
+    user_detail_federation_th_provider: "Provider",
+    user_detail_federation_th_linked: "Linked",
+    user_detail_federation_th_last_used: "Last used",
+    user_detail_federation_unlink_button: "Unlink",
+    user_detail_federation_empty: "No federated sign-in methods linked.",
+    confirm_unlink_federation_title: "Unlink this federated sign-in",
+    confirm_unlink_federation_impact: "{user} will no longer be able to sign in through \
+         {provider}; their account and their other sign-in methods remain. The link cannot \
+         be made again from the admin UI: this release has no way to re-link a user.",
+    confirm_unlink_federation_sessions_note: "Sessions already open, and tokens already \
+         issued to applications, stay valid — unlinking does not end them. To end them, \
+         disable the account on this user's page.",
+    confirm_unlink_federation_sessions_link: "Go to this user's page",
+    fed_err_link_not_found: "This link no longer exists; reload the page.",
 };
 
 // ── Formatters ───────────────────────────────────────────────────────────────

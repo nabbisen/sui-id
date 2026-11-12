@@ -165,6 +165,56 @@ pub fn exists_within_tx(
         .is_some())
 }
 
+/// RFC 096-B2 S6, C18 §A: the exact count the delete confirmation states
+/// in words ("N users will no longer be able to sign in") and the event
+/// records (`federation.provider.deleted`'s `deleted_links` — A3: "the
+/// event records that count"). Read before the delete that cascades
+/// these rows away, in the same transaction.
+pub fn count_for_provider_within_tx(
+    conn: &rusqlite::Connection,
+    provider_id: FederationProviderId,
+) -> StoreResult<i64> {
+    conn.query_row(
+        "SELECT COUNT(*) FROM federation_link WHERE provider_id = ?1",
+        [provider_id.to_string()],
+        |r| r.get(0),
+    )
+    .map_err(StoreError::from)
+}
+
+/// The same count, for a caller outside any transaction — the delete
+/// confirm page, which needs it to state "N users" before an
+/// administrator has committed to anything (`handlers/admin/federation_
+/// providers.rs`). A handler reaching for `Database::with_conn` directly
+/// is exactly what `write-authority.toml`'s allow-list exists to catch;
+/// this is the ordinary async repo function that boundary expects it to
+/// call instead.
+pub async fn count_for_provider(
+    db: &Database,
+    provider_id: FederationProviderId,
+) -> StoreResult<i64> {
+    db.with_conn(move |conn| count_for_provider_within_tx(conn, provider_id))
+        .await
+}
+
+/// RFC 096-B2 S6, C20: delete one link inside the caller's own
+/// transaction, so the pair's `federation_mfa_pending` rows cascade away
+/// with it (migration 0047 `:152-154`) in the same commit as the event.
+/// Unlike the standalone async [`delete`] above (its own `with_conn`,
+/// its own implicit commit), this is composable into `class_a`'s
+/// transaction. Returns the number of rows affected; the caller asserts
+/// exactly 1 or treats 0 as `NotFound`.
+pub fn delete_within_tx(
+    conn: &rusqlite::Connection,
+    user_id: UserId,
+    provider_id: FederationProviderId,
+) -> StoreResult<usize> {
+    Ok(conn.execute(
+        "DELETE FROM federation_link WHERE user_id = ?1 AND provider_id = ?2",
+        params![user_id.to_string(), provider_id.to_string()],
+    )?)
+}
+
 /// RFC 096-B2 S2a Part F: whether *any* user is linked to this provider
 /// at all — `architecture.md:306-307`'s upgrade report needs a yes/no,
 /// not which users. Used by the startup `requires_review` warning, not
@@ -208,28 +258,6 @@ pub fn touch_last_seen_within_tx(
         return Err(StoreError::NotFound);
     }
     Ok(())
-}
-
-/// Remove a single link (user revokes one provider connection).
-pub async fn delete(
-    db: &Database,
-    user_id: UserId,
-    provider_id: FederationProviderId,
-) -> StoreResult<()> {
-    let uid = user_id.to_string();
-    let pid = provider_id.to_string();
-    db.with_conn(move |conn| {
-        let n = conn.execute(
-            "DELETE FROM federation_link WHERE user_id = ?1 AND provider_id = ?2",
-            params![uid, pid],
-        )?;
-        if n == 0 {
-            Err(StoreError::NotFound)
-        } else {
-            Ok(())
-        }
-    })
-    .await
 }
 
 #[cfg(test)]

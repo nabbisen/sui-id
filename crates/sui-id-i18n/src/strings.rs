@@ -1116,4 +1116,40 @@ pub struct Strings {
     pub fed_err_changed_since_check: &'static str,
     pub fed_err_check_too_old: &'static str,
     pub fed_err_step_up_lapsed: &'static str,
+
+    // ---- Admin: federation provider delete (RFC 096-B2 S6, C18) ----
+    pub federation_providers_delete_button: &'static str,
+    pub confirm_delete_federation_provider_title: &'static str,
+    /// `{n}` users whose federated sign-in through this provider ends
+    /// (A3: "the confirmation states how many users' federated sign-in
+    /// ends, in words") — a function, not a template, so English can
+    /// pluralize "user"/"users" correctly (RFC 096-B2 S5's own
+    /// `signing_keys_count_caption` precedent for a counted caption).
+    pub confirm_delete_federation_provider_impact: fn(usize) -> String,
+    pub confirm_delete_federation_provider_reversibility: &'static str,
+    pub federation_providers_deleted_flash: &'static str,
+    /// Precondition 3 (A3 as narrowed 2026-11-12):
+    /// `federation_provider_admin::DeleteProviderError::StillConfigured`.
+    pub fed_err_still_configured: &'static str,
+
+    // ---- Admin: user detail, federated sign-in section (RFC 096-B2 S6, C20) ----
+    pub user_detail_federation_section: &'static str,
+    pub user_detail_federation_th_provider: &'static str,
+    pub user_detail_federation_th_linked: &'static str,
+    pub user_detail_federation_th_last_used: &'static str,
+    pub user_detail_federation_unlink_button: &'static str,
+    pub user_detail_federation_empty: &'static str,
+    pub confirm_unlink_federation_title: &'static str,
+    /// `{user}`/`{provider}` template (the `.replace` precedent,
+    /// `pages/me_security/overview.rs:75`).
+    pub confirm_unlink_federation_impact: &'static str,
+    /// States plainly that unlinking does not end already-open sessions
+    /// (the admin UI "must not let an administrator assume otherwise").
+    pub confirm_unlink_federation_sessions_note: &'static str,
+    /// The link text to that user's own detail page, where their
+    /// sessions are shown.
+    pub confirm_unlink_federation_sessions_link: &'static str,
+    /// `UnlinkFederationProviderError::NotFound`: the link was already
+    /// removed (another request, or a stale page).
+    pub fed_err_link_not_found: &'static str,
 }

@@ -40,6 +40,8 @@ pub mod federation_cache;
 pub mod federation_identity;
 #[path = "http/federation_preflight.rs"]
 pub mod federation_preflight;
+#[path = "http/federation_provider_admin.rs"]
+pub mod federation_provider_admin;
 #[path = "runtime/gc.rs"]
 pub mod gc;
 #[path = "http/handlers.rs"]

@@ -383,6 +383,26 @@ pub enum AuditEventKind {
     /// within_tx`'s own doc comment explains why this differs from
     /// C25's config-removal disable).
     FederationProviderDisabled,
+    /// `federation.provider.deleted` — RFC 096-B2 S6, C18. An
+    /// administrator's action, only against a disabled provider with no
+    /// `[[federation_providers]]` block naming it (the config check lives
+    /// in `sui-id`, not here — `federation_provider_admin::delete_
+    /// provider`'s own doc explains why). Checked-increments
+    /// `activation_generation` (never persisted — the row is gone),
+    /// invalidates pending flows, deletes the row (cascading its links,
+    /// and through them their MFA continuations and ceremonies). Carries
+    /// old/new generation, the deleted-link count, and the invalidated
+    /// flow counts — no issuer, client id, or slug, since the row itself
+    /// is gone.
+    FederationProviderDeleted,
+    /// `federation.link.deleted` — RFC 096-B2 S6, C20. An administrator
+    /// unlinks one user from one provider. The target is the user, not
+    /// the provider; the note carries the provider's id and the number of
+    /// `federation_mfa_pending` rows the delete's own `FOREIGN KEY ...
+    /// ON DELETE CASCADE` (migration 0047 `:152-154`) removed. Does not
+    /// end any already-open session — sessions do not record how they
+    /// were opened.
+    FederationLinkDeleted,
     /// Proof-only — see [`ProofOnlyForbiddenSystemPrincipalCommand`]. Never
     /// emitted; no command can construct this event because no command can
     /// construct a context for that command in the first place.

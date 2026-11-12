@@ -7,6 +7,7 @@
 //! FederationProviderSummary`] itself does not even carry one.
 
 use super::common::*;
+use super::confirm::{ConfirmScreenData, ReversibilityKind, confirm_screen};
 use crate::components::empty_state;
 use leptos::prelude::*;
 use sui_id_shared::api::FederationProviderSummary;
@@ -63,8 +64,16 @@ fn provider_row_view(
         }
         .into_any()
     } else {
+        // RFC 096-B2 S6 §A: "a provider that is disabled and has no
+        // configuration block offers Delete, which nothing else does."
         view! {
-            <td><span class="muted">{t.federation_providers_not_configured_note}</span></td>
+            <td>
+                <p class="muted">{t.federation_providers_not_configured_note}</p>
+                <a href=format!("/admin/federation-providers/{id_str}/delete-confirm")
+                   class="button danger">
+                    {t.federation_providers_delete_button}
+                </a>
+            </td>
         }
         .into_any()
     };
@@ -247,6 +256,63 @@ pub fn render_confirm_disable_federation_provider(
                         </div>
                     </form>
                 </div>
+            </Shell>
+        }
+    })
+}
+
+// ── Delete confirm (RFC 096-B2 S6, C18) ─────────────────────────────────
+
+pub struct ConfirmDeleteFederationProviderData {
+    pub provider_id: String,
+    pub display_name: String,
+    /// A3: "the confirmation states how many users' federated sign-in
+    /// ends."
+    pub linked_users_count: usize,
+    pub csrf_token: String,
+    pub flash: Option<Flash>,
+}
+
+pub fn render_confirm_delete_federation_provider(
+    data: ConfirmDeleteFederationProviderData,
+    dev_mode: bool,
+    lang: sui_id_i18n::Locale,
+) -> String {
+    render(move || {
+        let t = lang.strings();
+        let flash = data.flash;
+        let body = confirm_screen(
+            ConfirmScreenData {
+                title: t.confirm_delete_federation_provider_title.into(),
+                identity: data.display_name.clone(),
+                impact: Some((t.confirm_delete_federation_provider_impact)(
+                    data.linked_users_count,
+                )),
+                badge: Some(ReversibilityKind::Irreversible),
+                reversibility_text: Some(t.confirm_delete_federation_provider_reversibility.into()),
+                action_url: format!("/admin/federation-providers/{}/delete", data.provider_id),
+                csrf_token: data.csrf_token.clone(),
+                extra_hidden: vec![],
+                include_reason_field: false,
+                reason_required: false,
+                notice: None,
+                button_label: t.federation_providers_delete_button.into(),
+                button_danger: true,
+                cancel_url: "/admin/federation-providers".into(),
+            },
+            lang,
+        );
+        view! {
+            <Shell
+                title=t.confirm_delete_federation_provider_title.to_string()
+                show_nav=true
+                current=Some("federation-providers".to_string())
+                dev_mode=dev_mode
+                lang=lang
+                csrf_token=data.csrf_token.clone()
+            >
+                {flash_banner(flash)}
+                {body}
             </Shell>
         }
     })

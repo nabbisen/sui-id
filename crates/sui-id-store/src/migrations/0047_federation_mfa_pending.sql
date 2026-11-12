@@ -143,12 +143,15 @@ CREATE TABLE IF NOT EXISTS federation_mfa_pending (
     -- creates no link and denies (`link_only`) or provisions a
     -- passwordless user with no local MFA to challenge (
     -- `provision_on_first_login`, amended RFC 094 F04) -- so no RFC path
-    -- reaches this table before its link exists. `federation_link::
-    -- delete` (repos/federation_link.rs:162, self-service unlink) has no
-    -- caller today -- grepped, not assumed -- so the unlink cascade is a
-    -- property for when it is wired, not one exercised yet;
-    -- `federation_provider::delete` (repos/federation_provider.rs:207) is
-    -- live today.
+    -- reaches this table before its link exists. RFC 096-B2 S6 (C20)
+    -- wires this cascade in production: `federation_link::delete_
+    -- within_tx` (repos/federation_link.rs), called only from
+    -- `commands::unlink_federation_provider`, deletes the link an
+    -- administrator unlinks, and this `FOREIGN KEY` is what removes the
+    -- pair's own pending rows in the same statement. The free-standing
+    -- async `delete` this comment used to name had no caller at the
+    -- time it was written and has since been removed, superseded by
+    -- the real production path.
     FOREIGN KEY (user_id, provider_id)
         REFERENCES federation_link (user_id, provider_id)
         ON DELETE CASCADE

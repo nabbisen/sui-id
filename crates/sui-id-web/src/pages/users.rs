@@ -2,6 +2,7 @@
 
 use super::audit::audit_row_view;
 use super::common::*;
+use super::confirm::{ConfirmScreenData, ReversibilityKind, confirm_screen};
 use crate::components::empty_state;
 use crate::layout::Shell;
 use leptos::prelude::*;
@@ -197,6 +198,9 @@ pub struct UserDetailData {
     pub passkey_count: usize,
     pub sessions: Vec<UserDetailSession>,
     pub recent_audit: Vec<sui_id_shared::api::AuditLogEntryDto>,
+    /// RFC 096-B2 S6 §B: this user's federation links, for the
+    /// "Federated sign-in" section.
+    pub federated_links: Vec<UserDetailFederatedLink>,
     pub dev_mode: bool,
     pub csrf_token: String,
 }
@@ -205,6 +209,16 @@ pub struct UserDetailSession {
     pub started: chrono::DateTime<chrono::Utc>,
     pub expires: chrono::DateTime<chrono::Utc>,
     pub factors: String,
+}
+
+/// RFC 096-B2 S6 §B: one row of the user-detail "Federated sign-in"
+/// section — the provider's own `display_name` and `id` (for the
+/// Unlink link's own URL), and when the link was made/last used.
+pub struct UserDetailFederatedLink {
+    pub provider_id: String,
+    pub provider_display_name: String,
+    pub linked_at: chrono::DateTime<chrono::Utc>,
+    pub last_seen_at: chrono::DateTime<chrono::Utc>,
 }
 
 pub fn render_user_detail(
@@ -253,6 +267,42 @@ pub fn render_user_detail(
             .recent_audit
             .iter()
             .map(|e| audit_row_view(t, e.clone()))
+            .collect();
+
+        // RFC 096-B2 S6 §B: Unlink is admin-only; an auditor sees the
+        // same rows with no action column at all (same shape the
+        // federation-providers list already uses for its own actions).
+        let federated_link_rows: Vec<_> = data
+            .federated_links
+            .iter()
+            .map(|l| {
+                let linked_at = fmt_time(l.linked_at);
+                let last_seen_at = fmt_time(l.last_seen_at);
+                let unlink_cell = if can_write {
+                    let unlink_url = format!(
+                        "/admin/users/{uid}/federation/{}/unlink-confirm",
+                        l.provider_id
+                    );
+                    view! {
+                        <td>
+                            <a href=unlink_url class="button secondary">
+                                {t.user_detail_federation_unlink_button}
+                            </a>
+                        </td>
+                    }
+                    .into_any()
+                } else {
+                    view! { <td></td> }.into_any()
+                };
+                view! {
+                    <tr>
+                        <td>{l.provider_display_name.clone()}</td>
+                        <td class="muted">{linked_at}</td>
+                        <td class="muted">{last_seen_at}</td>
+                        {unlink_cell}
+                    </tr>
+                }
+            })
             .collect();
 
         let disable_confirm_url = format!("/admin/users/{uid}/disable-confirm");
@@ -317,6 +367,31 @@ pub fn render_user_detail(
                                 }.into_any()
                             } else {
                                 view! { <tbody>{session_rows}</tbody> }.into_any()
+                            }}
+                        </table>
+                    </div>
+                </section>
+
+                <section class="mb-4">
+                    <h2>{t.user_detail_federation_section}</h2>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>{t.user_detail_federation_th_provider}</th>
+                                    <th>{t.user_detail_federation_th_linked}</th>
+                                    <th>{t.user_detail_federation_th_last_used}</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            {if federated_link_rows.is_empty() {
+                                view! {
+                                    <tbody><tr><td colspan="4" class="muted center-pad-4">
+                                        {t.user_detail_federation_empty}
+                                    </td></tr></tbody>
+                                }.into_any()
+                            } else {
+                                view! { <tbody>{federated_link_rows}</tbody> }.into_any()
                             }}
                         </table>
                     </div>
@@ -404,6 +479,77 @@ pub fn render_user_detail(
                         </section>
                     }
                 })}
+            </Shell>
+        }
+    })
+}
+
+// ── Unlink confirm (RFC 096-B2 S6, C20) ─────────────────────────────────
+
+pub struct ConfirmUnlinkFederationData {
+    pub user_id: String,
+    pub username: String,
+    pub provider_id: String,
+    pub provider_display_name: String,
+    pub csrf_token: String,
+    pub flash: Option<Flash>,
+}
+
+pub fn render_confirm_unlink_federation(
+    data: ConfirmUnlinkFederationData,
+    dev_mode: bool,
+    lang: sui_id_i18n::Locale,
+) -> String {
+    render(move || {
+        let t = lang.strings();
+        let flash = data.flash;
+        let impact = t
+            .confirm_unlink_federation_impact
+            .replace("{user}", &data.username)
+            .replace("{provider}", &data.provider_display_name);
+        let identity = format!("{} — {}", data.username, data.provider_display_name);
+        let user_url = format!("/admin/users/{}", data.user_id);
+        let body = confirm_screen(
+            ConfirmScreenData {
+                title: t.confirm_unlink_federation_title.into(),
+                identity,
+                impact: Some(impact),
+                // Irreversible: C19 is withdrawn (RFC 096 A1) and this
+                // release has no way to re-link, so nothing in the product
+                // can undo an unlink (S6 review).
+                badge: Some(ReversibilityKind::Irreversible),
+                reversibility_text: None,
+                action_url: format!(
+                    "/admin/users/{}/federation/{}/unlink",
+                    data.user_id, data.provider_id
+                ),
+                csrf_token: data.csrf_token.clone(),
+                extra_hidden: vec![],
+                include_reason_field: false,
+                reason_required: false,
+                notice: None,
+                button_label: t.user_detail_federation_unlink_button.into(),
+                button_danger: true,
+                cancel_url: user_url.clone(),
+            },
+            lang,
+        );
+        view! {
+            <Shell
+                title=t.confirm_unlink_federation_title.to_string()
+                show_nav=true
+                current=Some("users".to_string())
+                dev_mode=dev_mode
+                lang=lang
+                csrf_token=data.csrf_token.clone()
+            >
+                {flash_banner(flash)}
+                {body}
+                <p class="muted max-w-card">
+                    {t.confirm_unlink_federation_sessions_note}
+                    " "
+                    <a href=user_url>{t.confirm_unlink_federation_sessions_link}</a>
+                </p>
             </Shell>
         }
     })

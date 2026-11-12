@@ -625,6 +625,30 @@ pub fn disable_within_tx(
     Ok(n)
 }
 
+/// RFC 096-B2 S6, C18. The guarded `DELETE` RFC 096 `:452-454` describes:
+/// the row's current (pre-increment) `activation_generation`, re-checked
+/// here the same way every other guarded write in this file re-checks
+/// its own counter, and `enabled = 0` (precondition 2, re-checked even
+/// though the caller already read and checked it, for the identical
+/// TOCTOU reason `disable_within_tx`'s own `WHERE` guards its counter).
+/// The new (incremented) generation is never written anywhere — there is
+/// no row left to hold it — it exists only for the event's own old/new
+/// pair (RFC 094 `:536`: "C18 records old/new generation"). Cascades to
+/// every `federation_link` row for this provider (migration 0038 `:22`),
+/// and through each of those, to its own `federation_mfa_pending` rows
+/// (migration 0047 `:152-154`) and, through them, to
+/// `federation_webauthn_ceremony`.
+pub fn delete_within_tx(
+    tx: &rusqlite::Transaction<'_>,
+    id: FederationProviderId,
+    old_activation_generation: i64,
+) -> StoreResult<usize> {
+    Ok(tx.execute(
+        "DELETE FROM federation_provider WHERE id = ?1 AND activation_generation = ?2 AND enabled = 0",
+        params![id.to_string(), old_activation_generation],
+    )?)
+}
+
 /// RFC 096-B2 S2b Part D, C26. `display_name` is not trust policy (RFC
 /// 096 `:434`) — updates without disabling, checked-incrementing
 /// nothing, invalidating nothing. The one-column counterpart to

@@ -296,10 +296,13 @@ release.*
 
 The first four rows are startup provisioning, not an administrator
 action: no session, `system_principal: permitted` — the same shape
-`client.registration_token.revoked` (C22) uses. The last two
-(`enabled`/`disabled`, RFC 096-B2 S4, command `C17`) are the opposite
-shape: an administrator action, a real session, `system_principal:
-forbidden`, step-up evidence recorded like K01's.
+`client.registration_token.revoked` (C22) uses. The last four
+(RFC 096-B2 S4/S6, commands `C17`/`C18`) are the opposite shape: an
+administrator action, a real session, `system_principal: forbidden`,
+step-up evidence recorded like K01's. `federation.link.deleted` (C20)
+is grouped here rather than under its own `federation.link.*` heading —
+there is no other member yet, and it is this same stage's own other
+half (C18 and C20 share the admin surface's one seam pattern).
 
 | Event name | Operation | Actor | Target | Note fields | Class |
 |---|---|---|---|---|---|
@@ -309,6 +312,8 @@ forbidden`, step-up evidence recorded like K01's.
 | `federation.provider.display_name_changed` | A configured `display_name` that differs from the stored one is written over it at startup, without disabling (not trust policy — command `C26`) | — | provider id | none | A |
 | `federation.provider.enabled` | An administrator enables a disabled provider after a fresh preflight check, consumed via `BEGIN IMMEDIATE` (RFC 096-B2 S4, command `C17`) | administrator | provider id | `config_version=…`, `old_activation_generation=…`, `new_activation_generation=…`, `metadata_fingerprint=…`, `jwks_fingerprint=…` (both hex; never the digest or `observed_at` — RFC 096 `:436-437`); `step_up` (required) | A |
 | `federation.provider.disabled` | An administrator disables a currently enabled provider: generation incremented, evidence cleared, flows invalidated (`validation_status` untouched — RFC 096-B2 S4 §B, command `C17`) | administrator | provider id | `old_activation_generation=…`, `new_activation_generation=…`, `invalidated_login_attempts=…`, `invalidated_mfa_pending=…`, `invalidated_ceremonies=…`; `step_up` (required) | A |
+| `federation.provider.deleted` | An administrator deletes a provider that is disabled and named by no `[[federation_providers]]` block (amendment A3 as narrowed 2026-11-12, command `C18`); cascades its links, and through them their MFA continuations and ceremonies | administrator | provider id | `old_activation_generation=…`, `new_activation_generation=…` (checked-incremented, never persisted), `deleted_links=…`, `invalidated_login_attempts=…`, `invalidated_mfa_pending=…`, `invalidated_ceremonies=…`; `step_up` (required) | A |
+| `federation.link.deleted` | An administrator unlinks one user from one provider, from that user's own admin page (RFC 096 amendment A1, command `C20`); does not end any already-open session | administrator | **user id** (not the provider) | `provider_id=…`, `invalidated_continuations=…` (`federation_mfa_pending` rows cascaded away, every status); `step_up` (required) | A |
 
 **`federation.provider.created` is RFC 094 M2b wave 3**, declared in
 `contracts/write-commands.toml` and emitted by nothing before that wave
@@ -321,11 +326,12 @@ now covers, not a write of its own (C24 folded into C23 — see `docs/src/
 reference/audit-events.md`'s Retired events). `federation.provider.
 removed_from_configuration` and `federation.provider.display_name_
 changed` are both wholly new, naming behavior this stage builds for the
-first time. **The last two rows are RFC 096-B2 S4.** No operator can
-reach either yet — `check_and_enable` and `disable_federation_provider`
-have no caller but their own tests until S5 builds the admin surface —
-so neither appears in `CHANGELOG.md` yet, the same way a sealed command
-with no caller never has before this stage's own dispatch required one.
+first time. **`federation.provider.enabled`/`.disabled` are RFC 096-B2
+S4**, reachable by an operator since S5 built the admin surface
+(`/admin/federation-providers`) — both are in `CHANGELOG.md`.
+**`federation.provider.deleted`/`federation.link.deleted` are RFC
+096-B2 S6**, reachable from the same page and, for the link, from a
+linked user's own admin page.
 
 ### Federation sign-in (`auth.federation.*`, RFC 004)
 

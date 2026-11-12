@@ -7661,6 +7661,390 @@ impl From<StoreError> for DisableFederationProviderErrorOrNoChange {
     }
 }
 
+// ── C18 — federation provider delete ──────────────────────────────────────
+
+static C18_DELETED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::FederationProviderDeleted,
+    name: "federation.provider.deleted",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[
+        AttributeSpec {
+            name: "old_activation_generation",
+            description: "the deleted provider's generation just before this delete",
+            required: true,
+        },
+        AttributeSpec {
+            name: "new_activation_generation",
+            description: "the checked-incremented generation, never persisted (RFC 094 `:536`)",
+            required: true,
+        },
+        AttributeSpec {
+            name: "deleted_links",
+            description: "federation_link rows deleted by the cascade (RFC 096 `:452-454`)",
+            required: true,
+        },
+        AttributeSpec {
+            name: "invalidated_login_attempts",
+            description: "pending/exchanging federation_login_attempt rows terminalized",
+            required: true,
+        },
+        AttributeSpec {
+            name: "invalidated_mfa_pending",
+            description: "pending federation_mfa_pending rows invalidated before the delete",
+            required: true,
+        },
+        AttributeSpec {
+            name: "invalidated_ceremonies",
+            description: "federation_webauthn_ceremony rows removed before the delete",
+            required: true,
+        },
+        STEP_UP_ATTRIBUTE,
+    ],
+};
+
+crate::declare_write_command! {
+    /// C18 — federation-provider delete (RFC 096-B2 S6, amendment A3 as
+    /// narrowed 2026-11-12). Its caller is the administrator's web
+    /// delete action (`sui_id::federation_provider_admin::delete_
+    /// provider`, the one legitimate caller — a source-scope test pins
+    /// that), behind a fresh step-up, so the administrator is the
+    /// actor; no CLI or scheduled delete exists.
+    command C18 = "C18" {
+        system_principal: forbidden;
+        enum C18Event {
+            Deleted {
+                provider_id: FederationProviderId,
+                old_activation_generation: i64,
+                new_activation_generation: i64,
+                deleted_links: i64,
+                invalidated: InvalidatedFlowCounts,
+                step_up: SessionStepUpEvidence,
+            } => &C18_DELETED,
+        }
+    }
+}
+
+impl SealedCommandEvent<C18> for C18Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Deleted { provider_id, .. } = self;
+        Some(AuditTarget(provider_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Deleted {
+            old_activation_generation,
+            new_activation_generation,
+            deleted_links,
+            invalidated,
+            step_up,
+            ..
+        } = self;
+        AuditAttributes::builder()
+            .attribute(
+                "old_activation_generation",
+                old_activation_generation.to_string(),
+            )
+            .attribute(
+                "new_activation_generation",
+                new_activation_generation.to_string(),
+            )
+            .attribute("deleted_links", deleted_links.to_string())
+            .attribute(
+                "invalidated_login_attempts",
+                invalidated.login_attempts.to_string(),
+            )
+            .attribute(
+                "invalidated_mfa_pending",
+                invalidated.mfa_pending.to_string(),
+            )
+            .attribute("invalidated_ceremonies", invalidated.ceremonies.to_string())
+            .attribute("step_up", step_up.as_attribute())
+            .build()
+    }
+}
+
+/// RFC 096-B2 S6 §A/§D: every way [`delete_federation_provider`] can
+/// refuse. No issuer, client id, slug, or any trust-policy value in any
+/// variant — the row itself is gone by the time this would be reported,
+/// and it carried none of that to begin with (RFC 096 `:452-454`:
+/// "events contain only old/new version or generation and bounded
+/// internal counts").
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeleteFederationProviderError {
+    /// The provider no longer exists.
+    NotFound,
+    /// Precondition 2 (A3): delete is refused for an enabled provider.
+    StillEnabled,
+    /// A step-up was required and is missing or stale.
+    StepUpRequired,
+    /// Any other storage failure; rolled back.
+    Storage,
+}
+
+impl std::fmt::Display for DeleteFederationProviderError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let msg = match self {
+            Self::NotFound => "the provider no longer exists; reload the provider list",
+            Self::StillEnabled => "this provider is still enabled; disable it first",
+            Self::StepUpRequired => {
+                "your identity confirmation has expired; confirm it again, then retry"
+            }
+            Self::Storage => {
+                "the provider could not be deleted; try again, and see the server log if it \
+                 persists"
+            }
+        };
+        write!(f, "{msg}")
+    }
+}
+
+impl std::error::Error for DeleteFederationProviderError {}
+
+impl From<StoreError> for DeleteFederationProviderError {
+    fn from(e: StoreError) -> Self {
+        match e {
+            StoreError::NotFound => Self::NotFound,
+            StoreError::StepUpRequired => Self::StepUpRequired,
+            other => {
+                tracing::error!(error = %other, "C18: storage failure, rolled back");
+                Self::Storage
+            }
+        }
+    }
+}
+
+/// Run C18 (federation-provider delete), RFC 096 `:452-454` built clause
+/// by clause:
+/// 1. re-reads the row; refuses `NotFound` if missing, `StillEnabled` if
+///    enabled (precondition 2 — precondition 3, "no configuration block
+///    names it," is checked by the caller before this is ever reached,
+///    since the store cannot see the configuration);
+/// 2. checked-increments `activation_generation` (never persisted —
+///    there is no row left to hold it; it exists only for the event's
+///    old/new pair);
+/// 3. invalidates pending flows through S2b's shared
+///    `invalidate_provider_flows_within_tx` (needed independently of the
+///    delete's own cascade: `federation_login_attempt` has no `FOREIGN
+///    KEY` to `federation_provider` at all, by design — migration 0046's
+///    own comment — so it would not cascade away on its own);
+/// 4. counts the links the delete is about to cascade away, **before**
+///    deleting, since they would not be countable afterward;
+/// 5. deletes the row, guarded on the exact (pre-increment) generation
+///    and `enabled = 0`;
+/// 6. appends `federation.provider.deleted`.
+pub async fn delete_federation_provider(
+    db: &crate::Database,
+    admin: UserId,
+    session_id: SessionId,
+    provider_id: FederationProviderId,
+    now: DateTime<Utc>,
+) -> Result<crate::registry::Audited<()>, DeleteFederationProviderError> {
+    let context = AuthorizedCommandContext::<C18>::for_authorized_actor(admin, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, C18>| {
+        let step_up = session_step_up_evidence_within_tx(tx.tx(), session_id, admin, now)?;
+
+        let current = crate::repos::federation_provider::get_within_tx(tx.tx(), provider_id)?;
+        if current.enabled {
+            return Err(DeleteFederationProviderError::StillEnabled);
+        }
+        let old_activation_generation = current.activation_generation;
+        let new_activation_generation = old_activation_generation
+            .checked_add(1)
+            .ok_or(DeleteFederationProviderError::Storage)?;
+
+        let invalidated = invalidate_provider_flows_within_tx(tx.tx(), provider_id, now)?;
+        let deleted_links =
+            crate::repos::federation_link::count_for_provider_within_tx(tx.tx(), provider_id)?;
+
+        let affected = crate::repos::federation_provider::delete_within_tx(
+            tx.tx(),
+            provider_id,
+            old_activation_generation,
+        )?;
+        if affected != 1 {
+            return Err(DeleteFederationProviderError::Storage);
+        }
+
+        Ok((
+            (),
+            C18Event::Deleted {
+                provider_id,
+                old_activation_generation,
+                new_activation_generation,
+                deleted_links,
+                invalidated,
+                step_up,
+            },
+        ))
+    })
+    .await
+}
+
+// ── C20 — federation link delete (unlink) ─────────────────────────────────
+
+static C20_DELETED: EventDescriptor = EventDescriptor {
+    kind: AuditEventKind::FederationLinkDeleted,
+    name: "federation.link.deleted",
+    class: AuditClass::Atomic,
+    actor: ActorRequirement::Required,
+    target: TargetRequirement::Required,
+    attributes: &[
+        AttributeSpec {
+            name: "provider_id",
+            description: "the provider the deleted link was to",
+            required: true,
+        },
+        AttributeSpec {
+            name: "invalidated_continuations",
+            description: "federation_mfa_pending rows removed by the cascade (0047 `:152-154`)",
+            required: true,
+        },
+        STEP_UP_ATTRIBUTE,
+    ],
+};
+
+crate::declare_write_command! {
+    /// C20 — federation-link delete, i.e. unlink one user from one
+    /// provider (RFC 096 amendment A1: link create is withdrawn; only
+    /// delete remains). Its caller is the administrator's web unlink
+    /// action (`sui_id::federation_provider_admin::unlink_user_from_
+    /// provider`, the one legitimate caller — a source-scope test pins
+    /// that, the same seam rule as C18), behind a fresh step-up, so the
+    /// administrator is the actor. The target is the user, not the
+    /// provider.
+    command C20 = "C20" {
+        system_principal: forbidden;
+        enum C20Event {
+            Deleted {
+                user_id: UserId,
+                provider_id: FederationProviderId,
+                invalidated_continuations: i64,
+                step_up: SessionStepUpEvidence,
+            } => &C20_DELETED,
+        }
+    }
+}
+
+impl SealedCommandEvent<C20> for C20Event {
+    fn target(&self) -> Option<AuditTarget> {
+        let Self::Deleted { user_id, .. } = self;
+        Some(AuditTarget(user_id.to_string()))
+    }
+
+    fn result(&self) -> AuditResult {
+        AuditResult::Ok
+    }
+
+    fn attributes(&self) -> Result<AuditAttributes, AuditBuildError> {
+        let Self::Deleted {
+            provider_id,
+            invalidated_continuations,
+            step_up,
+            ..
+        } = self;
+        AuditAttributes::builder()
+            .attribute("provider_id", provider_id.to_string())
+            .attribute(
+                "invalidated_continuations",
+                invalidated_continuations.to_string(),
+            )
+            .attribute("step_up", step_up.as_attribute())
+            .build()
+    }
+}
+
+/// RFC 096-B2 S6 §C: every way [`unlink_federation_provider`] can
+/// refuse.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnlinkFederationProviderError {
+    /// No link exists for this `(user_id, provider_id)` pair.
+    NotFound,
+    /// A step-up was required and is missing or stale.
+    StepUpRequired,
+    /// Any other storage failure; rolled back.
+    Storage,
+}
+
+impl std::fmt::Display for UnlinkFederationProviderError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let msg = match self {
+            Self::NotFound => "this link no longer exists; reload the page",
+            Self::StepUpRequired => {
+                "your identity confirmation has expired; confirm it again, then retry"
+            }
+            Self::Storage => {
+                "the link could not be removed; try again, and see the server log if it persists"
+            }
+        };
+        write!(f, "{msg}")
+    }
+}
+
+impl std::error::Error for UnlinkFederationProviderError {}
+
+impl From<StoreError> for UnlinkFederationProviderError {
+    fn from(e: StoreError) -> Self {
+        match e {
+            StoreError::StepUpRequired => Self::StepUpRequired,
+            other => {
+                tracing::error!(error = %other, "C20: storage failure, rolled back");
+                Self::Storage
+            }
+        }
+    }
+}
+
+/// Run C20 (unlink). Counts the pair's `federation_mfa_pending` rows
+/// before deleting the link, since migration 0047's own composite
+/// `FOREIGN KEY ... ON DELETE CASCADE` (`:152-154`) removes them in the
+/// same statement and they would not be countable afterward. Deletes
+/// nothing else: sessions do not record how they were opened, so an
+/// unlink cannot find, let alone end, one opened through this provider
+/// (the admin UI says so explicitly, and links to the user's sessions
+/// instead).
+pub async fn unlink_federation_provider(
+    db: &crate::Database,
+    admin: UserId,
+    session_id: SessionId,
+    user_id: UserId,
+    provider_id: FederationProviderId,
+    now: DateTime<Utc>,
+) -> Result<crate::registry::Audited<()>, UnlinkFederationProviderError> {
+    let context = AuthorizedCommandContext::<C20>::for_authorized_actor(admin, None);
+    db.class_a(context, move |tx: &mut ClassATx<'_, C20>| {
+        let step_up = session_step_up_evidence_within_tx(tx.tx(), session_id, admin, now)?;
+
+        let invalidated_continuations =
+            crate::repos::federation_mfa_pending::count_for_pair_within_tx(
+                tx.tx(),
+                user_id,
+                provider_id,
+            )?;
+        let affected =
+            crate::repos::federation_link::delete_within_tx(tx.tx(), user_id, provider_id)?;
+        if affected != 1 {
+            return Err(UnlinkFederationProviderError::NotFound);
+        }
+
+        Ok((
+            (),
+            C20Event::Deleted {
+                user_id,
+                provider_id,
+                invalidated_continuations,
+                step_up,
+            },
+        ))
+    })
+    .await
+}
+
 // ── C23 — federation provider trust-policy replacement ───────────────────
 //
 // RFC 096-B2 S2b. RFC 094 `:547-575`'s own text, built clause by clause

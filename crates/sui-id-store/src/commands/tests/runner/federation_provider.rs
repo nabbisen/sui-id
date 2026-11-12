@@ -1635,3 +1635,469 @@ async fn c17_reads_guard_at_only_after_it_holds_the_write_lock() {
         .expect("get");
     assert!(!stored.enabled, "nothing was enabled");
 }
+
+// ── C18 — federation provider delete ────────────────────────────────────
+
+use crate::commands::{DeleteFederationProviderError, UnlinkFederationProviderError};
+
+async fn seed_link(db: &Database, user_id: UserId, provider_id: FederationProviderId) {
+    let now = Utc::now();
+    repos::federation_link::upsert(
+        db,
+        crate::models::FederationLinkRow {
+            user_id,
+            provider_id,
+            upstream_sub: format!("sub-{user_id}"),
+            upstream_email: None,
+            linked_at: now,
+            last_seen_at: now,
+        },
+    )
+    .await
+    .expect("seed link");
+}
+
+/// Migration 0048's own partial `UNIQUE (user_id) WHERE status IN
+/// ('pending', 'exhausted')` index means a user can have at most one row
+/// in either of those two statuses at a time -- a test wanting more than
+/// one row for the same user must give every row after the first a
+/// different, non-competing status.
+async fn seed_mfa_pending_for_with_status(
+    db: &Database,
+    user_id: UserId,
+    provider: &crate::models::FederationProviderRow,
+    status: crate::models::FederationMfaPendingStatus,
+) {
+    let now = Utc::now();
+    let provider_id = provider.id;
+    let provider_config_version = provider.config_version;
+    let provider_activation_generation = provider.activation_generation;
+    let continuation_sealed =
+        (status == crate::models::FederationMfaPendingStatus::Pending).then(|| vec![0u8; 16]);
+    db.with_tx(move |tx| {
+        crate::repos::federation_mfa_pending::insert_within_tx(
+            tx,
+            &crate::models::FederationMfaPendingRow {
+                id: sui_id_shared::ids::FederationMfaPendingId::new(),
+                provider_id,
+                provider_config_version,
+                provider_activation_generation,
+                user_id,
+                continuation_sealed,
+                next_path: None,
+                browser_binding_sha256: [0u8; 32],
+                csrf_binding_sha256: [0u8; 32],
+                failure_count: 0,
+                status,
+                created_at: now,
+                expires_at: now + chrono::Duration::seconds(300),
+            },
+        )
+    })
+    .await
+    .expect("seed mfa pending");
+}
+
+async fn seed_mfa_pending_for(
+    db: &Database,
+    user_id: UserId,
+    provider: &crate::models::FederationProviderRow,
+) {
+    seed_mfa_pending_for_with_status(
+        db,
+        user_id,
+        provider,
+        crate::models::FederationMfaPendingStatus::Pending,
+    )
+    .await;
+}
+
+async fn an_ordinary_user(db: &Database) -> UserId {
+    let user = a_user();
+    repos::users::create(db, &user).await.expect("create user");
+    user.id
+}
+
+async fn link_exists(db: &Database, user_id: UserId, provider_id: FederationProviderId) -> bool {
+    db.with_conn(move |conn| repos::federation_link::exists_within_tx(conn, user_id, provider_id))
+        .await
+        .expect("exists check")
+}
+
+#[tokio::test]
+async fn delete_refuses_an_enabled_provider() {
+    let db = fresh_db();
+    let row = a_disabled_row_with_recorded_policy("c18-enabled");
+    repos::federation_provider::create_enabled_for_test(&db, &row, None)
+        .await
+        .expect("seed enabled provider");
+    let (admin, session_id) = an_admin_session(&db).await;
+
+    let result =
+        crate::commands::delete_federation_provider(&db, admin, session_id, row.id, Utc::now())
+            .await;
+    assert!(matches!(
+        result,
+        Err(DeleteFederationProviderError::StillEnabled)
+    ));
+    assert!(
+        repos::federation_provider::get(&db, row.id).await.is_ok(),
+        "nothing was deleted"
+    );
+}
+
+#[tokio::test]
+async fn delete_refuses_a_nonexistent_provider() {
+    let db = fresh_db();
+    let (admin, session_id) = an_admin_session(&db).await;
+    let ghost = FederationProviderId::new();
+
+    let result =
+        crate::commands::delete_federation_provider(&db, admin, session_id, ghost, Utc::now())
+            .await;
+    assert!(matches!(
+        result,
+        Err(DeleteFederationProviderError::NotFound)
+    ));
+}
+
+#[tokio::test]
+async fn delete_succeeds_and_cascades_links_and_continuations_but_keeps_the_users() {
+    let db = fresh_db();
+    let row = a_disabled_row_with_recorded_policy("c18-happy");
+    repos::federation_provider::create(&db, &row, None)
+        .await
+        .expect("seed disabled provider");
+    let (admin, session_id) = an_admin_session(&db).await;
+
+    let user_a = an_ordinary_user(&db).await;
+    let user_b = an_ordinary_user(&db).await;
+    let user_c = an_ordinary_user(&db).await;
+    for u in [user_a, user_b, user_c] {
+        seed_link(&db, u, row.id).await;
+    }
+    seed_mfa_pending_for(&db, user_a, &row).await;
+    seed_mfa_pending_for(&db, user_b, &row).await;
+
+    let before = audit_rows(&db).await;
+    let audited =
+        crate::commands::delete_federation_provider(&db, admin, session_id, row.id, Utc::now())
+            .await
+            .expect("must succeed");
+    audited.into_inner();
+
+    assert!(
+        matches!(
+            repos::federation_provider::get(&db, row.id).await,
+            Err(StoreError::NotFound)
+        ),
+        "the provider row is gone"
+    );
+    for u in [user_a, user_b, user_c] {
+        assert!(
+            !link_exists(&db, u, row.id).await,
+            "the link for {u} must be gone"
+        );
+        assert!(
+            repos::users::get(&db, u).await.is_ok(),
+            "the user {u} must still exist -- only the link is deleted"
+        );
+    }
+    let remaining_pending: i64 = db
+        .with_conn(|c| {
+            Ok(
+                c.query_row("SELECT COUNT(*) FROM federation_mfa_pending", [], |r| {
+                    r.get(0)
+                })?,
+            )
+        })
+        .await
+        .expect("count");
+    assert_eq!(remaining_pending, 0, "both pending rows cascaded away");
+
+    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
+    let event = last_event(&db).await;
+    assert_eq!(event.action, "federation.provider.deleted");
+    assert_eq!(event.target.as_deref(), Some(row.id.to_string().as_str()));
+    assert_eq!(event.actor, Some(admin));
+    let note = event.note.expect("note");
+    assert_eq!(
+        crate::registry::note_field(&note, "old_activation_generation").as_deref(),
+        Some("0")
+    );
+    assert_eq!(
+        crate::registry::note_field(&note, "new_activation_generation").as_deref(),
+        Some("1")
+    );
+    assert_eq!(
+        crate::registry::note_field(&note, "deleted_links").as_deref(),
+        Some("3"),
+        "the exact count A3 asks the event to record"
+    );
+    assert_eq!(
+        crate::registry::note_field(&note, "invalidated_mfa_pending").as_deref(),
+        Some("2")
+    );
+    record_exactly_once_coverage("C18");
+}
+
+#[tokio::test]
+async fn deleting_the_same_provider_twice_is_notfound_the_second_time() {
+    let db = fresh_db();
+    let row = a_disabled_row_with_recorded_policy("c18-twice");
+    repos::federation_provider::create(&db, &row, None)
+        .await
+        .expect("seed disabled provider");
+    let (admin, session_id) = an_admin_session(&db).await;
+
+    crate::commands::delete_federation_provider(&db, admin, session_id, row.id, Utc::now())
+        .await
+        .expect("first delete succeeds");
+    let second =
+        crate::commands::delete_federation_provider(&db, admin, session_id, row.id, Utc::now())
+            .await;
+    assert!(
+        matches!(second, Err(DeleteFederationProviderError::NotFound)),
+        "a capability cannot be replayed against a row that no longer exists"
+    );
+}
+
+#[tokio::test]
+async fn c18_injected_failure_before_append_rolls_back_everything() {
+    let db = fresh_db();
+    let row = a_disabled_row_with_recorded_policy("c18-rollback");
+    repos::federation_provider::create(&db, &row, None)
+        .await
+        .expect("seed disabled provider");
+    let (admin, session_id) = an_admin_session(&db).await;
+    let user = an_ordinary_user(&db).await;
+    seed_link(&db, user, row.id).await;
+    let before_audit = latest_audit_action(&db).await;
+
+    db.fault_injector().fail_before_next_append();
+    let result =
+        crate::commands::delete_federation_provider(&db, admin, session_id, row.id, Utc::now())
+            .await;
+    assert!(result.is_err(), "injected failure must surface as Err");
+
+    assert!(
+        repos::federation_provider::get(&db, row.id).await.is_ok(),
+        "the provider must not have survived rollback as deleted"
+    );
+    assert!(
+        link_exists(&db, user, row.id).await,
+        "the link must not have survived rollback as deleted"
+    );
+    assert_eq!(latest_audit_action(&db).await, before_audit);
+    record_rollback_coverage("C18");
+}
+
+// ── C20 — federation link delete (unlink) ───────────────────────────────
+
+#[tokio::test]
+async fn unlink_refuses_a_nonexistent_link() {
+    let db = fresh_db();
+    let row = a_disabled_row_with_recorded_policy("c20-no-link");
+    repos::federation_provider::create(&db, &row, None)
+        .await
+        .expect("seed provider");
+    let (admin, session_id) = an_admin_session(&db).await;
+    let user = an_ordinary_user(&db).await;
+
+    let result = crate::commands::unlink_federation_provider(
+        &db,
+        admin,
+        session_id,
+        user,
+        row.id,
+        Utc::now(),
+    )
+    .await;
+    assert!(matches!(
+        result,
+        Err(UnlinkFederationProviderError::NotFound)
+    ));
+}
+
+#[tokio::test]
+async fn unlink_succeeds_and_cascades_continuations_but_keeps_the_user_and_other_links() {
+    let db = fresh_db();
+    let row_a = a_disabled_row_with_recorded_policy("c20-happy-a");
+    let row_b = a_disabled_row_with_recorded_policy("c20-happy-b");
+    repos::federation_provider::create(&db, &row_a, None)
+        .await
+        .expect("seed provider a");
+    repos::federation_provider::create(&db, &row_b, None)
+        .await
+        .expect("seed provider b");
+    let (admin, session_id) = an_admin_session(&db).await;
+    let user = an_ordinary_user(&db).await;
+    seed_link(&db, user, row_a.id).await;
+    seed_link(&db, user, row_b.id).await;
+    seed_mfa_pending_for(&db, user, &row_a).await;
+    seed_mfa_pending_for_with_status(
+        &db,
+        user,
+        &row_a,
+        crate::models::FederationMfaPendingStatus::Completed,
+    )
+    .await;
+
+    let before = audit_rows(&db).await;
+    let audited = crate::commands::unlink_federation_provider(
+        &db,
+        admin,
+        session_id,
+        user,
+        row_a.id,
+        Utc::now(),
+    )
+    .await
+    .expect("must succeed");
+    audited.into_inner();
+
+    assert!(
+        !link_exists(&db, user, row_a.id).await,
+        "the link to provider a is gone"
+    );
+    assert!(
+        link_exists(&db, user, row_b.id).await,
+        "the link to provider b must remain -- only one pair was unlinked"
+    );
+    assert!(
+        repos::users::get(&db, user).await.is_ok(),
+        "the user must still exist"
+    );
+    let remaining_pending: i64 = db
+        .with_conn(|c| {
+            Ok(
+                c.query_row("SELECT COUNT(*) FROM federation_mfa_pending", [], |r| {
+                    r.get(0)
+                })?,
+            )
+        })
+        .await
+        .expect("count");
+    assert_eq!(
+        remaining_pending, 0,
+        "both continuations for the pair cascaded away"
+    );
+
+    assert_eq!(audit_rows(&db).await, before + 1, "exactly one event");
+    let event = last_event(&db).await;
+    assert_eq!(event.action, "federation.link.deleted");
+    assert_eq!(event.target.as_deref(), Some(user.to_string().as_str()));
+    assert_eq!(event.actor, Some(admin));
+    let note = event.note.expect("note");
+    assert_eq!(
+        crate::registry::note_field(&note, "provider_id").as_deref(),
+        Some(row_a.id.to_string().as_str())
+    );
+    assert_eq!(
+        crate::registry::note_field(&note, "invalidated_continuations").as_deref(),
+        Some("2")
+    );
+    record_exactly_once_coverage("C20");
+}
+
+#[tokio::test]
+async fn unlinking_the_same_pair_twice_is_notfound_the_second_time() {
+    let db = fresh_db();
+    let row = a_disabled_row_with_recorded_policy("c20-twice");
+    repos::federation_provider::create(&db, &row, None)
+        .await
+        .expect("seed provider");
+    let (admin, session_id) = an_admin_session(&db).await;
+    let user = an_ordinary_user(&db).await;
+    seed_link(&db, user, row.id).await;
+
+    crate::commands::unlink_federation_provider(&db, admin, session_id, user, row.id, Utc::now())
+        .await
+        .expect("first unlink succeeds");
+    let second = crate::commands::unlink_federation_provider(
+        &db,
+        admin,
+        session_id,
+        user,
+        row.id,
+        Utc::now(),
+    )
+    .await;
+    assert!(matches!(
+        second,
+        Err(UnlinkFederationProviderError::NotFound)
+    ));
+}
+
+#[tokio::test]
+async fn c20_injected_failure_before_append_rolls_back_everything() {
+    let db = fresh_db();
+    let row = a_disabled_row_with_recorded_policy("c20-rollback");
+    repos::federation_provider::create(&db, &row, None)
+        .await
+        .expect("seed provider");
+    let (admin, session_id) = an_admin_session(&db).await;
+    let user = an_ordinary_user(&db).await;
+    seed_link(&db, user, row.id).await;
+    let before_audit = latest_audit_action(&db).await;
+
+    db.fault_injector().fail_before_next_append();
+    let result = crate::commands::unlink_federation_provider(
+        &db,
+        admin,
+        session_id,
+        user,
+        row.id,
+        Utc::now(),
+    )
+    .await;
+    assert!(result.is_err(), "injected failure must surface as Err");
+
+    assert!(
+        link_exists(&db, user, row.id).await,
+        "the link must not have survived rollback as deleted"
+    );
+    assert_eq!(latest_audit_action(&db).await, before_audit);
+    record_rollback_coverage("C20");
+}
+
+/// S6 review-anticipating check: C18's and C20's store-side refusals
+/// each give a reason and a next step.
+#[test]
+fn c18_and_c20_store_refusals_each_name_a_next_step() {
+    let c18 = [
+        (
+            DeleteFederationProviderError::NotFound.to_string(),
+            "reload the provider list",
+        ),
+        (
+            DeleteFederationProviderError::StillEnabled.to_string(),
+            "disable it first",
+        ),
+        (
+            DeleteFederationProviderError::StepUpRequired.to_string(),
+            "confirm it again",
+        ),
+        (
+            DeleteFederationProviderError::Storage.to_string(),
+            "try again",
+        ),
+    ];
+    let c20 = [
+        (
+            UnlinkFederationProviderError::NotFound.to_string(),
+            "reload the page",
+        ),
+        (
+            UnlinkFederationProviderError::StepUpRequired.to_string(),
+            "confirm it again",
+        ),
+        (
+            UnlinkFederationProviderError::Storage.to_string(),
+            "try again",
+        ),
+    ];
+    for (text, next_step) in c18.iter().chain(c20.iter()) {
+        assert!(text.contains(next_step), "{text:?} lacks {next_step:?}");
+    }
+}

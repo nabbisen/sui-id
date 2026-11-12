@@ -779,13 +779,15 @@ descriptor = ["C17_ENABLED", "C17_DISABLED"]
 [[command]]
 id = "C18"
 class = "A"
-status = "target-absent"  # implemented | target-absent | target-legacy
-sealed = false
+status = "implemented"  # implemented | target-absent | target-legacy
+sealed = true
 owner = "Federation-provider delete"
-rationale = "Dispositioned 2026-11-08 (cycle J stage 10): reserve, against RFC 096-B2, in C19's own words. `delete` now test-gates behind `#[cfg(test)]` (cycle J stage 10 §2: no production caller, confirmed by a full-workspace grep; kept only for this file's own `set_enabled_and_delete` test), so it no longer describes production code at all -- `target-absent`, not `target-legacy`. Generation/evidence-invalidation semantics are RFC 096-B2's and arrive with it."
-mutation_surface = "none -- reserved against RFC 096-B2; today's `federation_provider::delete` (test-only) is not this command"
-files = []
-test_id = "none -- reserved; `federation_provider::delete`'s own test is not this command's"
+rationale = "RFC 096-B2 S6, amendment A3 as narrowed 2026-11-12: `federation.provider.deleted`. An administrator, through the admin UI only, behind a fresh step-up, deletes a provider that is both disabled and named by no `[[federation_providers]]` block -- the config check lives in `sui_id::federation_provider_admin::delete_provider` (the one legitimate caller, pinned by a source-scope test, the same seam S4's `check_and_enable` established), since the store cannot see the configuration. The transaction re-reads and refuses a missing or enabled row, checked-increments `activation_generation` (never persisted -- there is no row left to hold it), invalidates pending flows through S2b's shared invalidation, counts the links about to cascade away, then deletes the row -- cascading its `federation_link` rows (migration 0038 `:22`) and, through them, their own `federation_mfa_pending`/`federation_webauthn_ceremony` rows. The old `#[cfg(test)]`-only `federation_provider::delete` this row used to describe as absent is superseded by the real production `delete_within_tx`."
+mutation_surface = "`federation_provider::get_within_tx`, the shared per-provider flow invalidation (`commands::invalidate_provider_flows_within_tx`), `federation_link::count_for_provider_within_tx`, and `federation_provider::delete_within_tx` (the guarded `DELETE`, cascading) -- via `commands::delete_federation_provider`, called only from `sui_id::federation_provider_admin::delete_provider`"
+files = ["crates/sui-id-store/src/repos/federation_provider.rs", "crates/sui-id-store/src/repos/federation_link.rs", "crates/sui-id-store/src/commands.rs", "crates/sui-id/src/http/federation_provider_admin.rs", "crates/sui-id/src/http/handlers/admin/federation_providers.rs"]
+test_id = "`delete_refuses_an_enabled_provider`, `delete_refuses_a_nonexistent_provider`, `delete_succeeds_and_cascades_links_and_continuations_but_keeps_the_users`, `deleting_the_same_provider_twice_is_notfound_the_second_time`, `c18_injected_failure_before_append_rolls_back_everything`, `c18_and_c20_are_each_named_in_exactly_their_definition_and_one_shared_consumer` (scope), `a_configured_provider_offers_no_delete_and_its_post_is_refused`, `delete_through_the_admin_surface_states_the_count_and_records_the_audit_row` (e2e)"
+event = ["federation.provider.deleted"]
+descriptor = ["C18_DELETED"]
 
 [[command]]
 id = "C19"
@@ -801,13 +803,15 @@ test_id = "none -- withdrawn (amendment A1); no command, so no test"
 [[command]]
 id = "C20"
 class = "A"
-status = "target-absent"  # implemented | target-absent | target-legacy
-sealed = false
+status = "implemented"  # implemented | target-absent | target-legacy
+sealed = true
 owner = "Federation-link delete"
-rationale = "Dispositioned 2026-10-31 (cycle I stage 5): reserve, against RFC 096-B2 (`rfcs/accepted/096-upstream-oidc-federation-validation.md:131-132`, \"link create/delete\"; see C19's rationale for the id-list omission this stage reported rather than fixed). `federation_link::delete` has no caller anywhere in `crates/` -- confirmed by a full-workspace grep -- but is kept, not removed: 096-B2 is Accepted, not speculative, and names this exact command, unlike C12/C13, which reserved against nothing. No event is emitted; none is invented ahead of 096-B2's own naming."
-mutation_surface = "none -- reserved against RFC 096-B2; `federation_link::delete` kept for it, not yet called"
-files = []
-test_id = "none -- reserved"
+rationale = "RFC 096-B2 S6, amendment A1 (link create withdrawn; only delete remains): `federation.link.deleted`. An administrator unlinks one user from one provider, behind a fresh step-up, from the user's own admin page. No configuration-dependent precondition exists, unlike C18, but the same seam rule still applies: `sui_id::federation_provider_admin::unlink_user_from_provider` is the one legitimate caller, pinned by the same source-scope test as C18, for the same defense-in-depth reason every admin-mutating sealed command gets one. The transaction counts the pair's `federation_mfa_pending` rows (every status, since migration 0047's own composite `FOREIGN KEY ... ON DELETE CASCADE`, `:152-154`, has no status filter) before deleting the link, which cascades them away in the same statement. The target is the user, not the provider. Does not end any already-open session -- sessions do not record how they were opened, and the admin UI says so explicitly rather than implying otherwise. The old `federation_link::delete` this row used to describe as uncalled is superseded by the real production `delete_within_tx`."
+mutation_surface = "`federation_mfa_pending::count_for_pair_within_tx` and `federation_link::delete_within_tx` (the guarded `DELETE`, cascading the pair's own continuations) -- via `commands::unlink_federation_provider`, called only from `sui_id::federation_provider_admin::unlink_user_from_provider`"
+files = ["crates/sui-id-store/src/repos/federation_link.rs", "crates/sui-id-store/src/repos/federation_mfa_pending.rs", "crates/sui-id-store/src/commands.rs", "crates/sui-id/src/http/federation_provider_admin.rs", "crates/sui-id/src/http/handlers/admin/users.rs"]
+test_id = "`unlink_refuses_a_nonexistent_link`, `unlink_succeeds_and_cascades_continuations_but_keeps_the_user_and_other_links`, `unlinking_the_same_pair_twice_is_notfound_the_second_time`, `c20_injected_failure_before_append_rolls_back_everything`, `c18_and_c20_are_each_named_in_exactly_their_definition_and_one_shared_consumer` (scope), `user_detail_lists_the_link_admin_only_unlinks_auditor_read_only`, `unlink_through_the_admin_surface_keeps_the_user_and_records_the_audit_row` (e2e, asserts both the audit row and the no-link sign-in path afterward)"
+event = ["federation.link.deleted"]
+descriptor = ["C20_DELETED"]
 
 [[command]]
 id = "C21"

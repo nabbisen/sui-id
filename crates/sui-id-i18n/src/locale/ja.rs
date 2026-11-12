@@ -910,7 +910,7 @@ pub static STRINGS_JA: Strings = Strings {
     federation_providers_never_checked: "—",
     federation_providers_linked_yes: "あり",
     federation_providers_linked_no: "なし",
-    federation_providers_not_configured_note: "このプロバイダーを指す設定ブロックがありません。設定を復元して sui-id を再起動すると有効化できます。",
+    federation_providers_not_configured_note: "このプロバイダーを指す設定ブロックがありません。設定を復元して sui-id を再起動すると再度有効化できます。または削除することもできます。",
     federation_providers_check_and_enable_button: "確認して有効化",
     federation_providers_check_only_button: "確認のみ",
     federation_providers_disable_button: "無効化",
@@ -937,6 +937,29 @@ pub static STRINGS_JA: Strings = Strings {
     fed_err_changed_since_check: "確認後にプロバイダーが変更されました。もう一度実行してください。",
     fed_err_check_too_old: "確認から 10 分以上経過しています。もう一度実行してください。",
     fed_err_step_up_lapsed: "確認の実行中に本人確認が失効しました。再度本人確認を行い、確認をもう一度実行してください。",
+
+    federation_providers_delete_button: "削除",
+    confirm_delete_federation_provider_title: "このフェデレーションプロバイダーを削除",
+    confirm_delete_federation_provider_impact: |n| {
+        format!(
+            "{n} 人のユーザーがこのプロバイダー経由でサインインできなくなります。sui-id アカウント自体は残ります。"
+        )
+    },
+    confirm_delete_federation_provider_reversibility: "この操作は取り消せません。",
+    federation_providers_deleted_flash: "プロバイダーを削除しました。",
+    fed_err_still_configured: "このプロバイダーを指す [[federation_providers]] ブロックがまだ存在します。先にブロックを削除して sui-id を再起動してください。削除しないと再起動時に再作成されます。",
+
+    user_detail_federation_section: "フェデレーションサインイン",
+    user_detail_federation_th_provider: "プロバイダー",
+    user_detail_federation_th_linked: "連携日時",
+    user_detail_federation_th_last_used: "最終利用",
+    user_detail_federation_unlink_button: "連携解除",
+    user_detail_federation_empty: "連携されたフェデレーションサインインはありません。",
+    confirm_unlink_federation_title: "このフェデレーションサインインを解除",
+    confirm_unlink_federation_impact: "{user} は {provider} 経由でサインインできなくなります。アカウントと他のサインイン方法は残ります。このリリースには再連携の手段がないため、管理画面から連携を元に戻すことはできません。",
+    confirm_unlink_federation_sessions_note: "すでに開いているセッションと、アプリケーションに発行済みのトークンは有効なままです — 連携解除ではこれらは終了しません。終了するには、このユーザーのページでアカウントを無効化してください。",
+    confirm_unlink_federation_sessions_link: "このユーザーのページへ",
+    fed_err_link_not_found: "この連携は既に存在しません。ページを再読み込みしてください。",
 };
 
 // ── Formatters ───────────────────────────────────────────────────────────────

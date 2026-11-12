@@ -911,7 +911,7 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     federation_providers_never_checked: "—",
     federation_providers_linked_yes: "有",
     federation_providers_linked_no: "无",
-    federation_providers_not_configured_note: "没有配置块指向此提供方。恢复配置并重启 sui-id 后即可启用。",
+    federation_providers_not_configured_note: "没有配置块指向此提供方。恢复配置并重启 sui-id 后即可重新启用，或者删除它。",
     federation_providers_check_and_enable_button: "检查并启用",
     federation_providers_check_only_button: "仅检查",
     federation_providers_disable_button: "停用",
@@ -938,6 +938,27 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     fed_err_changed_since_check: "检查完成后该提供方发生了变化。请重新运行。",
     fed_err_check_too_old: "该检查已超过 10 分钟。请重新运行。",
     fed_err_step_up_lapsed: "检查运行期间您的身份确认已过期。请重新确认身份，然后再次运行检查。",
+
+    federation_providers_delete_button: "删除",
+    confirm_delete_federation_provider_title: "删除此联合身份提供方",
+    confirm_delete_federation_provider_impact: |n| {
+        format!("将有 {n} 名用户无法再通过此提供方登录；他们的 sui-id 账户仍会保留。")
+    },
+    confirm_delete_federation_provider_reversibility: "此操作无法撤销。",
+    federation_providers_deleted_flash: "该提供方已删除。",
+    fed_err_still_configured: "仍有 [[federation_providers]] 配置块指向此提供方。请先移除该配置块并重启 sui-id；否则重启后会被重新创建。",
+
+    user_detail_federation_section: "联合身份登录",
+    user_detail_federation_th_provider: "提供方",
+    user_detail_federation_th_linked: "关联时间",
+    user_detail_federation_th_last_used: "上次使用",
+    user_detail_federation_unlink_button: "取消关联",
+    user_detail_federation_empty: "尚未关联任何联合身份登录方式。",
+    confirm_unlink_federation_title: "取消此联合身份登录关联",
+    confirm_unlink_federation_impact: "{user} 将无法再通过 {provider} 登录；其账户及其他登录方式仍会保留。此版本无法重新关联，因此无法在管理界面中恢复此关联。",
+    confirm_unlink_federation_sessions_note: "已打开的会话和已向应用签发的令牌仍然有效 —— 取消关联不会结束它们。如需结束，请在此用户的页面上停用该账户。",
+    confirm_unlink_federation_sessions_link: "前往此用户的页面",
+    fed_err_link_not_found: "此关联已不存在，请重新加载页面。",
 };
 
 // ── Formatters ───────────────────────────────────────────────────────────────

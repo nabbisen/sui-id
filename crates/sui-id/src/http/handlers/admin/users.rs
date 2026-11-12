@@ -1,8 +1,9 @@
 //! Admin handlers for users (RFC 066).
 
-use super::forms::{ConfirmedReasonForm, DisableForm};
+use super::forms::{ConfirmedForm, ConfirmedReasonForm, DisableForm};
 use super::with_csrf_cookie;
 use crate::errors::HttpError;
+use crate::federation_provider_admin;
 use crate::handlers::{AppStateExt, CurrentAdmin, CurrentAdminOrAuditor};
 use axum::Form;
 use axum::extract::{Path, State};
@@ -14,18 +15,19 @@ use std::str::FromStr;
 use sui_id_core::admin::{self as admin_uc, CreateUserSpec};
 use sui_id_core::errors::CoreError;
 use sui_id_shared::api::{AuditLogEntryDto, UserSummary};
-use sui_id_shared::ids::UserId;
-use sui_id_store::repos::users;
+use sui_id_shared::ids::{FederationProviderId, UserId};
+use sui_id_store::commands::UnlinkFederationProviderError;
+use sui_id_store::repos::{federation_link, federation_provider, users};
 use sui_id_web::{
     Flash, FlashKind,
     pages::{
         ConfirmDeleteUserData, ConfirmDisableData, ConfirmRecoveryLinkData, ConfirmResetMfaData,
-        RecoveryLinkIssuedData, RecoveryLinkRefusedData, RecoveryRefusedKind, UserDetailData,
-        UserDetailSession,
+        ConfirmUnlinkFederationData, RecoveryLinkIssuedData, RecoveryLinkRefusedData,
+        RecoveryRefusedKind, UserDetailData, UserDetailFederatedLink, UserDetailSession,
     },
     render_confirm_delete_user, render_confirm_disable_user, render_confirm_recovery_link,
-    render_confirm_reset_mfa, render_recovery_link_issued, render_recovery_link_refused,
-    render_user_detail, render_users, render_users_new,
+    render_confirm_reset_mfa, render_confirm_unlink_federation, render_recovery_link_issued,
+    render_recovery_link_refused, render_user_detail, render_users, render_users_new,
 };
 
 pub async fn users_get(
@@ -350,6 +352,26 @@ pub async fn users_detail_get(
         })
         .collect();
 
+    // RFC 096-B2 S6 §B: this user's federation links, for the
+    // "Federated sign-in" section — the provider's own display name,
+    // not just its id, so the row names what a human reads.
+    let federation_links = federation_link::list_for_user(&app.db, target)
+        .await
+        .unwrap_or_default();
+    let mut federated_links = Vec::with_capacity(federation_links.len());
+    for link in federation_links {
+        let provider_display_name = federation_provider::get(&app.db, link.provider_id)
+            .await
+            .map(|p| p.display_name)
+            .unwrap_or_default();
+        federated_links.push(UserDetailFederatedLink {
+            provider_id: link.provider_id.to_string(),
+            provider_display_name,
+            linked_at: link.linked_at,
+            last_seen_at: link.last_seen_at,
+        });
+    }
+
     // RFC 115 D10, display only: an administrator who has never held a
     // credential and never signed in is being activated, not captured, so the
     // button is offered for them. U37 re-reads and decides in its transaction.
@@ -387,6 +409,7 @@ pub async fn users_detail_get(
         passkey_count,
         sessions,
         recent_audit,
+        federated_links,
         dev_mode: app.is_dev_mode,
         csrf_token: token.clone(),
     };
@@ -786,5 +809,140 @@ pub struct CsrfRoleForm {
 impl CsrfRoleForm {
     pub fn csrf_str(&self) -> &str {
         &self._csrf
+    }
+}
+
+// ── C20 — unlink a federation provider (RFC 096-B2 S6 §B) ──────────────────
+
+/// RFC 096-B2 S6 §C: one i18n key per [`UnlinkFederationProviderError`]
+/// variant.
+fn unlink_error_text(
+    e: UnlinkFederationProviderError,
+    t: &'static sui_id_i18n::Strings,
+) -> &'static str {
+    match e {
+        UnlinkFederationProviderError::NotFound => t.fed_err_link_not_found,
+        UnlinkFederationProviderError::StepUpRequired => t.fed_err_step_up_lapsed,
+        UnlinkFederationProviderError::Storage => t.fed_err_storage,
+    }
+}
+
+async fn provider_display_name_or_default(
+    app: &crate::state::AppState,
+    provider_id: FederationProviderId,
+) -> String {
+    federation_provider::get(&app.db, provider_id)
+        .await
+        .map(|p| p.display_name)
+        .unwrap_or_default()
+}
+
+pub async fn users_unlink_federation_confirm_get(
+    state_ext: AppStateExt,
+    CurrentAdminOrAuditor(admin_id, _role, ref actor): CurrentAdminOrAuditor,
+    ctx: crate::handlers::SessionContext,
+    jar: CookieJar,
+    Path((user_id, provider_id)): Path<(String, String)>,
+) -> Result<Response, HttpError> {
+    if !actor.can_write() {
+        return Err(HttpError::html_403_auditor());
+    }
+    let State(app) = state_ext;
+    // Parsed before anything uses it, so `return_to` and the page carry
+    // the canonical ids, never the raw path segments (the same fix S5's
+    // own review made for the federation-providers confirm pages).
+    let target = UserId::from_str(&user_id)
+        .map_err(|_| HttpError::html(CoreError::BadRequest("invalid user id".into())))?;
+    let provider = FederationProviderId::from_str(&provider_id).map_err(|_| {
+        HttpError::html(CoreError::BadRequest(
+            "invalid federation provider id".into(),
+        ))
+    })?;
+    let user_id = target.to_string();
+    let provider_id = provider.to_string();
+    let return_to = format!("/admin/users/{user_id}/federation/{provider_id}/unlink-confirm");
+    if let Err(redirect) = crate::handlers::require_fresh_step_up(&app, &ctx, &return_to).await {
+        return Ok(redirect);
+    }
+    let user = users::get(&app.db, target)
+        .await
+        .map_err(|e| HttpError::html(CoreError::from(e)))?;
+    let provider_display_name = provider_display_name_or_default(&app, provider).await;
+    let token = crate::csrf::ensure_token(&jar);
+    let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
+    let data = ConfirmUnlinkFederationData {
+        user_id,
+        username: user.username,
+        provider_id,
+        provider_display_name,
+        csrf_token: token.clone(),
+        flash: None,
+    };
+    let resp = Html(render_confirm_unlink_federation(
+        data,
+        app.is_dev_mode,
+        lang,
+    ))
+    .into_response();
+    Ok(with_csrf_cookie(resp, &app, &token))
+}
+
+pub async fn users_unlink_federation_post(
+    state_ext: AppStateExt,
+    CurrentAdmin(admin_id, ref admin_actor): CurrentAdmin,
+    ctx: crate::handlers::SessionContext,
+    jar: CookieJar,
+    Path((user_id, provider_id)): Path<(String, String)>,
+    Form(form): Form<ConfirmedForm>,
+) -> Result<Response, HttpError> {
+    let State(app) = state_ext;
+    crate::handlers::enforce_csrf(&jar, Some(&form.csrf))?;
+    crate::handlers::require_confirmed(&form.confirmed)?;
+    let target = UserId::from_str(&user_id)
+        .map_err(|_| HttpError::html(CoreError::BadRequest("invalid user id".into())))?;
+    let provider = FederationProviderId::from_str(&provider_id).map_err(|_| {
+        HttpError::html(CoreError::BadRequest(
+            "invalid federation provider id".into(),
+        ))
+    })?;
+    let user_id = target.to_string();
+    let provider_id = provider.to_string();
+    let return_to = format!("/admin/users/{user_id}/federation/{provider_id}/unlink-confirm");
+    if let Err(redirect) = crate::handlers::require_fresh_step_up(&app, &ctx, &return_to).await {
+        return Ok(redirect);
+    }
+    match federation_provider_admin::unlink_user_from_provider(&app, admin_actor, target, provider)
+        .await
+    {
+        Ok(()) => Ok(Redirect::to(&format!("/admin/users/{user_id}")).into_response()),
+        Err(UnlinkFederationProviderError::StepUpRequired) => {
+            Ok(crate::handlers::step_up_redirect(&return_to))
+        }
+        Err(e) => {
+            let lang = crate::handlers::resolve_admin_locale(&app, admin_id).await;
+            let user = users::get(&app.db, target)
+                .await
+                .map_err(|e| HttpError::html(CoreError::from(e)))?;
+            let provider_display_name = provider_display_name_or_default(&app, provider).await;
+            let token = crate::csrf::ensure_token(&jar);
+            let data = ConfirmUnlinkFederationData {
+                user_id,
+                username: user.username,
+                provider_id,
+                provider_display_name,
+                csrf_token: token.clone(),
+                flash: Some(Flash {
+                    kind: FlashKind::Error,
+                    text: unlink_error_text(e, lang.strings()).into(),
+                }),
+            };
+            let resp = Html(render_confirm_unlink_federation(
+                data,
+                app.is_dev_mode,
+                lang,
+            ))
+            .into_response();
+            Ok(with_csrf_cookie(resp, &app, &token))
+        }
     }
 }

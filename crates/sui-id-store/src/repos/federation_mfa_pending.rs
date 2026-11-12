@@ -443,6 +443,26 @@ pub fn invalidate_within_tx(
     Ok(n == 1)
 }
 
+/// RFC 096-B2 S6, C20: every continuation for one `(user_id,
+/// provider_id)` pair, counted before the unlink that cascades all of
+/// them away (migration 0047 `:152-154`'s composite `FOREIGN KEY ... ON
+/// DELETE CASCADE`) — every status, not only `pending`: the cascade has
+/// no `status` filter, so a terminal row not yet purged is removed too,
+/// and the event's own count (`federation.link.deleted`'s
+/// `invalidated_continuations`) must match what actually disappears.
+pub fn count_for_pair_within_tx(
+    conn: &rusqlite::Connection,
+    user_id: UserId,
+    provider_id: FederationProviderId,
+) -> StoreResult<i64> {
+    conn.query_row(
+        "SELECT COUNT(*) FROM federation_mfa_pending WHERE user_id = ?1 AND provider_id = ?2",
+        params![user_id.to_string(), provider_id.to_string()],
+        |r| r.get(0),
+    )
+    .map_err(StoreError::from)
+}
+
 /// RFC 096-B2 S2b §B: every `pending` continuation for one provider,
 /// invalidated — migration 0050's own upgrade SQL (`:221-224`), scoped by
 /// `provider_id` instead of unconditionally, on the caller's own

@@ -263,6 +263,22 @@ pub fn build_router(app: AppState) -> Router {
             "/admin/federation-providers/{id}/disable",
             post(admin::federation_providers_disable_post),
         )
+        .route(
+            "/admin/federation-providers/{id}/delete-confirm",
+            get(admin::federation_providers_delete_confirm_get),
+        )
+        .route(
+            "/admin/federation-providers/{id}/delete",
+            post(admin::federation_providers_delete_post),
+        )
+        .route(
+            "/admin/users/{user_id}/federation/{provider_id}/unlink-confirm",
+            get(admin::users_unlink_federation_confirm_get),
+        )
+        .route(
+            "/admin/users/{user_id}/federation/{provider_id}/unlink",
+            post(admin::users_unlink_federation_post),
+        )
         .route("/admin/audit", get(admin::audit_get))
         .route("/admin/audit.csv", get(admin::audit_csv_get))
         // ---------- settings (since v0.20.3) ----------
