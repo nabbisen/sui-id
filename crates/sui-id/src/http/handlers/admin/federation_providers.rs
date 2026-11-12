@@ -119,7 +119,7 @@ fn delete_provider_error_text(
 ) -> &'static str {
     match e {
         DeleteProviderError::NotFound => t.fed_err_not_found,
-        DeleteProviderError::StillEnabled => t.fed_err_not_disabled,
+        DeleteProviderError::StillEnabled => t.fed_err_delete_still_enabled,
         DeleteProviderError::StillConfigured => t.fed_err_still_configured,
         DeleteProviderError::StepUpRequired => t.fed_err_step_up_lapsed,
         DeleteProviderError::Storage => t.fed_err_storage,

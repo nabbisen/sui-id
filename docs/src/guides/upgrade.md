@@ -56,6 +56,53 @@ before upgrading across more than one or two of them.
 
 ## Version-specific notes
 
+### v0.90.x
+
+**Federated sign-in through every configured provider stops on upgrade,
+until an administrator checks and re-enables each one.** Users keep
+their accounts and their federation links — nothing is deleted. Password
+and passkey sign-in are unaffected.
+
+**Why:** an earlier release had no durable way to prove a provider's
+configuration had actually been checked against its upstream. Existing
+provider rows lack enough durable evidence to infer their endpoint
+origins, algorithm policy, authentication method, or a safe preflight
+(RFC 096), so this release disables every provider on upgrade rather
+than trust a configuration nobody has re-verified.
+
+**Before upgrading**, check every `[[federation_providers]]` block
+against the stricter rules startup now enforces — see the [configuration
+reference](../reference/configuration.md#federation_providers-rfc-004)
+and the [operator guide's "Configure a
+provider"](operators.md#federated-sign-in-upstream-oidc). A
+block that fails one of them stops sui-id from starting; the refusal
+names the provider and the field. **Run the new binary's `sui-id preview-upgrade --config sui-id.toml`
+first** (General procedure, step 4): it loads the configuration with these
+rules without starting the server or writing to the database, so a block
+that would refuse to start is reported now, by provider and field.
+
+**After upgrading**, for each provider: open **Federation providers** in
+the admin UI (`/admin/federation-providers`), then press **Check and
+enable**. If it is refused, the message on the page names the next
+step — see the operator guide's ["What a refusal
+means"](operators.md#federated-sign-in-upstream-oidc) for the
+complete list.
+
+**What else changed for an operator**, each covered in the operator
+guide:
+- Editing a trust field (`issuer`, `client_id`, `client_secret_env`,
+  `scopes`, `provision_mode`, `allowed_origins`, or `id_token_algs`) in
+  the config file now applies on the next restart, and disables the
+  provider until it is checked again.
+- Removing a `[[federation_providers]]` block from the config now
+  disables the provider, keeping its existing links, instead of leaving
+  it as it was.
+- The login page now shows a "Sign in with …" button for each enabled
+  provider — it never did before, even though this is what RFC 004
+  described from the start.
+- An administrator can now delete a provider (once it is disabled and no
+  longer configured), and unlink one user from one provider.
+
 ### v0.89.x
 
 **Upgrading from `0.88.x` runs no migration, so no pre-migration snapshot

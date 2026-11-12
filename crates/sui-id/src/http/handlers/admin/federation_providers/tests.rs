@@ -172,3 +172,36 @@ fn no_confirm_page_form_has_an_input_or_select_other_than_csrf_and_confirmed() {
         }
     }
 }
+
+/// S7 review: delete's refusals, which S6 had no test for. Each variant
+/// gives a message in every locale, and the still-enabled one is about
+/// deleting: it used to reuse the check flow's "disable it first to check
+/// it again", which is the wrong next step for a delete.
+#[test]
+fn every_delete_error_has_its_own_message_in_every_locale() {
+    let variants = [
+        DeleteProviderError::NotFound,
+        DeleteProviderError::StillEnabled,
+        DeleteProviderError::StillConfigured,
+        DeleteProviderError::StepUpRequired,
+        DeleteProviderError::Storage,
+    ];
+    for locale in Locale::ALL {
+        let t = locale.strings();
+        for v in variants {
+            assert!(
+                !delete_provider_error_text(v, t).is_empty(),
+                "{v:?} has no {locale:?} message"
+            );
+        }
+        assert_ne!(
+            delete_provider_error_text(DeleteProviderError::StillEnabled, t),
+            t.fed_err_not_disabled,
+            "{locale:?}: delete must not reuse the check flow's message"
+        );
+    }
+    let en = Locale::En.strings();
+    let text = delete_provider_error_text(DeleteProviderError::StillEnabled, en);
+    assert!(text.contains("then delete it"), "{text}");
+    assert!(!text.contains("check it again"), "{text}");
+}

@@ -276,8 +276,9 @@ providers for federated sign-in (the "Sign in with X" flow).
 > fields changed. Values are compared by meaning: listing the same scopes,
 > algorithms or origins in another order is not a change. (The secret is compared by its plaintext, in constant
 > time, after decrypting the stored value — never logged either way.)
-> There is currently no admin UI or CLI to review and re-enable a
-> provider after this; that mechanism ships later.
+> Review and re-enable it the same way as after an upgrade: **Federation
+> providers** in the admin UI (`/admin/federation-providers`), then
+> **Check and enable**.
 >
 > Removing a provider's `[[federation_providers]]` block entirely also
 > disables it (keeping its existing federation links) rather than
@@ -286,9 +287,9 @@ providers for federated sign-in (the "Sign in with X" flow).
 >
 > `enabled` is never read into the stored provider at all, at creation or
 > on any later boot — RFC 096-B2 made enabling a provider an
-> administrator's own action, through a mechanism this release does not
-> yet provide. A block that still sets it logs one warning per boot
-> saying the key no longer enables anything.
+> administrator's own action, at **Federation providers** in the admin
+> UI (`/admin/federation-providers`). A block that still sets it logs one
+> warning per boot saying the key no longer enables anything.
 
 ```toml
 [[federation_providers]]

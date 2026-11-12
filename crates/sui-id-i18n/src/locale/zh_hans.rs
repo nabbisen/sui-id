@@ -927,6 +927,7 @@ pub static STRINGS_ZH_HANS: Strings = Strings {
     fed_err_not_found: "此提供方已不存在。请重新加载列表。",
     fed_err_storage: "无法更新该提供方。请重试；如果问题持续，请查看服务器日志。",
     fed_err_not_disabled: "此提供方已启用。请先停用后再重新检查。",
+    fed_err_delete_still_enabled: "此提供方仍处于启用状态。请先停用，然后再删除。",
     fed_err_not_in_configuration: "没有 [[federation_providers]] 配置块指向此提供方。请添加后重启 sui-id。",
     fed_err_policy_not_recorded: "此提供方的信任策略尚未记录。请重启 sui-id；如果问题持续，请查看服务器日志。",
     fed_err_transport: "无法连接上游身份提供方。请检查此主机的网络、DNS 和 CA 证书，并查看服务器日志。",

@@ -1105,6 +1105,10 @@ pub struct Strings {
     pub fed_err_not_found: &'static str,
     pub fed_err_storage: &'static str,
     pub fed_err_not_disabled: &'static str,
+    /// Delete refused because the provider is still enabled (S7 review: the
+    /// check flow's `fed_err_not_disabled` says "to check it again", which is
+    /// wrong for a delete).
+    pub fed_err_delete_still_enabled: &'static str,
     pub fed_err_not_in_configuration: &'static str,
     pub fed_err_policy_not_recorded: &'static str,
     pub fed_err_transport: &'static str,

@@ -926,6 +926,7 @@ pub static STRINGS_JA: Strings = Strings {
     fed_err_not_found: "このプロバイダーはもう存在しません。一覧を再読み込みしてください。",
     fed_err_storage: "プロバイダーを更新できませんでした。もう一度お試しください。問題が続く場合はサーバーログを確認してください。",
     fed_err_not_disabled: "このプロバイダーは既に有効です。再確認するには先に無効化してください。",
+    fed_err_delete_still_enabled: "このプロバイダーはまだ有効です。先に無効化してから削除してください。",
     fed_err_not_in_configuration: "このプロバイダーを指す [[federation_providers]] ブロックがありません。追加して sui-id を再起動してください。",
     fed_err_policy_not_recorded: "このプロバイダーの信頼ポリシーはまだ記録されていません。sui-id を再起動してください。問題が続く場合はサーバーログを確認してください。",
     fed_err_transport: "アップストリームの ID プロバイダーに接続できませんでした。このホストのネットワーク、DNS、CA 証明書を確認し、サーバーログも確認してください。",

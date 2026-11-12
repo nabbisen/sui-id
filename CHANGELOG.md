@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+**Upgrading disables federated sign-in through every configured
+provider, until an administrator checks and re-enables each one — read
+the [upgrade guide's v0.90.x
+section](docs/src/guides/upgrade.md#v090x) before upgrading.** Startup
+also validates a federation provider's configuration more strictly; see
+Changed, below.
+
 ### Added
 
 - **A "Federation providers" page in the admin UI
@@ -18,11 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its action buttons. A provider whose configuration block was removed
   says so in its row and offers no Enable button, since that action
   could only fail.
-- **Check and enable.** From a provider's row, an administrator can
-  check it against its real upstream — discovery document and signing
-  keys, re-validated fresh — and enable it only if every check passes.
-  This is the administrator action every entry below about "an
-  administrator reviews and re-enables" a provider was waiting on.
+- **Check and enable.** From a disabled provider's row, an administrator
+  can check it against its real upstream — discovery document and
+  signing keys, re-validated fresh — and enable it only if every check
+  passes.
 - **Check only.** The same check, without enabling: useful for
   confirming a provider is reachable and correctly configured before
   committing to turning it on.
@@ -52,25 +58,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **The startup warnings that used to say an administrator's review
-  "requires a mechanism this release does not yet provide" now name
-  the real page, `/admin/federation-providers`, and what to press
-  there.**
-
-- **On upgrade, every configured federation ("Sign in with...") provider
-  is disabled, and stays disabled until an administrator reviews and
-  re-enables it.** Upgrading adds durable trust-policy tracking to each
-  provider, and an existing provider's configuration was never recorded
-  durably enough to safely re-validate it automatically — so instead of
-  guessing, this release disables every provider on upgrade rather than
-  risk one running with policy nobody re-checked. Any federated sign-in
-  already in progress at the moment of upgrade (including a pending
+- **On upgrade, every configured federation ("Sign in with…") provider
+  is disabled, and stays disabled until an administrator checks and
+  re-enables it, at Federation providers in the admin UI (above).**
+  Upgrading adds durable trust-policy tracking to each provider, and an
+  existing provider's configuration was never recorded durably enough to
+  safely re-validate it automatically — so instead of guessing, this
+  release disables every provider on upgrade rather than risk one
+  running with policy nobody re-checked. Any federated sign-in already
+  in progress at the moment of upgrade (including a pending
   second-factor step) is ended, not left half-completed; linked accounts
   and the upstream identity links themselves are unaffected and need no
-  action. **The way to review and re-enable a provider again ships later
-  in this same release** — this entry describes one piece of a change
-  that is not safe to release on its own, and will not be, until that
-  part lands too.
+  action. The startup warning naming each affected provider points at
+  the real page and what to press there. See the [upgrade
+  guide](docs/src/guides/upgrade.md#v090x) for the full checklist.
 - **A federation provider's configuration is now validated more
   strictly at startup, and some previously-accepted configuration files
   will now refuse to start.** Each of these is checked for every
@@ -79,13 +80,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     query string, or fragment (a provider's own issuer page without a
     path, e.g. `https://accounts.google.com`, is still accepted — only
     its own serialized value, with no normalization, ever was and still
-    is authoritative).
-  - `issuer`'s host may not be an IP address, `localhost`, or a name
-    ending `.localhost`, `.local`, `.internal`, or `.home.arpa`, nor one of those zones itself (`local`, `internal`, `home.arpa`). An
-    identity provider reachable only on a private network is not supported
-    in this release, and there is no configuration escape hatch. Renaming
-    it does not help: sui-id also refuses a name that resolves to a
-    private, loopback or link-local address when it connects.
+    is authoritative); its host may not be an IP address, `localhost`,
+    or a name ending `.localhost`, `.local`, `.internal`, or
+    `.home.arpa`, nor one of those zones itself (`local`, `internal`,
+    `home.arpa`). An identity provider reachable only on a private
+    network is not supported in this release, and there is no
+    configuration escape hatch. Renaming it does not help: sui-id also
+    refuses a name that resolves to a private, loopback or link-local
+    address when it connects.
   - `client_id` must be 1–512 UTF-8 bytes with no control characters.
   - `scopes` must be a unique combination of `openid`, `email` and
     `profile`, and must include `openid`.
@@ -93,41 +95,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     "the issuer's origin alone"), must include the issuer's own origin,
     and each entry must be written in canonical form, with no duplicates:
     lowercase host, no path or trailing `/`, and no `:443`.
-  - `slug` must be 1–64 characters of lowercase letters, digits and
-    hyphens, as the configuration reference already said, and no two
-    blocks may share one.
   - `provision_mode` must be exactly `link_only` or
     `provision_on_first_login`; an unrecognized value now refuses to
     start instead of silently being treated as `link_only`.
+  - `slug` must be 1–64 characters of lowercase letters, digits and
+    hyphens, as the configuration reference already said, and no two
+    blocks may share one.
+  - `id_token_algs` must be one to four of `RS256`, `PS256`, `ES256` and
+    `EdDSA`; `none` and the `HS*` family are refused.
 - **The `enabled` key in a `[[federation_providers]]` block no longer
   enables anything.** Enabling a federation provider is now an
   administrator's own action, at **Federation providers** in the admin
-  UI (below); a block that still sets `enabled = true` logs one warning
+  UI (above); a block that still sets `enabled = true` logs one warning
   per boot saying so. The key is still accepted, for now.
-- **The ID-token signature algorithms a federation provider accepts are
-  now the ones recorded for it, not the ones in the config file.**
-  Before this release, editing `id_token_algs` in the config file
-  changed what an already-enabled provider accepted immediately, with
-  no review. A config edit to them now goes through the trust-policy
-  replacement below, which disables the provider until it is reviewed.
 - **Editing a federation provider's trust policy in the config file now
   applies, on the next boot — and disables the provider.** Previously,
-  editing `issuer`, `client_id`, `client_secret_env`, `scopes`,
-  `provision_mode` or `id_token_algs` for an existing provider was warned
-  about but never applied, and `allowed_origins` alone was rewritten in
-  place without disabling the provider. Now,
-  startup compares the configured value against the stored one and, if
-  any of them differ, replaces the provider's complete trust policy and
-  disables it until an administrator reviews and re-enables it — the
-  same disabled/`requires_review` state an upgrade already puts an
-  existing provider into. Any federated sign-in already in progress for
-  that provider is ended, the same as on upgrade. `display_name` is not
-  trust policy and still applies without disabling anything.
+  editing `issuer`, `client_id`, `client_secret_env`, `scopes` or
+  `provision_mode` for an existing provider was warned about but never
+  applied, `allowed_origins` alone was rewritten in place without
+  disabling the provider, and `id_token_algs` was the one field that
+  *did* apply immediately, with no review at all. Now, startup compares
+  every one of these seven fields against the stored value and, if any
+  differ, replaces the provider's complete trust policy and disables it
+  until an administrator checks and re-enables it — the same
+  disabled/`requires_review` state an upgrade already puts an existing
+  provider into. Any federated sign-in already in progress for that
+  provider is ended, the same as on upgrade. `display_name` is not trust
+  policy and still applies without disabling anything.
 - **Removing a `[[federation_providers]]` block from the config now
   disables that provider on the next boot, instead of leaving its old
   configuration in force forever.** Its existing federation links are
   kept; nothing is deleted. Restoring the block keeps the provider
-  disabled until it is reviewed and re-enabled.
+  disabled until it is checked and re-enabled.
 
 ## [0.89.0] — 2026-11-11
 

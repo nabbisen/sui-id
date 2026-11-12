@@ -1683,11 +1683,12 @@ local-only accounts.
 
 ## Federated sign-in (upstream OIDC)
 
-Configure `[[federation_providers]]` blocks to add providers, then an
-administrator enables each one at **Federation providers** in the admin UI
-(`/admin/federation-providers`) — only an enabled provider's "Sign in with
-Google/Microsoft/…" button appears on the login page. See
-[configuration reference](../reference/configuration.md).
+### 1. Configure a provider
+
+Add a `[[federation_providers]]` block per upstream identity provider. See
+the [configuration reference](../reference/configuration.md#federation_providers-rfc-004)
+for every field and the rules startup enforces on each of them — a block
+that fails one refuses to start, naming the provider and the field.
 
 **Provision modes:**
 
@@ -1713,12 +1714,102 @@ sign-in can succeed, which does not scale past a handful of people. Choose
 `link_only` only when that per-user approval step is a requirement you want,
 not a cost you are accepting by taking the default.
 
-**Enabling a provider:**
+Every provider is created disabled. The config file's `enabled` key has no
+effect (a block that sets it true logs one warning per boot saying so) —
+enabling happens only at **Federation providers** in the admin UI
+(`/admin/federation-providers`), next.
 
-Every provider is created disabled, and stays disabled — the config file's
-`enabled` key no longer has any effect (RFC 096-B2). Enabling a provider now
-requires an administrator's review, through a mechanism this release does
-not yet provide.
+### 2. Check and enable
+
+A disabled provider's row offers **Check and enable**. Pressing it has
+sui-id contact the upstream right then: fetch its discovery document,
+fetch and validate its signing keys, and enable the provider only if
+every check passes. Nothing is enabled if any check fails.
+
+**Check only** runs the identical check without enabling anything
+afterward — use it to confirm a provider is reachable and correctly
+configured before committing to turn it on, or just to re-verify an
+already-enabled provider's upstream is still healthy.
+
+**The check is time-bounded.** It captures the provider's configuration
+and the live discovery/JWKS data together; enabling (or "Check only"
+reporting success) must happen within 10 minutes of that capture, or the
+check is refused as stale and must be run again — this guards against
+enabling a provider against upstream data that is no longer fresh by the
+time you act on it.
+
+### 3. What a refusal means
+
+Every refusal names what to do next, as the admin UI itself shows it:
+
+| Refusal | What it means |
+|---|---|
+| "This provider no longer exists. Reload the list." | Someone else deleted it. Reload the page. |
+| "The provider could not be updated. Try again, and check the server log if it persists." | A storage-layer failure on check, enable, disable, or delete. Try again. |
+| "This provider is already enabled. Disable it first to check it again." | You can only check a *disabled* provider. |
+| "This provider is still enabled. Disable it first, then delete it." | **Delete** only. A provider must be disabled before it can be deleted. |
+| "No `[[federation_providers]]` block names this provider. Add one, then restart sui-id." | The provider's block is gone from the config file. Restore it and restart before checking or enabling. |
+| "This provider's trust policy has not been recorded yet. Restart sui-id, and check the server log if it persists." | An internal inconsistency — restart, and if it does not clear, check the log. |
+| "The upstream identity provider could not be reached. Check this host's network, DNS, and CA certificates, then check the server log." | A network or TLS problem reaching the upstream, not a configuration mismatch. |
+| "The upstream's discovery document was refused. Check the server log for the reason." | The upstream's own `/.well-known/openid-configuration` failed one of sui-id's validation rules; the server log has the specific reason. |
+| "The upstream's signing keys were refused, or none of them is usable. Check the server log for the reason." | A problem with the upstream's JWKS; the server log has the specific reason. |
+| "The upstream does not accept this provider's client authentication method. Check client_secret_env against the upstream's client registration." | The upstream's discovery document does not list the auth method this provider's configuration implies (confidential vs. public client). |
+| "The upstream does not sign with any algorithm this provider accepts. Add one it supports to id_token_algs, then restart sui-id." | No overlap between `id_token_algs` and what the upstream's discovery document advertises. |
+| "The provider changed while the check was running. Run the check again." | Someone edited the provider mid-check. Run the check again. |
+| "The provider changed since the check. Run it again." | The provider changed between a successful check and enabling it. Run the check again. |
+| "The check is more than 10 minutes old. Run it again." | The freshness window above expired. Run the check again. |
+| "Your identity confirmation expired while the check ran. Confirm it again, then run the check again." | Your admin step-up confirmation lapsed mid-check. Re-confirm, then retry. |
+| "A `[[federation_providers]]` block still names this provider. Remove it and restart sui-id first, or it would be created again on restart." | **Delete** only: the provider is still configured. Remove the block, restart, then delete. |
+
+### 4. Change a provider
+
+Editing a trust field — `issuer`, `client_id`, `client_secret_env`,
+`scopes`, `provision_mode`, `allowed_origins`, or `id_token_algs` — in the
+config file applies on the next restart, and **disables the provider**
+until it is checked again (step 2); the server logs a warning naming the
+provider and exactly which fields changed. `display_name` is not trust
+policy: it is reconciled on every boot without disabling anything.
+Reordering `scopes`, `id_token_algs` or `allowed_origins` is not a change
+— they are compared by meaning, not by text.
+
+### 5. Disable, remove from configuration, or delete
+
+- **Disable** (the enabled provider's own row, admin UI) stops federated
+  sign-in through it immediately — sign-ins in progress end, and linked
+  users keep their links. Use this for a temporary pause; re-enabling
+  needs a fresh check (step 2) either way.
+- **Remove the `[[federation_providers]]` block from the config file**,
+  then restart: sui-id disables the provider automatically, on the same
+  boot, keeping its existing federation links. Use this to take a
+  provider out of service from the configuration file alone, without the
+  admin UI. It is also the required first step before deleting it.
+- **Delete** (admin UI) permanently removes the provider row and cascades
+  its federation links, and through them their pending MFA continuations
+  — linked users themselves are kept. Delete requires the provider to be
+  both disabled and unconfigured (no matching block). So remove its block
+  and restart first, which also disables it; delete second. Disabling
+  alone is not enough: a provider whose block remains would be created
+  again on the next restart.
+
+### 6. Unlink a user (from that user's own admin page)
+
+An administrator can unlink one user from one federation provider. This
+ends that user's ability to sign in through that provider; it does
+**not** end any session already open through it, or any token already
+issued to an application — sessions do not record how they were opened.
+To end those, disable the user's account instead (also on that user's
+page), which revokes both. **This cannot be undone in this release**:
+there is no self-service or administrator action that re-links a user,
+so the confirmation is marked irreversible. ("This link no longer
+exists; reload the page." means someone else already unlinked it.)
+
+### 7. Audit events
+
+Every state change above writes an audit event — see the [audit-event
+reference](../reference/audit-events.md)'s "Federation provider
+configuration events" and "Federation events" sections for the complete
+list, including which ones have no actor (startup reconciliation) and
+which carry a step-up record (every administrator action above).
 
 **Security notes:**
 

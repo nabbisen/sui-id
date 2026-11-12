@@ -929,6 +929,7 @@ pub static STRINGS_EN: Strings = Strings {
     fed_err_not_found: "This provider no longer exists. Reload the list.",
     fed_err_storage: "The provider could not be updated. Try again, and check the server log if it persists.",
     fed_err_not_disabled: "This provider is already enabled. Disable it first to check it again.",
+    fed_err_delete_still_enabled: "This provider is still enabled. Disable it first, then delete it.",
     fed_err_not_in_configuration: "No [[federation_providers]] block names this provider. Add one, then restart sui-id.",
     fed_err_policy_not_recorded: "This provider's trust policy has not been recorded yet. Restart sui-id, and check the server log if it persists.",
     fed_err_transport: "The upstream identity provider could not be reached. Check this host's network, DNS, and CA certificates, then check the server log.",
