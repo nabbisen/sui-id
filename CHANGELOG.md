@@ -7,7 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A "Federation providers" page in the admin UI
+  (`/admin/federation-providers`), the first place an administrator can
+  act on everything the entries below describe.** It lists every
+  configured upstream identity provider with its state (enabled or
+  disabled), review status, when the check behind its current enablement ran, and whether it
+  has any linked users. Auditors can view it; only administrators see
+  its action buttons. A provider whose configuration block was removed
+  says so in its row and offers no Enable button, since that action
+  could only fail.
+- **Check and enable.** From a provider's row, an administrator can
+  check it against its real upstream — discovery document and signing
+  keys, re-validated fresh — and enable it only if every check passes.
+  This is the administrator action every entry below about "an
+  administrator reviews and re-enables" a provider was waiting on.
+- **Check only.** The same check, without enabling: useful for
+  confirming a provider is reachable and correctly configured before
+  committing to turning it on.
+- **Disable.** An administrator can take a federation provider offline
+  at any time: federated sign-in through it stops immediately, any
+  sign-in already in progress ends, and its users keep their links.
+
 ### Changed
+
+- **The startup warnings that used to say an administrator's review
+  "requires a mechanism this release does not yet provide" now name
+  the real page, `/admin/federation-providers`, and what to press
+  there.**
 
 - **On upgrade, every configured federation ("Sign in with...") provider
   is disabled, and stays disabled until an administrator reviews and
@@ -44,8 +72,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     start instead of silently being treated as `link_only`.
 - **The `enabled` key in a `[[federation_providers]]` block no longer
   enables anything.** Enabling a federation provider is now an
-  administrator's own action, through a mechanism this release does not
-  yet provide; a block that still sets `enabled = true` logs one warning
+  administrator's own action, at **Federation providers** in the admin
+  UI (below); a block that still sets `enabled = true` logs one warning
   per boot saying so. The key is still accepted, for now.
 - **The ID-token signature algorithms a federation provider accepts are
   now the ones recorded for it, not the ones in the config file.**

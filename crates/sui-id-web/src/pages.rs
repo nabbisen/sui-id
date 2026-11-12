@@ -18,6 +18,7 @@ pub mod clients;
 pub mod confirm;
 pub mod dashboard;
 pub mod error;
+pub mod federation_providers;
 pub mod me_security;
 pub mod oidc;
 pub mod recovery_link;
@@ -38,6 +39,7 @@ pub use common::{ChainStatus, EmptyStateAction, EmptyStateData, Flash, FlashKind
 pub use confirm::*;
 pub use dashboard::*;
 pub use error::*;
+pub use federation_providers::*;
 pub use me_security::*;
 pub use oidc::*;
 pub use recovery_link::*;

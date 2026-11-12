@@ -135,6 +135,35 @@ pub struct SigningKeySummary {
     pub rotated_at: Option<DateTime<Utc>>,
 }
 
+// ---------- federation providers (RFC 096-B2 S5) ----------
+
+/// One row of the `/admin/federation-providers` list page. Deliberately
+/// omits every trust field (`client_id`, `client_secret_enc`, `scopes`,
+/// `allowed_origins`, `id_token_algs`, and anything digest/fingerprint-
+/// shaped) — RFC 096 `:380`: the admin UI may enable or disable a
+/// provider, but may not mutate, or even display as editable, its trust
+/// policy.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FederationProviderSummary {
+    pub id: crate::ids::FederationProviderId,
+    pub slug: String,
+    pub display_name: String,
+    pub issuer: String,
+    pub enabled: bool,
+    /// `true` for `ValidationStatus::RequiresReview`, `false` for
+    /// `Validated` — a plain bool so this crate need not depend on
+    /// `sui-id-store`'s model type.
+    pub requires_review: bool,
+    /// The provider's own `evidence_observed_at` — when it was last
+    /// checked and (if the check passed) enabled. `None` means never.
+    pub last_checked_at: Option<DateTime<Utc>>,
+    pub has_linked_users: bool,
+    /// `false` when no `[[federation_providers]]` config block names
+    /// this provider's slug (the C25 case) — the list row then offers
+    /// no Enable action, since it could only fail.
+    pub is_configured: bool,
+}
+
 // ---------- audit ----------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

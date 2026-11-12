@@ -239,6 +239,30 @@ pub fn build_router(app: AppState) -> Router {
             "/admin/signing-keys/{id}/delete-confirm",
             get(admin::signing_keys_delete_confirm_get),
         )
+        .route(
+            "/admin/federation-providers",
+            get(admin::federation_providers_get),
+        )
+        .route(
+            "/admin/federation-providers/{id}/enable-confirm",
+            get(admin::federation_providers_enable_confirm_get),
+        )
+        .route(
+            "/admin/federation-providers/{id}/enable",
+            post(admin::federation_providers_enable_post),
+        )
+        .route(
+            "/admin/federation-providers/{id}/check",
+            post(admin::federation_providers_check_post),
+        )
+        .route(
+            "/admin/federation-providers/{id}/disable-confirm",
+            get(admin::federation_providers_disable_confirm_get),
+        )
+        .route(
+            "/admin/federation-providers/{id}/disable",
+            post(admin::federation_providers_disable_post),
+        )
         .route("/admin/audit", get(admin::audit_get))
         .route("/admin/audit.csv", get(admin::audit_csv_get))
         // ---------- settings (since v0.20.3) ----------

@@ -25,6 +25,8 @@ pub(crate) mod auth;
 pub(crate) mod clients;
 #[path = "admin/dashboard.rs"]
 mod dashboard;
+#[path = "admin/federation_providers.rs"]
+mod federation_providers;
 #[path = "admin/forms.rs"]
 pub mod forms;
 #[path = "admin/signing_keys.rs"]
@@ -38,6 +40,7 @@ pub use audit::*;
 pub use auth::*;
 pub use clients::*;
 pub use dashboard::*;
+pub use federation_providers::*;
 pub use forms::{ConfirmedForm, ConfirmedReasonForm, CsrfOnlyForm, DisableForm};
 pub use signing_keys::*;
 pub use users::*;

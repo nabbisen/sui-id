@@ -84,6 +84,7 @@ mod r096_b1_stage7;
 mod r096_b2_stage3_preflight;
 mod r096_b2_stage4_c17_enable_disable;
 mod r096_b2_stage4_c17_scope;
+mod r096_b2_stage5_admin_surface;
 mod r102_stage1;
 mod r102_stage2;
 mod r102_stage3;

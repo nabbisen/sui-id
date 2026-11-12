@@ -147,6 +147,14 @@ async fn a_changed_trust_field_disables_the_provider_and_logs_the_changed_fields
         log.contains("re-enable"),
         "does not say it is now disabled until re-enabled: {log}"
     );
+    assert!(
+        log.contains("/admin/federation-providers"),
+        "does not say where: {log}"
+    );
+    assert!(
+        log.contains("Check and enable"),
+        "does not say what to press: {log}"
+    );
     assert_eq!(
         audit_count(&db, "federation.provider.policy_updated").await,
         1
@@ -405,8 +413,12 @@ async fn requires_review_provider_warns_once_naming_the_slug() {
         "does not say sign-in is off until re-enabled: {line}"
     );
     assert!(
-        line.contains("operator guide"),
+        line.contains("/admin/federation-providers"),
         "does not say where: {line}"
+    );
+    assert!(
+        line.contains("Check and enable"),
+        "does not say what to press: {line}"
     );
     // RFC 096-B2 S2a Part F: architecture.md:306-307's own upgrade
     // report asks for the internal ID, a yes/no for links, and the
@@ -581,6 +593,10 @@ fn warn_if_enabled_key_is_set_warns_once_naming_the_slug() {
     assert!(
         line.contains("no longer enables"),
         "does not say the key no longer enables it: {line}"
+    );
+    assert!(
+        line.contains("/admin/federation-providers"),
+        "does not say where: {line}"
     );
 }
 

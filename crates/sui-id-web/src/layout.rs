@@ -143,11 +143,16 @@ fn Nav(
     let t = lang.strings();
     // RFC 074: "clients" renamed to "apps" in nav label (route unchanged).
     // "me" (Security link) removed — replaced by user-menu dropdown.
-    let items: [(&'static str, &'static str, &'static str); 6] = [
+    let items: [(&'static str, &'static str, &'static str); 7] = [
         ("dashboard", t.nav_dashboard, "/admin"),
         ("users", t.nav_users, "/admin/users"),
         ("clients", t.nav_apps, "/admin/clients"), // label: Apps
         ("signing-keys", t.nav_signing_keys, "/admin/signing-keys"),
+        (
+            "federation-providers",
+            t.nav_federation_providers,
+            "/admin/federation-providers",
+        ),
         ("audit", t.nav_audit, "/admin/audit"),
         ("settings", t.nav_settings, "/admin/settings"),
     ];

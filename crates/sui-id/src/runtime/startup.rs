@@ -378,11 +378,9 @@ pub async fn prepare(cfg: Config, backup: crate::database::PreMigrationBackup) -
 /// about it. A provider already `validated` (a successful C17 enable,
 /// S4) produces no warning.
 ///
-/// TODO(096-B2 S5): "see the operator guide's ..." below names the
-/// section S7's operator guide will add; there is no admin UI yet for an
-/// administrator to act on this warning through. Update the section name
-/// in the message below (and this doc comment) once S5/S7 land, so it
-/// names what actually exists instead of what is still planned.
+/// RFC 096-B2 S5: names the real admin page an administrator acts
+/// through (`/admin/federation-providers`) and the button to press
+/// there (`check_and_enable`'s own confirm page, "Check and enable").
 async fn warn_providers_requiring_review(db: &sui_id_store::Database) {
     let providers = match sui_id_store::repos::federation_provider::list(db).await {
         Ok(providers) => providers,
@@ -423,9 +421,8 @@ async fn warn_providers_requiring_review(db: &sui_id_store::Database) {
             has_link,
             missing_policy_fields = missing,
             "federation provider {:?} (id {}) requires review before federated sign-in \
-             through it is enabled again -- {}, missing policy fields: {} -- \
-             see the operator guide's \"Reviewing and re-enabling a federation provider\" \
-             section",
+             through it is re-enabled -- {}, missing policy fields: {} -- \
+             visit /admin/federation-providers and press \"Check and enable\"",
             provider.slug,
             provider.id,
             if has_link {
@@ -535,16 +532,14 @@ async fn register_new_federation_provider(
 /// decision), so this is the one place that notices a block still
 /// setting it and says so, once per boot per provider.
 ///
-/// TODO(096-B2 S5): "how a provider is enabled" below names no mechanism
-/// yet, because the admin UI that will be it does not exist. Update the
-/// message once S5 lands.
+/// RFC 096-B2 S5: names the real admin page in place of the mechanism
+/// that did not exist yet.
 fn warn_if_enabled_key_is_set(cfg: &crate::config::FederationProviderConfig) {
     if cfg.enabled {
         tracing::warn!(
             slug = %cfg.slug,
             "federation provider {:?}'s config sets enabled = true, but this key no longer \
-             enables it -- enabling a federation provider now requires an administrator's \
-             review, through a mechanism this release does not yet provide",
+             enables it -- enable it at /admin/federation-providers instead",
             cfg.slug,
         );
     }
@@ -617,16 +612,14 @@ async fn reconcile_federation_provider(
     {
         Ok(Some(audited)) => {
             let changed = audited.into_inner();
-            // TODO(096-B2 S5): "an administrator reviews" below names no
-            // mechanism yet -- there is no admin UI for this today.
-            // Update this message once S5 lands.
+            // RFC 096-B2 S5: names the real admin page in place of the
+            // mechanism that did not exist yet.
             tracing::warn!(
                 slug = %cfg.slug,
                 changed_fields = %changed.join(","),
                 "federation provider {:?}'s trust policy changed in config ({}); the stored \
-                 policy has been replaced and it is now disabled until an administrator \
-                 reviews and re-enables it -- see the operator guide's \"Reviewing and \
-                 re-enabling a federation provider\" section",
+                 policy has been replaced and it is now disabled until re-enabled -- review \
+                 it at /admin/federation-providers and press \"Check and enable\"",
                 cfg.slug,
                 changed.join(","),
             );

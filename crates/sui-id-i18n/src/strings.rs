@@ -96,6 +96,8 @@ pub struct Strings {
     pub nav_users: &'static str,
     pub nav_clients: &'static str,
     pub nav_signing_keys: &'static str,
+    /// RFC 096-B2 S5.
+    pub nav_federation_providers: &'static str,
     pub nav_audit: &'static str,
     pub nav_settings: &'static str,
     pub nav_profile: &'static str,
@@ -1048,4 +1050,61 @@ pub struct Strings {
     pub dynamic_reg_token_expired: &'static str,
     pub scope_catalog_created_flash: &'static str,
     pub scope_catalog_deleted_flash: &'static str,
+
+    // ---- Admin: Federation providers (RFC 096-B2 S5) ----
+    pub federation_providers_title: &'static str,
+    pub federation_providers_lede: &'static str,
+    pub federation_providers_th_name: &'static str,
+    pub federation_providers_th_issuer: &'static str,
+    pub federation_providers_th_state: &'static str,
+    pub federation_providers_th_review: &'static str,
+    pub federation_providers_th_last_checked: &'static str,
+    pub federation_providers_th_linked_users: &'static str,
+    pub federation_providers_state_enabled: &'static str,
+    pub federation_providers_state_disabled: &'static str,
+    pub federation_providers_review_validated: &'static str,
+    pub federation_providers_review_requires_review: &'static str,
+    pub federation_providers_never_checked: &'static str,
+    pub federation_providers_linked_yes: &'static str,
+    pub federation_providers_linked_no: &'static str,
+    /// Row note for a stored, disabled provider with no matching
+    /// `[[federation_providers]]` config block (the C25 case) — no
+    /// Enable action is offered, because it could only fail.
+    pub federation_providers_not_configured_note: &'static str,
+    pub federation_providers_check_and_enable_button: &'static str,
+    pub federation_providers_check_only_button: &'static str,
+    pub federation_providers_disable_button: &'static str,
+    pub empty_federation_providers: &'static str,
+    // Enable-confirm page.
+    pub federation_providers_enable_confirm_title: &'static str,
+    pub federation_providers_enable_confirm_body: &'static str,
+    pub federation_providers_check_passed_flash: &'static str,
+    // Disable-confirm page.
+    pub federation_providers_disable_confirm_title: &'static str,
+    pub federation_providers_disable_confirm_body: &'static str,
+    // Flashes shown on the list page after a redirect.
+    pub federation_providers_enabled_flash: &'static str,
+    pub federation_providers_disabled_flash: &'static str,
+    pub federation_providers_already_disabled_flash: &'static str,
+    // `CheckAndEnableError`/`DisableFederationProviderError` refusals
+    // (`sui_id::federation_preflight`/`sui_id_store::commands`) — each
+    // names the reason and the next step. `StepUpRequired` is
+    // intercepted and redirected before either confirm page would ever
+    // render `fed_err_step_up_lapsed`; it is translated anyway so the
+    // exhaustive match in `handlers/admin/federation_providers.rs`
+    // compiles against a fully translated set.
+    pub fed_err_not_found: &'static str,
+    pub fed_err_storage: &'static str,
+    pub fed_err_not_disabled: &'static str,
+    pub fed_err_not_in_configuration: &'static str,
+    pub fed_err_policy_not_recorded: &'static str,
+    pub fed_err_transport: &'static str,
+    pub fed_err_discovery: &'static str,
+    pub fed_err_jwks: &'static str,
+    pub fed_err_auth_method_unsupported: &'static str,
+    pub fed_err_no_common_algorithm: &'static str,
+    pub fed_err_changed_during_check: &'static str,
+    pub fed_err_changed_since_check: &'static str,
+    pub fed_err_check_too_old: &'static str,
+    pub fed_err_step_up_lapsed: &'static str,
 }

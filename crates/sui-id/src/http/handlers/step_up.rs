@@ -63,6 +63,7 @@ const STEP_UP_RETURN_ALLOWLIST: &[&str] = &[
     "/admin/clients/",
     "/admin/signing-keys/",
     "/admin/settings/",
+    "/admin/federation-providers/",
     "/me/security/",
 ];
 
